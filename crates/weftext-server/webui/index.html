@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>文缕 Server</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <div><span class="eyebrow">WEFTEXT SERVER</span><strong>文缕</strong></div>
+      <p><span id="serverStage">连接中</span> · 仅本机开发基线 · <span id="sessionLabel">未登录</span> <button id="logoutButton" hidden>注销</button></p>
+    </header>
+    <section id="authPanel" class="auth-panel" hidden>
+      <form id="authForm">
+        <span class="eyebrow">CANONICAL ASCIIDOC · LOCAL ACCOUNTS</span>
+        <h1 id="authTitle">成员登录</h1>
+        <p id="authStatus" aria-live="polite">请验证本地成员身份</p>
+        <label id="bootstrapField" for="bootstrapInput" hidden>一次性 bootstrap secret<input id="bootstrapInput" type="password" autocomplete="off" /></label>
+        <label id="loginField" for="loginInput">登录名<input id="loginInput" value="owner" autocomplete="username" /></label>
+        <label for="passwordInput">密码<input id="passwordInput" type="password" autocomplete="current-password" /></label>
+        <button id="authSubmit" class="primary">登录</button>
+        <button id="authModeButton" type="button">首次使用？切换到 Owner 初始化</button>
+      </form>
+    </section>
+    <main id="workspaceView" hidden>
+      <aside class="activity-bar" aria-label="活动栏">
+        <button id="explorerActivity" aria-label="Explorer" aria-pressed="true">▤</button>
+        <button id="searchActivity" aria-label="Search" aria-pressed="false">⌕</button>
+        <button id="chronoActivity" aria-label="Chrono" aria-pressed="false">◷</button>
+        <button id="trashActivity" aria-label="Workspace Trash" aria-pressed="false">♲</button>
+      </aside>
+      <aside id="navigationPanel" class="navigation-panel" aria-label="Explorer 侧栏">
+        <section id="explorerPanel" aria-label="Explorer">
+          <div class="navigation-heading"><div><span class="eyebrow">EXPLORER</span><h2>工作区</h2></div></div>
+          <div class="explorer-modes" role="tablist" aria-label="Explorer 模式"><button id="hierarchyMode" role="tab" aria-selected="true">层级</button><button id="contentsMode" role="tab" aria-selected="false">内容</button></div>
+          <label class="navigation-filter" for="navigationFilter">筛选当前视图<input id="navigationFilter" /></label>
+          <div id="explorerScroll" class="explorer-scroll" tabindex="-1">
+            <div id="hierarchyView" role="tree" aria-label="工作区层级"></div>
+            <section id="contentsView" aria-label="当前位置内容" hidden>
+              <header class="contents-heading"><span id="contentsLocation"></span><small id="contentsFollowing"></small><button id="returnToNode" hidden>回到当前节点</button></header>
+              <nav id="contentsBreadcrumbs" class="contents-breadcrumbs" aria-label="浏览位置面包屑"></nav>
+              <div id="contentList" class="contents-list" role="list" aria-label="当前位置的直接子项"></div>
+            </section>
+          </div>
+        </section>
+        <section id="searchPanel" aria-label="Search" hidden>
+          <div class="navigation-heading"><span class="eyebrow">SEARCH</span><h2>搜索</h2></div>
+          <form id="searchForm" role="search">
+          <label for="searchInput">搜索工作区</label>
+          <div><input id="searchInput" type="search" autocomplete="off" /><button>搜索</button></div>
+          </form>
+          <div id="searchResults" class="search-results" aria-live="polite"></div>
+        </section>
+        <section id="chronoPanel" aria-label="Chrono" hidden><div class="navigation-heading"><span class="eyebrow">CHRONO</span><h2>时间节点</h2></div><p>Chrono 使用当前 managed node 的 UUID 打开语义。此 Owner-only 薄客户端尚未增加 Chrono 创建 API。</p></section>
+        <section id="trashPanel" class="trash-panel" aria-label="Workspace Trash" hidden>
+          <div class="navigation-heading"><div><span class="eyebrow">CORE TRASH ITEMS</span><h2>Workspace Trash</h2></div><button id="trashRefreshButton" type="button">刷新</button></div>
+          <p id="trashStatus" aria-live="polite">读取 permission-filtered Core item inventory…</p>
+          <p class="safety-note">Trash 是同步删除状态，不是备份。这里不显示或接受 item-store/payload 路径。</p>
+          <div class="trash-create-actions"><button id="trashMigrationPreviewButton" type="button" hidden>预览旧 Trash 显式迁移</button><button id="trashCurrentNodePreviewButton" type="button">预览删除当前节点子树</button><label for="trashResourceNames">当前节点资源名（每行一个）<textarea id="trashResourceNames" rows="3" placeholder="figure.png&#10;data.csv"></textarea></label><button id="trashResourcesPreviewButton" type="button">预览批量删除独立资源</button></div>
+          <div id="trashItemList" class="trash-item-list" role="list" aria-label="可见 Trash Items"></div>
+          <section id="trashItemPanel" class="transaction-preview" hidden>
+            <h3 id="trashItemName">Trash Item</h3>
+            <p id="trashItemEvidence"></p>
+            <label for="trashRestoreMode">恢复方式<select id="trashRestoreMode"><option id="trashRestoreOriginalOption" value="original">恢复原位</option><option id="trashRestoreAncestorsOption" value="with_ancestors">先恢复父链</option><option value="existing_target">选择现有目标</option></select></label>
+            <label for="trashRestoreTarget">现有目标<select id="trashRestoreTarget"></select></label>
+            <label for="trashRestoreName">恢复名称<input id="trashRestoreName" /></label>
+            <div class="actions"><button id="trashRestorePreviewButton" type="button">预览恢复</button><button id="trashPurgePreviewButton" type="button" class="danger">预览永久删除</button></div>
+          </section>
+          <section id="trashPlanPanel" class="transaction-preview" hidden>
+            <h3>精确 Trash 事务计划</h3>
+            <pre id="trashPlanOutput" tabindex="0" aria-label="Trash 事务精确 item 摘要"></pre>
+            <label class="exact-confirmation" for="trashPlanConfirm"><input id="trashPlanConfirm" type="checkbox" /><span id="trashPlanConfirmationText">我已核对 planId、item/operation ID、payload 摘要、字节数与目标。</span></label>
+            <div class="actions"><button id="trashPlanCancelButton" type="button">取消</button><button id="trashPlanCommitButton" type="button" class="primary" disabled>确认单次提交并刷新 Core inventory</button></div>
+          </section>
+        </section>
+        <div class="navigation-resize"><button id="narrowNavigation" aria-label="缩窄 Explorer">−</button><span id="navigationWidth"></span><button id="widenNavigation" aria-label="加宽 Explorer">＋</button></div>
+        <details id="navigationPerformance"><summary>导航性能</summary><div id="navigationMetrics"></div></details>
+      </aside>
+      <section class="document-area">
+        <div class="document-heading">
+          <div><span class="eyebrow">HOSTED DOCUMENT</span><h1 id="title">正在打开…</h1></div>
+          <code id="revision"></code>
+        </div>
+        <div id="status" class="status" aria-live="polite">正在连接 Server API…</div>
+        <section id="collaborationStatus" class="collaboration-status" aria-live="polite" aria-label="实时协作状态">
+          <strong id="collaborationState">实时协作：等待文档快照</strong>
+          <span id="collaborationRevision"></span>
+          <div id="collaborationParticipants" class="collaboration-participants" role="list" aria-label="当前参与者"></div>
+        </section>
+        <div class="panes">
+          <section>
+            <h2>精确源码草稿</h2>
+            <textarea id="editor" spellcheck="false" aria-label="文档精确源码"></textarea>
+            <div class="actions"><button id="previewButton">Core 预览</button><button id="commitButton" class="primary">revision 检查并提交</button></div>
+          </section>
+          <section>
+            <div class="preview-heading"><h2>Core 文档预览</h2><span id="previewSummary"></span></div>
+            <article id="preview" class="preview"></article>
+          </section>
+        </div>
+      </section>
+      <aside class="inspector" aria-label="Inspector">
+        <div class="navigation-heading"><span class="eyebrow">INSPECTOR</span><h2>文档</h2></div>
+        <nav id="inspectorTabs" class="inspector-tabs" role="tablist" aria-label="Inspector 面板">
+          <button id="propertiesTab" role="tab" aria-selected="true" aria-controls="propertiesPanel">Properties</button>
+          <button id="annotationsTab" role="tab" aria-selected="false" aria-controls="annotationsPanel" tabindex="-1">Annotations</button>
+          <button id="tasksTab" role="tab" aria-selected="false" aria-controls="tasksPanel" tabindex="-1">Tasks</button>
+          <button id="queryTab" role="tab" aria-selected="false" aria-controls="queryPanel" tabindex="-1">Query</button>
+          <button id="permissionsButton" role="tab" aria-selected="false" aria-controls="permissionsPanel" tabindex="-1">Permissions</button>
+        </nav>
+        <div id="propertiesPanel" role="tabpanel" aria-labelledby="propertiesTab">
+          <section id="nodeMetadataPanel" class="metadata-panel" aria-label="节点系统元数据">
+            <h3>节点系统元数据</h3>
+            <p>由 Core 从浅层 <code>weftext</code> envelope 投影；此 Server 薄界面只读。</p>
+            <dl id="nodeMetadataValues"></dl>
+            <div id="nodeMetadataAliases" aria-label="节点别名"></div>
+            <div id="nodeMetadataDiagnostics" role="status"></div>
+          </section>
+          <section id="documentPropertiesPanel" class="metadata-panel" aria-label="AsciiDoc 文档头属性">
+            <h3>文档属性</h3>
+            <p>仅显示 AsciiDoc 文档头 attribute，不与系统 YAML 混合。</p>
+            <dl id="documentPropertyValues"></dl>
+          </section>
+        </div>
+        <section id="annotationsPanel" class="product-panel" role="tabpanel" aria-labelledby="annotationsTab" hidden>
+          <header><h3>批注与建议</h3><p id="annotationStatus" aria-live="polite">选择节点后读取同目录 v3 sidecar。</p></header>
+          <form id="annotationCreateForm" class="surface-form">
+            <label for="annotationKind">类型<select id="annotationKind"><option value="comment">评论</option><option value="mark">标记</option><option value="suggestion_insert">插入建议</option><option value="suggestion_delete">删除建议</option></select></label>
+            <label for="annotationTarget">目标<select id="annotationTarget"><option value="document">整个文档</option><option value="text_range">当前源码选择</option><option value="insertion_point">当前插入点</option><option value="block_at">插入点所在块</option></select></label>
+            <label for="annotationBody">正文（AsciiDoc inline）<textarea id="annotationBody" rows="3" placeholder="评论正文；Ctrl+Enter 提交"></textarea></label>
+            <label for="annotationSuggestedSource">建议源码<textarea id="annotationSuggestedSource" rows="2" placeholder="仅 suggestion_insert 使用"></textarea></label>
+            <label for="annotationLabels">标签<input id="annotationLabels" placeholder="逗号分隔" /></label>
+            <div class="surface-form-row"><label for="annotationMark">外观<select id="annotationMark"><option value="none">无</option><option value="highlight">高亮</option><option value="underline">下划线</option><option value="squiggle">波浪线</option><option value="strike">删除线</option></select></label><label for="annotationTheme">主题<select id="annotationTheme"><option value="yellow">黄色</option><option value="red">红色</option><option value="green">绿色</option><option value="blue">蓝色</option><option value="purple">紫色</option><option value="pink">粉色</option><option value="gray">灰色</option></select></label></div>
+            <button id="annotationCreateButton" class="primary">添加批注</button>
+          </form>
+          <div id="annotationList" class="surface-list" role="list" aria-label="当前节点批注"></div>
+        </section>
+        <section id="tasksPanel" class="product-panel" role="tabpanel" aria-labelledby="tasksTab" hidden>
+          <header><h3>任务</h3><p id="taskStatus" aria-live="polite">任务由 Core typed occurrence 投影。</p></header>
+          <div id="taskList" class="surface-list" role="list" aria-label="当前节点任务"></div>
+          <section id="taskPlanPanel" class="transaction-preview" aria-label="任务事务预览" hidden>
+            <h4>固定事务预览</h4><code id="taskPlanId"></code>
+            <h5>Typed intent</h5><pre id="taskPlanIntent" tabindex="0" aria-label="待确认的 typed task intent"></pre>
+            <p id="taskPlanGenerated"></p>
+            <div id="taskPlanChanges"></div>
+            <h5>Core exact proposed source</h5>
+            <pre id="taskPlanSource" class="exact-source-preview" tabindex="0" aria-label="Core 生成的 exact proposed source"></pre>
+            <label class="exact-confirmation" for="taskPlanConfirm"><input id="taskPlanConfirm" type="checkbox" />我已核对 planId、typed intent、生成身份与上述 exact source</label>
+            <div class="actions"><button id="taskPlanCancelButton" type="button">取消</button><button id="taskPlanCommitButton" type="button" class="primary">确认单次提交并 authoritative refresh</button></div>
+          </section>
+        </section>
+        <section id="queryPanel" class="product-panel" role="tabpanel" aria-labelledby="queryTab" hidden>
+          <header><h3>统一 Query / CSV</h3><p>源码由 Core 解析；浏览器只呈现 permission-filtered typed result 与原样 CSV。</p></header>
+          <form id="queryForm" class="surface-form">
+            <label for="querySource">查询块源码<textarea id="querySource" rows="9" spellcheck="false">[.weftext-query,version=1,view=table]
+....
+from nodes as node
+scope workspace
+where true
+select node.name, node.path
+order by node.path asc
+limit 100
+....
+</textarea></label>
+            <div class="surface-form-row"><label for="queryBlockIndex">块序号<input id="queryBlockIndex" type="number" min="0" step="1" value="0" /></label><label for="queryToday">求值日期<input id="queryToday" type="date" /></label></div>
+            <button id="queryRunButton" class="primary">执行 Core 查询</button>
+          </form>
+          <p id="queryStatus" aria-live="polite"></p>
+          <div id="queryDiagnostics" class="surface-diagnostics" role="status"></div>
+          <div id="queryGroups" class="query-groups" aria-label="查询分组"></div>
+          <div id="queryTableContainer" class="query-table-container"></div>
+          <button id="queryCsvButton" type="button" disabled>下载 Core CSV</button>
+        </section>
+        <section id="permissionsPanel" class="product-panel" role="tabpanel" aria-labelledby="permissionsButton" hidden>
+          <p id="permissionSummary" aria-live="polite"></p>
+          <form id="memberForm" hidden>
+            <label for="memberLogin">登录名<input id="memberLogin" autocomplete="off" /></label>
+            <label for="memberPassword">初始密码<input id="memberPassword" type="password" autocomplete="new-password" /></label>
+            <label for="memberRole">角色<select id="memberRole"><option value="admin">Admin</option><option value="editor">Editor</option><option value="commenter">Commenter</option><option value="viewer">Viewer</option><option value="owner">Owner</option></select></label>
+            <button class="primary">添加成员</button>
+          </form>
+          <div id="memberList" role="list" aria-label="工作区成员"></div>
+          <form id="nodeAclForm" hidden>
+            <label for="nodeAclMember">当前节点成员<select id="nodeAclMember"></select></label>
+            <label for="nodeAclAccess">访问权限<select id="nodeAclAccess"><option value="">继承</option><option value="hidden">隐藏</option><option value="read">只读</option><option value="write">可写</option></select></label>
+            <button class="primary">保存当前节点授权</button>
+          </form>
+          <div id="nodeAclList" role="list" aria-label="当前节点显式授权"></div>
+          <section id="backupPanel" class="backup-panel" aria-label="Server 备份与恢复" hidden>
+            <h3>成对备份与恢复</h3>
+            <p id="backupStatus" aria-live="polite">仅 Owner 可操作。每次提交都会排空其他 API 请求并核对 workspace + control plane 精确对。</p>
+            <form id="backupForm" class="surface-form">
+              <label for="backupParent">Server 上的备份父目录<input id="backupParent" autocomplete="off" /></label>
+              <button id="backupPreviewButton" type="submit">预览完整成对备份</button>
+            </form>
+            <section id="backupPlanPanel" class="transaction-preview" hidden>
+              <h4>精确备份计划</h4>
+              <pre id="backupPlanOutput" tabindex="0"></pre>
+              <label class="exact-confirmation" for="backupPlanConfirm"><input id="backupPlanConfirm" type="checkbox" />我已核对 planDigest、两组 ID、字节数与目标目录</label>
+              <button id="backupCommitButton" type="button" class="primary" disabled>静默并提交成对备份</button>
+            </section>
+            <form id="backupVerifyForm" class="surface-form">
+              <label for="backupWorkspaceSnapshot">workspace 快照目录<input id="backupWorkspaceSnapshot" autocomplete="off" /></label>
+              <label for="backupControlSnapshot">control-plane 快照目录<input id="backupControlSnapshot" autocomplete="off" /></label>
+              <button id="backupVerifyButton" type="submit">只读校验精确对</button>
+            </form>
+            <form id="restoreForm" class="surface-form">
+              <label for="restoredWorkspaceRoot">新的 workspace 目标（必须不存在）<input id="restoredWorkspaceRoot" autocomplete="off" /></label>
+              <label for="restoredControlRoot">新的 control-plane 目标（必须不存在）<input id="restoredControlRoot" autocomplete="off" /></label>
+              <div class="surface-form-row"><button id="restorePreviewButton" type="button">预览 alternate restore</button><button id="drillPreviewButton" type="button">预览恢复演练</button></div>
+              <button id="restoreVerifyButton" type="button">校验已恢复精确对</button>
+            </form>
+            <section id="restorePlanPanel" class="transaction-preview" hidden>
+              <h4>精确恢复计划</h4>
+              <pre id="restorePlanOutput" tabindex="0"></pre>
+              <label class="exact-confirmation" for="restorePlanConfirm"><input id="restorePlanConfirm" type="checkbox" />我已核对两处不相交的 create-new 目标与 session 失效策略</label>
+              <button id="restoreCommitButton" type="button" class="primary" disabled>提交 alternate restore</button>
+              <button id="drillCommitButton" type="button" class="primary" disabled>执行并记录恢复演练</button>
+            </section>
+          </section>
+        </section>
+      </aside>
+    </main>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>

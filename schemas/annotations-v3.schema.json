@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.org/schemas/annotations-v3.schema.json",
+  "title": "Weftext portable annotations sidecar v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "document_id", "annotations"],
+  "properties": {
+    "version": { "const": 3 },
+    "document_id": { "$ref": "#/$defs/uuidV4" },
+    "annotations": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": { "$ref": "#/$defs/annotation" }
+    }
+  },
+  "$defs": {
+    "uuidV4": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^(sha256:)?[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "context": {
+      "type": "string",
+      "maxLength": 4096
+    },
+    "headingPath": {
+      "type": "array",
+      "maxItems": 32,
+      "items": { "type": "string", "minLength": 1, "maxLength": 4096 }
+    },
+    "blockId": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "textRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "exact", "prefix", "suffix", "start", "end", "base_revision"],
+      "properties": {
+        "kind": { "const": "text_range" },
+        "exact": { "type": "string", "minLength": 1, "maxLength": 262144 },
+        "prefix": { "$ref": "#/$defs/context" },
+        "suffix": { "$ref": "#/$defs/context" },
+        "start": { "type": "integer", "minimum": 0 },
+        "end": { "type": "integer", "minimum": 1 },
+        "base_revision": { "$ref": "#/$defs/digest" },
+        "block_id": { "$ref": "#/$defs/blockId" },
+        "heading_path": { "$ref": "#/$defs/headingPath", "default": [] }
+      }
+    },
+    "insertionPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "prefix", "suffix", "position", "base_revision"],
+      "properties": {
+        "kind": { "const": "insertion_point" },
+        "prefix": { "$ref": "#/$defs/context" },
+        "suffix": { "$ref": "#/$defs/context" },
+        "position": { "type": "integer", "minimum": 0 },
+        "base_revision": { "$ref": "#/$defs/digest" },
+        "block_id": { "$ref": "#/$defs/blockId" },
+        "heading_path": { "$ref": "#/$defs/headingPath", "default": [] }
+      }
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "exact", "heading_path", "base_revision"],
+      "properties": {
+        "kind": { "const": "block" },
+        "exact": { "type": "string", "minLength": 1, "maxLength": 262144 },
+        "heading_path": { "$ref": "#/$defs/headingPath" },
+        "block_id": { "$ref": "#/$defs/blockId" },
+        "base_revision": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "document" } }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "page", "x_millionths", "y_millionths", "width_millionths", "height_millionths"],
+      "properties": {
+        "kind": { "const": "rect" },
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "x_millionths": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "y_millionths": { "type": "integer", "minimum": 0, "maximum": 1000000 },
+        "width_millionths": { "type": "integer", "minimum": 1, "maximum": 1000000 },
+        "height_millionths": { "type": "integer", "minimum": 1, "maximum": 1000000 }
+      }
+    },
+    "timeRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "start_milliseconds", "end_milliseconds"],
+      "properties": {
+        "kind": { "const": "time_range" },
+        "start_milliseconds": { "type": "integer", "minimum": 0 },
+        "end_milliseconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "resourceRegion": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "resource_locator", "resource_digest", "media_kind", "region"],
+          "properties": {
+            "kind": { "const": "resource_region" },
+            "resource_locator": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "resource_digest": { "$ref": "#/$defs/digest" },
+            "media_kind": { "const": "image" },
+            "region": {
+              "allOf": [
+                { "$ref": "#/$defs/rect" },
+                { "properties": { "page": { "type": "null" } } }
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "resource_locator", "resource_digest", "media_kind", "region"],
+          "properties": {
+            "kind": { "const": "resource_region" },
+            "resource_locator": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "resource_digest": { "$ref": "#/$defs/digest" },
+            "media_kind": { "const": "pdf" },
+            "region": { "$ref": "#/$defs/rect" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "resource_locator", "resource_digest", "media_kind", "region"],
+          "properties": {
+            "kind": { "const": "resource_region" },
+            "resource_locator": { "type": "string", "minLength": 1, "maxLength": 4096 },
+            "resource_digest": { "$ref": "#/$defs/digest" },
+            "media_kind": { "enum": ["audio", "video"] },
+            "region": { "$ref": "#/$defs/timeRange" }
+          }
+        }
+      ]
+    },
+    "target": {
+      "oneOf": [
+        { "$ref": "#/$defs/textRange" },
+        { "$ref": "#/$defs/insertionPoint" },
+        { "$ref": "#/$defs/block" },
+        { "$ref": "#/$defs/document" },
+        { "$ref": "#/$defs/resourceRegion" }
+      ]
+    },
+    "appearance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mark", "theme"],
+      "properties": {
+        "mark": { "enum": ["highlight", "underline", "squiggle", "strike"] },
+        "theme": { "enum": ["yellow", "red", "green", "blue", "purple", "pink", "gray"] }
+      }
+    },
+    "body": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "source"],
+      "properties": {
+        "format": { "const": "weftext.asciidoc.inline.v1" },
+        "source": { "type": "string", "minLength": 1, "maxLength": 65536, "pattern": "^[^\\r\\n\\u0000]+$" }
+      }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "author_id", "author_name", "body", "created_at", "updated_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuidV4" },
+        "author_id": { "$ref": "#/$defs/uuidV4" },
+        "author_name": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[^\\r\\n\\u0000]+$" },
+        "body": { "$ref": "#/$defs/body" },
+        "created_at": { "$ref": "#/$defs/timestamp" },
+        "updated_at": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "annotationBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "target", "appearance", "state", "created_at", "updated_at"],
+      "properties": {
+        "id": { "$ref": "#/$defs/uuidV4" },
+        "kind": { "enum": ["comment", "mark", "suggestion_insert", "suggestion_delete"] },
+        "target": { "$ref": "#/$defs/target" },
+        "appearance": { "oneOf": [{ "$ref": "#/$defs/appearance" }, { "type": "null" }] },
+        "suggested_source": { "type": "string", "minLength": 1, "maxLength": 1048576, "pattern": "^[^\\u0000]+$" },
+        "labels": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "default": [],
+          "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[^\\r\\n\\u0000]+$" }
+        },
+        "thread": {
+          "type": "array",
+          "maxItems": 1000,
+          "default": [],
+          "items": { "$ref": "#/$defs/message" }
+        },
+        "state": { "enum": ["open", "resolved", "orphaned"] },
+        "resolution": { "enum": ["resolved", "accepted", "rejected"] },
+        "created_at": { "$ref": "#/$defs/timestamp" },
+        "updated_at": { "$ref": "#/$defs/timestamp" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "resolved" } }, "required": ["state"] },
+          "then": { "required": ["resolution"] },
+          "else": { "not": { "required": ["resolution"] } }
+        }
+      ]
+    },
+    "annotation": {
+      "allOf": [
+        { "$ref": "#/$defs/annotationBase" },
+        {
+          "oneOf": [
+            {
+              "properties": { "kind": { "const": "comment" }, "thread": { "minItems": 1 } },
+              "required": ["kind", "thread"],
+              "not": { "required": ["suggested_source"] }
+            },
+            {
+              "properties": { "kind": { "const": "mark" }, "appearance": { "$ref": "#/$defs/appearance" } },
+              "required": ["kind", "appearance"],
+              "not": { "required": ["suggested_source"] }
+            },
+            {
+              "properties": {
+                "kind": { "const": "suggestion_insert" },
+                "target": { "$ref": "#/$defs/insertionPoint" }
+              },
+              "required": ["kind", "target", "suggested_source"]
+            },
+            {
+              "properties": {
+                "kind": { "const": "suggestion_delete" },
+                "target": { "$ref": "#/$defs/textRange" }
+              },
+              "required": ["kind", "target"],
+              "not": { "required": ["suggested_source"] }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

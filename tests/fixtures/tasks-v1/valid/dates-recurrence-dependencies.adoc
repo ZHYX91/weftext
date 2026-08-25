@@ -1,0 +1,6 @@
+= Typed task fields
+
+* [ ] Establish the baseline task:[id=33333333-3333-4333-8333-333333333333,phase=todo,priority=normal,created=2026-08-23,start=2026-08-24T08:30:00Z,scheduled=2026-08-25,due=2026-08-26T17:00:00+08:00]
+* [ ] Publish twice weekly task:[id=44444444-4444-4444-8444-444444444444,due=2026-09-01,rrule="FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,TH;COUNT=8;WKST=MO",repeat-from=due,depends-on="33333333-3333-4333-8333-333333333333"]
+* [ ] Monthly reconciliation task:[id=55555555-5555-4555-8555-555555555555,scheduled=2026-09-30T18:00:00-04:00,rrule="FREQ=MONTHLY;BYMONTHDAY=1,-1;UNTIL=2027-12-31",repeat-from=scheduled]
+* [ ] Annual review after completion task:[id=77777777-7777-4777-8777-777777777777,rrule="FREQ=YEARLY;INTERVAL=1;BYMONTH=8;BYMONTHDAY=23",repeat-from=completion]

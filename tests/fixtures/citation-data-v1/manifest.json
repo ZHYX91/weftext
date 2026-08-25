@@ -1,0 +1,18 @@
+{
+  "profile": "weftext.citation-data.v1",
+  "cases": [
+    { "id": "minimal", "source": "valid/minimal.adoc", "valid": true, "key": "wang2024" },
+    { "id": "full-cjk-rtl", "source": "valid/full-cjk-rtl.adoc", "valid": true, "key": "wang2024cjk" },
+    { "id": "missing-key", "source": "invalid/missing-key.adoc", "valid": false, "code": "missing_required_field" },
+    { "id": "invalid-key", "source": "invalid/invalid-key.adoc", "valid": false, "code": "invalid_key" },
+    { "id": "duplicate-key", "source": "invalid/duplicate-key.adoc", "valid": false, "code": "duplicate_yaml_key" },
+    { "id": "invalid-name", "source": "invalid/invalid-name.adoc", "valid": false, "code": "invalid_name" },
+    { "id": "invalid-date", "source": "invalid/invalid-date.adoc", "valid": false, "code": "invalid_date" },
+    { "id": "unknown-field", "source": "invalid/unknown-field.adoc", "valid": false, "code": "unknown_field" },
+    { "id": "anchor", "source": "invalid/anchor.adoc", "valid": false, "code": "unsupported_yaml" },
+    { "id": "alias", "source": "invalid/alias.adoc", "valid": false, "code": "unsupported_yaml" },
+    { "id": "tag", "source": "invalid/tag.adoc", "valid": false, "code": "unsupported_yaml" },
+    { "id": "unclosed-envelope", "source": "invalid/unclosed-envelope.adoc", "valid": false, "code": "invalid_envelope" },
+    { "id": "malformed", "source": "invalid/malformed.adoc", "valid": false, "code": "invalid_yaml" }
+  ]
+}

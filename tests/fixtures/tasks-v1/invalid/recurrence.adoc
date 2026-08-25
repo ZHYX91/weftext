@@ -1,0 +1,7 @@
+= Invalid recurrence
+
+* [ ] Unsupported RRULE part task:[id=29292929-2929-4929-8929-292929292929,due=2026-09-01,rrule="FREQ=WEEKLY;BYHOUR=9",repeat-from=due]
+* [ ] Missing repeat basis task:[id=30303030-3030-4030-8030-303030303030,due=2026-09-01,rrule="FREQ=DAILY;COUNT=3"]
+* [ ] Unexpected repeat basis task:[id=31313131-3131-4131-8131-313131313131,due=2026-09-01,repeat-from=due]
+* [ ] Missing anchor task:[id=32323232-3232-4232-8232-323232323232,rrule="FREQ=MONTHLY;BYMONTHDAY=1",repeat-from=scheduled]
+* [ ] Unquoted RRULE task:[id=34343434-3434-4434-8434-343434343434,due=2026-09-01,rrule=FREQ=DAILY;COUNT=3,repeat-from=due]

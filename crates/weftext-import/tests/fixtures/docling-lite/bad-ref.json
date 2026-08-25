@@ -1,0 +1,9 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "bad-ref.pdf",
+  "furniture": {"self_ref": "#/furniture", "children": []},
+  "body": {"self_ref": "#/body", "children": [{"$ref": "#/texts/99"}]},
+  "groups": [], "texts": [], "pictures": [], "tables": [],
+  "key_value_items": [], "form_items": [], "pages": {}
+}

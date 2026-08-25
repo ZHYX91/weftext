@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.example/schemas/test-evidence-v1.schema.json",
+  "title": "Weftext release test-layer evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "layer",
+    "releaseVersion",
+    "sourceCommit",
+    "result",
+    "startedAt",
+    "completedAt",
+    "executor",
+    "summary",
+    "checks"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "weftext.test-evidence.v1"
+    },
+    "layer": {
+      "enum": [
+        "backup-disaster-recovery",
+        "cli",
+        "collaboration-multi-client",
+        "core-source",
+        "desktop-packaged",
+        "filesystem-integration",
+        "manual-accessibility-daily-use",
+        "server-container-packaged",
+        "webui-supported-browser"
+      ]
+    },
+    "releaseVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "result": {
+      "const": "passed"
+    },
+    "startedAt": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "completedAt": {
+      "$ref": "#/$defs/timestamp"
+    },
+    "executor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "identity",
+        "environment"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "ci",
+            "human"
+          ]
+        },
+        "identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 40
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "result",
+          "details"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "result": {
+            "const": "passed"
+          },
+          "details": {
+            "type": "string",
+            "minLength": 20
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

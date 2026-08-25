@@ -1,0 +1,15 @@
+= Task query
+
+.Due soon
+[.weftext-query,version=1,view=task-list]
+....
+from tasks as task
+scope workspace
+where not task.closed = true
+  and (task.due is null or task.due <= context.today + P14D)
+  and task.priority in ["highest", "high", "normal"]
+group by task.state as group_state
+select task.kind, task.id as task_id, task.owner_node.id as owner_node_id, task.title, task.closed, task.state, task.priority, task.due
+order by task.due asc nulls last, task.priority desc
+limit 250
+....

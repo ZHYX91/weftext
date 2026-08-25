@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.org/schemas/task-import-v1.schema.json",
+  "title": "Weftext task import settings v1",
+  "description": "Pinned, non-canonical source dialect and settings boundary for Markdown and Obsidian Tasks preview planning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["dialect", "pluginVersion", "globalFilter", "indentationWidth", "statuses"],
+  "properties": {
+    "dialect": { "enum": ["markdown_checklist_v1", "obsidian_tasks_emoji_v1"] },
+    "pluginVersion": { "type": ["string", "null"] },
+    "globalFilter": { "type": ["string", "null"] },
+    "indentationWidth": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "statuses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["symbol", "name", "statusType"],
+        "properties": {
+          "symbol": { "type": "string", "minLength": 1, "maxLength": 1 },
+          "name": { "type": "string", "minLength": 1 },
+          "statusType": {
+            "enum": ["TODO", "DONE", "IN_PROGRESS", "ON_HOLD", "CANCELLED", "NON_TASK"]
+          }
+        }
+      }
+    }
+  }
+}

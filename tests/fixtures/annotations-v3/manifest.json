@@ -1,0 +1,13 @@
+{
+  "profile": "weftext.annotations.v3",
+  "schema": "schemas/annotations-v3.schema.json",
+  "cases": [
+    { "id": "comment-text-cjk-rtl-emoji", "source": "valid/comment-text.json", "valid": true, "features": ["comment", "text-range", "cjk", "rtl", "emoji", "appearance", "labels"] },
+    { "id": "resources-and-suggestions", "source": "valid/resources-and-suggestions.json", "valid": true, "features": ["resource-region", "pdf", "suggestion-insert", "suggestion-delete", "resolved"] },
+    { "id": "document-thread", "source": "valid/document-thread.json", "valid": true, "features": ["document", "thread", "explicit-offset"] },
+    { "id": "legacy-body", "source": "invalid/legacy-body.json", "valid": false, "features": ["negative", "legacy-body"] },
+    { "id": "unknown-field", "source": "invalid/unknown-field.json", "valid": false, "features": ["negative", "closed-schema"] },
+    { "id": "invalid-resource-region", "source": "invalid/invalid-resource-region.json", "valid": false, "features": ["negative", "resource-bounds"] },
+    { "id": "duplicate-identity", "source": "invalid/duplicate-identity.json", "valid": false, "schema_valid": true, "features": ["negative", "identity", "semantic-validation"] }
+  ]
+}

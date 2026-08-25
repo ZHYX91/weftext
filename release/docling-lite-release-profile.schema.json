@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.local/schemas/docling-lite-release-profile.v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "workerProtocolVersion",
+    "workerPackageVersion",
+    "rustToolchainVersion",
+    "buildToolchain",
+    "source",
+    "exactPrereleasePins",
+    "exactDirectRegistryDependencies",
+    "profile",
+    "reviewedNativeRuntime",
+    "runtimeAssetLayout",
+    "reviewedExtractedArtifacts",
+    "isolation"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "weftext.docling-lite-release-profile.v2" },
+    "workerProtocolVersion": { "const": "weftext.docling-lite-worker-json.v1" },
+    "workerPackageVersion": { "$ref": "#/$defs/version" },
+    "rustToolchainVersion": { "$ref": "#/$defs/version" },
+    "buildToolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rustc", "cargo", "reviewedTarget"],
+      "properties": {
+        "rustc": { "type": "string", "minLength": 1 },
+        "cargo": { "type": "string", "minLength": 1 },
+        "reviewedTarget": { "const": "x86_64-pc-windows-msvc" }
+      }
+    },
+    "source": { "$ref": "#/$defs/doclingSource" },
+    "exactPrereleasePins": { "$ref": "#/$defs/exactVersions" },
+    "exactDirectRegistryDependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["docling", "docling-core", "docling-pdf", "ort", "ort-sys", "serde", "serde_json", "sha2"],
+      "properties": {
+        "docling": { "$ref": "#/$defs/version" },
+        "docling-core": { "$ref": "#/$defs/version" },
+        "docling-pdf": { "$ref": "#/$defs/version" },
+        "ort": { "$ref": "#/$defs/version" },
+        "ort-sys": { "$ref": "#/$defs/version" },
+        "serde": { "$ref": "#/$defs/version" },
+        "serde_json": { "$ref": "#/$defs/version" },
+        "sha2": { "$ref": "#/$defs/version" }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "successOutput", "failureOutput", "ocr", "layout", "tableFormer", "networkFeatures", "excludedFeatures"],
+      "properties": {
+        "input": { "const": "input/source.pdf" },
+        "successOutput": { "const": "raw DoclingDocument 1.10.0 JSON" },
+        "failureOutput": { "const": "typed Weftext worker failure JSON" },
+        "ocr": { "const": "PP-OCRv3 English" },
+        "layout": { "const": "Heron INT8" },
+        "tableFormer": { "const": false },
+        "networkFeatures": { "const": false },
+        "excludedFeatures": {
+          "type": "array",
+          "minItems": 9,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "reviewedNativeRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "component", "implementation", "version", "rustBindingCrate", "rustBindingVersion", "linkage", "installPath", "sourceArchive", "archiveFiles", "buildEnvironment", "forbiddenImports"],
+      "properties": {
+        "target": { "const": "x86_64-pc-windows-msvc" },
+        "component": { "const": "onnx-runtime" },
+        "implementation": { "const": "Microsoft ONNX Runtime" },
+        "version": { "const": "1.24.2" },
+        "rustBindingCrate": { "const": "ort" },
+        "rustBindingVersion": { "const": "2.0.0-rc.12" },
+        "linkage": { "const": "dynamic" },
+        "installPath": { "const": "onnxruntime.dll" },
+        "sourceArchive": { "$ref": "#/$defs/archivePin" },
+        "archiveFiles": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/archiveFilePin" }
+        },
+        "buildEnvironment": { "$ref": "#/$defs/buildEnvironment" },
+        "forbiddenImports": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/dll" }
+        }
+      }
+    },
+    "runtimeAssetLayout": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/runtimeLayout" }
+    },
+    "reviewedExtractedArtifacts": {
+      "type": "array",
+      "minItems": 5,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/reviewedArtifact" }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["providedByWorker", "requiredFromSupervisor"],
+      "properties": {
+        "providedByWorker": { "const": false },
+        "requiredFromSupervisor": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "dll": { "type": "string", "pattern": "^[a-z0-9._-]+\\.dll$" },
+    "doclingSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["crate", "version", "releaseTag", "releaseCommit", "defaultFeatures", "features"],
+      "properties": {
+        "crate": { "const": "docling" },
+        "version": { "const": "0.52.2" },
+        "releaseTag": { "const": "v0.52.2" },
+        "releaseCommit": { "pattern": "^[0-9a-f]{40}$" },
+        "defaultFeatures": { "const": false },
+        "features": { "const": ["pdf"] }
+      }
+    },
+    "exactVersions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["docling-core", "docling-pdf", "ort", "ort-sys"],
+      "properties": {
+        "docling-core": { "const": "0.52.2" },
+        "docling-pdf": { "const": "0.52.2" },
+        "ort": { "const": "2.0.0-rc.12" },
+        "ort-sys": { "const": "2.0.0-rc.12" }
+      }
+    },
+    "archivePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sourceUrl", "byteLength", "sha256"],
+      "properties": {
+        "artifact": { "const": "onnxruntime-win-x64-1.24.2.zip" },
+        "sourceUrl": { "const": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "archiveFilePin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "byteLength", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^onnxruntime-win-x64-1\\.24\\.2/lib/onnxruntime\\.(?:dll|lib)$" },
+        "role": { "enum": ["runtime_library", "import_library"] },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "buildEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ORT_LIB_PATH", "ORT_PREFER_DYNAMIC_LINK", "ORT_SKIP_DOWNLOAD", "CARGO_NET_OFFLINE"],
+      "properties": {
+        "ORT_LIB_PATH": { "const": "<extracted-archive-root>/onnxruntime-win-x64-1.24.2/lib" },
+        "ORT_PREFER_DYNAMIC_LINK": { "const": "1" },
+        "ORT_SKIP_DOWNLOAD": { "const": "1" },
+        "CARGO_NET_OFFLINE": { "const": "true" }
+      }
+    },
+    "runtimeLayout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component"],
+      "properties": {
+        "component": { "enum": ["pdfium", "layout-int8", "pp-ocr", "ocr-dictionary"] },
+        "path": { "type": "string", "minLength": 1 },
+        "pathByTarget": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu", "x86_64-apple-darwin", "aarch64-apple-darwin"],
+          "properties": {
+            "x86_64-pc-windows-msvc": { "type": "string", "minLength": 1 },
+            "x86_64-unknown-linux-gnu": { "type": "string", "minLength": 1 },
+            "x86_64-apple-darwin": { "type": "string", "minLength": 1 },
+            "aarch64-apple-darwin": { "type": "string", "minLength": 1 }
+          }
+        }
+      },
+      "oneOf": [
+        { "required": ["path"], "not": { "required": ["pathByTarget"] } },
+        { "required": ["pathByTarget"], "not": { "required": ["path"] } }
+      ]
+    },
+    "reviewedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "target", "byteLength", "sha256"],
+      "properties": {
+        "component": { "enum": ["pdfium", "layout-int8", "pp-ocr", "ocr-dictionary"] },
+        "target": { "enum": ["all", "x86_64-pc-windows-msvc", "x86_64-unknown-linux-gnu"] },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

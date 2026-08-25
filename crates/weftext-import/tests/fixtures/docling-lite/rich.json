@@ -1,0 +1,94 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "rich-fixture.pdf",
+  "origin": {"mimetype": "application/pdf", "binary_hash": 1, "filename": "rich-fixture.pdf"},
+  "furniture": {"self_ref": "#/furniture", "children": [], "content_layer": "furniture", "name": "_root_", "label": "unspecified"},
+  "body": {
+    "self_ref": "#/body",
+    "children": [
+      {"$ref": "#/texts/0"},
+      {"$ref": "#/texts/1"},
+      {"$ref": "#/texts/2"},
+      {"$ref": "#/groups/0"},
+      {"$ref": "#/tables/0"},
+      {"$ref": "#/pictures/0"}
+    ],
+    "content_layer": "body",
+    "name": "_root_",
+    "label": "unspecified"
+  },
+  "groups": [
+    {
+      "self_ref": "#/groups/0",
+      "parent": {"$ref": "#/body"},
+      "children": [{"$ref": "#/texts/3"}, {"$ref": "#/texts/4"}],
+      "content_layer": "body",
+      "name": "list",
+      "label": "list"
+    }
+  ],
+  "texts": [
+    {
+      "self_ref": "#/texts/0", "parent": {"$ref": "#/body"}, "children": [],
+      "content_layer": "body", "label": "title", "orig": "中文 العربية", "text": "中文 العربية",
+      "prov": [{"page_no": 1, "bbox": {"l": 60, "t": 760, "r": 540, "b": 700, "coord_origin": "BOTTOMLEFT"}, "charspan": [0, 0]}]
+    },
+    {
+      "self_ref": "#/texts/1", "parent": {"$ref": "#/body"}, "children": [],
+      "content_layer": "body", "label": "section_header", "level": 1, "orig": "章节 واحد", "text": "章节 واحد",
+      "prov": [{"page_no": 1, "bbox": {"l": 60, "t": 680, "r": 400, "b": 640, "coord_origin": "BOTTOMLEFT"}, "charspan": [0, 0]}]
+    },
+    {
+      "self_ref": "#/texts/2", "parent": {"$ref": "#/body"}, "children": [],
+      "content_layer": "body", "label": "text", "orig": "混合 CJK 与 RTL: مرحبا بالعالم", "text": "混合 CJK 与 RTL: مرحبا بالعالم",
+      "prov": [{"page_no": 1, "bbox": {"l": 60, "t": 620, "r": 540, "b": 580, "coord_origin": "BOTTOMLEFT"}, "charspan": [0, 0]}]
+    },
+    {
+      "self_ref": "#/texts/3", "parent": {"$ref": "#/groups/0"}, "children": [],
+      "content_layer": "body", "label": "list_item", "orig": "第一项", "text": "第一项", "enumerated": false, "marker": "-", "prov": []
+    },
+    {
+      "self_ref": "#/texts/4", "parent": {"$ref": "#/groups/0"}, "children": [],
+      "content_layer": "body", "label": "list_item", "orig": "البند الثاني", "text": "البند الثاني", "enumerated": false, "marker": "-", "prov": []
+    },
+    {
+      "self_ref": "#/texts/5", "parent": {"$ref": "#/pictures/0"}, "children": [],
+      "content_layer": "body", "label": "caption", "orig": "示意图", "text": "示意图", "prov": []
+    }
+  ],
+  "pictures": [
+    {
+      "self_ref": "#/pictures/0", "parent": {"$ref": "#/body"}, "children": [],
+      "content_layer": "body", "label": "picture",
+      "prov": [{"page_no": 1, "bbox": {"l": 300, "t": 300, "r": 540, "b": 100, "coord_origin": "BOTTOMLEFT"}, "charspan": [0, 0]}],
+      "captions": [{"$ref": "#/texts/5"}], "references": [], "footnotes": [], "annotations": [],
+      "image": {"mimetype": "image/png", "dpi": 72, "size": {"width": 1, "height": 1}, "uri": "data:image/png;base64,UE5H"}
+    }
+  ],
+  "tables": [
+    {
+      "self_ref": "#/tables/0", "parent": {"$ref": "#/body"}, "children": [],
+      "content_layer": "body", "label": "table",
+      "prov": [{"page_no": 1, "bbox": {"l": 60, "t": 540, "r": 280, "b": 360, "coord_origin": "BOTTOMLEFT"}, "charspan": [0, 0]}],
+      "captions": [], "references": [], "footnotes": [], "annotations": [],
+      "data": {
+        "num_rows": 2, "num_cols": 2,
+        "table_cells": [],
+        "grid": [
+          [
+            {"text": "列 A", "row_span": 1, "col_span": 1, "column_header": true},
+            {"text": "列 B", "row_span": 1, "col_span": 1, "column_header": true}
+          ],
+          [
+            {"text": "值 一", "row_span": 1, "col_span": 1, "column_header": false},
+            {"text": "قيمة", "row_span": 1, "col_span": 1, "column_header": false}
+          ]
+        ]
+      }
+    }
+  ],
+  "key_value_items": [],
+  "form_items": [],
+  "pages": {"1": {"size": {"width": 600, "height": 800}, "page_no": 1}}
+}

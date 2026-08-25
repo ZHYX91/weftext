@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "weftext.release-trust.v1",
+  "cosignVersion": "3.0.6",
+  "certificateOidcIssuer": "https://token.actions.githubusercontent.com",
+  "certificateIdentityTemplate": "https://github.com/ZHYX91/weftext/.github/workflows/release-artifacts.yml@refs/tags/v{releaseVersion}"
+}

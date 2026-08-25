@@ -1,0 +1,28 @@
+---
+weftext:
+  id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+---
+= Protected task-like source
+:example: * [ ] document-header task:[id=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb]
+
+// * [ ] Line comment task:[id=cccccccc-cccc-4ccc-8ccc-cccccccccccc]
+
+////
+* [ ] Comment block task:[id=dddddddd-dddd-4ddd-8ddd-dddddddddddd]
+////
+
+[source]
+----
+* [ ] Source block task:[id=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee]
+----
+
+....
+* [ ] Literal block task:[id=ffffffff-ffff-4fff-8fff-ffffffffffff]
+....
+
+++++
+* [ ] Passthrough block task:[id=12121212-1212-4212-8212-121212121212]
+++++
+
+* [ ] A visible simple item with pass:[task:[id=13131313-1313-4313-8313-131313131313]] literal text
+* [ ] The visible structured item task:[id=14141414-1414-4414-8414-141414141414,priority=low]

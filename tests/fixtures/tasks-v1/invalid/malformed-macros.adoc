@@ -1,0 +1,6 @@
+= Malformed task metadata
+
+* [ ] Macro is not final task:[id=39393939-3939-4939-8939-393939393939] trailing text
+* [ ] Two macros task:[id=40404040-4040-4040-8040-404040404040] task:[id=41414141-4141-4141-8141-414141414141]
+* [ ] Unclosed task:[id=42424242-4242-4242-8242-424242424242
+* [ ] Descriptiontask:[id=43434343-4343-4343-8343-434343434343]

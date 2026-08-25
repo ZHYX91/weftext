@@ -1,0 +1,11 @@
+= Node query
+
+[.weftext-query,version=1,view=table]
+....
+from nodes as node
+scope subtree(this.node)
+where contains(node.name, "研究") or node.parent_id is null
+select node.id, node.name, node.path, node.parent_id, node.depth
+order by node.path asc
+limit 50
+....

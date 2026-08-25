@@ -1,0 +1,9 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.11.0",
+  "name": "unknown.pdf",
+  "furniture": {"self_ref": "#/furniture", "children": []},
+  "body": {"self_ref": "#/body", "children": []},
+  "groups": [], "texts": [], "pictures": [], "tables": [],
+  "key_value_items": [], "form_items": [], "pages": {}
+}

@@ -1,0 +1,93 @@
+{
+  "profile": "weftext.tasks.v1",
+  "cases": [
+    {
+      "id": "basic-multilingual",
+      "source": "valid/basic-multilingual.adoc",
+      "valid": true,
+      "tasks": 4,
+      "structured": 2,
+      "features": ["positive", "cjk", "rtl", "nested-list", "simple-checklist", "closed-marker-preservation"]
+    },
+    {
+      "id": "dates-recurrence-dependencies",
+      "source": "valid/dates-recurrence-dependencies.adoc",
+      "valid": true,
+      "tasks": 4,
+      "structured": 4,
+      "features": ["date", "time", "recurrence", "identity", "dependency"]
+    },
+    {
+      "id": "protected-contexts",
+      "source": "valid/protected-contexts.adoc",
+      "valid": true,
+      "tasks": 2,
+      "structured": 1,
+      "features": ["protected-context", "inline-passthrough"]
+    },
+    {
+      "id": "mixed-line-endings",
+      "sourceText": "* [ ] CRLF\r\n** [x] LF\n*** [ ] العربية task:[id=66666666-6666-4666-8666-666666666666,due=2026-09-01]\r- [*] CR only",
+      "valid": true,
+      "tasks": 4,
+      "structured": 1,
+      "features": ["mixed-line-ending", "nested-list", "rtl"]
+    },
+    {
+      "id": "invalid-identity",
+      "source": "invalid/identity.adoc",
+      "valid": false,
+      "tasks": 5,
+      "codes": ["missing_id", "invalid_id", "duplicate_id"],
+      "features": ["negative", "identity"]
+    },
+    {
+      "id": "invalid-fields",
+      "source": "invalid/fields.adoc",
+      "valid": false,
+      "tasks": 12,
+      "codes": [
+        "unknown_attribute",
+        "duplicate_attribute",
+        "invalid_attribute_name",
+        "invalid_attribute_value",
+        "invalid_phase",
+        "invalid_resolution",
+        "invalid_priority",
+        "invalid_date_time",
+        "invalid_state_combination"
+      ],
+      "features": ["negative", "malformed", "date", "time"]
+    },
+    {
+      "id": "invalid-recurrence",
+      "source": "invalid/recurrence.adoc",
+      "valid": false,
+      "tasks": 5,
+      "codes": [
+        "invalid_recurrence",
+        "missing_repeat_from",
+        "unexpected_repeat_from",
+        "missing_recurrence_anchor",
+        "invalid_attribute_value"
+      ],
+      "features": ["negative", "recurrence"]
+    },
+    {
+      "id": "invalid-dependencies",
+      "source": "invalid/dependencies.adoc",
+      "valid": false,
+      "tasks": 3,
+      "codes": ["invalid_dependency", "duplicate_dependency", "self_dependency"],
+      "features": ["negative", "dependency"]
+    },
+    {
+      "id": "malformed-macros",
+      "source": "invalid/malformed-macros.adoc",
+      "valid": false,
+      "tasks": 4,
+      "codes": ["malformed_macro", "duplicate_macro"],
+      "features": ["negative", "malformed"]
+    }
+  ]
+}

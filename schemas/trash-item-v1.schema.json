@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.org/schemas/trash-item-v1.schema.json",
+  "title": "Weftext Workspace Trash item manifest v1",
+  "oneOf": [
+    { "$ref": "#/$defs/nodeKnown" },
+    { "$ref": "#/$defs/nodeUnknown" },
+    { "$ref": "#/$defs/resourceKnown" },
+    { "$ref": "#/$defs/resourceUnknown" }
+  ],
+  "$defs": {
+    "uuidV4": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "portableName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "pattern": "^[^\\x00-\\x1f\\\\/:*?\"<>|]+$"
+    },
+    "nodeKnown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "trashItemId", "operationId", "kind", "trashedAt", "originStatus", "nodeId", "originalParentNodeId", "originalName", "ancestorNodeIds", "payloadEntryCount", "payloadByteLength", "payloadSha256"],
+      "properties": {
+        "schema": { "const": "weftext.trash-item/v1" },
+        "trashItemId": { "$ref": "#/$defs/uuidV4" },
+        "operationId": { "$ref": "#/$defs/uuidV4" },
+        "kind": { "const": "node" },
+        "trashedAt": { "$ref": "#/$defs/timestamp" },
+        "originStatus": { "const": "known" },
+        "nodeId": { "$ref": "#/$defs/uuidV4" },
+        "originalParentNodeId": { "$ref": "#/$defs/uuidV4" },
+        "originalName": { "$ref": "#/$defs/portableName" },
+        "ancestorNodeIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/uuidV4" } },
+        "payloadEntryCount": { "type": "integer", "minimum": 1 },
+        "payloadByteLength": { "type": "integer", "minimum": 0 },
+        "payloadSha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "nodeUnknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "trashItemId", "operationId", "kind", "trashedAt", "originStatus", "nodeId", "originalParentNodeId", "originalName", "ancestorNodeIds", "payloadEntryCount", "payloadByteLength", "payloadSha256"],
+      "properties": {
+        "schema": { "const": "weftext.trash-item/v1" },
+        "trashItemId": { "$ref": "#/$defs/uuidV4" },
+        "operationId": { "$ref": "#/$defs/uuidV4" },
+        "kind": { "const": "node" },
+        "trashedAt": { "$ref": "#/$defs/timestamp" },
+        "originStatus": { "const": "unknown" },
+        "nodeId": { "$ref": "#/$defs/uuidV4" },
+        "originalParentNodeId": { "type": "null" },
+        "originalName": { "$ref": "#/$defs/portableName" },
+        "ancestorNodeIds": { "type": "array", "maxItems": 0 },
+        "payloadEntryCount": { "type": "integer", "minimum": 1 },
+        "payloadByteLength": { "type": "integer", "minimum": 0 },
+        "payloadSha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "resourceKnown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "trashItemId", "operationId", "kind", "trashedAt", "originStatus", "originalOwnerNodeId", "originalName", "byteLength", "sha256"],
+      "properties": {
+        "schema": { "const": "weftext.trash-item/v1" },
+        "trashItemId": { "$ref": "#/$defs/uuidV4" },
+        "operationId": { "$ref": "#/$defs/uuidV4" },
+        "kind": { "const": "resource" },
+        "trashedAt": { "$ref": "#/$defs/timestamp" },
+        "originStatus": { "const": "known" },
+        "originalOwnerNodeId": { "$ref": "#/$defs/uuidV4" },
+        "originalName": { "$ref": "#/$defs/portableName" },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "resourceUnknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "trashItemId", "operationId", "kind", "trashedAt", "originStatus", "originalOwnerNodeId", "originalName", "byteLength", "sha256"],
+      "properties": {
+        "schema": { "const": "weftext.trash-item/v1" },
+        "trashItemId": { "$ref": "#/$defs/uuidV4" },
+        "operationId": { "$ref": "#/$defs/uuidV4" },
+        "kind": { "const": "resource" },
+        "trashedAt": { "$ref": "#/$defs/timestamp" },
+        "originStatus": { "const": "unknown" },
+        "originalOwnerNodeId": { "type": "null" },
+        "originalName": { "$ref": "#/$defs/portableName" },
+        "byteLength": { "type": "integer", "minimum": 0 },
+        "sha256": { "$ref": "#/$defs/digest" }
+      }
+    }
+  }
+}

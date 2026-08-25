@@ -1,0 +1,291 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.example/schemas/release-input-v1.schema.json",
+  "title": "Weftext external release inputs",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "releaseVersion",
+    "sourceCommit",
+    "artifacts",
+    "sboms",
+    "noticeFiles",
+    "testEvidence",
+    "knownLimitations",
+    "migrationPath",
+    "backupCompatibility",
+    "rollbackProcedure"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "weftext.release-input.v1"
+    },
+    "releaseVersion": {
+      "$ref": "#/$defs/version"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "sboms": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "$ref": "#/$defs/sbom"
+      }
+    },
+    "noticeFiles": {
+      "type": "array",
+      "minItems": 6,
+      "items": {
+        "$ref": "#/$defs/scopedEvidence"
+      }
+    },
+    "testEvidence": {
+      "type": "array",
+      "minItems": 9,
+      "items": {
+        "$ref": "#/$defs/testEvidence"
+      }
+    },
+    "knownLimitations": {
+      "$ref": "#/$defs/evidence"
+    },
+    "migrationPath": {
+      "$ref": "#/$defs/evidence"
+    },
+    "backupCompatibility": {
+      "$ref": "#/$defs/evidence"
+    },
+    "rollbackProcedure": {
+      "$ref": "#/$defs/evidence"
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "expectedSha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "expectedSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "component",
+        "platform",
+        "version",
+        "signatureBundle",
+        "signatureBundleSha256"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "component": {
+          "enum": [
+            "cli",
+            "desktop",
+            "server",
+            "server-container",
+            "webui"
+          ]
+        },
+        "platform": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "expectedSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "signatureBundle": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "signatureBundleSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "ociReference": {
+          "type": "string",
+          "pattern": "^[a-z0-9.-]+(?::[0-9]+)?/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "component": {
+                "const": "server-container"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "ociReference"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "path"
+                  ]
+                },
+                {
+                  "required": [
+                    "expectedSha256"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "path",
+              "expectedSha256"
+            ],
+            "not": {
+              "required": [
+                "ociReference"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "scope": {
+      "enum": [
+        "cargo",
+        "desktop-npm",
+        "docling-worker-cargo",
+        "server-container",
+        "server-webui-npm",
+        "webui-npm"
+      ]
+    },
+    "scopedEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "path",
+        "expectedSha256"
+      ],
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "expectedSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sbom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "path",
+        "expectedSha256",
+        "generator"
+      ],
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "expectedSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "generator": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "version"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "$ref": "#/$defs/version"
+            }
+          }
+        }
+      }
+    },
+    "testEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layer",
+        "path",
+        "expectedSha256"
+      ],
+      "properties": {
+        "layer": {
+          "enum": [
+            "backup-disaster-recovery",
+            "cli",
+            "collaboration-multi-client",
+            "core-source",
+            "desktop-packaged",
+            "filesystem-integration",
+            "manual-accessibility-daily-use",
+            "server-container-packaged",
+            "webui-supported-browser"
+          ]
+        },
+        "path": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "expectedSha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    }
+  }
+}

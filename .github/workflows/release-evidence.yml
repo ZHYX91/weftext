@@ -1,0 +1,75 @@
+name: release-evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact lowercase 40-character release commit
+        required: true
+        type: string
+      artifact_run_id:
+        description: Workflow run containing the immutable release-input artifact
+        required: true
+        type: string
+      artifact_name:
+        description: Artifact containing release-input.json and every referenced file
+        required: true
+        default: weftext-release-input
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: release-evidence-${{ inputs.source_commit }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out the exact release source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source_commit }}
+          persist-credentials: false
+
+      - name: Download immutable external release inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ runner.temp }}/weftext-release-input
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.artifact_run_id }}
+
+      - name: Install the pinned signature verifier
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6
+        with:
+          cosign-release: v3.0.6
+
+      - name: Materialize the locked Rust dependency metadata
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal
+          cargo +1.98.0 fetch --locked
+          cargo +1.98.0 fetch --locked --manifest-path workers/weftext-docling-lite/Cargo.toml
+
+      - name: Verify the complete release evidence set
+        env:
+          RELEASE_INPUT: ${{ runner.temp }}/weftext-release-input/release-input.json
+          RELEASE_OUTPUT: ${{ runner.temp }}/weftext-release-evidence
+        run: >-
+          python3 scripts/release_evidence.py verify-release
+          --repo .
+          --input "${RELEASE_INPUT}"
+          --output "${RELEASE_OUTPUT}"
+
+      - name: Preserve the verified evidence manifest
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: weftext-release-evidence-${{ inputs.source_commit }}
+          path: ${{ runner.temp }}/weftext-release-evidence
+          if-no-files-found: error
+          retention-days: 90

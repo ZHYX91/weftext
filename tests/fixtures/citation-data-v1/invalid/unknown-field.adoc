@@ -1,0 +1,9 @@
+---
+_weftext:
+  id: "550e8400-e29b-41d4-a716-446655440007"
+reference:
+  key: unknown2024
+  type: book
+  title: "Unknown field"
+  rendered: "Do not persist this"
+---

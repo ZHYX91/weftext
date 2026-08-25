@@ -1,0 +1,100 @@
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+select task.id
+where task.closed = false
+order by task.due asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where task.closed = false
+where task.state = "todo"
+select task.id
+order by task.due asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where task.closed = false
+select task.id
+order by task.due asc, task.due desc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where task.priority in ["high", "high"]
+select task.id
+order by task.id asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where task.closed = false
+select task.id
+order by task.id asc
+limit 0
+....
+
+[.weftext-query,version=1]
+....
+from nodes as node
+scope subtree aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa
+where node.depth >= 0
+select node.id
+order by node.id asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where task.title = "unclosed
+select task.id
+order by task.id asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where task.closed = false order by task.due asc
+select task.id
+order by task.id asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from tasks as task
+scope workspace
+where (task.closed = false
+select task.id
+order by task.id asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from nodes as node
+scope workspace
+where true
+select node.id
+order by node.path
+limit 10
+....

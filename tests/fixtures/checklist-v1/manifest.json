@@ -1,0 +1,5 @@
+{
+  "profile": "weftext-checklist-parser-evidence/v1",
+  "valid": ["valid/evidence.adoc"],
+  "negative": ["invalid/protected-contexts.adoc"]
+}

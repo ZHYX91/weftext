@@ -1,0 +1,16 @@
+---
+weftext:
+  id: "550e8400-e29b-41d4-a716-446655440000"
+  icon: "weftext:project"
+  aliases:
+    - 文缕
+    - "Weftext Notes"
+  child_sort: manual
+  child_sort_direction: descending
+  sibling_rank: 2048
+  adjacent_heading_body: run_in
+---
+= 文缕: Canonical profile
+
+== 章节 😀
+正文。

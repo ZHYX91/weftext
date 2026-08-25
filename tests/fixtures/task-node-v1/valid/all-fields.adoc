@@ -1,0 +1,16 @@
+---
+weftext:
+  id: "550e8400-e29b-41d4-a716-446655440000"
+---
+= 发布 Weftext 😀
+:weftext-task: v1
+:weftext-task-state: completed
+:weftext-task-priority: highest
+:weftext-task-created: 2026-08-25
+:weftext-task-start: 2026-08-25T01:02:03Z
+:weftext-task-scheduled: 2026-08-26T09:30:00+08:00
+:weftext-task-due: 2028-02-29
+:weftext-task-closed: 2026-08-27T10:11:12.123-05:30
+:weftext-task-depends-on: 9b74c989-7bac-472f-9a8f-01f0db9f7a10 7a1d2054-11f0-4a47-9876-001122334455
+
+تفاصيل المهمة.

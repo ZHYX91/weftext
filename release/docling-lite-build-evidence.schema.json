@@ -1,0 +1,228 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.local/schemas/docling-lite-build-evidence.v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "target",
+    "toolchain",
+    "doclingSource",
+    "fixedLiteProfile",
+    "buildEnvironment",
+    "worker",
+    "workerSourceFiles",
+    "nativeRuntime",
+    "externalRuntimeImports",
+    "directRegistryDependencies",
+    "cargoManifestSha256",
+    "cargoLockSha256",
+    "releaseProfileSha256",
+    "runtimeAssets",
+    "physicalPackageBytes",
+    "packageComplete",
+    "missingForPackage",
+    "osSandboxEvidence",
+    "sandboxComplete",
+    "completeForExecution",
+    "missingForExecution"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "weftext.docling-lite-build-evidence.v2" },
+    "target": { "const": "x86_64-pc-windows-msvc" },
+    "toolchain": { "$ref": "#/$defs/toolchain" },
+    "doclingSource": { "$ref": "#/$defs/doclingSource" },
+    "fixedLiteProfile": { "$ref": "#/$defs/fixedProfile" },
+    "buildEnvironment": { "$ref": "#/$defs/buildEnvironment" },
+    "worker": { "$ref": "#/$defs/worker" },
+    "workerSourceFiles": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/sourceFile" }
+    },
+    "nativeRuntime": { "$ref": "#/$defs/nativeRuntime" },
+    "externalRuntimeImports": { "$ref": "#/$defs/externalImports" },
+    "directRegistryDependencies": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/dependency" }
+    },
+    "cargoManifestSha256": { "$ref": "#/$defs/sha256" },
+    "cargoLockSha256": { "$ref": "#/$defs/sha256" },
+    "releaseProfileSha256": { "$ref": "#/$defs/sha256" },
+    "runtimeAssets": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/runtimeAsset" }
+    },
+    "physicalPackageBytes": { "type": "integer", "minimum": 1 },
+    "packageComplete": { "const": false },
+    "missingForPackage": { "$ref": "#/$defs/nonemptyStrings" },
+    "osSandboxEvidence": { "type": "null" },
+    "sandboxComplete": { "const": false },
+    "completeForExecution": { "const": false },
+    "missingForExecution": { "$ref": "#/$defs/nonemptyStrings" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "dll": { "type": "string", "pattern": "^[a-z0-9._-]+\\.dll$" },
+    "dlls": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/dll" } },
+    "nonemptyStrings": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rustc", "cargo"],
+      "properties": {
+        "rustc": { "type": "string", "minLength": 1 },
+        "cargo": { "type": "string", "minLength": 1 }
+      }
+    },
+    "doclingSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["crate", "version", "releaseTag", "releaseCommit", "defaultFeatures", "features"],
+      "properties": {
+        "crate": { "const": "docling" },
+        "version": { "const": "0.52.2" },
+        "releaseTag": { "const": "v0.52.2" },
+        "releaseCommit": { "pattern": "^[0-9a-f]{40}$" },
+        "defaultFeatures": { "const": false },
+        "features": { "const": ["pdf"] }
+      }
+    },
+    "fixedProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formats", "ocrLanguage", "layoutPrecision", "tableFormer", "networkFeatures"],
+      "properties": {
+        "formats": { "const": ["pdf"] },
+        "ocrLanguage": { "const": "en" },
+        "layoutPrecision": { "const": "int8" },
+        "tableFormer": { "const": false },
+        "networkFeatures": { "const": false }
+      }
+    },
+    "buildEnvironment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cargoCommand", "ORT_LIB_PATH", "ORT_PREFER_DYNAMIC_LINK", "ORT_SKIP_DOWNLOAD", "CARGO_NET_OFFLINE"],
+      "properties": {
+        "cargoCommand": { "const": "cargo +1.98.0 build --release --locked --offline --target x86_64-pc-windows-msvc" },
+        "ORT_LIB_PATH": { "const": "<extracted-archive-root>/onnxruntime-win-x64-1.24.2/lib" },
+        "ORT_PREFER_DYNAMIC_LINK": { "const": "1" },
+        "ORT_SKIP_DOWNLOAD": { "const": "1" },
+        "CARGO_NET_OFFLINE": { "const": "true" }
+      }
+    },
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "installPath", "fileName", "byteLength", "sha256"],
+      "properties": {
+        "component": { "const": "docling-rs" },
+        "installPath": { "const": "weftext-docling-lite.exe" },
+        "fileName": { "const": "weftext-docling-lite.exe" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sourceFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "byteLength", "sha256"],
+      "properties": {
+        "path": { "enum": ["src/lib.rs", "src/main.rs"] },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sourceUrl", "byteLength", "sha256"],
+      "properties": {
+        "artifact": { "const": "onnxruntime-win-x64-1.24.2.zip" },
+        "sourceUrl": { "const": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["archivePath", "byteLength", "sha256"],
+      "properties": {
+        "archivePath": { "const": "onnxruntime-win-x64-1.24.2/lib/onnxruntime.lib" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "rustBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["crate", "version", "sysCrate", "sysVersion"],
+      "properties": {
+        "crate": { "const": "ort" },
+        "version": { "const": "2.0.0-rc.12" },
+        "sysCrate": { "const": "ort-sys" },
+        "sysVersion": { "const": "2.0.0-rc.12" }
+      }
+    },
+    "nativeRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "implementation", "version", "linkage", "installPath", "byteLength", "sha256", "rustBinding", "sourceArchive", "importLibrary", "workerImports", "runtimeImports", "forbiddenImportsAbsent"],
+      "properties": {
+        "component": { "const": "onnx-runtime" },
+        "implementation": { "const": "Microsoft ONNX Runtime" },
+        "version": { "const": "1.24.2" },
+        "linkage": { "const": "dynamic" },
+        "installPath": { "const": "onnxruntime.dll" },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "rustBinding": { "$ref": "#/$defs/rustBinding" },
+        "sourceArchive": { "$ref": "#/$defs/archive" },
+        "importLibrary": { "$ref": "#/$defs/fileBinding" },
+        "workerImports": { "$ref": "#/$defs/dlls" },
+        "runtimeImports": { "$ref": "#/$defs/dlls" },
+        "forbiddenImportsAbsent": { "$ref": "#/$defs/dlls" }
+      }
+    },
+    "externalImports": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["packaged", "windowsSystem", "unboundMicrosoftRuntime"],
+      "properties": {
+        "packaged": { "$ref": "#/$defs/dlls" },
+        "windowsSystem": { "$ref": "#/$defs/dlls" },
+        "unboundMicrosoftRuntime": { "$ref": "#/$defs/dlls" }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "runtimeAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "installPath", "byteLength", "sha256"],
+      "properties": {
+        "component": { "enum": ["pdfium", "layout-int8", "pp-ocr", "ocr-dictionary"] },
+        "installPath": { "type": "string", "minLength": 1 },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

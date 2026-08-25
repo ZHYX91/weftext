@@ -1,0 +1,30 @@
+[package]
+name = "weftext-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "weftext"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+uuid.workspace = true
+weftext-agent-dsh = { path = "../weftext-agent-dsh" }
+weftext-agent-mcp = { path = "../weftext-agent-mcp" }
+weftext-backup = { path = "../weftext-backup" }
+weftext-core = { path = "../weftext-core" }
+weftext-export = { path = "../weftext-export" }
+weftext-import = { path = "../weftext-import" }
+weftext-intake = { path = "../weftext-intake" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+rusqlite.workspace = true

@@ -1,0 +1,48 @@
+[workspace]
+members = [
+  "apps/desktop/src-tauri",
+  "crates/weftext-backup",
+  "crates/weftext-core",
+  "crates/weftext-export",
+  "crates/weftext-import",
+  "crates/weftext-intake",
+  "crates/weftext-asciidoc",
+  "crates/weftext-agent",
+  "crates/weftext-agent-dsh",
+  "crates/weftext-agent-mcp",
+  "crates/weftext-cli",
+  "crates/weftext-server",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/ZHYX91/weftext"
+rust-version = "1.98"
+
+[workspace.dependencies]
+axum = "0.8.9"
+argon2 = "0.5.3"
+getrandom = "0.3.4"
+futures-util = "0.3.33"
+hayagriva = { version = "=0.8.1", default-features = false, features = ["archive", "csl-json"] }
+jiff = "=0.1.29"
+rusqlite = { version = "0.37.0", features = ["bundled"] }
+saphyr-parser = "0.0.12"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+subtle = "2.6.1"
+tempfile = "3.20"
+tokio = "1.53.1"
+tokio-stream = "0.1.17"
+uuid = { version = "1.0", features = ["serde", "v4"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

@@ -1,0 +1,161 @@
+{
+  "schemaVersion": "weftext.docling-lite-release-profile.v2",
+  "workerProtocolVersion": "weftext.docling-lite-worker-json.v1",
+  "workerPackageVersion": "0.1.0",
+  "rustToolchainVersion": "1.98.0",
+  "buildToolchain": {
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+    "reviewedTarget": "x86_64-pc-windows-msvc"
+  },
+  "source": {
+    "crate": "docling",
+    "version": "0.52.2",
+    "releaseTag": "v0.52.2",
+    "releaseCommit": "ca9fe7a543b55a540dfa18b88f4f44591b5a928e",
+    "defaultFeatures": false,
+    "features": [
+      "pdf"
+    ]
+  },
+  "exactPrereleasePins": {
+    "docling-core": "0.52.2",
+    "docling-pdf": "0.52.2",
+    "ort": "2.0.0-rc.12",
+    "ort-sys": "2.0.0-rc.12"
+  },
+  "exactDirectRegistryDependencies": {
+    "docling": "0.52.2",
+    "docling-core": "0.52.2",
+    "docling-pdf": "0.52.2",
+    "ort": "2.0.0-rc.12",
+    "ort-sys": "2.0.0-rc.12",
+    "serde": "1.0.229",
+    "serde_json": "1.0.151",
+    "sha2": "0.10.9"
+  },
+  "profile": {
+    "input": "input/source.pdf",
+    "successOutput": "raw DoclingDocument 1.10.0 JSON",
+    "failureOutput": "typed Weftext worker failure JSON",
+    "ocr": "PP-OCRv3 English",
+    "layout": "Heron INT8",
+    "tableFormer": false,
+    "networkFeatures": false,
+    "excludedFeatures": [
+      "asr",
+      "fetch-images",
+      "vlm",
+      "chunking",
+      "cuda",
+      "tensorrt",
+      "directml-execution-provider",
+      "coreml",
+      "web-browser"
+    ]
+  },
+  "reviewedNativeRuntime": {
+    "target": "x86_64-pc-windows-msvc",
+    "component": "onnx-runtime",
+    "implementation": "Microsoft ONNX Runtime",
+    "version": "1.24.2",
+    "rustBindingCrate": "ort",
+    "rustBindingVersion": "2.0.0-rc.12",
+    "linkage": "dynamic",
+    "installPath": "onnxruntime.dll",
+    "sourceArchive": {
+      "artifact": "onnxruntime-win-x64-1.24.2.zip",
+      "sourceUrl": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip",
+      "byteLength": 74075355,
+      "sha256": "8e3e9c826375352e29cb2614fe44f3d7a4b0ff7b8028ad7a456af9d949a7e8b0"
+    },
+    "archiveFiles": [
+      {
+        "path": "onnxruntime-win-x64-1.24.2/lib/onnxruntime.dll",
+        "role": "runtime_library",
+        "byteLength": 14148680,
+        "sha256": "114947d633e6844ce3c4b51ef6678f776628571d08a5763859c61642c8dcca9c"
+      },
+      {
+        "path": "onnxruntime-win-x64-1.24.2/lib/onnxruntime.lib",
+        "role": "import_library",
+        "byteLength": 2124,
+        "sha256": "2ec547a0e0e655fd60d549d23a3155a3ec47217f92de32e84df51866175a51ff"
+      }
+    ],
+    "buildEnvironment": {
+      "ORT_LIB_PATH": "<extracted-archive-root>/onnxruntime-win-x64-1.24.2/lib",
+      "ORT_PREFER_DYNAMIC_LINK": "1",
+      "ORT_SKIP_DOWNLOAD": "1",
+      "CARGO_NET_OFFLINE": "true"
+    },
+    "forbiddenImports": [
+      "d3d12.dll",
+      "directml.dll"
+    ]
+  },
+  "runtimeAssetLayout": [
+    {
+      "component": "layout-int8",
+      "path": "models/layout_heron_int8.onnx"
+    },
+    {
+      "component": "pp-ocr",
+      "path": "models/ocr_rec_en.onnx"
+    },
+    {
+      "component": "ocr-dictionary",
+      "path": "models/en_dict.txt"
+    },
+    {
+      "component": "pdfium",
+      "pathByTarget": {
+        "x86_64-pc-windows-msvc": ".pdfium/lib/pdfium.dll",
+        "x86_64-unknown-linux-gnu": ".pdfium/lib/libpdfium.so",
+        "x86_64-apple-darwin": ".pdfium/lib/libpdfium.dylib",
+        "aarch64-apple-darwin": ".pdfium/lib/libpdfium.dylib"
+      }
+    }
+  ],
+  "reviewedExtractedArtifacts": [
+    {
+      "component": "layout-int8",
+      "target": "all",
+      "byteLength": 68543846,
+      "sha256": "5c7a4685c838b485069b81847f2c9330f7ffc488aefff7a8ceb7f7968c95e410"
+    },
+    {
+      "component": "pp-ocr",
+      "target": "all",
+      "byteLength": 8967018,
+      "sha256": "ef7abd8bd3629ae57ea2c28b425c1bd258a871b93fd2fe7c433946ade9b5d9ea"
+    },
+    {
+      "component": "ocr-dictionary",
+      "target": "all",
+      "byteLength": 190,
+      "sha256": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3"
+    },
+    {
+      "component": "pdfium",
+      "target": "x86_64-pc-windows-msvc",
+      "byteLength": 7261184,
+      "sha256": "3aabcd60cec7c2bae8e40d63110b6b53dfe657015f268496fdf9ef9460cbe4d5"
+    },
+    {
+      "component": "pdfium",
+      "target": "x86_64-unknown-linux-gnu",
+      "byteLength": 7621800,
+      "sha256": "3019ad1cd6980e51d900bb9266f8980cb846cb8e0c1f6553c52a7a1626469020"
+    }
+  ],
+  "isolation": {
+    "providedByWorker": false,
+    "requiredFromSupervisor": [
+      "deny-by-default network isolation",
+      "memory limit",
+      "filesystem allowlist",
+      "process-tree containment and cancellation"
+    ]
+  }
+}

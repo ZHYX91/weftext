@@ -1,0 +1,69 @@
+[.weftext-query,view=table]
+....
+from nodes as node
+scope workspace
+where node.depth >= 0
+select node.id
+order by node.id asc
+limit 10
+....
+
+[.weftext-query,version=2]
+....
+from nodes as node
+scope workspace
+where node.depth >= 0
+select node.id
+order by node.id asc
+limit 10
+....
+
+[.weftext-query,version=1,view=kanban]
+....
+from tasks as task
+scope workspace
+where task.closed = false
+select task.id
+order by task.id asc
+limit 10
+....
+
+[.weftext-query,version=1,view=task-list]
+....
+from nodes as node
+scope workspace
+where node.depth >= 0
+select node.id
+order by node.id asc
+limit 10
+....
+
+[.weftext-query,version=1,source=tasks]
+....
+from tasks as task
+scope workspace
+where task.closed = false
+select task.id
+order by task.id asc
+limit 10
+....
+
+[.weftext-query,version=1,version=1]
+....
+from nodes as node
+scope workspace
+where node.depth >= 0
+select node.id
+order by node.id asc
+limit 10
+....
+
+[.weftext-query,version=1]
+....
+from annotations as annotation
+scope workspace
+where annotation.id is not null
+select annotation.id
+order by annotation.id asc
+limit 10
+....

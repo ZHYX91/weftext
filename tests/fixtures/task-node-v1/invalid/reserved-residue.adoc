@@ -1,0 +1,5 @@
+= Invalid task profile
+:weftext-task-state: todo
+:weftext-task-rrule: FREQ=DAILY
+
+The node remains ordinary visible content even though its reserved task profile is invalid.

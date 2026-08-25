@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "document_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+  "annotations": [{
+    "id": "11111111-1111-4111-8111-111111111111",
+    "kind": "mark",
+    "target": { "kind": "resource_region", "resource_locator": "resources/image.png", "resource_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "media_kind": "image", "region": { "kind": "rect", "page": 1, "x_millionths": 900000, "y_millionths": 0, "width_millionths": 200000, "height_millionths": 1 } },
+    "appearance": { "mark": "highlight", "theme": "yellow" },
+    "labels": [],
+    "thread": [],
+    "state": "open",
+    "created_at": "2026-08-24T10:20:00+08:00",
+    "updated_at": "2026-08-24T10:20:00+08:00"
+  }]
+}

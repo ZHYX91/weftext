@@ -1,0 +1,11 @@
+---
+_weftext:
+  id: "550e8400-e29b-41d4-a716-446655440005"
+reference:
+  key: invalidname2024
+  type: book
+  title: "Invalid name"
+  author:
+    - literal: "Group"
+      family: Wang
+---

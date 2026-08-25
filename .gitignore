@@ -1,0 +1,32 @@
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.local
+
+# Build and dependency outputs
+target/
+/target-stage1-*/
+node_modules/
+dist/
+build/
+coverage/
+*.log
+*.tsbuildinfo
+__pycache__/
+*.py[cod]
+.tmp-docling-*
+
+# Weftext local runtime state and user workspaces
+.weftext/
+workspaces/
+
+# Private product research and local audit snapshots
+.private-research/

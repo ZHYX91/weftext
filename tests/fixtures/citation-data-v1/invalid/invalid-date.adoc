@@ -1,0 +1,11 @@
+---
+_weftext:
+  id: "550e8400-e29b-41d4-a716-446655440006"
+reference:
+  key: invaliddate2024
+  type: book
+  title: "Invalid date"
+  issued:
+    date-parts:
+      - [2024, 13, 40]
+---

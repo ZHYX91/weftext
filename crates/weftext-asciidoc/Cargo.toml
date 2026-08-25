@@ -1,0 +1,18 @@
+[package]
+name = "weftext-asciidoc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+asciidork-ast = "=0.18.2"
+asciidork-core = "=0.18.0"
+asciidork-parser = "=0.18.2"
+bumpalo = "3.15.4"
+serde.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

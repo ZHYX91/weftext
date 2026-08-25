@@ -1,0 +1,229 @@
+{
+  "schemaVersion": "weftext.docling-lite-build-evidence.v2",
+  "target": "x86_64-pc-windows-msvc",
+  "toolchain": {
+    "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)"
+  },
+  "doclingSource": {
+    "crate": "docling",
+    "version": "0.52.2",
+    "releaseTag": "v0.52.2",
+    "releaseCommit": "ca9fe7a543b55a540dfa18b88f4f44591b5a928e",
+    "defaultFeatures": false,
+    "features": [
+      "pdf"
+    ]
+  },
+  "fixedLiteProfile": {
+    "formats": [
+      "pdf"
+    ],
+    "ocrLanguage": "en",
+    "layoutPrecision": "int8",
+    "tableFormer": false,
+    "networkFeatures": false
+  },
+  "buildEnvironment": {
+    "cargoCommand": "cargo +1.98.0 build --release --locked --offline --target x86_64-pc-windows-msvc",
+    "ORT_LIB_PATH": "<extracted-archive-root>/onnxruntime-win-x64-1.24.2/lib",
+    "ORT_PREFER_DYNAMIC_LINK": "1",
+    "ORT_SKIP_DOWNLOAD": "1",
+    "CARGO_NET_OFFLINE": "true"
+  },
+  "worker": {
+    "component": "docling-rs",
+    "installPath": "weftext-docling-lite.exe",
+    "fileName": "weftext-docling-lite.exe",
+    "byteLength": 17717248,
+    "sha256": "4c5c54b2508e573a386ad546450cedcaa05bf51d5cdaa4a0ab01b934bff25794"
+  },
+  "workerSourceFiles": [
+    {
+      "path": "src/lib.rs",
+      "byteLength": 46724,
+      "sha256": "4c3c9e4218677c0e4ea936174f984843290882bf456d78f1fb52a709ed4e9e7f"
+    },
+    {
+      "path": "src/main.rs",
+      "byteLength": 95,
+      "sha256": "1a8c43aafa54df8a02d81efcf2c3b7d6700c4e35ce2a8187f46d5eca7403a84e"
+    }
+  ],
+  "nativeRuntime": {
+    "component": "onnx-runtime",
+    "implementation": "Microsoft ONNX Runtime",
+    "version": "1.24.2",
+    "linkage": "dynamic",
+    "installPath": "onnxruntime.dll",
+    "byteLength": 14148680,
+    "sha256": "114947d633e6844ce3c4b51ef6678f776628571d08a5763859c61642c8dcca9c",
+    "rustBinding": {
+      "crate": "ort",
+      "version": "2.0.0-rc.12",
+      "sysCrate": "ort-sys",
+      "sysVersion": "2.0.0-rc.12"
+    },
+    "sourceArchive": {
+      "artifact": "onnxruntime-win-x64-1.24.2.zip",
+      "sourceUrl": "https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip",
+      "byteLength": 74075355,
+      "sha256": "8e3e9c826375352e29cb2614fe44f3d7a4b0ff7b8028ad7a456af9d949a7e8b0"
+    },
+    "importLibrary": {
+      "archivePath": "onnxruntime-win-x64-1.24.2/lib/onnxruntime.lib",
+      "byteLength": 2124,
+      "sha256": "2ec547a0e0e655fd60d549d23a3155a3ec47217f92de32e84df51866175a51ff"
+    },
+    "workerImports": [
+      "advapi32.dll",
+      "api-ms-win-core-synch-l1-2-0.dll",
+      "api-ms-win-crt-heap-l1-1-0.dll",
+      "api-ms-win-crt-locale-l1-1-0.dll",
+      "api-ms-win-crt-math-l1-1-0.dll",
+      "api-ms-win-crt-runtime-l1-1-0.dll",
+      "api-ms-win-crt-stdio-l1-1-0.dll",
+      "api-ms-win-crt-string-l1-1-0.dll",
+      "bcrypt.dll",
+      "bcryptprimitives.dll",
+      "kernel32.dll",
+      "ntdll.dll",
+      "onnxruntime.dll",
+      "vcruntime140.dll"
+    ],
+    "runtimeImports": [
+      "advapi32.dll",
+      "api-ms-win-core-path-l1-1-0.dll",
+      "api-ms-win-crt-convert-l1-1-0.dll",
+      "api-ms-win-crt-filesystem-l1-1-0.dll",
+      "api-ms-win-crt-heap-l1-1-0.dll",
+      "api-ms-win-crt-locale-l1-1-0.dll",
+      "api-ms-win-crt-math-l1-1-0.dll",
+      "api-ms-win-crt-runtime-l1-1-0.dll",
+      "api-ms-win-crt-stdio-l1-1-0.dll",
+      "api-ms-win-crt-string-l1-1-0.dll",
+      "api-ms-win-crt-time-l1-1-0.dll",
+      "dbghelp.dll",
+      "dxgi.dll",
+      "kernel32.dll",
+      "msvcp140.dll",
+      "msvcp140_1.dll",
+      "setupapi.dll",
+      "vcruntime140.dll",
+      "vcruntime140_1.dll"
+    ],
+    "forbiddenImportsAbsent": [
+      "d3d12.dll",
+      "directml.dll"
+    ]
+  },
+  "externalRuntimeImports": {
+    "packaged": [
+      "onnxruntime.dll"
+    ],
+    "windowsSystem": [
+      "advapi32.dll",
+      "api-ms-win-core-path-l1-1-0.dll",
+      "api-ms-win-core-synch-l1-2-0.dll",
+      "bcrypt.dll",
+      "bcryptprimitives.dll",
+      "dbghelp.dll",
+      "dxgi.dll",
+      "kernel32.dll",
+      "ntdll.dll",
+      "setupapi.dll"
+    ],
+    "unboundMicrosoftRuntime": [
+      "api-ms-win-crt-convert-l1-1-0.dll",
+      "api-ms-win-crt-filesystem-l1-1-0.dll",
+      "api-ms-win-crt-heap-l1-1-0.dll",
+      "api-ms-win-crt-locale-l1-1-0.dll",
+      "api-ms-win-crt-math-l1-1-0.dll",
+      "api-ms-win-crt-runtime-l1-1-0.dll",
+      "api-ms-win-crt-stdio-l1-1-0.dll",
+      "api-ms-win-crt-string-l1-1-0.dll",
+      "api-ms-win-crt-time-l1-1-0.dll",
+      "msvcp140.dll",
+      "msvcp140_1.dll",
+      "vcruntime140.dll",
+      "vcruntime140_1.dll"
+    ]
+  },
+  "directRegistryDependencies": [
+    {
+      "name": "docling",
+      "version": "0.52.2"
+    },
+    {
+      "name": "docling-core",
+      "version": "0.52.2"
+    },
+    {
+      "name": "docling-pdf",
+      "version": "0.52.2"
+    },
+    {
+      "name": "ort",
+      "version": "2.0.0-rc.12"
+    },
+    {
+      "name": "ort-sys",
+      "version": "2.0.0-rc.12"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.151"
+    },
+    {
+      "name": "sha2",
+      "version": "0.10.9"
+    }
+  ],
+  "cargoManifestSha256": "cf8ad4a7574bb3d563c343953cfd944c722823ab57db68e06497417a267c9a42",
+  "cargoLockSha256": "6a5967dd2406a3ba928f210bb4b14334ce46a5af1b6508e4fea134eb39720aae",
+  "releaseProfileSha256": "2c18fa8b51cf00e84ad85277cceeb8f96357ff057265d6c82788b16d28409616",
+  "runtimeAssets": [
+    {
+      "component": "pdfium",
+      "installPath": ".pdfium/lib/pdfium.dll",
+      "byteLength": 7261184,
+      "sha256": "3aabcd60cec7c2bae8e40d63110b6b53dfe657015f268496fdf9ef9460cbe4d5"
+    },
+    {
+      "component": "layout-int8",
+      "installPath": "models/layout_heron_int8.onnx",
+      "byteLength": 68543846,
+      "sha256": "5c7a4685c838b485069b81847f2c9330f7ffc488aefff7a8ceb7f7968c95e410"
+    },
+    {
+      "component": "pp-ocr",
+      "installPath": "models/ocr_rec_en.onnx",
+      "byteLength": 8967018,
+      "sha256": "ef7abd8bd3629ae57ea2c28b425c1bd258a871b93fd2fe7c433946ade9b5d9ea"
+    },
+    {
+      "component": "ocr-dictionary",
+      "installPath": "models/en_dict.txt",
+      "byteLength": 190,
+      "sha256": "5662df9d2d03f0e8ca0d3b0649d6acbab904b6a14b3d3521463c71c37c668ce3"
+    }
+  ],
+  "physicalPackageBytes": 116638166,
+  "packageComplete": false,
+  "missingForPackage": [
+    "Microsoft Visual C++/Universal CRT imports are enumerated but not packaged or digest-bound",
+    "redistributable full license and notice files are not staged and digest-bound in this target package"
+  ],
+  "osSandboxEvidence": null,
+  "sandboxComplete": false,
+  "completeForExecution": false,
+  "missingForExecution": [
+    "Microsoft Visual C++/Universal CRT imports are enumerated but not packaged or digest-bound",
+    "redistributable full license and notice files are not staged and digest-bound in this target package",
+    "versioned target OS sandbox evidence for network, memory, filesystem, process-tree, and cancellation controls"
+  ]
+}

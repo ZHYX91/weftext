@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://weftext.org/schemas/citation-data-v1.schema.json",
+  "title": "Weftext Citation Data v1 reference mapping",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["key", "type", "title"],
+  "properties": {
+    "key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+    },
+    "type": {
+      "enum": [
+        "article", "article-journal", "article-magazine", "article-newspaper",
+        "bill", "book", "broadcast", "chapter", "classic", "collection",
+        "dataset", "document", "entry", "entry-dictionary", "entry-encyclopedia",
+        "event", "figure", "graphic", "hearing", "interview", "legal_case",
+        "legislation", "manuscript", "map", "motion_picture", "musical_score",
+        "pamphlet", "patent", "performance", "periodical", "personal_communication",
+        "post", "post-weblog", "regulation", "report", "review", "review-book",
+        "software", "song", "speech", "standard", "thesis", "treaty"
+      ]
+    },
+    "title": { "$ref": "#/$defs/nonEmptyString" },
+    "title-short": { "$ref": "#/$defs/nonEmptyString" },
+    "abstract": { "$ref": "#/$defs/nonEmptyString" },
+    "container-title": { "$ref": "#/$defs/nonEmptyString" },
+    "container-title-short": { "$ref": "#/$defs/nonEmptyString" },
+    "collection-title": { "$ref": "#/$defs/nonEmptyString" },
+    "publisher": { "$ref": "#/$defs/nonEmptyString" },
+    "publisher-place": { "$ref": "#/$defs/nonEmptyString" },
+    "event": { "$ref": "#/$defs/nonEmptyString" },
+    "event-place": { "$ref": "#/$defs/nonEmptyString" },
+    "genre": { "$ref": "#/$defs/nonEmptyString" },
+    "medium": { "$ref": "#/$defs/nonEmptyString" },
+    "status": { "$ref": "#/$defs/nonEmptyString" },
+    "version": { "$ref": "#/$defs/nonEmptyString" },
+    "language": { "$ref": "#/$defs/nonEmptyString" },
+    "source": { "$ref": "#/$defs/nonEmptyString" },
+    "URL": { "$ref": "#/$defs/nonEmptyString" },
+    "DOI": { "$ref": "#/$defs/nonEmptyString" },
+    "ISBN": { "$ref": "#/$defs/nonEmptyString" },
+    "ISSN": { "$ref": "#/$defs/nonEmptyString" },
+    "PMCID": { "$ref": "#/$defs/nonEmptyString" },
+    "PMID": { "$ref": "#/$defs/nonEmptyString" },
+    "archive": { "$ref": "#/$defs/nonEmptyString" },
+    "archive-place": { "$ref": "#/$defs/nonEmptyString" },
+    "archive_location": { "$ref": "#/$defs/nonEmptyString" },
+    "call-number": { "$ref": "#/$defs/nonEmptyString" },
+    "note": { "$ref": "#/$defs/nonEmptyString" },
+    "volume": { "$ref": "#/$defs/nonEmptyString" },
+    "issue": { "$ref": "#/$defs/nonEmptyString" },
+    "number": { "$ref": "#/$defs/nonEmptyString" },
+    "edition": { "$ref": "#/$defs/nonEmptyString" },
+    "page": { "$ref": "#/$defs/nonEmptyString" },
+    "page-first": { "$ref": "#/$defs/nonEmptyString" },
+    "collection-number": { "$ref": "#/$defs/nonEmptyString" },
+    "author": { "$ref": "#/$defs/names" },
+    "editor": { "$ref": "#/$defs/names" },
+    "translator": { "$ref": "#/$defs/names" },
+    "container-author": { "$ref": "#/$defs/names" },
+    "collection-editor": { "$ref": "#/$defs/names" },
+    "composer": { "$ref": "#/$defs/names" },
+    "director": { "$ref": "#/$defs/names" },
+    "illustrator": { "$ref": "#/$defs/names" },
+    "interviewer": { "$ref": "#/$defs/names" },
+    "original-author": { "$ref": "#/$defs/names" },
+    "recipient": { "$ref": "#/$defs/names" },
+    "reviewed-author": { "$ref": "#/$defs/names" },
+    "issued": { "$ref": "#/$defs/date" },
+    "accessed": { "$ref": "#/$defs/date" },
+    "original-date": { "$ref": "#/$defs/date" },
+    "event-date": { "$ref": "#/$defs/date" },
+    "submitted": { "$ref": "#/$defs/date" }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "names": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/name" }
+    },
+    "name": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": { "$ref": "#/$defs/nonEmptyString" },
+        "given": { "$ref": "#/$defs/nonEmptyString" },
+        "literal": { "$ref": "#/$defs/nonEmptyString" },
+        "suffix": { "$ref": "#/$defs/nonEmptyString" },
+        "non-dropping-particle": { "$ref": "#/$defs/nonEmptyString" },
+        "dropping-particle": { "$ref": "#/$defs/nonEmptyString" },
+        "ORCID": { "$ref": "#/$defs/nonEmptyString" }
+      },
+      "oneOf": [
+        {
+          "required": ["literal"],
+          "not": {
+            "anyOf": [
+              { "required": ["family"] },
+              { "required": ["given"] },
+              { "required": ["suffix"] },
+              { "required": ["non-dropping-particle"] },
+              { "required": ["dropping-particle"] }
+            ]
+          }
+        },
+        {
+          "anyOf": [
+            { "required": ["family"] },
+            { "required": ["given"] }
+          ],
+          "not": { "required": ["literal"] }
+        }
+      ]
+    },
+    "date": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date-parts": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "prefixItems": [
+              { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+              { "type": "integer", "minimum": 1, "maximum": 12 },
+              { "type": "integer", "minimum": 1, "maximum": 31 }
+            ]
+          }
+        },
+        "literal": { "$ref": "#/$defs/nonEmptyString" },
+        "season": { "$ref": "#/$defs/nonEmptyString" },
+        "circa": { "type": "boolean" }
+      },
+      "oneOf": [
+        {
+          "required": ["date-parts"],
+          "not": { "required": ["literal"] }
+        },
+        {
+          "required": ["literal"],
+          "not": { "required": ["date-parts"] }
+        }
+      ]
+    }
+  }
+}

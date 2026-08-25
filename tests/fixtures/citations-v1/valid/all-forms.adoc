@@ -1,0 +1,15 @@
+---
+weftext:
+  id: "550e8400-e29b-41d4-a716-446655440020"
+---
+= Citation forms
+
+The result has been replicated cite:[wang2024].
+
+cite:narrative[smith2025] reports the same result.
+
+比较 cite:[wang2024,label=page,locator="59-61",prefix="参见 ",suffix=", خاصة"]+[smith2025,label=chapter,locator=2].
+
+nocite::[uncited2026,wang2024]
+
+bibliography::[include=all]

@@ -1,0 +1,94 @@
+{
+  "profile": "weftext.task-import.v1",
+  "cases": [
+    {
+      "id": "markdown-multilingual-mixed-endings",
+      "settings": {
+        "dialect": "markdown_checklist_v1",
+        "pluginVersion": null,
+        "globalFilter": null,
+        "indentationWidth": 2,
+        "statuses": [
+          { "symbol": " ", "name": "Open", "statusType": "TODO" },
+          { "symbol": "x", "name": "Closed", "statusType": "DONE" },
+          { "symbol": "X", "name": "Closed", "statusType": "DONE" }
+        ]
+      },
+      "documents": [
+        {
+          "locator": "multilingual.md",
+          "source": "- [ ] 中文\r\n  * [X] العربية\n"
+        }
+      ],
+      "committable": true,
+      "identities": 0,
+      "contains": ["* [ ] 中文\r\n** [x] العربية"]
+    },
+    {
+      "id": "obsidian-structured-and-filtered",
+      "settings": {
+        "dialect": "obsidian_tasks_emoji_v1",
+        "pluginVersion": "8.2.0",
+        "globalFilter": "#task",
+        "indentationWidth": 4,
+        "statuses": [
+          { "symbol": " ", "name": "Todo", "statusType": "TODO" },
+          { "symbol": "x", "name": "Done", "statusType": "DONE" },
+          { "symbol": "/", "name": "In Progress", "statusType": "IN_PROGRESS" }
+        ]
+      },
+      "documents": [
+        {
+          "locator": "project.md",
+          "source": "- [/] #task 编写 🔼 📅 2026-09-02 🆔 write\n- [ ] ordinary checklist\n"
+        }
+      ],
+      "committable": true,
+      "identities": 1,
+      "contains": ["* [ ] 编写 task:[id=", "phase=in-progress", "priority=medium", "due=2026-09-02", "- \\[ ] ordinary checklist"]
+    },
+    {
+      "id": "cross-document-blockers",
+      "settings": {
+        "dialect": "obsidian_tasks_emoji_v1",
+        "pluginVersion": "8.2.0",
+        "globalFilter": null,
+        "indentationWidth": 4,
+        "statuses": [
+          { "symbol": " ", "name": "Todo", "statusType": "TODO" },
+          { "symbol": "x", "name": "Done", "statusType": "DONE" }
+        ]
+      },
+      "documents": [
+        { "locator": "a.md", "source": "- [ ] A 🆔 duplicate\n- [ ] Bad 📅 2026-02-30\n" },
+        { "locator": "b.md", "source": "- [ ] B 🆔 duplicate\n- [ ] C ⛔ missing\n" }
+      ],
+      "committable": false,
+      "identities": 3,
+      "codes": ["duplicate_legacy_id", "invalid_date", "unresolved_dependency"]
+    },
+    {
+      "id": "query-safe-and-unsafe-boundaries",
+      "settings": {
+        "dialect": "obsidian_tasks_emoji_v1",
+        "pluginVersion": "8.2.0",
+        "globalFilter": null,
+        "indentationWidth": 4,
+        "statuses": [
+          { "symbol": " ", "name": "Todo", "statusType": "TODO" },
+          { "symbol": "x", "name": "Done", "statusType": "DONE" }
+        ]
+      },
+      "documents": [
+        {
+          "locator": "queries.md",
+          "source": "```tasks\nnot done\ndue today\n```\n\n```tasks\nfilter by function task.isDone\n```\n"
+        }
+      ],
+      "committable": false,
+      "identities": 0,
+      "codes": ["unsafe_query_instruction"],
+      "contains": ["[.weftext-query,version=1,view=task-list]", "where task.closed = false and task.due = context.today", "filter by function task.isDone"]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+worker_processes auto;
+pid /run/weftext-nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    access_log /dev/stdout;
+    error_log /dev/stderr warn;
+    server_tokens off;
+
+    client_body_temp_path /tmp/weftext-nginx/client-body;
+    proxy_temp_path /tmp/weftext-nginx/proxy;
+
+    proxy_http_version 1.1;
+    proxy_buffering off;
+    proxy_read_timeout 65s;
+    proxy_send_timeout 65s;
+    proxy_set_header Host ${WEFTEXT_PUBLIC_AUTHORITY};
+    proxy_set_header X-Weftext-Proxy-Token "${WEFTEXT_PROXY_TOKEN}";
+    proxy_set_header Connection "";
+    proxy_set_header Forwarded "";
+    proxy_set_header X-Forwarded-For "";
+    proxy_set_header X-Forwarded-Host "";
+    proxy_set_header X-Forwarded-Port "";
+    proxy_set_header X-Forwarded-Prefix "";
+    proxy_set_header X-Forwarded-Proto "";
+    proxy_set_header X-Real-IP "";
+
+    server {
+        listen ${WEFTEXT_HTTPS_PORT} ssl;
+        server_name ${WEFTEXT_PUBLIC_HOST};
+
+        if ($http_host != "${WEFTEXT_PUBLIC_AUTHORITY}") {
+            return 421;
+        }
+
+        ssl_certificate ${WEFTEXT_TLS_CERTIFICATE};
+        ssl_certificate_key ${WEFTEXT_TLS_PRIVATE_KEY};
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_session_tickets off;
+
+        location / {
+            proxy_pass http://127.0.0.1:8787;
+        }
+    }
+
+    server {
+        listen 127.0.0.1:8788;
+        server_name _;
+        access_log off;
+
+        location = /api/v1/health/ready {
+            proxy_pass http://127.0.0.1:8787;
+        }
+
+        location / {
+            return 404;
+        }
+    }
+}

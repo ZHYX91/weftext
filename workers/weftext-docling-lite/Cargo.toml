@@ -1,0 +1,41 @@
+[package]
+name = "weftext-docling-lite"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.98"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/ZHYX91/weftext"
+description = "Pinned offline DoclingDocument worker for Weftext PDF intake"
+publish = false
+
+# This package is intentionally isolated from the main Cargo workspace so its
+# dependency graph and release evidence remain independently reviewable.
+[workspace]
+resolver = "2"
+
+[dependencies]
+docling = { version = "=0.52.2", default-features = false, features = ["pdf"] }
+# Published docling 0.52.2 uses compatible-version requirements for its two
+# internal crates. Pin the complete reviewed release set instead of accepting a
+# newer backend under the old top-level crate version.
+docling-core = { version = "=0.52.2", default-features = false }
+docling-pdf = { version = "=0.52.2", default-features = false }
+# docling-pdf spells this as a prerelease range. Keep a direct exact pin so a
+# fresh lock cannot drift to rc.13, which is incompatible with docling.rs 0.52.2.
+ort = { version = "=2.0.0-rc.12", default-features = false }
+ort-sys = { version = "=2.0.0-rc.12", default-features = false }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+sha2 = "=0.10.9"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

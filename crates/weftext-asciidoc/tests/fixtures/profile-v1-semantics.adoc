@@ -1,0 +1,48 @@
+---
+weftext:
+  id: "550e8400-e29b-41d4-a716-446655440000"
+---
+= Semantic profile: Fidelity
+:stem: latexmath
+
+[#intro]
+[.run-in]
+== Introduction
+See xref:other.adoc#target[Other], https://example.test[site], and footnote:note[Local note].
+The formula latexmath:[x^2 + y^2] is exact. [[inline-anchor]]
+*bold* _italic_ +monospace+ [.term]#role text# H~2~O x^2^
+
+* [ ] Parent item
+** [x] Nested item
+
+.Measurements
+|===
+|Name |Value
+
+|Alpha
+|1
+|===
+
+.Architecture
+image::architecture.svg[Architecture diagram]
+
+.Example
+[source,rust]
+----
+fn main() {
+    println!("<safe>");
+}
+----
+
+.Energy
+[stem]
+++++
+E = mc^2
+++++
+
+.Process
+[mermaid]
+....
+flowchart LR
+  A --> B
+....

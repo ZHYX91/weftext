@@ -1,0 +1,7 @@
+---
+shared-title: &shared "Alias source"
+reference:
+  key: alias2024
+  type: book
+  title: *shared
+---

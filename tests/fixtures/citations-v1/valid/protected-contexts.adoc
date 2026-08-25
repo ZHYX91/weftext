@@ -1,0 +1,33 @@
+---
+weftext:
+  id: "550e8400-e29b-41d4-a716-446655440021"
+---
+= Protected contexts
+:note: cite:[documentheader2024]
+
+// cite:[linecomment2024]
+
+////
+cite:[commentblock2024]
+nocite::[commentblock2024]
+////
+
+[source]
+----
+cite:[source2024]
+bibliography::[]
+----
+
+....
+cite:[literal2024]
+....
+
+++++
+cite:[passthrough2024]
+++++
+
+The literal pass:[cite:[inlinepass2024]] stays literal.
+
+The constrained +cite:[singleplus2024]+ stays literal.
+
+Only cite:[visible2024] is an occurrence.

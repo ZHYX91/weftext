@@ -1,0 +1,9 @@
+---
+_weftext:
+  id: "550e8400-e29b-41d4-a716-446655440004"
+reference:
+  key: first2024
+  key: second2024
+  type: book
+  title: "Duplicate key"
+---

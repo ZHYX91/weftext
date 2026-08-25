@@ -1,0 +1,57 @@
+{
+  "profile": "weftext.task-rebaseline/v1",
+  "schema": "../../../schemas/task-rebaseline-v1.schema.json",
+  "cases": [
+    {
+      "id": "valid-fields-cjk-crlf",
+      "source": "valid-fields.adoc",
+      "conversionReady": true
+    },
+    {
+      "id": "protected-malformed-recurrence",
+      "source": "blocked-inputs.adoc",
+      "conversionReady": false,
+      "blockerCodes": [
+        "duplicate_legacy_task_id",
+        "recurrence_unsupported",
+        "malformed_macro_residue"
+      ]
+    },
+    {
+      "id": "parser-failed-freezes-old-identity",
+      "source": "parser-failed.adoc",
+      "conversionReady": false,
+      "blockerCodes": ["parser_alignment_unproven"]
+    },
+    {
+      "id": "parser-abort-table-freezes-raw-id",
+      "source": "parser-abort-table.adoc",
+      "conversionReady": false,
+      "blockerCodes": ["parser_alignment_unproven"]
+    },
+    {
+      "id": "principal-context-and-unicode-reserved",
+      "source": "principal-context-and-reserved.adoc",
+      "conversionReady": false,
+      "blockerCodes": [
+        "relative_locator",
+        "document_context_dependency",
+        "destination_name_unavailable"
+      ]
+    },
+    {
+      "id": "prospective-content-boundary",
+      "source": "content-boundary.adoc",
+      "rules": "content-boundary.rules",
+      "conversionReady": false,
+      "blockerCodes": ["destination_content_boundary"]
+    },
+    {
+      "id": "nfc-default-casefold-collision",
+      "source": "nfc-collision.adoc",
+      "existingChildName": "CAFÉ",
+      "conversionReady": false,
+      "blockerCodes": ["destination_collision"]
+    }
+  ]
+}

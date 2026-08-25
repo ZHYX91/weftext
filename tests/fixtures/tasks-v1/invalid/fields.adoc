@@ -1,0 +1,14 @@
+= Invalid fields
+
+* [ ] Unknown field task:[id=16161616-1616-4616-8616-161616161616,owner=alice]
+* [ ] Duplicate field task:[id=17171717-1717-4717-8717-171717171717,priority=low,priority=high]
+* [ ] Invalid name task:[id=18181818-1818-4818-8818-181818181818,BadName=value]
+* [ ] Attribute reference task:[id=19191919-1919-4919-8919-191919191919,due={deadline}]
+* [ ] Single quoted task:[id=20202020-2020-4020-8020-202020202020,priority='high']
+* [ ] Invalid phase task:[id=21212121-2121-4121-8121-212121212121,phase=blocked]
+* [x] Invalid resolution task:[id=23232323-2323-4323-8323-232323232323,resolution=done]
+* [ ] Invalid priority task:[id=24242424-2424-4424-8424-242424242424,priority=urgent]
+* [ ] Invalid calendar task:[id=25252525-2525-4525-8525-252525252525,due=2026-02-30]
+* [ ] Unicode date must diagnose, not panic task:[id=26262626-2626-4626-8626-262626262626,due="日期日期日期日期日期"]
+* [ ] Open contradiction task:[id=27272727-2727-4727-8727-272727272727,resolution=cancelled,closed=2026-08-23]
+* [x] Closed contradiction task:[id=28282828-2828-4828-8828-282828282828,phase=on-hold]

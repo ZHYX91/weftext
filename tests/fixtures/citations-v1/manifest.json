@@ -1,0 +1,20 @@
+{
+  "profile": "weftext.citations.v1",
+  "cases": [
+    { "id": "all-forms", "source": "valid/all-forms.adoc", "valid": true, "clusters": 3, "items": 4, "nocites": 1, "bibliographies": 1 },
+    { "id": "protected-contexts", "source": "valid/protected-contexts.adoc", "valid": true, "clusters": 1, "items": 1, "nocites": 0, "bibliographies": 0 },
+    { "id": "unknown-target", "source": "invalid/unknown-target.adoc", "valid": false, "code": "unknown_target" },
+    { "id": "unknown-attribute", "source": "invalid/unknown-attribute.adoc", "valid": false, "code": "unknown_attribute" },
+    { "id": "duplicate-attribute", "source": "invalid/duplicate-attribute.adoc", "valid": false, "code": "duplicate_attribute" },
+    { "id": "invalid-key", "source": "invalid/invalid-key.adoc", "valid": false, "code": "invalid_key" },
+    { "id": "unsupported-label", "source": "invalid/unsupported-label.adoc", "valid": false, "code": "unsupported_locator_label" },
+    { "id": "label-without-locator", "source": "invalid/label-without-locator.adoc", "valid": false, "code": "label_without_locator" },
+    { "id": "narrative-cluster", "source": "invalid/narrative-cluster.adoc", "valid": false, "code": "narrative_cluster" },
+    { "id": "single-quoted-value", "source": "invalid/single-quoted-value.adoc", "valid": false, "code": "invalid_attribute_value" },
+    { "id": "attribute-reference-value", "source": "invalid/attribute-reference-value.adoc", "valid": false, "code": "invalid_attribute_value" },
+    { "id": "malformed-chain", "source": "invalid/malformed-chain.adoc", "valid": false, "code": "malformed_macro" },
+    { "id": "empty", "source": "invalid/empty.adoc", "valid": false, "code": "empty_cluster" },
+    { "id": "inline-nocite", "source": "invalid/inline-nocite.adoc", "valid": false, "code": "block_macro_placement" },
+    { "id": "duplicate-bibliography", "source": "invalid/duplicate-bibliography.adoc", "valid": false, "code": "duplicate_bibliography" }
+  ]
+}

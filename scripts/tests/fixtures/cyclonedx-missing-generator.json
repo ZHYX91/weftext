@@ -1,0 +1,16 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:123e4567-e89b-42d3-a456-426614174000",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "bom-ref": "pkg:generic/weftext@0.1.0",
+      "type": "application",
+      "name": "weftext",
+      "version": "0.1.0"
+    },
+    "tools": []
+  },
+  "components": []
+}

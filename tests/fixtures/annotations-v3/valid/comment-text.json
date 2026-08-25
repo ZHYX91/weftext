@@ -1,0 +1,36 @@
+{
+  "version": 3,
+  "document_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1",
+  "annotations": [
+    {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "kind": "comment",
+      "target": {
+        "kind": "text_range",
+        "exact": "正文",
+        "prefix": "前缀 ",
+        "suffix": " suffix",
+        "start": 10,
+        "end": 16,
+        "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "block_id": "claim",
+        "heading_path": ["章节 😀"]
+      },
+      "appearance": { "mark": "highlight", "theme": "purple" },
+      "labels": ["核对", "تحقق"],
+      "thread": [
+        {
+          "id": "22222222-2222-4222-8222-222222222222",
+          "author_id": "33333333-3333-4333-8333-333333333333",
+          "author_name": "审阅者 😀",
+          "body": { "format": "weftext.asciidoc.inline.v1", "source": "请核对 _هذا النص_ 😀" },
+          "created_at": "2026-08-24T10:20:00+08:00",
+          "updated_at": "2026-08-24T10:20:00+08:00"
+        }
+      ],
+      "state": "open",
+      "created_at": "2026-08-24T10:20:00+08:00",
+      "updated_at": "2026-08-24T10:20:00+08:00"
+    }
+  ]
+}

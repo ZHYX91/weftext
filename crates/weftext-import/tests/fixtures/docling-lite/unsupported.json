@@ -1,0 +1,25 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "unsupported.pdf",
+  "furniture": {"self_ref": "#/furniture", "children": [{"$ref": "#/texts/1"}]},
+  "body": {"self_ref": "#/body", "children": [{"$ref": "#/texts/0"}]},
+  "groups": [],
+  "texts": [
+    {
+      "self_ref": "#/texts/0", "parent": {"$ref": "#/body"}, "children": [],
+      "content_layer": "body", "label": "text", "orig": "- [x] accepted", "text": "- [x] accepted", "prov": []
+    },
+    {
+      "self_ref": "#/texts/1", "parent": {"$ref": "#/furniture"}, "children": [],
+      "content_layer": "furniture", "label": "page_header", "orig": "header", "text": "header", "prov": []
+    }
+  ],
+  "pictures": [], "tables": [],
+  "key_value_items": [],
+  "form_items": [{
+    "self_ref": "#/form_items/0", "parent": {"$ref": "#/body"}, "children": [],
+    "content_layer": "body", "label": "form", "prov": []
+  }],
+  "pages": {}
+}

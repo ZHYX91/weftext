@@ -1,0 +1,188 @@
+name: source-gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Verify immutable release-source policy
+        run: |
+          python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+          python3 scripts/release_evidence.py policy --repo .
+          python3 scripts/check_docs.py
+
+      - name: Install Node.js for the packaged desktop assets
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - name: Build packaged desktop assets
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install the pinned Rust toolchain
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component clippy --component rustfmt
+
+      - name: Run source gate
+        run: |
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --workspace --all-targets -- -D warnings
+          cargo +1.98.0 test --workspace --locked
+
+  cross-platform-core:
+    name: Core host gate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, macos-15-intel]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install the pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Check the full Windows workspace on its native host
+        if: runner.os == 'Windows'
+        run: cargo +1.98.0 check --workspace --all-targets --locked
+
+      - name: Check and test the portable target-format surface
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          cargo +1.98.0 check -p weftext-core -p weftext-asciidoc -p weftext-backup -p weftext-import -p weftext-intake -p weftext-cli -p weftext-server --all-targets --locked
+          cargo +1.98.0 test -p weftext-core -p weftext-asciidoc -p weftext-backup -p weftext-import -p weftext-intake -p weftext-cli -p weftext-server --locked
+
+  docling-worker-source:
+    name: Docling Lite worker source (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-15-intel]
+    defaults:
+      run:
+        working-directory: workers/weftext-docling-lite
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install the worker's isolated Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component clippy --component rustfmt
+
+      - name: Materialize only the locked Cargo crates
+        run: cargo +1.98.0 fetch --locked
+
+      - name: Configure the reviewed Windows CPU runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'onnxruntime-win-x64-1.24.2.zip'
+          $extract = Join-Path $env:RUNNER_TEMP 'weftext-onnxruntime-1.24.2'
+          Invoke-WebRequest -Uri 'https://github.com/microsoft/onnxruntime/releases/download/v1.24.2/onnxruntime-win-x64-1.24.2.zip' -OutFile $archive
+          if ((Get-Item -LiteralPath $archive).Length -ne 74075355 -or
+              (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant() -cne '8e3e9c826375352e29cb2614fe44f3d7a4b0ff7b8028ad7a456af9d949a7e8b0') {
+            throw 'ONNX Runtime archive differs from the reviewed pin'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $extract -Force
+          $lib = Join-Path $extract 'onnxruntime-win-x64-1.24.2/lib'
+          if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $lib 'onnxruntime.dll')).Hash.ToLowerInvariant() -cne '114947d633e6844ce3c4b51ef6678f776628571d08a5763859c61642c8dcca9c' -or
+              (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $lib 'onnxruntime.lib')).Hash.ToLowerInvariant() -cne '2ec547a0e0e655fd60d549d23a3155a3ec47217f92de32e84df51866175a51ff') {
+            throw 'ONNX Runtime extracted files differ from the reviewed pins'
+          }
+          "ORT_LIB_PATH=$lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'ORT_PREFER_DYNAMIC_LINK=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'ORT_SKIP_DOWNLOAD=1' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          'CARGO_NET_OFFLINE=true' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $lib | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Check the portable worker source without native linking
+        if: runner.os != 'Windows'
+        env:
+          ORT_SKIP_DOWNLOAD: '1'
+          CARGO_NET_OFFLINE: 'true'
+        run: |
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 check --all-targets --locked --offline
+          cargo +1.98.0 clippy --all-targets --locked --offline -- -D warnings
+
+      - name: Test the reviewed Windows CPU build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 check --all-targets --locked --offline --target x86_64-pc-windows-msvc
+          cargo +1.98.0 test --all-targets --locked --offline --target x86_64-pc-windows-msvc
+          cargo +1.98.0 clippy --all-targets --locked --offline --target x86_64-pc-windows-msvc -- -D warnings
+          cargo +1.98.0 build --release --locked --offline --target x86_64-pc-windows-msvc
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $installation = (& $vswhere -latest -products '*' -property installationPath | Select-Object -First 1)
+          $dumpbin = Get-ChildItem (Join-Path $installation 'VC/Tools/MSVC') -Recurse -Filter dumpbin.exe |
+            Where-Object { $_.FullName -match '[\\/]bin[\\/]Hostx64[\\/]x64[\\/]dumpbin\.exe$' } |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          $workerImports = (& $dumpbin.FullName /nologo /dependents 'target/x86_64-pc-windows-msvc/release/weftext-docling-lite.exe') -join "`n"
+          $runtimeImports = (& $dumpbin.FullName /nologo /dependents (Join-Path $env:ORT_LIB_PATH 'onnxruntime.dll')) -join "`n"
+          if ($workerImports -notmatch '(?im)^\s+onnxruntime\.dll\s*$' -or
+              "$workerImports`n$runtimeImports" -match '(?im)^\s+(?:directml|d3d12)\.dll\s*$') {
+            throw 'worker/native PE imports do not match the reviewed CPU-only dynamic-link policy'
+          }
+
+  ui-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Install Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 22.13.0
+          cache: npm
+          cache-dependency-path: |
+            apps/desktop/package-lock.json
+            prototypes/webui/package-lock.json
+
+      - name: Check Desktop UI
+        working-directory: apps/desktop
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm run lint
+          npm run build
+
+      - name: Check WebUI
+        working-directory: prototypes/webui
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm run lint
+          npm test
+
+      - name: Check authenticated Server thin client
+        working-directory: crates/weftext-server/webui
+        run: node --test tests/*.test.mjs

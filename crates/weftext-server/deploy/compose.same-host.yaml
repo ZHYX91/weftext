@@ -1,0 +1,131 @@
+name: weftext-same-host
+
+services:
+  weftext-server:
+    image: "${WEFTEXT_SERVER_IMAGE_REPOSITORY:?set the release image repository}@sha256:${WEFTEXT_SERVER_IMAGE_DIGEST:?set the verified 64-character release image digest}"
+    network_mode: host
+    init: true
+    restart: unless-stopped
+    read_only: true
+    user: "${WEFTEXT_UID:-10001}:${WEFTEXT_GID:-10001}"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=64m
+    volumes:
+      - type: bind
+        source: "${WEFTEXT_WORKSPACE_PATH:?set WEFTEXT_WORKSPACE_PATH}"
+        target: /workspace
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${WEFTEXT_CONTROL_PATH:?set WEFTEXT_CONTROL_PATH}"
+        target: /var/lib/weftext
+        bind:
+          create_host_path: false
+    command:
+      - /workspace
+      - --control-plane
+      - /var/lib/weftext
+      - --bind
+      - 127.0.0.1:8787
+      - --same-host-proxy-origin
+      - "${WEFTEXT_PUBLIC_ORIGIN:?set WEFTEXT_PUBLIC_ORIGIN to the exact https origin}"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          token=$$(/usr/local/bin/busybox cat /var/lib/weftext/reverse-proxy-secret) &&
+          /usr/local/bin/busybox wget -q -O /dev/null
+          --header "Host: ${WEFTEXT_PUBLIC_AUTHORITY:?set WEFTEXT_PUBLIC_AUTHORITY}"
+          --header "X-Weftext-Proxy-Token: $$token"
+          http://127.0.0.1:8787/api/v1/health/ready
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 30s
+    stop_grace_period: 35s
+
+  same-host-proxy:
+    image: "${WEFTEXT_PROXY_IMAGE_REPOSITORY:?set the reviewed proxy image repository}@sha256:${WEFTEXT_PROXY_IMAGE_DIGEST:?set the verified 64-character proxy image digest}"
+    network_mode: host
+    init: true
+    restart: unless-stopped
+    read_only: true
+    user: "${WEFTEXT_UID:-10001}:${WEFTEXT_GID:-10001}"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      weftext-server:
+        condition: service_healthy
+        restart: true
+    environment:
+      WEFTEXT_PROXY_SECRET_FILE: /etc/nginx/weftext-reverse-proxy-secret
+      WEFTEXT_PUBLIC_ORIGIN: "${WEFTEXT_PUBLIC_ORIGIN:?set WEFTEXT_PUBLIC_ORIGIN to the exact https origin}"
+      WEFTEXT_PUBLIC_AUTHORITY: "${WEFTEXT_PUBLIC_AUTHORITY:?set WEFTEXT_PUBLIC_AUTHORITY}"
+      WEFTEXT_PUBLIC_HOST: "${WEFTEXT_PUBLIC_HOST:?set WEFTEXT_PUBLIC_HOST}"
+      WEFTEXT_HTTPS_PORT: "${WEFTEXT_HTTPS_PORT:-443}"
+      WEFTEXT_TLS_CERTIFICATE: /etc/nginx/weftext-certificate.pem
+      WEFTEXT_TLS_PRIVATE_KEY: /etc/nginx/weftext-private-key.pem
+      WEFTEXT_NGINX_TEMPLATE: /etc/nginx/weftext-same-host.conf.template
+      WEFTEXT_NGINX_CONFIG: /run/weftext-nginx.conf
+    tmpfs:
+      - /run:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=${WEFTEXT_UID:-10001},gid=${WEFTEXT_GID:-10001}
+      - /tmp:rw,noexec,nosuid,nodev,size=16m,mode=0700,uid=${WEFTEXT_UID:-10001},gid=${WEFTEXT_GID:-10001}
+    volumes:
+      - type: bind
+        source: "${WEFTEXT_CONTROL_PATH:?set WEFTEXT_CONTROL_PATH}/reverse-proxy-secret"
+        target: /etc/nginx/weftext-reverse-proxy-secret
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${WEFTEXT_TLS_CERTIFICATE_PATH:?set WEFTEXT_TLS_CERTIFICATE_PATH}"
+        target: /etc/nginx/weftext-certificate.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: "${WEFTEXT_TLS_PRIVATE_KEY_PATH:?set WEFTEXT_TLS_PRIVATE_KEY_PATH}"
+        target: /etc/nginx/weftext-private-key.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    configs:
+      - source: nginx_same_host_template
+        target: /etc/nginx/weftext-same-host.conf.template
+        mode: 0444
+      - source: nginx_same_host_start
+        target: /etc/nginx/start-nginx-same-host.sh
+        mode: 0444
+    entrypoint:
+      - /bin/sh
+    command:
+      - /etc/nginx/start-nginx-same-host.sh
+    healthcheck:
+      test:
+        - CMD
+        - /bin/busybox
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:8788/api/v1/health/ready
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
+    stop_signal: SIGQUIT
+    stop_grace_period: 35s
+
+configs:
+  nginx_same_host_template:
+    file: ./nginx.same-host.conf.template
+  nginx_same_host_start:
+    file: ./start-nginx-same-host.sh

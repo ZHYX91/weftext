@@ -1,0 +1,16 @@
+= Protected query-like text
+
+////
+[.weftext-query,version=1,view=task-list]
+This query-like attribute line is comment text.
+////
+
+[.weftext-query,version=1,view=list]
+....
+from nodes as node
+scope workspace
+where node.depth >= 0
+select node.id, node.name
+order by node.path asc
+limit 100
+....

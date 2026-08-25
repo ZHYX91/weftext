@@ -1,0 +1,13 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "formula.pdf",
+  "furniture": {"self_ref": "#/furniture", "children": []},
+  "body": {"self_ref": "#/body", "children": [{"$ref": "#/texts/0"}]},
+  "groups": [],
+  "texts": [{
+    "self_ref": "#/texts/0", "parent": {"$ref": "#/body"}, "children": [],
+    "content_layer": "body", "label": "text", "orig": "<!-- formula-not-decoded -->", "text": "<!-- formula-not-decoded -->", "prov": []
+  }],
+  "pictures": [], "tables": [], "key_value_items": [], "form_items": [], "pages": {}
+}

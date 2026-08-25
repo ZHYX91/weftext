@@ -1,0 +1,28 @@
+---
+# Exact comments and ordering are source authority.
+_weftext:
+  id: "550e8400-e29b-41d4-a716-446655440001"
+reference:
+  key: wang2024cjk
+  type: article-journal
+  title: "结构化文档与 العربية"
+  author:
+    - family: 王
+      given: 伟
+      ORCID: "https://orcid.org/0000-0000-0000-0000"
+    - literal: "مثال للأبحاث"
+  issued:
+    date-parts:
+      - [2024, 5, 12]
+  container-title: "文献研究"
+  volume: "12"
+  issue: "3"
+  page: "45-67"
+  DOI: "10.1000/example"
+  URL: "https://example.org/article"
+  language: zh-CN
+tags: [方法, بحث]
+---
+= 阅读笔记
+
+正文保持普通 AsciiDoc。

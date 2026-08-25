@@ -1,0 +1,73 @@
+{
+  "profile": "weftext.query.v1",
+  "cases": [
+    {
+      "id": "tasks-full",
+      "source": "valid/tasks-full.adoc",
+      "valid": true,
+      "blocks": 1,
+      "features": ["tasks", "boolean-precedence", "date-arithmetic", "scope", "ordering", "grouping", "projection", "limit"]
+    },
+    {
+      "id": "nodes-subtree-cjk",
+      "source": "valid/nodes-subtree-cjk.adoc",
+      "valid": true,
+      "blocks": 1,
+      "features": ["nodes", "subtree", "cjk", "null"]
+    },
+    {
+      "id": "protected-contexts",
+      "source": "valid/protected-contexts.adoc",
+      "valid": true,
+      "blocks": 1,
+      "features": ["protected-context"]
+    },
+    {
+      "id": "mixed-line-endings",
+      "sourceText": "[.weftext-query,version=1,view=table]\r\n....\nfrom tasks as task\r\nscope workspace\r\nwhere task.closed = false\r\nselect task.title, task.due\r\norder by task.due asc nulls last\r\nlimit 25\r\n....",
+      "valid": true,
+      "blocks": 1,
+      "features": ["mixed-line-ending"]
+    },
+    {
+      "id": "invalid-headers",
+      "source": "invalid/headers.adoc",
+      "valid": false,
+      "blocks": 7,
+      "codes": ["missing_version", "unsupported_version", "unsupported_source", "unsupported_view", "view_source_mismatch", "unknown_attribute", "duplicate_attribute"],
+      "features": ["negative", "outer-surface"]
+    },
+    {
+      "id": "invalid-body-types",
+      "source": "invalid/body-types.adoc",
+      "valid": false,
+      "blocks": 7,
+      "codes": ["unknown_field", "type_mismatch", "invalid_literal", "invalid_operator"],
+      "features": ["negative", "typing", "date-arithmetic"]
+    },
+    {
+      "id": "invalid-body-structure",
+      "source": "invalid/body-structure.adoc",
+      "valid": false,
+      "blocks": 10,
+      "codes": ["clause_order", "duplicate_clause", "duplicate_field", "duplicate_value", "invalid_limit", "invalid_literal", "invalid_token", "unexpected_token"],
+      "features": ["negative", "malformed", "resource-bound"]
+    },
+    {
+      "id": "missing-delimiter",
+      "source": "invalid/missing-delimiter.adoc",
+      "valid": false,
+      "blocks": 1,
+      "codes": ["malformed_block"],
+      "features": ["negative", "malformed"]
+    },
+    {
+      "id": "unterminated-block",
+      "source": "invalid/unterminated-block.adoc",
+      "valid": false,
+      "blocks": 1,
+      "codes": ["unterminated_block"],
+      "features": ["negative", "malformed"]
+    }
+  ]
+}

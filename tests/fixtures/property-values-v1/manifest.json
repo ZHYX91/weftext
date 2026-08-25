@@ -1,0 +1,27 @@
+{
+  "profile": "weftext.property-value.v1",
+  "cases": [
+    { "id": "plain-null", "decoded": "null", "style": "plain", "value": { "kind": "null" } },
+    { "id": "plain-true", "decoded": "true", "style": "plain", "value": { "kind": "boolean", "value": true } },
+    { "id": "plain-false", "decoded": "false", "style": "plain", "value": { "kind": "boolean", "value": false } },
+    { "id": "integer-zero", "decoded": "0", "style": "plain", "value": { "kind": "integer", "value": "0" } },
+    { "id": "integer-negative", "decoded": "-42", "style": "plain", "value": { "kind": "integer", "value": "-42" } },
+    { "id": "decimal-exact", "decoded": "123.4500", "style": "plain", "value": { "kind": "decimal", "value": "123.4500" } },
+    { "id": "calendar-date", "decoded": "2026-08-24", "style": "plain", "value": { "kind": "date", "value": "2026-08-24" } },
+    { "id": "offset-instant", "decoded": "2026-08-24T12:30:00+08:00", "style": "plain", "value": { "kind": "instant", "value": "2026-08-24T12:30:00+08:00" } },
+    { "id": "plain-cjk", "decoded": "研究", "style": "plain", "value": { "kind": "text", "value": "研究" } },
+    { "id": "quoted-date-is-text", "decoded": "2026-08-24", "style": "double_quoted", "value": { "kind": "text", "value": "2026-08-24" } },
+    { "id": "literal-boolean-is-text", "decoded": "true", "style": "literal", "value": { "kind": "text", "value": "true" } },
+    { "id": "yaml11-keyword", "decoded": "yes", "style": "plain", "error": "ambiguous_keyword" },
+    { "id": "case-keyword", "decoded": "TRUE", "style": "plain", "error": "ambiguous_keyword" },
+    { "id": "yaml-special-float", "decoded": ".inf", "style": "plain", "error": "ambiguous_keyword" },
+    { "id": "leading-zero", "decoded": "01", "style": "plain", "error": "invalid_number" },
+    { "id": "leading-dot-number", "decoded": ".5", "style": "plain", "error": "invalid_number" },
+    { "id": "exponent-number", "decoded": "1e3", "style": "plain", "error": "invalid_number" },
+    { "id": "integer-overflow", "decoded": "9223372036854775808", "style": "plain", "error": "invalid_number" },
+    { "id": "invalid-date", "decoded": "2026-02-30", "style": "plain", "error": "invalid_temporal" },
+    { "id": "missing-offset", "decoded": "2026-08-24T12:30:00", "style": "plain", "error": "invalid_temporal" },
+    { "id": "yaml-space-timestamp", "decoded": "2026-08-24 12:30:00Z", "style": "plain", "error": "invalid_temporal" },
+    { "id": "empty-plain", "decoded": "", "style": "plain", "error": "empty_plain_scalar" }
+  ]
+}

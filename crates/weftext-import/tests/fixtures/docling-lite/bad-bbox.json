@@ -1,0 +1,15 @@
+{
+  "schema_name": "DoclingDocument",
+  "version": "1.10.0",
+  "name": "bad-bbox.pdf",
+  "furniture": {"self_ref": "#/furniture", "children": []},
+  "body": {"self_ref": "#/body", "children": [{"$ref": "#/texts/0"}]},
+  "groups": [],
+  "texts": [{
+    "self_ref": "#/texts/0", "parent": {"$ref": "#/body"}, "children": [],
+    "content_layer": "body", "label": "text", "orig": "bad", "text": "bad",
+    "prov": [{"page_no": 1, "bbox": {"l": 10, "t": 700, "r": 700, "b": 650, "coord_origin": "BOTTOMLEFT"}, "charspan": [0, 3]}]
+  }],
+  "pictures": [], "tables": [], "key_value_items": [], "form_items": [],
+  "pages": {"1": {"size": {"width": 600, "height": 800}, "page_no": 1}}
+}

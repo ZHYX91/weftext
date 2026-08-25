@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "weftext.test-evidence.v1",
+  "layer": "core-source",
+  "releaseVersion": "0.1.0",
+  "sourceCommit": "0000000000000000000000000000000000000000",
+  "result": "passed",
+  "startedAt": "2026-08-24T10:00:00Z",
+  "completedAt": "2026-08-24T10:05:00Z",
+  "executor": {
+    "kind": "ci",
+    "identity": "fixture-only-ci-runner",
+    "environment": "fixture-only linux runner; this file is not release evidence"
+  },
+  "summary": "Fixture-only record proving that the strict test-evidence parser accepts a complete passed layer.",
+  "checks": [
+    {
+      "name": "fixture parser case",
+      "result": "passed",
+      "details": "The fixture contains every bounded field required by the parser test."
+    }
+  ]
+}

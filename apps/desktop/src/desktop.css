@@ -1,0 +1,19 @@
+:root {
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", system-ui, sans-serif;
+}
+
+body {
+  user-select: none;
+}
+
+textarea,
+input,
+[contenteditable="true"] {
+  user-select: text;
+}
+
+.desktop-open-button {
+  border-color: #973c29 !important;
+  background: #a44734 !important;
+  color: #fff !important;
+}
