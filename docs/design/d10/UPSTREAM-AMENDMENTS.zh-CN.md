@@ -23,7 +23,7 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate upstream amendment p
 - D7 `EffectManifest/1`、EffectBytes、delivery epoch 与 preview/committed transport；
 - D8 `PreparedEditBinding/1`、Draft/IME/explicit confirmation；
 - D4 Registry、D7 Narrow Field Qualification 与 D6 Policy/ObservationScope；
-- 原 current authorization、deny precedence、non-disclosure、authority/fence、dependency CAS、replay 和 planned recovery。
+- 原 current authorization、deny precedence、non-disclosure、authority/fence、dependency CAS、replay 和 planned recovery。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 因此本修订不触发 D3 镜像、D7 binding version 3、D6 wire version 2 或新的 protocolOwner。
 
@@ -147,15 +147,15 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate upstream amendment p
 
 ## 5. D8 与 D9 的明确非修订说明
 
-D8 不增加 unattended edit branch。Document/Annotation edit、dirty Draft、IME、current serial、完整 preview 和 explicit confirmation 原样保留。Agent/Automation 只能给 D8 提 proposal；不能伪造 EditSession 或 human origin。
+D8 不增加 unattended edit branch。Document/Annotation edit、dirty Draft、IME、current serial、完整 preview 和 explicit confirmation 原样保留。Agent/Automation 只能给 D8 提 proposal；不能伪造 EditSession 或 human origin。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
-D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或 external publisher。D10 外部 transport/Connector 不授 D9 worker 网络，D9 publication confirmation 不授 Standing Approval author write。
+D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或 external publisher。D10 外部 transport/Connector 不授 D9 worker 网络，D9 publication confirmation 不授 Standing Approval author write。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 ## 6. 激活与版本兼容
 
 这些 amendment 只有在独立审查接受、总控协调裁决，并与 D10 candidate 一起激活后才生效。激活前：
 
-- 产品可以实现/read-only D10 Broker、Agent proposal、Automation scheduling、Tool/MCP、Connector read 和 external effect control；
+- 产品可以实现/read-only D10 Broker、Agent proposal、Automation scheduling、Tool/MCP、Connector read 和 external effect control；。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 - 所有 D7/D8 author proposal 仍使用现有逐次确认；
 - `single_field_member` unattended author submit capability 必须显示 not_in_release 或其它真实 D1 unavailable 状态，不得以 private flag 绕过。
 

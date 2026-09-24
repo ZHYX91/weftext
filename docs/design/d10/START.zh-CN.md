@@ -102,7 +102,7 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 - D4 Registry 与 D10 Catalog 分域，但通过 Activation Binding 做完整激活；D4 累计 semantic ledger 不允许回滚指针或删除历史。
 - Tool Value 固定复用 D7 类型和值代数的有限子集，MCP 只作为 Tool Adapter transport。
 - package trust 固定 SHA-256 内容绑定与应用层 Ed25519 publisher 签名，同时把 PublisherIdentity 与 NamespaceClaim 分开。
-- external effect、idempotency、outcome_unknown、credential rotation、cost reservation、cancel race 与 audit failure 均已有唯一规范结论。
+- external effect、idempotency、outcome_unknown、credential rotation、cost reservation、cancel race 与 audit failure 均已有唯一规范结论。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 这些是作者候选选择，不是独立 acceptance。
 
@@ -136,7 +136,7 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 2. D6/D7 amendment 是否必要、充分且没有第三 ledger/第三 commit path；
 3. standing approval 的 exact-one Entry、footprint、count reservation、revocation/recovery 是否闭合；
 4. Registry/Catalog 激活、publisher trust 与 D4 cumulative ledger 是否一致；
-5. prompt injection、MCP、secret/egress、external outcome unknown、cost uncertain、audit failure、cancel/planned race 是否闭合；
+5. prompt injection、MCP、secret/egress、external outcome unknown、cost uncertain、audit failure、cancel/planned race 是否闭合；。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 6. Mandatory scenarios、D1–D9 ownership、Mobile negative boundary 与 terminology 是否无回归。
 
 独立评审之前不得把 candidate、文档 CI 成功或作者自查写成 Gate pass；不得合并、发行或开始 A2。

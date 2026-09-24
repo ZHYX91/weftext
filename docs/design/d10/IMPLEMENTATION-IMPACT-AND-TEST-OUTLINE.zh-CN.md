@@ -38,14 +38,14 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 
 建议实现顺序：
 
-1. S1：D10 strict value/control decoders、受管 token tags、ActivationBinding/Capability Catalog、publisher/namespace trust。
+1. S1：D10 strict value/control decoders、受管 token tags、ActivationBinding/Capability Catalog、publisher/namespace trust。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 2. S2：DelegationLease、ContextBundle、egress、SecretRef、audit spool 与原子预算/费用 reservation。
 3. S3：Run/Automation Definition、occurrence claim、serial scheduler、cancel/restart。
 4. S4：Model/Tool/MCP adapters 与 runtime isolation；先只 read/compute，不开放 external mutation。
 5. S5：ExternalEffectIntent、send fence、idempotency/reconciliation、credential rotation。
 6. S6：协调实现 UPSTREAM-AMENDMENTS 中 D6/D7 standing-approval 分支；在此之前无人值守 author commit 继续 unavailable。
 7. S7：Connector 的具名 read-only profile；只有已有 SourceBinding/OriginBinding closed adapter 的写回才可逐 profile 开放。
-8. S8：Desktop/CLI/Server/WebUI surfaces、diagnostics、audit/export/retention；Mobile 只做 negative capability conformance。
+8. S8：Desktop/CLI/Server/WebUI surfaces、diagnostics、audit/export/retention；Mobile 只做 negative capability conformance。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 9. S9：清理旧原型/别名/自由 JSON/tool callback、更新公开规范；只有真实实施/平台证据完成后才能公开声称支持。
 
 ## 2. 数据与存储影响
@@ -130,7 +130,7 @@ Windows、macOS、Linux 分开验收；存在 container/sandbox 名称不算通�
 
 ## 6. Automation 与 scheduler 实施义务
 
-Scheduler 必须持久化 definition revision、next finite schedule horizon、sourceOccurrenceKey、claim owner、Run link 和实际 skipped/started outcome。首版 serial：
+Scheduler 必须持久化 definition revision、next finite schedule horizon、sourceOccurrenceKey、claim owner、Run link 和实际 skipped/started outcome。首版 serial：。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 - 同 `AutomationOccurrenceKey/1` 至多一个 active Run；
 - enable/disable 不改变 definitionRevision；
@@ -140,7 +140,7 @@ Scheduler 必须持久化 definition revision、next finite schedule horizon、s
 - rule/source/authorization/ActivationBinding 变化在新 step 前重验；
 - clock epoch/continuity 不可证明时暂停，不延长期限。
 
-测试不能只 mock “scheduler returned one row”，必须真实制造双进程、双 Server frontend、crash before/after claim、process pause、clock epoch loss、source/rule generation change 和 enable/disable 竞争。
+测试不能只 mock “scheduler returned one row”，必须真实制造双进程、双 Server frontend、crash before/after claim、process pause、clock epoch loss、source/rule generation change 和 enable/disable 竞争。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 ## 7. Standing Approval 协调实现
 
@@ -182,7 +182,7 @@ Core 必须拥有 StandingApprovalEnvelope validator、ApprovalUse builder 和�
 
 缺任一项时可保留 read-only connector，mutation 对 unattended execution unavailable。不能用 HTTP method 名或 status 2xx 泛化成所有服务的成功/幂等合同。
 
-send fence 需要 fault injection：durable intent 前、intent 后 send 前、write syscall/HTTP send 中、remote accepted 后 response 前、response 后 terminal audit 前。没有可证结果的一律 outcome_unknown。
+send fence 需要 fault injection：durable intent 前、intent 后 send 前、write syscall/HTTP send 中、remote accepted 后 response 前、response 后 terminal audit 前。没有可证结果的一律 outcome_unknown。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 Connector sync 若修改 SourceBinding/OriginBinding/watermark 必须另有 owner-stage closed adapter；普通 ExternalEffectIntent 或 single_field_member approval 不得直接写这些控制字段。
 
@@ -198,7 +198,7 @@ Money 只能使用同 account currency 与 Counter microUnits。pricing rule 必
 
 reservation 状态必须耐久。uncertain 在 billing truth 不可证明前不得自动 release。overcharge anomaly 要冻结 capability 并进入管理恢复；不能修改历史 reservation 使其“合法”。
 
-真实 provider 测试至少包括：success billing、error billing、retry billing、delayed invoice、missing usage、usage disagreement、over-ceiling simulation、currency mismatch 与 crash recovery。
+真实 provider 测试至少包括：success billing、error billing、retry billing、delayed invoice、missing usage、usage disagreement、over-ceiling simulation、currency mismatch 与 crash recovery。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 ## 10. Audit、retention 与 export
 

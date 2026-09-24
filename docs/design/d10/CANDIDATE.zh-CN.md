@@ -27,7 +27,7 @@ D10 不把 D9 worker 升级成通用插件宿主，不给 D7 ActionSpec 增加�
 
 1. 任一作者修改最终仍只有原 D3 或 D6 author commit point；D10 没有第三提交入口。
 2. read、content egress、workspace mutation、external side effect 与 secret use 是五个独立授权维度，任何一个都不蕴含另一个。
-3. Web page、Document、tool result、MCP descriptor、model output、template text 与 provider response 都是不可信数据，不能扩大 principal、delegation、tool allowlist、egress recipient、network、file、process、secret、budget 或 approval。
+3. Web page、Document、tool result、MCP descriptor、model output、template text 与 provider response 都是不可信数据，不能扩大 principal、delegation、tool allowlist、egress recipient、network、file、process、secret、budget 或 approval。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 4. D10 的控制身份不是内容身份。RunId、AutomationId、ApprovalId、ExternalEffectId 和 AuditEventId 都不能进入 EntityRef 或替代 D3 Ref。
 5. 安装、namespace ownership、运行可用性和作者事实正交。disable、uninstall、failed upgrade、credential rotation 或 provider outage 不删除、默认化或重写作者事实。
 6. 外部副作用与 Core transaction 不是原子整体。产品必须分别报告作者结果和外部结果。
@@ -69,7 +69,7 @@ D10 控制状态位于与 D6 Authority Store 绑定的受管控制域，由 Core
 
 D4 Registry 仍是唯一 semantic namespace/schema 权威。D10 证明 package/publisher/namespace claim、安装资产与贡献来源，随后把完整候选 `RegistrySnapshot/1`、`RegistryBinding/1` 交给 D4 既有验证、演进和 catalog load；D10 不增加 Registry member，也不改变 D4 Field/Facet/Relation/Calendar/Unit 语义。
 
-D10 另维护 Capability Catalog，记录每个 executable 或纯数据 contribution 的 exact package digest/version、contribution kind/version、runtime profile、platform/architecture、dependencies、host privileges、network/egress class、secret requirement、cost profile 与 D1 capability ID。Catalog 不能保存另一份 FieldDefinition 或用 display name/安装顺序证明 namespace owner。
+D10 另维护 Capability Catalog，记录每个 executable 或纯数据 contribution 的 exact package digest/version、contribution kind/version、runtime profile、platform/architecture、dependencies、host privileges、network/egress class、secret requirement、cost profile 与 D1 capability ID。Catalog 不能保存另一份 FieldDefinition 或用 display name/安装顺序证明 namespace owner。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 ```text
 ActivationBinding/1 {
@@ -319,7 +319,7 @@ Transcript 与 audit 分开。transcript 可按部署 policy 有限保存/删除
 
 ## 20. Run、取消与恢复
 
-Run state 闭集为 queued|running|awaiting_confirmation|blocked|cancelling|reconciling|completed|failed|cancelled。每个 step 另保存实际 domain outcome，Run terminal state 不能抹掉已经 committed 的 author/external facts。
+Run state 闭集为 queued|running|awaiting_confirmation|blocked|cancelling|reconciling|completed|failed|cancelled。每个 step 另保存实际 domain outcome，Run terminal state 不能抹掉已经 committed 的 author/external facts。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 取消 queued/prepared 且未发送的 step 可产生 cancelled。已进入 D6 planned 的 request 不因取消 Run 自动 abort；Run 进入 cancelling/blocked，并按原 D6 planned recovery 处理。当前 delegation 撤销可阻止缺乏当前资格的新 author commit，但不能把撤权写成永久业务 rejection。已 committed decision 不回滚。
 
@@ -333,7 +333,7 @@ D1 capability availability 及其固定 reason 优先级完全不变，尤其 po
 
 D10 自有控制请求的阶段顺序为：closed decode/version → D1 static capability/surface/release → current principal/control-object visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution。阶段顺序优先于错误细分类，防止越权探测。
 
-D10 自有 error code 闭集：invalid_request、not_visible、control_conflict、binding_changed、approval_required、approval_expired、delegation_expired、budget_exceeded、audit_unavailable、state_unavailable、invalid_output、cancelled、external_outcome_unknown。unknown token、wrong tag、wrong audience 或无权控制对象统一 not_visible；只有已经有权读取本人记录时才披露 expired/conflict。
+D10 自有 error code 闭集：invalid_request、not_visible、control_conflict、binding_changed、approval_required、approval_expired、delegation_expired、budget_exceeded、audit_unavailable、state_unavailable、invalid_output、cancelled、external_outcome_unknown。unknown token、wrong tag、wrong audience 或无权控制对象统一 not_visible；只有已经有权读取本人记录时才披露 expired/conflict。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 一旦请求进入原 D3/D6/D7/D8/D9 入口，返回该 owner 原有 error/disposition，不包装为 D10 error，也不根据内部 deployment detail改变原拒绝顺序。
 
@@ -345,7 +345,7 @@ Server 承载 hosted Broker、scheduler、connector/model/tool executors 和 sec
 
 Mobile 对 agent.session、automation、connector execution、conversion execution 和 credential management 返回 D1 unsupported_surface；不会用“只读监控”入口变相提供 D1 已禁止的批准或委托。Mobile 可读取普通已 committed workspace facts。
 
-LTR/RTL、locale、screen reader、Web/CLI transport 差异只影响呈现和交互，不改变 request bytes、target、approval rule、cost、error 或 author/external outcome。
+LTR/RTL、locale、screen reader、Web/CLI transport 差异只影响呈现和交互，不改变 request bytes、target、approval rule、cost、error 或 author/external outcome。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 ## 23. D1–D9 组合与必要修订
 

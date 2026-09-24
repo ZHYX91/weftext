@@ -17,7 +17,7 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate。本词表只定义
 - 裸 “Provider” 易与 D9 Conversion Provider 冲突；D10 必须写成 Model Provider、External Service、Connector Provider 或直接写 Contribution/Adapter。
 - “Registry”在 D10 正文默认指 D4 semantic Registry；D10 自身使用 Capability Catalog，不另建“plugin registry”。
 - “approval”“authorization”“delegation”“confirmation”分域：D6 Policy 是工作区授权；Delegation Lease 只能减权；Standing Approval 是有限预授权；D8 confirmation 是当前完整预览的人机确认。
-- “source”必须加限定：author source、external input、tool result、provider state、package asset 或 source binding。Provider state 不是 author source。
+- “source”必须加限定：author source、external input、tool result、provider state、package asset 或 source binding。Provider state 不是 author source。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 ## 2. D10 新概念
 
@@ -118,7 +118,7 @@ EntityRef、NodeRef、ResourceRef、AnnotationRef、Locator 与 OperationId 均�
 
 RunId、AutomationId、ApprovalId、ExternalEffectId、AuditEventId、tool call ID、package ID、provider account ID 都是控制/外部身份，不能进入 EntityRef。
 
-author source 是 D2/D3/D6 认可的作者 payload；external input、ContextBundle、tool result、model output、package asset、transcript、connector cache 与 provider response 都不是 author source。
+author source 是 D2/D3/D6 认可的作者 payload；external input、ContextBundle、tool result、model output、package asset、transcript、connector cache 与 provider response 都不是 author source。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 D3 Provenance 只是来源证据，不授予 authority。D10 package/provider origin 同样不能转化为写权限。SourceBinding/OriginBinding 是 D3 绑定语义；Connector 自己的 cursor/etag 不得借名“binding”后绕过它们。
 

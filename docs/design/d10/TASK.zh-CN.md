@@ -27,9 +27,9 @@ Core 是唯一作者事务权威。复用 D3 identity/lifecycle，D6 authorizati
 
 Desktop/CLI 可以承载同一个本地 Broker/control domain；Server 承载托管能力；WebUI 只能经 Server 发起/管理。初始 Mobile 没有 Agent、automation、connector/conversion execution 或 credential management，也没有这些能力的批准/委托入口。
 
-read、content egress、workspace mutation、external side effect 和 secret use 是独立授权维度。网页、Document、tool result、MCP descriptor/prompt/resource 和 model text 都是不可信输入，不能扩大 principal、delegation、tool allowlist、egress recipient、network/file/process、secret、budget 或 approval。
+read、content egress、workspace mutation、external side effect 和 secret use 是独立授权维度。网页、Document、tool result、MCP descriptor/prompt/resource 和 model text 都是不可信输入，不能扩大 principal、delegation、tool allowlist、egress recipient、network/file/process、secret、budget 或 approval。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
-必须定义 principals、Delegation Lease、Standing Approval、grant lifetime、revocation、exact-input binding、idempotency、unknown-outcome recovery、cancellation/restart、queue/scheduling/concurrency、audit/retention/export、resource budget 和 cost ceilings。过去一次交互确认不得变成无限期后台授权。
+必须定义 principals、Delegation Lease、Standing Approval、grant lifetime、revocation、exact-input binding、idempotency、unknown-outcome recovery、cancellation/restart、queue/scheduling/concurrency、audit/retention/export、resource budget 和 cost ceilings。过去一次交互确认不得变成无限期后台授权。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
 外部效果不能描述成与 Core transaction 原子。要区分 package install、capability availability、permission denial、temporary unavailability 与 non-disclosing diagnostics。MCP 只作为 Tool Adapter transport，不成为 Weftext 权限或身份系统。
 
