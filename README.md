@@ -8,6 +8,9 @@ translation_status: synced
 
 # Weftext / 文缕
 
+See the separate [design collaboration entrypoint](docs/design/README.md) for target architecture. Accepted D1–D9 designs do not establish implementation in the current prototype; D10 and implementation have separate acceptance.
+
+
 > [!WARNING]
 > **This is a personal toy project for learning and experimentation.** It has not reached a standard suitable for practical use. Do not use it for real work, important data, or production environments. Assume that it may corrupt or lose data. The project makes no commitment to stability, security, compatibility, continued maintenance, or support.
 

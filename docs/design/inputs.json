@@ -1,0 +1,439 @@
+{
+  "schema_version": 1,
+  "status": "accepted-design-not-implemented",
+  "generation": "D1-D9 through D9-r04-evidence05-2026-09-24",
+  "files": [
+    {
+      "path": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "title": "D1 Product Surface and Capability Boundary",
+      "role": "accepted-design-input",
+      "topic": "D1",
+      "main": true,
+      "bytes": 49189,
+      "lines": 510
+    },
+    {
+      "path": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "title": "D2 Document Content and Domain Objects",
+      "role": "accepted-design-input",
+      "topic": "D2",
+      "main": true,
+      "bytes": 98763,
+      "lines": 1188
+    },
+    {
+      "path": "docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md",
+      "title": "D3 Identity References Ownership and Lifecycle",
+      "role": "accepted-design-input",
+      "topic": "D3",
+      "main": true,
+      "bytes": 351167,
+      "lines": 2037
+    },
+    {
+      "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
+      "title": "D3 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D3",
+      "main": false,
+      "bytes": 74040,
+      "lines": 702
+    },
+    {
+      "path": "docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md",
+      "title": "D4 Attribute Types Schema and Relations",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": true,
+      "bytes": 173344,
+      "lines": 888
+    },
+    {
+      "path": "docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md",
+      "title": "D4 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": false,
+      "bytes": 31552,
+      "lines": 160
+    },
+    {
+      "path": "docs/design/snapshots/d5-tables-and-node-collections/source.md",
+      "title": "D5 Tables and Node Collections",
+      "role": "accepted-design-input",
+      "topic": "D5",
+      "main": true,
+      "bytes": 28034,
+      "lines": 150
+    },
+    {
+      "path": "docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md",
+      "title": "D5 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D5",
+      "main": false,
+      "bytes": 8169,
+      "lines": 51
+    },
+    {
+      "path": "docs/design/snapshots/d6-control-interfaces/source.md",
+      "title": "D6 Control Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 83610,
+      "lines": 324
+    },
+    {
+      "path": "docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md",
+      "title": "D6 Storage Transactions Permissions and Sync",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": true,
+      "bytes": 49757,
+      "lines": 231
+    },
+    {
+      "path": "docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md",
+      "title": "D6 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 25128,
+      "lines": 81
+    },
+    {
+      "path": "docs/design/snapshots/d6-terminology-registry/source.json",
+      "title": "D6 Terminology Registry",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 57101,
+      "lines": 991
+    },
+    {
+      "path": "docs/design/snapshots/d7-definition-transfer/source.md",
+      "title": "D7 Definition Transfer",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 11815,
+      "lines": 59
+    },
+    {
+      "path": "docs/design/snapshots/d7-execution-and-action-interfaces/source.md",
+      "title": "D7 Execution and Action Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 33878,
+      "lines": 159
+    },
+    {
+      "path": "docs/design/snapshots/d7-narrow-field-qualification/source.md",
+      "title": "D7 Narrow Field Qualification",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 10577,
+      "lines": 48
+    },
+    {
+      "path": "docs/design/snapshots/d7-prepared-action-binding/source.md",
+      "title": "D7 Prepared Action Binding",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 11363,
+      "lines": 57
+    },
+    {
+      "path": "docs/design/snapshots/d7-preview-and-effects-transport/source.md",
+      "title": "D7 Preview and Effects Transport",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 25222,
+      "lines": 123
+    },
+    {
+      "path": "docs/design/snapshots/d7-query-algebra/source.md",
+      "title": "D7 Query Algebra",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 42472,
+      "lines": 231
+    },
+    {
+      "path": "docs/design/snapshots/d7-query-view-action/source.md",
+      "title": "D7 Query View Action",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": true,
+      "bytes": 12702,
+      "lines": 79
+    },
+    {
+      "path": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "title": "D7 Scenario Dispositions",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 23171,
+      "lines": 220
+    },
+    {
+      "path": "docs/design/snapshots/d7-terminology-and-naming-lexicon/source.md",
+      "title": "D7 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 58480,
+      "lines": 845
+    },
+    {
+      "path": "docs/design/snapshots/d7-terminology-registry/source.json",
+      "title": "D7 Terminology Registry",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 61730,
+      "lines": 1012
+    },
+    {
+      "path": "docs/design/snapshots/d7-value-and-cel-profile/source.md",
+      "title": "D7 Value and CEL Profile",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 27655,
+      "lines": 147
+    },
+    {
+      "path": "docs/design/snapshots/d7-view-contract/source.md",
+      "title": "D7 View Contract",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 21581,
+      "lines": 119
+    },
+    {
+      "path": "docs/design/snapshots/d8-acceptance-matrix/source.json",
+      "title": "D8 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 78383,
+      "lines": 1287
+    },
+    {
+      "path": "docs/design/snapshots/d8-acceptance-matrix/source.md",
+      "title": "D8 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 60887,
+      "lines": 177
+    },
+    {
+      "path": "docs/design/snapshots/d8-direction-and-accessibility/source.md",
+      "title": "D8 Direction and Accessibility",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 16615,
+      "lines": 120
+    },
+    {
+      "path": "docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md",
+      "title": "D8 Editor and Cross-Surface Interaction",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": true,
+      "bytes": 28744,
+      "lines": 192
+    },
+    {
+      "path": "docs/design/snapshots/d8-editor-interfaces/source.md",
+      "title": "D8 Editor Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 40338,
+      "lines": 226
+    },
+    {
+      "path": "docs/design/snapshots/d8-terminology-and-naming-lexicon/source.md",
+      "title": "D8 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 4614,
+      "lines": 34
+    },
+    {
+      "path": "docs/design/snapshots/d9-acceptance-matrix/source.md",
+      "title": "D9 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 13182,
+      "lines": 88
+    },
+    {
+      "path": "docs/design/snapshots/d9-conversion-templates-and-workers/source.md",
+      "title": "D9 Conversion Templates and Workers",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": true,
+      "bytes": 25714,
+      "lines": 129
+    },
+    {
+      "path": "docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "title": "D9 Coordinated D3 D7 Binding Amendment",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 14894,
+      "lines": 85
+    },
+    {
+      "path": "docs/design/snapshots/d9-import-ir-and-mapping/source.md",
+      "title": "D9 Import IR and Mapping",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 26824,
+      "lines": 153
+    },
+    {
+      "path": "docs/design/snapshots/d9-templates/source.md",
+      "title": "D9 Templates",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 35053,
+      "lines": 171
+    },
+    {
+      "path": "docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md",
+      "title": "D9 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 6168,
+      "lines": 47
+    },
+    {
+      "path": "docs/design/snapshots/d9-workers-and-export/source.md",
+      "title": "D9 Workers and Export",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 32593,
+      "lines": 149
+    },
+    {
+      "path": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "title": "D1 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D1",
+      "main": false,
+      "bytes": 7522,
+      "lines": 95
+    },
+    {
+      "path": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "title": "D2 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D2",
+      "main": false,
+      "bytes": 8050,
+      "lines": 101
+    },
+    {
+      "path": "docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md",
+      "title": "D3 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D3",
+      "main": false,
+      "bytes": 19979,
+      "lines": 171
+    },
+    {
+      "path": "docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md",
+      "title": "D4 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D4",
+      "main": false,
+      "bytes": 44559,
+      "lines": 310
+    },
+    {
+      "path": "docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md",
+      "title": "D5 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D5",
+      "main": false,
+      "bytes": 8048,
+      "lines": 57
+    },
+    {
+      "path": "docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md",
+      "title": "D6 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D6",
+      "main": false,
+      "bytes": 10713,
+      "lines": 74
+    },
+    {
+      "path": "docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md",
+      "title": "D7 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D7",
+      "main": false,
+      "bytes": 14074,
+      "lines": 77
+    },
+    {
+      "path": "docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md",
+      "title": "D8 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D8",
+      "main": false,
+      "bytes": 7640,
+      "lines": 66
+    },
+    {
+      "path": "docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md",
+      "title": "D9 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D9",
+      "main": false,
+      "bytes": 9931,
+      "lines": 64
+    },
+    {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "title": "D4-D10-A2 Mandatory Scenario Inputs 2026-08-28",
+      "role": "scenario-intake",
+      "topic": "D4-D10-A2",
+      "main": false,
+      "bytes": 179938,
+      "lines": 1141
+    },
+    {
+      "path": "docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md",
+      "title": "D8 RTL and Bidirectional Interaction Mandatory Review Intake 2026-09-01",
+      "role": "scenario-intake",
+      "topic": "D8",
+      "main": false,
+      "bytes": 7259,
+      "lines": 69
+    }
+  ]
+}
