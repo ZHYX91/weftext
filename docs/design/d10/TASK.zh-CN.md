@@ -7,28 +7,62 @@ translation_status: source
 
 # D10：Agent、自动化与外部能力
 
-## 目标与当前状态
+## 目标和当前状态
 
-状态：candidate-preparation。给出可实现、可审查的完整设计：Agent 可以读取什么、如何选择上下文、提议动作、取得批准、审计与撤销；自动化、定时任务、连接器与转换协调器如何共享权限边界。比较有竞争力的完整替代，不预设一个通用工具系统能解决所有边界。
+状态：candidate。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
-## 必读输入
+当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
-固定调用方给出的 Git 提交，读取[完整输入索引](../README.zh-CN.md)和 `../inputs.json`。先完整读取 D1 主文与 Impact、强制场景输入中全部 D10 路由和横切术语要求、D9 主文，再读 D2–D8 主文、相关完整接口和所有术语/实施门。阅读分批可以，但未完整覆盖前不得声称全套候选已完成。必须维护已读文件/范围与未读清单。
+## 固定输入
 
-## 硬约束与问题
+使用总控给定的固定 Git commit。必须完整读取 ../inputs.json 所列设计输入，并维护实际阅读覆盖。当前作者会话已经完成 48/48 输入阅读；START 记录该事实及曾发生的截断补读。
 
-Core 是唯一作者事务权威。复用 D3 身份与生命周期、D6 授权/事务/恢复、D7 精确 Action 与结果消费、D8 Draft 和确认、D9 worker/提案/发布边界。外部模型输出、transcript、secret、凭据、Provider provenance 不成为作者权威，不得到第二条写路径。部署安装、Registry 定义和作者内容正交；禁用或升级失败不得删除作者事实。
+上游 D1–D9 在协调修订真正接受前持续权威。快照中的旧模型、旧阶段、旧授权与历史 candidate 标签仅作为原文历史，不改变当前任务包的执行边界。
 
-明确 Desktop/CLI 本地 broker、Server 托管复用及 WebUI 调用；Mobile 首期无 Agent、自动化、连接器或转换执行。区分用户读取、内容出站、工作区修改和外部副作用授权；工具返回、网页、文档和模型文本均不能扩大授权。覆盖提示注入、最小上下文、数据最小化、secret 保管与脱敏、网络/文件/进程隔离、包来源/依赖/更新与回滚。
+## 约束和问题
 
-给出主体、能力、授权寿命、撤权、精确输入绑定、幂等与结果未知恢复、取消与重启、队列/调度/并发、审计/保留/导出、资源预算与费用上限。外部副作用不能假称与 Core 事务原子提交。定时执行不得把旧交互同意变成无限授权。说明安装和能力可用性、权限不足、暂时不可用及诊断不披露的关系。
+Core 是唯一作者事务权威。复用 D3 identity/lifecycle，D6 authorization/transactions/recovery，D7 exact Actions/result/effects，D8 Draft/confirmation，以及 D9 worker/proposal/publication。外部 model output、transcript、secret、credential、Provider provenance、Run 和 tool result 均不能变成作者权威或取得第二写路径。
 
-## 产物与验收
+安装、D4 Registry、D10 Capability Catalog、运行健康和作者内容必须分域。disable、uninstall、failed upgrade、credential rotation 和 provider outage 不删除作者事实。任何 Registry/Catalog 激活必须有明确代际和完整历史，不按安装顺序或 display name 建立 namespace ownership。
 
-输出一个连贯候选、概念及术语表、接口与状态机、明确非目标、完整替代比较、场景 disposition、实现影响和测试轮廓。精确列出必要上游修订；独立接受并协调生效前上游不变。实际测试、模型检查、CI、实机证据与待验证事项分别说明，有限模拟不是产品支持声明。
+Desktop/CLI 可以承载同一个本地 Broker/control domain；Server 承载托管能力；WebUI 只能经 Server 发起/管理。初始 Mobile 没有 Agent、automation、connector/conversion execution 或 credential management，也没有这些能力的批准/委托入口。
 
-最少覆盖恶意文档诱导出站、授权过期/撤销、权限变化后的缓存读取、重复调度、崩溃后未知外部副作用、取消竞争、凭据轮换、升级失败、审计失败和相同请求跨产品端一致性。独立评审必须完整 accept/pass、零开放 P0/P1、术语通过，并审查更优完整替代和依赖闭环。
+read、content egress、workspace mutation、external side effect 和 secret use 是独立授权维度。网页、Document、tool result、MCP descriptor/prompt/resource 和 model text 都是不可信输入，不能扩大 principal、delegation、tool allowlist、egress recipient、network/file/process、secret、budget 或 approval。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
-## 本次执行边界
+必须定义 principals、Delegation Lease、Standing Approval、grant lifetime、revocation、exact-input binding、idempotency、unknown-outcome recovery、cancellation/restart、queue/scheduling/concurrency、audit/retention/export、resource budget 和 cost ceilings。过去一次交互确认不得变成无限期后台授权。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
 
-作者使用普通 Chat 最新＋极高；独立评审使用 Chat GPT-6 Pro。首批只完成阅读检查点、候选结构和关键开放决策，并在单一分支提交中英文 START 文档、创建草稿 PR，验证实际 GitHub 写入。不得更改输入快照、产品代码、权限、分支保护、品牌，不合并或发布。后续按同一任务包完成候选。
+外部效果不能描述成与 Core transaction 原子。要区分 package install、capability availability、permission denial、temporary unavailability 与 non-disclosing diagnostics。MCP 只作为 Tool Adapter transport，不成为 Weftext 权限或身份系统。
+
+## 交付物
+
+作者阶段在 docs/design/d10/ 形成并保持中英文同步的完整候选：
+
+- CANDIDATE.zh-CN.md / CANDIDATE.md
+- TERMINOLOGY.zh-CN.md / TERMINOLOGY.md
+- SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
+- IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
+- UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
+- 本 TASK 中英文件
+- START 中英文件
+
+CANDIDATE 必须自包含最终架构、数据类型、操作合同、状态机、错误与竞争、权限/批准/出站/secret、激活/升级/回滚、Agent/Automation/Connector/MCP、budget/cost/audit 及五端边界。必须比较可信的 A/B/C/D 完整替代并说明选择理由和非目标。
+
+SCENARIO-DISPOSITIONS 必须逐项覆盖 mandatory intake 的 D10 路由和本 TASK 的故障边界，给来源定位、accept/revise/reject/defer-with-owner、执行模式、候选落点和验证义务。
+
+UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces、D7 Execution/Action 的拟新增/替换规范，以及保持不变的 wire/owner/版本边界；不能把作者提案写成已生效上游。
+
+## 作者执行阶段
+
+同一作者会话先完成方案规划，再在同一候选分支和既有 PR 中写入完整候选、进行仓库校验并核实实际提交实物。需要重大设计收敛时可以回到作者规划，但不得因为阶段切换另建候选分支或重复 PR。
+
+作者只修改 docs/design/d10/ 中必要设计材料和既有 PR 的标题/正文。不得修改输入快照、产品实现、brand、仓库权限或分支保护；不得合并、发行或开始 A2。
+
+作者完成条件是：48/48 输入覆盖真实；七对双语文档完整；必要 upstream amendment 明确未激活；diff 只在授权目录；实际文档检查/CI 已读取并如实报告；任何 pending/failure 不被写成 pass。
+
+## 独立审查
+
+完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
+
+独立审查至少要求：完整 accept/pass 判断；P0/P1=0 才可建议协调激活；terminology pass；检查是否存在更简单且完整的替代；检查 D6/D7 amendment 是否必要且充分；验证 mandatory scenarios、依赖闭合与证据边界。
+
+有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。
