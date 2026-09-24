@@ -337,7 +337,7 @@ D10 自有 error code 闭集：invalid_request、not_visible、control_conflict�
 
 一旦请求进入原 D3/D6/D7/D8/D9 入口，返回该 owner 原有 error/disposition，不包装为 D10 error，也不根据内部 deployment detail改变原拒绝顺序。
 
-## 22. 产品表面
+## 22. 产品端
 
 Desktop 本地承载同一个 local Broker、scheduler、secret transport 与 Core adapter；CLI 本地连接/启动同一能力族，不创建另一套 scheduler 或 authority。Desktop/CLI 远端模式只调用 Server。
 

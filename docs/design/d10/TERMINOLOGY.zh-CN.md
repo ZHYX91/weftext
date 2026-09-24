@@ -98,7 +98,7 @@ D10 不定义 alias 去替代这些名称。
 
 **Capability Catalog**持有 contribution/runtime 的当前部署描述；它不能定义 Field、Facet 或关系语义。Catalog change 与 Registry change 可由同一个 Activation Binding 协调，但两者不是同一对象。
 
-**D1 capability**描述某个正式产品表面在当前 release/current subject 下是否可提供一个产品能力，并使用 D1 固定 unavailable reasons。D10 Contribution availability 只是 D1 判断的一项下游事实，不能改变 D1 reason precedence。
+**D1 capability**描述某个正式产品端在当前 release/current subject 下是否可提供一个产品能力，并使用 D1 固定 unavailable reasons。D10 Contribution availability 只是 D1 判断的一项下游事实，不能改变 D1 reason precedence。
 
 ## 6. Provider 术语消歧
 

@@ -79,7 +79,7 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate upstream amendment p
 >
 > 用户可以针对这份 exact 原 planned decision 给出新的、一次性的明确交互授权；Core 将其作为新的附加 authorization evidence 绑定原 plan，而不是把原 StandingApprovalEnvelope 替换成另一份 envelope。原业务依赖若已发生确定冲突，新的 approval 也不能复活 plan，仍按本文件既有 authoritative abort 条件处理。
 >
-> 已 committed decision 在 delivery/replay 时不要求旧 Standing Approval 仍未过期；只要求原 saved decision 连续且当前调用者仍有原协议要求的 current authorization。lost receipt 重放返回原 bytes，不增加 approval count、budget spend 或 author revision。
+> 已 committed decision 在 delivery/replay 时不要求旧 Standing Approval 仍未过期；只要求原 saved decision 连续且当前调用方仍有原协议要求的 current authorization。lost receipt 重放返回原 bytes，不增加 approval count、budget spend 或 author revision。
 
 ## 3. D6 Control Interfaces — 拟新增/替换条款
 
