@@ -5,144 +5,138 @@ translation_status: source
 
 [English](START.md)
 
-# D10 启动阅读检查点
+# D10 阅读与候选检查点
 
-状态：candidate-preparation。本文件只记录 D10 第一批实际阅读、边界和待比较结构；不是完整 D10 候选，不代表设计接受、实现完成或发布许可。
+状态：candidate complete for independent review，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
 
-固定输入提交：`f205831c848729f7ddbc3ba0cf32b689459c0c98`。作者分支：`docs/d10-start`。后续 Draft PR 目标分支：`docs/chat-collaboration`。快照中的旧模型、阶段和授权文字只作为历史输入保留；当前 D10 任务包决定本次执行方式。
+固定上游输入 commit：f205831c848729f7ddbc3ba0cf32b689459c0c98。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
-## 已完成阅读
+## 1. 阅读覆盖
 
-以下 11 个文件已经从固定输入提交直接读取到文件末尾，没有以搜索摘要替代正文：
+设计输入已完成 48/48，未读 0。完整集合与固定输入中的 docs/design/inputs.json 一致：
 
-- `AGENTS.zh-CN.md`
-- `docs/DOCUMENTATION.zh-CN.md`
-- `docs/design/AGENTS.zh-CN.md`
-- `docs/design/README.zh-CN.md`
-- `docs/design/inputs.json`
-- `docs/design/d10/TASK.zh-CN.md`
-- `scripts/check_docs.py`
-- `docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md`
-- `docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md`
-- `docs/design/snapshots/d9-conversion-templates-and-workers/source.md`
+```text
+docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md
+docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md
+docs/design/snapshots/d9-conversion-templates-and-workers/source.md
+docs/design/snapshots/d2-document-content-and-domain-objects/source.md
+docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md
+docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md
+docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d5-tables-and-node-collections/source.md
+docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d6-control-interfaces/source.md
+docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md
+docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d6-terminology-registry/source.json
+docs/design/snapshots/d7-definition-transfer/source.md
+docs/design/snapshots/d7-execution-and-action-interfaces/source.md
+docs/design/snapshots/d7-narrow-field-qualification/source.md
+docs/design/snapshots/d7-prepared-action-binding/source.md
+docs/design/snapshots/d7-preview-and-effects-transport/source.md
+docs/design/snapshots/d7-query-algebra/source.md
+docs/design/snapshots/d7-query-view-action/source.md
+docs/design/snapshots/d7-scenario-dispositions/source.md
+docs/design/snapshots/d7-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d7-terminology-registry/source.json
+docs/design/snapshots/d7-value-and-cel-profile/source.md
+docs/design/snapshots/d7-view-contract/source.md
+docs/design/snapshots/d8-acceptance-matrix/source.json
+docs/design/snapshots/d8-acceptance-matrix/source.md
+docs/design/snapshots/d8-direction-and-accessibility/source.md
+docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md
+docs/design/snapshots/d8-editor-interfaces/source.md
+docs/design/snapshots/d8-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d9-acceptance-matrix/source.md
+docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md
+docs/design/snapshots/d9-import-ir-and-mapping/source.md
+docs/design/snapshots/d9-templates/source.md
+docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md
+docs/design/snapshots/d9-workers-and-export/source.md
+docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md
+docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md
+```
 
-其中后四项属于 48 份设计输入清单。本批因此实际完整读取 4/48 份设计输入；强制场景 intake 已分段覆盖至末尾。一次较大分段返回曾被工具截断，该范围随后以更小分段重新完整覆盖，截断结果没有被计入已读证据。
+此外已完整读取固定输入上的仓库/设计规则和任务入口：
 
-## 尚未读取的设计输入
+- AGENTS.zh-CN.md
+- docs/DOCUMENTATION.zh-CN.md
+- docs/design/AGENTS.zh-CN.md
+- docs/design/README.zh-CN.md
+- docs/design/inputs.json
+- docs/design/d10/TASK.zh-CN.md
+- scripts/check_docs.py
 
-以下 44 份是 `docs/design/inputs.json` 中尚未完整读取的输入。完整 D10 候选形成前不得把它们视为已覆盖：
+候选形成前还复读了分支上的 START，核对实际进度，没有把搜索摘要、目录或部分命中当作全文阅读。
 
-- `docs/design/snapshots/d2-document-content-and-domain-objects/source.md`
-- `docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md`
-- `docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md`
-- `docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d5-tables-and-node-collections/source.md`
-- `docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d6-control-interfaces/source.md`
-- `docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md`
-- `docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d6-terminology-registry/source.json`
-- `docs/design/snapshots/d7-definition-transfer/source.md`
-- `docs/design/snapshots/d7-execution-and-action-interfaces/source.md`
-- `docs/design/snapshots/d7-narrow-field-qualification/source.md`
-- `docs/design/snapshots/d7-prepared-action-binding/source.md`
-- `docs/design/snapshots/d7-preview-and-effects-transport/source.md`
-- `docs/design/snapshots/d7-query-algebra/source.md`
-- `docs/design/snapshots/d7-query-view-action/source.md`
-- `docs/design/snapshots/d7-scenario-dispositions/source.md`
-- `docs/design/snapshots/d7-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d7-terminology-registry/source.json`
-- `docs/design/snapshots/d7-value-and-cel-profile/source.md`
-- `docs/design/snapshots/d7-view-contract/source.md`
-- `docs/design/snapshots/d8-acceptance-matrix/source.json`
-- `docs/design/snapshots/d8-acceptance-matrix/source.md`
-- `docs/design/snapshots/d8-direction-and-accessibility/source.md`
-- `docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md`
-- `docs/design/snapshots/d8-editor-interfaces/source.md`
-- `docs/design/snapshots/d8-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d9-acceptance-matrix/source.md`
-- `docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md`
-- `docs/design/snapshots/d9-import-ir-and-mapping/source.md`
-- `docs/design/snapshots/d9-templates/source.md`
-- `docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md`
-- `docs/design/snapshots/d9-workers-and-export/source.md`
-- `docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md`
-- `docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md`
+## 2. 截断与补读记录
 
-## D10 范围
+读取过程中曾出现工具返回截断。截断调用一律不计为完整阅读，并以更小单段重新覆盖缺口。明确补读包括：
 
-D10 要定义 Agent、自动化与外部能力怎样在不产生第二写入权威的前提下工作。范围至少包括 Agent 可读取的数据和上下文选择、建议动作、批准、撤权、审计与恢复；自动化的调度、队列、重复与取消；连接器的外部协议、凭据和同步控制状态；Extension Package、manifest、contribution、runtime、namespace 注册和 provider 生命周期；以及这些能力与 D9 转换协调器共享而不混淆的授权、隔离、预算、审计和外部副作用边界。
+- D3 identity 主文的中段与尾段；
+- D7 Query Algebra；
+- D7 多文件聚合读取后逐文件补读；
+- D8 Editor Interfaces；
+- D8 Acceptance Matrix Markdown 与 JSON；
+- Mandatory Scenario Intake 的大段聚合读取改为较小分段连续覆盖到文件末尾。
 
-Desktop 与 CLI 可承载本地 broker/control plane，Server 可承载托管能力，WebUI 只能经 Server 发起或管理。Mobile 首期不运行 Agent、自动化、连接器或转换执行，也不管理这些能力的凭据；它只能消费合法提交后的普通结果。
+最终没有已知未补行段。这里的“48/48”只表示作者实际完成输入阅读，不表示作者或独立 reviewer 已证明所有上游实现。
 
-本批不定义产品实现，不修改 D1–D9 快照，不把任何候选 package、provider、manifest 或 runtime 语法冻结成兼容合同。
+## 3. 从首批检查点到完整候选
 
-## 已识别的硬约束
+首批只读了 4/48 个设计输入并创建 START 验证 GitHub 写入。随后同一作者会话完成余下 44 份全文阅读，并基于完整输入比较方案 A/B/C 后收敛为方案 D：Narrow Delegation Broker + Typed Contribution Catalog + Specialized Executors。
 
-- Core 是唯一作者事务权威。Agent、自动化、连接器、模型、网页、工具输出、transcript、provider 对象和运行缓存都不能成为作者事实或第二条工作区写路径。
-- 本地与托管模式必须沿用 D1 的唯一提交持有者和能力探测边界；同一能力在产品端之间不能由 UI 或调用端自行改写语义。
-- D3 的身份、owner、locator、来源与生命周期边界必须复用；外部 provider ID、cursor、etag、UID 或名称不能替代 Weftext identity。
-- D6 的授权、预算、事务、恢复和信息不披露必须是最终工作区修改的门。旧 capability 探测、旧交互同意或后台定时器都不是持续授权票据。
-- D7 的 Action、准备、精确输入绑定、preview/effects、结果消费和 unknown recovery 必须复用；D10 不建立另一个通用提交协议。
-- D8 的 Draft、确认和跨产品端交互边界必须复用；自动或模型生成的提案不能伪称用户原生输入。
-- D9 的 worker、隔离输入、提案、发布和外部输出边界保持权威。D10 可复用其隔离与外部副作用经验，但不能把转换 worker 改造成通用作者。
-- 用户读取、内容出站、工作区修改和外部副作用是不同授权维度；一个维度的许可不能隐式扩大到另一个维度。
-- 网页、文档、工具返回和模型文本全部是不可信输入，不能扩大主体、范围、网络、文件、进程、secret 或写入权限；提示注入必须在能力与数据边界上默认拒绝。
-- 上下文选择遵循最小必要和数据最小化；secret 使用句柄或受控引用，不进入工作区内容、模型上下文、普通日志或可导出 transcript。
-- 定时和后台执行必须有明确主体、能力范围、授权寿命、撤权和重验。一次交互批准不能自动变成无限期后台授权。
-- 外部副作用与 Core 事务不能假装原子。设计必须覆盖幂等键、结果未知、重试、补偿或人工恢复、取消竞争和崩溃重启。
-- 安装、registry 定义、provider 可用性和作者内容互相正交。禁用、卸载、版本不兼容或升级失败不得删除、默认化或改写作者事实。
-- Extension、pack、connector、adapter、provider、module、contribution 与 runtime 的术语必须通过横切术语门；官方 namespace、publisher namespace 和用户自定义 namespace 需要 anti-spoof 与冲突规则。
-- 运行环境必须覆盖网络、文件、进程与资源隔离，来源和依赖验证，更新与回滚，资源预算与费用上限，审计失败，以及权限变化后的缓存读取。
-- capability 不可用、权限不足、组件缺失、未配置、离线、版本不兼容和暂时不可用必须保持可诊断但不泄露被遮蔽部署信息。
+第二轮收敛进一步修正了首版方案：
 
-## 建议候选文档结构
+- 不再假定“无需上游修改”；无人值守作者提交需要明确 D6/D7 coordinated amendment。
+- standing approval 首版严格收窄到原 D7 单 owner、单 Field、当前完整 Field 恰一 Entry、一个 existing scalar member 的 set_field_member。
+- D4 Registry 与 D10 Catalog 分域，但通过 Activation Binding 做完整激活；D4 累计 semantic ledger 不允许回滚指针或删除历史。
+- Tool Value 固定复用 D7 类型和值代数的有限子集，MCP 只作为 Tool Adapter transport。
+- package trust 固定 SHA-256 内容绑定与应用层 Ed25519 publisher 签名，同时把 PublisherIdentity 与 NamespaceClaim 分开。
+- external effect、idempotency、outcome_unknown、credential rotation、cost reservation、cancel race 与 audit failure 均已有唯一规范结论。
 
-完整候选可按以下逻辑组织，实际文件拆分在完整阅读后再决定：
+这些是作者候选选择，不是独立 acceptance。
 
-1. 范围、非目标、上游合同与总体不变量。
-2. Terminology、package/contribution taxonomy、namespace 与 registry。
-3. 主体、委托、capability、授权寿命、撤权和精确输入绑定。
-4. Agent 上下文选择、工具调用、提案、批准与结果消费。
-5. 自动化调度、队列、并发、重复、取消、重启与授权重验。
-6. 连接器、provider、secret、同步控制状态与外部副作用。
-7. runtime 隔离、网络/文件/进程边界、依赖来源、更新和回滚。
-8. Desktop/CLI 本地控制面、Server 托管控制面、WebUI 管理入口和 Mobile 不可用矩阵。
-9. 状态机、幂等、unknown recovery、审计、保留、导出、预算与费用。
-10. 与 D9 worker/转换发布、D7 Action、D8 确认的接口组合。
-11. 强制场景 disposition、恶意输入与故障注入、跨产品端一致性。
-12. 上游修订清单、实现影响、测试轮廓、待验证证据和接受条件。
+## 4. 当前候选材料
 
-## 关键开放决策与竞争性顶层方案
+本目录的完整候选由七对同步中英文 Markdown 组成：
 
-当前不冻结任何方案。至少保留以下三种完整顶层方案进入后续比较：
+- CANDIDATE.zh-CN.md / CANDIDATE.md
+- TERMINOLOGY.zh-CN.md / TERMINOLOGY.md
+- SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
+- IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
+- UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
+- TASK.zh-CN.md / TASK.md
+- START.zh-CN.md / START.md
 
-- 方案 A：共享 broker/control plane，加专用 Agent runtime、automation scheduler 和 connector adapters。公共层只拥有主体、授权、capability、secret 引用、审计、预算、job 生命周期和外部副作用恢复；各领域运行器保留各自封闭协议。需要证明公共层足够统一，又不会变成开放的万能工具系统。
-- 方案 B：统一 capability host，以类型化 contributions 驱动 Agent、自动化、连接器和部分外部执行。manifest 声明输入、输出、权限、sandbox、网络和副作用类别，host 统一调度与审计。需要证明 closed schema、最小权限、升级兼容和 provider 隔离不会被开放 contribution blob 破坏。
-- 方案 C：Agent、自动化和连接器维持独立控制子系统，只共享 D6 授权、D7 Action/结果、统一审计标识与少量 capability vocabulary。需要证明重复状态机和诊断不会造成语义漂移，同时避免为了统一而引入过大的公共 runtime。
+CANDIDATE 是自包含主规范；TERMINOLOGY 关闭命名碰撞；SCENARIO-DISPOSITIONS 逐项裁决 mandatory/task/race 场景；Implementation Impact 分层未来证据；UPSTREAM-AMENDMENTS 给 D6/D7 精确配套文本；TASK 定义当前作者→独立评审流程；START 记录真实输入覆盖。
 
-必须进一步比较的开放问题包括：交互 Agent session 与后台 automation 的主体/委托关系；一次性批准、会话批准、策略批准和定时授权的边界；读取上下文与内容出站是否需要不同 grant；外部副作用结果未知后的恢复模型；connector sync 与一次性 Action 的共用/分离程度；package 安装信任与运行时授权是否分层；registry 定义与已安装 provider 版本如何绑定；审计失败时哪些操作必须阻断；本地与 Server 是否共享一套 wire 还是只共享语义对象；以及跨 capability 的预算、费用与并发仲裁由谁拥有。
+## 5. 当前设计选择和仍未激活部分
 
-## 下一批完整阅读顺序
+作者推荐方案 D。Core 仍是唯一作者事务权威，D10 Broker 没有第二写路径；D4 Registry 与 D10 Capability Catalog 分域；Agent/Automation/Connector/MCP 都通过当前权限、委托、egress、secret、budget、audit 和各自 owner protocol。
 
-下一批继续只读，并维持已读/未读清单：
+D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档完整，产品也不能把 unattended author submit 标记 available；在协调激活前，Automation 只能准备 author proposal，并沿现有 D7/D8 逐次确认。
 
-1. D2 主文与 D2 实施影响，先固定 Document、作者源、领域对象和 Task/Template 边界。
-2. D3 主文、D3 术语与 D3 实施影响，固定 identity、ownership、provenance、origin 和生命周期词义。
-3. D4 主文、D4 术语与 D4 实施影响，固定 typed value、schema/field/relation、namespace 与 registry 相关上游语义。
-4. D5 主文、D5 术语与 D5 实施影响，固定 Record、collection、occurrence 与规模边界。
-5. D6 两份主接口、术语、registry 与实施影响，重点读取主体、权限、事务、审计、预算、恢复、控制状态和缓存非披露。
-6. D7 全部 Action/Query/View/结果消费接口、术语、registry 与实施影响，重点闭合准备、确认、unknown、effects 和 capability contribution 的接口可复用范围。
-7. D8 主文、editor interfaces、direction/accessibility、acceptance matrix、术语、实施影响与 RTL intake，固定 Agent/自动化提案如何进入 Draft、确认、可访问交互和五端一致性。
-8. 最后补齐 D9 其余 acceptance、binding amendment、IR/mapping、templates、workers/export、术语与实施影响，再开始完整 D10 候选写作。
+本候选也不声称 OS sandbox、真实 MCP/model/connector 服务、credential store、费用系统、真实 Core amendment 或五端 UI 已实现。Implementation Impact 中这些证据继续 pending。
 
-完整输入未覆盖前，只允许继续扩展候选结构、问题清单和反例；不声明设计门通过，不冻结顶层选择，也不据当前阅读修改任何上游快照。
+## 6. 交接给独立评审
+
+下一步不是继续作者批次，而是由 fresh independent Chat GPT-6 Pro 从固定上游和本候选实物从零审查。独立 reviewer 应完整读取七对 D10 文档及必要上游原文，重点攻击：
+
+1. 方案 D 是否确实比 A/B/C 更简单且完整；
+2. D6/D7 amendment 是否必要、充分且没有第三 ledger/第三 commit path；
+3. standing approval 的 exact-one Entry、footprint、count reservation、revocation/recovery 是否闭合；
+4. Registry/Catalog 激活、publisher trust 与 D4 cumulative ledger 是否一致；
+5. prompt injection、MCP、secret/egress、external outcome unknown、cost uncertain、audit failure、cancel/planned race 是否闭合；
+6. Mandatory scenarios、D1–D9 ownership、Mobile negative boundary 与 terminology 是否无回归。
+
+独立评审之前不得把 candidate、文档 CI 成功或作者自查写成 Gate pass；不得合并、发行或开始 A2。
