@@ -12,7 +12,7 @@ translation_status: synced
 
 - Weftext is implemented natively in Rust.
 - Production document conversion uses Weftext-owned import infrastructure and does not depend on another product's metadata, adapter, manifest, wire contract, or release.
-- Public repository documentation describes current Weftext contracts. Product comparisons, screenshots, research notes, schedules, handoffs, decision history, and acceptance logs stay outside this repository.
+- Product documentation describes current implementation contracts. The explicitly separate [design area](docs/design/README.md) may contain proposed architecture, necessary review dispositions, and accepted design inputs before implementation. Private transcripts, credentials, unrelated research, local handoffs and internal schedules stay outside this repository.
 - Human-facing public Markdown is maintained as a Chinese source and synchronized English translation. Test fixtures, generated evidence, lockfiles, and machine-readable samples are not localized.
 
 ## Storage authority

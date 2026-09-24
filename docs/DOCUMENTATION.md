@@ -16,7 +16,7 @@ The GNU AGPL text in root `LICENSE` remains verbatim and authoritative; `LICENSE
 
 ## Public content
 
-Public documents describe current contracts, current implemented boundaries, and remaining release gates. They do not retain development-stage numbering, completed-task narratives, old decision chronology, internal schedules, handoffs, research comparisons, acceptance ledgers, or competitor references. Git records document history; the private control workspace holds planning and research.
+Product documents describe current contracts, current implemented boundaries, and remaining release gates. Outside the explicit design-collaboration exception below, they do not retain development-stage numbering, completed-task narratives, old decision chronology, internal schedules, handoffs, research comparisons, acceptance ledgers, or competitor references. Git records document history; the private control workspace holds private planning and research.
 
 Compatibility and migration text states only the active boundary needed to read or convert existing data. Retired syntax is not presented as another supported product language.
 
@@ -37,3 +37,9 @@ python scripts/check_docs.py
 ```
 
 The check validates pairs, frontmatter, language links, heading-level parity, relative links, localized cross-links, forbidden Chinese translations, forbidden historical labels, and excluded product-comparison names. The source gate runs the same command. Automated checks do not replace paragraph-level semantic editing; a contract change still requires human comparison of both languages.
+
+## Design collaboration
+
+The [design area](design/README.md) is a separate target-design track. It may publish architecture proposals, review dispositions needed to understand them, and accepted design inputs before implementation. Every proposal states its status and implementation limits. This exception does not turn target behavior into a shipped contract or authorize private logs and secrets.
+
+Only the enumerated imported files under `docs/design/snapshots` are original-language generated research inputs. Preserve their normative wording; do not maintain a second translated normative copy. The bilingual index explains historical labels, current precedence and omitted private transport links. New proposals, summaries and decisions remain paired Chinese/English documents. Validate the snapshot inventory and links with `python scripts/check_design_inputs.py` in addition to the normal documentation gate.
