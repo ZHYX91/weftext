@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r03-supplement-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
+revision: D10-r04-final-review-fixes-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
 
 ## 1. Implementation slices and state owners
 
@@ -101,6 +101,25 @@ The Package verifier implements SHA-256 catalog binding, Ed25519 package signatu
 - semantic rollback is a successor activation and never moves Registry history backward.
 
 Candidate D4 Registry must still pass original `RegistrySnapshot/1`, `RegistryBinding/1`, evolution proof, and catalog loader. D10 package metadata may not be inserted into the D4 closed snapshot for convenience.
+
+### 3.1 Pack parent dependency and lifecycle tests
+
+Implementation separates package installation, Contribution activation, D4 definition retention, and UI visibility. A domain Pack Contribution stores primary `parentDomainId`, `extensionPointId`, `requiredVersionRange`, and the exact parent binding resolved at activation in the Catalog. The parent binding is covered by the Catalog digest. When the parent version changes, the old dependent binding becomes invalid and only a successor ActivationBinding can reactivate it.
+
+At minimum test these combinations while preserving fixed D1 reason precedence:
+
+| Condition | Contribution | Expected capability projection | schema/author facts |
+| --- | --- | --- | --- |
+| parent missing | inactive | `missing_component` when no higher-priority reason applies | history/raw source retained; typed interpretation follows D4 complete/unavailable |
+| parent present but explicitly disabled | inactive | `not_configured` | same; definitions are not deleted |
+| parent incompatible | inactive | `incompatible_version` | old history retained; old rules do not keep running |
+| unsupported surface | inactive on that surface | `unsupported_surface` | portable facts follow that surface's Core/D4 capability |
+| UI hidden only | activation unchanged | no new unavailable reason | RegistryBinding/author facts unchanged |
+| parent ready/compatible | may activate | continue through all other D1/D6/D10 gates | current RegistryBinding interprets facts |
+
+Tests cover both Pack families. A Calendar rule/data Pack produces no derived rule/View/cache or Connector behavior while the parent is inactive. An Organizations schema Pack whose accepted definitions remain completely proven by the current D4 binding may still interpret existing author facts, but retained schema cannot secretly expose domain-specific View/Action/Assign/Connector behavior. When definitions state is unavailable, raw source remains and typed operations fail closed.
+
+GC/uninstall tests prove package config/source, accepted semantic ledger, tombstones/migrations, and immutable assets required for recovery are not deleted because UI/module is disabled. Tests also prove a parent version/binding change invalidates the old dependent Catalog binding rather than following ambient latest at runtime.
 
 The supplemental S D4 reference catalog is now an implementation-test input: its 61 Fields, 7 Facets, 27 relation Fields, and real cross-Field constraints such as Calendar `union_variant_equal` participate in D7 Narrow Field Qualification. Tests include at least the positive `people/phone` construction, a relation-Field negative, a cross-field `calendar/range` or `calendar/recurrence` negative, and an unknown-constraint-constructor negative. No hard-coded "safe FieldId allowlist" may bypass the Registry-graph proof.
 
@@ -295,12 +314,15 @@ Original D3/D7/D8/D9 errors likewise pass through exactly from their owner. Diag
 
 "When capability available" still requires D1 release/platform evidence; design existence does not create a Supported claim.
 
-## 13. Real implementation replacement and prohibited compatibility layer
+## 13. Controlled naming mapping and implementation replacement
 
-A later implementation should atomically replace any old free tool callback, arbitrary JSON argument, UI-self-asserted approval, inherited process environment secrets, extension/name-driven automatic tool dispatch, Agent direct file writes, or cursor/provider state mixed into author source. If an old prototype was unpublished, do not preserve serde aliases, fallback parsers, or dual-read/dual-write.
+The per-concept structured mapping in TERMINOLOGY §13 is the current D10 naming authority rather than a future test plan. Implementation, CLI/API/schema/manifest, UI labels, and locale resources consume only mappings already recorded there. "No public IPC", "no direct CLI", and "no historical alias" are controlled decisions and cannot be replaced by implementation-defined names.
 
-Historical research fixtures may remain with explicit non-authoritative labels; public/API/CLI/schema/positive fixtures may not accept old and new controlled semantics simultaneously.
+A later implementation atomically replaces any old free tool callback, arbitrary JSON argument, UI-self-asserted approval, inherited process environment secret, extension/name-driven automatic tool dispatch, Agent direct file write, cursor/provider state mixed into author source, or prototype that violates the Terminology collision table. If an old prototype was unpublished, no serde aliases, fallback parsers, or dual-read/dual-write remain.
 
+Every D10 concept must trace from stable concept ID to Chinese/English formal names, owner, wire/API/manifest/schema status, code type/function/variable/namespace, CLI/UI/locale, short/alias rules, examples/counterexamples, and first-freeze/migration target. Inherited D1-D9 names only reference the original owner; implementation cannot register new D10 aliases for `Registry`, `OriginBinding`, D6 permission, D7 Action, D8 Draft, or D9 Provider.
+
+B10-01 implementation negative gate: Adopt code paths use only the `adopt_*` convention and associated binding values use the existing D3 `OriginBinding` / `origin_binding`. Controlled positive source, API/schema, fixtures, and terminology registry contain no `adoption_binding`, with no scanner exemption.
 ## 14. Test and evidence layers
 
 | Layer | Can prove | Cannot prove |
@@ -357,6 +379,7 @@ Each case includes positive and mutant/negative paths and is not satisfied by st
 The author implementation plan is ready for independent review only when:
 
 - CANDIDATE, TERMINOLOGY, SCENARIO-DISPOSITIONS, UPSTREAM-AMENDMENTS, and this file agree;
+- TERMINOLOGY §13 completes all 13 Intake §8.5.1 mapping fields for every current D10 controlled concept, inherited names reference their original owner, and no TODO/"implementation decides" placeholder remains;
 - 48/48 upstream input coverage remains accurate;
 - D6/D7 amendment is clearly an unactivated proposal;
 - unsupported/deferred is never written as available;

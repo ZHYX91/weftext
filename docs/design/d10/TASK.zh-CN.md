@@ -9,7 +9,7 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision r03。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision r04。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
@@ -78,6 +78,6 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
 
-独立审查至少要求：完整 accept/pass 判断；P0/P1=0 才可建议协调激活；terminology pass；检查是否存在更简单且完整的替代；检查 D6/D7 amendment 是否必要且充分；验证 mandatory scenarios、依赖闭合与证据边界。
+独立审查已经对旧 C 完成 14/14 候选与 49/49 上游指定输入阅读，并给出 revise；这只建立旧 C verdict。当前 r04 必须重新独立核验全部 10 项作者处置，尤其 B11 场景来源、Lexicon 13项 mapping 与 Pack parent lifecycle。最终仍要求完整 accept/pass 判断、P0/P1=0、terminology pass、更简单完整替代比较、必要 amendment 充分性，以及 mandatory scenarios、依赖与证据闭合。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。

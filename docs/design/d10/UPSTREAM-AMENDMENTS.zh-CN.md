@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 配套 D6/D7 上游协调修订提案
 
-revision: D10-r03-supplement-2026-09-28；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定上游输入提交为 `f205831c848729f7ddbc3ba0cf32b689459c0c98`。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
+revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定上游输入提交为 `f205831c848729f7ddbc3ba0cf32b689459c0c98`。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
 
 ## 1. 修订目的和不变边界
 
@@ -250,13 +250,26 @@ d7_planned_preview_opened {
 
 这是对 D3 词表的最小协调勘误提案。固定 U 快照仍未修改；独立复核和协调接受之前，本文不能声称该勘误已经生效。
 
-## 7. D8 与 D9 的明确非修订说明
+## 7. Pack parent lifecycle — 无需新增 D1/D4 wire 修订
+
+CANDIDATE §6.1 对 Pack parent domain/extension point 的 lifecycle 收敛不要求修改固定 D1/D4 wire，理由如下：
+
+1. D1 已经冻结 `unsupported_surface|not_in_release|policy_denied|user_action_required|missing_component|not_configured|offline|incompatible_version|temporarily_unavailable` 的 closed reason 和固定优先级。D10 只把 parent dependency 的实际阻塞事实映射到这些既有 reason；不新增 `parent_missing` 等产品级 reason。
+2. D4 已经冻结 `RegistrySnapshot/1`、`RegistryBinding/1`、namespace definitions 的 `complete|unavailable`、raw-source preservation、generation+digest 双绑定，以及 tombstone/migration/semantic contribution 的累计 ledger。Pack/parent disable 不能借 D10 改写这些规则。
+3. Parent Extension Dependency 只存在 D10 Capability Catalog/ActivationBinding 的部署控制面：domain contribution 声明 parent domain、extension point 和 version range；激活时解析 exact parent binding 并写入 Catalog digest。它不进入 D4 Field/Facet schema，也不成为作者事实。
+4. UI visibility 继续只是产品投影。仅隐藏父模块 UI 不修改 D1 capability、D4 RegistryBinding 或 D10 contribution activation。
+
+因此 parent missing/disabled/incompatible/unsupported surface 时，dependent runtime/view/action/rule contribution inactive；已接受 D4 definitions/history/raw author source 按原 D4 complete/unavailable 合同保留。若 exact definitions 仍 complete，Core 可解释已有作者事实，但这不授权新的 domain behavior。若 definitions 不可证明，按原 `provider_or_schema_unavailable`/retained raw 路径处理。
+
+只有未来方案要求以下任一事项时才必须重开上游：把 parent dependency 成员加入 `RegistrySnapshot/1`；新增 D1 unavailable reason；让 UI disable 改写 schema availability；允许 disabled parent 下 dependent contribution 继续产生领域派生语义；或改变 D4 semantic-ledger retention。当前候选全部拒绝这些路线。
+
+## 8. D8 与 D9 的明确非修订说明
 
 D8 不增加无人值守编辑分支。Document/Annotation 编辑、dirty Draft、IME、current serial、完整 preview 和明确确认原样保留。Agent/Automation 只能向 D8 提出 proposal；不能伪造 EditSession 或人工来源。
 
 D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或外部发布器。D10 的外部 transport/Connector 不授予 D9 worker 网络能力，D9 publication confirmation 也不授予 Standing Approval 作者写入权。
 
-## 8. 激活与版本兼容
+## 9. 激活与版本兼容
 
 这些 amendment 只有在独立审查接受、总控协调裁决，并与 D10 candidate 一起激活后才生效。激活前：
 
@@ -269,7 +282,7 @@ D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、Publica
 
 历史 committed D3/D6 decision 继续原 decoder/bytes，不回填 ApprovalUse。尚未形成 decision 的旧 prepare 不自动获得 Standing Approval；已经 planned 的新-profile decision 才能使用本文 recovery transport。
 
-## 9. 独立复审必须攻击的联合反例
+## 10. 独立复审必须攻击的联合反例
 
 1. R1 prepare 初检批准有效，R2 抢占最后次数；R1 进入 D6 后只因 approval 竞争失败，必须得到 `approval_unavailable/preflight`，unseen 无 ledger decision。
 2. R1 已 planned 后 approval 撤销；同 error 保持 planned，不能 semantic_rejected/terminal_failed。

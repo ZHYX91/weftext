@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 Agent、自动化与外部能力候选
 
-revision: D10-r03-supplement-2026-09-28；状态：candidate，等待独立审查与协调激活。本候选以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份 D1–D9 输入为权威前提，并已补读补充输入 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 新增的 D4 reference catalog；当前作者输入覆盖为 49/49。历史 48/48 阅读记录仍只表示当时 U 的原清单，不追溯改写为 49/49。本文是作者候选，不表示 Gate 通过、产品已经实现、D6/D7 已修改或可以开始 A2。
+revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate，等待独立审查与协调激活。本候选以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份 D1–D9 输入为权威前提，并已补读补充输入 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 新增的 D4 reference catalog；当前作者输入覆盖为 49/49。历史 48/48 阅读记录仍只表示当时 U 的原清单，不追溯改写为 49/49。旧候选 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e` 已被独立 reviewer 完整读取并裁决为 revise；该结论不等于当前 r04 已独立接受。本文仍是作者修订候选，不表示 Gate 通过、产品已经实现、上游 amendment 已生效或可以开始 A2。
 
 ## 1. 选择与问题边界
 
@@ -88,6 +88,32 @@ ActivationBinding/1 {
 暂时 offline/health failure 不产生新 semantic generation。真正 package、definition、runtime contract 或 trust 变化才产生后继 binding。未激活升级失败可丢弃 staging；已激活后的“回滚”必须是后继激活，不能把 D4 semantic ledger 指针倒退或删除中间历史。
 
 disable/uninstall 可使 executable contribution unavailable，也可使需要该 provider 才能证明的定义进入原 D4 unavailable 分支，但必须保留作者 raw source、累计 tombstone/migration 与必要的已接纳语义证据；不能把 unavailable 解释为空集合或删除事实。
+
+### 6.1 Pack 父领域、extension point 与生命周期
+
+每个 domain Pack Contribution 必须声明**恰一个 primary parent domain/extension point**与 required compatible version range；跨域附加依赖继续逐项显式声明，不能用“安装了同一 package”或 UI 位置推断。候选 Catalog dependency 语义固定为 `parentDomainId,extensionPointId,requiredVersionRange,resolvedParentVersion,resolutionState`，但本代不因此冻结新的公共 IPC。构造 ActivationBinding 时必须把 dependency 解析到当前准确 parent extension-point version，解析结果进入 Capability Catalog digest；parent version/binding 改变会使旧 dependent binding 失效，必须经过 successor activation，不能在运行中跟随“latest”。
+
+package **安装/验证**与 contribution **激活**分开。父 domain 缺失时 package 仍可作为已验证资产存在，用户配置、来源、签名、历史 binding 和可恢复选择保留；dependent domain contribution 不激活。父 extension point 被明确停用时同样不激活。版本范围不兼容时不能降级到旧规则。仅仅隐藏父模块 UI、关闭某个导航入口或不显示设置页，若 parent semantic/capability 仍 active compatible，则**不改变 dependency state**，不能用 UI visibility 偷偷停用或启用 contribution。
+
+内部 dependency resolution 只允许 `ready|missing|disabled|incompatible|unsupported_surface` 五类结果。它不是第二套产品 availability reason；对外 capability 仍按 D1 固定优先级裁决。在更高优先级 reason 不成立且该 dependency 是实际阻塞原因时：surface 不支持→`unsupported_surface`，parent component 缺失→`missing_component`，parent 已存在但显式停用→`not_configured`，parent version 不兼容→`incompatible_version`。policy denial 必须更早遮蔽这些部署细节；offline/temporary failure 仍沿 D1 原定义。UI hidden-only 没有 unavailable reason，因为它不是 capability 状态。
+
+D4 语义保留与 D10 激活是不同轴。已经接纳到 D4 semantic ledger 的 Field/Facet/alias 定义、tombstone、migration、digest 和必要 immutable asset 不能因为 pack 或父模块 disable/uninstall 被删除。若当前 RegistryBinding 仍能证明该 namespace/definitions 为 `complete`，Core 可以继续解释、查询和保留已有作者事实；这只是 portable schema interpretation，不代表依赖 contribution 仍 active，也不自动开放该 pack 的 View、Action、derived rule 或新建作者事实能力。若 definitions 无法完整证明，则按 D4 `unavailable` / `provider_or_schema_unavailable` 路径保留 raw source；不得把未知或 unavailable 解释为空值。
+
+Calendar System/Holiday Schedule 这类 rule/data Pack 默认没有作者 schema 注入权：parent Calendar extension point 非 `ready` 时不注册历法/节假日领域规则、不生成派生字段/View、不刷新相关 cache，也不暗中执行 dependent connector；已存在的 period/range/event 作者 facts 不变，pack 配置与来源仍保留。Organizations country schema pack 若其已接受 schema bytes 仍由当前 D4 binding 完整证明，可以继续解释已有 namespaced author facts；但 parent contribution 不 active 时不得借 retained schema 偷开 Organizations 专属 View/Action、自动 Assign 或 connector。
+
+父 dependency 状态变化的 activation 规则固定：
+
+| 条件 | D10 contribution activation | D4/作者事实 | UI/config |
+| --- | --- | --- | --- |
+| parent ready + version compatible + surface supported | 可在其它授权/预算门通过后 active | 按 current RegistryBinding 解释 | UI 可显示，也可被用户隐藏 |
+| parent missing | inactive | 已接受 history/raw source 保留；definitions 能否 typed 解释按 D4 complete/unavailable | config/source 可恢复查看 |
+| parent disabled | inactive | 同上；不删除 schema/作者 facts | 全局扩展管理仍可见 |
+| parent incompatible | inactive | 旧 history 保留；不得用 incompatible runtime 产生新派生语义 | 显示版本不兼容诊断 |
+| surface unsupported | 该 surface inactive | portable author facts 仍按该 surface 的 Core/D4 能力处理 | 不出现可执行入口；全局/其它 surface 配置不删除 |
+| UI hidden only | activation 不变 | 完全不变 | 只隐藏入口，不改变 capability |
+
+当前选择是 **C：定义/历史保留、contribution 激活、UI 可见性三轴分离**。替代 A“父停用即删除 schema/作者事实”违反 D4 raw/history 不变量，reject；替代 B“pack 已安装就无视父状态继续运行”违反 Intake §6.5/§8.3 的 parent extension-point 边界，reject；替代 D“把 Calendar/Organizations pack 规则烘进 Core”把领域语义迁入 Core，reject。该选择不新增 Calendar 算法、产品模块或安装 UI 实现。
+
 
 ## 7. Publisher、namespace 与 package 信任
 

@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate revision r03, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
+Status: candidate revision r04, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
 
 Fixed upstream input commit: f205831c848729f7ddbc3ba0cf32b689459c0c98. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
@@ -135,20 +135,14 @@ The D6/D7 Standing Approval amendment is not jointly accepted. Therefore, even w
 
 The candidate also does not claim implementation of OS sandbox, real MCP/model/connector services, credential storage, cost system, real Core amendment, or five-surface UI. Those evidence items remain pending in Implementation Impact.
 
-## 6. Staged independent review and this author revision
+## 6. Independent-review coverage and current author revision
 
-The first two independent-review batches completely read all 14 D10 files in reviewed candidate C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`, plus eight fixed-upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` documents: D1 main/impact, D6 main/Control, and D7 Execution/Narrow Field/Prepared Binding/Preview Effects. The other 40 upstream inputs still await independent review.
+The reviewed old candidate is fixed as C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`. Historically, the first two independent-review batches first completed C 14/14 and 8/48 upstream U inputs. That remains process history rather than current coverage.
 
-The author's prior 48/48 input reading remains author-source coverage only and cannot substitute for independent upstream coverage. This revision responds to B1-01 through B1-05 and B2-01 from the first two batches. REVIEW-DISPOSITIONS records each author response. Every item remains "author revised, pending independent re-review" and must not be described as independently closed.
+Independent review later completed all original U 48/48 inputs plus the supplemental S D4 reference catalog 1/1. Therefore designated upstream reading for old C is now **49/49 with 0 unread**, and candidate-file reading is **14/14**. The independent verdict on old C is **revise**, with the complete issue set **3 P1 + 7 P2 = 10 items**.
 
-This revision focuses on:
+Author r02/r03 addressed the original six findings plus B10-01, and current r04 addresses B11-01, B11-02, and B11-03. Current r04 is an **author revision candidate** and has not received a new independent verdict. "Old C fully read" must never be represented as "r04 passed".
 
-1. one proposed D6 `approval_unavailable/preflight` result for an approval race after D6 entry, separated from D10 pre-submit approval errors;
-2. read-only recovery delivery of the original preview for a planned decision, without extending old tokens or re-preparing;
-3. atomic release of approval-count reservation only with authoritative terminal_failed, never ordinary cancellation/TTL/temporary loss of authority;
-4. a raw-no-op branch with empty MutationFootprint/field_change/sourceVersions;
-5. cost released only when billable execution never began, while an actually sent zero bill is `settled(0)`;
-6. DelegationLease `maxRuns` consumed at first protected execution, never refunded after later failure/cancellation, never double-consumed on same-Run recovery, with terminal-occurrence and trusted-time deduplication/expiry semantics.
+REVIEW-DISPOSITIONS remains the author disposition ledger for all ten items, each with status "author revised; pending independent re-review". The new B11 changes focus on line-by-line scenario-source re-audit, complete per-concept Lexicon mapping required by Intake §8.5.1, and closure of Pack parent-domain/extension-point lifecycle.
 
-The next step remains continued independent review and targeted re-review, not an author-declared Gate pass. Proposed upstream amendments remain inactive until accepted, and A2 must not start.
-
+The next step is independent re-review of the current fixed r04 artifacts, not further old-C input reading. Upstream amendments remain inactive; do not merge, release, or start A2.

@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 术语与命名
 
-revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本词表只定义 D10 新增控制/扩展概念和 D1–D9 的消费边界，不重新分配任何上游 owned concept。自然语言、历史材料、测试描述和第三方产品用词不自动成为受控名称。
+revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本词表只定义 D10 新增控制/扩展概念和 D1–D9 的消费边界，不重新分配任何上游 owned concept。自然语言、历史材料、测试描述和第三方产品用词不自动成为受控名称。
 
 ## 1. 命名原则
 
@@ -25,6 +25,10 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本词表只定
 | --- | --- | --- | --- | --- |
 | weftext.term.extension-package | 扩展包 / Extension Package | D10 | 具名版本、内容摘要、publisher、依赖和贡献目录组成的分发/升级单元 | 不是权限单元、namespace owner、作者对象 |
 | weftext.term.contribution | 贡献项 / Contribution | D10 | package 中可单独接纳、启停和授权的一个纯数据或可执行能力 | 不等于整个 package 的权限 |
+| weftext.term.pack | 扩展包数据包 / Pack | D10 | 无任意宿主权限的声明、规则、schema 或数据 contribution 集合，归属一个父领域/extension point | 不是 executable Extension、Connector、作者 Profile 或 D4 Registry |
+| weftext.term.bundled-module | 内置模块 / Bundled Module | D1 产品归属 + D10 lifecycle consumption | 第一方用户可见产品模块，可提供领域 extension points 和 UX | 不是 Core identity、package owner 或作者数据库 |
+| weftext.term.agent-session | Agent 会话 / Agent Session | D10 | Run 的交互式 Agent 模式，绑定一个受管任务、上下文与工具集合 | 不是作者实体、永久 principal 或独立 ledger |
+| weftext.term.parent-extension-dependency | 父扩展依赖 / Parent Extension Dependency | D10 | domain Pack/Contribution 对父 domain、extension point 和兼容版本范围的必需依赖；激活时解析并绑定 | UI 隐藏不是依赖失效，已接受 D4 定义历史也不是运行时激活 |
 | weftext.term.capability-catalog | 能力目录 / Capability Catalog | D10 | 当前激活部署中的 contribution/runtime 可用性和 host privilege 描述 | 不是 D4 Registry、D1 capability response 或作者 schema |
 | weftext.term.activation-binding | 激活绑定 / Activation Binding | D10 | 将 current D4 RegistryBinding、Capability Catalog digest 与 trust revision 固定为一个受管代际的记录 | 不是 D4 semantic generation 的替代 |
 | weftext.term.publisher-identity | 发布者身份 / Publisher Identity | D10 | 由接纳 trust root 证明的 package 签名主体 | 不是 namespace ownership 本身 |
@@ -88,22 +92,27 @@ D10 不定义 alias 去替代这些名称。
 
 ## 4. Package、module、pack 与 plugin
 
-**Extension Package**是安装/升级/签名单位，可以包含一个或多个 Contribution。权限和运行可用性逐 Contribution 计算，拒绝某个网络 Connector 不得自动禁用同 package 的纯数据 contribution。
+**Extension Package**是安装、升级、签名与资产完整性单位，可以包含一个或多个 Contribution。权限、依赖和运行可用性逐 Contribution 计算，拒绝某个网络 Connector 不得自动禁用同 package 的纯数据 contribution。
 
-**Bundled Module**表示第一方产品组织/UI 形态，例如 Calendar/People/Library 等 D1 已有模块方向；module 不成为新的 namespace owner class 或权限域。
+**Bundled Module**表示第一方产品组织/UI 形态，例如 Calendar、People、Organizations、Library 等 D1 已有模块方向。module 可以提供领域 extension point，但不成为新的 namespace owner class、作者数据库或 Core identity。
 
-**Pack**只用于没有任意 code/process/network/secret 能力的声明式语义/数据包。一个需要执行代码或网络的“pack”必须在受控面重新分类为 executable Contribution/Connector，而不是靠名称规避 runtime gate。
+**Pack**只用于没有任意 code/process/network/secret/file host privilege 的声明式语义、规则、schema 或数据 contribution。一个需要执行代码、网络、凭据或复杂运行行为的“pack”必须在受控面重新分类为 executable Contribution/Connector，而不是靠名称规避 runtime gate。
 
-**plugin**仅为用户可理解的泛称或历史文本。controlled schema、CLI/API、测试 fixture 和候选设计不得用 plugin 替代具体类别。
+每个 domain Pack Contribution 必须归属一个 primary parent domain/extension point，并声明 required compatible version range；这项依赖是 D10 Capability Catalog 的激活依赖，不是 UI 层级。parent UI 只隐藏入口时，若 parent semantic capability 仍 active compatible，则 Pack activation 不变；真正 parent missing、disabled、incompatible 或 surface unsupported 才使 dependent contribution inactive。package 本身仍可保持 installed/verified，配置、来源和历史 binding 可恢复。
+
+Pack 的**语义定义保留**与**运行激活**分开。已经进入 D4 semantic ledger 的 schema/Field/Facet 定义与历史不能因为 Pack 或 parent UI/module disable/uninstall 被删除；当前 RegistryBinding 若仍证明 definitions complete，Core 可以继续解释已有作者 facts，但这不意味着 Pack 的 View/Action/rule/connector 仍 active。definitions 无法证明时按 D4 unavailable/raw-preservation 处理。
+
+**plugin**仅为用户可理解的泛称或历史文本。controlled schema、CLI/API、测试 fixture 和候选设计不得用 plugin 替代具体类别；它也不能成为 Pack、Module、Connector、Provider 的共同 wire kind。
 
 ## 5. Registry、Catalog 与 capability
 
-**D4 Registry**持有 semantic namespace、Field/Facet/Relation/Calendar/unit 等作者语义，并按 D4 累计 evolution 规则演进。
+**D4 Registry**持有 semantic namespace、Field/Facet/Relation/Calendar/unit 等作者语义，并按 D4 累计 evolution 规则演进。D4 Registry 的 complete/unavailable、generation、digest、tombstone 和 migration 历史不能被 D10 package enablement 重写。
 
-**Capability Catalog**持有 contribution/runtime 的当前部署描述；它不能定义 Field、Facet 或关系语义。Catalog change 与 Registry change 可由同一个 Activation Binding 协调，但两者不是同一对象。
+**Capability Catalog**持有 contribution/runtime 的当前部署描述、parent extension-point 依赖解析和 host privilege；它不能定义 Field、Facet 或关系语义。Catalog change 与 Registry change 可以由同一个 Activation Binding 协调，但两者不是同一对象。
 
-**D1 capability**描述某个正式产品端在当前 release/current subject 下是否可提供一个产品能力，并使用 D1 固定 unavailable reasons。D10 Contribution availability 只是 D1 判断的一项下游事实，不能改变 D1 reason precedence。
+**Parent Extension Dependency**只描述 parent domain、extension point、required version range 与当前解析结果；它不是 D4 schema ownership，也不是 UI 可见性。resolved parent binding 必须进入 current Catalog digest，parent version/binding 改变后旧 dependent activation 失效并要求 successor ActivationBinding。
 
+**D1 capability**描述某个正式产品端在当前 release/current subject 下是否可提供产品能力，并使用 D1 固定 unavailable reasons。D10 dependency state 只作为 D1 capability 判断的一项下游事实，不新增平行 reason。更高优先级项仍先应用；若 parent dependency 本身是首个阻塞原因，则 missing→`missing_component`、disabled→`not_configured`、incompatible→`incompatible_version`、surface unsupported→`unsupported_surface`。UI hidden-only 不产生 unavailable reason。
 ## 6. Provider 术语消歧
 
 D9 的 **Conversion Provider** / **Route** 保持 D9 owner，不被 D10 重命名。
@@ -186,3 +195,55 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 独立审查前应机械扫描 D10 controlled headings、类型名、error code、state、candidate interfaces、CLI/API 示例与双语 pair，确保上表 owned names 一致；扫描不得把历史引用、用户正文、反例或第三方自然语言误判为受控 positive surface。
 
 独立 reviewer 仍需人工检查 Registry/Catalog、Provider、source/binding、approval/authorization、Run/transaction、audit/transcript 等高风险概念是否在上下文中保持上述分域。本文状态为 candidate，不自证 terminology gate 通过。
+
+## 13. 逐概念结构化映射
+
+本节是 Intake §8.5.1 要求的机械可追踪 Lexicon 产物。表中的“未公开 IPC”“无直接 CLI”等是明确结论，不表示将命名推迟给实现；后续若要公开新的 wire/API/CLI 名称，必须先修订本表。locale key 是候选受控映射，当前 PR 不实现资源文件。继承自 D1–D9 的名称继续由原 owner 冻结，D10 只引用，不建立 alias。
+
+| stable concept/term ID | 中文正式名 | English formal name | 精确定义 | owner/layer | 排除边界 | canonical wire/API/manifest/schema | code type/function/variable/namespace | CLI/UI label + locale key | 允许简称 | 禁止/退役/历史 alias | 正例 / 反例 | 首次冻结、状态、迁移/删除目标 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| weftext.term.extension-package | 扩展包 | Extension Package | 具名版本、内容摘要、publisher、依赖和 contributions 的分发/升级单元 | D10 package lifecycle | 不是权限单元、namespace owner 或作者对象 | 公共 IPC 未冻结；manifest 类别使用限定名 `Extension Package` | type `ExtensionPackage`; variable `extension_package`; package ID 不进入 EntityRef | UI“扩展包”; locale `term.extensionPackage`（候选映射，资源未实现） | 无 | 禁用裸 `plugin` 作为受控同义词；历史用户口语可出现 | 正：一个包含 schema+connector；反：一次安装获得全部权限 | 首次冻结 `D10-r01`；`r04` 补全映射；无公开旧 wire，发布前删除泛化 plugin 受控面 |
+| weftext.term.contribution | 贡献项 | Contribution | package 中独立接纳、启停、授权和依赖解析的纯数据或可执行能力 | D10 capability lifecycle | 不继承整个 package 权限，不是 D1 capability response | 公共 IPC 未冻结；manifest/schema 使用限定 `Contribution` 条目 | type `Contribution`; variable `contribution`; canonical contribution ID | 通常无独立 CLI；设置 UI“贡献项”; locale `term.contribution` | 无 | 禁止把 package/plugin/provider 当同义词 | 正：同包 data pack 可用而 connector denied；反：whole-package grant | `D10-r01`; 无旧兼容 alias |
+| weftext.term.pack | 扩展包数据包 | Pack | 无任意代码、网络、secret、文件权限的声明/规则/schema/data contribution 集合，绑定父 domain extension point | D10 extension taxonomy + parent domain owner | 不是 executable Extension/Connector，也不是作者 Profile | 公共 IPC 未冻结；manifest 必须声明 pack kind 与父 dependency | type `PackContribution`; variable `pack`; namespace 仍由 D4 owner 规则决定 | UI 按父域显示“扩展包”; locale `term.pack` | pack | 禁用“Weftext pack”作为无父域正式名；`plugin` 仅历史/口语 | 正：Calendar Holiday Schedule pack；反：带网络凭据仍称 pack | `D10-r04` 显式冻结父域生命周期；既有候选 Pack 名保留，无 wire 迁移 |
+| weftext.term.bundled-module | 内置模块 | Bundled Module | 第一方用户可见产品模块，提供领域 UX 和 extension points；其关闭不改变 Core 身份或作者 source | D1 product ownership; D10 consumes lifecycle | 不是 package、namespace owner、Core contract 或作者数据库 | 沿用 D1 capability/module ID；D10 不新增 wire kind | 代码模块名按 D1/领域 owner；D10 不造第二 namespace | 既有产品 label/locale 由 D1/领域 owner；无 D10 新 CLI verb | module（文档限定） | 禁止把 module 与 Extension Package/Pack 混称 | 正：Calendar UI 隐藏但 portable author facts 保留；反：关闭 UI 删除 schema | 继承 D1；`r04` 补 parent lifecycle 映射；无迁移 |
+| weftext.term.capability-catalog | 能力目录 | Capability Catalog | 当前 ActivationBinding 下 contribution/runtime、依赖解析和宿主权限的部署描述 | D10 control domain | 不是 D4 Registry、D1 capability response 或作者 schema | 公共 IPC 未冻结；受控名称 `Capability Catalog`，digest 进入 `ActivationBinding/1` | type `CapabilityCatalog`; variable `capability_catalog` | 无直接普通用户 label；管理诊断“能力目录”; locale `term.capabilityCatalog` | Catalog（仅 D10 上下文） | 禁止裸 Registry/plugin registry | 正：记录 parent dependency=disabled；反：保存第二份 FieldDefinition | `D10-r01`; `r04` 扩展 parent dependency；无旧 wire |
+| weftext.term.parent-extension-dependency | 父扩展依赖 | Parent Extension Dependency | domain Contribution 对 parentDomainId、extensionPointId 与兼容 version range 的必需依赖，Activation 时解析到准确 parent binding | D10 Capability Catalog; parent semantic owner remains domain module | 不是 UI 可见性、D4 semantic history 或授权 grant | 公共 IPC 未冻结；Catalog dependency record 固定字段语义 `parentDomainId`,`extensionPointId`,`requiredVersionRange`,`resolvedParentVersion`,`resolutionState` | type `ParentExtensionDependency`; variable `parent_extension_dependency` | 通常无直接 UI；诊断“父扩展依赖”; locale `term.parentExtensionDependency` | parent dependency（文档） | 禁止用 UI hidden/安装顺序代替依赖状态 | 正：Calendar pack pin 到 compatible extension point；反：Calendar disabled 时 holiday contribution 仍运行 | 首次冻结 `D10-r04`; 无 legacy alias；若未来公开 wire 必须另审 |
+| weftext.term.activation-binding | 激活绑定 | Activation Binding | 把当前 D4 RegistryBinding、Capability Catalog digest 和 trust revision 固定为同一受管激活代 | D10 control domain + D4 consumption boundary | 不是 D4 semantic generation 或 runtime health | 受控内部类型 `ActivationBinding/1`; 公共 IPC 未冻结 | type `ActivationBinding`; variable `activation_binding` | 无普通 CLI/UI label；诊断“激活绑定”; locale `term.activationBinding` | 无 | 禁止 current/latest 指针无版本绑定 | 正：parent version change 产生 successor binding；反：半 Registry/半 Catalog | `D10-r01`; 无 legacy wire；历史 binding 不删除 |
+| weftext.term.publisher-identity | 发布者身份 | Publisher Identity | 由接纳 trust root 证明的 package 签名主体 | D10 package trust | 不是 namespace ownership、用户 principal 或 Node identity | manifest/trust 语义名 `PublisherIdentity`; 公共 wire 未冻结 | type `PublisherIdentity`; variable `publisher_identity` | 管理 UI“发布者”; locale `term.publisherIdentity` | publisher（限定上下文） | 禁止把 signature-valid 当 namespace owner | 正：key rotation continuity；反：self-signed 首装 claim reserved namespace | `D10-r01`; 无兼容 alias |
+| weftext.term.namespace-claim | 命名空间所有权声明 | Namespace Claim | 把 PublisherIdentity 与允许的 D4 publisher namespace 绑定的受管 claim | D10 trust proof consumed by D4 owner gate | 不是安装、enablement、display name | 受控概念 `NamespaceClaim`; D4 namespace row 形状不改 | type `NamespaceClaim`; variable `namespace_claim` | 管理 UI“命名空间声明”; locale `term.namespaceClaim` | 无 | 禁止 namespace registration=install | 正：一个 active namespace 恰一 owner；反：两个 publisher 同时 claim | `D10-r01`; 无旧 alias |
+| weftext.term.delegation-lease | 委托租约 | Delegation Lease | 进一步收窄 D6 principal 的有限任务/Run 授权，含寿命、scope、maxRuns 与预算账户 | D10 delegation control | 不是 D6 Policy，不可增加权限或多级转授 | 受控内部类型 `DelegationLease/1`; 公共 IPC 未冻结 | type `DelegationLease`; variable `delegation_lease` | UI“委托”; locale `term.delegationLease` | Lease（D10 限定） | 禁止 permanent grant/session-wide allow 作为同义词 | 正：maxRuns=1 同 Run 多步；反：新 Run 在耗尽后继续 | `D10-r01`; `r02/r04` 收敛 maxRuns；无 legacy alias |
+| weftext.term.lease-run-use | 运行准入消费 | Lease Run Use | Run 第一次进入受保护执行时对 leaseId 谱系消费一次 maxRuns 的耐久防重事实 | D10 run admission control | 不是 occurrence claim、作者 ledger 或每-step 计数 | 受控内部类型 `LeaseRunUse/1`; 公共 IPC 未冻结 | type `LeaseRunUse`; variable `lease_run_use` | 无直接 UI；诊断“运行准入”; locale `term.leaseRunUse` | 无 | 禁止 run counter/step counter 混称 | 正：同 Run planned 恢复复用；反：remaining=0 再消费一次 | 首次冻结 `D10-r02`; `r04` 明确 same-Run continuation；无旧 alias |
+| weftext.term.standing-approval | 持续批准 | Standing Approval | 对有限可机械判定的未来操作集合给予期限/次数/预算上限的预授权 | D10 approval control + proposed D6 consumption | 不是永久同意、Policy 或自然语言目标 | 受控内部类型 `StandingApprovalEnvelope/1`; 公共 IPC 未冻结 | type `StandingApprovalEnvelope`; variable `standing_approval` | UI“持续批准”; locale `term.standingApproval` | 无 | 禁止 always allow/remember forever | 正：single_field_member envelope；反：整源自由写 | `D10-r01`; `r02` 收窄并配套 D6/D7；未激活 |
+| weftext.term.approval-use | 批准使用记录 | Approval Use | 把准备请求、完整 preview、footprint 与一次批准 reservation/consumption 绑定 | D10 control + proposed D6 amendment | 不是 author plan、receipt 或第三 ledger | 受控内部类型 `ApprovalUse/1`; 公共 IPC 未冻结 | type `ApprovalUse`; variable `approval_use` | 无直接 UI；可显示“本次使用持续批准”; locale `term.approvalUse` | 无 | 禁止 approved=true 客户端字段 | 正：reserved→consumed；反：TTL 自动释放 | 首次冻结 `D10-r01`; `r02` 增 released_terminal；未激活 |
+| weftext.term.planned-decision-approval | 已计划决议交互批准 | Planned Decision Approval | 用户完整重读原 planned 保存 preview 后，对 exact 原 request 给出的有限一次性交互授权 | D10 control + proposed D6/D7 amendment | 不 reprepare、不换 OperationId、不复活冲突 plan | 受控内部类型 `PlannedDecisionApproval/1`; D7 recovery transport 见 amendment | type `PlannedDecisionApproval`; variable `planned_decision_approval` | UI“确认原计划”; locale `term.plannedDecisionApproval` | 无 | 禁止把 fresh prepare 当恢复 | 正：旧 token 过期后查原 preview；反：重新 Query 换 target | 首次冻结 `D10-r02`; 未激活，无 legacy alias |
+| weftext.term.automation-definition | 自动化定义 | Automation Definition | 版本化的单 invocation 调度定义 | D10 scheduler control | 不是通用 DAG、脚本或作者 Document | 公共 IPC 未冻结；受控概念 `Automation Definition` | type `AutomationDefinition`; variable `automation_definition` | UI“自动化”; locale `term.automationDefinition` | Automation（产品上下文） | 禁止 workflow/script 作为本代同义词 | 正：一次 schedule→一个 invocation；反：自由 DAG | `D10-r01`; 无旧 wire |
+| weftext.term.automation-occurrence | 自动化发生项 | Automation Occurrence | 由 definition revision 与 source occurrence 机械产生的调度机会 | D10 scheduler control | 不是作者 recurrence identity 或新 Node | 受控 key `AutomationOccurrenceKey/1`; 公共 IPC 未冻结 | type `AutomationOccurrenceKey`; variable `automation_occurrence_key` | 通常无独立 label；诊断“发生项”; locale `term.automationOccurrence` | occurrence（限定 Automation） | 禁止 recurrence Node/Run 同义 | 正：terminal K 重扫仍原 Run；反：enable 重建第二 Run | `D10-r01`; `r02` 补 terminal dedup |
+| weftext.term.run | 运行 | Run | Agent 或 Automation 的受管执行记录与 step outcomes | D10 runtime control | 不是 author transaction 或 receipt | 公共 IPC 未冻结；受控概念 `Run` | type `Run`; variable `run` | UI“运行”; locale `term.run` | Run | 禁止 job=author transaction | 正：cancelled Run 含已 committed step；反：Run completed=author committed | `D10-r01`; 无旧 alias |
+| weftext.term.agent-session | Agent 会话 | Agent Session | Run 的交互 Agent 模式，绑定当前任务、ContextBundle 与工具 allowlist | D10 Agent runtime | 不是 principal、Document、长期授权 | 公共 IPC 未冻结；受控概念 `Agent Session` | type `AgentSession`; variable `agent_session` | UI“Agent 会话”; locale `term.agentSession` | Agent session | 禁止 chat=authority/session=grant | 正：一次交互 Run；反：会话自动继承全 Workspace | 首次冻结 `D10-r04` 映射；语义来自 r01 Candidate |
+| weftext.term.context-bundle | 上下文包 | Context Bundle | 面向特定 recipient 的当前受权、最小化、版本绑定输入 | D10 context/egress control | 不是 author snapshot、授权 token 或 secret container | 公共 IPC 未冻结；受控概念 `ContextBundle` | type `ContextBundle`; variable `context_bundle` | 通常不直接显示；诊断“上下文”; locale `term.contextBundle` | 无 | 禁止 prompt=context authority | 正：Model A 的 bundle 不能改发 Model B；反：ambient workspace | `D10-r01`; 无 legacy alias |
+| weftext.term.tool-value-profile | 工具值配置 | Tool Value Profile | 复用 D7 TypeSpec/V 有限子集的工具参数/结果代数 | D10 Tool Adapter | 不是任意 JSON Schema 或 D4 全值域 | 受控 profile `ToolValueProfile/1`; 公共 transport 由 adapter 决定 | type `ToolValue`; variable `tool_value` | 无直接 UI；开发诊断“工具值”; locale `term.toolValueProfile` | ToolValue | 禁止 any/open map/float fallback | 正：exact int64；反：JS double 舍入 | `D10-r01`; 无兼容 fallback |
+| weftext.term.input-slot | 输入槽 | Input Slot | 单次 invocation 的 exact bytes/media/purpose/recipient 文件输入句柄 | D10 Tool/Model runtime | 不是 path、ResourceRef 或跨调用 file handle | 受控概念 `InputSlot`; 公共 IPC 未冻结 | type `InputSlot`; variable `input_slot` | 无直接 UI；可显示“输入文件”; locale `term.inputSlot` | 无 | 禁止 filepath/path handle | 正：exact attachment bytes；反：传 `C:\Users\...` | `D10-r01`; 无 legacy alias |
+| weftext.term.tool-adapter | 工具适配器 | Tool Adapter | 把已接纳外部工具协议映射到 ToolValue 和 effect class | D10 external capability adapter | 不是 D7 author Action adapter | 公共 IPC 未冻结；manifest contribution kind `Tool Adapter`（语义名） | type `ToolAdapter`; variable `tool_adapter` | 管理 UI“工具适配器”; locale `term.toolAdapter` | tool adapter | 禁止 tool=permission | 正：本地接纳删除工具为 mutation；反：信任远端 readOnly | `D10-r01`; 无 legacy alias |
+| weftext.term.mcp-adapter | MCP 适配器 | MCP Adapter | 使用 MCP 作为发现/运输协议的 Tool Adapter | D10 Tool Adapter | MCP metadata 不是 policy/identity/permission | 公共 IPC 使用外部 MCP；Weftext 受控类别 `MCP Adapter` | type `McpAdapter`; variable `mcp_adapter` | UI“MCP 适配器”; locale `term.mcpAdapter` | MCP | 禁止 MCP server=trusted principal | 正：schema drift pending；反：发现即热执行 | `D10-r01`; 无旧 alias |
+| weftext.term.model-adapter | 模型适配器 | Model Adapter | 连接受管 ContextBundle 与模型 transport 的 adapter | D10 Agent runtime | 模型不是 author authority 或 secret store | 公共 IPC 未冻结；manifest contribution kind `Model Adapter`（语义名） | type `ModelAdapter`; variable `model_adapter` | UI“模型”; locale `term.modelAdapter` | model adapter | 禁止 model provider=author | 正：recipient-specific egress；反：换 provider 沿用 grant | `D10-r01`; 无 legacy alias |
+| weftext.term.connector | 连接器 | Connector | 具名外部系统的协议、账户、cursor/version 与 sync control adapter | D10 connector control + D3/D9 mappings | 不是 author source、EntityRef 或通用 sync authority | 公共 IPC 未冻结；manifest contribution kind `Connector`（语义名） | type `Connector`; variable `connector` | UI“连接器”; locale `term.connector` | 无 | 禁止 provider/cursor=identity | 正：cursor 在 control state；反：cursor 写作者 YAML | `D10-r01`; 无 legacy alias |
+| weftext.term.secret-reference | 凭据引用 | Secret Reference | 指向 OS/Server secret store 中 credential 的受管引用及 generation | D10 secret control | 不是 secret bytes、作者 source、ToolValue | 受控概念 `SecretRef`; 公共 secret wire 禁止 | type `SecretRef`; variable `secret_ref` | UI“凭据”; locale `term.secretReference` | SecretRef | 禁止 token/credential bytes 当引用 | 正：transport 注入；反：进入 prompt/log | `D10-r01`; 无 secret compatibility fallback |
+| weftext.term.external-effect-intent | 外部效果意图 | External Effect Intent | 冻结 target/account/request/idempotency/approval/budget 的一次外部 mutation 请求 | D10 external-effect control | 不是 D6 transaction、author receipt 或 rollback | 受控内部类型 `ExternalEffectIntent/1`; 公共 IPC 未冻结 | type `ExternalEffectIntent`; variable `external_effect_intent` | UI“外部操作”; locale `term.externalEffectIntent` | effect intent（文档） | 禁止 transaction/rollback 同义 | 正：同 key reconcile；反：unknown 换 key 重发 | `D10-r01`; 无 legacy alias |
+| weftext.term.external-outcome-unknown | 外部结果未知 | External Outcome Unknown | 不能证明外部 mutation 是否发生或完整发生的持久结果状态 | D10 external-effect recovery | 不是 timeout、failed 或 cancelled | 受控状态 `outcome_unknown`; 外部 adapter 必须保留 | enum `ExternalOutcome::Unknown`; variable `outcome_unknown` | UI“结果未知”; locale `term.externalOutcomeUnknown` | unknown（仅外部效果上下文） | 禁止 timeout/failure/cancel 同义 | 正：send 后 response 丢失；反：自动当 failed 重试 | `D10-r01`; 无 legacy alias |
+| weftext.term.cost-reservation | 费用预留 | Cost Reservation | 收费 attempt 前对一个或多个账户原子占用的有限费用上限 | D10 cost control | 不是账单事实、approval count 或 effect idempotency | 公共 IPC 未冻结；受控状态 `reserved\|settled\|released\|uncertain` | type `CostReservation`; variable `cost_reservation` | UI“费用预留”; locale `term.costReservation` | 无 | 禁止 released=zero bill | 正：已发送零账单 `settled(0)`；反：TTL 释放 uncertain | `D10-r01`; `r02` 明确三终态；无 legacy alias |
+| weftext.term.audit-started | 审计开始记录 | Audit Started Record | 受保护步骤真正执行前耐久写入的最小安全审计事实 | D10 audit control | 不是 success、receipt 或普通 telemetry | 公共 IPC 未冻结；受控事件语义 `audit_started` | type `AuditStartedRecord`; variable `audit_started` | 通常无直接 UI；审计查看器 label“开始”; locale `term.auditStarted` | 无 | 禁止 log line=authoritative audit | 正：本地 spool 后执行；反：collector offline 即假失败 | `D10-r01`; 无 legacy alias |
+| weftext.term.money | 费用值 | Money | currency + Counter microUnits 的 exact 费用表示 | D10 cost value | 不做隐式 FX 或 binary float | 受控内部类型 `Money/1`; 公共 IPC 未冻结 | type `Money`; variable `money` | UI 按 currency 格式化；locale key 无独立概念 label | 无 | 禁止 float money / implicit conversion | 正：USD microUnits；反：跨币种自动相加 | `D10-r01`; 无 legacy alias |
+
+### 13.1 继承名称与碰撞裁决
+
+| 名称/概念 | 原 owner | D10 使用规则 | rejected collision / negative gate |
+| --- | --- | --- | --- |
+| `RegistrySnapshot/1`、`RegistryBinding/1`、Field/Facet | D4 | 逐字复用；D10 只认证来源并提供完整 binding | Capability Catalog 不得改名为 Registry，不保存第二份 FieldDefinition |
+| `EntityRef`、`NodeRef`、`SourceBinding`、`OriginBinding`、`Provenance` | D3 | 逐字复用；控制 ID/provider ID 不进入这些类型 | `adoption_binding` 不得成为 OriginBinding alias；B10-01 见 amendment |
+| `PrincipalContext`、`ObservationScope`、D6 Policy/error | D6 | D10 delegation 只收窄，不替换 | Agent permission / approval 不得覆盖 D6 deny |
+| `ActionSpec`、`PreparedActionBinding/2`、`EffectManifest/1` | D7 | 工作区 Action 仍走原 prepare/preview/commit | tool plan / AgentPlan 不得成为第二 Action wire |
+| Draft / `PreparedEditBinding/1` | D8 | 人工编辑仍走 Draft/confirmation | model proposal 不得叫 Draft，除非真实进入 D8 Draft |
+| Conversion Provider / Route / PublicationReceipt | D9 | 继续限定为 conversion/publication owner | D10 裸 Provider 不得覆盖 D9 Provider |
+| author source / Provenance | D2/D3 | source 是作者 payload，Provenance 是非授权来源证据 | external input/provider state/tool result 不得叫 author source |
+| D1 capability / unavailable reason | D1 | 产品可用性继续只用 D1 closed reasons 和固定优先级 | D10 dependency state 不得新增平行产品 availability reason |
+

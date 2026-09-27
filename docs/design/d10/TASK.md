@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision r03. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision r04. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
@@ -79,6 +79,6 @@ These remain candidate amendments and do not change current upstream authority b
 
 After the complete candidate is fixed in a commit, hand it to a fresh independent Chat GPT-6 Pro for review from scratch. Author self-review is not an independent Gate.
 
-Independent review at minimum requires a complete accept/pass judgment; P0/P1=0 before coordinated activation can be recommended; terminology pass; evaluation of a simpler complete alternative; examination of whether the D6/D7 amendment is necessary and sufficient; and closure of mandatory scenarios, dependencies, and evidence boundaries.
+Independent review completed 14/14 candidate files and 49/49 designated upstream inputs for old C and returned revise; that establishes only the old-C verdict. Current r04 requires independent re-review of all ten author dispositions, especially B11 scenario sourcing, the 13-field Lexicon mapping, and Pack parent lifecycle. Final review still requires a complete accept/pass judgment, P0/P1=0, terminology pass, comparison with a simpler complete alternative, adequacy of required amendments, and closure of mandatory scenarios, dependencies, and evidence boundaries.
 
 Finite simulations, models, or CI do not establish product support. Real Core, durable fault, OS sandbox, real protocol-provider, UI/device, and release evidence remain separated by the Implementation Impact document, with unfinished items explicitly pending.

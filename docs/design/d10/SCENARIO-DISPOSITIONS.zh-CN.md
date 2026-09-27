@@ -7,40 +7,43 @@ translation_status: source
 
 # D10 场景裁决
 
-revision: D10-r03-supplement-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
+revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
 
 执行模式列只有四类：automatic 表示在本文 closed 规则下允许无需逐次人工确认继续；interactive 表示可以准备但必须逐次确认；unsupported 表示本代明确不可用；deferred 表示由具名 所有者 的未来合同冻结后才能开放。
+
+来源定位分四类：**Intake 原要求**表示场景直接来自 Mandatory Intake；**上游合同**表示直接来自已接受 D1–D9；**候选推导攻击**表示作者从上游不变量构造的负向攻击，不冒充 Intake 原文；F/A/T/E/P 等其余条目是 TASK 或候选自增故障。来源标签只说明出处，不改变 disposition。
 
 ## 1. 上游强制路由与领域边界
 
 | ID | 来源定位 | 场景/风险 | disposition | 执行模式 | D10 候选落点 | 验证义务 |
 | --- | --- | --- | --- | --- | --- | --- |
-| D10-U01 | D1 §2–§4，D1-I01/I06 | Agent、automation、connector 直接写工作区或与 Core 同时写 | reject | unsupported | Core 仍为唯一 author 提交 point；executor 无 author store/workspace mount | 依赖图、文件/DB 句柄负向、双 writer/fence 测试 |
-| D10-U02 | D1 §4.1/4.4 | Desktop 与 CLI 各启动独立 scheduler，或 terminal occurrence 被重扫后重复运行 | revise | automatic | 同一本地 control domain、唯一 occurrence claim 与 durable terminal proof；CLI 管理同一能力族 | 双进程 claim；K terminal 后重启、重扫、disable→enable、缓存重建均恢复原 Run |
-| D10-U03 | D1 §4.2/4.3 | WebUI 直接跑 模型/connector 或浏览器持 凭据 | reject | unsupported | WebUI 只经 Server Broker；secret 留 Server secret store | 浏览器 bundle/API 扫描、凭据 泄漏负向 |
-| D10-U04 | D1 §4.5，D8 Direction §7 | Mobile Agent、automation approval、conversion/connector 管理 | reject | unsupported | 保留 D1 unsupported_surface；只消费 committed facts | 五端 capability fixture，Mobile 不出现隐藏批准入口 |
-| D10-U05 | 强制输入 §2.4/§2.5 与 D4 Calendar | Calendar recurrence/后台提醒从设备时钟或未绑定规则猜测 | revise | automatic | Automation 调度 使用已验证 D4 temporal rules、有限 horizon/limit 与 exact 源 dependency | tzdb/rule 代际 改变、DST/超域、重启 反例 |
-| D10-U06 | 强制输入 §2.6 Organizations | organization 提供方 ID/服务名变成 Node 身份 | reject | unsupported | Connector ID 留控制域；作者关系仍 D3/D4 身份 | 同名/改名/提供方 ID 重用不得合并 Node |
-| D10-U07 | 强制输入 §2.7–§2.8 Calendar packs | pack 安装即改变作者字段或 提供方 失效删除事实 | reject | unsupported | 激活只改变 Registry/Catalog availability；raw 源 与 semantic ledger 保留 | disable/uninstall/失败 update 后作者 字节 不变 |
-| D10-U08 | 强制输入 §9 A2-08 | connector sync 把 cursor/凭据 写入作者 源 | reject | unsupported | cursor/etag/凭据 是控制状态；写回需具名 closed 适配器 | author 源 搜索无 secret/cursor；提交/control 原子关联 |
-| D10-U09 | 强制输入 §9 A2-09/A2-15 | 各 surface 对同 capability 自己猜是否可用 | reject | unsupported | D1 capability 为唯一产品可用性；D10 只提供 downstream facts | Desktop/CLI/Server/WebUI 相同 reason precedence |
-| D10-U10 | 强制输入 §9 A2-21 | 模式定义、connector、运行时 状态 合并为一个 提供方 状态 | reject | unsupported | D4 Registry、D10 Catalog、运行时 health 三域分离 | 模式定义 可用/运行时 不可用 与反向组合  |
-| D10-U11 | 强制输入 §9 A2-28 | holiday/workday 提供方 变更后旧派生结果继续有效 | revise | automatic | rule/贡献项 代际 进入依赖；失效 reset/recompute | 旧 结果/缓存/automation 调度 不能混 代际 |
-| D10-U12 | 强制输入 §9 A2-32 | ICS UID/RECURRENCE-ID 自动成为 D3 身份/upsert key | reject | unsupported | 只经已冻结 SourceBinding/OriginBinding 适配器 才可 lookup/upsert | 相同 UID 两次 ordinary import 保持 fresh，未开放 sync 明确 不可用 |
-| D10-U13 | 强制输入 §9 A2-33 | subscribe、sync、copy、adopt 混成同一个“同步”动作 | reject | unsupported | 每个 authority/效果 走其 所有者 closed protocol | 不同 intent 的 请求/回执/approval 不互用 |
-| D10-U14 | 强制输入 §9 A2-36 | package 获得 whole-package 工作区权限 | reject | unsupported | 权限按 Contribution，五类授权维度分开 | 同包纯数据可用、网络 connector denied 的组合 |
-| D10-U15 | 强制输入 §9 A2-37 | Settings/Marketplace UI 状态成为 capability authority | reject | unsupported | UI 只是 Activation/Policy/Catalog 的投影 | 隐藏/显示按钮不改变 Core eligibility |
-| D10-U16 | 强制输入 §9 A2-43 | 本地化 模块/清单 名改变 规范 ID | reject | unsupported | 规范 命名空间/贡献项 ID 独立 区域设置 | 中英/RTL 切换 请求 字节 不变  |
-| D10-U17 | 强制输入 §9 A2-46 | Mobile 上传文件后自动委托 Server 转换/Agent | reject | unsupported | Mobile 只能普通附件；无转换/Agent 委托/审批 | 上传不触发 worker/模型，返回 unsupported_surface |
-| D10-U18 | 强制输入 §9 A2-49 | 未接纳 贡献项 动态注入 SearchContribution/模式定义 | reject | unsupported | D10 认证并 代际-bind Contribution；D7 grammar 不变 | 运行时 discovery 新 贡献项 只 pending，不进入 当前 query |
-| D10-U19 | 强制输入 §9 A2-50 | 禁用规则 pack 后把作者值删除/默认化 | reject | unsupported | 相关派生能力 不可用/reset，作者 源 保留 | disable/reenable 与 raw 源 digest 不变 |
-| D10-U20 | 强制输入 §9 A2-53/54 | D10 新术语覆盖 D1–D9 owned name 或 wire alias 漂移 | revise | automatic | Terminology 文件与 controlled-name gate | 受控 positive surface 扫描；历史 prose 排除 |
-| D10-U21 | 强制输入 §9 A2-56，D9 Templates | Node/Office Template 被当作长期 Agent 脚本或任意 callback | reject | unsupported | Template 仍 D9 一次性构造/渲染；D10 不执行其普通文字 | template text 含 工具 指令只作不可信文字 |
-| D10-U22 | D7 Algebra §6 SearchContribution | SearchContribution 内带脚本/网络 或 提供方 不可用 时静默跳项 | reject | unsupported | 保持 D7 纯数据 closed descriptor；D10 只认证来源/代际 | 缺 贡献项 整体按原 D7 不可用，不改 grammar |
-| D10-U23 | D7 Execution §5–§6 | Query row/evidence 被 Agent 当长期写授权 | reject | unsupported | evidence/selector 仍 TTL/revision/dependency/当前 授权-bound | A→B→A、授权 change、结果 reset 后旧 evidence 失败  |
-| D10-U24 | D8 Main §2–§3/Interfaces §4–§5 | 模型 输出伪装成人类 Draft、自动点击确认 | reject | unsupported | D8 edit 仍 interactive；Automation 不创建 EditSession | dirty Draft、composition、stale 预览、unknown 回执 全链 |
-| D10-U25 | D9 Workers §1–§2 | 把 D9 conversion worker 变成有网络的通用工具 宿主 | reject | unsupported | D9 worker 继续专用无 workspace/网络 默认；D10 executor 独立 | worker sandbox 不因 D10 网络能力扩大 |
-| D10-U26 | D9 Export §4 | 外部 publication 回执 当作 Resource/author 回执 | reject | unsupported | PublicationReceipt 与 D3/D6 回执 分域 | publish 成功 + Resource create fail 两结果并存  |
+| D10-U01 | 上游合同：D1 §2–§4，D1-I01/I06 | Agent、automation、connector 直接写工作区或与 Core 同时写 | reject | unsupported | Core 仍为唯一 author 提交 point；executor 无 author store/workspace mount | 依赖图、文件/DB 句柄负向、双 writer/fence 测试 |
+| D10-U02 | 上游合同：D1 §4.1/§4.4 | Desktop 与 CLI 各启动独立 scheduler，或 terminal occurrence 被重扫后重复运行 | revise | automatic | 同一本地 control domain、唯一 occurrence claim 与 durable terminal proof；CLI 管理同一能力族 | 双进程 claim；K terminal 后重启、重扫、disable→enable、缓存重建均恢复原 Run |
+| D10-U03 | 上游合同：D1 §4.2/§4.3 | WebUI 直接跑 模型/connector 或浏览器持 凭据 | reject | unsupported | WebUI 只经 Server Broker；secret 留 Server secret store | 浏览器 bundle/API 扫描、凭据 泄漏负向 |
+| D10-U04 | 上游合同：D1 §4.5；D8 Direction §7 | Mobile Agent、automation approval、conversion/connector 管理 | reject | unsupported | 保留 D1 unsupported_surface；只消费 committed facts | 五端 capability fixture，Mobile 不出现隐藏批准入口 |
+| D10-U05 | Intake 原要求：§6.1、§6.6、§13.1.2；D4 Calendar | Calendar recurrence/后台提醒从设备时钟或未绑定规则猜测 | revise | automatic | Automation 调度 使用已验证 D4 temporal rules、有限 horizon/limit 与 exact 源 dependency | tzdb/rule 代际 改变、DST/超域、重启 反例 |
+| D10-U06 | Intake 原要求：§4.4、§13.1.3 | organization 提供方 ID/服务名变成 Node 身份 | reject | unsupported | Connector ID 留控制域；作者关系仍 D3/D4 身份 | 同名/改名/提供方 ID 重用不得合并 Node |
+| D10-U07 | Intake 原要求：§6.5、§8.3 Packs、§9 第49–50项 | pack 安装即改变作者字段或 提供方 失效删除事实 | reject | unsupported | 激活只改变 Registry/Catalog availability；raw 源 与 semantic ledger 保留 | disable/uninstall/失败 update 后作者 字节 不变 |
+| D10-U08 | Intake 原要求：§9 第8项 | connector sync 把 cursor/凭据 写入作者 源 | reject | unsupported | cursor/etag/凭据 是控制状态；写回需具名 closed 适配器 | author 源 搜索无 secret/cursor；提交/control 原子关联 |
+| D10-U09 | Intake 原要求：§9 第9、15项 | 各 surface 对同 capability 自己猜是否可用 | reject | unsupported | D1 capability 为唯一产品可用性；D10 只提供 downstream facts | Desktop/CLI/Server/WebUI 相同 reason precedence |
+| D10-U10 | Intake 原要求：§9 第21项 | 模式定义、connector、运行时 状态 合并为一个 提供方 状态 | reject | unsupported | D4 Registry、D10 Catalog、运行时 health 三域分离 | 模式定义 可用/运行时 不可用 与反向组合  |
+| D10-U11 | Intake 原要求：§9 第28项 | holiday/workday 提供方 变更后旧派生结果继续有效 | revise | automatic | rule/贡献项 代际 进入依赖；失效 reset/recompute | 旧 结果/缓存/automation 调度 不能混 代际 |
+| D10-U12 | Intake 原要求：§9 第32项 | ICS UID/RECURRENCE-ID 自动成为 D3 身份/upsert key | reject | unsupported | 只经已冻结 SourceBinding/OriginBinding 适配器 才可 lookup/upsert | 相同 UID 两次 ordinary import 保持 fresh，未开放 sync 明确 不可用 |
+| D10-U13 | Intake 原要求：§9 第33项 | subscribe、sync、copy、adopt 混成同一个“同步”动作 | reject | unsupported | 每个 authority/效果 走其 所有者 closed protocol | 不同 intent 的 请求/回执/approval 不互用 |
+| D10-U14 | Intake 原要求：§9 第36项 | package 获得 whole-package 工作区权限 | reject | unsupported | 权限按 Contribution，五类授权维度分开 | 同包纯数据可用、网络 connector denied 的组合 |
+| D10-U15 | Intake 原要求：§9 第37项 | Settings/Marketplace UI 状态成为 capability authority | reject | unsupported | UI 只是 Activation/Policy/Catalog 的投影 | 隐藏/显示按钮不改变 Core eligibility |
+| D10-U16 | Intake 原要求：§8.5.1；§9 第37、43、54项 | 本地化 模块/清单 名改变 规范 ID | reject | unsupported | 规范 命名空间/贡献项 ID 独立 区域设置 | 中英/RTL 切换 请求 字节 不变  |
+| D10-U17 | 候选推导攻击：D1 §4.5/§9 Mobile 边界 + D9 conversion；非 Intake 直接条目 | Mobile 上传文件后自动委托 Server 转换/Agent | reject | unsupported | Mobile 只能普通附件；无转换/Agent 委托/审批 | 上传不触发 worker/模型，返回 unsupported_surface |
+| D10-U18 | Intake 原要求：§13.1.5；上游 D7 Query Algebra §6 SearchContribution | 未接纳 贡献项 动态注入 SearchContribution/模式定义 | reject | unsupported | D10 认证并 代际-bind Contribution；D7 grammar 不变 | 运行时 discovery 新 贡献项 只 pending，不进入 当前 query |
+| D10-U19 | Intake 原要求：§6.5、§8.3 Packs、§9 第28、48、50项；上游 D4 unknown/unavailable 保留 | 禁用规则 pack 后把作者值删除/默认化 | reject | unsupported | 相关派生能力 不可用/reset，作者 源 保留 | disable/reenable 与 raw 源 digest 不变 |
+| D10-U20 | Intake 原要求：§8.5.1–§8.5.4；§9 第53、54、57项 | D10 新术语覆盖 D1–D9 owned name 或 wire alias 漂移 | revise | automatic | Terminology 文件与 controlled-name gate | 受控 positive surface 扫描；历史 prose 排除 |
+| D10-U21 | Intake 原要求：§2.5、§8.3 第6项、§9 第39、56项；上游 D9 Templates | Node/Office Template 被当作长期 Agent 脚本或任意 callback | reject | unsupported | Template 仍 D9 一次性构造/渲染；D10 不执行其普通文字 | template text 含 工具 指令只作不可信文字 |
+| D10-U22 | 上游合同：D7 Query Algebra §6 SearchContribution | SearchContribution 内带脚本/网络 或 提供方 不可用 时静默跳项 | reject | unsupported | 保持 D7 纯数据 closed descriptor；D10 只认证来源/代际 | 缺 贡献项 整体按原 D7 不可用，不改 grammar |
+| D10-U23 | 上游合同：D7 Execution §5–§6 | Query row/evidence 被 Agent 当长期写授权 | reject | unsupported | evidence/selector 仍 TTL/revision/dependency/当前 授权-bound | A→B→A、授权 change、结果 reset 后旧 evidence 失败  |
+| D10-U24 | 上游合同：D8 Main §2–§3 / Interfaces §4–§5 | 模型 输出伪装成人类 Draft、自动点击确认 | reject | unsupported | D8 edit 仍 interactive；Automation 不创建 EditSession | dirty Draft、composition、stale 预览、unknown 回执 全链 |
+| D10-U25 | 上游合同：D9 Workers §1–§2 | 把 D9 conversion worker 变成有网络的通用工具 宿主 | reject | unsupported | D9 worker 继续专用无 workspace/网络 默认；D10 executor 独立 | worker sandbox 不因 D10 网络能力扩大 |
+| D10-U26 | 上游合同：D9 Export §4 | 外部 publication 回执 当作 Resource/author 回执 | reject | unsupported | PublicationReceipt 与 D3/D6 回执 分域 | publish 成功 + Resource create fail 两结果并存  |
+| D10-U27 | 上游合同：D3 Lexicon §origin-binding / §adopt | Adopt 把 `adoption_binding` 登记成自身 code convention，与既有 `OriginBinding` / `origin_binding` 所有权重叠 | revise | deferred | UPSTREAM-AMENDMENTS 的 B10-01 最小词表勘误：Adopt 只保留 `adopt_*`；关联绑定归 origin-binding 所有，不加 alias/wire/identity/capability | 正向 `adopt_*`→`OriginBinding/origin_binding`；反向受控正向面不存在 `adoption_binding`，scanner 不加豁免 |
 
 ## 2. TASK 强制故障边界
 
@@ -137,12 +140,19 @@ revision: D10-r03-supplement-2026-09-28；状态：candidate。本文件把固�
 | D10-P06 | D10 Candidate §6 | health outage 每次都生成新的 semantic generation | reject | unsupported | runtime health 与 semantic activation 分域；短暂故障不改 Registry 历史 | 反复健康抖动时 RegistryBinding 保持不变 |
 | D10-P07 | D10 Candidate §6 | uninstall 后已保存 unknown Field 被清理 | reject | unsupported | raw 源 与 history 保留；typed 状态 不可用 | uninstall/reinstall roundtrip  |
 | D10-P08 | D10 Candidate §6 | 激活切换中 崩溃 | accept | automatic | old 或完整 new ActivationBinding，不半态 | 崩溃 at every staging/提交 point  |
+| D10-P09 | S D4 reference catalog + 上游 D7 Narrow Field | `single_field_member` 因为“只改一个 Field”而跳过真实 Facet/Relation/constraint 图 | reject | unsupported | 当前第49份输入证明目录含 27 relation Fields、Calendar 跨 Field `union_variant_equal` 与 required/local constraints；必须运行完整 Registry 图证明，`people/phone` 只作实际正向构造 | 正向 `people/phone`；负向 relation Field、`calendar/range`/`calendar/recurrence` 跨字段约束与 unknown constructor 都拒绝窄证明 |
+| D10-P10 | Intake 原要求：§6.5、§8.3、§9 第49项 | Pack 已安装但父 domain/extension point 缺失 | accept | automatic | package/config/source 保留，dependent contribution inactive；无更高优先级 D1 reason 时 capability 投影 `missing_component` | 不注册领域 rule/View/Action；已接纳 D4 history/raw source 不删除 |
+| D10-P11 | Intake 原要求：§6.5、§9 第49–50项 | 父 extension point 显式停用，但 dependent pack 仍暗中运行 | reject | unsupported | contribution inactive；组件存在但配置停用时 D1 投影 `not_configured`；accepted schema retention 与 activation 分域 | 禁用 Calendar 后 holiday/rule 输出消失，作者 period/range/event facts 与配置保留 |
+| D10-P12 | Intake 原要求：§6.5、§9 第49项 | parent version 不兼容仍沿旧规则继续运行 | reject | unsupported | dependency resolution=`incompatible`，dependent contribution inactive；D1 投影 `incompatible_version`，必须 successor activation 后恢复 | parent upgrade/downgrade 竞争不能让旧 binding 跟随 latest |
+| D10-P13 | Intake 原要求：§6.5、§8.3 + D1 capability | 仅隐藏父模块 UI 就把 pack 当 disabled，或用 UI 显示强行启用 | reject | unsupported | UI visibility 与 dependency activation 分离；parent semantic capability 仍 ready 时 activation 不变 | 隐藏/恢复导航入口前后 RegistryBinding、Contribution activation 和作者 facts 不变 |
+| D10-P14 | Intake 原要求：§6.5、§9 第49项 + D1 | 当前 surface 不支持父 domain/规则运行 | accept | unsupported | 该 surface contribution inactive，D1 固定 `unsupported_surface`；其它 surface/global config 不删除 | Mobile 不运行规则仍按其 Core/D4 能力保留 portable author facts |
+| D10-P15 | Intake 原要求：§6.5、§8.3；Candidate §6.1 | parent extension-point version/binding 改变但 dependent Catalog binding 未失效 | reject | unsupported | resolved parent binding 进入 Capability Catalog digest；变化必须 successor ActivationBinding，禁止 ambient latest | 两个 activation generation 不能混用旧 parent rule 与新 Catalog |
 
 ## 7. Deferred boundaries with named owners
 
 | ID | 来源定位 | 场景 | disposition | 执行模式 | 所有者/理由 | 再开放前要求 |
 | --- | --- | --- | --- | --- | --- | --- |
-| D10-D01 | 强制输入 Calendar holiday/anniversary | 未冻结 holiday/anniversary 提供方 算法 | defer-with-owner | deferred | D4 temporal semantics + D10 提供方 admission | closed rule 贡献项、version/coverage、D7 consumer  |
+| D10-D01 | Intake §13.1.2 + §6.5；仅具体算法/规则语义 | 未冻结 holiday/anniversary 提供方 算法 | defer-with-owner | deferred | D4 temporal semantics + D10 提供方 admission | closed rule 贡献项、version/coverage、D7 consumer  |
 | D10-D02 | 强制输入 ICS sync | 通用双向 ICS subscription/upsert | defer-with-owner | deferred | owner 为 D3 binding + D9 mapping + D10 connector | 再开放前必须闭合 SourceBinding/OriginBinding、冲突/watermark 和幂等语义 |
 | D10-D03 | D10 Candidate §13 | 通用多步骤 workflow DAG | defer-with-owner | deferred | owner 为未来 D10 | 再开放前必须定义 typed DAG、恢复、预算和 approval 组合 |
 | D10-D04 | D10 Candidate §14 | 无人值守 create/delete/Facet/native-table/bulk | defer-with-owner | interactive | owner 为未来 D10 与相应 D3/D7 adapters | 每种动作都要独立机械 approval envelope 与 D6 原子消费合同 |

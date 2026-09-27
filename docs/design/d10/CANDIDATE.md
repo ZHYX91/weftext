@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r03-supplement-2026-09-28; status: candidate, pending independent review and coordinated activation. This candidate takes the original 48 D1-D9 inputs at fixed upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` as authoritative and has additionally read the D4 reference catalog added by supplemental S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; current author input coverage is 49/49. Historical 48/48 reading records still refer only to the original U inventory and are not retroactively rewritten as 49/49. This is an author candidate; it does not mean the Gate has passed, the product is implemented, D6/D7 have changed, or A2 may start.
+revision: D10-r04-final-review-fixes-2026-09-28; status: candidate, pending independent review and coordinated activation. This candidate takes the original 48 D1-D9 inputs at fixed upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` as authoritative and has additionally read the D4 reference catalog added by supplemental S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; current author input coverage is 49/49. Historical 48/48 reading records still refer only to the original U inventory and are not retroactively rewritten as 49/49. Independent review has completely read old candidate C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e` and adjudicated it revise; that does not mean current r04 is independently accepted. This remains an author revision candidate and does not mean the Gate has passed, the product is implemented, an upstream amendment is active, or A2 may start.
 
 ## 1. Selection and problem boundary
 
@@ -89,6 +89,32 @@ Activation order is fixed: stage immutable assets → verify publisher/namespace
 Temporary offline/health failure does not create a semantic generation. A package, definition, runtime contract, or trust change produces a successor binding. An unactivated failed upgrade may discard staging; rollback after activation must be a successor activation and cannot move the D4 semantic-ledger pointer backward or delete intervening history.
 
 Disable/uninstall may make executable contributions unavailable and may place definitions whose proof requires that provider into the existing D4 unavailable branch, but author raw source, cumulative tombstones/migrations, and required accepted semantic evidence remain. Unavailable cannot be interpreted as an empty set or deletion of facts.
+
+### 6.1 Pack parent domain, extension point, and lifecycle
+
+Every domain Pack Contribution declares **exactly one primary parent domain/extension point** plus a required compatible version range. Additional cross-domain dependencies remain explicit item-by-item and cannot be inferred from sharing a package or UI location. Candidate Catalog dependency semantics are fixed as `parentDomainId,extensionPointId,requiredVersionRange,resolvedParentVersion,resolutionState`, without freezing a new public IPC in this generation. ActivationBinding construction resolves the dependency to the exact current parent extension-point version and includes the result in the Capability Catalog digest. A parent version/binding change invalidates the old dependent binding and requires successor activation; runtime never follows an ambient "latest".
+
+Package **installation/verification** is separate from Contribution **activation**. When the parent domain is missing, the package may remain as a verified asset and user configuration, source, signatures, historical bindings, and recoverable choices are retained, while the dependent domain Contribution stays inactive. Explicitly disabling the parent extension point also keeps it inactive. An incompatible version range never falls back to old rules. Merely hiding the parent module UI, closing a navigation entry, or suppressing a settings page does **not change dependency state** when the parent semantic capability remains active and compatible; UI visibility cannot secretly enable or disable the Contribution.
+
+Internal dependency resolution has only `ready|missing|disabled|incompatible|unsupported_surface`. This is not a second product-availability reason system. External capability state still follows fixed D1 precedence. When no higher-priority D1 reason applies and this dependency is the actual blocker: unsupported surface→`unsupported_surface`, missing parent component→`missing_component`, present but explicitly disabled parent→`not_configured`, incompatible parent version→`incompatible_version`. Policy denial masks these deployment details earlier; offline/temporary failure retains original D1 meaning. UI-hidden-only has no unavailable reason because it is not a capability state.
+
+D4 semantic retention and D10 activation are separate axes. Field/Facet/alias definitions, tombstones, migrations, digests, and required immutable assets already accepted into the D4 semantic ledger cannot be deleted because a Pack or parent module is disabled/uninstalled. When the current RegistryBinding can still prove that namespace/definitions are `complete`, Core may continue interpreting, querying, and preserving existing author facts. That is portable-schema interpretation, not continued activation of the dependent Contribution, and it does not reopen that Pack's View, Action, derived rule, or new-authoring capability. When definitions cannot be completely proven, D4 follows its `unavailable` / `provider_or_schema_unavailable` path while preserving raw source; unknown or unavailable is never converted to empty.
+
+Rule/data Packs such as Calendar System/Holiday Schedule have no default author-schema injection authority. When the parent Calendar extension point is not `ready`, they register no calendar/holiday domain rule, generate no derived field/View, refresh no related cache, and silently run no dependent Connector. Existing period/range/event author facts remain unchanged and Pack configuration/source remains. An Organizations country schema Pack whose previously accepted schema bytes remain completely proven by the current D4 binding may still interpret existing namespaced author facts, but an inactive parent Contribution cannot use retained schema to secretly expose Organizations-specific View/Action, automatic Assign, or Connector behavior.
+
+Parent dependency state changes follow these activation rules:
+
+| Condition | D10 Contribution activation | D4/author facts | UI/config |
+| --- | --- | --- | --- |
+| parent ready + compatible version + supported surface | may become active after other authorization/budget gates | interpreted under current RegistryBinding | UI may show or be user-hidden |
+| parent missing | inactive | accepted history/raw source retained; typed interpretation follows D4 complete/unavailable | config/source remains recoverable |
+| parent disabled | inactive | same; no schema/author-fact deletion | global extension management remains visible |
+| parent incompatible | inactive | old history retained; incompatible runtime cannot produce new derived semantics | version incompatibility diagnostic |
+| surface unsupported | inactive on that surface | portable author facts follow that surface's Core/D4 capability | no executable entry; global/other-surface config retained |
+| UI hidden only | activation unchanged | unchanged | entry hidden only; capability unchanged |
+
+The selected complete alternative is **C: separate definition/history retention, Contribution activation, and UI visibility**. Alternative A, "delete schema/author facts when the parent is disabled", violates D4 raw/history invariants and is rejected. Alternative B, "installed Pack keeps running regardless of parent state", violates the parent extension-point boundary in Intake §6.5/§8.3 and is rejected. Alternative D, "bake Calendar/Organizations Pack rules into Core", moves domain semantics into Core and is rejected. This choice adds no Calendar algorithm, product module, or installation UI implementation.
+
 
 ## 7. Publisher, namespace, and package trust
 

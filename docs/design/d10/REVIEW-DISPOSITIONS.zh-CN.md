@@ -7,16 +7,19 @@ translation_status: source
 
 # D10 分批独立审查问题处置
 
-revision: D10-r03-supplement-2026-09-28；状态：author revision record，等待独立复核。本文件记录前两批独立审查提出的问题、作者修改位置和仍待复核状态；它不是独立 reviewer 的关闭记录，也不是 Gate verdict。
+revision: D10-r04-final-review-fixes-2026-09-28；状态：author revision record，等待独立复核。本文件记录前两批独立审查提出的问题、作者修改位置和仍待复核状态；它不是独立 reviewer 的关闭记录，也不是 Gate verdict。
 
 ## 1. 审查覆盖边界
 
-被评候选固定为 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`，固定上游为 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98`。
+被评旧候选固定为 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`，固定上游为 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98`，补充目录来自 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`。
 
-前两批独立审查已经完整读取 C 的全部 14 份 D10 文件，以及 U 的 8 份上游：D1 主文/实施、D6 主文/Control、D7 Execution/Narrow Field/Prepared Binding/Preview Effects。U 原 48 份中仍有 40 份待独立审查；本轮作者又补读 S 新增的 D4 reference catalog，但它尚未被独立 reviewer 完整读取，因此按当前 49 份输入口径共有 41 份上游输入仍待独立审查。
+历史上，前两批独立审查先完整读取 C 的 14/14 D10 文件，以及 U 的 D1 主文/实施、D6 主文/Control、D7 Execution/Narrow Field/Prepared Binding/Preview Effects 共 8/48；这个“8/48”只保留为过程记录。
 
-作者会话此前完成的 U 48/48 与本轮补读 S 第 49 份都只用于作者修订来源，不得写成独立审查覆盖。历史 48/48 也不得追溯改写成当时已读 49 份。下表每个状态都固定为“作者已修订，等待独立复核”。
+独立评审随后已经继续完成：C 全部 14/14 候选文件、U 原 48/48 输入，以及 S 新增的 D4 reference catalog 1/1。按当前输入口径，独立 reviewer 的指定上游阅读覆盖是 **49/49，未读 0**。这仍只评价旧 C，不自动覆盖其后的作者 r02/r03/r04 修订。
 
+旧 C 的独立结论是 **revise**。截至本轮收到的完整问题集合为 **3 个 P1 + 7 个 P2，共 10 项**：原 B1-01、B1-02、B2-01 为 P1；B1-03、B1-04、B1-05、B10-01、B11-01、B11-02、B11-03 为 P2。当前作者 r04 对这些问题进行修订，但尚未获得独立接受。
+
+作者自己的 U 48/48 与 S 第49份阅读只是作者来源覆盖，不能替代上述独立 verdict；同样，独立 reviewer 对旧 C 的全读也不能被写成当前 r04 已通过。下表每个作者处置状态都固定为“作者已修订，等待独立复核”。
 ## 2. 问题处置
 
 | ID | 原级别 | 问题 | 作者修订决定 | 主要修改位置 | 当前状态 |
@@ -29,6 +32,10 @@ revision: D10-r03-supplement-2026-09-28；状态：author revision record，等�
 | B2-01 | P1 | DelegationLease.maxRuns 没有唯一消费单位/准入事务；失败/取消/恢复可能重置次数 | 选择“第一次获准受保护执行即消费”语义。queued claim 和准入前取消不消费；Core-managed Run-admission CAS 按同一 `leaseId` 谱系验证 current revision、trusted time、ActivationBinding、budgets 与累计次数，并原子写 `LeaseRunUse/1`。准入后失败/取消/崩溃不退款，同 Run 恢复不重复消费。进一步明确：已有完整 `LeaseRunUse/1` 的同 Run 后续受保护步骤和原 planned 恢复不再比较 remaining count；`maxRuns=1` 已消费 1 次也能继续同 Run，但仍逐步重验当前授权、准确 revision、可信时间、ActivationBinding、批准和预算。只有新 Run 在次数耗尽时返回 `delegation_exhausted`；失权/撤销/过期/绑定变化仍阻止执行。terminal occurrence 的 claim/outcome 必须耐久防重；Lease expiry 不依赖 cleanup，时间连续性不可证返回 `state_unavailable` | CANDIDATE §8/§13/§20/§21；TERMINOLOGY §2/§8；SCENARIO U02/F03/F05/F24–F27；IMPLEMENTATION §2.1/§6/§11/§15；TASK 当前修订约束 | 作者已修订；等待独立复核 |
 
 | B10-01 | P2 | D3 词表中 `weftext.term.origin-binding` 已拥有 `OriginBinding` / `origin_binding`，但 Adopt 又把 `adoption_binding` 写入 wire/API 变量说明和 `owned-names.codeConventions`，形成第二个绑定命名约定 | 提出最小 D3 词表勘误：Adopt 只保留 `adopt_*` code convention；任何 Adopt 关联绑定值继续使用既有 `OriginBinding(ForeignIdentityKey, NodeRef)` 类型及 `origin_binding` 名称，并归 `weftext.term.origin-binding` 所有。删除 `adoption_binding` 约定，不提供 compatibility alias、双读、迁移别名、第二 identity/wire/capability。增加正向 `adopt_*`→`OriginBinding/origin_binding` 与反向“`adoption_binding` 不得出现在受控正向面”的验证 | UPSTREAM-AMENDMENTS §6；SCENARIO U27；IMPLEMENTATION terminology/corpus；本表 | 作者已修订；等待独立复核 |
+
+| B11-01 | P2 | SCENARIO-DISPOSITIONS 多个 Intake 来源定位错引或把候选推导攻击写成直接 A2 条目 | 对 §1 全部 U01–U27 重新逐行核对 Mandatory Intake 与上游原合同。U05/U06/U07/U18 改到实际章节；U08–U21 的 §9 编号逐项复核；U17 明确标为“候选推导攻击”而非 Intake 原文。新增来源类别说明，不删除任何原场景；Pack lifecycle 另增 P10–P15 | SCENARIO-DISPOSITIONS §1/§6/§7；Candidate §6.1 | 作者已修订；等待独立复核 |
+| B11-02 | P2 | D10 Lexicon 只有概念表/部分 type，未满足 Intake §8.5.1 每概念 13 项可追踪映射 | TERMINOLOGY 新增逐概念结构化映射，覆盖现有全部 D10 受控概念并补 Pack、Bundled Module、Agent Session、Parent Extension Dependency；每项固定 stable ID、中英正式名、定义、owner、排除、wire/API/manifest/schema 状态、代码约定、CLI/UI+locale、简称、禁止/历史 alias、正反例、首次冻结/状态/迁移。另列 D1–D9 继承名称/collision，未公开 IPC/无 CLI 明确写无，不新增实现资源 | TERMINOLOGY §2、§4–§5、§13；IMPLEMENTATION terminology gates | 作者已修订；等待独立复核 |
+| B11-03 | P2 | Pack 父领域/extension-point 依赖、版本、disable/UI-hidden/surface lifecycle 未闭合；holiday 算法延期被错误当成通用生命周期答案 | 选择“D4 定义/历史保留、D10 contribution 激活、UI 可见性三轴分离”。domain Pack 必须声明 primary parent domain/extension point + version range；Activation 时 pin 准确 parent binding。missing/disabled/incompatible/unsupported_surface 分别产生唯一 inactive 结果并投影既有 D1 reason；UI hidden-only 不改 activation。已接受 D4 schema/history/raw source 保留，typed interpretation 只依 current Registry complete/unavailable；parent inactive 不得暗中运行 View/Action/rule/connector | CANDIDATE §6.1；TERMINOLOGY §4–§5/§13；SCENARIO U07/U19/P10–P15/D01；IMPLEMENTATION §3；UPSTREAM-AMENDMENTS Pack non-amendment note | 作者已修订；等待独立复核 |
 
 ## 3. 保持不变的边界
 
@@ -55,4 +62,4 @@ D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上�
 - settled(0)、released、uncertain 是否互斥且恢复一致；
 - LeaseRunUse、occurrence claim、terminal outcome、trusted time 是否能阻止重启/重扫/启停造成次数重置或重复 Run。
 
-本文件不能把“作者已修改”写成“独立已关闭”。U 剩余 40 份以及 S 新增目录的独立阅读也必须继续完成，才能形成最终 D10 Gate 结论。
+本文件不能把“作者已修改”写成“独立已关闭”。独立上游指定阅读现在为 49/49、未读 0；剩余工作是对当前 r04 作者修订做独立复核，而不是补旧 C 的输入阅读。只有独立 reviewer 重新裁决当前修订后，才能形成最终 D10 Gate 结论。

@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r03-supplement-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
+revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
 
 ## 1. 实现切片与状态所有者
 
@@ -100,6 +100,25 @@ Package verifier 实现 SHA-256 目录绑定、Ed25519 package signature、Publi
 - semantic rollback 只能作为 successor activation，不能倒退 Registry history。
 
 D4 candidate Registry 仍必须通过原 `RegistrySnapshot/1`、`RegistryBinding/1`、evolution proof 与 catalog loader。不能为了实现方便把 D10 package metadata 塞进 D4 closed snapshot。
+
+### 3.1 Pack parent dependency 与 lifecycle 测试
+
+实现必须把 package 安装、Contribution 激活、D4 definition retention 与 UI visibility 分开建模。domain Pack Contribution 在 Catalog 中保存 primary `parentDomainId`、`extensionPointId`、`requiredVersionRange` 和 activation 时解析的准确 parent binding；parent binding 进入 Catalog digest。父版本变化后旧 dependent binding 失效，只有 successor ActivationBinding 可以重新激活。
+
+至少验证下列组合，并保持 D1 固定 reason 优先级：
+
+| 条件 | Contribution | 预期 capability projection | schema/作者事实 |
+| --- | --- | --- | --- |
+| parent missing | inactive | 高优先级 reason 不成立时 `missing_component` | history/raw source 保留；typed interpretation 由 D4 complete/unavailable 决定 |
+| parent present but explicitly disabled | inactive | `not_configured` | 同上；不能删除 definitions |
+| parent incompatible | inactive | `incompatible_version` | old history retained；不得继续跑旧规则 |
+| unsupported surface | inactive on that surface | `unsupported_surface` | portable facts 按该 surface 的 Core/D4 能力处理 |
+| UI hidden only | activation unchanged | 无新增 unavailable reason | 完全不改变 RegistryBinding/作者 facts |
+| parent ready/compatible | may activate | 继续经过 D1/D6/D10 其它门 | current RegistryBinding 解释 |
+
+测试必须同时覆盖两类 Pack：Calendar rule/data Pack 在 parent inactive 时不得产生派生 rule/View/cache 或 connector 行为；Organizations schema Pack 在其已接受 definitions 仍由 current D4 binding 完整证明时可继续解释已有作者 facts，但不得因 retained schema 偷开 domain-specific View/Action/Assign/connector。若 definitions state=unavailable，raw source 保留，typed operation fail closed。
+
+GC/uninstall 测试必须证明 package config/source、accepted semantic ledger、tombstone/migration 和恢复所需 immutable assets 不因 UI/module disable 被误删。测试还必须验证 parent version/binding 变化会使旧 dependent Catalog binding 失效，而不是在运行中跟随 latest。
 
 补充 S 的 D4 reference catalog 现在属于实施测试输入：61 个 Field、7 个 Facet、27 个 relation Field，以及 Calendar 的跨 Field `union_variant_equal` 等真实约束必须参与 D7 Narrow Field Qualification。测试必须至少包含 `people/phone` 正向构造、一个 relation Field 负例、`calendar/range` 或 `calendar/recurrence` 的跨字段约束负例，以及未知 constraint constructor 负例；不能硬编码一个“安全 FieldId 列表”绕过 Registry 图证明。
 
@@ -294,12 +313,15 @@ D3/D7/D8/D9 原 error 同样必须逐字沿原 owner 传递。诊断 UI 可以�
 
 表中“能力可用时”仍必须满足 D1 release/platform evidence；设计存在不产生 supported 声明。
 
-## 13. 真实实现替换与禁止兼容层
+## 13. 受控命名映射与实现替换
 
-后续实现应成套替换任何现有自由 tool callback、任意 JSON argument、UI 自报 approval、进程继承环境 secret、按 extension/name 自动调用工具、Agent 直写文件或 cursor/provider state 混入 author source 的原型。若旧原型未发布，不保留 serde alias、fallback parser 或双读双写。
+TERMINOLOGY §13 的逐概念结构化映射是当前 D10 命名权威，不是未来测试计划。实现、CLI/API/schema/manifest、UI label 与 locale resource 只能消费其中已经给出的 mapping；“未公开 IPC”“无直接 CLI”“无历史 alias”是受控结论，不能被实现自行补成另一个名字。
 
-历史研究 fixture 可以保留并明确 non-authoritative；public/API/CLI/schema/positive fixture 不得同时接受新旧两套受控语义。
+后续实现应成套替换任何旧自由 tool callback、任意 JSON argument、UI 自报 approval、进程继承环境 secret、extension/name 驱动的自动 tool dispatch、Agent 直写文件、cursor/provider state 混入 author source，以及违反 Terminology collision 表的 prototype。若旧原型未发布，不保留 serde alias、fallback parser 或双读双写。
 
+每个 D10 concept 必须能从 stable concept ID 追到中英正式名、owner、wire/API/manifest/schema 状态、代码 type/function/variable/namespace、CLI/UI/locale、简称/别名、正反例和首次冻结/迁移目标。继承 D1–D9 名称只引用原 owner；实现不得重新登记 `Registry`、`OriginBinding`、D6 permission、D7 Action、D8 Draft 或 D9 Provider 的 D10 alias。
+
+B10-01 的实现负向门：Adopt 代码路径只允许 `adopt_*` convention；关联绑定值使用 D3 既有 `OriginBinding` / `origin_binding`。受控正向源码、API/schema、fixture 和 terminology registry 中不得出现 `adoption_binding`，scanner 不增加豁免。
 ## 14. 测试与证据分层
 
 | 层 | 能证明 | 不能证明 |
@@ -356,6 +378,7 @@ D3/D7/D8/D9 原 error 同样必须逐字沿原 owner 传递。诊断 UI 可以�
 作者实现计划只有在以下条件都明确记录后才可交独立评审：
 
 - CANDIDATE、TERMINOLOGY、SCENARIO-DISPOSITIONS、UPSTREAM-AMENDMENTS 与本文互相一致；
+- TERMINOLOGY §13 对全部当前 D10 受控概念逐项完成 Intake §8.5.1 的 13 项 mapping，继承名称引用原 owner，没有 TODO/“留实现决定”占位；
 - 48/48 upstream input coverage 保持；
 - D6/D7 amendment 明确为未激活提案；
 - 没有把 unsupported/deferred 写成 available；

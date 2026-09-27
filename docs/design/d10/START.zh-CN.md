@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision r03，处于分批独立复审期间，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
+状态：candidate revision r04，处于分批独立复审期间，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
 
 固定上游输入 commit：f205831c848729f7ddbc3ba0cf32b689459c0c98。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
@@ -134,20 +134,14 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 本候选也不声称 OS sandbox、真实 MCP/model/connector 服务、credential store、费用系统、真实 Core amendment 或五端 UI 已实现。Implementation Impact 中这些证据继续 pending。
 
-## 6. 分批独立审查与本轮作者修订
+## 6. 独立审查覆盖与当前作者修订
 
-前两批独立审查已经完整读取被评候选 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e` 的 14 份 D10 文件，以及固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 中 D1 主文/实施、D6 主文/Control、D7 Execution/Narrow Field/Prepared Binding/Preview Effects 共 8 份。其余 40 份上游输入仍待独立审查。
+被评旧候选固定为 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`。历史前两批独立审查先读完 C 14/14 和 U 的 8/48；这是过程记录，不是当前覆盖。
 
-作者此前的 48/48 输入阅读仍只属于作者来源覆盖，不能替代独立 reviewer 的上游覆盖。当前修订针对前两批提出的 B1-01 至 B1-05 和 B2-01；逐项作者处置记录见 REVIEW-DISPOSITIONS。所有条目状态都只是“作者已修订、等待独立复核”，不得写成 independently closed。
+后续独立评审已经继续完成 U 原 48/48 和 S 新增 D4 reference catalog 1/1，因此对旧 C 的指定上游阅读覆盖现在是 **49/49、未读 0**，候选文件也是 **14/14**。旧 C 的独立结论为 **revise**，完整问题集合是 **3P1 + 7P2 = 10 项**。
 
-本轮修订重点为：
+作者在 r02/r03 处理原六项和 B10-01，本轮 r04 再处理 B11-01、B11-02、B11-03。当前 r04 是**作者修订候选**，独立 reviewer 尚未对这些修改给出新 verdict；“旧 C 已全读”绝不能写成“r04 已通过”。
 
-1. D6 内 approval 竞争增加唯一 `approval_unavailable/preflight` 提案，并与 D10 前置 approval error 分域；
-2. planned decision 增加只读原 preview 恢复运输，不延长旧 token、不重新 prepare；
-3. authoritative terminal_failed 原子释放 approval count reservation，普通取消/TTL/暂时失权不释放；
-4. raw no-op 明确为空 MutationFootprint/field_change/sourceVersions 分支；
-5. cost released 只表示收费执行从未开始，实际发送零账单为 `settled(0)`；
-6. DelegationLease `maxRuns` 固定为第一次受保护执行时消费，失败/取消后不退款，同 Run 恢复不重复消费，并补齐 terminal occurrence 与 trusted-time 防重/过期语义。
+当前十项仍以 REVIEW-DISPOSITIONS 为作者处置账本，状态统一是“作者已修订，等待独立复核”。B11 本轮新增修订聚焦：场景来源逐行重核、Intake §8.5.1 的完整逐概念 Lexicon mapping、以及 Pack parent domain/extension-point 生命周期闭合。
 
-下一步仍是继续独立审查与定向复核，不是作者自行宣布 Gate 通过。上游协调修订在接受前仍未生效，也不得开始 A2。
-
+下一步是对当前固定 r04 实物做独立复核，而不是继续补旧 C 的输入阅读。上游 amendment 仍未激活，不得合并、发行或开始 A2。

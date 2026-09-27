@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Coordinated D6/D7 Upstream Amendment Proposal
 
-revision: D10-r03-supplement-2026-09-28; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
+revision: D10-r04-final-review-fixes-2026-09-28; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -251,13 +251,26 @@ Positive validation: an Adopt code path may be named `adopt_*`, but the associat
 
 This is a minimal coordinated D3 terminology erratum proposal. Fixed U snapshots remain unchanged, and this document cannot claim the erratum is effective before independent re-review and coordinated acceptance.
 
-## 7. Explicit non-amendment for D8 and D9
+## 7. Pack parent lifecycle — no new D1/D4 wire amendment
+
+The Pack parent-domain/extension-point lifecycle selected by CANDIDATE §6.1 requires no change to fixed D1/D4 wire for these reasons:
+
+1. D1 already freezes the closed `unsupported_surface|not_in_release|policy_denied|user_action_required|missing_component|not_configured|offline|incompatible_version|temporarily_unavailable` reasons and fixed precedence. D10 only maps the actual parent-dependency blocker onto those existing reasons and adds no product-level `parent_missing` reason.
+2. D4 already freezes `RegistrySnapshot/1`, `RegistryBinding/1`, namespace definition `complete|unavailable`, raw-source preservation, generation+digest binding, and cumulative tombstone/migration/semantic-contribution ledger. D10 cannot rewrite those rules when a Pack or parent is disabled.
+3. Parent Extension Dependency exists only in the D10 Capability Catalog/ActivationBinding deployment control plane. A domain Contribution declares parent domain, extension point, and version range; activation resolves an exact parent binding and covers it in the Catalog digest. It does not enter D4 Field/Facet schema and is not an author fact.
+4. UI visibility remains a product projection. Hiding only the parent-module UI changes no D1 capability, D4 RegistryBinding, or D10 Contribution activation.
+
+Therefore parent missing/disabled/incompatible/unsupported-surface makes dependent runtime/View/Action/rule Contributions inactive while accepted D4 definitions/history/raw author source remain under original D4 complete/unavailable semantics. If exact definitions remain complete, Core may interpret existing author facts without authorizing new domain behavior. If definitions cannot be proven, original `provider_or_schema_unavailable`/raw-retention behavior applies.
+
+Upstream must be reopened only if a future design wants any of these: parent-dependency members inside `RegistrySnapshot/1`; a new D1 unavailable reason; UI disable changing schema availability; dependent domain behavior continuing under a disabled parent; or changed D4 semantic-ledger retention. The current candidate rejects all of those routes.
+
+## 8. Explicit non-amendment for D8 and D9
 
 D8 gains no unattended edit branch. Document/Annotation edit, dirty Draft, IME, current serial, complete preview, and explicit confirmation remain unchanged. Agent/Automation may only propose into D8 and cannot fabricate EditSession or human origin.
 
 D9 does not change Provider/Route, worker sandbox, ExportPlan, LossReport, PublicationReceipt, or external publisher. D10 external transport/Connector grants no network to a D9 worker, and D9 publication confirmation grants no Standing Approval author write.
 
-## 8. Activation and version compatibility
+## 9. Activation and version compatibility
 
 These amendments take effect only after independent review acceptance, controller coordinated decision, and activation together with the D10 candidate. Before activation:
 
@@ -270,7 +283,7 @@ The new D6 `approval_unavailable` is a closed-enum extension. Coordinated activa
 
 Historical committed D3/D6 decisions keep their original decoders/bytes and are not backfilled with ApprovalUse. An old prepare with no decision does not automatically gain Standing Approval. Only a planned decision produced under the new profile can use the recovery transport defined here.
 
-## 9. Joint counterexamples required for independent re-review
+## 10. Joint counterexamples required for independent re-review
 
 1. R1 prepare sees valid approval, R2 consumes the final use; when R1 reaches D6 and only approval lost the race, the result must be `approval_unavailable/preflight` and an unseen request has no ledger decision.
 2. R1 is already planned when approval is revoked; the same error leaves it planned and cannot become semantic_rejected/terminal_failed.
