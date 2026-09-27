@@ -165,7 +165,7 @@ Policy/2 capability union 增加一个无参数值 d10_control_self，只允许 
 
 Workspace D10 control adapter 是受管 PreparedIntent producer，但只接受 CONTROL-CONTRACT §7 的 automation_configure、consent、state、workspace_limits、activation 五类 Workspace body。它不能接受 deployment_put、cost_reconcile、secret bytes 或自由 callback。producer 从真实 current principal、完整 closed body、受权读取和 stable prepare binding 生成原 d6_commit_request；external caller 仍不能声明 principal、authorized、effect 或 writer。涉及作者 payload 的最终 mutation 仍只能来自原 D7/D8/D3 adapter；普通 D10 control mutation 不能构造 author source bytes。
 
-固定 S profile/2 的“全部非 Field capability”在本 amendment 中冻结为 S 当时闭集：workspace_state、entity_state、locator_state、source_read、source_write、body_write、node_control、node_create、resource_read、resource_write、annotation_read、annotation_write、lifecycle、registry_admin、binding_admin、policy_admin、export、repair、audit、source_envelope_state、commit_sequence_state。以后新增 capability 不自动进入 profile/2。
+固定 S profile/2 的“全部非 Field capability”在本 amendment 中冻结为 S 当时的受控集合 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。以后新增 capability 不自动进入 profile/2。
 
 新增 d6_bootstrap_profile wireVersion=3；成员仍为 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope。profile/3 的 initialPolicy.version 仍为 2；creator 初始 Workspace grant=上述固定 profile/2 非 Field 集合 + d10_control_self + S 原规则从 target Registry 生成的全部 Field read/write，deny 为空。
 

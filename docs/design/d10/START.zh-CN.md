@@ -7,9 +7,9 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision r04，处于分批独立复审期间，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
+状态：candidate revision R05，作者修订待新的固定候选全量独立联合终审，尚未独立接受或运行时激活。本文件记录输入覆盖、候选文件集合和验收状态，不是 Gate verdict。
 
-固定上游输入 commit：f205831c848729f7ddbc3ba0cf32b689459c0c98。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
+固定输入基线已整合为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 包含旧 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份输入和新增 D4 reference catalog。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
 ## 1. 阅读覆盖
 
@@ -117,6 +117,8 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 - SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
 - UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
+- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
+- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
 - TASK.zh-CN.md / TASK.md
 - START.zh-CN.md / START.md
 
@@ -134,14 +136,10 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 本候选也不声称 OS sandbox、真实 MCP/model/connector 服务、credential store、费用系统、真实 Core amendment 或五端 UI 已实现。Implementation Impact 中这些证据继续 pending。
 
-## 6. 独立审查覆盖与当前作者修订
+## 6. 独立终审状态
 
-被评旧候选固定为 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`。历史前两批独立审查先读完 C 14/14 和 U 的 8/48；这是过程记录，不是当前覆盖。
+独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`。正式覆盖为候选 16/16、上游 28/49；正式账仍为 1P1+5P2 开放，D3 批次等待正式报告。RelationDag 的临时判断已收回，本候选不据此改名。
 
-后续独立评审已经继续完成 U 原 48/48 和 S 新增 D4 reference catalog 1/1，因此对旧 C 的指定上游阅读覆盖现在是 **49/49、未读 0**，候选文件也是 **14/14**。旧 C 的独立结论为 **revise**，完整问题集合是 **3P1 + 7P2 = 10 项**。
+R05 在授权、事务、费用恢复、stop、bootstrap profile、公开 control wire 和 package/module 映射上有实质修订，因此旧 C 的阅读覆盖、问题结论和阶段性判断都不能继承到 R05。R05 固定后必须作为新候选做完整联合终审。
 
-作者在 r02/r03 处理原六项和 B10-01，本轮 r04 再处理 B11-01、B11-02、B11-03。当前 r04 是**作者修订候选**，独立 reviewer 尚未对这些修改给出新 verdict；“旧 C 已全读”绝不能写成“r04 已通过”。
-
-当前十项仍以 REVIEW-DISPOSITIONS 为作者处置账本，状态统一是“作者已修订，等待独立复核”。B11 本轮新增修订聚焦：场景来源逐行重核、Intake §8.5.1 的完整逐概念 Lexicon mapping、以及 Pack parent domain/extension-point 生命周期闭合。
-
-下一步是对当前固定 r04 实物做独立复核，而不是继续补旧 C 的输入阅读。上游 amendment 仍未激活，不得合并、发行或开始 A2。
+作者自查、文档 CI 和有限模型只能证明文档/模型自身，不建立产品实现、发布、surface 可用或独立 Gate 通过。D6/D7/D3 的配套修订继续只是未激活提案，不得合并、发布、激活或开始 A2。

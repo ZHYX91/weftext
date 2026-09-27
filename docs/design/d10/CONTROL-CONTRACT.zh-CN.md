@@ -50,7 +50,7 @@ VersionRange 必须满足 minimum < maximumExclusive。不存在 latest、wildca
     | {kind:"deployment", storeIncarnation:Uuid}
 
 ControlRecordKind/1 闭集为：
-automation、lease、approval、planned_approval、external_approval、run、workspace_budget、activation、deployment_policy、trust、package、external_account、secret、grant、cost_account、pricing、reservation、external_effect、stop。
+受控记录类别闭集为：`automation, lease, approval, planned_approval, external_approval, run, workspace_budget, activation, deployment_policy, trust, package, external_account, secret, grant, cost_account, pricing, reservation, external_effect, stop`。
 
     ControlRef<K>/1 = {
       storeIncarnation:Uuid,
@@ -75,6 +75,19 @@ control id 与 incarnation 永不重用。retire、archive、revoke、close 或�
     }
 
 CurrencyCode 是 exact 三位 ASCII A-Z。D10 不执行隐式外汇换算。
+
+本文其余基础标量沿用现有 closed JSON 语义：`Token` 是 D6 §1 的非空 opaque token；`Text` 是 Unicode scalar string；`Bytes` 是受相应入口字节预算约束的 byte sequence；`Boolean` 只接受 JSON true/false；`Sha256` 是 `sha256:` 加 64 位 lowercase hex；`HostPrincipal` 是受信 host authentication 映射得到的 `Token`，不是请求字段。`Ed25519PublicKey` 与 `Ed25519Signature` 只在受信 package/trust adapter 中出现，编码格式必须由该 adapter 的已接纳 profile 固定，普通 control caller 不能自报已验证。
+
+受控 ASCII token 语法：
+
+```text
+LowerCamelAscii = [a-z][A-Za-z0-9]{0,62}
+LowerKebabAscii = [a-z][a-z0-9]*(?:-[a-z0-9]+)*
+CanonicalInteger = "-"? ("0" | [1-9][0-9]*)
+CanonicalDecimal = CanonicalInteger ("." [0-9]*[1-9])?
+```
+
+`LowerKebabAscii` 总长 1..63 bytes；`CanonicalInteger` 和 `CanonicalDecimal` 必须在相应 ToolType 的显式 bounds 内。decimal 不允许尾随零、小数点后空串、指数写法或 negative zero。
 
     ScheduleHorizon/1 = {
       start:D4.zoned_instant,
@@ -116,9 +129,26 @@ ToolValueProfile/1 由 D10 Tool Adapter 拥有，不是 D7 TypeSpec 的别名，
       type:ToolType/1
     }
 
-maximumUtf8Bytes 为 1..8388608；object 最多 64 members；union 2..8 arms；list maximum 为 1..4096 且 minimum <= maximum；完整 type depth 最大 16，canonical type bytes 最大 65536。member name 和 arm tag 按 UTF-8 bytes 排序且唯一。integer/decimal 使用 canonical base-10 string，禁止 binary float、NaN、Infinity 和 negative zero。
+`maximumUtf8Bytes` 取 1..8388608；对象最多 64 个 `members`；联合类型有 2..8 个 `arms`；列表 `maximum` 为 1..4096 且 `minimum <= maximum`；完整类型深度最多 16，规范类型字节最多 65536。成员名和联合标签按 UTF-8 字节排序且唯一。整数和十进制定点值使用规范十进制字符串，禁止二进制浮点、NaN、Infinity 和负零。
 
-ToolValue/1 与 ToolType 一一对应：bool、text、int64/integer/decimal 分别携带 exact value；optional 只有 none 或 some；object 只允许声明过的 members；list 有 items；union 有 tag 和 value。缺 required、额外 member、错误 arm、越界或超预算全部 invalid_request。ToolValue 不含 EntityRef、Locator、SecretRef、file path capability、ActionEvidence、plan/result token、开放 map 或 executable value。
+ToolValue/1 exact wire 为：
+
+```text
+ToolValue/1 =
+  {kind:"bool", value:Boolean}
+| {kind:"text", value:Text}
+| {kind:"int64", value:CanonicalInteger}
+| {kind:"integer", value:CanonicalInteger}
+| {kind:"decimal", value:CanonicalDecimal}
+| {kind:"optional", value:{kind:"none"} | {kind:"some", value:ToolValue/1}}
+| {kind:"object", members:[{name:LowerCamelAscii, value:ToolValue/1}]}
+| {kind:"list", items:[ToolValue/1]}
+| {kind:"union", tag:LowerKebabAscii, value:ToolValue/1}
+```
+
+ToolValue/1 必须和调用点绑定的 ToolType/1 逐层一致。object 的 members 按 name 排序且唯一，只能出现声明成员；list 数量满足 bounds；union tag 必须命中声明 arm。int64 还必须落在 signed 64-bit 范围。
+
+缺少必需成员、出现额外成员、选择错误联合分支、越界或超预算都返回 invalid_request。ToolValue 不能承载 EntityRef、Locator、SecretRef、文件路径能力、ActionEvidence、plan/result token、开放 map 或可执行值。
 
 ## 4. Package、Contribution 与依赖
 
@@ -149,7 +179,7 @@ PackageId/1 与 D4 SemanticNamespaceId 是不同类型，即使字符串可能�
     }
 
 ContributionKind 闭集为：
-module、schema、view、action、template、preset、pack、tool、model、connector、importer、exporter、conversion、renderer、localization。
+贡献类型闭集为：`module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`。
 
 这组 kind 覆盖 Mandatory Intake 已选的 module、Profile/schema、View、Action、Template、Preset、Pack、Connector/Adapter 以及 D9 import/export/conversion 和 D10 tool/model/runtime 贡献；它不表示所有 kind 已产品实现。
 
@@ -175,10 +205,10 @@ dependency 是具体 dependent Contribution 的成员，不存在 package 级 am
 
 | 产品 | PackageId | module contribution | schema contribution | D4 semantic owner / Facet | extension points |
 | --- | --- | --- | --- | --- | --- |
-| Calendar / 日历 | weftext.calendar | module | schema | calendar → first_party,weftext.calendar；calendar/period-note、calendar/range-note、calendar/event，semanticMajor=1 | calendar-system、holiday-schedule |
-| Library / 文献库 | weftext.library | module | schema | library → first_party,weftext.library；library/work，semanticMajor=1 | none |
-| People / 人物 | weftext.people | module | schema | people → first_party,weftext.people；people/person，semanticMajor=1 | none |
-| Organizations / 组织 | weftext.organizations | module | schema | organizations → first_party,weftext.organizations；organizations/organization，semanticMajor=1 | schema-pack |
+| 日历 / Calendar | `weftext.calendar` | `module` | `schema` | `calendar` → `first_party,weftext.calendar`；`calendar/period-note`、`calendar/range-note`、`calendar/event`，`semanticMajor=1` | `calendar-system`、`holiday-schedule` |
+| 文献库 / Library | `weftext.library` | `module` | `schema` | `library` → `first_party,weftext.library`；`library/work`，`semanticMajor=1` | `none` |
+| 人物 / People | `weftext.people` | `module` | `schema` | `people` → `first_party,weftext.people`；`people/person`，`semanticMajor=1` | `none` |
+| 组织 / Organizations | `weftext.organizations` | `module` | `schema` | `organizations` → `first_party,weftext.organizations`；`organizations/organization`，`semanticMajor=1` | `schema-pack` |
 
 每个 module contribution 的 descriptor 只包含正式中英文产品名、同 package schema contribution 引用以及上表 extension points。schema descriptor 只列 exact SemanticNamespaceId、D4 namespace ownerId 和 FacetId/semanticMajor，不复制 FieldDefinition 或 FacetSchema bytes。
 
@@ -220,7 +250,7 @@ Deployment 管理资格 H 由 DeploymentControlPolicy/1 拥有：
       state:"active" | "revoked" | "retired",
       grantee:{
         hostPrincipal:HostPrincipal,
-        workspacePrincipal:D6.PrincipalToken,
+        workspacePrincipal:Token,
         workspaceRef:D3.WorkspaceRef
       },
       contributions:[ContributionBinding/1],
@@ -237,6 +267,20 @@ Deployment 管理资格 H 由 DeploymentControlPolicy/1 拥有：
       contractVersion:Version/1,
       descriptorDigest:Sha256
     }
+
+    ResourceUseGrantSpec/1 = {
+      grantee:{
+        hostPrincipal:HostPrincipal,
+        workspacePrincipal:Token,
+        workspaceRef:D3.WorkspaceRef
+      },
+      contributions:[ContributionBinding/1],
+      notBefore:D4.zoned_instant,
+      notAfter:D4.zoned_instant,
+      permission:ResourcePermission/1
+    }
+
+`ResourceUseGrantSpec/1` 是创建/更新输入；`grantId`、两个 revision、state 和 usage 只能由 Core 从现有记录与事务结果产生。
 
 ResourcePermission/1 四个 variant：
 
@@ -333,7 +377,7 @@ ControlBody/1 只有七个 variant：
 6. deployment_put：
    target:Target<K>；
    value:DeploymentValue/1。
-   K 只允许 deployment_policy|trust|package|external_account|secret|grant|cost_account|pricing；K 必须和 value.kind 对应。仅 H。
+   K 只允许 `deployment_policy|trust|package|external_account|secret|grant|cost_account|pricing`；K 必须与 `value.kind` 对应，而且只有 H 可以执行。
 
 7. cost_reconcile：
    reservation:Binding<reservation>；
@@ -371,8 +415,8 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
       {kind:"once", at:D4.zoned_instant}
     | {kind:"recurrence",
        ownerNodeRef:D3.NodeRef,
-       recurrenceOccurrenceKey:D4.OccurrenceKey,
-       rangeOccurrenceKey:D4.OccurrenceKey,
+       recurrenceOccurrenceKey:D4.occurrenceKey,
+       rangeOccurrenceKey:D4.occurrenceKey,
        horizon:ScheduleHorizon/1,
        outputLimit:Counter}
 
@@ -399,7 +443,7 @@ readGrants 只能使用原 D6 读取/状态观察 capability，不得包含 poli
       costGrants:[Binding<grant>/1]
     }
 
-SingleFieldMemberRule/1 逐字承接 C §14：D7 set_field_member、一个 owner/Field/唯一 Entry/member、scalar text|bool|int64|integer|decimal、value constraint any|enum|numeric_range，以及 raw no-op 分支。它不扩展到 create/delete/Facet/native-table/bulk。
+`SingleFieldMemberRule/1` 完全承接 C §14：动作固定为 `set_field_member`；目标限制为一个 owner/Field 下唯一 Entry 的单个 member；值类型闭集为 `text|bool|int64|integer|decimal`，约束闭集为 `any|enum|numeric_range`，并保留 raw no-op 分支。它不扩展到 create、delete、Facet、native table 或 bulk 操作。
 
     ConsentSpec/1 =
       {kind:"planned",
@@ -436,7 +480,27 @@ prepare 成功返回：
                   prepareToken:Token}}
     }
 
-ControlPreview/1 是完整有限 before/after/control-effect 预览，只能包含当前 caller 已获权控制元数据；不能包含 secret bytes、隐藏作者值或其他用户账单。超预算拒绝，不截断。
+    ControlPreview/1 = {
+      kind:"d10_control_preview",
+      wireVersion:1,
+      canonicalIntentBytes:Bytes,
+      affected:[{
+        ref:ControlRef<K>/1,
+        change:"create" | "update" | "enable" | "disable" |
+               "revoke" | "cancel" | "archive" | "retire" |
+               "disconnect" | "close" | "settle",
+        beforeRevision:Option<Counter>,
+        proposedAfterRevision:Option<Counter>
+      }],
+      resourceUses:[{
+        grant:Binding<grant>/1,
+        maximum:Option<Money/1>
+      }]
+    }
+
+affected 按 ref canonical bytes 排序且唯一；resourceUses 按 grant ref 排序且唯一。canonicalIntentBytes 是本次已成功 closed-decode 的完整 D10-Control-Intent/1 bytes，因此包含 caller 已提供并获权查看的拟议控制语义；preview 不另带 secret bytes、隐藏作者值或其它用户账务。
+
+ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒绝，不截断。
 
 查询：
 
@@ -454,6 +518,36 @@ ControlPreview/1 是完整有限 before/after/control-effect 预览，只能包�
 稳定 key 为 (scope incarnation, initiating principal, requestId)。requestId 必须在首次调用前由客户端保存并在 transport retry 中复用。
 
 Core 内部保存：
+
+    StableControlKey/1 = {
+      scope:Scope/1,
+      initiatingPrincipal:Token,
+      requestId:Uuid
+    }
+
+    PreparedCommitRequest/1 =
+      {kind:"workspace", request:D6.d6_commit_request}
+    | {kind:"deployment", request:{
+        kind:"d10_host_control_commit",
+        wireVersion:1,
+        scope:Scope/1,
+        requestId:Uuid,
+        prepareToken:Token
+      }}
+
+    ControlDependencies/1 = {
+      configBindings:[Binding<K>/1],
+      usageBindings:[{
+        ref:ControlRef<K>/1,
+        usageRevision:Counter
+      }],
+      authorityProof:Token,
+      authorizationGenerations:[Token],
+      stopRefs:[ControlRef<stop>/1],
+      sourceOrRegistryBindings:[Sha256]
+    }
+
+`ControlDependencies/1` 是 Core 从实际受权读取形成的内部完整依赖集，不是 caller 输入。数组按完整 canonical bytes 排序且唯一；sourceOrRegistryBindings 只保存已有 owner 的 binding digest，不创造新作者或 Registry token。
 
     ControlPrepareBinding/1 = {
       key:StableControlKey/1,
@@ -477,7 +571,7 @@ ControlDependencies/1 内部恰含本次实际读取的 config bindings、usage 
 5. same-key same-input 已有 authoritative decision 时，先重新验证当前主体对原结果和效果范围的披露资格，然后重放保存结果；此时不再用当前 target revision 否定历史成功；
 6. 尚无 decision 才验证 expected config/usage revisions、当前授权、依赖、时间和预算，构造或恢复原 prepare；
 7. Workspace 提交进入原 D6 transaction/ledger；Deployment 提交进入同一 store incarnation 的 closed host control transaction；
-8. 原子保存 effect、decision/receipt linkage、record/account deltas、dependency invalidation、evidence pins 和 required audit link。
+8. 原子保存效果、决议/receipt 关联、记录与账户增量、依赖失效信息、证据固定引用和必需的审计关联。
 
 另一个合法请求已经把对象 r5→r6 后，原 r5 成功请求重试仍返回 r5 saved outcome；读取 current state 是另一个受权 read。当前主体若已经失去结果披露资格则 not_visible，但旧 decision 不能删除或改写。
 
@@ -516,6 +610,23 @@ configuration revision 与 usageRevision 分域；checked increment 到 Counter 
        fixedMicroUnits:Counter,
        meters:[PricingMeter/1],
        evidence:EvidenceTicket/1}
+
+    NamespaceClaim/1 = {
+      namespaceId:D4.SemanticNamespaceId,
+      ownerClass:"first_party" | "publisher",
+      ownerId:Token
+    }
+
+`NamespaceClaim/1` 只把已验证 PublisherIdentity 绑定到 D4 已有 semantic namespace owner claim；它不创建第二 namespace registry，也不能覆盖 `core`、`wf` 或其它保留 owner。
+
+    PricingMeter/1 = {
+      meterId:LocalOperationId,
+      numerator:Counter,
+      denominator:Counter,
+      maxUnits:Counter
+    }
+
+`denominator` 和 `maxUnits` 必须为正；同一 pricing 内 meterId 按 ASCII 排序且唯一。最大费用使用 checked integer/rational arithmetic，不能使用 binary float。
 
 EvidenceTicket/1：
 
@@ -570,7 +681,22 @@ DeploymentControlDecision/1 是 host domain 成功结果：
 
 ## 10. 费用 reservation 与可恢复 settlement
 
-CostReservation/1 至少绑定 reservationId、attemptId、account、grant、pricing、currency、upperBound、revision 和 state。attemptId/reservationId 永不复用。
+    CostReservation/1 = {
+      reservationId:Uuid,
+      attemptId:Uuid,
+      account:Binding<cost_account>/1,
+      grant:Binding<grant>/1,
+      pricing:Binding<pricing>/1,
+      currency:CurrencyCode,
+      upperBound:Money/1,
+      revision:Counter,
+      state:"reserved" | "uncertain" | "settled" | "released",
+      actual:Option<Money/1>
+    }
+
+`actual` 仅在 state=settled 时为 some；其它状态必须为 none。
+
+`attemptId` 与 `reservationId` 永不复用。
 
 状态机：
 
@@ -590,7 +716,7 @@ released 仅在可靠 never_started 证据证明本 attempt 的 billable executi
       evidence:EvidenceTicket/1
     }
 
-settled 要求 actual=some；released 要求 actual=none 且 evidenceClass=never_started。final_bill 要求 settled。错误 attempt/account/currency、non-final、aggregate 无法唯一拆分或 continuity 不足保持 uncertain/full bound，使用 state_unavailable；malformed accepted-adapter output 使用 invalid_request/invalid_output owner contract，不猜结论。
+`settled` 要求 `actual=some`；`released` 要求 `actual=none` 且 `evidenceClass=never_started`；`final_bill` 只能得到 settled。attempt、account 或 currency 不匹配、账单尚未 final、汇总账单无法唯一拆分，或证据连续性不足时，都保持 uncertain 并占用完整上限，返回 `state_unavailable`。已接纳适配器给出格式错误结果时沿其原 invalid-output 合同处理，不能猜测结论。
 
 reconcile 用 expected reservation revision CAS。成功事务原子追加 CostSettlementDecision、更新 reservation state/revision、grant/account held/spent/available、evidence/audit。相同 evidence/prior revision/derived decision replay 不再次返额；并发不同 decision 至多一个 CAS winner。actual 超 upperBound 进入原 overcharge anomaly/freeze 路径，普通 reconcile 不提高 ceiling。
 
@@ -640,7 +766,7 @@ D6 coordinated amendment 增加 execution_stopped/preflight：尚未 planned 的
 
 固定 S profile/2 的“全部非 Field capability”在 amendment 中明确冻结为 S 当时集合：
 
-workspace_state、entity_state、locator_state、source_read、source_write、body_write、node_control、node_create、resource_read、resource_write、annotation_read、annotation_write、lifecycle、registry_admin、binding_admin、policy_admin、export、repair、audit、source_envelope_state、commit_sequence_state。
+固定集合为 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。
 
 profile/2 永远不自动包含以后新增的 d10_control_self。
 
@@ -678,7 +804,7 @@ retire/archive 不删除仍被 saved decision、planned recovery、unknown exter
 2. 同 stable key 的 r5 写已提交但响应丢失，另一个请求把对象改到 r6；原请求重试在当前披露授权通过后返回 r5 saved result，不重复建对象，也不因 r6 误判 stale。
 3. same key 修改 target/body/expected revision 返回 control_conflict；旧 id 删除后同名重建不能命中旧请求。
 4. grant revision/renewal 不清零 spent/held/attempts；换新 grant 也不抹旧 reservation/account liability。
-5. reserve100、已发送、crash→uncertain、final bill20→settled(20)，只返80；final bill0→settled(0)；never-started proof 才 released。
+5. 预留 100 后实际发送，崩溃恢复为 `uncertain`；同 attempt 的最终账单 20 得到 `settled(20)` 且只返 80；最终账单 0 得到 `settled(0)`；只有 never-started proof 才得到 `released`。
 6. 两个 reconciler 并发同 reservation 只有一个 CAS winner；提交后丢响应 replay 不双返余额。
 7. stop 与 Run admission、D6 final commit、external send fence 的每个线性化顺序；stop 后 settlement/authoritative abort/evidence cleanup 仍可执行。
 8. profile/2 family 在软件升级后不获得 d10_control_self；显式 profile/3 只影响之后新 family；既有 Workspace 只能 policy_admin 显式授予。

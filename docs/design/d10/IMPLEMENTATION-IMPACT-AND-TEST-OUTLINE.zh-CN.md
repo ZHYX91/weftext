@@ -50,11 +50,11 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 
 ### 1.1 R05 控制合同实施切片
 
-[CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 是 R05 的规范输入，不是实现草案。实现不得自行选择另一套授权、重放或账务语义。
+[CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 是 R05 的规范输入，不是非规范实现说明。实现不得自行选择另一套授权、重放或账务语义。
 
 - Workspace 自助控制由 proposed D6 Policy/2 `d10_control_self` 授权；Workspace 管理由原 `policy_admin`，Registry activation 另验 `registry_admin`。deployment trust/account/secret/pricing/grant 由 D10 DeploymentControlPolicy 管理，不得借 Workspace admin 或 issuer admin。
-- Workspace author-affecting mutation 继续使用原 D6 authority store、PreparedIntent、decision/receipt 与 author commit point。DeploymentControlDecision 只保存 host control outcome；host adapter 不得写作者 source。
-- `ControlPrepareBinding/1` 使用 `(scope incarnation, principal, requestId)` stable key 和完整 canonical intent bytes。恢复顺序固定为 current visibility/authority → same-key compare → saved decision replay → 只有尚无 decision 才核 current expected revision/eligibility。
+- 会影响作者提交的 Workspace 控制变更继续使用原 D6 authority store、`PreparedIntent`、决议/receipt 与作者提交点。`DeploymentControlDecision` 只保存部署控制结果；host adapter 不得写作者 source。
+- `ControlPrepareBinding/1` 使用 `(scope incarnation, principal, requestId)` 稳定键和完整规范意图字节。恢复顺序固定为：先验证当前可见性/权限，再比较同键完整输入，再重放已保存决议；只有尚无决议时才检查当前 expected revision 和执行资格。
 - configuration revision 与 usageRevision 分离；control ID/incarnation 永不复用。retire/archive 不能删掉 planned、unknown、uncertain、evidence 或 dedup 仍引用的记录。
 - `ResourceUseGrant/1` 的 cost/secret/egress/external-effect 四类分别实现；grant renew/revision 不清零 spent/held/attempt/use，换 grant 也不清除旧 reservation 和实际 account liability。
 - fixed S profile/2 的旧非 Field 集合必须由测试常量逐字固定；profile/3 才增加 `d10_control_self`。升级、replay、replacement、continue/failover 不能改既有 family profile。
@@ -392,11 +392,11 @@ TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 cap
 32. D3 词表正向映射：`adopt_*` 使用 `OriginBinding` / `origin_binding`；反向受控源码/API/schema/fixture/术语 registry 均不存在 `adoption_binding`，且 scanner 不允许豁免。
 33. self-service P 有 `d10_control_self`、真实窄 Field 权限和 deployment cost grant 时可创建有限 Automation；缺任一资格则拒绝，不能把 Field 权限当 deployment account manage；
 34. stable-key r5 成功/丢响应，随后 r6 更新，原 retry 重放 r5 saved result；same key different body/expected target 返回 `control_conflict`；
-35. grant renewal/revision/new grant 与旧 uncertain reservation，证明 spent/held/attempt/account liability 不清零；
-36. emergency stop 与 Run admission、D6 final commit、external send 三处完整竞争，并证明 stop 不阻断 settlement/authoritative abort/evidence cleanup；
+35. 授权续期、revision 更新或新 grant 与旧 `uncertain` reservation 并存时，证明已消费、已占用、attempt 次数和账户义务都不会清零；
+36. 紧急 stop 分别与 Run 准入、D6 最终提交和外部发送竞争，并证明 stop 不阻断合法 settlement、authoritative abort 和证据清理；
 37. profile/2 family 升级不获得 `d10_control_self`；profile/3 只作用 explicit issuer update 后新 family；
 38. per-Contribution dependency：connector unavailable 时同包 schema/template/pack 不受牵连；
-39. Calendar/Library/People/Organizations 的 D10 PackageId→module→schema mapping 与 D4 namespace owner/Facet 分型，第三方同名 anti-spoof；
+39. Calendar、Library、People、Organizations 的 D10 PackageId→module→schema 映射与 D4 namespace owner/Facet 保持类型分离，并验证第三方同名包不能冒充第一方 owner；
 40. design accepted 但 release/surface/policy/version/health 任一门不满足时仍返回真实 D1 unavailable reason。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。

@@ -54,7 +54,7 @@ Recommended implementation order:
 [CONTROL-CONTRACT](CONTROL-CONTRACT.md) is normative R05 input rather than an implementation sketch. Implementation may not choose a different authorization, replay, or accounting semantic.
 
 - Workspace self-control is authorized by proposed D6 Policy/2 `d10_control_self`; Workspace administration remains original `policy_admin`, with `registry_admin` additionally required for Registry activation. Deployment trust/account/secret/pricing/grant is owned by D10 DeploymentControlPolicy and cannot be inherited from Workspace admin or issuer admin.
-- Workspace author-affecting mutation continues through the original D6 authority store, PreparedIntent, decision/receipt, and author commit point. DeploymentControlDecision stores only host-control outcomes; the host adapter cannot write author source.
+- Workspace author-affecting mutation continues through the original D6 authority store, `PreparedIntent`, decision/receipt, and author commit point. `DeploymentControlDecision` stores only host-control outcomes; the host adapter cannot write author source.
 - `ControlPrepareBinding/1` uses stable `(scope incarnation, principal, requestId)` plus complete canonical intent bytes. Recovery order is current visibility/authority → same-key comparison → saved-decision replay → only an undecided operation checks current expected revision/eligibility.
 - Configuration revision and usageRevision are separate; control ID/incarnation is never reused. Retire/archive cannot delete records still pinned by planned, unknown, uncertain, evidence, or dedup state.
 - Implement all four `ResourceUseGrant/1` variants separately: cost, secret, egress, external-effect. Grant renewal/revision never clears spent/held/attempt/use, and replacing a grant never clears an old reservation or actual-account liability.
@@ -393,7 +393,7 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 32. D3 lexicon positive mapping: `adopt_*` uses `OriginBinding` / `origin_binding`; negative controlled source/API/schema/fixtures/terminology registry contain no `adoption_binding`, with no scanner exemption.
 33. a self-service P with `d10_control_self`, actual narrow Field authority, and a deployment cost grant creates a finite Automation; missing any qualification rejects and Field authority never becomes deployment-account administration;
 34. stable-key r5 succeeds/response is lost, r6 later updates, and original retry replays saved r5 result; same key with different body/expected target returns `control_conflict`;
-35. grant renewal/revision/new grant races an old uncertain reservation and proves spent/held/attempt/account liability never resets;
+35. grant renewal/revision/new grant races an old `uncertain` reservation and proves spent/held/attempt/account liability never resets;
 36. emergency stop races Run admission, D6 final commit, and external send, while settlement/authoritative abort/evidence cleanup remains possible after stop;
 37. profile/2 family does not gain `d10_control_self` on upgrade; profile/3 affects only new families after explicit issuer update;
 38. per-Contribution dependency: an unavailable connector does not disable same-package schema/template/pack;

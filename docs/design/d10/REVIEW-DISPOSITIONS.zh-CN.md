@@ -5,26 +5,17 @@ translation_status: source
 
 [English](REVIEW-DISPOSITIONS.md)
 
-# D10 分批独立审查问题处置
+# D10 独立审查问题处置
 
-revision: D10-r05-checkpoint-2026-09-28；状态：incomplete author checkpoint，等待继续完成 R05 和新固定候选全量独立联合终审。本文件记录前两批独立审查提出的问题、作者修改位置和仍待复核状态；它不是独立 reviewer 的关闭记录，也不是 Gate verdict。
+revision: D10-r05-unified-control-contract-2026-09-28；状态：author revision record，所有独立问题保持开放，等待 R05 固定后完整联合终审。
 
-## 1. 审查覆盖与 R05 检查点边界
+## 1. 审查覆盖边界
 
-旧固定候选仍为 C=`35fab950dabedfb92c9f12858701be8afe6faa74`，固定上游 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`。截至本检查点，总控给出的独立终审正式覆盖是：旧 C 候选 **16/16**、上游 **28/49**；正式开放问题为 **1P1 + 5P2**。RelationDag 的临时判断已经收回，本检查点不据此改名或新增处置。
+旧固定候选为 C=`35fab950dabedfb92c9f12858701be8afe6faa74`，当前固定输入为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`。独立终审对旧 C 的正式覆盖为候选 **16/16**、上游 **28/49**；正式账仍为 **1P1 + 5P2 开放**，D3 批次等待正式报告。RelationDag 的临时判断已收回，本文件不据此改名或新增处置。
 
-上述覆盖只属于旧固定 C，**不能**转记为 R05 检查点或后续候选已经独立读取、接受或关闭。R05 改变基础授权、事务、公开 wire、费用恢复、bootstrap/stop 和 package/module 映射，后续必须形成新的固定候选并做全量独立联合终审。
+这些覆盖、发现和阶段性结论只属于旧 C，不能转记为 R05 已读取、已接受或已关闭。R05 改变基础授权、控制事务、费用恢复、bootstrap/stop、公开 control wire 和 package/module 映射，固定后必须做新的全量独立联合终审。
 
-本轮由于传输中断，只保存已经生成且可完整读回的作者中间产物。已保存范围：
-
-- 新增双语 `CONTROL-CONTRACT`：closed control types、管理域、ResourceUseGrant、stable prepare/replay、host decision、费用 settlement、stop 线性化、Policy/2/profile/3、首版 capability 与 package/contribution 映射。
-- R05 双语 `CANDIDATE`：引用 CONTROL-CONTRACT，修订费用 uncertain、stop、首版 D6 error compatibility、管理/resource 边界和 package/contribution 语义。
-- R05 双语 `UPSTREAM-AMENDMENTS`：加入 `d10_control_self`、profile/2 固定旧集合、profile/3、`execution_stopped` 和严格 stop authoritative-abort 提案，同时保留原 D6/D7 standing-approval/planned-preview 与 D3 B10-01。
-- R05 双语 `TERMINOLOGY`：修正 Bundled Module 来源、费用状态，并增加 R05 control/capability/四模块映射。
-- R05 双语 `SCENARIO-DISPOSITIONS`：修 B05 U02 来源、B04 双语差异，并加入费用、stable replay、grant、stop、profile/availability、per-Contribution dependency 和四模块场景。
-- R05 双语 `IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE`：同步 CONTROL-CONTRACT、费用恢复、stop/capability 和 hostile/race corpus，完成门改为当前作者输入 49/49。
-
-**尚未完成的 R05 工作**：本文件的最终逐项处置仍需在后续统一修订中收敛；`TASK` / `START` 尚未同步为 R05；全部八对既有文件加新增 CONTROL-CONTRACT 的最终两语一致性/引用/类型检查尚未执行；尚未运行仓库文档检查或读取该检查点的新 CI；没有做任何产品实现测试。本检查点不是完整 R05，也不是 Gate verdict。
+以下各行只记录作者技术处置及落点；“作者已修订”不等于独立关闭。
 
 ## 2. 问题处置
 
@@ -43,12 +34,12 @@ revision: D10-r05-checkpoint-2026-09-28；状态：incomplete author checkpoint�
 | B11-02 | P2 | D10 Lexicon 只有概念表/部分 type，未满足 Intake §8.5.1 每概念 13 项可追踪映射 | TERMINOLOGY 新增逐概念结构化映射，覆盖现有全部 D10 受控概念并补 Pack、Bundled Module、Agent Session、Parent Extension Dependency；每项固定 stable ID、中英正式名、定义、owner、排除、wire/API/manifest/schema 状态、代码约定、CLI/UI+locale、简称、禁止/历史 alias、正反例、首次冻结/状态/迁移。另列 D1–D9 继承名称/collision，未公开 IPC/无 CLI 明确写无，不新增实现资源 | TERMINOLOGY §2、§4–§5、§13；IMPLEMENTATION terminology gates | 作者已修订；等待独立复核 |
 | B11-03 | P2 | Pack 父领域/extension-point 依赖、版本、disable/UI-hidden/surface lifecycle 未闭合；holiday 算法延期被错误当成通用生命周期答案 | 选择“D4 定义/历史保留、D10 contribution 激活、UI 可见性三轴分离”。domain Pack 必须声明 primary parent domain/extension point + version range；Activation 时 pin 准确 parent binding。missing/disabled/incompatible/unsupported_surface 分别产生唯一 inactive 结果并投影既有 D1 reason；UI hidden-only 不改 activation。已接受 D4 schema/history/raw source 保留，typed interpretation 只依 current Registry complete/unavailable；parent inactive 不得暗中运行 View/Action/rule/connector | CANDIDATE §6.1；TERMINOLOGY §4–§5/§13；SCENARIO U07/U19/P10–P15/D01；IMPLEMENTATION §3；UPSTREAM-AMENDMENTS Pack non-amendment note | 作者已修订；等待独立复核 |
 
-| B04-P1-01 | P1 | 关键控制操作缺少逐项授权、稳定幂等、恢复和资源 use/manage 合同 | R05 检查点已生成 CONTROL-CONTRACT 及配套 CANDIDATE/UPSTREAM/TERMINOLOGY/SCENARIO/IMPLEMENTATION 草案：区分 S/W/H，冻结 closed bodies、ResourceUseGrant、stable key、当前可见授权→saved replay→unseen revision 顺序、同域原子事务、stop、profile/3；TASK/START 与最终全对一致性检查尚未完成 | CONTROL-CONTRACT；CANDIDATE；UPSTREAM-AMENDMENTS；TERMINOLOGY；SCENARIO；IMPLEMENTATION | 作者中间修订已耐久保存；问题保持开放，等待继续完成和独立复核 |
-| B03-P2-01 | P2 | CostReservation 把 uncertain 称为终态但又允许未来账单恢复，缺恢复边/CAS/证据归属 | R05 检查点已把 uncertain 改为可恢复非终态，定义 CostSettlementDecision、final-bill/never-started evidence、CAS、防重和原子账户更新；最终同步/文档检查尚未完成 | CONTROL-CONTRACT §10；CANDIDATE §18；TERMINOLOGY；SCENARIO F30/F31；IMPLEMENTATION §9 | 作者中间修订已耐久保存；问题保持开放 |
-| B04-P2-01 | P2 | Bundled Module 冒称 D1 已有 module ID/code/locale，且模块/package/schema 映射未闭合 | R05 检查点已改为 D10 候选 package/product mapping，增加 Calendar/Library/People/Organizations PackageId→module→schema 与实际 D4 owner/Facet 分型；candidate code/locale 明确未实现 | CONTROL-CONTRACT §4–§5；TERMINOLOGY §14；SCENARIO P17 | 作者中间修订已耐久保存；问题保持开放 |
-| B04-P2-02 | P2 | D01 anniversary/birthday 两语漂移；F06 英文漏 response 边界 | R05 场景草案已统一 D01 为 birthday+anniversary+holiday，并把 F06 两语都固定为 durable intent→send→response 三边界 | SCENARIO D01/F06 | 作者中间修订已耐久保存；问题保持开放 |
-| B04-P2-03 | P2 | TASK / Implementation 当前完成门仍写 48/48 | Implementation 检查点已改为当前作者输入 49/49、历史 U 48/48 保留；TASK 尚未同步，因此本问题**尚未完整修复** | IMPLEMENTATION §16；TASK 待续 | 部分作者修订已耐久保存；问题保持开放 |
-| B05-P2-01 | P2 | U02 把 terminal occurrence/原 Run 恢复规则冒称 D1 §4.1/4.4 明文 | R05 场景草案已拆为“D1 直接产品端/共享 Core 边界”与“D10 Candidate §13/§20 + Implementation §6 派生恢复规则” | SCENARIO U02 | 作者中间修订已耐久保存；问题保持开放 |
+| B04-P1-01 | P1 | 关键控制操作缺少逐项授权、稳定幂等、恢复和资源 use/manage 合同 | R05 新增 CONTROL-CONTRACT：区分 Workspace self / Workspace admin / deployment admin，冻结七类 closed body、四类 ResourceUseGrant、stable key 与 canonical compare、当前可见授权→saved replay→尚无 decision 才核 current revision 的顺序、同域原子提交、ID/incarnation 防 ABA、secret staging、host decision、stop 线性化和 profile/3；Workspace author-affecting mutation 仍进入 D6 唯一 ledger | CONTROL-CONTRACT §1–§14；CANDIDATE；UPSTREAM-AMENDMENTS §3.5/§9；IMPLEMENTATION §1.1/§11.1 | 作者已修订；独立问题保持开放 |
+| B03-P2-01 | P2 | CostReservation 把 uncertain 称为终态但又允许未来账单恢复，缺恢复边/CAS/证据归属 | R05 将 uncertain 定义为可恢复非终态；同 attempt 的 final bill→settled(actual)，可靠 never-started proof→released，sent-zero 固定 settled(0)；CostSettlementDecision 使用 expected revision CAS，原子更新 reservation/grant/account/evidence/audit，同 decision replay 防双返额，证据不足保持完整占用 | CONTROL-CONTRACT §10；CANDIDATE §18；TERMINOLOGY；SCENARIO F30/F31；IMPLEMENTATION §9 | 作者已修订；独立问题保持开放 |
+| B04-P2-01 | P2 | Bundled Module 冒称 D1 已有 module ID/code/locale，且 module/package/schema 映射未闭合 | R05 明确 Bundled Module 是 D10 候选产品组织抽象，不冒称 D1 已有 runtime ID；冻结 Calendar/Library/People/Organizations 的唯一 D10 PackageId→module→schema 映射并引用实际 D4 namespace owner/FacetId，PackageId 与 D4 namespace 分型；candidate code/locale 明确未实现 | CONTROL-CONTRACT §4–§5；TERMINOLOGY §14.2；SCENARIO P17 | 作者已修订；独立问题保持开放 |
+| B04-P2-02 | P2 | D01 anniversary/birthday 双语漂移；F06 英文漏 response 边界 | R05 两语 D01 都保留 birthday、anniversary、holiday 三类具体规则算法；F06 两语都固定 durable intent→send→response 三个故障边界 | SCENARIO D01/F06 | 作者已修订；独立问题保持开放 |
+| B04-P2-03 | P2 | TASK / Implementation 当前完成门仍写 48/48 | R05 将当前作者完整输入统一为 S 的 49/49；TASK、START、Implementation 的当前完成门改为 49/49，旧 U 的 48/48 仅保留在历史阅读语境 | TASK；START；IMPLEMENTATION §16 | 作者已修订；独立问题保持开放 |
+| B05-P2-01 | P2 | U02 把 terminal occurrence/原 Run 恢复规则冒称 D1 §4.1/4.4 明文 | R05 U02 分开直接上游依据与 D10 派生依据：D1 §4.1/§4.4 只支持共享 Core/产品端边界；terminal occurrence 与原 Run 恢复明确归 Candidate §13/§20 + Implementation §6 | SCENARIO U02 | 作者已修订；独立问题保持开放 |
 
 ## 3. 保持不变的边界
 
@@ -75,4 +66,4 @@ D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上�
 - settled(0)、released、uncertain 是否互斥且恢复一致；
 - LeaseRunUse、occurrence claim、terminal outcome、trusted time 是否能阻止重启/重扫/启停造成次数重置或重复 Run。
 
-本文件不能把“作者已修改”写成“独立已关闭”。独立上游指定阅读现在为 49/49、未读 0；剩余工作是对当前 r04 作者修订做独立复核，而不是补旧 C 的输入阅读。只有独立 reviewer 重新裁决当前修订后，才能形成最终 D10 Gate 结论。
+本文件不能把“作者已修改”写成“独立已关闭”。独立终审仍在读取旧固定 C 的上游输入；R05 固定后必须作为新候选从零进行完整联合终审，只有新的独立 verdict 才能形成最终 D10 Gate 结论。

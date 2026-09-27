@@ -51,7 +51,7 @@ VersionRange requires minimum < maximumExclusive. There is no latest, wildcard, 
     | {kind:"deployment", storeIncarnation:Uuid}
 
 ControlRecordKind/1 is closed to:
-automation, lease, approval, planned_approval, external_approval, run, workspace_budget, activation, deployment_policy, trust, package, external_account, secret, grant, cost_account, pricing, reservation, external_effect, stop.
+The controlled record-kind set is `automation, lease, approval, planned_approval, external_approval, run, workspace_budget, activation, deployment_policy, trust, package, external_account, secret, grant, cost_account, pricing, reservation, external_effect, stop`.
 
     ControlRef<K>/1 = {
       storeIncarnation:Uuid,
@@ -76,6 +76,19 @@ Control IDs and incarnations are never reused. Retire, archive, revoke, close, o
     }
 
 CurrencyCode is exact three-character ASCII A-Z. D10 performs no implicit foreign-exchange conversion.
+
+Other primitive scalars reuse existing closed JSON semantics. `Token` is the non-empty opaque token from D6 §1; `Text` is a Unicode-scalar string; `Bytes` is a byte sequence bounded by the applicable entrypoint budget; `Boolean` accepts JSON true/false only; `Sha256` is `sha256:` plus 64 lowercase hex digits; `HostPrincipal` is a `Token` produced by trusted host authentication mapping and is never a request field. `Ed25519PublicKey` and `Ed25519Signature` appear only inside accepted package/trust adapters whose admitted profile fixes their encoding; an ordinary control caller cannot self-assert verification.
+
+Controlled ASCII-token grammar:
+
+```text
+LowerCamelAscii = [a-z][A-Za-z0-9]{0,62}
+LowerKebabAscii = [a-z][a-z0-9]*(?:-[a-z0-9]+)*
+CanonicalInteger = "-"? ("0" | [1-9][0-9]*)
+CanonicalDecimal = CanonicalInteger ("." [0-9]*[1-9])?
+```
+
+`LowerKebabAscii` is 1..63 bytes. `CanonicalInteger` and `CanonicalDecimal` must also satisfy the explicit bounds of the applicable ToolType. decimal forbids trailing zero, empty fractional part, exponent notation, and negative zero.
 
     ScheduleHorizon/1 = {
       start:D4.zoned_instant,
@@ -117,9 +130,26 @@ ToolValueProfile/1 is owned by the D10 Tool Adapter. It is not an alias for D7 T
       type:ToolType/1
     }
 
-maximumUtf8Bytes is 1..8388608; an object has at most 64 members; a union has 2..8 arms; list maximum is 1..4096 with minimum <= maximum; complete type depth is at most 16 and canonical type bytes at most 65536. Member names and arm tags are sorted by UTF-8 bytes and unique. integer/decimal use canonical base-10 strings; binary float, NaN, Infinity, and negative zero are forbidden.
+`maximumUtf8Bytes` is 1..8388608; an object has at most 64 `members`; a union has 2..8 `arms`; list `maximum` is 1..4096 with `minimum <= maximum`; complete type depth is at most 16 and canonical type bytes at most 65536. Member names and arm tags are sorted by UTF-8 bytes and unique. integer/decimal use canonical base-10 strings; binary float, NaN, Infinity, and negative zero are forbidden.
 
-ToolValue/1 corresponds one-to-one with ToolType: bool, text, int64/integer/decimal carry exact values; optional has only none or some; object allows only declared members; list has items; union has tag and value. Missing required members, extras, wrong arms, bounds violations, or budget overflow are invalid_request. ToolValue contains no EntityRef, Locator, SecretRef, file-path capability, ActionEvidence, plan/result token, open map, or executable value.
+ToolValue/1 exact wire is:
+
+```text
+ToolValue/1 =
+  {kind:"bool", value:Boolean}
+| {kind:"text", value:Text}
+| {kind:"int64", value:CanonicalInteger}
+| {kind:"integer", value:CanonicalInteger}
+| {kind:"decimal", value:CanonicalDecimal}
+| {kind:"optional", value:{kind:"none"} | {kind:"some", value:ToolValue/1}}
+| {kind:"object", members:[{name:LowerCamelAscii, value:ToolValue/1}]}
+| {kind:"list", items:[ToolValue/1]}
+| {kind:"union", tag:LowerKebabAscii, value:ToolValue/1}
+```
+
+ToolValue/1 matches the ToolType/1 bound at the call site recursively. object members are name-sorted and unique and contain only declared members; list length satisfies the bounds; union tag matches one declared arm. int64 also lies within signed 64-bit range.
+
+Missing required members, extras, wrong arms, bounds violations, or budget overflow are invalid_request. ToolValue contains no EntityRef, Locator, SecretRef, file-path capability, ActionEvidence, plan/result token, open map, or executable value.
 
 ## 4. Package, Contribution, and dependencies
 
@@ -150,7 +180,7 @@ PackageId/1 and D4 SemanticNamespaceId are distinct types even when their string
     }
 
 ContributionKind is closed to:
-module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization.
+The Contribution-kind closed set is `module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`.
 
 This set covers the Mandatory Intake-selected module, Profile/schema, View, Action, Template, Preset, Pack, Connector/Adapter, D9 import/export/conversion, and D10 tool/model/runtime contribution families. It does not claim that every kind is product-implemented.
 
@@ -176,10 +206,10 @@ This section is a new D10 candidate mapping. It does not claim that D1 already d
 
 | Product | PackageId | module contribution | schema contribution | D4 semantic owner / Facet | extension points |
 | --- | --- | --- | --- | --- | --- |
-| Calendar / 日历 | weftext.calendar | module | schema | calendar → first_party,weftext.calendar; calendar/period-note, calendar/range-note, calendar/event, semanticMajor=1 | calendar-system, holiday-schedule |
-| Library / 文献库 | weftext.library | module | schema | library → first_party,weftext.library; library/work, semanticMajor=1 | none |
-| People / 人物 | weftext.people | module | schema | people → first_party,weftext.people; people/person, semanticMajor=1 | none |
-| Organizations / 组织 | weftext.organizations | module | schema | organizations → first_party,weftext.organizations; organizations/organization, semanticMajor=1 | schema-pack |
+| Calendar / 日历 | `weftext.calendar` | `module` | `schema` | `calendar` → `first_party,weftext.calendar`; `calendar/period-note`, `calendar/range-note`, `calendar/event`, `semanticMajor=1` | `calendar-system`, `holiday-schedule` |
+| Library / 文献库 | `weftext.library` | `module` | `schema` | `library` → `first_party,weftext.library`; `library/work`, `semanticMajor=1` | `none` |
+| People / 人物 | `weftext.people` | `module` | `schema` | `people` → `first_party,weftext.people`; `people/person`, `semanticMajor=1` | `none` |
+| Organizations / 组织 | `weftext.organizations` | `module` | `schema` | `organizations` → `first_party,weftext.organizations`; `organizations/organization`, `semanticMajor=1` | `schema-pack` |
 
 Each module descriptor contains only the formal Chinese/English product names, the same-package schema-contribution reference, and the extension points above. A schema descriptor lists only exact SemanticNamespaceId, D4 namespace ownerId, and FacetId/semanticMajor; it does not copy FieldDefinition or FacetSchema bytes.
 
@@ -221,7 +251,7 @@ Initial H comes only from explicit trusted-local-host initialization or Server d
       state:"active" | "revoked" | "retired",
       grantee:{
         hostPrincipal:HostPrincipal,
-        workspacePrincipal:D6.PrincipalToken,
+        workspacePrincipal:Token,
         workspaceRef:D3.WorkspaceRef
       },
       contributions:[ContributionBinding/1],
@@ -238,6 +268,20 @@ Initial H comes only from explicit trusted-local-host initialization or Server d
       contractVersion:Version/1,
       descriptorDigest:Sha256
     }
+
+    ResourceUseGrantSpec/1 = {
+      grantee:{
+        hostPrincipal:HostPrincipal,
+        workspacePrincipal:Token,
+        workspaceRef:D3.WorkspaceRef
+      },
+      contributions:[ContributionBinding/1],
+      notBefore:D4.zoned_instant,
+      notAfter:D4.zoned_instant,
+      permission:ResourcePermission/1
+    }
+
+`ResourceUseGrantSpec/1` is the create/update input. `grantId`, both revisions, state, and usage are produced only by Core from the existing record and transaction result.
 
 ResourcePermission/1 has exactly four variants:
 
@@ -334,7 +378,7 @@ ControlBody/1 has exactly seven variants:
 6. deployment_put:
    target:Target<K>;
    value:DeploymentValue/1.
-   K is only deployment_policy|trust|package|external_account|secret|grant|cost_account|pricing and must match value.kind. H only.
+   K is only `deployment_policy|trust|package|external_account|secret|grant|cost_account|pricing`, must match `value.kind`, and is available only to H.
 
 7. cost_reconcile:
    reservation:Binding<reservation>;
@@ -372,8 +416,8 @@ All step/input/output/elapsed maxima are finite positive values. costs is sorted
       {kind:"once", at:D4.zoned_instant}
     | {kind:"recurrence",
        ownerNodeRef:D3.NodeRef,
-       recurrenceOccurrenceKey:D4.OccurrenceKey,
-       rangeOccurrenceKey:D4.OccurrenceKey,
+       recurrenceOccurrenceKey:D4.occurrenceKey,
+       rangeOccurrenceKey:D4.occurrenceKey,
        horizon:ScheduleHorizon/1,
        outputLimit:Counter}
 
@@ -400,7 +444,7 @@ readGrants may use only original D6 read/state-observation capabilities and neve
       costGrants:[Binding<grant>/1]
     }
 
-SingleFieldMemberRule/1 exactly carries C §14: D7 set_field_member, one owner/Field/unique Entry/member, scalar text|bool|int64|integer|decimal, value constraint any|enum|numeric_range, and the raw-no-op branch. It never expands to create/delete/Facet/native-table/bulk.
+`SingleFieldMemberRule/1` exactly carries C §14: action `set_field_member`; one member of the unique Entry under one owner/Field; value-type closed set `text|bool|int64|integer|decimal`; constraint closed set `any|enum|numeric_range`; and the raw-no-op branch. It never expands to create, delete, Facet, native-table, or bulk operations.
 
     ConsentSpec/1 =
       {kind:"planned",
@@ -437,7 +481,27 @@ A successful prepare returns:
                   prepareToken:Token}}
     }
 
-ControlPreview/1 is a complete bounded before/after/control-effect preview containing only currently authorized control metadata. It contains no secret bytes, hidden author values, or other users’ billing. Budget overflow rejects rather than truncates.
+    ControlPreview/1 = {
+      kind:"d10_control_preview",
+      wireVersion:1,
+      canonicalIntentBytes:Bytes,
+      affected:[{
+        ref:ControlRef<K>/1,
+        change:"create" | "update" | "enable" | "disable" |
+               "revoke" | "cancel" | "archive" | "retire" |
+               "disconnect" | "close" | "settle",
+        beforeRevision:Option<Counter>,
+        proposedAfterRevision:Option<Counter>
+      }],
+      resourceUses:[{
+        grant:Binding<grant>/1,
+        maximum:Option<Money/1>
+      }]
+    }
+
+affected is sorted/unique by ref canonical bytes; resourceUses is sorted/unique by grant ref. canonicalIntentBytes is the complete successfully closed-decoded D10-Control-Intent/1 byte sequence, so it carries the proposed control semantics already supplied by and visible to the caller. preview adds no secret bytes, hidden author value, or another user's billing.
+
+ControlPreview/1 contains only control metadata currently visible to the principal. Budget overflow rejects rather than truncates.
 
 Result query:
 
@@ -455,6 +519,36 @@ It returns the currently disclosable prepare/apply history and never re-executes
 The stable key is (scope incarnation, initiating principal, requestId). The client persists requestId before the first call and reuses it for transport retry.
 
 Core internally stores:
+
+    StableControlKey/1 = {
+      scope:Scope/1,
+      initiatingPrincipal:Token,
+      requestId:Uuid
+    }
+
+    PreparedCommitRequest/1 =
+      {kind:"workspace", request:D6.d6_commit_request}
+    | {kind:"deployment", request:{
+        kind:"d10_host_control_commit",
+        wireVersion:1,
+        scope:Scope/1,
+        requestId:Uuid,
+        prepareToken:Token
+      }}
+
+    ControlDependencies/1 = {
+      configBindings:[Binding<K>/1],
+      usageBindings:[{
+        ref:ControlRef<K>/1,
+        usageRevision:Counter
+      }],
+      authorityProof:Token,
+      authorizationGenerations:[Token],
+      stopRefs:[ControlRef<stop>/1],
+      sourceOrRegistryBindings:[Sha256]
+    }
+
+`ControlDependencies/1` is the complete internal dependency set Core derives from actual authorized reads and is never caller input. Arrays are sorted/unique by complete canonical bytes. sourceOrRegistryBindings stores binding digests owned by existing source/Registry contracts and creates no new author or Registry token.
 
     ControlPrepareBinding/1 = {
       key:StableControlKey/1,
@@ -478,7 +572,7 @@ The shared order is fixed:
 5. for same-key same-input with an authoritative saved decision, revalidate current disclosure authority for the original result/effect scope and then replay the saved result; current target revision does not invalidate historical success;
 6. only an undecided operation validates expected config/usage revisions, current authority, dependencies, time, and budget and constructs or resumes the original preparation;
 7. Workspace submission enters the original D6 transaction/ledger; Deployment submission enters the closed host-control transaction in the same store incarnation;
-8. atomically save effect, decision/receipt linkage, record/account deltas, dependency invalidation, evidence pins, and required audit link.
+8. atomically save effect, decision/receipt linkage, record/account deltas, dependency invalidation, evidence pins, and required audit linkage.
 
 If another valid operation changes an object r5→r6 after the original r5 operation committed but its response was lost, retry of the original request returns the saved r5 outcome after current disclosure authorization; it neither recreates the object nor incorrectly fails stale. Reading current state is a different authorized read. If the caller later loses result-disclosure authority, result query returns not_visible while the saved decision remains immutable.
 
@@ -517,6 +611,23 @@ Configuration revision and usageRevision are distinct. Checked increment at Coun
        fixedMicroUnits:Counter,
        meters:[PricingMeter/1],
        evidence:EvidenceTicket/1}
+
+    NamespaceClaim/1 = {
+      namespaceId:D4.SemanticNamespaceId,
+      ownerClass:"first_party" | "publisher",
+      ownerId:Token
+    }
+
+`NamespaceClaim/1` only binds a verified PublisherIdentity to an existing D4 semantic-namespace ownership claim. It creates no second namespace registry and cannot override `core`, `wf`, or another reserved owner.
+
+    PricingMeter/1 = {
+      meterId:LocalOperationId,
+      numerator:Counter,
+      denominator:Counter,
+      maxUnits:Counter
+    }
+
+`denominator` and `maxUnits` are positive and meterId is ASCII-sorted and unique within one pricing record. Maximum cost uses checked integer/rational arithmetic and never binary float.
 
 EvidenceTicket/1 is:
 
@@ -571,7 +682,22 @@ Only an atomically successful commit saves a decision. Preflight/authorization/C
 
 ## 10. Cost reservation and recoverable settlement
 
-CostReservation/1 binds at least reservationId, attemptId, account, grant, pricing, currency, upperBound, revision, and state. attemptId and reservationId are never reused.
+    CostReservation/1 = {
+      reservationId:Uuid,
+      attemptId:Uuid,
+      account:Binding<cost_account>/1,
+      grant:Binding<grant>/1,
+      pricing:Binding<pricing>/1,
+      currency:CurrencyCode,
+      upperBound:Money/1,
+      revision:Counter,
+      state:"reserved" | "uncertain" | "settled" | "released",
+      actual:Option<Money/1>
+    }
+
+`actual` is some only when state=settled and is none in every other state.
+
+`attemptId` and `reservationId` are never reused.
 
 State machine:
 
@@ -591,7 +717,7 @@ released is legal only when reliable never_started evidence proves that billable
       evidence:EvidenceTicket/1
     }
 
-settled requires actual=some. released requires actual=none and evidenceClass=never_started. final_bill requires settled. Wrong attempt/account/currency, non-final evidence, an aggregate bill that cannot be uniquely split, or insufficient continuity leaves uncertain with the complete bound and returns state_unavailable. Malformed accepted-adapter output follows the owner’s invalid-output contract and never guesses a result.
+`settled` requires `actual=some`. `released` requires `actual=none` and `evidenceClass=never_started`. `final_bill` can produce only settled. Wrong attempt/account/currency, non-final evidence, an aggregate bill that cannot be uniquely split, or insufficient continuity leaves uncertain with the complete bound and returns `state_unavailable`. Malformed accepted-adapter output follows its existing invalid-output contract and never guesses a result.
 
 Reconcile uses CAS on the expected reservation revision. Success atomically appends CostSettlementDecision, updates reservation state/revision, grant/account held/spent/available projections, and evidence/audit. Exact evidence/prior-revision/derived-decision replay does not return capacity twice; concurrent different decisions have at most one CAS winner. actual above upperBound follows the existing overcharge anomaly/freeze path and normal reconciliation never raises the ceiling.
 
@@ -641,7 +767,7 @@ Fixed-S Policy/1 decoder, existing Policy/2 capabilities, and all saved policy/d
 
 Under the amendment, fixed-S profile/2 “all non-Field capabilities” is frozen to the set present in S:
 
-workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state.
+The frozen set is `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`.
 
 profile/2 never automatically gains later d10_control_self.
 
@@ -679,7 +805,7 @@ At minimum verify:
 2. An r5 stable-key write committed but response was lost; another request changed the object to r6; retry returns saved r5 result after current disclosure authorization, without duplicate creation or false stale rejection.
 3. Same key with changed target/body/expected revision returns control_conflict; delete/recreate under the same display name never captures the old request.
 4. Grant renewal/revision does not clear spent/held/attempts; a replacement grant does not erase old reservation/account liability.
-5. reserve100, sent, crash→uncertain, final bill20→settled(20) returns only80; final bill0→settled(0); only never-started proof produces released.
+5. reserve 100, actually send, crash→`uncertain`; a same-attempt final bill of 20 produces `settled(20)` and returns only 80; a final bill of 0 produces `settled(0)`; only never-started proof produces `released`.
 6. Two reconcilers race one reservation: at most one CAS winner; response loss after commit replays without double return.
 7. Every ordering of stop versus Run admission, D6 final commit, and external send fence; settlement/authoritative abort/evidence cleanup still works after stop.
 8. A profile/2 family does not gain d10_control_self after software upgrade; explicit profile/3 affects only later families; existing Workspaces require explicit policy_admin grant.

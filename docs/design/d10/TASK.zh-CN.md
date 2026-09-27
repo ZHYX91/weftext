@@ -9,7 +9,7 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision r04。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision R05，作者修订已形成，等待新的固定候选全量独立联合终审。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
@@ -42,6 +42,7 @@ Desktop/CLI 可以承载同一个本地 Broker/control domain；Server 承载托
 - SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
 - UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
+- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
 - 本 TASK 中英文件
 - START 中英文件
 
@@ -57,7 +58,7 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 作者只修改 docs/design/d10/ 中必要设计材料和既有 PR 的标题/正文。不得修改输入快照、产品实现、brand、仓库权限或分支保护；不得合并、发行或开始 A2。
 
-作者完成条件是：48/48 输入覆盖真实；七对双语文档完整；必要 upstream amendment 明确未激活；diff 只在授权目录；实际文档检查/CI 已读取并如实报告；任何 pending/failure 不被写成 pass。
+作者完成条件是：当前输入覆盖 49/49 真实，旧 U 的 48/48 只保留为历史阅读记录；docs/design/d10/ 的 9 对双语文件完整同步；必要 upstream amendment 明确未激活；候选完整包含固定 S 的四个输入补充且其它快照逐字不变；实际文档检查/CI 已读取并如实报告；任何 pending/failure 不被写成 pass。
 
 ## 当前分批修订约束
 
@@ -78,6 +79,6 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
 
-独立审查已经对旧 C 完成 14/14 候选与 49/49 上游指定输入阅读，并给出 revise；这只建立旧 C verdict。当前 r04 必须重新独立核验全部 10 项作者处置，尤其 B11 场景来源、Lexicon 13项 mapping 与 Pack parent lifecycle。最终仍要求完整 accept/pass 判断、P0/P1=0、terminology pass、更简单完整替代比较、必要 amendment 充分性，以及 mandatory scenarios、依赖与证据闭合。
+独立终审仍以旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 为对象；当前正式覆盖为候选 16/16、上游 28/49，正式账仍为 1P1+5P2 开放，D3 批次等待正式报告。该覆盖和结论均不得转记为 R05 已读取、已接受或已关闭。R05 固定后必须从零做完整联合终审，最终仍要求完整 verdict、P0/P1=0、术语/场景/依赖/证据闭合以及必要 amendment 的充分性。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。

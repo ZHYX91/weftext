@@ -10,7 +10,7 @@ translation_status: synced
 
 Status: candidate revision r04, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
 
-Fixed upstream input commit: f205831c848729f7ddbc3ba0cf32b689459c0c98. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
+The integrated fixed-input baseline is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 inputs from U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the added D4 reference catalog. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
 ## 1. Reading coverage
 
@@ -118,6 +118,8 @@ The complete candidate in this directory is seven synchronized Chinese/English M
 - SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
 - UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
+- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
+- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
 - TASK.zh-CN.md / TASK.md
 - START.zh-CN.md / START.md
 
@@ -135,14 +137,10 @@ The D6/D7 Standing Approval amendment is not jointly accepted. Therefore, even w
 
 The candidate also does not claim implementation of OS sandbox, real MCP/model/connector services, credential storage, cost system, real Core amendment, or five-surface UI. Those evidence items remain pending in Implementation Impact.
 
-## 6. Independent-review coverage and current author revision
+## 6. Independent-final-review status
 
-The reviewed old candidate is fixed as C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`. Historically, the first two independent-review batches first completed C 14/14 and 8/48 upstream U inputs. That remains process history rather than current coverage.
+Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`. Formal coverage is 16/16 candidate files and 28/49 upstream inputs; the formal ledger remains 1 P1 + 5 P2 open, and the D3 batch awaits its formal report. The temporary RelationDag judgment was withdrawn and causes no rename here.
 
-Independent review later completed all original U 48/48 inputs plus the supplemental S D4 reference catalog 1/1. Therefore designated upstream reading for old C is now **49/49 with 0 unread**, and candidate-file reading is **14/14**. The independent verdict on old C is **revise**, with the complete issue set **3 P1 + 7 P2 = 10 items**.
+R05 materially revises authorization, transaction semantics, cost recovery, stop, bootstrap profile, public control wire, and package/module mapping. Therefore old-C reading coverage, finding results, and interim judgments do not transfer to R05. After R05 is fixed it requires a new complete joint final review as a new candidate.
 
-Author r02/r03 addressed the original six findings plus B10-01, and current r04 addresses B11-01, B11-02, and B11-03. Current r04 is an **author revision candidate** and has not received a new independent verdict. "Old C fully read" must never be represented as "r04 passed".
-
-REVIEW-DISPOSITIONS remains the author disposition ledger for all ten items, each with status "author revised; pending independent re-review". The new B11 changes focus on line-by-line scenario-source re-audit, complete per-concept Lexicon mapping required by Intake §8.5.1, and closure of Pack parent-domain/extension-point lifecycle.
-
-The next step is independent re-review of the current fixed r04 artifacts, not further old-C input reading. Upstream amendments remain inactive; do not merge, release, or start A2.
+Author self-checks, documentation CI, and finite models prove only their own artifacts. They establish neither product implementation/release/surface availability nor an independent Gate pass. D6/D7/D3 companion amendments remain inactive proposals; do not merge, release, activate, or start A2.

@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision r04. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision R05. The author revision is formed and awaits a new complete independent joint final review of a fixed candidate. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
@@ -43,6 +43,7 @@ The author stage maintains complete synchronized Chinese/English candidate mater
 - SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
 - UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
+- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
 - this TASK pair
 - the START pair
 
@@ -58,7 +59,7 @@ The same author conversation first completes planning, then writes the complete 
 
 The author modifies only necessary design material under docs/design/d10/ and the existing PR title/body. Do not modify input snapshots, product implementation, brand, repository permissions, or branch protection; do not merge, release, or start A2.
 
-Author completion means: actual 48/48 input coverage; seven complete bilingual document pairs; required upstream amendment clearly unactivated; diff restricted to the authorized directory; actual document checks/CI read and accurately reported; no pending/failure mislabeled as pass.
+Author completion means: current input coverage is accurately 49/49 while the old U 48/48 remains historical reading context; all nine bilingual files under docs/design/d10/ are synchronized; required upstream amendments remain explicitly inactive; the candidate includes the four fixed-S supplemental input files with every other snapshot byte-identical to S; actual document checks/CI are read and accurately reported; no pending/failure is mislabeled as pass.
 
 ## Current staged-revision constraints
 
@@ -79,6 +80,6 @@ These remain candidate amendments and do not change current upstream authority b
 
 After the complete candidate is fixed in a commit, hand it to a fresh independent Chat GPT-6 Pro for review from scratch. Author self-review is not an independent Gate.
 
-Independent review completed 14/14 candidate files and 49/49 designated upstream inputs for old C and returned revise; that establishes only the old-C verdict. Current r04 requires independent re-review of all ten author dispositions, especially B11 scenario sourcing, the 13-field Lexicon mapping, and Pack parent lifecycle. Final review still requires a complete accept/pass judgment, P0/P1=0, terminology pass, comparison with a simpler complete alternative, adequacy of required amendments, and closure of mandatory scenarios, dependencies, and evidence boundaries.
+Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`; formal coverage is currently 16/16 candidate files and 28/49 upstream inputs, with 1 P1 + 5 P2 formally open and the D3 batch awaiting its formal report. None of that coverage or verdict transfers to R05 as read, accepted, or closed. Once R05 is fixed it requires a fresh complete joint final review, still requiring a complete verdict, P0/P1=0, and closure of terminology, scenarios, dependencies, evidence, and required amendments.
 
 Finite simulations, models, or CI do not establish product support. Real Core, durable fault, OS sandbox, real protocol-provider, UI/device, and release evidence remain separated by the Implementation Impact document, with unfinished items explicitly pending.
