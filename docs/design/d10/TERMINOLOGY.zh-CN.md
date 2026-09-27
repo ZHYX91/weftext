@@ -17,7 +17,7 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate。本词表只定义
 - 裸 “Provider” 易与 D9 Conversion Provider 冲突；D10 必须写成 Model Provider、External Service、Connector Provider 或直接写 Contribution/Adapter。
 - “Registry”在 D10 正文默认指 D4 semantic Registry；D10 自身使用 Capability Catalog，不另建“plugin registry”。
 - “approval”“authorization”“delegation”“confirmation”分域：D6 Policy 是工作区授权；Delegation Lease 只能减权；Standing Approval 是有限预授权；D8 confirmation 是当前完整预览的人机确认。
-- “source”必须加限定：author source、external input、tool result、provider state、package asset 或 source binding。Provider state 不是 author source。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
+- “source”必须加限定：author source、external input、tool result、provider state、package asset 或 source binding。Provider state 不是 author source。
 
 ## 2. D10 新概念
 
@@ -29,9 +29,11 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate。本词表只定义
 | weftext.term.activation-binding | 激活绑定 / Activation Binding | D10 | 将 current D4 RegistryBinding、Capability Catalog digest 与 trust revision 固定为一个受管代际的记录 | 不是 D4 semantic generation 的替代 |
 | weftext.term.publisher-identity | 发布者身份 / Publisher Identity | D10 | 由接纳 trust root 证明的 package 签名主体 | 不是 namespace ownership 本身 |
 | weftext.term.namespace-claim | 命名空间所有权声明 / Namespace Claim | D10→D4 proof | 把 publisher identity 与一个允许的 D4 publisher namespace 绑定的受管声明 | 安装顺序、display name、enablement 均不是 claim |
-| weftext.term.delegation-lease | 委托租约 / Delegation Lease | D10 | 对当前 D6 principal 权限作进一步有限收窄的任务/运行授权边界 | 不增加 D6 capability，不可多级转授 |
+| weftext.term.delegation-lease | 委托租约 / Delegation Lease | D10 | 对当前 D6 principal 权限作进一步有限收窄的任务/运行授权边界，含有限 maxRuns | 不增加 D6 capability，不可多级转授 |
+| weftext.term.lease-run-use | 运行准入消费 / Lease Run Use | D10 | 某 Run 第一次获准进入受保护执行时对同一 leaseId 谱系消费一次 maxRuns 的耐久防重事实 | queued claim 不是消费；失败、取消、崩溃后不退款 |
 | weftext.term.standing-approval | 持续批准 / Standing Approval | D10 | 对有限、可机械判定的未来操作集合给予有期限/次数/预算上限的批准 | 不是永久同意、自然语言目标或 D6 Policy |
-| weftext.term.approval-use | 批准使用记录 / Approval Use | D10 + proposed D6 amendment | 把一份已准备请求、完整预览、实际 footprint 与一个批准的单次消费/预留绑定 | 不是 author plan、receipt 或第三 ledger |
+| weftext.term.approval-use | 批准使用记录 / Approval Use | D10 + proposed D6 amendment | 把一份已准备请求、完整预览、实际 footprint 与一个批准的单次消费或预留绑定；count 状态可为 unreserved、reserved、consumed、released_terminal | 不是 author plan、receipt 或第三 ledger |
+| weftext.term.planned-decision-approval | 已计划决议交互批准 / Planned Decision Approval | D10 + proposed D7/D6 amendment | 用户在新的受保护 recovery preview 中完整查阅原 planned 语义后，对 exact 原 request 给出有限一次性交互授权 | 不重新 prepare、不换 OperationId、不复活已冲突 plan |
 | weftext.term.automation-definition | 自动化定义 / Automation Definition | D10 | 一个受管、版本化的单 invocation 调度定义 | 不是通用 workflow DAG 或作者 Document |
 | weftext.term.automation-occurrence | 自动化发生项 / Automation Occurrence | D10 | 由 definition revision 与源 occurrence 机械产生的一次调度机会 | 不等于作者 recurrence occurrence identity |
 | weftext.term.run | 运行 / Run | D10 | Agent 或 Automation 的受管执行记录及 step outcomes | Run completed 不等于 author committed |
@@ -55,8 +57,10 @@ revision: D10-r01-candidate-2026-09-25；状态：candidate。本词表只定义
 
 - `ActivationBinding/1`
 - `DelegationLease/1`
+- `LeaseRunUse/1`
 - `StandingApprovalEnvelope/1`
 - `ApprovalUse/1`
+- `PlannedDecisionApproval/1`
 - `ToolValueProfile/1`
 - `InputSlot`
 - `AutomationOccurrenceKey/1`
@@ -118,7 +122,7 @@ EntityRef、NodeRef、ResourceRef、AnnotationRef、Locator 与 OperationId 均�
 
 RunId、AutomationId、ApprovalId、ExternalEffectId、AuditEventId、tool call ID、package ID、provider account ID 都是控制/外部身份，不能进入 EntityRef。
 
-author source 是 D2/D3/D6 认可的作者 payload；external input、ContextBundle、tool result、model output、package asset、transcript、connector cache 与 provider response 都不是 author source。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
+author source 是 D2/D3/D6 认可的作者 payload；external input、ContextBundle、tool result、model output、package asset、transcript、connector cache 与 provider response 都不是 author source。
 
 D3 Provenance 只是来源证据，不授予 authority。D10 package/provider origin 同样不能转化为写权限。SourceBinding/OriginBinding 是 D3 绑定语义；Connector 自己的 cursor/etag 不得借名“binding”后绕过它们。
 
@@ -126,16 +130,19 @@ D3 Provenance 只是来源证据，不授予 authority。D10 package/provider or
 
 **authorization**：当前 D6 Policy、ObservationScope、authority/cut 与适用上游权限门共同给出的当前工作区资格。
 
-**delegation**：Delegation Lease 对当前 authorization 的进一步收窄；它不是授权来源。
+**delegation**：Delegation Lease 对当前 authorization 的进一步收窄；它不是授权来源。maxRuns 是同一 leaseId 谱系允许进入受保护执行的 Run 总次数，不按 leaseRevision、重启或 scheduler cache 重建清零。
+
+**Lease Run Use**：Run 在第一次受保护步骤前通过原子准入 CAS 时写入的耐久消费事实。同一个 Run 恢复复用原记录；准入后即使失败或取消也不返还次数。
 
 **interactive confirmation**：当前完整 preview 后由用户明确确认原 request；D8/D7 保持默认路径。
 
-**Standing Approval**：仅对候选规定的机械 envelope 预先允许未来相同类型操作，并仍需 fresh prepare/preview/current authorization。
+**Standing Approval**：仅对候选规定的机械 envelope 预先允许未来相同类型操作，并仍需 fresh prepare、preview 与 current authorization。
 
-**ApprovalUse**：一份已准备 request 实际消费 Standing Approval 的受管绑定；不能由客户端自报。
+**ApprovalUse**：一份已准备 request 实际消费 Standing Approval 的受管绑定；不能由客户端自报。其次数 reservation 在 D6 planned 时才成为 reserved，commit 后 consumed，只有 authoritative terminal_failed 才能原子转为 released_terminal。
 
-**approval-required**：D10 控制层判断不能机械消费 Standing Approval、必须进入交互确认的状态；不能替代原 D6/D7 semantic errors。
+**Planned Decision Approval**：原 D6 decision 已经 planned、旧 preview transport 已过期或 Standing Approval 不再可用时，用户通过新的只读 planned-preview recovery epoch 完整查阅原保存语义后，对 exact 原 request 给出的有限一次性交互授权。它不改变 request、OperationId、PreparedActionBinding 或 target，也不能使已经发生确定 dependency conflict 的 plan 复活。
 
+**approval-required / approval-expired**：只属于进入正式 D6 请求之前的 D10 控制结果。若 D10 自动路径已经进入 D6 后 approval 发生竞争失效，配套修订使用 D6 approval_unavailable/preflight，不能再伪装成 D10 前置错误。
 ## 9. Secret、context、egress 与 external effect
 
 Secret Reference 只指 secret store 中的 credential；secret bytes 不进入 ToolValue、ContextBundle 或普通日志。
@@ -146,7 +153,7 @@ egress 指数据离开当前受信 Core/host boundary 到具名 model/tool/conne
 
 external side effect 指改变外部系统状态的请求。读取外部数据和写外部数据使用不同 effect class；“read-only tool”只在 Weftext 本地接纳 contract 下成立，不能信任远端 self-annotation。
 
-External Outcome Unknown 表示已无法证明 external request 的结果；不能称 timeout、failure 或 cancellation。
+External Outcome Unknown 表示已无法证明 external request 的结果；不能称 timeout、failure 或 cancellation。费用 released 只表示能证明收费执行从未开始；已经发送但可靠账单为零属于 settled(0)。
 
 ## 10. Audit、transcript、log 与 evidence
 

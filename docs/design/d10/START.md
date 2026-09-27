@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate complete for independent review, not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
+Status: candidate revision r02, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
 
 Fixed upstream input commit: f205831c848729f7ddbc3ba0cf32b689459c0c98. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
@@ -119,6 +119,10 @@ The complete candidate in this directory is seven synchronized Chinese/English M
 - TASK.zh-CN.md / TASK.md
 - START.zh-CN.md / START.md
 
+A supplementary re-review record is also maintained:
+
+- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
+
 CANDIDATE is the self-contained main specification; TERMINOLOGY closes naming collisions; SCENARIO-DISPOSITIONS adjudicates mandatory/task/race scenarios item by item; Implementation Impact layers future evidence; UPSTREAM-AMENDMENTS provides exact D6/D7 companion text; TASK defines the current author-to-independent-review process; START records actual input coverage.
 
 ## 5. Current design selection and still-unactivated parts
@@ -129,15 +133,20 @@ The D6/D7 Standing Approval amendment is not jointly accepted. Therefore, even w
 
 The candidate also does not claim implementation of OS sandbox, real MCP/model/connector services, credential storage, cost system, real Core amendment, or five-surface UI. Those evidence items remain pending in Implementation Impact.
 
-## 6. Handoff to independent review
+## 6. Staged independent review and this author revision
 
-The next step is not another author batch. A fresh independent Chat GPT-6 Pro should review from scratch using the fixed upstream and the actual candidate artifacts. The independent reviewer should completely read the seven D10 document pairs and necessary upstream text and especially attack:
+The first two independent-review batches completely read all 14 D10 files in reviewed candidate C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e`, plus eight fixed-upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` documents: D1 main/impact, D6 main/Control, and D7 Execution/Narrow Field/Prepared Binding/Preview Effects. The other 40 upstream inputs still await independent review.
 
-1. whether Option D is actually simpler and complete relative to A/B/C;
-2. whether the D6/D7 amendment is necessary and sufficient without a third ledger/commit path;
-3. closure of exact-one Entry, footprint, count reservation, revocation, and recovery in standing approval;
-4. consistency of Registry/Catalog activation, publisher trust, and the cumulative D4 ledger;
-5. closure of prompt injection, MCP, secret/egress, external outcome unknown, cost uncertain, audit failure, and cancel/planned races;
-6. mandatory scenarios, D1-D9 ownership, Mobile negative boundary, and terminology without regression.
+The author's prior 48/48 input reading remains author-source coverage only and cannot substitute for independent upstream coverage. This revision responds to B1-01 through B1-05 and B2-01 from the first two batches. REVIEW-DISPOSITIONS records each author response. Every item remains "author revised, pending independent re-review" and must not be described as independently closed.
 
-Before independent review, neither candidate status, green documentation CI, nor author self-review may be described as Gate pass. Do not merge, release, or start A2.
+This revision focuses on:
+
+1. one proposed D6 `approval_unavailable/preflight` result for an approval race after D6 entry, separated from D10 pre-submit approval errors;
+2. read-only recovery delivery of the original preview for a planned decision, without extending old tokens or re-preparing;
+3. atomic release of approval-count reservation only with authoritative terminal_failed, never ordinary cancellation/TTL/temporary loss of authority;
+4. a raw-no-op branch with empty MutationFootprint/field_change/sourceVersions;
+5. cost released only when billable execution never began, while an actually sent zero bill is `settled(0)`;
+6. DelegationLease `maxRuns` consumed at first protected execution, never refunded after later failure/cancellation, never double-consumed on same-Run recovery, with terminal-occurrence and trusted-time deduplication/expiry semantics.
+
+The next step remains continued independent review and targeted re-review, not an author-declared Gate pass. Proposed upstream amendments remain inactive until accepted, and A2 must not start.
+

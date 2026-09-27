@@ -122,12 +122,32 @@ DelegationLease/1 {
 }
 ```
 
-The first generation permits only one delegation layer from a user/administrator to a named Automation or Run; Agents, tools, and connectors cannot redelegate authority to another principal. Child steps remain part of the same Run and share the original Lease and budget restrictions.
+The first generation permits only one delegation layer from a user or administrator to a named Automation or Run; Agents, tools, and connectors cannot redelegate authority to another principal. Child steps remain part of the same Run and share the original Lease and budget restrictions.
 
 Effective eligibility is D1 capability ∩ current D6 Policy/ObservationScope ∩ DelegationLease ∩ contribution deployment policy ∩ egress grant ∩ secret-use grant ∩ external-effect approval ∩ current ActivationBinding ∩ budgets. Failure in one dimension cannot be compensated by another.
 
-Lease readScope cannot invent D6 Field ref-set permissions that D6 does not provide. Core first obtains a legal read/write scope under D6, and D10 then narrows it using exact owner/Field/context constraints. Expiry, revocation, or generation change prevents new protected steps; already committed author decisions and externally linearized sends are not retroactively rolled back.
+Lease readScope cannot invent D6 Field ref-set permissions that D6 does not provide. Core first obtains a legal read/write scope under D6, and D10 then narrows it using exact owner, Field, and context constraints. Expiry, revocation, or generation change prevents new protected steps; already committed author decisions and externally linearized sends are not retroactively rolled back.
 
+`maxRuns` is the finite positive Counter limit on Runs that may enter protected execution over the full lineage of one `leaseId`. Changing `leaseRevision` never resets prior consumption. An authorized successor revision may raise the limit but cannot lower it below already consumed uses; revocation uses a separate revoked state. Creating a queued Run, establishing an occurrence claim, performing scheduler-only bookkeeping, or cancelling before the first protected step consumes no `maxRuns` use.
+
+Immediately before the first protected step is permitted, a Core-managed Run-admission CAS validates the exact current `leaseId/leaseRevision`, proves trusted current time lies within `notBefore..notAfter`, validates current ActivationBinding and Run/occurrence binding, validates all admission budgets, and proves cumulative consumption for the `leaseId` lineage is below `maxRuns`. The winning CAS durably creates:
+
+```text
+LeaseRunUse/1 {
+  leaseId,
+  leaseRevision,
+  runId,
+  automationId,
+  definitionRevision,
+  occurrenceKey,
+  admissionClockEpoch,
+  admittedAt
+}
+```
+
+The record and cumulative consumption are stored in the same managed control transaction. It is a Run-admission deduplication fact, not an author ledger. The successful CAS is the `maxRuns` consumption linearization point: later model or tool failure, user cancellation, a failed or cancelled Run, or process crash never refunds it. Restart of the same Run restores the original `LeaseRunUse/1` and does not consume again. Exhaustion returns D10 `delegation_exhausted` before entering D6/D7 or external transport.
+
+Trusted-time eligibility of the Lease is rechecked before every new protected step and before final author or external submission. Lease expiry does not depend on a cleanup task having run: once trusted current time is after `notAfter`, a new step returns `delegation_expired`. If the clock epoch or time continuity cannot be proven, return `state_unavailable` and pause rather than assuming no time elapsed. Once trusted time is re-established, adjudicate using actual current time. Already completed author commits, external effects, costs, and `LeaseRunUse/1` history are never rolled back.
 ## 9. Context, egress, and prompt injection
 
 An Agent has no ambient workspace. Each context request explicitly selects workspace, typed sources, maximum scope, purpose, target model/tool recipient, and budget. Core/Server constructs an immutable ContextBundle under current authorization, binding exact source versions/result epoch/authorization generation and the actual selected bytes; context selection follows least necessary access and data minimization.
@@ -181,13 +201,16 @@ AutomationOccurrenceKey/1 =
   (automationId, definitionRevision, sourceOccurrenceKey)
 ```
 
-One key has at most one active Run claim. Enable/disable changes control revision but not definitionRevision, so repeated enabling cannot duplicate execution. A semantic change to invocation, schedule, Lease, approval, or budget produces a new definitionRevision and takes over only occurrences after an explicit activation point.
+One key maps to at most one Run identity and one durable claim, including after terminal state: restart, schedule rescan, disable→enable, and scheduler-cache rebuild cannot create a second Run. Enable/disable changes control revision but not definitionRevision and does not delete claim or terminal proof. A semantic change to invocation, schedule, Lease, approval, or budget produces a new definitionRevision and takes over only occurrences after an explicit activation point.
 
-Before each occurrence begins, current capability, Lease, D6 authorization, ActivationBinding, secret generation, and budget are revalidated. Once a D3/D6 request has been produced, restart resumes only the original Run/original request and never resamples targets or creates a new OperationId.
+Terminal occurrence history may be compacted only into durable proof that the key already produced its original Run and terminal outcome. While a definition revision can still be rescanned or recovered, ordinary GC may not turn "already executed" back into "never seen". Recovery of the original claim always returns the original Run identity and outcome.
 
+An occurrence claim may exist before Run admission, so a queued or blocked Run that has never entered protected execution consumes no Lease `maxRuns`. Only the §8 Run-admission CAS immediately before the first protected step creates `LeaseRunUse/1`. If `maxRuns` is exhausted, the occurrence keeps its existing claim/Run, enters blocked, and returns `delegation_exhausted`; creating another Run for the same occurrence cannot bypass the limit.
+
+Before occurrence start and every new protected step, revalidate current capability, exact Lease revision, trusted time, D6 authorization, ActivationBinding, secret generation, and budget. Once a D3/D6 request has been produced, restart resumes only the original Run and original request and never resamples a target or creates a new OperationId. A paused Run may naturally outlive its Lease even when scheduler cleanup never ran; once trusted time advances beyond expiry, new context, model, tool, external steps and final author submission are blocked. Loss of clock continuity fails closed as `state_unavailable`; once trusted time is restored, determine expired or active from actual current time.
 ## 14. Standing Approval
 
-Standing Approval does not mean an Agent may modify arbitrary future content. First-generation unattended author submission supports one narrow profile of the existing D7 set_field_member action: one existing Node, one Field, exactly one Entry in the current complete Field, and one existing scalar member.
+Standing Approval does not mean an Agent may modify arbitrary future content. First-generation unattended author submission supports one narrow profile of the existing D7 `set_field_member` action: one existing Node, one Field, exactly one Entry in the current complete Field, and one existing scalar member.
 
 ```text
 StandingApprovalEnvelope/1 {
@@ -217,13 +240,17 @@ StandingApprovalEnvelope/1 {
 
 memberPath is a static object-member path with no list index, wildcard, or dynamic FieldId. memberType is restricted to bool, exact text, int64, integer, decimal, and semantic_code. valueConstraint is either a finite set of at most 64 complete TypedLiteral values, an exact same-type numeric closed interval, or exact text with a UTF-8 byte limit and no CR/LF. All D4 nonEmpty, code-scope, schema/cardinality, and constraint rules still apply separately.
 
-Mechanical approval requires every condition: current D1/D6/D10 authorization; matching approval/automation/definition/delegation/activation binding; fresh current source revision; exactly one Entry in the complete Field; successful D7 Narrow Field Qualification; exact owner/field/member/type; new value within the frozen constraint; actual mutation footprint changes only that member while occurrenceKey, other members, qualifiers, note, provenance, other Entries, body, Facets, Refs, relations, identity, placement, and control remain unchanged; complete owner_fields preview exists and is retrievable; audit and approval-count/cost reservations succeed.
+Common mechanical prerequisites are: current D1/D6/D10 authorization; exact approval/automation/definition/delegation/activation bindings; a fresh current source revision; exactly one Entry in the complete Field; successful D7 Narrow Field Qualification; exact owner, Field, member, and type; new value inside the frozen constraint; a complete retrievable owner_fields preview; and ability to establish audit and approval-count/cost reservations.
 
-Failure cannot choose the first Entry, widen to a whole Entry/source, degrade to append/remove, or select another same-named target. It can only transition to awaiting_confirmation, blocked, or failure.
+There are exactly two legal actual-effect branches:
 
-## 15. Fresh prepare, ApprovalUse, and D6/D7/D8
+1. **One real member change:** the complete proposed source differs from before and actual MutationFootprint contains exactly the selected existing scalar-member change; occurrenceKey, other members, qualifiers, note, provenance, other Entries, body, Facets, Refs, relations, identity, placement, and control remain unchanged. The public owner_fields preview contains the complete Field before/after `field_change` under the original D7 contract.
+2. **Byte-exact raw no-op:** the original `set_field_member` still resolves exactly to the same unique Entry and existing member, the current typed member value already equals the requested value, and the complete proposed source produced by the original adapter is byte-for-byte equal to the before source. MutationFootprint is empty, preview contains no `field_change`, and final D6 receipt has empty `sourceVersions`; standing approval never invents a member footprint, Field effect, or revision. Target existence, type, valueConstraint, current authorization, dependencies, and Narrow Field Qualification are still fully validated.
 
-Every automated author mutation still performs: fresh current Field selection → original D7 ActionSpec → original d7_action_prepare → complete D7 EffectManifest/bytes → Core mechanically matches StandingApprovalEnvelope → create ApprovalUse → original D6 request.
+Anything outside these two branches cannot automatically choose first, widen to a whole Entry/source, degrade to append/remove, or select another same-named target; it can only transition to awaiting_confirmation, blocked, or failure. If the original D6 rules commit a raw no-op decision, it still consumes one `maxSuccessfulCommits` use; replay of the same saved decision does not consume again.
+## 15. Fresh prepare, approval consumption, and planned recovery
+
+Every automated author mutation still performs: fresh current Field selection → original D7 ActionSpec → original `d7_action_prepare` → complete D7 EffectManifest/bytes → Core mechanically matches StandingApprovalEnvelope → create ApprovalUse → original D6 request.
 
 ```text
 ApprovalUse/1 {
@@ -243,16 +270,74 @@ ApprovalUse/1 {
 }
 ```
 
-ApprovalUse is managed authorization evidence, not an author plan, and adds no member to ActionSpec, PreparedActionBinding/2, or d6_commit_request. A client cannot submit approved=true. Core creates it independently from the saved prepared record, preview, and footprint.
+ApprovalUse is managed authorization evidence, not an author plan, and adds no member to ActionSpec, PreparedActionBinding/2, or `d6_commit_request`. A client cannot submit approved=true. Core creates it independently from the saved prepared record, preview, and footprint. Its approval-count state is only `unreserved → reserved → consumed | released_terminal`; historical state is never deleted or rolled back.
 
-Existing upstream text is insufficient to freeze unattended confirmation: current D7 describes user confirmation after preview, while D6 has no StandingApproval/ApprovalUse atomic-consumption and counting contract. This candidate therefore carries a coordinated D6/D7 amendment proposal; until it is jointly accepted, unattended author commit remains unavailable and Automation may only prepare a proposal for interactive confirmation.
+Existing upstream text is insufficient to freeze unattended confirmation, so UPSTREAM-AMENDMENTS proposes a coordinated D6/D7 amendment. Until it is jointly accepted, unattended author commit remains unavailable and Automation may only prepare a proposal for interactive confirmation.
 
-The coordinated amendment requires D6 planning CAS to validate and reserve approval use/count/budgets, and final author commit to revalidate current authorization and the original ApprovalUse while publishing author effects, the original receipt, consumed approval count, and required audit link in one transaction. A committed raw no-op still consumes one successful commit. Same-request replay does not consume again.
+### 15.1 Pre-D6 D10 denial versus in-D6 race failure
 
-If a planned decision loses sufficient approval, it remains planned/blocked and cannot silently switch to a renewed envelope. A user may explicitly authorize the exact original plan once and attach new authorization evidence for recovery, without modifying request, OperationId, source plan, or PreparedActionBinding. A deterministic business dependency conflict cannot be revived by new approval.
+Before a formal `d6_commit_request` is sent, the D10 adapter may return D10 `approval_required`, `approval_expired`, `delegation_expired`, or `delegation_exhausted` from control state the caller is already allowed to observe. These are pre-submit control outcomes and do not prove a later race is impossible.
 
-D8 interactive editing is not loosened. Automation does not forge EditSession, draftSerial, IME, or user clicks. Agent output requiring D8 document/annotation edit still enters D8 Draft/preview/explicit confirmation. A background commit to the same owner only drives a dirty Draft through existing stale/conflict handling and never overwrites the Draft.
+Once the unattended D10 path has associated ApprovalUse as an internal dependency of the original planToken and entered D6, an approval-eligibility race belongs to the D6 owner. The companion amendment adds exactly one `d6_error.code`: `approval_unavailable`, always with disposition `preflight`. It is reachable only after original D6 current authorization/ObservationScope and applicable business visibility have passed and the associated standing or supplemental approval can no longer be consumed before planning CAS or planned recovery submission. Original D6 permission failure remains `not_visible`; business dependency/semantic/budget failures keep their original D6 codes and cannot be masked by `approval_unavailable`.
 
+For an unseen request, `approval_unavailable/preflight` writes no author ledger, no recorded rejection, and no planned decision. The caller may retry while the original preparation remains valid under newly valid approval, or return to an interactive path. For an already planned request, the same error leaves the ledger planned and preserves the original plan, pins, and reservations; it cannot be written as `semantic_rejected` or `terminal_failed`. The D10 adapter does not wrap this D6 error in a D10 approval code. If UI needs to distinguish exhausted, revoked, or expired approval, it performs a separately authorized D10 control read.
+
+This is a necessary extension of the D6 closed error set. Existing D6 request/receipt/error object shapes remain unchanged, but a consumer selecting this coordinated capability must support the added enum value. Existing capability profiles never emit this code, and an unnegotiated old consumer may not be exposed to this branch.
+
+### 15.2 Re-inspecting the original preview after planned
+
+PreparedActionBinding/2, semantic preview, and recovery pins survive with a planned decision under the original ledger-recovery lifetime, while the original preview token may expire independently. Existing `d7_effects_resolve/open` is committed-only. The D7 transport companion therefore needs a read-only planned-preview recovery entrypoint rather than extending an old token or re-preparing:
+
+```text
+d7_planned_preview_open {
+  wireVersion: 1,
+  kind: "d7_planned_preview_open",
+  protocolOwner: "D6",
+  request: <original d6_commit_request>
+}
+
+d7_planned_preview_opened {
+  wireVersion: 1,
+  kind: "d7_planned_preview_opened",
+  request,
+  previewToken,
+  previewCursorToken,
+  previewManifest
+}
+```
+
+Processing order is fixed: closed decode → current authenticated audience and protected minimal locator mapping → original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility → authority/custody/ledger continuity → byte-equal request at the same key with state exactly planned → complete original PreparedActionBinding/2, semantic preview, and all pins → create a new finite recovery delivery epoch.
+
+The new `previewToken` remains in the action_preview transport family but binds only the immutable preview semantics and original pins saved by the planned decision. It never reruns Query, reparses a drifted definition, reselects a target, regenerates proposed source, or changes the request. It has an independent finite delivery lifetime and neither extends nor revives the old previewToken/cursor. Page and EffectBytes reads continue to use the original D7 transport; expiration of this recovery epoch returns the preview transport's `preview_expired`. A non-planned state, request mismatch, or unprovable pins/continuity follows existing `d7_effects_error` `effects_unavailable` or an earlier original authorization error. `d7_effects_resolve/open` remains committed-only.
+
+Only after manifest, all pages, and required EffectBytes have been completely consumed under one recovery epoch may UI create new interactive authorization:
+
+```text
+PlannedDecisionApproval/1 {
+  approvalId,
+  approvalRevision,
+  workspaceRef,
+  grantingPrincipal,
+  request,
+  previewSemanticBinding,
+  delegationBinding,
+  activationBinding,
+  grantedAt,
+  expiresAt
+}
+```
+
+It binds only the exact original planned request and saved immutable preview semantic record, not the expiring transport token, and changes no OperationId, plan, PreparedActionBinding, or target. Final submission still revalidates current D6 authorization, trusted time, and original business dependencies. A deterministic dependency conflict follows the original D6 authoritative-abort rules and cannot be revived by the new interactive approval.
+
+### 15.3 Terminal state of an approval reservation
+
+Only D6 planning CAS changes ApprovalUse count state atomically from unreserved to reserved. Successful author commit changes it to consumed in the same final transaction; replay of the same saved decision never consumes again.
+
+When the original D6 ledger, under complete continuity and current authorization, proves that a planned decision **can never commit** and records authoritative `terminal_failed` under the original rules, the same abort transaction changes the ApprovalUse count reservation from reserved to `released_terminal`. released_terminal does not count against the reserved/consumed total for `maxSuccessfulCommits`, but immutable history remains. Terminal replay never releases twice.
+
+Only authoritative terminal_failed performs this release. Run cancellation, preview/approval TTL, temporary revocation, Lease expiry, attempt/work pause, or temporarily unprovable authority/continuity is not an abort and keeps the reservation. Cost reservations are a separate state machine: a charge that occurred, may have occurred, or is unknown is never refunded merely because the author plan becomes terminal_failed; it follows §18 settled/released/uncertain semantics independently.
+
+If a planned decision is later explicitly rescued by `PlannedDecisionApproval/1` and ultimately committed, the original standing-approval count reservation still moves reserved→consumed. The interactive rescue does not refund the already occupied standing slot for use by another Run.
 ## 16. Connector and secret
 
 A Connector is a protocol adapter for one named external system. It owns provider-specific cursor/etag/version/account control state, but these stay in D10/D6 control state and are not author Refs or Fields. External stable IDs may participate in lookup/upsert only through frozen D3 SourceBinding/OriginBinding protocols; connector installation never creates identity authority.
@@ -293,7 +378,7 @@ Compensation is a new ExternalEffectIntent with its own authorization, approval,
 
 ## 18. Budget, cost, and concurrent reservation
 
-Existing D6 work/attempt budgets remain. D10 adds managed multi-account reservation for model/tool/network/external cost; the narrowest remaining balances of Run, Lease, Automation, and deployment accounts must be reserved atomically so two concurrent Runs cannot both observe and spend the final balance.
+Existing D6 work/attempt budgets remain. D10 adds managed multi-account reservation for model, tool, network, and external cost; the narrowest remaining balances of Run, Lease, Automation, and deployment accounts must be reserved atomically so two concurrent Runs cannot both observe the final balance.
 
 ```text
 Money/1 {
@@ -302,12 +387,17 @@ Money/1 {
 }
 ```
 
-microUnits is a Counter and all multiplication/accumulation is checked. One account uses one configured currency and performs no implicit FX. Before a potentially billable attempt, a finite conservative maximum is reserved under the currently accepted pricing rule, binding priceVersion, request limits, and included charge categories. A service whose finite maximum cannot be proven cannot offer hard cost-ceiling mode.
+microUnits is a Counter and all multiplication/accumulation uses checked arithmetic. One account uses one configured currency and performs no implicit FX. Before a potentially billable attempt begins, reserve a finite upper bound under the currently accepted pricing rule, binding priceVersion, request limits, and included charge categories. A service whose finite maximum cannot be proven cannot offer hard cost-ceiling mode.
 
-Cost reservation states are reserved → settled | released | uncertain. Release requires proof that no billable send occurred; settlement requires reliable final billing evidence; timeout, crash, or billing uncertainty becomes uncertain and continues to occupy the maximum. TTL, restart, and transcript deletion cannot release uncertain reservations. Every retry reserves independently; effect idempotency does not imply free billing.
+Cost reservation states are `reserved → settled | released | uncertain`, with fixed terminal meanings:
+
+- `released` is allowed only when billable execution or a billable send is proven **never to have started**, such as cancellation before the send fence. It means the reservation has no corresponding billing attempt.
+- `settled` means a billable attempt started and reliable final billing truth is known; the actual amount may be 0 microUnits. A request that was actually sent and later has a reliable zero bill is `settled(0)`, never released.
+- `uncertain` means a billable attempt may have started but final cost cannot be proven. It continues to occupy the original upper bound until reliable billing truth or an authorized accounting-recovery result is obtained.
+
+TTL, restart, author terminal_failed, and transcript deletion cannot release uncertain. Every retry establishes a separate cost reservation; effect idempotency does not imply free billing. Author approval-count reservations and cost reservations are separate: the former can be released with authoritative terminal_failed under §15.3, while cost becomes released only from proof that no billable attempt began.
 
 If a service violates an accepted pricing contract and produces cost above reservation, record the actual anomaly, freeze the affected capability, and require administrative handling. The system may not silently raise the ceiling while continuing to claim the original guarantee.
-
 ## 19. Audit and retention
 
 Before execution, the following protected steps require a durable local/Server authority-bound audit started record: sensitive workspace/context read, egress, secret use, D10-initiated author submit, external mutation, and delegation/approval/package-activation mutation. If it cannot be written, fail closed.
@@ -320,24 +410,43 @@ Transcript and audit are separate. Transcript may have finite deployment retenti
 
 ## 20. Run, cancellation, and recovery
 
-Run state is the closed set queued|running|awaiting_confirmation|blocked|cancelling|reconciling|completed|failed|cancelled. Each step separately stores its domain outcome, and Run terminal state cannot erase already committed author/external facts.
+Run state is the closed set queued|running|awaiting_confirmation|blocked|cancelling|reconciling|completed|failed|cancelled. Each step separately stores its domain outcome, and Run terminal state cannot erase already committed author facts or external effects that already occurred.
 
-A queued/prepared unsent step can become cancelled. A request that has entered D6 planned is not automatically aborted by Run cancellation; Run becomes cancelling/blocked and follows the original D6 planned-recovery contract. Revoking current delegation may prevent a new author commit that no longer has current authority, but revocation is not a permanent business rejection. A committed decision is never rolled back.
+Occurrence claim, Run identity, `LeaseRunUse/1`, and terminal outcome are four distinct control facts. Once scheduler creates a claim/Run for an occurrence, restart, rescan, disable→enable, or cache rebuild restores the original Run; terminal K never receives a new Run identity. Implementation may compact history only while preserving proof that K was already handled rather than recreating "not executed".
+
+A queued/prepared Run that has not passed the §8 Run-admission CAS may be cancelled before the first protected execution without consuming `maxRuns`. Once `LeaseRunUse/1` exists, later failure, cancellation, or crash never refunds that run use. Recovery of the same Run reads the original use.
+
+A request that has entered D6 planned is not automatically aborted by Run cancellation; Run becomes cancelling/blocked and follows original D6 planned recovery. Loss of current delegation, trusted time, or Standing Approval may prevent a new author commit that no longer has current eligibility, but temporary loss is not persisted as a permanent business rejection. A committed decision is never rolled back.
 
 After an external effect enters submitting, cancellation only prevents later steps; that effect still resolves to succeeded, failed_no_effect, or outcome_unknown. Late model/tool output cannot start new work after its step is closed.
 
-Restart first restores durable occurrence claim, Run, ApprovalUse/cost reservations, and original requests. If clock continuity cannot be proven, the current attempt ends or pauses and its deadline is not extended. If execution side-effect outcome cannot be proven, transition to blocked/reconciling rather than creating a new OperationId or effect ID.
-
+Restart first restores durable occurrence claim, Run, LeaseRunUse, ApprovalUse/cost reservations, and original requests. A paused Lease expires naturally without a cleanup task; once trusted time is after `notAfter`, new steps and final submissions are refused. If clock continuity cannot be proven, return `state_unavailable` and retain original control records without extending the deadline or assuming the Lease remains valid. If execution side-effect outcome cannot be proven, transition to blocked/reconciling rather than creating a new OperationId or effect ID.
 ## 21. Errors and unavailability semantics
 
-D1 capability availability and its fixed reason precedence remain unchanged, especially policy_denied before component, configuration, network, version, and health details. D10 does not replace missing_component, not_configured, offline, incompatible_version, or temporarily_unavailable with one runtime_unavailable.
+D1 capability availability and its fixed reason precedence remain unchanged, especially `policy_denied` before component, configuration, network, version, and health details. D10 does not replace `missing_component`, `not_configured`, `offline`, `incompatible_version`, or `temporarily_unavailable` with one runtime_unavailable.
 
 D10 control request stages are: closed decode/version → D1 static capability/surface/release → current principal/control-object visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution. Stage ordering precedes error specialization to prevent unauthorized probing.
 
-The D10 control error closed set is invalid_request, not_visible, control_conflict, binding_changed, approval_required, approval_expired, delegation_expired, budget_exceeded, audit_unavailable, state_unavailable, invalid_output, cancelled, external_outcome_unknown. Unknown tokens, wrong tag, wrong audience, and unauthorized control objects all return not_visible; expired/conflict details are disclosed only when the caller may already read that caller-owned record.
+The D10 control error closed set is `invalid_request|not_visible|control_conflict|binding_changed|approval_required|approval_expired|delegation_expired|delegation_exhausted|budget_exceeded|audit_unavailable|state_unavailable|invalid_output|cancelled|external_outcome_unknown`. Unknown tokens, wrong tag, wrong audience, and unauthorized control objects all return `not_visible`; expired, exhausted, or conflict detail is disclosed only when the caller may already read that caller-owned record.
 
-Once a request enters an original D3/D6/D7/D8/D9 entrypoint, that owner returns its original error/disposition. D10 does not wrap it in a D10 error or change the original refusal ordering based on internal deployment detail.
+Error ownership is determined by the boundary already entered:
 
+| Failure location | Owner and normative result |
+| --- | --- |
+| Before formal D6 request, D10 finds no usable approval | D10 `approval_required` or `approval_expired` |
+| Run admission finds Lease run count exhausted | D10 `delegation_exhausted`; D6/D7 is not entered |
+| Lease has expired | D10 `delegation_expired`; if trusted time is unprovable, `state_unavailable` |
+| After D6 entry, original D6 author permission/ObservationScope fails | original D6 `not_visible/preflight` |
+| After D6 entry, business dependency/semantic/budget fails | original D6 code/disposition |
+| After D6 entry, only associated standing/supplemental approval loses a race | companion amendment D6 `approval_unavailable/preflight`; unseen writes no ledger and planned remains planned |
+| New planned-preview recovery transport fails | original D7 `d7_effects_error` with existing `not_visible|preview_expired|reset_required|effects_unavailable|budget_exceeded` codes as applicable |
+| Committed effects read | existing `d7_effects_resolve/open` and original errors only |
+
+A D10 probe therefore cannot eliminate an approval race after D6 entry and cannot hide a private submission result outside D6. The new `approval_unavailable` is a necessary coordinated extension of the D6 closed enum; request, receipt, and error object shapes remain unchanged, but the capability cannot be advertised available until the consumer supports the new enum.
+
+A D6 `approval_unavailable/preflight` may be retried with the **same original request** after control conditions change: unseen retries only while the original preparation remains valid and new valid approval exists; planned resumes under §15.2 `PlannedDecisionApproval/1` or still-valid original approval. It never writes `semantic_rejected` and never creates a terminal decision merely because of TTL, cancellation, or temporary revocation.
+
+Once a request enters an original D3/D6/D7/D8/D9 entrypoint, that owner returns its original error/disposition except for the explicitly proposed D6 enum extension above. D10 does not wrap it in a generic AgentError or reorder refusal based on internal deployment details.
 ## 22. Product surfaces
 
 Local Desktop hosts the shared local Broker, scheduler, secret transport, and Core adapters; local CLI connects to or starts the same capability family rather than creating a second scheduler or authority. Remote Desktop/CLI call Server only.
@@ -352,7 +461,7 @@ LTR/RTL, locale, screen reader, and Web/CLI transport differences affect present
 
 D1 surfaces, capability reasons, and sole commit holder remain; D2 raw source/unknown-provider preservation remains; D3 identity/SourceBinding/OriginBinding/Provenance remains; D4 Registry exact shape/evolution remains; D5 gains no persistent Record; D8 Draft/explicit edit confirmation remains; D9 worker/ExportPlan/publication remains.
 
-Only the D6/D7 standing-approval author-submit branch needs a coordinated amendment, specified precisely in UPSTREAM-AMENDMENTS. Existing upstream remains authoritative until that amendment is jointly accepted and coordinatedly activated; therefore the D10 design can be reviewed now, but the product must keep the unattended author-commit branch unavailable.
+Only the D6/D7 standing-approval author-submit and planned-preview recovery branches need coordinated amendments, specified precisely in UPSTREAM-AMENDMENTS. They include the D6 `approval_unavailable/preflight` error extension, ApprovalUse reservation/terminal rules, and D7 planned-preview recovery transport. Existing upstream remains authoritative until joint acceptance and coordinated activation, so the product must keep unattended author commit unavailable.
 
 ## 24. Security counterexamples
 

@@ -8,173 +8,270 @@ translation_status: synced
 
 # D10 Coordinated D6/D7 Upstream Amendment Proposal
 
-revision: D10-r01-candidate-2026-09-25; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text that can be mechanically compared; it modifies no snapshot and does not authorize early product implementation of unattended author submission.
+revision: D10-r02-review-fixes-2026-09-27; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
 
 ## 1. Purpose and unchanged boundaries
 
-Existing D7 already freezes fresh Action prepare, complete preview/effects, original D3/D6 request, replay, and unknown recovery. Existing D6 freezes current authorization, planned/commit CAS, the sole author ledger, and the final author commit point. The missing contract is how a future Standing Approval is mechanically validated, counted, revoked, and recovered before final submission when D7 otherwise describes user confirmation after preview.
+Existing D7 freezes fresh Action prepare, complete preview/effects, the original D3/D6 request, replay, and unknown recovery. Existing D6 freezes current authorization, planned/commit CAS, the sole author ledger, and the final author commit point. D10 needs three composition semantics that current upstream does not define:
 
-This proposal opens only one narrow profile defined by the D10 candidate: an existing Node + one Field + exactly one Entry in the current complete Field + one existing scalar member using the existing D7 `set_field_member`. All other D7/D8/D3 author mutations remain interactively confirmed per operation.
+1. When Standing Approval loses a race after D6 entry, D6 needs one expressible error that does not create a permanent rejection.
+2. When a D6 decision is already planned and the original preview transport expired, a currently authorized user needs a read-only path to inspect the **saved original preview**, not a re-prepare.
+3. ApprovalUse count reservation needs one terminal state when an authoritative `terminal_failed` decision is recorded, separate from cost-reservation semantics.
+
+This proposal still opens only one narrow automatic author profile from the D10 candidate: existing Node + one Field + exactly one Entry in the current complete Field + one existing scalar member through the existing D7 `set_field_member`. Every other D7/D8/D3 author mutation remains interactively confirmed per operation.
 
 The following remain unchanged:
 
 - D3 wireVersion11, Result/9, modes, identity/lifecycle stages, and receipts;
-- shapes of D6 `d6_commit_request`, `d6_commit_receipt`, `d6_error`, and the Workspace+OperationId ledger key;
-- exact shape of D7 `ActionSpec`, `d7_action_prepare`, `d7_action_prepared`, and `PreparedActionBinding/2`;
-- D7 `EffectManifest/1`, EffectBytes, delivery epoch, and preview/committed transport;
+- exact shapes of D6 `d6_commit_request` and `d6_commit_receipt`, the Workspace+OperationId ledger key, and the unique author commit point;
+- exact shapes of D7 `ActionSpec`, `d7_action_prepare`, `d7_action_prepared`, and `PreparedActionBinding/2`;
+- D7 `EffectManifest/1`, EffectBytes item/schema, and committed transport;
 - D8 `PreparedEditBinding/1`, Draft/IME/explicit confirmation;
 - D4 Registry, D7 Narrow Field Qualification, and D6 Policy/ObservationScope;
 - existing current authorization, deny precedence, non-disclosure, authority/fence, dependency CAS, replay, and planned recovery.
 
-Therefore this amendment does not require a D3 mirror update, D7 binding version 3, D6 wire version 2, or a new protocolOwner.
+The D6 `d6_error` object shape and disposition set remain, but its code closed set needs one coordinated value, `approval_unavailable`. This is a necessary closed-enum extension rather than an overloaded existing error. D7 Preview/Effects needs one planned-only read-only recovery entrypoint; existing `d7_effects_resolve/open` remains committed-only. Neither extension is usable before capability negotiation and coordinated activation.
 
 ## 2. D6 Storage Transactions Permissions and Sync — proposed additions
 
-### 2.1 Add after the permission model: D10 delegation and approval are not D6 permission sources
+### 2.1 D10 delegation/approval is not a D6 permission source
 
-Add the following complete normative text after the current `PrincipalContext` and generation/revocation rules in the D6 main document:
+Add after the D6 main-document current `PrincipalContext`, generation, and revocation rules:
 
-> **D10 delegation/approval consumption.** D10 may provide current DelegationLease and approval evidence from a host/Core managed control domain, but these can only narrow eligibility already granted by this section's D6 Policy, ObservationScope, state-disclosure, and actual-footprint gates. They can never add a capability, turn deny into allow, or replace current authorization. Ordinary requests, Agents, workers, Connectors, MCP servers, and client JSON cannot self-assert principal, delegation, standing approval, approval count, or proof.
+> **D10 delegation/approval consumption.** D10 may provide current DelegationLease, StandingApproval, and PlannedDecisionApproval evidence from a host/Core managed control domain, but these can only narrow eligibility already granted by D6 Policy, ObservationScope, state disclosure, and actual-footprint gates. They cannot add a capability, turn deny into allow, or replace current authorization. Ordinary requests, Agents, workers, Connectors, MCP servers, and client JSON cannot self-assert principal, delegation, approval, approval count, or proof.
 >
-> Every plan, commit, saved-receipt delivery, and result/effects delivery using D10 delegation still performs this document's existing current-principal/delegation/policy/generation gates first. DelegationLease expiry or revocation prevents new protected steps but does not rewrite a committed decision as failure and does not roll back an external effect that has already crossed its send linearization point. An old approval or capability probe is never a durable authorization ticket.
+> Every plan, commit, saved-receipt delivery, and result/effects delivery using D10 delegation still performs existing D6 current-principal/delegation/policy/generation gates first. DelegationLease expiry, revocation, run-count exhaustion, or unprovable time continuity prevents new protected steps but does not rewrite a committed decision as failure and does not roll back an external effect that already crossed its send linearization point. An old approval or capability probe is never a durable authorization ticket.
 >
-> Only an author-submit profile explicitly named by the D10/1 coordinated contract may use Standing Approval instead of this operation's interactive confirmation; the first profile is D7 `set_field_member` with `single_field_member`. Every other D3/D6/D7/D8 author intent follows its original confirmation contract. D10 approval cannot legalize a D6/D7 plan that is otherwise invalid, unobservable, semantically conflicting, over budget, or stale.
+> Only an author-submit profile explicitly listed by the D10/1 coordinated contract may use Standing Approval instead of per-operation interactive confirmation; the first profile is D7 `set_field_member` with `single_field_member`. Every other D3/D6/D7/D8 author intent follows its original confirmation contract. D10 approval cannot legalize an otherwise invalid, unobservable, stale, over-budget, or semantically conflicting plan.
 
-### 2.2 Add before the author commit point: ApprovalUse is additional authorization evidence
+### 2.2 ApprovalUse is additional authorization evidence and explicitly supports raw no-op
 
-Add the following complete text near the D6 main-document unique author commit point and planning/commit dependency revalidation rules:
+Add near the unique D6 author commit point and planning/commit dependency revalidation rules:
 
-> For a D6-owned Action using D10 Standing Approval, after D7 prepare is complete, Core must independently construct a managed `ApprovalUse/1` from the saved PreparedActionBinding/2, complete owner_fields preview, actual MutationFootprint, current D6 authorization, and current D10 control records. The client still holds only the original `d6_commit_request`; it cannot add `approved`, approvalId, delegation, proof, budget override, or effect override to the request.
+> For a D6-owned Action using D10 Standing Approval, after D7 prepare completes, Core independently constructs managed `ApprovalUse/1` from the saved PreparedActionBinding/2, complete owner_fields preview, actual MutationFootprint, current D6 authorization, and current D10 control records. The client still holds only the original `d6_commit_request`; it cannot add approved, approvalId, delegation, proof, budget override, or effect override to the request.
 >
-> `ApprovalUse/1` immutably binds at least approvalId/revision, Run/step, complete canonical D6 request, planToken, the corresponding PreparedActionBinding record, complete preview semantic binding, actual footprint proof, DelegationLease/ActivationBinding, approval-count reservation, and all applicable budget/cost reservations. It is additional authorization evidence for current author submission and is not a second author plan, second ledger, receipt, or capability token.
+> `ApprovalUse/1` immutably binds approvalId/revision, Run/step, complete canonical D6 request, planToken, corresponding PreparedActionBinding, complete preview semantic binding, actual footprint proof, DelegationLease/ActivationBinding, approval-count reservation, and every applicable budget/cost reservation. It is additional authorization evidence, not a second author plan, second ledger, receipt, or capability token.
 >
-> Core may construct ApprovalUse only for the D10 `single_field_member` profile: the current complete Field has exactly one Entry; the Action is the original `set_field_member`; owner, FieldId, memberPath, and memberType exactly match the envelope; value satisfies the envelope's closed constraint; D7 Narrow Field Qualification succeeds; the complete preview has been formed and is deliverable; and the actual footprint changes only one existing scalar member of that existing Entry. Any change to occurrenceKey, other members, qualifiers, note, provenance, other Entries, body/title/coreKind/Facet, Ref/relation, identity/lifecycle/placement, or D6 control state makes standing approval inapplicable. Core does not select first/preferred/same-value Entry and does not degrade failure to whole-entry/source write.
+> Core may establish ApprovalUse only for `single_field_member`. Common prerequisites are: exactly one Entry in the current complete Field; original Action is `set_field_member`; owner, FieldId, memberPath, and memberType exactly match the envelope; value satisfies the closed constraint; D7 Narrow Field Qualification succeeds; and complete preview exists and is disclosable. There are only two allowed actual-effect branches:
 >
-> Standing Approval cannot hide an upstream error. If the Action/Field/preview/D6 permission itself fails, return the original D7/D6 error. If the business plan is valid but no approval can be consumed, the D10 caller receives its own approval_required/expired control result and may move to interactive confirmation; this is not recorded as D6 semantic_rejected.
-
-### 2.3 Add to planned CAS: atomic reservation
-
-Extend the D6 main-document planned CAS contract with:
-
-> For an unseen D6 request with ApprovalUse, after all original step-6 business/authorization/dependency checks pass and before planned is written, planning CAS also compares current approval/delegation/activation revisions, exact binding between the original ApprovalUse and request/plan/preview/footprint, approval validity and non-revoked state, `committed + reserved < maxSuccessfulCommits`, and prior versions of every applicable budget/cost reservation. Only when all are true may the same database write transaction store planned, the complete fixed plan/pins, ApprovalUse reserved, approval-count reserved, and related resource reservations.
+> 1. **member-change:** MutationFootprint contains exactly the existing scalar-member change and the public owner_fields preview contains the exact `field_change`;
+> 2. **raw-no-op:** the original Action still resolves to the same unique Entry/existing member, requested typed value equals the current value, and complete proposed source bytes equal before byte-for-byte. MutationFootprint is empty, preview contains no `field_change`, and final D6 receipt has empty `sourceVersions`; no effect, footprint, or revision may be invented.
 >
-> When two concurrent requests race for the last approval count or budget, at most one CAS wins. The loser returns to the original D6 restart gate and cannot treat a previously read balance as current fact. reserved is not committed and does not modify author source early. Replay of the same canonical request under the same Workspace+OperationId is associated with the same reservation and never reserves again.
+> Any change to occurrenceKey, other member, qualifier, note, provenance, other Entry, body/title/coreKind/Facet, Ref/relation, identity/lifecycle/placement, or D6 control state makes standing approval inapplicable. Core never chooses first/preferred/same-value Entry and never degrades failure to whole-entry/source write.
 >
-> Prepare/preview records that never become planned may release temporary resources after expiry. Once planned references ApprovalUse/reservations, those records follow the original ledger-recovery lifetime and are not reclaimed by preview TTL, Agent-session exit, or ordinary cache GC.
+> If a raw no-op forms a committed decision under original D6 rules, it still consumes one successful-commit approval count; replay of the same saved decision never consumes again.
 
-### 2.4 Add to final author commit: atomic consumption
+### 2.3 The sole error for an in-D6 approval race
 
-Add to the D6 main-document final database transaction:
+Add the following error contract to both the D6 main document and Control Interfaces:
 
-> For a planned decision with ApprovalUse, final author commit still revalidates current D6 authorization, authority/fence, original business dependencies, and the complete original plan. It also compares that ApprovalUse still binds the same plan/request, the reserved record is complete, and current delegation/approval has not made this new author submission ineligible. Standing Approval expiry/revocation affects author submission that has not linearized; if final commit wins the author-decision CAS before the managed expiry/revoke transaction it may complete, otherwise it remains planned/blocked and revocation is not persisted as a permanent business rejection.
+> Before formal `d6_commit_request` entry, the D10 adapter may return D10 approval_required, approval_expired, delegation_expired, or delegation_exhausted from already observable control state. That probe does not eliminate later races.
 >
-> When all checks pass, author payload/control effects, the D6 committed decision, canonical receipt bytes, approval-count reserved→consumed, ApprovalUse terminal link, applicable budget settlement/control effects, and required audit link are published in the same final author transaction. A raw-source no-op that forms a committed decision under original D6 rules still counts as one successful commit and consumes one approval count; replay of the same saved decision does not consume again.
+> Once the unattended path has associated ApprovalUse as an internal dependency of the original planToken and entered D6, exactly one case uses new `d6_error.code="approval_unavailable"`, always with disposition `preflight`: the approval dependency becomes unusable in a race while original D6 current author authorization/ObservationScope and applicable business visibility still hold.
 >
-> If the final author transaction rolls back, author source, receipt, approval-count consumed, and settlement all roll back to the original planned/reserved state. The system cannot observe "approval consumed but author not committed" or the reverse half-state. Later derived audit aggregation/telemetry failure cannot invite a duplicate author request; recovery consults only the original ledger/control records.
-
-### 2.5 Add to journal/recovery: cancellation, expiry, and supplemental approval
-
-Add after the D6 main-document recovery table and planned-recovery rules:
-
-> A planned decision does not automatically become terminal_failed because its Run is cancelled or its DelegationLease/Standing Approval expires or is revoked. Recovery first performs original current authorization/non-disclosure, then validates the original plan/dependencies and approval evidence needed for this submission. When current approval is insufficient, remain planned/blocked; do not create a new OperationId, rerun Query/resample the target, or modify the original request or PreparedActionBinding.
+> Original D6 permission failure remains `not_visible/preflight`; business dependency, semantic, budget, authority, and integrity failures keep their original code/disposition and cannot be masked by `approval_unavailable`.
 >
-> A user may give new explicit one-shot interactive authorization for this exact original planned decision; Core binds it as new supplemental authorization evidence to the original plan rather than replacing the original StandingApprovalEnvelope. If original business dependencies have a deterministic conflict, new approval cannot revive the plan and the existing authoritative-abort conditions still apply.
+> For an unseen request, `approval_unavailable/preflight` writes no author ledger, recorded rejection, or planned decision. The original prepare may be retried under new valid approval while still valid, or the caller may return to an interactive path. For an already planned request, the same error leaves ledger=planned and preserves original plan/pins/reservations; it cannot become `semantic_rejected` or `terminal_failed`.
 >
-> Delivery/replay of a committed decision does not require the historical Standing Approval to remain unexpired. It requires only continuous original saved-decision state and the current caller authorization already required by the original protocol. Lost-receipt replay returns original bytes and does not increment approval count, budget spend, or author revision.
+> The D10 adapter passes this D6 error through verbatim. UI that wants to distinguish revoked, expired, or race-lost approval performs a separately authorized D10 control read and does not smuggle control detail through the author error.
+>
+> This is a coordinated-capability closed-enum extension. D6 request/receipt/error object shape and disposition set remain unchanged. A consumer selecting the capability must support the new code; existing profiles never emit it and an unnegotiated old consumer cannot enter the branch.
+
+### 2.4 planned CAS atomically reserves
+
+Extend D6 planned CAS:
+
+> For an unseen D6 request carrying ApprovalUse, after original step-6 business, authorization, dependency, semantic, and budget validation and before planned is written, planning CAS also compares current approval/delegation/activation revisions, exact ApprovalUse binding to request/plan/preview/footprint, approval time/revoked state, `consumed + reserved < maxSuccessfulCommits`, and old versions of every applicable budget/cost reservation.
+>
+> Only when all are true may the same database write transaction store planned, the complete fixed plan/pins, ApprovalUse count `unreserved→reserved`, and related resource reservations. Two requests racing for the last approval count or budget produce at most one winner; the loser returns to the original restart gate and cannot reuse a previously observed balance.
+>
+> Replay of the same canonical Workspace+OperationId request remains bound to the same reservation and never reserves twice. Temporary ApprovalUse that never reaches planned may expire with preparation lifetime. Once referenced by planned, the approval reservation and recovery pins follow original ledger-recovery lifetime and are not reclaimed by preview TTL, Agent-session exit, or ordinary cache GC.
+
+### 2.5 final author commit, terminal release, and replay
+
+Extend D6 final transaction and recovery:
+
+> For a planned decision with ApprovalUse, final author commit still revalidates current D6 authorization, authority/fence, original business dependencies, and complete plan. It additionally proves that ApprovalUse still binds the same request/plan and that current standing/supplemental approval permits this **new** author submission.
+>
+> On success, author payload/control effects, D6 committed decision, canonical receipt bytes, approval count `reserved→consumed`, ApprovalUse terminal link, applicable D6 budget control effects, and required audit link publish in the same final author transaction. A committed raw no-op also becomes consumed. Transaction rollback returns every item to the original planned/reserved state.
+>
+> If the original D6 ledger under complete continuity and current authorization proves the planned decision **can never commit** and records authoritative `terminal_failed` under existing rules, the same abort transaction changes ApprovalUse count reservation `reserved→released_terminal`. released_terminal does not count against maxSuccessfulCommits reserved/consumed total, but immutable history remains and terminal replay never releases twice.
+>
+> Only authoritative terminal_failed releases approval count. Run cancellation, preview/approval TTL, temporary revocation, Lease expiry, attempt/work pause, and temporarily unprovable authority/continuity are not aborts and retain the reservation.
+>
+> Approval count and cost reservations are separate. Author terminal_failed does not refund model/tool/external cost that occurred, may have occurred, or is unknown; D10 settled/released/uncertain rules apply independently.
+>
+> Delivery/replay of a committed decision does not require historical Standing Approval to remain unexpired. It requires continuous original saved-decision state and current caller authorization already required by the original protocol. Lost-receipt replay returns original bytes without another approval count, budget spend, or source revision.
 
 ## 3. D6 Control Interfaces — proposed additions/replacements
 
-### 3.1 Add a producer-classification paragraph after §2 PreparedIntent
+### 3.1 PreparedIntent producer classification
 
-After the paragraph describing valid closed adapters that can generate managed PreparedIntent, add:
+After §2's paragraph describing valid closed adapters that produce managed PreparedIntent, add:
 
-> D10 Broker itself is not a PreparedIntent producer. When a D10 Agent/Automation proposes a workspace mutation, it can only call an existing D7/D8/Core closed adapter. For the D7 `single_field_member` standing-approval profile, D7 prepare first creates the complete PreparedActionBinding/2, PreparedIntent, preview, and original `d6_commit_request` under its normal contract; only then may a Core-managed D10 approval adapter read the protected prepare record and establish ApprovalUse. D10 runtime cannot directly construct PreparedIntent, MutationFootprint, source bytes, or proof.
+> D10 Broker itself is not a PreparedIntent producer. A D10 Agent/Automation workspace mutation can only call an existing D7/D8/Core closed adapter. For `single_field_member`, D7 prepare first produces PreparedActionBinding/2, PreparedIntent, preview, and the original `d6_commit_request` under its normal contract; only then may a Core-managed D10 approval adapter build ApprovalUse from protected records. D10 runtime cannot directly construct PreparedIntent, MutationFootprint, source bytes, or proof.
 >
-> ApprovalUse does not change the exact members of `d6_commit_request`, canonical request key, planToken tag, protocolOwner, or ledger key. It is uniquely associated with the original request through planToken/protected internal records; no external caller can append an approval field.
+> ApprovalUse changes no exact `d6_commit_request` member, canonical request key, planToken tag, protocolOwner, or ledger key. It is associated with the original planToken only through protected internal records; no external caller can append an approval field.
 
-### 3.2 Complete augmentation of §2 unique order
+### 3.2 Complete additions to §2 steps 5–8
 
-For the D10 standing-approval profile, original D6 steps 1-8 remain, with only these additional checks in steps 5-8:
+For the D10 standing-approval profile, original steps 1–8 remain with these additions only:
 
-> **Step 5 addition:** after resolving this principal's planToken, when its PreparedIntent requires D10 Standing Approval, use only the already-authorized minimal control mapping to identify approval profile and ApprovalUse locator. missing/wrong-audience/wrong-workspace remains not_visible. The complete ApprovalUse may be read only after current D6 authorization/ObservationScope has passed.
+> **Step 5 addition:** after resolving this principal's planToken, when the unattended path has associated ApprovalUse, use only the already authorized minimal control mapping to locate its profile/record. missing, wrong audience, or wrong Workspace stays `not_visible`. Complete ApprovalUse is read only after current D6 authorization/ObservationScope passes.
 >
-> **Step 6 addition:** besides original business semantic/dependency/budget validation, Core validates D10 `single_field_member` eligibility, current approval/delegation/activation, complete preview/footprint, and count/cost reservation candidate. Business errors remain original D6/D7 owner errors. If the business plan is valid but D10 approval alone is unavailable, the calling D10 adapter returns approval_required/approval_expired and does not persist a D6 recorded rejection.
+> **Step 6 addition:** besides original business dependency, semantic, and budget validation, verify both `single_field_member` effect branches, current approval/delegation/activation, and count/cost reservation candidate. If original D6 permission or business semantics fail, return the original owner error. Only when those still hold and ApprovalUse alone cannot be consumed return `d6_error approval_unavailable/preflight`. An unseen request writes no decision.
 >
-> **Step 7 addition:** planned CAS atomically reserves ApprovalUse, approval count, and budgets together with the complete plan/pins. A CAS loser returns to original step 3. No reservation can create an author effect early.
+> **Step 7 addition:** planned CAS atomically stores plan/pins and changes ApprovalUse count `unreserved→reserved`; a CAS loser returns to original step 3. No reservation creates author effects early.
 >
-> **Step 8 addition:** final author commit revalidates current authorization and final eligibility of ApprovalUse and consumes approval count/settles applicable managed budget in the same transaction. Failure/crash follows original D6 planned recovery and never creates a separate D10 author decision.
+> **Step 8 addition:** before planned recovery or final author commit, recheck current D6 authorization and current approval eligibility. If approval alone is unavailable, return `approval_unavailable/preflight` and keep planned. Deterministic business conflict follows the original terminal_failed rules. Successful commit changes count `reserved→consumed` in the same transaction; authoritative terminal_failed changes it `reserved→released_terminal` in the same abort transaction.
 
-### 3.3 §3 receipt and error wire remains unchanged
+### 3.3 Exact extension of §3 receipt and error contract
 
-Add:
+Extend the `d6_error.code` closed set to:
 
-> Standing Approval adds no member/code to `d6_commit_receipt` or `d6_error`. The author-protocol caller sees the original D6 commit/replay bytes. D10 UI/Broker may additionally show, from an authorized D10 Run/ApprovalUse record, that standing approval was consumed, but this is control evidence and is not written into the receipt.
->
-> approval_required, approval_expired, delegation_expired, control_conflict, and other D10 control errors are returned only by D10 control adapters. Once formal submission enters `d6_commit_request`, original D6 error/disposition has priority and is not wrapped. Loss of current author permission continues to be original not_visible rather than an approval error.
+```text
+invalid_request
+not_visible
+authority_unavailable
+integrity_conflict
+operation_id_conflict
+plan_expired
+approval_unavailable
+dependency_conflict
+semantic_rejected
+budget_exceeded
+transaction_aborted
+```
 
-### 3.4 Add the general boundary for managed D10 control intents
+`approval_unavailable` permits only disposition=`preflight`. It means the coordinated D10 author-submit approval dependency cannot be consumed after D6 entry while original D6 author permission/ObservationScope and applicable business prerequisites did not fail earlier. It creates no recorded rejection and reveals no internal approval cause.
 
-Add to the D6 Control Interfaces managed-configuration area without freezing every D10 public wire in this amendment:
+Original phase/key/permission/availability rules remain; `dependency_conflict|semantic_rejected|budget_exceeded` remain recorded only under the original step-6 contract, and permanent abort after planned remains only `transaction_aborted|terminal`. A consumer that did not negotiate D10 standing-approval capability cannot receive the new enum.
 
-> Durable D10 control state such as ActivationBinding, DelegationLease, StandingApprovalEnvelope, and AutomationDefinition may be changed only by Core-managed closed control adapters with independent control revision/CAS, current-principal authorization, complete preview/audit, and replay contracts. It cannot be mutated through free payload in `d6_commit_request`, ordinary author source, provider callback, or Agent JSON.
->
-> This D10 candidate freezes those objects' semantics and their composition with author submission. Exact public IPC/HTTP envelopes are an implementation-interface choice, but may not weaken closed decode, version/CAS, non-disclosure, audit, or current-authorization obligations. Any future decision to route a D10 control mutation through a generic D6 management request must reuse the existing unique ledger/authoritative control transaction and cannot create an unledgered management bypass.
+Standing Approval adds no receipt member. D10 UI may display use origin from an authorized Run/ApprovalUse control state, but that control evidence is not an author receipt.
+
+### 3.4 D10 control state and Lease Run admission
+
+Durable D10 control state such as ActivationBinding, DelegationLease, StandingApprovalEnvelope, AutomationDefinition, LeaseRunUse, and PlannedDecisionApproval may be changed only through Core-managed closed control adapters with independent control revision/CAS, current-principal authorization, audit, and replay contracts. They cannot be changed through author source, provider callback, Agent JSON, or free payload in `d6_commit_request`.
+
+`maxRuns` is consumed by a D10 Run-admission CAS immediately before the first protected execution and never enters the D6 author ledger. CAS accumulates uses over one `leaseId` lineage and writes `LeaseRunUse/1`; restart of the same Run does not consume again, and failure/cancellation/crash after admission never refunds it. Exhaustion is D10 `delegation_exhausted` before D6/D7 entry.
 
 ## 4. D7 Execution and Action Interfaces — proposed replacement/additions
 
-### 4.1 Replace the ActionSpec overview confirmation sentence
+### 4.1 ActionSpec default confirmation statement
 
-Fixed-upstream D7 Execution/Action §5 currently describes the user confirming through the original D3/D6 submission after viewing preview. Replace that statement completely with:
+Replace the current §5 semantics that the user confirms through the original D3/D6 submission after seeing preview with:
 
-> The default confirmation for ActionSpec remains: after obtaining and validating a complete current preview, the current user explicitly sends the original D3/D6 request returned by prepare. Only the D10/1 coordinated `single_field_member` profile may continue without a per-operation human click: Core must mechanically prove a valid ApprovalUse from this fresh D7 prepare's complete PreparedActionBinding/2, EffectManifest/EffectBytes, actual MutationFootprint, and current authorization. This exception creates no D7 confirmation token, changes no request, and does not claim that a user read the preview item by item. Every other ActionSpec kind and D3-owned intent continues to require original interactive confirmation unless a future coordinated contract explicitly opens it item by item.
+> Default ActionSpec confirmation remains: after obtaining and validating a complete current preview, the current user explicitly sends the original D3/D6 request returned by prepare. Only the D10/1 coordinated `single_field_member` profile may continue without this operation's human click: Core must mechanically prove valid ApprovalUse from the complete PreparedActionBinding/2, EffectManifest/EffectBytes, actual MutationFootprint, and current authorization of this fresh D7 prepare. This exception creates no D7 confirmation token, changes no request, and does not claim a user read preview item by item. Every other ActionSpec kind and D3-owned intent keeps original interactive confirmation.
 
-### 4.2 Add standing-approval eligibility before §6 prepare/commit
+### 4.2 standing-approval eligibility including raw no-op
 
-Add this complete section:
+Add before §6 prepare/commit:
 
-> **D10 standing-approval eligibility.** D7 prepare never knows or trusts caller-asserted approval. It still completes its original sequence of closed intent decode, potential observation, authority/cut, source/selector/definition/rule/dependency, proposed source/MutationFootprint, D2/D4/D5/D7 gates, and immutable prepare/preview. Only after all succeed may a Core-managed D10 adapter attempt a match.
+> D7 prepare never knows or trusts caller-asserted approval. It still completes original closed intent decode, potential observation, authority/cut, source/selector/definition/rule/dependency, proposed source/MutationFootprint, D2/D4/D5/D7 gates, and immutable prepare/preview. Only after all succeed may a Core-managed D10 adapter attempt a match.
 >
-> The only current profile requires ActionSpec.intent.kind exactly `set_field_member`; selector points to exactly one Entry in the current complete Field; memberPath is a static object-member-name path terminating at an existing scalar member; owner/Field/member type exactly matches StandingApprovalEnvelope; value passes the original TypedLiteral/D4 decoder and the envelope valueConstraint; Narrow Field Qualification succeeds for the same RegistryBinding/current source; and MutationFootprint contains exactly that member-value change. Any Entry insertion/removal, occurrenceKey/qualifier/note/provenance change, other member, Facet/body/title/coreKind change, relation/ref, identity/lifecycle/placement/control effect, or effect requiring full-source preview makes eligibility=false.
+> The only current profile requires ActionSpec.intent.kind exactly `set_field_member`, exactly one Entry in the current complete Field, memberPath naming an existing scalar member, exact owner/Field/member type/value constraint, and successful Narrow Field Qualification. Actual effect is only:
 >
-> eligibility=false does not change legality of the D7 Action. If the original Action can be submitted interactively, the D10 caller transitions to awaiting_confirmation; if the Action itself is invalid, return the original D7 error. D7 defines no looser parser, Field selector, permission, or semantic fallback for automation.
+> - member-change: MutationFootprint is exactly the selected member and owner_fields preview contains the exact `field_change`;
+> - raw-no-op: requested value already equals the current typed member and complete proposed source equals before bytes; MutationFootprint is empty and preview contains no `field_change`.
+>
+> eligibility=false does not change legality of the original Action. An Action that can be submitted interactively transitions to awaiting_confirmation; an invalid Action returns the original D7 error. D7 gains no looser parser, selector, permission, or semantic fallback for automation.
 
-### 4.3 Add to replay/recovery paragraph
+### 4.3 replay and restart
 
 Add:
 
-> D10 standing approval does not change D7 OperationId/replay rules. A fresh automation occurrence needs a fresh prepare. A lost receipt for the same committed request can only resend the original request. ApprovalUse/count/budget replay and recovery are owned by the D6 coordinated amendment; D7 cannot issue a semantically equivalent Action under a new OperationId merely because an Agent/automation restarted.
+> Standing Approval does not change D7 OperationId/replay. A fresh automation occurrence requires fresh prepare; loss of a receipt for the same committed request only resends the original request. D10/Automation restart cannot create a semantically equivalent new OperationId merely because the original preview transport expired.
 >
-> Existing D7 preview delivery epoch, EffectBytes, ActionEvidence, FieldSelection, result epoch, and source-revision invalidation rules remain. Standing Approval cannot revive stale evidence/selector/preview. When a new prepare is required, it produces a new request/OperationId and requires a new approval use; neither an old click nor an old mechanical approval carries forward.
+> Existing ActionEvidence, FieldSelection, result epoch, source revision, and preview delivery-epoch invalidation rules remain. Standing Approval cannot revive stale evidence/selector. If a decision has not reached planned and must be re-prepared, it gets a new request/OperationId and a new approval use; old mechanical approval does not carry forward.
 
-## 5. Explicit non-amendment for D8 and D9
+## 5. D7 Preview and Effects Transport — planned recovery extension
+
+### 5.1 New read-only planned-preview entrypoint
+
+Existing `d7_effects_resolve` remains committed-only, with planned/rejected/terminal/unseen still returning `effects_unavailable`. Existing `d7_effects_open` continues to accept committed `effectsToken` only.
+
+Add:
+
+```text
+d7_planned_preview_open {
+  wireVersion: 1,
+  kind: "d7_planned_preview_open",
+  protocolOwner: "D6",
+  request: <original d6_commit_request>
+}
+
+d7_planned_preview_opened {
+  wireVersion: 1,
+  kind: "d7_planned_preview_opened",
+  request,
+  previewToken,
+  previewCursorToken,
+  previewManifest
+}
+```
+
+It is not prepare, commit, resolve, or author-state mutation. Input is the complete original D6 request; OperationId-only, planToken-only, or approvalId-only ledger probing is forbidden.
+
+The unique order is:
+
+1. closed decode;
+2. current authenticated audience and protected minimal locator mapping;
+3. original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility;
+4. current authority/custody/ledger continuity;
+5. byte-equal canonical request at the same key with ledger state=planned;
+6. complete original PreparedActionBinding/2, semantic preview, and all required pins;
+7. create a new finite recovery delivery epoch and return a fresh action_preview token/cursor/header.
+
+The new epoch's semantic items, order, EffectBytes payloads, and profile come byte-equivalently from the immutable preview saved with the planned decision. It cannot rerun Query, parse a current drifted definition, reselect a target, regenerate proposed source, or switch Registry. It only reissues transport handles.
+
+The recovery epoch has an independent finite TTL and neither extends nor revives old preview token/cursor. Page and EffectBytes continue to use original D7 transport. Expired recovery epoch uses `preview_expired`; proven epoch invalidation uses `reset_required`; unprovable pin/continuity or request/state mismatch uses `effects_unavailable`; earlier authorization failure remains `not_visible`. No new effects-error enum is added.
+
+### 5.2 Interactive approval consumption boundary
+
+Only after manifest, every page, and every required EffectBytes has been completely obtained under one recovery epoch and decoded without gaps may UI create D10 `PlannedDecisionApproval/1`.
+
+The record binds the exact original request, original planned decision, original immutable preview semantic record, current granting principal/DelegationLease/ActivationBinding, and finite grant lifetime. It does not bind the short-lived preview token itself and changes no request, OperationId, PreparedActionBinding, plan, or target.
+
+Final submission still uses the original D6 request and §2/§3 current authorization, approval, dependency, and authority/fence checks. New interactive approval only proves that the user has freshly inspected and authorized the original plan; it cannot legalize a deterministic dependency conflict, stale target, or damaged pins.
+
+If the original plan already holds a standing ApprovalUse count reservation, that reservation remains occupied during interactive rescue. Successful author commit still changes `reserved→consumed`; only authoritative terminal_failed changes `reserved→released_terminal`. The interactive click cannot release the slot early for a second Run.
+
+## 6. Explicit non-amendment for D8 and D9
 
 D8 gains no unattended edit branch. Document/Annotation edit, dirty Draft, IME, current serial, complete preview, and explicit confirmation remain unchanged. Agent/Automation may only propose into D8 and cannot fabricate EditSession or human origin.
 
 D9 does not change Provider/Route, worker sandbox, ExportPlan, LossReport, PublicationReceipt, or external publisher. D10 external transport/Connector grants no network to a D9 worker, and D9 publication confirmation grants no Standing Approval author write.
 
-## 6. Activation and version compatibility
+## 7. Activation and version compatibility
 
 These amendments take effect only after independent review acceptance, controller coordinated decision, and activation together with the D10 candidate. Before activation:
 
-- product may implement/read-only D10 Broker, Agent proposal, Automation scheduling, Tool/MCP, Connector read, and external-effect control;
+- product may implement D10 Broker, Agent proposal, Automation scheduling, Tool/MCP, Connector read, and external-effect control parts that do not require unattended author submission;
 - all D7/D8 author proposals still use current per-operation confirmation;
-- the `single_field_member` unattended author-submit capability must report not_in_release or another truthful D1 unavailable state and cannot be hidden behind a private flag.
+- `single_field_member` unattended author-submit capability must return a truthful D1 unavailable state and cannot be hidden behind a private flag;
+- the planned-preview recovery entrypoint cannot appear in the old uncoordinated D7 transport profile.
 
-After activation, historical saved D3/D6 decisions keep their original decoders/bytes. Previously committed history is not backfilled with ApprovalUse. An old D7 prepare without a decision does not automatically gain standing approval; the user must fresh-prepare or use only an exact recovery route explicitly supported by the then-coordinated version.
+The new D6 `approval_unavailable` is a closed-enum extension. Coordinated activation binds consumer support to capability availability; old clients/profiles cannot receive the unknown enum. Request/receipt shapes, D6 wireVersion1 request, and D7 PreparedActionBinding/2 shape remain unchanged.
 
-## 7. Joint counterexamples required for independent review
+Historical committed D3/D6 decisions keep their original decoders/bytes and are not backfilled with ApprovalUse. An old prepare with no decision does not automatically gain Standing Approval. Only a planned decision produced under the new profile can use the recovery transport defined here.
 
-1. Two same-value Field Entries must not select first under automatic approval.
-2. Approval count=1 with two Runs planning concurrently allows at most one planned/reserved winner.
-3. Process crash after approval reserve does not reserve again on restart.
-4. Approval revoke/expiry after D6 planned does not auto-terminal-fail and does not substitute a new envelope.
-5. Final commit racing approval revoke has one linearized result.
-6. Author commit succeeds, receipt is lost, approval expires: replay returns original receipt without another count.
-7. Committed raw no-op consumes once and replay does not recount.
-8. Stale FieldSelection, A→B→A, and Registry generation change cannot be revived by standing approval.
-9. A footprint mutant changing note/provenance/Facet/second member must reject automatic approval.
-10. D8 dirty Draft combined with valid background author commit leaves the Draft intact.
-11. D3 create/lifecycle Action cannot use the single_field_member envelope for unattended submission.
-12. A D10 control error cannot wrap/leak original D6 not_visible or hidden facts.
+## 8. Joint counterexamples required for independent re-review
 
-These author-candidate counterexamples are not test results; actual evidence remains layered by the Implementation Impact document.
+1. R1 prepare sees valid approval, R2 consumes the final use; when R1 reaches D6 and only approval lost the race, the result must be `approval_unavailable/preflight` and an unseen request has no ledger decision.
+2. R1 is already planned when approval is revoked; the same error leaves it planned and cannot become semantic_rejected/terminal_failed.
+3. A new client has no old preview copy but is currently authorized and continuity holds; `d7_planned_preview_open` can deliver the complete original preview without re-prepare.
+4. Recovery preview cannot rerun Query or change target; a drifted current definition does not change saved semantics.
+5. New PlannedDecisionApproval cannot revive deterministic dependency conflict.
+6. Approval count=1 with two Runs planning concurrently yields at most one `reserved`.
+7. A reserved plan later reaches authoritative terminal_failed after deterministic dependency change; the same abort transaction records `released_terminal`, and replay does not release twice.
+8. Cancellation, TTL, temporary revocation, and Lease expiry do not release approval reservation.
+9. Model/tool cost that occurred or remains uncertain is unaffected by author terminal_failed.
+10. A set_field_member request whose value already equals current produces empty MutationFootprint, empty field_change, and empty sourceVersions while still validating target/type/value/permission/dependencies; a committed decision consumes one approval count.
+11. Two same-value Field Entries cannot select first.
+12. A footprint mutant that changes note, provenance, Facet, or a second member rejects unattended approval.
+13. Author commit succeeds, receipt is lost, and approval later expires: replay returns original receipt without another count.
+14. Valid background author commit with a dirty D8 Draft does not overwrite the Draft.
+15. D3 create/lifecycle Action cannot use a `single_field_member` envelope for unattended submission.
+16. A D10 control error cannot wrap or leak original D6 `not_visible` and hidden facts.
+
+These are author-revision review targets, not a claim that the first two independent-review batches are closed. Only later independent re-review can change their review status.

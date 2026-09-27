@@ -30,9 +30,11 @@ revision: D10-r01-candidate-2026-09-25; status: candidate. This lexicon defines 
 | weftext.term.activation-binding | 激活绑定 / Activation Binding | D10 | Managed record binding current D4 RegistryBinding, Capability Catalog digest, and trust revision into one generation | Not a replacement for D4 semantic generation |
 | weftext.term.publisher-identity | 发布者身份 / Publisher Identity | D10 | Package-signing subject proven by an accepted trust root | Not namespace ownership itself |
 | weftext.term.namespace-claim | 命名空间所有权声明 / Namespace Claim | D10→D4 proof | Managed claim binding publisher identity to an allowed D4 publisher namespace | Install order, display name, and enablement are not claims |
-| weftext.term.delegation-lease | 委托租约 / Delegation Lease | D10 | Task/run authorization boundary that further narrows the current D6 principal | Adds no D6 capability and cannot be redelegated |
+| weftext.term.delegation-lease | 委托租约 / Delegation Lease | D10 | Task/run authorization boundary that further narrows the current D6 principal and includes finite maxRuns | Adds no D6 capability and cannot be redelegated |
+| weftext.term.lease-run-use | 运行准入消费 / Lease Run Use | D10 | Durable deduplication fact consuming one maxRuns use for a leaseId lineage when a Run first enters protected execution | A queued claim is not consumption; failure, cancellation, or crash does not refund it |
 | weftext.term.standing-approval | 持续批准 / Standing Approval | D10 | Finite pre-approval for a mechanically decidable future operation set with lifetime/count/budget limits | Not permanent consent, natural-language goal, or D6 Policy |
-| weftext.term.approval-use | 批准使用记录 / Approval Use | D10 + proposed D6 amendment | Binds one prepared request, complete preview, actual footprint, and one reservation/consumption of an approval | Not an author plan, receipt, or third ledger |
+| weftext.term.approval-use | 批准使用记录 / Approval Use | D10 + proposed D6 amendment | Binds one prepared request, complete preview, actual footprint, and one approval reservation or consumption; count state may be unreserved, reserved, consumed, or released_terminal | Not an author plan, receipt, or third ledger |
+| weftext.term.planned-decision-approval | 已计划决议交互批准 / Planned Decision Approval | D10 + proposed D7/D6 amendment | Finite one-shot interactive authorization for the exact original planned request after complete inspection through a new protected recovery preview | Does not re-prepare, change OperationId, or revive a conflicting plan |
 | weftext.term.automation-definition | 自动化定义 / Automation Definition | D10 | Managed versioned schedule for one invocation | Not a general workflow DAG or author Document |
 | weftext.term.automation-occurrence | 自动化发生项 / Automation Occurrence | D10 | One scheduling opportunity mechanically derived from a definition revision and source occurrence | Not author recurrence-occurrence identity |
 | weftext.term.run | 运行 / Run | D10 | Managed execution record for an Agent or Automation plus step outcomes | Run completed does not mean author committed |
@@ -56,8 +58,10 @@ The following type/record names are frozen controlled spellings by the D10 candi
 
 - `ActivationBinding/1`
 - `DelegationLease/1`
+- `LeaseRunUse/1`
 - `StandingApprovalEnvelope/1`
 - `ApprovalUse/1`
+- `PlannedDecisionApproval/1`
 - `ToolValueProfile/1`
 - `InputSlot`
 - `AutomationOccurrenceKey/1`
@@ -127,16 +131,19 @@ D3 Provenance is source evidence and does not grant authority. D10 package/provi
 
 **authorization** is current workspace eligibility from D6 Policy, ObservationScope, authority/cut, and applicable upstream gates.
 
-**delegation** is a Delegation Lease that further narrows current authorization; it is not an authorization source.
+**delegation** is a Delegation Lease that further narrows current authorization; it is not an authorization source. maxRuns is the total number of Runs that one leaseId lineage may admit into protected execution and is not reset by leaseRevision, restart, or scheduler-cache rebuild.
+
+**Lease Run Use** is the durable consumption fact written by the atomic Run-admission CAS immediately before a Run's first protected step. Recovery of the same Run reuses the original record, and failure or cancellation after admission never refunds the use.
 
 **interactive confirmation** is explicit user confirmation of the original request after a current complete preview; D8/D7 keep this as the default path.
 
-**Standing Approval** pre-allows only the mechanically bounded envelope defined by the candidate and still requires fresh prepare/preview/current authorization.
+**Standing Approval** pre-allows only the mechanically bounded envelope defined by the candidate and still requires fresh prepare, preview, and current authorization.
 
-**ApprovalUse** is the managed binding by which one prepared request actually consumes a Standing Approval; it cannot be client-asserted.
+**ApprovalUse** is the managed binding by which one prepared request actually consumes Standing Approval and cannot be client-asserted. Its count reservation becomes reserved only at D6 planned, becomes consumed on commit, and can become released_terminal only with authoritative terminal_failed.
 
-**approval-required** is a D10 control-layer state meaning a Standing Approval cannot be mechanically consumed and interactive confirmation is required; it does not replace original D6/D7 semantic errors.
+**Planned Decision Approval** is finite one-shot interactive authorization for the exact original request when the D6 decision is already planned and the old preview transport expired or Standing Approval is no longer usable. It can be created only after complete inspection through a new read-only planned-preview recovery epoch. It changes no request, OperationId, PreparedActionBinding, or target and cannot revive a plan with a deterministic dependency conflict.
 
+**approval-required / approval-expired** are D10 control results only before formal D6 submission. If approval loses a race after the unattended path has entered D6, the companion amendment uses D6 approval_unavailable/preflight rather than pretending the failure was a D10 preflight result.
 ## 9. Secret, context, egress, and external effect
 
 Secret Reference points only to a credential in secret storage; secret bytes never enter ToolValue, ContextBundle, or ordinary logs.
@@ -147,7 +154,7 @@ egress means data leaving the current trusted Core/host boundary to a named mode
 
 external side effect means a request that changes external-system state. Reading external data and writing external data are different effect classes; a "read-only tool" exists only under the locally accepted Weftext contract and not because a remote server self-annotated it.
 
-External Outcome Unknown means the external request's outcome cannot be proven; it is not timeout, failure, or cancellation.
+External Outcome Unknown means the external request's outcome cannot be proven; it is not timeout, failure, or cancellation. Cost released means billable execution is proven never to have started; an actually sent request with a reliable zero bill is settled(0).
 
 ## 10. Audit, transcript, log, and evidence
 

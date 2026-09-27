@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate complete for independent review，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
+状态：candidate revision r02，处于分批独立复审期间，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
 
 固定上游输入 commit：f205831c848729f7ddbc3ba0cf32b689459c0c98。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
@@ -102,7 +102,7 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 - D4 Registry 与 D10 Catalog 分域，但通过 Activation Binding 做完整激活；D4 累计 semantic ledger 不允许回滚指针或删除历史。
 - Tool Value 固定复用 D7 类型和值代数的有限子集，MCP 只作为 Tool Adapter transport。
 - package trust 固定 SHA-256 内容绑定与应用层 Ed25519 publisher 签名，同时把 PublisherIdentity 与 NamespaceClaim 分开。
-- external effect、idempotency、outcome_unknown、credential rotation、cost reservation、cancel race 与 audit failure 均已有唯一规范结论。。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
+- external effect、idempotency、outcome_unknown、credential rotation、cost reservation、cancel race 与 audit failure 均已有唯一规范结论。
 
 这些是作者候选选择，不是独立 acceptance。
 
@@ -118,6 +118,10 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 - TASK.zh-CN.md / TASK.md
 - START.zh-CN.md / START.md
 
+另有辅助复审记录：
+
+- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
+
 CANDIDATE 是自包含主规范；TERMINOLOGY 关闭命名碰撞；SCENARIO-DISPOSITIONS 逐项裁决 mandatory/task/race 场景；Implementation Impact 分层未来证据；UPSTREAM-AMENDMENTS 给 D6/D7 精确配套文本；TASK 定义当前作者→独立评审流程；START 记录真实输入覆盖。
 
 ## 5. 当前设计选择和仍未激活部分
@@ -128,15 +132,20 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 本候选也不声称 OS sandbox、真实 MCP/model/connector 服务、credential store、费用系统、真实 Core amendment 或五端 UI 已实现。Implementation Impact 中这些证据继续 pending。
 
-## 6. 交接给独立评审
+## 6. 分批独立审查与本轮作者修订
 
-下一步不是继续作者批次，而是由 fresh independent Chat GPT-6 Pro 从固定上游和本候选实物从零审查。独立 reviewer 应完整读取七对 D10 文档及必要上游原文，重点攻击：
+前两批独立审查已经完整读取被评候选 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e` 的 14 份 D10 文件，以及固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 中 D1 主文/实施、D6 主文/Control、D7 Execution/Narrow Field/Prepared Binding/Preview Effects 共 8 份。其余 40 份上游输入仍待独立审查。
 
-1. 方案 D 是否确实比 A/B/C 更简单且完整；
-2. D6/D7 amendment 是否必要、充分且没有第三 ledger/第三 commit path；
-3. standing approval 的 exact-one Entry、footprint、count reservation、revocation/recovery 是否闭合；
-4. Registry/Catalog 激活、publisher trust 与 D4 cumulative ledger 是否一致；
-5. prompt injection、MCP、secret/egress、external outcome unknown、cost uncertain、audit failure、cancel/planned race 是否闭合；。上述技术名称均只表示本文定义的受控边界，不增加额外权限、身份或作者写入语义。
-6. Mandatory scenarios、D1–D9 ownership、Mobile negative boundary 与 terminology 是否无回归。
+作者此前的 48/48 输入阅读仍只属于作者来源覆盖，不能替代独立 reviewer 的上游覆盖。当前修订针对前两批提出的 B1-01 至 B1-05 和 B2-01；逐项作者处置记录见 REVIEW-DISPOSITIONS。所有条目状态都只是“作者已修订、等待独立复核”，不得写成 independently closed。
 
-独立评审之前不得把 candidate、文档 CI 成功或作者自查写成 Gate pass；不得合并、发行或开始 A2。
+本轮修订重点为：
+
+1. D6 内 approval 竞争增加唯一 `approval_unavailable/preflight` 提案，并与 D10 前置 approval error 分域；
+2. planned decision 增加只读原 preview 恢复运输，不延长旧 token、不重新 prepare；
+3. authoritative terminal_failed 原子释放 approval count reservation，普通取消/TTL/暂时失权不释放；
+4. raw no-op 明确为空 MutationFootprint/field_change/sourceVersions 分支；
+5. cost released 只表示收费执行从未开始，实际发送零账单为 `settled(0)`；
+6. DelegationLease `maxRuns` 固定为第一次受保护执行时消费，失败/取消后不退款，同 Run 恢复不重复消费，并补齐 terminal occurrence 与 trusted-time 防重/过期语义。
+
+下一步仍是继续独立审查与定向复核，不是作者自行宣布 Gate 通过。上游协调修订在接受前仍未生效，也不得开始 A2。
+

@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision r02. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
@@ -59,6 +59,21 @@ The same author conversation first completes planning, then writes the complete 
 The author modifies only necessary design material under docs/design/d10/ and the existing PR title/body. Do not modify input snapshots, product implementation, brand, repository permissions, or branch protection; do not merge, release, or start A2.
 
 Author completion means: actual 48/48 input coverage; seven complete bilingual document pairs; required upstream amendment clearly unactivated; diff restricted to the authorized directory; actual document checks/CI read and accurately reported; no pending/failure mislabeled as pass.
+
+## Current staged-revision constraints
+
+The same author continues revising this candidate after staged independent review; author revision does not change the fact that the independent Gate is incomplete. The following contracts are now explicit:
+
+- Delegation Lease `maxRuns` is consumed once at the atomic Run-admission point immediately before the first protected execution; cancellation before that point consumes nothing, while failure, cancellation, or crash after admission never refunds it, and recovery of the same Run never consumes twice.
+- Claim, Run identity, and terminal proof for one Automation occurrence remain durably deduplicated; restart, rescan, disable→enable, and cache rebuild cannot start another Run.
+- Lease expiry is determined by trusted current time rather than a cleanup task; unprovable time continuity fails closed and never assumes the Lease remains unexpired.
+- When Standing Approval loses a race after formal D6 entry, UPSTREAM-AMENDMENTS proposes D6 `approval_unavailable/preflight`; it is not disguised as a D10 pre-submit approval error and is never persisted as a permanent semantic rejection.
+- After a planned decision's original preview transport expires, UPSTREAM-AMENDMENTS provides a read-only planned-preview recovery entrypoint that reissues a finite delivery epoch from saved semantics; it does not reprepare, change OperationId, rerun Query, or change target.
+- Authoritative `terminal_failed` may release an approval-count reservation in the same abort transaction, while cancellation, TTL, temporary revocation, and Lease expiry do not; cost reservation follows its separate settled/released/uncertain contract.
+- Both raw no-op and real member change belong to the first single_field_member automatic profile, but raw no-op keeps MutationFootprint, field_change, and sourceVersions empty rather than inventing effects.
+- Cost `released` means billable execution is proven never to have started; an actually sent request with a final zero bill is `settled(0)`.
+
+These remain candidate amendments and do not change current upstream authority before coordinated D6/D7 acceptance.
 
 ## Independent review
 
