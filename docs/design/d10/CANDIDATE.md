@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r04-final-review-fixes-2026-09-28; status: candidate, pending independent review and coordinated activation. This candidate takes the original 48 D1-D9 inputs at fixed upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` as authoritative and has additionally read the D4 reference catalog added by supplemental S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; current author input coverage is 49/49. Historical 48/48 reading records still refer only to the original U inventory and are not retroactively rewritten as 49/49. Independent review has completely read old candidate C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e` and adjudicated it revise; that does not mean current r04 is independently accepted. This remains an author revision candidate and does not mean the Gate has passed, the product is implemented, an upstream amendment is active, or A2 may start.
+revision: D10-r05-unified-control-contract-2026-09-28; status: candidate author revision pending a new complete independent joint final review of a fixed R05 candidate. This candidate continues to use the original 48 inputs at fixed upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the supplemental D4 reference catalog at S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; author coverage is 49/49 and historical 48/48 records keep their original context. Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`: candidate 16/16, upstream 16/49, with 1 P1 + 5 P2 formally open and the D3 batch awaiting its formal report. R05 changes foundational authorization, transaction, and public-wire semantics, so old coverage cannot be carried forward as R05 acceptance. This document does not mean the Gate passed, the product is implemented, a runtime capability is available, an upstream amendment is active, or A2 may start.
 
 ## 1. Selection and problem boundary
 
@@ -66,11 +66,15 @@ D10 control state lives in a managed control domain bound to the D6 Authority St
 
 Every durable record that affects workspace-operation eligibility must be changed through a Core-managed closed adapter. Ordinary runtime telemetry may be transported independently, but recovery may not treat telemetry as approval, authorization, cost, or side-effect fact.
 
+The **exact normative contract** for R05 management authority, closed bodies, stable request keys, prepare/result/secret/stop entrypoints, ResourceUseGrant, deployment-control decisions, cost settlement, stop linearization, and package manifests is owned by [CONTROL-CONTRACT](CONTROL-CONTRACT.md). That file is part of this candidate rather than implementation notes. A Workspace control write that affects an author decision still enters the original D6 authority/decision transaction. Deployment host control may change only deployment-control records and can neither write author payload through a host adapter nor forge a D6 receipt.
+
 ## 6. Registry, Catalog, and activation
 
 The D4 Registry remains the only semantic namespace/schema authority. D10 authenticates package/publisher/namespace claims, installed assets, and contribution origins, then supplies the complete candidate `RegistrySnapshot/1` and `RegistryBinding/1` to existing D4 validation, evolution, and catalog loading. D10 adds no Registry member and changes no D4 Field/Facet/Relation/Calendar/Unit semantics.
 
 D10 separately maintains a Capability Catalog that records each executable or pure-data contribution's exact package digest/version, contribution kind/version, runtime profile, platform/architecture, dependencies, host privileges, network/egress class, secret requirements, cost profile, and D1 capability ID. The Catalog cannot keep a second FieldDefinition or prove namespace ownership from display name or install order.
+
+R05 closes package/contribution wire in CONTROL-CONTRACT §4–§5. Dependencies are members of the **specific dependent Contribution**, not an ambient package-level array; an unavailable connector cannot disable unrelated schema/template/data-pack Contributions in the same package. The Contribution-kind closed set explicitly retains module/schema/view/action/template/preset/pack/tool/model/connector/importer/exporter/conversion/renderer/localization. Calendar, Library, People, and Organizations each have one first-party PackageId→module Contribution→schema Contribution mapping that explicitly references D4-frozen namespace ownership and FacetIds. These D10 PackageIds do not create a second D4 namespace and are not claimed to be pre-existing D1 module IDs, code paths, or locale resources.
 
 Supplemental S contributes the 49th current input, the D4 reference catalog: 61 Fields, 7 Facets, 22 value-type aliases, 4 qualifier sets, and 1 Calendar series policy. It changes no existing D4/D7 semantics; it supplies the previously omitted normative machine graph. For `single_field_member`, the actual catalog contains 27 relation Fields, a cross-Field `union_variant_equal` between `calendar/range` and `calendar/recurrence` under `calendar/event`, plus required-field and Field-local constraints. Therefore the automatic path must still run the complete Registry-graph proof from D7 Narrow Field Qualification and can never infer safety merely from "one Field is modified". The positive `people/phone` case is a non-relation Field in `people/person`, whose Facet has no additional constraints and whose Field constraints are empty, while alias, qualifier, source-envelope, and all other D7 dependencies still require full validation.
 
@@ -154,6 +158,8 @@ The first generation permits only one delegation layer from a user or administra
 
 Effective eligibility is D1 capability ∩ current D6 Policy/ObservationScope ∩ DelegationLease ∩ contribution deployment policy ∩ egress grant ∩ secret-use grant ∩ external-effect approval ∩ current ActivationBinding ∩ budgets. Failure in one dimension cannot be compensated by another.
 
+R05 further separates resource **use** from resource **administration**. Workspace self-service requires proposed D6 Policy/2 capability `d10_control_self`; Workspace administration still uses `policy_admin`, and Registry activation additionally requires `registry_admin`. Deployment trust/account/secret/pricing/grant state is managed only under host DeploymentControlPolicy. A user has a positive path to create and manage a finite owned Automation, but selecting deployment cost, secret, egress, or external-effect resources requires an exact ResourceUseGrant issued by deployment administration. Grant revision/renewal never clears spent/held/attempt counters, and a new grant never erases an old attempt's liability to the actual account. Exact fields, authorization order, and stable replay are defined in CONTROL-CONTRACT §6–§9.
+
 Lease readScope cannot invent D6 Field ref-set permissions that D6 does not provide. Core first obtains a legal read/write scope under D6, and D10 then narrows it using exact owner, Field, and context constraints. Expiry, revocation, or generation change prevents new protected steps; already committed author decisions and externally linearized sends are not retroactively rolled back.
 
 `maxRuns` is the finite positive Counter limit on Runs that may enter protected execution over the full lineage of one `leaseId`. Changing `leaseRevision` never resets prior consumption. An authorized successor revision may raise the limit but cannot lower it below already consumed uses; revocation uses a separate revoked state. Creating a queued Run, establishing an occurrence claim, performing scheduler-only bookkeeping, or cancelling before the first protected step consumes no `maxRuns` use.
@@ -191,7 +197,7 @@ Secrets, credentials, tokens, plan/effects handles, private environment, and uns
 
 ## 10. Tool Value Profile and MCP
 
-D10 ToolValueProfile/1 reuses a restricted subset of D7 TypeSpec/V: bool, exact text, int64, integer, decimal, Optional, closed object, bounded list, and closed union. Maximum type depth is 16, object members 64, union arms 8, list maximum 4096, type description 64 KiB, and complete parameters or results 8 MiB; deployment/run budgets may be narrower.
+R05 no longer leaves ToolValueProfile/1 as a placeholder that merely “reuses a subset.” CONTROL-CONTRACT §3, owned by the D10 Tool Adapter, normatively freezes the closed ToolValueProfile/1, ToolType/1, and ToolValue/1 wires: bool, text, int64, integer, decimal, optional, closed object, bounded list, and closed union, with depth/member/arm/list/byte limits, canonical numeric rules, and unknown-member rejection. It is neither a D7 TypeSpec alias nor arbitrary JSON Schema.
 
 First-generation ToolValue excludes EntityRef, Locator, ActionEvidence, plan/result/effects tokens, SecretRef, arbitrary file-path capabilities, calendar/quantity values, and open maps. When a readable string representation of an author Ref is sent to an external service, it is only egress-approved text and does not regain Core authority at the receiver.
 
@@ -313,7 +319,7 @@ Once the unattended D10 path has associated ApprovalUse as an internal dependenc
 
 For an unseen request, `approval_unavailable/preflight` writes no author ledger, no recorded rejection, and no planned decision. The caller may retry while the original preparation remains valid under newly valid approval, or return to an interactive path. For an already planned request, the same error leaves the ledger planned and preserves the original plan, pins, and reservations; it cannot be written as `semantic_rejected` or `terminal_failed`. The D10 adapter does not wrap this D6 error in a D10 approval code. If UI needs to distinguish exhausted, revoked, or expired approval, it performs a separately authorized D10 control read.
 
-This is a necessary extension of the D6 closed error set. Existing D6 request/receipt/error object shapes remain unchanged, but a consumer selecting this coordinated capability must support the added enum value. Existing capability profiles never emit this code, and an unnegotiated old consumer may not be exposed to this branch.
+This is part of the first jointly specified public unattended author-submit contract, not an anonymous old/new D10-profile compatibility layer. Fixed-upstream D6 is not an already published old product API. On joint acceptance, the first public D6-Control/1 closed error set directly contains the code. Any component combination that can enter the formal branch must support that same set; an incompatible combination is rejected at the D1 capability/version gate and cannot enter D6 to discover compatibility through an unknown enum. Policy/1/2, bootstrap profile/1/2, and historical saved-decision decoders remain unchanged.
 
 ### 15.2 Re-inspecting the original preview after planned
 
@@ -409,26 +415,23 @@ Compensation is a new ExternalEffectIntent with its own authorization, approval,
 
 ## 18. Budget, cost, and concurrent reservation
 
-Existing D6 work/attempt budgets remain. D10 adds managed multi-account reservation for model, tool, network, and external cost; the narrowest remaining balances of Run, Lease, Automation, and deployment accounts must be reserved atomically so two concurrent Runs cannot both observe the final balance.
+The original D6 work/attempt budget remains. D10 uses the ResourceUseGrant, CostReservation, and CostSettlementDecision contracts in CONTROL-CONTRACT §6 and §10 for model, tool, network, and external cost. The narrowest remaining limits across Run, Lease, Automation, grant, and deployment account are atomically checked in one authority-store admission transaction so concurrent Runs cannot both observe the last capacity.
+
+Exact Money/1, currency, microUnits, grant/account ceilings, pricing bindings, and checked arithmetic are defined by CONTROL-CONTRACT §2 and §9. There is no implicit FX conversion and no caller-facing accounting interface for manually entering “actual cost” or a target terminal state. Every potentially billable attempt binds an independent reservation, attemptId, actual account/grant, pricing version, and finite upper bound before it begins. Grant renewal or revision never clears spent, held, or attempts, and replacing a grant never migrates or erases the old reservation/account liability.
+
+The cost state machine is:
 
 ```text
-Money/1 {
-  currency,
-  microUnits
-}
+reserved → settled(actual) | released | uncertain
+uncertain → settled(actual) | released
 ```
 
-microUnits is a Counter and all multiplication/accumulation uses checked arithmetic. One account uses one configured currency and performs no implicit FX. Before a potentially billable attempt begins, reserve a finite upper bound under the currently accepted pricing rule, binding priceVersion, request limits, and included charge categories. A service whose finite maximum cannot be proven cannot offer hard cost-ceiling mode.
+Only settled and released are terminal. uncertain is a **recoverable non-terminal state** retaining the complete upper bound. released requires reliable never-started evidence proving billable execution/send for that attempt never began. An actually sent attempt with a reliable final zero bill is settled(0). Reliable final billing evidence attributable to the same reservation/attempt/account/currency/pricing resolves uncertain→settled(actual); reserve100→uncertain→final bill20 returns only80.
 
-Cost reservation states are `reserved → settled | released | uncertain`, with fixed terminal meanings:
+Reconciliation is evidence-driven and available only to current deployment administration or the named reconciler for that account, using expected-reservation-revision CAS and EvidenceTicket. Success atomically appends immutable CostSettlementDecision, updates reservation and grant/account held/spent/available projections, and stores evidence plus audit. Exact decision replay never returns capacity twice and concurrent conflicting decisions have at most one winner. Wrong-attempt/account/currency, non-final, or non-attributable evidence leaves uncertain with the full bound. Administrator-entered zero, effect idempotency, business rollback, author terminal_failed, TTL, and Run terminal state are not refund evidence.
 
-- `released` is allowed only when billable execution or a billable send is proven **never to have started**, such as cancellation before the send fence. It means the reservation has no corresponding billing attempt.
-- `settled` means a billable attempt started and reliable final billing truth is known; the actual amount may be 0 microUnits. A request that was actually sent and later has a reliable zero bill is `settled(0)`, never released.
-- `uncertain` means a billable attempt may have started but final cost cannot be proven. It continues to occupy the original upper bound until reliable billing truth or an authorized accounting-recovery result is obtained.
+actual above the reservation upper bound follows the existing overcharge-anomaly/freeze path; ordinary reconciliation never silently expands the ceiling. ApprovalUse count, LeaseRunUse, and cost reservation remain fully separate.
 
-TTL, restart, author terminal_failed, and transcript deletion cannot release uncertain. Every retry establishes a separate cost reservation; effect idempotency does not imply free billing. Author approval-count reservations and cost reservations are separate: the former can be released with authoritative terminal_failed under §15.3, while cost becomes released only from proof that no billable attempt began.
-
-If a service violates an accepted pricing contract and produces cost above reservation, record the actual anomaly, freeze the affected capability, and require administrative handling. The system may not silently raise the ceiling while continuing to claim the original guarantee.
 ## 19. Audit and retention
 
 Before execution, the following protected steps require a durable local/Server authority-bound audit started record: sensitive workspace/context read, egress, secret use, D10-initiated author submit, external mutation, and delegation/approval/package-activation mutation. If it cannot be written, fail closed.
@@ -450,6 +453,10 @@ A queued/prepared Run that has not passed the §8 Run-admission CAS may be cance
 A request that has entered D6 planned is not automatically aborted by Run cancellation; Run becomes cancelling/blocked and follows original D6 planned recovery. Loss of current delegation, trusted time, or Standing Approval may prevent a new author commit that no longer has current eligibility, but temporary loss is not persisted as a permanent business rejection. A committed decision is never rolled back.
 
 After an external effect enters submitting, cancellation only prevents later steps; that effect still resolves to succeeded, failed_no_effect, or outcome_unknown. Late model/tool output cannot start new work after its step is closed.
+
+R05 adds irreversible emergency stop, but stop is not rollback. CONTROL-CONTRACT §11 fixes three real linearization points: new Run admission and stop share one store serialization domain; D6 final author commit rechecks the corresponding stop latch inside the actual final transaction while holding write serialization; and external transport holds the stop gate through the first irreversible real send handoff rather than checking only queue admission. An earlier committed/sent result remains a fact and a later stop only prevents effects not yet linearized.
+
+Stop does not block currently authorized authoritative abort, cost settlement, evidence/audit retention, or reference-safe cleanup. Temporary disable, Lease expiry, ordinary cancellation, or temporary authorization loss is not irreversible abort proof. The proposed D6 companion adds `execution_stopped/preflight` and permits an already planned request to enter the original `transaction_aborted/terminal` authoritative-abort path only after current authorization, continuity, complete RunBinding, and irreversible stop are all proven.
 
 Restart first restores durable occurrence claim, Run, LeaseRunUse, ApprovalUse/cost reservations, and original requests. Recovery of the same Run first proves continuity of the existing LeaseRunUse, then current authorization, exact Lease revision, trusted time, ActivationBinding, approval, and budgets; it never performs a second new-Run admission merely because `maxRuns` remaining is now zero. A paused Lease expires naturally without a cleanup task; once trusted time is after `notAfter`, new steps and final submissions are refused. If clock continuity cannot be proven, return `state_unavailable` and retain original control records without extending the deadline or assuming the Lease remains valid. If execution side-effect outcome cannot be proven, transition to blocked/reconciling rather than creating a new OperationId or effect ID.
 ## 21. Errors and unavailability semantics
@@ -473,7 +480,7 @@ Error ownership is determined by the boundary already entered:
 | New planned-preview recovery transport fails | original D7 `d7_effects_error` with existing `not_visible|preview_expired|reset_required|effects_unavailable|budget_exceeded` codes as applicable |
 | Committed effects read | existing `d7_effects_resolve/open` and original errors only |
 
-A D10 probe therefore cannot eliminate an approval race after D6 entry and cannot hide a private submission result outside D6. The new `approval_unavailable` is a necessary coordinated extension of the D6 closed enum; request, receipt, and error object shapes remain unchanged, but the capability cannot be advertised available until the consumer supports the new enum.
+A D10 probe therefore cannot eliminate an approval race after D6 entry and cannot hide a private submission result outside D6. `approval_unavailable` and R05 `execution_stopped` are formal members of the first jointly specified public unattended author-submit D6 closed error set. There is no older D10 error profile that can still enter the same branch. Design acceptance fixes the contract only; runtime availability must still pass D1 contractMajor, release, surface, policy, principal, component/configuration, version-combination, reachability, and health gates.
 
 A D6 `approval_unavailable/preflight` may be retried with the **same original request** after control conditions change: unseen retries only while the original preparation remains valid and new valid approval exists; planned resumes under §15.2 `PlannedDecisionApproval/1` or still-valid original approval. It never writes `semantic_rejected` and never creates a terminal decision merely because of TTL, cancellation, or temporary revocation.
 
@@ -492,7 +499,7 @@ LTR/RTL, locale, screen reader, and Web/CLI transport differences affect present
 
 D1 surfaces, capability reasons, and sole commit holder remain; D2 raw source/unknown-provider preservation remains; D3 identity/SourceBinding/OriginBinding/Provenance remains; D4 Registry exact shape/evolution remains; D5 gains no persistent Record; D8 Draft/explicit edit confirmation remains; D9 worker/ExportPlan/publication remains.
 
-Only the D6/D7 standing-approval author-submit and planned-preview recovery branches need coordinated amendments, specified precisely in UPSTREAM-AMENDMENTS. They include the D6 `approval_unavailable/preflight` error extension, ApprovalUse reservation/terminal rules, and D7 planned-preview recovery transport. Existing upstream remains authoritative until joint acceptance and coordinated activation, so the product must keep unattended author commit unavailable.
+R05 expands the coordinated-amendment scope to D6/D7 standing-approval author-submit and planned-preview recovery, Policy/2 `d10_control_self`, freezing the old set for bootstrap profile/2 plus explicit profile/3, and irreversible-stop `execution_stopped/preflight` plus the planned authoritative-abort condition. UPSTREAM-AMENDMENTS contains the exact proposal and CONTROL-CONTRACT owns D10 host/control wire. Joint design acceptance or coordinated activation **does not mean runtime implementation or release**. `automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` must enter the official D1 capability catalog and pass every real availability gate before they can be advertised available.
 
 ## 24. Security counterexamples
 

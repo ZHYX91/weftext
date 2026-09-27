@@ -29,7 +29,7 @@ revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate upstream am
 - D4 Registry、D7 Narrow Field Qualification 与 D6 Policy/ObservationScope；
 - 原当前授权、deny 优先级、信息不披露、authority/fence、dependency CAS、replay 与 planned 恢复规则。
 
-D6 `d6_error` object shape 与 disposition 集合保持，但 code 闭集需要增加一个协调值 `approval_unavailable`。这是必要的 closed-enum 扩展，不伪装成既有错误。D7 Preview/Effects 需要增加一个 planned-only 只读恢复入口；原 `d7_effects_resolve/open` 继续 committed-only。以上扩展在 capability 协商和协调激活前均不可使用。
+D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公开 unattended author-submit 合同的 code 闭集需要协调加入 `approval_unavailable` 与 `execution_stopped`。它们都是必要的 closed-enum 扩展，不伪装成既有错误，也不建立匿名 old/new D10 error profile。D7 Preview/Effects 需要增加 planned-only 只读恢复入口；原 `d7_effects_resolve/open` 继续 committed-only。R05 还提议 Policy/2 新增 `d10_control_self`、固定 bootstrap profile/2 的原非 Field 集合并新增显式 profile/3。以上都只是设计提案；独立接受/协调激活不等于产品已经实现或 D1 capability 已可用。
 
 ## 2. D6 Storage Transactions Permissions and Sync — 拟新增条款
 
@@ -74,7 +74,7 @@ D6 `d6_error` object shape 与 disposition 集合保持，但 code 闭集需要�
 >
 > D10 adapter 必须逐字传递这个 D6 error，不包装成 D10 approval error。调用端若要显示“批准已撤销/过期/次数被抢占”等细分原因，必须另经当前受权的 D10 control read，不能从 D6 author error 偷带控制细节。
 >
-> 这是协调能力专用 closed-enum 扩展。D6 request/receipt/error object shape 与 disposition 集合不变；选择该 capability 的 consumer 必须支持新增 code。旧 profile 永远不会产生该 code，未协商旧 consumer 不得暴露到该分支。
+> 这是第一份共同公开 unattended author-submit D6-Control/1 error 闭集的一部分。固定 S 的 D6 是尚未发布的设计合同，不构成必须运行时兼容的旧 D10 profile。能够进入该正式 branch 的组件组合必须支持同一闭集；不兼容组合在 D1 capability/version gate 前拒绝。Policy/1/2、bootstrap profile/1/2 与历史 saved decision decoder 均保持。
 
 ### 2.4 planning CAS 原子 reserve
 
@@ -136,6 +136,7 @@ integrity_conflict
 operation_id_conflict
 plan_expired
 approval_unavailable
+execution_stopped
 dependency_conflict
 semantic_rejected
 budget_exceeded
@@ -143,6 +144,8 @@ transaction_aborted
 ```
 
 `approval_unavailable` 只允许 disposition=`preflight`。它表示 coordinated D10 author-submit 的 approval dependency 在进入 D6 后不可消费，但原 D6 author permission/ObservationScope 与适用业务前提没有更早失败。它不生成 recorded rejection，不泄露 approval 内部原因。
+
+`execution_stopped` 同样只允许 disposition=`preflight`，且 current authorization/ObservationScope 必须先通过。它只表示本 request 绑定的不可逆 ExecutionStopLatch 已在线性化顺序中阻止新的 author submit；不得替代 `not_visible`、approval 错误、temporary disable、Lease expiry 或业务 dependency。unseen 不写 ledger；planned 按 §3.5 的严格 authoritative-abort 条件处理。
 
 原三阶段/key/权限/availability 规则不变；`dependency_conflict|semantic_rejected|budget_exceeded` 仍只在原步骤6可 recorded；planned 后永久 abort 仍只有 `transaction_aborted|terminal`。一个旧 consumer 未协商 D10 standing-approval capability 时不能收到新增 enum。
 
@@ -153,6 +156,28 @@ Standing Approval 不增加 receipt member。D10 UI 可以从受权 Run/Approval
 ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefinition、LeaseRunUse、PlannedDecisionApproval 等耐久 D10 控制状态只能由 Core 管理的封闭 control adapter 修改，并具有独立 control revision/CAS、当前 principal authorization、audit 与 replay 合同。它们不能经作者 source、provider callback、Agent JSON 或 `d6_commit_request` 自由 payload 修改。
 
 `maxRuns` 消费发生在第一次受保护执行前的 D10 Run-admission CAS，不进入 D6 author ledger。CAS 按同一 `leaseId` 谱系累计历史，写 `LeaseRunUse/1`；同 Run restart 不重复消费，准入后的 failed/cancelled/crash 不退款。只有一个**尚无 LeaseRunUse 的新 Run**在累计消费已达到 `maxRuns` 时才返回 D10 `delegation_exhausted`。已经有完整 `LeaseRunUse/1` 的同 Run 后续受保护步骤和原 planned request 恢复不再比较 remaining count，也不再次消费；即使 `maxRuns=1` 且累计已经为 1，也不能把该同 Run 当成新 Run 拒绝。它们仍必须逐步验证当前授权、准确 `leaseRevision`、可信时间、ActivationBinding、批准和预算；撤销、过期、revision/binding 变化或连续性不可证明仍会阻止执行。
+
+### 3.5 D10 Workspace 自助管理、bootstrap profile/3 与不可逆 stop
+
+这是对固定 S D6 Control 的显式协调修订，不改写 S 快照。
+
+Policy/2 capability union 增加一个无参数值 d10_control_self，只允许 workspace scope。它允许当前主体通过 R05 CONTROL-CONTRACT 的 closed Workspace control adapter 管理自己拥有的有限 Automation/Lease/Approval/Run 控制记录；它不蕴含 source/Field read-write、policy_admin、registry_admin、binding_admin、repair、commit_sequence_state 或任何 deployment resource。其它能力也不蕴含它；deny 继续优先。
+
+Workspace D10 control adapter 是受管 PreparedIntent producer，但只接受 CONTROL-CONTRACT §7 的 automation_configure、consent、state、workspace_limits、activation 五类 Workspace body。它不能接受 deployment_put、cost_reconcile、secret bytes 或自由 callback。producer 从真实 current principal、完整 closed body、受权读取和 stable prepare binding 生成原 d6_commit_request；external caller 仍不能声明 principal、authorized、effect 或 writer。涉及作者 payload 的最终 mutation 仍只能来自原 D7/D8/D3 adapter；普通 D10 control mutation 不能构造 author source bytes。
+
+固定 S profile/2 的“全部非 Field capability”在本 amendment 中冻结为 S 当时闭集：workspace_state、entity_state、locator_state、source_read、source_write、body_write、node_control、node_create、resource_read、resource_write、annotation_read、annotation_write、lifecycle、registry_admin、binding_admin、policy_admin、export、repair、audit、source_envelope_state、commit_sequence_state。以后新增 capability 不自动进入 profile/2。
+
+新增 d6_bootstrap_profile wireVersion=3；成员仍为 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope。profile/3 的 initialPolicy.version 仍为 2；creator 初始 Workspace grant=上述固定 profile/2 非 Field 集合 + d10_control_self + S 原规则从 target Registry 生成的全部 Field read/write，deny 为空。
+
+只有当前 administer_issuer 的显式 issuer-profile 管理操作才能把以后新 family 切换为 profile/3。既有 family 保存的 profile/1/2 副本、replacement、WorkspaceBootstrapPlan、saved decisions、replay/continue/failover 不重算、不补 grant。既有 Workspace 取得 d10_control_self 只能由当前 policy_admin 走原 Policy 修改事务显式安装；Field 权限主体不能自授。
+
+d6_error.code 的第一份共同公开 closed set 同时增加 execution_stopped，只允许 disposition=preflight。对尚未 planned 的 D10-bound author request：先通过 current authorization/ObservationScope，再检查受保护 RunBinding 对应不可逆 stop latch；stop 已线性化时返回 execution_stopped/preflight，不写 author decision。
+
+D6 final author commit 必须在真正持有 authority-store 写序列化的最终事务内再次验证同一 RunBinding 的 stop latches；不得只在 prepare 或事务外 check。stop 先线性化则本次新 author commit 不发生；commit 先线性化则保存原 committed decision，之后 stop 不倒推撤销。
+
+对 already planned request，stop 本身不能直接写 terminal。只有 current authorization、authority/continuity、原完整 plan/RunBinding 和不可逆 stop 均可证明，并由原 D6 recovery 证明该计划确定永不提交时，才能在原 author ledger 中写 transaction_aborted/terminal；同一 abort transaction 按既定 ApprovalUse 规则释放 approval-count reservation。临时 disable、Lease expiry、普通 Run cancel、暂时撤权或 clock/state 暂不可证都不是该证明，planned 保持 planned。费用 reservation 不因 author abort 自动释放。
+
+stop 不阻断当前获权的 authoritative abort、cost settlement、evidence/audit retention 或 reference-safe cleanup；这些操作不会恢复 executor 或 author-write 权限。
 
 ## 4. D7 Execution and Action Interfaces — 拟新增/替换条款
 
@@ -182,6 +207,10 @@ ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefin
 > Standing Approval 不改变 D7 OperationId/replay。fresh automation occurrence 必须 fresh prepare；同一 committed request 丢 receipt 只能重发原 request。D10/Automation restart 不得因为原 preview token 过期就生成语义相同的新 OperationId。
 >
 > 原 ActionEvidence、FieldSelection、result epoch、source revision、preview delivery epoch 失效规则保持。Standing Approval 不能复活 stale evidence/selector。若 decision 尚未 planned 且需要重新 prepare，就产生新 request/OperationId 和新的 approval use；旧 mechanical approval 不沿用。
+
+### 4.4 不可逆 stop 与 D7 prepare 的绑定
+
+D7 ActionSpec、PreparedActionBinding/2、EffectManifest/EffectBytes wire 不增加 caller-supplied stop 字段。对于 D10 自动 author-submit，Core 在 prepare 成功后用受保护内部关联把 planToken 绑定到当前 Run/Automation/Lease 与其 ExecutionStopLatch refs；调用方不能删除、替换或自报这些 refs。final submit 由 D6 §3.5 在真正 transaction 内重验 stop。D7 交互路径本身不因 stop 获得新的自动确认能力；stop 只会阻止仍未线性化的后台 submit。
 
 ## 5. D7 Preview and Effects Transport — planned 恢复扩展
 
@@ -271,16 +300,15 @@ D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、Publica
 
 ## 9. 激活与版本兼容
 
-这些 amendment 只有在独立审查接受、总控协调裁决，并与 D10 candidate 一起激活后才生效。激活前：
+这些 amendment 只有在独立审查接受、总控协调裁决并与 D10 candidate 一起形成后续设计版本后，才改变规范；**设计接受/协调激活不是产品实现、发布或运行时 availability 证据**。
 
-- 产品可以实现 D10 Broker、Agent proposal、Automation scheduling、Tool/MCP、Connector read 和 external-effect control 的不涉及无人值守作者提交部分；
-- 所有 D7/D8 author proposal 仍使用当前逐次确认；
-- `single_field_member` unattended author-submit capability 必须返回真实 D1 unavailable 状态，不得用 private flag 绕过；
-- planned-preview recovery 新入口也不得在未协调的旧 D7 transport profile 中出现。
+首版 D10 公开能力由 D10 定义、D1 发现/发布的候选 ID：automation.manage、workspace.extensions.manage、deployment.external.manage、automation.stop、automation.author_submit。它们必须先进入所选 D1 contractMajor 的正式 capability catalog，并继续经过 D1 已冻结的 release、surface、policy、principal、component/configuration、reachability/version-combination 与 health 门。unknown ID 仍为 D1 unsupported_feature；不允许的组件版本组合仍为 incompatible_version。D10/D6 不增加第二个产品级协商器。
 
-新增 D6 `approval_unavailable` 是 closed enum 扩展。协调激活必须把 consumer 支持与 capability availability 绑定；旧 client/profile 不得收到未知 enum。request/receipt shape、D6 wireVersion1 request 和 D7 PreparedActionBinding/2 shape 均不因此改变。
+第一份共同公开 unattended author-submit D6-Control/1 error 闭集在该能力真正发布时已经包含 approval_unavailable 与 execution_stopped。不存在旧 D10 author-submit error profile、enum fallback、migration parser 或双读写。这里删除的只是未发布 D10 profile 假设；S 已冻结的 Policy/1/2、bootstrap profile/1/2、IssuerControlPolicy、D1 bootstrap/contractMajor 以及历史 saved decision decoder 全部保留。
 
-历史 committed D3/D6 decision 继续原 decoder/bytes，不回填 ApprovalUse。尚未形成 decision 的旧 prepare 不自动获得 Standing Approval；已经 planned 的新-profile decision 才能使用本文 recovery transport。
+运行时发布前，所有 D7/D8 author proposal 仍使用当前逐次确认，planned-preview recovery 新入口和 unattended author submit 均保持真实 D1 unavailable。实现可以独立推进不涉及无人值守作者提交的 Broker、Agent proposal、Tool/MCP、Connector read 和 external-effect control，但每项仍须自己的 D1 capability 和真实实现证据。
+
+历史 committed D3/D6 decision 继续按原 decoder/bytes 重放，不回填 ApprovalUse、stop 或 d10_control_self。已有 family 保留其固定 bootstrap profile；没有任何升级路径把 profile/2 静默解释为 profile/3。
 
 ## 10. 独立复审必须攻击的联合反例
 
@@ -302,5 +330,8 @@ D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、Publica
 16. D10 control error 不能包装或泄漏原 D6 `not_visible` 与隐藏事实。
 17. `maxRuns=1` 且同 Run 已有 LeaseRunUse 时，第二个受保护步骤和原 planned 恢复不能因 remaining=0 返回 `delegation_exhausted`；新 Run 才应被拒绝。
 18. Adopt 正向代码只保留 `adopt_*`，关联绑定只使用 `OriginBinding` / `origin_binding`；`adoption_binding` 在正向术语/代码面必须不存在，也不能作为 alias。
+19. profile/2 family 在软件升级后不得自动获得 d10_control_self；profile/3 只影响显式 issuer update 后的新 family，既有 Workspace 只能由当前 policy_admin 显式授予。
+20. stop 与新 Run admission、D6 final author commit 的两种先后都必须只有一个线性化结果；stop 后仍允许受权 authoritative abort、cost settlement 和 evidence retention。
+21. same stable Workspace-control request 已成功但响应丢失，随后对象 revision 改变；当前披露授权通过后必须重放旧结果，不能重复 mutation，也不能因 current revision 改变误拒绝历史成功。
 
 这些是作者修订后的审查靶点，不表示前两批独立问题已经关闭。只有后续独立复审才能改变其审查状态。

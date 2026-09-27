@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r04-final-review-fixes-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
+revision: D10-r05-unified-control-contract-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
 
 ## 1. Implementation slices and state owners
 
@@ -48,6 +48,20 @@ Recommended implementation order:
 7. S7: named read-only Connector profiles; writeback opens per profile only where an existing closed SourceBinding/OriginBinding adapter exists.
 8. S8: Desktop/CLI/Server/WebUI surfaces, diagnostics, audit/export/retention; Mobile performs negative-capability conformance only.
 9. S9: remove old prototypes/aliases/free JSON/tool callbacks and update public specifications; support claims wait for real implementation/platform evidence.
+
+### 1.1 R05 control-contract implementation slice
+
+[CONTROL-CONTRACT](CONTROL-CONTRACT.md) is normative R05 input rather than an implementation sketch. Implementation may not choose a different authorization, replay, or accounting semantic.
+
+- Workspace self-control is authorized by proposed D6 Policy/2 `d10_control_self`; Workspace administration remains original `policy_admin`, with `registry_admin` additionally required for Registry activation. Deployment trust/account/secret/pricing/grant is owned by D10 DeploymentControlPolicy and cannot be inherited from Workspace admin or issuer admin.
+- Workspace author-affecting mutation continues through the original D6 authority store, PreparedIntent, decision/receipt, and author commit point. DeploymentControlDecision stores only host-control outcomes; the host adapter cannot write author source.
+- `ControlPrepareBinding/1` uses stable `(scope incarnation, principal, requestId)` plus complete canonical intent bytes. Recovery order is current visibility/authority → same-key comparison → saved-decision replay → only an undecided operation checks current expected revision/eligibility.
+- Configuration revision and usageRevision are separate; control ID/incarnation is never reused. Retire/archive cannot delete records still pinned by planned, unknown, uncertain, evidence, or dedup state.
+- Implement all four `ResourceUseGrant/1` variants separately: cost, secret, egress, external-effect. Grant renewal/revision never clears spent/held/attempt/use, and replacing a grant never clears an old reservation or actual-account liability.
+- The old non-Field set of fixed-S profile/2 is frozen byte-for-byte in tests; only profile/3 adds `d10_control_self`. Upgrade, replay, replacement, continue, and failover cannot alter an existing family's profile.
+- PackageManifest dependencies resolve inside the concrete dependent Contribution. Contribution availability is independent, so an unavailable connector cannot transitively disable a same-package schema/template/pack.
+
+These are contract implementation obligations and do not claim that this author stage ran real Core/OS/provider implementation tests.
 
 ## 2. Data and storage impact
 
@@ -247,23 +261,18 @@ Connector sync changing SourceBinding/OriginBinding/watermark needs a separate o
 
 ## 9. Budget and cost implementation obligations
 
-D10 cost engine performs atomic multi-account reservation rather than read-then-decrement. It enforces at least Run, DelegationLease, Automation, and deployment limits while remaining separately cumulative from original D6 work/attempt budgets.
+Cost implementation follows CONTROL-CONTRACT §6 and §9–§10 exactly. CostReservation state is `reserved→settled(actual)|released|uncertain` plus `uncertain→settled(actual)|released`. Only settled/released are terminal. uncertain retains the complete upper bound and may later recover from evidence.
 
-Money uses one account currency and Counter microUnits only. Pricing rules are versioned and frozen:
+Implementation stores reservationId, attemptId, actual cost account/grant, currency, pricing binding, upper bound, state/revision, and evidence attribution. The caller has no targetState or hand-entered actual amount. Final-bill and never-started conclusions come only from a trusted EvidenceTicket adapter.
 
-- fixed charges;
-- token/unit linear charges where finite input, output, and work limits imply a finite maximum;
-- dynamic pricing without a finite maximum cannot offer hard-ceiling mode.
+Reconciliation CASes the expected reservation revision in the same authority transaction and atomically stores `CostSettlementDecision/1`, reservation state/revision, grant/account held/spent/available projections, evidence, and audit linkage. Exact decision replay never returns capacity twice; two conflicting reconcilers have at most one winner. Wrong attempt/account/currency, non-final evidence, or an aggregate bill that cannot be uniquely attributed leaves uncertain with the full bound.
 
-Reservation state is durable and terminal meanings are unique:
+A reliable zero bill after send is always `settled(0)`; only never-started proof is `released`. TTL, restart, author terminal_failed, Run terminal state, administrator-entered zero without evidence, and effect idempotency never release cost. actual above upper bound follows the existing overcharge-anomaly/freeze path rather than raising the ceiling through normal settlement.
 
-- `released`: billable execution or billable send is proven never to have started;
-- `settled(actual)`: a billable attempt started and final billing truth is proven; actual may be 0, and an actually sent request with a reliable zero bill is `settled(0)`;
-- `uncertain`: a billable attempt may have started but final cost cannot be proven, so the original maximum remains occupied.
+ResourceUseGrant configuration and cumulative usage have separate revisions. Renewal/revision retains spent/held/attempts; a lowered limit cannot be below existing consumed+held use. Changing grantee/account/resource kind/currency creates a new grantId, while an old reservation continues to settle against the old grant and actual account.
 
-An actually sent request is not released merely because its final charge is zero. Author terminal_failed also does not automatically release cost; released requires proof that the corresponding billable attempt never began. Overcharge anomaly freezes the capability for administrative recovery and never rewrites historical reservation to make it "legal".
+Real billing evidence must cover at least: reserve100→send→crash→uncertain→final bill20→settled(20), returning only80; sent+final0→settled(0); never sent→released; concurrent reconcilers; response loss after commit and replay; wrong attempt/account/currency; non-final or unsplittable aggregate evidence; administrator zero without evidence; and overcharge. Provider tests not actually run remain pending.
 
-Real provider tests include: cancellation before send→released; actual send with zero bill→settled(0); normal success billing; error/retry billing; delayed invoice; missing usage; usage disagreement; uncertain crash recovery; simulated over-ceiling; and currency mismatch. Every retry has an independent reservation, and idempotent effect does not imply free retry.
 ## 10. Audit, retention, and export
 
 The local/Server protected audit spool durably records started before protected operations; remote collector may be asynchronous. Implementation needs:
@@ -297,9 +306,17 @@ Error ownership is mechanically verified rather than collapsed into a generic Ag
 
 D10 control errors also verify the same `not_visible` response when a hidden object exists versus is missing until the caller has visibility. Only after the caller may read that caller-owned control record can expired, exhausted, or conflict detail be shown.
 
-The new D6 `approval_unavailable` is a coordinated closed-enum extension. Tests prove that old capability profiles never emit it and the capability is available only when the consumer supports the amended profile. The D10 adapter may not rewrap this D6 code as approval_required.
+R05 defines no anonymous old D10 capability profile. The first jointly specified public unattended author-submit D6 closed enum directly contains `approval_unavailable` plus proposed `execution_stopped`; runtime capability is decided by the official D1 catalog and real availability gates. The D10 adapter may not rewrap a D6 code as approval_required, and existing Policy/bootstrap/saved-decision compatibility contracts remain.
 
 Original D3/D7/D8/D9 errors likewise pass through exactly from their owner. Diagnostic UI may explain status through a separately authorized control read but cannot leak hidden data by changing the formal error wire.
+### 11.1 R05 capability, stop, and public-contract gates
+
+Candidate first-public D10 capability IDs are `automation.manage`, `workspace.extensions.manage`, `deployment.external.manage`, `automation.stop`, and `automation.author_submit`. Design acceptance or coordinated design activation freezes specification only. Implementation may report available only after the ID exists in the selected D1 contractMajor's official catalog and the real release/surface/policy/principal/component/configuration/version/reachability/health gates pass.
+
+The first jointly specified public unattended author-submit D6 closed error set directly contains `approval_unavailable/preflight` and proposed `execution_stopped/preflight`. Tests do not construct an anonymous old capability profile; Policy/1/2, bootstrap profile/1/2, D1 bootstrap/contractMajor, and historical saved-decision replay all remain.
+
+Emergency stop requires real race evidence at three boundaries: the same store transaction as Run admission, recheck inside the actual D6 final write-lock transaction, and an external send fence held through the first irreversible send handoff. A model that only checks stop then sleeps/commits/sends is insufficient. After stop, currently authorized authoritative abort, cost settlement, evidence/audit retention, and reference-safe cleanup must still work.
+
 ## 12. Cross-surface implementation matrix
 
 | Capability | Desktop local | CLI local | Server | WebUI | Mobile |
@@ -323,6 +340,8 @@ A later implementation atomically replaces any old free tool callback, arbitrary
 Every D10 concept must trace from stable concept ID to Chinese/English formal names, owner, wire/API/manifest/schema status, code type/function/variable/namespace, CLI/UI/locale, short/alias rules, examples/counterexamples, and first-freeze/migration target. Inherited D1-D9 names only reference the original owner; implementation cannot register new D10 aliases for `Registry`, `OriginBinding`, D6 permission, D7 Action, D8 Draft, or D9 Provider.
 
 B10-01 implementation negative gate: Adopt code paths use only the `adopt_*` convention and associated binding values use the existing D3 `OriginBinding` / `origin_binding`. Controlled positive source, API/schema, fixtures, and terminology registry contain no `adoption_binding`, with no scanner exemption.
+
+TERMINOLOGY §14 and CONTROL-CONTRACT additionally freeze R05 control records, five capability IDs, and four first-party module/package/schema mappings. Candidate code symbols/namespaces and locale keys are unimplemented mappings only; CI string presence is not implementation evidence. PackageId, D4 SemanticNamespaceId, D4 namespace ownerId, FacetId, and module ContributionId remain owner-typed and cannot be merged merely because strings match.
 ## 14. Test and evidence layers
 
 | Layer | Can prove | Cannot prove |
@@ -372,15 +391,23 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 30. package disable with author raw unknown namespace retained;
 31. D4 reference-catalog positive narrow proof for `people/phone` plus relation/cross-Field/unknown-constructor negatives;
 32. D3 lexicon positive mapping: `adopt_*` uses `OriginBinding` / `origin_binding`; negative controlled source/API/schema/fixtures/terminology registry contain no `adoption_binding`, with no scanner exemption.
+33. a self-service P with `d10_control_self`, actual narrow Field authority, and a deployment cost grant creates a finite Automation; missing any qualification rejects and Field authority never becomes deployment-account administration;
+34. stable-key r5 succeeds/response is lost, r6 later updates, and original retry replays saved r5 result; same key with different body/expected target returns `control_conflict`;
+35. grant renewal/revision/new grant races an old uncertain reservation and proves spent/held/attempt/account liability never resets;
+36. emergency stop races Run admission, D6 final commit, and external send, while settlement/authoritative abort/evidence cleanup remains possible after stop;
+37. profile/2 family does not gain `d10_control_self` on upgrade; profile/3 affects only new families after explicit issuer update;
+38. per-Contribution dependency: an unavailable connector does not disable same-package schema/template/pack;
+39. Calendar/Library/People/Organizations D10 PackageId→module→schema mappings remain type-distinct from D4 namespace owner/Facet and reject a same-name third-party spoof;
+40. design accepted while release/surface/policy/version/health gate fails still produces the real D1 unavailable result.
 
 Each case includes positive and mutant/negative paths and is not satisfied by string-log comparison. Any case not actually executed remains pending in the evidence table.
 ## 16. Completion gate
 
 The author implementation plan is ready for independent review only when:
 
-- CANDIDATE, TERMINOLOGY, SCENARIO-DISPOSITIONS, UPSTREAM-AMENDMENTS, and this file agree;
-- TERMINOLOGY §13 completes all 13 Intake §8.5.1 mapping fields for every current D10 controlled concept, inherited names reference their original owner, and no TODO/"implementation decides" placeholder remains;
-- 48/48 upstream input coverage remains accurate;
+- CANDIDATE, CONTROL-CONTRACT, TERMINOLOGY, SCENARIO-DISPOSITIONS, UPSTREAM-AMENDMENTS, and this file agree;
+- TERMINOLOGY §13–§14 completes all 13 Intake §8.5.1 mapping fields for every current D10 controlled concept, inherited names reference their original owner, and no TODO/"implementation decides" placeholder remains;
+- current author input coverage remains 49/49; historical U 48/48 records keep their historical context;
 - D6/D7 amendment is clearly an unactivated proposal;
 - unsupported/deferred is never written as available;
 - automatic author commit remains limited to single_field_member profile;

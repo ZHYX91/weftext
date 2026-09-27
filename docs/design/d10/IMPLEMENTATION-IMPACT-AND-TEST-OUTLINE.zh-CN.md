@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
+revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
 
 ## 1. 实现切片与状态所有者
 
@@ -47,6 +47,20 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 7. S7：Connector 的具名 read-only profile；只有已有 SourceBinding/OriginBinding closed adapter 的写回才可逐 profile 开放。
 8. S8：完成 Desktop/CLI/Server/WebUI 端侧接线、诊断、audit/export/retention；Mobile 只验证明确不可用的 capability。
 9. S9：清理旧原型/别名/自由 JSON/tool callback、更新公开规范；只有真实实施/平台证据完成后才能公开声称支持。
+
+### 1.1 R05 控制合同实施切片
+
+[CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 是 R05 的规范输入，不是实现草案。实现不得自行选择另一套授权、重放或账务语义。
+
+- Workspace 自助控制由 proposed D6 Policy/2 `d10_control_self` 授权；Workspace 管理由原 `policy_admin`，Registry activation 另验 `registry_admin`。deployment trust/account/secret/pricing/grant 由 D10 DeploymentControlPolicy 管理，不得借 Workspace admin 或 issuer admin。
+- Workspace author-affecting mutation 继续使用原 D6 authority store、PreparedIntent、decision/receipt 与 author commit point。DeploymentControlDecision 只保存 host control outcome；host adapter 不得写作者 source。
+- `ControlPrepareBinding/1` 使用 `(scope incarnation, principal, requestId)` stable key 和完整 canonical intent bytes。恢复顺序固定为 current visibility/authority → same-key compare → saved decision replay → 只有尚无 decision 才核 current expected revision/eligibility。
+- configuration revision 与 usageRevision 分离；control ID/incarnation 永不复用。retire/archive 不能删掉 planned、unknown、uncertain、evidence 或 dedup 仍引用的记录。
+- `ResourceUseGrant/1` 的 cost/secret/egress/external-effect 四类分别实现；grant renew/revision 不清零 spent/held/attempt/use，换 grant 也不清除旧 reservation 和实际 account liability。
+- fixed S profile/2 的旧非 Field 集合必须由测试常量逐字固定；profile/3 才增加 `d10_control_self`。升级、replay、replacement、continue/failover 不能改既有 family profile。
+- PackageManifest dependency 在具体 dependent Contribution 内解析。Contribution availability 单独计算，connector unavailable 不得级联停用同包 schema/template/pack。
+
+这些是合同实现义务，不表示本作者阶段已经运行真实 Core/OS/provider 实现测试。
 
 ## 2. 数据与存储影响
 
@@ -246,23 +260,18 @@ Connector sync 若修改 SourceBinding/OriginBinding/watermark 必须另有 owne
 
 ## 9. Budget 与费用实现义务
 
-D10 cost engine 必须做多账户原子 reservation，而不是先读余额后分别扣减。至少验证 Run、DelegationLease、Automation、deployment 四层上限，并与 D6 原 work/attempt budget 独立累计。
+费用实现逐字服从 CONTROL-CONTRACT §6、§9–§10。CostReservation 的状态机为 `reserved→settled(actual)|released|uncertain` 与 `uncertain→settled(actual)|released`；只有 settled/released 是终态，uncertain 保留完整 upper bound 并可由后续证据恢复。
 
-Money 只能使用同 account currency 与 Counter microUnits。pricing rule 必须版本化并冻结：
+实现必须保存 reservationId、attemptId、真实 cost account/grant、currency、pricing binding、upper bound、state/revision 和 evidence attribution。调用方没有 targetState 或手填 actual；final-bill / never-started 结论只能来自受信 EvidenceTicket adapter。
 
-- 固定收费；
-- token/unit 线性收费时，最大输入、输出和工作上限能推导有限最大费用；
-- 无法给出有限上限的动态价格不提供 hard ceiling。
+reconcile 在同一 authority transaction 中 CAS expected reservation revision，并原子保存 `CostSettlementDecision/1`、reservation state/revision、grant/account held/spent/available、evidence 与 audit link。same decision replay 不二次返额；两个不同 reconciler 竞争至多一个 winner。错误 attempt/account/currency、non-final 或不可唯一拆分 aggregate bill 保持 uncertain/full bound。
 
-reservation 状态必须耐久且终态含义唯一：
+发送后的可靠零账单必须 `settled(0)`；只有 never-started proof 才 `released`。TTL、restart、author terminal_failed、Run terminal、管理员无证据填0或 effect idempotency 均不能释放。actual 超 upper bound 走已有 overcharge anomaly/freeze，不通过普通 settlement 提高 ceiling。
 
-- `released`：能证明 billable execution 或 billable send 从未开始；
-- `settled(actual)`：收费尝试已经开始且最终计费可证，actual 可以为 0；实际发送后可靠账单为零必须是 `settled(0)`；
-- `uncertain`：收费尝试可能开始但最终费用不可证，继续占用原上限。
+ResourceUseGrant 的配置和累计 usage 分开版本化。renew/revision 保留 spent/held/attempts；降低额度不得低于既有消耗+占用。变更 grantee/account/resource kind/currency 创建新 grantId，但旧 reservation 继续结算到旧 grant 与实际账户。
 
-已经发送请求不能因为“最终收费为零”写成 released。author terminal_failed 也不能自动释放费用；只有证明对应收费尝试从未开始才可 released。overcharge anomaly 冻结 capability 并进入管理恢复，不能改写历史 reservation 使其“合法”。
+真实费用证据至少覆盖：reserve100→send→crash→uncertain→final bill20→settled(20) 只返80；sent+final0→settled(0)；never sent→released；并发 reconciler；commit 后 response loss replay；wrong attempt/account/currency；non-final/不可拆 aggregate；管理员无证据0；overcharge。未运行的 provider 测试保持 pending。
 
-真实 provider 测试至少包括：发送前取消→released；实际发送且账单0→settled(0)；正常成功计费；error/retry billing；delayed invoice；missing usage；usage disagreement；uncertain crash recovery；over-ceiling simulation；currency mismatch。每次 retry 独立 reservation，幂等效果不等于免费重试。
 ## 10. Audit、retention 与 export
 
 本地/Server protected audit spool 必须先于受保护操作耐久记录 started；remote collector 可以异步。实现必须有：
@@ -296,9 +305,17 @@ D1 capability reason 和固定优先级必须从真实部署组合执行测试�
 
 D10 control error 还必须验证 hidden object exists/missing 两个世界在 caller 尚无可见资格时都返回 `not_visible`。若 caller 已有本人 control record 可见性，才允许显示 expired、exhausted 或 conflict。
 
-新增 D6 `approval_unavailable` 是 closed-enum 协调扩展；测试必须证明旧 capability profile 永远不会产生它，只有 consumer 明确支持修订 profile 时 capability 才 available。不能在 D10 adapter 内把这个 D6 code 重新包装成 approval_required。
+R05 不再定义匿名旧 D10 capability profile。第一份共同公开 unattended author-submit D6 closed enum 直接包含 `approval_unavailable` 与 proposed `execution_stopped`；能否运行该 capability 由 D1 正式 catalog 与真实 availability gates 决定。D10 adapter 不得把 D6 code 重新包装为 approval_required，也不得删除既有 Policy/bootstrap/saved-decision 兼容合同。
 
 D3/D7/D8/D9 原 error 同样必须逐字沿原 owner 传递。诊断 UI 可以在另一个受权 control read 中解释状态，但不能通过改变正式 error wire 泄露隐藏数据。
+### 11.1 R05 capability、stop 与公开合同门
+
+首版 D10 候选 capability IDs 是 `automation.manage`、`workspace.extensions.manage`、`deployment.external.manage`、`automation.stop`、`automation.author_submit`。设计接受或 coordinated design activation 只冻结规范；实现只有在 ID 已进入选定 D1 contractMajor 正式 catalog，并且真实 release/surface/policy/principal/component/configuration/version/reachability/health 门通过时才能报告 available。
+
+第一份共同公开 unattended author-submit D6 closed error set 直接包含 `approval_unavailable/preflight` 和 proposed `execution_stopped/preflight`。测试不得构造匿名“旧 capability profile”；同时必须保留 Policy/1/2、bootstrap profile/1/2、D1 bootstrap/contractMajor 和历史 saved-decision replay。
+
+emergency stop 需要三个真实竞争证据：与 Run-admission 同 store transaction；D6 final commit 在实际写锁 transaction 内重验 stop；external send fence 持续到第一次不可撤回 send handoff。只做“check stop then sleep/commit/send”的模型不满足。stop 后仍必须能进行当前获权 authoritative abort、cost settlement、evidence/audit retention 与 reference-safe cleanup。
+
 ## 12. 跨表面实施矩阵
 
 | 能力 | Desktop local | CLI local | Server | WebUI | Mobile |
@@ -322,6 +339,8 @@ TERMINOLOGY §13 的逐概念结构化映射是当前 D10 命名权威，不是�
 每个 D10 concept 必须能从 stable concept ID 追到中英正式名、owner、wire/API/manifest/schema 状态、代码 type/function/variable/namespace、CLI/UI/locale、简称/别名、正反例和首次冻结/迁移目标。继承 D1–D9 名称只引用原 owner；实现不得重新登记 `Registry`、`OriginBinding`、D6 permission、D7 Action、D8 Draft 或 D9 Provider 的 D10 alias。
 
 B10-01 的实现负向门：Adopt 代码路径只允许 `adopt_*` convention；关联绑定值使用 D3 既有 `OriginBinding` / `origin_binding`。受控正向源码、API/schema、fixture 和 terminology registry 中不得出现 `adoption_binding`，scanner 不增加豁免。
+
+TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 capability ID 和四个第一方 module/package/schema 映射。候选代码 symbol/namespace 和 locale key 只能作为尚未实现的 mapping 验证，不能被 CI “存在字符串”冒充实际代码或资源实现。PackageId、D4 SemanticNamespaceId、D4 namespace ownerId、FacetId 与 module ContributionId 必须按各自 owner 分型，不允许因为字符串相同合并。
 ## 14. 测试与证据分层
 
 | 层 | 能证明 | 不能证明 |
@@ -371,15 +390,23 @@ B10-01 的实现负向门：Adopt 代码路径只允许 `adopt_*` convention；�
 30. package disable 时 author raw unknown namespace 保留；
 31. D4 reference catalog 的 `people/phone` 正向窄证明与 relation/cross-Field/未知 constructor 负例；
 32. D3 词表正向映射：`adopt_*` 使用 `OriginBinding` / `origin_binding`；反向受控源码/API/schema/fixture/术语 registry 均不存在 `adoption_binding`，且 scanner 不允许豁免。
+33. self-service P 有 `d10_control_self`、真实窄 Field 权限和 deployment cost grant 时可创建有限 Automation；缺任一资格则拒绝，不能把 Field 权限当 deployment account manage；
+34. stable-key r5 成功/丢响应，随后 r6 更新，原 retry 重放 r5 saved result；same key different body/expected target 返回 `control_conflict`；
+35. grant renewal/revision/new grant 与旧 uncertain reservation，证明 spent/held/attempt/account liability 不清零；
+36. emergency stop 与 Run admission、D6 final commit、external send 三处完整竞争，并证明 stop 不阻断 settlement/authoritative abort/evidence cleanup；
+37. profile/2 family 升级不获得 `d10_control_self`；profile/3 只作用 explicit issuer update 后新 family；
+38. per-Contribution dependency：connector unavailable 时同包 schema/template/pack 不受牵连；
+39. Calendar/Library/People/Organizations 的 D10 PackageId→module→schema mapping 与 D4 namespace owner/Facet 分型，第三方同名 anti-spoof；
+40. design accepted 但 release/surface/policy/version/health 任一门不满足时仍返回真实 D1 unavailable reason。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。
 ## 16. 完成门
 
 作者实现计划只有在以下条件都明确记录后才可交独立评审：
 
-- CANDIDATE、TERMINOLOGY、SCENARIO-DISPOSITIONS、UPSTREAM-AMENDMENTS 与本文互相一致；
-- TERMINOLOGY §13 对全部当前 D10 受控概念逐项完成 Intake §8.5.1 的 13 项 mapping，继承名称引用原 owner，没有 TODO/“留实现决定”占位；
-- 48/48 upstream input coverage 保持；
+- CANDIDATE、CONTROL-CONTRACT、TERMINOLOGY、SCENARIO-DISPOSITIONS、UPSTREAM-AMENDMENTS 与本文互相一致；
+- TERMINOLOGY §13–§14 对全部当前 D10 受控概念逐项完成 Intake §8.5.1 的 13 项 mapping，继承名称引用原 owner，没有 TODO/“留实现决定”占位；
+- 当前作者输入覆盖保持 49/49；历史 U 的 48/48 记录保持其历史上下文；
 - D6/D7 amendment 明确为未激活提案；
 - 没有把 unsupported/deferred 写成 available；
 - 自动 author commit 只限 single_field_member profile；

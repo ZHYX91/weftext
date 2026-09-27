@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 Agent、自动化与外部能力候选
 
-revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate，等待独立审查与协调激活。本候选以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份 D1–D9 输入为权威前提，并已补读补充输入 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 新增的 D4 reference catalog；当前作者输入覆盖为 49/49。历史 48/48 阅读记录仍只表示当时 U 的原清单，不追溯改写为 49/49。旧候选 C=`1c2bcd3e2926966c628292072c7a54a2bd5df40e` 已被独立 reviewer 完整读取并裁决为 revise；该结论不等于当前 r04 已独立接受。本文仍是作者修订候选，不表示 Gate 通过、产品已经实现、上游 amendment 已生效或可以开始 A2。
+revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate author revision，等待新的固定候选全量独立联合终审。本候选继续以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 原 48 份输入和补充 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` D4 reference catalog 为权威输入，作者覆盖 49/49；历史 48/48 记录保持原上下文。独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`：候选 16/16、上游 16/49，正式开放 1P1+5P2，D3 批次等待正式报告。R05 改变基础授权、事务和公开 wire，因此这些旧覆盖不能转记为 R05 接受；本文不表示 Gate 通过、产品实现、运行时 capability available、上游 amendment 生效或可以开始 A2。
 
 ## 1. 选择与问题边界
 
@@ -65,11 +65,15 @@ D10 控制状态位于与 D6 Authority Store 绑定的受管控制域，由 Core
 
 所有影响工作区操作资格的 durable record 必须通过 Core 管理的 closed adapter 修改。普通运行 telemetry 可以独立运输，但不得被恢复器当作批准、授权、费用或效果事实。
 
+R05 的管理授权、closed body、stable request key、prepare/result/secret/stop 入口、ResourceUseGrant、部署控制决议、费用结算、stop 线性化和 package manifest 的**精确规范**统一由 [CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 拥有。该文档是本候选的一部分，不是实现笔记。Workspace author-affecting control write 仍进入原 D6 authority/decision transaction；deployment host control 只能改变部署控制记录，不能经 host adapter 写作者 payload 或伪造 D6 receipt。
+
 ## 6. Registry、Catalog 与激活
 
 D4 Registry 仍是唯一 semantic namespace/schema 权威。D10 证明 package/publisher/namespace claim、安装资产与贡献来源，随后把完整候选 `RegistrySnapshot/1`、`RegistryBinding/1` 交给 D4 既有验证、演进和 catalog load；D10 不增加 Registry member，也不改变 D4 Field/Facet/Relation/Calendar/Unit 语义。
 
 D10 另维护 Capability Catalog，记录每个可执行或纯数据 Contribution 的精确包摘要/版本、贡献类型/版本、运行 profile、平台/架构、依赖、宿主权限、网络/出站类别、secret 要求、费用 profile 与 D1 capability ID。Catalog 不能保存第二份 FieldDefinition，也不能用显示名称或安装顺序证明命名空间 owner。
+
+R05 将 package/contribution wire 收敛到 CONTROL-CONTRACT §4–§5：dependency 是**具体 dependent Contribution 自身的成员**，不是 package 级 ambient 数组；一个 connector 不可用不能停用同包无关 schema/template/data pack。Contribution kind 闭集显式保留 module/schema/view/action/template/preset/pack/tool/model/connector/importer/exporter/conversion/renderer/localization。Calendar、Library、People、Organizations 各有唯一第一方 PackageId→module contribution→schema contribution 映射，且明确引用 D4 已冻结 namespace owner 与 FacetId；这些 D10 PackageId 不成为第二 D4 namespace，也不冒称 D1 已存在 module ID、代码路径或 locale 资源。
 
 补充 S 的 D4 reference catalog 是当前候选的第 49 份输入：61 个 Field、7 个 Facet、22 个 value-type alias、4 个 qualifier set 和 1 个 Calendar series policy。它不改变既有 D4/D7 语义，只把先前遗漏的规范机器图纳入实际输入。对 `single_field_member` 尤其重要的是：实际目录有 27 个 relation Field，`calendar/event` 还有 `calendar/range` 与 `calendar/recurrence` 的跨 Field `union_variant_equal`，另有 required-field 与 Field 内部约束；因此自动路径必须继续执行 D7 Narrow Field Qualification 的完整 Registry 图证明，不能从“只修改一个 Field”直接推出安全。正向 `people/phone` 在目录中是普通非 relation Field，位于无额外 Facet constraint 的 `people/person`，自身 constraints 为空，但其 alias、qualifier、source-envelope 和其它 D7 依赖仍必须完整验证。
 
@@ -153,6 +157,8 @@ DelegationLease/1 {
 
 有效资格为：D1 capability ∩ current D6 Policy/ObservationScope ∩ DelegationLease ∩ contribution deployment policy ∩ egress grant ∩ secret-use grant ∩ external-effect approval ∩ current ActivationBinding ∩ budgets。任何一项失败都不能由另一项补足。
 
+R05 进一步把“使用资源”和“管理资源”分开。Workspace 自助管理需要 proposed D6 Policy/2 capability `d10_control_self`；Workspace 管理仍使用 `policy_admin`，Registry 激活另需 `registry_admin`；deployment trust/account/secret/pricing/grant 只由 host DeploymentControlPolicy 管理。用户可合法创建和管理自己的有限 Automation，但选择部署费用账户、secret、egress 或 external-effect resource 必须持有由部署管理员签发的 exact ResourceUseGrant。grant revision/续期不清零 spent/held/attempt 次数；新 grant 也不消除旧 attempt 对实际账户的义务。完整字段、授权顺序与 stable replay 见 CONTROL-CONTRACT §6–§9。
+
 Lease 的 readScope 不能虚构 D6 不存在的 Field ref-set 权限。Core 先按 D6 原授权取得合法读写范围，D10 再用准确 owner、Field 和 context 约束收窄。过期、撤销或 generation 变化阻止新受保护步骤；已经提交的作者决议和已经线性化发送的外部请求不被倒推回滚。
 
 `maxRuns` 是同一个 `leaseId` 谱系在整个寿命内允许进入受保护执行的 Run 总上限，取值为有限正 Counter。修改 `leaseRevision` 不会清零既有消费；受权的后继 revision 可以提高上限，但不能把上限降到已消费次数以下，撤销使用独立 revoked 状态。创建 queued Run、建立 occurrence claim、执行纯调度记账或在第一项受保护步骤前取消，都不消费 `maxRuns`。
@@ -190,7 +196,7 @@ Secret、credential、token、plan/effects handles、private environment 和未�
 
 ## 10. Tool Value Profile 与 MCP
 
-D10 ToolValueProfile/1 复用 D7 TypeSpec/V 的受限子集：bool、exact text、int64、integer、decimal、Optional、closed object、bounded list 和 closed union。类型最大深度 16、object members 64、union arms 8、list maximum 4096、type description 64 KiB、单次完整参数或结果 8 MiB；实际 deployment/run budget 可以更窄。
+R05 不再把 ToolValueProfile/1 留作“复用某个子集”的类型占位。CONTROL-CONTRACT §3 由 D10 Tool Adapter owner 正式冻结 ToolValueProfile/1、ToolType/1 与 ToolValue/1 的 closed wire：bool、text、int64、integer、decimal、optional、closed object、bounded list 和 closed union，并固定 depth/member/arm/list/byte 限额、canonical numeric 与 unknown-member 拒绝。它不是 D7 TypeSpec alias，也不是任意 JSON Schema。
 
 首版 ToolValue 不含 EntityRef、Locator、ActionEvidence、plan/result/effects token、SecretRef、任意 file path capability、calendar/quantity 或开放 map。需要向外部服务发送一个作者 Ref 的可读字符串时，它只是经明确 egress 允许的 text，不自动重新获得 Core 能力。
 
@@ -312,7 +318,7 @@ ApprovalUse 是受管授权证据，不是 author plan，不新增 ActionSpec、
 
 对 unseen request，`approval_unavailable/preflight` 不写 author ledger、不写 recorded rejection，也不建立 planned；调用方可在新的合法批准下重试原仍有效的准备，或回到交互路径。对已经 planned 的 request，同一错误保持原 ledger 为 planned，保留原 plan、pins 和 reservation；不能写成 `semantic_rejected` 或 `terminal_failed`。D10 adapter 不把这个 D6 error 包装成自身 approval code；如 UI 需要显示“次数耗尽/已撤销/已过期”，必须另经当前受权的 D10 control read 得出。
 
-这是一项必要的 D6 closed-error 扩展。已有 D6 request/receipt/error object shape 不改，但选择该 coordinated capability 的消费者必须支持新增 enum 值；旧 capability profile 永远不会产生该 code，未协商的旧 consumer 不得暴露到该分支。
+这是第一份共同公开 unattended author-submit 合同的一部分，而不是匿名 old/new D10 profile 兼容层。固定上游 D6 尚未发布为旧产品 API；共同接受时第一份公开 D6-Control/1 error closed set 直接包含该 code。能进入该正式 branch 的组件组合必须支持同一闭集；不兼容组合在 D1 capability/version gate 前拒绝，不能进入 D6 后再靠未知 enum 探测版本。Policy/1/2、bootstrap profile/1/2 和历史 saved decision decoder 保持原样。
 
 ### 15.2 planned 后重新查阅原 preview
 
@@ -408,26 +414,23 @@ ExternalEffectIntent/1 {
 
 ## 18. Budget、费用与并发预留
 
-D6 原 work/attempt budget 保持。D10 为 model、tool、network 和 external cost 增加受管多账户 reservation；Run、Lease、Automation 与 deployment account 的最窄剩余额度必须原子满足，避免两个并发 Run 同时看到最后余额。
+D6 原 work/attempt budget 保持。D10 为 model、tool、network 和 external cost 使用 CONTROL-CONTRACT §6、§10 的 ResourceUseGrant、CostReservation 与 CostSettlementDecision。Run、Lease、Automation、grant 与 deployment account 的最窄剩余额度必须在同一 authority store 的准入事务中原子满足，避免两个并发 Run 同时看到最后余额。
+
+Money/1、currency、microUnits、grant/account ceiling、pricing binding 和 checked arithmetic 的 exact shape 由 CONTROL-CONTRACT §2、§9 定义；没有隐式换汇，也没有调用方手写“实际费用”或目标终态的账务接口。每个可能收费 attempt 在开始前绑定一个独立 reservation、attemptId、实际 account/grant、pricing version 与有限 upper bound。grant 续期或 revision 更新不清空 spent、held、attempts；换 grant 不迁移或消除旧 reservation/account liability。
+
+费用状态机固定为：
 
 ```text
-Money/1 {
-  currency,
-  microUnits
-}
+reserved → settled(actual) | released | uncertain
+uncertain → settled(actual) | released
 ```
 
-microUnits 使用 Counter，所有乘法和累计都做 checked arithmetic。一个 account 只使用已配置 currency，不隐式换汇。每个可能收费 attempt 在开始前预留当前 accepted pricing rule 下的有限上限，并绑定 priceVersion、request limit 和包含的收费项。无法证明有限上限的服务不能提供 hard cost ceiling 模式。
+只有 settled 与 released 是终态；uncertain 是**可恢复非终态**并持续占用完整 upper bound。released 只允许可靠 never-started evidence 证明本 attempt 的收费执行/send 从未开始；已经实际发送、最终可靠账单为 0 必须 settled(0)。同 reservation/attempt/account/currency/pricing 的可靠 final bill 使 uncertain→settled(actual)；例如 reserve100→uncertain→final bill20 只返80。
 
-费用 reservation 状态为 `reserved → settled | released | uncertain`，三个终态含义固定：
+reconcile 只能由当前部署管理员或该账户具名 reconciler 使用 EvidenceTicket 驱动，采用 expected reservation revision CAS。成功必须在同一事务追加不可变 CostSettlementDecision、更新 reservation、grant/account held/spent/available、evidence 和 audit。same decision replay 不二次返额，并发冲突至多一个 winner。错误 attempt/account/currency、non-final 或不可唯一拆分的证据保持 uncertain/full bound。管理员无证据归零、effect idempotency、业务 rollback、author terminal_failed、TTL 或 Run terminal 都不是退款证据。
 
-- `released` 只允许在能证明收费执行或 billable send **从未开始** 时使用，例如发送栅栏前取消。它表示原预留没有对应收费尝试。
-- `settled` 表示收费尝试已经开始且已有可靠最终计费事实；实际金额可以是 0 microUnits。一次请求已经实际发送但最终账单可靠为 0 时必须 `settled(0)`，不能写成 released。
-- `uncertain` 表示收费尝试可能已经开始但最终费用不可证明；它继续占用原上限，直到得到可靠账单或受权的账务恢复结论。
+actual 超 reservation upper bound 沿原 overcharge anomaly/freeze 路径处理，普通 reconcile 不静默扩大 ceiling。ApprovalUse count、LeaseRunUse 与 cost reservation 继续完全分域。
 
-TTL、restart、author terminal_failed 或 transcript deletion 都不能自行释放 uncertain。每次 retry 独立建立费用 reservation；effect idempotency 不等于计费免费。author approval-count reservation 与费用 reservation 分域：前者可以按 §15.3 随 authoritative terminal_failed 释放，后者只按本节“未开始收费尝试”的证据决定是否 released。
-
-服务违反已接纳 pricing contract 并产生超过 reservation 的费用时，记录实际 anomaly、冻结相应 capability 并要求管理处理；不得悄悄提高 ceiling 后继续宣称原保证。
 ## 19. Audit 与 retention
 
 下列 protected step 必须在执行前写入耐久本地/Server authority-bound audit started record：敏感 workspace/context read、egress、secret use、经 D10 发起的 author submit、external mutation、delegation/approval/package activation mutation。不能写入时 fail closed。
@@ -449,6 +452,10 @@ queued/prepared 且未通过 §8 Run-admission CAS 的 Run 可以在第一项受
 已进入 D6 planned 的 request 不因取消 Run 自动 abort；Run 进入 cancelling/blocked，并按原 D6 planned recovery 处理。当前 delegation、trusted time 或 Standing Approval 失效可阻止缺乏当前资格的新 author commit，但不能把暂时失权写成永久业务 rejection。若已经有 committed decision，则不回滚。
 
 external effect 进入 submitting 后，取消只阻止后续步骤；该 effect 最终仍是 succeeded、failed_no_effect 或 outcome_unknown。迟到 model/tool output 在 step 已关闭后不能启动新 tool/action。
+
+R05 增加不可逆 emergency stop，但 stop 不是 rollback。CONTROL-CONTRACT §11 规定三个实际线性化点：新 Run admission 与 stop 在同一 store serialization domain；D6 final author commit 必须在真正持有写锁的 final transaction 内重验对应 stop latch；external transport 必须把 stop gate 保持到第一次不可撤回的真实 send handoff，而不是只检查 queue admission。先线性化的 committed/sent 结果保留，后来的 stop 只阻止尚未线性化的新效果。
+
+stop 不阻断当前获权的 authoritative abort、费用 settlement、evidence/audit retention 或 reference-safe cleanup。临时 disable、Lease expiry、普通 cancel 或暂时撤权都不是不可逆 abort proof。D6 配套提案新增 `execution_stopped/preflight`，并只允许已 planned request 在 current authorization、continuity、完整 RunBinding 和不可逆 stop 全部证明后进入原 `transaction_aborted/terminal` authoritative-abort 路径。
 
 重启先恢复 durable occurrence claim、Run、LeaseRunUse、ApprovalUse/cost reservation 与原 requests。同 Run 的恢复先验证既有 LeaseRunUse 连续性，再验证当前授权、准确 Lease revision、可信时间、ActivationBinding、批准和预算；不得因为 `maxRuns` 的剩余数已经为 0 再做一次新 Run 准入。Lease 在暂停时自然过期不需要 cleanup task；可信时间超过 `notAfter` 后，新步骤和最终提交都拒绝。无法证明 clock continuity 时返回 `state_unavailable` 并保持原控制记录，不延长 deadline、不假定 Lease 仍有效。无法证明 execution side effect 的结果时进入 blocked/reconciling，而不是生成新 OperationId 或 effect ID。
 ## 21. 错误与不可用语义
@@ -472,7 +479,7 @@ D10 自有 error code 闭集为 `invalid_request|not_visible|control_conflict|bi
 | 读取 planned 原 preview 的新 recovery transport 失败 | 原 D7 `d7_effects_error`，使用 `not_visible|preview_expired|reset_required|effects_unavailable|budget_exceeded` 等既有 code |
 | committed effects 读取 | 继续只用既有 `d7_effects_resolve/open` 与原错误 |
 
-因此 D10 probe 不能“消除”进入 D6 后的批准竞争，也不能在 D6 之外隐藏一个私有提交结果。新增 `approval_unavailable` 是必要的 coordinated D6 closed-enum 扩展；request、receipt、error object shape 不变，但该 capability 在 consumer 支持新 enum 前不得 advertised available。
+因此 D10 probe 不能“消除”进入 D6 后的批准竞争，也不能在 D6 之外隐藏一个私有提交结果。`approval_unavailable` 与 R05 的 `execution_stopped` 是第一份共同公开 unattended author-submit D6 closed error set 的正式成员；不存在另一个仍可进入相同 branch 的旧 D10 error profile。设计接受只确定合同，运行时 availability 仍必须逐项通过 D1 的 contractMajor、release、surface、policy、principal、component/configuration、version combination、reachability 和 health 门。
 
 一次 D6 `approval_unavailable/preflight` 可以在控制条件改变后用**同一个原 request**重试：unseen 仅在原 prepare 仍有效且重新取得合法批准时重试；planned 则在 §15.2 的 `PlannedDecisionApproval/1` 或仍有效原 approval 下恢复。它永远不写 `semantic_rejected`，也不因 TTL、cancel 或暂时撤权产生 terminal decision。
 
@@ -491,7 +498,7 @@ LTR/RTL、区域设置、屏幕阅读器和 Web/CLI 运输差异只影响呈现�
 
 D1 表面、capability reason 和唯一提交持有者保持；D2 raw source/unknown provider preservation 保持；D3 identity/SourceBinding/OriginBinding/Provenance 保持；D4 Registry exact shape 与演进保持；D5 不新增持久 Record；D8 Draft/explicit edit confirmation 保持；D9 worker/ExportPlan/publication 保持。
 
-需要 coordinated amendment 的只有 D6/D7 standing-approval author-submit 与 planned-preview 恢复分支，精确提案在 UPSTREAM-AMENDMENTS 文档。修订包含 D6 `approval_unavailable/preflight` 错误扩展、ApprovalUse reservation/terminal 规则以及 D7 planned-preview recovery transport；当前上游在共同接受和协调激活前继续权威，因此产品不得把该自动提交分支标为 available。
+R05 需要 coordinated amendment 的范围扩大为：D6/D7 standing-approval author-submit 与 planned-preview 恢复、Policy/2 的 `d10_control_self`、bootstrap profile/2 固定旧集合与显式 profile/3，以及不可逆 stop 的 `execution_stopped/preflight` 与 planned authoritative-abort 条件。精确提案在 UPSTREAM-AMENDMENTS；CONTROL-CONTRACT 拥有 D10 host/control wire。共同设计接受或协调激活都**不等于运行时已实现/已发布**，`automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` 仍必须进入 D1 正式 capability catalog 并通过全部真实 availability 门后才能 advertised available。
 
 ## 24. 安全反例
 

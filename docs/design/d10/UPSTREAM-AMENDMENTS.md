@@ -30,7 +30,7 @@ The following remain unchanged:
 - D4 Registry, D7 Narrow Field Qualification, and D6 Policy/ObservationScope;
 - existing current authorization, deny precedence, non-disclosure, authority/fence, dependency CAS, replay, and planned recovery.
 
-The D6 `d6_error` object shape and disposition set remain, but its code closed set needs one coordinated value, `approval_unavailable`. This is a necessary closed-enum extension rather than an overloaded existing error. D7 Preview/Effects needs one planned-only read-only recovery entrypoint; existing `d7_effects_resolve/open` remains committed-only. Neither extension is usable before capability negotiation and coordinated activation.
+The D6 `d6_error` object shape and disposition set remain, but the first jointly specified public unattended author-submit contract needs coordinated closed-set additions `approval_unavailable` and `execution_stopped`. Both are real closed-enum extensions rather than overloaded existing errors, and they create no anonymous old/new D10 error profile. D7 Preview/Effects needs a planned-only read-only recovery entrypoint while existing `d7_effects_resolve/open` remains committed-only. R05 also proposes Policy/2 `d10_control_self`, freezing the original non-Field set for bootstrap profile/2, and explicit profile/3. These remain design proposals: independent acceptance/coordinated activation is not product implementation or D1 capability availability.
 
 ## 2. D6 Storage Transactions Permissions and Sync — proposed additions
 
@@ -75,7 +75,7 @@ Add the following error contract to both the D6 main document and Control Interf
 >
 > The D10 adapter passes this D6 error through verbatim. UI that wants to distinguish revoked, expired, or race-lost approval performs a separately authorized D10 control read and does not smuggle control detail through the author error.
 >
-> This is a coordinated-capability closed-enum extension. D6 request/receipt/error object shape and disposition set remain unchanged. A consumer selecting the capability must support the new code; existing profiles never emit it and an unnegotiated old consumer cannot enter the branch.
+> This is part of the first jointly specified public D6-Control/1 unattended author-submit error set. Fixed-S D6 is an unpublished design contract rather than an already deployed old D10 profile. Any component combination that can enter the formal branch supports the same closed set; incompatible combinations are rejected at the D1 capability/version gate. Policy/1/2, bootstrap profile/1/2, and historical saved-decision decoders remain unchanged.
 
 ### 2.4 planned CAS atomically reserves
 
@@ -137,6 +137,7 @@ integrity_conflict
 operation_id_conflict
 plan_expired
 approval_unavailable
+execution_stopped
 dependency_conflict
 semantic_rejected
 budget_exceeded
@@ -144,6 +145,8 @@ transaction_aborted
 ```
 
 `approval_unavailable` permits only disposition=`preflight`. It means the coordinated D10 author-submit approval dependency cannot be consumed after D6 entry while original D6 author permission/ObservationScope and applicable business prerequisites did not fail earlier. It creates no recorded rejection and reveals no internal approval cause.
+
+`execution_stopped` likewise permits only disposition=`preflight`, after current authorization/ObservationScope succeeds. It means only that an irreversible ExecutionStopLatch bound to this request has won the linearization ordering and blocks a new author submit. It cannot replace `not_visible`, approval errors, temporary disable, Lease expiry, or business dependency errors. An unseen request writes no ledger; a planned request follows the strict authoritative-abort conditions in §3.5.
 
 Original phase/key/permission/availability rules remain; `dependency_conflict|semantic_rejected|budget_exceeded` remain recorded only under the original step-6 contract, and permanent abort after planned remains only `transaction_aborted|terminal`. A consumer that did not negotiate D10 standing-approval capability cannot receive the new enum.
 
@@ -154,6 +157,28 @@ Standing Approval adds no receipt member. D10 UI may display use origin from an 
 Durable D10 control state such as ActivationBinding, DelegationLease, StandingApprovalEnvelope, AutomationDefinition, LeaseRunUse, and PlannedDecisionApproval may be changed only through Core-managed closed control adapters with independent control revision/CAS, current-principal authorization, audit, and replay contracts. They cannot be changed through author source, provider callback, Agent JSON, or free payload in `d6_commit_request`.
 
 `maxRuns` is consumed by a D10 Run-admission CAS immediately before the first protected execution and never enters the D6 author ledger. CAS accumulates uses over one `leaseId` lineage and writes `LeaseRunUse/1`; restart of the same Run does not consume again, and failure/cancellation/crash after admission never refunds it. Only a **new Run with no existing LeaseRunUse** returns D10 `delegation_exhausted` when cumulative use has reached `maxRuns`. Later protected steps of an already admitted Run and recovery of that Run's original planned request do not compare remaining count again and do not consume again; even when `maxRuns=1` and cumulative use is already 1, that same Run is not rejected as a new Run. Those later steps still revalidate current authorization, exact `leaseRevision`, trusted time, ActivationBinding, approval, and budgets; revocation, expiry, revision/binding change, or unprovable continuity still blocks execution.
+
+### 3.5 D10 Workspace self-management, bootstrap profile/3, and irreversible stop
+
+This is an explicit coordinated amendment to fixed-S D6 Control and does not modify the S snapshot.
+
+Add one no-argument Policy/2 capability d10_control_self, valid only at workspace scope. It lets the current principal use the R05 CONTROL-CONTRACT closed Workspace control adapter to manage that principal's own finite Automation/Lease/Approval/Run control records. It implies no source/Field read-write, policy_admin, registry_admin, binding_admin, repair, commit_sequence_state, or deployment resource. No other capability implies it and deny precedence remains.
+
+The Workspace D10 control adapter is a managed PreparedIntent producer only for CONTROL-CONTRACT §7 Workspace bodies automation_configure, consent, state, workspace_limits, and activation. It cannot accept deployment_put, cost_reconcile, secret bytes, or a free callback. The producer derives the original d6_commit_request from the real current principal, complete closed body, authorized reads, and stable prepare binding; an external caller still cannot assert principal, authorized, effect, or writer. Any final author-payload mutation can still come only from the original D7/D8/D3 adapter; an ordinary D10 control mutation cannot construct author source bytes.
+
+Under this amendment the fixed-S profile/2 phrase “all non-Field capabilities” is frozen to the set present in S: workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state. Later capabilities never enter profile/2 automatically.
+
+Add d6_bootstrap_profile wireVersion=3 with the same members kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope. profile/3 still creates initialPolicy.version=2. Its creator Workspace grant equals the frozen profile/2 non-Field set above plus d10_control_self plus the original S rule generating all target-Registry Field read/write grants; deny is empty.
+
+Only an explicit issuer-profile management operation by current administer_issuer can select profile/3 for subsequently issued families. Stored profile/1/2 copies of existing families, replacement, WorkspaceBootstrapPlan, saved decisions, replay/continue/failover are never recomputed or augmented. An existing Workspace acquires d10_control_self only through the original Policy-management transaction by current policy_admin; a Field-authorized principal cannot self-grant it.
+
+The first jointly specified public d6_error.code set also adds execution_stopped, valid only with disposition=preflight. For an unseen D10-bound author request, current authorization/ObservationScope succeeds first; then D6 checks the protected RunBinding's irreversible stop latch. If stop already linearized, return execution_stopped/preflight with no author decision.
+
+D6 final author commit revalidates the same RunBinding stop latches inside the real final authority-store write serialization. A prepare-time or out-of-transaction check is insufficient. Stop linearized first means the new author commit does not occur; commit linearized first preserves the committed decision and later stop cannot roll it back.
+
+For an already planned request, stop cannot directly write a terminal result. Only when current authorization, authority/continuity, the original complete plan/RunBinding, and irreversible stop are all proven, and original D6 recovery proves the plan can never submit, may the original author ledger write transaction_aborted/terminal. The same abort transaction follows the existing ApprovalUse rule for releasing approval-count reservation. Temporary disable, Lease expiry, ordinary Run cancellation, temporary authorization loss, or temporarily unprovable clock/state is not that proof and leaves the request planned. Cost reservation is never automatically released by author abort.
+
+Stop does not block currently authorized authoritative abort, cost settlement, evidence/audit retention, or reference-safe cleanup. Those operations do not restore executor or author-write authority.
 
 ## 4. D7 Execution and Action Interfaces — proposed replacement/additions
 
@@ -183,6 +208,10 @@ Add:
 > Standing Approval does not change D7 OperationId/replay. A fresh automation occurrence requires fresh prepare; loss of a receipt for the same committed request only resends the original request. D10/Automation restart cannot create a semantically equivalent new OperationId merely because the original preview transport expired.
 >
 > Existing ActionEvidence, FieldSelection, result epoch, source revision, and preview delivery-epoch invalidation rules remain. Standing Approval cannot revive stale evidence/selector. If a decision has not reached planned and must be re-prepared, it gets a new request/OperationId and a new approval use; old mechanical approval does not carry forward.
+
+### 4.4 Irreversible stop binding for D7 prepare
+
+D7 ActionSpec, PreparedActionBinding/2, and EffectManifest/EffectBytes add no caller-supplied stop field. For D10 unattended author-submit, after successful prepare Core creates a protected internal association from planToken to the current Run/Automation/Lease and its ExecutionStopLatch refs; the caller cannot remove, replace, or self-assert those refs. Final submission is rechecked by D6 §3.5 inside the real transaction. The D7 interactive path gains no new automatic-confirmation authority from stop; stop only prevents a background submit that has not yet linearized.
 
 ## 5. D7 Preview and Effects Transport — planned recovery extension
 
@@ -272,16 +301,15 @@ D9 does not change Provider/Route, worker sandbox, ExportPlan, LossReport, Publi
 
 ## 9. Activation and version compatibility
 
-These amendments take effect only after independent review acceptance, controller coordinated decision, and activation together with the D10 candidate. Before activation:
+These amendments change the specification only after independent acceptance, controller coordination, and formation of a subsequent design version with the D10 candidate. **Design acceptance/coordinated activation is not product implementation, release, or runtime availability evidence.**
 
-- product may implement D10 Broker, Agent proposal, Automation scheduling, Tool/MCP, Connector read, and external-effect control parts that do not require unattended author submission;
-- all D7/D8 author proposals still use current per-operation confirmation;
-- `single_field_member` unattended author-submit capability must return a truthful D1 unavailable state and cannot be hidden behind a private flag;
-- the planned-preview recovery entrypoint cannot appear in the old uncoordinated D7 transport profile.
+Candidate first-public D10 capability IDs are defined by D10 and discovered/published by D1: automation.manage, workspace.extensions.manage, deployment.external.manage, automation.stop, and automation.author_submit. They first enter the official capability catalog of the selected D1 contractMajor and remain subject to D1-frozen release, surface, policy, principal, component/configuration, reachability/version-combination, and health gates. Unknown IDs remain D1 unsupported_feature; disallowed component-version combinations remain incompatible_version. D10/D6 adds no second product-level negotiator.
 
-The new D6 `approval_unavailable` is a closed-enum extension. Coordinated activation binds consumer support to capability availability; old clients/profiles cannot receive the unknown enum. Request/receipt shapes, D6 wireVersion1 request, and D7 PreparedActionBinding/2 shape remain unchanged.
+When the capability is actually released, the first jointly specified public unattended author-submit D6-Control/1 error set already contains approval_unavailable and execution_stopped. There is no legacy D10 author-submit error profile, enum fallback, migration parser, or dual-read/dual-write. Only the unpublished D10-profile assumption is removed; S-frozen Policy/1/2, bootstrap profile/1/2, IssuerControlPolicy, D1 bootstrap/contractMajor, and historical saved-decision decoders all remain.
 
-Historical committed D3/D6 decisions keep their original decoders/bytes and are not backfilled with ApprovalUse. An old prepare with no decision does not automatically gain Standing Approval. Only a planned decision produced under the new profile can use the recovery transport defined here.
+Before runtime release, every D7/D8 author proposal continues to use current per-operation confirmation and the planned-preview recovery entrypoint plus unattended author submit remain truthfully unavailable under D1. Broker, Agent proposals, Tool/MCP, Connector read, and external-effect control that do not perform unattended author submit may progress independently, but each still requires its own D1 capability and real implementation evidence.
+
+Historical committed D3/D6 decisions replay under their original decoder/bytes and are not backfilled with ApprovalUse, stop, or d10_control_self. Existing families keep their fixed bootstrap profile; no upgrade path silently reinterprets profile/2 as profile/3.
 
 ## 10. Joint counterexamples required for independent re-review
 
@@ -303,5 +331,8 @@ Historical committed D3/D6 decisions keep their original decoders/bytes and are 
 16. A D10 control error cannot wrap or leak original D6 `not_visible` and hidden facts.
 17. With `maxRuns=1` and an existing `LeaseRunUse/1` for the same Run, its second protected step and original planned recovery cannot return `delegation_exhausted` merely because remaining is zero; only a new Run is rejected.
 18. Positive Adopt code keeps only `adopt_*`, while association binding uses only `OriginBinding` / `origin_binding`; `adoption_binding` must be absent from positive terminology/code surfaces and must not exist as an alias.
+19. A profile/2 family must not gain d10_control_self after software upgrade; profile/3 affects only new families after explicit issuer update, and an existing Workspace can receive it only through current policy_admin.
+20. Both orderings of stop versus new Run admission and D6 final author commit must have exactly one linearized result; authorized authoritative abort, cost settlement, and evidence retention still work after stop.
+21. A stable Workspace-control request succeeded but its response was lost and another request later changed the object revision; after current disclosure authorization, retry must replay the old result without duplicate mutation and without falsely rejecting historical success because current revision changed.
 
 These are author-revision review targets, not a claim that the first two independent-review batches are closed. Only later independent re-review can change their review status.

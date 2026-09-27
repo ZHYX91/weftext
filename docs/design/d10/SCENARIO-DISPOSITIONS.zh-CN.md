@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 场景裁决
 
-revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
+revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
 
 执行模式列只有四类：automatic 表示在本文 closed 规则下允许无需逐次人工确认继续；interactive 表示可以准备但必须逐次确认；unsupported 表示本代明确不可用；deferred 表示由具名 所有者 的未来合同冻结后才能开放。
 
@@ -18,7 +18,7 @@ revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件
 | ID | 来源定位 | 场景/风险 | disposition | 执行模式 | D10 候选落点 | 验证义务 |
 | --- | --- | --- | --- | --- | --- | --- |
 | D10-U01 | 上游合同：D1 §2–§4，D1-I01/I06 | Agent、automation、connector 直接写工作区或与 Core 同时写 | reject | unsupported | Core 仍为唯一 author 提交 point；executor 无 author store/workspace mount | 依赖图、文件/DB 句柄负向、双 writer/fence 测试 |
-| D10-U02 | 上游合同：D1 §4.1/§4.4 | Desktop 与 CLI 各启动独立 scheduler，或 terminal occurrence 被重扫后重复运行 | revise | automatic | 同一本地 control domain、唯一 occurrence claim 与 durable terminal proof；CLI 管理同一能力族 | 双进程 claim；K terminal 后重启、重扫、disable→enable、缓存重建均恢复原 Run |
+| D10-U02 | 直接上游：D1 §4.1/§4.4（共享 Core/产品端边界）；D10 派生：Candidate §13/§20 + Implementation §6（terminal occurrence / 原 Run 恢复） | Desktop 与 CLI 各启动独立 scheduler，或 terminal occurrence 被重扫后重复运行 | revise | automatic | 同一本地 control domain、唯一 occurrence claim 与 durable terminal proof；terminal K 与原 Run 恢复是 D10 派生规则，不冒称 D1 明文 | 双进程 claim；K terminal 后重启、重扫、disable→enable、缓存重建均恢复原 Run |
 | D10-U03 | 上游合同：D1 §4.2/§4.3 | WebUI 直接跑 模型/connector 或浏览器持 凭据 | reject | unsupported | WebUI 只经 Server Broker；secret 留 Server secret store | 浏览器 bundle/API 扫描、凭据 泄漏负向 |
 | D10-U04 | 上游合同：D1 §4.5；D8 Direction §7 | Mobile Agent、automation approval、conversion/connector 管理 | reject | unsupported | 保留 D1 unsupported_surface；只消费 committed facts | 五端 capability fixture，Mobile 不出现隐藏批准入口 |
 | D10-U05 | Intake 原要求：§6.1、§6.6、§13.1.2；D4 Calendar | Calendar recurrence/后台提醒从设备时钟或未绑定规则猜测 | revise | automatic | Automation 调度 使用已验证 D4 temporal rules、有限 horizon/limit 与 exact 源 dependency | tzdb/rule 代际 改变、DST/超域、重启 反例 |
@@ -78,6 +78,14 @@ revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件
 | D10-F27 | TASK / Candidate §8/§20 | clock epoch/时间连续性丢失却假定 Lease 仍有效 | reject | unsupported | 返回 `state_unavailable` 并暂停；恢复可信时间后按真实当前时间判 active/expired | 丢 epoch、重启、恢复时间三段状态机 |
 | D10-F28 | Candidate §8/§13/§20 | `maxRuns=1` 已由 R1 首次准入消费，R1 的第二个受保护步骤因为 remaining=0 被误判成新 Run | reject | unsupported | 同 Run 已有完整 `LeaseRunUse/1` 时不再比较 remaining count，也不再次消费；仍逐步验证当前授权、准确 leaseRevision、可信时间、ActivationBinding、批准与预算 | 正向同 Run 第二步继续；负向 lease revoke/expire/revision-change 时仍阻止 |
 | D10-F29 | Candidate §8/§20 | 同 Run 的原 D6 planned request 恢复时，因为 lease 已无剩余次数而返回 `delegation_exhausted` | reject | unsupported | planned 恢复先证明原 `LeaseRunUse/1` 连续性，复用既有准入，不重新做新 Run count gate；若记录缺失/连续性不可证则 `state_unavailable`，不是重新消费 | `maxRuns=1`、remaining=0 的原 planned 恢复可继续；新 Run 同时应被 `delegation_exhausted` 拒绝 |
+| D10-F30 | Candidate §18 / CONTROL-CONTRACT §10 | `uncertain` reservation 后来得到同 attempt 的可靠最终账单，却没有规范恢复边而永久占用 | reject | unsupported | `uncertain` 是可恢复非终态；同 reservation/attempt/account/currency/pricing 的 final bill 通过 CAS 产生 `CostSettlementDecision/1` 并原子转 `settled(actual)` | reserve100→send→crash→`uncertain`→bill20→`settled(20)`，只返80；response-loss replay 不双返 |
+| D10-F31 | Candidate §18 / CONTROL-CONTRACT §10 | wrong-attempt/non-final 账单、管理员无证据填0或 effect idempotency 导致提前退款 | reject | unsupported | 只有 final bill 或 never-started EvidenceTicket 可结算；不足证据保持 `uncertain` 和完整 upper bound；sent-zero=`settled(0)` | 两 reconciler 竞争至多一 winner；wrong account/currency、aggregate un-attributable、manual zero 均不改余额 |
+| D10-F32 | CONTROL-CONTRACT §8 | stable key 写 r5 已成功但响应丢失，另一个合法请求已把对象改到 r6，原请求重试 | accept | automatic | 当前披露授权后先重放 saved result，再处理 current-state read；historical success 不因 current revision 变化被误拒绝 | r5 commit→lost response→r6 update→same-key retry 返回原 r5 outcome，不重复 create/mutate |
+| D10-F33 | CONTROL-CONTRACT §6 | `ResourceUseGrant/1` 续期/换 revision 清零 spent/held/attempts，或换新 grant 抹掉旧 account liability | reject | unsupported | 同 grantId usage 连续；变 grantee/account/kind/currency 必须新 grantId；旧 reservation 与实际账户义务保留 | renew 限额、rotate grant、uncertain invoice 三组竞争；任何路径都不能重置已占用额度 |
+| D10-F34 | CONTROL-CONTRACT §11 + UPSTREAM-AMENDMENTS §3.5 | emergency stop 在 Run admission 或 D6 final author commit 的 check 后插入，形成越权窗口 | reject | unsupported | stop 与 admission 同 store linearization；D6 final transaction 在真实写序列化内重验 stop latch | stop-before/admission-before、stop-before/commit-before 四序列；先线性化的结果唯一且已 committed 不倒推 |
+| D10-F35 | CONTROL-CONTRACT §11 | emergency stop 在外部请求已入队但真正发送前发生，transport 仍发送 | reject | unsupported | stop/send 共用 send fence，持有到第一次不可撤回的真实 send handoff；queue admission 不算 send | stop-before-send→无 send；send-handoff-before-stop→保留 started/outcome_unknown；stop 后结算/evidence 仍可运行 |
+| D10-F36 | UPSTREAM-AMENDMENTS §3.5 | 新增 `d10_control_self` 后旧 bootstrap profile/2 family 因软件升级自动获得自助管理权 | reject | unsupported | profile/2 固定 S 原非 Field 闭集；显式 profile/3 只影响 issuer 更新后的新 family；既有 Workspace 只能 policy_admin 显式授予 | profile/1/2 replay/replacement/continue 均不扩权；新 family profile/3 正向自助路径 |
+| D10-F37 | CONTROL-CONTRACT §13 / UPSTREAM-AMENDMENTS §9 | 设计 amendment 已接受就直接 advertised available，跳过真实 release/surface/policy/version/health | reject | unsupported | 设计接受只冻结规范；五个 D10 capability ID 必须进入正式 D1 catalog 并逐项通过原 availability 门 | not_in_release、unsupported_surface、policy_denied、incompatible_version、offline/health 组合保持 D1 precedence |
 
 ## 3. Standing Approval 与确认边界
 
@@ -147,12 +155,14 @@ revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件
 | D10-P13 | Intake 原要求：§6.5、§8.3 + D1 capability | 仅隐藏父模块 UI 就把 pack 当 disabled，或用 UI 显示强行启用 | reject | unsupported | UI visibility 与 dependency activation 分离；parent semantic capability 仍 ready 时 activation 不变 | 隐藏/恢复导航入口前后 RegistryBinding、Contribution activation 和作者 facts 不变 |
 | D10-P14 | Intake 原要求：§6.5、§9 第49项 + D1 | 当前 surface 不支持父 domain/规则运行 | accept | unsupported | 该 surface contribution inactive，D1 固定 `unsupported_surface`；其它 surface/global config 不删除 | Mobile 不运行规则仍按其 Core/D4 能力保留 portable author facts |
 | D10-P15 | Intake 原要求：§6.5、§8.3；Candidate §6.1 | 父 extension point 的版本或 binding 已改变，但 dependent Catalog 仍错误沿用旧绑定 | reject | unsupported | 激活时解析出的父 binding 必须进入 Capability Catalog digest；父版本或 binding 变化必须产生 successor ActivationBinding，禁止运行时跟随未绑定的 latest | 两个 activation generation 不能混用旧父规则与新 Catalog |
+| D10-P16 | CONTROL-CONTRACT §4 | package 级 ambient dependency 使同包 connector unavailable 时误停用 schema/template/data pack | reject | unsupported | dependency 必须属于具体 dependent Contribution；每项 contribution 独立解析 parent/contract version/capability | connector denied + same-package schema/template/pack 仍按自身依赖可用；whole-package permission 不成立 |
+| D10-P17 | Intake §8.3–§8.5 + S D4 §3/§9 | Calendar/Library/People/Organizations 的产品 module/package/schema ID 混成 D4 namespace/Facet owner 或继续只留示意 ID | revise | automatic | R05 给唯一 D10 PackageId→module→schema mapping，显式引用 D4 reserved owner tuple/FacetId；PackageId 与 D4 namespace 分型 | 四模块映射、中英 label/候选 locale/code 未实现声明、第三方同名 anti-spoof；package version 不改同 Facet semanticMajor |
 
 ## 7. Deferred boundaries with named owners
 
 | ID | 来源定位 | 场景 | disposition | 执行模式 | 所有者/理由 | 再开放前要求 |
 | --- | --- | --- | --- | --- | --- | --- |
-| D10-D01 | Intake §13.1.2 + §6.5；仅具体算法/规则语义 | 未冻结 holiday/anniversary 提供方 算法 | defer-with-owner | deferred | D4 temporal semantics + D10 提供方 admission | closed rule 贡献项、version/coverage、D7 consumer  |
+| D10-D01 | Intake §13.1.2 + §6.5；仅具体算法/规则语义 | 未冻结 birthday、anniversary 与 holiday 的具体 provider/rule 算法 | defer-with-owner | deferred | D4 temporal semantics + D10 provider admission；通用 Pack lifecycle 已由 P10–P15 闭合 | closed rule contribution、version/coverage、D7 consumer；不得把 anniversary 缩成 birthday |
 | D10-D02 | 强制输入 ICS sync | 通用双向 ICS subscription/upsert | defer-with-owner | deferred | owner 为 D3 binding + D9 mapping + D10 connector | 再开放前必须闭合 SourceBinding/OriginBinding、冲突/watermark 和幂等语义 |
 | D10-D03 | D10 Candidate §13 | 通用多步骤 workflow DAG | defer-with-owner | deferred | owner 为未来 D10 | 再开放前必须定义 typed DAG、恢复、预算和 approval 组合 |
 | D10-D04 | D10 Candidate §14 | 无人值守 create/delete/Facet/native-table/bulk | defer-with-owner | interactive | owner 为未来 D10 与相应 D3/D7 adapters | 每种动作都要独立机械 approval envelope 与 D6 原子消费合同 |
