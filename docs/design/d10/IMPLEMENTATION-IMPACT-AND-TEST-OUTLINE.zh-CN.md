@@ -45,7 +45,7 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 5. S5：ExternalEffectIntent、send fence、idempotency/reconciliation、credential rotation。
 6. S6：协调实现 UPSTREAM-AMENDMENTS 中 D6/D7 standing-approval 分支；在此之前无人值守 author commit 继续 unavailable。
 7. S7：Connector 的具名 read-only profile；只有已有 SourceBinding/OriginBinding closed adapter 的写回才可逐 profile 开放。
-8. S8：Desktop/CLI/Server/WebUI surfaces、diagnostics、audit/export/retention；Mobile 只做 negative capability conformance。
+8. S8：完成 Desktop/CLI/Server/WebUI 端侧接线、诊断、audit/export/retention；Mobile 只验证明确不可用的 capability。
 9. S9：清理旧原型/别名/自由 JSON/tool callback、更新公开规范；只有真实实施/平台证据完成后才能公开声称支持。
 
 ## 2. 数据与存储影响

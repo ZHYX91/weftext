@@ -145,8 +145,8 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 | D10-D03 | D10 Candidate §13 | 通用多步骤 workflow DAG | defer-with-owner | deferred | owner 为未来 D10 | 再开放前必须定义 typed DAG、恢复、预算和 approval 组合 |
 | D10-D04 | D10 Candidate §14 | 无人值守 create/delete/Facet/native-table/bulk | defer-with-owner | interactive | owner 为未来 D10 与相应 D3/D7 adapters | 每种动作都要独立机械 approval envelope 与 D6 原子消费合同 |
 | D10-D05 | D10 Candidate §10 | 从任意 JSON Schema/OpenAPI 自动生成可调用工具 | defer-with-owner | deferred | owner 为未来 D10 ToolValue profile | 必须先闭合 exact numeric、null、additionalProperties 和递归边界 |
-| D10-D06 | D10 Candidate §11 | 浏览器本地 MCP/process execution | defer-with-owner | unsupported | D1 surface boundary | 新 D1 surface/review  |
-| D10-D07 | D10 Candidate §22 | Mobile Agent/connector/approval | defer-with-owner | unsupported | D1 + D8 + D10 joint | 重开 D1 与真实 Mobile evidence  |
+| D10-D06 | D10 Candidate §11 | 浏览器本地运行 MCP 或进程型执行器 | defer-with-owner | unsupported | owner 为 D1 产品端边界 | 必须先重开 D1，并重新审查浏览器执行、文件/网络/进程隔离和权限模型 |
+| D10-D07 | D10 Candidate §22 | Mobile 上提供 Agent、connector 或 approval | defer-with-owner | unsupported | owner 为 D1 + D8 + D10 联合边界 | 必须重开 D1，并提供真实 Mobile 平台、交互和权限证据 |
 | D10-D08 | TASK/A2 | A2 系统级验收 | defer-with-owner | deferred | A2 | D10 independent acceptance/activation 后才开始 |
 
 ## 8. 当前证据状态
