@@ -51,14 +51,14 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 | D10-F03 | TASK | Delegation Lease 到期后 queued/paused Run 继续执行 | accept | automatic | 每个受保护步骤与最终提交都检查当前 Lease 和可信时间；cleanup 是否运行不决定 expiry | 暂停跨过 notAfter 后拒绝新步骤/最终提交；重启不延长期限 |
 | D10-F04 | TASK | 撤权后旧 context/缓存/结果 继续交付 | accept | automatic | 当前 D6 代际/所有者 gate；各上游 缓存 规则保持 | revocation 与 chunk/page/工具-call 竞争 |
 | D10-F05 | TASK | 同一调度 occurrence 重复 claim 或 terminal 后重新建 Run | accept | automatic | `AutomationOccurrenceKey/1`、durable unique claim、terminal dedup proof | 两进程竞争；K terminal 后重启/重扫/disable-enable 不另起 Run |
-| D10-F06 | TASK | 崩溃 时 外部 请求 可能已发 | accept | automatic | durable ExternalEffectIntent + send fence；恢复 outcome_unknown | durable-before-send、send-before-response 两侧 fault  |
+| D10-F06 | TASK | 崩溃时外部请求可能已经发送 | accept | automatic | 先耐久保存 ExternalEffectIntent，再经过发送栅栏；无法证明发送结果时恢复为 outcome_unknown | 在“耐久意图→发送→响应”三个边界分别做故障注入 |
 | D10-F07 | TASK | 取消 与 D6 planning 竞争 | accept | automatic | 已 planned 不被 Run 取消 冒充 abort；按原 D6 恢复 | 取消-before-plan、plan-before-取消、提交-before-取消  |
 | D10-F08 | TASK | 取消 与 外部 send 竞争 | accept | automatic | 仅证明未 send 才 cancelled；submitting 后三态 | send fence 两侧 fault injection |
 | D10-F09 | TASK | 凭据 rotation 后旧 请求 自动用新 凭据 重发 | reject | unsupported | old attempt 绑定实际 secretGeneration；新 凭据 仅可受权 reconcile | rotation + unknown 请求；禁止 mutation resend |
 | D10-F10 | TASK | 失败 package upgrade 半激活 Registry/Catalog | accept | automatic | staged validation + one ActivationBinding switch | 每个激活步骤 崩溃；旧 binding 完整存活  |
 | D10-F11 | TASK | 已激活版本回滚时 Registry 指针倒退 | reject | unsupported | rollback 是 successor activation；semantic ledger 累计 | 三代 模式定义/history/revival attack |
 | D10-F12 | TASK | audit collector offline 就停止全部本地工作 | revise | automatic | local durable spool 是安全门；remote collector 可延迟 | collector offline、spool full、disk failure 分支 |
-| D10-F13 | TASK | local durable audit 写失败仍执行 protected step | reject | unsupported | protected step fail closed；安全停止有 reserve | audit failure before read/egress/secret/send/author submit  |
+| D10-F13 | TASK | 本地耐久 audit 写失败后仍执行受保护步骤 | reject | unsupported | 本地受保护审计写失败时 fail closed；取消、撤权和紧急停止保留独立控制写入容量 | 在读取、出站、secret 使用、外部发送和作者提交之前分别注入审计故障 |
 | D10-F14 | TASK | Desktop/CLI/Server/WebUI 对相同请求得不同目标/错误 | accept | automatic | shared Core semantics；宿主 只运输/认证 | identical fixture 跨四端；Mobile 为负能力 |
 | D10-F15 | TASK | capability probe 泄露 package 未安装/账户状态给 denied principal | accept | automatic | D1 reason precedence，policy_denied 先遮蔽 deployment detail | 重叠 reason 矩阵 |
 | D10-F16 | TASK | 外部 效果 与 Core write 被展示为一个“原子成功” | reject | unsupported | 两个独立 outcome/回执；无 composite author 回执 | Core 成功/外部 unknown 与反向组合 |
@@ -89,7 +89,7 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 | D10-A09 | D6/D7 配套修订提案 | request 已 planned、旧 preview 已过期且 Standing Approval 不再可用 | revise | interactive | `d7_planned_preview_open` 在当前 audience/ObservationScope/权限/连续性下从原 pins 重签有限 recovery epoch；完整查阅后建立 `PlannedDecisionApproval/1` 绑定原 request | 新客户端无旧副本可查原 preview；不重算 Query/target；确定 dependency conflict 不能复活 |
 | D10-A10 | D6/D7 配套修订提案 | `set_field_member` 请求值已等于 current member，完整 source 逐字 no-op | accept | automatic | 仍验证唯一 Entry/member、类型、valueConstraint、当前权限与依赖；MutationFootprint、field_change、sourceVersions 均为空 | 不伪造 effect/version；若原 D6 committed 则消费一次批准，replay 不重复 |
 | D10-A11 | D8 Main §3 | 后台合法更新与当前 dirty Draft 同 所有者 | accept | automatic | author 提交 有效；D8 Draft 进入 stale/conflict，不被覆盖 | 当前 Draft 字节/selection 保持 |
-| D10-A12 | D8 Main §3 | composition 期间 Agent proposal 自动提交 | reject | interactive | D8 composition/预览 gate 保持 | composition trace + delayed proposal  |
+| D10-A12 | D8 Main §3 | composition 期间 Agent proposal 自动提交 | reject | interactive | 保持 D8 composition/预览门；未完成输入法事务不能被 Agent 提案绕过 | 组合输入轨迹与迟到 Agent proposal 的竞争测试 |
 | D10-A13 | D6/D7 配套修订提案 | R1 前置批准有效，R2 抢占最后次数；R1 进入 D6 后只有 approval 失败 | revise | automatic | 新 D6 `approval_unavailable/preflight`；unseen 不写 ledger，planned 保持 planned；D10 不包装 | 原 D6 permission/business error 优先；批准变化后同 请求 可按规范重试 |
 | D10-A14 | D6/D7 配套修订提案 | planned 已 reserved，依赖改变并被原 D6 authoritative abort 为 terminal_failed | revise | automatic | abort 同事务把 approval count `reserved→released_terminal`；历史保留，replay 不双释放 | 取消/TTL/临时撤权/Lease 过期均不得 release；费用状态另行裁决 |
 
@@ -97,15 +97,15 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 
 | ID | 来源定位 | 场景/风险 | disposition | 执行模式 | D10 候选落点 | 验证义务 |
 | --- | --- | --- | --- | --- | --- | --- |
-| D10-T01 | D10 Candidate §10 | MCP server 自称 delete 工具 为 readOnly | reject | interactive | remote annotation 不授 效果 class；本地 Contribution 决定 | hostile MCP descriptor fixture  |
+| D10-T01 | D10 Candidate §10 | MCP server 把删除工具自报为 readOnly | reject | interactive | 远端 annotation 不决定效果类别；本地接纳的 Contribution 才定义工具是读取还是外部 mutation | hostile MCP descriptor 中伪造 readOnly，验证授权门不改变 |
 | D10-T02 | D10 Candidate §10 | MCP 运行时 新发现一个 工具/模式定义 | accept | deferred | 只进入 pending admission；当前 allowlist 不变 | discovery diff 不改变可调用目录 |
-| D10-T03 | D10 Candidate §10 | remote JSON 把 2^63+1 经 double 舍入 | reject | unsupported | ToolValue exact integer；无法精确适配即 unsupported | integer/decimal/null/unknown member corpus  |
+| D10-T03 | D10 Candidate §10 | 远端 JSON 把 2^63+1 经 double 舍入 | reject | unsupported | ToolValue 必须保留 exact integer；适配器不能证明精确语义就拒绝 | 覆盖 integer、decimal、null、未知成员和越界数值 |
 | D10-T04 | D10 Candidate §10 | 工具 参数中传 EntityRef/token 作为“普通工具能力” | reject | unsupported | 首版 ToolValue 排除 Ref/Locator/control token | decoder negative |
 | D10-T05 | D10 Candidate §10 | 文件工具取得任意 宿主 path | reject | unsupported | 仅 InputSlot exact 字节，无 path capability | ../、symlink、home/workspace path 负向  |
-| D10-T06 | D6 §5 + D10 Candidate §16 | 凭据 被写入 Document、prompt、transcript | reject | unsupported | SecretRef + trusted transport injection | secret canary across 源/context/log/export  |
-| D10-T07 | D10 Candidate §9 | 可读 workspace context 发给未批准的新 Model Provider | reject | interactive | recipient-specific egress；read 不蕴含 egress | 提供方 switch requires new match  |
+| D10-T06 | D6 §5 + D10 Candidate §16 | credential 被写入 Document、prompt 或 transcript | reject | unsupported | SecretRef 只由受信 transport 注入认证通道，secret bytes 不进入作者源、上下文或普通日志 | 用 canary secret 扫描 source、context、log、transcript 和 export |
+| D10-T07 | D10 Candidate §9 | 已获权读取的 workspace context 被发送给未批准的新 Model Provider | reject | interactive | 出站授权按 recipient 精确绑定；读取资格不蕴含发送到另一个提供方 | 切换模型提供方时必须重新匹配 egress recipient |
 | D10-T08 | D10 Candidate §9 | 工具 output 指令要求访问隐藏 Field | reject | unsupported | 工具 output 是不可信数据，不能扩大 readScope | hidden-world noninterference |
-| D10-T09 | D10 Candidate §11 | executable package 继承 SSH agent/browser cookie/env secret | reject | unsupported | 运行时 默认无这些 宿主 capabilities | OS sandbox real tests  |
+| D10-T09 | D10 Candidate §11 | 可执行 package 继承 SSH agent、browser cookie 或环境 secret | reject | unsupported | runtime 默认没有这些宿主能力，只能使用显式 InputSlot 与受管 transport | 在真实 OS sandbox 中探测 home、浏览器资料、SSH 与环境变量 |
 | D10-T10 | D9 Worker §2 + D10 Runtime | D9 conversion route 借 D10 transport 获得网络 | reject | unsupported | D9 no-网络 默认保持，transport capability 不继承 | dependency/handle/网络 scan  |
 
 ## 5. Connector、外部效果与恢复
@@ -128,11 +128,11 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 | ID | 来源定位 | 场景/风险 | disposition | 执行模式 | D10 候选落点 | 验证义务 |
 | --- | --- | --- | --- | --- | --- | --- |
 | D10-P01 | D4 §3.2/Registry handshake | 两个 publisher claim 同 命名空间 | accept | unsupported | NamespaceClaim 唯一 所有者；D4 所有者 conflict fail closed | claim conflict before inner parse  |
-| D10-P02 | D4 Registry evolution | 同 semantic ID 回滚到旧 digest | reject | unsupported | semantic ledger 累计；rollback 是 successor activation | three-代际 mutation/revival  |
-| D10-P03 | D10 Candidate §7 | self-signed package 首装即 claim 命名空间 | reject | unsupported | PublisherIdentity ≠ NamespaceClaim | trust-root/claim negative  |
-| D10-P04 | D10 Candidate §7 | publisher key 合法轮换 | revise | automatic | old-key continuity + 当前 trust policy + successor activation | old/new key chain  |
+| D10-P02 | D4 Registry evolution | 同一个 semantic ID 试图回滚到旧 digest | reject | unsupported | semantic ledger 只允许累计后继；rollback 也是 successor activation | 三代演进中验证 mutation、tombstone 与复活攻击 |
+| D10-P03 | D10 Candidate §7 | self-signed package 首次安装就要求 claim namespace | reject | unsupported | PublisherIdentity 与 NamespaceClaim 分开；自签只能证明某把 key 签过包 | 信任根和 namespace claim 的负向测试 |
+| D10-P04 | D10 Candidate §7 | publisher key 合法轮换 | revise | automatic | 必须证明旧 key 到新 key 的连续性，并由当前 trust policy 接纳为 successor activation | 旧/新 key chain、撤销和错误接管反例 |
 | D10-P05 | D10 Candidate §6 | 运行时 binary 更新而 Registry 未变 | accept | automatic | successor ActivationBinding/Catalog；RegistryBinding 可保持 | exact catalog digest 代际  |
-| D10-P06 | D10 Candidate §6 | health outage 每次生成 semantic 代际 | reject | unsupported | 运行时 health 与 semantic activation 分离 | flapping health no Registry churn  |
+| D10-P06 | D10 Candidate §6 | health outage 每次都生成新的 semantic generation | reject | unsupported | runtime health 与 semantic activation 分域；短暂故障不改 Registry 历史 | 反复健康抖动时 RegistryBinding 保持不变 |
 | D10-P07 | D10 Candidate §6 | uninstall 后已保存 unknown Field 被清理 | reject | unsupported | raw 源 与 history 保留；typed 状态 不可用 | uninstall/reinstall roundtrip  |
 | D10-P08 | D10 Candidate §6 | 激活切换中 崩溃 | accept | automatic | old 或完整 new ActivationBinding，不半态 | 崩溃 at every staging/提交 point  |
 
@@ -140,14 +140,14 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 
 | ID | 来源定位 | 场景 | disposition | 执行模式 | 所有者/理由 | 再开放前要求 |
 | --- | --- | --- | --- | --- | --- | --- |
-| D10-D01 | 强制输入 Calendar holiday/anniversary | 未冻结 holiday/anniversary 提供方 算法 | defer-with-所有者 | deferred | D4 temporal semantics + D10 提供方 admission | closed rule 贡献项、version/coverage、D7 consumer  |
-| D10-D02 | 强制输入 ICS sync | 通用双向 ICS subscription/upsert | defer-with-所有者 | deferred | D3 binding + D9 mapping + D10 connector | SourceBinding/OriginBinding、conflict/watermark、idempotency  |
-| D10-D03 | D10 Candidate §13 | 通用 multi-step 工作流 DAG | defer-with-所有者 | deferred | future D10 | typed DAG、恢复、budget、approval composition  |
-| D10-D04 | D10 Candidate §14 | 无人值守 create/delete/Facet/native-table/bulk | defer-with-所有者 | interactive | future D10 + owning D3/D7 adapters | 机械 approval envelope 与 D6 atomic use  |
-| D10-D05 | D10 Candidate §10 | 任意 JSON Schema/OpenAPI 自动生成工具 | defer-with-所有者 | deferred | future D10 ToolValue profile | exact numeric/null/additionalProperties/recursion contract  |
-| D10-D06 | D10 Candidate §11 | 浏览器本地 MCP/process execution | defer-with-所有者 | unsupported | D1 surface boundary | 新 D1 surface/review  |
-| D10-D07 | D10 Candidate §22 | Mobile Agent/connector/approval | defer-with-所有者 | unsupported | D1 + D8 + D10 joint | 重开 D1 与真实 Mobile evidence  |
-| D10-D08 | TASK/A2 | A2 系统级验收 | defer-with-所有者 | deferred | A2 | D10 independent acceptance/activation 后才开始 |
+| D10-D01 | 强制输入 Calendar holiday/anniversary | 未冻结 holiday/anniversary 提供方 算法 | defer-with-owner | deferred | D4 temporal semantics + D10 提供方 admission | closed rule 贡献项、version/coverage、D7 consumer  |
+| D10-D02 | 强制输入 ICS sync | 通用双向 ICS subscription/upsert | defer-with-owner | deferred | owner 为 D3 binding + D9 mapping + D10 connector | 再开放前必须闭合 SourceBinding/OriginBinding、冲突/watermark 和幂等语义 |
+| D10-D03 | D10 Candidate §13 | 通用多步骤 workflow DAG | defer-with-owner | deferred | owner 为未来 D10 | 再开放前必须定义 typed DAG、恢复、预算和 approval 组合 |
+| D10-D04 | D10 Candidate §14 | 无人值守 create/delete/Facet/native-table/bulk | defer-with-owner | interactive | owner 为未来 D10 与相应 D3/D7 adapters | 每种动作都要独立机械 approval envelope 与 D6 原子消费合同 |
+| D10-D05 | D10 Candidate §10 | 从任意 JSON Schema/OpenAPI 自动生成可调用工具 | defer-with-owner | deferred | owner 为未来 D10 ToolValue profile | 必须先闭合 exact numeric、null、additionalProperties 和递归边界 |
+| D10-D06 | D10 Candidate §11 | 浏览器本地 MCP/process execution | defer-with-owner | unsupported | D1 surface boundary | 新 D1 surface/review  |
+| D10-D07 | D10 Candidate §22 | Mobile Agent/connector/approval | defer-with-owner | unsupported | D1 + D8 + D10 joint | 重开 D1 与真实 Mobile evidence  |
+| D10-D08 | TASK/A2 | A2 系统级验收 | defer-with-owner | deferred | A2 | D10 independent acceptance/activation 后才开始 |
 
 ## 8. 当前证据状态
 

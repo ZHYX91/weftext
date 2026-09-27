@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r01-candidate-2026-09-25; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
+revision: D10-r02-review-fixes-2026-09-27; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
 
 ## 1. Implementation slices and state owners
 

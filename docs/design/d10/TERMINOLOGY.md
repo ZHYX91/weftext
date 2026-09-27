@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Terminology and Naming
 
-revision: D10-r01-candidate-2026-09-25; status: candidate. This lexicon defines only new D10 control/extension concepts and consumption boundaries for D1-D9; it does not reassign any upstream-owned concept. Natural language, historical material, test descriptions, and third-party product vocabulary do not automatically become controlled names.
+revision: D10-r02-review-fixes-2026-09-27; status: candidate. This lexicon defines only new D10 control/extension concepts and consumption boundaries for D1-D9; it does not reassign any upstream-owned concept. Natural language, historical material, test descriptions, and third-party product vocabulary do not automatically become controlled names.
 
 ## 1. Naming principles
 

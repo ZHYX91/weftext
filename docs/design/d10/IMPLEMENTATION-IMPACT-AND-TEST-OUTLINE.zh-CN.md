@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r01-candidate-2026-09-25；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
+revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
 
 ## 1. 实现切片与状态所有者
 
@@ -38,7 +38,7 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 
 建议实现顺序：
 
-1. S1：D10 strict value/control decoders、受管 token tags、ActivationBinding/Capability Catalog、publisher/namespace trust。
+1. S1：实现 D10 严格 value/control decoder、受管 token tag、ActivationBinding/Capability Catalog，以及 publisher/namespace 信任校验。
 2. S2：DelegationLease、ContextBundle、egress、SecretRef、audit spool 与原子预算/费用 reservation。
 3. S3：Run/Automation Definition、occurrence claim、serial scheduler、cancel/restart。
 4. S4：Model/Tool/MCP adapters 与 runtime isolation；先只 read/compute，不开放 external mutation。
@@ -135,10 +135,10 @@ Windows、macOS、Linux 分开验收；存在 container/sandbox 名称不算通�
 
 ## 6. Automation 与 scheduler 实施义务
 
-Scheduler 必须持久化 definition revision、有限 schedule horizon、sourceOccurrenceKey、claim owner、Run identity、LeaseRunUse link 和实际 skipped/started/terminal outcome。首版 serial 语义要求：
+Scheduler 必须持久化 definition revision、有限调度 horizon、sourceOccurrenceKey、claim owner、Run identity、LeaseRunUse 关联，以及真实的 skipped/started/terminal outcome。首版采用 serial 语义：
 
 - 同一个 `AutomationOccurrenceKey/1` 至多有一个 Run identity 和一个 durable claim；
-- terminal occurrence 在 restart、rescan、disable→enable、scheduler cache rebuild 后仍返回原 Run/outcome，不创建第二 Run；
+- terminal occurrence 在重启、重扫、disable→enable 和 scheduler 缓存重建后仍返回原 Run/outcome，不创建第二个 Run；
 - enable/disable 不改变 definitionRevision，也不清除 claim/terminal proof；
 - definition 语义改变生成新 revision 和明确 activation point；
 - run_once 只取当前有限窗口最新遗漏 occurrence；
@@ -215,7 +215,7 @@ planned-preview recovery 必须从真实 planned 保存的 PreparedActionBinding
 
 缺任一项时可保留 read-only connector，mutation 对 unattended execution unavailable。不能用 HTTP method 名或 status 2xx 泛化成所有服务的成功/幂等合同。
 
-send fence 需要 fault injection：durable intent 前、intent 后 send 前、write syscall/HTTP send 中、remote accepted 后 response 前、response 后 terminal audit 前。没有可证结果的一律 outcome_unknown。
+发送栅栏需要故障注入：耐久 intent 之前、intent 已保存但尚未发送、系统写入或 HTTP 发送中、远端已接收但尚未响应、收到响应但 terminal audit 尚未耐久。任何无法证明的结果都保持 outcome_unknown。
 
 Connector sync 若修改 SourceBinding/OriginBinding/watermark 必须另有 owner-stage closed adapter；普通 ExternalEffectIntent 或 single_field_member approval 不得直接写这些控制字段。
 

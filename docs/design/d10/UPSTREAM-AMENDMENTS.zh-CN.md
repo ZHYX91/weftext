@@ -27,7 +27,7 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate upstream amendmen
 - D7 `EffectManifest/1`、EffectBytes item/schema 与 committed transport；
 - D8 `PreparedEditBinding/1`、Draft/IME/explicit confirmation；
 - D4 Registry、D7 Narrow Field Qualification 与 D6 Policy/ObservationScope；
-- 原 current authorization、deny precedence、non-disclosure、authority/fence、dependency CAS、replay 和 planned recovery。
+- 原当前授权、deny 优先级、信息不披露、authority/fence、dependency CAS、replay 与 planned 恢复规则。
 
 D6 `d6_error` object shape 与 disposition 集合保持，但 code 闭集需要增加一个协调值 `approval_unavailable`。这是必要的 closed-enum 扩展，不伪装成既有错误。D7 Preview/Effects 需要增加一个 planned-only 只读恢复入口；原 `d7_effects_resolve/open` 继续 committed-only。以上扩展在 capability 协商和协调激活前均不可使用。
 
@@ -56,7 +56,7 @@ D6 `d6_error` object shape 与 disposition 集合保持，但 code 闭集需要�
 > 1. **member-change**：MutationFootprint 恰只包含该 existing scalar member 的改变，公开 owner_fields preview 有准确 `field_change`；
 > 2. **raw-no-op**：原 Action 仍准确解析到同一唯一 Entry/existing member，请求 typed value 与当前值相等，并且完整 proposed source bytes 与 before 逐字相同。此时 MutationFootprint 必须为空、preview 不列 `field_change`、最终 D6 receipt 的 `sourceVersions` 为空；不得伪造 effect、footprint 或 revision。
 >
-> 任一 occurrenceKey、其它 member、qualifier、note、provenance、其它 Entry、body/title/coreKind/Facet、Ref/relation、identity/lifecycle/placement 或 D6 control state 变化都使 standing approval 不适用。Core 不选择 first/preferred/same-value Entry，也不把失败降格到 whole-entry/source write。
+> 任一 occurrenceKey、其它 member、qualifier、note、provenance、其它 Entry、正文/title/coreKind/Facet、Ref/relation、identity/lifecycle/placement 或 D6 控制状态变化都使 Standing Approval 不适用。Core 不选择第一条、preferred 或同值 Entry，也不把失败降格到整 Entry/整 source 写入。
 >
 > 若 raw-no-op 最终按原 D6 规则形成 committed decision，它仍消费一次 approval successful-commit count；same saved decision replay 不再次消费。
 
@@ -150,7 +150,7 @@ Standing Approval 不增加 receipt member。D10 UI 可以从受权 Run/Approval
 
 ### 3.4 D10 control state 与 Lease Run admission
 
-ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefinition、LeaseRunUse、PlannedDecisionApproval 等 durable D10 control state 只能由 Core-managed closed control adapter 修改，具有独立 control revision/CAS、current principal authorization、audit 与 replay 合同。它们不能经 author source、provider callback、Agent JSON 或 `d6_commit_request` 自由 payload 修改。
+ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefinition、LeaseRunUse、PlannedDecisionApproval 等耐久 D10 控制状态只能由 Core 管理的封闭 control adapter 修改，并具有独立 control revision/CAS、当前 principal authorization、audit 与 replay 合同。它们不能经作者 source、provider callback、Agent JSON 或 `d6_commit_request` 自由 payload 修改。
 
 `maxRuns` 消费发生在第一次受保护执行前的 D10 Run-admission CAS，不进入 D6 author ledger。CAS 按同一 `leaseId` 谱系累计历史，写 `LeaseRunUse/1`；同 Run restart 不重复消费，准入后的 failed/cancelled/crash 不退款。耗尽属于 D10 `delegation_exhausted`，发生在进入 D6/D7 前。
 
@@ -233,13 +233,13 @@ d7_planned_preview_opened {
 
 最终提交仍走原 D6 request 和 §2/§3 的 current authorization、approval、dependency、authority/fence 检查。新的交互批准只解决“本次用户已重新查阅并授权原 plan”，不能使确定 dependency conflict、stale target 或损坏 pins 合法。
 
-若原 plan 已有 standing ApprovalUse count reservation，该 reservation 在人工恢复期间继续保留；成功 author commit 仍 `reserved→consumed`，只有 authoritative terminal_failed 才 `released_terminal`。不得在人工点击时提前释放给另一个 Run。
+若原 plan 已有 standing ApprovalUse count reservation，该 reservation 在人工恢复期间继续保留；成功 author commit 仍 `reserved→consumed`，只有 authoritative terminal_failed 才 `reserved→released_terminal`。不得在人工点击时提前释放给另一个 Run。
 
 ## 6. D8 与 D9 的明确非修订说明
 
-D8 不增加 unattended edit branch。Document/Annotation edit、dirty Draft、IME、current serial、完整 preview 和 explicit confirmation 原样保留。Agent/Automation 只能给 D8 提 proposal；不能伪造 EditSession 或 human origin。
+D8 不增加无人值守编辑分支。Document/Annotation 编辑、dirty Draft、IME、current serial、完整 preview 和明确确认原样保留。Agent/Automation 只能向 D8 提出 proposal；不能伪造 EditSession 或人工来源。
 
-D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或 external publisher。D10 外部 transport/Connector 不授 D9 worker 网络，D9 publication confirmation 不授 Standing Approval author write。
+D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或外部发布器。D10 的外部 transport/Connector 不授予 D9 worker 网络能力，D9 publication confirmation 也不授予 Standing Approval 作者写入权。
 
 ## 7. 激活与版本兼容
 

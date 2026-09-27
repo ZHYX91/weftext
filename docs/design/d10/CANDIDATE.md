@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r01-candidate-2026-09-25; status: candidate, pending independent review and coordinated activation. This candidate takes D1-D9 at fixed upstream input commit `f205831c848729f7ddbc3ba0cf32b689459c0c98` as authoritative and has completely read all 48/48 inputs listed by `docs/design/inputs.json`. This is an author candidate; it does not mean the Gate has passed, the product is implemented, D6/D7 have changed, or A2 may start.
+revision: D10-r02-review-fixes-2026-09-27; status: candidate, pending independent review and coordinated activation. This candidate takes D1-D9 at fixed upstream input commit `f205831c848729f7ddbc3ba0cf32b689459c0c98` as authoritative and has completely read all 48/48 inputs listed by `docs/design/inputs.json`. This is an author candidate; it does not mean the Gate has passed, the product is implemented, D6/D7 have changed, or A2 may start.
 
 ## 1. Selection and problem boundary
 

@@ -102,7 +102,7 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 - D4 Registry 与 D10 Catalog 分域，但通过 Activation Binding 做完整激活；D4 累计 semantic ledger 不允许回滚指针或删除历史。
 - Tool Value 固定复用 D7 类型和值代数的有限子集，MCP 只作为 Tool Adapter transport。
 - package trust 固定 SHA-256 内容绑定与应用层 Ed25519 publisher 签名，同时把 PublisherIdentity 与 NamespaceClaim 分开。
-- external effect、idempotency、outcome_unknown、credential rotation、cost reservation、cancel race 与 audit failure 均已有唯一规范结论。
+- 外部效果、幂等、outcome_unknown、凭据轮换、费用 reservation、取消竞争和 audit failure 都已经有唯一规范结论。
 
 这些是作者候选选择，不是独立 acceptance。
 
