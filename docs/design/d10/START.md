@@ -8,13 +8,13 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate revision r02, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
+Status: candidate revision r03, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
 
 Fixed upstream input commit: f205831c848729f7ddbc3ba0cf32b689459c0c98. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
 ## 1. Reading coverage
 
-Design-input reading is complete at 48/48 with 0 unread. The complete set matches docs/design/inputs.json at the fixed input:
+Historical fixed upstream U remains completely read at 48/48. This revision additionally completed the supplemental S file `docs/design/snapshots/d4-reference-catalog-registry/source.json`, so current author input coverage is 49/49 with 0 unread. The original 48-file inventory is unchanged, and historical 48/48 records are not retroactively rewritten as if 49 files had been read then. The code block below remains the original 48 files from U:
 
 ```text
 docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md
@@ -66,6 +66,8 @@ docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md
 docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md
 docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md
 ```
+
+The supplemental 49th input comes from S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` and was read in full: 102856 characters and 3685 content lines (the trailing newline yields one extra empty element in line splitting). The catalog contains 61 Fields, 7 Facets, 22 value-type aliases, 4 qualifier sets, and 1 Calendar series policy. The author checked it against the D7 Narrow Field Qualification positive `people/phone` construction and the relation/cross-Field negative boundaries.
 
 The repository/design rules and task entrypoints at the fixed input were also read completely:
 

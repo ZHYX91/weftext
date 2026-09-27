@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r02-review-fixes-2026-09-27; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
+revision: D10-r03-supplement-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
 
 ## 1. Implementation slices and state owners
 
@@ -102,6 +102,8 @@ The Package verifier implements SHA-256 catalog binding, Ed25519 package signatu
 
 Candidate D4 Registry must still pass original `RegistrySnapshot/1`, `RegistryBinding/1`, evolution proof, and catalog loader. D10 package metadata may not be inserted into the D4 closed snapshot for convenience.
 
+The supplemental S D4 reference catalog is now an implementation-test input: its 61 Fields, 7 Facets, 27 relation Fields, and real cross-Field constraints such as Calendar `union_variant_equal` participate in D7 Narrow Field Qualification. Tests include at least the positive `people/phone` construction, a relation-Field negative, a cross-field `calendar/range` or `calendar/recurrence` negative, and an unknown-constraint-constructor negative. No hard-coded "safe FieldId allowlist" may bypass the Registry-graph proof.
+
 ## 4. Agent, Tool, and MCP implementation obligations
 
 Agent runtime holds only Run-local state, ContextBundle references, and the allowed tool catalog and does not cache ambient workspace authority. Context builder derives exact source/result pins from current Core-authorized input and rematches recipient before egress.
@@ -146,6 +148,8 @@ Scheduler persists definition revision, finite schedule horizon, sourceOccurrenc
 - an occurrence claim may exist before Run admission, so queued/blocked Runs that have not entered protected execution consume no Lease `maxRuns`;
 - immediately before the first protected step, a Core-managed Run-admission CAS validates current leaseId/leaseRevision, trusted time, ActivationBinding, budgets, and cumulative consumption over the leaseId lineage and atomically writes `LeaseRunUse/1`;
 - after admission, failure, cancellation, or crash never refunds a run use; recovery of the same Run does not consume again;
+- later protected steps of the same Run and recovery of its original planned request reuse a complete existing `LeaseRunUse/1` and do not compare remaining count again; even with `maxRuns=1` and cumulative use already 1, they reuse the original admission;
+- reuse is not exemption from current gates: every step still checks current authorization, exact leaseRevision, trusted time, ActivationBinding, applicable approval, and budgets; revocation, expiry, revision change, or binding change still blocks;
 - exhausted `maxRuns` returns D10 `delegation_exhausted`, retains the existing claim/blocked Run, and cannot be bypassed by creating another Run for the same occurrence;
 - source/rule/authorization/ActivationBinding changes are revalidated before each new step;
 - after trusted time passes Lease `notAfter`, new steps and final submission are refused whether or not a cleanup task ran;
@@ -162,7 +166,9 @@ Tests must do more than mock a scheduler row. At minimum exercise:
 5. crash immediately after admission CAS, then recovery of the same Run without another consumption;
 6. Lease expiry while Run is paused and cleanup never runs, with trusted time advancing and new context/model/tool/external steps plus final author submission refused;
 7. lost clock continuity failing closed as `state_unavailable`, then actual expired/active adjudication after trusted time is restored;
-8. source/rule-generation and definition-revision changes without rerunning old K under the successor revision.
+8. source/rule-generation and definition-revision changes without rerunning old K under the successor revision;
+9. with `maxRuns=1`, the second protected step of the same Run reuses the original LeaseRunUse when remaining=0, while a new Run is rejected with `delegation_exhausted`;
+10. recovery of the same Run's original planned request at remaining=0 continues after proving LeaseRunUse continuity; missing or unprovable continuity returns `state_unavailable` and never re-consumes.
 ## 7. Standing Approval coordinated implementation
 
 UPSTREAM-AMENDMENTS is a prerequisite for this slice. The feature may not be shipped secretly in Broker before the amendment is jointly accepted.
@@ -341,7 +347,9 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 27. Mobile upload/Agent/approval negative capability;
 28. hidden object exists/missing non-disclosure;
 29. provider billing uncertain/overcharge;
-30. package disable with author raw unknown namespace retained.
+30. package disable with author raw unknown namespace retained;
+31. D4 reference-catalog positive narrow proof for `people/phone` plus relation/cross-Field/unknown-constructor negatives;
+32. D3 lexicon positive mapping: `adopt_*` uses `OriginBinding` / `origin_binding`; negative controlled source/API/schema/fixtures/terminology registry contain no `adoption_binding`, with no scanner exemption.
 
 Each case includes positive and mutant/negative paths and is not satisfied by string-log comparison. Any case not actually executed remains pending in the evidence table.
 ## 16. Completion gate

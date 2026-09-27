@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Scenario Dispositions
 
-revision: D10-r02-review-fixes-2026-09-27; status: candidate. This file maps D10 routing in the fixed upstream inputs, mandatory TASK failures, and new competitive boundaries from this candidate to executable dispositions. A disposition describes how the D10 candidate handles a scenario and is not a claim that a test has passed.
+revision: D10-r03-supplement-2026-09-28; status: candidate. This file maps D10 routing in the fixed upstream inputs, mandatory TASK failures, and new competitive boundaries from this candidate to executable dispositions. A disposition describes how the D10 candidate handles a scenario and is not a claim that a test has passed.
 
 The execution-mode column has only four values: automatic means the closed rules in this document permit progress without per-operation human confirmation; interactive means preparation is allowed but per-operation confirmation is required; unsupported means explicitly unavailable in this generation; deferred means a named future owner must freeze a contract before availability.
 
@@ -42,6 +42,7 @@ The execution-mode column has only four values: automatic means the closed rules
 | D10-U24 | D8 Main §2–§3/Interfaces §4–§5 | model output masquerades as human Draft and auto-clicks confirmation | reject | unsupported | D8 edit remains interactive; Automation creates no EditSession | dirty Draft, composition, stale preview, unknown receipt chain |
 | D10-U25 | D9 Workers §1–§2 | D9 conversion worker becomes generic networked tool host | reject | unsupported | D9 worker remains specialized with no workspace/network by default; D10 executor separate | Worker sandbox cannot inherit D10 network capability |
 | D10-U26 | D9 Export §4 | external publication receipt becomes Resource/author receipt | reject | unsupported | PublicationReceipt and D3/D6 receipt remain separate | publication success + Resource-create failure coexist |
+| D10-U27 | D3 lexicon §origin-binding / §adopt | Adopt registers `adoption_binding` as its own code convention despite existing ownership of `OriginBinding` / `origin_binding` | revise | deferred | UPSTREAM-AMENDMENTS §6 proposes the minimal lexicon erratum: Adopt keeps only `adopt_*`; binding values use origin-binding-owned `OriginBinding` / `origin_binding`; no alias/wire/identity/capability is added | Positive `adopt_*`→`OriginBinding/origin_binding`; negative controlled surfaces contain no `adoption_binding`, with no scanner exemption |
 
 ## 2. TASK mandatory failure boundaries
 
@@ -74,6 +75,8 @@ The execution-mode column has only four values: automatic means the closed rules
 | D10-F25 | TASK / Candidate §13 | terminal K starts another Run after restart, rescan, or disable→enable | reject | unsupported | claim/terminal dedup proof remains verifiable while the definition revision can recover; compaction cannot lose the do-not-rerun proof | All four recovery paths for terminal K return the original Run/outcome |
 | D10-F26 | TASK / Candidate §8/§20 | Run pauses across Lease notAfter while cleanup task never runs | accept | automatic | trusted current time gates admission/submission; cleanup does not own expiry semantics | after advancing trusted time, reject new context/model/tool/external steps and final author submit |
 | D10-F27 | TASK / Candidate §8/§20 | lost clock epoch/time continuity is treated as a still-valid Lease | reject | unsupported | return `state_unavailable` and pause; after trusted time returns, decide active/expired from actual time | lost epoch, restart, trusted-time restoration state machine |
+| D10-F28 | Candidate §8/§13/§20 | `maxRuns=1` was consumed by R1 admission and R1's second protected step is misclassified as a new Run because remaining=0 | reject | unsupported | An existing complete `LeaseRunUse/1` for the same Run skips the remaining-count gate and consumes nothing again; current authorization, exact leaseRevision, trusted time, ActivationBinding, approval, and budgets are still revalidated | Positive same-Run second step continues; negative lease revoke/expire/revision change still blocks |
+| D10-F29 | Candidate §8/§20 | recovery of the same Run's original D6 planned request returns `delegation_exhausted` because the lease has no remaining run count | reject | unsupported | Planned recovery first proves continuity of the original `LeaseRunUse/1` and reuses that admission instead of re-running the new-Run count gate; missing/unprovable record returns `state_unavailable`, never a guessed re-consumption | With `maxRuns=1` and remaining=0, original planned recovery may continue while a new Run is rejected with `delegation_exhausted` |
 
 ## 3. Standing Approval and confirmation boundaries
 
@@ -136,6 +139,7 @@ The execution-mode column has only four values: automatic means the closed rules
 | D10-P06 | D10 Candidate §6 | health outage creates semantic generation each time | reject | unsupported | runtime health separate from semantic activation | flapping health causes no Registry churn |
 | D10-P07 | D10 Candidate §6 | uninstall cleans a saved unknown Field from author source | reject | unsupported | raw source/history remain; typed state unavailable | uninstall/reinstall roundtrip |
 | D10-P08 | D10 Candidate §6 | crash during activation switch | accept | automatic | either old or complete new ActivationBinding, never half-state | crash at every staging/commit point |
+| D10-P09 | S D4 reference catalog + D7 Narrow Field | `single_field_member` skips the real Facet/Relation/constraint graph merely because one Field is modified | reject | unsupported | Current 49th input proves 27 relation Fields, Calendar cross-Field `union_variant_equal`, and required/local constraints; the complete Registry-graph proof remains mandatory. `people/phone` is an actual positive construction, not a FieldId allowlist | Positive `people/phone`; negative relation Fields, cross-field `calendar/range`/`calendar/recurrence`, and unknown constructors must fail narrow proof |
 
 ## 7. Deferred boundaries with named owners
 

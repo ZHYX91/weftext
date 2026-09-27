@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 Agent、自动化与外部能力候选
 
-revision: D10-r02-review-fixes-2026-09-27；状态：candidate，等待独立审查与协调激活。本候选以固定上游输入提交 `f205831c848729f7ddbc3ba0cf32b689459c0c98` 的 D1–D9 为权威前提，已完整读取 `docs/design/inputs.json` 所列 48/48 份输入。本文是作者候选，不表示 Gate 通过、产品已经实现、D6/D7 已修改或可以开始 A2。
+revision: D10-r03-supplement-2026-09-28；状态：candidate，等待独立审查与协调激活。本候选以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份 D1–D9 输入为权威前提，并已补读补充输入 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 新增的 D4 reference catalog；当前作者输入覆盖为 49/49。历史 48/48 阅读记录仍只表示当时 U 的原清单，不追溯改写为 49/49。本文是作者候选，不表示 Gate 通过、产品已经实现、D6/D7 已修改或可以开始 A2。
 
 ## 1. 选择与问题边界
 
@@ -70,6 +70,8 @@ D10 控制状态位于与 D6 Authority Store 绑定的受管控制域，由 Core
 D4 Registry 仍是唯一 semantic namespace/schema 权威。D10 证明 package/publisher/namespace claim、安装资产与贡献来源，随后把完整候选 `RegistrySnapshot/1`、`RegistryBinding/1` 交给 D4 既有验证、演进和 catalog load；D10 不增加 Registry member，也不改变 D4 Field/Facet/Relation/Calendar/Unit 语义。
 
 D10 另维护 Capability Catalog，记录每个可执行或纯数据 Contribution 的精确包摘要/版本、贡献类型/版本、运行 profile、平台/架构、依赖、宿主权限、网络/出站类别、secret 要求、费用 profile 与 D1 capability ID。Catalog 不能保存第二份 FieldDefinition，也不能用显示名称或安装顺序证明命名空间 owner。
+
+补充 S 的 D4 reference catalog 是当前候选的第 49 份输入：61 个 Field、7 个 Facet、22 个 value-type alias、4 个 qualifier set 和 1 个 Calendar series policy。它不改变既有 D4/D7 语义，只把先前遗漏的规范机器图纳入实际输入。对 `single_field_member` 尤其重要的是：实际目录有 27 个 relation Field，`calendar/event` 还有 `calendar/range` 与 `calendar/recurrence` 的跨 Field `union_variant_equal`，另有 required-field 与 Field 内部约束；因此自动路径必须继续执行 D7 Narrow Field Qualification 的完整 Registry 图证明，不能从“只修改一个 Field”直接推出安全。正向 `people/phone` 在目录中是普通非 relation Field，位于无额外 Facet constraint 的 `people/person`，自身 constraints 为空，但其 alias、qualifier、source-envelope 和其它 D7 依赖仍必须完整验证。
 
 ```text
 ActivationBinding/1 {
@@ -146,6 +148,9 @@ LeaseRunUse/1 {
 
 该记录与累计消费在同一受管 control transaction 保存，是 Run 准入防重事实，不是作者 ledger。CAS 成功就是 `maxRuns` 的消费线性化点：之后模型或工具失败、用户取消、Run 失败或取消、进程崩溃都不退款。同一 Run 重启只恢复原 `LeaseRunUse/1`，不再次消费。上限耗尽时，在进入 D6/D7 或外部 transport 前返回 D10 `delegation_exhausted`。
 
+
+`maxRuns` 只在“这个 Run 尚无 `LeaseRunUse/1`”的首次准入分支比较剩余次数并消费。已经存在、完整且与同一 `runId`、`leaseId`、准确 `leaseRevision` 绑定的 `LeaseRunUse/1` 时，同 Run 的第二个或后续受保护步骤、以及该 Run 内原 D6 planned request 的恢复都**不再次检查 remaining>0，也不再次消费次数**；即使 `maxRuns=1` 且累计消费已经等于 1，也不能把同 Run 误判成“新 Run 已耗尽”。这些后续步骤仍逐次验证当前 D6/D10 授权、记录中的准确 Lease revision、可信时间、当前 ActivationBinding、适用批准和预算。Lease 被撤销、过期、revision/binding 改变或其它当前资格失败仍会阻止执行；只有“新 Run 没有既有 LeaseRunUse 且累计已达 maxRuns”才返回 `delegation_exhausted`。既有 LeaseRunUse 丢失或连续性不可证明时返回 `state_unavailable`，不能重新消费一次来猜测恢复。
+
 Lease 的可信时间资格在每个新的受保护步骤以及最终作者或外部提交前重新检查。清理任务是否运行不决定 Lease 是否过期；只要可信当前时间已经超过 `notAfter`，新步骤固定返回 `delegation_expired`。若 clock epoch 或时间连续性不可证明，固定返回 `state_unavailable` 并暂停，不能假定“时间没有经过”；可信时间恢复后按真实当前时间重新裁决。已经发生的作者提交、外部效果、费用和 `LeaseRunUse/1` 历史均不回退。
 ## 9. Context、出站与提示注入
 
@@ -204,7 +209,7 @@ AutomationOccurrenceKey/1 =
 
 terminal occurrence 历史可以压缩，但只允许压缩成仍能证明该 key 已经产生过原 Run 和原 terminal outcome 的耐久摘要；当某 definition revision 仍可能被 scheduler 重扫或恢复时，不得用普通 GC 把“已执行”变回“从未见过”。同一个原 claim 的恢复始终返回原 Run identity 和原 outcome。
 
-Occurrence claim 可以先于 Run admission 建立，因此 queued 或 blocked 且从未进入受保护执行的 Run 不消耗 Lease `maxRuns`。第一次受保护步骤通过 §8 的 Run-admission CAS 后才建立 `LeaseRunUse/1`。若 `maxRuns` 已耗尽，当前 occurrence 保持其既有 claim/Run 并进入 blocked，返回 `delegation_exhausted`；不得把同一 occurrence 换新 Run 绕过上限。
+Occurrence claim 可以先于 Run admission 建立，因此 queued 或 blocked 且从未进入受保护执行的 Run 不消耗 Lease `maxRuns`。已经有同一 Run 的 `LeaseRunUse/1` 后，后续 step 与原 planned 恢复复用该准入事实，不再因为全局 remaining=0 重新执行 Run-admission count gate。第一次受保护步骤通过 §8 的 Run-admission CAS 后才建立 `LeaseRunUse/1`。若 `maxRuns` 已耗尽，当前 occurrence 保持其既有 claim/Run 并进入 blocked，返回 `delegation_exhausted`；不得把同一 occurrence 换新 Run 绕过上限。
 
 每次 occurrence 开始和每个新的受保护步骤前重新验证 current capability、准确 Lease revision、trusted time、D6 authorization、ActivationBinding、secret generation 与预算。已生成 D3/D6 request 后重启只恢复原 Run 和原 request；不能重新采样 target 或生成新 OperationId。暂停期间 Lease 可以自然到期，即使清理 scheduler 从未运行；可信时间推进后必须阻止新的 context、model、tool、external step 和最终作者提交。时钟连续性丢失时 fail closed 为 `state_unavailable`，恢复可信时间后再判断 expired 或 active。
 ## 14. Standing Approval
@@ -419,7 +424,7 @@ queued/prepared 且未通过 §8 Run-admission CAS 的 Run 可以在第一项受
 
 external effect 进入 submitting 后，取消只阻止后续步骤；该 effect 最终仍是 succeeded、failed_no_effect 或 outcome_unknown。迟到 model/tool output 在 step 已关闭后不能启动新 tool/action。
 
-重启先恢复 durable occurrence claim、Run、LeaseRunUse、ApprovalUse/cost reservation 与原 requests。Lease 在暂停时自然过期不需要 cleanup task；可信时间超过 `notAfter` 后，新步骤和最终提交都拒绝。无法证明 clock continuity 时返回 `state_unavailable` 并保持原控制记录，不延长 deadline、不假定 Lease 仍有效。无法证明 execution side effect 的结果时进入 blocked/reconciling，而不是生成新 OperationId 或 effect ID。
+重启先恢复 durable occurrence claim、Run、LeaseRunUse、ApprovalUse/cost reservation 与原 requests。同 Run 的恢复先验证既有 LeaseRunUse 连续性，再验证当前授权、准确 Lease revision、可信时间、ActivationBinding、批准和预算；不得因为 `maxRuns` 的剩余数已经为 0 再做一次新 Run 准入。Lease 在暂停时自然过期不需要 cleanup task；可信时间超过 `notAfter` 后，新步骤和最终提交都拒绝。无法证明 clock continuity 时返回 `state_unavailable` 并保持原控制记录，不延长 deadline、不假定 Lease 仍有效。无法证明 execution side effect 的结果时进入 blocked/reconciling，而不是生成新 OperationId 或 effect ID。
 ## 21. 错误与不可用语义
 
 D1 capability availability 及其固定 reason 优先级完全不变，尤其 `policy_denied` 必须先于组件、配置、network、version 与 health 细节。D10 不用一个 runtime_unavailable 覆盖 `missing_component`、`not_configured`、`offline`、`incompatible_version` 或 `temporarily_unavailable`。

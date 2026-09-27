@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Coordinated D6/D7 Upstream Amendment Proposal
 
-revision: D10-r02-review-fixes-2026-09-27; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
+revision: D10-r03-supplement-2026-09-28; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -40,7 +40,7 @@ Add after the D6 main-document current `PrincipalContext`, generation, and revoc
 
 > **D10 delegation/approval consumption.** D10 may provide current DelegationLease, StandingApproval, and PlannedDecisionApproval evidence from a host/Core managed control domain, but these can only narrow eligibility already granted by D6 Policy, ObservationScope, state disclosure, and actual-footprint gates. They cannot add a capability, turn deny into allow, or replace current authorization. Ordinary requests, Agents, workers, Connectors, MCP servers, and client JSON cannot self-assert principal, delegation, approval, approval count, or proof.
 >
-> Every plan, commit, saved-receipt delivery, and result/effects delivery using D10 delegation still performs existing D6 current-principal/delegation/policy/generation gates first. DelegationLease expiry, revocation, run-count exhaustion, or unprovable time continuity prevents new protected steps but does not rewrite a committed decision as failure and does not roll back an external effect that already crossed its send linearization point. An old approval or capability probe is never a durable authorization ticket.
+> Every plan, commit, saved-receipt delivery, and result/effects delivery using D10 delegation still performs existing D6 current-principal/delegation/policy/generation gates first. DelegationLease expiry, revocation, or unprovable time continuity prevents new protected steps. `maxRuns` exhaustion prevents only a **new Run that has no LeaseRunUse**; later steps of an already admitted Run and recovery of that Run's original planned request are not rejected again merely because remaining is zero, while current authorization, exact leaseRevision, trusted time, ActivationBinding, approval, and budget gates still apply. None of these control failures rewrites a committed decision as failure or rolls back an external effect that already crossed its send linearization point. An old approval or capability probe is never a durable authorization ticket.
 >
 > Only an author-submit profile explicitly listed by the D10/1 coordinated contract may use Standing Approval instead of per-operation interactive confirmation; the first profile is D7 `set_field_member` with `single_field_member`. Every other D3/D6/D7/D8 author intent follows its original confirmation contract. D10 approval cannot legalize an otherwise invalid, unobservable, stale, over-budget, or semantically conflicting plan.
 
@@ -153,7 +153,7 @@ Standing Approval adds no receipt member. D10 UI may display use origin from an 
 
 Durable D10 control state such as ActivationBinding, DelegationLease, StandingApprovalEnvelope, AutomationDefinition, LeaseRunUse, and PlannedDecisionApproval may be changed only through Core-managed closed control adapters with independent control revision/CAS, current-principal authorization, audit, and replay contracts. They cannot be changed through author source, provider callback, Agent JSON, or free payload in `d6_commit_request`.
 
-`maxRuns` is consumed by a D10 Run-admission CAS immediately before the first protected execution and never enters the D6 author ledger. CAS accumulates uses over one `leaseId` lineage and writes `LeaseRunUse/1`; restart of the same Run does not consume again, and failure/cancellation/crash after admission never refunds it. Exhaustion is D10 `delegation_exhausted` before D6/D7 entry.
+`maxRuns` is consumed by a D10 Run-admission CAS immediately before the first protected execution and never enters the D6 author ledger. CAS accumulates uses over one `leaseId` lineage and writes `LeaseRunUse/1`; restart of the same Run does not consume again, and failure/cancellation/crash after admission never refunds it. Only a **new Run with no existing LeaseRunUse** returns D10 `delegation_exhausted` when cumulative use has reached `maxRuns`. Later protected steps of an already admitted Run and recovery of that Run's original planned request do not compare remaining count again and do not consume again; even when `maxRuns=1` and cumulative use is already 1, that same Run is not rejected as a new Run. Those later steps still revalidate current authorization, exact `leaseRevision`, trusted time, ActivationBinding, approval, and budgets; revocation, expiry, revision/binding change, or unprovable continuity still blocks execution.
 
 ## 4. D7 Execution and Action Interfaces — proposed replacement/additions
 
@@ -236,13 +236,28 @@ Final submission still uses the original D6 request and §2/§3 current authoriz
 
 If the original plan already holds a standing ApprovalUse count reservation, that reservation remains occupied during interactive rescue. Successful author commit still changes `reserved→consumed`; only authoritative terminal_failed changes `reserved→released_terminal`. The interactive click cannot release the slot early for a second Run.
 
-## 6. Explicit non-amendment for D8 and D9
+## 6. D3 Terminology and Naming Lexicon — minimal erratum proposal
+
+The D3 lexicon at fixed U contains one internal owned-name conflict between approximately lines 377/379 under `weftext.term.origin-binding` and lines 496/498 under `weftext.term.adopt`. `weftext.term.origin-binding` already owns code name `OriginBinding` and variable name `origin_binding`, while `weftext.term.adopt` says that variable `adoption_binding` must map to OriginBinding and also registers `adoption_binding` under Adopt `owned-names.codeConventions`. That gives one association-binding concept a second variable naming convention.
+
+Propose only the following minimal erratum, with no change to identity, wire, capability, operation semantics, or the frozen OriginBinding type:
+
+1. Change the Adopt wire/API note to: D3 freezes no mode; future API/code verbs use only `adopt_*`. When Adopt creates or re-establishes a foreign-object association, the binding value uses the existing D3 `OriginBinding(ForeignIdentityKey, NodeRef)` type and existing variable/field name `origin_binding`; Adopt defines no `adoption_binding`.
+2. Change Adopt `owned-names.codeConventions` from `["adopt_*","adoption_binding"]` to `["adopt_*"]`.
+3. Keep `weftext.term.origin-binding` owned names `OriginBinding` / `origin_binding` unchanged and uniquely owning this binding-name family.
+4. Delete the `adoption_binding` convention with no compatibility alias, dual read, migration alias, or second variable name; it does not enter public wire, CLI, locale, identity, or capability.
+
+Positive validation: an Adopt code path may be named `adopt_*`, but the associated binding value type and variable must resolve to `weftext.term.origin-binding` `OriginBinding` / `origin_binding`. Negative validation: controlled positive source, API/schema, fixtures, and terminology registry must not assign `adoption_binding` to Adopt or treat it as a compatibility alias for OriginBinding; scanners may not hide remnants through exceptions.
+
+This is a minimal coordinated D3 terminology erratum proposal. Fixed U snapshots remain unchanged, and this document cannot claim the erratum is effective before independent re-review and coordinated acceptance.
+
+## 7. Explicit non-amendment for D8 and D9
 
 D8 gains no unattended edit branch. Document/Annotation edit, dirty Draft, IME, current serial, complete preview, and explicit confirmation remain unchanged. Agent/Automation may only propose into D8 and cannot fabricate EditSession or human origin.
 
 D9 does not change Provider/Route, worker sandbox, ExportPlan, LossReport, PublicationReceipt, or external publisher. D10 external transport/Connector grants no network to a D9 worker, and D9 publication confirmation grants no Standing Approval author write.
 
-## 7. Activation and version compatibility
+## 8. Activation and version compatibility
 
 These amendments take effect only after independent review acceptance, controller coordinated decision, and activation together with the D10 candidate. Before activation:
 
@@ -255,7 +270,7 @@ The new D6 `approval_unavailable` is a closed-enum extension. Coordinated activa
 
 Historical committed D3/D6 decisions keep their original decoders/bytes and are not backfilled with ApprovalUse. An old prepare with no decision does not automatically gain Standing Approval. Only a planned decision produced under the new profile can use the recovery transport defined here.
 
-## 8. Joint counterexamples required for independent re-review
+## 9. Joint counterexamples required for independent re-review
 
 1. R1 prepare sees valid approval, R2 consumes the final use; when R1 reaches D6 and only approval lost the race, the result must be `approval_unavailable/preflight` and an unseen request has no ledger decision.
 2. R1 is already planned when approval is revoked; the same error leaves it planned and cannot become semantic_rejected/terminal_failed.
@@ -273,5 +288,7 @@ Historical committed D3/D6 decisions keep their original decoders/bytes and are 
 14. Valid background author commit with a dirty D8 Draft does not overwrite the Draft.
 15. D3 create/lifecycle Action cannot use a `single_field_member` envelope for unattended submission.
 16. A D10 control error cannot wrap or leak original D6 `not_visible` and hidden facts.
+17. With `maxRuns=1` and an existing LeaseRunUse for the same Run, its second protected step and original planned recovery cannot return `delegation_exhausted` merely because remaining is zero; only a new Run is rejected.
+18. Positive Adopt code keeps only `adopt_*`, while association binding uses only `OriginBinding` / `origin_binding`; `adoption_binding` must be absent from positive terminology/code surfaces and must not exist as an alias.
 
 These are author-revision review targets, not a claim that the first two independent-review batches are closed. Only later independent re-review can change their review status.

@@ -7,13 +7,13 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision r02，处于分批独立复审期间，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
+状态：candidate revision r03，处于分批独立复审期间，尚未独立接受或协调激活。本文件记录作者会话实际输入覆盖、读取完整性和候选交接状态，不是 Gate verdict。
 
 固定上游输入 commit：f205831c848729f7ddbc3ba0cf32b689459c0c98。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
 ## 1. 阅读覆盖
 
-设计输入已完成 48/48，未读 0。完整集合与固定输入中的 docs/design/inputs.json 一致：
+历史固定上游 U 的原输入已完成 48/48；本轮又完整补读补充 S 新增的 `docs/design/snapshots/d4-reference-catalog-registry/source.json`，因此当前作者输入覆盖为 49/49、未读 0。原 48 份清单保持不变，历史 48/48 记录不追溯改写成当时已读 49 份。下列代码块仍是 U 的原 48 份：
 
 ```text
 docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md
@@ -65,6 +65,8 @@ docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md
 docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md
 docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md
 ```
+
+补充第 49 份输入来自 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，完整内容为 102856 字符、3685 个内容行（文件尾换行使逐行 API 分割多一个空元素）。该目录实际包含 61 个 Field、7 个 Facet、22 个 value-type alias、4 个 qualifier set 和 1 个 Calendar series policy；作者已核对它与 D7 Narrow Field Qualification 的 `people/phone` 正向构造及 relation/cross-Field 负向边界一致。
 
 此外已完整读取固定输入上的仓库/设计规则和任务入口：
 

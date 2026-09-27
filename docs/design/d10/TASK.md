@@ -10,13 +10,13 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision r02. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision r03. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
 ## Fixed inputs
 
-Use the fixed Git commit supplied by the controller. Completely read the design inputs listed by ../inputs.json and maintain actual reading coverage. The current author session has completed 48/48 input reads; START records that fact and the real truncated-range rereads.
+Use the fixed Git commit supplied by the controller. Completely read the design inputs listed by ../inputs.json and maintain actual reading coverage. The current author session completed the original 48/48 from U and additionally read the D4 reference catalog added by S, for current 49/49 coverage. START explicitly distinguishes the historical 48/48 from the newly added 49th input.
 
 Upstream D1-D9 remain authoritative until any coordinated amendment is actually accepted. Old model, stage, authorization, and historical candidate labels inside snapshots are historical source text only and do not override this task packet.
 

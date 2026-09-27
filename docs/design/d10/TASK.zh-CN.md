@@ -9,13 +9,13 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision r02。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision r03。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
 ## 固定输入
 
-使用总控给定的固定 Git commit。必须完整读取 ../inputs.json 所列设计输入，并维护实际阅读覆盖。当前作者会话已经完成 48/48 输入阅读；START 记录该事实及曾发生的截断补读。
+使用总控给定的固定 Git commit。必须完整读取 ../inputs.json 所列设计输入，并维护实际阅读覆盖。当前作者会话已完成 U 原 48/48，并补读 S 新增的 D4 reference catalog，当前输入覆盖为 49/49；START 明确区分历史 48/48 与本轮新增第 49 份。
 
 上游 D1–D9 在协调修订真正接受前持续权威。快照中的旧模型、旧阶段、旧授权与历史 candidate 标签仅作为原文历史，不改变当前任务包的执行边界。
 

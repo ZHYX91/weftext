@@ -7,7 +7,7 @@ translation_status: 源
 
 # D10 场景裁决
 
-revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
+revision: D10-r03-supplement-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
 
 执行模式列只有四类：automatic 表示在本文 closed 规则下允许无需逐次人工确认继续；interactive 表示可以准备但必须逐次确认；unsupported 表示本代明确不可用；deferred 表示由具名 所有者 的未来合同冻结后才能开放。
 
@@ -73,6 +73,8 @@ revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件把固
 | D10-F25 | TASK / Candidate §13 | terminal K 经重启、重扫或 disable→enable 后另起 Run | reject | unsupported | claim/terminal 防重事实在 definition revision 可恢复期间持续可证，压缩不得丢失“不再执行”证明 | K terminal 后四种恢复路径都返回原 Run/outcome |
 | D10-F26 | TASK / Candidate §8/§20 | Run 暂停，Lease 跨过 notAfter，但清理任务未运行 | accept | automatic | trusted 当前 time 是准入/提交门；cleanup 不拥有 expiry 语义 | 推进可信时间后拒绝新 context/模型/工具/外部 step 与最终 author submit |
 | D10-F27 | TASK / Candidate §8/§20 | clock epoch/时间连续性丢失却假定 Lease 仍有效 | reject | unsupported | 返回 `state_unavailable` 并暂停；恢复可信时间后按真实当前时间判 active/expired | 丢 epoch、重启、恢复时间三段状态机 |
+| D10-F28 | Candidate §8/§13/§20 | `maxRuns=1` 已由 R1 首次准入消费，R1 的第二个受保护步骤因为 remaining=0 被误判成新 Run | reject | unsupported | 同 Run 已有完整 `LeaseRunUse/1` 时不再比较 remaining count，也不再次消费；仍逐步验证当前授权、准确 leaseRevision、可信时间、ActivationBinding、批准与预算 | 正向同 Run 第二步继续；负向 lease revoke/expire/revision-change 时仍阻止 |
+| D10-F29 | Candidate §8/§20 | 同 Run 的原 D6 planned request 恢复时，因为 lease 已无剩余次数而返回 `delegation_exhausted` | reject | unsupported | planned 恢复先证明原 `LeaseRunUse/1` 连续性，复用既有准入，不重新做新 Run count gate；若记录缺失/连续性不可证则 `state_unavailable`，不是重新消费 | `maxRuns=1`、remaining=0 的原 planned 恢复可继续；新 Run 同时应被 `delegation_exhausted` 拒绝 |
 
 ## 3. Standing Approval 与确认边界
 

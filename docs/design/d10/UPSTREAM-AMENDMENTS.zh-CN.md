@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 配套 D6/D7 上游协调修订提案
 
-revision: D10-r02-review-fixes-2026-09-27；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定上游输入提交为 `f205831c848729f7ddbc3ba0cf32b689459c0c98`。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
+revision: D10-r03-supplement-2026-09-28；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定上游输入提交为 `f205831c848729f7ddbc3ba0cf32b689459c0c98`。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
 
 ## 1. 修订目的和不变边界
 
@@ -39,7 +39,7 @@ D6 `d6_error` object shape 与 disposition 集合保持，但 code 闭集需要�
 
 > **D10 delegation/approval consumption.** D10 可由 host/Core 受管控制域提供当前 DelegationLease、StandingApproval 与 PlannedDecisionApproval 证据，但它们只能收窄已经由 D6 Policy、ObservationScope、state disclosure 与实际 footprint 授予的资格，不能增加 capability、把 deny 改成 allow 或替代 current authorization。普通请求、Agent、worker、Connector、MCP server 与客户端 JSON 均不能自报 principal、delegation、approval、approval count 或 proof。
 >
-> 每个使用 D10 委托的 plan、commit、saved receipt delivery、result/effects delivery 仍先执行 D6 既有 current principal/delegation/policy/generation 门。DelegationLease 过期、撤销、次数耗尽或时间连续性不可证明会阻止新的受保护步骤，但不把已 committed decision 改写为失败，也不回滚已经线性化发送的外部效果。旧 approval 或 capability probe 永远不是持续授权票据。
+> 每个使用 D10 委托的 plan、commit、saved receipt delivery、result/effects delivery 仍先执行 D6 既有 current principal/delegation/policy/generation 门。DelegationLease 过期、撤销或时间连续性不可证明会阻止新的受保护步骤。`maxRuns` 耗尽只阻止**尚无 LeaseRunUse 的新 Run**；已经有完整 LeaseRunUse 的同 Run 后续步骤和原 planned 恢复不因 remaining=0 被再次拒绝，但仍须通过当前授权、准确 leaseRevision、可信时间、ActivationBinding、批准和预算门。以上任何控制失败都不把已 committed decision 改写为失败，也不回滚已经线性化发送的外部效果。旧 approval 或 capability probe 永远不是持续授权票据。
 >
 > 只有 D10/1 coordinated contract 明确列出的 author-submit profile 才允许 Standing Approval 替代本次交互确认；首版仅为 D7 `set_field_member` 的 `single_field_member` profile。其它 D3/D6/D7/D8 author intent 沿原确认合同。D10 approval 无法使原本非法、不可观察、stale、超预算或语义冲突的 plan 成为合法。
 
@@ -152,7 +152,7 @@ Standing Approval 不增加 receipt member。D10 UI 可以从受权 Run/Approval
 
 ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefinition、LeaseRunUse、PlannedDecisionApproval 等耐久 D10 控制状态只能由 Core 管理的封闭 control adapter 修改，并具有独立 control revision/CAS、当前 principal authorization、audit 与 replay 合同。它们不能经作者 source、provider callback、Agent JSON 或 `d6_commit_request` 自由 payload 修改。
 
-`maxRuns` 消费发生在第一次受保护执行前的 D10 Run-admission CAS，不进入 D6 author ledger。CAS 按同一 `leaseId` 谱系累计历史，写 `LeaseRunUse/1`；同 Run restart 不重复消费，准入后的 failed/cancelled/crash 不退款。耗尽属于 D10 `delegation_exhausted`，发生在进入 D6/D7 前。
+`maxRuns` 消费发生在第一次受保护执行前的 D10 Run-admission CAS，不进入 D6 author ledger。CAS 按同一 `leaseId` 谱系累计历史，写 `LeaseRunUse/1`；同 Run restart 不重复消费，准入后的 failed/cancelled/crash 不退款。只有一个**尚无 LeaseRunUse 的新 Run**在累计消费已达到 `maxRuns` 时才返回 D10 `delegation_exhausted`。已经有完整 `LeaseRunUse/1` 的同 Run 后续受保护步骤和原 planned request 恢复不再比较 remaining count，也不再次消费；即使 `maxRuns=1` 且累计已经为 1，也不能把该同 Run 当成新 Run 拒绝。它们仍必须逐步验证当前授权、准确 `leaseRevision`、可信时间、ActivationBinding、批准和预算；撤销、过期、revision/binding 变化或连续性不可证明仍会阻止执行。
 
 ## 4. D7 Execution and Action Interfaces — 拟新增/替换条款
 
@@ -235,13 +235,28 @@ d7_planned_preview_opened {
 
 若原 plan 已有 standing ApprovalUse count reservation，该 reservation 在人工恢复期间继续保留；成功 author commit 仍 `reserved→consumed`，只有 authoritative terminal_failed 才 `reserved→released_terminal`。不得在人工点击时提前释放给另一个 Run。
 
-## 6. D8 与 D9 的明确非修订说明
+## 6. D3 Terminology and Naming Lexicon — 最小勘误提案
+
+固定 U 的 D3 词表在 `weftext.term.origin-binding` 的约第 377/379 行与 `weftext.term.adopt` 的约第 496/498 行之间存在一处内部 owned-name 冲突：`weftext.term.origin-binding` 已拥有 code 名 `OriginBinding` 与变量名 `origin_binding`；但 `weftext.term.adopt` 的 wire/API 说明又写“variables `adoption_binding` 必须映射 OriginBinding”，并把 `adoption_binding` 登记进 Adopt 的 `owned-names.codeConventions`。这会让同一个关联绑定概念同时出现第二个变量命名约定。
+
+建议只做以下最小勘误，不改变任何 identity、wire、capability、操作语义或已冻结 OriginBinding 类型：
+
+1. `weftext.term.adopt` 的 wire/API 改为：D3 不冻结 mode；future API/code verb 只使用 `adopt_*`。Adopt 若创建或重建 foreign-object 关联，其绑定值使用既有 D3 `OriginBinding(ForeignIdentityKey, NodeRef)` 类型，代码变量/字段名称使用既有 `origin_binding`；Adopt 不定义 `adoption_binding`。
+2. Adopt 的 `owned-names.codeConventions` 从 `["adopt_*","adoption_binding"]` 改为 `["adopt_*"]`。
+3. `weftext.term.origin-binding` 的 `owned-names` 保持 `OriginBinding` / `origin_binding`，继续唯一拥有这一绑定名称族。
+4. 删除 `adoption_binding` 约定，不提供 compatibility alias、双读、迁移别名或第二变量名；它也不进入 public wire、CLI、locale、identity 或 capability。
+
+正向验证：Adopt 代码路径可以叫 `adopt_*`，但其关联绑定值的类型和变量必须解析到 `weftext.term.origin-binding` 的 `OriginBinding` / `origin_binding`。反向验证：受控正向源码、API/schema、fixture、术语 registry 中不得把 `adoption_binding` 归到 Adopt，也不得把它作为 OriginBinding 的兼容 alias；扫描器不能用豁免掩盖残留。
+
+这是对 D3 词表的最小协调勘误提案。固定 U 快照仍未修改；独立复核和协调接受之前，本文不能声称该勘误已经生效。
+
+## 7. D8 与 D9 的明确非修订说明
 
 D8 不增加无人值守编辑分支。Document/Annotation 编辑、dirty Draft、IME、current serial、完整 preview 和明确确认原样保留。Agent/Automation 只能向 D8 提出 proposal；不能伪造 EditSession 或人工来源。
 
 D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或外部发布器。D10 的外部 transport/Connector 不授予 D9 worker 网络能力，D9 publication confirmation 也不授予 Standing Approval 作者写入权。
 
-## 7. 激活与版本兼容
+## 8. 激活与版本兼容
 
 这些 amendment 只有在独立审查接受、总控协调裁决，并与 D10 candidate 一起激活后才生效。激活前：
 
@@ -254,7 +269,7 @@ D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、Publica
 
 历史 committed D3/D6 decision 继续原 decoder/bytes，不回填 ApprovalUse。尚未形成 decision 的旧 prepare 不自动获得 Standing Approval；已经 planned 的新-profile decision 才能使用本文 recovery transport。
 
-## 8. 独立复审必须攻击的联合反例
+## 9. 独立复审必须攻击的联合反例
 
 1. R1 prepare 初检批准有效，R2 抢占最后次数；R1 进入 D6 后只因 approval 竞争失败，必须得到 `approval_unavailable/preflight`，unseen 无 ledger decision。
 2. R1 已 planned 后 approval 撤销；同 error 保持 planned，不能 semantic_rejected/terminal_failed。
@@ -272,5 +287,7 @@ D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、Publica
 14. D8 dirty Draft 与合法 background author commit 组合，Draft 不被覆盖。
 15. D3 create/lifecycle Action 不能借 `single_field_member` envelope 自动提交。
 16. D10 control error 不能包装或泄漏原 D6 `not_visible` 与隐藏事实。
+17. `maxRuns=1` 且同 Run 已有 LeaseRunUse 时，第二个受保护步骤和原 planned 恢复不能因 remaining=0 返回 `delegation_exhausted`；新 Run 才应被拒绝。
+18. Adopt 正向代码只保留 `adopt_*`，关联绑定只使用 `OriginBinding` / `origin_binding`；`adoption_binding` 在正向术语/代码面必须不存在，也不能作为 alias。
 
 这些是作者修订后的审查靶点，不表示前两批独立问题已经关闭。只有后续独立复审才能改变其审查状态。

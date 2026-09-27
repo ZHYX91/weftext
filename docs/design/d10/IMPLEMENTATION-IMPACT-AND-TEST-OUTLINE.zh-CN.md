@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r02-review-fixes-2026-09-27；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
+revision: D10-r03-supplement-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
 
 ## 1. 实现切片与状态所有者
 
@@ -101,6 +101,8 @@ Package verifier 实现 SHA-256 目录绑定、Ed25519 package signature、Publi
 
 D4 candidate Registry 仍必须通过原 `RegistrySnapshot/1`、`RegistryBinding/1`、evolution proof 与 catalog loader。不能为了实现方便把 D10 package metadata 塞进 D4 closed snapshot。
 
+补充 S 的 D4 reference catalog 现在属于实施测试输入：61 个 Field、7 个 Facet、27 个 relation Field，以及 Calendar 的跨 Field `union_variant_equal` 等真实约束必须参与 D7 Narrow Field Qualification。测试必须至少包含 `people/phone` 正向构造、一个 relation Field 负例、`calendar/range` 或 `calendar/recurrence` 的跨字段约束负例，以及未知 constraint constructor 负例；不能硬编码一个“安全 FieldId 列表”绕过 Registry 图证明。
+
 ## 4. Agent、Tool 与 MCP 实施义务
 
 Agent runtime 只持 Run-local state、ContextBundle refs 和已允许 tool catalog，不缓存 ambient workspace authority。Context builder 必须从 Core 当前授权输入产生 exact source/result pins，并在 egress 前再次匹配 recipient。
@@ -145,6 +147,8 @@ Scheduler 必须持久化 definition revision、有限调度 horizon、sourceOcc
 - occurrence claim 可以在 Run admission 前存在，queued/blocked 且未进入受保护执行的 Run 不消费 Lease `maxRuns`；
 - 第一次受保护步骤前必须执行 Core-managed Run-admission CAS，准确验证 current leaseId/leaseRevision、可信时间、ActivationBinding、budgets 与同 leaseId 谱系累计消费，并原子写 `LeaseRunUse/1`；
 - admission 成功后 failed、cancelled、crash 均不返还 run use；同 Run recovery 不重复消费；
+- 已有完整 `LeaseRunUse/1` 的同 Run 后续 protected step 和原 planned request 恢复不再比较 remaining count；即使 `maxRuns=1` 且累计已为 1，也只复用原准入事实；
+- 复用准入事实不等于免检：每一步仍验证当前授权、准确 leaseRevision、可信时间、ActivationBinding、适用批准和预算；撤销/过期/revision 或 binding 改变仍阻止；
 - `maxRuns` 耗尽返回 D10 `delegation_exhausted`，保留当前 claim/Run blocked，不能为同一 occurrence 创建新 Run 绕过；
 - source/rule/authorization/ActivationBinding 变化在新 step 前重验；
 - trusted time 超过 Lease `notAfter` 后，不论 cleanup task 是否运行，新 step 和最终提交都拒绝；
@@ -161,7 +165,9 @@ dedup 历史允许压缩为 coverage proof/terminal summary，但压缩必须保
 5. admission CAS 后立即 crash，再恢复同 Run，验证不重复消费；
 6. Run 暂停期间 Lease 到期，cleanup 不运行但可信时间推进，验证新 context/model/tool/external step 与最终 author submit 都拒绝；
 7. clock continuity 丢失，验证 fail closed 为 `state_unavailable`，恢复可信时间后再按真实当前时间判断 expired/active；
-8. source/rule generation 与 definition revision 改变，旧 K 不被新 revision 接管重跑。
+8. source/rule generation 与 definition revision 改变，旧 K 不被新 revision 接管重跑；
+9. `maxRuns=1` 的同 Run 第二个 protected step 在 remaining=0 时仍复用原 LeaseRunUse，而新 Run 被 `delegation_exhausted` 拒绝；
+10. 同 Run 原 planned request 在 remaining=0 时恢复，验证原 LeaseRunUse 连续性后继续；缺记录/连续性不可证时为 `state_unavailable`，不能重新消费。
 ## 7. Standing Approval 协调实现
 
 UPSTREAM-AMENDMENTS 是本切片前置条件。修订尚未共同接受时，不得把该分支隐藏在 Broker 中先上线。
@@ -340,7 +346,9 @@ D3/D7/D8/D9 原 error 同样必须逐字沿原 owner 传递。诊断 UI 可以�
 27. Mobile upload/Agent/approval negative capability；
 28. hidden object exists/missing non-disclosure；
 29. provider billing uncertain/overcharge；
-30. package disable 时 author raw unknown namespace 保留。
+30. package disable 时 author raw unknown namespace 保留；
+31. D4 reference catalog 的 `people/phone` 正向窄证明与 relation/cross-Field/未知 constructor 负例；
+32. D3 词表正向映射：`adopt_*` 使用 `OriginBinding` / `origin_binding`；反向受控源码/API/schema/fixture/术语 registry 均不存在 `adoption_binding`，且 scanner 不允许豁免。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。
 ## 16. 完成门
