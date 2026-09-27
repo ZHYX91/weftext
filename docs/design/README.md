@@ -22,6 +22,8 @@ Imported snapshots retain original language and normative prose. Only relative l
 
 Bind candidates to a fixed Git commit, complete reading scope, assumptions and actual evidence. Better complete alternatives are welcome. Changes to upstream contracts require exact coordinated proposals and independent acceptance followed by one coordinated activation before snapshots can change. When a reviewer becomes the main author, obtain separate independent final acceptance.
 
+Supplemental input: the first public inventory omitted the normative machine catalog referenced by the D4 main document. The byte-preserved [D4 reference catalog](snapshots/d4-reference-catalog-registry/source.json) brings the inventory to 49 files. It contains 4 qualifier sets, 22 type aliases, 61 field definitions, 7 facet schemas and 1 calendar series policy, matching the accepted upstream input copy. The original 48 snapshots remain unchanged. Reading records tied to the earlier fixed commit cover only the original inventory and must be supplemented with this catalog. This repairs the input omission; it neither changes D4 semantics nor accepts D10.
+
 ## D10 and release
 
 The next task is [Agent, automation and external capabilities](d10/TASK.md). D10 is followed by A2 global design review, then the G1 minimum usable product under the [roadmap](../../ROADMAP.md). Publishing design, accepting design and releasing runnable software are distinct events.
@@ -30,6 +32,7 @@ The next task is [Agent, automation and external capabilities](d10/TASK.md). D10
 
 | Topic | Input | Role |
 |---|---|---|
+| D4 | [D4 Reference Catalog Registry v1](snapshots/d4-reference-catalog-registry/source.json) | accepted-design-input |
 | D1 | [D1 Product Surface and Capability Boundary](snapshots/d1-product-surface-and-capability-boundary/source.md) | accepted-design-input |
 | D2 | [D2 Document Content and Domain Objects](snapshots/d2-document-content-and-domain-objects/source.md) | accepted-design-input |
 | D3 | [D3 Identity References Ownership and Lifecycle](snapshots/d3-identity-references-ownership-and-lifecycle/source.md) | accepted-design-input |
