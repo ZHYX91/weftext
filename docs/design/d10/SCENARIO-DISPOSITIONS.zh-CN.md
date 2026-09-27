@@ -146,7 +146,7 @@ revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate。本文件
 | D10-P12 | Intake 原要求：§6.5、§9 第49项 | parent version 不兼容仍沿旧规则继续运行 | reject | unsupported | dependency resolution=`incompatible`，dependent contribution inactive；D1 投影 `incompatible_version`，必须 successor activation 后恢复 | parent upgrade/downgrade 竞争不能让旧 binding 跟随 latest |
 | D10-P13 | Intake 原要求：§6.5、§8.3 + D1 capability | 仅隐藏父模块 UI 就把 pack 当 disabled，或用 UI 显示强行启用 | reject | unsupported | UI visibility 与 dependency activation 分离；parent semantic capability 仍 ready 时 activation 不变 | 隐藏/恢复导航入口前后 RegistryBinding、Contribution activation 和作者 facts 不变 |
 | D10-P14 | Intake 原要求：§6.5、§9 第49项 + D1 | 当前 surface 不支持父 domain/规则运行 | accept | unsupported | 该 surface contribution inactive，D1 固定 `unsupported_surface`；其它 surface/global config 不删除 | Mobile 不运行规则仍按其 Core/D4 能力保留 portable author facts |
-| D10-P15 | Intake 原要求：§6.5、§8.3；Candidate §6.1 | parent extension-point version/binding 改变但 dependent Catalog binding 未失效 | reject | unsupported | resolved parent binding 进入 Capability Catalog digest；变化必须 successor ActivationBinding，禁止 ambient latest | 两个 activation generation 不能混用旧 parent rule 与新 Catalog |
+| D10-P15 | Intake 原要求：§6.5、§8.3；Candidate §6.1 | 父 extension point 的版本或 binding 已改变，但 dependent Catalog 仍错误沿用旧绑定 | reject | unsupported | 激活时解析出的父 binding 必须进入 Capability Catalog digest；父版本或 binding 变化必须产生 successor ActivationBinding，禁止运行时跟随未绑定的 latest | 两个 activation generation 不能混用旧父规则与新 Catalog |
 
 ## 7. Deferred boundaries with named owners
 
