@@ -1,6 +1,6 @@
 ---
 source_language: zh-CN
-translation_status: 源
+translation_status: source
 ---
 
 [English](SCENARIO-DISPOSITIONS.md)

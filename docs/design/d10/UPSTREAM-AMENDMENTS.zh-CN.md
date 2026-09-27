@@ -243,7 +243,7 @@ d7_planned_preview_opened {
 
 1. `weftext.term.adopt` 的 wire/API 改为：D3 不冻结 mode；future API/code verb 只使用 `adopt_*`。Adopt 若创建或重建 foreign-object 关联，其绑定值使用既有 D3 `OriginBinding(ForeignIdentityKey, NodeRef)` 类型，代码变量/字段名称使用既有 `origin_binding`；Adopt 不定义 `adoption_binding`。
 2. Adopt 的 `owned-names.codeConventions` 从 `["adopt_*","adoption_binding"]` 改为 `["adopt_*"]`。
-3. `weftext.term.origin-binding` 的 `owned-names` 保持 `OriginBinding` / `origin_binding`，继续唯一拥有这一绑定名称族。
+3. `weftext.term.origin-binding` 的 owned-names 保持 `OriginBinding` / `origin_binding`，继续唯一拥有这一绑定名称族。
 4. 删除 `adoption_binding` 约定，不提供 compatibility alias、双读、迁移别名或第二变量名；它也不进入 public wire、CLI、locale、identity 或 capability。
 
 正向验证：Adopt 代码路径可以叫 `adopt_*`，但其关联绑定值的类型和变量必须解析到 `weftext.term.origin-binding` 的 `OriginBinding` / `origin_binding`。反向验证：受控正向源码、API/schema、fixture、术语 registry 中不得把 `adoption_binding` 归到 Adopt，也不得把它作为 OriginBinding 的兼容 alias；扫描器不能用豁免掩盖残留。

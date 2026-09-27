@@ -242,7 +242,7 @@ The D3 lexicon at fixed U contains one internal owned-name conflict between appr
 
 Propose only the following minimal erratum, with no change to identity, wire, capability, operation semantics, or the frozen OriginBinding type:
 
-1. Change the Adopt wire/API note to: D3 freezes no mode; future API/code verbs use only `adopt_*`. When Adopt creates or re-establishes a foreign-object association, the binding value uses the existing D3 `OriginBinding(ForeignIdentityKey, NodeRef)` type and existing variable/field name `origin_binding`; Adopt defines no `adoption_binding`.
+1. For `weftext.term.adopt`, change the Adopt wire/API note to: D3 freezes no mode; future API/code verbs use only `adopt_*`. When Adopt creates or re-establishes a foreign-object association, the binding value uses the existing D3 `OriginBinding(ForeignIdentityKey, NodeRef)` type and existing variable/field name `origin_binding`; Adopt defines no `adoption_binding`.
 2. Change Adopt `owned-names.codeConventions` from `["adopt_*","adoption_binding"]` to `["adopt_*"]`.
 3. Keep `weftext.term.origin-binding` owned names `OriginBinding` / `origin_binding` unchanged and uniquely owning this binding-name family.
 4. Delete the `adoption_binding` convention with no compatibility alias, dual read, migration alias, or second variable name; it does not enter public wire, CLI, locale, identity, or capability.
@@ -288,7 +288,7 @@ Historical committed D3/D6 decisions keep their original decoders/bytes and are 
 14. Valid background author commit with a dirty D8 Draft does not overwrite the Draft.
 15. D3 create/lifecycle Action cannot use a `single_field_member` envelope for unattended submission.
 16. A D10 control error cannot wrap or leak original D6 `not_visible` and hidden facts.
-17. With `maxRuns=1` and an existing LeaseRunUse for the same Run, its second protected step and original planned recovery cannot return `delegation_exhausted` merely because remaining is zero; only a new Run is rejected.
+17. With `maxRuns=1` and an existing `LeaseRunUse/1` for the same Run, its second protected step and original planned recovery cannot return `delegation_exhausted` merely because remaining is zero; only a new Run is rejected.
 18. Positive Adopt code keeps only `adopt_*`, while association binding uses only `OriginBinding` / `origin_binding`; `adoption_binding` must be absent from positive terminology/code surfaces and must not exist as an alias.
 
 These are author-revision review targets, not a claim that the first two independent-review batches are closed. Only later independent re-review can change their review status.
