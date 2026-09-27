@@ -1,0 +1,21 @@
+name: Design documents
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - 'docs/design/**'
+      - 'scripts/check_docs.py'
+      - 'scripts/check_design_inputs.py'
+      - 'scripts/tests/test_design_inputs.py'
+      - '.github/workflows/design-docs.yml'
+permissions:
+  contents: read
+jobs:
+  design-docs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: python3 scripts/check_docs.py
+      - run: python3 scripts/check_design_inputs.py
+      - run: python3 -m unittest discover -s scripts/tests -p test_design_inputs.py

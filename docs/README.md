@@ -8,6 +8,9 @@ translation_status: synced
 
 # Weftext documentation authority
 
+See the separate [design collaboration entrypoint](design/README.md) for target architecture. Accepted D1–D9 designs do not establish implementation in the current prototype; D10 and implementation have separate acceptance.
+
+
 This directory contains the current public product contracts and architecture decisions. Repository documentation uses Markdown independently of the managed Weftext AsciiDoc format.
 
 Public documents describe Weftext behavior and external format classes generically. Product comparisons, screenshots, research, decision history, schedules, handoffs, and acceptance logs stay in the private control workspace outside this repository.

@@ -7,6 +7,9 @@ translation_status: source
 
 # Weftext 文档权威
 
+目标设计另见[设计协作入口](design/README.zh-CN.md)。D1–D9 已接受设计不代表当前原型已实现；D10 与后续实现分别验收。
+
+
 本目录包含当前公开产品契约和架构决策。仓库文档使用 Markdown，与 Weftext 受管文档采用 AsciiDoc 无关。
 
 公开文档以通用方式描述 Weftext 行为和外部格式类别。产品比较、截图、研究、决策历史、排期、任务交接和验收日志保存在本仓库之外的私有控制工作区。

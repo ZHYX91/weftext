@@ -1,0 +1,3685 @@
+{
+  "wireVersion": 1,
+  "kind": "d4_reference_catalog",
+  "catalogId": "7a97e4b0-a82e-44f8-8f53-25279060a4b7",
+  "globalLimits": {
+    "maximumTypeDepth": 8,
+    "maximumObjectMembers": 64,
+    "maximumUnionVariants": 8,
+    "maximumCollectionItems": 256,
+    "maximumEntryUtf8Bytes": 65528,
+    "maximumSchemaUtf8Bytes": 65536,
+    "maximumProvenanceAtoms": 16
+  },
+  "qualifierSets": [
+    {
+      "qualifierSetId": "d4/event-assertion-qualifiers-v1",
+      "shape": "event_assertion",
+      "members": [
+        {
+          "name": "confidence",
+          "required": false,
+          "wireType": "typed_confidence_decimal"
+        },
+        {
+          "name": "eventTime",
+          "required": true,
+          "wireType": "typed_event_time"
+        },
+        {
+          "name": "selection",
+          "required": false,
+          "wireType": "selection_enum"
+        }
+      ]
+    },
+    {
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "shape": "fact",
+      "members": [
+        {
+          "name": "selection",
+          "required": false,
+          "wireType": "selection_enum"
+        },
+        {
+          "name": "validity",
+          "required": false,
+          "wireType": "typed_validity_interval"
+        }
+      ]
+    },
+    {
+      "qualifierSetId": "d4/observation-qualifiers-v1",
+      "shape": "observation",
+      "members": [
+        {
+          "name": "confidence",
+          "required": false,
+          "wireType": "typed_confidence_decimal"
+        },
+        {
+          "name": "observedAt",
+          "required": true,
+          "wireType": "typed_zoned_instant"
+        },
+        {
+          "name": "selection",
+          "required": false,
+          "wireType": "selection_enum"
+        }
+      ]
+    },
+    {
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "shape": "relation",
+      "members": [
+        {
+          "name": "status",
+          "required": false,
+          "wireType": "typed_semantic_code"
+        },
+        {
+          "name": "validity",
+          "required": false,
+          "wireType": "typed_validity_interval"
+        }
+      ]
+    }
+  ],
+  "valueTypeAliases": [
+    {
+      "aliasId": "calendar/participant-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "role",
+            "required": false,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "namespace",
+                "namespaceId": "calendar"
+              }
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "node_ref"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "calendar/period-identity-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "calendarId",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "calendarVersion",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "periodKey",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "periodKind",
+            "required": true,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "field_local",
+                "codes": [
+                  "day",
+                  "month",
+                  "quarter",
+                  "week",
+                  "year"
+                ]
+              }
+            }
+          },
+          {
+            "name": "periodRuleId",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "timeZone",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "tzdbVersion",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "calendar/period-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "period",
+            "required": true,
+            "valueType": {
+              "kind": "alias_ref",
+              "aliasId": "calendar/period-identity-value"
+            }
+          },
+          {
+            "name": "seriesKey",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "calendar/range-value",
+      "valueType": {
+        "kind": "union",
+        "variants": [
+          {
+            "variant": "date",
+            "valueType": {
+              "kind": "date_range"
+            }
+          },
+          {
+            "variant": "instant",
+            "valueType": {
+              "kind": "instant_range"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "calendar/recurrence-value",
+      "valueType": {
+        "kind": "union",
+        "variants": [
+          {
+            "variant": "date",
+            "valueType": {
+              "kind": "object",
+              "members": [
+                {
+                  "name": "anchor",
+                  "required": true,
+                  "valueType": {
+                    "kind": "calendar_date"
+                  }
+                },
+                {
+                  "name": "byMonth",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 12,
+                    "itemType": {
+                      "kind": "integer",
+                      "minimum": "1",
+                      "maximum": "12"
+                    }
+                  }
+                },
+                {
+                  "name": "byMonthDay",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 62,
+                    "itemType": {
+                      "kind": "integer",
+                      "minimum": "-31",
+                      "maximum": "31",
+                      "excludedValues": [
+                        "0"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "byWeekday",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 7,
+                    "itemType": {
+                      "kind": "semantic_code",
+                      "codeScope": {
+                        "kind": "field_local",
+                        "codes": [
+                          "friday",
+                          "monday",
+                          "saturday",
+                          "sunday",
+                          "thursday",
+                          "tuesday",
+                          "wednesday"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "count",
+                  "required": false,
+                  "valueType": {
+                    "kind": "integer",
+                    "minimum": "1",
+                    "maximum": "2147483647"
+                  }
+                },
+                {
+                  "name": "exDates",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 256,
+                    "itemType": {
+                      "kind": "calendar_date"
+                    }
+                  }
+                },
+                {
+                  "name": "exceptions",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 256,
+                    "itemType": {
+                      "kind": "object",
+                      "members": [
+                        {
+                          "name": "action",
+                          "required": true,
+                          "valueType": {
+                            "kind": "union",
+                            "variants": [
+                              {
+                                "variant": "cancel",
+                                "valueType": {
+                                  "kind": "semantic_code",
+                                  "codeScope": {
+                                    "kind": "field_local",
+                                    "codes": [
+                                      "cancelled"
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "variant": "replace",
+                                "valueType": {
+                                  "kind": "object",
+                                  "members": [
+                                    {
+                                      "name": "eventStatus",
+                                      "required": false,
+                                      "valueType": {
+                                        "kind": "semantic_code",
+                                        "codeScope": {
+                                          "kind": "field_local",
+                                          "codes": [
+                                            "cancelled",
+                                            "confirmed",
+                                            "tentative"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "name": "note",
+                                      "required": false,
+                                      "valueType": {
+                                        "kind": "text",
+                                        "normalization": "exact"
+                                      }
+                                    },
+                                    {
+                                      "name": "range",
+                                      "required": true,
+                                      "valueType": {
+                                        "kind": "date_range"
+                                      }
+                                    },
+                                    {
+                                      "name": "title",
+                                      "required": false,
+                                      "valueType": {
+                                        "kind": "text",
+                                        "normalization": "exact",
+                                        "nonEmpty": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "name": "originalStart",
+                          "required": true,
+                          "valueType": {
+                            "kind": "calendar_date"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "frequency",
+                  "required": true,
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "field_local",
+                      "codes": [
+                        "daily",
+                        "monthly",
+                        "weekly",
+                        "yearly"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "interval",
+                  "required": true,
+                  "valueType": {
+                    "kind": "integer",
+                    "minimum": "1",
+                    "maximum": "65535"
+                  }
+                },
+                {
+                  "name": "profileVersion",
+                  "required": true,
+                  "valueType": {
+                    "kind": "integer",
+                    "minimum": "1",
+                    "maximum": "1"
+                  }
+                },
+                {
+                  "name": "rDates",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 256,
+                    "itemType": {
+                      "kind": "calendar_date"
+                    }
+                  }
+                },
+                {
+                  "name": "until",
+                  "required": false,
+                  "valueType": {
+                    "kind": "calendar_date"
+                  }
+                },
+                {
+                  "name": "weekStart",
+                  "required": false,
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "field_local",
+                      "codes": [
+                        "friday",
+                        "monday",
+                        "saturday",
+                        "sunday",
+                        "thursday",
+                        "tuesday",
+                        "wednesday"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "variant": "instant",
+            "valueType": {
+              "kind": "object",
+              "members": [
+                {
+                  "name": "anchor",
+                  "required": true,
+                  "valueType": {
+                    "kind": "zoned_instant"
+                  }
+                },
+                {
+                  "name": "byMonth",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 12,
+                    "itemType": {
+                      "kind": "integer",
+                      "minimum": "1",
+                      "maximum": "12"
+                    }
+                  }
+                },
+                {
+                  "name": "byMonthDay",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 62,
+                    "itemType": {
+                      "kind": "integer",
+                      "minimum": "-31",
+                      "maximum": "31",
+                      "excludedValues": [
+                        "0"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "byWeekday",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 7,
+                    "itemType": {
+                      "kind": "semantic_code",
+                      "codeScope": {
+                        "kind": "field_local",
+                        "codes": [
+                          "friday",
+                          "monday",
+                          "saturday",
+                          "sunday",
+                          "thursday",
+                          "tuesday",
+                          "wednesday"
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "name": "count",
+                  "required": false,
+                  "valueType": {
+                    "kind": "integer",
+                    "minimum": "1",
+                    "maximum": "2147483647"
+                  }
+                },
+                {
+                  "name": "exDates",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 256,
+                    "itemType": {
+                      "kind": "zoned_instant"
+                    }
+                  }
+                },
+                {
+                  "name": "exceptions",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 256,
+                    "itemType": {
+                      "kind": "object",
+                      "members": [
+                        {
+                          "name": "action",
+                          "required": true,
+                          "valueType": {
+                            "kind": "union",
+                            "variants": [
+                              {
+                                "variant": "cancel",
+                                "valueType": {
+                                  "kind": "semantic_code",
+                                  "codeScope": {
+                                    "kind": "field_local",
+                                    "codes": [
+                                      "cancelled"
+                                    ]
+                                  }
+                                }
+                              },
+                              {
+                                "variant": "replace",
+                                "valueType": {
+                                  "kind": "object",
+                                  "members": [
+                                    {
+                                      "name": "eventStatus",
+                                      "required": false,
+                                      "valueType": {
+                                        "kind": "semantic_code",
+                                        "codeScope": {
+                                          "kind": "field_local",
+                                          "codes": [
+                                            "cancelled",
+                                            "confirmed",
+                                            "tentative"
+                                          ]
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "name": "note",
+                                      "required": false,
+                                      "valueType": {
+                                        "kind": "text",
+                                        "normalization": "exact"
+                                      }
+                                    },
+                                    {
+                                      "name": "range",
+                                      "required": true,
+                                      "valueType": {
+                                        "kind": "instant_range"
+                                      }
+                                    },
+                                    {
+                                      "name": "title",
+                                      "required": false,
+                                      "valueType": {
+                                        "kind": "text",
+                                        "normalization": "exact",
+                                        "nonEmpty": true
+                                      }
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "name": "originalStart",
+                          "required": true,
+                          "valueType": {
+                            "kind": "zoned_instant"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "frequency",
+                  "required": true,
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "field_local",
+                      "codes": [
+                        "daily",
+                        "monthly",
+                        "weekly",
+                        "yearly"
+                      ]
+                    }
+                  }
+                },
+                {
+                  "name": "interval",
+                  "required": true,
+                  "valueType": {
+                    "kind": "integer",
+                    "minimum": "1",
+                    "maximum": "65535"
+                  }
+                },
+                {
+                  "name": "profileVersion",
+                  "required": true,
+                  "valueType": {
+                    "kind": "integer",
+                    "minimum": "1",
+                    "maximum": "1"
+                  }
+                },
+                {
+                  "name": "rDates",
+                  "required": false,
+                  "valueType": {
+                    "kind": "bounded_set",
+                    "minimum": 1,
+                    "maximum": 256,
+                    "itemType": {
+                      "kind": "zoned_instant"
+                    }
+                  }
+                },
+                {
+                  "name": "until",
+                  "required": false,
+                  "valueType": {
+                    "kind": "zoned_instant"
+                  }
+                },
+                {
+                  "name": "weekStart",
+                  "required": false,
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "field_local",
+                      "codes": [
+                        "friday",
+                        "monday",
+                        "saturday",
+                        "sunday",
+                        "thursday",
+                        "tuesday",
+                        "wednesday"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "calendar/reminder-intent-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "channel",
+            "required": false,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "namespace",
+                "namespaceId": "calendar"
+              }
+            }
+          },
+          {
+            "name": "minutesBefore",
+            "required": true,
+            "valueType": {
+              "kind": "integer",
+              "minimum": "0",
+              "maximum": "5256000"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "core/node-target-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "node_ref"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "library/creator-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "role",
+            "required": false,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "namespace",
+                "namespaceId": "library"
+              }
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "node_ref"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "organizations/classification-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "scheme",
+            "required": true,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "namespace",
+                "namespaceId": "organizations"
+              }
+            }
+          },
+          {
+            "name": "value",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "organizations/labeled-text-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "customLabel",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "label",
+            "required": false,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "namespace",
+                "namespaceId": "organizations"
+              }
+            }
+          },
+          {
+            "name": "text",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/account-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "customLabel",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "identifier",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "custom",
+                  "valueType": {
+                    "kind": "object",
+                    "members": [
+                      {
+                        "name": "identifier",
+                        "required": true,
+                        "valueType": {
+                          "kind": "text",
+                          "normalization": "exact",
+                          "nonEmpty": true
+                        }
+                      },
+                      {
+                        "name": "serviceKey",
+                        "required": true,
+                        "valueType": {
+                          "kind": "text",
+                          "normalization": "exact",
+                          "nonEmpty": true
+                        }
+                      }
+                    ]
+                  }
+                },
+                {
+                  "variant": "preset",
+                  "valueType": {
+                    "kind": "external_identifier",
+                    "schemeScope": {
+                      "kind": "contribution_set",
+                      "schemes": [
+                        "people/facebook",
+                        "people/qq",
+                        "people/wechat",
+                        "people/x"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "usage",
+            "required": false,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "contribution_set",
+                "codes": [
+                  "people/other",
+                  "people/personal",
+                  "people/work"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/engagement-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "department",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "position",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "rank",
+            "required": false,
+            "valueType": {
+              "kind": "object",
+              "members": [
+                {
+                  "name": "level",
+                  "required": true,
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                },
+                {
+                  "name": "system",
+                  "required": true,
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "node",
+                  "valueType": {
+                    "kind": "node_ref"
+                  }
+                },
+                {
+                  "variant": "text",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/family-relation-code-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "relationship",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "custom",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                },
+                {
+                  "variant": "preset",
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "contribution_set",
+                      "codes": [
+                        "people/extended-relative"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "node",
+                  "valueType": {
+                    "kind": "node_ref"
+                  }
+                },
+                {
+                  "variant": "text",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/family-target-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "node",
+                  "valueType": {
+                    "kind": "node_ref"
+                  }
+                },
+                {
+                  "variant": "text",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/labeled-text-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "customLabel",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact",
+              "nonEmpty": true
+            }
+          },
+          {
+            "name": "label",
+            "required": false,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "contribution_set",
+                "codes": [
+                  "people/other",
+                  "people/personal",
+                  "people/work"
+                ]
+              }
+            }
+          },
+          {
+            "name": "text",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact",
+              "nonEmpty": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/life-event-value",
+      "valueType": {
+        "kind": "union",
+        "variants": [
+          {
+            "variant": "custom",
+            "valueType": {
+              "kind": "object",
+              "members": [
+                {
+                  "name": "customLabel",
+                  "required": true,
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                },
+                {
+                  "name": "description",
+                  "required": false,
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "variant": "preset",
+            "valueType": {
+              "kind": "object",
+              "members": [
+                {
+                  "name": "customLabel",
+                  "required": false,
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                },
+                {
+                  "name": "description",
+                  "required": false,
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                },
+                {
+                  "name": "eventCode",
+                  "required": true,
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "contribution_set",
+                      "codes": [
+                        "people/birth",
+                        "people/death",
+                        "people/employment-start",
+                        "people/graduation",
+                        "people/marriage"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/measurement-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "measurementCode",
+            "required": true,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "contribution_set",
+                "codes": [
+                  "people/height",
+                  "people/weight"
+                ]
+              }
+            }
+          },
+          {
+            "name": "quantity",
+            "required": true,
+            "valueType": {
+              "kind": "quantity"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/name-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "language",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "role",
+            "required": true,
+            "valueType": {
+              "kind": "semantic_code",
+              "codeScope": {
+                "kind": "field_local",
+                "codes": [
+                  "alias",
+                  "former",
+                  "legal",
+                  "ordinary",
+                  "transliteration"
+                ]
+              }
+            }
+          },
+          {
+            "name": "script",
+            "required": false,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          },
+          {
+            "name": "text",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "nfc-for-compare",
+              "nonEmpty": true
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/profession-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "organization",
+            "required": false,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "node",
+                  "valueType": {
+                    "kind": "node_ref"
+                  }
+                },
+                {
+                  "variant": "text",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "profession",
+            "required": true,
+            "valueType": {
+              "kind": "text",
+              "normalization": "exact"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/professional-relation-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "relationship",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "custom",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                },
+                {
+                  "variant": "preset",
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "contribution_set",
+                      "codes": [
+                        "people/colleague"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "node",
+                  "valueType": {
+                    "kind": "node_ref"
+                  }
+                },
+                {
+                  "variant": "text",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "people/relation-code-value",
+      "valueType": {
+        "kind": "object",
+        "members": [
+          {
+            "name": "relationship",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "custom",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact",
+                    "nonEmpty": true
+                  }
+                },
+                {
+                  "variant": "preset",
+                  "valueType": {
+                    "kind": "semantic_code",
+                    "codeScope": {
+                      "kind": "contribution_set",
+                      "codes": [
+                        "people/acquaintance",
+                        "people/classmate",
+                        "people/friend"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "target",
+            "required": true,
+            "valueType": {
+              "kind": "union",
+              "variants": [
+                {
+                  "variant": "node",
+                  "valueType": {
+                    "kind": "node_ref"
+                  }
+                },
+                {
+                  "variant": "text",
+                  "valueType": {
+                    "kind": "text",
+                    "normalization": "exact"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "aliasId": "tasks/temporal-point-value",
+      "valueType": {
+        "kind": "union",
+        "variants": [
+          {
+            "variant": "date",
+            "valueType": {
+              "kind": "calendar_date"
+            }
+          },
+          {
+            "variant": "instant",
+            "valueType": {
+              "kind": "zoned_instant"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "fieldDefinitions": [
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "calendar/event-status",
+      "valueType": {
+        "kind": "semantic_code",
+        "codeScope": {
+          "kind": "field_local",
+          "codes": [
+            "cancelled",
+            "confirmed",
+            "tentative"
+          ]
+        }
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "calendar/participant",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "calendar/participant-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "calendar/participates-in",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "calendar/event"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization",
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "calendar/period",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "calendar/period-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "calendar/range",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "calendar/range-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "calendar/recurrence",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "calendar/recurrence-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [
+        {
+          "kind": "mutually_exclusive_members",
+          "members": [
+            "count",
+            "until"
+          ]
+        }
+      ],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "calendar/reminder-intent",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "calendar/reminder-intent-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/creator",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "library/creator-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "library/created",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "library/work"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization",
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/identifier",
+      "valueType": {
+        "kind": "external_identifier"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/publication-state",
+      "valueType": {
+        "kind": "semantic_code",
+        "codeScope": {
+          "kind": "field_local",
+          "codes": [
+            "accepted",
+            "draft",
+            "published"
+          ]
+        }
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/resource",
+      "valueType": {
+        "kind": "resource_ref"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/venue",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "library/hosts-work",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": 1
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "library/work"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "library/work",
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/version-of",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "library/has-version",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": 1
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "library/work"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "library/work"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "library/work-kind",
+      "valueType": {
+        "kind": "semantic_code",
+        "codeScope": {
+          "kind": "field_local",
+          "codes": [
+            "article",
+            "book",
+            "dataset",
+            "report",
+            "standard"
+          ]
+        }
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/address",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "organizations/labeled-text-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/allied-with",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/brand-of",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/has-brand",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/business-guided-by",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/business-guides",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/classification",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "organizations/classification-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/contact",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "organizations/labeled-text-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/governs",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/governed-by",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/identifier",
+      "valueType": {
+        "kind": "external_identifier"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/jointly-led-by",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/jointly-leads",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/member-of",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/has-member-organization",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/name",
+      "valueType": {
+        "kind": "text",
+        "normalization": "nfc-for-compare"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/owns",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/owned-by",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/parent",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/child",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": 1
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/related",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/site",
+      "valueType": {
+        "kind": "text",
+        "normalization": "exact"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/status",
+      "valueType": {
+        "kind": "semantic_code",
+        "codeScope": {
+          "kind": "namespace",
+          "namespaceId": "organizations"
+        }
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/subsidiary-of",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/has-subsidiary",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/supervised-by",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/supervises",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "organizations/territorially-administered-by",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "organizations/territorially-administers",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "organizations/organization"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/account",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/account-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/address",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/labeled-text-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/avatar",
+      "valueType": {
+        "kind": "resource_ref"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/email",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/labeled-text-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/engagement",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/engagement-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "directed",
+        "inverseCode": "organizations/has-engagement",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "ranked",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "ordinary_node"
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/family-related",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-relation-code-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/gender-identity-state",
+      "valueType": {
+        "kind": "text",
+        "normalization": "exact",
+        "nonEmpty": true
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/guardian",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "directed",
+        "inverseCode": "people/ward",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/legal-sex-state",
+      "valueType": {
+        "kind": "text",
+        "normalization": "exact",
+        "nonEmpty": true
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/life-event",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/life-event-value"
+      },
+      "shape": "event_assertion",
+      "qualifierSetId": "d4/event-assertion-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/manager",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "directed",
+        "inverseCode": "people/direct-report",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "ranked",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/measurement",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/measurement-value"
+      },
+      "shape": "observation",
+      "qualifierSetId": "d4/observation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [
+        {
+          "kind": "measurement_unit_dimension",
+          "codeMember": "measurementCode",
+          "quantityMember": "quantity",
+          "byCode": {
+            "people/height": "core/length",
+            "people/weight": "core/mass"
+          }
+        }
+      ],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/mentor",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "directed",
+        "inverseCode": "people/mentee",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "ranked",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/name",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/name-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [
+        {
+          "kind": "at_most_one_preferred"
+        }
+      ],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/nationality-state",
+      "valueType": {
+        "kind": "text",
+        "normalization": "exact",
+        "nonEmpty": true
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/parent",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "directed",
+        "inverseCode": "people/child",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "family",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/phone",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/labeled-text-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/profession",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/profession-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/professional-relation",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/professional-relation-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/sibling",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "family",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/social-related",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/relation-code-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/spouse",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/family-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref_or_text",
+        "direction": "symmetric",
+        "selfEdgePolicy": "reject",
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "family",
+        "endpointPurgePolicy": "explicit_remove_before_either_endpoint_purge",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "people/person"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "people/website",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "people/labeled-text-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "tasks/completed-at",
+      "valueType": {
+        "kind": "zoned_instant"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "tasks/dependency",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "core/node-target-value"
+      },
+      "shape": "relation",
+      "qualifierSetId": "d4/relation-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": "many"
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "relation": {
+        "kind": "relation_definition",
+        "targetMember": "target",
+        "targetDomain": "node_ref",
+        "direction": "directed",
+        "inverseCode": "tasks/dependent",
+        "sourceCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "targetCardinality": {
+          "minimum": 0,
+          "maximum": "many"
+        },
+        "resolutionPolicy": "live_required_on_create_retain_suspended",
+        "deletePolicy": "retain_fact_explicit_cleanup",
+        "graphProjection": "general",
+        "subjectPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "tasks/task"
+          ]
+        },
+        "targetPredicate": {
+          "kind": "facet_any",
+          "facetIds": [
+            "tasks/task"
+          ]
+        }
+      },
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "tasks/due",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "tasks/temporal-point-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "tasks/priority",
+      "valueType": {
+        "kind": "semantic_code",
+        "codeScope": {
+          "kind": "field_local",
+          "codes": [
+            "high",
+            "low",
+            "normal",
+            "urgent"
+          ]
+        }
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "tasks/start",
+      "valueType": {
+        "kind": "alias_ref",
+        "aliasId": "tasks/temporal-point-value"
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    },
+    {
+      "wireVersion": 1,
+      "kind": "field_definition",
+      "fieldId": "tasks/status",
+      "valueType": {
+        "kind": "semantic_code",
+        "codeScope": {
+          "kind": "field_local",
+          "codes": [
+            "cancelled",
+            "done",
+            "open"
+          ]
+        }
+      },
+      "shape": "fact",
+      "qualifierSetId": "d4/fact-qualifiers-v1",
+      "cardinality": {
+        "minimum": 0,
+        "maximum": 1
+      },
+      "occurrenceOrder": "author_order",
+      "duplicatePolicy": "key_unique_values_may_repeat",
+      "constraints": [],
+      "semanticMajor": 1
+    }
+  ],
+  "facetSchemas": [
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "calendar/event",
+      "semanticMajor": 1,
+      "requires": [
+        "calendar/range-note"
+      ],
+      "conflicts": [],
+      "fields": [
+        "calendar/event-status",
+        "calendar/range",
+        "calendar/recurrence",
+        "calendar/reminder-intent"
+      ],
+      "relations": [
+        "calendar/participant"
+      ],
+      "constraints": [
+        {
+          "kind": "required_field",
+          "fieldId": "calendar/range",
+          "when": "effective"
+        },
+        {
+          "kind": "union_variant_equal",
+          "leftFieldId": "calendar/range",
+          "rightFieldId": "calendar/recurrence",
+          "when": "both_present"
+        }
+      ]
+    },
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "calendar/period-note",
+      "semanticMajor": 1,
+      "requires": [],
+      "conflicts": [],
+      "fields": [
+        "calendar/period"
+      ],
+      "relations": [],
+      "constraints": [
+        {
+          "kind": "required_field",
+          "fieldId": "calendar/period",
+          "when": "effective"
+        }
+      ]
+    },
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "calendar/range-note",
+      "semanticMajor": 1,
+      "requires": [],
+      "conflicts": [],
+      "fields": [
+        "calendar/range"
+      ],
+      "relations": [],
+      "constraints": [
+        {
+          "kind": "required_field",
+          "fieldId": "calendar/range",
+          "when": "effective"
+        }
+      ]
+    },
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "library/work",
+      "semanticMajor": 1,
+      "requires": [],
+      "conflicts": [],
+      "fields": [
+        "library/identifier",
+        "library/publication-state",
+        "library/resource",
+        "library/work-kind"
+      ],
+      "relations": [
+        "library/creator",
+        "library/venue",
+        "library/version-of"
+      ],
+      "constraints": []
+    },
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "organizations/organization",
+      "semanticMajor": 1,
+      "requires": [],
+      "conflicts": [],
+      "fields": [
+        "organizations/address",
+        "organizations/classification",
+        "organizations/contact",
+        "organizations/identifier",
+        "organizations/name",
+        "organizations/site",
+        "organizations/status"
+      ],
+      "relations": [
+        "organizations/allied-with",
+        "organizations/brand-of",
+        "organizations/business-guided-by",
+        "organizations/governs",
+        "organizations/jointly-led-by",
+        "organizations/member-of",
+        "organizations/owns",
+        "organizations/parent",
+        "organizations/related",
+        "organizations/subsidiary-of",
+        "organizations/supervised-by",
+        "organizations/territorially-administered-by"
+      ],
+      "constraints": []
+    },
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "people/person",
+      "semanticMajor": 1,
+      "requires": [],
+      "conflicts": [],
+      "fields": [
+        "people/account",
+        "people/address",
+        "people/avatar",
+        "people/email",
+        "people/gender-identity-state",
+        "people/legal-sex-state",
+        "people/life-event",
+        "people/measurement",
+        "people/name",
+        "people/nationality-state",
+        "people/phone",
+        "people/profession",
+        "people/website"
+      ],
+      "relations": [
+        "people/engagement",
+        "people/family-related",
+        "people/guardian",
+        "people/manager",
+        "people/mentor",
+        "people/parent",
+        "people/professional-relation",
+        "people/sibling",
+        "people/social-related",
+        "people/spouse"
+      ],
+      "constraints": []
+    },
+    {
+      "wireVersion": 1,
+      "kind": "facet_schema",
+      "facetId": "tasks/task",
+      "semanticMajor": 1,
+      "requires": [],
+      "conflicts": [],
+      "fields": [
+        "tasks/completed-at",
+        "tasks/due",
+        "tasks/priority",
+        "tasks/start",
+        "tasks/status"
+      ],
+      "relations": [
+        "tasks/dependency"
+      ],
+      "constraints": [
+        {
+          "kind": "required_field",
+          "fieldId": "tasks/status",
+          "when": "effective"
+        }
+      ]
+    }
+  ],
+  "calendarSeriesScopePolicies": [
+    {
+      "kind": "calendar_series_scope_policy",
+      "policyId": "calendar/series-scope",
+      "policyVersion": "1",
+      "keyMembers": [
+        "series",
+        "periodKey",
+        "scope"
+      ],
+      "scopeKinds": [
+        "node",
+        "workspace"
+      ],
+      "nodeScopeMember": "scopeNodeRef",
+      "multiplicities": [
+        "many",
+        "unique"
+      ],
+      "conflictCode": "calendar_series_scope_conflict",
+      "retryRevisionRequired": true
+    }
+  ]
+}

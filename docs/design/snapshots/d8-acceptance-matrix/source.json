@@ -1,0 +1,1287 @@
+{
+  "revision": "D8-r03-p2-2026-09-24",
+  "status": "candidate",
+  "cases": [
+    {
+      "id": "RTL-001",
+      "group": "Arabic-only/document/edit",
+      "positive": "Source/Write/Read正文：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-002",
+      "group": "Arabic-only/document/save",
+      "positive": "Source/Write/Read正文：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-003",
+      "group": "Arabic-only/document/reload",
+      "positive": "Source/Write/Read正文：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-004",
+      "group": "Arabic-only/document/offline",
+      "positive": "Source/Write/Read正文：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-005",
+      "group": "Arabic-only/document/conflict",
+      "positive": "Source/Write/Read正文：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-006",
+      "group": "Arabic-only/document/recovery",
+      "positive": "Source/Write/Read正文：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-007",
+      "group": "Arabic-only/document/direction",
+      "positive": "Source/Write/Read正文：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-008",
+      "group": "Arabic-only/name/edit",
+      "positive": "Node名称/导航标签：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-009",
+      "group": "Arabic-only/name/save",
+      "positive": "Node名称/导航标签：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-010",
+      "group": "Arabic-only/name/reload",
+      "positive": "Node名称/导航标签：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-011",
+      "group": "Arabic-only/name/offline",
+      "positive": "Node名称/导航标签：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-012",
+      "group": "Arabic-only/name/conflict",
+      "positive": "Node名称/导航标签：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-013",
+      "group": "Arabic-only/name/recovery",
+      "positive": "Node名称/导航标签：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-014",
+      "group": "Arabic-only/name/direction",
+      "positive": "Node名称/导航标签：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-015",
+      "group": "Arabic-only/property/edit",
+      "positive": "完整D4属性/重复事实：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-016",
+      "group": "Arabic-only/property/save",
+      "positive": "完整D4属性/重复事实：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-017",
+      "group": "Arabic-only/property/reload",
+      "positive": "完整D4属性/重复事实：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-018",
+      "group": "Arabic-only/property/offline",
+      "positive": "完整D4属性/重复事实：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-019",
+      "group": "Arabic-only/property/conflict",
+      "positive": "完整D4属性/重复事实：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-020",
+      "group": "Arabic-only/property/recovery",
+      "positive": "完整D4属性/重复事实：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-021",
+      "group": "Arabic-only/property/direction",
+      "positive": "完整D4属性/重复事实：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-022",
+      "group": "Arabic-only/table/edit",
+      "positive": "原生table cell：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-023",
+      "group": "Arabic-only/table/save",
+      "positive": "原生table cell：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-024",
+      "group": "Arabic-only/table/reload",
+      "positive": "原生table cell：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-025",
+      "group": "Arabic-only/table/offline",
+      "positive": "原生table cell：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-026",
+      "group": "Arabic-only/table/conflict",
+      "positive": "原生table cell：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-027",
+      "group": "Arabic-only/table/recovery",
+      "positive": "原生table cell：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-028",
+      "group": "Arabic-only/table/direction",
+      "positive": "原生table cell：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-029",
+      "group": "Arabic-only/query/edit",
+      "positive": "Query结果与DynamicBlock：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-030",
+      "group": "Arabic-only/query/save",
+      "positive": "Query结果与DynamicBlock：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-031",
+      "group": "Arabic-only/query/reload",
+      "positive": "Query结果与DynamicBlock：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-032",
+      "group": "Arabic-only/query/offline",
+      "positive": "Query结果与DynamicBlock：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-033",
+      "group": "Arabic-only/query/conflict",
+      "positive": "Query结果与DynamicBlock：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-034",
+      "group": "Arabic-only/query/recovery",
+      "positive": "Query结果与DynamicBlock：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-035",
+      "group": "Arabic-only/query/direction",
+      "positive": "Query结果与DynamicBlock：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-036",
+      "group": "Arabic-only/annotation/edit",
+      "positive": "纯文本Annotation：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-037",
+      "group": "Arabic-only/annotation/save",
+      "positive": "纯文本Annotation：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-038",
+      "group": "Arabic-only/annotation/reload",
+      "positive": "纯文本Annotation：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-039",
+      "group": "Arabic-only/annotation/offline",
+      "positive": "纯文本Annotation：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-040",
+      "group": "Arabic-only/annotation/conflict",
+      "positive": "纯文本Annotation：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-041",
+      "group": "Arabic-only/annotation/recovery",
+      "positive": "纯文本Annotation：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-042",
+      "group": "Arabic-only/annotation/direction",
+      "positive": "纯文本Annotation：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-043",
+      "group": "Arabic-only/search/edit",
+      "positive": "搜索结果与命中导航：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-044",
+      "group": "Arabic-only/search/save",
+      "positive": "搜索结果与命中导航：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-045",
+      "group": "Arabic-only/search/reload",
+      "positive": "搜索结果与命中导航：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-046",
+      "group": "Arabic-only/search/offline",
+      "positive": "搜索结果与命中导航：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-047",
+      "group": "Arabic-only/search/conflict",
+      "positive": "搜索结果与命中导航：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-048",
+      "group": "Arabic-only/search/recovery",
+      "positive": "搜索结果与命中导航：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-049",
+      "group": "Arabic-only/search/direction",
+      "positive": "搜索结果与命中导航：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-050",
+      "group": "Hebrew-only/document/edit",
+      "positive": "Source/Write/Read正文：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-051",
+      "group": "Hebrew-only/document/save",
+      "positive": "Source/Write/Read正文：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-052",
+      "group": "Hebrew-only/document/reload",
+      "positive": "Source/Write/Read正文：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-053",
+      "group": "Hebrew-only/document/offline",
+      "positive": "Source/Write/Read正文：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-054",
+      "group": "Hebrew-only/document/conflict",
+      "positive": "Source/Write/Read正文：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-055",
+      "group": "Hebrew-only/document/recovery",
+      "positive": "Source/Write/Read正文：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-056",
+      "group": "Hebrew-only/document/direction",
+      "positive": "Source/Write/Read正文：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-057",
+      "group": "Hebrew-only/name/edit",
+      "positive": "Node名称/导航标签：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-058",
+      "group": "Hebrew-only/name/save",
+      "positive": "Node名称/导航标签：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-059",
+      "group": "Hebrew-only/name/reload",
+      "positive": "Node名称/导航标签：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-060",
+      "group": "Hebrew-only/name/offline",
+      "positive": "Node名称/导航标签：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-061",
+      "group": "Hebrew-only/name/conflict",
+      "positive": "Node名称/导航标签：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-062",
+      "group": "Hebrew-only/name/recovery",
+      "positive": "Node名称/导航标签：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-063",
+      "group": "Hebrew-only/name/direction",
+      "positive": "Node名称/导航标签：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-064",
+      "group": "Hebrew-only/property/edit",
+      "positive": "完整D4属性/重复事实：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-065",
+      "group": "Hebrew-only/property/save",
+      "positive": "完整D4属性/重复事实：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-066",
+      "group": "Hebrew-only/property/reload",
+      "positive": "完整D4属性/重复事实：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-067",
+      "group": "Hebrew-only/property/offline",
+      "positive": "完整D4属性/重复事实：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-068",
+      "group": "Hebrew-only/property/conflict",
+      "positive": "完整D4属性/重复事实：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-069",
+      "group": "Hebrew-only/property/recovery",
+      "positive": "完整D4属性/重复事实：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-070",
+      "group": "Hebrew-only/property/direction",
+      "positive": "完整D4属性/重复事实：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-071",
+      "group": "Hebrew-only/table/edit",
+      "positive": "原生table cell：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-072",
+      "group": "Hebrew-only/table/save",
+      "positive": "原生table cell：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-073",
+      "group": "Hebrew-only/table/reload",
+      "positive": "原生table cell：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-074",
+      "group": "Hebrew-only/table/offline",
+      "positive": "原生table cell：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-075",
+      "group": "Hebrew-only/table/conflict",
+      "positive": "原生table cell：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-076",
+      "group": "Hebrew-only/table/recovery",
+      "positive": "原生table cell：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-077",
+      "group": "Hebrew-only/table/direction",
+      "positive": "原生table cell：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-078",
+      "group": "Hebrew-only/query/edit",
+      "positive": "Query结果与DynamicBlock：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-079",
+      "group": "Hebrew-only/query/save",
+      "positive": "Query结果与DynamicBlock：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-080",
+      "group": "Hebrew-only/query/reload",
+      "positive": "Query结果与DynamicBlock：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-081",
+      "group": "Hebrew-only/query/offline",
+      "positive": "Query结果与DynamicBlock：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-082",
+      "group": "Hebrew-only/query/conflict",
+      "positive": "Query结果与DynamicBlock：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-083",
+      "group": "Hebrew-only/query/recovery",
+      "positive": "Query结果与DynamicBlock：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-084",
+      "group": "Hebrew-only/query/direction",
+      "positive": "Query结果与DynamicBlock：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-085",
+      "group": "Hebrew-only/annotation/edit",
+      "positive": "纯文本Annotation：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-086",
+      "group": "Hebrew-only/annotation/save",
+      "positive": "纯文本Annotation：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-087",
+      "group": "Hebrew-only/annotation/reload",
+      "positive": "纯文本Annotation：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-088",
+      "group": "Hebrew-only/annotation/offline",
+      "positive": "纯文本Annotation：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-089",
+      "group": "Hebrew-only/annotation/conflict",
+      "positive": "纯文本Annotation：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-090",
+      "group": "Hebrew-only/annotation/recovery",
+      "positive": "纯文本Annotation：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-091",
+      "group": "Hebrew-only/annotation/direction",
+      "positive": "纯文本Annotation：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-092",
+      "group": "Hebrew-only/search/edit",
+      "positive": "搜索结果与命中导航：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "视觉次序/DOM索引不得选错目标",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-093",
+      "group": "Hebrew-only/search/save",
+      "positive": "搜索结果与命中导航：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-094",
+      "group": "Hebrew-only/search/reload",
+      "positive": "搜索结果与命中导航：重新授权读取保持原值与方向隔离。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "不normalize/丢字/以旧locator复活",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-095",
+      "group": "Hebrew-only/search/offline",
+      "positive": "搜索结果与命中导航：本地Core提交或远端仅Draft，二者明确区分。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "远端离线不得本机解释/提交托管源",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-096",
+      "group": "Hebrew-only/search/conflict",
+      "positive": "搜索结果与命中导航：保留base/current/proposed并重新预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "同title/value/key/ABA不得自动覆盖",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-097",
+      "group": "Hebrew-only/search/recovery",
+      "positive": "搜索结果与命中导航：依原request恢复真实决议。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "丢回执不得新OperationId重复写；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-098",
+      "group": "Hebrew-only/search/direction",
+      "positive": "搜索结果与命中导航：ltr/rtl/auto切换保持Core意图与逻辑内容。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。",
+      "negative": "翻译/locale/dir=auto不替代完整RTL能力",
+      "contract": "主稿§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "WIRE-01",
+      "group": "strict decoder",
+      "positive": "各closed请求合法结构与整数边界接受",
+      "negative": "duplicate/unknown/missing/null/bool/exponent/float/-0/overflow及wrong-union拒绝",
+      "contract": "Interfaces§1–6",
+      "evidence": "bounded-wire; semantic-review; real-decoder-pending"
+    },
+    {
+      "id": "SRC-01",
+      "group": "authority",
+      "positive": "Source/Write/Read使用同一Draft/source；invalid Draft可保留",
+      "negative": "invalid时不得混用旧body新header或产生partial canonical projection",
+      "contract": "主稿§2/4；Interfaces§3",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SRC-02",
+      "group": "mapping",
+      "positive": "Core完整Draft Edit Map按schema path/flow区间对应唯一raw片段；generated/escape/atomic区间readonly",
+      "negative": "同显示文字不得配错paragraph/cell；旧mapBinding禁止复用",
+      "contract": "Interfaces§3/8",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SRC-03",
+      "group": "grammar",
+      "positive": "D2 table/link/heading等已允许源完整验证",
+      "negative": "HTML/粗体/math/unknown宏不能由Write变成新语法",
+      "contract": "主稿§4/7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "POS-01",
+      "group": "coordinates",
+      "positive": "UTF8/UTF16/scalar/D2 logical EOL双向转换，含BOM/emoji/CRLF",
+      "negative": "不得切surrogate、CRLF；NEL/LS/PS不当D2新行",
+      "contract": "主稿§5",
+      "evidence": "bounded-coordinates; platform-implementation-pending"
+    },
+    {
+      "id": "POS-02",
+      "group": "bidi caret",
+      "positive": "同一layout epoch的dual affinity、visual左右与logical前后清楚",
+      "negative": "只有首步成功、collapsed selection及同epoch才要求Left/Right往返；端点clamp独立断言，不能丢affinity",
+      "contract": "Direction§4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "POS-03",
+      "group": "grapheme",
+      "positive": "默认移动/删除不拆emoji ZWJ/组合音标，Source码点检查显式",
+      "negative": "方向变化不得反转Backspace/Delete目标",
+      "contract": "主稿§5；Direction§4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "POS-04",
+      "group": "selection",
+      "positive": "反向anchor/focus、Shift、跨行/atomic与drag选择准确",
+      "negative": "虚拟化/折行/异步重排不能复用旧像素/DOM target",
+      "contract": "主稿§5；Direction§4/6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "IME-01",
+      "group": "composition",
+      "positive": "begin/update/end及末尾input归一为一个Draft事务",
+      "negative": "double final input/Enter/slash/提交快捷键不得重复或提前写",
+      "contract": "主稿§6",
+      "evidence": "bounded-composition; real-IME-pending"
+    },
+    {
+      "id": "IME-02",
+      "group": "composition lifecycle",
+      "positive": "cancel还原preimage；后台未完成preedit明确留存",
+      "negative": "blur/方向变更/virtual unmount不得默默确认或丢失",
+      "contract": "主稿§6；Direction§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "CLIP-01",
+      "group": "clipboard",
+      "positive": "logical文本复制与exact Source复制分别明确；cut先写成功",
+      "negative": "视觉倒序、注入isolate、clip拒绝先删、隐含HTML执行拒绝",
+      "contract": "主稿§7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "CLIP-02",
+      "group": "paste",
+      "positive": "Write inert文本全量成功或明确不可表示；Source保留原文proposal",
+      "negative": "table newline/pipe/TSV或跨ownerResource不可偷转/截断/下载",
+      "contract": "主稿§7；Interfaces§3",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "UNDO-01",
+      "group": "local undo",
+      "positive": "IME/paste各一group，切表面共享Draft栈；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "不得跨owner/提交边界或native composition抢撤销；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§8",
+      "evidence": "bounded-composition; semantic-review"
+    },
+    {
+      "id": "UNDO-02",
+      "group": "committed undo",
+      "positive": "当前cut的新逆向计划，保留后续不相关编辑；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "不得旧receipt回滚、权限绕过、伪跨Workspace原子undo；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§8/9",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "UNDO-03",
+      "group": "undo protocol",
+      "positive": "D8单source且当前完整after版本相等才新prepare；Redo为Undo的Undo；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "后续同owner改动/ABA/控制效果/stale Annotation/缺历史pins/非D8来源拒绝；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "Interfaces§7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "PLAN-01",
+      "group": "serial binding",
+      "positive": "只允许current serial的完整preview确认；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "旧prepare迟到/后续输入/焦点变化不得提交错draft；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§3",
+      "evidence": "bounded-state; real-Core-pending"
+    },
+    {
+      "id": "PLAN-02",
+      "group": "unknown outcome",
+      "positive": "unknown/planned先恢复同一request，重复请求一次效果；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "新OperationId重做、以cancel/超时判失败、receipt覆盖后续输入拒绝；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§3/11",
+      "evidence": "bounded-state; real-Core-pending"
+    },
+    {
+      "id": "PLAN-03",
+      "group": "effects",
+      "positive": "全manifest及byte ranges/epoch可取且正确解码",
+      "negative": "少页/混epoch/符号subject伪Ref/preview当receipt拒绝",
+      "contract": "Interfaces§4/5；D7 Effects",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "ACL-01",
+      "group": "partial field",
+      "positive": "phone-only只走D7 Field选择/窄路径，全部metadata资格显式",
+      "negative": "D8全源/隐藏字段/原receipt缓存不得旁路资格",
+      "contract": "主稿§2/10；Interfaces§2/4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "ACL-02",
+      "group": "revocation",
+      "positive": "失权停止新交付，原decision恢复当前授权先行",
+      "negative": "已知隐藏rev/错误原因/字段值不得泄露；不声称追回已交付字节",
+      "contract": "主稿§3/9；Interfaces§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "STALE-01",
+      "group": "ABA",
+      "positive": "revision7→8→9即使文本相同旧selector仍失效",
+      "negative": "key/title/digest相同不可自动复活",
+      "contract": "主稿§9",
+      "evidence": "bounded-state; real-Core-pending"
+    },
+    {
+      "id": "ANCHOR-01",
+      "group": "annotation",
+      "positive": "明确当前same-owner新target经Core验证/preview后替换",
+      "negative": "重复文本fuzzy默认、Field/carrier target、draft locator、跨owner拒绝",
+      "contract": "主稿§9；Interfaces§4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "ANCHOR-02",
+      "group": "suggestion",
+      "positive": "D7原replacement绑定exact range及revision原子提交",
+      "negative": "方向重排replacement、stale接受、资源未知region profile拒绝",
+      "contract": "主稿§9/10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "FIELD-01",
+      "group": "typed values",
+      "positive": "同值不同occurrence的note/provenance/顺序保持，完整FieldId消歧",
+      "negative": "显示摘要覆盖多值、empty=null、locale猜数字/date、inverse副本拒绝",
+      "contract": "主稿§10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "TABLE-01",
+      "group": "native table",
+      "positive": "ragged、escaped pipe、blank/comment trivia保持，row domain明确；保留set_native_cell/insert_native_row/remove_native_row/reorder_native_rows/toggle_checklist及两种promotion，各按原形状；两行重排有原trivia证明则可准备",
+      "negative": "补矩形/首行schema/持久rowId/不支持reorder仍执行拒绝；无trivia证明拒绝原重排；“多row”不得误禁用已闭合重排，插行不得套单NativeSelector",
+      "contract": "主稿§10；D5§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "VIEW-01",
+      "group": "result selection",
+      "positive": "query epoch固定targets，paging/all-result明确，重复Node去重",
+      "negative": "aggregate/ref列自动可写、刷新扩大selection、page=全集拒绝",
+      "contract": "主稿§10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "VIEW-02",
+      "group": "collection",
+      "positive": "创建/移出完整postquery含top/take，parent明确，四类删除分离",
+      "negative": "label当FieldId、行号当Ref、移出即Trash、当前页证明membership拒绝",
+      "contract": "主稿§10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "VIEW-03",
+      "group": "board",
+      "positive": "drag与键盘选column映射同Field值和Core意图",
+      "negative": "RTL视觉左右不得反转关系owner、数轴、时间早晚或字段值",
+      "contract": "主稿§10；Direction§5",
+      "evidence": "bounded-direction; real-host-pending"
+    },
+    {
+      "id": "MIX-01",
+      "group": "mixed corpus",
+      "positive": "数字/括号/URL/path/email/ref/citation/CJK/Latin/代码/formula全部logical保持",
+      "negative": "技术token不受邻近名称方向控制；不把inert代码公式执行",
+      "contract": "Direction§3",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "DIR-01",
+      "group": "authority",
+      "positive": "shell locale/explicit、document/flow auto及neutral fallback有明确顺序",
+      "negative": "不得加portable sidecar/未知D2header语义，block偏好不跨revision猜",
+      "contract": "Direction§2",
+      "evidence": "bounded-direction; semantic-review"
+    },
+    {
+      "id": "DIR-02",
+      "group": "mirroring",
+      "positive": "navigation/menu/pane/grid/icon按镜像表切换并keyboard可达",
+      "negative": "brand/media/math/data-axis/关系箭头不得无差别scaleX翻转",
+      "contract": "Direction§5",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "A11Y-01",
+      "group": "keyboard/AT",
+      "positive": "所有动作keyboard/读屏可完成，role/name/state、逻辑朗读顺序稳定",
+      "negative": "focus trap/消失/漂移、同源双pane重复朗读、IME live-region噪声拒绝",
+      "contract": "Direction§6/7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "A11Y-02",
+      "group": "reflow",
+      "positive": "200%文字/400%页面/320px、高对比、reduce-motion；二维表有详情替代",
+      "negative": "缩放隐藏操作、颜色独占语义、drag-only操作拒绝",
+      "contract": "Direction§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SCALE-01",
+      "group": "virtualization",
+      "positive": "100k导航/10k结果、200page、composition/focus pin、长名rapid dir切换",
+      "negative": "DOM row index冒充identity、locale排序、局部parser/partial result拒绝",
+      "contract": "Impact§2；Direction§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SCALE-02",
+      "group": "budgets",
+      "positive": "达到D6/D5更窄预算完整拒绝并保留Draft；UI异步响应",
+      "negative": "自动截断/静默拆batch、CPU阻塞UI、清dirty cache丢提案拒绝",
+      "contract": "Impact§2；主稿§11",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "PARITY-01",
+      "group": "surfaces",
+      "positive": "Desktop/Server WebUI/Mobile同意图产生同领域结果/错误/commit",
+      "negative": "远端断网local Core、Mobile转换/Agent入口或未测host支持声明拒绝",
+      "contract": "主稿§11；Direction§7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "LOCAL-01",
+      "group": "localization",
+      "positive": "四项能力分别报告；rtl shell可使用当前已翻译UI语言",
+      "negative": "Arabic citation/dir=auto/Unicode存储不能宣称阿拉伯UI翻译完成",
+      "contract": "Direction§1/7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RECOVER-01",
+      "group": "draft persistence",
+      "positive": "quota失败、重启、后台恢复显示实际Draft/提交状态；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值",
+      "negative": "未保存草稿称已保存、登录换用户读旧缓存、dirty静默TTL删除拒绝；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门",
+      "contract": "主稿§11",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "EXT-01",
+      "group": "unsupported",
+      "positive": "D9模板/区域/转换和实时协作未交付时明确不可用",
+      "negative": "通过UI第二parser/格式/后台网络或新identity偷补能力拒绝",
+      "contract": "主稿§1/9/10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "WIRE-02",
+      "group": "D2 snapshot embedding",
+      "positive": "d8_document.snapshot是完整D2 document_snapshot，三个owner与当前cut一致；valid/invalid payload均在snapshot.document内",
+      "negative": "direct payload wrapper、缺snapshot wire/kind/owner或owner错配拒绝",
+      "contract": "Interfaces§2；D2§5.1/5.11",
+      "evidence": "semantic-review; real-decoder-pending"
+    },
+    {
+      "id": "DIR-03",
+      "group": "D7 View label precedence",
+      "positive": "View既有textDirection决定数据label，个人容器方向仅控制布局及auto-neutral fallback；所有方向组合产生同一Core意图",
+      "negative": "Document override不得静默覆盖saved View；不得把shell切向写入ViewSpec/Query",
+      "contract": "Direction§2；D7 View§2",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "MAP-01",
+      "group": "重复paragraph/同值cell",
+      "positive": "同显示字符串通过不同path定位；双向scalar偏移正确",
+      "negative": "text查找或DOM索引不能代替map",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "MAP-02",
+      "group": "join/escape/atomic/adjacent",
+      "positive": "join空格、escaped pipe、原子readonly；相邻text累加offset",
+      "negative": "readonly显示字符不得误作raw可写字节",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "MAP-03",
+      "group": "map绑定/反向选区",
+      "positive": "owner/base/serial/source及mapBinding完整；anchor/focus方向保留",
+      "negative": "旧serial/source或同文本ABA拒绝，不倒排replacement",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-01",
+      "group": "空正文首字",
+      "positive": "Arabic/Hebrew/mixed三组从合法空正文site输入首字",
+      "negative": "无paragraph不能以textRuns为空永久禁Write",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-02",
+      "group": "Enter/合段/删空",
+      "positive": "plainRegion splice/break/site插入的完整树差异、空白及多行后继caret；删空后继续输入",
+      "negative": "macro/marker/anchor/trivia额外改变完整拒绝",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-03",
+      "group": "EOL/undo/提交",
+      "positive": "LF/CRLF/CR各完整trace；未触及字节保持；一次undo；完整prepare→preview→receipt",
+      "negative": "不把D2 valid、有限模型或preview当commit",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-04",
+      "group": "异步输入",
+      "positive": "单请求队列按native before/after日志保留后续输入，原事务结果不覆写后续host",
+      "negative": "composition/队列未排空禁止prepare/confirm；无法证明衔接保留输入",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "NATIVE-01",
+      "group": "关闭native bulk生成",
+      "positive": "1000/1001、ragged/missing/trivia/重复/stale/额外变化均无UI生成入口；D7原闭合命令保持；保留set_native_cell/insert_native_row/remove_native_row/reorder_native_rows/toggle_checklist及两种promotion，各按原形状；两行重排有原trivia证明则可准备",
+      "negative": "不得拆批或借Source规避命令合同；不宣称人工来源证明；无trivia证明拒绝原重排；“多row”不得误禁用已闭合重排，插行不得套单NativeSelector",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "ANNOT-01",
+      "group": "五种target exactness",
+      "positive": "whole-document/resource不因无关source变更stale；locators按各自revision",
+      "negative": "Trash suspension不是第三个D2 targetStatus；restore不修复stale",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "CARET-01",
+      "group": "caret端点与双affinity",
+      "positive": "empty/singlegrapheme/bidi/soft-wrap分别验证，成功相邻移动有条件逆运算",
+      "negative": "首步clamp不要求回原点；不按logical点去重dual stop",
+      "contract": "Interfaces§3/8；主稿§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-05",
+      "group": "D2 header EOF",
+      "positive": "title/attribute/comment EOF在实际非0 scalar列提供site，新增必要EOL后输入首字",
+      "negative": "不得要求EOF column=0或把正文接进header",
+      "contract": "Interfaces§3.2/3.4/8.5；D2§4.2/4.3",
+      "evidence": "grammar-derived bounded witnesses; real Core pending"
+    },
+    {
+      "id": "WRITE-06",
+      "group": "discovery trivia及carrier EOF",
+      "positive": "最后carrier/comment之后合法site或blank region保持前缀；无末尾EOL先构造分隔再输入",
+      "negative": "discovery prefix不等于protected frame；不能在后续carrier之前插入body",
+      "contract": "Interfaces§3.2/3.4/8.5；D2§4.2/4.3",
+      "evidence": "grammar-derived bounded witnesses; real Core pending"
+    },
+    {
+      "id": "WRITE-07",
+      "group": "空白/BOM/三类EOL族",
+      "positive": "10类EOF/blank源边界×3EOL×2BOM，首字/space/tab/Enter后清空、undo/redo、重新输入",
+      "negative": "有限oracle不冒充完整D2/Core证明；保留space/tab/BOM/EOL",
+      "contract": "Interfaces§3.2/3.4/8.5；D2§4.2/4.3",
+      "evidence": "grammar-derived bounded witnesses; real Core pending"
+    },
+    {
+      "id": "WRITE-08",
+      "group": "空白立即接受",
+      "positive": "space/tab首字成为exact Draft source且有plain caret；删最后非blank保留未选空白",
+      "negative": "不得长期pending-prefix或要求Source处理普通blank",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-09",
+      "group": "多行后继状态",
+      "positive": "两EOL删除一条后形成多行paragraph，region仍可继续编辑；reload无需旧undo日志",
+      "negative": "不得只支持单行paragraph或以Undo冒充Backspace/Delete",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-10",
+      "group": "所有换行与选区",
+      "positive": "mixed EOL、反向selection、CRLF拼接后caret到完整字素末尾、未选字节保持",
+      "negative": "不得切CRLF、normalize其他EOL或倒排replacement",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-11",
+      "group": "区域保护与边界",
+      "positive": "普通region最大化但不跨parent/header/carrier/comment/anchor/protected；空region仅在raw-safe EOF",
+      "negative": "结构边界site不得冒充可直接splice的空区域；新增语法完整拒绝",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-12",
+      "group": "输入呈现与恢复",
+      "positive": "Write明确实际源换行/段间空行；Read仍是D2 logical text；undo/redo新serial新map",
+      "negative": "不得从normalized native整块回写、旧serial倒退或把copy text当export",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "ORIGIN-01",
+      "group": "全body来源覆盖",
+      "positive": "全部16种D2可地址occurrence及全部Inline槽都有Core origin，dirty全文替换可重建",
+      "negative": "不得依赖Base locator、DOM序号、相同text搜索或遍历payload假节点",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "ORIGIN-02",
+      "group": "非可写来源",
+      "positive": "scalar/escape/join/atom四relation准确range；重复原子、escaped cells及protected同token可区分",
+      "negative": "nonnull navigation不得赋scalar写资格或D3 Annotation地址",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "TERMS-01",
+      "group": "上游闭集消费者",
+      "positive": "D2 Inline text/link/resource_occurrence/node_link/citation与原上游相等",
+      "negative": "Inline kind resource拒绝；D3 target resource合法，不做全局替换",
+      "contract": "Interfaces§3/8；主稿§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    }
+  ],
+  "evidence_note": "Rows are obligations, not test results. Bounded models cover only named subcontracts; actual product/platform implementation remains pending."
+}

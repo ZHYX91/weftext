@@ -1,0 +1,991 @@
+{
+  "schema": "D6-Terminology/1",
+  "concepts": [
+    {
+      "conceptId": "weftext.term.storage-domain",
+      "zh": "事务存储域",
+      "en": "Storage Domain",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "一个实际SQLite原子提交域，可隔离多个Workspace及bootstrap控制记录",
+      "exclusions": "不是Workspace identity、跨域事务或跨Workspace授权",
+      "ownedNames": [
+        "StorageDomain",
+        "storageDomain"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.storage_domain",
+      "uiZh": "事务存储域",
+      "uiEn": "Storage Domain",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "同DB原子发布 / 不能把两个独立DB称同域",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.authority-store",
+      "zh": "权威存储",
+      "en": "Authority Store",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "域内唯一完整作者源及必须原子一致的控制记录",
+      "exclusions": "不等于可重建index、history或export artifact",
+      "ownedNames": [
+        "AuthorityStore",
+        "authorityStore"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.authority_store",
+      "uiZh": "权威存储",
+      "uiEn": "Authority Store",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "当前Document完整bytes / index不能替代源",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.storage-fence",
+      "zh": "物理写栅栏",
+      "en": "Storage Fence",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "每次holder写事务须比较的耐久单调资格代",
+      "exclusions": "不是D3 authority generation或source revision",
+      "ownedNames": [
+        "StorageFence",
+        "storageFence"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.storage_fence",
+      "uiZh": "物理写栅栏",
+      "uiEn": "Storage Fence",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "失效holder零写 / 不以旧source revision作写资格",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.authorized-cut",
+      "zh": "一致授权读取切点",
+      "en": "Authorized Cut",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "同一MVCC切点的源/控制版本和认证上下文",
+      "exclusions": "不授永不过期读取权",
+      "ownedNames": [
+        "AuthorizedCut",
+        "authorizedCut",
+        "openAuthorizedCut",
+        "subscribeCut"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.authorized_cut",
+      "uiZh": "一致授权读取切点",
+      "uiEn": "Authorized Cut",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "按cut读取后交付重验权限 / token不绕过撤权",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.mutation-footprint",
+      "zh": "实际修改范围",
+      "en": "Mutation Footprint",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "真实before/proposed中全部实际语义修改的受信投影",
+      "exclusions": "不是客户端自报patch范围",
+      "ownedNames": [
+        "MutationFootprint",
+        "mutationFootprint"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.mutation_footprint",
+      "uiZh": "实际修改范围",
+      "uiEn": "Mutation Footprint",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "phone修改只获phone写权 / 夹带name必须拒绝",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.prepared-intent",
+      "zh": "准备意图",
+      "en": "Prepared Intent",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "Core保存的immutable完整意图、源计划、依赖与预算",
+      "exclusions": "不是D3 planned、content reservation或自由回调",
+      "ownedNames": [
+        "PreparedIntent",
+        "preparedIntent",
+        "d6_prepare_request",
+        "d6_prepared_intent"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.prepared_intent",
+      "uiZh": "准备意图",
+      "uiEn": "Prepared Intent",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "预览保存计划 / 尚未分配Node",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.plan-token",
+      "zh": "计划控制令牌",
+      "en": "Plan Token",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "选择一份受管PreparedIntent的opaque运输token",
+      "exclusions": "不是identity、授权凭证或可编辑计划",
+      "ownedNames": [
+        "PlanToken",
+        "planToken"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.plan_token",
+      "uiZh": "计划控制令牌",
+      "uiEn": "Plan Token",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "按原token提交 / 改源须新token",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.result-handle",
+      "zh": "完整结果句柄",
+      "en": "Result Handle",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "绑定完整Query/cut/schema/audience/期限的受管结果及其token投影",
+      "exclusions": "不是Node/Record/View identity或D7 row selector",
+      "ownedNames": [
+        "ResultHandle",
+        "resultToken",
+        "publishResult"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.result_handle",
+      "uiZh": "完整结果句柄",
+      "uiEn": "Result Handle",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "全部结果complete后分页 / producing不可交付半结果",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.result-cursor",
+      "zh": "结果游标",
+      "en": "Result Cursor",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "绑定同一result/epoch/运输位置的opaque游标",
+      "exclusions": "不是semantic limit、row identity或独立结果",
+      "ownedNames": [
+        "ResultCursor",
+        "cursorToken",
+        "nextCursorToken"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.result_cursor",
+      "uiZh": "结果游标",
+      "uiEn": "Result Cursor",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "空nonterminal页仍继续 / 空数组不等EOF",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.budget-binding",
+      "zh": "预算绑定",
+      "en": "Budget Binding",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "固定资源规模上限及其可信消耗域",
+      "exclusions": "不混淆原语义额度、attempt时长和等待墙钟",
+      "ownedNames": [
+        "BudgetBinding",
+        "budgetBinding"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.budget_binding",
+      "uiZh": "预算绑定",
+      "uiEn": "Budget Binding",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "work先charge / crash不退款",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.series-scope-configuration",
+      "zh": "系列范围配置",
+      "en": "Series Scope Configuration",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "跨全部periodKey的exact series+scope受管multiplicity配置，绑定D4 Registry及policy；unique按各完整period key分别检查",
+      "exclusions": "不是每次create自行选择unique/many",
+      "ownedNames": [
+        "SeriesScopeConfiguration",
+        "seriesScopeConfiguration",
+        "d6_series_configuration_intent",
+        "d6_series_configuration_remove_intent"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.series_scope_configuration",
+      "uiZh": "系列范围配置",
+      "uiEn": "Series Scope Configuration",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "Workspace policy_admin建unique / 普通create不能覆盖",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.import-job",
+      "zh": "导入作业",
+      "en": "Import Job",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "有限输入、不可拆groups、显式batch及真实committed前缀",
+      "exclusions": "不是全输入全局原子事务、普通import的身份合并",
+      "ownedNames": [
+        "ImportJob",
+        "importJob",
+        "stageInput",
+        "planAtomicGroups",
+        "commitImportBatch"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.import_job",
+      "uiZh": "导入作业",
+      "uiEn": "Import Job",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "第六批crash保留前五批 / watermark不能提前",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.source-checkout",
+      "zh": "编辑检出",
+      "en": "Source Checkout",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "既有实体源proposal的外部文件呈现",
+      "exclusions": "不是ordinary import_new或第二活动作者权威",
+      "ownedNames": [
+        "SourceCheckout",
+        "sourceCheckout"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.source_checkout",
+      "uiZh": "编辑检出",
+      "uiEn": "Source Checkout",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "D6Record-as-entity",
+        "unqualified-source-as-origin"
+      ],
+      "exampleAndCounterexample": "expected revision回写 / 文件消失不等删除Node",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.source-version",
+      "zh": "源版本",
+      "en": "Source Version",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "完整EntityRef与对应源revision的绑定；D2 DocumentRevision与D3三类revisionToken由d6d/d6r/d6a类别、storeIncarnation、Counter及完整Ref共同绑定",
+      "exclusions": "不是只靠摘要防ABA；不新增DocumentRef；numeric SourceVersion和opaque revision token不与43字符随机Token同形互换",
+      "ownedNames": [
+        "SourceVersion",
+        "sourceVersions",
+        "sourceRevision",
+        "readSource",
+        "DocumentRevision",
+        "ResourceRevision",
+        "AnnotationRevision"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.source_version",
+      "uiZh": "源版本",
+      "uiEn": "Source Version",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "A→B→A revision不同 / path不是源identity",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.principal-context",
+      "zh": "认证主体上下文",
+      "en": "Principal Context",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "host/D10认证的主体、session、delegation与policy generation",
+      "exclusions": "不是客户端JSON自行声明的principal",
+      "ownedNames": [
+        "PrincipalContext",
+        "principalContext"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.principal_context",
+      "uiZh": "认证主体上下文",
+      "uiEn": "Principal Context",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "受信OS映射 / request自报管理员无效",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.commit-protocol",
+      "zh": "控制提交协议",
+      "en": "Control Commit Protocol",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "D6 own ledger的闭合提交、回执、错误与重放协议",
+      "exclusions": "不包装D3绕过其原阶段；不是新Action领域",
+      "ownedNames": [
+        "D6ControlCommit",
+        "d6_commit_request",
+        "d6_commit_receipt",
+        "d6_error",
+        "commitBoundPlan",
+        "replayOperation"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.commit_protocol",
+      "uiZh": "控制提交协议",
+      "uiEn": "Control Commit Protocol",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "pure existing走D6 / fresh组合走D3",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.effects-token",
+      "zh": "效果清单令牌",
+      "en": "Effects Token",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "引用同一decision保存的完整效果清单的运输token",
+      "exclusions": "不是第二作者源、独立成功receipt或写能力",
+      "ownedNames": [
+        "EffectsToken",
+        "effectsToken"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.effects_token",
+      "uiZh": "效果清单令牌",
+      "uiEn": "Effects Token",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "200行展示后仍可取完整清单 / token不越过遮蔽",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.result-page-protocol",
+      "zh": "结果分页协议",
+      "en": "Result Page Protocol",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "完整结果的当前受权分页与闭合错误",
+      "exclusions": "不是D7 row schema或streaming部分成功",
+      "ownedNames": [
+        "D6ResultPage",
+        "d6_result_page_request",
+        "d6_result_page",
+        "d6_result_error",
+        "readResultPage"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.result_page_protocol",
+      "uiZh": "结果分页协议",
+      "uiEn": "Result Page Protocol",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "terminal显式 / I/O失败不能回成功EOF",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.attempt-allowance",
+      "zh": "执行次数额度",
+      "en": "Attempt Allowance",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "绑定planned decision的有限执行attempt资格及管理意图",
+      "exclusions": "不扩大原语义预算或退还已耗work",
+      "ownedNames": [
+        "AttemptAllowance",
+        "attemptAllowance",
+        "d6_attempt_allowance_intent"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.attempt_allowance",
+      "uiZh": "执行次数额度",
+      "uiEn": "Attempt Allowance",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "管理补充两次 / 原work=MAX不恢复工作量",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.execution-resource-summary",
+      "zh": "执行资源摘要",
+      "en": "Execution Resource Summary",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "向当前Workspace policy_admin交付的受管计划占用与暂停类别",
+      "exclusions": "不是普通用户可枚举的作者内容或自动放弃权限",
+      "ownedNames": [
+        "ExecutionResourceSummary",
+        "executionResourceSummary"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.execution_resource_summary",
+      "uiZh": "执行资源摘要",
+      "uiEn": "Execution Resource Summary",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "显示pins占用 / 不披露隐藏源值",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.dependency-proof",
+      "zh": "依赖完整性证明",
+      "en": "Dependency Completeness Proof",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "受信完整读取及其正负范围版本证明；包括独立lifecycle/负范围状态证明及D3 prepared-origin，不将无源端点伪装为SourceVersion",
+      "exclusions": "不是客户端声称完整的readSet；不自动证明结果可被调用者观察",
+      "ownedNames": [
+        "DependencyProof",
+        "dependencyProof",
+        "readCompleteScope",
+        "validateDependencies"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.dependency_proof",
+      "uiZh": "依赖完整性证明",
+      "uiEn": "Dependency Completeness Proof",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "无索引完整扫描 / 部分索引不是空scope；live→Trash→live须使旧state依赖失效，即使源版本不变",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.foreign-version-comparison",
+      "zh": "外部版本比较",
+      "en": "Foreign Version Comparison",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "由D9/D10固定比较器证明外部版本关系的纯读取",
+      "exclusions": "不重定义D3 SourceBinding或OriginBinding；比较不执行绑定退役或任何持久修改",
+      "ownedNames": [
+        "ForeignVersionComparison",
+        "compareForeignVersion"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.foreign_version_comparison",
+      "uiZh": "外部版本比较",
+      "uiEn": "Foreign Version Comparison",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "未知比较器停止 / etag字典序不等版本序",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.binding-retirement-intent",
+      "zh": "绑定退役意图",
+      "en": "Binding Retirement Intent",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "显式受权的既有SourceBinding/OriginBinding控制退役意图，由所属D9/D10输入适配并同事务提交",
+      "exclusions": "不重新定义D3绑定、不由只读版本比较自动触发",
+      "ownedNames": [
+        "BindingRetirementIntent",
+        "retireBinding"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.binding_retirement_intent",
+      "uiZh": "绑定退役意图",
+      "uiEn": "Binding Retirement Intent",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "用户明确退役来源绑定 / 比较器不可用不删除绑定",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.control-inspection-protocol",
+      "zh": "控制状态读取协议",
+      "en": "Control Inspection Protocol",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "向当前Workspace policy_admin读取同cut配置/CAS版本与执行资源摘要的closed协议",
+      "exclusions": "不是通用作者源API或OperationId枚举",
+      "ownedNames": [
+        "ControlInspection",
+        "d6_control_read_request",
+        "d6_control_state",
+        "d6_control_error"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.control_inspection_protocol",
+      "uiZh": "控制状态读取协议",
+      "uiEn": "Control Inspection Protocol",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "取得resourcePolicyRevision / 权限不足不返回目标存在状态",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.byte-handle",
+      "zh": "资源字节句柄",
+      "en": "Resource Byte Handle",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "D2 Resource snapshot中绑定已提交完整ResourceRef/版本/cut/descriptor/audience/pin/期限/预算的只读字节句柄",
+      "exclusions": "不是上传staging、identity、Query result/cursor、plan、effects、权限凭证或latest指针",
+      "ownedNames": [
+        "ByteHandle",
+        "ByteHandleRecord",
+        "d6_byte_handle",
+        "handleToken"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.byte_handle",
+      "uiZh": "资源字节句柄",
+      "uiEn": "Resource Byte Handle",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "H签发R1后资源更新R2仍读R1 / 过期、跨audience或撤权不重绑",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.byte-read-protocol",
+      "zh": "资源字节读取协议",
+      "en": "Resource Byte Read Protocol",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "固定ByteHandle上的closed offset/maxBytes读取、完整chunk与准确EOF、当前授权和共享有界计费",
+      "exclusions": "不是D7 row协议、repair Document envelope、自由URL/路径读取或新增提交入口",
+      "ownedNames": [
+        "ByteReadProtocol",
+        "readResourceBytes",
+        "d6_byte_read_request",
+        "d6_byte_chunk",
+        "d6_byte_error"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.byte_read_protocol",
+      "uiZh": "资源字节读取协议",
+      "uiEn": "Resource Byte Read Protocol",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "R1 chunk范围无洞重组 / I/O short read不能伪装EOF",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.observation-scope",
+      "zh": "潜在约束观察范围",
+      "en": "Constraint Observation Scope",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "在作者/范围读取前固定的结果观察上界，覆盖空范围并按当前权限证明",
+      "exclusions": "不是实际写集或内部完整读取证明",
+      "ownedNames": [
+        "ObservationScope",
+        "observationScope",
+        "d6_observation_scope"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.observation_scope",
+      "uiZh": "潜在约束观察范围",
+      "uiEn": "Constraint Observation Scope",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "在作者/范围读取前固定的结果观察上界，覆盖空范围并按当前权限证明 / 不是实际写集或内部完整读取证明",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.issuer-control-policy",
+      "zh": "签发域控制权限",
+      "en": "Issuer Control Policy",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "issuer自身allocate/administer授权及当前revision",
+      "exclusions": "不是身份认证或Workspace内容授权",
+      "ownedNames": [
+        "IssuerControlPolicy",
+        "issuerControlPolicy",
+        "d6_issuer_control_policy"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.issuer_control_policy",
+      "uiZh": "签发域控制权限",
+      "uiEn": "Issuer Control Policy",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "issuer自身allocate/administer授权及当前revision / 不是身份认证或Workspace内容授权",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.workspace-bootstrap-plan",
+      "zh": "工作区初始控制计划",
+      "en": "Workspace Bootstrap Plan",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "原D3计划内固定首份policy/Registry/Calendar控制和主体映射并同activation发布",
+      "exclusions": "不是第二decision、可编辑请求或永久管理员",
+      "ownedNames": [
+        "WorkspaceBootstrapPlan",
+        "workspaceBootstrapPlan",
+        "d6_workspace_bootstrap_plan"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.workspace_bootstrap_plan",
+      "uiZh": "工作区初始控制计划",
+      "uiEn": "Workspace Bootstrap Plan",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "原D3计划内固定首份policy/Registry/Calendar控制和主体映射并同activation发布 / 不是第二decision、可编辑请求或永久管理员",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.bootstrap-profile",
+      "zh": "工作区初始控制配置",
+      "en": "Workspace Bootstrap Profile",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "family不可变的Registry种子和显式初始范围/multiplicity选择",
+      "exclusions": "不是D2 Profile或Facet，不是每次重试最新配置",
+      "ownedNames": [
+        "WorkspaceBootstrapProfile",
+        "bootstrapProfile",
+        "d6_bootstrap_profile"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.bootstrap_profile",
+      "uiZh": "工作区初始控制配置",
+      "uiEn": "Workspace Bootstrap Profile",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "family不可变的Registry种子和显式初始范围/multiplicity选择 / 不是D2 Profile或Facet，不是每次重试最新配置",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.calendar-period-scope-binding",
+      "zh": "历法周期范围绑定",
+      "en": "Calendar Period Scope Binding",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "period Node到明确D4范围的必要控制选择及独立ABA版本",
+      "exclusions": "不是作者series/periodKey副本、Field或content identity",
+      "ownedNames": [
+        "CalendarPeriodScopeBinding",
+        "periodScopeBindings",
+        "d6_period_scope_intent"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.calendar_period_scope_binding",
+      "uiZh": "历法周期范围绑定",
+      "uiEn": "Calendar Period Scope Binding",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "period Node到明确D4范围的必要控制选择及独立ABA版本 / 不是作者series/periodKey副本、Field或content identity",
+      "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.source-envelope-state-capability",
+      "zh": "源包络状态能力",
+      "en": "Source Envelope State Capability",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "Policy/2显式授予指定源版本/容量/聚合有效性及其编辑outcome观察",
+      "exclusions": "不授body/其它Field/decision内容读取；不由source或Field权限蕴含",
+      "ownedNames": [
+        "SourceEnvelopeStateCapability",
+        "source_envelope_state"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.source_envelope_state_capability",
+      "uiZh": "源包络状态能力",
+      "uiEn": "Source Envelope State Capability",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "显式Policy/2 grant；禁止从field_write自动补grant",
+      "firstFreeze": "D7 coordinated revision02 candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.commit-sequence-state-capability",
+      "zh": "提交序号状态能力",
+      "en": "Commit Sequence State Capability",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "Policy/2显式授予整个Workspace共享D3/D6提交活动序号观察",
+      "exclusions": "不授body/其它Field/decision内容读取；不由source或Field权限蕴含",
+      "ownedNames": [
+        "CommitSequenceStateCapability",
+        "commit_sequence_state"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag frozen in D6; adapters must use this concept mapping when D8/D10 freeze CLI.",
+      "localeKey": "storage.commit_sequence_state_capability",
+      "uiZh": "提交序号状态能力",
+      "uiEn": "Commit Sequence State Capability",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "显式Policy/2 grant；禁止从field_write自动补grant",
+      "firstFreeze": "D7 coordinated revision02 candidate; not activated",
+      "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
+      "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
+    }
+  ],
+  "crossStageBindings": [
+    {
+      "owner": "D2 envelope / D6 value contract",
+      "names": [
+        "d6_byte_handle",
+        "<D6:ByteHandle>",
+        "handleToken"
+      ],
+      "conceptId": "weftext.term.byte-handle",
+      "contract": "D2 §5.9 unchanged; D6 Interface §11"
+    },
+    {
+      "owner": "D2/D3 wire / D6 version meaning",
+      "names": [
+        "<D6:DocumentRevision>",
+        "expectedDocumentRevisionToken",
+        "documentRevisionToken",
+        "resourceRevisionToken",
+        "annotationRevisionToken"
+      ],
+      "conceptId": "weftext.term.source-version",
+      "contract": "D6 Candidate §4 and Interface §12; do not replace D3 opaque lexical decoder with Token"
+    },
+    {
+      "owner": "D3 wire / D6 trusted proof",
+      "names": [
+        "sourceSnapshotCutToken",
+        "continuationCutToken",
+        "generationToken",
+        "expectedGenerationToken",
+        "custodyGenerationToken"
+      ],
+      "conceptId": "weftext.term.authority-store",
+      "contract": "D3 original distinct domains; D6 Interface §12, no Result TTL or random Token coercion"
+    },
+    {
+      "owner": "D4 closed shapes / D6 internal trusted projection",
+      "names": [
+        "RelationReadContext",
+        "RelationReadBinding",
+        "RecurrenceReadContext",
+        "RecurrenceReadBinding"
+      ],
+      "conceptId": "weftext.term.dependency-proof",
+      "contract": "D6 Candidate §4, no public arbitrary context API",
+      "revision04Note": "RelationReadContext/2 and RelationReadBinding/2 distinguish source/entity-state/incidence; Recurrence remains /1. stateToken is an inherited D4 member backed by D6 DependencyProof, not a new public capability token."
+    },
+    {
+      "owner": "D7 row schema / D6 transport",
+      "names": [
+        "ResultRowHandle"
+      ],
+      "conceptId": "weftext.term.result-handle",
+      "contract": "D7 downstream row ownership; not cursorToken or generic JSON fallback"
+    }
+  ]
+}
