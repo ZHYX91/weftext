@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r05-unified-control-contract-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
 
 ## 1. Implementation slices and state owners
 
@@ -342,6 +342,10 @@ Every D10 concept must trace from stable concept ID to Chinese/English formal na
 B10-01 implementation negative gate: Adopt code paths use only the `adopt_*` convention and associated binding values use the existing D3 `OriginBinding` / `origin_binding`. Controlled positive source, API/schema, fixtures, and terminology registry contain no `adoption_binding`, with no scanner exemption.
 
 TERMINOLOGY §14 and CONTROL-CONTRACT additionally freeze R05 control records, five capability IDs, and four first-party module/package/schema mappings. Candidate code symbols/namespaces and locale keys are unimplemented mappings only; CI string presence is not implementation evidence. PackageId, D4 SemanticNamespaceId, D4 namespace ownerId, FacetId, and module ContributionId remain owner-typed and cannot be merged merely because strings match.
+
+R06 additionally adds two **original-owner** naming gates. The nine D8 concepts and thirteen kinds consume UPSTREAM-AMENDMENTS §8.1 item by item: implementation cannot add D10 aliases, CLI verbs, locale keys, or rename EditSession/Draft/PreparedEditBinding as D10 concepts. D9 grouped lexicon terms consume the stable concept IDs in §8.2; `PublicationReceipt/1` remains external-publication control only, TerminalSchema/V nested inside `D7ResultPin` remains D7-decoded, and D2 Template, D3 SourceBinding/ForeignIdentityKey/OriginBinding/ResourceRegionLocator, D7 PreparedActionBinding/2, and D3/D6 author receipts cannot be re-registered by D9.
+
+These owner-lexicon additions change only terminology registry/checking and no D8/D9 wire or product capability. Where implementation has no corresponding UI/CLI/locale, “no new surface” is the passing condition; naming conformance must not invent resources.
 ## 14. Test and evidence layers
 
 | Layer | Can prove | Cannot prove |
@@ -398,7 +402,10 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 37. profile/2 family does not gain `d10_control_self` on upgrade; profile/3 affects only new families after explicit issuer update;
 38. per-Contribution dependency: an unavailable connector does not disable same-package schema/template/pack;
 39. Calendar/Library/People/Organizations D10 PackageId→module→schema mappings remain type-distinct from D4 namespace owner/Facet and reject a same-name third-party spoof;
-40. design accepted while release/surface/policy/version/health gate fails still produces the real D1 unavailable result.
+40. design accepted while release/surface/policy/version/health gate fails still produces the real D1 unavailable result;
+41. reverse/forward owner-lexicon mapping for nine D8 concepts and thirteen kinds, with no extra CLI/locale/wire alias and no naming change to IME, Write/Read, confirm, or Undo;
+42. stable concept IDs plus inherited ownership for D9 grouped terms: `PublicationReceipt/1` cannot become an author receipt, `D7ResultPin` cannot acquire TerminalSchema/V ownership, and PreparedActionBinding/SourceBinding/OriginBinding/ResourceRegionLocator cannot be re-registered;
+43. U12 three branches: current ICS profile is unsupported with zero author effect; a supported ordinary-file profile without D3 binding semantics gives fresh identities for two separate explicit imports while same-request retry replays exactly; the D3-binding path tests never_bound/active_live/active_non_live/retired/conflict/miss and never decides from UID without SourceBinding.
 
 Each case includes positive and mutant/negative paths and is not satisfied by string-log comparison. Any case not actually executed remains pending in the evidence table.
 ## 16. Completion gate
@@ -406,9 +413,9 @@ Each case includes positive and mutant/negative paths and is not satisfied by st
 The author implementation plan is ready for independent review only when:
 
 - CANDIDATE, CONTROL-CONTRACT, TERMINOLOGY, SCENARIO-DISPOSITIONS, UPSTREAM-AMENDMENTS, and this file agree;
-- TERMINOLOGY §13–§14 completes all 13 Intake §8.5.1 mapping fields for every current D10 controlled concept, inherited names reference their original owner, and no TODO/"implementation decides" placeholder remains;
+- TERMINOLOGY §13–§15 completes Intake §8.5.1 mapping for D10-owned and upstream-referenced concepts; complete D8/D9 original-owner additions live in UPSTREAM-AMENDMENTS §8 and D10 does not acquire their ownership; no TODO/"implementation decides" placeholder remains;
 - current author input coverage remains 49/49; historical U 48/48 records keep their historical context;
-- D6/D7 amendment is clearly an unactivated proposal;
+- D6/D7/D8/D9/D3 companion amendments are clearly unactivated proposals;
 - unsupported/deferred is never written as available;
 - automatic author commit remains limited to single_field_member profile;
 - External effect unknown, cost uncertain, audit failure, and cancel/planned recovery each have one normative result;

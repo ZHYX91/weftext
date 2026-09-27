@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 Agent、自动化与外部能力候选
 
-revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate author revision，等待新的固定候选全量独立联合终审。本候选继续以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 原 48 份输入和补充 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` D4 reference catalog 为权威输入，作者覆盖 49/49；历史 48/48 记录保持原上下文。独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`：候选 16/16、上游 16/49，正式开放 1P1+5P2，D3 批次等待正式报告。R05 改变基础授权、事务和公开 wire，因此这些旧覆盖不能转记为 R05 接受；本文不表示 Gate 通过、产品实现、运行时 capability available、上游 amendment 生效或可以开始 A2。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate author revision，等待新的固定候选全量独立联合终审。本候选继续以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 原 48 份输入和补充 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` D4 reference catalog 为权威输入，作者覆盖 49/49；历史 48/48 记录保持原上下文。独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`：候选 16/16、上游 44/49，正式开放 1P1+8P2；最后 D2/D5 五份仍在独立读取。R06 在 R05 基础上只补 D8/D9 owner 术语配套、U12 导入前提和有限一致性清理；旧 C 的覆盖不能转记为 R06 接受；本文不表示 Gate 通过、产品实现、运行时 capability available、上游 amendment 生效或可以开始 A2。
 
 ## 1. 选择与问题边界
 
@@ -496,9 +496,9 @@ LTR/RTL、区域设置、屏幕阅读器和 Web/CLI 运输差异只影响呈现�
 
 ## 23. D1–D9 组合与必要修订
 
-D1 表面、capability reason 和唯一提交持有者保持；D2 raw source/unknown provider preservation 保持；D3 identity/SourceBinding/OriginBinding/Provenance 保持；D4 Registry exact shape 与演进保持；D5 不新增持久 Record；D8 Draft/explicit edit confirmation 保持；D9 worker/ExportPlan/publication 保持。
+D1 表面、capability reason 和唯一提交持有者保持；D2 raw source/unknown provider preservation 保持；D3 identity/SourceBinding/OriginBinding/Provenance 保持；D4 Registry exact shape 与演进保持；D5 不新增持久 Record；D8 Draft/IME/explicit edit confirmation 与所有 Editor wire 保持；D9 worker/Template/ExportPlan/publication 与所有转换 wire 保持。R06 只要求 D8、D9 原 owner 在 UPSTREAM-AMENDMENTS §8 补齐 Mandatory Intake §8.5.1 的术语映射；D10 不取得这些名称的 owner。
 
-R05 需要 coordinated amendment 的范围扩大为：D6/D7 standing-approval author-submit 与 planned-preview 恢复、Policy/2 的 `d10_control_self`、bootstrap profile/2 固定旧集合与显式 profile/3，以及不可逆 stop 的 `execution_stopped/preflight` 与 planned authoritative-abort 条件。精确提案在 UPSTREAM-AMENDMENTS；CONTROL-CONTRACT 拥有 D10 host/control wire。共同设计接受或协调激活都**不等于运行时已实现/已发布**，`automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` 仍必须进入 D1 正式 capability catalog 并通过全部真实 availability 门后才能 advertised available。
+R06 coordinated amendment 集合包含 R05 的 D6/D7 standing-approval author-submit、planned-preview 恢复、Policy/2 `d10_control_self`、bootstrap profile/3 与不可逆 stop 条款，并新增**仅命名元数据**的 D8/D9 owner 词表配套。精确提案在 UPSTREAM-AMENDMENTS；CONTROL-CONTRACT 只拥有 D10 host/control wire。D8/D9 词表修订不增加无人值守编辑、转换 profile、身份、作者提交或发布能力。共同设计接受或协调激活都**不等于运行时已实现/已发布**，`automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` 仍必须进入 D1 正式 capability catalog 并通过全部真实 availability 门后才能 advertised available。
 
 ## 24. 安全反例
 

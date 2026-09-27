@@ -5,9 +5,9 @@ translation_status: source
 
 [English](UPSTREAM-AMENDMENTS.md)
 
-# D10 配套 D6/D7 上游协调修订提案
+# D10 配套上游协调修订提案
 
-revision: D10-r04-final-review-fixes-2026-09-28；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定上游输入提交为 `f205831c848729f7ddbc3ba0cf32b689459c0c98`。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定输入为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 已包含旧 U 的原 48 份输入和 D4 reference catalog。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
 
 ## 1. 修订目的和不变边界
 
@@ -292,11 +292,107 @@ CANDIDATE §6.1 对 Pack parent domain/extension point 的 lifecycle 收敛不�
 
 只有未来方案要求以下任一事项时才必须重开上游：把 parent dependency 成员加入 `RegistrySnapshot/1`；新增 D1 unavailable reason；让 UI disable 改写 schema availability；允许 disabled parent 下 dependent contribution 继续产生领域派生语义；或改变 D4 semantic-ledger retention。当前候选全部拒绝这些路线。
 
-## 8. D8 与 D9 的明确非修订说明
+## 8. D8 / D9 术语配套修订与行为不变边界
 
-D8 不增加无人值守编辑分支。Document/Annotation 编辑、dirty Draft、IME、current serial、完整 preview 和明确确认原样保留。Agent/Automation 只能向 D8 提出 proposal；不能伪造 EditSession 或人工来源。
+R06 不给 D8 增加无人值守编辑分支，也不改变 D9 转换、模板或发布行为；但 Mandatory Intake §8.5.1 要求由**原 owner**补全受控术语元数据，因此本节取代此前“D8/D9 完全无需修订”的说法。以下仅是 D8/D9 owner 词表的规范性配套提案，尚未共同接受。
 
-D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、PublicationReceipt 或外部发布器。D10 的外部 transport/Connector 不授予 D9 worker 网络能力，D9 publication confirmation 也不授予 Standing Approval 作者写入权。
+### 8.1 D8 owner 词表追加条款
+
+D8 现有九个 concept ID、Editor Interfaces 的 12 个公开 request/response kind 与内部 `d8_prepared_edit_binding` 均保持原 wire。D8 owner 追加如下命名元数据；不改 IME、Write/Read、作者源、确认、Undo 或错误合同。
+
+共同规则：九个 concept 的 `firstFreeze` 均为已接受的 D8 r03 概念；R06 只补 naming metadata。除 `Direction Preference` 的既有方向选择器和 Edit Draft 的既有状态短语外，本代不冻结新的 CLI verb、独立 UI 控件名或 locale key；写“无”就是规范结论，不是留实现决定。没有已发布旧 alias；实现采用这些名称时，必须从 D8 editor adapter 的受控 type/kind registry、fixtures、help/locales 中原子删除任何未列出的受控 alias，禁止双读。历史证据和用户正文不迁移。
+
+| concept ID | 正式中英名；owner/layer | 定义 / 排除 | owned names 与 kind 归属 | CLI / UI / locale | 简称、alias、正反例与迁移目标 |
+| --- | --- | --- | --- | --- | --- |
+| `weftext.term.edit_session` | 编辑会话 / Edit Session；D8 UI state | 当前编辑交互会话；非 Workspace、Document identity 或提交权威 | code type `EditSession`；不拥有独立 wire kind；`d8_document_read/document` 仍是 D8 envelope 且嵌套 D2/D6 owner 数据 | CLI 无；不新增独立 UI label/locale key；界面继续显示 Source/Write/Read 模式 | D8 文档可简称 session；禁止 EditorSession wire alias；删除目标为 editor state registry 中未列受控 alias |
+| `weftext.term.edit_draft` | 编辑草稿 / Edit Draft；D8 proposal state | 非权威用户提案与 `draftSerial`；非已保存作者源 | code type `Draft`；`d8_draft_project`、`d8_draft_text_replace`、`d8_draft_write` 输入归此；响应投影另归 Draft Projection | CLI 无；UI 继续使用已冻结“草稿已保存于此设备/待提交”等状态短语；不新增 locale key | D8 上下文可简称 Draft；禁止 author draft/source alias；删除目标为 draft-state alias/fixtures/help |
+| `weftext.term.draft_projection` | 草稿投影 / Draft Projection；D8 Core projection | Core 对一次 proposal 的可丢弃投影；非 D2 payload、Locator | code/wire `d8_draft_projection`；`d8_draft_text_replaced`、`d8_draft_written` 也返回该 projection | CLI 无；无独立 UI label/locale key，renderer 只消费结构 | 可简称 projection 仅限 D8；禁止 document_snapshot alias；删除未列 projection wire/type alias |
+| `weftext.term.draft_edit_map` | 草稿编辑映射 / Draft Edit Map；D8 Core mapping | flow/path/segment/plainRegion/site 的 proposal-local 坐标；非持久身份/Locator | code type `DraftEditMap`；由 `d8_draft_projection` 内 `editMap` 承载，文本 replace/write 请求消费其 binding | CLI/UI/locale 均无新增 | 可简称 edit map；禁止 locator/parser alias；删除 editor map registry 中未列 alias |
+| `weftext.term.prepared_edit_binding` | 编辑准备绑定 / Prepared Edit Binding；D8 protected Core record | D8 immutable prepare 记录；非 D7 PreparedActionBinding、ActionSpec 或第三 ledger | type `PreparedEditBinding/1`；internal kind `d8_prepared_edit_binding`；`d8_edit_prepare/edit_prepared` 和 `d8_undo_prepare` 消费/产生其受保护结果 | CLI/UI/locale 无新增 | 简称 Prepared Edit Binding；禁止 prepared-action alias；删除未列 binding wrapper/fixture 名 |
+| `weftext.term.composition_transaction` | 组合输入事务 / Composition Transaction；D8 UI input state | IME begin/update/commit/cancel 分组；非 D6 author transaction/receipt | code type `CompositionTransaction`；无 D8 JSON kind，新旧 input events 只映射到该 UI state | CLI/UI label/locale 无新增；辅助技术沿现有输入状态说明 | D8 上下文可简称 composition；禁止 commit transaction alias；删除 UI state registry 中未列 alias |
+| `weftext.term.caret_affinity` | 光标亲和位置 / Caret Affinity；D8 layout state | 同 logical point 的 `upstream|downstream` visual side；非 source offset/Locator | code enum `CaretAffinity`；作为 layout/caret state 成员，不新增 request kind | CLI 无；无独立 label/locale key，必要辅助说明按当前 caret 状态生成 | 可简称 affinity；禁止 source-side identity alias；删除 layout enum 未列 alias |
+| `weftext.term.layout_epoch` | 布局代 / Layout Epoch；D8 layout state | 同次 shaping/wrap/hit-test 的可丢弃世代；非 result/auth/author revision | code type `LayoutEpoch`；无 public D8 JSON kind | CLI/UI/locale 无新增 | 可简称 epoch 仅限布局上下文；禁止 result epoch alias；删除 layout cache 未列 alias |
+| `weftext.term.direction_preference` | 方向偏好 / Direction Preference；D8 presentation | device/session 的 `ltr|rtl|auto` 呈现偏好；非 locale、作者方向或 Query 排序 | code type `DirectionPreference`；值来自 Direction §2 的 shell/document/session preference，不新增 author wire | CLI 无；UI 继续使用现有方向选择器和 `ltr|rtl|auto` 选择值；不冻结新的概念 locale key | 可简称 direction preference；禁止 locale/author-dir alias；删除任何把偏好写回作者 source 的受控路径 |
+
+kind 反向归属固定为：
+
+| kind | owner 概念 / 继承 owner |
+| --- | --- |
+| `d8_document_read`, `d8_document` | D8 interface envelope；内容语义继承 D2 `document_snapshot` 与 D6 source read，不创造第十个 D8 identity concept |
+| `d8_draft_project` | Edit Draft 输入；成功输出归 Draft Projection |
+| `d8_draft_projection` | Draft Projection |
+| `d8_draft_text_replace`, `d8_draft_write` | Edit Draft + Draft Edit Map |
+| `d8_draft_text_replaced`, `d8_draft_written` | Draft Projection；caret 仍为 D8 编辑返回状态 |
+| `d8_edit_prepare`, `d8_edit_prepared`, `d8_undo_prepare` | Prepared Edit Binding；嵌套 commit request 继续归 D6 |
+| `d8_editor_error` | D8 Editor Interfaces error family，不建立 durable concept ID |
+| `d8_prepared_edit_binding` | Prepared Edit Binding internal kind |
+
+`document|annotation` 继续只是 D8 intent 局部 discriminator，不是实体 kind。上述补充不增加任何 D8 wire member、error、IME 状态或自动确认路径。
+
+### 8.2 D9 owner 词表追加条款
+
+D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有行的 `firstFreeze` 为已接受 D9 r04 对应合同；R06 只补命名 metadata。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
+
+迁移删除目标代码：M-import=旧 source ID/`ImportIr`/YAML proposal decoder、fixtures、help、generated samples；M-route=自由 command/fallback/provider alias 与 route inventory；M-template=旧 attr/record/H1–H9/formula-reorder/宽泛 view 模板 parser/help/samples；M-export=自由 binding dictionary、rowHandle identity、author-snapshot export、generic author-receipt alias；M-region=D9 私有 Locator kind/opaque registry identity；M-none=没有具体旧原型，仅删除实现中未列受控 alias。历史研究文本不迁移。
+
+| concept ID | 正式中英名；owner | canonical type/profile/kind 归属 | 定义 / 排除 | CLI/UI/locale；简称/alias | 迁移目标 |
+| --- | --- | --- | --- | --- | --- |
+| `weftext.term.source-artifact` | 来源工件 / Source Artifact；D9 input control | `SourceArtifact` descriptor；`d9_probe` 等输入 | host pin 的外部 bytes；非 Node、SourceBinding、identity | 无独立 CLI/locale；UI 可显示来源工件；禁止 path/hash identity | M-import |
+| `weftext.term.import-ir` | 导入中间表示 / Import IR；D9 conversion | `ImportIR/1`, format `weftext.conversion-ir` | 有界 typed conversion IR；非第三方 AST/作者源 | 无直接 UI/locale；简称 IR 限 D9；禁旧 ImportIr alias | M-import |
+| `weftext.term.source-location` | 来源位置 / Source Location；D9 IR evidence | `SourceLocation` closed union | 输入版本内坐标；非 D3 Locator/写 target | 无 CLI/UI/locale；禁止 Locator alias | M-import |
+| `weftext.term.import-observation` | 导入观察 / Import Observation；D9 IR evidence | `Observation` exact object | origins/confidence/method 提取证据；非 provenance 授权 | 无 CLI/UI/locale；简称 observation | M-import |
+| `weftext.term.conversion-provider` | 转换提供方 / Conversion Provider；D9 host registry | Provider installed record | 经版本/依赖/许可/沙箱审查的适配器；非 Model Provider | 管理 UI 可显示签名提供方名称；不冻结 locale key/CLI verb；裸 Provider 仅 D9 上下文 | M-route |
+| `weftext.term.conversion-route` | 转换路由 / Conversion Route；D9 host registry | routeId/profileId + fixed Provider chain | 有限有序无循环流水线；非自由 fallback | 管理 UI 可显示 Route；无新 locale/CLI | M-route |
+| `weftext.term.import-mapping` | 导入映射 / Import Mapping；D9 Core mapping | `ImportMapping/1` | Core 明确结构/字段转换选择；非 Query/Action | 分析 UI 可显示映射；无独立 locale key/CLI | M-import |
+| `weftext.term.mapping-proposal` | 映射提案 / Mapping Proposal；D9 proposal | `d9_import_analysis` 中固定 proposal 语义 | prepare 前完整提案；非 author plan/patch | UI 通过 import analysis 展示；无独立 locale/CLI | M-import |
+| `weftext.term.import-job` | 导入作业 / Import Job；D9+D6 control | D6 持久 job/control record；D9 kinds `d9_import_*` 观察其状态 | 固定有限 groups/batches；非第二 ledger/全 job 原子事务 | UI/CLI 只通过既有 import semantic entry；无独立 locale key | M-import |
+| `weftext.term.coupling-group` | 耦合组 / Coupling Group；D9 mapping | ConversionInput/prepare 内 group | 不可拆作者组；非 UI page/worker process | 无 CLI/UI/locale | M-import |
+| `weftext.term.import-batch` | 导入批次 / Import Batch；D9 mapping | 一个原 D3/D6 atomic request | 有限提交批次；非任意 1000 条切块 | UI 可显示批次进度但无新 locale key | M-import |
+| `weftext.term.conversion-input` | 转换输入证据 / Conversion Input；D9 控制域 | `ConversionInput/1` ZIP/profile | 绑定原始输入、IR、映射、损失和路由；非身份或作者源 | 无直接 UI/CLI/locale | M-import |
+| `weftext.term.worker-invocation` | Worker 调用记录 / Worker Invocation；D9 Worker 控制域 | `WorkerInvocation/1` | 固定作业、步骤、路由、输入、选项和预算；没有路径或命令字段 | 无 UI/CLI/locale；Worker 不得自报授权 | M-route |
+| `weftext.term.template-recipe` | 模板配方 / Template Recipe；D9 template | `TemplateRecipe/1`, format `weftext.node-template` | 对 D2 Template 的一次 fresh construction 配方；非第二 Template identity | Template UI 可显示配方；无独立 locale/CLI | M-template |
+| `weftext.term.template-construction-input` | 模板构造输入 / Template Construction Input；D9 control | `TemplateConstructionInput/1` | 固定 pins/recipe/params/resource/loss 证据；非 author source | 无直接 UI/CLI/locale | M-template |
+| `weftext.term.office-template` | Office 模板 / Office Template；D9 template | 普通 Office template profile | 普通文本模板 bytes；非宏/脚本 | UI 可称 Office 模板；无固定 locale key/CLI | M-template |
+| `weftext.term.template-placeholder` | 模板占位符 / Template Placeholder；D9 template | Templates token/binding contract | 值插入位置；非 content control/named range | 用户可见 placeholder 文本；无独立 locale key | M-template |
+| `weftext.term.style-directive` | 样式指令 / Style Directive；D9 template | Templates style directive | 可见 style 样板；非执行命令 | UI 可预览，不冻结 CLI/locale | M-template |
+| `weftext.term.repeat-band` | 重复带 / Repeat Band；D9 template | 单完整 row/column repeat contract | dataset 重复结构；非 Excel Table 增强层 | UI 可显示重复区域；无独立 locale/CLI | M-template |
+| `weftext.term.render-snapshot` | 渲染快照 / Render Snapshot；D9 export | Templates `RenderSnapshot` finite union | 已授权显式渲染投影；非 author snapshot/import | 无直接 CLI/locale；inspect UI 可展示 | M-export |
+| `weftext.term.d7-result-pin` | D7 结果固定证据 / D7 Result Pin；D9 control over D7 | `D7ResultPin` 内部 pin；嵌套 `TerminalSchema`/V 继续归 D7 | 固定完整 D7 终态结果/epoch/auth/cut；非 rowHandle identity | 无 UI/CLI/locale；禁止 D7 result identity alias | M-export |
+| `weftext.term.export-plan` | 导出计划 / Export Plan；D9 export control | `ExportPlan/1` | 当前输出不可变准备记录；非 D6 PreparedIntent/author ledger | export prepare/inspect UI 消费；无独立 locale key | M-export |
+| `weftext.term.export-input-catalog` | 导出输入目录 / Export Input Catalog；D9 export | `ExportInputCatalog/1` | Plan 的完整受权输入目录；非作者 source | 无独立 UI/CLI/locale | M-export |
+| `weftext.term.export-content-selection` | 导出内容选择 / Export Content Selection；D9 export | `ExportContentSelection/1` | body/bibliography 明确消费选择；非授权 grant | inspect UI 显示选择；无 locale key | M-export |
+| `weftext.term.export-projection` | 导出投影 / Export Projection；D9 export | `ExportProjection/1` | bindings/datasets 的有限 Core 投影；非自由 dictionary | 无独立 locale/CLI | M-export |
+| `weftext.term.export-input-location` | 导出输入位置 / Export Input Location；D9 evidence | `input|source_range|annotation|query_cell|query_scalar|template_range` closed union | Plan 内证据位置；非 Locator/identity | 无 UI/CLI/locale | M-export |
+| `weftext.term.export-loss-location` | 导出损失位置 / Export Loss Location；D9 evidence | ExportInputLocation + `binding|dataset_cell|block` | 同 Plan 的损失定位；非跨 Plan 地址 | 无 UI/CLI/locale | M-export |
+| `weftext.term.export-loss-report` | 导出损失报告 / Export Loss Report；D9 export | `ExportLossReport/1`, format `weftext.export-loss` | 固定提案损失报告；非 import LossReport | inspect UI 显示完整报告；无独立 locale key | M-export |
+| `weftext.term.export-blocks` | 导出块投影 / Export Blocks；D9 export compiler | internal `ExportBlocks` | D2 已知结构的只读编译结果；非新 author block ID | 无 UI/CLI/locale | M-export |
+| `weftext.term.staged-output` | 暂存输出 / Staged Output；D9 publication control | validated staging record | 未发布完整输出；非 author revision | publish/state UI 消费；无独立 locale key | M-export |
+| `weftext.term.publication-receipt` | 外部发布回执 / Publication Receipt；D9 publication | `PublicationReceipt/1` | 外部文件发布事实，只绑定 plan/output/destination | UI 可显示“已发布”；无独立 locale key；**禁止 D3/D6 author receipt alias** | M-export |
+| `weftext.term.import-loss-report` | 导入损失报告 / Import Loss Report；D9 import/template | `LossReport/1` | 导入/Node Template 固定损失选择；非 export report | analysis UI 显示；无独立 locale key | M-import |
+| `weftext.term.import-loss-issue` | 导入问题 / Import Loss Issue；D9 IR | IR issue exact object | 原始观察问题；非安全批准或完整性证明 | analysis UI 可显示 message；无独立 locale key | M-import |
+| `weftext.term.template-loss-location` | 模板损失位置 / Template Loss Location；D9 模板域 | `template_source|template_annotation` union | 模板输入固定证据或明确省略证据；非 D3 Locator | 无 UI/CLI/locale | M-template |
+| `weftext.term.image-physical-size` | 图片物理尺寸 / Image Physical Size；D9 image profile | profile `image_physical_size/1` | 可验证源物理事实/量化；非宿主 DPI 猜测 | inspect UI 可显示尺寸；无独立 locale key | M-none |
+| `weftext.term.image-size-selection` | 图片尺寸选择 / Image Size Selection；D9 export | `imageSizes` Plan member | 用户冻结的布局选择；非源物理事实 | export UI 可显示选择；无独立 locale key | M-none |
+| `weftext.term.region-body` | 区域几何体 / Region Body；D9 geometry | `RegionBody` + profile `d9rg1` | 非身份几何事实；非完整 Locator | 无 UI/CLI/locale | M-region |
+
+继承 owner 必须显式保持：
+
+- D2 `Template` meta-kind 仍拥有 Node Template 的作者身份；D9 只拥有 `TemplateRecipe/1`/construction evidence。
+- D7 `TerminalSchema`、V 值代数和 `PreparedActionBinding/2` 继续归 D7；`D7ResultPin` 只 pin 这些既有事实。
+- D3 `SourceBinding`、`ForeignIdentityKey`、`OriginBinding`、`ResourceRegionLocator/l1` 与 D3/D6 author receipt 继续归原 owner。D9 的 `RegionBody/d9rg1` 只是内层几何，`PublicationReceipt/1` 只能表示外部发布。
+- D6 `SourceVersion`、`BudgetBinding`、Token 与 job/commit 权威不改。
+
+D9 public kind 的反向归属还包括以下五组：
+
+- `d9_probe|d9_probe_result` → 来源工件与转换路由探测；
+- `d9_import_analyze|d9_import_analysis|d9_import_choose|d9_import_next|d9_import_prepare|d9_import_prepared|d9_import_state|d9_import_state_result` → 导入中间表示、映射提案与导入作业；
+- `d9_template_analyze` → 模板配方与模板构造输入；
+- `d9_convert|d9_conversion_started|d9_conversion_state|d9_conversion_state_result|d9_conversion_cancel` → 转换路由、Worker 调用和作业控制；
+- `d9_error` → D9 error family，不建立身份 concept。
+
+未知 kind、profile 或 version 仍拒绝。
+
+这些 D8/D9 词表补充只完成命名门，不改变现有 wire、身份、权限、作者提交、IME、模板、转换、worker、导出或发布语义。
 
 ## 9. 激活与版本兼容
 
@@ -333,5 +429,7 @@ D9 不修改 Provider/Route、worker sandbox、ExportPlan、LossReport、Publica
 19. profile/2 family 在软件升级后不得自动获得 d10_control_self；profile/3 只影响显式 issuer update 后的新 family，既有 Workspace 只能由当前 policy_admin 显式授予。
 20. stop 与新 Run admission、D6 final author commit 的两种先后都必须只有一个线性化结果；stop 后仍允许受权 authoritative abort、cost settlement 和 evidence retention。
 21. same stable Workspace-control request 已成功但响应丢失，随后对象 revision 改变；当前披露授权通过后必须重放旧结果，不能重复 mutation，也不能因 current revision 改变误拒绝历史成功。
+22. D8 九 concept 与十三 kind 必须能从 owner lexicon 正反向唯一映射；任何 unlisted CLI/locale/wire alias 失败，且不得因此改变 IME/Write/Read/confirm/Undo。
+23. D9 grouped lexicon 必须拆出稳定 concept ID；`PublicationReceipt/1` 只能映射外部发布事实，`D7ResultPin` 的 nested TerminalSchema/V 仍归 D7，PreparedActionBinding/SourceBinding/OriginBinding 等继承 owner 不得被 D9 重注册。
 
 这些是作者修订后的审查靶点，不表示前两批独立问题已经关闭。只有后续独立复审才能改变其审查状态。

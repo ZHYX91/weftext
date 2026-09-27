@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
 
 ## 1. 实现切片与状态所有者
 
@@ -341,6 +341,10 @@ TERMINOLOGY §13 的逐概念结构化映射是当前 D10 命名权威，不是�
 B10-01 的实现负向门：Adopt 代码路径只允许 `adopt_*` convention；关联绑定值使用 D3 既有 `OriginBinding` / `origin_binding`。受控正向源码、API/schema、fixture 和 terminology registry 中不得出现 `adoption_binding`，scanner 不增加豁免。
 
 TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 capability ID 和四个第一方 module/package/schema 映射。候选代码 symbol/namespace 和 locale key 只能作为尚未实现的 mapping 验证，不能被 CI “存在字符串”冒充实际代码或资源实现。PackageId、D4 SemanticNamespaceId、D4 namespace ownerId、FacetId 与 module ContributionId 必须按各自 owner 分型，不允许因为字符串相同合并。
+
+R06 另增加两组**原 owner**命名门。D8 九个 concept 与十三个 kind 必须逐项消费 UPSTREAM-AMENDMENTS §8.1：实现不得新增 D10 alias、CLI verb、locale key 或把 EditSession/Draft/PreparedEditBinding 重新命名成 D10 概念。D9 的 grouped lexicon 必须逐项消费 §8.2 的 stable concept IDs；`PublicationReceipt/1` 只能进入外部发布控制面，`D7ResultPin` 内部的 TerminalSchema/V 仍由 D7 owner 解码，D2 Template、D3 SourceBinding/ForeignIdentityKey/OriginBinding/ResourceRegionLocator、D7 PreparedActionBinding/2 与 D3/D6 author receipt 都不得被 D9 重注册。
+
+这些 owner 词表补充只改变术语 registry/检查，不改变 D8/D9 wire 或产品能力。实现若尚无对应 UI/CLI/locale，本代“无新增”就是通过条件；不能为了通过命名门凭空创建资源。
 ## 14. 测试与证据分层
 
 | 层 | 能证明 | 不能证明 |
@@ -397,7 +401,10 @@ TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 cap
 37. profile/2 family 升级不获得 `d10_control_self`；profile/3 只作用 explicit issuer update 后新 family；
 38. per-Contribution dependency：connector unavailable 时同包 schema/template/pack 不受牵连；
 39. Calendar、Library、People、Organizations 的 D10 PackageId→module→schema 映射与 D4 namespace owner/Facet 保持类型分离，并验证第三方同名包不能冒充第一方 owner；
-40. design accepted 但 release/surface/policy/version/health 任一门不满足时仍返回真实 D1 unavailable reason。
+40. design accepted 但 release/surface/policy/version/health 任一门不满足时仍返回真实 D1 unavailable reason；
+41. D8 九 concept / 十三 kind 的 owner-lexicon 正反向映射；不存在额外 CLI/locale/wire alias，且命名检查不能改变 IME、Write/Read、confirm、Undo；
+42. D9 grouped terms 的 stable concept ID 与继承 owner：`PublicationReceipt/1` 不能成为 author receipt，`D7ResultPin` 不能取得 TerminalSchema/V owner，PreparedActionBinding/SourceBinding/OriginBinding/ResourceRegionLocator 不得重注册；
+43. U12 三分支：当前 ICS profile 返回 unsupported 且零作者效果；无 D3 binding 的普通受支持文件 profile 两次独立明确导入各 fresh、same request retry 精确重放；D3 binding 路径逐项验证 never_bound/active_live/active_non_live/retired/conflict/miss，UID 不能脱离 SourceBinding 决策。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。
 ## 16. 完成门
@@ -405,9 +412,9 @@ TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 cap
 作者实现计划只有在以下条件都明确记录后才可交独立评审：
 
 - CANDIDATE、CONTROL-CONTRACT、TERMINOLOGY、SCENARIO-DISPOSITIONS、UPSTREAM-AMENDMENTS 与本文互相一致；
-- TERMINOLOGY §13–§14 对全部当前 D10 受控概念逐项完成 Intake §8.5.1 的 13 项 mapping，继承名称引用原 owner，没有 TODO/“留实现决定”占位；
+- TERMINOLOGY §13–§15 对 D10 自有与上游引用概念完成 Intake §8.5.1 映射；D8/D9 原 owner 的完整补充位于 UPSTREAM-AMENDMENTS §8，D10 不重复取得 owner；没有 TODO/“留实现决定”占位；
 - 当前作者输入覆盖保持 49/49；历史 U 的 48/48 记录保持其历史上下文；
-- D6/D7 amendment 明确为未激活提案；
+- D6/D7/D8/D9/D3 配套 amendment 都明确为未激活提案；
 - 没有把 unsupported/deferred 写成 available；
 - 自动 author commit 只限 single_field_member profile；
 - External effect unknown、cost uncertain、audit failure、cancel/planned 恢复均有单一规范结论；

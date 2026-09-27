@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Terminology and Naming
 
-revision: D10-r05-unified-control-contract-2026-09-28; status: candidate. This lexicon defines only new D10 control/extension concepts and consumption boundaries for D1-D9; it does not reassign any upstream-owned concept. Natural language, historical material, test descriptions, and third-party product vocabulary do not automatically become controlled names.
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate. This lexicon defines only new D10 control/extension concepts and consumption boundaries for D1-D9; it does not reassign any upstream-owned concept. Natural language, historical material, test descriptions, and third-party product vocabulary do not automatically become controlled names.
 
 ## 1. Naming principles
 
@@ -284,3 +284,67 @@ Common rule: PackageId below is D10 package identity, not D4 SemanticNamespaceId
 | `weftext.term.deployment-external-manage-capability` | 部署外部能力管理 | Deployment External Management Capability | Host trust/account/secret/pricing/grant management | D10 host; D1 discovery/availability | Grants no Workspace author read/write | `deployment.external.manage` | `DeploymentExternalManageCapability`; `deployment_external_manage` | candidate admin label; locale not implemented | none | issuer-admin alias forbidden | Positive: H manages secret; negative: Workspace admin changes pricing | R05 candidate, not product-released |
 | weftext.term.automation-stop-capability | 自动化停止能力 | Automation Stop Capability | Set irreversible stop latch on authorized automation/run | D10 safety; D1 discovery/availability | Not rollback, cancellation, or settlement | automation.stop | AutomationStopCapability; automation_stop | label "Emergency Stop"; locale not implemented | stop | stop=rollback forbidden | Positive: stop works after ordinary budget exhaustion; negative: stop deletes evidence | R05 candidate, not product-released |
 | weftext.term.automation-author-submit-capability | 自动化作者提交能力 | Automation Author Submit Capability | First generation allows only single_field_member Standing Approval into D6 author submit | D10 profile semantics + D6 submit; D1 discovery/availability | Not generic author-write, D8 Draft, or create/delete | automation.author_submit | AutomationAuthorSubmitCapability; automation_author_submit | candidate label "Automatic Single-field Submit"; locale not implemented | none | anonymous old capability profile forbidden | Positive: all D1 gates pass and D6 closed error is implemented; negative: design acceptance alone means available | R05 candidate, not product-released |
+
+## 15. R06 upstream-owner terminology references
+
+R06 does not re-register D8/D9 names under D10 ownership. UPSTREAM-AMENDMENTS §8 is the companion lexicon proposal by the original D8/D9 owners; this section only freezes reverse references used by D10.
+
+The D8-owned concepts are exactly:
+
+```text
+weftext.term.edit_session
+weftext.term.edit_draft
+weftext.term.draft_projection
+weftext.term.draft_edit_map
+weftext.term.prepared_edit_binding
+weftext.term.composition_transaction
+weftext.term.caret_affinity
+weftext.term.layout_epoch
+weftext.term.direction_preference
+```
+
+A Draft reference in D10 must explicitly mean D8 `weftext.term.edit_draft`; Prepared Edit Binding means D8 `weftext.term.prepared_edit_binding`; Direction Preference means D8 `weftext.term.direction_preference`. Ownership of the 13 D8 kinds is determined by the owner table in UPSTREAM-AMENDMENTS §8.1 and D10 creates no alias.
+
+The D9-owned new/split concepts are exactly:
+
+```text
+weftext.term.source-artifact
+weftext.term.import-ir
+weftext.term.source-location
+weftext.term.import-observation
+weftext.term.conversion-provider
+weftext.term.conversion-route
+weftext.term.import-mapping
+weftext.term.mapping-proposal
+weftext.term.import-job
+weftext.term.coupling-group
+weftext.term.import-batch
+weftext.term.conversion-input
+weftext.term.worker-invocation
+weftext.term.template-recipe
+weftext.term.template-construction-input
+weftext.term.office-template
+weftext.term.template-placeholder
+weftext.term.style-directive
+weftext.term.repeat-band
+weftext.term.render-snapshot
+weftext.term.d7-result-pin
+weftext.term.export-plan
+weftext.term.export-input-catalog
+weftext.term.export-content-selection
+weftext.term.export-projection
+weftext.term.export-input-location
+weftext.term.export-loss-location
+weftext.term.export-loss-report
+weftext.term.export-blocks
+weftext.term.staged-output
+weftext.term.publication-receipt
+weftext.term.import-loss-report
+weftext.term.import-loss-issue
+weftext.term.template-loss-location
+weftext.term.image-physical-size
+weftext.term.image-size-selection
+weftext.term.region-body
+```
+
+D7 TerminalSchema/V and `PreparedActionBinding/2`, D3 `SourceBinding`/`ForeignIdentityKey`/`OriginBinding`/`ResourceRegionLocator/l1`, the D2 Template meta-kind, and D3/D6 author receipts remain owned by their original specifications. In particular, `weftext.term.publication-receipt` denotes only D9 external-publication fact and can never alias an author receipt; `weftext.term.d7-result-pin` only pins existing D7 results and acquires no schema/value ownership.

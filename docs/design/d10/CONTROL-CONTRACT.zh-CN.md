@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 控制与管理合同
 
-revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate author revision，等待完整独立联合终审。本文件冻结 R05 所需的 D10 管理、授权、幂等、恢复、费用、停止和 package/contribution 控制语义。它不修改固定上游 S；所有 D6/D7 变更只在 UPSTREAM-AMENDMENTS 中作为未激活提案。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate author revision，等待完整独立联合终审。本文件冻结 R05 所需的 D10 管理、授权、幂等、恢复、费用、停止和 package/contribution 控制语义。它不修改固定上游 S；所有 D6/D7 变更只在 UPSTREAM-AMENDMENTS 中作为未激活提案。
 
 ## 1. 权威、适用范围与错误边界
 
@@ -76,7 +76,7 @@ control id 与 incarnation 永不重用。retire、archive、revoke、close 或�
 
 CurrencyCode 是 exact 三位 ASCII A-Z。D10 不执行隐式外汇换算。
 
-本文其余基础标量沿用现有 closed JSON 语义：`Token` 是 D6 §1 的非空 opaque token；`Text` 是 Unicode scalar string；`Bytes` 是受相应入口字节预算约束的 byte sequence；`Boolean` 只接受 JSON true/false；`Sha256` 是 `sha256:` 加 64 位 lowercase hex；`HostPrincipal` 是受信 host authentication 映射得到的 `Token`，不是请求字段。`Ed25519PublicKey` 与 `Ed25519Signature` 只在受信 package/trust adapter 中出现，编码格式必须由该 adapter 的已接纳 profile 固定，普通 control caller 不能自报已验证。
+本文其余基础标量沿用现有 closed JSON 语义：`Token` 是 D6 §1 的非空 opaque token；`Text` 是 Unicode scalar string；`Bytes` 是受相应入口字节预算约束的 byte sequence；`Boolean` 只接受 JSON true/false；`Sha256` 是 `sha256:` 加 64 位 lowercase hex；`HostPrincipal` 是受信 host authentication 映射得到的 `Token`。当前主体身份永远不能由请求自报；但已经通过 H 授权的管理操作可以在 policy、reconciler 或 ResourceUseGrant 的**目标主体字段**中填写另一个 `HostPrincipal`，这表示被管理的受权对象，不表示当前主体冒充该目标主体。`Ed25519PublicKey` 与 `Ed25519Signature` 只在受信 package/trust adapter 中出现，编码格式必须由该 adapter 的已接纳 profile 固定，普通 control caller 不能自报已验证。
 
 受控 ASCII token 语法：
 
@@ -181,7 +181,7 @@ PackageId/1 与 D4 SemanticNamespaceId 是不同类型，即使字符串可能�
 ContributionKind 闭集为：
 贡献类型闭集为：`module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`。
 
-这组 kind 覆盖 Mandatory Intake 已选的 module、Profile/schema、View、Action、Template、Preset、Pack、Connector/Adapter 以及 D9 import/export/conversion 和 D10 tool/model/runtime 贡献；它不表示所有 kind 已产品实现。
+这组 kind 覆盖 Mandatory Intake 已选的 module、Profile/schema、View、Action、Template、Preset、Pack、Connector/Adapter，以及 D9 import/export/conversion 和 D10 tool/model/connector 贡献。`runtime` 不是独立 `ContributionKind`；它只表示上述可执行 contribution 所使用的 D10 运行基础设施。kind 列表不表示所有类别已产品实现。
 
     ContributionDependency/1 = {
       role:"primary_parent" | "additional",
@@ -197,7 +197,7 @@ dependency 是具体 dependent Contribution 的成员，不存在 package 级 am
 
 一个 connector contribution 不可用只使该 contribution inactive；同 package 的 template、schema、pack 或 view 只按自己的依赖和能力计算。定义历史、Contribution activation、UI visibility 继续保持三个独立轴。
 
-每个 kind 的 descriptor 由既有 owner 的闭合合同验证：schema 只引用 D4 Registry 中已有的 namespace/Facet bindings；view/action 消费 D7 closed descriptors；template/preset/importer/exporter/conversion 消费 D9 合同；tool/model/connector/runtime 由 D10；module 只组织产品贡献，不拥有作者事实。
+每个 kind 的 descriptor 由既有 owner 的闭合合同验证：schema 只引用 D4 Registry 中已有的 namespace/Facet bindings；view/action 消费 D7 closed descriptors；template/preset/importer/exporter/conversion 消费 D9 合同；tool/model/connector 的 descriptor 与运行基础设施由 D10；module 只组织产品贡献，不拥有作者事实。
 
 ## 5. 四个第一方 module 的唯一 package 映射
 
@@ -422,18 +422,32 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
 
 parameters 必须由该 contribution 的 active ToolValueProfile/1 输入类型验证。recurrence selector 只定位同一 revision 重新绑定的 D4 recurrence source，不成为 durable EntityRef。
 
+    LeaseReadGrant/1 = {
+      scope:<exact D6 Policy/2 grant.scope from S D6 Control §4>,
+      capabilities:[LeaseReadCapability/1]
+    }
+
+    LeaseReadCapability/1 =
+      {kind:"field_read", fieldIds:[D4.FieldId]}
+    | {kind:
+        "workspace_state" | "entity_state" | "locator_state" |
+        "source_read" | "resource_read" | "annotation_read" |
+        "source_envelope_state"}
+
+`LeaseReadGrant/1` 是 D10 的减权投影，不是新的 D6 grant wire。它逐字消费 S D6 Control §4 的 scope/capability decoder 和 scope 适用矩阵：例如 `workspace_state` 只允许 workspace scope，`entity_state|locator_state|source_envelope_state` 可使用原 workspace/ref_set 规则，Field read 使用 D6 原 `field_read` 形状。它禁止 write、admin、repair、audit、export、`commit_sequence_state` 与 `d10_control_self`，因此只能收窄调用主体已经拥有的读取/状态观察资格。
+
     LeaseSpec/1 = {
       notBefore:D4.zoned_instant,
       notAfter:D4.zoned_instant,
       maxRuns:Counter,
       activationBinding:ActivationBinding/1,
       capabilityAllowlist:[D1.CapabilityId],
-      readGrants:[D6 closed read capability request],
+      readGrants:[LeaseReadGrant/1],
       resourceGrants:[Binding<grant>/1],
       budgets:BudgetCaps/1
     }
 
-readGrants 只能使用原 D6 读取/状态观察 capability，不得包含 policy_admin、registry_admin、binding_admin、repair 或 d10_control_self。notBefore < notAfter，maxRuns 正且有限。
+`readGrants` 只接受上面的 `LeaseReadGrant/1`；实际授权仍由当前 D6 Policy 按原 deny precedence 计算，Lease 不能增加权限。`notBefore < notAfter`，`maxRuns` 正且有限。
 
     StandingApprovalSpec/1 = {
       notBefore:D4.zoned_instant,
@@ -443,7 +457,7 @@ readGrants 只能使用原 D6 读取/状态观察 capability，不得包含 poli
       costGrants:[Binding<grant>/1]
     }
 
-`SingleFieldMemberRule/1` 完全承接 C §14：动作固定为 `set_field_member`；目标限制为一个 owner/Field 下唯一 Entry 的单个 member；值类型闭集为 `text|bool|int64|integer|decimal`，约束闭集为 `any|enum|numeric_range`，并保留 raw no-op 分支。它不扩展到 create、delete、Facet、native table 或 bulk 操作。
+`SingleFieldMemberRule/1` 是 Candidate §14 `StandingApprovalEnvelope/1.rule` 的受控 D10 内部投影，不是独立 D6/D7 wire。它完全承接该节：动作固定为 `set_field_member`；目标限制为一个 owner/Field 下唯一 Entry 的单个 member；值类型闭集为 `text|bool|int64|integer|decimal`，约束闭集为 `any|enum|numeric_range`，并保留 raw no-op 分支。任何变化都必须先修 Candidate §14，再同步本投影；它不扩展到 create、delete、Facet、native table 或 bulk 操作。
 
     ConsentSpec/1 =
       {kind:"planned",

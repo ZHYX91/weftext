@@ -8,13 +8,13 @@ translation_status: synced
 
 # D10 Independent-Review Issue Dispositions
 
-revision: D10-r05-unified-control-contract-2026-09-28; status: author revision record. All independent findings remain open pending a complete joint final review after R05 is fixed.
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: author revision record. All independent findings remain open pending a complete joint final review after R05 is fixed.
 
 ## 1. Review-coverage boundary
 
-The old fixed candidate is C=`35fab950dabedfb92c9f12858701be8afe6faa74`, and the current fixed input is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`. Formal independent-final-review coverage for old C is **16/16 candidate files** and **28/49 upstream inputs**. The formal ledger remains **1 P1 + 5 P2 open**, and the D3 batch awaits its formal report. The temporary RelationDag judgment was withdrawn and causes no rename or added disposition here.
+The old fixed candidate remains C=`35fab950dabedfb92c9f12858701be8afe6faa74`, with fixed input S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`. Formal independent-final-review coverage for old C is **16/16 candidate files** and **44/49 upstream inputs**; the final five D2/D5 inputs are still being read. The formal ledger is **1 P1 + 8 P2 open**. Those coverage numbers, findings, and interim judgments belong only to old C and cannot be carried forward as R06 having been read, accepted, or closed.
 
-Those coverage numbers, findings, and interim judgments belong only to old C and cannot be carried forward as R05 having been read, accepted, or closed. R05 changes foundational authorization, control transactions, cost recovery, bootstrap/stop, public control wire, and package/module mapping, so a new fixed R05 candidate requires a fresh complete independent joint final review.
+R06 inherits the R05 authorization/transaction/cost/stop/package control revisions and adds original-owner D8/D9 terminology companions, the U12 import preconditions, and bounded consistency cleanup. Once fixed it still requires a fresh complete joint final review as a new candidate.
 
 Rows below record only the author's technical disposition and landing points. “Author revised” never means independently closed.
 
@@ -41,6 +41,10 @@ Rows below record only the author's technical disposition and landing points. �
 | B04-P2-02 | P2 | D01 anniversary/birthday bilingual drift; F06 English omitted the response boundary | R05 keeps birthday, anniversary, and holiday concrete rule algorithms in both D01 languages and fixes F06 in both languages to the three durable-intent→send→response fault boundaries | SCENARIO D01/F06 | Author revised; independent finding remains open |
 | B04-P2-03 | P2 | TASK / Implementation current completion gate still said 48/48 | R05 makes current author coverage uniformly S 49/49; TASK, START, and Implementation current completion gates use 49/49 while old-U 48/48 remains only historical reading context | TASK; START; IMPLEMENTATION §16 | Author revised; independent finding remains open |
 | B05-P2-01 | P2 | U02 presented terminal-occurrence/original-Run recovery as explicit D1 §4.1/§4.4 text | R05 U02 separates direct upstream from D10-derived evidence: D1 §4.1/§4.4 supports only the shared-Core/product-surface boundary, while terminal-occurrence/original-Run recovery is explicitly Candidate §13/§20 + Implementation §6 | SCENARIO U02 | Author revised; independent finding remains open |
+
+| B08-P2-01 | P2 | D8's nine concepts/thirteen kinds lacked per-concept CLI/UI/locale or explicit no-new-surface decisions, kind→concept ownership, alias rules, and migration/deletion targets | R06 adds complete naming metadata and reverse attribution for all nine concepts/thirteen kinds under D8 ownership in UPSTREAM-AMENDMENTS §8.1; concepts with no new UI/CLI/locale say so explicitly; D10 TERMINOLOGY §15 only references the owner and creates no alias; D8 wire, IME, Write/Read, confirm, and Undo remain unchanged | UPSTREAM-AMENDMENTS §8.1; TERMINOLOGY §15; SCENARIO P18; IMPLEMENTATION §13/§15 | Author revised; independent finding remains open |
+| B09-P2-01 | P2 | D9 grouped lexicon/eight D9 sources lacked stable IDs, complete bilingual names, wire/type/profile ownership, surface/alias decisions, and migration targets for new concepts | R06 splits stable D9-owned concept IDs for SourceArtifact/ImportIR/Provider/Route/Template/RenderSnapshot/D7ResultPin/ExportPlan/PublicationReceipt and related terms, with per-concept existing-or-no-new surface decisions; inherited D2/D3/D6/D7 names keep their owners; PublicationReceipt is external-publication only | UPSTREAM-AMENDMENTS §8.2; TERMINOLOGY §15; SCENARIO P19; IMPLEMENTATION §13/§15 | Author revised; independent finding remains open |
+| B09-P2-02 | P2 | U12's “same UID twice ordinary import fresh” omitted current ICS unavailability and the D3 SourceBinding/ForeignIdentityKey state matrix | R06 makes U12 three-branched: current ICS conversion unavailable with zero author effect; a supported ordinary-file profile without D3 binding semantics gives fresh identities for two separate explicit imports while same-request retry replays exactly; once D3 binding semantics apply, use never_bound/active_live/active_non_live/retired/conflict/miss plus explicit-adopt rules and never decide from UID without SourceBinding | SCENARIO U12; IMPLEMENTATION §15 | Author revised; independent finding remains open |
 
 ## 3. Unchanged boundaries
 

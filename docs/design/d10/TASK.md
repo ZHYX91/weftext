@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision R05. The author revision is formed and awaits a new complete independent joint final review of a fixed candidate. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision R06. The author revision is formed and awaits a new complete independent joint final review of a fixed candidate. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
@@ -80,6 +80,6 @@ These remain candidate amendments and do not change current upstream authority b
 
 After the complete candidate is fixed in a commit, hand it to a fresh independent Chat GPT-6 Pro for review from scratch. Author self-review is not an independent Gate.
 
-Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`; formal coverage is currently 16/16 candidate files and 28/49 upstream inputs, with 1 P1 + 5 P2 formally open and the D3 batch awaiting its formal report. None of that coverage or verdict transfers to R05 as read, accepted, or closed. Once R05 is fixed it requires a fresh complete joint final review, still requiring a complete verdict, P0/P1=0, and closure of terminology, scenarios, dependencies, evidence, and required amendments.
+Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`; formal coverage is currently 16/16 candidate files and 44/49 upstream inputs, with 1 P1 + 8 P2 formally open; the final five D2/D5 inputs are still being independently read. None of that coverage or verdict transfers to R06 as read, accepted, or closed. Once R06 is fixed it requires a fresh complete joint final review, still requiring a complete verdict, P0/P1=0, and closure of terminology, scenarios, dependencies, evidence, and required amendments.
 
 Finite simulations, models, or CI do not establish product support. Real Core, durable fault, OS sandbox, real protocol-provider, UI/device, and release evidence remain separated by the Implementation Impact document, with unfinished items explicitly pending.

@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 场景裁决
 
-revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
 
 执行模式列只有四类：automatic 表示在本文 closed 规则下允许无需逐次人工确认继续；interactive 表示可以准备但必须逐次确认；unsupported 表示本代明确不可用；deferred 表示由具名 所有者 的未来合同冻结后才能开放。
 
@@ -28,7 +28,7 @@ revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本
 | D10-U09 | Intake 原要求：§9 第9、15项 | 各 surface 对同 capability 自己猜是否可用 | reject | unsupported | D1 capability 为唯一产品可用性；D10 只提供 downstream facts | Desktop/CLI/Server/WebUI 相同 reason precedence |
 | D10-U10 | Intake 原要求：§9 第21项 | 模式定义、connector、运行时 状态 合并为一个 提供方 状态 | reject | unsupported | D4 Registry、D10 Catalog、运行时 health 三域分离 | 模式定义 可用/运行时 不可用 与反向组合  |
 | D10-U11 | Intake 原要求：§9 第28项 | holiday/workday 提供方 变更后旧派生结果继续有效 | revise | automatic | rule/贡献项 代际 进入依赖；失效 reset/recompute | 旧 结果/缓存/automation 调度 不能混 代际 |
-| D10-U12 | Intake 原要求：§9 第32项 | ICS UID/RECURRENCE-ID 自动成为 D3 身份/upsert key | reject | unsupported | 只经已冻结 SourceBinding/OriginBinding 适配器 才可 lookup/upsert | 相同 UID 两次 ordinary import 保持 fresh，未开放 sync 明确 不可用 |
+| D10-U12 | Intake 原要求：§9 第32项；上游 D9 Main §1 / Acceptance S32 + D3 §3.1 | 把“当前 ICS 转换未开放”“无绑定普通文件导入”“D3 SourceBinding/ForeignIdentityKey 已绑定重导入”混成同一 fresh/upsert 规则 | revise | deferred | 三分支：① 当前 ICS 生产转换 profile unavailable，不能产生该转换作者效果或 OriginBinding；② 已支持且**没有 D3 binding 语义**的普通文件 profile，两次独立明确导入各 fresh，唯有同 canonical request 的未知结果重试精确重放；③ 一旦进入 D3 SourceBinding/ForeignIdentityKey 语义，严格按 `initial_import|adopt` 状态矩阵：never_bound 才 fresh，active_live 不 fresh，active_non_live 拒绝，retired 需新的显式 adopt，conflict 拒绝，ordinary re-import miss 只报 missing，绝不自动转 initial_import/adopt | ICS 返回 unsupported_profile 且零作者效果；普通无绑定 profile 两次独立 import 得不同 fresh identity、same-request retry 不重复；D3 never_bound/active_live/active_non_live/retired/conflict/miss 全矩阵，UID 不能脱离 SourceBinding 独断 |
 | D10-U13 | Intake 原要求：§9 第33项 | subscribe、sync、copy、adopt 混成同一个“同步”动作 | reject | unsupported | 每个 authority/效果 走其 所有者 closed protocol | 不同 intent 的 请求/回执/approval 不互用 |
 | D10-U14 | Intake 原要求：§9 第36项 | package 获得 whole-package 工作区权限 | reject | unsupported | 权限按 Contribution，五类授权维度分开 | 同包纯数据可用、网络 connector denied 的组合 |
 | D10-U15 | Intake 原要求：§9 第37项 | Settings/Marketplace UI 状态成为 capability authority | reject | unsupported | UI 只是 Activation/Policy/Catalog 的投影 | 隐藏/显示按钮不改变 Core eligibility |
@@ -157,6 +157,8 @@ revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本
 | D10-P15 | Intake 原要求：§6.5、§8.3；Candidate §6.1 | 父 extension point 的版本或 binding 已改变，但 dependent Catalog 仍错误沿用旧绑定 | reject | unsupported | 激活时解析出的父 binding 必须进入 Capability Catalog digest；父版本或 binding 变化必须产生 successor ActivationBinding，禁止运行时跟随未绑定的 latest | 两个 activation generation 不能混用旧父规则与新 Catalog |
 | D10-P16 | CONTROL-CONTRACT §4 | package 级 ambient dependency 使同包 connector unavailable 时误停用 schema/template/data pack | reject | unsupported | dependency 必须属于具体 dependent Contribution；每项 contribution 独立解析 parent/contract version/capability | connector denied + same-package schema/template/pack 仍按自身依赖可用；whole-package permission 不成立 |
 | D10-P17 | Intake §8.3–§8.5 + S D4 §3/§9 | Calendar/Library/People/Organizations 的产品 module/package/schema ID 混成 D4 namespace/Facet owner 或继续只留示意 ID | revise | automatic | R05 给唯一 D10 PackageId→module→schema mapping，显式引用 D4 reserved owner tuple/FacetId；PackageId 与 D4 namespace 分型 | 四模块映射、中英 label/候选 locale/code 未实现声明、第三方同名 anti-spoof；package version 不改同 Facet semanticMajor |
+| D10-P18 | Mandatory Intake §8.5.1 + S D8 Lexicon/Editor Interfaces | D8 九概念和十三 kind 缺逐概念 surface/alias/migration 与 kind→concept 反向 owner 映射，D10 若自行补名会夺取 D8 owner | revise | automatic | UPSTREAM-AMENDMENTS §8.1 由 D8 owner 补完整命名 metadata；TERMINOLOGY §15 只反向引用，不新增 D10 alias；wire/IME/confirm/Undo 不变 | 九 concept ID 的 13 项命名字段、13 kind 唯一反向映射、无新增 CLI/locale 的负向检查；任何 unlisted alias 失败 |
+| D10-P19 | Mandatory Intake §8.5.1 + S D9 Lexicon/八份 D9 来源 | D9 grouped terms 缺稳定 concept ID 与新/继承 owner 分域，PublicationReceipt/D7ResultPin 易被误当作者回执/结果身份 | revise | automatic | UPSTREAM-AMENDMENTS §8.2 由 D9 owner 拆分稳定 concept ID、wire/type/profile 归属和迁移目标；D7/D3/D6/D2 继承名称保持原 owner | PublicationReceipt 只外部发布；D7ResultPin nested schema/V 仍 D7；PreparedActionBinding/SourceBinding/OriginBinding/ResourceRegionLocator 不被 D9 重注册；未知 alias/profile/version 拒绝 |
 
 ## 7. Deferred boundaries with named owners
 

@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Control and Management Contract
 
-revision: D10-r05-unified-control-contract-2026-09-28; status: candidate author revision pending a complete independent joint final review. This file freezes the D10 management, authorization, idempotency, recovery, cost, stop, and package/contribution semantics required by R05. It does not modify fixed upstream S; every D6/D7 change exists only as an inactive proposal in UPSTREAM-AMENDMENTS.
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate author revision pending a complete independent joint final review. This file freezes the D10 management, authorization, idempotency, recovery, cost, stop, and package/contribution semantics required by R05. It does not modify fixed upstream S; every D6/D7 change exists only as an inactive proposal in UPSTREAM-AMENDMENTS.
 
 ## 1. Authority, scope, and error boundary
 
@@ -77,7 +77,7 @@ Control IDs and incarnations are never reused. Retire, archive, revoke, close, o
 
 CurrencyCode is exact three-character ASCII A-Z. D10 performs no implicit foreign-exchange conversion.
 
-Other primitive scalars reuse existing closed JSON semantics. `Token` is the non-empty opaque token from D6 §1; `Text` is a Unicode-scalar string; `Bytes` is a byte sequence bounded by the applicable entrypoint budget; `Boolean` accepts JSON true/false only; `Sha256` is `sha256:` plus 64 lowercase hex digits; `HostPrincipal` is a `Token` produced by trusted host authentication mapping and is never a request field. `Ed25519PublicKey` and `Ed25519Signature` appear only inside accepted package/trust adapters whose admitted profile fixes their encoding; an ordinary control caller cannot self-assert verification.
+Other primitive scalars reuse existing closed JSON semantics. `Token` is the non-empty opaque token from D6 §1; `Text` is a Unicode-scalar string; `Bytes` is a byte sequence bounded by the applicable entrypoint budget; `Boolean` accepts JSON true/false only; `Sha256` is `sha256:` plus 64 lowercase hex digits; `HostPrincipal` is a `Token` produced by trusted host authentication mapping. The current actor is never caller-supplied, but an H-authorized management operation may name another `HostPrincipal` in a policy, reconciler, or ResourceUseGrant **target-principal field**; that configures the authorized target and does not impersonate that principal as the caller. `Ed25519PublicKey` and `Ed25519Signature` appear only inside accepted package/trust adapters whose admitted profile fixes their encoding; an ordinary control caller cannot self-assert verification.
 
 Controlled ASCII-token grammar:
 
@@ -182,7 +182,7 @@ PackageId/1 and D4 SemanticNamespaceId are distinct types even when their string
 ContributionKind is closed to:
 The Contribution-kind closed set is `module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`.
 
-This set covers the Mandatory Intake-selected module, Profile/schema, View, Action, Template, Preset, Pack, Connector/Adapter, D9 import/export/conversion, and D10 tool/model/runtime contribution families. It does not claim that every kind is product-implemented.
+This set covers the Mandatory Intake-selected module, Profile/schema, View, Action, Template, Preset, Pack, Connector/Adapter, D9 import/export/conversion, and D10 tool/model/connector contribution families. `runtime` is not an independent `ContributionKind`; it denotes D10 runtime infrastructure used by those executable Contributions. The kind list does not claim that every category is product-implemented.
 
     ContributionDependency/1 = {
       role:"primary_parent" | "additional",
@@ -198,7 +198,7 @@ A dependency belongs to one concrete dependent Contribution; there is no ambient
 
 An unavailable connector Contribution makes only that Contribution inactive. A template, schema, pack, or view in the same package is evaluated from its own dependencies and capabilities. Definition history, Contribution activation, and UI visibility remain three separate axes.
 
-Each kind’s descriptor is validated by its existing semantic owner: schema references existing D4 Registry namespace/Facet bindings; view/action consume D7 closed descriptors; template/preset/importer/exporter/conversion consume D9 contracts; tool/model/connector/runtime are owned by D10; module only organizes product contributions and owns no author facts.
+Each kind’s descriptor is validated by its existing semantic owner: schema references existing D4 Registry namespace/Facet bindings; view/action consume D7 closed descriptors; template/preset/importer/exporter/conversion consume D9 contracts; D10 owns tool/model/connector descriptors and their runtime infrastructure; module only organizes product contributions and owns no author facts.
 
 ## 5. Unique package mapping for four first-party modules
 
@@ -423,18 +423,32 @@ All step/input/output/elapsed maxima are finite positive values. costs is sorted
 
 parameters must validate against the active ToolValueProfile/1 input type of the Contribution. A recurrence selector only locates D4 recurrence source rebound to the same current revision and never becomes a durable EntityRef.
 
+    LeaseReadGrant/1 = {
+      scope:<exact D6 Policy/2 grant.scope from S D6 Control §4>,
+      capabilities:[LeaseReadCapability/1]
+    }
+
+    LeaseReadCapability/1 =
+      {kind:"field_read", fieldIds:[D4.FieldId]}
+    | {kind:
+        "workspace_state" | "entity_state" | "locator_state" |
+        "source_read" | "resource_read" | "annotation_read" |
+        "source_envelope_state"}
+
+`LeaseReadGrant/1` is a D10 attenuation projection rather than a new D6 grant wire. It consumes the exact scope/capability decoder and scope-applicability matrix from S D6 Control §4: for example `workspace_state` is workspace-scope only, `entity_state|locator_state|source_envelope_state` retain the original workspace/ref_set rules, and Field read uses the original D6 `field_read` shape. It forbids write/admin/repair/audit/export, `commit_sequence_state`, and `d10_control_self`, so it can only narrow read/state-observation authority the actor already possesses.
+
     LeaseSpec/1 = {
       notBefore:D4.zoned_instant,
       notAfter:D4.zoned_instant,
       maxRuns:Counter,
       activationBinding:ActivationBinding/1,
       capabilityAllowlist:[D1.CapabilityId],
-      readGrants:[D6 closed read capability request],
+      readGrants:[LeaseReadGrant/1],
       resourceGrants:[Binding<grant>/1],
       budgets:BudgetCaps/1
     }
 
-readGrants may use only original D6 read/state-observation capabilities and never policy_admin, registry_admin, binding_admin, repair, or d10_control_self. notBefore < notAfter and maxRuns is finite positive.
+`readGrants` accepts only `LeaseReadGrant/1` above; actual authorization is still computed from current D6 Policy with its original deny precedence, and a Lease cannot add authority. `notBefore < notAfter` and `maxRuns` is finite positive.
 
     StandingApprovalSpec/1 = {
       notBefore:D4.zoned_instant,
@@ -444,7 +458,7 @@ readGrants may use only original D6 read/state-observation capabilities and neve
       costGrants:[Binding<grant>/1]
     }
 
-`SingleFieldMemberRule/1` exactly carries C §14: action `set_field_member`; one member of the unique Entry under one owner/Field; value-type closed set `text|bool|int64|integer|decimal`; constraint closed set `any|enum|numeric_range`; and the raw-no-op branch. It never expands to create, delete, Facet, native-table, or bulk operations.
+`SingleFieldMemberRule/1` is the controlled D10 internal projection of Candidate §14 `StandingApprovalEnvelope/1.rule`, not an independent D6/D7 wire. It exactly carries that section: action `set_field_member`; one member of the unique Entry under one owner/Field; value-type closed set `text|bool|int64|integer|decimal`; constraint closed set `any|enum|numeric_range`; and the raw-no-op branch. Any change must first amend Candidate §14 and then synchronize this projection. It never expands to create, delete, Facet, native-table, or bulk operations.
 
     ConsentSpec/1 =
       {kind:"planned",

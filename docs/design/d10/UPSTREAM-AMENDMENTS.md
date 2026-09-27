@@ -6,9 +6,9 @@ translation_status: synced
 
 [简体中文](UPSTREAM-AMENDMENTS.zh-CN.md)
 
-# D10 Coordinated D6/D7 Upstream Amendment Proposal
+# D10 Coordinated Upstream Amendment Proposal
 
-revision: D10-r04-final-review-fixes-2026-09-28; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed upstream input commit is `f205831c848729f7ddbc3ba0cf32b689459c0c98`. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed input is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 U inputs plus the D4 reference catalog. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -293,11 +293,107 @@ Therefore parent missing/disabled/incompatible/unsupported-surface makes depende
 
 Upstream must be reopened only if a future design wants any of these: parent-dependency members inside `RegistrySnapshot/1`; a new D1 unavailable reason; UI disable changing schema availability; dependent domain behavior continuing under a disabled parent; or changed D4 semantic-ledger retention. The current candidate rejects all of those routes.
 
-## 8. Explicit non-amendment for D8 and D9
+## 8. D8 / D9 terminology companion amendments and unchanged-behavior boundary
 
-D8 gains no unattended edit branch. Document/Annotation edit, dirty Draft, IME, current serial, complete preview, and explicit confirmation remain unchanged. Agent/Automation may only propose into D8 and cannot fabricate EditSession or human origin.
+R06 adds no unattended-edit branch to D8 and changes no D9 conversion, template, or publication behavior. Mandatory Intake §8.5.1 nevertheless requires the **original owner** to complete controlled terminology metadata, so this section replaces the earlier statement that D8/D9 needed no amendment at all. These are normative companion proposals for the D8/D9 owner lexicons and are not yet jointly accepted.
 
-D9 does not change Provider/Route, worker sandbox, ExportPlan, LossReport, PublicationReceipt, or external publisher. D10 external transport/Connector grants no network to a D9 worker, and D9 publication confirmation grants no Standing Approval author write.
+### 8.1 D8 owner-lexicon addition
+
+The existing nine D8 concept IDs, the 12 public request/response kinds from Editor Interfaces, and internal `d8_prepared_edit_binding` keep their existing wire. D8 adds the following naming metadata without changing IME, Write/Read, author source, confirmation, Undo, or error behavior.
+
+Common rule: every concept's `firstFreeze` is the accepted D8 r03 concept; R06 adds naming metadata only. Except for the existing `Direction Preference` selector and existing Edit Draft status phrases, this generation freezes no new CLI verb, standalone UI-control name, or locale key. “none” is a normative decision rather than deferral. There is no published legacy alias. When implementation adopts these names it atomically removes any unlisted controlled alias from the D8 editor adapter's type/kind registry, fixtures, help, and locales, with no dual-read path. Historical evidence and user prose are not migrated.
+
+| concept ID | formal zh/en; owner/layer | definition / exclusion | owned names and kind ownership | CLI / UI / locale | short forms, aliases, example/counterexample, migration target |
+| --- | --- | --- | --- | --- | --- |
+| `weftext.term.edit_session` | 编辑会话 / Edit Session; D8 UI state | current editor interaction session; not Workspace/Document identity or commit authority | code type `EditSession`; no independent wire kind; `d8_document_read/document` remain D8 envelopes over D2/D6-owned data | no CLI; no new standalone UI label/locale key; shell keeps Source/Write/Read mode labels | “session” only in qualified D8 prose; no EditorSession wire alias; delete unlisted editor-state aliases |
+| `weftext.term.edit_draft` | 编辑草稿 / Edit Draft; D8 proposal state | non-authoritative user proposal plus `draftSerial`; not saved author source | code type `Draft`; inputs `d8_draft_project`, `d8_draft_text_replace`, `d8_draft_write`; successful projection is owned separately | no CLI; UI keeps existing Draft-saved/pending status phrases; no new locale key | Draft allowed only in D8 context; no author-draft/source alias; delete unlisted draft-state aliases |
+| `weftext.term.draft_projection` | 草稿投影 / Draft Projection; D8 Core projection | discardable projection of one proposal; not D2 payload/Locator | code/wire `d8_draft_projection`; also returned by `d8_draft_text_replaced` and `d8_draft_written` | no direct CLI/UI/locale | “projection” only in D8; no document_snapshot alias; delete unlisted projection aliases |
+| `weftext.term.draft_edit_map` | 草稿编辑映射 / Draft Edit Map; D8 Core mapping | proposal-local flow/path/segment/plainRegion/site coordinates; not durable identity/Locator | code type `DraftEditMap`; carried as `editMap` inside `d8_draft_projection` and consumed by replace/write | no CLI/UI/locale | “edit map” allowed; no locator/parser alias; delete unlisted editor-map aliases |
+| `weftext.term.prepared_edit_binding` | 编辑准备绑定 / Prepared Edit Binding; protected D8 Core record | immutable D8 prepare record; not D7 PreparedActionBinding, ActionSpec, or third ledger | `PreparedEditBinding/1`, internal kind `d8_prepared_edit_binding`; `d8_edit_prepare/edit_prepared` and `d8_undo_prepare` consume or expose its protected result | no CLI/UI/locale | formal name only; no prepared-action alias; delete unlisted binding wrappers/fixtures |
+| `weftext.term.composition_transaction` | 组合输入事务 / Composition Transaction; D8 UI input state | IME begin/update/commit/cancel group; not D6 author transaction/receipt | code type `CompositionTransaction`; no D8 JSON kind | no CLI or standalone UI/locale key; accessibility uses current input-state description | “composition” only in D8; no commit-transaction alias; delete unlisted UI-state aliases |
+| `weftext.term.caret_affinity` | 光标亲和位置 / Caret Affinity; D8 layout state | `upstream|downstream` visual side of one logical point; not source offset/Locator | code enum `CaretAffinity`; member of layout/caret state, no new request kind | no CLI or standalone label/locale key | “affinity” allowed; no source-side identity alias; delete unlisted layout-enum aliases |
+| `weftext.term.layout_epoch` | 布局代 / Layout Epoch; D8 layout state | discardable shaping/wrap/hit-test generation; not result/auth/author revision | code type `LayoutEpoch`; no public D8 JSON kind | no CLI/UI/locale | “epoch” only with layout qualifier; no result-epoch alias; delete unlisted layout-cache aliases |
+| `weftext.term.direction_preference` | 方向偏好 / Direction Preference; D8 presentation | device/session `ltr|rtl|auto` preference; not locale, authored direction, or Query ordering | code type `DirectionPreference`; values come from Direction §2 shell/document/session preference, no author wire | no CLI; UI keeps the existing direction selector and `ltr|rtl|auto` values; no new concept locale key | “direction preference” allowed; no locale/author-dir alias; delete any controlled path that writes preference into author source |
+
+Reverse kind ownership is fixed as follows:
+
+| kind | owning concept / inherited owner |
+| --- | --- |
+| `d8_document_read`, `d8_document` | D8 interface envelope; content semantics remain inherited D2 `document_snapshot` plus D6 source read; no tenth D8 identity concept |
+| `d8_draft_project` | Edit Draft input; successful output is Draft Projection |
+| `d8_draft_projection` | Draft Projection |
+| `d8_draft_text_replace`, `d8_draft_write` | Edit Draft + Draft Edit Map |
+| `d8_draft_text_replaced`, `d8_draft_written` | Draft Projection; caret remains D8 editor-return state |
+| `d8_edit_prepare`, `d8_edit_prepared`, `d8_undo_prepare` | Prepared Edit Binding; nested commit request remains D6-owned |
+| `d8_editor_error` | D8 Editor Interfaces error family; no durable concept ID |
+| `d8_prepared_edit_binding` | Prepared Edit Binding internal kind |
+
+`document|annotation` remain local D8 intent discriminators, not entity kinds. This addition changes no D8 wire member, error, IME state, or automatic-confirmation path.
+
+### 8.2 D9 owner-lexicon addition
+
+D9 behavior and wire remain unchanged. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every row's `firstFreeze` is its accepted D9 r04 contract; R06 adds naming metadata only. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
+
+Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decoder, fixtures, help, generated samples; M-route=free-command/fallback/provider aliases and route inventory; M-template=old attr/record/H1–H9/formula-reorder/broad-view template parser/help/samples; M-export=free binding dictionary, rowHandle identity, author-snapshot export, generic author-receipt alias; M-region=D9-private Locator kind/opaque registry identity; M-none=no specific predecessor, only unlisted controlled aliases. Historical research text is not migrated.
+
+| concept ID | formal zh/en; owner | canonical type/profile/kind ownership | definition / exclusion | CLI/UI/locale; short/alias | migration target |
+| --- | --- | --- | --- | --- | --- |
+| `weftext.term.source-artifact` | 来源工件 / Source Artifact; D9 input control | `SourceArtifact`; input to `d9_probe` and analysis | host-pinned external bytes; not Node, SourceBinding, identity | no standalone CLI/locale; UI may show source artifact; path/hash is never identity | M-import |
+| `weftext.term.import-ir` | 导入中间表示 / Import IR; D9 conversion | `ImportIR/1`, format `weftext.conversion-ir` | bounded typed conversion IR; not third-party AST/author source | no direct UI/locale; “IR” only in D9; no ImportIr alias | M-import |
+| `weftext.term.source-location` | 来源位置 / Source Location; D9 IR evidence | `SourceLocation` closed union | coordinate in one input version; not D3 Locator/write target | no CLI/UI/locale; no Locator alias | M-import |
+| `weftext.term.import-observation` | 导入观察 / Import Observation; D9 IR evidence | exact `Observation` | origins/confidence/method evidence; not provenance authorization | no CLI/UI/locale; “observation” allowed | M-import |
+| `weftext.term.conversion-provider` | 转换提供方 / Conversion Provider; D9 host registry | installed Provider record | version/dependency/license/sandbox-reviewed adapter; not Model Provider | management UI may show signed provider name; no locale key/CLI verb; bare Provider only in D9 context | M-route |
+| `weftext.term.conversion-route` | 转换路由 / Conversion Route; D9 host registry | routeId/profileId + fixed Provider chain | finite ordered acyclic pipeline; not free fallback | management UI may show Route; no new locale/CLI | M-route |
+| `weftext.term.import-mapping` | 导入映射 / Import Mapping; D9 Core mapping | `ImportMapping/1` | explicit structure/Field conversion choice; not Query/Action | analysis UI may show mapping; no standalone locale/CLI | M-import |
+| `weftext.term.mapping-proposal` | 映射提案 / Mapping Proposal; D9 proposal | fixed proposal in `d9_import_analysis` | complete pre-prepare proposal; not author plan/patch | shown through import analysis; no standalone locale/CLI | M-import |
+| `weftext.term.import-job` | 导入作业 / Import Job; D9+D6 control | D6 durable job/control record; observed by `d9_import_*` kinds | finite groups/batches; not second ledger/job-wide atomic transaction | existing import semantic entry only; no standalone locale | M-import |
+| `weftext.term.coupling-group` | 耦合组 / Coupling Group; D9 mapping | group inside ConversionInput/prepare | indivisible author group; not UI page/worker process | no CLI/UI/locale | M-import |
+| `weftext.term.import-batch` | 导入批次 / Import Batch; D9 mapping | one original D3/D6 atomic request | finite commit batch; not arbitrary 1000-row slicing | UI may show batch progress; no locale key | M-import |
+| `weftext.term.conversion-input` | 转换输入证据 / Conversion Input; D9 control | `ConversionInput/1` ZIP/profile | binds raw/IR/mapping/loss/route; not identity/author source | no direct UI/CLI/locale | M-import |
+| `weftext.term.worker-invocation` | Worker 调用记录 / Worker Invocation; D9 worker control | `WorkerInvocation/1` | fixed job/step/route/inputs/options/budget; no path/command | no UI/CLI/locale; worker cannot self-authorize | M-route |
+| `weftext.term.template-recipe` | 模板配方 / Template Recipe; D9 template | `TemplateRecipe/1`, format `weftext.node-template` | one fresh construction recipe over D2 Template; no second Template identity | Template UI may show recipe; no standalone locale/CLI | M-template |
+| `weftext.term.template-construction-input` | 模板构造输入 / Template Construction Input; D9 control | `TemplateConstructionInput/1` | fixed pins/recipe/params/resources/loss evidence; not author source | no direct UI/CLI/locale | M-template |
+| `weftext.term.office-template` | Office 模板 / Office Template; D9 template | ordinary Office-template profile | ordinary text-template bytes; not macro/script | UI may say Office Template; no fixed locale key/CLI | M-template |
+| `weftext.term.template-placeholder` | 模板占位符 / Template Placeholder; D9 template | Templates token/binding contract | value insertion position; not content control/named range | placeholder text may be visible; no standalone locale key | M-template |
+| `weftext.term.style-directive` | 样式指令 / Style Directive; D9 template | Templates style directive | visible style sample; not executable command | previewable; no CLI/locale | M-template |
+| `weftext.term.repeat-band` | 重复带 / Repeat Band; D9 template | single complete row/column repeat contract | dataset repetition; not Excel Table enhancement | UI may show repeat region; no standalone locale/CLI | M-template |
+| `weftext.term.render-snapshot` | 渲染快照 / Render Snapshot; D9 export | finite Templates `RenderSnapshot` union | explicit authorized rendering projection; not author snapshot/import | no direct CLI/locale; inspect UI may show | M-export |
+| `weftext.term.d7-result-pin` | D7 结果固定证据 / D7 Result Pin; D9 control over D7 | internal `D7ResultPin`; nested `TerminalSchema`/V remain D7-owned | pins complete terminal result/epoch/auth/cut; not rowHandle identity | no UI/CLI/locale; no D7-result identity alias | M-export |
+| `weftext.term.export-plan` | 导出计划 / Export Plan; D9 export control | `ExportPlan/1` | immutable current-output preparation record; not D6 PreparedIntent/author ledger | consumed by export prepare/inspect UI; no standalone locale key | M-export |
+| `weftext.term.export-input-catalog` | 导出输入目录 / Export Input Catalog; D9 export | `ExportInputCatalog/1` | complete authorized Plan input catalog; not author source | no standalone UI/CLI/locale | M-export |
+| `weftext.term.export-content-selection` | 导出内容选择 / Export Content Selection; D9 export | `ExportContentSelection/1` | explicit body/bibliography consumption choice; not permission grant | inspect UI shows choice; no locale key | M-export |
+| `weftext.term.export-projection` | 导出投影 / Export Projection; D9 export | `ExportProjection/1` | bounded Core bindings/datasets projection; not free dictionary | no standalone locale/CLI | M-export |
+| `weftext.term.export-input-location` | 导出输入位置 / Export Input Location; D9 evidence | closed `input|source_range|annotation|query_cell|query_scalar|template_range` union | Plan-local evidence position; not Locator/identity | no UI/CLI/locale | M-export |
+| `weftext.term.export-loss-location` | 导出损失位置 / Export Loss Location; D9 evidence | ExportInputLocation plus `binding|dataset_cell|block` | loss position in one Plan; not cross-Plan address | no UI/CLI/locale | M-export |
+| `weftext.term.export-loss-report` | 导出损失报告 / Export Loss Report; D9 export | `ExportLossReport/1`, format `weftext.export-loss` | fixed-proposal loss report; not import LossReport | inspect UI shows full report; no standalone locale key | M-export |
+| `weftext.term.export-blocks` | 导出块投影 / Export Blocks; D9 export compiler | internal `ExportBlocks` | read-only compilation of known D2 structures; no author block ID | no UI/CLI/locale | M-export |
+| `weftext.term.staged-output` | 暂存输出 / Staged Output; D9 publication control | validated staging record | complete unpublished output; no author revision | consumed by publish/state UI; no standalone locale key | M-export |
+| `weftext.term.publication-receipt` | 外部发布回执 / Publication Receipt; D9 publication | `PublicationReceipt/1` | external-file publication fact bound only to plan/output/destination | UI may say Published; no standalone locale key; **never an alias of D3/D6 author receipt** | M-export |
+| `weftext.term.import-loss-report` | 导入损失报告 / Import Loss Report; D9 import/template | `LossReport/1` | fixed import/Node-Template loss choice; not export report | shown in analysis UI; no standalone locale key | M-import |
+| `weftext.term.import-loss-issue` | 导入问题 / Import Loss Issue; D9 IR | exact IR issue | raw observed issue; not security approval/completeness proof | analysis UI may show message; no standalone locale key | M-import |
+| `weftext.term.template-loss-location` | 模板损失位置 / Template Loss Location; D9 template | `template_source|template_annotation` union | template-pin/omission evidence; not D3 Locator | no UI/CLI/locale | M-template |
+| `weftext.term.image-physical-size` | 图片物理尺寸 / Image Physical Size; D9 image profile | profile `image_physical_size/1` | verifiable source physical fact/quantization; not host-DPI guess | inspect UI may display size; no standalone locale key | M-none |
+| `weftext.term.image-size-selection` | 图片尺寸选择 / Image Size Selection; D9 export | Plan member `imageSizes` | user-frozen layout choice; not source physical fact | export UI may display choice; no standalone locale key | M-none |
+| `weftext.term.region-body` | 区域几何体 / Region Body; D9 geometry | `RegionBody` + profile `d9rg1` | non-identity geometry fact; not complete Locator | no UI/CLI/locale | M-region |
+
+Inherited ownership remains explicit:
+
+- D2 `Template` meta-kind retains Node-Template author identity; D9 owns only `TemplateRecipe/1` and construction evidence.
+- D7 `TerminalSchema`, V algebra, and `PreparedActionBinding/2` remain D7-owned; `D7ResultPin` only pins those existing facts.
+- D3 `SourceBinding`, `ForeignIdentityKey`, `OriginBinding`, `ResourceRegionLocator/l1`, and D3/D6 author receipts remain original-owner concepts. D9 `RegionBody/d9rg1` is inner geometry only, and `PublicationReceipt/1` can represent only external publication.
+- D6 `SourceVersion`, `BudgetBinding`, Token, and job/commit authority remain unchanged.
+
+The D9 owner lexicon also records these five reverse public-kind groups:
+
+- `d9_probe|d9_probe_result` → Source Artifact / Conversion Route probe;
+- `d9_import_analyze|d9_import_analysis|d9_import_choose|d9_import_next|d9_import_prepare|d9_import_prepared|d9_import_state|d9_import_state_result` → Import IR / Mapping Proposal / Import Job;
+- `d9_template_analyze` → Template Recipe / Construction Input;
+- `d9_convert|d9_conversion_started|d9_conversion_state|d9_conversion_state_result|d9_conversion_cancel` → Conversion Route / Worker Invocation / Job control;
+- `d9_error` → the D9 error family only, with no identity concept.
+
+Unknown kind, profile, or version still rejects.
+
+These D8/D9 lexicon additions complete the naming gate only and change no existing wire, identity, permission, author commit, IME, template, conversion, worker, export, or publication semantics.
 
 ## 9. Activation and version compatibility
 
@@ -334,5 +430,7 @@ Historical committed D3/D6 decisions replay under their original decoder/bytes a
 19. A profile/2 family must not gain d10_control_self after software upgrade; profile/3 affects only new families after explicit issuer update, and an existing Workspace can receive it only through current policy_admin.
 20. Both orderings of stop versus new Run admission and D6 final author commit must have exactly one linearized result; authorized authoritative abort, cost settlement, and evidence retention still work after stop.
 21. A stable Workspace-control request succeeded but its response was lost and another request later changed the object revision; after current disclosure authorization, retry must replay the old result without duplicate mutation and without falsely rejecting historical success because current revision changed.
+22. The nine D8 concepts and thirteen kinds must map uniquely in both directions from the owner lexicon; any unlisted CLI/locale/wire alias fails, with no change to IME/Write/Read/confirm/Undo behavior.
+23. D9 grouped lexicon terms must split into stable concept IDs; `PublicationReceipt/1` maps only to external publication, nested TerminalSchema/V inside `D7ResultPin` remains D7-owned, and inherited PreparedActionBinding/SourceBinding/OriginBinding concepts cannot be re-registered by D9.
 
 These are author-revision review targets, not a claim that the first two independent-review batches are closed. Only later independent re-review can change their review status.

@@ -9,7 +9,7 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision R05，作者修订已形成，等待新的固定候选全量独立联合终审。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision R06，作者修订已形成，等待新的固定候选全量独立联合终审。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
@@ -79,6 +79,6 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
 
-独立终审仍以旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 为对象；当前正式覆盖为候选 16/16、上游 28/49，正式账仍为 1P1+5P2 开放，D3 批次等待正式报告。该覆盖和结论均不得转记为 R05 已读取、已接受或已关闭。R05 固定后必须从零做完整联合终审，最终仍要求完整 verdict、P0/P1=0、术语/场景/依赖/证据闭合以及必要 amendment 的充分性。
+独立终审仍以旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 为对象；当前正式覆盖为候选 16/16、上游 44/49，正式账为 1P1+8P2 开放；最后 D2/D5 五份仍在独立读取。该覆盖和结论均不得转记为 R05 已读取、已接受或已关闭。R06 固定后必须从零做完整联合终审，最终仍要求完整 verdict、P0/P1=0、术语/场景/依赖/证据闭合以及必要 amendment 的充分性。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。

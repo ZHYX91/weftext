@@ -139,8 +139,8 @@ The candidate also does not claim implementation of OS sandbox, real MCP/model/c
 
 ## 6. Independent-final-review status
 
-Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`. Formal coverage is 16/16 candidate files and 28/49 upstream inputs; the formal ledger remains 1 P1 + 5 P2 open, and the D3 batch awaits its formal report. The temporary RelationDag judgment was withdrawn and causes no rename here.
+Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`. Formal coverage is 16/16 candidate files and 44/49 upstream inputs; the formal ledger is 1 P1 + 8 P2 open, and the final five D2/D5 inputs are still being independently read. The temporary RelationDag judgment was withdrawn and causes no rename here.
 
-R05 materially revises authorization, transaction semantics, cost recovery, stop, bootstrap profile, public control wire, and package/module mapping. Therefore old-C reading coverage, finding results, and interim judgments do not transfer to R05. After R05 is fixed it requires a new complete joint final review as a new candidate.
+R06 inherits R05 authorization, transaction semantics, cost recovery, stop, bootstrap profile, public control wire, and package/module mapping and adds D8/D9 owner-terminology companions, U12 import preconditions, and bounded consistency cleanup. Therefore old-C reading coverage, finding results, and interim judgments do not transfer to R06. After R06 is fixed it requires a new complete joint final review as a new candidate.
 
 Author self-checks, documentation CI, and finite models prove only their own artifacts. They establish neither product implementation/release/surface availability nor an independent Gate pass. D6/D7/D3 companion amendments remain inactive proposals; do not merge, release, activate, or start A2.

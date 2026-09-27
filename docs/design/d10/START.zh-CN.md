@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision R05，作者修订待新的固定候选全量独立联合终审，尚未独立接受或运行时激活。本文件记录输入覆盖、候选文件集合和验收状态，不是 Gate verdict。
+状态：candidate revision R06，作者修订待新的固定候选全量独立联合终审，尚未独立接受或运行时激活。本文件记录输入覆盖、候选文件集合和验收状态，不是 Gate verdict。
 
 固定输入基线已整合为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 包含旧 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份输入和新增 D4 reference catalog。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
@@ -138,8 +138,8 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 ## 6. 独立终审状态
 
-独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`。正式覆盖为候选 16/16、上游 28/49；正式账仍为 1P1+5P2 开放，D3 批次等待正式报告。RelationDag 的临时判断已收回，本候选不据此改名。
+独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`。正式覆盖为候选 16/16、上游 44/49；正式账为 1P1+8P2 开放，最后 D2/D5 五份仍在独立读取。RelationDag 的临时判断已收回，本候选不据此改名。
 
-R05 在授权、事务、费用恢复、stop、bootstrap profile、公开 control wire 和 package/module 映射上有实质修订，因此旧 C 的阅读覆盖、问题结论和阶段性判断都不能继承到 R05。R05 固定后必须作为新候选做完整联合终审。
+R06 继承 R05 的授权、事务、费用恢复、stop、bootstrap profile、公开 control wire 和 package/module 映射，并新增 D8/D9 owner 术语配套、U12 导入前提与有界一致性清理；因此旧 C 的阅读覆盖、问题结论和阶段性判断都不能继承到 R06。R06 固定后必须作为新候选做完整联合终审。
 
 作者自查、文档 CI 和有限模型只能证明文档/模型自身，不建立产品实现、发布、surface 可用或独立 Gate 通过。D6/D7/D3 的配套修订继续只是未激活提案，不得合并、发布、激活或开始 A2。

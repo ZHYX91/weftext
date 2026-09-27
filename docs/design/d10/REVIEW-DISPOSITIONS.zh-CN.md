@@ -7,13 +7,13 @@ translation_status: source
 
 # D10 独立审查问题处置
 
-revision: D10-r05-unified-control-contract-2026-09-28；状态：author revision record，所有独立问题保持开放，等待 R05 固定后完整联合终审。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：author revision record，所有独立问题保持开放，等待 R05 固定后完整联合终审。
 
 ## 1. 审查覆盖边界
 
-旧固定候选为 C=`35fab950dabedfb92c9f12858701be8afe6faa74`，当前固定输入为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`。独立终审对旧 C 的正式覆盖为候选 **16/16**、上游 **28/49**；正式账仍为 **1P1 + 5P2 开放**，D3 批次等待正式报告。RelationDag 的临时判断已收回，本文件不据此改名或新增处置。
+旧固定候选仍为 C=`35fab950dabedfb92c9f12858701be8afe6faa74`，固定输入为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`。独立终审对旧 C 的正式覆盖为候选 **16/16**、上游 **44/49**；最后 D2/D5 五份仍在读取。正式账为 **1P1 + 8P2 开放**。这些覆盖、发现和阶段性结论只属于旧 C，不能转记为 R06 已读取、已接受或已关闭。
 
-这些覆盖、发现和阶段性结论只属于旧 C，不能转记为 R05 已读取、已接受或已关闭。R05 改变基础授权、控制事务、费用恢复、bootstrap/stop、公开 control wire 和 package/module 映射，固定后必须做新的全量独立联合终审。
+R06 继承 R05 的授权/事务/费用/stop/package 控制修订，并新增 D8/D9 原 owner 术语配套、U12 导入前提及有限一致性清理。固定后仍必须作为新候选进行 fresh 完整联合终审。
 
 以下各行只记录作者技术处置及落点；“作者已修订”不等于独立关闭。
 
@@ -40,6 +40,10 @@ revision: D10-r05-unified-control-contract-2026-09-28；状态：author revision
 | B04-P2-02 | P2 | D01 anniversary/birthday 双语漂移；F06 英文漏 response 边界 | R05 两语 D01 都保留 birthday、anniversary、holiday 三类具体规则算法；F06 两语都固定 durable intent→send→response 三个故障边界 | SCENARIO D01/F06 | 作者已修订；独立问题保持开放 |
 | B04-P2-03 | P2 | TASK / Implementation 当前完成门仍写 48/48 | R05 将当前作者完整输入统一为 S 的 49/49；TASK、START、Implementation 的当前完成门改为 49/49，旧 U 的 48/48 仅保留在历史阅读语境 | TASK；START；IMPLEMENTATION §16 | 作者已修订；独立问题保持开放 |
 | B05-P2-01 | P2 | U02 把 terminal occurrence/原 Run 恢复规则冒称 D1 §4.1/4.4 明文 | R05 U02 分开直接上游依据与 D10 派生依据：D1 §4.1/§4.4 只支持共享 Core/产品端边界；terminal occurrence 与原 Run 恢复明确归 Candidate §13/§20 + Implementation §6 | SCENARIO U02 | 作者已修订；独立问题保持开放 |
+
+| B08-P2-01 | P2 | D8 九概念/十三 kind 缺逐概念 CLI/UI/locale 或无新增结论、kind→concept owner、alias 与迁移删除目标 | R06 在 UPSTREAM-AMENDMENTS §8.1 由 D8 owner 补九概念完整 naming metadata 与十三 kind 反向归属；未新增 UI/CLI/locale 的概念明确写无；D10 TERMINOLOGY §15 只引用 owner，不建立 alias；D8 wire、IME、Write/Read、confirm、Undo 不变 | UPSTREAM-AMENDMENTS §8.1；TERMINOLOGY §15；SCENARIO P18；IMPLEMENTATION §13/§15 | 作者已修订；独立问题保持开放 |
+| B09-P2-01 | P2 | D9 grouped lexicon 和八份 D9 来源缺新增概念稳定 ID、完整中英名、wire/type/profile owner、surface/alias 与迁移目标 | R06 由 D9 owner 拆分 SourceArtifact/ImportIR/Provider/Route/Template/RenderSnapshot/D7ResultPin/ExportPlan/PublicationReceipt 等稳定 concept ID，明确 per-concept surface 为已有入口或无新增；继承 D2/D3/D6/D7 名称保持原 owner；PublicationReceipt 只表示外部发布 | UPSTREAM-AMENDMENTS §8.2；TERMINOLOGY §15；SCENARIO P19；IMPLEMENTATION §13/§15 | 作者已修订；独立问题保持开放 |
+| B09-P2-02 | P2 | U12 用“相同 UID 两次 ordinary import fresh”遗漏当前 ICS profile 未开放及 D3 SourceBinding/ForeignIdentityKey 状态矩阵 | R06 将 U12 改为三分支：当前 ICS conversion unavailable 且零作者效果；无 D3 binding 的已支持普通文件 profile 两次独立明确导入各 fresh、same request retry 精确重放；进入 D3 binding 语义后严格按 never_bound/active_live/active_non_live/retired/conflict/miss 与 explicit adopt 规则，UID 不能脱离 SourceBinding 独断 | SCENARIO U12；IMPLEMENTATION §15 | 作者已修订；独立问题保持开放 |
 
 ## 3. 保持不变的边界
 

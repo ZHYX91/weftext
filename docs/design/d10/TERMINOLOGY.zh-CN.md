@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 术语与命名
 
-revision: D10-r05-unified-control-contract-2026-09-28；状态：candidate。本词表只定义 D10 新增控制/扩展概念和 D1–D9 的消费边界，不重新分配任何上游 owned concept。自然语言、历史材料、测试描述和第三方产品用词不自动成为受控名称。
+revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate。本词表只定义 D10 新增控制/扩展概念和 D1–D9 的消费边界，不重新分配任何上游 owned concept。自然语言、历史材料、测试描述和第三方产品用词不自动成为受控名称。
 
 ## 1. 命名原则
 
@@ -283,3 +283,67 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | `weftext.term.deployment-external-manage-capability` | 部署外部能力管理 | Deployment External Management Capability | 管理 host trust、account、secret、pricing 和 grant | D10 host；D1 discovery/availability | 不授 Workspace author read/write | `deployment.external.manage` | `DeploymentExternalManageCapability`；`deployment_external_manage` | 管理 label 候选；locale 未实现 | 无 | 禁止 issuer admin alias | 正：H 管理 secret；反：Workspace admin 改 pricing | R05 candidate，尚未产品发布 |
 | weftext.term.automation-stop-capability | 自动化停止能力 | Automation Stop Capability | 对获权 automation/run 设置不可逆 stop latch | D10 safety；D1 discovery/availability | 非 rollback、cancel 或 settlement | automation.stop | AutomationStopCapability；automation_stop | label“紧急停止”；locale 未实现 | stop | 禁止 stop=rollback | 正：普通预算耗尽仍 stop；反：stop 删除 evidence | R05 candidate，尚未产品发布 |
 | weftext.term.automation-author-submit-capability | 自动化作者提交能力 | Automation Author Submit Capability | 首版只允许 single_field_member Standing Approval 路径进入 D6 author submit | D10 profile semantics + D6 submit；D1 discovery/availability | 非通用 author-write、D8 Draft 或 create/delete | automation.author_submit | AutomationAuthorSubmitCapability；automation_author_submit | 候选 label“自动提交单字段值”；locale 未实现 | 无 | 禁止旧匿名 capability profile | 正：D1 门全过且 D6 closed error 已实现；反：仅设计接受即 available | R05 candidate，尚未产品发布 |
+
+## 15. R06 上游 owner 术语引用
+
+R06 不把 D8/D9 名称重新登记到 D10 owner。UPSTREAM-AMENDMENTS §8 是 D8/D9 原 owner 的配套词表提案；本节只固定 D10 消费时的反向引用。
+
+D8 owner 概念恰为：
+
+```text
+weftext.term.edit_session
+weftext.term.edit_draft
+weftext.term.draft_projection
+weftext.term.draft_edit_map
+weftext.term.prepared_edit_binding
+weftext.term.composition_transaction
+weftext.term.caret_affinity
+weftext.term.layout_epoch
+weftext.term.direction_preference
+```
+
+D10 文档中的 Draft 必须明确指 D8 `weftext.term.edit_draft`；Prepared Edit Binding 指 D8 `weftext.term.prepared_edit_binding`；Direction Preference 指 D8 `weftext.term.direction_preference`。D8 的 13 个 kind 归属由 UPSTREAM-AMENDMENTS §8.1 owner 表决定，D10 不建立 alias。
+
+D9 owner 新增/拆分概念恰为：
+
+```text
+weftext.term.source-artifact
+weftext.term.import-ir
+weftext.term.source-location
+weftext.term.import-observation
+weftext.term.conversion-provider
+weftext.term.conversion-route
+weftext.term.import-mapping
+weftext.term.mapping-proposal
+weftext.term.import-job
+weftext.term.coupling-group
+weftext.term.import-batch
+weftext.term.conversion-input
+weftext.term.worker-invocation
+weftext.term.template-recipe
+weftext.term.template-construction-input
+weftext.term.office-template
+weftext.term.template-placeholder
+weftext.term.style-directive
+weftext.term.repeat-band
+weftext.term.render-snapshot
+weftext.term.d7-result-pin
+weftext.term.export-plan
+weftext.term.export-input-catalog
+weftext.term.export-content-selection
+weftext.term.export-projection
+weftext.term.export-input-location
+weftext.term.export-loss-location
+weftext.term.export-loss-report
+weftext.term.export-blocks
+weftext.term.staged-output
+weftext.term.publication-receipt
+weftext.term.import-loss-report
+weftext.term.import-loss-issue
+weftext.term.template-loss-location
+weftext.term.image-physical-size
+weftext.term.image-size-selection
+weftext.term.region-body
+```
+
+其中 D7 TerminalSchema/V、`PreparedActionBinding/2`，D3 `SourceBinding`/`ForeignIdentityKey`/`OriginBinding`/`ResourceRegionLocator/l1`，D2 Template meta-kind 以及 D3/D6 author receipt 都继续由原 owner 冻结。特别是 `weftext.term.publication-receipt` 只表示 D9 外部发布事实，绝不成为作者回执别名；`weftext.term.d7-result-pin` 只固定 D7 已有结果，不取得其 schema/value owner。
