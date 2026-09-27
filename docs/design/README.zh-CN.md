@@ -21,6 +21,8 @@ translation_status: source
 
 候选必须绑定固定 Git 提交、完整阅读范围、假设和实际证据。更好的完整替代可以提出；涉及上游必须给出精确协调修订，独立通过及一次协调生效前不能默默改快照。评审者成为主作者时，最终验收另取独立评审。
 
+补充输入：首次公开清单遗漏了 D4 主文引用的规范性机器目录。现补入逐字保留的 [D4 参考目录](snapshots/d4-reference-catalog-registry/source.json)，清单增至 49 份。该目录包含 4 份限定信息集、22 个类型别名、61 个字段定义、7 个特征模式和 1 个日历系列策略，与已接受的上游输入副本一致。原有 48 份快照不变；基于旧固定提交的阅读记录仍只覆盖原清单，必须另行补读本目录。这是补齐输入，不是修改 D4 规范或接受 D10。
+
 ## D10 与发布
 
 下一任务为[Agent、自动化和外部能力](d10/TASK.zh-CN.md)。D10 之后进行 A2 全局设计审查，之后按[路线图](../../ROADMAP.zh-CN.md)推进 G1 最小可用产品。设计公开、设计接受、可运行发布是不同事件。
@@ -29,6 +31,7 @@ translation_status: source
 
 | Topic | Input | Role |
 |---|---|---|
+| D4 | [D4 Reference Catalog Registry v1](snapshots/d4-reference-catalog-registry/source.json) | accepted-design-input |
 | D1 | [D1 Product Surface and Capability Boundary](snapshots/d1-product-surface-and-capability-boundary/source.md) | accepted-design-input |
 | D2 | [D2 Document Content and Domain Objects](snapshots/d2-document-content-and-domain-objects/source.md) | accepted-design-input |
 | D3 | [D3 Identity References Ownership and Lifecycle](snapshots/d3-identity-references-ownership-and-lifecycle/source.md) | accepted-design-input |

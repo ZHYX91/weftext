@@ -4,6 +4,15 @@
   "generation": "D1-D9 through D9-r04-evidence05-2026-09-24",
   "files": [
     {
+      "path": "docs/design/snapshots/d4-reference-catalog-registry/source.json",
+      "title": "D4 Reference Catalog Registry v1",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": false,
+      "bytes": 102856,
+      "lines": 3685
+    },
+    {
       "path": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
       "title": "D1 Product Surface and Capability Boundary",
       "role": "accepted-design-input",
