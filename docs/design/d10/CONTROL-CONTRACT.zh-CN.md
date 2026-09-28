@@ -244,7 +244,7 @@ dependency 是具体 dependent Contribution 的成员，不存在 package 级 am
 5. `ActivationBinding.activationGeneration`、`capabilityCatalogDigest` 与准确 D4 `registryBinding` 共同绑定完整集合。D7 explicit selection 绑定所选 `(contributionId,version)`；D7 `all` 绑定该 generation 的完整集合。新增/删除/version/descriptor/owner/Registry 变化使旧 search dependency/result 失效，不能静默改变字段。
 6. carrier 只是纯数据，不授 `field_read`、network、secret、script、私有全文 index payload、author write 或 alias-source 权威。执行仍是 D7 `scan → explicit read → CEL match/rank → sort/project` 且逐项通过当前 D6 授权；缺失/不可用的 selected contribution 走原 D7 unavailable，不能静默跳过后宣称空结果成功。
 
-第一方正例：`weftext.people` package 的合法 `view` carrier 可承载 D7 SearchContribution `people/search-name`、version `1`、`fieldId:"people/name"`、`textPath:["text"]`、`role:"name"`。只有 D4 保留 tuple `people→(first_party,weftext.people)`、asset digest、当前 Registry proof 与完整 Catalog 都成立时才能激活；同名第三方 package、wrong digest 或仅 runtime discovery 都保持 inactive/pending。
+第一方正例：`weftext.people` package 的合法 `view` carrier 可承载 D7 SearchContribution `people/search-name`、version `1`、`fieldId:"people/name"`、`textPath:["text"]`、`role:"name"`。只有 D4 保留 tuple `people→(first_party,weftext.people)`、asset `digest`、当前 Registry proof 与完整 Catalog 都成立时才能激活；同名第三方 package、wrong digest 或仅 runtime discovery 都保持 inactive/pending。
 
 ## 5. 四个第一方 module 的唯一 package 映射
 
@@ -401,7 +401,7 @@ ControlBody/1 只有七个 variant：
    K/action 适用闭集：
    automation→enable|disable|archive；
    lease/approval→revoke|archive；
-   grant→revoke|archive，其中 archive 映射到已有 `retired` 状态；
+   grant→revoke|archive，其中 `archive` 映射到已有 `retired` 状态；
    run→cancel|archive；
    trust→revoke；
    package/pricing→retire；
@@ -686,19 +686,19 @@ current state 使用另一个入口：
 | K | exact scope | exact `view` | config/domain/usage revision 语义 |
 | --- | --- | --- | --- |
 | `automation` | workspace | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` 是 control/lifecycle CAS；`definitionRevision` 只随 semantic definition 改变；usageRevision=none。 |
-| `lease` | workspace | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`；usageRevision=some，只在新的 `LeaseRunUse/1` 消耗谱系时推进；正常 usage 不使已 admitted Run 的 leaseRevision 失效。 |
-| `approval` | workspace | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`；usageRevision=some，只用于 ApprovalUse reserve/consume/released_terminal；撤销/archive 推进 approvalRevision，不清 usage。 |
+| `lease` | workspace | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`；用量修订只在新的 `LeaseRunUse/1` 消耗谱系时推进；普通用量变化不会使已经准入的运行因租约修订变化而失效。 |
+| `approval` | workspace | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`；用量修订只随批准使用的预留、消费或终态释放变化；撤销或归档推进批准配置修订，不清除累计用量。 |
 | `planned_approval` | workspace | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none；不在此泄露 author request/preview bytes。 |
 | `external_approval` | workspace | `{kind:"external_approval_state",grantingPrincipal:Token,intent:Binding<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none。 |
 | `run` | workspace | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | durable Run/lifecycle transition 推进 binding revision；usageRevision=none，maxRuns 消耗归 Lease usage。 |
 | `workspace_budget` | workspace | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | binding revision 是 limits CAS；usageRevision=none，真实 cost usage 继续在 grant/account/reservation，不建立第二 budget ledger。 |
 | `activation` | workspace | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`；successor activation 使旧 record `current:false`，不删除；usageRevision=none。 |
-| `deployment_policy` | deployment | `{kind:"deployment_policy_state",policy:DeploymentControlPolicy/1}` | `binding.revision==policy.revision`；usageRevision=none。 |
+| `deployment_policy` | deployment | `{kind:"deployment_policy_state",policy:DeploymentControlPolicy/1}` | `binding.revision==policy.revision`；无独立累计用量修订。 |
 | `trust` | deployment | `{kind:"trust_state",state:"active"|"revoked",publisherId:Text,publicKey:Ed25519PublicKey,previous:Option<Binding<trust>/1>,proof:EvidenceTicket/1,claims:[NamespaceClaim/1]}` | key/claim/rotation/revoke 推进 binding revision；usageRevision=none。 |
-| `package` | deployment | `{kind:"package_state",state:"installed"|"retired",manifest:PackageManifest/1,signature:Ed25519Signature}` | install/update/retire 推进 binding revision；packageVersion 独立；usageRevision=none。 |
+| `package` | deployment | `{kind:"package_state",state:"installed"|"retired",manifest:PackageManifest/1,signature:Ed25519Signature}` | 安装、更新或退役推进绑定修订；包版本域独立；无独立累计用量修订。 |
 | `external_account` | deployment | `{kind:"external_account_state",state:"connected"|"disconnected",provider:ContributionBinding/1,externalAccountId:Text,endpointId:LocalOperationId,proof:EvidenceTicket/1}` | config/disconnect 推进 binding revision；usageRevision=none。 |
 | `secret` | deployment | `{kind:"secret_state",state:"active"|"revoked",account:Binding<external_account>/1,audience:ContributionBinding/1,usageKind:"authenticate",secretVersionId:Token}` | publish/rotation/rebind/revoke 推进 binding revision；永不返回 plaintext/staged bytes；usageRevision=none，使用次数归 ResourceUseGrant。 |
-| `grant` | deployment | `{kind:"grant_state",grant:ResourceUseGrant/1}` | `binding.ref.id==grant.grantId`、`binding.revision==grant.grantRevision`，usageRevision=some 且等于 `grant.usageRevision`；archive 映射现有 `retired`。 |
+| `grant` | deployment | `{kind:"grant_state",grant:ResourceUseGrant/1}` | `binding.ref.id==grant.grantId`、`binding.revision==grant.grantRevision`；存在独立用量修订且其值等于 `grant.usageRevision`；归档动作映射到已有 `retired` 状态。 |
 | `cost_account` | deployment | `{kind:"cost_account_state",state:"active"|"frozen"|"closed",currency:CurrencyCode,ceiling:Counter,pricing:Option<Binding<pricing>/1>,spentMicroUnits:Counter,heldMicroUnits:Counter}` | config/close/freeze 推进 binding revision；held/spent reservation delta 推进 usageRevision=some；freeze 不清 liability。 |
 | `pricing` | deployment | `{kind:"pricing_state",state:"active"|"retired",account:Binding<external_account>/1,currency:CurrencyCode,fixedMicroUnits:Counter,meters:[PricingMeter/1],evidence:EvidenceTicket/1}` | pricing update/retire 推进 binding revision；usageRevision=none。 |
 | `reservation` | deployment | `{kind:"reservation_state",reservation:CostReservation/1}` | `binding.ref.id==reservation.reservationId` 且 `binding.revision==reservation.revision`；usageRevision=none；`uncertain` 是已有可恢复状态，不是 unknown。 |
@@ -771,7 +771,7 @@ ControlDependencies/1 内部恰含本次实际读取的 config bindings、usage 
 
 失败 prepare/commit 不创建 applied decision。已存在的 prepare binding 可以在 transient state_unavailable 后用同一输入恢复；修改 expected revision/body/target 必须新 requestId。防重 binding、terminal proof、planned/unknown/uncertain pins 不能因普通 TTL 清理后让旧 requestId 再执行。
 
-configuration revision 与 usageRevision 分域；checked increment 到 Counter 上限时 budget_exceeded，禁止 wrap/reset。retired id/incarnation 永不复用，防止 ABA。
+configuration revision 与 `usageRevision` 分域；checked increment 到 Counter 上限时 budget_exceeded，禁止 wrap/reset。retired id/incarnation 永不复用，防止 ABA。
 
 ## 9. Deployment value 与证据
 
