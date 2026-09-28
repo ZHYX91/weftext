@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Control and Management Contract
 
-revision: D10-r07-independent-review-fixes-2026-09-28; status: author-revised candidate after complete independent review of C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` returned REVISE (P0=0, P1=1 JR001, P2=8 JR002–JR009; terminology and translation failed). This file is the unique D10 owner for management/current-result/error contracts revised by R07. Fixed upstream S remains unchanged; every D6/D7/D3/D8/D9 amendment in UPSTREAM-AMENDMENTS remains inactive pending later coordinated acceptance.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: author-revised candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed C18/18 and S49/49 and returned REVISE (P0=0, P1=1 B03-P1-01, P2=10 B01/B02/B03/B10/B11 findings; terminology and bilingual semantics both REVISE). R08 is an author remediation awaiting a fresh complete independent review. Fixed S remains unchanged and every upstream companion amendment remains inactive pending later coordinated acceptance.
 
 ## 1. Authority, scope, and error boundary
 
@@ -42,7 +42,7 @@ The separate D10 Run/step error object is:
         "cancelled" | "external_outcome_unknown"
     }
 
-`D10ControlError/1` is used only by `d10_control_prepare`, `d10_host_control_commit`, `d10_control_result`, `d10_control_read`, `d10_secret_stage`, and `d10_emergency_stop`. `D10RunStepError/1` is used only while a D10-owned Run/step has not entered another protocol owner: Run admission, ContextBundle/model/tool/connector execution, pre-D6 approval/delegation checks, and external-effect execution/recovery.
+`D10ControlError/1` is used only by `d10_control_prepare`, `d10_host_control_commit`, `d10_control_result`, `d10_control_read`, `d10_secret_stage`, `d10_emergency_stop`, and `d10_emergency_stop_result`. `D10RunStepError/1` is used only while a D10-owned Run/step has not entered another protocol owner: Run admission, ContextBundle/model/tool/connector execution, pre-D6 approval/delegation checks, and external-effect execution/recovery.
 
 Once a request enters D3, D6, D7, D8, or D9, that owner returns its original closed error/envelope unchanged. D10 never wraps D6 `not_visible`, `approval_unavailable`, `execution_stopped`, or `transaction_aborted`; never wraps D7 action/effects errors; and never renames D3/D8/D9 errors. A D10 diagnostic UI may perform a separately authorized `d10_control_read` after the owner error, but that read cannot alter the formal result.
 
@@ -102,6 +102,16 @@ Independent cumulative-use CAS uses `usageRevision` only for `lease`, `approval`
 CurrencyCode is exact three-character ASCII A-Z. D10 performs no implicit foreign-exchange conversion.
 
 Other primitive scalars reuse existing closed JSON semantics. `Token` is the non-empty opaque token from D6 §1; `Text` is a Unicode-scalar string; `Bytes` is a byte sequence bounded by the applicable entrypoint budget; `Boolean` accepts JSON true/false only; `Sha256` is `sha256:` plus 64 lowercase hex digits; `HostPrincipal` is a `Token` produced by trusted host authentication mapping. The current actor is never caller-supplied, but an H-authorized management operation may name another `HostPrincipal` in a policy, reconciler, or ResourceUseGrant **target-principal field**; that configures the authorized target and does not impersonate that principal as the caller. `Ed25519PublicKey` and `Ed25519Signature` appear only inside accepted package/trust adapters whose admitted profile fixes their encoding; an ordinary control caller cannot self-assert verification.
+
+    HostOrWorkspacePrincipal/1 =
+        {kind:"workspace",
+         workspaceRef:D3.WorkspaceRef,
+         principal:Token}
+      | {kind:"deployment",
+         storeIncarnation:Uuid,
+         principal:HostPrincipal}
+
+`HostOrWorkspacePrincipal/1` is a D10 closed projection of the trusted authenticated actor at the successful safety-transition cut. The workspace arm pairs the current D6-authenticated Workspace principal with its exact WorkspaceRef; the deployment arm pairs the H-authenticated HostPrincipal with the actual D10 storeIncarnation. Neither arm is caller-supplied, an author EntityRef, or a capability token.
 
 Controlled ASCII-token grammar:
 
@@ -213,6 +223,41 @@ A `view` Contribution descriptor asset has a closed root dispatch. It is either 
     }
 
 This does not make `SearchContribution` a ViewSpec and does not create a `search` ContributionKind. One D10 Contribution carries exactly one D7 SearchContribution. The D7 object remains exact `{contributionId,version,fieldId,textPath,role}` with its original D7 owner, D4-style semantic contribution ID grammar, positive Counter version, 0..8 static text path, and `name|alias|content` role.
+
+R08 also freezes one named, versioned first-party Core author adapter. It is not a generic Tool callback and does not make ToolValue a D7 value alias:
+
+    CoreFieldMemberAdapterDescriptor/1 = {
+      kind:"d10_core_field_member_adapter",
+      wireVersion:1,
+      actionKind:"set_field_member"
+    }
+
+The only generation-one adapter identity is packageId `weftext.automation`, package-local contributionId `set-field-member`, Contribution kind `action`, and contractVersion `{major:1,minor:0,patch:0}`. packageVersion and descriptorDigest still use ordinary accepted first-party PackageManifest/ContributionBinding rules. This package is not a Bundled Module and creates no D4 namespace or author fact.
+
+    SingleFieldMemberPath/1 =
+      [D4.ObjectMemberSpec.name]   // exact length 1..7
+
+    FieldMemberTask/1 = {
+      ownerNodeRef:D3.NodeRef,
+      fieldId:D4.FieldId,
+      selection:"require_exactly_one_entry",
+      memberPath:SingleFieldMemberPath/1,
+      value:D7.TypedLiteral
+    }
+
+`FieldMemberTask.value` is the original D7 Action literal, not the approval scalar. It is either one allowed scalar `SingleFieldMemberScalarType/1`, or exactly one D7 Optional wrapper whose item is that scalar and whose value state is `some`. `optional.none`, Ref/Locator/control tokens, objects, lists, sets, unions, nested Optional, and ToolValue text promoted into Ref/FieldId are rejected. An optional D4 member therefore keeps the original D7 Optional bridge while `SingleFieldMemberRule.memberType` compares the present underlying scalar.
+
+    D10AuthorPreparationLink/1 = {
+      run:ControlRef<run>/1,
+      stepId:Counter,
+      automation:Binding<automation>/1,
+      definitionRevision:Counter,
+      taskDigest:Sha256,
+      preparedBindingToken:Token,
+      request:D6.d6_commit_request
+    }
+
+This is a protected Core recovery link, not a public request and not a second author decision. `preparedBindingToken` is the exact token of the original D7 PreparedActionBinding/2 and `request` is its original D6 request. Core saves this link, the original PreparedActionBinding/2, and required pins atomically before returning the prepared author step or allowing submission.
 
 ContributionKind is closed to:
 The Contribution-kind closed set is `module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`.
@@ -449,12 +494,17 @@ Option<T> is only {kind:"none"} or {kind:"some",value:T}; null is forbidden.
 
 All step/input/output/elapsed maxima are finite positive values. costs is sorted and unique by grant ref and currency matches the grant/account.
 
+    AutomationInvocation/1 =
+        {kind:"tool",
+         contribution:ContributionBinding/1,
+         parameters:ToolValue/1}
+      | {kind:"core_field_member",
+         contribution:ContributionBinding/1,
+         task:FieldMemberTask/1}
+
     AutomationSpec/1 = {
       label:Text,
-      invocation:{
-        contribution:ContributionBinding/1,
-        parameters:ToolValue/1
-      },
+      invocation:AutomationInvocation/1,
       schedule:AutomationSchedule/1,
       missedPolicy:"skip" | "run_once",
       queueLimit:Counter,
@@ -470,7 +520,7 @@ All step/input/output/elapsed maxima are finite positive values. costs is sorted
        horizon:ScheduleHorizon/1,
        outputLimit:Counter}
 
-parameters must validate against the active ToolValueProfile/1 input type of the Contribution. A recurrence selector only locates D4 recurrence source rebound to the same current revision and never becomes a durable EntityRef.
+`tool` parameters must validate against the active ToolValueProfile/1 input type of that Contribution. `core_field_member` accepts only the exact accepted first-party adapter identity above and its closed `FieldMemberTask/1`; it does not use ToolValueProfile and grants no extra read/write authority. A recurrence selector only locates D4 recurrence source rebound to the same current revision and never becomes a durable EntityRef.
 
     LeaseReadGrant/1 = {
       scope:<exact D6 Policy/2 grant.scope from S D6 Control §4>,
@@ -499,6 +549,19 @@ parameters must validate against the active ToolValueProfile/1 input type of the
 
 `readGrants` accepts only `LeaseReadGrant/1` above; actual authorization is still computed from current D6 Policy with its original deny precedence, and a Lease cannot add authority. `notBefore < notAfter` and `maxRuns` is finite positive.
 
+
+For one `core_field_member` Run step, Core performs exactly this mapping and no callback dispatch:
+
+1. Bind the current Automation definitionRevision, exact invocation, ActivationBinding, Lease, current D6 principal, and all finite budgets.
+2. Before reading values, run the original D7 Narrow Field Qualification graph for the configured owner/Field/member and prove every required current observation/write scope. Full-source validation may occur internally, but a narrow caller never receives hidden source bytes.
+3. Read the complete current Field for `task.ownerNodeRef/task.fieldId`. Automatic execution requires exactly one Entry and the configured member must already be present. From that exact preimage obtain `expectedRevision`, its real `occurrenceKey`, and the original complete `rawEntrySource`; no stale selector is persisted in Automation configuration.
+4. Construct the original D7 intent exactly as `{format:"weftext.action",version:1,intent:{kind:"set_field_member",selector:{owner:task.ownerNodeRef,fieldId:task.fieldId,expectedRevision:<fresh owner source revision>,occurrenceKey:<the unique current Entry key>,rawEntrySource:<the exact original Entry JSON text>},memberPath:task.memberPath,value:task.value}}`.
+5. Call the original D7 prepare path, retain its PreparedActionBinding/2, fetch and validate the complete preview/effects/MutationFootprint, then compare the **actual** member-change or byte-exact raw-no-op against the separate current Standing Approval. Approval never supplies the target, Entry, member path, or requested value.
+6. Core constructs ApprovalUse from the original prepared semantics and enters D6 with the original `d6_commit_request`. Planning/final/replay remain owned by D6.
+
+For optional S `people/phone.label`, task.value is the D7 Optional TypedLiteral `{type:{kind:"optional",item:{kind:"semantic_code",scope:<the complete people contribution-set scope>}},value:{state:"some",value:"people/work"}}`. The D4 scope remains all three codes `people/other|people/personal|people/work`; an approval enum may intentionally allow only a subset. One current phone Entry with present `personal→work` is a true member-change. Present `work→work` is eligible only when the complete proposed source is byte-equal and therefore exercises the existing raw-no-op branch. Zero or multiple current phone Entries make the automatic profile inapplicable; an interactive user may still select the second same-value phone by its real D7 selector and use the ordinary D7 confirmation path.
+
+All original D2/D4/D6/D7 limits remain active, including D4 raw Entry 65,528 bytes and the existing complete source/header/carrier/entry/check budgets. Internal complete-source validation never expands public disclosure. If `D10AuthorPreparationLink/1` exists after restart, Core resumes only that exact original PreparedActionBinding/request. If it is absent and Core can prove the atomic save never succeeded and no request was delivered, a new prepare may be created. If existence/continuity is unknown, return `state_unavailable`; planned or submitted-unknown work recovers the original request and never creates a new OperationId.
 
     StandingApprovalSpec/1 = {
       notBefore:D4.zoned_instant,
@@ -550,6 +613,78 @@ A malformed Standing Approval configuration returns management `D10ControlError.
 
 Normative positive semantic-code fixture: current S `people/phone` expands `people/labeled-text-value.label` as an optional contribution-set semantic_code. With one current phone Entry whose `label` is present, the D7 Action value is Optional<semantic_code>.some; `SingleFieldMemberRule.memberType` is the underlying semantic_code scope. An enum containing `people/personal` and `people/work` may authorize present `personal→work`, while `work→work` exercises raw-no-op. An allowed D4 code omitted from the approval enum, for example `people/other`, does not become automatically approved.
 
+R08 separates immutable external-request semantics, a concrete send attempt, and the mutable external-effect lifecycle:
+
+    FrozenEffectBytes/1 = {
+      bytes:Bytes,
+      byteLength:Counter,
+      digest:Sha256
+    }
+
+    ExternalTarget/1 = {
+      operation:LocalOperationId,
+      target:ToolValue/1
+    }
+
+    ExternalIdempotencyBinding/1 =
+        {kind:"none"}
+      | {kind:"bounded_key",
+         key:Text,
+         notBefore:D4.zoned_instant,
+         notAfter:D4.zoned_instant,
+         proof:FrozenEffectBytes/1}
+
+    ExternalEffectIntent/1 = {
+      effect:ControlRef<external_effect>/1,
+      workspaceRef:D3.WorkspaceRef,
+      contributionBinding:ContributionBinding/1,
+      accountBinding:Binding<external_account>/1,
+      targetBinding:ExternalTarget/1,
+      requestPayload:FrozenEffectBytes/1,
+      idempotencyBinding:ExternalIdempotencyBinding/1
+    }
+
+    ExternalRequestBinding/1 = {
+      effect:ControlRef<external_effect>/1,
+      requestDigest:Sha256
+    }
+
+    ExternalExecutionBinding/1 = {
+      sendAttemptId:Uuid,
+      intent:ExternalRequestBinding/1,
+      delegationBinding:Binding<lease>/1,
+      approvalBinding:Binding<external_approval>/1,
+      externalEffectGrant:Binding<grant>/1,
+      egressBinding:Binding<grant>/1,
+      secretGeneration:Option<{
+        secret:Binding<secret>/1,
+        secretVersionId:Token,
+        grant:Binding<grant>/1
+      }>,
+      budgetReservations:[{
+        billableAttemptId:Uuid,
+        reservation:ControlRef<reservation>/1
+      }]
+    }
+
+    ExternalEffectCurrentView/1 = {
+      kind:"external_effect_state",
+      state:"prepared" | "submitting" | "succeeded" |
+            "failed_no_effect" | "outcome_unknown" | "cancelled",
+      recoveryMode:"automatic" | "manual_required",
+      contribution:ContributionBinding/1,
+      account:Binding<external_account>/1,
+      operation:LocalOperationId,
+      requestDigest:Sha256,
+      targetDigest:Sha256
+    }
+
+`FrozenEffectBytes.byteLength` equals the exact bytes and digest equals their SHA-256. Every instance must fit the narrowest applicable finite Run/Automation/Lease input and egress limits. `bounded_key.key` is non-empty UTF-8 text of at most 1024 bytes, `notBefore < notAfter`, and proof is the accepted adapter's complete immutable evidence for the same contribution/account/operation/target/key/window. This proof is internal bytes and is **not** an EvidenceTicket arm.
+
+`requestDigest` is SHA-256 of the complete canonical frozen ExternalEffectIntent under domain D10-External-Intent/1; `targetDigest` is the complete ExternalTarget digest under D10-External-Target/1. Core retains the full bytes. `budgetReservations` is 0..32, sorted/unique by reservation ref, and each item resolves to a CostReservation whose `attemptId==billableAttemptId`; later settlement may advance that reservation revision without mutating the immutable send binding. `sendAttemptId` is distinct from every billableAttemptId.
+
+The public current view is only `ExternalEffectCurrentView/1`. It never returns request payload bytes, target ToolValue, idempotency key/proof, secret generation, approval record, or reservation identities. Even digest/account/contribution disclosure requires current authority for the original frozen effect scope.
+
     ConsentSpec/1 =
       {kind:"planned",
        originalRequest:D6.d6_commit_request,
@@ -559,13 +694,13 @@ Normative positive semantic-code fixture: current S `people/phone` expands `peop
        notBefore:D4.zoned_instant,
        notAfter:D4.zoned_instant}
     | {kind:"external",
-       intent:Binding<external_effect>/1,
+       intent:ControlRef<external_effect>/1,
        requestDigest:Sha256,
        resourceGrants:[Binding<grant>/1],
        notBefore:D4.zoned_instant,
        notAfter:D4.zoned_instant}
 
-planned authorizes only the original planned request and never reprepares, changes OperationId, or changes target. external authorizes only the original ExternalEffectIntent.
+planned authorizes only the original planned request and never reprepares, changes OperationId, or changes target. external authorizes only the immutable ExternalEffectIntent whose exact ControlRef and requestDigest match. A legal `prepared→submitting→...` lifecycle revision never changes that frozen request digest and therefore never invalidates consent by itself; changing contribution/account/target/payload/idempotency creates a new effect intent and needs new consent.
 
 A successful prepare returns:
 
@@ -626,14 +761,41 @@ Historical prepare/apply and current exact-record reads are deliberately separat
          scope:Scope/1, requestId:Uuid,
          prepared:ControlPreparedHistory/1, applied:ControlAppliedHistory/1}
 
+    ControlOperationKind/1 =
+        "automation_configure" | "consent" | "state" |
+        "workspace_limits" | "activation" |
+        "deployment_put" | "cost_reconcile"
+
+    ControlAffectedChange/1 = {
+      ref:ControlRef<K>/1,
+      change:"create" | "update" | "enable" | "disable" |
+             "revoke" | "cancel" | "archive" | "retire" |
+             "disconnect" | "close" | "settle",
+      beforeRevision:Option<Counter>,
+      proposedAfterRevision:Option<Counter>
+    }
+
+    ControlResourceUse/1 = {
+      grant:Binding<grant>/1,
+      maximum:Option<Money/1>
+    }
+
+    ControlPreviewSummary/1 = {
+      affected:[ControlAffectedChange/1],
+      resourceUses:[ControlResourceUse/1]
+    }
+
     ControlPreparedHistory/1 = {
-      canonicalIntentBytes:Bytes,
+      intentDigest:Sha256,
+      operation:ControlOperationKind/1,
       allocatedControlRefs:[ControlRef<K>/1],
-      preview:ControlPreview/1,
+      previewSummary:ControlPreviewSummary/1,
       commitOwner:"D6" | "D10"
     }
 
-The prepared history is projected only from the original `ControlPrepareBinding/1`. It never returns a still-usable prepareToken and, for the Workspace arm, never returns or reconstructs the D6 author request or planned-preview author content. Planned author inspection remains the D7 `d7_planned_preview_open` proposal. `allocatedControlRefs` is sorted/unique by complete canonical Ref bytes.
+The protected `ControlPrepareBinding/1.canonicalIntentBytes` continues to store complete canonical control intent B, including any nested planned author request A; stable-key conflict still compares the complete bytes. `intentDigest` is only SHA-256 of those saved bytes. Historical public result never returns A, complete B, generated control-submit request M, prepareToken, or planned-preview bytes/token. `operation` is exactly one of the seven ControlBody kinds; `ControlAffectedChange/1` and `ControlResourceUse/1` are the existing ControlPreview item shapes with unchanged fields, enums, sorting, uniqueness, Option, and Money semantics.
+
+Initial `d10_control_prepare` may return full `D10ControlPrepared/1`, including M, only after current disclosure authority covers complete B and any nested A scope. Earlier possession of A is not current read authority. Same-key prepare after an authoritative applied success returns the same `d10_control_result_applied` historical arm, never a fresh-looking prepared object. If applied-success existence or linkage is unprovable, return `state_unavailable`; never downgrade to prepared.
 
     ControlAppliedHistory/1 =
         {kind:"workspace",
@@ -690,7 +852,7 @@ The generation-one current projections are closed as follows:
 | `lease` | `workspace` | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`; usageRevision some and advances only when a new `LeaseRunUse/1` consumes the lineage. Normal usage never stales an already-admitted Run's leaseRevision. |
 | `approval` | `workspace` | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`; usageRevision some for ApprovalUse reserve/consume/released_terminal only. Revocation/archive advances approvalRevision without resetting usage. |
 | `planned_approval` | `workspace` | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. No author request/preview bytes are exposed here. |
-| `external_approval` | `workspace` | `{kind:"external_approval_state",grantingPrincipal:Token,intent:Binding<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. |
+| `external_approval` | `workspace` | `{kind:"external_approval_state",grantingPrincipal:Token,intent:ControlRef<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. |
 | `run` | `workspace` | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | binding revision advances on durable Run/lifecycle transition. usageRevision none; maxRuns consumption belongs to Lease usage. |
 | `workspace_budget` | `workspace` | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | binding revision is limits CAS. usageRevision none; actual cost usage remains in grants/accounts/reservations rather than a second budget ledger. |
 | `activation` | `workspace` | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`; successor activation makes earlier record `current:false` without deleting it. usageRevision none. |
@@ -703,10 +865,20 @@ The generation-one current projections are closed as follows:
 | `cost_account` | `deployment` | `{kind:"cost_account_state",state:"active"|"frozen"|"closed",currency:CurrencyCode,ceiling:Counter,pricing:Option<Binding<pricing>/1>,spentMicroUnits:Counter,heldMicroUnits:Counter}` | binding revision covers config/close/freeze; usageRevision some for held/spent reservation deltas. Freeze never clears liabilities. |
 | `pricing` | `deployment` | `{kind:"pricing_state",state:"active"|"retired",account:Binding<external_account>/1,currency:CurrencyCode,fixedMicroUnits:Counter,meters:[PricingMeter/1],evidence:EvidenceTicket/1}` | binding revision covers pricing update/retire. usageRevision none. |
 | `reservation` | `deployment` | `{kind:"reservation_state",reservation:CostReservation/1}` | `binding.ref.id==reservation.reservationId` and `binding.revision==reservation.revision`. usageRevision none; `uncertain` is the existing recoverable state, not unknown. |
-| `external_effect` | `workspace` | `{kind:"external_effect_state",state:"prepared"|"submitting"|"succeeded"|"failed_no_effect"|"outcome_unknown"|"cancelled",recoveryMode:"automatic"|"manual_required",intent:ExternalEffectIntent/1}` | binding revision advances on durable effect/recovery transition. usageRevision none; costs/attempt quotas remain their reservation/grant owners. |
-| `stop` | the exact workspace or deployment scope used to create the latch | `{kind:"stop_state",latch:ExecutionStopLatch/1}` | fresh open record has revision 1; only `open→stopped` advances once; idempotent repeated stop is a no-op. usageRevision none. |
+| `external_effect` | `workspace` | `ExternalEffectCurrentView/1` | binding revision advances only on durable effect/recovery lifecycle transition and is distinct from the immutable requestDigest. usageRevision none; costs/attempt quotas remain their reservation/grant owners. |
+    ExecutionStopLatchView/1 = {
+      target:ControlRef<automation|run>/1,
+      state:"open" | "stopped",
+      stoppedBy:Option<HostOrWorkspacePrincipal/1>
+    }
+
+| `stop` | exact target Workspace scope when read through W, or exact deployment storeIncarnation when read through H | `{kind:"stop_state",latch:ExecutionStopLatchView/1}` | fresh open record has revision 1; only `open→stopped` advances once; idempotent repeated stop is a no-op. Internal safety sequence is not public; usageRevision none. |
 
 For `lease|approval|grant|cost_account`, `D10ControlCurrent.usageRevision` must be `some` and equal the record's current independent usage revision; every other kind requires `none`. Trusted time crossing `notBefore/notAfter` changes current eligibility but does not silently mutate configuration revision or create a persisted `expired` state. Revocation/retirement/archive/close remains observable to an authorized reader and never aliases absence.
+
+`activation_state.current` is derived in the same authorized cut from the exact active-selector record; the selector, not the historical ActivationBinding record, is the CAS object for switching. Successor activation compares the exact current predecessor selector and atomically publishes the new ActivationBinding plus selector. An old generation becoming non-current never changes that historical generation or its Binding revision.
+
+Generation one exposes no independent early-revoke state action for `planned_approval` or `external_approval`. Their finite time bounds, exact Lease/Activation/request binding, current ResourceUseGrant state, current D6 authorization, and irreversible stop gates are rechecked at the relevant planned/send boundary. This support limitation does not create a generic approval lifecycle state and never releases planned work except through the original authoritative-abort rule.
 
 ## 8. Idempotency, CAS, and replay order
 
@@ -925,7 +1097,7 @@ Administrator-entered zero, effect idempotency, business rollback, author abort,
 
 ## 11. Emergency stop and linearization
 
-Public stop:
+Public stop is a specialized safety transaction outside ordinary control prepare:
 
     D10EmergencyStopRequest/1 = {
       kind:"d10_emergency_stop",
@@ -937,29 +1109,80 @@ Public stop:
       | ControlRef<run>/1
     }
 
-An ordinary owner may stop the exact owned automation/run; W is Workspace-scoped and H Deployment-scoped. Stop requires no target configuration revision, so ordinary configuration-Counter exhaustion cannot block it. It requires the exact ID/incarnation and current stop authority.
+Generation one requires `requestId == target.id`. requestId is a deterministic dedup coordinate for the exact target, not a caller-selected capability. The request still carries the complete target Ref; no text, display name, bare UUID, or ToolValue is promoted into it.
 
-Before first enable/admission every executable object reserves one durable ExecutionStopLatch/1:
+    StopOwner/1 = {
+      storeIncarnation:Uuid,
+      workspaceRef:D3.WorkspaceRef,
+      target:ControlRef<automation|run>/1,
+      latch:ControlRef<stop>/1,
+      requestId:Uuid
+    }
+
+    StopCapacity/1 = {
+      issued:Counter,
+      reserved:Counter
+    }
+
+The protected stop stable key is `("D10-Emergency-Stop/1",target.storeIncarnation,target.kind,requestId)`. `requestId==target.id`, target/latch storeIncarnations equal StopOwner.storeIncarnation, and one exact target has exactly one latch. workspaceRef is the target's real Workspace from protected control state. D10 storeIncarnation is an internal persistent control-domain incarnation bound to the actually opened D6 authority-store backend; it is not a frozen D6 public API name, WorkspaceId, filesystem path, or authority token.
+
+W uses exact Workspace scope and H exact deployment storeIncarnation. Both may address the same latch only after their independent current authority gates. Scope is access qualification, not a second stop fact.
+
+Before first enable/admission, object creation atomically reserves one durable latch, one StopOwner association, one audit/result slot, and one unit of safety-sequence capacity. If reservation fails, the executable object cannot become manageable/runnable. Ordinary control prepare, configuration Counter space, budgets, approval/lease counts, cost, and executor quotas cannot consume this capacity. Stop requires no target configuration revision and no preceding ordinary management write.
 
     ExecutionStopLatch/1 = {
       target:ControlRef<automation|run>/1,
       state:"open" | "stopped",
-      stoppedBy:Option<HostOrWorkspacePrincipal>,
+      stoppedBy:Option<HostOrWorkspacePrincipal/1>,
       stoppedAtControlSequence:Option<Counter>
     }
 
-open→stopped is one-way and there is no clear operation. Repeated stop is idempotent. Stop consumes no maxRuns, ApprovalUse, cost, ordinary management quota, or executor budget.
+Open requires both options none; stopped requires both some. The transition is exactly Binding revision 1/open → revision 2/stopped. There is no clear operation. Safety sequence reservation obeys `reserved <= MAX-issued`, MAX=2^63-1. First stop atomically executes `issued:=issued+1`, `reserved:=reserved-1`, writes the sequence/actor/latch revision, immutable stop result/audit link, and required invalidations. Thus capacity exhaustion may reject creation of a new executable target, never the first stop of an existing reserved target.
+
+    D10EmergencyStopReceipt/1 = {
+      kind:"d10_emergency_stop_receipt",
+      wireVersion:1,
+      requestId:Uuid,
+      target:ControlRef<automation|run>/1,
+      latch:Binding<stop>/1,
+      state:"stopped"
+    }
+
+The receipt requires latch revision 2 and is a deterministic projection of the single latch transition; it is neither a D6 author receipt nor a second success ledger.
+
+    D10EmergencyStopResultRequest/1 = {
+      kind:"d10_emergency_stop_result",
+      wireVersion:1,
+      requestId:Uuid,
+      scope:Scope/1,
+      target:ControlRef<automation|run>/1
+    }
+
+    D10EmergencyStopResult/1 =
+        D10EmergencyStopReceipt/1
+      | {kind:"d10_emergency_stop_not_applied",
+         wireVersion:1,
+         requestId:Uuid,
+         target:ControlRef<automation|run>/1,
+         latch:Binding<stop>/1,
+         state:"open"}
+
+`not_applied` requires proven latch revision 1/open at that read linearization point and is not a promise about a later stop.
+
+Stop/result order is: closed decode and D1 automation.stop gate → current authenticated principal plus exact W/H scope and target/stop disclosure authority → authority/fence/custody → protected stable-key/target equality → latch/result continuity → transition or read → final current disclosure gate. Hidden, missing, wrong-scope, and wrong-store are `not_visible`; unprovable authority/fence/custody is `authority_unavailable`; proven corruption is `integrity_conflict`. After visibility, the same stable key bound to a different target is `control_conflict`. Unprovable latch/result continuity is `state_unavailable`, never not_applied or a fresh stop.
+
+If target configuration r5 is stopped and the response is lost, then a separately legal configuration changes the target to r6, retry with the same exact target/requestId returns the original receipt. Current r6 neither invalidates nor rewrites it. Loss of result-disclosure authority instead returns `not_visible` while the latch remains stopped.
 
 Linearization rules:
 
-1. New Run admission and stop share the same store serialization domain. The admission transaction checks applicable latches and atomically writes occurrence claim/LeaseRunUse. If stop commits first there is no admission. If admission commits first, its consumed count remains and later steps still check stop.
-2. D6 final author commit rechecks every stop latch referenced by the protected RunBinding inside the actual final transaction while holding its write serialization. A prepare-time or out-of-transaction check is insufficient. Commit first preserves the committed result; stop first prevents the new commit.
-3. External transport and stop share one send fence. Inside the fence the transport rechecks latches, durably stores ExternalEffectIntent/started evidence and cost hold, and retains the fence through the first irreversible real send handoff. Queue admission is not send linearization. The fence is released before waiting for a remote response. Stop first means no send; send handoff first preserves sent fact and may later produce outcome_unknown.
-4. After crash, restore latch, started/send evidence, reservation, and decision before restoring the executor. Insufficient evidence cannot turn possibly-sent into cancelled.
-5. Stop does not block currently authorized authoritative abort, cost settlement, evidence retention, audit retention, or reference-safe cleanup. Those operations do not regain executor authority.
+1. New Run admission and the safety transaction share the same Authority Store serialization domain. Admission checks latches and atomically writes occurrence claim/LeaseRunUse. Stop first means no admission; admission first preserves its consumed count and all later protected steps still check stop.
+2. D6 final author commit rechecks every referenced stop latch inside the actual final author transaction while holding the same write-serialization boundary. Commit first preserves the committed result; stop first prevents the new commit.
+3. External transport and stop share one send fence. Before the first irreversible handoff, Core has frozen the immutable ExternalEffectIntent and exact ExternalExecutionBinding, rechecks stop plus approval/grant/secret/cost bindings, durably stores send-attempt/started evidence and holds, and retains the fence through the first real send handoff. Stop first means no send; handoff first preserves the original send attempt and may later be outcome_unknown.
+4. After crash, restore latch, send-attempt evidence, reservations, and original decisions before restoring an executor. Unknown evidence can never become cancelled or justify a new effectId, idempotency key, or OperationId.
+5. Stop does not block currently authorized authoritative abort, cost settlement, evidence/audit retention, or reference-safe cleanup. Those operations do not regain executor authority.
 6. Temporary disable, Lease expiry, temporary authorization loss, or ordinary cancel is not irreversible abort proof.
 
-The coordinated D6 amendment adds execution_stopped/preflight. An unseen D10-bound author request blocked by irreversible stop after current authorization/ObservationScope succeeds receives it and writes no author decision. A planned request may reach the original transaction_aborted/terminal authoritative-abort path only after current authorization, continuity, complete RunBinding, and irreversible stop are all proven. The same transaction follows the existing ApprovalUse-count release rule; cost is not automatically released.
+The stop safety transaction is a specialized closed write in the same managed Authority Store, not D10ControlPrepare and not a D6 author transaction. The coordinated D6 amendment only defines how D6 final/planned author work consumes the latch and returns `execution_stopped/preflight` or the original authoritative-abort result. Stop never fabricates ordinary control history, never rolls back committed author facts or an already-sent external effect, and never releases cost merely because execution was stopped.
 
 ## 12. D6 Policy/2 and bootstrap profile/3 proposal boundary
 
