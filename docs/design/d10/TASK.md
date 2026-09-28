@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision R06. The author revision is formed and awaits a new complete independent joint final review of a fixed candidate. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision R07. The complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` finished 18/18 candidate and 49/49 S inputs with final REVISE (P0=0, P1=1 JR001, P2=8 JR002–JR009; terminology/translation failed). R07 is the author remediation and awaits fresh independent re-review. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
@@ -44,8 +44,9 @@ The author stage maintains complete synchronized Chinese/English candidate mater
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
 - UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
 - CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
-- this TASK pair
-- the START pair
+- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
+- TASK.zh-CN.md / TASK.md
+- START.zh-CN.md / START.md
 
 CANDIDATE is self-contained and fixes the final architecture, data types, operation contracts, state machines, errors/races, permission/approval/egress/secret rules, activation/upgrade/rollback, Agent/Automation/Connector/MCP, budget/cost/audit, and five-surface boundaries. It compares credible complete A/B/C/D alternatives and states the selection rationale and non-goals.
 
@@ -59,7 +60,7 @@ The same author conversation first completes planning, then writes the complete 
 
 The author modifies only necessary design material under docs/design/d10/ and the existing PR title/body. Do not modify input snapshots, product implementation, brand, repository permissions, or branch protection; do not merge, release, or start A2.
 
-Author completion means: current input coverage is accurately 49/49 while the old U 48/48 remains historical reading context; all nine bilingual files under docs/design/d10/ are synchronized; required upstream amendments remain explicitly inactive; the candidate includes the four fixed-S supplemental input files with every other snapshot byte-identical to S; actual document checks/CI are read and accurately reported; no pending/failure is mislabeled as pass.
+Author completion means: the nine bilingual pairs / 18 exact paths under docs/design/d10/ are synchronized at R07; fixed S stays byte-unchanged; the four referenced S supplemental paths are `docs/design/README.md`, `docs/design/README.zh-CN.md`, `docs/design/inputs.json`, and `docs/design/snapshots/d4-reference-catalog-registry/source.json`, with only the last being the 49th normative source; all companion amendments remain explicitly inactive; actual documentation checks/CI are read and accurately reported; no pending/failure is mislabeled as pass.
 
 ## Current staged-revision constraints
 
@@ -80,6 +81,6 @@ These remain candidate amendments and do not change current upstream authority b
 
 After the complete candidate is fixed in a commit, hand it to a fresh independent Chat GPT-6 Pro for review from scratch. Author self-review is not an independent Gate.
 
-Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`; formal coverage is currently 16/16 candidate files and 44/49 upstream inputs, with 1 P1 + 8 P2 formally open; the final five D2/D5 inputs are still being independently read. None of that coverage or verdict transfers to R06 as read, accepted, or closed. Once R06 is fixed it requires a fresh complete joint final review, still requiring a complete verdict, P0/P1=0, and closure of terminology, scenarios, dependencies, evidence, and required amendments.
+Historical C=`35fab950dabedfb92c9f12858701be8afe6faa74` completed 49/49 and ended REVISE. The complete independent review of R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` completed candidate 18/18 and S 49/49 and ended REVISE with JR001 P1 and JR002–JR009 P2 open, terminology/translation failed, and no D8/D9 additions. Q01/Q02 remain closed and Q03 owner/composition verification is complete. That completed coverage is historical input to R07 and must not be recorded as R07 acceptance. R07 requires fresh independent re-review.
 
 Finite simulations, models, or CI do not establish product support. Real Core, durable fault, OS sandbox, real protocol-provider, UI/device, and release evidence remain separated by the Implementation Impact document, with unfinished items explicitly pending.
