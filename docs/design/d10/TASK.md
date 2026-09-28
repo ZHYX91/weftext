@@ -10,13 +10,13 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision `D10-r07-independent-review-fixes-2026-09-28`. The complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` finished 18/18 candidate and 49/49 S inputs with final REVISE (P0=0, P1=1 JR001, P2=8 JR002–JR009; terminology/translation failed). R07 is the author remediation and awaits fresh independent re-review. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision `D10-r08-joint-review-fixes-2026-09-28`. The complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S completed candidate 18/18 and S49/49 and returned REVISE: P0=0, P1=1 (`B03-P1-01`), P2=10 (`B01-P2-01`, `B02-P2-01`, `B02-P2-02`, `B02-P2-03`, `B03-P2-01`, `B03-P2-02`, `B03-P2-03`, `B03-P2-04`, `B10-P2-01`, `B11-P2-01`); overall, terminology, and bilingual semantics all require revision. R08 is the author remediation and does not independently close any finding. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
 ## Fixed inputs
 
-Use the fixed Git commit supplied by the controller. Completely read the design inputs listed by ../inputs.json and maintain actual reading coverage. The current author session completed the original 48/48 from U and additionally read the D4 reference catalog added by S, for current 49/49 coverage. START explicitly distinguishes the historical 48/48 from the newly added 49th input.
+Use the fixed Git commit supplied by the controller and report reading evidence by actor/lineage rather than merging it. The original author lineage historically completed S49/49. This continuation author has personally completed S16/49 full reads; D9 workers/export and templates were dependency-scoped partial reads only and are not counted as full. The independent joint review of fixed R07 separately completed S49/49. None of these coverage records substitutes for another, and workflow/tool summaries do not count as full reads. START records the exact provenance.
 
 Upstream D1-D9 remain authoritative until any coordinated amendment is actually accepted. Old model, stage, authorization, and historical candidate labels inside snapshots are historical source text only and do not override this task packet.
 
@@ -60,7 +60,7 @@ The same author conversation first completes planning, then writes the complete 
 
 The author modifies only necessary design material under docs/design/d10/ and the existing PR title/body. Do not modify input snapshots, product implementation, brand, repository permissions, or branch protection; do not merge, release, or start A2.
 
-Author completion means: the nine bilingual pairs / 18 exact paths under docs/design/d10/ are synchronized at R07; fixed S stays byte-unchanged; the four referenced S supplemental paths are `docs/design/README.md`, `docs/design/README.zh-CN.md`, `docs/design/inputs.json`, and `docs/design/snapshots/d4-reference-catalog-registry/source.json`, with only the last being the 49th normative source; all companion amendments remain explicitly inactive; actual documentation checks/CI are read and accurately reported; no pending/failure is mislabeled as pass.
+Author completion means: all nine bilingual pairs / 18 exact paths under docs/design/d10/ are synchronized at `D10-r08-joint-review-fixes-2026-09-28`; fixed S and every path outside docs/design/d10/ remain byte-unchanged; the English/Chinese scenario sets remain the same 125 IDs with matching branch dispositions; repository documentation/input checks applicable to the final candidate pass; all companion amendments remain explicitly inactive; reading/CI evidence is reported accurately and no pending/failure is mislabeled pass. Because R08 changes authorization, transaction/safety, public wire, recovery, external-send, and D8/D9 interface-owner contracts, author completion is followed by a **fresh complete independent joint review of the fixed R08 candidate: candidate 18/18 + S49/49**, not a differential carry-forward from R07.
 
 ## Current staged-revision constraints
 
@@ -77,10 +77,22 @@ The same author continues revising this candidate after staged independent revie
 
 These remain candidate amendments and do not change current upstream authority before coordinated D6/D7 acceptance.
 
+R08 additionally freezes the following author-stage boundaries already owned by CONTROL/CANDIDATE/UPSTREAM/SCENARIO/IMPLEMENTATION:
+
+- unattended authoring uses only the named first-party Core field-member adapter with closed `FieldMemberTask/1`; task intent is distinct from Standing Approval, and arbitrary ToolValue never becomes NodeRef/FieldId/selector/author request;
+- control history keeps full canonical B internally for dedup while public history returns only the seven-kind summary and never A/B/M;
+- external consent binds stable effect Ref + requestDigest; lifecycle revision is separate from immutable request semantics; public current view does not disclose payload/key/secret/reservation identity;
+- emergency stop is a specialized same-store D10 safety transaction with exact-target dedup, pre-reserved capacity, receipt/result replay, and no ordinary prepare or second author ledger;
+- D8 13 kinds and D9 17 public kinds each have one technical-interface owner; consumes/returns/operates-on data retain their original domain owners, including D6 ImportJob.
+
 ## Independent review
 
 After the complete candidate is fixed in a commit, hand it to a fresh independent Chat GPT-6 Pro for review from scratch. Author self-review is not an independent Gate.
 
-Historical C=`35fab950dabedfb92c9f12858701be8afe6faa74` completed 49/49 and ended REVISE. The complete independent review of R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` completed candidate 18/18 and S 49/49 and ended REVISE with JR001 P1 and JR002–JR009 P2 open, terminology/translation failed, and no D8/D9 additions. The two previously clarified questions remain closed, and owner/composition verification is complete. That completed coverage is historical input to R07 and must not be recorded as R07 acceptance. R07 requires fresh independent re-review.
+Historical C=`35fab950dabedfb92c9f12858701be8afe6faa74` and fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` remain historical REVISE records. The complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` completed candidate18/18 and S49/49 and returned REVISE with P0=0, P1=1 (`B03-P1-01`) and the ten P2 findings recorded in REVIEW-DISPOSITIONS; overall, terminology, and bilingual semantics all require revision. That complete R07 review is evidence for author remediation only, not R08 acceptance.
+
+After all nine R08 pairs are synchronized and document/input gates pass, fix the new R08 commit and perform a fresh complete independent joint review from scratch: candidate18/18 + fixed S49/49. Old R07 reading coverage, findings, CI, or verdict cannot be reused as proof that the new public-wire/authorization/transaction changes have passed. Required upstream amendments remain inactive proposals until later coordinated acceptance, versioning, activation, and acceptance evidence.
 
 Finite simulations, models, or CI do not establish product support. Real Core, durable fault, OS sandbox, real protocol-provider, UI/device, and release evidence remain separated by the Implementation Impact document, with unfinished items explicitly pending.
+
+Observed author checkpoint before R08-B: head `29ecca0cab43652a2e60f9997a68ec6ba8f6ca2b`; Design documents run `36383316785` failed only on the already-known 19 mixed-prose findings in TERMINOLOGY.zh-CN.md and UPSTREAM-AMENDMENTS.zh-CN.md, so input checks were skipped. source-gate run `36383316792` was still in progress at controller observation and included the known rust-source documentation failure plus the existing ui-source dependency-audit failure. This is a dated execution record, not a permanent contract or a pass claim.
