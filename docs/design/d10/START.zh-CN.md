@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision R06，作者修订待新的固定候选全量独立联合终审，尚未独立接受或运行时激活。本文件记录输入覆盖、候选文件集合和验收状态，不是 Gate verdict。
+状态：candidate revision R07，固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 完整独立终审后的作者修订；尚未新的独立接受或协调激活。本文件记录输入/候选交接状态，不是 Gate verdict。
 
 固定输入基线已整合为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 包含旧 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份输入和新增 D4 reference catalog。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
@@ -108,25 +108,26 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 
 这些是作者候选选择，不是独立 acceptance。
 
+
 ## 4. 当前候选材料
 
-本目录的完整候选由七对同步中英文 Markdown 组成：
+本目录完整候选由**九对同步中英文 Markdown（18 个 exact path）**组成：
 
 - CANDIDATE.zh-CN.md / CANDIDATE.md
+- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
+- UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
 - TERMINOLOGY.zh-CN.md / TERMINOLOGY.md
 - SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
-- UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
-- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
 - REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
 - TASK.zh-CN.md / TASK.md
 - START.zh-CN.md / START.md
 
-另有辅助复审记录：
+不存在第十份 supplementary record；REVIEW-DISPOSITIONS 本身就是九对之一。
 
-- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
+作者包所称固定 S 四个补充路径是 `docs/design/README.md`、`docs/design/README.zh-CN.md`、`docs/design/inputs.json`、`docs/design/snapshots/d4-reference-catalog-registry/source.json`。前三份是 README/index，只有 catalog 是第 49 个规范源；R07 不修改其中任何文件。
 
-CANDIDATE 是自包含主规范；TERMINOLOGY 关闭命名碰撞；SCENARIO-DISPOSITIONS 逐项裁决 mandatory/task/race 场景；Implementation Impact 分层未来证据；UPSTREAM-AMENDMENTS 给 D6/D7 精确配套文本；TASK 定义当前作者→独立评审流程；START 记录真实输入覆盖。
+CANDIDATE 是自包含主规范；CONTROL-CONTRACT 唯一拥有 D10 closed management/current/error/rule wire；TERMINOLOGY 关闭命名冲突；SCENARIO-DISPOSITIONS 保留并裁决 mandatory/task/race 场景；Implementation Impact 分层未来证据；UPSTREAM-AMENDMENTS 继续只是未激活配套文本；REVIEW-DISPOSITIONS 记录独立问题及作者落点；TASK 定义流程；START 记录交接。
 
 ## 5. 当前设计选择和仍未激活部分
 
@@ -138,8 +139,10 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 ## 6. 独立终审状态
 
-独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`。正式覆盖为候选 16/16、上游 44/49；正式账为 1P1+8P2 开放，最后 D2/D5 五份仍在独立读取。RelationDag 的临时判断已收回，本候选不据此改名。
+历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成上游 49/49，结论为 REVISE；只保留为历史证据。
 
-R06 继承 R05 的授权、事务、费用恢复、stop、bootstrap profile、公开 control wire 和 package/module 映射，并新增 D8/D9 owner 术语配套、U12 导入前提与有界一致性清理；因此旧 C 的阅读覆盖、问题结论和阶段性判断都不能继承到 R06。R06 固定后必须作为新候选做完整联合终审。
+固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict：**REVISE**，P0=0、P1=1（`JR001`）、P2=8（`JR002`–`JR009`）；术语不通过、双语翻译不通过。D8/D9 无新增 finding；Q01/Q02 维持关闭，Q03 owner/组合核验已完整结束。
 
-作者自查、文档 CI 和有限模型只能证明文档/模型自身，不建立产品实现、发布、surface 可用或独立 Gate 通过。D6/D7/D3 的配套修订继续只是未激活提案，不得合并、发布、激活或开始 A2。
+R07 是落实该完整问题集的作者修订。旧 C35 的 review 和 R06 的 18/18+49/49 都不能冒充新 R07 commit 已被独立阅读或通过。REVIEW-DISPOSITIONS 中每条 JR 只标记作者已修、等待独立复核。
+
+作者检查、文档 CI 和有界模型只能证明自身 artifact。所有 D6/D7/D3/D8/D9 配套修订继续只是未激活提案；不得合并、发布、激活或开始 A2。
