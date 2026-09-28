@@ -141,7 +141,7 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成上游 49/49，结论为 REVISE；只保留为历史证据。
 
-固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict：**REVISE**，P0=0、P1=1（`JR001`）、P2=8（`JR002`–`JR009`）；术语不通过、双语翻译不通过。D8/D9 无新增 finding；Q01/Q02 维持关闭，Q03 owner/组合核验已完整结束。
+固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict：**REVISE**，P0=0、P1=1（`JR001`）、P2=8（`JR002`–`JR009`）；术语不通过、双语翻译不通过。D8/D9 无新增 finding；此前两项已澄清问题维持关闭，owner/组合核验已完整结束。
 
 R07 是落实该完整问题集的作者修订。旧 C35 的 review 和 R06 的 18/18+49/49 都不能冒充新 R07 commit 已被独立阅读或通过。REVIEW-DISPOSITIONS 中每条 JR 只标记作者已修、等待独立复核。
 
