@@ -7,20 +7,20 @@ translation_status: source
 
 # D10 独立审查问题处置
 
-revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 C 完整独立 REVISE 后的 R07 作者处置记录。所有 JR finding 在新的独立复核前继续开放；“作者已修”不等于关闭。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：R08-B 作者处置/交接修订。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成候选18/18、S49/49，结论 REVISE：P0=0、P1=1、P2=10；整体、术语及中英语义均需修订。R08 作者修订不会自行关闭任何 finding，最终固定 R08 仍需新的完整独立联合复核。
 
 
 ## 1. 审查覆盖边界
 
-历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 最终已完成 S49/49 并为 REVISE；更早的阶段性阅读计数已被最终结果取代，只保留为历史过程证据。
+历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成对应上游审查并以 REVISE 结束。固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立审查完成候选18/18、S49/49，并以 JR001 P1、JR002–JR009 P2 的 REVISE 结束；这只是历史记录，不能视为 R07 或 R08 已接受。
 
-固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict **REVISE**；P0=0；P1=1（`JR001`）；P2=8（`JR002`–`JR009`）；术语不通过；翻译不通过。D8/D9 无新增 finding。此前两项已澄清问题继续保持关闭且不改设计；owner/组合核验已经完整完成。
+随后完整独立联合终审固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，完成**候选18/18、S49/49，规范正文无阅读缺口**，最终 **REVISE**：P0=0、P1=1（`B03-P1-01`）、P2=10（`B01-P2-01`、`B02-P2-01`、`B02-P2-02`、`B02-P2-03`、`B03-P2-01`、`B03-P2-02`、`B03-P2-03`、`B03-P2-04`、`B10-P2-01`、`B11-P2-01`）。整体、术语与中英语义均需修订；D8、D9 各新增一项当前 finding。
 
-R07 是对这组完整问题的作者统一修订；任何旧覆盖/verdict 都不能转记为 R07 已独立阅读、接受或关闭。
+R08 是对这组固定 R07 问题的作者修订。旧 R06/R07 覆盖只作为历史证据，不能转记为最终 R08 commit 已被独立阅读、通过或关闭。
 
-## 2. R07 JR001–JR009 作者处置
+## 2. 历史 R06→R07 JR001–JR009 作者处置
 
-| ID | 级别 | 作者修订 | R07 主要落点 | 验证目标 | 当前状态 |
+| ID | 级别 | 历史作者修订 | 历史 R07 主要落点 | 验证目标 | R07 形成时记录状态 |
 | --- | --- | --- | --- | --- | --- |
 | JR001 | P1 | CONTROL 唯一拥有完整 SingleFieldMemberRule；保留 semantic_code、0..64 同型 TypedLiteral enum、numeric range、bounded exact text、1..7 D4 member path、Optional-present bridge、member-change/raw-no-op | CONTROL §7；CANDIDATE §14；UPSTREAM approval 消费面；Implementation；场景 | 真实 `people/phone.label` present Optional semantic-code change + raw-no-op + 第二同值 phone 负例；禁止 whole-source widening | 作者已修；待独立复核 |
 | JR002 | P2 | 历史 prepare/applied result 与 current exact ControlRef read 分开；闭合19类 current projection、scope、lifecycle/config/domain/usage revision 与 non-disclosure | CONTROL §7–§8；Candidate recovery/error；Implementation/F32 | r5丢响应/r6 current：result=r5、current read=r6；secret 无明文；planned preview 只走D7；applied连续性不明=`state_unavailable` | 作者已修；待独立复核 |
@@ -32,9 +32,25 @@ R07 是对这组完整问题的作者统一修订；任何旧覆盖/verdict 都�
 | JR008 | P2 | NamespaceClaim 直接消费 exact D4 owner tuple；ownerId 绝不是 D6 Token，proof 独立 | CONTROL §9；Candidate trust；Implementation | 正例 people 保留 tuple；随机43字符 Token/同名 package/install-order 负例 | 作者已修；待独立复核 |
 | JR009 | P2 | D7 SearchContribution 在 `view` 下有唯一 D10 纯数据 carrier，ID/版本分域、descriptor digest/owner/Registry proof、完整 Catalog generation binding | CONTROL §4；CANDIDATE §6；TERMINOLOGY 继承表；U18/U22；Implementation | 合法第一方 install→activate→D7 search；wrong owner/digest/duplicate/omission/unavailable/script 负例 | 作者已修；待独立复核 |
 
-此前两项已澄清问题保持关闭且不改设计。owner/组合核验已完整完成；R07 不再保留“其它 owner 组合仍待核”的笼统声明。
+此前两项已澄清问题保持关闭且不改设计。owner/组合核验已完整完成；R07 不再保留“其它 owner 组合仍待核”的笼统声明。 本表为历史记录；上文固定 R07 的后续完整评审已经取代其当时的 pending 状态。
 
-## 3. 历史分批问题处置
+## 3. R08 B01–B11 作者处置
+
+| ID | 级别 | 固定 R07 C 原 finding 定位 | 已落盘 R08 作者修订 | R08 主要 owner / consumer | fresh 复核验证目标 | 当前状态 |
+| --- | --- | --- | --- | --- | --- | --- |
+| B03-P1-01 | P1 | CONTROL EN452–473；CANDIDATE §15 | 新增具名第一方 `CoreFieldMemberAdapterDescriptor/1`、closed `FieldMemberTask/1`，闭合 task→fresh Field→原 D7 FieldSelector→`set_field_member`→prepare/preview/MutationFootprint→ApprovalUse→原 D6 request 映射，并用受保护 `D10AuthorPreparationLink/1` 恢复原请求。task intent 与 Standing Approval 继续分域。 | CONTROL §4/§7；CANDIDATE §§13–15；SCENARIO 自动作者场景；IMPLEMENTATION §§4.1/7/15 | 真实 `people/phone.label` present Optional semantic-code `personal→work`；逐字 `work→work`；第二条同值 phone 自动不适用但交互路径可用；冷启动恢复原 request，continuity unknown 不产生新 OperationId | 作者修订已落盘；待 fresh 独立复核 |
+| B01-P2-01 | P2 | CONTROL EN926–962、EN622–636 | 闭合 exact-target stop 成功/查询：`requestId==target.id`、预留 latch/result/safety-sequence capacity、不可逆 revision-2 receipt、只读 lost-response result query、W/H 当前 authority/continuity 顺序，并明确不走普通 prepare、不造 D6 author receipt 或第二成功账本。 | CONTROL §1/§7/§11；CANDIDATE §20；UPSTREAM D6/final/send consumers；SCENARIO F34/F35；IMPLEMENTATION §11.1/§15 | 首次 stop、丢响应后 target r5→r6 重试、W/H 有权读取同一 latch、hidden target、continuity unknown、MAX/预留容量边界以及 admission/final-commit/send 竞争 | 作者修订已落盘；待 fresh 独立复核 |
+| B02-P2-01 | P2 | TERMINOLOGY EN204/214/234/238 | 修正 public-wire 分类：Money 与 ActivationBinding 是有具体 carrier 的 closed public value；完整 ExternalEffectIntent/ExternalExecutionBinding 是受保护内部记录，`ExternalEffectCurrentView/1` 才是 public current projection。新 adapter/history/stop public carrier 另行登记。 | TERMINOLOGY §13；CONTROL §§2/7/8/11；CANDIDATE；IMPLEMENTATION | 每个具名 value/projection 都能定位唯一 carrier/owner；“无独立 RPC”不等于“无 public wire”；public value 本身不授 write/secret 权限 | 作者修订已落盘；待 fresh 独立复核 |
+| B02-P2-02 | P2 | SCENARIO EN13/32/115/133 | 按真实首代分支重分 U12/T02/E05。U12 分开 unsupported ICS、已支持普通显式 fresh import 与 D3 binding/Adopt 状态；T02 pending admission 是自动状态处理但不使工具 callable；E05 对同一 immutable external request 保持 `outcome_unknown`，回读 miss 既不是成功也不是安全重发依据。 | SCENARIO U12/T02/E05/F17；CANDIDATE §17；IMPLEMENTATION §15 | 不凭空开放 ICS；独立 ordinary import 保持 fresh；同 request 只恢复原结果；active_live 不自动 upsert；retired 需显式 Adopt；pending tool 不可运行；unknown effect 不换 request/key | 作者修订已落盘；待 fresh 独立复核 |
+| B02-P2-03 | P2 | CONTROL EN553–568、EN629–636 | 内部继续保存完整 canonical B 用于 stable-key equality；public prepared history 改为七种 operation kind 的 `ControlPreparedHistory/1` 摘要。历史 result 不返回嵌套作者请求 A、完整 B 或生成 submit request M；首次 prepare 仅在当前披露覆盖 B 与嵌套 A 后交付 M。已 applied 的 prepare replay 返回 historical applied arm，不伪装 fresh prepared。 | CONTROL §7–§8；SCENARIO F32；IMPLEMENTATION §§2.1/4.1/15 | 同完整 B 防重、same key/different B 冲突；r5 saved history 与 current r6 分开；当前授权先行；applied linkage 不可证明为 `state_unavailable`，不降格 prepared | 作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-01 | P2 | CONTROL EN706–707、EN943–949；CANDIDATE EN388–400 | 闭合 external-effect 返回树：immutable `FrozenEffectBytes/1` / `ExternalEffectIntent/1`、准确 `ExternalExecutionBinding/1`、stable effect Ref + requestDigest consent、closed `ExternalEffectCurrentView/1`，并定义 `HostOrWorkspacePrincipal/1`。lifecycle revision 不再兼任 frozen request identity。 | CONTROL §§2/7/11；CANDIDATE §17；SCENARIO E05/F17/F35；IMPLEMENTATION §§8/11.1/15 | current projection 不泄露 payload/target/key/proof/secret/reservation identity；prepared→submitting 不使 consent 自失效；frozen bytes/target 不可替换；sendAttemptId 与 billable attempt 分域；D9 worker 不继承 D10 egress | 作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-02 | P2 | START EN106 / CN105 | R08-B 中英统一说明 `ToolValueProfile/1`、`ToolType/1`、`ToolValue/1` 是 D10 自有受限代数；具名 Core field-member adapter 明确消费原 D7 TypedLiteral/ResolvedCodeScope；普通 ToolValue 不能成为 NodeRef、FieldId、selector 或 author request。 | START §3/§5；CONTROL §3/§4/§7；TERMINOLOGY；CANDIDATE §§13–15 | 中英 owner 声明与 CONTROL 一致；旧“复用 D7 有限子集”只能作为明确已取代历史或被删除 | 本 R08-B 批次作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-03 | P2 | REVIEW EN91 / CN90；CN81 | 删除过时“仍在读旧 C”“六项”和未来 R05 当前态，改为固定 R07 C18/18+S49/49 已完成 REVISE 的记录，并新增当前 11 finding R08 作者处置表。旧 R06/R07 记录继续明确为历史。 | REVIEW §§1–7；TASK/START 交接 consumers | 当前 ID 恰为11项、1个P1+10个P2；当前文本不再声称旧 review 仍在运行，也不把 R08 写成独立接受 | 本 R08-B 批次作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-04 | P2 | TASK EN19/CN18；START EN17/CN16；IMPLEMENTATION §16 | 阅读证据分账：原作者 lineage 历史 S49/49；本接续作者全文 S16/49；D9 workers/export、templates 只算依赖局部；固定 R07 独立评审另行 S49/49。三套证据互不继承。 | TASK Fixed Inputs/Completion/Review；START §§1–2/6；IMPLEMENTATION §16 | 三套覆盖始终分开；本 R08-B 批次不增加 S 全文计数；workflow/tool summary 不算全文 | 本 R08-B 批次作者修订已落盘；待 fresh 独立复核 |
+| B10-P2-01 | P2 | UPSTREAM EN309/311/320–325；CN308/310/319–324；SCENARIO P18 | 把含糊 kind→concept 共 owner 改成每个 D8 kind 一个 technical-interface owner。13 kind 全部映射；Draft/Draft Projection/Draft Edit Map/Prepared Edit Binding 与上游 value 只是 consumes/returns 数据。D8 domain concept 仍恰为九个；wire/IME/confirm/Undo 不改。 | UPSTREAM §8.1；SCENARIO P18；IMPLEMENTATION §§13/15 | 精确 13-kind 唯一 owner 扫描；`d8_draft_text_replace/write` 消费 Draft Edit Map 但不共享 kind owner；dirty Draft 允许合法后台 D7 commit 并按 stale/rebase 处理；Undo 不回滚后续后台 commit | 作者修订已落盘；待 fresh 独立复核 |
+| B11-P2-01 | P2 | UPSTREAM EN335/386–392；CN334/385–391；SCENARIO P19 | 为17个 D9 public kind 各给一个 technical-interface owner，并把 consumes/returns/operates-on 分开。36个 D9-owned naming row 继续归 D9；继承 `weftext.term.import-job` 保留 D6 concept ID、ownedNames、`storage.import_job` 与历史 firstFreeze。D2/D3/D6/D7 名称保留原 owner。 | UPSTREAM §8.2；SCENARIO P19；IMPLEMENTATION §§13/15 | 精确 17-kind 唯一 owner + 36-D9/1-inherited-D6 naming 检查；`d9_import_state` operates on D6 ImportJob 但不拥有它；PublicationReceipt 只证明 publication；D7ResultPin nested schema/V 继续归 D7 | 作者修订已落盘；待 fresh 独立复核 |
+
+## 4. 历史分批问题处置
 
 | ID | 原级别 | 问题 | 作者修订决定 | 主要修改位置 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -62,7 +78,7 @@ R07 是对这组完整问题的作者统一修订；任何旧覆盖/verdict 都�
 | B09-P2-01 | P2 | D9 grouped lexicon 和八份 D9 来源缺新增概念稳定 ID、完整中英名、wire/type/profile owner、surface/alias 与迁移目标 | R06 由 D9 owner 拆分 SourceArtifact/ImportIR/Provider/Route/Template/RenderSnapshot/D7ResultPin/ExportPlan/PublicationReceipt 等稳定 concept ID，明确 per-concept surface 为已有入口或无新增；继承 D2/D3/D6/D7 名称保持原 owner；PublicationReceipt 只表示外部发布 | UPSTREAM-AMENDMENTS §8.2；TERMINOLOGY §15；SCENARIO P19；IMPLEMENTATION §13/§15 | 作者已修订；独立问题保持开放 |
 | B09-P2-02 | P2 | U12 用“相同 UID 两次 ordinary import fresh”遗漏当前 ICS profile 未开放及 D3 SourceBinding/ForeignIdentityKey 状态矩阵 | R06 将 U12 改为三分支：当前 ICS conversion unavailable 且零作者效果；无 D3 binding 的已支持普通文件 profile 两次独立明确导入各 fresh、same request retry 精确重放；进入 D3 binding 语义后严格按 never_bound/active_live/active_non_live/retired/conflict/miss 与 explicit adopt 规则，UID 不能脱离 SourceBinding 独断 | SCENARIO U12；IMPLEMENTATION §15 | 作者已修订；独立问题保持开放 |
 
-## 3. 保持不变的边界
+## 5. 保持不变的边界
 
 本轮没有放宽自动作者写入范围。首版仍只允许 D7 `set_field_member` 的 single_field_member profile；D3 create/lifecycle、D8 document/annotation edit、bulk/Facet/native-table 等仍需要交互确认或保持不支持。
 
@@ -72,11 +88,19 @@ Core 仍是唯一 author transaction authority。ApprovalUse、LeaseRunUse、Pla
 
 D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上游 U 没有被修改；修订在独立接受与协调激活前不生效。
 
-## 5. 文档质量修订
+## 6. 文档质量修订
 
 上一版中文为了满足混排检查，重复追加了“技术名称不扩大权限”等泛句，并产生双句号。它们不是规范语义。本轮删除这些填充句，改为在对应段落直接用中文解释真实边界，同时保留必要的受控英文标识。仓库 check_docs 规则不放松；若仍有混排失败，只修改实际文案，不通过重复填充绕过。
 
-## 6. 后续独立复核目标
+## 7. Fresh 独立复核要求
+
+后续 reviewer 必须把最终固定 R08 commit 当作新候选。R08 已改变 public wire、授权、恢复、transaction/safety、external-send 与上游 interface-owner 合同，因此只对 R07 做差分复核不够；必须 fresh 完整读取候选18/18与固定 S49/49，并重新判断中英语义与术语。
+
+在该交接之前，作者完成门继续开放：九对双语/18个 exact path 必须全部一致到 R08；固定 S 与全部非 D10 路径保持不变；125 个 scenario ID 集合及分支裁决中英一致；最终候选适用的仓库文档检查通过；REVIEW/TASK/START 只能报告真实阅读与 CI 证据，不能把 pending 工作升级成通过。
+
+当前 11 项 finding 在新的独立 verdict 前全部保持开放。必要的 D3/D6/D7/D8/D9 配套修订继续只是提案；后续 coordinated acceptance、version、activation 与验收证据和作者文档完成是不同阶段。任何作者自查、旧 R07 的 S49/49 覆盖、CI 结果或旧独立 verdict 都不能建立 R08 acceptance。
+
+
 
 后续 reviewer 至少应对本表六项重新构造原反例，并检查：
 
