@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: R08-A author semantic-consumption implementation/test obligations after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S completed C18/18 and S49/49 with REVISE (P0=0, P1=1, P2=10). These are design/test obligations, not executed product evidence; all eleven findings remain open pending fresh complete independent review of the eventual R08 candidate.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author implementation/test obligations synchronized to the final author candidate. These are design and future evidence obligations, not executed product tests. All eleven fixed-R07 findings remain open pending fresh complete independent joint review of the fixed R08 candidate.
 
 ## 1. Implementation slices and state owners
 
@@ -477,8 +477,8 @@ The author implementation plan is ready for independent review only when:
 - D1 surface/reason, D3 identity, D4 Registry, D8 confirmation, and D9 worker/publication are not silently changed;
 - every actually run evidence item is reported at its exact layer and pending items are not labeled pass.
 
-- fixed R07 complete independent review remains historical REVISE with P0=0/P1=1/P2=10; this R08-A author batch closes none of those eleven findings by itself;
+- fixed R07 complete independent review remains historical REVISE with P0=0/P1=1/P2=10; the complete R08 author revision closes none of those eleven findings by author assertion;
 - this outline contains obligations to implement/test, not evidence that the Core adapter, stop transaction, external transport, D8/D9 mappings, or race corpus has been executed;
-- R08-A is not the final 18-file checkpoint: REVIEW-DISPOSITIONS, TASK, START, and the all-18 bilingual/document-gate cleanup remain later batches.
+- the fixed R08 candidate is complete only when all nine bilingual pairs / 18 exact paths agree, fixed S and non-D10 paths remain unchanged, the 125 scenario IDs/classifications match, and applicable documentation/input gates pass; a fresh complete independent review still follows.
 
 These are candidate-completeness conditions, not an independent Gate verdict.
