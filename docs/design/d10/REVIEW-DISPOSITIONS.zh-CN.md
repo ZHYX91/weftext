@@ -14,7 +14,7 @@ revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 C �
 
 历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 最终已完成 S49/49 并为 REVISE；更早的阶段性阅读计数已被最终结果取代，只保留为历史过程证据。
 
-固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict **REVISE**；P0=0；P1=1（`JR001`）；P2=8（`JR002`–`JR009`）；术语不通过；翻译不通过。D8/D9 无新增 finding。Q01/Q02 维持关闭；Q03 owner/组合核验已完整结束。
+固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict **REVISE**；P0=0；P1=1（`JR001`）；P2=8（`JR002`–`JR009`）；术语不通过；翻译不通过。D8/D9 无新增 finding。此前两项已澄清问题继续保持关闭且不改设计；owner/组合核验已经完整完成。
 
 R07 是对这组完整问题的作者统一修订；任何旧覆盖/verdict 都不能转记为 R07 已独立阅读、接受或关闭。
 
@@ -32,7 +32,7 @@ R07 是对这组完整问题的作者统一修订；任何旧覆盖/verdict 都�
 | JR008 | P2 | NamespaceClaim 直接消费 exact D4 owner tuple；ownerId 绝不是 D6 Token，proof 独立 | CONTROL §9；Candidate trust；Implementation | 正例 people 保留 tuple；随机43字符 Token/同名 package/install-order 负例 | 作者已修；待独立复核 |
 | JR009 | P2 | D7 SearchContribution 在 `view` 下有唯一 D10 纯数据 carrier，ID/版本分域、descriptor digest/owner/Registry proof、完整 Catalog generation binding | CONTROL §4；CANDIDATE §6；TERMINOLOGY 继承表；U18/U22；Implementation | 合法第一方 install→activate→D7 search；wrong owner/digest/duplicate/omission/unavailable/script 负例 | 作者已修；待独立复核 |
 
-Q01/Q02 保持关闭且不改设计。Q03 owner/组合核验已完整完成；R07 不再保留“其它 owner 组合仍待核”的笼统声明。
+此前两项已澄清问题保持关闭且不改设计。owner/组合核验已完整完成；R07 不再保留“其它 owner 组合仍待核”的笼统声明。
 
 ## 3. 历史分批问题处置
 
