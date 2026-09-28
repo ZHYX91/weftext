@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Terminology and Naming
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate. This lexicon defines only new D10 control/extension concepts and consumption boundaries for D1-D9; it does not reassign any upstream-owned concept. Natural language, historical material, test descriptions, and third-party product vocabulary do not automatically become controlled names.
+revision: D10-r07-independent-review-fixes-2026-09-28; status: author-revised after complete R06 independent REVISE; terminology remains pending fresh independent re-review. This lexicon preserves all upstream owners and records R07 JR004/JR005/JR007/JR009 corrections without activating any upstream amendment.
 
 ## 1. Naming principles
 
@@ -43,7 +43,7 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: cand
 | weftext.term.automation-occurrence | 自动化发生项 / Automation Occurrence | D10 | One scheduling opportunity mechanically derived from a definition revision and source occurrence | Not author recurrence-occurrence identity |
 | weftext.term.run | 运行 / Run | D10 | Managed execution record for an Agent or Automation plus step outcomes | Run completed does not mean author committed |
 | weftext.term.context-bundle | 上下文包 / Context Bundle | D10 | Current-authorized, minimized, version-bound context for a specific model/tool recipient | Not an author snapshot or redelegable token |
-| weftext.term.tool-value-profile | 工具值配置 / Tool Value Profile | D10 | Tool parameter/result algebra reusing a finite subset of D7 TypeSpec/V | Not arbitrary JSON Schema or the full D4 Field-value algebra |
+| weftext.term.tool-value-profile | 工具值配置 / Tool Value Profile | D10 | D10-owned closed ToolValueProfile/ToolType/ToolValue algebra for external tool parameters/results | Not arbitrary JSON Schema, not a D7 TypeSpec alias, and not the full D4 Field-value algebra |
 | weftext.term.input-slot | 输入槽 / Input Slot | D10 | Per-invocation restricted file input handle bound to exact bytes/purpose/recipient | Not a path, ResourceRef, or cross-invocation file handle |
 | weftext.term.tool-adapter | 工具适配器 / Tool Adapter | D10 | Adapter mapping an accepted external tool protocol to Tool Value and an explicit effect class | Not an author Action adapter |
 | weftext.term.mcp-adapter | MCP 适配器 / MCP Adapter | D10 | A Tool Adapter that uses MCP as transport/discovery protocol | MCP annotations/prompts do not become Weftext permissions |
@@ -52,7 +52,7 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: cand
 | weftext.term.secret-reference | 凭据引用 / Secret Reference | D10 | Managed reference and generation for a credential stored in OS/Server secret storage | Not secret bytes, author source, or model input |
 | weftext.term.external-effect-intent | 外部效果意图 / External Effect Intent | D10 | One frozen external mutation request including target/account/request/idempotency/approval/budget | Not a D6 transaction or rollback |
 | weftext.term.external-outcome-unknown | 外部结果未知 / External Outcome Unknown | D10 | Durable state in which external mutation occurrence/completeness cannot be proven | Not failed or cancelled |
-| weftext.term.cost-reservation | 费用预留 / Cost Reservation | D10 | Atomic finite upper-bound reservation against one or more cost accounts before a billable attempt | Not a billing fact or effect idempotency |
+| weftext.term.cost-reservation | 费用预留 / Cost Reservation | D10 | Finite upper-bound reservation for one billable attempt against exactly one actual cost account/grant/pricing/currency; admission may also check layered Run/Lease/Automation/Workspace/deployment ceilings | Not a billing fact, effect idempotency, or a reservation spanning multiple actual accounts |
 | weftext.term.audit-started | 审计开始记录 / Audit Started Record | D10 | Minimum durable security-audit fact written before a protected step truly executes | Does not mean the step succeeded |
 | weftext.term.money | 费用值 / Money | D10 | Exact cost representation as currency + Counter microUnits | No implicit FX and no binary float |
 
@@ -67,6 +67,8 @@ The following type/record names are frozen controlled spellings by the D10 candi
 - `ApprovalUse/1`
 - `PlannedDecisionApproval/1`
 - `ToolValueProfile/1`
+- `ToolType/1`
+- `ToolValue/1`
 - `InputSlot`
 - `AutomationOccurrenceKey/1`
 - `ExternalEffectIntent/1`
@@ -222,7 +224,7 @@ This section is the mechanically traceable Lexicon artifact required by Intake �
 | weftext.term.run | 运行 | Run | Managed execution record for Agent or Automation plus step outcomes | D10 runtime control | Not author transaction or receipt | No public IPC frozen; controlled concept `Run` | type `Run`; variable `run` | UI "Run"; locale `term.run` | Run | job=author transaction conflation forbidden | Positive: cancelled Run contains committed step; negative: Run completed=author committed | `D10-r01`; no legacy alias |
 | weftext.term.agent-session | Agent 会话 | Agent Session | Interactive Agent mode of Run, bound to current task, ContextBundle, and tool allowlist | D10 Agent runtime | Not principal, Document, or durable authority | No public IPC frozen; controlled concept `Agent Session` | type `AgentSession`; variable `agent_session` | UI "Agent Session"; locale `term.agentSession` | Agent session | chat=authority and session=grant conflations forbidden | Positive: one interactive Run; negative: session inherits full Workspace | Mapping first frozen `D10-r04`; semantics inherited from r01 Candidate |
 | weftext.term.context-bundle | 上下文包 | Context Bundle | Current-authorized, minimized, version-bound input for a specific recipient | D10 context/egress control | Not author snapshot, authorization token, or secret container | No public IPC frozen; controlled concept `ContextBundle` | type `ContextBundle`; variable `context_bundle` | Usually not directly shown; diagnostic "Context"; locale `term.contextBundle` | none | prompt=context authority conflation forbidden | Positive: Model A bundle cannot be sent to Model B; negative: ambient workspace | `D10-r01`; no legacy alias |
-| weftext.term.tool-value-profile | 工具值配置 | Tool Value Profile | Tool parameter/result algebra reusing a bounded D7 TypeSpec/V subset | D10 Tool Adapter | Not arbitrary JSON Schema or full D4 value domain | Controlled profile `ToolValueProfile/1`; public transport adapter-specific | type `ToolValue`; variable `tool_value` | No direct UI; developer diagnostic "Tool Value"; locale `term.toolValueProfile` | ToolValue | any/open-map/float fallback forbidden | Positive: exact int64; negative: JS-double rounding | `D10-r01`; no compatibility fallback |
+| weftext.term.tool-value-profile | 工具值配置 | Tool Value Profile | D10-owned closed ToolValueProfile/ToolType/ToolValue algebra | D10 Tool Adapter | Not arbitrary JSON Schema, a D7 TypeSpec/TypedLiteral alias, or the full D4 value domain | Controlled `ToolValueProfile/1`, `ToolType/1`, `ToolValue/1`; public transport remains adapter-specific | types `ToolValueProfile`, `ToolType`, `ToolValue`; variables `tool_value_profile`, `tool_type`, `tool_value` | No direct UI; developer diagnostic "Tool Value"; locale `term.toolValueProfile` | ToolValue | any/open-map/float or D7-alias fallback forbidden | Positive: exact int64 ToolValue under ToolType; negative: JS-double or treating D7 TypeSpec as the same wire | `D10-r01`; R07 separates the three names; no compatibility fallback |
 | weftext.term.input-slot | 输入槽 | Input Slot | Per-invocation file-input handle bound to exact bytes/media/purpose/recipient | D10 Tool/Model runtime | Not a path, ResourceRef, or cross-call file handle | Controlled concept `InputSlot`; no public IPC frozen | type `InputSlot`; variable `input_slot` | No direct UI; may display "Input File"; locale `term.inputSlot` | none | filepath/path handle aliases forbidden | Positive: exact attachment bytes; negative: pass `C:\Users\...` | `D10-r01`; no legacy alias |
 | weftext.term.tool-adapter | 工具适配器 | Tool Adapter | Maps an admitted external tool protocol to ToolValue and effect class | D10 external capability adapter | Not a D7 author Action adapter | No public IPC frozen; manifest contribution kind `Tool Adapter` (semantic name) | type `ToolAdapter`; variable `tool_adapter` | Admin UI "Tool Adapter"; locale `term.toolAdapter` | tool adapter | tool=permission conflation forbidden | Positive: locally classify delete tool as mutation; negative: trust remote readOnly | `D10-r01`; no legacy alias |
 | weftext.term.mcp-adapter | MCP 适配器 | MCP Adapter | Tool Adapter using MCP as discovery/transport protocol | D10 Tool Adapter | MCP metadata is not policy/identity/permission | External MCP is the transport; Weftext controlled category is `MCP Adapter` | type `McpAdapter`; variable `mcp_adapter` | UI "MCP Adapter"; locale `term.mcpAdapter` | MCP | MCP server=trusted principal conflation forbidden | Positive: schema drift becomes pending; negative: execute immediately on discovery | `D10-r01`; no legacy alias |
@@ -231,7 +233,7 @@ This section is the mechanically traceable Lexicon artifact required by Intake �
 | weftext.term.secret-reference | 凭据引用 | Secret Reference | Managed reference and generation for a credential in OS/Server secret storage | D10 secret control | Not secret bytes, author source, or ToolValue | Controlled concept `SecretRef`; public secret-value wire forbidden | type `SecretRef`; variable `secret_ref` | UI "Credential"; locale `term.secretReference` | SecretRef | Token/credential bytes are not aliases for reference | Positive: transport injection; negative: prompt/log exposure | `D10-r01`; no secret compatibility fallback |
 | weftext.term.external-effect-intent | 外部效果意图 | External Effect Intent | One frozen external mutation request binding target/account/request/idempotency/approval/budget | D10 external-effect control | Not a D6 transaction, author receipt, or rollback | Controlled internal type `ExternalEffectIntent/1`; no public IPC frozen | type `ExternalEffectIntent`; variable `external_effect_intent` | UI "External Action"; locale `term.externalEffectIntent` | effect intent (prose) | transaction/rollback synonyms forbidden | Positive: reconcile same key; negative: retry unknown with new key | `D10-r01`; no legacy alias |
 | weftext.term.external-outcome-unknown | 外部结果未知 | External Outcome Unknown | Durable outcome state where external mutation occurrence/completeness cannot be proven | D10 external-effect recovery | Not timeout, failed, or cancelled | Controlled state `outcome_unknown`; external adapter must preserve it | enum `ExternalOutcome::Unknown`; variable `outcome_unknown` | UI "Outcome Unknown"; locale `term.externalOutcomeUnknown` | unknown (external-effect context only) | timeout/failure/cancel aliases forbidden | Positive: response lost after send; negative: treat as failed and retry | `D10-r01`; no legacy alias |
-| weftext.term.cost-reservation | 费用预留 | Cost Reservation | Finite cost upper bound atomically reserved across one or more accounts before a billable attempt | D10 cost control | Not billing fact, approval count, or effect idempotency | CONTROL-CONTRACT §10: `reserved→settled\|released\|uncertain` plus `uncertain→settled\|released`; only settled/released are terminal | type `CostReservation`; variable `cost_reservation` | UI "Cost Reservation"; locale `term.costReservation` (candidate, not implemented) | none | released=zero bill and uncertain=terminal are forbidden | Positive: sent zero bill `settled(0)`; negative: TTL/admin-without-evidence releases uncertain | `D10-r01`; `r05` makes uncertain explicitly recoverable non-terminal; no legacy alias |
+| weftext.term.cost-reservation | 费用预留 | Cost Reservation | One finite upper bound for one billable attempt/account/grant/pricing/currency; layered policy ceilings are checked at admission but are not extra actual accounts | D10 cost control | Not billing fact, approval count, effect idempotency, or multi-account single reservation | CONTROL-CONTRACT §10: one `CostReservation/1`, `reserved→settled\|released\|uncertain`, `uncertain→settled\|released`; only settled/released terminal | type `CostReservation`; variable `cost_reservation` | UI "Cost Reservation"; locale `term.costReservation` (candidate, not implemented) | none | multi-account reservation / released=zero bill / uncertain=terminal forbidden | Positive: sent zero bill `settled(0)`; negative: one reservation charges two accounts | `D10-r01`; R07 clarifies one actual account; no legacy alias |
 | weftext.term.audit-started | 审计开始记录 | Audit Started Record | Minimum durable security-audit fact written before a protected step executes | D10 audit control | Not success, receipt, or ordinary telemetry | No public IPC frozen; controlled event semantic `audit_started` | type `AuditStartedRecord`; variable `audit_started` | Usually no direct UI; audit viewer label "Started"; locale `term.auditStarted` | none | log line=authoritative audit conflation forbidden | Positive: execute after local spool; negative: remote collector outage means local audit failure | `D10-r01`; no legacy alias |
 | weftext.term.money | 费用值 | Money | Exact cost representation using currency + Counter microUnits | D10 cost value | No implicit FX or binary float | Controlled internal type `Money/1`; no public IPC frozen | type `Money`; variable `money` | UI formats by currency; no standalone concept locale label | none | float money / implicit conversion forbidden | Positive: USD microUnits; negative: implicit cross-currency sum | `D10-r01`; no legacy alias |
 
@@ -247,6 +249,14 @@ This section is the mechanically traceable Lexicon artifact required by Intake �
 | Conversion Provider / Route / PublicationReceipt | D9 | Remain qualified to conversion/publication owner | Bare D10 Provider cannot overwrite D9 Provider |
 | author source / Provenance | D2/D3 | source is author payload; Provenance is non-authorizing source evidence | external input/provider state/tool result cannot be called author source |
 | D1 capability / unavailable reason | D1 | Product availability keeps D1 closed reasons and fixed precedence | D10 dependency state cannot create a parallel product-availability reason |
+
+
+### 13.2 Additional inherited owner gates
+
+| Name/concept | Original owner | D10 consumption rule | rejected collision / negative gate |
+| --- | --- | --- | --- |
+| `SearchContribution` / `weftext.term.search-contribution` | D7 Query Algebra / D7 terminology | D10 authenticates the pure-data descriptor asset, namespace proof, activation generation, complete Catalog set, and Registry binding; D7 retains exact `{contributionId,version,fieldId,textPath,role}` semantics and executes the search Query | D10 must not rename it ViewSpec/search-provider, add script/network/read/write authority, or create an alias author source |
+| `ImportJob`, `importJob`, `stageInput`, `planAtomicGroups`, `commitImportBatch` / `weftext.term.import-job` | D6 terminology registry | D9 `d9_import_*` consumes the D6 durable job/control record; D10 may only host required package/runtime dependencies | D9/D10 may not re-freeze the ID, owned names, `storage.import_job`, or historical firstFreeze under D9 |
 
 ## 14. R05 control, capability, and first-party module mappings
 
@@ -305,7 +315,7 @@ weftext.term.direction_preference
 
 A Draft reference in D10 must explicitly mean D8 `weftext.term.edit_draft`; Prepared Edit Binding means D8 `weftext.term.prepared_edit_binding`; Direction Preference means D8 `weftext.term.direction_preference`. Ownership of the 13 D8 kinds is determined by the owner table in UPSTREAM-AMENDMENTS §8.1 and D10 creates no alias.
 
-The D9-owned new/split concepts are exactly:
+The D9-owned new/split concepts are exactly. `weftext.term.import-job` is intentionally excluded because D6 already owns it:
 
 ```text
 weftext.term.source-artifact
@@ -316,7 +326,6 @@ weftext.term.conversion-provider
 weftext.term.conversion-route
 weftext.term.import-mapping
 weftext.term.mapping-proposal
-weftext.term.import-job
 weftext.term.coupling-group
 weftext.term.import-batch
 weftext.term.conversion-input
