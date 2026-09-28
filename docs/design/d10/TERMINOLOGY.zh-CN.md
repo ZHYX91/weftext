@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 术语与命名
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：固定 R07 完整联合终审 REVISE 后的 R08 作者术语修订；全部 finding 仍等待新的独立复核。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：与最终作者修订同步的完整 R08 术语候选。术语与中英语义相关 finding 均保持开放，等待 fresh 完整独立复核。
 
 ## 1. 命名原则
 
@@ -236,7 +236,7 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | weftext.term.audit-started | 审计开始记录 | Audit Started Record | 受保护步骤真正执行前耐久写入的最小安全审计事实 | D10 audit control | 不是 success、receipt 或普通 telemetry | 公共 IPC 未冻结；受控事件语义 `audit_started` | type `AuditStartedRecord`; variable `audit_started` | 通常无直接 UI；审计查看器 label“开始”; locale `term.auditStarted` | 无 | 禁止 log line=authoritative audit | 正：本地 spool 后执行；反：collector offline 即假失败 | `D10-r01`; 无 legacy alias |
 | weftext.term.money | 费用值 | Money | currency + Counter microUnits 的 exact 费用表示 | D10 cost value | 不做隐式 FX 或 binary float | closed public value `Money/1`；由 BudgetCaps、ResourcePermission、ControlPreview/History、reservation/current projection 承载；无独立 RPC | type `Money`; variable `money` | UI 按 currency 格式化 | 无 | 禁止 float money / implicit conversion | 正：public preview maximum；反：跨币种自动相加 | `D10-r01`; R08 明确 public value carrier |
 
-| weftext.term.core-field-member-adapter | Core 字段成员适配器 | Core Field Member Adapter | 把 closed Automation task 确定映射到原 D7 set_field_member prepare/submit 的具名第一方 Core adapter | D10 automation/Core adapter | 不是 generic Tool callback、script 或新 D7 Action kind | descriptor `CoreFieldMemberAdapterDescriptor/1`；accepted Contribution `weftext.automation/set-field-member`；无独立 endpoint | types `CoreFieldMemberAdapterDescriptor`,`FieldMemberTask` | 无独立 CLI | field-member adapter | 禁止 ToolValue→Ref coercion/free callback | 正：people/phone.label Optional semantic-code task；反：任意 source patch | 首次提议 D10-r08-joint-review-fixes-2026-09-28；待独立复核 |
+| weftext.term.core-field-member-adapter | Core 字段成员适配器 | Core Field Member Adapter | 将一个受限 Automation task 确定映射到原 D7 set_field_member prepare/submit 的具名第一方 Core adapter | D10 automation/Core adapter | 不是通用 Tool callback、脚本或新的 D7 Action kind | descriptor 为 `CoreFieldMemberAdapterDescriptor/1`；accepted Contribution 为 `weftext.automation/set-field-member`；不新增独立 endpoint | types 为 `CoreFieldMemberAdapterDescriptor`,`FieldMemberTask` | 不新增独立 CLI | 字段成员适配器 | 禁止 ToolValue→Ref 强制转换或自由 callback | 正例：people/phone.label 的 Optional semantic-code task；反例：任意 source patch | 首次提议 D10-r08-joint-review-fixes-2026-09-28；待独立复核 |
 | weftext.term.control-history-projection | 控制历史投影 | Control History Projection | 已保存 D10 control history 的受权 public 摘要，不重放嵌套作者请求 bytes | D10 control history | 不是完整 B、嵌套 A、生成 M 或第二 decision ledger | `ControlPreparedHistory/1`,`ControlPreviewSummary/1`,`ControlAffectedChange/1`,`ControlResourceUse/1` 由 `d10_control_result` 承载 | 对应 types | 仅诊断/history UI | 无 | 禁止 history 返回 A/B/M | 正：r6 current 下读 r5 history；反：重建 M | 首次提议 D10-r08-joint-review-fixes-2026-09-28；待独立复核 |
 | weftext.term.emergency-stop-result | 紧急停止结果 | Emergency Stop Result | exact-target 不可逆 safety latch receipt 或读取时点已证明 open 的结果 | D10 safety control | 不是普通 control prepare、D6 author receipt、cancel 或 rollback | `d10_emergency_stop`,`d10_emergency_stop_result`；`D10EmergencyStopReceipt/1` 或 `d10_emergency_stop_not_applied`；current 用 `ExecutionStopLatchView/1` | stop result types | UI“已停止”/“本次检查时未停止” | stop result | 禁止 stop_address/prepared-control alias | 正：r5→r6 后重放丢失响应；反：探测 hidden target | 首次提议 D10-r08-joint-review-fixes-2026-09-28；待独立复核 |
 
