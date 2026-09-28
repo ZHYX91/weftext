@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 完整独立 REVISE 后同步到 R07 的实现/测试义务；这些只是设计/测试要求，不是产品执行证据。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：R08-A 作者语义消费的实现/测试义务。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S 的完整独立联合终审已完成 C18/18、S49/49，结论 REVISE（P0=0、P1=1、P2=10）。这些只是设计/测试义务，不是已执行产品证据；11 项 finding 在最终 R08 候选的 fresh 完整独立复核前全部保持开放。
 
 ## 1. 实现切片与状态所有者
 
@@ -48,9 +48,9 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 8. S8：完成 Desktop/CLI/Server/WebUI 端侧接线、诊断、audit/export/retention；Mobile 只验证明确不可用的 capability。
 9. S9：清理旧原型/别名/自由 JSON/tool callback、更新公开规范；只有真实实施/平台证据完成后才能公开声称支持。
 
-### 1.1 R05 控制合同实施切片
+### 1.1 R08 控制合同实施切片
 
-[CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 是 R05 的规范输入，不是非规范实现说明。实现不得自行选择另一套授权、重放或账务语义。
+[CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 是本纲要消费的 R08 management/current/history/author-adapter/external-effect/stop wire 唯一规范 owner；实现不得另选授权、重放、记账、frozen-request 或 stop 语义。
 
 - Workspace 自助控制由 proposed D6 Policy/2 `d10_control_self` 授权；Workspace 管理由原 `policy_admin`，Registry activation 另验 `registry_admin`。deployment trust/account/secret/pricing/grant 由 D10 DeploymentControlPolicy 管理，不得借 Workspace admin 或 issuer admin。
 - 会影响作者提交的 Workspace 控制变更继续使用原 D6 authority store、`PreparedIntent`、决议/receipt 与作者提交点。`DeploymentControlDecision` 只保存部署控制结果；host adapter 不得写作者 source。
@@ -73,13 +73,20 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 - Automation Definition、occurrence claim、Run/step 与 terminal dedup proof；
 - ApprovalUse、approval-count reservation 与 PlannedDecisionApproval；
 - budget/cost account 与 reservation；
-- ExternalEffectIntent、attempt、reconciliation evidence；
+- immutable ExternalEffectIntent、ExternalExecutionBinding send-attempt association 与 reconciliation evidence；
+- 把一个 Run step 绑定到原 D7 PreparedActionBinding 与 D6 request 的受保护 D10AuthorPreparationLink；
+- 完整 ControlPrepareBinding canonical intent B 与另行受权的 public history summary；历史 public delivery 不再保存另一份 A/B/M；
+- exact-target ExecutionStopLatch、StopOwner/result association 与预留 safety-sequence capacity；
 - Audit Started、terminal link 与本地 protected spool metadata；
 - SecretRef/account generation metadata，不含 secret bytes。
 
 这些记录应与 Workspace/authority identity、fence、current principal 和 version/CAS 一起管理。SQL table layout、index 和 GC 由实现决定，但不得改变候选的 version、atomicity、replay、masking、retention 语义。
 
 D6 author ledger 仍是 Workspace+OperationId 唯一 author decision namespace。D10 Run、Approval、LeaseRunUse 和 ExternalEffect 记录不得在恢复时生成第二个“作者 committed”事实。
+
+control history 持久化保留两种不同表示。内部 `ControlPrepareBinding.canonicalIntentBytes` 保存完整 canonical B，stable-key equality 比较完整 bytes。public `ControlPreparedHistory/1` 只含 `intentDigest`、`automation_configure|consent|state|workspace_limits|activation|deployment_put|cost_reconcile` 七值之一、allocated refs 与既有 affected/resource-use summary。
+
+历史 result 永不返回嵌套作者请求 A、完整 B、生成 submit request M 或可复用 prepare token。首次 prepare 只有在当前披露覆盖完整 B 与嵌套 A 后才可返回 M。r5 historical result 与 r6 current exact-ref view 分别授权、分别投影；applied linkage 不可证明时固定 `state_unavailable`，绝不 prepared。
 
 ApprovalUse count history 必须耐久记录 unreserved、reserved、consumed、released_terminal 的单向转移；只有 D6 authoritative terminal_failed 的同一 abort transaction 可以产生 released_terminal。Run cancel、TTL、临时撤权和 Lease 过期均不能靠 GC 释放该 reservation。
 
@@ -100,6 +107,10 @@ Desktop/CLI 使用符合平台能力的 OS secret store；Server 使用部署提
 ### 2.3 Immutable assets
 
 package、manifest、definition、runtime、model、font/other dependency 按 exact digest/version 存于不可变资产区。激活前完整校验，激活后不能就地覆盖相同 identity 的 bytes。GC 只能删除不再被 current/historical binding、planned decision、unknown effect 或 audit/recovery pin 引用的资产。
+
+`activation.current` 是派生 current-read 值，不是回写历史 ActivationBinding 的 revision。测试在同一个受权 cut 读取 active selector 与 candidate binding，CAS 准确 current predecessor selector，并原子发布 successor selector/binding。
+
+旧 generation/revision 变成 non-current 后仍保持 byte-stable。A→B→A selector race 不能让 stale predecessor CAS 成功。
 
 ## 3. 激活、Registry 与 package 实施义务
 
@@ -152,13 +163,19 @@ ToolValue decoder/encoder 必须逐类型证明 exact 语义；严禁：
 MCP adapter 测试需要恶意 server：descriptor 前后漂移、tool name 冲突、schema 变更、extra field、巨大递归 schema、伪 readOnly、prompt injection、资源内容带 tool 指令、断流/重复响应、超预算结果。发现变化只能 pending/reject/reset，不得在一个 Run 中热换 schema。
 
 
-### 4.1 R07 closed-rule 与 SearchContribution conformance
+### 4.1 R08 Core author-adapter、closed-rule 与 SearchContribution conformance
 
-Standing Approval 测试只使用 CONTROL-CONTRACT §7 rule decoder，覆盖 0/64 enum 边界、完整 TypedLiteral 排序唯一、同型 numeric bounds、0/65528 UTF-8 text 与 CR/LF 拒绝、1..7 静态 D4 object-member path 加 alias depth、semantic-code scope+code equality，以及 required/present-optional 两种 D7 bridge。真实正例用完整 Field 只有一个 Entry 且 optional `label` 已 present 的 `people/phone`：`personal→work` 为真实变化、`work→work` 为 raw-no-op；`optional.none` 不自动批准；再有第二个同值 phone Entry 时整个自动 profile 不适用。
+`CoreFieldMemberAdapterDescriptor/1` 与 `FieldMemberTask/1` 测试必须穿过真实第一方 `weftext.automation/set-field-member` contribution，不能使用 generic ToolValue callback。task 拥有具体 D3 NodeRef、D4 FieldId、1..7 existing memberPath 与原 D7 TypedLiteral；Standing Approval 是独立 allow-rule，绝不提供这些 task 坐标。把 ToolValue text/title/path/model output 当 NodeRef、FieldId、occurrenceKey 或 control token 必须拒绝。
 
-Control-result/current 测试实例化全部 19 个 `ControlRecordKind` current projection，断言 exact scope/lifecycle，并区分 configuration revision 与独立 lease/approval/grant/cost-account usageRevision。第二个 Run 消耗同 Lease usage 不得改变第一个 admitted Run 的 leaseRevision；revoke 必须改变 configuration revision 并阻止后续步骤。r5 成功/丢响应→r6 更新后，`d10_control_result` 必须重放 r5，`d10_control_read` 才返回 r6；applied 连续性不明返回 `state_unavailable`，secret current read 永不含 plaintext。
+每次自动尝试都运行真实链：current Narrow Field Qualification → 完整 current Field read → exactly-one Entry selection → 重建原 D7 FieldSelector `{owner,fieldId,expectedRevision,occurrenceKey,rawEntrySource}` → 原 `set_field_member` Action → 真实 D7 prepare/完整 preview/effects/MutationFootprint → 机械比较 Standing Approval → ApprovalUse → 原 D6 request/plan/final/replay。`D10AuthorPreparationLink/1` 必须在提交前与原 PreparedActionBinding 原子耐久。冷启动只能恢复该原 request；只有证明从未保存时才能重新 prepare；continuity unknown 为 `state_unavailable`；planned/submitted-unknown 绝不新建 replacement OperationId。
 
-SearchContribution 集成直接消费真实 D7 Query Algebra descriptor。覆盖合法第一方 owner/digest/Registry/textPath 激活并进入原 D7 Query builder、runtime-only discovery、wrong owner、asset digest mismatch、重复 D7 contributionId、D10 contractVersion 不变而 D7 version 改变、所谓完整集合漏掉一个应 active descriptor、selected Field/provider unavailable、script/network/extra member、缺 D6 `field_read`、successor Catalog generation 使旧 result 失效。不得用永久 deny-only 路径冒充正向能力。
+Standing Approval rule 测试继续覆盖 0/64 enum、完整 TypedLiteral 排序唯一、同型 numeric bounds、0/65528 UTF-8 text 与 CR/LF 拒绝、1..7 static D4 member path 加 alias depth、semantic-code scope+code equality，以及 required/present-optional D7 bridge。保留原 D2/D4 预算：raw Entry 65,528 bytes、header 65,536 bytes、最多 256 header lines、32 carriers、8,192 entries、1,048,576 checked bytes，以及原 alias-depth/schema/source limits。完整 source 验证只是内部证明，不因此向窄主体披露完整 source。
+
+规范正例是只有一个 Entry 且 optional `label` 已 present 的 `people/phone`。task 输入使用原 D7 Optional TypedLiteral，`state:"some"`，完整 resolved contribution-set scope 为 `people/other|people/personal|people/work`；approval enum 可以有意更窄。present `personal→work` 是真实 member change；present `work→work` 只有完整 proposed source byte-equal 且 MutationFootprint/field_change/sourceVersions 全空时才自动通过。`optional.none` 不自动批准。第二条同值 phone 存在时自动 exactly-one 不适用，但普通 interactive D7 路径仍能用真实 occurrenceKey/rawEntrySource selector 选择第二条。
+
+Control-result/current 测试实例化全部 19 个 `ControlRecordKind` current projection，断言 exact scope/lifecycle，区分 configuration revision 与独立 usageRevision，并精确枚举七种 public control-history operation kind。内部完整 B bytes 继续是 stable-key equality 来源；public history 永不返回 A/B/M。首次 prepare 只有在当前披露覆盖 B 与嵌套 A 时才可交付 M。r5 成功/丢响应→r6 更新后，`d10_control_result` 只返回原 r5 summary/receipt/deltas，`d10_control_read` 另返回 current r6；两个入口都先执行各自 current authorization。applied continuity 不明固定 `state_unavailable`，绝不 prepared。secret current read 永不含 plaintext。
+
+SearchContribution 集成直接消费真实 D7 Query Algebra descriptor，并使用真实 NFC text 正例，例如 accepted 第一方 `people/search-name`，终点是既有 `people/name.text`。测试覆盖合法 `people→(first_party,weftext.people)` NamespaceClaim tuple + 独立 proof、descriptor digest、current Registry/textPath、同 cut 完整 Catalog set，以及第一方 install→activation→原 D7 Query consumption。负例包括 runtime-only discovery、wrong owner、digest mismatch、重复 contributionId、D10 contractVersion 不变而 D7 version 改变、漏掉 active descriptor、selected Field/provider unavailable、script/network/extra member、缺 D6 `field_read`、successor Catalog/selector invalidation。Pack 测试另保留 parentDomainId、extensionPointId、compatible parent version/binding 三轴和合法第一方 activation 正例。不得用永久 deny-only 路径冒充这些正向能力。
 
 ## 5. Runtime 与 OS sandbox
 
@@ -246,6 +263,8 @@ planned-preview recovery 必须从真实 planned 保存的 PreparedActionBinding
 14. cancel、TTL、临时撤权、Lease 过期不产生 released_terminal。
 
 只有真实 D6 commit transaction 同时保存 author result 与 approval consumed 后才算一次自动提交完成。authoritative terminal_failed 的 approval release 也必须与原 abort 同事务证明。
+
+首代有意不提供 supplemental `planned_approval` 或 `external_approval` 的独立提前 revoke state action。测试必须证明这个支持边界，而不是发明 generic state：有限时间边界、准确 Lease/Activation/request binding、当前 ResourceUseGrant、当前 D6 authorization 与不可逆 stop 都在对应 planned/send cut 重新检查。expiry 或上层 grant/Lease/stop 变化可以阻断新使用，但不能把 supplemental approval 改写成合成 revoked state；planned work 只能按原 authoritative-abort 规则释放。
 ## 8. External effect 与 Connector 实施义务
 
 每个可写 External Service 必须有具名 adapter profile，声明：
@@ -266,6 +285,14 @@ planned-preview recovery 必须从真实 planned 保存的 PreparedActionBinding
 发送栅栏需要故障注入：耐久 intent 之前、intent 已保存但尚未发送、系统写入或 HTTP 发送中、远端已接收但尚未响应、收到响应但 terminal audit 尚未耐久。任何无法证明的结果都保持 outcome_unknown。
 
 Connector sync 若修改 SourceBinding/OriginBinding/watermark 必须另有 owner-stage closed adapter；普通 ExternalEffectIntent 或 single_field_member approval 不得直接写这些控制字段。
+
+R08 external-effect 测试逐字消费 CONTROL-CONTRACT §7：
+- `FrozenEffectBytes/1` 验证 byteLength/digest 与有限 payload/idempotency-proof bytes；proof 不是凭空新增 EvidenceTicket arm。
+- immutable `ExternalEffectIntent/1` 冻结 effect Ref、Workspace、Contribution/account、operation/target、request payload 与 idempotency binding；lifecycle revision 属于另一个域。
+- `ConsentSpec.external` 绑定 stable effect Ref + requestDigest，因此合法 `prepared→submitting` 不会自行使 consent 失效；任何 contribution/account/target/payload/idempotency 变化都要求新 effect intent 与 consent。
+- `ExternalExecutionBinding/1` 在不可逆 send 前冻结 sendAttemptId、准确 Lease/approval/external-effect grant/egress grant、可选 secret generation 与 0..32 个可归属 cost reservation。sendAttemptId 永远不是 billableAttemptId；每份 reservation 都解析到自己的 billable attempt。
+- public `ExternalEffectCurrentView/1` 只暴露受权 state/recovery mode/contribution/account/operation/requestDigest/targetDigest，永不返回 payload、target ToolValue、idempotency key/proof、secret generation、approval record 或 reservation identities。
+crash/reconcile mutant 尝试替换 frozen bytes、target、key、secret generation 或 effectId 必须被拒绝；`outcome_unknown` recovery 永远继续同一 immutable request。D9 conversion worker 保持 network=denied，不能借 D10 egress。D9 PublicationReceipt 只证明 publication；另存 Resource 仍需原作者协议。
 
 ## 9. Budget 与费用实现义务
 
@@ -322,13 +349,17 @@ D10 control error 还必须验证 hidden object exists/missing 两个世界在 c
 R05 不再定义匿名旧 D10 capability profile。第一份共同公开 unattended author-submit D6 closed enum 直接包含 `approval_unavailable` 与 proposed `execution_stopped`；能否运行该 capability 由 D1 正式 catalog 与真实 availability gates 决定。D10 adapter 不得把 D6 code 重新包装为 approval_required，也不得删除既有 Policy/bootstrap/saved-decision 兼容合同。
 
 D3/D7/D8/D9 原 error 同样必须逐字沿原 owner 传递。诊断 UI 可以在另一个受权 control read 中解释状态，但不能通过改变正式 error wire 泄露隐藏数据。
-### 11.1 R05 capability、stop 与公开合同门
+### 11.1 R08 capability、stop 与公开合同门
 
 首版 D10 候选 capability IDs 是 `automation.manage`、`workspace.extensions.manage`、`deployment.external.manage`、`automation.stop`、`automation.author_submit`。设计接受或 coordinated design activation 只冻结规范；实现只有在 ID 已进入选定 D1 contractMajor 正式 catalog，并且真实 release/surface/policy/principal/component/configuration/version/reachability/health 门通过时才能报告 available。
 
 第一份共同公开 unattended author-submit D6 closed error set 直接包含 `approval_unavailable/preflight` 和 proposed `execution_stopped/preflight`。测试不得构造匿名“旧 capability profile”；同时必须保留 Policy/1/2、bootstrap profile/1/2、D1 bootstrap/contractMajor 和历史 saved-decision replay。
 
-emergency stop 需要三个真实竞争证据：与 Run-admission 同 store transaction；D6 final commit 在实际写锁 transaction 内重验 stop；external send fence 持续到第一次不可撤回 send handoff。只做“check stop then sleep/commit/send”的模型不满足。stop 后仍必须能进行当前获权 authoritative abort、cost settlement、evidence/audit retention 与 reference-safe cleanup。
+emergency stop conformance 消费 CONTROL §11 的专用 D10 同库 safety transaction，不能建模成普通 control prepare 或已冻结 D6 public API。exact target 固定 `requestId==target.id`；W/H 是同一 latch 的两个独立 current-authority 读取面。首次 enable/admission 前已经预留 target/latch/result slot 与一个 safety-sequence unit。MAX=2^63-1；普通 configuration Counter/budget/quota 耗尽不能消费 reserved safety capacity，也不能阻止已预留 target 的首次 stop；容量耗尽只能拒绝新 executable target 建立。
+
+测试覆盖首次 open→stopped、immutable revision-2 receipt、只读 `d10_emergency_stop_result` 返回原 receipt 或读取时点已证明 open 的结果，以及顺序 `closed decode/D1 → current disclosure → authority/fence/custody → stable-key/target equality → continuity → transition/read → final disclosure`。hidden/wrong-scope/wrong-store 为 `not_visible`；authority 不可证明为 `authority_unavailable`；确定破坏为 `integrity_conflict`；已可见 same-key/different-target 为 `control_conflict`；latch/result continuity 不可证明为 `state_unavailable`，绝不 not-applied。receipt 丢失后 target r5→r6 仍重放原 receipt。
+
+仍必须证明与 Run admission 共用 store serialization domain、D6 final commit 在真实 final author transaction 内重验 latch、external send fence 持有到首次不可逆 handoff。stop 后当前获权 authoritative abort、cost settlement、evidence/audit retention 与 reference-safe cleanup 继续可用。任何 stop 测试都不得伪造 prepare history、D6 author receipt 或第二成功账本。
 
 ## 12. 跨表面实施矩阵
 
