@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate revision R07, author-revised after the complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d`; not independently re-accepted or coordinatedly activated. This file records input/candidate handoff state, not a Gate verdict.
+Status: candidate revision `D10-r07-independent-review-fixes-2026-09-28`, author-revised after the complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d`; not independently re-accepted or coordinatedly activated. This file records input/candidate handoff state, not a Gate verdict.
 
 The integrated fixed-input baseline is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 inputs from U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the added D4 reference catalog. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
