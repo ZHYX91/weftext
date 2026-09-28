@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate. This file describes future implementation obligations and evidence gates. It does not state that the repository currently implements Agents, automation, Connectors, MCP, standing approval, or a D10 runtime. It authorizes no product-code change; the current PR contains design material only.
+revision: D10-r07-independent-review-fixes-2026-09-28; status: author implementation/test obligations synchronized to R07 after complete independent REVISE; these obligations are design/test requirements and not product-execution evidence.
 
 ## 1. Implementation slices and state owners
 
@@ -152,6 +152,15 @@ ToolValue decoders/encoders must prove exact semantics per type. Prohibited shor
 
 MCP tests require hostile servers: descriptor drift, tool-name collision, schema changes, extra fields, huge recursive schema, fake readOnly, prompt injection, resource contents carrying tool instructions, truncated/duplicate responses, and over-budget results. A discovered change may only pending/reject/reset and may not hot-swap schema during a Run.
 
+
+### 4.1 R07 closed-rule and SearchContribution conformance
+
+Standing Approval tests use CONTROL-CONTRACT §7 as the only rule decoder. They must cover 0- and 64-element enum bounds, sorted/unique complete TypedLiterals, same-type numeric bounds, 0/65528 UTF-8 text limits with CR/LF rejection, 1..7 static D4 object-member paths with alias-depth enforcement, semantic-code scope+code equality, and both required and present-optional D7 bridge forms. The real positive fixture is a one-Entry `people/phone` with present optional `label`; `personal→work` is a real change, `work→work` is raw-no-op, `optional.none` is not automatic, and another same-value phone Entry makes the whole automatic profile inapplicable.
+
+Control-result/current tests instantiate all 19 `ControlRecordKind` current projections, assert exact scopes and lifecycle states, and distinguish configuration revision from independent lease/approval/grant/cost-account usageRevision. A second Run consuming the same Lease usage must not change the first admitted Run's leaseRevision; revoke must change configuration revision and block later steps. r5 success/lost-response→r6 update must replay r5 through `d10_control_result` and return r6 only through `d10_control_read`; ambiguous applied continuity returns `state_unavailable`, and secret current read never returns plaintext.
+
+SearchContribution integration uses the real D7 Query Algebra descriptor. Tests cover a valid first-party owner/digest/Registry/textPath activation feeding the existing D7 Query builder; runtime-only discovery; wrong owner; asset digest mismatch; duplicate D7 contributionId; D7 version change under unchanged D10 contractVersion; omitted otherwise-active descriptor in the purported complete set; selected Field/provider unavailability; script/network/extra members; lack of D6 `field_read`; and successor Catalog generation invalidating old results. No test may satisfy the feature by a permanent deny-only path.
+
 ## 5. Runtime and OS sandbox
 
 Every executable contribution support claim is bound to real sandbox evidence per platform. Minimum checks:
@@ -261,7 +270,7 @@ Connector sync changing SourceBinding/OriginBinding/watermark needs a separate o
 
 ## 9. Budget and cost implementation obligations
 
-Cost implementation follows CONTROL-CONTRACT §6 and §9–§10 exactly. CostReservation state is `reserved→settled(actual)|released|uncertain` plus `uncertain→settled(actual)|released`. Only settled/released are terminal. uncertain retains the complete upper bound and may later recover from evidence.
+Cost implementation follows CONTROL-CONTRACT §6 and §9–§10 exactly. One `CostReservation/1` always names one actual account; layered Run/Lease/Automation/Workspace/deployment ceilings are checked together but are not multiple account charges. Separately attributable multi-account charges use separate reservations/evidence and must not double-count one cost. CostReservation state is `reserved→settled(actual)|released|uncertain` plus `uncertain→settled(actual)|released`. Only settled/released are terminal. uncertain retains the complete upper bound and may later recover from evidence.
 
 Implementation stores reservationId, attemptId, actual cost account/grant, currency, pricing binding, upper bound, state/revision, and evidence attribution. The caller has no targetState or hand-entered actual amount. Final-bill and never-started conclusions come only from a trusted EvidenceTicket adapter.
 
@@ -272,6 +281,11 @@ A reliable zero bill after send is always `settled(0)`; only never-started proof
 ResourceUseGrant configuration and cumulative usage have separate revisions. Renewal/revision retains spent/held/attempts; a lowered limit cannot be below existing consumed+held use. Changing grantee/account/resource kind/currency creates a new grantId, while an old reservation continues to settle against the old grant and actual account.
 
 Real billing evidence must cover at least: reserve100→send→crash→uncertain→final bill20→settled(20), returning only80; sent+final0→settled(0); never sent→released; concurrent reconcilers; response loss after commit and replay; wrong attempt/account/currency; non-final or unsplittable aggregate evidence; administrator zero without evidence; and overcharge. Provider tests not actually run remain pending.
+
+
+Current-control and historical-result persistence tests additionally prove that `Binding<lease>.revision==leaseRevision`, `Binding<approval>.revision==approvalRevision`, `Binding<grant>.revision==grantRevision`, reservation revision and deployment-policy revision each have one CAS authority, while independent usageRevision changes do not mutate those configuration bindings. `ControlDependencies.usageBindings` is limited to lease/approval/grant/cost_account.
+
+Trust tests include the positive reserved first-party `people→(first_party,weftext.people)` claim and reject a random 43-character D6 Token as `ownerId`. Package/search owner proof uses the exact D4 tuple plus a separate EvidenceTicket; install order and same-named package never substitute.
 
 ## 10. Audit, retention, and export
 
