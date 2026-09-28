@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 Agent、自动化与外部能力候选
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate author revision，等待新的固定候选全量独立联合终审。本候选继续以固定上游 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 原 48 份输入和补充 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` D4 reference catalog 为权威输入，作者覆盖 49/49；历史 48/48 记录保持原上下文。独立终审当前仍针对旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74`：候选 16/16、上游 44/49，正式开放 1P1+8P2；最后 D2/D5 五份仍在独立读取。R06 在 R05 基础上只补 D8/D9 owner 术语配套、U12 导入前提和有限一致性清理；旧 C 的覆盖不能转记为 R06 接受；本文不表示 Gate 通过、产品实现、运行时 capability available、上游 amendment 生效或可以开始 A2。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d`、S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 18/18、上游 49/49，并给出 REVISE：P0=0、P1=1（JR001）、P2=8（JR002–JR009），术语不通过、翻译不通过；本稿是落实九项问题后的 R07 作者修订，等待新的独立复核，不表示已独立接受、实现、发布、激活、合并或可开始 A2。历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 也已完成 49/49 并为 REVISE，仅作历史。
 
 ## 1. 选择与问题边界
 
@@ -72,6 +72,8 @@ R05 的管理授权、closed body、stable request key、prepare/result/secret/s
 D4 Registry 仍是唯一 semantic namespace/schema 权威。D10 证明 package/publisher/namespace claim、安装资产与贡献来源，随后把完整候选 `RegistrySnapshot/1`、`RegistryBinding/1` 交给 D4 既有验证、演进和 catalog load；D10 不增加 Registry member，也不改变 D4 Field/Facet/Relation/Calendar/Unit 语义。
 
 D10 另维护 Capability Catalog，记录每个可执行或纯数据 Contribution 的精确包摘要/版本、贡献类型/版本、运行 profile、平台/架构、依赖、宿主权限、网络/出站类别、secret 要求、费用 profile 与 D1 capability ID。Catalog 不能保存第二份 FieldDefinition，也不能用显示名称或安装顺序证明命名空间 owner。
+
+R07 给 D7 SearchContribution 补齐真正的正向 Catalog 路径，同时不增加 D4 Registry member 或第二搜索引擎。CONTROL-CONTRACT §4 唯一冻结 D10 `view` kind 的纯数据 carrier、不可变 descriptor asset digest、D4 owner/Field/textPath 验证、D7/D10 两层 ID 与版本分域、同 cut 完整 SearchContribution 集合及 `activationGeneration + capabilityCatalogDigest + registryBinding` 失效语义。合法第一方 SearchContribution 因此可安装/激活并进入原 D7 search Query builder；未接纳/runtime-only descriptor 只能 pending，selected contribution unavailable 仍按原 D7 失败而不能静默跳过。
 
 R05 将 package/contribution wire 收敛到 CONTROL-CONTRACT §4–§5：dependency 是**具体 dependent Contribution 自身的成员**，不是 package 级 ambient 数组；一个 connector 不可用不能停用同包无关 schema/template/data pack。Contribution kind 闭集显式保留 module/schema/view/action/template/preset/pack/tool/model/connector/importer/exporter/conversion/renderer/localization。Calendar、Library、People、Organizations 各有唯一第一方 PackageId→module contribution→schema contribution 映射，且明确引用 D4 已冻结 namespace owner 与 FacetId；这些 D10 PackageId 不成为第二 D4 namespace，也不冒称 D1 已存在 module ID、代码路径或 locale 资源。
 
@@ -244,9 +246,12 @@ terminal occurrence 历史可以压缩，但只允许压缩成仍能证明该 ke
 Occurrence claim 可以先于 Run admission 建立，因此 queued 或 blocked 且从未进入受保护执行的 Run 不消耗 Lease `maxRuns`。已经有同一 Run 的 `LeaseRunUse/1` 后，后续 step 与原 planned 恢复复用该准入事实，不再因为全局 remaining=0 重新执行 Run-admission count gate。第一次受保护步骤通过 §8 的 Run-admission CAS 后才建立 `LeaseRunUse/1`。若 `maxRuns` 已耗尽，当前 occurrence 保持其既有 claim/Run 并进入 blocked，返回 `delegation_exhausted`；不得把同一 occurrence 换新 Run 绕过上限。
 
 每次 occurrence 开始和每个新的受保护步骤前重新验证 current capability、准确 Lease revision、trusted time、D6 authorization、ActivationBinding、secret generation 与预算。已生成 D3/D6 request 后重启只恢复原 Run 和原 request；不能重新采样 target 或生成新 OperationId。暂停期间 Lease 可以自然到期，即使清理 scheduler 从未运行；可信时间推进后必须阻止新的 context、model、tool、external step 和最终作者提交。时钟连续性丢失时 fail closed 为 `state_unavailable`，恢复可信时间后再判断 expired 或 active。
+
 ## 14. Standing Approval
 
-Standing Approval 不是“允许这个 Agent 以后修改任何东西”。首版无人值守作者提交只支持原 D7 `set_field_member` 的一个极窄 profile：单 existing Node、单 Field、当前完整 Field 恰一个 Entry、一个 existing scalar member。
+Standing Approval 不是“允许 Agent 以后任意修改”。首版完整规则只由 CONTROL-CONTRACT §7 的 `SingleFieldMemberRule/1` 拥有；本节只消费同一定义，不再另写竞争的 type/constraint enum。
+
+首版无人值守作者 profile 仍是原 D7 `set_field_member`：单 existing Node、单 Field、当前完整 Field 恰一 Entry、一个 existing scalar member。Envelope 直接引用唯一 owner：
 
 ```text
 StandingApprovalEnvelope/1 {
@@ -260,30 +265,20 @@ StandingApprovalEnvelope/1 {
   activationBinding,
   notBefore,
   notAfter,
-  rule: {
-    kind: "single_field_member",
-    ownerNodeRef,
-    fieldId,
-    selection: "require_exactly_one_entry",
-    memberPath,
-    memberType,
-    valueConstraint
-  },
+  rule: SingleFieldMemberRule/1,
   maxSuccessfulCommits,
   budgetAccountBindings
 }
 ```
 
-memberPath 只能是静态 object member path，不允许 list index、wildcard 或动态 FieldId。memberType 只允许 bool、exact text、int64、integer、decimal、semantic_code。valueConstraint 只允许最多 64 个完整 TypedLiteral 的有限集合、同型 exact numeric closed interval，或有 UTF-8 byte 上限且禁止 CR/LF 的 exact text。所有 D4 nonEmpty、code scope、schema/cardinality/constraint 仍独立验证。
+CONTROL-CONTRACT §7 保留 bool、exact text、int64、integer、decimal、semantic_code；0..64 TypedLiteral enum、同型 exact numeric closed range、有限且禁止 CR/LF 的 exact text、1..7 D4 静态 object-member path 以及两个实际效果分支。它同时逐字保留 D7 Optional bridge：D4 optional scalar member 只有当前已 present 且 D7 action 提供 Optional<scalar>.some 时才可自动批准；`none` 删除不属于自动路径。真实 semantic-code 正例使用 S `people/phone.label` contribution-set member。
 
-机械批准的共同前提是：current D1/D6/D10 authorization 有效；approval、automation、definition、delegation、activation binding 都准确匹配；使用 fresh current source revision；完整 Field 恰一 Entry；D7 Narrow Field Qualification 成功；owner、Field、member、type 准确；新值落入冻结 constraint；完整 owner_fields preview 已形成并可取；audit 与 approval-count/cost reservation 可以建立。
+共同前提仍为 current D1/D6/D10 authorization、准确 approval/automation/definition/delegation/activation binding、fresh source revision、完整 Field 恰一 Entry、D7 Narrow Field Qualification 成功、owner/Field/member/type 精确、新值落入 CONTROL 冻结 constraint、完整 owner_fields preview 可取，并可建立 audit 与 approval-count/cost reservation。
 
-实际效果有且只有两个合法分支：
+实际结果仍只有两支。**member-change** 要求原 D7 adapter 的完整 proposed source 和实际 MutationFootprint 只包含所选 existing scalar member 变化，所有其它作者/control 事实不变，owner_fields preview 有完整 Field before/after `field_change`。**逐字 raw no-op** 要求同 current 唯一 target、按 required/present-optional 投影后的 D7 同型 equality，以及原 adapter 的完整 proposed source 与 before bytes 逐字相同；MutationFootprint、`field_change`、D6 `sourceVersions` 均为空。
 
-1. **单成员实际变化**：完整 proposed source 与 before 不同，实际 MutationFootprint 恰只包含所选 existing scalar member 的变化；occurrenceKey、其它 member、qualifier、note、provenance、其它 Entries、body、Facet、Ref、relation、identity、placement 和 control 均不变。公开 owner_fields preview 按 D7 原合同包含该 Field 的完整 before/after `field_change`。
-2. **逐字 raw no-op**：原 `set_field_member` 仍准确解析到同一唯一 Entry 和 existing member，当前 member 的 typed value 已与请求值相等，且由原 adapter 构造的完整 proposed source 与 before source bytes 逐字相同。此时 MutationFootprint 必须为空，preview 的 `field_change` 集合为空，最终 D6 receipt 的 `sourceVersions` 为空；不得为了满足 standing approval 伪造 member footprint、Field effect 或 revision。目标存在性、类型、valueConstraint、current authorization、dependencies 与 Narrow Field Qualification 仍全部验证。
+其它结果都不属于 Standing Approval：不得选 first/preferred/same-value target，不得扩大 whole Entry/source，不得降级 append/remove，也不得换同名 target；只能进入交互确认、blocked 或 failure。若 raw no-op 按原 D6 形成 committed decision，仍消费一次 successful-commit approval count；同一 saved D6 decision replay 不重复消费。
 
-除这两个分支外，任一结果都不能自动选择 first、扩大到 whole entry/source、降级为 append/remove 或换同名 target；只能转 awaiting_confirmation、blocked 或失败。若 raw no-op 最终按原 D6 规则形成 committed decision，它仍消费一次 `maxSuccessfulCommits`；同一 saved decision 的 replay 不重复消费。
 ## 15. Fresh prepare、批准消费与 planned 恢复
 
 每次自动作者修改仍按：fresh current Field selection → 原 D7 ActionSpec → 原 `d7_action_prepare` → 完整 D7 EffectManifest/bytes → Core 机械匹配 StandingApprovalEnvelope → 建立 ApprovalUse → 原 D6 request。
@@ -414,7 +409,7 @@ ExternalEffectIntent/1 {
 
 ## 18. Budget、费用与并发预留
 
-D6 原 work/attempt budget 保持。D10 为 model、tool、network 和 external cost 使用 CONTROL-CONTRACT §6、§10 的 ResourceUseGrant、CostReservation 与 CostSettlementDecision。Run、Lease、Automation、grant 与 deployment account 的最窄剩余额度必须在同一 authority store 的准入事务中原子满足，避免两个并发 Run 同时看到最后余额。
+D6 原 work/attempt budget 保持。D10 为 model、tool、network 和 external cost 使用 CONTROL-CONTRACT §6、§10 的 ResourceUseGrant、CostReservation 与 CostSettlementDecision。Run、Lease、Automation、Workspace、grant 与 deployment account 的最窄剩余额度必须在同一 authority store 的准入事务中原子满足，避免两个并发 Run 同时看到最后余额。这些层级是 ceiling/projection，不是同一 reservation 的多个 actual account：一份 CostReservation 仍只绑定一个 attempt、一个实际账户、一个 grant、一个 pricing version 和一个 currency，一笔费用只记一次；真正可分别归属的多账户费用必须拆成可归属的 attempts/reservations/evidence，需要时可作为一个原子组准入。
 
 Money/1、currency、microUnits、grant/account ceiling、pricing binding 和 checked arithmetic 的 exact shape 由 CONTROL-CONTRACT §2、§9 定义；没有隐式换汇，也没有调用方手写“实际费用”或目标终态的账务接口。每个可能收费 attempt 在开始前绑定一个独立 reservation、attemptId、实际 account/grant、pricing version 与有限 upper bound。grant 续期或 revision 更新不清空 spent、held、attempts；换 grant 不迁移或消除旧 reservation/account liability。
 
@@ -462,9 +457,7 @@ stop 不阻断当前获权的 authoritative abort、费用 settlement、evidence
 
 D1 capability availability 及其固定 reason 优先级完全不变，尤其 `policy_denied` 必须先于组件、配置、network、version 与 health 细节。D10 不用一个 runtime_unavailable 覆盖 `missing_component`、`not_configured`、`offline`、`incompatible_version` 或 `temporarily_unavailable`。
 
-D10 自有控制请求的阶段顺序为：closed decode/version → D1 static capability/surface/release → current principal/control-object visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution。阶段顺序优先于错误细分类，防止越权探测。
-
-D10 自有 error code 闭集为 `invalid_request|not_visible|control_conflict|binding_changed|approval_required|approval_expired|delegation_expired|delegation_exhausted|budget_exceeded|audit_unavailable|state_unavailable|invalid_output|cancelled|external_outcome_unknown`。unknown token、wrong tag、wrong audience 或无权控制对象统一 `not_visible`；只有已经有权读取本人记录时才披露 expired、exhausted 或 conflict。
+CONTROL-CONTRACT §1 唯一拥有两个 D10 envelope。管理/current/history/secret/stop 入口使用 `D10ControlError/1`；尚未进入其它 protocol owner 的 D10 Run/step 使用 `D10RunStepError/1`，闭集为 `invalid_request|not_visible|control_conflict|binding_changed|approval_required|approval_expired|delegation_expired|delegation_exhausted|budget_exceeded|audit_unavailable|state_unavailable|invalid_output|cancelled|external_outcome_unknown`。Run/step 阶段固定为 closed decode/version → D1 static capability/surface/release → current principal/control-object visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution。unknown token、wrong tag、wrong audience 或无权控制对象继续统一 `not_visible`；expired/exhausted/conflict 细节只能在另行受权的 control disclosure 后取得。一旦进入 D3/D6/D7/D8/D9，原 owner envelope 必须逐字返回。
 
 错误 owner 必须按进入边界区分：
 
