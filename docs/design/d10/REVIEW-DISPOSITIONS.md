@@ -8,17 +8,34 @@ translation_status: synced
 
 # D10 Independent-Review Issue Dispositions
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: author revision record. All independent findings remain open pending a complete joint final review after R05 is fixed.
+revision: D10-r07-independent-review-fixes-2026-09-28; status: R07 author disposition record after complete independent REVISE of fixed R06 C. Every JR finding remains open until fresh independent re-review; "author revised" is not closure.
+
 
 ## 1. Review-coverage boundary
 
-The old fixed candidate remains C=`35fab950dabedfb92c9f12858701be8afe6faa74`, with fixed input S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`. Formal independent-final-review coverage for old C is **16/16 candidate files** and **44/49 upstream inputs**; the final five D2/D5 inputs are still being read. The formal ledger is **1 P1 + 8 P2 open**. Those coverage numbers, findings, and interim judgments belong only to old C and cannot be carried forward as R06 having been read, accepted, or closed.
+Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` ultimately completed S 49/49 and ended REVISE; earlier partial-reading counters are superseded and remain historical process evidence only.
 
-R06 inherits the R05 authorization/transaction/cost/stop/package control revisions and adds original-owner D8/D9 terminology companions, the U12 import preconditions, and bounded consistency cleanup. Once fixed it still requires a fresh complete joint final review as a new candidate.
+The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**; P0=0; P1=1 (`JR001`); P2=8 (`JR002`–`JR009`); terminology failed; translation failed. D8/D9 added no findings. Q01/Q02 remain closed; Q03 owner/composition verification is complete.
 
-Rows below record only the author's technical disposition and landing points. “Author revised” never means independently closed.
+R07 is the author remediation of that exact complete issue set. No old coverage/verdict may be carried forward as R07 having been independently read, accepted, or closed.
 
-## 2. Issue dispositions
+## 2. R07 JR001–JR009 author dispositions
+
+| ID | Severity | Author revision | Main R07 landing | Validation target | Current status |
+| --- | --- | --- | --- | --- | --- |
+| JR001 | P1 | CONTROL uniquely owns the complete SingleFieldMemberRule; preserves semantic_code, 0..64 same-type TypedLiteral enum, numeric range, bounded exact text, 1..7 D4 member path, Optional-present bridge, member-change/raw-no-op | CONTROL §7; CANDIDATE §14; UPSTREAM Standing Approval consumers; Implementation; scenarios | real `people/phone.label` present Optional semantic-code change + raw-no-op + same-value second phone negative; no whole-source widening | Author revised; pending independent re-review |
+| JR002 | P2 | separate historical prepare/applied result from current exact ControlRef read; close all 19 current projections, scopes, lifecycle/config/domain/usage revisions and non-disclosure | CONTROL §7–§8; Candidate recovery/errors; Implementation/F32 | r5 lost response/r6 current: result=r5, current read=r6; secret no plaintext; planned author preview only D7; ambiguous applied continuity=`state_unavailable` | Author revised; pending independent re-review |
+| JR003 | P2 | split `D10ControlError/1` management from `D10RunStepError/1`; map entrypoints and preserve D3/D6/D7/D8/D9 envelopes | CONTROL §1; CANDIDATE §21; Implementation | management stale_revision != runtime binding_changed; pre-D6 approval errors never wrap D6 approval_unavailable | Author revised; pending independent re-review |
+| JR004 | P2 | register ToolValueProfile/ToolType/ToolValue separately as a D10-owned closed algebra, not a D7 alias | CONTROL §3; TERMINOLOGY §2/§3/§13; START/Implementation | no controlled "reuse D7 subset" claim; exact numeric/optional/object/list/union decoder | Author revised; pending independent re-review |
+| JR005 | P2 | one CostReservation remains one attempt/account/grant/pricing/currency; layered limits are ceilings, true multi-account costs use separate attributable reservations | CONTROL §10; CANDIDATE §18; TERMINOLOGY; F20; Implementation | no duplicate charge; concurrent layered-cap race; separately attributable accounts stay separate | Author revised; pending independent re-review |
+| JR006 | P2 | unify R07 status, nine bilingual pairs/18 paths, complete review history, and exact four S supplemental paths | all status headers; TASK; START; this file | no stale partial-reading/seven-pair/r04/current-R06 status; only catalog is the 49th normative source | Author revised; pending independent re-review |
+| JR007 | P2 | ImportJob remains D6-owned with original concept ID, ownedNames, `storage.import_job`, firstFreeze; D9 only consumes | UPSTREAM §8.2; TERMINOLOGY §13.2/§15 | no D9 new/split ownership or D9 firstFreeze for ImportJob | Author revised; pending independent re-review |
+| JR008 | P2 | NamespaceClaim consumes the exact D4 owner tuple; ownerId is never a D6 Token and proof is separate | CONTROL §9; Candidate trust; Implementation | positive reserved people tuple; random 43-char Token/same-name package/install-order negatives | Author revised; pending independent re-review |
+| JR009 | P2 | D7 SearchContribution gets one closed D10 pure-data carrier under `view`, distinct IDs/versions, descriptor digest/owner/Registry proof and complete Catalog-generation binding | CONTROL §4; CANDIDATE §6; TERMINOLOGY inherited map; U18/U22; Implementation | valid first-party install→activate→D7 search; wrong owner/digest/duplicate/omission/unavailable/script negatives | Author revised; pending independent re-review |
+
+Q01/Q02 remain closed with no design change. Q03 owner/composition verification is complete; R07 does not retain a generic "other owner combinations pending" disclaimer.
+
+## 3. Historical staged issue dispositions
 
 | ID | Original severity | Issue | Author revision decision | Main change locations | Current status |
 | --- | --- | --- | --- | --- | --- |
@@ -46,7 +63,7 @@ Rows below record only the author's technical disposition and landing points. �
 | B09-P2-01 | P2 | D9 grouped lexicon/eight D9 sources lacked stable IDs, complete bilingual names, wire/type/profile ownership, surface/alias decisions, and migration targets for new concepts | R06 splits stable D9-owned concept IDs for SourceArtifact/ImportIR/Provider/Route/Template/RenderSnapshot/D7ResultPin/ExportPlan/PublicationReceipt and related terms, with per-concept existing-or-no-new surface decisions; inherited D2/D3/D6/D7 names keep their owners; PublicationReceipt is external-publication only | UPSTREAM-AMENDMENTS §8.2; TERMINOLOGY §15; SCENARIO P19; IMPLEMENTATION §13/§15 | Author revised; independent finding remains open |
 | B09-P2-02 | P2 | U12's “same UID twice ordinary import fresh” omitted current ICS unavailability and the D3 SourceBinding/ForeignIdentityKey state matrix | R06 makes U12 three-branched: current ICS conversion unavailable with zero author effect; a supported ordinary-file profile without D3 binding semantics gives fresh identities for two separate explicit imports while same-request retry replays exactly; once D3 binding semantics apply, use never_bound/active_live/active_non_live/retired/conflict/miss plus explicit-adopt rules and never decide from UID without SourceBinding | SCENARIO U12; IMPLEMENTATION §15 | Author revised; independent finding remains open |
 
-## 3. Unchanged boundaries
+## 4. Unchanged boundaries
 
 This revision does not broaden automatic author writes. The first generation still permits only the D7 `set_field_member` single_field_member profile; D3 create/lifecycle, D8 document/annotation edit, bulk/Facet/native-table, and other operations remain interactively confirmed or unsupported.
 
@@ -56,11 +73,11 @@ External `outcome_unknown` and cost `uncertain` remain. Approval/Run fixes do no
 
 All proposed D6/D7 additions exist only in UPSTREAM-AMENDMENTS. Fixed upstream U is unchanged, and those amendments do not take effect before independent acceptance and coordinated activation.
 
-## 4. Documentation-quality revision
+## 5. Documentation-quality revision
 
 The previous Chinese candidate repeatedly appended a generic sentence saying technical names did not expand authority in order to satisfy mixed-prose checks, and some lines gained doubled punctuation. Those sentences were not normative semantics. This revision removes that padding and explains the actual boundary in natural Chinese while retaining necessary controlled identifiers. Repository check_docs rules are not relaxed; any remaining mixed-prose failure must be fixed by real wording rather than repeated filler.
 
-## 5. Targets for subsequent independent re-review
+## 6. Targets for subsequent independent re-review
 
 A later reviewer should reconstruct at least the original counterexample for each item and check:
 
