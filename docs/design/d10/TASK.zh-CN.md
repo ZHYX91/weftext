@@ -9,7 +9,7 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S 的完整独立联合终审已完成候选18/18、S49/49，结论 REVISE：P0=0、P1=1（`B03-P1-01`）、P2=10（`B01-P2-01`、`B02-P2-01`、`B02-P2-02`、`B02-P2-03`、`B03-P2-01`、`B03-P2-02`、`B03-P2-03`、`B03-P2-04`、`B10-P2-01`、`B11-P2-01`）；整体、术语与中英语义均需修订。R08 是作者统一修订，不会自行关闭任何 finding。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`；完整 R08 作者修订候选。固定 R07 的完整联合终审结论为 REVISE（P0=0、P1=1、P2=10），当前11项 finding 全部保持开放。固定 R08 commit 必须进行 fresh 完整独立联合评审后，才能形成任何接受或协调激活结论。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
@@ -93,5 +93,3 @@ R08 还冻结以下已经由 CONTROL/CANDIDATE/UPSTREAM/SCENARIO/IMPLEMENTATION 
 九对 R08 文档全部同步且 document/input gate 通过后，应固定新的 R08 commit，并从零进行 fresh 完整独立联合评审：候选18/18 + 固定 S49/49。旧 R07 的阅读覆盖、finding、CI 或 verdict 都不能作为新的 public-wire/授权/transaction 改动已经通过的证据。必要上游修订继续未激活，须在后续 coordinated acceptance、version、activation 与验收证据阶段另行处理。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。
-
-R08-B 之前的作者检查点实测记录：head `29ecca0cab43652a2e60f9997a68ec6ba8f6ca2b`；Design documents run `36383316785` 仅因 TERMINOLOGY.zh-CN.md 与 UPSTREAM-AMENDMENTS.zh-CN.md 已知 19 处 mixed-prose 失败，因此 input checks 被 skipped。总控观察时 source-gate run `36383316792` 仍在运行，并包含已知 rust-source 文档失败和既有 ui-source 依赖审计失败。这只是带 SHA 的执行记录，不是永久合同或 pass 声明。
