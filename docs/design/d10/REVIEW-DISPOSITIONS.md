@@ -15,7 +15,7 @@ revision: D10-r07-independent-review-fixes-2026-09-28; status: R07 author dispos
 
 Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` ultimately completed S 49/49 and ended REVISE; earlier partial-reading counters are superseded and remain historical process evidence only.
 
-The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**; P0=0; P1=1 (`JR001`); P2=8 (`JR002`–`JR009`); terminology failed; translation failed. D8/D9 added no findings. Q01/Q02 remain closed; Q03 owner/composition verification is complete.
+The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**; P0=0; P1=1 (`JR001`); P2=8 (`JR002`–`JR009`); terminology failed; translation failed. D8/D9 added no findings. The two previously clarified questions remain closed with no design change; owner/composition verification is complete.
 
 R07 is the author remediation of that exact complete issue set. No old coverage/verdict may be carried forward as R07 having been independently read, accepted, or closed.
 
@@ -33,7 +33,7 @@ R07 is the author remediation of that exact complete issue set. No old coverage/
 | JR008 | P2 | NamespaceClaim consumes the exact D4 owner tuple; ownerId is never a D6 Token and proof is separate | CONTROL §9; Candidate trust; Implementation | positive reserved people tuple; random 43-char Token/same-name package/install-order negatives | Author revised; pending independent re-review |
 | JR009 | P2 | D7 SearchContribution gets one closed D10 pure-data carrier under `view`, distinct IDs/versions, descriptor digest/owner/Registry proof and complete Catalog-generation binding | CONTROL §4; CANDIDATE §6; TERMINOLOGY inherited map; U18/U22; Implementation | valid first-party install→activate→D7 search; wrong owner/digest/duplicate/omission/unavailable/script negatives | Author revised; pending independent re-review |
 
-Q01/Q02 remain closed with no design change. Q03 owner/composition verification is complete; R07 does not retain a generic "other owner combinations pending" disclaimer.
+The two previously clarified questions remain closed with no design change. Owner/composition verification is complete; R07 does not retain a generic "other owner combinations pending" disclaimer.
 
 ## 3. Historical staged issue dispositions
 
