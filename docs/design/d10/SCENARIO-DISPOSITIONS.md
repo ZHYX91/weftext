@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Scenario Dispositions
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: R08-A author semantic-consumption revision after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S completed C18/18 and S49/49 with REVISE (P0=0, P1=1, P2=10). All eleven findings remain open pending the fresh complete independent review of the eventual R08 candidate.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author scenario dispositions synchronized to the final author candidate. The 125 scenario IDs and their generation-one branch classifications are author candidate material; all eleven findings remain open pending fresh complete independent review.
 
 The execution-mode vocabulary has only four values: automatic means the closed rules in this document permit progress without per-operation human confirmation; interactive means the operation is explicitly user-driven or needs per-operation confirmation; unsupported means explicitly unavailable in this generation; deferred means a named future owner must freeze a missing contract before availability. A row with mutually exclusive branches may list slash-separated branch modes drawn only from those four values; that syntax does not create a fifth mode.
 
