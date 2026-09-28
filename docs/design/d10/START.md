@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate revision `D10-r08-joint-review-fixes-2026-09-28`. The complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against fixed S completed candidate18/18 and S49/49 and returned REVISE (P0=0, P1=1, P2=10; overall, terminology, and bilingual semantics require revision). R08 is the author remediation and has not been independently reviewed, accepted, or coordinatedly activated. This file records input/candidate handoff state, not a Gate verdict.
+Status: candidate revision `D10-r08-joint-review-fixes-2026-09-28`; complete R08 author-revised candidate awaiting a fresh complete independent joint review. Fixed R07 was fully reviewed at candidate18/18 + S49/49 and returned REVISE (P0=0, P1=1, P2=10); that historical review is not R08 acceptance. This file records handoff state, not a Gate verdict.
 
 The integrated fixed-input baseline is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 inputs from U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the added D4 reference catalog. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
@@ -141,27 +141,3 @@ The D6/D7 Standing Approval amendment is not jointly accepted. Therefore, even w
 The candidate also does not claim implementation of OS sandbox, real MCP/model/connector services, credential storage, cost system, real Core amendment, or five-surface UI. Those evidence items remain pending in Implementation Impact.
 
 ## 6. Independent-final-review status
-
-Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` and fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` remain historical REVISE records.
-
-The complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and S **49/49** with no normative reading gap. Final result: **REVISE**, P0=0, P1=1 (`B03-P1-01`), P2=10 (`B01-P2-01`, `B02-P2-01`, `B02-P2-02`, `B02-P2-03`, `B03-P2-01`, `B03-P2-02`, `B03-P2-03`, `B03-P2-04`, `B10-P2-01`, `B11-P2-01`). Overall, terminology, and bilingual semantics all require revision. R08 is the author remediation and closes none of these findings by author assertion.
-
-All companion D3/D6/D7/D8/D9 amendments remain inactive proposals. Author checks, documentation CI, and bounded models prove only their artifacts; no merge, release, activation, or A2/product implementation is authorized by this handoff.
-
-## 7. Next completion and review gate
-
-Before fixing the final R08 candidate, all **nine bilingual pairs / 18 exact paths** must agree on `D10-r08-joint-review-fixes-2026-09-28`; fixed S and every path outside docs/design/d10/ must remain unchanged; the English/Chinese scenario corpus must retain the same **125 IDs** with matching branch classifications; and the applicable repository documentation/input checks must pass. Reading and CI evidence must be reported at the actual actor/layer and no pending/failure may be called pass.
-
-The fixed final R08 commit then requires a **fresh complete independent joint review from scratch: candidate18/18 + fixed S49/49**. R07's completed 18/18+49/49 review cannot be inherited as a differential pass because R08 changes public wire, authorization, transaction/safety, recovery, external-send, and D8/D9 interface-owner contracts. Any required upstream amendment still needs later coordinated acceptance, versioning, activation, and acceptance evidence.
-
-Observed pre-R08-B checkpoint only: head `29ecca0cab43652a2e60f9997a68ec6ba8f6ca2b`; Design documents run `36383316785` failed solely on the 19 known mixed-prose findings in TERMINOLOGY.zh-CN.md and UPSTREAM-AMENDMENTS.zh-CN.md, so its input checks were skipped. At controller observation, source-gate run `36383316792` remained in progress and included the known rust-source documentation failure and existing ui-source dependency-audit failure. This is a dated execution record, not normative state or a pass claim.
-
-
-
-Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` completed 49/49 upstream reading and ended REVISE; it is historical evidence only.
-
-The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**, P0=0, P1=1 (`JR001`), P2=8 (`JR002`–`JR009`); terminology failed and bilingual translation failed. D8/D9 produced no additional findings; The two previously clarified questions remain closed, and owner/composition review is complete.
-
-R07 is the author remediation of that complete issue set. Neither the old C35 review nor the R06 18/18+49/49 review counts as an independent read/pass of the new R07 commit. REVIEW-DISPOSITIONS marks every JR row only as author revised / pending independent re-review.
-
-Author checks, documentation CI, and bounded models prove only their artifacts. All D6/D7/D3/D8/D9 companion amendments remain inactive proposals; do not merge, release, activate, or start A2.
