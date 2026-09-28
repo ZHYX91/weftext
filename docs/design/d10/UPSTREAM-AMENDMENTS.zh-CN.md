@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 配套上游协调修订提案
 
-revision: D10-r07-independent-review-fixes-2026-09-28；状态：candidate upstream amendment proposal，仍未共同接受或协调激活。固定 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 继续权威且逐字不变；R07 只修复完整独立终审问题，不实现或激活这些未来配套改动。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：与 R08 同步的 candidate coordinated upstream-amendment proposal。固定 S 继续权威且逐字不变；除非后续完整独立复核接受新候选并由总控明确协调激活，否则本文件任何条款都不生效。
 
 ## 1. 修订目的和不变边界
 
@@ -175,9 +175,13 @@ d6_error.code 的第一份共同公开 closed set 同时增加 execution_stopped
 
 D6 final author commit 必须在真正持有 authority-store 写序列化的最终事务内再次验证同一 RunBinding 的 stop latches；不得只在 prepare 或事务外 check。stop 先线性化则本次新 author commit 不发生；commit 先线性化则保存原 committed decision，之后 stop 不倒推撤销。
 
+latch transition 本身继续由 CONTROL-CONTRACT §11 冻结的专用 D10 safety transaction 拥有。它在同一物理 Authority Store serialization domain 中使用预留 latch/result/sequence capacity，但既不是 `d10_control_prepare`、也不是 `d6_commit_request`，更不增加 D6 public store-incarnation API。D6 只在 planning/final recovery 消费受保护 latch association；普通 D6 budget、author commitSequence 或 D10 configuration Counter 耗尽都不能成为停止已预留 target 的前置条件。
+
 对 already planned request，stop 本身不能直接写 terminal。只有 current authorization、authority/continuity、原完整 plan/RunBinding 和不可逆 stop 均可证明，并由原 D6 recovery 证明该计划确定永不提交时，才能在原 author ledger 中写 transaction_aborted/terminal；同一 abort transaction 按既定 ApprovalUse 规则释放 approval-count reservation。临时 disable、Lease expiry、普通 Run cancel、暂时撤权或 clock/state 暂不可证都不是该证明，planned 保持 planned。费用 reservation 不因 author abort 自动释放。
 
 stop 不阻断当前获权的 authoritative abort、cost settlement、evidence/audit retention 或 reference-safe cleanup；这些操作不会恢复 executor 或 author-write 权限。
+
+External send 竞争继续归 D10 transport boundary，而不是 D6：首次不可逆 handoff 前，同一 safety serialization/fence 重验 frozen ExternalExecutionBinding、stop、approval/grant/secret/cost binding，并耐久记录 send-attempt evidence 与 holds。send 先完成保留已发送事实；stop 先完成阻止发送。D9 worker 保持原 no-network 默认，不因本 D10 amendment 获得 transport capability。
 
 ## 4. D7 Execution and Action Interfaces — 拟新增/替换条款
 
@@ -300,7 +304,7 @@ R06 不给 D8 增加无人值守编辑分支，也不改变 D9 转换、模板�
 
 D8 现有九个 concept ID、Editor Interfaces 的 12 个公开 request/response kind 与内部 `d8_prepared_edit_binding` 均保持原 wire。D8 owner 追加如下命名元数据；不改 IME、Write/Read、作者源、确认、Undo 或错误合同。
 
-共同规则：九个 concept 的 `firstFreeze` 均为已接受的 D8 r03 概念；R06 只补 naming metadata。除 `Direction Preference` 的既有方向选择器和 Edit Draft 的既有状态短语外，本代不冻结新的 CLI verb、独立 UI 控件名或 locale key；写“无”就是规范结论，不是留实现决定。没有已发布旧 alias；实现采用这些名称时，必须从 D8 editor adapter 的受控 type/kind registry、fixtures、help/locales 中原子删除任何未列出的受控 alias，禁止双读。历史证据和用户正文不迁移。
+共同规则：九个 concept 的原 `firstFreeze` 继续是已接受的 D8 r03 concept contract。R08 只提议追加 naming/interface-owner metadata；该后续 metadata 有自己的 R08 candidate 来源，不能倒称 S 原行已经包含它。除 `Direction Preference` 的既有方向选择器和 Edit Draft 的既有状态短语外，本代不冻结新的 CLI verb、独立 UI 控件名或 locale key；写“无”就是规范结论，不是留实现决定。没有已发布旧 alias；实现采用这些名称时，必须从 D8 editor adapter 的受控 type/kind registry、fixtures、help/locales 中原子删除任何未列出的受控 alias，禁止双读。历史证据和用户正文不迁移。
 
 | concept ID | 正式中英名；owner/layer | 定义 / 排除 | owned names 与 kind 归属 | CLI / UI / locale | 简称、alias、正反例与迁移目标 |
 | --- | --- | --- | --- | --- | --- |
@@ -314,24 +318,29 @@ D8 现有九个 concept ID、Editor Interfaces 的 12 个公开 request/response
 | `weftext.term.layout_epoch` | 布局代 / Layout Epoch；D8 layout state | 同次 shaping/wrap/hit-test 的可丢弃世代；非 result/auth/author revision | code type `LayoutEpoch`；无 public D8 JSON kind | CLI/UI/locale 无新增 | 可简称 epoch 仅限布局上下文；禁止 result epoch alias；删除 layout cache 未列 alias |
 | `weftext.term.direction_preference` | 方向偏好 / Direction Preference；D8 presentation | device/session 的 `ltr|rtl|auto` 呈现偏好；非 locale、作者方向或 Query 排序 | code type `DirectionPreference`；值来自 Direction §2 的 shell/document/session preference，不新增 author wire | CLI 无；UI 继续使用现有方向选择器和 `ltr|rtl|auto` 选择值；不冻结新的概念 locale key | 可简称 direction preference；禁止 locale/author-dir alias；删除任何把偏好写回作者 source 的受控路径 |
 
-kind 反向归属固定为：
+kind 反向归属逐 kind 固定。“technical interface owner”表示负责 decode/return 该消息的 D8 interface contract，不是第十个 domain concept；domain concept 另列为 consumes/returns 数据：
 
-| kind | owner 概念 / 继承 owner |
-| --- | --- |
-| `d8_document_read`, `d8_document` | D8 interface envelope；内容语义继承 D2 `document_snapshot` 与 D6 source read，不创造第十个 D8 identity concept |
-| `d8_draft_project` | Edit Draft 输入；成功输出归 Draft Projection |
-| `d8_draft_projection` | Draft Projection |
-| `d8_draft_text_replace`, `d8_draft_write` | Edit Draft + Draft Edit Map |
-| `d8_draft_text_replaced`, `d8_draft_written` | Draft Projection；caret 仍为 D8 编辑返回状态 |
-| `d8_edit_prepare`, `d8_edit_prepared`, `d8_undo_prepare` | Prepared Edit Binding；嵌套 commit request 继续归 D6 |
-| `d8_editor_error` | D8 Editor Interfaces error family，不建立 durable concept ID |
-| `d8_prepared_edit_binding` | Prepared Edit Binding internal kind |
+| kind | 唯一 technical interface owner | consumes / operates on | returns / domain concepts |
+| --- | --- | --- | --- |
+| `d8_document_read` | D8 Document Read Interface（Editor Interfaces §2） | D3 NodeRef + 当前 D6 read authorization | `d8_document`；D2 document_snapshot 语义仍归 D2 |
+| `d8_document` | D8 Document Read Interface（Editor Interfaces §2） | 对准确 read request 的结果 | D2 document_snapshot + D8 Draft/selection shell projection；不造新 identity concept |
+| `d8_draft_project` | D8 Draft Projection Interface（Editor Interfaces §3.1） | Edit Draft + 当前 author cut | `d8_draft_projection` |
+| `d8_draft_projection` | D8 Draft Projection Interface（Editor Interfaces §3.1） | 一份 Edit Draft proposal | Draft Projection，内部携 Draft Edit Map |
+| `d8_draft_text_replace` | D8 Draft Text Replace Interface（Editor Interfaces §3.3） | Edit Draft + Draft Edit Map segment/range binding | `d8_draft_text_replaced` |
+| `d8_draft_text_replaced` | D8 Draft Text Replace Interface（Editor Interfaces §3.3） | 准确 replacement 的结果 | Draft Projection + caret；Draft Edit Map 只是 projection 中消费/返回数据，不与 kind 共 owner |
+| `d8_draft_write` | D8 Draft Write Interface（Editor Interfaces §3.4） | Edit Draft + Draft Edit Map site/path binding | `d8_draft_written` |
+| `d8_draft_written` | D8 Draft Write Interface（Editor Interfaces §3.4） | 准确 write 的结果 | Draft Projection + caret；Draft Edit Map 是数据，不是 kind owner |
+| `d8_edit_prepare` | D8 Edit Prepare Interface（Editor Interfaces §4） | Edit Draft + Prepared Edit Binding 构造规则 | `d8_edit_prepared`；嵌套 D6 commit request 仍归 D6 |
+| `d8_edit_prepared` | D8 Edit Prepare Interface（Editor Interfaces §4） | protected Prepared Edit Binding 结果 | preview/commit envelope；不声明 author success |
+| `d8_undo_prepare` | D8 Undo Prepare Interface（Editor Interfaces §7） | 当前 bytes/revision + 原 receipt/effects | `d8_edit_prepared`；只准备 inverse edit，不拥有 Undo history |
+| `d8_editor_error` | D8 Editor Error Interface（Editor Interfaces §6） | D8 public interface 失败 | closed D8 editor error family；无 durable concept ID |
+| `d8_prepared_edit_binding` | D8 Prepared Edit Binding Internal Interface（Editor Interfaces §4.2） | immutable prepared request/preview/authorization coordinates | protected `PreparedEditBinding/1`；绝不是 public response kind |
 
 `document|annotation` 继续只是 D8 intent 局部 discriminator，不是实体 kind。上述补充不增加任何 D8 wire member、error、IME 状态或自动确认路径。
 
 ### 8.2 D9 owner 词表追加条款
 
-D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的 `firstFreeze` 为已接受 D9 r04 对应合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它；R07 只补命名 metadata/owner 更正。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
+D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的原 concept-contract `firstFreeze` 继续是已接受 D9 r04 合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它。R08 提议追加 naming 与逐 kind technical-interface-owner metadata，并具有独立 R08 candidate 来源；不能倒称这些逐项 ID/owner 已经作为 S 原行存在。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
 
 迁移删除目标代码：M-import=旧 source ID/`ImportIr`/YAML proposal decoder、fixtures、help、generated samples；M-route=自由 command/fallback/provider alias 与 route inventory；M-template=旧 attr/record/H1–H9/formula-reorder/宽泛 view 模板 parser/help/samples；M-export=自由 binding dictionary、rowHandle identity、author-snapshot export、generic author-receipt alias；M-region=D9 私有 Locator kind/opaque registry identity；M-none=没有具体旧原型，仅删除实现中未列受控 alias。历史研究文本不迁移。
 
@@ -382,13 +391,29 @@ D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 conc
 - D3 `SourceBinding`、`ForeignIdentityKey`、`OriginBinding`、`ResourceRegionLocator/l1` 与 D3/D6 author receipt 继续归原 owner。D9 的 `RegionBody/d9rg1` 只是内层几何，`PublicationReceipt/1` 只能表示外部发布。
 - D6 `SourceVersion`、`BudgetBinding`、Token 与 job/commit 权威不改。
 
-D9 public kind 的反向归属还包括以下五组：
+D9 owner lexicon 还为 17 个 public kind 逐项记录唯一 technical interface owner。这些 interface-owner label 不创建 17 个新 domain concept；上表 36 个 D9-owned concept 继续构成领域词表，D6 ImportJob 继续是唯一继承 D6 concept。
 
-- `d9_probe|d9_probe_result` → 来源工件与转换路由探测；
-- `d9_import_analyze|d9_import_analysis|d9_import_choose|d9_import_next|d9_import_prepare|d9_import_prepared|d9_import_state|d9_import_state_result` → 导入中间表示、映射提案与导入作业；
-- `d9_template_analyze` → 模板配方与模板构造输入；
-- `d9_convert|d9_conversion_started|d9_conversion_state|d9_conversion_state_result|d9_conversion_cancel` → 转换路由、Worker 调用和作业控制；
-- `d9_error` → D9 error family，不建立身份 concept。
+| kind | 唯一 technical interface owner | consumes / operates on | returns / owner boundary |
+| --- | --- | --- | --- |
+| `d9_probe` | D9 Probe Interface（Main §4） | SourceArtifact + 固定 Conversion Route candidate | 只发起探测，无 author effect |
+| `d9_probe_result` | D9 Probe Interface（Main §4） | 准确 probe evidence | probe/profile candidate；SourceArtifact/Route 仍为 D9 concept |
+| `d9_convert` | D9 Conversion Start Interface（Main §4） | SourceArtifact + accepted route/options/budget | `d9_conversion_started`；worker 继续 sandbox |
+| `d9_conversion_started` | D9 Conversion Start Interface（Main §4） | 一次 accepted start | job token/status coordinate，不是 author identity |
+| `d9_conversion_state` | D9 Conversion Job Interface（Main §4） | conversion job token | `d9_conversion_state_result` |
+| `d9_conversion_state_result` | D9 Conversion Job Interface（Main §4） | WorkerInvocation/IR job state | state/validated IR result；不是 author receipt |
+| `d9_conversion_cancel` | D9 Conversion Job Interface（Main §4） | conversion job token | cancel request；不改变已 committed 作者事实 |
+| `d9_import_analyze` | D9 Import Analysis Interface（Main §4） | ImportIR + ImportMapping/Loss inputs | `d9_import_analysis` |
+| `d9_import_analysis` | D9 Import Analysis Interface（Main §4） | fixed analysis cut | MappingProposal + loss/object/group/batch catalog |
+| `d9_import_choose` | D9 Import Analysis Interface（Main §4） | analysis token + 明确 loss/mapping choices | successor analysis；不是 D6 commit |
+| `d9_import_prepare` | D9 Import Preparation Interface（Main §4） | fixed analysis + 继承 D6 ImportJob group/batch control | `d9_import_prepared`；真实 author plan 继续归 D7/D3/D6 |
+| `d9_import_prepared` | D9 Import Preparation Interface（Main §4） | exact prepared batch | 包装/返回原 D7 prepared outcome；不造新 author receipt |
+| `d9_import_next` | D9 Import Preparation Interface（Main §4） | 当前继承 D6 ImportJob + 之前 authoritative batch outcome | 下一有限 batch prepare 或 terminal job state |
+| `d9_import_state` | D9 Import Job State Interface（Main §4） | **operate on D6-owned ImportJob** | `d9_import_state_result`；interface owner 是 D9，record/concept owner 仍为 D6 |
+| `d9_import_state_result` | D9 Import Job State Interface（Main §4） | D6 ImportJob + 关联原 receipts | 只读 progress/result projection；D3/D6 receipt 保留原 owner |
+| `d9_template_analyze` | D9 Node Template Analysis Interface（Templates §6） | D2 Template + D9 TemplateRecipe/TemplateConstructionInput | `d9_import_analysis`；D2 Template identity 仍归 D2 |
+| `d9_error` | D9 Error Interface（Main §4） | D9 public-interface failure | closed D9 error family；进入 D3/D6/D7 后继续原 owner error |
+
+未知 kind、profile 或 version 仍拒绝。
 
 未知 kind、profile 或 version 仍拒绝。
 
