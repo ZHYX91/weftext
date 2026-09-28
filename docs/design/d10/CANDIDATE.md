@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r07-independent-review-fixes-2026-09-28; status: author-revised R07 candidate after the complete independent review of C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` and S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed 18/18 candidate and 49/49 upstream reading and returned REVISE: P0=0, P1=1 (JR001), P2=8 (JR002–JR009), terminology failed, translation failed. R07 contains the author fixes and awaits fresh independent re-review; it is not independently accepted, implemented, released, activated, merged, or an A2 start authorization. Historical C=`35fab950dabedfb92c9f12858701be8afe6faa74` also completed 49/49 with REVISE and is history only.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: author-revised R08 candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed C18/18 and S49/49 and returned REVISE: P0=0, P1=1 (B03-P1-01), P2=10. Overall, terminology, and bilingual semantics all require revision. R08 contains the author remediation and awaits a fresh complete independent review; it is not independently accepted, implemented, released, activated, merged, or an A2 start authorization.
 
 ## 1. Selection and problem boundary
 
@@ -64,9 +64,9 @@ D10 control state lives in a managed control domain bound to the D6 Authority St
 | Package/runtime immutable assets | Managed asset area | Exact digest/version; staging is not activation |
 | Transient context, model/tool output, transcript | Limited pins/cache | Cannot replace author/control ledger |
 
-Every durable record that affects workspace-operation eligibility must be changed through a Core-managed closed adapter. Ordinary runtime telemetry may be transported independently, but recovery may not treat telemetry as approval, authorization, cost, or side-effect fact.
+Every durable record that affects workspace-operation eligibility must be changed through a Core-managed closed adapter. Ordinary management writes use CONTROL-CONTRACT §7 prepare/commit. Irreversible emergency stop is the explicit safety exception: CONTROL-CONTRACT §11 defines a specialized closed write in the same managed Authority Store with pre-reserved latch/result/sequence capacity, not an ordinary prepare and not a D6 author transaction. Ordinary runtime telemetry may be transported independently, but recovery may not treat telemetry as approval, authorization, cost, stop, or side-effect fact.
 
-The **exact normative contract** for R05 management authority, closed bodies, stable request keys, prepare/result/secret/stop entrypoints, ResourceUseGrant, deployment-control decisions, cost settlement, stop linearization, and package manifests is owned by [CONTROL-CONTRACT](CONTROL-CONTRACT.md). That file is part of this candidate rather than implementation notes. A Workspace control write that affects an author decision still enters the original D6 authority/decision transaction. Deployment host control may change only deployment-control records and can neither write author payload through a host adapter nor forge a D6 receipt.
+The **exact normative contract** for R08 management authority, closed bodies, stable request keys, prepare/result/current/secret/stop entrypoints, the named Core field-member author adapter, ResourceUseGrant, immutable external-effect request/send binding, deployment-control decisions, cost settlement, stop safety linearization, and package manifests is owned by [CONTROL-CONTRACT](CONTROL-CONTRACT.md). That file is part of this candidate rather than implementation notes. A Workspace control write that affects an author decision still enters the original D6 authority/decision transaction. Deployment host control may change only deployment-control records and can neither write author payload through a host adapter nor forge a D6 receipt.
 
 ## 6. Registry, Catalog, and activation
 
@@ -74,7 +74,7 @@ The D4 Registry remains the only semantic namespace/schema authority. D10 authen
 
 D10 separately maintains a Capability Catalog that records each executable or pure-data contribution's exact package digest/version, contribution kind/version, runtime profile, platform/architecture, dependencies, host privileges, network/egress class, secret requirements, cost profile, and D1 capability ID. The Catalog cannot keep a second FieldDefinition or prove namespace ownership from display name or install order.
 
-R07 gives D7 SearchContribution a concrete positive Catalog path without adding a D4 Registry member or a second search engine. CONTROL-CONTRACT §4 uniquely freezes the D10 `view`-kind pure-data carrier, immutable descriptor-asset digest binding, D4 owner/Field/textPath validation, distinct D7-versus-D10 IDs and versions, complete same-cut SearchContribution set, and `activationGeneration + capabilityCatalogDigest + registryBinding` invalidation. A valid first-party SearchContribution can therefore install/activate and feed the existing D7 search Query builder; an unadmitted/runtime-only descriptor stays pending, and an unavailable selected contribution fails through the original D7 contract rather than being silently skipped.
+R08 retains the R07 D7 SearchContribution a concrete positive Catalog path without adding a D4 Registry member or a second search engine. CONTROL-CONTRACT §4 uniquely freezes the D10 `view`-kind pure-data carrier, immutable descriptor-asset digest binding, D4 owner/Field/textPath validation, distinct D7-versus-D10 IDs and versions, complete same-cut SearchContribution set, and `activationGeneration + capabilityCatalogDigest + registryBinding` invalidation. A valid first-party SearchContribution can therefore install/activate and feed the existing D7 search Query builder; an unadmitted/runtime-only descriptor stays pending, and an unavailable selected contribution fails through the original D7 contract rather than being silently skipped.
 
 R05 closes package/contribution wire in CONTROL-CONTRACT §4–§5. Dependencies are members of the **specific dependent Contribution**, not an ambient package-level array; an unavailable connector cannot disable unrelated schema/template/data-pack Contributions in the same package. The Contribution-kind closed set explicitly retains module/schema/view/action/template/preset/pack/tool/model/connector/importer/exporter/conversion/renderer/localization. Calendar, Library, People, and Organizations each have one first-party PackageId→module Contribution→schema Contribution mapping that explicitly references D4-frozen namespace ownership and FacetIds. These D10 PackageIds do not create a second D4 namespace and are not claimed to be pre-existing D1 module IDs, code paths, or locale resources.
 
@@ -91,6 +91,8 @@ ActivationBinding/1 {
 ```
 
 Activation order is fixed: stage immutable assets → verify publisher/namespace/dependencies → construct candidate Registry and Catalog → complete D4 evolution/load validation → prove runtime assets are available → switch ActivationBinding in one managed transaction. Before failure, the old binding continues; after failure there may not be a half-Catalog or half-Registry.
+
+The active-selector record is the CAS object for that switch. `activation.current` in a current-read projection is derived from the selector in the same authorized cut; marking an older binding non-current never mutates the historical ActivationBinding generation/revision.
 
 Temporary offline/health failure does not create a semantic generation. A package, definition, runtime contract, or trust change produces a successor binding. An unactivated failed upgrade may discard staging; rollback after activation must be a successor activation and cannot move the D4 semantic-ledger pointer backward or delete intervening history.
 
@@ -229,7 +231,7 @@ Run completed only means all required steps reached their own terminal states; i
 
 ## 13. Automation scheduling
 
-First-generation Automation schedules one accepted invocation and does not provide a general DAG, loop, or free script. A definition contains the capability invocation, schedule, DelegationLease, approval binding, budgets, queue limit, and missed policy.
+First-generation Automation schedules one accepted invocation and does not provide a general DAG, loop, or free script. CONTROL-CONTRACT §7 closes the invocation union: ordinary admitted external tools use `kind:"tool"` plus ToolValue, while unattended authoring uses only the named first-party `weftext.automation/set-field-member` Core adapter with `FieldMemberTask/1`. No ToolValue string, title, path, or model output becomes a NodeRef/FieldId. A definition contains that exact invocation, schedule, DelegationLease, approval binding, budgets, queue limit, and missed policy.
 
 A schedule may be a one-time D4 ZonedInstant or occurrences derived from an explicit Calendar recurrence/range source with finite horizon and limit. Core computes the occurrences from actual source and frozen D4 rule context; an executor may not self-assert trusted temporal context, and date-only input that does not determine an instant is not silently assigned midnight.
 
@@ -252,7 +254,7 @@ Before occurrence start and every new protected step, revalidate current capabil
 
 Standing Approval does not mean an Agent may modify arbitrary future content. The complete generation-one rule is owned only by CONTROL-CONTRACT §7 as `SingleFieldMemberRule/1`; this section consumes that exact rule and does not define a competing value/type/constraint enum.
 
-The first unattended author profile remains the original D7 `set_field_member` path over one existing Node, one Field, exactly one current Entry, and one existing scalar member. The envelope references the unique owner:
+The first unattended author profile remains the original D7 `set_field_member` path over one existing Node, one Field, exactly one current Entry, and one existing scalar member. The Automation task and Standing Approval are distinct: `FieldMemberTask/1` supplies this Run's concrete ownerNodeRef/FieldId/memberPath/original D7 TypedLiteral, while `SingleFieldMemberRule/1` only narrows which actual prepared effects may be approved. The envelope references the unique owner:
 
 ```text
 StandingApprovalEnvelope/1 {
@@ -278,11 +280,11 @@ Common prerequisites remain current D1/D6/D10 authorization; exact approval/auto
 
 The actual result is still exactly one of two branches. **Member-change** requires the original D7 adapter's complete proposed source and actual MutationFootprint to contain only the selected existing scalar-member change, with every other author/control fact unchanged and the complete Field before/after `field_change` in owner_fields preview. **Byte-exact raw no-op** requires the same current unique target, D7 same-type equality after the required/present-optional projection, and byte-for-byte equality of the original adapter's complete proposed source; MutationFootprint, `field_change`, and D6 `sourceVersions` stay empty.
 
-Anything else is outside Standing Approval: no first/preferred/same-value target selection, no whole-Entry/source widening, no append/remove, and no alternative same-named target. It transitions to interactive confirmation, blocked, or failure. A committed raw no-op still consumes one successful-commit approval count; replay of the same saved D6 decision never consumes again.
+CONTROL-CONTRACT §7 gives the complete mapping. For real S `people/phone.label`, task input is Optional<semantic_code>.some over the complete three-code D4 scope. Unique present `personal→work` is a true change and `work→work` may be a byte-exact raw no-op; the approval enum may be narrower than the D4 code scope. If a second phone Entry exists, automatic exactly-one selection is inapplicable, but the ordinary interactive D7 path may still choose that second Entry by its real occurrenceKey/rawEntrySource selector. Anything else is outside Standing Approval: no first/preferred/same-value target selection, no whole-Entry/source widening, no append/remove, and no alternative same-named target. It transitions to interactive confirmation, blocked, or failure. A committed raw no-op still consumes one successful-commit approval count; replay of the same saved D6 decision never consumes again.
 
 ## 15. Fresh prepare, approval consumption, and planned recovery
 
-Every automated author mutation still performs: fresh current Field selection → original D7 ActionSpec → original `d7_action_prepare` → complete D7 EffectManifest/bytes → Core mechanically matches StandingApprovalEnvelope → create ApprovalUse → original D6 request.
+Every automated author mutation consumes the exact CONTROL-CONTRACT §7 mapping: fresh complete Field selection → original D7 FieldSelector with owner/FieldId/fresh expectedRevision/real occurrenceKey/exact rawEntrySource → original `set_field_member` TypedLiteral → original `d7_action_prepare` → complete preview/effects/actual MutationFootprint → compare the separate StandingApprovalEnvelope → ApprovalUse → original D6 request. The protected `D10AuthorPreparationLink/1` is atomically saved with the original PreparedActionBinding before submission; restart/planned/submitted_unknown recovers that exact request and never creates a replacement OperationId.
 
 ```text
 ApprovalUse/1 {
@@ -384,27 +386,13 @@ Credential rotation creates a new generation. New unsent invocations use a curre
 
 An external mutation and a Core transaction never combine into one atomic success.
 
-```text
-ExternalEffectIntent/1 {
-  effectId,
-  contributionBinding,
-  accountBinding,
-  targetBinding,
-  requestPayload,
-  secretGeneration,
-  idempotencyBinding,
-  delegationBinding,
-  approvalBinding,
-  egressBinding,
-  budgetReservations
-}
-```
+CONTROL-CONTRACT §7 uniquely owns the complete internal `ExternalEffectIntent/1`, `ExternalExecutionBinding/1`, and public `ExternalEffectCurrentView/1`. The immutable intent freezes the exact contribution/account/operation/target/request payload and idempotency proof; a concrete send attempt separately freezes Lease, external-effect grant, egress grant, supplemental approval, secret generation, and every attributable cost reservation. Secret bytes never enter those public projections.
 
-States are prepared → submitting → succeeded | failed_no_effect | outcome_unknown; only a request proven not to have started sending may move from prepared to cancelled. outcome_unknown remains unknown until reliable reconciliation; manual_required is a recovery mode, not a fake failed terminal state.
+States are prepared → submitting → succeeded | failed_no_effect | outcome_unknown; only a request proven not to have started sending may move from prepared to cancelled. Lifecycle Binding revision is distinct from immutable requestDigest, so a legal prepared→submitting transition cannot invalidate its own consent. Changing contribution/account/target/payload/idempotency creates a new effect intent and needs new consent. outcome_unknown remains unknown until reliable reconciliation; manual_required is a recovery mode, not a fake failed terminal state.
 
-Automatic retry is allowed only when an accepted adapter explicitly supplies a still-valid idempotency window/key or reliable failed_no_effect evidence exists. Retry keeps the same EffectIntent, semantic request, target/account, and original idempotency key and revalidates current authorization/egress/cost. Expired idempotency window, changed target/request, or credential change that breaks the original contract stops automatic sending.
+Automatic retry is allowed only when the original intent contains still-valid bounded idempotency proof accepted for the exact request, or reliable failed_no_effect evidence exists. Retry keeps the same EffectIntent, semantic request, target/account, and original idempotency key and revalidates current authorization/egress/cost. Expired proof, changed target/request, or credential change that breaks the original contract stops automatic sending. A new sendAttemptId cannot substitute a new effectId or idempotency key for an unknown original request.
 
-Trusted transport uses a send fence: first durable intent, audit started, and cost reservation; then begin sending inside a host gate serialized with revocation. If revocation wins first, no send occurs; once send has begun, cancel/revoke cannot prove no external effect occurred. A crash between durable started and a provable send outcome recovers conservatively as outcome_unknown.
+Trusted transport uses the CONTROL §11 send fence. Before first irreversible handoff it freezes ExternalExecutionBinding and durably associates send-attempt evidence and all cost holds. Revocation/stop first means no send; handoff first preserves the sent fact and may later become outcome_unknown. D9 conversion workers retain their original no-network default and cannot borrow D10 egress merely because D10 has networking. A D9 PublicationReceipt proves only external publication; saving a resulting Resource remains a separate original D3/D7 author decision.
 
 Compensation is a new ExternalEffectIntent with its own authorization, approval, and cost and is not rollback. A workflow requiring both Core write and external mutation shows two outcomes and creates no composite author receipt.
 
@@ -449,7 +437,7 @@ A request that has entered D6 planned is not automatically aborted by Run cancel
 
 After an external effect enters submitting, cancellation only prevents later steps; that effect still resolves to succeeded, failed_no_effect, or outcome_unknown. Late model/tool output cannot start new work after its step is closed.
 
-R05 adds irreversible emergency stop, but stop is not rollback. CONTROL-CONTRACT §11 fixes three real linearization points: new Run admission and stop share one store serialization domain; D6 final author commit rechecks the corresponding stop latch inside the actual final transaction while holding write serialization; and external transport holds the stop gate through the first irreversible real send handoff rather than checking only queue admission. An earlier committed/sent result remains a fact and a later stop only prevents effects not yet linearized.
+R08 retains irreversible emergency stop, but stop is not rollback. CONTROL-CONTRACT §11 now closes the exact-target stable key, pre-reserved latch/result/safety-sequence capacity, immutable receipt, and read-only lost-response result query. This safety write shares the Authority Store serialization domain but is neither ordinary D10ControlPrepare nor a D6 author transaction; it needs no prior ordinary management write and ordinary configuration/budget exhaustion cannot block an already-reserved target's first stop. The same section fixes three real linearization points: new Run admission and stop share one store serialization domain; D6 final author commit rechecks the corresponding stop latch inside the actual final transaction while holding write serialization; and external transport holds the stop gate through the first irreversible real send handoff rather than checking only queue admission. An earlier committed/sent result remains a fact and a later stop only prevents effects not yet linearized.
 
 Stop does not block currently authorized authoritative abort, cost settlement, evidence/audit retention, or reference-safe cleanup. Temporary disable, Lease expiry, ordinary cancellation, or temporary authorization loss is not irreversible abort proof. The proposed D6 companion adds `execution_stopped/preflight` and permits an already planned request to enter the original `transaction_aborted/terminal` authoritative-abort path only after current authorization, continuity, complete RunBinding, and irreversible stop are all proven.
 
@@ -490,9 +478,9 @@ LTR/RTL, locale, screen reader, and Web/CLI transport differences affect present
 
 ## 23. D1-D9 composition and required amendments
 
-D1 surfaces, capability reasons, and sole commit holder remain; D2 raw source/unknown-provider preservation remains; D3 identity/SourceBinding/OriginBinding/Provenance remains; D4 Registry exact shape/evolution remains; D5 gains no persistent Record; D8 Draft/IME/explicit edit confirmation and all Editor wire remain; D9 worker/Template/ExportPlan/publication and all conversion wire remain. R06 only requires the original D8/D9 owners to complete Mandatory Intake §8.5.1 terminology mappings in UPSTREAM-AMENDMENTS §8; D10 does not acquire ownership of those names.
+D1 surfaces, capability reasons, and sole commit holder remain; D2 raw source/unknown-provider preservation remains; D3 identity/SourceBinding/OriginBinding/Provenance remains; D4 Registry exact shape/evolution remains; D5 gains no persistent Record; D8 Draft/IME/explicit edit confirmation and all Editor wire remain; D9 worker/Template/ExportPlan/publication and all conversion wire remain. R08 requires the original D8/D9 owners to complete Mandatory Intake §8.5.1 terminology and technical-interface mappings in UPSTREAM-AMENDMENTS §8. Every public kind has one technical-interface owner with separate consumes/returns/operates-on relationships; D10 does not acquire those names or domain-record ownership.
 
-R06 coordinated amendments retain R05 D6/D7 standing-approval author-submit, planned-preview recovery, Policy/2 `d10_control_self`, bootstrap profile/3, and irreversible-stop clauses, and add **naming-metadata-only** D8/D9 owner-lexicon companions. UPSTREAM-AMENDMENTS contains the exact proposal and CONTROL-CONTRACT owns only D10 host/control wire. The D8/D9 lexicon amendments add no unattended editing, conversion profile, identity, author submission, or publication capability. Joint design acceptance or coordinated activation **does not mean runtime implementation or release**. `automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` must enter the official D1 capability catalog and pass every real availability gate before they can be advertised available.
+R08 coordinated amendments retain earlier D6/D7 standing-approval author-submit, planned-preview recovery, Policy/2 `d10_control_self`, bootstrap profile/3, and irreversible-stop clauses, and add **naming-metadata-only** D8/D9 owner-lexicon companions. UPSTREAM-AMENDMENTS contains the exact proposal and CONTROL-CONTRACT owns only D10 host/control wire. The D8/D9 lexicon amendments add no unattended editing, conversion profile, identity, author submission, or publication capability. Joint design acceptance or coordinated activation **does not mean runtime implementation or release**. `automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` must enter the official D1 capability catalog and pass every real availability gate before they can be advertised available.
 
 ## 24. Security counterexamples
 
