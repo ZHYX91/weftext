@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 配套上游协调修订提案
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate upstream amendment proposal，尚未共同接受或协调激活。固定输入为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 已包含旧 U 的原 48 份输入和 D4 reference catalog。当前 D1–D9 快照继续权威；本文只给独立评审一份完整未来配套文本，不修改快照，也不授权产品提前实现无人值守作者提交。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：candidate upstream amendment proposal，仍未共同接受或协调激活。固定 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 继续权威且逐字不变；R07 只修复完整独立终审问题，不实现或激活这些未来配套改动。
 
 ## 1. 修订目的和不变边界
 
@@ -331,7 +331,7 @@ kind 反向归属固定为：
 
 ### 8.2 D9 owner 词表追加条款
 
-D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有行的 `firstFreeze` 为已接受 D9 r04 对应合同；R06 只补命名 metadata。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
+D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的 `firstFreeze` 为已接受 D9 r04 对应合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它；R07 只补命名 metadata/owner 更正。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
 
 迁移删除目标代码：M-import=旧 source ID/`ImportIr`/YAML proposal decoder、fixtures、help、generated samples；M-route=自由 command/fallback/provider alias 与 route inventory；M-template=旧 attr/record/H1–H9/formula-reorder/宽泛 view 模板 parser/help/samples；M-export=自由 binding dictionary、rowHandle identity、author-snapshot export、generic author-receipt alias；M-region=D9 私有 Locator kind/opaque registry identity；M-none=没有具体旧原型，仅删除实现中未列受控 alias。历史研究文本不迁移。
 
@@ -345,7 +345,7 @@ D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 conc
 | `weftext.term.conversion-route` | 转换路由 / Conversion Route；D9 host registry | routeId/profileId + fixed Provider chain | 有限有序无循环流水线；非自由 fallback | 管理 UI 可显示 Route；无新 locale/CLI | M-route |
 | `weftext.term.import-mapping` | 导入映射 / Import Mapping；D9 Core mapping | `ImportMapping/1` | Core 明确结构/字段转换选择；非 Query/Action | 分析 UI 可显示映射；无独立 locale key/CLI | M-import |
 | `weftext.term.mapping-proposal` | 映射提案 / Mapping Proposal；D9 proposal | `d9_import_analysis` 中固定 proposal 语义 | prepare 前完整提案；非 author plan/patch | UI 通过 import analysis 展示；无独立 locale/CLI | M-import |
-| `weftext.term.import-job` | 导入作业 / Import Job；D9+D6 control | D6 持久 job/control record；D9 kinds `d9_import_*` 观察其状态 | 固定有限 groups/batches；非第二 ledger/全 job 原子事务 | UI/CLI 只通过既有 import semantic entry；无独立 locale key | M-import |
+| `weftext.term.import-job` | 导入作业 / Import Job；**owner D6，D9 消费** | 完整继承 D6 owned names `ImportJob`、`importJob`、`stageInput`、`planAtomicGroups`、`commitImportBatch`；D9 `d9_import_*` 只观察/操作该 D6 record | 固定有限 groups/batches；非第二 ledger/全 job 原子事务 | 继承 D6 UI/locale `storage.import_job`；firstFreeze 保持 `D6 revision05-observation-bootstrap candidate; not activated`；无 D9 兼容 alias | M-import |
 | `weftext.term.coupling-group` | 耦合组 / Coupling Group；D9 mapping | ConversionInput/prepare 内 group | 不可拆作者组；非 UI page/worker process | 无 CLI/UI/locale | M-import |
 | `weftext.term.import-batch` | 导入批次 / Import Batch；D9 mapping | 一个原 D3/D6 atomic request | 有限提交批次；非任意 1000 条切块 | UI 可显示批次进度但无新 locale key | M-import |
 | `weftext.term.conversion-input` | 转换输入证据 / Conversion Input；D9 控制域 | `ConversionInput/1` ZIP/profile | 绑定原始输入、IR、映射、损失和路由；非身份或作者源 | 无直接 UI/CLI/locale | M-import |
