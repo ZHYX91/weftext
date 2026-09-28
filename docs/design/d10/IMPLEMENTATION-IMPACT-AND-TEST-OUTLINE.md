@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r07-independent-review-fixes-2026-09-28; status: author implementation/test obligations synchronized to R07 after complete independent REVISE; these obligations are design/test requirements and not product-execution evidence.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: R08-A author semantic-consumption implementation/test obligations after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S completed C18/18 and S49/49 with REVISE (P0=0, P1=1, P2=10). These are design/test obligations, not executed product evidence; all eleven findings remain open pending fresh complete independent review of the eventual R08 candidate.
 
 ## 1. Implementation slices and state owners
 
@@ -49,9 +49,9 @@ Recommended implementation order:
 8. S8: Desktop/CLI/Server/WebUI surfaces, diagnostics, audit/export/retention; Mobile performs negative-capability conformance only.
 9. S9: remove old prototypes/aliases/free JSON/tool callbacks and update public specifications; support claims wait for real implementation/platform evidence.
 
-### 1.1 R05 control-contract implementation slice
+### 1.1 R08 control-contract implementation slice
 
-[CONTROL-CONTRACT](CONTROL-CONTRACT.md) is normative R05 input rather than an implementation sketch. Implementation may not choose a different authorization, replay, or accounting semantic.
+[CONTROL-CONTRACT](CONTROL-CONTRACT.md) is the normative R08 owner for the management/current/history/author-adapter/external-effect/stop wires consumed by this outline. Implementation may not choose a different authorization, replay, accounting, frozen-request, or stop semantic.
 
 - Workspace self-control is authorized by proposed D6 Policy/2 `d10_control_self`; Workspace administration remains original `policy_admin`, with `registry_admin` additionally required for Registry activation. Deployment trust/account/secret/pricing/grant is owned by D10 DeploymentControlPolicy and cannot be inherited from Workspace admin or issuer admin.
 - Workspace author-affecting mutation continues through the original D6 authority store, `PreparedIntent`, decision/receipt, and author commit point. `DeploymentControlDecision` stores only host-control outcomes; the host adapter cannot write author source.
@@ -74,13 +74,20 @@ Managed D10 control records are needed without adding another author commit root
 - Automation Definition, occurrence claim, Run/step, and terminal deduplication proof;
 - ApprovalUse, approval-count reservation, and PlannedDecisionApproval;
 - budget/cost accounts and reservations;
-- ExternalEffectIntent, attempt, and reconciliation evidence;
+- immutable ExternalEffectIntent, ExternalExecutionBinding send-attempt association, and reconciliation evidence;
+- protected D10AuthorPreparationLink tying one Run step to the original D7 PreparedActionBinding and D6 request;
+- complete ControlPrepareBinding canonical intent B plus its separately authorized public history summary; historical public delivery never stores another A/B/M copy;
+- exact-target ExecutionStopLatch, StopOwner/result association, and pre-reserved safety-sequence capacity;
 - Audit Started, terminal links, and protected local-spool metadata;
 - SecretRef/account-generation metadata, never secret bytes.
 
 These records are managed with Workspace/authority identity, fence, current principal, and version/CAS. SQL tables, indexes, and GC are implementation choices, but they may not alter candidate versioning, atomicity, replay, masking, or retention semantics.
 
 The D6 author ledger remains the unique Workspace+OperationId author-decision namespace. D10 Run, Approval, LeaseRunUse, and ExternalEffect records may not generate a second "author committed" fact during recovery.
+
+Control-history persistence keeps two different representations. Internal `ControlPrepareBinding.canonicalIntentBytes` stores complete canonical B and stable-key equality compares those full bytes. Public `ControlPreparedHistory/1` contains only `intentDigest`, exactly one of `automation_configure|consent|state|workspace_limits|activation|deployment_put|cost_reconcile`, allocated refs, and the existing affected/resource-use summary.
+
+Historical result never returns nested author request A, complete B, generated submit request M, or a reusable prepare token. Initial prepare may return M only after current disclosure covers complete B and nested A. r5 historical result and r6 current exact-ref view are separately authorized and separately projected; unprovable applied linkage is `state_unavailable`, never prepared.
 
 ApprovalUse count history durably records the one-way states unreserved, reserved, consumed, and released_terminal. Only the same abort transaction that records authoritative D6 terminal_failed may produce released_terminal. Run cancellation, TTL, temporary revocation, and Lease expiry cannot release the reservation through GC.
 
@@ -101,6 +108,10 @@ If a claimed platform cannot provide an adequate secret store, contributions dep
 ### 2.3 Immutable assets
 
 Package, manifest, definition, runtime, model, font, and other dependencies are stored as immutable assets under exact digest/version. Activation performs complete validation and active assets cannot be overwritten in place under the same identity. GC may remove only assets no longer referenced by current/historical bindings, planned decisions, unknown effects, or audit/recovery pins.
+
+`activation.current` is a derived current-read value, not a revision written back into historical ActivationBinding. Tests read the active selector and candidate binding in one authorized cut, CAS the exact current predecessor selector, and atomically publish the successor selector/binding.
+
+The old generation/revision remains byte-stable after it becomes non-current. An A→B→A selector race must not let a stale predecessor CAS succeed.
 
 ## 3. Activation, Registry, and package implementation obligations
 
@@ -153,13 +164,19 @@ ToolValue decoders/encoders must prove exact semantics per type. Prohibited shor
 MCP tests require hostile servers: descriptor drift, tool-name collision, schema changes, extra fields, huge recursive schema, fake readOnly, prompt injection, resource contents carrying tool instructions, truncated/duplicate responses, and over-budget results. A discovered change may only pending/reject/reset and may not hot-swap schema during a Run.
 
 
-### 4.1 R07 closed-rule and SearchContribution conformance
+### 4.1 R08 Core author-adapter, closed-rule, and SearchContribution conformance
 
-Standing Approval tests use CONTROL-CONTRACT §7 as the only rule decoder. They must cover 0- and 64-element enum bounds, sorted/unique complete TypedLiterals, same-type numeric bounds, 0/65528 UTF-8 text limits with CR/LF rejection, 1..7 static D4 object-member paths with alias-depth enforcement, semantic-code scope+code equality, and both required and present-optional D7 bridge forms. The real positive fixture is a one-Entry `people/phone` with present optional `label`; `personal→work` is a real change, `work→work` is raw-no-op, `optional.none` is not automatic, and another same-value phone Entry makes the whole automatic profile inapplicable.
+`CoreFieldMemberAdapterDescriptor/1` and `FieldMemberTask/1` tests traverse the actual first-party `weftext.automation/set-field-member` contribution, never a generic ToolValue callback. The task owns the concrete D3 NodeRef, D4 FieldId, 1..7 existing memberPath, and original D7 TypedLiteral; Standing Approval is a separate allow-rule and never supplies those task coordinates. ToolValue text/title/path/model output must fail if presented as a NodeRef, FieldId, occurrenceKey, or control token.
 
-Control-result/current tests instantiate all 19 `ControlRecordKind` current projections, assert exact scopes and lifecycle states, and distinguish configuration revision from independent lease/approval/grant/cost-account usageRevision. A second Run consuming the same Lease usage must not change the first admitted Run's leaseRevision; revoke must change configuration revision and block later steps. r5 success/lost-response→r6 update must replay r5 through `d10_control_result` and return r6 only through `d10_control_read`; ambiguous applied continuity returns `state_unavailable`, and secret current read never returns plaintext.
+Each automatic attempt traverses the real chain: current Narrow Field Qualification → complete current Field read → exactly-one Entry selection → reconstruct original D7 FieldSelector `{owner,fieldId,expectedRevision,occurrenceKey,rawEntrySource}` → original `set_field_member` Action → real D7 prepare/complete preview/effects/MutationFootprint → mechanical Standing Approval comparison → ApprovalUse → original D6 request/plan/final/replay. `D10AuthorPreparationLink/1` must be atomically durable with the original PreparedActionBinding before submission. Cold restart resumes only that original request. Proven-never-saved may prepare again; unknown continuity is `state_unavailable`; planned/submitted-unknown never creates a replacement OperationId.
 
-SearchContribution integration uses the real D7 Query Algebra descriptor. Tests cover a valid first-party owner/digest/Registry/textPath activation feeding the existing D7 Query builder; runtime-only discovery; wrong owner; asset digest mismatch; duplicate D7 contributionId; D7 version change under unchanged D10 contractVersion; omitted otherwise-active descriptor in the purported complete set; selected Field/provider unavailability; script/network/extra members; lack of D6 `field_read`; and successor Catalog generation invalidating old results. No test may satisfy the feature by a permanent deny-only path.
+Standing Approval rule tests still cover 0- and 64-element enum bounds, sorted/unique complete TypedLiterals, same-type numeric bounds, 0/65528 UTF-8 text with CR/LF rejection, 1..7 static D4 member paths plus alias-depth enforcement, semantic-code scope+code equality, and required/present-optional D7 bridges. Preserve the original D2/D4 budgets: raw Entry 65,528 bytes, header 65,536 bytes, at most 256 header lines, 32 carriers, 8,192 entries, and 1,048,576 checked bytes, plus original alias-depth/schema/source limits. Full-source validation is internal proof and does not disclose full source to a narrow principal.
+
+The normative positive fixture is a one-Entry `people/phone` whose optional `label` is present. Task input is the original D7 Optional TypedLiteral with `state:"some"` and the complete resolved contribution-set scope `people/other|people/personal|people/work`; an approval enum may intentionally be narrower. Present `personal→work` is a real member change. Present `work→work` is automatic only when the complete proposed source is byte-equal and MutationFootprint/field_change/sourceVersions are all empty. `optional.none` is not automatic. A second same-value phone makes automatic exactly-one inapplicable, while the ordinary interactive D7 path still selects that second Entry by its real occurrenceKey/rawEntrySource selector.
+
+Control-result/current tests instantiate all 19 `ControlRecordKind` current projections, assert exact scopes/lifecycle states, distinguish configuration revision from independent usageRevision, and enumerate exactly seven public control-history operation kinds. Internal complete B bytes remain the stable-key equality source; public history never returns A/B/M. Initial prepare may expose M only after current disclosure covers B and nested A. r5 success/lost-response→r6 update returns the original r5 summary/receipt/deltas through `d10_control_result` and current r6 only through `d10_control_read`; each delivery performs its own current authorization first. Ambiguous applied continuity returns `state_unavailable`, never prepared. Secret current read never returns plaintext.
+
+SearchContribution integration uses the real D7 Query Algebra descriptor and a real NFC text positive such as accepted first-party `people/search-name` ending at existing `people/name.text`. Tests cover valid `people→(first_party,weftext.people)` NamespaceClaim tuple plus separate proof, descriptor digest, current Registry/textPath, complete same-cut Catalog set, and first-party install→activation→existing D7 Query consumption. Negatives include runtime-only discovery, wrong owner, digest mismatch, duplicate contributionId, D7 version change under unchanged D10 contractVersion, omitted active descriptor, unavailable selected Field/provider, script/network/extra members, missing D6 `field_read`, and successor Catalog/selector invalidation. Pack tests separately retain parentDomainId, extensionPointId, and compatible parent version/binding with a legitimate first-party activation positive. No test may satisfy these features by a permanent deny-only path.
 
 ## 5. Runtime and OS sandbox
 
@@ -247,6 +264,8 @@ Core race/recovery tests include at least:
 14. cancellation, TTL, temporary revocation, and Lease expiry never create released_terminal.
 
 An automatic submission completes only when the real D6 commit transaction stores both author result and approval consumed. Approval release on authoritative terminal_failed must likewise be proven in the same original abort transaction.
+
+Generation one intentionally exposes no independent early-revoke state action for supplemental `planned_approval` or `external_approval`. Tests prove the supported boundary instead of inventing a generic state: finite time bounds, exact Lease/Activation/request binding, current ResourceUseGrant, current D6 authorization, and irreversible stop are rechecked at the relevant planned/send cut. Expiry or upstream grant/Lease/stop change may block new use without rewriting the supplemental approval into a synthetic revoked state; planned work is released only by the original authoritative-abort rule.
 ## 8. External effect and Connector implementation obligations
 
 Each writable External Service requires a named adapter profile declaring:
@@ -267,6 +286,14 @@ When any item is missing, a read-only connector may remain while unattended muta
 The send fence needs fault injection before durable intent, after intent before send, during write syscall/HTTP send, after remote acceptance before response, and after response before terminal audit. Unprovable outcomes are always outcome_unknown.
 
 Connector sync changing SourceBinding/OriginBinding/watermark needs a separate owner-stage closed adapter. Ordinary ExternalEffectIntent or single_field_member approval cannot directly write those control fields.
+
+R08 external-effect tests consume CONTROL-CONTRACT §7 exactly:
+- `FrozenEffectBytes/1` verifies byteLength/digest and finite payload/idempotency-proof bytes; proof is not an invented EvidenceTicket arm.
+- immutable `ExternalEffectIntent/1` freezes effect Ref, Workspace, Contribution/account, operation/target, request payload, and idempotency binding; lifecycle revision is a different domain.
+- `ConsentSpec.external` binds stable effect Ref + requestDigest, so legal `prepared→submitting` does not invalidate its own consent; any contribution/account/target/payload/idempotency change requires a new effect intent and consent.
+- `ExternalExecutionBinding/1` freezes sendAttemptId, exact Lease/approval/external-effect grant/egress grant, optional secret generation, and 0..32 attributable cost reservations before irreversible send. sendAttemptId is never a billableAttemptId; every reservation resolves to its own billable attempt.
+- public `ExternalEffectCurrentView/1` exposes only authorized state/recovery mode/contribution/account/operation/requestDigest/targetDigest and never payload, target ToolValue, idempotency key/proof, secret generation, approval record, or reservation identities.
+Crash/reconciliation mutants replace frozen bytes, target, key, secret generation, or effectId and must be rejected. `outcome_unknown` recovery always continues the same immutable request. D9 conversion workers retain network=denied and cannot borrow D10 egress. A D9 PublicationReceipt proves publication only; separately saving a Resource still requires the original author protocol.
 
 ## 9. Budget and cost implementation obligations
 
@@ -323,13 +350,17 @@ D10 control errors also verify the same `not_visible` response when a hidden obj
 R05 defines no anonymous old D10 capability profile. The first jointly specified public unattended author-submit D6 closed enum directly contains `approval_unavailable` plus proposed `execution_stopped`; runtime capability is decided by the official D1 catalog and real availability gates. The D10 adapter may not rewrap a D6 code as approval_required, and existing Policy/bootstrap/saved-decision compatibility contracts remain.
 
 Original D3/D7/D8/D9 errors likewise pass through exactly from their owner. Diagnostic UI may explain status through a separately authorized control read but cannot leak hidden data by changing the formal error wire.
-### 11.1 R05 capability, stop, and public-contract gates
+### 11.1 R08 capability, stop, and public-contract gates
 
 Candidate first-public D10 capability IDs are `automation.manage`, `workspace.extensions.manage`, `deployment.external.manage`, `automation.stop`, and `automation.author_submit`. Design acceptance or coordinated design activation freezes specification only. Implementation may report available only after the ID exists in the selected D1 contractMajor's official catalog and the real release/surface/policy/principal/component/configuration/version/reachability/health gates pass.
 
 The first jointly specified public unattended author-submit D6 closed error set directly contains `approval_unavailable/preflight` and proposed `execution_stopped/preflight`. Tests do not construct an anonymous old capability profile; Policy/1/2, bootstrap profile/1/2, D1 bootstrap/contractMajor, and historical saved-decision replay all remain.
 
-Emergency stop requires real race evidence at three boundaries: the same store transaction as Run admission, recheck inside the actual D6 final write-lock transaction, and an external send fence held through the first irreversible send handoff. A model that only checks stop then sleeps/commits/sends is insufficient. After stop, currently authorized authoritative abort, cost settlement, evidence/audit retention, and reference-safe cleanup must still work.
+Emergency stop conformance consumes the specialized D10 same-store safety transaction from CONTROL §11 and must not model it as ordinary control prepare or a frozen D6 public API. Exact target fixes `requestId==target.id`; W and H are independent current-authority views of the same latch. Target/latch/result slot plus one safety-sequence unit are reserved before first enable/admission. With MAX=2^63-1, ordinary configuration Counter/budget/quota exhaustion cannot consume reserved safety capacity or block the first stop of an already-reserved target; exhaustion may only reject creation of a new executable target.
+
+Tests cover first open→stopped, immutable revision-2 receipt, read-only `d10_emergency_stop_result` returning the original receipt or a point-in-time proven-open result, and ordering `closed decode/D1 → current disclosure → authority/fence/custody → stable-key/target equality → continuity → transition/read → final disclosure`. Hidden/wrong-scope/wrong-store is `not_visible`; unprovable authority is `authority_unavailable`; proven corruption is `integrity_conflict`; visible same-key/different-target is `control_conflict`; unprovable latch/result continuity is `state_unavailable`, never not-applied. Lost receipt followed by target r5→r6 replays the original receipt.
+
+Race proofs remain required with Run admission in the same store serialization domain, D6 final commit rechecking the latch inside the actual final author transaction, and the external send fence held through first irreversible handoff. After stop, authorized abort, cost settlement, evidence/audit retention, and reference-safe cleanup remain possible. No stop test may create fake prepare history, a D6 author receipt, or a second success ledger.
 
 ## 12. Cross-surface implementation matrix
 
