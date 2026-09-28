@@ -269,7 +269,7 @@ Connector sync 若修改 SourceBinding/OriginBinding/watermark 必须另有 owne
 
 ## 9. Budget 与费用实现义务
 
-费用实现逐字服从 CONTROL-CONTRACT §6、§9–§10。CostReservation 的状态机为 `reserved→settled(actual)|released|uncertain` 与 `uncertain→settled(actual)|released`；只有 settled/released 是终态，uncertain 保留完整 upper bound 并可由后续证据恢复。
+费用实现逐字服从 CONTROL-CONTRACT §6、§9–§10。一份 `CostReservation/1` 永远只对应一个实际账户；Run/Lease/Automation/Workspace/deployment 多层额度在同一准入中检查，但不是多个账户的重复计费。真实可分别归属的多账户费用使用独立 reservation/evidence，禁止对同一费用重复计算。CostReservation 的状态机为 `reserved→settled(actual)|released|uncertain` 与 `uncertain→settled(actual)|released`；只有 settled/released 是终态，uncertain 保留完整 upper bound 并可由后续证据恢复。
 
 实现必须保存 reservationId、attemptId、真实 cost account/grant、currency、pricing binding、upper bound、state/revision 和 evidence attribution。调用方没有 targetState 或手填 actual；final-bill / never-started 结论只能来自受信 EvidenceTicket adapter。
 
