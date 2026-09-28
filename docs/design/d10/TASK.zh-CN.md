@@ -9,7 +9,7 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision R06，作者修订已形成，等待新的固定候选全量独立联合终审。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision R07。固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE（P0=0、P1=1 JR001、P2=8 JR002–JR009，术语/翻译不通过）；R07 是统一作者修订，等待新的独立复核。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
@@ -43,8 +43,9 @@ Desktop/CLI 可以承载同一个本地 Broker/control domain；Server 承载托
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
 - UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
 - CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
-- 本 TASK 中英文件
-- START 中英文件
+- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
+- TASK.zh-CN.md / TASK.md
+- START.zh-CN.md / START.md
 
 CANDIDATE 必须自包含最终架构、数据类型、操作合同、状态机、错误与竞争、权限/批准/出站/secret、激活/升级/回滚、Agent/Automation/Connector/MCP、budget/cost/audit 及五端边界。必须比较可信的 A/B/C/D 完整替代并说明选择理由和非目标。
 
@@ -58,7 +59,7 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 作者只修改 docs/design/d10/ 中必要设计材料和既有 PR 的标题/正文。不得修改输入快照、产品实现、brand、仓库权限或分支保护；不得合并、发行或开始 A2。
 
-作者完成条件是：当前输入覆盖 49/49 真实，旧 U 的 48/48 只保留为历史阅读记录；docs/design/d10/ 的 9 对双语文件完整同步；必要 upstream amendment 明确未激活；候选完整包含固定 S 的四个输入补充且其它快照逐字不变；实际文档检查/CI 已读取并如实报告；任何 pending/failure 不被写成 pass。
+作者完成条件是：docs/design/d10/ 九对双语/18 exact path 全部同步为 R07；固定 S 逐字不改；四个引用的 S 补充路径准确为 `docs/design/README.md`、`docs/design/README.zh-CN.md`、`docs/design/inputs.json`、`docs/design/snapshots/d4-reference-catalog-registry/source.json`，其中只有最后一份是第49个规范源；所有配套 amendment 明确未激活；实际文档检查/CI 已读取并如实报告；任何 pending/failure 不写成 pass。
 
 ## 当前分批修订约束
 
@@ -79,6 +80,6 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
 
-独立终审仍以旧固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 为对象；当前正式覆盖为候选 16/16、上游 44/49，正式账为 1P1+8P2 开放；最后 D2/D5 五份仍在独立读取。该覆盖和结论均不得转记为 R05 已读取、已接受或已关闭。R06 固定后必须从零做完整联合终审，最终仍要求完整 verdict、P0/P1=0、术语/场景/依赖/证据闭合以及必要 amendment 的充分性。
+历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成 49/49 且结论 REVISE。R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE，开放 JR001 P1 与 JR002–JR009 P2，术语/翻译不通过，D8/D9 无新增。Q01/Q02 保持关闭，Q03 owner/组合核验已完成。该完整覆盖只作为 R07 的历史输入，不能转记为 R07 已接受；R07 必须重新独立复核。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。
