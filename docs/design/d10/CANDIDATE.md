@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: author-revised R08 candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed C18/18 and S49/49 and returned REVISE: P0=0, P1=1 (B03-P1-01), P2=10. Overall, terminology, and bilingual semantics all require revision. R08 contains the author remediation and awaits a fresh complete independent review; it is not independently accepted, implemented, released, activated, merged, or an A2 start authorization.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author-revised candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=1, P2=10). All eleven findings remain open. The candidate is complete for author handoff and awaits a fresh complete independent joint review of the fixed R08 commit; it is not independently accepted, activated, merged, released, or product implementation evidence.
 
 ## 1. Selection and problem boundary
 
