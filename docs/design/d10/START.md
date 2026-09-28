@@ -142,7 +142,7 @@ The candidate also does not claim implementation of OS sandbox, real MCP/model/c
 
 Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` completed 49/49 upstream reading and ended REVISE; it is historical evidence only.
 
-The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**, P0=0, P1=1 (`JR001`), P2=8 (`JR002`–`JR009`); terminology failed and bilingual translation failed. D8/D9 produced no additional findings; Q01/Q02 remain closed and Q03 owner/composition review is complete.
+The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**, P0=0, P1=1 (`JR001`), P2=8 (`JR002`–`JR009`); terminology failed and bilingual translation failed. D8/D9 produced no additional findings; The two previously clarified questions remain closed, and owner/composition review is complete.
 
 R07 is the author remediation of that complete issue set. Neither the old C35 review nor the R06 18/18+49/49 review counts as an independent read/pass of the new R07 commit. REVIEW-DISPOSITIONS marks every JR row only as author revised / pending independent re-review.
 
