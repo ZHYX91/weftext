@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 Agent、自动化与外部能力候选
 
-revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d`、S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 18/18、上游 49/49，并给出 REVISE：P0=0、P1=1（JR001）、P2=8（JR002–JR009），术语不通过、翻译不通过；本稿是落实九项问题后的 R07 作者修订，等待新的独立复核，不表示已独立接受、实现、发布、激活、合并或可开始 A2。历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 也已完成 49/49 并为 REVISE，仅作历史。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成 C18/18、S49/49，结论 REVISE：P0=0、P1=1（B03-P1-01）、P2=10，整体、术语及中英语义均需修订。R08 是作者统一修订，等待新的完整独立复核；不表示已独立接受、实现、发布、激活、合并或可以开始 A2。
 
 ## 1. 选择与问题边界
 
@@ -63,9 +63,9 @@ D10 控制状态位于与 D6 Authority Store 绑定的受管控制域，由 Core
 | package/runtime immutable assets | 受管资产区 | exact digest/version；暂存不等于激活 |
 | transient context、model/tool output、transcript | 受限 pins/cache | 不能替代 author/control ledger |
 
-所有影响工作区操作资格的 durable record 必须通过 Core 管理的 closed adapter 修改。普通运行 telemetry 可以独立运输，但不得被恢复器当作批准、授权、费用或效果事实。
+所有影响工作区操作资格的 durable record 必须通过 Core 管理的 closed adapter 修改。普通 management write 使用 CONTROL-CONTRACT §7 prepare/commit；不可逆 emergency stop 是明确的 safety 例外：CONTROL-CONTRACT §11 在同一 managed Authority Store 中定义预留 latch/result/sequence capacity 的专用 closed write，它不是普通 prepare，也不是 D6 author transaction。普通运行 telemetry 可以独立运输，但不得被恢复器当作批准、授权、费用、stop 或效果事实。
 
-R05 的管理授权、closed body、stable request key、prepare/result/secret/stop 入口、ResourceUseGrant、部署控制决议、费用结算、stop 线性化和 package manifest 的**精确规范**统一由 [CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 拥有。该文档是本候选的一部分，不是实现笔记。Workspace author-affecting control write 仍进入原 D6 authority/decision transaction；deployment host control 只能改变部署控制记录，不能经 host adapter 写作者 payload 或伪造 D6 receipt。
+R08 的管理授权、closed body、stable request key、prepare/result/current/secret/stop 入口、具名 Core field-member author adapter、ResourceUseGrant、immutable external-effect request/send binding、部署控制决议、费用结算、stop safety 线性化和 package manifest 的**精确规范**统一由 [CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 拥有。该文档是本候选的一部分，不是实现笔记。Workspace author-affecting control write 仍进入原 D6 authority/decision transaction；deployment host control 只能改变部署控制记录，不能经 host adapter 写作者 payload 或伪造 D6 receipt。
 
 ## 6. Registry、Catalog 与激活
 
@@ -73,7 +73,7 @@ D4 Registry 仍是唯一 semantic namespace/schema 权威。D10 证明 package/p
 
 D10 另维护 Capability Catalog，记录每个可执行或纯数据 Contribution 的精确包摘要/版本、贡献类型/版本、运行 profile、平台/架构、依赖、宿主权限、网络/出站类别、secret 要求、费用 profile 与 D1 capability ID。Catalog 不能保存第二份 FieldDefinition，也不能用显示名称或安装顺序证明命名空间 owner。
 
-R07 给 D7 SearchContribution 补齐真正的正向 Catalog 路径，同时不增加 D4 Registry member 或第二搜索引擎。CONTROL-CONTRACT §4 唯一冻结 D10 `view` kind 的纯数据 carrier、不可变 descriptor asset digest、D4 owner/Field/textPath 验证、D7/D10 两层 ID 与版本分域、同 cut 完整 SearchContribution 集合及 `activationGeneration + capabilityCatalogDigest + registryBinding` 失效语义。合法第一方 SearchContribution 因此可安装/激活并进入原 D7 search Query builder；未接纳/runtime-only descriptor 只能 pending，selected contribution unavailable 仍按原 D7 失败而不能静默跳过。
+R08 保留 R07 对 D7 SearchContribution 补齐真正的正向 Catalog 路径，同时不增加 D4 Registry member 或第二搜索引擎。CONTROL-CONTRACT §4 唯一冻结 D10 `view` kind 的纯数据 carrier、不可变 descriptor asset digest、D4 owner/Field/textPath 验证、D7/D10 两层 ID 与版本分域、同 cut 完整 SearchContribution 集合及 `activationGeneration + capabilityCatalogDigest + registryBinding` 失效语义。合法第一方 SearchContribution 因此可安装/激活并进入原 D7 search Query builder；未接纳/runtime-only descriptor 只能 pending，selected contribution unavailable 仍按原 D7 失败而不能静默跳过。
 
 R05 将 package/contribution wire 收敛到 CONTROL-CONTRACT §4–§5：dependency 是**具体 dependent Contribution 自身的成员**，不是 package 级 ambient 数组；一个 connector 不可用不能停用同包无关 schema/template/data pack。Contribution kind 闭集显式保留 module/schema/view/action/template/preset/pack/tool/model/connector/importer/exporter/conversion/renderer/localization。Calendar、Library、People、Organizations 各有唯一第一方 PackageId→module contribution→schema contribution 映射，且明确引用 D4 已冻结 namespace owner 与 FacetId；这些 D10 PackageId 不成为第二 D4 namespace，也不冒称 D1 已存在 module ID、代码路径或 locale 资源。
 
@@ -90,6 +90,8 @@ ActivationBinding/1 {
 ```
 
 一次激活固定顺序为：stage immutable assets → 验证 publisher/namespace/dependency → 构造 candidate Registry 与 Catalog → 完整 D4 evolution/load validation → 验证运行资产可达 → 在同一受管事务切换 ActivationBinding。失败前继续旧 binding，失败后不能出现半份 Catalog 或半份 Registry。
+
+active-selector record 才是本次切换的 CAS 对象。current-read projection 中的 `activation.current` 在同一受权 cut 由 selector 派生；旧 binding 变成 non-current 不会改写历史 ActivationBinding 的 generation/revision。
 
 暂时 offline/health failure 不产生新 semantic generation。真正 package、definition、runtime contract 或 trust 变化才产生后继 binding。未激活升级失败可丢弃 staging；已激活后的“回滚”必须是后继激活，不能把 D4 semantic ledger 指针倒退或删除中间历史。
 
@@ -228,7 +230,7 @@ Run completed 只表示其所有已要求步骤达到各自 terminal 状态；�
 
 ## 13. Automation 调度
 
-首版 Automation 只调度一个已经接纳的 invocation，不提供通用 DAG、循环或自由脚本。definition 包含 capability invocation、schedule、DelegationLease、approval binding、budgets、queue limit 和 missed policy。
+首版 Automation 只调度一个已经接纳的 invocation，不提供通用 DAG、循环或自由脚本。CONTROL-CONTRACT §7 把 invocation 冻结为 closed union：普通已接纳外部工具使用 `kind:"tool"` + ToolValue；无人值守作者路径只能使用具名第一方 `weftext.automation/set-field-member` Core adapter 与 `FieldMemberTask/1`。任何 ToolValue 字符串、title、path 或 model output 都不能提升为 NodeRef/FieldId。definition 保存该准确 invocation、schedule、DelegationLease、approval binding、budgets、queue limit 与 missed policy。
 
 schedule 仅支持一次性 D4 ZonedInstant，或从明确的 Calendar recurrence/range source、有限 horizon 与 limit 产生 occurrence。Core 必须从实际 source 与冻结的 D4 rule context 计算，不接受 executor 自报可信时间规则；无法得到确定 instant 的 date-only 输入不暗补午夜。
 
@@ -251,7 +253,7 @@ Occurrence claim 可以先于 Run admission 建立，因此 queued 或 blocked �
 
 Standing Approval 不是“允许 Agent 以后任意修改”。首版完整规则只由 CONTROL-CONTRACT §7 的 `SingleFieldMemberRule/1` 拥有；本节只消费同一定义，不再另写竞争的 type/constraint enum。
 
-首版无人值守作者 profile 仍是原 D7 `set_field_member`：单 existing Node、单 Field、当前完整 Field 恰一 Entry、一个 existing scalar member。Envelope 直接引用唯一 owner：
+首版无人值守作者 profile 仍是原 D7 `set_field_member`：单 existing Node、单 Field、当前完整 Field 恰一 Entry、一个 existing scalar member。Automation task 与 Standing Approval 必须分域：`FieldMemberTask/1` 提供本次 Run 的具体 ownerNodeRef/FieldId/memberPath/原 D7 TypedLiteral，`SingleFieldMemberRule/1` 只进一步收窄实际 prepared effect 是否可批准。Envelope 直接引用唯一 owner：
 
 ```text
 StandingApprovalEnvelope/1 {
@@ -277,11 +279,11 @@ CONTROL-CONTRACT §7 保留 bool、exact text、int64、integer、decimal、sema
 
 实际结果仍只有两支。**member-change** 要求原 D7 adapter 的完整 proposed source 和实际 MutationFootprint 只包含所选 existing scalar member 变化，所有其它作者/control 事实不变，owner_fields preview 有完整 Field before/after `field_change`。**逐字 raw no-op** 要求同 current 唯一 target、按 required/present-optional 投影后的 D7 同型 equality，以及原 adapter 的完整 proposed source 与 before bytes 逐字相同；MutationFootprint、`field_change`、D6 `sourceVersions` 均为空。
 
-其它结果都不属于 Standing Approval：不得选 first/preferred/same-value target，不得扩大 whole Entry/source，不得降级 append/remove，也不得换同名 target；只能进入交互确认、blocked 或 failure。若 raw no-op 按原 D6 形成 committed decision，仍消费一次 successful-commit approval count；同一 saved D6 decision replay 不重复消费。
+完整映射由 CONTROL-CONTRACT §7 唯一拥有。真实 S `people/phone.label` 的 task 输入是完整三-code D4 scope 上的 Optional<semantic_code>.some；唯一 present Entry 的 `personal→work` 是真实变化，`work→work` 可以是逐字 raw no-op，approval enum 可比 D4 code scope 更窄。若存在第二条 phone Entry，自动 exactly-one 选择不适用，但普通交互 D7 路径仍可用真实 occurrenceKey/rawEntrySource selector 明确选择第二条。其它结果都不属于 Standing Approval：不得选 first/preferred/same-value target，不得扩大 whole Entry/source，不得降级 append/remove，也不得换同名 target；只能进入交互确认、blocked 或 failure。若 raw no-op 按原 D6 形成 committed decision，仍消费一次 successful-commit approval count；同一 saved D6 decision replay 不重复消费。
 
 ## 15. Fresh prepare、批准消费与 planned 恢复
 
-每次自动作者修改仍按：fresh current Field selection → 原 D7 ActionSpec → 原 `d7_action_prepare` → 完整 D7 EffectManifest/bytes → Core 机械匹配 StandingApprovalEnvelope → 建立 ApprovalUse → 原 D6 request。
+每次自动作者修改都消费 CONTROL-CONTRACT §7 的准确映射：fresh 完整 Field selection → 用 owner/FieldId/fresh expectedRevision/真实 occurrenceKey/准确 rawEntrySource 构造原 D7 FieldSelector → 原 `set_field_member` TypedLiteral → 原 `d7_action_prepare` → 完整 preview/effects/实际 MutationFootprint → 比较独立 StandingApprovalEnvelope → ApprovalUse → 原 D6 request。受保护的 `D10AuthorPreparationLink/1` 与原 PreparedActionBinding 在提交前原子保存；restart/planned/submitted_unknown 只能恢复该准确 request，绝不生成替代 OperationId。
 
 ```text
 ApprovalUse/1 {
@@ -383,29 +385,15 @@ credential rotation 产生新 generation。未发送的新调用必须使用当�
 
 外部 mutation 与 Core transaction 永不组合成一个“原子成功”。
 
-```text
-ExternalEffectIntent/1 {
-  effectId,
-  contributionBinding,
-  accountBinding,
-  targetBinding,
-  requestPayload,
-  secretGeneration,
-  idempotencyBinding,
-  delegationBinding,
-  approvalBinding,
-  egressBinding,
-  budgetReservations
-}
-```
+CONTROL-CONTRACT §7 唯一拥有完整内部 `ExternalEffectIntent/1`、`ExternalExecutionBinding/1` 与 public `ExternalEffectCurrentView/1`。immutable intent 冻结准确 contribution/account/operation/target/request payload 与 idempotency proof；具体 send attempt 另冻结 Lease、external-effect grant、egress grant、supplemental approval、secret generation 与全部可归属费用 reservation。secret bytes 永不进入这些 public projection。
 
-状态为 prepared → submitting → succeeded | failed_no_effect | outcome_unknown；只有能证明请求尚未开始发送时才可从 prepared 进入 cancelled。outcome_unknown 保持未知直到可靠 reconcile；manual_required 是恢复方式，不是假失败终态。
+状态为 prepared → submitting → succeeded | failed_no_effect | outcome_unknown；只有能证明请求尚未开始发送时才可从 prepared 进入 cancelled。lifecycle Binding revision 与 immutable requestDigest 分域，因此合法 prepared→submitting 不会自行使 consent 失效。改变 contribution/account/target/payload/idempotency 必须新建 effect intent 并重新 consent。outcome_unknown 保持未知直到可靠 reconcile；manual_required 是恢复方式，不是假失败终态。
 
-自动 retry 只在已接纳 adapter 明确提供仍有效的 idempotency window/key，或已有可靠 failed_no_effect 证据时允许。retry 使用同一 EffectIntent、同一语义 request、target/account 和原 idempotency key，并重新验证当前 authorization/egress/cost。幂等窗口失效、目标改变、请求改变或 credential 改变无法保持原合同即停止自动发送。
+自动 retry 只在原 intent 已包含且仍有效、针对准确请求接纳的 bounded idempotency proof，或已有可靠 failed_no_effect 证据时允许。retry 使用同一 EffectIntent、semantic request、target/account 与原 idempotency key，并重新验证 current authorization/egress/cost。proof 失效、target/request 改变或 credential 变化破坏原合同就停止自动发送。新的 sendAttemptId 不能拿新的 effectId 或 idempotency key 重做 unknown 原请求。
 
-受信 transport 使用发送栅栏：先 durable intent、audit started 与 cost reservation，再在与 revocation 序列化的 host gate 中开始发送。revocation 先赢则不发送；发送已经开始后 cancel/revoke 不能证明外部未执行。崩溃发生在 durable started 与可证明 send outcome 之间按 outcome_unknown 恢复。
+受信 transport 使用 CONTROL §11 send fence；首次不可逆 handoff 前冻结 ExternalExecutionBinding，并把 send-attempt evidence 与全部 cost hold 耐久关联。revocation/stop 先赢则不发送；handoff 先赢则保留已发送事实，后续可进入 outcome_unknown。D9 conversion worker 保持原 no-network 默认，不能因为 D10 有网络就借用 egress。D9 PublicationReceipt 只证明 external publication；把结果另存 Resource 仍是独立的原 D3/D7 author decision。
 
-补偿操作是新的 ExternalEffectIntent，需要自己的授权、批准和费用；不是 rollback。一个 workflow 同时要求 Core write 与 external mutation 时分别展示两个 outcome，不生成综合 author receipt。
+补偿操作是新的 ExternalEffectIntent，需要自己的授权、批准和费用，不是 rollback。一个 workflow 同时要求 Core write 与 external mutation 时分别展示两个 outcome，不生成综合 author receipt。
 
 ## 18. Budget、费用与并发预留
 
@@ -448,7 +436,7 @@ queued/prepared 且未通过 §8 Run-admission CAS 的 Run 可以在第一项受
 
 external effect 进入 submitting 后，取消只阻止后续步骤；该 effect 最终仍是 succeeded、failed_no_effect 或 outcome_unknown。迟到 model/tool output 在 step 已关闭后不能启动新 tool/action。
 
-R05 增加不可逆 emergency stop，但 stop 不是 rollback。CONTROL-CONTRACT §11 规定三个实际线性化点：新 Run admission 与 stop 在同一 store serialization domain；D6 final author commit 必须在真正持有写锁的 final transaction 内重验对应 stop latch；external transport 必须把 stop gate 保持到第一次不可撤回的真实 send handoff，而不是只检查 queue admission。先线性化的 committed/sent 结果保留，后来的 stop 只阻止尚未线性化的新效果。
+R08 保留不可逆 emergency stop，但 stop 不是 rollback。CONTROL-CONTRACT §11 进一步闭合 exact-target stable key、预留 latch/result/safety-sequence capacity、immutable receipt 与只读 lost-response result query。该 safety write 共用 Authority Store serialization domain，但既不是普通 D10ControlPrepare，也不是 D6 author transaction；不要求先执行普通 management write，普通 configuration/budget 耗尽也不能阻止已预留 target 的首次 stop。该节同时规定三个实际线性化点：新 Run admission 与 stop 在同一 store serialization domain；D6 final author commit 必须在真正持有写锁的 final transaction 内重验对应 stop latch；external transport 必须把 stop gate 保持到第一次不可撤回的真实 send handoff，而不是只检查 queue admission。先线性化的 committed/sent 结果保留，后来的 stop 只阻止尚未线性化的新效果。
 
 stop 不阻断当前获权的 authoritative abort、费用 settlement、evidence/audit retention 或 reference-safe cleanup。临时 disable、Lease expiry、普通 cancel 或暂时撤权都不是不可逆 abort proof。D6 配套提案新增 `execution_stopped/preflight`，并只允许已 planned request 在 current authorization、continuity、完整 RunBinding 和不可逆 stop 全部证明后进入原 `transaction_aborted/terminal` authoritative-abort 路径。
 
@@ -489,9 +477,9 @@ LTR/RTL、区域设置、屏幕阅读器和 Web/CLI 运输差异只影响呈现�
 
 ## 23. D1–D9 组合与必要修订
 
-D1 表面、capability reason 和唯一提交持有者保持；D2 raw source/unknown provider preservation 保持；D3 identity/SourceBinding/OriginBinding/Provenance 保持；D4 Registry exact shape 与演进保持；D5 不新增持久 Record；D8 Draft/IME/explicit edit confirmation 与所有 Editor wire 保持；D9 worker/Template/ExportPlan/publication 与所有转换 wire 保持。R06 只要求 D8、D9 原 owner 在 UPSTREAM-AMENDMENTS §8 补齐 Mandatory Intake §8.5.1 的术语映射；D10 不取得这些名称的 owner。
+D1 表面、capability reason 和唯一提交持有者保持；D2 raw source/unknown provider preservation 保持；D3 identity/SourceBinding/OriginBinding/Provenance 保持；D4 Registry exact shape 与演进保持；D5 不新增持久 Record；D8 Draft/IME/explicit edit confirmation 与所有 Editor wire 保持；D9 worker/Template/ExportPlan/publication 与所有转换 wire 保持。R08 要求 D8、D9 原 owner 在 UPSTREAM-AMENDMENTS §8 补齐 Mandatory Intake §8.5.1 的术语与 technical-interface 映射。每个 public kind 都有唯一 technical-interface owner，并分开列 consumes/returns/operates-on；D10 不取得这些名称或 domain record 的 owner。
 
-R06 coordinated amendment 集合包含 R05 的 D6/D7 standing-approval author-submit、planned-preview 恢复、Policy/2 `d10_control_self`、bootstrap profile/3 与不可逆 stop 条款，并新增**仅命名元数据**的 D8/D9 owner 词表配套。精确提案在 UPSTREAM-AMENDMENTS；CONTROL-CONTRACT 只拥有 D10 host/control wire。D8/D9 词表修订不增加无人值守编辑、转换 profile、身份、作者提交或发布能力。共同设计接受或协调激活都**不等于运行时已实现/已发布**，`automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` 仍必须进入 D1 正式 capability catalog 并通过全部真实 availability 门后才能 advertised available。
+R08 coordinated amendment 集合保留既有 的 D6/D7 standing-approval author-submit、planned-preview 恢复、Policy/2 `d10_control_self`、bootstrap profile/3 与不可逆 stop 条款，并新增**仅命名元数据**的 D8/D9 owner 词表配套。精确提案在 UPSTREAM-AMENDMENTS；CONTROL-CONTRACT 只拥有 D10 host/control wire。D8/D9 词表修订不增加无人值守编辑、转换 profile、身份、作者提交或发布能力。共同设计接受或协调激活都**不等于运行时已实现/已发布**，`automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` 仍必须进入 D1 正式 capability catalog 并通过全部真实 availability 门后才能 advertised available。
 
 ## 24. 安全反例
 
