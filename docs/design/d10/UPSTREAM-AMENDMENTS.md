@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Coordinated Upstream Amendment Proposal
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate upstream amendment proposal, not jointly accepted or coordinatedly activated. Fixed input is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 U inputs plus the D4 reference catalog. Current D1-D9 snapshots remain authoritative. This document gives independent review complete future companion text; it changes no snapshot and does not authorize early product implementation of unattended author submission.
+revision: D10-r07-independent-review-fixes-2026-09-28; status: candidate coordinated upstream amendment proposal, still not jointly accepted or coordinatedly activated. Fixed S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` remains authoritative and byte-unchanged; R07 only repairs the complete independent-review findings and does not implement or activate these future companion changes.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -332,7 +332,7 @@ Reverse kind ownership is fixed as follows:
 
 ### 8.2 D9 owner-lexicon addition
 
-D9 behavior and wire remain unchanged. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every row's `firstFreeze` is its accepted D9 r04 contract; R06 adds naming metadata only. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
+D9 behavior and wire remain unchanged. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's `firstFreeze` is its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R07 adds naming metadata/owner correction only. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
 
 Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decoder, fixtures, help, generated samples; M-route=free-command/fallback/provider aliases and route inventory; M-template=old attr/record/H1–H9/formula-reorder/broad-view template parser/help/samples; M-export=free binding dictionary, rowHandle identity, author-snapshot export, generic author-receipt alias; M-region=D9-private Locator kind/opaque registry identity; M-none=no specific predecessor, only unlisted controlled aliases. Historical research text is not migrated.
 
@@ -346,7 +346,7 @@ Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decode
 | `weftext.term.conversion-route` | 转换路由 / Conversion Route; D9 host registry | routeId/profileId + fixed Provider chain | finite ordered acyclic pipeline; not free fallback | management UI may show Route; no new locale/CLI | M-route |
 | `weftext.term.import-mapping` | 导入映射 / Import Mapping; D9 Core mapping | `ImportMapping/1` | explicit structure/Field conversion choice; not Query/Action | analysis UI may show mapping; no standalone locale/CLI | M-import |
 | `weftext.term.mapping-proposal` | 映射提案 / Mapping Proposal; D9 proposal | fixed proposal in `d9_import_analysis` | complete pre-prepare proposal; not author plan/patch | shown through import analysis; no standalone locale/CLI | M-import |
-| `weftext.term.import-job` | 导入作业 / Import Job; D9+D6 control | D6 durable job/control record; observed by `d9_import_*` kinds | finite groups/batches; not second ledger/job-wide atomic transaction | existing import semantic entry only; no standalone locale | M-import |
+| `weftext.term.import-job` | 导入作业 / Import Job; **owner D6, consumed by D9** | inherit exact D6 owned names `ImportJob`, `importJob`, `stageInput`, `planAtomicGroups`, `commitImportBatch`; D9 `d9_import_*` only observes/operates the D6 record | finite groups/batches; not second ledger/job-wide atomic transaction | inherit D6 UI/locale `storage.import_job`; firstFreeze remains `D6 revision05-observation-bootstrap candidate; not activated`; no D9 compatibility alias | M-import |
 | `weftext.term.coupling-group` | 耦合组 / Coupling Group; D9 mapping | group inside ConversionInput/prepare | indivisible author group; not UI page/worker process | no CLI/UI/locale | M-import |
 | `weftext.term.import-batch` | 导入批次 / Import Batch; D9 mapping | one original D3/D6 atomic request | finite commit batch; not arbitrary 1000-row slicing | UI may show batch progress; no locale key | M-import |
 | `weftext.term.conversion-input` | 转换输入证据 / Conversion Input; D9 control | `ConversionInput/1` ZIP/profile | binds raw/IR/mapping/loss/route; not identity/author source | no direct UI/CLI/locale | M-import |
