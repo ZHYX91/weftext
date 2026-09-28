@@ -80,6 +80,6 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
 
-历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成 49/49 且结论 REVISE。R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE，开放 JR001 P1 与 JR002–JR009 P2，术语/翻译不通过，D8/D9 无新增。Q01/Q02 保持关闭，Q03 owner/组合核验已完成。该完整覆盖只作为 R07 的历史输入，不能转记为 R07 已接受；R07 必须重新独立复核。
+历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成 49/49 且结论 REVISE。R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE，开放 JR001 P1 与 JR002–JR009 P2，术语/翻译不通过，D8/D9 无新增。此前两项已澄清问题保持关闭，owner/组合核验已完成。该完整覆盖只作为 R07 的历史输入，不能转记为 R07 已接受；R07 必须重新独立复核。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。
