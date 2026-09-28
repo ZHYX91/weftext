@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Goal and current status
 
-Status: candidate revision R07. The complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` finished 18/18 candidate and 49/49 S inputs with final REVISE (P0=0, P1=1 JR001, P2=8 JR002–JR009; terminology/translation failed). R07 is the author remediation and awaits fresh independent re-review. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
+Status: candidate revision `D10-r07-independent-review-fixes-2026-09-28`. The complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` finished 18/18 candidate and 49/49 S inputs with final REVISE (P0=0, P1=1 JR001, P2=8 JR002–JR009; terminology/translation failed). R07 is the author remediation and awaits fresh independent re-review. Produce a complete, implementable, independently reviewable design defining what an Agent may read, context selection, proposed actions, approval, audit, and revocation, and how automation, scheduling, connectors, MCP, model/tool adapters, and conversion coordination share security boundaries without sharing a second author authority.
 
 The current author candidate uses a narrow Broker, typed Capability Catalog, and specialized executors; Core remains the sole author transaction authority. The candidate also carries the required D6/D7 Standing Approval companion-amendment proposal, but those amendments do not take effect before independent acceptance and coordinated activation.
 
