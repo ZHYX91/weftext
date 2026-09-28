@@ -7,17 +7,34 @@ translation_status: source
 
 # D10 独立审查问题处置
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：author revision record，所有独立问题保持开放，等待 R05 固定后完整联合终审。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 C 完整独立 REVISE 后的 R07 作者处置记录。所有 JR finding 在新的独立复核前继续开放；“作者已修”不等于关闭。
+
 
 ## 1. 审查覆盖边界
 
-旧固定候选仍为 C=`35fab950dabedfb92c9f12858701be8afe6faa74`，固定输入为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`。独立终审对旧 C 的正式覆盖为候选 **16/16**、上游 **44/49**；最后 D2/D5 五份仍在读取。正式账为 **1P1 + 8P2 开放**。这些覆盖、发现和阶段性结论只属于旧 C，不能转记为 R06 已读取、已接受或已关闭。
+历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 最终已完成 S49/49 并为 REVISE；更早的阶段性阅读计数已被最终结果取代，只保留为历史过程证据。
 
-R06 继承 R05 的授权/事务/费用/stop/package 控制修订，并新增 D8/D9 原 owner 术语配套、U12 导入前提及有限一致性清理。固定后仍必须作为新候选进行 fresh 完整联合终审。
+固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict **REVISE**；P0=0；P1=1（`JR001`）；P2=8（`JR002`–`JR009`）；术语不通过；翻译不通过。D8/D9 无新增 finding。Q01/Q02 维持关闭；Q03 owner/组合核验已完整结束。
 
-以下各行只记录作者技术处置及落点；“作者已修订”不等于独立关闭。
+R07 是对这组完整问题的作者统一修订；任何旧覆盖/verdict 都不能转记为 R07 已独立阅读、接受或关闭。
 
-## 2. 问题处置
+## 2. R07 JR001–JR009 作者处置
+
+| ID | 级别 | 作者修订 | R07 主要落点 | 验证目标 | 当前状态 |
+| --- | --- | --- | --- | --- | --- |
+| JR001 | P1 | CONTROL 唯一拥有完整 SingleFieldMemberRule；保留 semantic_code、0..64 同型 TypedLiteral enum、numeric range、bounded exact text、1..7 D4 member path、Optional-present bridge、member-change/raw-no-op | CONTROL §7；CANDIDATE §14；UPSTREAM approval 消费面；Implementation；场景 | 真实 `people/phone.label` present Optional semantic-code change + raw-no-op + 第二同值 phone 负例；禁止 whole-source widening | 作者已修；待独立复核 |
+| JR002 | P2 | 历史 prepare/applied result 与 current exact ControlRef read 分开；闭合19类 current projection、scope、lifecycle/config/domain/usage revision 与 non-disclosure | CONTROL §7–§8；Candidate recovery/error；Implementation/F32 | r5丢响应/r6 current：result=r5、current read=r6；secret 无明文；planned preview 只走D7；applied连续性不明=`state_unavailable` | 作者已修；待独立复核 |
+| JR003 | P2 | `D10ControlError/1` 管理域与 `D10RunStepError/1` 分离；逐入口映射并保留 D3/D6/D7/D8/D9 原 envelope | CONTROL §1；CANDIDATE §21；Implementation | management stale_revision != runtime binding_changed；D6前 approval error 不包装 D6 approval_unavailable | 作者已修；待独立复核 |
+| JR004 | P2 | 分别登记 ToolValueProfile/ToolType/ToolValue，明确 D10 自有 closed algebra、非 D7 alias | CONTROL §3；TERMINOLOGY §2/§3/§13；START/Implementation | controlled surface 不再写复用 D7 subset；exact numeric/optional/object/list/union decoder | 作者已修；待独立复核 |
+| JR005 | P2 | 一份 CostReservation 仍是一 attempt/account/grant/pricing/currency；多层 limit 是 ceiling；真实多账户费用用独立可归属 reservation | CONTROL §10；CANDIDATE §18；TERMINOLOGY；F20；Implementation | 同一费用不重复；多层容量竞争；实际多账户各自归属 | 作者已修；待独立复核 |
+| JR006 | P2 | 统一 R07、九对18路径、完整 review 历史与 S 四个补充路径 | 全部状态头；TASK；START；本文件 | 不残留阶段性阅读/seven-pair/r04/当前R06 状态；只有 catalog 是第49规范源 | 作者已修；待独立复核 |
+| JR007 | P2 | ImportJob 继续归 D6，保留原 concept ID、ownedNames、`storage.import_job`、firstFreeze；D9 只消费 | UPSTREAM §8.2；TERMINOLOGY §13.2/§15 | 不再有 D9 new/split ownership 或 D9 firstFreeze | 作者已修；待独立复核 |
+| JR008 | P2 | NamespaceClaim 直接消费 exact D4 owner tuple；ownerId 绝不是 D6 Token，proof 独立 | CONTROL §9；Candidate trust；Implementation | 正例 people 保留 tuple；随机43字符 Token/同名 package/install-order 负例 | 作者已修；待独立复核 |
+| JR009 | P2 | D7 SearchContribution 在 `view` 下有唯一 D10 纯数据 carrier，ID/版本分域、descriptor digest/owner/Registry proof、完整 Catalog generation binding | CONTROL §4；CANDIDATE §6；TERMINOLOGY 继承表；U18/U22；Implementation | 合法第一方 install→activate→D7 search；wrong owner/digest/duplicate/omission/unavailable/script 负例 | 作者已修；待独立复核 |
+
+Q01/Q02 保持关闭且不改设计。Q03 owner/组合核验已完整完成；R07 不再保留“其它 owner 组合仍待核”的笼统声明。
+
+## 3. 历史分批问题处置
 
 | ID | 原级别 | 问题 | 作者修订决定 | 主要修改位置 | 当前状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -55,11 +72,11 @@ Core 仍是唯一 author transaction authority。ApprovalUse、LeaseRunUse、Pla
 
 D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上游 U 没有被修改；修订在独立接受与协调激活前不生效。
 
-## 4. 文档质量修订
+## 5. 文档质量修订
 
 上一版中文为了满足混排检查，重复追加了“技术名称不扩大权限”等泛句，并产生双句号。它们不是规范语义。本轮删除这些填充句，改为在对应段落直接用中文解释真实边界，同时保留必要的受控英文标识。仓库 check_docs 规则不放松；若仍有混排失败，只修改实际文案，不通过重复填充绕过。
 
-## 5. 后续独立复核目标
+## 6. 后续独立复核目标
 
 后续 reviewer 至少应对本表六项重新构造原反例，并检查：
 
