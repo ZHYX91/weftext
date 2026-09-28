@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision R07，固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 完整独立终审后的作者修订；尚未新的独立接受或协调激活。本文件记录输入/候选交接状态，不是 Gate verdict。
+状态：candidate revision `D10-r07-independent-review-fixes-2026-09-28`，固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 完整独立终审后的作者修订；尚未新的独立接受或协调激活。本文件记录输入/候选交接状态，不是 Gate verdict。
 
 固定输入基线已整合为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 包含旧 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份输入和新增 D4 reference catalog。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
