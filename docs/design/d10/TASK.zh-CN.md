@@ -80,7 +80,7 @@ R08 还冻结以下已经由 CONTROL/CANDIDATE/UPSTREAM/SCENARIO/IMPLEMENTATION 
 
 - 无人值守作者路径只能使用具名第一方 Core field-member adapter 与 closed `FieldMemberTask/1`；task intent 与 Standing Approval 分域，任意 ToolValue 绝不能成为 NodeRef/FieldId/selector/author request；
 - control history 内部保留完整 canonical B 防重，public history 只返回七-kind summary，绝不返回 A/B/M；
-- external consent 绑定 stable effect Ref + requestDigest；lifecycle revision 与 immutable request semantics 分域；public current view 不披露 payload/key/secret/reservation identity；
+- external consent 绑定稳定 effect Ref 与 requestDigest；生命周期 revision 与不可变请求语义分域；public current view 不披露请求 payload、幂等 key、secret 或 reservation identity；
 - emergency stop 是专用同库 D10 safety transaction，使用 exact-target 防重、预留容量、receipt/result replay，不走普通 prepare，也不建第二 author ledger；
 - D8 13 kind 与 D9 17 public kind 各有一个 technical-interface owner；consumes/returns/operates-on 数据继续保留原 domain owner，包括 D6 ImportJob。
 
