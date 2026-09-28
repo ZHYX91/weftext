@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Coordinated Upstream Amendment Proposal
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: candidate coordinated upstream-amendment proposal synchronized to R08 after the complete R07 joint review. Fixed S remains authoritative and byte-unchanged. Nothing in this file is active unless a later independent review accepts the new candidate and controller coordination explicitly activates the companion changes.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: companion upstream-amendment proposal synchronized to the complete R08 author candidate. Fixed S remains authoritative and byte-unchanged. The proposal is inactive and all eleven R08 findings remain open until the fixed R08 candidate receives a fresh complete independent joint review and later coordinated acceptance/versioning/activation.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -413,8 +413,6 @@ The D9 owner lexicon also records a unique technical interface owner for each of
 | `d9_import_state_result` | D9 Import Job State Interface (Main §4) | D6 ImportJob + linked original receipts | read-only progress/result projection; D3/D6 receipts keep their owners |
 | `d9_template_analyze` | D9 Node Template Analysis Interface (Templates §6) | D2 Template + D9 TemplateRecipe/TemplateConstructionInput | `d9_import_analysis`; D2 Template identity stays D2 |
 | `d9_error` | D9 Error Interface (Main §4) | D9 public-interface failure | closed D9 error family; D3/D6/D7 errors are passed through at their original owner boundary |
-
-Unknown kind, profile, or version still rejects.
 
 Unknown kind, profile, or version still rejects.
 
