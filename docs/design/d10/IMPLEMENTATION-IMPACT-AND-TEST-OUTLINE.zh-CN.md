@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：R08-A 作者语义消费的实现/测试义务。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S 的完整独立联合终审已完成 C18/18、S49/49，结论 REVISE（P0=0、P1=1、P2=10）。这些只是设计/测试义务，不是已执行产品证据；11 项 finding 在最终 R08 候选的 fresh 完整独立复核前全部保持开放。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：与最终作者候选同步的完整 R08 实现/测试义务。这些是设计与未来证据要求，不是已执行产品测试。固定 R07 的11项 finding 全部保持开放，等待固定 R08 候选的 fresh 完整独立联合评审。
 
 ## 1. 实现切片与状态所有者
 
@@ -476,8 +476,8 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 - D1 surface/reason、D3 identity、D4 Registry、D8 confirmation、D9 worker/publication 不被暗改；
 - 任何实际运行证据精确分层，pending 项不被写成 pass。
 
-- 固定 R07 的完整独立终审历史结论仍为 REVISE（P0=0/P1=1/P2=10）；本 R08-A 作者批次不能自行关闭这 11 项 finding；
+- 固定 R07 的完整独立终审历史结论仍为 REVISE（P0=0/P1=1/P2=10）；完整 R08 作者修订也不能靠作者声明关闭这 11 项 finding；
 - 本纲要列的是待实现/待测试义务，不是 Core adapter、stop transaction、external transport、D8/D9 mapping 或 race corpus 已执行的证据；
-- R08-A 不是最终 18 文件检查点：REVIEW-DISPOSITIONS、TASK、START 与全18文件双语/文档门禁收尾仍是后续批次。
+- 固定 R08 候选只有在九对双语/18 exact path 全部一致、固定 S 与非 D10 路径不变、125 个 scenario ID/分类一致且适用 documentation/input gate 通过时才算作者候选完整；之后仍需 fresh 完整独立复核。
 
 这些是候选完整性门，不是独立 Gate verdict。
