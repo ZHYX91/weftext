@@ -388,7 +388,11 @@ B10-01 implementation negative gate: Adopt code paths use only the `adopt_*` con
 
 TERMINOLOGY §14 and CONTROL-CONTRACT additionally freeze R05 control records, five capability IDs, and four first-party module/package/schema mappings. Candidate code symbols/namespaces and locale keys are unimplemented mappings only; CI string presence is not implementation evidence. PackageId, D4 SemanticNamespaceId, D4 namespace ownerId, FacetId, and module ContributionId remain owner-typed and cannot be merged merely because strings match.
 
-R06 additionally adds two **original-owner** naming gates. The nine D8 concepts and thirteen kinds consume UPSTREAM-AMENDMENTS §8.1 item by item: implementation cannot add D10 aliases, CLI verbs, locale keys, or rename EditSession/Draft/PreparedEditBinding as D10 concepts. D9 grouped lexicon terms consume the stable concept IDs in §8.2; `PublicationReceipt/1` remains external-publication control only, TerminalSchema/V nested inside `D7ResultPin` remains D7-decoded, and D2 Template, D3 SourceBinding/ForeignIdentityKey/OriginBinding/ResourceRegionLocator, D7 PreparedActionBinding/2, and D3/D6 author receipts cannot be re-registered by D9.
+R08 consumes two **original-owner** naming/interface gates. D8 keeps exactly nine domain concepts and thirteen kinds; every kind resolves to exactly one technical-interface owner from UPSTREAM-AMENDMENTS §8.1. Draft, Draft Projection, Draft Edit Map, Prepared Edit Binding, D2 snapshot, and D6/D7 values may be consumed/returned but never co-own the kind. In particular `d8_draft_text_replace/write` belong to their D8 interfaces while using Draft Edit Map coordinates. This mapping changes no D8 wire, IME, explicit confirmation, PreparedEditBinding/1, or Undo semantics.
+
+A dirty D8 Draft is not a global Core write lock: a legal background D7 author commit may occur. D8 must queue/project the author update, preserve local input/composition, and require the later edit to rebase/reprepare or report stale under the original D8 contract. Undo may invert only its original committed edit and cannot roll back a later background commit.
+
+D9 keeps the 36 D9-owned naming rows plus the one inherited D6 ImportJob. All 17 public kinds resolve to exactly one technical-interface owner from UPSTREAM-AMENDMENTS §8.2; consumes/returns/operates-on never means co-ownership. `d9_import_state` is a D9 interface operating on D6-owned ImportJob, whose original concept ID, ownedNames, `storage.import_job`, and historical firstFreeze remain unchanged. PublicationReceipt is publication-only; TerminalSchema/V inside D7ResultPin remain D7-owned; inherited D2/D3/D6/D7 names keep original owners. D9 workers retain no-network by default.
 
 These owner-lexicon additions change only terminology registry/checking and no D8/D9 wire or product capability. Where implementation has no corresponding UI/CLI/locale, “no new surface” is the passing condition; naming conformance must not invent resources.
 ## 14. Test and evidence layers
@@ -410,7 +414,7 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 
 1. prompt injection attempting to expand read, egress, secret, tool, or budget;
 2. MCP descriptor/schema drift, fake readOnly, huge output;
-3. standing approval over two same-value Entries, with no automatic first;
+3. `FieldMemberTask/1` real `people/phone.label` Optional semantic-code path: unique present `personal→work`, byte-exact `work→work`, `optional.none` rejection, and a second same-value Entry where automatic exactly-one is inapplicable but interactive D7 selection remains available;
 4. approval-count N=1 dual race with at most one reserved;
 5. R1 approval valid before D6, R2 consumes the use, and R1 losing only approval inside D6 receives `approval_unavailable/preflight`;
 6. approval revoked after planned leaves the decision planned rather than semantic rejection/terminal;
@@ -441,16 +445,22 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 31. D4 reference-catalog positive narrow proof for `people/phone` plus relation/cross-Field/unknown-constructor negatives;
 32. D3 lexicon positive mapping: `adopt_*` uses `OriginBinding` / `origin_binding`; negative controlled source/API/schema/fixtures/terminology registry contain no `adoption_binding`, with no scanner exemption.
 33. a self-service P with `d10_control_self`, actual narrow Field authority, and a deployment cost grant creates a finite Automation; missing any qualification rejects and Field authority never becomes deployment-account administration;
-34. stable-key r5 succeeds/response is lost, r6 later updates, and original retry replays saved r5 result; same key with different body/expected target returns `control_conflict`;
+34. stable-key r5 success/response loss, then r6 update: protected complete B decides equality; public historical r5 exposes only seven-kind summary/receipt/deltas with no A/B/M, current read separately returns r6; same key different complete B returns `control_conflict`;
 35. grant renewal/revision/new grant races an old `uncertain` reservation and proves spent/held/attempt/account liability never resets;
-36. emergency stop races Run admission, D6 final commit, and external send, while settlement/authoritative abort/evidence cleanup remains possible after stop;
+36. exact-target stop (`requestId==target.id`) races Run admission, D6 final commit, and external send; include first receipt, lost-response query after target r5→r6, hidden/continuity error ordering, pre-reserved MAX boundary, and proof that stop does not block settlement, authoritative abort, or evidence cleanup;
 37. profile/2 family does not gain `d10_control_self` on upgrade; profile/3 affects only new families after explicit issuer update;
 38. per-Contribution dependency: an unavailable connector does not disable same-package schema/template/pack;
 39. Calendar/Library/People/Organizations D10 PackageId→module→schema mappings remain type-distinct from D4 namespace owner/Facet and reject a same-name third-party spoof;
 40. design accepted while release/surface/policy/version/health gate fails still produces the real D1 unavailable result;
-41. reverse/forward owner-lexicon mapping for nine D8 concepts and thirteen kinds, with no extra CLI/locale/wire alias and no naming change to IME, Write/Read, confirm, or Undo;
-42. stable concept IDs plus inherited ownership for D9 grouped terms: `PublicationReceipt/1` cannot become an author receipt, `D7ResultPin` cannot acquire TerminalSchema/V ownership, and PreparedActionBinding/SourceBinding/OriginBinding/ResourceRegionLocator cannot be re-registered;
-43. U12 three branches: current ICS profile is unsupported with zero author effect; a supported ordinary-file profile without D3 binding semantics gives fresh identities for two separate explicit imports while same-request retry replays exactly; the D3-binding path tests never_bound/active_live/active_non_live/retired/conflict/miss and never decides from UID without SourceBinding.
+41. D8 nine-concept/thirteen-kind unique technical-interface-owner mapping; consumed Draft Edit Map is never co-owner; dirty Draft plus legal background D7 commit preserves input and forces stale/rebase behavior, and Undo never rolls back the later background commit; no extra CLI/locale/wire alias;
+42. D9 17-kind unique technical-interface-owner mapping plus 36 D9-owned naming rows and one inherited D6 ImportJob; `d9_import_state` operates on ImportJob without owning it, PublicationReceipt cannot become an author receipt, D7ResultPin cannot acquire TerminalSchema/V ownership, and inherited D2/D3/D6/D7 names cannot be re-registered;
+43. U12 branch modes: current ICS production profile unsupported with zero author effect; two separately explicit ordinary-file imports without D3 binding are fresh while same canonical request recovery replays; D3-bound path covers never_bound/active_live/active_non_live/retired/conflict/miss, with retired fresh only via explicit Adopt and no UID-only decision.
+44. T02 discovery records/reuses pending admission without making an unadmitted tool callable; current Catalog is byte-stable, and restart/uncertainty of an existing prepared invocation resumes the original admitted descriptor/request rather than generating a replacement request.
+45. E05 eventual-consistency readback miss remains `outcome_unknown` for the same immutable effect/target/request bytes/original key; later readback may resolve it, but no new effectId/target/payload/key is created and expired proof does not authorize resend.
+46. cold restart after D7 prepare restores the exact `D10AuthorPreparationLink/1` and original D6 request; unknown link continuity is `state_unavailable`, while a proven never-saved prepare may be recreated.
+47. external consent remains valid across legal prepared→submitting lifecycle revision because it binds effect Ref + requestDigest; any frozen request semantic change requires a new effect/consent; sendAttemptId and every billableAttemptId remain distinct.
+48. supplemental planned/external approvals have no independent early-revoke state action in generation one; time/binding/grant/authorization/stop gates block use without fabricating generic revoked state.
+49. `activation.current` is derived from the same-cut selector; stale selector CAS fails, successor switch is atomic, and historical ActivationBinding generation/revision is unchanged by becoming non-current.
 
 Each case includes positive and mutant/negative paths and is not satisfied by string-log comparison. Any case not actually executed remains pending in the evidence table.
 ## 16. Completion gate
@@ -459,12 +469,16 @@ The author implementation plan is ready for independent review only when:
 
 - CANDIDATE, CONTROL-CONTRACT, TERMINOLOGY, SCENARIO-DISPOSITIONS, UPSTREAM-AMENDMENTS, and this file agree;
 - TERMINOLOGY §13–§15 completes Intake §8.5.1 mapping for D10-owned and upstream-referenced concepts; complete D8/D9 original-owner additions live in UPSTREAM-AMENDMENTS §8 and D10 does not acquire their ownership; no TODO/"implementation decides" placeholder remains;
-- current author input coverage remains 49/49; historical U 48/48 records keep their historical context;
+- reading provenance is separated: the original author lineage records historical S49/49; this continuation author has personally completed S16/49 full reads, while D9 workers/export and templates were dependency-scoped partial reads and are not counted as full; the independent review of fixed R07 separately completed S49/49. None of these evidence sets substitutes for another;
 - D6/D7/D8/D9/D3 companion amendments are clearly unactivated proposals;
 - unsupported/deferred is never written as available;
 - automatic author commit remains limited to single_field_member profile;
 - External effect unknown, cost uncertain, audit failure, and cancel/planned recovery each have one normative result;
 - D1 surface/reason, D3 identity, D4 Registry, D8 confirmation, and D9 worker/publication are not silently changed;
 - every actually run evidence item is reported at its exact layer and pending items are not labeled pass.
+
+- fixed R07 complete independent review remains historical REVISE with P0=0/P1=1/P2=10; this R08-A author batch closes none of those eleven findings by itself;
+- this outline contains obligations to implement/test, not evidence that the Core adapter, stop transaction, external transport, D8/D9 mappings, or race corpus has been executed;
+- R08-A is not the final 18-file checkpoint: REVIEW-DISPOSITIONS, TASK, START, and the all-18 bilingual/document-gate cleanup remain later batches.
 
 These are candidate-completeness conditions, not an independent Gate verdict.
