@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate。本文件描述未来实现义务和证据门，不表示当前仓库已经实现 Agent、自动化、Connector、MCP、standing approval 或 D10 runtime。本文不授权修改产品代码；当前 PR 只包含设计材料。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 完整独立 REVISE 后同步到 R07 的实现/测试义务；这些只是设计/测试要求，不是产品执行证据。
 
 ## 1. 实现切片与状态所有者
 
@@ -151,6 +151,15 @@ ToolValue decoder/encoder 必须逐类型证明 exact 语义；严禁：
 
 MCP adapter 测试需要恶意 server：descriptor 前后漂移、tool name 冲突、schema 变更、extra field、巨大递归 schema、伪 readOnly、prompt injection、资源内容带 tool 指令、断流/重复响应、超预算结果。发现变化只能 pending/reject/reset，不得在一个 Run 中热换 schema。
 
+
+### 4.1 R07 closed-rule 与 SearchContribution conformance
+
+Standing Approval 测试只使用 CONTROL-CONTRACT §7 rule decoder，覆盖 0/64 enum 边界、完整 TypedLiteral 排序唯一、同型 numeric bounds、0/65528 UTF-8 text 与 CR/LF 拒绝、1..7 静态 D4 object-member path 加 alias depth、semantic-code scope+code equality，以及 required/present-optional 两种 D7 bridge。真实正例用完整 Field 只有一个 Entry 且 optional `label` 已 present 的 `people/phone`：`personal→work` 为真实变化、`work→work` 为 raw-no-op；`optional.none` 不自动批准；再有第二个同值 phone Entry 时整个自动 profile 不适用。
+
+Control-result/current 测试实例化全部 19 个 `ControlRecordKind` current projection，断言 exact scope/lifecycle，并区分 configuration revision 与独立 lease/approval/grant/cost-account usageRevision。第二个 Run 消耗同 Lease usage 不得改变第一个 admitted Run 的 leaseRevision；revoke 必须改变 configuration revision 并阻止后续步骤。r5 成功/丢响应→r6 更新后，`d10_control_result` 必须重放 r5，`d10_control_read` 才返回 r6；applied 连续性不明返回 `state_unavailable`，secret current read 永不含 plaintext。
+
+SearchContribution 集成直接消费真实 D7 Query Algebra descriptor。覆盖合法第一方 owner/digest/Registry/textPath 激活并进入原 D7 Query builder、runtime-only discovery、wrong owner、asset digest mismatch、重复 D7 contributionId、D10 contractVersion 不变而 D7 version 改变、所谓完整集合漏掉一个应 active descriptor、selected Field/provider unavailable、script/network/extra member、缺 D6 `field_read`、successor Catalog generation 使旧 result 失效。不得用永久 deny-only 路径冒充正向能力。
+
 ## 5. Runtime 与 OS sandbox
 
 每个可执行 contribution 的支持声明必须逐平台绑定真实 sandbox 证据。最低检查：
@@ -271,6 +280,11 @@ reconcile 在同一 authority transaction 中 CAS expected reservation revision�
 ResourceUseGrant 的配置和累计 usage 分开版本化。renew/revision 保留 spent/held/attempts；降低额度不得低于既有消耗+占用。变更 grantee/account/resource kind/currency 创建新 grantId，但旧 reservation 继续结算到旧 grant 与实际账户。
 
 真实费用证据至少覆盖：reserve100→send→crash→uncertain→final bill20→settled(20) 只返80；sent+final0→settled(0)；never sent→released；并发 reconciler；commit 后 response loss replay；wrong attempt/account/currency；non-final/不可拆 aggregate；管理员无证据0；overcharge。未运行的 provider 测试保持 pending。
+
+
+current-control 与 historical-result 持久化测试还必须证明 `Binding<lease>.revision==leaseRevision`、`Binding<approval>.revision==approvalRevision`、`Binding<grant>.revision==grantRevision`，reservation revision 与 deployment-policy revision 各自只有一套 CAS 权威；独立 usageRevision 变化不修改这些 configuration binding。`ControlDependencies.usageBindings` 只允许 lease/approval/grant/cost_account。
+
+Trust 测试包含保留第一方 `people→(first_party,weftext.people)` 正例，并拒绝把随机 43 字符 D6 Token 当 `ownerId`。Package/search owner proof 使用 exact D4 tuple + 独立 EvidenceTicket；install order 与同名 package 不能替代。
 
 ## 10. Audit、retention 与 export
 
