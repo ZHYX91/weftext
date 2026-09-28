@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 术语与命名
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate。本词表只定义 D10 新增控制/扩展概念和 D1–D9 的消费边界，不重新分配任何上游 owned concept。自然语言、历史材料、测试描述和第三方产品用词不自动成为受控名称。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 完整独立 REVISE 后的作者术语修订，等待新的独立复核；所有上游 owner 保持，R07 只落实 JR004/JR005/JR007/JR009，不激活任何上游修订。
 
 ## 1. 命名原则
 
@@ -42,7 +42,7 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：ca
 | weftext.term.automation-occurrence | 自动化发生项 / Automation Occurrence | D10 | 由 definition revision 与源 occurrence 机械产生的一次调度机会 | 不等于作者 recurrence occurrence identity |
 | weftext.term.run | 运行 / Run | D10 | Agent 或 Automation 的受管执行记录及 step outcomes | Run completed 不等于 author committed |
 | weftext.term.context-bundle | 上下文包 / Context Bundle | D10 | 当前受权、最小化、版本绑定、面向特定 recipient 的模型/工具上下文 | 不是 author snapshot 或可转授权 token |
-| weftext.term.tool-value-profile | 工具值配置 / Tool Value Profile | D10 | 复用 D7 TypeSpec/V 有限子集的工具参数/结果代数 | 不是任意 JSON Schema、D4 Field value 全集 |
+| weftext.term.tool-value-profile | 工具值配置 / Tool Value Profile | D10 | D10 自有 closed ToolValueProfile/ToolType/ToolValue 工具参数/结果代数 | 不是任意 JSON Schema、D7 TypeSpec alias 或 D4 Field value 全集 |
 | weftext.term.input-slot | 输入槽 / Input Slot | D10 | 单次 invocation 使用、绑定 exact bytes/用途/recipient 的受限文件输入句柄 | 不是路径、ResourceRef 或跨调用 file handle |
 | weftext.term.tool-adapter | 工具适配器 / Tool Adapter | D10 | 把一个已接纳外部 tool protocol 映射到 Tool Value 与明确 effect class 的 adapter | 不是作者 Action adapter |
 | weftext.term.mcp-adapter | MCP 适配器 / MCP Adapter | D10 | Tool Adapter 使用 MCP 作为运输/发现协议的具体类型 | MCP annotations/prompts 不构成 Weftext 权限 |
@@ -51,7 +51,7 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：ca
 | weftext.term.secret-reference | 凭据引用 / Secret Reference | D10 | 对 OS/Server secret store 中实际 credential 的受管引用及 generation | 不是 secret bytes、author source 或 model input |
 | weftext.term.external-effect-intent | 外部效果意图 / External Effect Intent | D10 | 已冻结 target/account/request/idempotency/approval/budget 的一次外部 mutation 请求 | 不是 D6 transaction 或 rollback |
 | weftext.term.external-outcome-unknown | 外部结果未知 / External Outcome Unknown | D10 | 无法证明外部 mutation 是否发生或是否完整发生的持久状态 | 不是 failed 或 cancelled |
-| weftext.term.cost-reservation | 费用预留 / Cost Reservation | D10 | 在可能收费的 attempt 前对一个或多个费用账户原子占用的有限上限 | 不是账单事实或 effect idempotency |
+| weftext.term.cost-reservation | 费用预留 / Cost Reservation | D10 | 一笔 billable attempt 对恰一个实际 cost account/grant/pricing/currency 的有限上限 reservation；准入可同时检查 Run/Lease/Automation/Workspace/deployment 多层 ceiling | 不是 billing fact、effect idempotency，也不是一份跨多个实际账户的 reservation |
 | weftext.term.audit-started | 审计开始记录 / Audit Started Record | D10 | protected step 真正执行前耐久写入的最小安全审计事实 | 不代表 step 已成功 |
 | weftext.term.money | 费用值 / Money | D10 | currency + Counter microUnits 的 exact cost 表示 | 不做隐式 FX，不使用 binary float |
 
@@ -66,6 +66,8 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：ca
 - `ApprovalUse/1`
 - `PlannedDecisionApproval/1`
 - `ToolValueProfile/1`
+- `ToolType/1`
+- `ToolValue/1`
 - `InputSlot`
 - `AutomationOccurrenceKey/1`
 - `ExternalEffectIntent/1`
@@ -221,7 +223,7 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | weftext.term.run | 运行 | Run | Agent 或 Automation 的受管执行记录与 step outcomes | D10 runtime control | 不是 author transaction 或 receipt | 公共 IPC 未冻结；受控概念 `Run` | type `Run`; variable `run` | UI“运行”; locale `term.run` | Run | 禁止 job=author transaction | 正：cancelled Run 含已 committed step；反：Run completed=author committed | `D10-r01`; 无旧 alias |
 | weftext.term.agent-session | Agent 会话 | Agent Session | Run 的交互 Agent 模式，绑定当前任务、ContextBundle 与工具 allowlist | D10 Agent runtime | 不是 principal、Document、长期授权 | 公共 IPC 未冻结；受控概念 `Agent Session` | type `AgentSession`; variable `agent_session` | UI“Agent 会话”; locale `term.agentSession` | Agent session | 禁止 chat=authority/session=grant | 正：一次交互 Run；反：会话自动继承全 Workspace | 首次冻结 `D10-r04` 映射；语义来自 r01 Candidate |
 | weftext.term.context-bundle | 上下文包 | Context Bundle | 面向特定 recipient 的当前受权、最小化、版本绑定输入 | D10 context/egress control | 不是 author snapshot、授权 token 或 secret container | 公共 IPC 未冻结；受控概念 `ContextBundle` | type `ContextBundle`; variable `context_bundle` | 通常不直接显示；诊断“上下文”; locale `term.contextBundle` | 无 | 禁止 prompt=context authority | 正：Model A 的 bundle 不能改发 Model B；反：ambient workspace | `D10-r01`; 无 legacy alias |
-| weftext.term.tool-value-profile | 工具值配置 | Tool Value Profile | 复用 D7 TypeSpec/V 有限子集的工具参数/结果代数 | D10 Tool Adapter | 不是任意 JSON Schema 或 D4 全值域 | 受控 profile `ToolValueProfile/1`; 公共 transport 由 adapter 决定 | type `ToolValue`; variable `tool_value` | 无直接 UI；开发诊断“工具值”; locale `term.toolValueProfile` | ToolValue | 禁止 any/open map/float fallback | 正：exact int64；反：JS double 舍入 | `D10-r01`; 无兼容 fallback |
+| weftext.term.tool-value-profile | 工具值配置 | Tool Value Profile | D10 自有 closed ToolValueProfile/ToolType/ToolValue 代数 | D10 Tool Adapter | 不是任意 JSON Schema、D7 TypeSpec/TypedLiteral alias 或 D4 全值域 | 受控 `ToolValueProfile/1`、`ToolType/1`、`ToolValue/1`；公共 transport 仍由 adapter 决定 | types `ToolValueProfile`、`ToolType`、`ToolValue`; variables `tool_value_profile`、`tool_type`、`tool_value` | 无直接 UI；开发诊断“工具值”; locale `term.toolValueProfile` | ToolValue | 禁止 any/open map/float 或 D7 alias fallback | 正：ToolType 下 exact int64 ToolValue；反：JS double 或把 D7 TypeSpec 当同一 wire | `D10-r01`; R07 分开登记三名称；无兼容 fallback |
 | weftext.term.input-slot | 输入槽 | Input Slot | 单次 invocation 的 exact bytes/media/purpose/recipient 文件输入句柄 | D10 Tool/Model runtime | 不是 path、ResourceRef 或跨调用 file handle | 受控概念 `InputSlot`; 公共 IPC 未冻结 | type `InputSlot`; variable `input_slot` | 无直接 UI；可显示“输入文件”; locale `term.inputSlot` | 无 | 禁止 filepath/path handle | 正：exact attachment bytes；反：传 `C:\Users\...` | `D10-r01`; 无 legacy alias |
 | weftext.term.tool-adapter | 工具适配器 | Tool Adapter | 把已接纳外部工具协议映射到 ToolValue 和 effect class | D10 external capability adapter | 不是 D7 author Action adapter | 公共 IPC 未冻结；manifest contribution kind `Tool Adapter`（语义名） | type `ToolAdapter`; variable `tool_adapter` | 管理 UI“工具适配器”; locale `term.toolAdapter` | tool adapter | 禁止 tool=permission | 正：本地接纳删除工具为 mutation；反：信任远端 readOnly | `D10-r01`; 无 legacy alias |
 | weftext.term.mcp-adapter | MCP 适配器 | MCP Adapter | 使用 MCP 作为发现/运输协议的 Tool Adapter | D10 Tool Adapter | MCP metadata 不是 policy/identity/permission | 公共 IPC 使用外部 MCP；Weftext 受控类别 `MCP Adapter` | type `McpAdapter`; variable `mcp_adapter` | UI“MCP 适配器”; locale `term.mcpAdapter` | MCP | 禁止 MCP server=trusted principal | 正：schema drift pending；反：发现即热执行 | `D10-r01`; 无旧 alias |
@@ -230,7 +232,7 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | weftext.term.secret-reference | 凭据引用 | Secret Reference | 指向 OS/Server secret store 中 credential 的受管引用及 generation | D10 secret control | 不是 secret bytes、作者 source、ToolValue | 受控概念 `SecretRef`; 公共 secret wire 禁止 | type `SecretRef`; variable `secret_ref` | UI“凭据”; locale `term.secretReference` | SecretRef | 禁止 token/credential bytes 当引用 | 正：transport 注入；反：进入 prompt/log | `D10-r01`; 无 secret compatibility fallback |
 | weftext.term.external-effect-intent | 外部效果意图 | External Effect Intent | 冻结 target/account/request/idempotency/approval/budget 的一次外部 mutation 请求 | D10 external-effect control | 不是 D6 transaction、author receipt 或 rollback | 受控内部类型 `ExternalEffectIntent/1`; 公共 IPC 未冻结 | type `ExternalEffectIntent`; variable `external_effect_intent` | UI“外部操作”; locale `term.externalEffectIntent` | effect intent（文档） | 禁止 transaction/rollback 同义 | 正：同 key reconcile；反：unknown 换 key 重发 | `D10-r01`; 无 legacy alias |
 | weftext.term.external-outcome-unknown | 外部结果未知 | External Outcome Unknown | 不能证明外部 mutation 是否发生或完整发生的持久结果状态 | D10 external-effect recovery | 不是 timeout、failed 或 cancelled | 受控状态 `outcome_unknown`; 外部 adapter 必须保留 | enum `ExternalOutcome::Unknown`; variable `outcome_unknown` | UI“结果未知”; locale `term.externalOutcomeUnknown` | unknown（仅外部效果上下文） | 禁止 timeout/failure/cancel 同义 | 正：send 后 response 丢失；反：自动当 failed 重试 | `D10-r01`; 无 legacy alias |
-| weftext.term.cost-reservation | 费用预留 | Cost Reservation | 收费 attempt 前对一个或多个账户原子占用的有限费用上限 | D10 cost control | 不是账单事实、approval count 或 effect idempotency | CONTROL-CONTRACT §10：`reserved→settled\|released\|uncertain`，且 `uncertain→settled\|released`；只有 settled/released 终态 | type `CostReservation`; variable `cost_reservation` | UI“费用预留”; locale `term.costReservation`（候选，未实现） | 无 | 禁止 released=zero bill；禁止 uncertain=terminal | 正：已发送零账单 `settled(0)`；反：TTL/管理员无证据释放 uncertain | `D10-r01`; `r05` 将 uncertain 明确为可恢复非终态；无 legacy alias |
+| weftext.term.cost-reservation | 费用预留 | Cost Reservation | 一个 billable attempt/account/grant/pricing/currency 的有限上限；多层 policy ceiling 在准入时检查但不是其它实际账户 | D10 cost control | 不是账单事实、approval count、effect idempotency 或单份多账户 reservation | CONTROL-CONTRACT §10：一份 `CostReservation/1`，`reserved→settled\|released\|uncertain`、`uncertain→settled\|released`；只有 settled/released 终态 | type `CostReservation`; variable `cost_reservation` | UI“费用预留”; locale `term.costReservation`（候选，未实现） | 无 | 禁止 multi-account reservation / released=zero bill / uncertain=terminal | 正：已发送零账单 `settled(0)`；反：一份 reservation 同时记两个账户 | `D10-r01`; R07 明确单 actual account；无 legacy alias |
 | weftext.term.audit-started | 审计开始记录 | Audit Started Record | 受保护步骤真正执行前耐久写入的最小安全审计事实 | D10 audit control | 不是 success、receipt 或普通 telemetry | 公共 IPC 未冻结；受控事件语义 `audit_started` | type `AuditStartedRecord`; variable `audit_started` | 通常无直接 UI；审计查看器 label“开始”; locale `term.auditStarted` | 无 | 禁止 log line=authoritative audit | 正：本地 spool 后执行；反：collector offline 即假失败 | `D10-r01`; 无 legacy alias |
 | weftext.term.money | 费用值 | Money | currency + Counter microUnits 的 exact 费用表示 | D10 cost value | 不做隐式 FX 或 binary float | 受控内部类型 `Money/1`; 公共 IPC 未冻结 | type `Money`; variable `money` | UI 按 currency 格式化；locale key 无独立概念 label | 无 | 禁止 float money / implicit conversion | 正：USD microUnits；反：跨币种自动相加 | `D10-r01`; 无 legacy alias |
 
@@ -246,6 +248,14 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | Conversion Provider / Route / PublicationReceipt | D9 | 继续限定为 conversion/publication owner | D10 裸 Provider 不得覆盖 D9 Provider |
 | author source / Provenance | D2/D3 | source 是作者 payload，Provenance 是非授权来源证据 | external input/provider state/tool result 不得叫 author source |
 | D1 capability / unavailable reason | D1 | 产品可用性继续只用 D1 closed reasons 和固定优先级 | D10 dependency state 不得新增平行产品 availability reason |
+
+
+### 13.2 追加继承 owner 门
+
+| 名称/概念 | 原 owner | D10 消费规则 | 禁止碰撞 / 负向门 |
+| --- | --- | --- | --- |
+| `SearchContribution` / `weftext.term.search-contribution` | D7 Query Algebra / D7 terminology | D10 只认证纯数据 descriptor asset、namespace proof、activation generation、完整 Catalog 集和 Registry binding；D7 继续拥有 exact `{contributionId,version,fieldId,textPath,role}` 语义并执行 Query | D10 不得改名为 ViewSpec/search-provider、增加 script/network/read/write 权限或创建 alias 作者源 |
+| `ImportJob`、`importJob`、`stageInput`、`planAtomicGroups`、`commitImportBatch` / `weftext.term.import-job` | D6 terminology registry | D9 `d9_import_*` 只消费 D6 durable job/control record；D10 最多承载所需 package/runtime dependency | D9/D10 不得把 ID、ownedNames、`storage.import_job` 或历史 firstFreeze 重新冻结为 D9 |
 
 ## 14. R05 控制、capability 与第一方 module 映射
 
@@ -304,7 +314,7 @@ weftext.term.direction_preference
 
 D10 文档中的 Draft 必须明确指 D8 `weftext.term.edit_draft`；Prepared Edit Binding 指 D8 `weftext.term.prepared_edit_binding`；Direction Preference 指 D8 `weftext.term.direction_preference`。D8 的 13 个 kind 归属由 UPSTREAM-AMENDMENTS §8.1 owner 表决定，D10 不建立 alias。
 
-D9 owner 新增/拆分概念恰为：
+D9 owner 新增/拆分概念恰为；`weftext.term.import-job` 明确排除，因为 D6 已拥有它：
 
 ```text
 weftext.term.source-artifact
@@ -315,7 +325,6 @@ weftext.term.conversion-provider
 weftext.term.conversion-route
 weftext.term.import-mapping
 weftext.term.mapping-proposal
-weftext.term.import-job
 weftext.term.coupling-group
 weftext.term.import-batch
 weftext.term.conversion-input
