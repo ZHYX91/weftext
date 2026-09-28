@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate revision r04, under staged independent re-review and not independently accepted or coordinatedly activated. This file records actual author-session input coverage, reading integrity, and candidate handoff state; it is not a Gate verdict.
+Status: candidate revision R07, author-revised after the complete independent review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d`; not independently re-accepted or coordinatedly activated. This file records input/candidate handoff state, not a Gate verdict.
 
 The integrated fixed-input baseline is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 inputs from U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the added D4 reference catalog. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
@@ -103,31 +103,32 @@ A second design-convergence pass further corrected the initial plan:
 - it no longer assumes "no upstream amendments"; unattended author submission requires an explicit coordinated D6/D7 amendment;
 - first-generation standing approval is strictly limited to the existing D7 single-owner, single-Field, exactly-one-current-Entry, one-existing-scalar-member set_field_member case;
 - D4 Registry and D10 Catalog remain separate but are activated together by Activation Binding; the D4 cumulative semantic ledger cannot roll back its pointer or delete history;
-- Tool Value reuses a finite subset of the D7 type/value algebra, and MCP is only a Tool Adapter transport;
+- ToolValueProfile/ToolType/ToolValue are a D10-owned closed algebra rather than a D7 alias, and MCP is only a Tool Adapter transport;
 - package trust fixes SHA-256 content binding plus application-level Ed25519 publisher signatures and keeps PublisherIdentity separate from NamespaceClaim;
 - external effect, idempotency, outcome_unknown, credential rotation, cost reservation, cancellation races, and audit failure now each have one normative conclusion.
 
 These are author-candidate choices and not independent acceptance.
 
+
 ## 4. Current candidate material
 
-The complete candidate in this directory is seven synchronized Chinese/English Markdown pairs:
+The complete candidate in this directory is **nine synchronized Chinese/English Markdown pairs (18 exact paths)**:
 
 - CANDIDATE.zh-CN.md / CANDIDATE.md
+- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
+- UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
 - TERMINOLOGY.zh-CN.md / TERMINOLOGY.md
 - SCENARIO-DISPOSITIONS.zh-CN.md / SCENARIO-DISPOSITIONS.md
 - IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md / IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md
-- UPSTREAM-AMENDMENTS.zh-CN.md / UPSTREAM-AMENDMENTS.md
-- CONTROL-CONTRACT.zh-CN.md / CONTROL-CONTRACT.md
 - REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
 - TASK.zh-CN.md / TASK.md
 - START.zh-CN.md / START.md
 
-A supplementary re-review record is also maintained:
+No supplementary tenth record exists; REVIEW-DISPOSITIONS is one of the nine pairs.
 
-- REVIEW-DISPOSITIONS.zh-CN.md / REVIEW-DISPOSITIONS.md
+The four fixed-S supplemental paths referenced by the author packet are `docs/design/README.md`, `docs/design/README.zh-CN.md`, `docs/design/inputs.json`, and `docs/design/snapshots/d4-reference-catalog-registry/source.json`. The first three are README/index material; only the catalog is the 49th normative source. R07 does not modify any of them.
 
-CANDIDATE is the self-contained main specification; TERMINOLOGY closes naming collisions; SCENARIO-DISPOSITIONS adjudicates mandatory/task/race scenarios item by item; Implementation Impact layers future evidence; UPSTREAM-AMENDMENTS provides exact D6/D7 companion text; TASK defines the current author-to-independent-review process; START records actual input coverage.
+CANDIDATE is the self-contained main specification; CONTROL-CONTRACT uniquely owns D10 closed management/current/error/rule wires; TERMINOLOGY closes naming collisions; SCENARIO-DISPOSITIONS preserves and adjudicates mandatory/task/race scenarios; Implementation Impact layers future evidence; UPSTREAM-AMENDMENTS remains inactive companion text; REVIEW-DISPOSITIONS records independent findings and author landing; TASK defines process; START records handoff state.
 
 ## 5. Current design selection and still-unactivated parts
 
@@ -139,8 +140,10 @@ The candidate also does not claim implementation of OS sandbox, real MCP/model/c
 
 ## 6. Independent-final-review status
 
-Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`. Formal coverage is 16/16 candidate files and 44/49 upstream inputs; the formal ledger is 1 P1 + 8 P2 open, and the final five D2/D5 inputs are still being independently read. The temporary RelationDag judgment was withdrawn and causes no rename here.
+Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` completed 49/49 upstream reading and ended REVISE; it is historical evidence only.
 
-R06 inherits R05 authorization, transaction semantics, cost recovery, stop, bootstrap profile, public control wire, and package/module mapping and adds D8/D9 owner-terminology companions, U12 import preconditions, and bounded consistency cleanup. Therefore old-C reading coverage, finding results, and interim judgments do not transfer to R06. After R06 is fixed it requires a new complete joint final review as a new candidate.
+The complete independent final review of fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and upstream **49/49**, with no reading gap. Final verdict: **REVISE**, P0=0, P1=1 (`JR001`), P2=8 (`JR002`–`JR009`); terminology failed and bilingual translation failed. D8/D9 produced no additional findings; Q01/Q02 remain closed and Q03 owner/composition review is complete.
 
-Author self-checks, documentation CI, and finite models prove only their own artifacts. They establish neither product implementation/release/surface availability nor an independent Gate pass. D6/D7/D3 companion amendments remain inactive proposals; do not merge, release, activate, or start A2.
+R07 is the author remediation of that complete issue set. Neither the old C35 review nor the R06 18/18+49/49 review counts as an independent read/pass of the new R07 commit. REVIEW-DISPOSITIONS marks every JR row only as author revised / pending independent re-review.
+
+Author checks, documentation CI, and bounded models prove only their artifacts. All D6/D7/D3/D8/D9 companion amendments remain inactive proposals; do not merge, release, activate, or start A2.
