@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 场景裁决
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate。本文件把固定上游输入中的 D10 路由、TASK 强制故障和本候选新增竞争边界逐项落到可执行裁决。disposition 只评价 D10 候选如何承接该场景，不表示测试已经通过。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：固定 R06 完整独立 REVISE 后的 R07 作者修订；全部既有 scenario ID/裁决继续属于候选，只按 JR001–JR009 补正正负验证义务，等待新的独立复核。
 
 执行模式列只有四类：automatic 表示在本文 closed 规则下允许无需逐次人工确认继续；interactive 表示可以准备但必须逐次确认；unsupported 表示本代明确不可用；deferred 表示由具名 所有者 的未来合同冻结后才能开放。
 
@@ -34,11 +34,11 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：ca
 | D10-U15 | Intake 原要求：§9 第37项 | Settings/Marketplace UI 状态成为 capability authority | reject | unsupported | UI 只是 Activation/Policy/Catalog 的投影 | 隐藏/显示按钮不改变 Core eligibility |
 | D10-U16 | Intake 原要求：§8.5.1；§9 第37、43、54项 | 本地化 模块/清单 名改变 规范 ID | reject | unsupported | 规范 命名空间/贡献项 ID 独立 区域设置 | 中英/RTL 切换 请求 字节 不变  |
 | D10-U17 | 候选推导攻击：D1 §4.5/§9 Mobile 边界 + D9 conversion；非 Intake 直接条目 | Mobile 上传文件后自动委托 Server 转换/Agent | reject | unsupported | Mobile 只能普通附件；无转换/Agent 委托/审批 | 上传不触发 worker/模型，返回 unsupported_surface |
-| D10-U18 | Intake 原要求：§13.1.5；上游 D7 Query Algebra §6 SearchContribution | 未接纳 贡献项 动态注入 SearchContribution/模式定义 | reject | unsupported | D10 认证并 代际-bind Contribution；D7 grammar 不变 | 运行时 discovery 新 贡献项 只 pending，不进入 当前 query |
+| D10-U18 | Intake 原要求：§13.1.5；上游 D7 Query Algebra §6 SearchContribution | SearchContribution 接纳与动态注入边界 | revise | automatic | CONTROL §4 在 `view` 下承载 exact D7 纯数据 descriptor，绑定 asset digest/owner/Registry/完整 Catalog generation，D7 grammar/授权不变 | 第一方 `people/search-name` 合法安装+激活+进入 D7 搜索；runtime discovery 未激活时只 pending，不改变 current query input |
 | D10-U19 | Intake 原要求：§6.5、§8.3 Packs、§9 第28、48、50项；上游 D4 unknown/unavailable 保留 | 禁用规则 pack 后把作者值删除/默认化 | reject | unsupported | 相关派生能力 不可用/reset，作者 源 保留 | disable/reenable 与 raw 源 digest 不变 |
 | D10-U20 | Intake 原要求：§8.5.1–§8.5.4；§9 第53、54、57项 | D10 新术语覆盖 D1–D9 owned name 或 wire alias 漂移 | revise | automatic | Terminology 文件与 controlled-name gate | 受控 positive surface 扫描；历史 prose 排除 |
 | D10-U21 | Intake 原要求：§2.5、§8.3 第6项、§9 第39、56项；上游 D9 Templates | Node/Office Template 被当作长期 Agent 脚本或任意 callback | reject | unsupported | Template 仍 D9 一次性构造/渲染；D10 不执行其普通文字 | template text 含 工具 指令只作不可信文字 |
-| D10-U22 | 上游合同：D7 Query Algebra §6 SearchContribution | SearchContribution 内带脚本/网络 或 提供方 不可用 时静默跳项 | reject | unsupported | 保持 D7 纯数据 closed descriptor；D10 只认证来源/代际 | 缺 贡献项 整体按原 D7 不可用，不改 grammar |
+| D10-U22 | 上游合同：D7 Query Algebra §6 SearchContribution | SearchContribution 纯数据闭合、完整集合与 unavailable member 行为 | revise | automatic | D10 验证 exact asset/root/owner/Field/textPath 与完整集合；descriptor 不授 script/network/read/write/alias 权威 | 合法 descriptor 可搜索；script/network/extra member 拒绝；wrong owner/digest/duplicate/遗漏 active member 阻断激活；selected unavailable contribution 走原 D7 unavailable，禁止静默跳过 |
 | D10-U23 | 上游合同：D7 Execution §5–§6 | Query row/evidence 被 Agent 当长期写授权 | reject | unsupported | evidence/selector 仍 TTL/revision/dependency/当前 授权-bound | A→B→A、授权 change、结果 reset 后旧 evidence 失败  |
 | D10-U24 | 上游合同：D8 Main §2–§3 / Interfaces §4–§5 | 模型 输出伪装成人类 Draft、自动点击确认 | reject | unsupported | D8 edit 仍 interactive；Automation 不创建 EditSession | dirty Draft、composition、stale 预览、unknown 回执 全链 |
 | D10-U25 | 上游合同：D9 Workers §1–§2 | 把 D9 conversion worker 变成有网络的通用工具 宿主 | reject | unsupported | D9 worker 继续专用无 workspace/网络 默认；D10 executor 独立 | worker sandbox 不因 D10 网络能力扩大 |
@@ -68,7 +68,7 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：ca
 | D10-F17 | TASK | unknown 外部 结果 换新 idempotency key 自动重试 | reject | unsupported | 原 EffectIntent/key；无可靠 reconcile 则停止 | 超时、eventual consistency、window expiry  |
 | D10-F18 | TASK | idempotent 效果 被认为 retry 不收费 | reject | unsupported | 每 attempt 独立 CostReservation | 重试费用、billing delay、unknown charge |
 | D10-F19 | TASK | 并发 Runs 都消费 Standing Approval 最后一次 | accept | automatic | ApprovalUse count reservation 与 D6 planning CAS；authoritative terminal_failed 才释放为 released_terminal | N=1 双并发至多一个 reserved；terminal replay 不二次释放 |
-| D10-F20 | TASK | 并发 Runs 都消费最后一笔费用预算 | accept | automatic | 多账户原子 CostReservation | Run/Lease/Automation/deployment 四账户竞争 |
+| D10-F20 | TASK | 并发 Runs 都消费最后一笔费用预算 | accept | automatic | 一份 CostReservation 只绑定一个 attempt/实际 account/grant/pricing/currency；同一 admission 原子检查全部适用 Run/Lease/Automation/Workspace/deployment 多层 ceiling | 最后一笔容量并发至多一个 charge 获准；真正可分别归属的第二实际账户用独立 reservation/evidence，同一费用绝不重复记账 |
 | D10-F21 | TASK | 费用未知或 author terminal_failed 后错误释放额度 | reject | unsupported | CostReservation=uncertain 持续占原上限；费用状态与 approval reservation 分域 | 崩溃/超时/重启/author abort 均不自动 release；只有证明收费尝试未开始才 released |
 | D10-F22 | TASK | 提供方 超过已接纳价格上限仍静默继续 | revise | automatic | 记录 anomaly、冻结 capability、要求管理处理 | simulated overcharge，不自动提高 ceiling |
 | D10-F23 | TASK / Candidate §18 | 已实际发送请求且可靠账单为 0，被错误标成 released | reject | unsupported | 发送后有最终计费事实一律 settled(actual)，零费用为 settled(0)；released 仅证明收费执行从未开始 | 发送前取消→released；实际发送零账单→settled(0)；费用不可证→uncertain |
@@ -80,7 +80,7 @@ revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：ca
 | D10-F29 | Candidate §8/§20 | 同 Run 的原 D6 planned request 恢复时，因为 lease 已无剩余次数而返回 `delegation_exhausted` | reject | unsupported | planned 恢复先证明原 `LeaseRunUse/1` 连续性，复用既有准入，不重新做新 Run count gate；若记录缺失/连续性不可证则 `state_unavailable`，不是重新消费 | `maxRuns=1`、remaining=0 的原 planned 恢复可继续；新 Run 同时应被 `delegation_exhausted` 拒绝 |
 | D10-F30 | Candidate §18 / CONTROL-CONTRACT §10 | `uncertain` reservation 后来得到同 attempt 的可靠最终账单，却没有规范恢复边而永久占用 | reject | unsupported | `uncertain` 是可恢复非终态；同 reservation/attempt/account/currency/pricing 的 final bill 通过 CAS 产生 `CostSettlementDecision/1` 并原子转 `settled(actual)` | reserve100→send→crash→`uncertain`→bill20→`settled(20)`，只返80；response-loss replay 不双返 |
 | D10-F31 | Candidate §18 / CONTROL-CONTRACT §10 | wrong-attempt/non-final 账单、管理员无证据填0或 effect idempotency 导致提前退款 | reject | unsupported | 只有 final bill 或 never-started EvidenceTicket 可结算；不足证据保持 `uncertain` 和完整 upper bound；sent-zero=`settled(0)` | 两 reconciler 竞争至多一 winner；wrong account/currency、aggregate un-attributable、manual zero 均不改余额 |
-| D10-F32 | CONTROL-CONTRACT §8 | stable key 写 r5 已成功但响应丢失，另一个合法请求已把对象改到 r6，原请求重试 | accept | automatic | 当前披露授权后先重放 saved result，再处理 current-state read；historical success 不因 current revision 变化被误拒绝 | r5 commit→lost response→r6 update→same-key retry 返回原 r5 outcome，不重复 create/mutate |
+| D10-F32 | CONTROL-CONTRACT §7–§8 | stable-key r5 成功响应丢失，另一请求把 current state 更新到 r6，随后同时查询历史 result 与 current exact-ref | accept | automatic | `d10_control_result` 从原 D6/host saved decision 投影 r5；`d10_control_read(ControlRef)` 在当前披露授权后另投影 r6 | r5 commit→lost response→r6 update→same-key result 返回 r5 outcome、exact-ref read 返回 r6；applied 连续性不可证明时 `state_unavailable`，不得降级 prepared |
 | D10-F33 | CONTROL-CONTRACT §6 | `ResourceUseGrant/1` 续期/换 revision 清零 spent/held/attempts，或换新 grant 抹掉旧 account liability | reject | unsupported | 同 grantId usage 连续；变 grantee/account/kind/currency 必须新 grantId；旧 reservation 与实际账户义务保留 | renew 限额、rotate grant、uncertain invoice 三组竞争；任何路径都不能重置已占用额度 |
 | D10-F34 | CONTROL-CONTRACT §11 + UPSTREAM-AMENDMENTS §3.5 | emergency stop 在 Run admission 或 D6 final author commit 的 check 后插入，形成越权窗口 | reject | unsupported | stop 与 admission 同 store linearization；D6 final transaction 在真实写序列化内重验 stop latch | stop-before/admission-before、stop-before/commit-before 四序列；先线性化的结果唯一且已 committed 不倒推 |
 | D10-F35 | CONTROL-CONTRACT §11 | emergency stop 在外部请求已入队但真正发送前发生，transport 仍发送 | reject | unsupported | stop/send 共用 send fence，持有到第一次不可撤回的真实 send handoff；queue admission 不算 send | stop-before-send→无 send；send-handoff-before-stop→保留 started/outcome_unknown；stop 后结算/evidence 仍可运行 |
