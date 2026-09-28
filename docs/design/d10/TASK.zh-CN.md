@@ -9,13 +9,13 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision `D10-r07-independent-review-fixes-2026-09-28`。固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE（P0=0、P1=1 JR001、P2=8 JR002–JR009，术语/翻译不通过）；R07 是统一作者修订，等待新的独立复核。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S 的完整独立联合终审已完成候选18/18、S49/49，结论 REVISE：P0=0、P1=1（`B03-P1-01`）、P2=10（`B01-P2-01`、`B02-P2-01`、`B02-P2-02`、`B02-P2-03`、`B03-P2-01`、`B03-P2-02`、`B03-P2-03`、`B03-P2-04`、`B10-P2-01`、`B11-P2-01`）；整体、术语与中英语义均需修订。R08 是作者统一修订，不会自行关闭任何 finding。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
 ## 固定输入
 
-使用总控给定的固定 Git commit。必须完整读取 ../inputs.json 所列设计输入，并维护实际阅读覆盖。当前作者会话已完成 U 原 48/48，并补读 S 新增的 D4 reference catalog，当前输入覆盖为 49/49；START 明确区分历史 48/48 与本轮新增第 49 份。
+使用总控给定的固定 Git commit，并按 actor/lineage 分开记录阅读证据，不能合并继承。原作者 lineage 历史完成 S49/49；本接续作者亲自完成 S16/49 全文，D9 workers/export 与 templates 只做 dependency-scoped 局部读取，不计全文；固定 R07 的独立联合评审另行完成 S49/49。三套覆盖互不替代，workflow/tool summary 不计全文；START 记录准确来源。
 
 上游 D1–D9 在协调修订真正接受前持续权威。快照中的旧模型、旧阶段、旧授权与历史 candidate 标签仅作为原文历史，不改变当前任务包的执行边界。
 
@@ -59,7 +59,7 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 作者只修改 docs/design/d10/ 中必要设计材料和既有 PR 的标题/正文。不得修改输入快照、产品实现、brand、仓库权限或分支保护；不得合并、发行或开始 A2。
 
-作者完成条件是：docs/design/d10/ 九对双语/18 exact path 全部同步为 R07；固定 S 逐字不改；四个引用的 S 补充路径准确为 `docs/design/README.md`、`docs/design/README.zh-CN.md`、`docs/design/inputs.json`、`docs/design/snapshots/d4-reference-catalog-registry/source.json`，其中只有最后一份是第49个规范源；所有配套 amendment 明确未激活；实际文档检查/CI 已读取并如实报告；任何 pending/failure 不写成 pass。
+作者完成条件是：docs/design/d10/ 九对双语/18 exact path 全部同步为 `D10-r08-joint-review-fixes-2026-09-28`；固定 S 与 docs/design/d10/ 之外全部路径逐字不变；中英文 scenario 保持相同 125 个 ID 且分支裁决一致；最终候选适用的 repository documentation/input 检查通过；所有配套 amendment 明确未激活；阅读/CI 证据如实报告，任何 pending/failure 不写成 pass。R08 已改变授权、transaction/safety、public wire、恢复、external-send 与 D8/D9 interface-owner 合同，因此作者完成后必须对固定 R08 做**fresh 完整独立联合评审：候选18/18 + S49/49**，不能继承 R07 做差分通过。
 
 ## 当前分批修订约束
 
@@ -76,10 +76,22 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 这些条款在 D6/D7 配套修订共同接受前仍只是候选提案，不改变当前上游权威。
 
+R08 还冻结以下已经由 CONTROL/CANDIDATE/UPSTREAM/SCENARIO/IMPLEMENTATION 拥有的作者阶段边界：
+
+- 无人值守作者路径只能使用具名第一方 Core field-member adapter 与 closed `FieldMemberTask/1`；task intent 与 Standing Approval 分域，任意 ToolValue 绝不能成为 NodeRef/FieldId/selector/author request；
+- control history 内部保留完整 canonical B 防重，public history 只返回七-kind summary，绝不返回 A/B/M；
+- external consent 绑定 stable effect Ref + requestDigest；lifecycle revision 与 immutable request semantics 分域；public current view 不披露 payload/key/secret/reservation identity；
+- emergency stop 是专用同库 D10 safety transaction，使用 exact-target 防重、预留容量、receipt/result replay，不走普通 prepare，也不建第二 author ledger；
+- D8 13 kind 与 D9 17 public kind 各有一个 technical-interface owner；consumes/returns/operates-on 数据继续保留原 domain owner，包括 D6 ImportJob。
+
 ## 独立审查
 
 完整候选形成固定提交后，交给新的独立 Chat GPT-6 Pro 从零审查。作者自查不算独立 Gate。
 
-历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成 49/49 且结论 REVISE。R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE，开放 JR001 P1 与 JR002–JR009 P2，术语/翻译不通过，D8/D9 无新增。此前两项已澄清问题保持关闭，owner/组合核验已完成。该完整覆盖只作为 R07 的历史输入，不能转记为 R07 已接受；R07 必须重新独立复核。
+历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 与固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 继续只作为历史 REVISE 记录。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 的完整独立联合终审完成候选18/18、S49/49，结论 REVISE：P0=0、P1=1（`B03-P1-01`）以及 REVIEW-DISPOSITIONS 中记录的十项 P2；整体、术语与中英语义均需修订。该完整 R07 review 只为作者修订提供证据，不代表 R08 已接受。
+
+九对 R08 文档全部同步且 document/input gate 通过后，应固定新的 R08 commit，并从零进行 fresh 完整独立联合评审：候选18/18 + 固定 S49/49。旧 R07 的阅读覆盖、finding、CI 或 verdict 都不能作为新的 public-wire/授权/transaction 改动已经通过的证据。必要上游修订继续未激活，须在后续 coordinated acceptance、version、activation 与验收证据阶段另行处理。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。
+
+R08-B 之前的作者检查点实测记录：head `29ecca0cab43652a2e60f9997a68ec6ba8f6ca2b`；Design documents run `36383316785` 仅因 TERMINOLOGY.zh-CN.md 与 UPSTREAM-AMENDMENTS.zh-CN.md 已知 19 处 mixed-prose 失败，因此 input checks 被 skipped。总控观察时 source-gate run `36383316792` 仍在运行，并包含已知 rust-source 文档失败和既有 ui-source 依赖审计失败。这只是带 SHA 的执行记录，不是永久合同或 pass 声明。
