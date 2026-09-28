@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 独立审查问题处置
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：R08-B 作者处置/交接修订。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成候选18/18、S49/49，结论 REVISE：P0=0、P1=1、P2=10；整体、术语及中英语义均需修订。R08 作者修订不会自行关闭任何 finding，最终固定 R08 仍需新的完整独立联合复核。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：完整 R08 作者处置记录。固定 R07 已完成候选18/18 + S49/49 并结论 REVISE（P0=0、P1=1、P2=10）。当前11项 finding 全部保持开放；本作者记录等待固定 R08 候选的 fresh 完整独立复核。
 
 
 ## 1. 审查覆盖边界
@@ -44,9 +44,9 @@ R08 是对这组固定 R07 问题的作者修订。旧 R06/R07 覆盖只作为�
 | B02-P2-02 | P2 | SCENARIO EN13/32/115/133 | 按真实首代分支重分 U12/T02/E05。U12 分开 unsupported ICS、已支持普通显式 fresh import 与 D3 binding/Adopt 状态；T02 pending admission 是自动状态处理但不使工具 callable；E05 对同一 immutable external request 保持 `outcome_unknown`，回读 miss 既不是成功也不是安全重发依据。 | SCENARIO U12/T02/E05/F17；CANDIDATE §17；IMPLEMENTATION §15 | 不凭空开放 ICS；独立 ordinary import 保持 fresh；同 request 只恢复原结果；active_live 不自动 upsert；retired 需显式 Adopt；pending tool 不可运行；unknown effect 不换 request/key | 作者修订已落盘；待 fresh 独立复核 |
 | B02-P2-03 | P2 | CONTROL EN553–568、EN629–636 | 内部继续保存完整 canonical B 用于 stable-key equality；public prepared history 改为七种 operation kind 的 `ControlPreparedHistory/1` 摘要。历史 result 不返回嵌套作者请求 A、完整 B 或生成 submit request M；首次 prepare 仅在当前披露覆盖 B 与嵌套 A 后交付 M。已 applied 的 prepare replay 返回 historical applied arm，不伪装 fresh prepared。 | CONTROL §7–§8；SCENARIO F32；IMPLEMENTATION §§2.1/4.1/15 | 同完整 B 防重、same key/different B 冲突；r5 saved history 与 current r6 分开；当前授权先行；applied linkage 不可证明为 `state_unavailable`，不降格 prepared | 作者修订已落盘；待 fresh 独立复核 |
 | B03-P2-01 | P2 | CONTROL EN706–707、EN943–949；CANDIDATE EN388–400 | 闭合 external-effect 返回树：immutable `FrozenEffectBytes/1` / `ExternalEffectIntent/1`、准确 `ExternalExecutionBinding/1`、stable effect Ref + requestDigest consent、closed `ExternalEffectCurrentView/1`，并定义 `HostOrWorkspacePrincipal/1`。lifecycle revision 不再兼任 frozen request identity。 | CONTROL §§2/7/11；CANDIDATE §17；SCENARIO E05/F17/F35；IMPLEMENTATION §§8/11.1/15 | current projection 不泄露 payload/target/key/proof/secret/reservation identity；prepared→submitting 不使 consent 自失效；frozen bytes/target 不可替换；sendAttemptId 与 billable attempt 分域；D9 worker 不继承 D10 egress | 作者修订已落盘；待 fresh 独立复核 |
-| B03-P2-02 | P2 | START EN106 / CN105 | R08-B 中英统一说明 `ToolValueProfile/1`、`ToolType/1`、`ToolValue/1` 是 D10 自有受限代数；具名 Core field-member adapter 明确消费原 D7 TypedLiteral/ResolvedCodeScope；普通 ToolValue 不能成为 NodeRef、FieldId、selector 或 author request。 | START §3/§5；CONTROL §3/§4/§7；TERMINOLOGY；CANDIDATE §§13–15 | 中英 owner 声明与 CONTROL 一致；旧“复用 D7 有限子集”只能作为明确已取代历史或被删除 | 本 R08-B 批次作者修订已落盘；待 fresh 独立复核 |
-| B03-P2-03 | P2 | REVIEW EN91 / CN90；CN81 | 删除过时“仍在读旧 C”“六项”和未来 R05 当前态，改为固定 R07 C18/18+S49/49 已完成 REVISE 的记录，并新增当前 11 finding R08 作者处置表。旧 R06/R07 记录继续明确为历史。 | REVIEW §§1–7；TASK/START 交接 consumers | 当前 ID 恰为11项、1个P1+10个P2；当前文本不再声称旧 review 仍在运行，也不把 R08 写成独立接受 | 本 R08-B 批次作者修订已落盘；待 fresh 独立复核 |
-| B03-P2-04 | P2 | TASK EN19/CN18；START EN17/CN16；IMPLEMENTATION §16 | 阅读证据分账：原作者 lineage 历史 S49/49；本接续作者全文 S16/49；D9 workers/export、templates 只算依赖局部；固定 R07 独立评审另行 S49/49。三套证据互不继承。 | TASK Fixed Inputs/Completion/Review；START §§1–2/6；IMPLEMENTATION §16 | 三套覆盖始终分开；本 R08-B 批次不增加 S 全文计数；workflow/tool summary 不算全文 | 本 R08-B 批次作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-02 | P2 | START EN106 / CN105 | R08 中英统一说明 `ToolValueProfile/1`、`ToolType/1`、`ToolValue/1` 是 D10 自有受限代数；具名 Core field-member adapter 明确消费原 D7 TypedLiteral/ResolvedCodeScope；普通 ToolValue 不能成为 NodeRef、FieldId、selector 或 author request。 | START §3/§5；CONTROL §3/§4/§7；TERMINOLOGY；CANDIDATE §§13–15 | 中英 owner 声明与 CONTROL 一致；旧“复用 D7 有限子集”只能作为明确已取代历史或被删除 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-03 | P2 | REVIEW EN91 / CN90；CN81 | 删除过时“仍在读旧 C”“六项”和未来 R05 当前态，改为固定 R07 C18/18+S49/49 已完成 REVISE 的记录，并新增当前 11 finding R08 作者处置表。旧 R06/R07 记录继续明确为历史。 | REVIEW §§1–7；TASK/START 交接 consumers | 当前 ID 恰为11项、1个P1+10个P2；当前文本不再声称旧 review 仍在运行，也不把 R08 写成独立接受 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-04 | P2 | TASK EN19/CN18；START EN17/CN16；IMPLEMENTATION §16 | 阅读证据分账：原作者 lineage 历史 S49/49；本接续作者全文 S16/49；D9 workers/export、templates 只算依赖局部；固定 R07 独立评审另行 S49/49。三套证据互不继承。 | TASK Fixed Inputs/Completion/Review；START §§1–2/6；IMPLEMENTATION §16 | 三套覆盖始终分开；本 R08 批次不增加 S 全文计数；workflow/tool summary 不算全文 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
 | B10-P2-01 | P2 | UPSTREAM EN309/311/320–325；CN308/310/319–324；SCENARIO P18 | 把含糊 kind→concept 共 owner 改成每个 D8 kind 一个 technical-interface owner。13 kind 全部映射；Draft/Draft Projection/Draft Edit Map/Prepared Edit Binding 与上游 value 只是 consumes/returns 数据。D8 domain concept 仍恰为九个；wire/IME/confirm/Undo 不改。 | UPSTREAM §8.1；SCENARIO P18；IMPLEMENTATION §§13/15 | 精确 13-kind 唯一 owner 扫描；`d8_draft_text_replace/write` 消费 Draft Edit Map 但不共享 kind owner；dirty Draft 允许合法后台 D7 commit 并按 stale/rebase 处理；Undo 不回滚后续后台 commit | 作者修订已落盘；待 fresh 独立复核 |
 | B11-P2-01 | P2 | UPSTREAM EN335/386–392；CN334/385–391；SCENARIO P19 | 为17个 D9 public kind 各给一个 technical-interface owner，并把 consumes/returns/operates-on 分开。36个 D9-owned naming row 继续归 D9；继承 `weftext.term.import-job` 保留 D6 concept ID、ownedNames、`storage.import_job` 与历史 firstFreeze。D2/D3/D6/D7 名称保留原 owner。 | UPSTREAM §8.2；SCENARIO P19；IMPLEMENTATION §§13/15 | 精确 17-kind 唯一 owner + 36-D9/1-inherited-D6 naming 检查；`d9_import_state` operates on D6 ImportJob 但不拥有它；PublicationReceipt 只证明 publication；D7ResultPin nested schema/V 继续归 D7 | 作者修订已落盘；待 fresh 独立复核 |
 
@@ -99,16 +99,3 @@ D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上�
 在该交接之前，作者完成门继续开放：九对双语/18个 exact path 必须全部一致到 R08；固定 S 与全部非 D10 路径保持不变；125 个 scenario ID 集合及分支裁决中英一致；最终候选适用的仓库文档检查通过；REVIEW/TASK/START 只能报告真实阅读与 CI 证据，不能把 pending 工作升级成通过。
 
 当前 11 项 finding 在新的独立 verdict 前全部保持开放。必要的 D3/D6/D7/D8/D9 配套修订继续只是提案；后续 coordinated acceptance、version、activation 与验收证据和作者文档完成是不同阶段。任何作者自查、旧 R07 的 S49/49 覆盖、CI 结果或旧独立 verdict 都不能建立 R08 acceptance。
-
-
-
-后续 reviewer 至少应对本表六项重新构造原反例，并检查：
-
-- `approval_unavailable/preflight` 是否是 D6 owner 下唯一、非永久且不泄漏的 race 结果；
-- planned-preview recovery 是否真正只读原保存语义，并与 committed effects transport、旧 preview TTL 和 current authorization 一致；
-- released_terminal 是否只在 authoritative abort 发生，并与费用状态完全分开；
-- raw no-op 是否没有伪造 footprint/effect/version；
-- settled(0)、released、uncertain 是否互斥且恢复一致；
-- LeaseRunUse、occurrence claim、terminal outcome、trusted time 是否能阻止重启/重扫/启停造成次数重置或重复 Run。
-
-本文件不能把“作者已修改”写成“独立已关闭”。独立终审仍在读取旧固定 C 的上游输入；R05 固定后必须作为新候选从零进行完整联合终审，只有新的独立 verdict 才能形成最终 D10 Gate 结论。
