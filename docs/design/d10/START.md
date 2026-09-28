@@ -141,3 +141,15 @@ The D6/D7 Standing Approval amendment is not jointly accepted. Therefore, even w
 The candidate also does not claim implementation of OS sandbox, real MCP/model/connector services, credential storage, cost system, real Core amendment, or five-surface UI. Those evidence items remain pending in Implementation Impact.
 
 ## 6. Independent-final-review status
+
+Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` and fixed R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` remain historical REVISE records.
+
+The complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and S **49/49** with no normative reading gap. Final result: **REVISE**, P0=0, P1=1 (`B03-P1-01`), P2=10 (`B01-P2-01`, `B02-P2-01`, `B02-P2-02`, `B02-P2-03`, `B03-P2-01`, `B03-P2-02`, `B03-P2-03`, `B03-P2-04`, `B10-P2-01`, `B11-P2-01`). Overall, terminology, and bilingual semantics all require revision. R08 is the author remediation and closes none of these findings by author assertion.
+
+All D3/D6/D7/D8/D9 companion amendments remain inactive proposals. Author checks, documentation CI, and bounded models prove only their artifacts; no merge, release, activation, or A2/product implementation is authorized by this handoff.
+
+## 7. Next completion and review gate
+
+The complete R08 author candidate consists of the nine bilingual pairs / 18 exact paths in this directory. Fixed S and every path outside docs/design/d10/ must remain unchanged; the English/Chinese scenario corpus must retain the same 125 IDs and branch classifications; and the applicable repository documentation/input checks must pass. Reading and CI evidence must be reported at the actual actor/layer and no pending/failure may be called pass.
+
+After the final R08 commit is fixed, perform a **fresh complete independent joint review from scratch: candidate18/18 + fixed S49/49**. R07's completed 18/18+49/49 review cannot be inherited as a differential pass because R08 changes public wire, authorization, transaction/safety, recovery, external-send, and D8/D9 interface-owner contracts. Any required upstream amendment still needs later coordinated acceptance, versioning, activation, and acceptance evidence.
