@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对固定 S 的完整独立联合终审已完成候选18/18、S49/49，结论 REVISE（P0=0、P1=1、P2=10；整体、术语与中英语义均需修订）。R08 是作者统一修订，尚未经新的独立复核、接受或协调激活。本文件记录输入/候选交接状态，不是 Gate verdict。
+状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`；完整 R08 作者修订候选，等待 fresh 完整独立联合评审。固定 R07 已按候选18/18 + S49/49 完整评审并结论 REVISE（P0=0、P1=1、P2=10）；该历史评审不等于 R08 已接受。本文件记录交接状态，不是 Gate verdict。
 
 固定输入基线已整合为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 包含旧 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份输入和新增 D4 reference catalog。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
@@ -140,27 +140,3 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 本候选也不声称 OS sandbox、真实 MCP/model/connector 服务、credential store、费用系统、真实 Core amendment 或五端 UI 已实现。Implementation Impact 中这些证据继续 pending。
 
 ## 6. 独立终审状态
-
-历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 与固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 继续只作为历史 REVISE 记录。
-
-固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成候选 **18/18**、S **49/49**，规范正文无阅读缺口。最终结果：**REVISE**，P0=0、P1=1（`B03-P1-01`）、P2=10（`B01-P2-01`、`B02-P2-01`、`B02-P2-02`、`B02-P2-03`、`B03-P2-01`、`B03-P2-02`、`B03-P2-03`、`B03-P2-04`、`B10-P2-01`、`B11-P2-01`）；整体、术语与中英语义均需修订。R08 是作者统一修订，不能靠作者声明关闭任何 finding。
-
-所有 D3/D6/D7/D8/D9 配套 amendment 继续只是未激活提案。作者检查、documentation CI 与 bounded model 只能证明自身 artifact；本交接不授权 merge、release、activation 或 A2/product implementation。
-
-## 7. 下一完成门与评审门
-
-最终固定 R08 前，**九对双语 / 18 exact path** 必须全部一致到 `D10-r08-joint-review-fixes-2026-09-28`；固定 S 与 docs/design/d10/ 之外全部路径保持不变；中英文 scenario corpus 保持相同 **125 个 ID** 且分支分类一致；最终候选适用的 repository documentation/input 检查通过。阅读与 CI 证据必须按真实 actor/layer 报告，任何 pending/failure 都不能称 pass。
-
-随后固定最终 R08 commit，并**从零进行 fresh 完整独立联合评审：候选18/18 + 固定 S49/49**。R07 已完成的 18/18+49/49 不能继承为差分通过，因为 R08 已改变 public wire、授权、transaction/safety、恢复、external-send 与 D8/D9 interface-owner 合同。任何必要 upstream amendment 仍需后续 coordinated acceptance、version、activation 与验收证据。
-
-仅作 R08-B 前检查点实测记录：head `29ecca0cab43652a2e60f9997a68ec6ba8f6ca2b`；Design documents run `36383316785` 只因 TERMINOLOGY.zh-CN.md 与 UPSTREAM-AMENDMENTS.zh-CN.md 已知 19 处 mixed-prose 失败，因此 input checks 被 skipped。总控观察时 source-gate run `36383316792` 仍在运行，并包含已知 rust-source 文档失败和既有 ui-source 依赖审计失败。这只是带 SHA 的执行记录，不是规范状态或 pass 声明。
-
-
-
-历史固定 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 已完成上游 49/49，结论为 REVISE；只保留为历史证据。
-
-固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立终审已完成候选 **18/18**、上游 **49/49**，无阅读缺口。最终 verdict：**REVISE**，P0=0、P1=1（`JR001`）、P2=8（`JR002`–`JR009`）；术语不通过、双语翻译不通过。D8/D9 无新增 finding；此前两项已澄清问题维持关闭，owner/组合核验已完整结束。
-
-R07 是落实该完整问题集的作者修订。旧 C35 的 review 和 R06 的 18/18+49/49 都不能冒充新 R07 commit 已被独立阅读或通过。REVIEW-DISPOSITIONS 中每条 JR 只标记作者已修、等待独立复核。
-
-作者检查、文档 CI 和有界模型只能证明自身 artifact。所有 D6/D7/D3/D8/D9 配套修订继续只是未激活提案；不得合并、发布、激活或开始 A2。
