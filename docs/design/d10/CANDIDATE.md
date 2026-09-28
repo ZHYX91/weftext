@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate author revision pending a new complete independent joint final review of a fixed R05 candidate. This candidate continues to use the original 48 inputs at fixed upstream U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the supplemental D4 reference catalog at S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; author coverage is 49/49 and historical 48/48 records keep their original context. Independent final review still targets old fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74`: candidate 16/16, upstream 44/49, with 1 P1 + 8 P2 formally open; the final five D2/D5 inputs are still being independently read. R06 only adds D8/D9 owner-terminology companions, the U12 import preconditions, and bounded consistency cleanup on top of R05, so old-C coverage cannot be carried forward as R06 acceptance. This document does not mean the Gate passed, the product is implemented, a runtime capability is available, an upstream amendment is active, or A2 may start.
+revision: D10-r07-independent-review-fixes-2026-09-28; status: author-revised R07 candidate after the complete independent review of C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` and S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed 18/18 candidate and 49/49 upstream reading and returned REVISE: P0=0, P1=1 (JR001), P2=8 (JR002–JR009), terminology failed, translation failed. R07 contains the author fixes and awaits fresh independent re-review; it is not independently accepted, implemented, released, activated, merged, or an A2 start authorization. Historical C=`35fab950dabedfb92c9f12858701be8afe6faa74` also completed 49/49 with REVISE and is history only.
 
 ## 1. Selection and problem boundary
 
@@ -73,6 +73,8 @@ The **exact normative contract** for R05 management authority, closed bodies, st
 The D4 Registry remains the only semantic namespace/schema authority. D10 authenticates package/publisher/namespace claims, installed assets, and contribution origins, then supplies the complete candidate `RegistrySnapshot/1` and `RegistryBinding/1` to existing D4 validation, evolution, and catalog loading. D10 adds no Registry member and changes no D4 Field/Facet/Relation/Calendar/Unit semantics.
 
 D10 separately maintains a Capability Catalog that records each executable or pure-data contribution's exact package digest/version, contribution kind/version, runtime profile, platform/architecture, dependencies, host privileges, network/egress class, secret requirements, cost profile, and D1 capability ID. The Catalog cannot keep a second FieldDefinition or prove namespace ownership from display name or install order.
+
+R07 gives D7 SearchContribution a concrete positive Catalog path without adding a D4 Registry member or a second search engine. CONTROL-CONTRACT §4 uniquely freezes the D10 `view`-kind pure-data carrier, immutable descriptor-asset digest binding, D4 owner/Field/textPath validation, distinct D7-versus-D10 IDs and versions, complete same-cut SearchContribution set, and `activationGeneration + capabilityCatalogDigest + registryBinding` invalidation. A valid first-party SearchContribution can therefore install/activate and feed the existing D7 search Query builder; an unadmitted/runtime-only descriptor stays pending, and an unavailable selected contribution fails through the original D7 contract rather than being silently skipped.
 
 R05 closes package/contribution wire in CONTROL-CONTRACT §4–§5. Dependencies are members of the **specific dependent Contribution**, not an ambient package-level array; an unavailable connector cannot disable unrelated schema/template/data-pack Contributions in the same package. The Contribution-kind closed set explicitly retains module/schema/view/action/template/preset/pack/tool/model/connector/importer/exporter/conversion/renderer/localization. Calendar, Library, People, and Organizations each have one first-party PackageId→module Contribution→schema Contribution mapping that explicitly references D4-frozen namespace ownership and FacetIds. These D10 PackageIds do not create a second D4 namespace and are not claimed to be pre-existing D1 module IDs, code paths, or locale resources.
 
@@ -245,9 +247,12 @@ Terminal occurrence history may be compacted only into durable proof that the ke
 An occurrence claim may exist before Run admission, so a queued or blocked Run that has never entered protected execution consumes no Lease `maxRuns`. Once the same Run already has `LeaseRunUse/1`, later steps and recovery of its original planned request reuse that admission fact and do not re-run the global remaining-count gate merely because remaining is now zero. Only the §8 Run-admission CAS immediately before the first protected step creates `LeaseRunUse/1`. If `maxRuns` is exhausted, the occurrence keeps its existing claim/Run, enters blocked, and returns `delegation_exhausted`; creating another Run for the same occurrence cannot bypass the limit.
 
 Before occurrence start and every new protected step, revalidate current capability, exact Lease revision, trusted time, D6 authorization, ActivationBinding, secret generation, and budget. Once a D3/D6 request has been produced, restart resumes only the original Run and original request and never resamples a target or creates a new OperationId. A paused Run may naturally outlive its Lease even when scheduler cleanup never ran; once trusted time advances beyond expiry, new context, model, tool, external steps and final author submission are blocked. Loss of clock continuity fails closed as `state_unavailable`; once trusted time is restored, determine expired or active from actual current time.
+
 ## 14. Standing Approval
 
-Standing Approval does not mean an Agent may modify arbitrary future content. First-generation unattended author submission supports one narrow profile of the existing D7 `set_field_member` action: one existing Node, one Field, exactly one Entry in the current complete Field, and one existing scalar member.
+Standing Approval does not mean an Agent may modify arbitrary future content. The complete generation-one rule is owned only by CONTROL-CONTRACT §7 as `SingleFieldMemberRule/1`; this section consumes that exact rule and does not define a competing value/type/constraint enum.
+
+The first unattended author profile remains the original D7 `set_field_member` path over one existing Node, one Field, exactly one current Entry, and one existing scalar member. The envelope references the unique owner:
 
 ```text
 StandingApprovalEnvelope/1 {
@@ -261,30 +266,20 @@ StandingApprovalEnvelope/1 {
   activationBinding,
   notBefore,
   notAfter,
-  rule: {
-    kind: "single_field_member",
-    ownerNodeRef,
-    fieldId,
-    selection: "require_exactly_one_entry",
-    memberPath,
-    memberType,
-    valueConstraint
-  },
+  rule: SingleFieldMemberRule/1,
   maxSuccessfulCommits,
   budgetAccountBindings
 }
 ```
 
-memberPath is a static object-member path with no list index, wildcard, or dynamic FieldId. memberType is restricted to bool, exact text, int64, integer, decimal, and semantic_code. valueConstraint is either a finite set of at most 64 complete TypedLiteral values, an exact same-type numeric closed interval, or exact text with a UTF-8 byte limit and no CR/LF. All D4 nonEmpty, code-scope, schema/cardinality, and constraint rules still apply separately.
+CONTROL-CONTRACT §7 preserves bool, exact text, int64, integer, decimal, and semantic_code; the 0..64 TypedLiteral enum, exact same-type numeric closed range, bounded no-CR/LF exact text, static 1..7 D4 object-member path, and the two real-effect branches. It explicitly preserves the original D7 Optional bridge: an optional D4 scalar member is eligible only when currently present and the D7 action supplies Optional<scalar>.some; `none` deletion is not automatically approved. The positive semantic-code fixture is the real S `people/phone.label` contribution-set member.
 
-Common mechanical prerequisites are: current D1/D6/D10 authorization; exact approval/automation/definition/delegation/activation bindings; a fresh current source revision; exactly one Entry in the complete Field; successful D7 Narrow Field Qualification; exact owner, Field, member, and type; new value inside the frozen constraint; a complete retrievable owner_fields preview; and ability to establish audit and approval-count/cost reservations.
+Common prerequisites remain current D1/D6/D10 authorization; exact approval/automation/definition/delegation/activation bindings; fresh source revision; exactly one Entry in the complete Field; successful D7 Narrow Field Qualification; exact owner/Field/member/type; value inside the frozen CONTROL constraint; complete retrievable owner_fields preview; and audit plus approval-count/cost reservations.
 
-There are exactly two legal actual-effect branches:
+The actual result is still exactly one of two branches. **Member-change** requires the original D7 adapter's complete proposed source and actual MutationFootprint to contain only the selected existing scalar-member change, with every other author/control fact unchanged and the complete Field before/after `field_change` in owner_fields preview. **Byte-exact raw no-op** requires the same current unique target, D7 same-type equality after the required/present-optional projection, and byte-for-byte equality of the original adapter's complete proposed source; MutationFootprint, `field_change`, and D6 `sourceVersions` stay empty.
 
-1. **One real member change:** the complete proposed source differs from before and actual MutationFootprint contains exactly the selected existing scalar-member change; occurrenceKey, other members, qualifiers, note, provenance, other Entries, body, Facets, Refs, relations, identity, placement, and control remain unchanged. The public owner_fields preview contains the complete Field before/after `field_change` under the original D7 contract.
-2. **Byte-exact raw no-op:** the original `set_field_member` still resolves exactly to the same unique Entry and existing member, the current typed member value already equals the requested value, and the complete proposed source produced by the original adapter is byte-for-byte equal to the before source. MutationFootprint is empty, preview contains no `field_change`, and final D6 receipt has empty `sourceVersions`; standing approval never invents a member footprint, Field effect, or revision. Target existence, type, valueConstraint, current authorization, dependencies, and Narrow Field Qualification are still fully validated.
+Anything else is outside Standing Approval: no first/preferred/same-value target selection, no whole-Entry/source widening, no append/remove, and no alternative same-named target. It transitions to interactive confirmation, blocked, or failure. A committed raw no-op still consumes one successful-commit approval count; replay of the same saved D6 decision never consumes again.
 
-Anything outside these two branches cannot automatically choose first, widen to a whole Entry/source, degrade to append/remove, or select another same-named target; it can only transition to awaiting_confirmation, blocked, or failure. If the original D6 rules commit a raw no-op decision, it still consumes one `maxSuccessfulCommits` use; replay of the same saved decision does not consume again.
 ## 15. Fresh prepare, approval consumption, and planned recovery
 
 Every automated author mutation still performs: fresh current Field selection → original D7 ActionSpec → original `d7_action_prepare` → complete D7 EffectManifest/bytes → Core mechanically matches StandingApprovalEnvelope → create ApprovalUse → original D6 request.
@@ -415,7 +410,7 @@ Compensation is a new ExternalEffectIntent with its own authorization, approval,
 
 ## 18. Budget, cost, and concurrent reservation
 
-The original D6 work/attempt budget remains. D10 uses the ResourceUseGrant, CostReservation, and CostSettlementDecision contracts in CONTROL-CONTRACT §6 and §10 for model, tool, network, and external cost. The narrowest remaining limits across Run, Lease, Automation, grant, and deployment account are atomically checked in one authority-store admission transaction so concurrent Runs cannot both observe the last capacity.
+The original D6 work/attempt budget remains. D10 uses the ResourceUseGrant, CostReservation, and CostSettlementDecision contracts in CONTROL-CONTRACT §6 and §10 for model, tool, network, and external cost. The narrowest remaining limits across Run, Lease, Automation, Workspace, grant, and deployment account are atomically checked in one authority-store admission transaction so concurrent Runs cannot both observe the last capacity. These layers are ceilings/projections, not multiple actual accounts: one CostReservation still binds one attempt, one actual account, one grant, one pricing version, and one currency, and one charge is recorded once. Truly separately attributable multi-account charges require separately attributable attempts/reservations/evidence, optionally admitted as one atomic group.
 
 Exact Money/1, currency, microUnits, grant/account ceilings, pricing bindings, and checked arithmetic are defined by CONTROL-CONTRACT §2 and §9. There is no implicit FX conversion and no caller-facing accounting interface for manually entering “actual cost” or a target terminal state. Every potentially billable attempt binds an independent reservation, attemptId, actual account/grant, pricing version, and finite upper bound before it begins. Grant renewal or revision never clears spent, held, or attempts, and replacing a grant never migrates or erases the old reservation/account liability.
 
@@ -463,9 +458,7 @@ Restart first restores durable occurrence claim, Run, LeaseRunUse, ApprovalUse/c
 
 D1 capability availability and its fixed reason precedence remain unchanged, especially `policy_denied` before component, configuration, network, version, and health details. D10 does not replace `missing_component`, `not_configured`, `offline`, `incompatible_version`, or `temporarily_unavailable` with one runtime_unavailable.
 
-D10 control request stages are: closed decode/version → D1 static capability/surface/release → current principal/control-object visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution. Stage ordering precedes error specialization to prevent unauthorized probing.
-
-The D10 control error closed set is `invalid_request|not_visible|control_conflict|binding_changed|approval_required|approval_expired|delegation_expired|delegation_exhausted|budget_exceeded|audit_unavailable|state_unavailable|invalid_output|cancelled|external_outcome_unknown`. Unknown tokens, wrong tag, wrong audience, and unauthorized control objects all return `not_visible`; expired, exhausted, or conflict detail is disclosed only when the caller may already read that caller-owned record.
+CONTROL-CONTRACT §1 uniquely owns two D10 envelopes. Management/current/history/secret/stop entrypoints use `D10ControlError/1`; a D10-owned Run/step before another protocol owner is entered uses `D10RunStepError/1`, whose closed codes are `invalid_request|not_visible|control_conflict|binding_changed|approval_required|approval_expired|delegation_expired|delegation_exhausted|budget_exceeded|audit_unavailable|state_unavailable|invalid_output|cancelled|external_outcome_unknown`. The Run/step stage order is closed decode/version → D1 static capability/surface/release → current principal/control-object visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution. Unknown tokens, wrong tag, wrong audience, and unauthorized control objects remain `not_visible`; detailed expired/exhausted/conflict state is available only after separately authorized control disclosure. Once D3/D6/D7/D8/D9 is entered, its original envelope is returned unchanged.
 
 Error ownership is determined by the boundary already entered:
 
