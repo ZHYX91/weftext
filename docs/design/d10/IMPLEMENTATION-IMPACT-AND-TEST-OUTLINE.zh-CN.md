@@ -288,10 +288,10 @@ Connector sync 若修改 SourceBinding/OriginBinding/watermark 必须另有 owne
 
 R08 external-effect 测试逐字消费 CONTROL-CONTRACT §7：
 - `FrozenEffectBytes/1` 验证 byteLength/digest 与有限 payload/idempotency-proof bytes；proof 不是凭空新增 EvidenceTicket arm。
-- immutable `ExternalEffectIntent/1` 冻结 effect Ref、Workspace、Contribution/account、operation/target、request payload 与 idempotency binding；lifecycle revision 属于另一个域。
+- 不可变的 `ExternalEffectIntent/1` 冻结外部效果引用、工作区、贡献项/账户、操作/目标、请求载荷与幂等绑定；生命周期修订属于另一个独立版本域。
 - `ConsentSpec.external` 绑定 stable effect Ref + requestDigest，因此合法 `prepared→submitting` 不会自行使 consent 失效；任何 contribution/account/target/payload/idempotency 变化都要求新 effect intent 与 consent。
 - `ExternalExecutionBinding/1` 在不可逆 send 前冻结 sendAttemptId、准确 Lease/approval/external-effect grant/egress grant、可选 secret generation 与 0..32 个可归属 cost reservation。sendAttemptId 永远不是 billableAttemptId；每份 reservation 都解析到自己的 billable attempt。
-- public `ExternalEffectCurrentView/1` 只暴露受权 state/recovery mode/contribution/account/operation/requestDigest/targetDigest，永不返回 payload、target ToolValue、idempotency key/proof、secret generation、approval record 或 reservation identities。
+- public `ExternalEffectCurrentView/1` 只在授权通过后暴露状态、恢复方式、贡献项、账户、操作以及 requestDigest/targetDigest；永不返回请求载荷、目标 ToolValue、幂等键/证明、secret generation、approval record 或 reservation identities。
 crash/reconcile mutant 尝试替换 frozen bytes、target、key、secret generation 或 effectId 必须被拒绝；`outcome_unknown` recovery 永远继续同一 immutable request。D9 conversion worker 保持 network=denied，不能借 D10 egress。D9 PublicationReceipt 只证明 publication；另存 Resource 仍需原作者协议。
 
 ## 9. Budget 与费用实现义务
@@ -446,7 +446,7 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 33. self-service P 有 `d10_control_self`、真实窄 Field 权限和 deployment cost grant 时可创建有限 Automation；缺任一资格则拒绝，不能把 Field 权限当 deployment account manage；
 34. stable-key r5 成功/丢响应、随后 r6 更新：受保护完整 B 决定 equality；public historical r5 只给七-kind summary/receipt/deltas 且无 A/B/M，current read 另返回 r6；same key different complete B 返回 `control_conflict`；
 35. 授权续期、revision 更新或新 grant 与旧 `uncertain` reservation 并存时，证明已消费、已占用、attempt 次数和账户义务都不会清零；
-36. exact-target stop（`requestId==target.id`）分别与 Run admission、D6 final commit、external send 竞争；同时覆盖 first receipt、target r5→r6 后 lost-response query、hidden/continuity error 顺序、预留 MAX 边界，并证明 stop 不阻断 settlement、authoritative abort 或 evidence cleanup；
+36. exact-target stop（`requestId==target.id`）分别与运行准入、D6 最终作者提交和外部发送竞争；同时覆盖首次 receipt、目标配置 r5→r6 后的丢响应查询、隐藏目标/连续性错误顺序、预留 MAX 边界，并证明 stop 不阻断费用结算、权威 abort 或证据清理；
 37. profile/2 family 升级不获得 `d10_control_self`；profile/3 只作用 explicit issuer update 后新 family；
 38. per-Contribution dependency：connector unavailable 时同包 schema/template/pack 不受牵连；
 39. Calendar、Library、People、Organizations 的 D10 PackageId→module→schema 映射与 D4 namespace owner/Facet 保持类型分离，并验证第三方同名包不能冒充第一方 owner；
