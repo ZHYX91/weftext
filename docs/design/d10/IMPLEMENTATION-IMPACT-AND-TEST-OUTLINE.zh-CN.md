@@ -387,7 +387,11 @@ B10-01 的实现负向门：Adopt 代码路径只允许 `adopt_*` convention；�
 
 TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 capability ID 和四个第一方 module/package/schema 映射。候选代码 symbol/namespace 和 locale key 只能作为尚未实现的 mapping 验证，不能被 CI “存在字符串”冒充实际代码或资源实现。PackageId、D4 SemanticNamespaceId、D4 namespace ownerId、FacetId 与 module ContributionId 必须按各自 owner 分型，不允许因为字符串相同合并。
 
-R06 另增加两组**原 owner**命名门。D8 九个 concept 与十三个 kind 必须逐项消费 UPSTREAM-AMENDMENTS §8.1：实现不得新增 D10 alias、CLI verb、locale key 或把 EditSession/Draft/PreparedEditBinding 重新命名成 D10 概念。D9 的 grouped lexicon 必须逐项消费 §8.2 的 stable concept IDs；`PublicationReceipt/1` 只能进入外部发布控制面，`D7ResultPin` 内部的 TerminalSchema/V 仍由 D7 owner 解码，D2 Template、D3 SourceBinding/ForeignIdentityKey/OriginBinding/ResourceRegionLocator、D7 PreparedActionBinding/2 与 D3/D6 author receipt 都不得被 D9 重注册。
+R08 消费两组**原 owner** naming/interface gate。D8 继续恰有九个 domain concept 与十三个 kind；每个 kind 必须从 UPSTREAM-AMENDMENTS §8.1 解析到唯一 technical-interface owner。Draft、Draft Projection、Draft Edit Map、Prepared Edit Binding、D2 snapshot、D6/D7 value 可以被 consumes/returns，但绝不与 kind 共 owner。尤其 `d8_draft_text_replace/write` 归对应 D8 interface，同时使用 Draft Edit Map 坐标。该 mapping 不改变 D8 wire、IME、显式确认、PreparedEditBinding/1 或 Undo 语义。
+
+dirty D8 Draft 不是全局 Core 写锁：合法后台 D7 author commit 仍可发生。D8 必须排队/投影 author update、保留本地 input/composition，并要求后续 edit 按原 D8 合同 rebase/reprepare 或报告 stale。Undo 只能反演自己的原 committed edit，不能回滚后来发生的后台 commit。
+
+D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public kind 都必须从 UPSTREAM-AMENDMENTS §8.2 解析到唯一 technical-interface owner；consumes/returns/operates-on 从不表示共 owner。`d9_import_state` 是 D9 interface，但 operates on D6-owned ImportJob；其原 concept ID、ownedNames、`storage.import_job` 与历史 firstFreeze 全部不变。PublicationReceipt 只证明 publication；D7ResultPin 内 TerminalSchema/V 仍归 D7；继承 D2/D3/D6/D7 名称保持原 owner。D9 worker 保持 no-network 默认。
 
 这些 owner 词表补充只改变术语 registry/检查，不改变 D8/D9 wire 或产品能力。实现若尚无对应 UI/CLI/locale，本代“无新增”就是通过条件；不能为了通过命名门凭空创建资源。
 ## 14. 测试与证据分层
@@ -409,7 +413,7 @@ R06 另增加两组**原 owner**命名门。D8 九个 concept 与十三个 kind 
 
 1. prompt injection 请求扩大 read、egress、secret、tool 或 budget；
 2. MCP descriptor/schema drift、伪 readOnly、巨大输出；
-3. 两个同值 Entry 的 standing approval，禁止自动选 first；
+3. `FieldMemberTask/1` 真实 `people/phone.label` Optional semantic-code 路径：唯一 present `personal→work`、逐字 `work→work`、`optional.none` 拒绝，以及第二个同值 Entry 导致自动 exactly-one 不适用但 interactive D7 selection 仍可用；
 4. approval-count N=1 双并发，至多一个 reserved；
 5. R1 进入 D6 前批准有效、R2 抢占次数，R1 只因 approval 竞争失败时得到 D6 `approval_unavailable/preflight`；
 6. planned 后 approval 撤销，保持 planned 而非 semantic rejection/terminal；
@@ -440,16 +444,22 @@ R06 另增加两组**原 owner**命名门。D8 九个 concept 与十三个 kind 
 31. D4 reference catalog 的 `people/phone` 正向窄证明与 relation/cross-Field/未知 constructor 负例；
 32. D3 词表正向映射：`adopt_*` 使用 `OriginBinding` / `origin_binding`；反向受控源码/API/schema/fixture/术语 registry 均不存在 `adoption_binding`，且 scanner 不允许豁免。
 33. self-service P 有 `d10_control_self`、真实窄 Field 权限和 deployment cost grant 时可创建有限 Automation；缺任一资格则拒绝，不能把 Field 权限当 deployment account manage；
-34. stable-key r5 成功/丢响应，随后 r6 更新，原 retry 重放 r5 saved result；same key different body/expected target 返回 `control_conflict`；
+34. stable-key r5 成功/丢响应、随后 r6 更新：受保护完整 B 决定 equality；public historical r5 只给七-kind summary/receipt/deltas 且无 A/B/M，current read 另返回 r6；same key different complete B 返回 `control_conflict`；
 35. 授权续期、revision 更新或新 grant 与旧 `uncertain` reservation 并存时，证明已消费、已占用、attempt 次数和账户义务都不会清零；
-36. 紧急 stop 分别与 Run 准入、D6 最终提交和外部发送竞争，并证明 stop 不阻断合法 settlement、authoritative abort 和证据清理；
+36. exact-target stop（`requestId==target.id`）分别与 Run admission、D6 final commit、external send 竞争；同时覆盖 first receipt、target r5→r6 后 lost-response query、hidden/continuity error 顺序、预留 MAX 边界，并证明 stop 不阻断 settlement、authoritative abort 或 evidence cleanup；
 37. profile/2 family 升级不获得 `d10_control_self`；profile/3 只作用 explicit issuer update 后新 family；
 38. per-Contribution dependency：connector unavailable 时同包 schema/template/pack 不受牵连；
 39. Calendar、Library、People、Organizations 的 D10 PackageId→module→schema 映射与 D4 namespace owner/Facet 保持类型分离，并验证第三方同名包不能冒充第一方 owner；
 40. design accepted 但 release/surface/policy/version/health 任一门不满足时仍返回真实 D1 unavailable reason；
-41. D8 九 concept / 十三 kind 的 owner-lexicon 正反向映射；不存在额外 CLI/locale/wire alias，且命名检查不能改变 IME、Write/Read、confirm、Undo；
-42. D9 grouped terms 的 stable concept ID 与继承 owner：`PublicationReceipt/1` 不能成为 author receipt，`D7ResultPin` 不能取得 TerminalSchema/V owner，PreparedActionBinding/SourceBinding/OriginBinding/ResourceRegionLocator 不得重注册；
-43. U12 三分支：当前 ICS profile 返回 unsupported 且零作者效果；无 D3 binding 的普通受支持文件 profile 两次独立明确导入各 fresh、same request retry 精确重放；D3 binding 路径逐项验证 never_bound/active_live/active_non_live/retired/conflict/miss，UID 不能脱离 SourceBinding 决策。
+41. D8 九 concept / 十三 kind 的唯一 technical-interface-owner 映射；consumed Draft Edit Map 绝不共 owner；dirty Draft + 合法后台 D7 commit 必须保留输入并触发 stale/rebase 行为，Undo 不能回滚后续后台 commit；无额外 CLI/locale/wire alias；
+42. D9 17-kind 唯一 technical-interface-owner 映射 + 36 个 D9-owned naming row + 1 个继承 D6 ImportJob；`d9_import_state` operates on ImportJob 但不拥有它，`PublicationReceipt/1` 不能成为 author receipt，`D7ResultPin` 不能取得 TerminalSchema/V owner，继承 D2/D3/D6/D7 名称不得重注册；
+43. U12 分支模式：当前 ICS production profile unsupported 且零作者效果；无 D3 binding 的 ordinary-file profile 两次独立显式 import 各 fresh、同 canonical request recovery 重放；D3-bound 路径覆盖 never_bound/active_live/active_non_live/retired/conflict/miss，retired 只有显式 Adopt 才 fresh，UID 不能单独决策。
+44. T02 discovery 记录/复用 pending admission，不让未接纳 tool callable；current Catalog bytes 不变，已有 prepared invocation 的 restart/uncertainty 只恢复原 admitted descriptor/request，不生成 replacement request。
+45. E05 eventual-consistency readback miss 对同一 immutable effect/target/request bytes/原 key 保持 `outcome_unknown`；后续 readback 可以解析结果，但不能创建新 effectId/target/payload/key，proof 过期也不授权 resend。
+46. D7 prepare 后冷启动恢复准确 `D10AuthorPreparationLink/1` 与原 D6 request；link continuity unknown 为 `state_unavailable`，只有证明从未保存的 prepare 才可重建。
+47. external consent 绑定 effect Ref + requestDigest，因此合法 prepared→submitting lifecycle revision 不会使自身失效；任何 frozen request semantic 变化都要求新 effect/consent；sendAttemptId 与每个 billableAttemptId 始终分域。
+48. 首代 supplemental planned/external approval 没有独立提前 revoke state action；time/binding/grant/authorization/stop gate 可阻断使用，但不伪造 generic revoked state。
+49. `activation.current` 由同 cut selector 派生；stale selector CAS 失败，successor switch 原子完成，历史 ActivationBinding generation/revision 不因变成 non-current 而改变。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。
 ## 16. 完成门
@@ -458,12 +468,16 @@ R06 另增加两组**原 owner**命名门。D8 九个 concept 与十三个 kind 
 
 - CANDIDATE、CONTROL-CONTRACT、TERMINOLOGY、SCENARIO-DISPOSITIONS、UPSTREAM-AMENDMENTS 与本文互相一致；
 - TERMINOLOGY §13–§15 对 D10 自有与上游引用概念完成 Intake §8.5.1 映射；D8/D9 原 owner 的完整补充位于 UPSTREAM-AMENDMENTS §8，D10 不重复取得 owner；没有 TODO/“留实现决定”占位；
-- 当前作者输入覆盖保持 49/49；历史 U 的 48/48 记录保持其历史上下文；
+- 阅读证据分账：原作者 lineage 保留历史 S49/49；本接续作者亲自完成 S16/49 全文，D9 workers/export 与 templates 仅做依赖局部读取且不计全文；固定 R07 的独立评审另行完成 S49/49。三套证据互不替代；
 - D6/D7/D8/D9/D3 配套 amendment 都明确为未激活提案；
 - 没有把 unsupported/deferred 写成 available；
 - 自动 author commit 只限 single_field_member profile；
 - External effect unknown、cost uncertain、audit failure、cancel/planned 恢复均有单一规范结论；
 - D1 surface/reason、D3 identity、D4 Registry、D8 confirmation、D9 worker/publication 不被暗改；
 - 任何实际运行证据精确分层，pending 项不被写成 pass。
+
+- 固定 R07 的完整独立终审历史结论仍为 REVISE（P0=0/P1=1/P2=10）；本 R08-A 作者批次不能自行关闭这 11 项 finding；
+- 本纲要列的是待实现/待测试义务，不是 Core adapter、stop transaction、external transport、D8/D9 mapping 或 race corpus 已执行的证据；
+- R08-A 不是最终 18 文件检查点：REVIEW-DISPOSITIONS、TASK、START 与全18文件双语/文档门禁收尾仍是后续批次。
 
 这些是候选完整性门，不是独立 Gate verdict。
