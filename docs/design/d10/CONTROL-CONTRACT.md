@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Control and Management Contract
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: author-revised candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed C18/18 and S49/49 and returned REVISE (P0=0, P1=1 B03-P1-01, P2=10 B01/B02/B03/B10/B11 findings; terminology and bilingual semantics both REVISE). R08 is an author remediation awaiting a fresh complete independent review. Fixed S remains unchanged and every upstream companion amendment remains inactive pending later coordinated acceptance.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author-revised candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=1, P2=10). All eleven findings remain open. The candidate is complete for author handoff and awaits a fresh complete independent joint review of the fixed R08 commit; it is not independently accepted, activated, merged, released, or product implementation evidence.
 
 ## 1. Authority, scope, and error boundary
 
