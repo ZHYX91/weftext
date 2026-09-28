@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 控制与管理合同
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成 C18/18、S49/49，结论 REVISE（P0=0、P1=1 B03-P1-01、P2=10 B01/B02/B03/B10/B11 项，术语与中英语义均 REVISE）；R08 是作者统一修订，等待新的完整独立复核。固定 S 不变，所有 upstream 配套修订在后续协调接受前继续未激活。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：完整 R08 作者修订候选。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审结论为 REVISE（P0=0、P1=1、P2=10），当前11项 finding 全部保持开放。候选已完成作者交接，等待固定 R08 commit 的 fresh 完整独立联合评审；不表示已独立接受、激活、合并、发布或已形成产品实现证据。
 
 ## 1. 权威、适用范围与错误边界
 
