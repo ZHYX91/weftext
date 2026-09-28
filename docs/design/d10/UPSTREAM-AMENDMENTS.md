@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Coordinated Upstream Amendment Proposal
 
-revision: D10-r07-independent-review-fixes-2026-09-28; status: candidate coordinated upstream amendment proposal, still not jointly accepted or coordinatedly activated. Fixed S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` remains authoritative and byte-unchanged; R07 only repairs the complete independent-review findings and does not implement or activate these future companion changes.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: candidate coordinated upstream-amendment proposal synchronized to R08 after the complete R07 joint review. Fixed S remains authoritative and byte-unchanged. Nothing in this file is active unless a later independent review accepts the new candidate and controller coordination explicitly activates the companion changes.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -176,9 +176,13 @@ The first jointly specified public d6_error.code set also adds execution_stopped
 
 D6 final author commit revalidates the same RunBinding stop latches inside the real final authority-store write serialization. A prepare-time or out-of-transaction check is insufficient. Stop linearized first means the new author commit does not occur; commit linearized first preserves the committed decision and later stop cannot roll it back.
 
+The latch transition itself remains the specialized D10 safety transaction frozen by CONTROL-CONTRACT §11. It uses pre-reserved latch/result/sequence capacity in the same physical Authority Store serialization domain, but it is not `d10_control_prepare`, not `d6_commit_request`, and adds no public D6 store-incarnation API. D6 only consumes the protected latch association at planning/final recovery. Ordinary D6 budget, author commitSequence, or D10 configuration-Counter exhaustion cannot be a prerequisite for stopping an already-reserved target.
+
 For an already planned request, stop cannot directly write a terminal result. Only when current authorization, authority/continuity, the original complete plan/RunBinding, and irreversible stop are all proven, and original D6 recovery proves the plan can never submit, may the original author ledger write transaction_aborted/terminal. The same abort transaction follows the existing ApprovalUse rule for releasing approval-count reservation. Temporary disable, Lease expiry, ordinary Run cancellation, temporary authorization loss, or temporarily unprovable clock/state is not that proof and leaves the request planned. Cost reservation is never automatically released by author abort.
 
 Stop does not block currently authorized authoritative abort, cost settlement, evidence/audit retention, or reference-safe cleanup. Those operations do not restore executor or author-write authority.
+
+External send competition remains owned by the D10 transport boundary rather than D6: before irreversible handoff the same safety serialization/fence rechecks the frozen ExternalExecutionBinding, stop, approval/grant/secret/cost bindings, and durably records send-attempt evidence and holds. Send first preserves the sent fact; stop first prevents send. D9 workers keep their original no-network default and gain no transport capability from this D10 amendment.
 
 ## 4. D7 Execution and Action Interfaces — proposed replacement/additions
 
@@ -301,7 +305,7 @@ R06 adds no unattended-edit branch to D8 and changes no D9 conversion, template,
 
 The existing nine D8 concept IDs, the 12 public request/response kinds from Editor Interfaces, and internal `d8_prepared_edit_binding` keep their existing wire. D8 adds the following naming metadata without changing IME, Write/Read, author source, confirmation, Undo, or error behavior.
 
-Common rule: every concept's `firstFreeze` is the accepted D8 r03 concept; R06 adds naming metadata only. Except for the existing `Direction Preference` selector and existing Edit Draft status phrases, this generation freezes no new CLI verb, standalone UI-control name, or locale key. “none” is a normative decision rather than deferral. There is no published legacy alias. When implementation adopts these names it atomically removes any unlisted controlled alias from the D8 editor adapter's type/kind registry, fixtures, help, and locales, with no dual-read path. Historical evidence and user prose are not migrated.
+Common rule: every concept's original `firstFreeze` remains its accepted D8 r03 concept contract. R08 proposes additional naming/interface-owner metadata only; that later metadata has its own R08 candidate provenance and does not retroactively claim the S line already contained it. Except for the existing `Direction Preference` selector and existing Edit Draft status phrases, this generation freezes no new CLI verb, standalone UI-control name, or locale key. “none” is a normative decision rather than deferral. There is no published legacy alias. When implementation adopts these names it atomically removes any unlisted controlled alias from the D8 editor adapter's type/kind registry, fixtures, help, and locales, with no dual-read path. Historical evidence and user prose are not migrated.
 
 | concept ID | formal zh/en; owner/layer | definition / exclusion | owned names and kind ownership | CLI / UI / locale | short forms, aliases, example/counterexample, migration target |
 | --- | --- | --- | --- | --- | --- |
@@ -315,24 +319,29 @@ Common rule: every concept's `firstFreeze` is the accepted D8 r03 concept; R06 a
 | `weftext.term.layout_epoch` | 布局代 / Layout Epoch; D8 layout state | discardable shaping/wrap/hit-test generation; not result/auth/author revision | code type `LayoutEpoch`; no public D8 JSON kind | no CLI/UI/locale | “epoch” only with layout qualifier; no result-epoch alias; delete unlisted layout-cache aliases |
 | `weftext.term.direction_preference` | 方向偏好 / Direction Preference; D8 presentation | device/session `ltr|rtl|auto` preference; not locale, authored direction, or Query ordering | code type `DirectionPreference`; values come from Direction §2 shell/document/session preference, no author wire | no CLI; UI keeps the existing direction selector and `ltr|rtl|auto` values; no new concept locale key | “direction preference” allowed; no locale/author-dir alias; delete any controlled path that writes preference into author source |
 
-Reverse kind ownership is fixed as follows:
+Reverse kind ownership is fixed per kind. “Technical interface owner” names the D8 interface contract that decodes/returns the message; it is not a tenth domain concept. Domain concepts are listed separately as consumed/returned data:
 
-| kind | owning concept / inherited owner |
-| --- | --- |
-| `d8_document_read`, `d8_document` | D8 interface envelope; content semantics remain inherited D2 `document_snapshot` plus D6 source read; no tenth D8 identity concept |
-| `d8_draft_project` | Edit Draft input; successful output is Draft Projection |
-| `d8_draft_projection` | Draft Projection |
-| `d8_draft_text_replace`, `d8_draft_write` | Edit Draft + Draft Edit Map |
-| `d8_draft_text_replaced`, `d8_draft_written` | Draft Projection; caret remains D8 editor-return state |
-| `d8_edit_prepare`, `d8_edit_prepared`, `d8_undo_prepare` | Prepared Edit Binding; nested commit request remains D6-owned |
-| `d8_editor_error` | D8 Editor Interfaces error family; no durable concept ID |
-| `d8_prepared_edit_binding` | Prepared Edit Binding internal kind |
+| kind | unique technical interface owner | consumes / operates on | returns / domain concepts |
+| --- | --- | --- | --- |
+| `d8_document_read` | D8 Document Read Interface (Editor Interfaces §2) | D3 NodeRef + current D6 read authorization | `d8_document`; D2 document_snapshot semantics remain D2-owned |
+| `d8_document` | D8 Document Read Interface (Editor Interfaces §2) | result of the exact read request | D2 document_snapshot + D8 Draft/selection shell projection; no new identity concept |
+| `d8_draft_project` | D8 Draft Projection Interface (Editor Interfaces §3.1) | Edit Draft + current author cut | `d8_draft_projection` |
+| `d8_draft_projection` | D8 Draft Projection Interface (Editor Interfaces §3.1) | one Edit Draft proposal | Draft Projection carrying Draft Edit Map |
+| `d8_draft_text_replace` | D8 Draft Text Replace Interface (Editor Interfaces §3.3) | Edit Draft + Draft Edit Map segment/range binding | `d8_draft_text_replaced` |
+| `d8_draft_text_replaced` | D8 Draft Text Replace Interface (Editor Interfaces §3.3) | result of exact replacement | Draft Projection + caret; Draft Edit Map remains consumed/returned inside projection, not co-owner of the kind |
+| `d8_draft_write` | D8 Draft Write Interface (Editor Interfaces §3.4) | Edit Draft + Draft Edit Map site/path binding | `d8_draft_written` |
+| `d8_draft_written` | D8 Draft Write Interface (Editor Interfaces §3.4) | result of exact write | Draft Projection + caret; Draft Edit Map remains data, not kind owner |
+| `d8_edit_prepare` | D8 Edit Prepare Interface (Editor Interfaces §4) | Edit Draft + Prepared Edit Binding construction rules | `d8_edit_prepared`; nested D6 commit request remains D6-owned |
+| `d8_edit_prepared` | D8 Edit Prepare Interface (Editor Interfaces §4) | protected Prepared Edit Binding result | preview/commit envelope; no author success claim |
+| `d8_undo_prepare` | D8 Undo Prepare Interface (Editor Interfaces §7) | current bytes/revision + original receipt/effects | `d8_edit_prepared`; it prepares an inverse edit, it does not own Undo history |
+| `d8_editor_error` | D8 Editor Error Interface (Editor Interfaces §6) | failures from D8 public interfaces | closed D8 editor error family; no durable concept ID |
+| `d8_prepared_edit_binding` | D8 Prepared Edit Binding Internal Interface (Editor Interfaces §4.2) | immutable prepared request/preview/authorization coordinates | protected `PreparedEditBinding/1`; never public response kind |
 
 `document|annotation` remain local D8 intent discriminators, not entity kinds. This addition changes no D8 wire member, error, IME state, or automatic-confirmation path.
 
 ### 8.2 D9 owner-lexicon addition
 
-D9 behavior and wire remain unchanged. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's `firstFreeze` is its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R07 adds naming metadata/owner correction only. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
+D9 behavior and wire remain unchanged. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's original concept-contract `firstFreeze` remains its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R08 proposes additional naming and per-kind technical-interface-owner metadata with its own candidate provenance; it does not retroactively claim those per-kind IDs/owners were already lines in S. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
 
 Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decoder, fixtures, help, generated samples; M-route=free-command/fallback/provider aliases and route inventory; M-template=old attr/record/H1–H9/formula-reorder/broad-view template parser/help/samples; M-export=free binding dictionary, rowHandle identity, author-snapshot export, generic author-receipt alias; M-region=D9-private Locator kind/opaque registry identity; M-none=no specific predecessor, only unlisted controlled aliases. Historical research text is not migrated.
 
@@ -383,13 +392,29 @@ Inherited ownership remains explicit:
 - D3 `SourceBinding`, `ForeignIdentityKey`, `OriginBinding`, `ResourceRegionLocator/l1`, and D3/D6 author receipts remain original-owner concepts. D9 `RegionBody/d9rg1` is inner geometry only, and `PublicationReceipt/1` can represent only external publication.
 - D6 `SourceVersion`, `BudgetBinding`, Token, and job/commit authority remain unchanged.
 
-The D9 owner lexicon also records these five reverse public-kind groups:
+The D9 owner lexicon also records a unique technical interface owner for each of the 17 public kinds. These interface-owner labels do not create 17 new domain concepts; the 36 D9-owned concept rows above remain the domain lexicon, and D6 ImportJob remains the one inherited D6 concept.
 
-- `d9_probe|d9_probe_result` → Source Artifact / Conversion Route probe;
-- `d9_import_analyze|d9_import_analysis|d9_import_choose|d9_import_next|d9_import_prepare|d9_import_prepared|d9_import_state|d9_import_state_result` → Import IR / Mapping Proposal / Import Job;
-- `d9_template_analyze` → Template Recipe / Construction Input;
-- `d9_convert|d9_conversion_started|d9_conversion_state|d9_conversion_state_result|d9_conversion_cancel` → Conversion Route / Worker Invocation / Job control;
-- `d9_error` → the D9 error family only, with no identity concept.
+| kind | unique technical interface owner | consumes / operates on | returns / owner boundary |
+| --- | --- | --- | --- |
+| `d9_probe` | D9 Probe Interface (Main §4) | SourceArtifact + fixed Conversion Route candidate | request only; no author effect |
+| `d9_probe_result` | D9 Probe Interface (Main §4) | exact probe evidence | probe/profile candidate; SourceArtifact/Route remain D9 concepts |
+| `d9_convert` | D9 Conversion Start Interface (Main §4) | SourceArtifact + accepted route/options/budget | `d9_conversion_started`; worker remains sandboxed |
+| `d9_conversion_started` | D9 Conversion Start Interface (Main §4) | one accepted start | job token/status coordinate, not author identity |
+| `d9_conversion_state` | D9 Conversion Job Interface (Main §4) | conversion job token | `d9_conversion_state_result` |
+| `d9_conversion_state_result` | D9 Conversion Job Interface (Main §4) | WorkerInvocation/IR job state | state/validated IR result; no author receipt |
+| `d9_conversion_cancel` | D9 Conversion Job Interface (Main §4) | conversion job token | cancellation request; committed author facts are unaffected |
+| `d9_import_analyze` | D9 Import Analysis Interface (Main §4) | ImportIR + ImportMapping/Loss inputs | `d9_import_analysis` |
+| `d9_import_analysis` | D9 Import Analysis Interface (Main §4) | fixed analysis cut | MappingProposal + loss/object/group/batch catalog |
+| `d9_import_choose` | D9 Import Analysis Interface (Main §4) | analysis token + explicit loss/mapping choices | successor analysis; not a D6 commit |
+| `d9_import_prepare` | D9 Import Preparation Interface (Main §4) | fixed analysis + inherited D6 ImportJob group/batch control | `d9_import_prepared`; actual author plan remains D7/D3/D6-owned |
+| `d9_import_prepared` | D9 Import Preparation Interface (Main §4) | exact prepared batch | wraps/returns original D7 prepared outcome; no new author receipt |
+| `d9_import_next` | D9 Import Preparation Interface (Main §4) | current inherited D6 ImportJob + prior authoritative batch outcome | next finite batch preparation or terminal job state |
+| `d9_import_state` | D9 Import Job State Interface (Main §4) | **operates on D6-owned ImportJob** | `d9_import_state_result`; interface owner is D9, record/concept owner remains D6 |
+| `d9_import_state_result` | D9 Import Job State Interface (Main §4) | D6 ImportJob + linked original receipts | read-only progress/result projection; D3/D6 receipts keep their owners |
+| `d9_template_analyze` | D9 Node Template Analysis Interface (Templates §6) | D2 Template + D9 TemplateRecipe/TemplateConstructionInput | `d9_import_analysis`; D2 Template identity stays D2 |
+| `d9_error` | D9 Error Interface (Main §4) | D9 public-interface failure | closed D9 error family; D3/D6/D7 errors are passed through at their original owner boundary |
+
+Unknown kind, profile, or version still rejects.
 
 Unknown kind, profile, or version still rejects.
 
