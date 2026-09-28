@@ -9,7 +9,7 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision R07。固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE（P0=0、P1=1 JR001、P2=8 JR002–JR009，术语/翻译不通过）；R07 是统一作者修订，等待新的独立复核。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
+状态：candidate revision `D10-r07-independent-review-fixes-2026-09-28`。固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 的完整独立终审已完成候选18/18、S49/49，最终 REVISE（P0=0、P1=1 JR001、P2=8 JR002–JR009，术语/翻译不通过）；R07 是统一作者修订，等待新的独立复核。形成一个完整、可实现、可独立审查的设计，定义 Agent 可读取的数据、上下文选择、提案动作、批准、审计和撤权；定义 automation、调度、connector、MCP、model/tool adapter 与 conversion coordination 怎样共享安全边界而不共享第二套作者权威。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
