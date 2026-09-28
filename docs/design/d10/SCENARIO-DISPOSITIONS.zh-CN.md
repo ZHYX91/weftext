@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 场景裁决
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：R08-A 作者语义消费修订。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S 的完整独立联合终审已完成 C18/18、S49/49，结论 REVISE（P0=0、P1=1、P2=10）；11 项 finding 在最终 R08 新候选的 fresh 完整独立复核前全部保持开放。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：与最终作者候选同步的完整 R08 场景裁决。125 个 scenario ID 及首代分支分类属于作者候选内容；当前11项 finding 全部保持开放，等待 fresh 完整独立复核。
 
 执行模式列只有四类：automatic 表示在本文 closed 规则下允许无需逐次人工确认继续；interactive 表示可以准备但必须逐次确认；unsupported 表示本代明确不可用；deferred 表示由具名 所有者 的未来合同冻结后才能开放。
 
