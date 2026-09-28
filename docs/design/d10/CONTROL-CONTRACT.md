@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Control and Management Contract
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28; status: candidate author revision pending a complete independent joint final review. This file freezes the D10 management, authorization, idempotency, recovery, cost, stop, and package/contribution semantics required by R05. It does not modify fixed upstream S; every D6/D7 change exists only as an inactive proposal in UPSTREAM-AMENDMENTS.
+revision: D10-r07-independent-review-fixes-2026-09-28; status: author-revised candidate after complete independent review of C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` returned REVISE (P0=0, P1=1 JR001, P2=8 JR002–JR009; terminology and translation failed). This file is the unique D10 owner for management/current-result/error contracts revised by R07. Fixed upstream S remains unchanged; every D6/D7/D3/D8/D9 amendment in UPSTREAM-AMENDMENTS remains inactive pending later coordinated acceptance.
 
 ## 1. Authority, scope, and error boundary
 
@@ -16,7 +16,8 @@ Core remains the sole author-transaction authority. Workspace author commits, sa
 
 Public capabilities still pass the real D1 contractMajor, surface, release, policy, principal, component/configuration, reachability/version-combination, and health gates before entering this contract. Design acceptance, coordinated design activation, or the existence of a control record is not runtime available evidence.
 
-The D10 control entrypoint error object is:
+
+The D10 management/control error object is:
 
     D10ControlError/1 {
       kind:"d10_control_error", wireVersion:1,
@@ -27,9 +28,27 @@ The D10 control entrypoint error object is:
         "state_unavailable" | "budget_exceeded"
     }
 
-These errors apply only to D10 prepare, host control, result, secret staging, and stop. Once a Workspace author commit enters D6, it continues to return the D6 closed error set; D10 does not wrap or rename D6 not_visible, approval_unavailable, execution_stopped, or transaction_aborted.
+The separate D10 Run/step error object is:
 
-Absent object, wrong scope/audience, and current lack of object-observation authority are all not_visible. Unprovable authority/fence/custody is authority_unavailable; protected-record or evidence integrity conflict is integrity_conflict; same stable key with different complete input is control_conflict; an expected revision mismatch on a currently visible object is stale_revision; temporarily unprovable trusted time, external evidence, or required continuity is state_unavailable.
+    D10RunStepError/1 {
+      kind:"d10_run_step_error", wireVersion:1,
+      code:
+        "invalid_request" | "not_visible" |
+        "control_conflict" | "binding_changed" |
+        "approval_required" | "approval_expired" |
+        "delegation_expired" | "delegation_exhausted" |
+        "budget_exceeded" | "audit_unavailable" |
+        "state_unavailable" | "invalid_output" |
+        "cancelled" | "external_outcome_unknown"
+    }
+
+`D10ControlError/1` is used only by `d10_control_prepare`, `d10_host_control_commit`, `d10_control_result`, `d10_control_read`, `d10_secret_stage`, and `d10_emergency_stop`. `D10RunStepError/1` is used only while a D10-owned Run/step has not entered another protocol owner: Run admission, ContextBundle/model/tool/connector execution, pre-D6 approval/delegation checks, and external-effect execution/recovery.
+
+Once a request enters D3, D6, D7, D8, or D9, that owner returns its original closed error/envelope unchanged. D10 never wraps D6 `not_visible`, `approval_unavailable`, `execution_stopped`, or `transaction_aborted`; never wraps D7 action/effects errors; and never renames D3/D8/D9 errors. A D10 diagnostic UI may perform a separately authorized `d10_control_read` after the owner error, but that read cannot alter the formal result.
+
+Management/control ordering is fixed: closed decode and D1 capability gates → current principal/scope/audience/object-observation authority → authority/fence/custody → stable-key conflict or exact ControlRef lookup → protected-record integrity/continuity → current-revision/dependency/budget checks only when applicable. Absent object, wrong scope/audience, and current lack of object-observation authority are all `not_visible`. Unprovable authority/fence/custody is `authority_unavailable`; a proven protected-record/evidence contradiction is `integrity_conflict`; same stable key with different complete input is `control_conflict`; an expected configuration revision mismatch on a currently visible object is `stale_revision`; temporarily unprovable trusted time, external evidence, or required continuity is `state_unavailable`.
+
+Run/step ordering remains Candidate §21: closed decode/version → D1 static capability/surface/release → current principal/control visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution. Stage ordering precedes specialization. In particular `binding_changed` belongs only to the Run/step domain; management CAS uses `stale_revision`, and pre-D6 `approval_required|approval_expired` never replace the D6-owned in-race `approval_unavailable/preflight`.
 
 ## 2. Shared closed types
 
@@ -69,6 +88,11 @@ The controlled record-kind set is `automation, lease, approval, planned_approval
     | {kind:"existing", binding:Binding<K>/1}
 
 Control IDs and incarnations are never reused. Retire, archive, revoke, close, or removal from a display surface never permits a later object to use the same ID. Re-creating the same display name receives a fresh ID.
+
+
+`Binding<K>/1.revision` is the sole configuration/lifecycle CAS revision for the addressed control record. When an existing owned record already has a named revision, the names are identical rather than parallel authorities: `leaseRevision == Binding<lease>.revision`, `approvalRevision == Binding<approval|planned_approval|external_approval>.revision`, `grantRevision == Binding<grant>.revision`, `CostReservation.revision == Binding<reservation>.revision`, and `DeploymentControlPolicy.revision == Binding<deployment_policy>.revision`. `ActivationBinding.activationGeneration == Binding<activation>.revision`. Automation intentionally has a distinct `definitionRevision`: enable/disable/archive advances the automation control revision without changing the immutable semantic definition revision.
+
+Independent cumulative-use CAS uses `usageRevision` only for `lease`, `approval`, `grant`, and `cost_account`. A normal Run admission increments Lease usage without changing `leaseRevision`, so the already-admitted Run's exact Lease binding does not become stale merely because another Run consumed capacity. Approval reserve/consume/released_terminal similarly advances approval usage without changing `approvalRevision`. Grant already owns `usageRevision` in §6; cost-account held/spent usage receives the same independent revision in §7 below. Configuration/lifecycle changes never reset cumulative usage, and usage changes never revive a revoked/retired/closed configuration.
 
     Money/1 = {
       currency:CurrencyCode,
@@ -179,6 +203,17 @@ PackageId/1 and D4 SemanticNamespaceId are distinct types even when their string
       dependencies:[ContributionDependency/1]
     }
 
+
+A `view` Contribution descriptor asset has a closed root dispatch. It is either the original D7 `ViewSpec` owned by D7, or the following D10 carrier for the D7-owned pure-data SearchContribution:
+
+    D10D7SearchDescriptor/1 = {
+      kind:"d10_d7_search_descriptor",
+      wireVersion:1,
+      search:<exact S D7 Query Algebra §6 SearchContribution>
+    }
+
+This does not make `SearchContribution` a ViewSpec and does not create a `search` ContributionKind. One D10 Contribution carries exactly one D7 SearchContribution. The D7 object remains exact `{contributionId,version,fieldId,textPath,role}` with its original D7 owner, D4-style semantic contribution ID grammar, positive Counter version, 0..8 static text path, and `name|alias|content` role.
+
 ContributionKind is closed to:
 The Contribution-kind closed set is `module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`.
 
@@ -199,6 +234,18 @@ A dependency belongs to one concrete dependent Contribution; there is no ambient
 An unavailable connector Contribution makes only that Contribution inactive. A template, schema, pack, or view in the same package is evaluated from its own dependencies and capabilities. Definition history, Contribution activation, and UI visibility remain three separate axes.
 
 Each kind’s descriptor is validated by its existing semantic owner: schema references existing D4 Registry namespace/Facet bindings; view/action consume D7 closed descriptors; template/preset/importer/exporter/conversion consume D9 contracts; D10 owns tool/model/connector descriptors and their runtime infrastructure; module only organizes product contributions and owns no author facts.
+
+
+For `D10D7SearchDescriptor/1`, activation additionally proves all of the following before it may enter the current Capability Catalog:
+
+1. `descriptorAssetId` resolves to exactly one `PackageAsset/1`; immutable bytes have the declared `byteLength`, SHA-256 equals that asset's `digest`, the strict root decoder is `d10_d7_search_descriptor`, and the active `ContributionBinding.descriptorDigest` is that same digest.
+2. D10 PackageId/packageVersion, D10 package-local `Contribution.contributionId`, D10 `contractVersion`, D7 `SearchContribution.contributionId`, and D7 positive Counter `version` are five distinct identity/version domains. Equal spellings or numbers create no mapping. Changing any D7 search member/version changes the Catalog digest even when D10 contractVersion is unchanged.
+3. The namespace portion of the D7 SearchContribution ID is authorized by the current D4 owner tuple plus D10 trust/NamespaceClaim proof. Independently, `fieldId` resolves under the exact current `RegistryBinding/1`, its namespace owner is verified, the Field is current-available, and the complete alias-expanded `textPath` terminates in D7 text or Optional<text>. No rule requires the SearchContribution ID namespace to equal the Field namespace.
+4. In one current Catalog, D7 SearchContribution IDs are unique. All active `view` Contributions whose descriptor root is `d10_d7_search_descriptor` form the complete SearchContribution set, sorted by D7 contributionId canonical bytes. Omission, duplicate ID, wrong owner, wrong digest, malformed path, or unavailable required Field makes the successor activation fail closed; the previous ActivationBinding remains current.
+5. `ActivationBinding.activationGeneration`, `capabilityCatalogDigest`, and the exact D4 `registryBinding` jointly bind that complete set. Explicit D7 search selection binds the selected `(contributionId,version)` rows; D7 `all` binds the complete set at that generation. A successor addition/removal/version/descriptor/owner/Registry change invalidates old search dependencies/results rather than silently changing their fields.
+6. The carrier is pure data. It grants no `field_read`, network, secret, script, index-private payload, author write, or alias-source authority. Query execution remains the D7 `scan → explicit read → CEL match/rank → sort/project` pipeline under current D6 authorization. Missing/unavailable selected contributions follow original D7 unavailability; they are never silently skipped and never become an empty successful search.
+
+The positive first-party construction is a valid `weftext.people` package `view` carrier whose accepted descriptor contains D7 SearchContribution `people/search-name`, version `1`, `fieldId:"people/name"`, `textPath:["text"]`, `role:"name"`. Activation succeeds only with the reserved D4 tuple `people→(first_party,weftext.people)`, matching descriptor asset digest, current Registry proof, and complete Catalog construction. A same-named third-party package, wrong digest, or runtime-only discovery remains inactive/pending.
 
 ## 5. Unique package mapping for four first-party modules
 
@@ -354,8 +401,10 @@ ControlBody/1 has exactly seven variants:
    action:StateAction.
    Closed applicability:
    automation→enable|disable|archive;
-   lease/approval/grant→revoke|archive;
+   lease/approval→revoke|archive;
+   grant→revoke|archive, where archive is the existing `retired` state;
    run→cancel|archive;
+   trust→revoke;
    package/pricing→retire;
    external_account→disconnect;
    cost_account→close;
@@ -450,6 +499,7 @@ parameters must validate against the active ToolValueProfile/1 input type of the
 
 `readGrants` accepts only `LeaseReadGrant/1` above; actual authorization is still computed from current D6 Policy with its original deny precedence, and a Lease cannot add authority. `notBefore < notAfter` and `maxRuns` is finite positive.
 
+
     StandingApprovalSpec/1 = {
       notBefore:D4.zoned_instant,
       notAfter:D4.zoned_instant,
@@ -458,7 +508,47 @@ parameters must validate against the active ToolValueProfile/1 input type of the
       costGrants:[Binding<grant>/1]
     }
 
-`SingleFieldMemberRule/1` is the controlled D10 internal projection of Candidate §14 `StandingApprovalEnvelope/1.rule`, not an independent D6/D7 wire. It exactly carries that section: action `set_field_member`; one member of the unique Entry under one owner/Field; value-type closed set `text|bool|int64|integer|decimal`; constraint closed set `any|enum|numeric_range`; and the raw-no-op branch. Any change must first amend Candidate §14 and then synchronize this projection. It never expands to create, delete, Facet, native-table, or bulk operations.
+`CONTROL-CONTRACT` is the unique owner of the generation-one automatic-author rule:
+
+    SingleFieldMemberRule/1 = {
+      kind:"single_field_member",
+      ownerNodeRef:D3.NodeRef,
+      fieldId:D4.FieldId,
+      selection:"require_exactly_one_entry",
+      memberPath:[D4.ObjectMemberSpec.name],
+      memberType:SingleFieldMemberScalarType/1,
+      valueConstraint:SingleFieldMemberValueConstraint/1
+    }
+
+    SingleFieldMemberScalarType/1 =
+        {kind:"bool"}
+      | {kind:"text"}
+      | {kind:"int64"}
+      | {kind:"integer"}
+      | {kind:"decimal"}
+      | {kind:"semantic_code",
+         scope:<exact ResolvedCodeScope structure frozen by S D7 Value §5.2>}
+
+    SingleFieldMemberValueConstraint/1 =
+        {kind:"enum", values:[D7.TypedLiteral]}
+      | {kind:"numeric_range", minimum:D7.TypedLiteral, maximum:D7.TypedLiteral}
+      | {kind:"text_utf8_no_crlf", maximumUtf8Bytes:Counter}
+
+`memberPath` has 1..7 names. Each name uses the original D4 `ObjectMemberSpec/1.name` decoder. Starting at the complete alias-expanded Field valueType root, every nonterminal element must select a direct object member; list/set/sequence indexes, union-arm selectors, wildcard, JSON Pointer syntax, runtime strings, and dynamic FieldIds are forbidden. The terminal member must already be present in the current Entry. D4 type depth remains maximum 8 and alias expansion consumes that original depth, so 1..7 is only an absolute outer bound and never bypasses the D4 depth/schema/source checks.
+
+`memberType` is the underlying scalar D7 bridge type. For a required D4 member the original D7 `set_field_member` Action literal has exactly that TypeSpec. For an optional D4 member the Action literal must have exact D7 type `{kind:"optional",item:<memberType>}` and value `some`; Core extracts only that present scalar for the rule/constraint comparison. `optional.none` is never automatically approved. This preserves the original D7 optional-member bridge rather than confusing the scalar domain with its Optional wrapper.
+
+`enum.values` has 0..64 complete scalar D7 TypedLiterals. Empty is legal and matches no automatic operation. Every literal type must be byte-equal to `memberType`; values are strictly sorted and unique by complete D3-CJ/3 canonical UTF-8 bytes. Membership uses the original D7 Value §2 same-type equality: exact text by scalar value, numeric values exactly, and semantic_code by complete resolved scope plus code. No numeric widening or text/code coercion is permitted.
+
+`numeric_range` is only for int64/integer/decimal. minimum and maximum must have exactly the same complete type as `memberType` and satisfy the original D7 same-type order `minimum <= maximum`. `text_utf8_no_crlf` is only for exact `{kind:"text"}`; `maximumUtf8Bytes` is 0..65528, directly bounded by the S D4 maximum raw Entry UTF-8 size. The candidate Unicode-scalar text is encoded as UTF-8, must be at most that limit, and must contain neither U+000D nor U+000A. The complete proposed D4 Entry/source is still separately encoded and checked against D4/D2 framing, escaping, nonEmpty, schema, cardinality, and source budgets.
+
+All constraints only narrow the current D4/D7 domain. A valid enum hit never substitutes for current Registry contribution availability, Narrow Field Qualification, current D6 authorization, `source_envelope_state`, or the separately required `commit_sequence_state` at author commit.
+
+The two actual-effect branches remain closed. Member-change requires the original D7 adapter to produce exactly one existing scalar-member MutationFootprint and the complete owner_fields field_change while every other source/member/qualifier/note/provenance/Entry/body/Facet/Ref/relation/control fact stays unchanged. Raw-no-op additionally requires the same current owner/Field/unique Entry/member, D7 same-type equality after the required/present-optional projection above, and byte-for-byte equality of the original adapter's complete proposed source to the before source; MutationFootprint, field_change, and D6 sourceVersions remain empty. Typed equality alone cannot authorize a byte rewrite.
+
+A malformed Standing Approval configuration returns management `D10ControlError.invalid_request`. A currently valid D7 Action whose scalar value is outside the frozen constraint is simply not covered by Standing Approval and returns the pre-D6 Run/step `approval_required` path; expiry returns `approval_expired`. After formal D6 entry, D6 owns the error exactly as specified in the coordinated amendment.
+
+Normative positive semantic-code fixture: current S `people/phone` expands `people/labeled-text-value.label` as an optional contribution-set semantic_code. With one current phone Entry whose `label` is present, the D7 Action value is Optional<semantic_code>.some; `SingleFieldMemberRule.memberType` is the underlying semantic_code scope. An enum containing `people/personal` and `people/work` may authorize present `personal→work`, while `work→work` exercises raw-no-op. An allowed D4 code omitted from the approval enum does not become automatically approved.
 
     ConsentSpec/1 =
       {kind:"planned",
@@ -517,6 +607,7 @@ affected is sorted/unique by ref canonical bytes; resourceUses is sorted/unique 
 
 ControlPreview/1 contains only control metadata currently visible to the principal. Budget overflow rejects rather than truncates.
 
+
 Result query:
 
     D10ControlResultRequest/1 = {
@@ -526,7 +617,96 @@ Result query:
       requestId:Uuid
     }
 
-It returns the currently disclosable prepare/apply history and never re-executes the operation or claims that the historical after revision is still current.
+Historical prepare/apply and current exact-record reads are deliberately separate.
+
+    D10ControlResult/1 =
+        {kind:"d10_control_result_prepared", wireVersion:1,
+         scope:Scope/1, requestId:Uuid, prepared:ControlPreparedHistory/1}
+      | {kind:"d10_control_result_applied", wireVersion:1,
+         scope:Scope/1, requestId:Uuid,
+         prepared:ControlPreparedHistory/1, applied:ControlAppliedHistory/1}
+
+    ControlPreparedHistory/1 = {
+      canonicalIntentBytes:Bytes,
+      allocatedControlRefs:[ControlRef<K>/1],
+      preview:ControlPreview/1,
+      commitOwner:"D6" | "D10"
+    }
+
+The prepared history is projected only from the original `ControlPrepareBinding/1`. It never returns a still-usable prepareToken and, for the Workspace arm, never returns or reconstructs the D6 author request or planned-preview author content. Planned author inspection remains the D7 `d7_planned_preview_open` proposal. `allocatedControlRefs` is sorted/unique by complete canonical Ref bytes.
+
+    ControlAppliedHistory/1 =
+        {kind:"workspace",
+         ownerReceipt:D6.d6_commit_receipt,
+         changes:[ControlRevisionDelta/1],
+         usageChanges:[ControlUsageRevisionDelta/1]}
+      | {kind:"deployment",
+         changes:[ControlRevisionDelta/1],
+         usageChanges:[ControlUsageRevisionDelta/1],
+         evidence:[EvidenceTicket/1],
+         auditRef:Token}
+
+    ControlRevisionDelta/1 = {
+      ref:ControlRef<K>/1,
+      beforeRevision:Option<Counter>,
+      afterRevision:Counter
+    }
+
+    ControlUsageRevisionDelta/1 = {
+      ref:ControlRef<lease|approval|grant|cost_account>/1,
+      beforeUsageRevision:Counter,
+      afterUsageRevision:Counter
+    }
+
+Workspace applied history is projected from the same authoritative D6 saved decision: `ownerReceipt` is the original immutable receipt bytes and `changes/usageChanges` are only its decision-linked D10 control effects. Deployment applied history is projected from the original `DeploymentControlDecision/1` plus the record/account deltas atomically linked to that decision by §8. Neither arm is a second success ledger.
+
+Result resolution order is: current result-disclosure authorization → authority/custody/continuity → stable key. Missing/hidden is `not_visible`. If a prepare binding is proven and no applied success exists, return prepared. If an authoritative applied success exists, return applied. A D6 recorded rejection/terminal failure remains owned by D6 and is obtained by replaying the original D6 request; D10 result may return prepared history only after it proves that no applied success exists. If the presence/absence or linkage of an applied success is temporarily unprovable, return `state_unavailable` rather than downgrading to prepared. Proven decision/effect linkage contradiction is `integrity_conflict`.
+
+If r5 applied, the response was lost, and another valid request later changes the same record to r6, retry of the original request returns the saved r5 applied history after current disclosure authorization. It never substitutes r6.
+
+Current state uses a different entrypoint:
+
+    D10ControlReadRequest/1 = {
+      kind:"d10_control_read", wireVersion:1,
+      scope:Scope/1,
+      ref:ControlRef<K>/1
+    }
+
+    D10ControlCurrent/1 = {
+      kind:"d10_control_current", wireVersion:1,
+      scope:Scope/1,
+      binding:Binding<K>/1,
+      usageRevision:Option<Counter>,
+      view:ControlCurrentView<K>/1
+    }
+
+`scope` must be the record's exact real scope. There is no name lookup, wildcard, list, or display-label lookup. Current disclosure authorization occurs before existence/state. Missing, wrong scope/audience, and hidden all return `not_visible`. A visible record whose protected continuity is temporarily unprovable returns `state_unavailable`; an unknown closed state/member in a supposedly compatible record is an integrity/version failure, never `state:"unknown"`.
+
+The generation-one current projections are closed as follows:
+
+| K | exact scope | exact `view` | config/domain/usage revision semantics |
+| --- | --- | --- | --- |
+| `automation` | workspace | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` is the control/lifecycle CAS; `definitionRevision` changes only semantic definition. usageRevision none. |
+| `lease` | workspace | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`; usageRevision some and advances only when a new `LeaseRunUse/1` consumes the lineage. Normal usage never stales an already-admitted Run's leaseRevision. |
+| `approval` | workspace | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`; usageRevision some for ApprovalUse reserve/consume/released_terminal only. Revocation/archive advances approvalRevision without resetting usage. |
+| `planned_approval` | workspace | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. No author request/preview bytes are exposed here. |
+| `external_approval` | workspace | `{kind:"external_approval_state",grantingPrincipal:Token,intent:Binding<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. |
+| `run` | workspace | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | binding revision advances on durable Run/lifecycle transition. usageRevision none; maxRuns consumption belongs to Lease usage. |
+| `workspace_budget` | workspace | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | binding revision is limits CAS. usageRevision none; actual cost usage remains in grants/accounts/reservations rather than a second budget ledger. |
+| `activation` | workspace | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`; successor activation makes earlier record `current:false` without deleting it. usageRevision none. |
+| `deployment_policy` | deployment | `{kind:"deployment_policy_state",policy:DeploymentControlPolicy/1}` | `binding.revision==policy.revision`; usageRevision none. |
+| `trust` | deployment | `{kind:"trust_state",state:"active"|"revoked",publisherId:Text,publicKey:Ed25519PublicKey,previous:Option<Binding<trust>/1>,proof:EvidenceTicket/1,claims:[NamespaceClaim/1]}` | binding revision covers key/claim/rotation/revocation. usageRevision none. |
+| `package` | deployment | `{kind:"package_state",state:"installed"|"retired",manifest:PackageManifest/1,signature:Ed25519Signature}` | binding revision covers install/update/retire; packageVersion is independent. usageRevision none. |
+| `external_account` | deployment | `{kind:"external_account_state",state:"connected"|"disconnected",provider:ContributionBinding/1,externalAccountId:Text,endpointId:LocalOperationId,proof:EvidenceTicket/1}` | binding revision covers configuration/disconnect. usageRevision none. |
+| `secret` | deployment | `{kind:"secret_state",state:"active"|"revoked",account:Binding<external_account>/1,audience:ContributionBinding/1,usageKind:"authenticate",secretVersionId:Token}` | binding revision covers publish/rotation/rebind/revoke. No plaintext/staged bytes are returned. usageRevision none; secret-use counts remain in the ResourceUseGrant. |
+| `grant` | deployment | `{kind:"grant_state",grant:ResourceUseGrant/1}` | `binding.ref.id==grant.grantId`, `binding.revision==grant.grantRevision`, and usageRevision is some and equals `grant.usageRevision`. `archive` maps to the existing `retired` state. |
+| `cost_account` | deployment | `{kind:"cost_account_state",state:"active"|"frozen"|"closed",currency:CurrencyCode,ceiling:Counter,pricing:Option<Binding<pricing>/1>,spentMicroUnits:Counter,heldMicroUnits:Counter}` | binding revision covers config/close/freeze; usageRevision some for held/spent reservation deltas. Freeze never clears liabilities. |
+| `pricing` | deployment | `{kind:"pricing_state",state:"active"|"retired",account:Binding<external_account>/1,currency:CurrencyCode,fixedMicroUnits:Counter,meters:[PricingMeter/1],evidence:EvidenceTicket/1}` | binding revision covers pricing update/retire. usageRevision none. |
+| `reservation` | deployment | `{kind:"reservation_state",reservation:CostReservation/1}` | `binding.ref.id==reservation.reservationId` and `binding.revision==reservation.revision`. usageRevision none; `uncertain` is the existing recoverable state, not unknown. |
+| `external_effect` | workspace | `{kind:"external_effect_state",state:"prepared"|"submitting"|"succeeded"|"failed_no_effect"|"outcome_unknown"|"cancelled",recoveryMode:"automatic"|"manual_required",intent:ExternalEffectIntent/1}` | binding revision advances on durable effect/recovery transition. usageRevision none; costs/attempt quotas remain their reservation/grant owners. |
+| `stop` | the exact workspace or deployment scope used to create the latch | `{kind:"stop_state",latch:ExecutionStopLatch/1}` | fresh open record has revision 1; only `open→stopped` advances once; idempotent repeated stop is a no-op. usageRevision none. |
+
+For `lease|approval|grant|cost_account`, `D10ControlCurrent.usageRevision` must be `some` and equal the record's current independent usage revision; every other kind requires `none`. Trusted time crossing `notBefore/notAfter` changes current eligibility but does not silently mutate configuration revision or create a persisted `expired` state. Revocation/retirement/archive/close remains observable to an authorized reader and never aliases absence.
 
 ## 8. Idempotency, CAS, and replay order
 
@@ -553,7 +733,7 @@ Core internally stores:
     ControlDependencies/1 = {
       configBindings:[Binding<K>/1],
       usageBindings:[{
-        ref:ControlRef<K>/1,
+        ref:ControlRef<lease|approval|grant|cost_account>/1,
         usageRevision:Counter
       }],
       authorityProof:Token,
@@ -562,7 +742,7 @@ Core internally stores:
       sourceOrRegistryBindings:[Sha256]
     }
 
-`ControlDependencies/1` is the complete internal dependency set Core derives from actual authorized reads and is never caller input. Arrays are sorted/unique by complete canonical bytes. sourceOrRegistryBindings stores binding digests owned by existing source/Registry contracts and creates no new author or Registry token.
+`ControlDependencies/1` is the complete internal dependency set Core derives from actual authorized reads and is never caller input. Arrays are sorted/unique by complete canonical bytes. A usage binding exists only for lease maxRuns lineage use, Standing Approval count use, ResourceUseGrant cumulative use, or actual cost-account held/spent use; it never substitutes for that record's configuration Binding. sourceOrRegistryBindings stores binding digests owned by existing source/Registry contracts and creates no new author or Registry token.
 
     ControlPrepareBinding/1 = {
       key:StableControlKey/1,
@@ -629,10 +809,13 @@ Configuration revision and usageRevision are distinct. Checked increment at Coun
     NamespaceClaim/1 = {
       namespaceId:D4.SemanticNamespaceId,
       ownerClass:"first_party" | "publisher",
-      ownerId:Token
+      ownerId:NamespaceOwnerId/1,
+      proof:EvidenceTicket/1
     }
 
-`NamespaceClaim/1` only binds a verified PublisherIdentity to an existing D4 semantic-namespace ownership claim. It creates no second namespace registry and cannot override `core`, `wf`, or another reserved owner.
+`NamespaceOwnerId/1` is only a D10 validation name for the exact scalar `ownerId` already carried by the D4 Registry row; it is not a new namespace identity. For `first_party`, the value must be the exact reserved D4 tuple value for that namespace (`weftext.people`, `weftext.organizations`, `weftext.calendar`, or `weftext.library`). For `publisher`, it must be byte-equal to the accepted trust record's `publisherId` and that exact `(namespaceId,ownerClass,ownerId)` tuple must be proven by the `namespace_claim` EvidenceTicket. A D6 random Token/ticket can never occupy `ownerId`; proof is the separate `proof` member.
+
+`NamespaceClaim/1` binds a verified PublisherIdentity/first-party root to the already-owned D4 semantic-namespace tuple. It creates no second namespace registry and cannot override `core`, `wf`, another reserved owner, or a different verified publisher. Install order, package/display name, enablement, and string coincidence are never owner proof.
 
     PricingMeter/1 = {
       meterId:LocalOperationId,
@@ -708,6 +891,9 @@ Only an atomically successful commit saves a decision. Preflight/authorization/C
       state:"reserved" | "uncertain" | "settled" | "released",
       actual:Option<Money/1>
     }
+
+
+Each `CostReservation/1` belongs to exactly one billable `attemptId`, one actual `cost_account`, one grant, one pricing binding, and one currency. Run/Lease/Automation/Workspace/deployment limits checked during the same admission are layered ceilings/projections, not additional actual accounts for this reservation, and the same cost is recorded once. If one operation truly creates separately attributable charges against multiple actual accounts, it creates separately attributable attempts/reservations/evidence for those accounts; any required group admission is atomic over those reservations without turning one reservation into a multi-account object.
 
 `actual` is some only when state=settled and is none in every other state.
 
