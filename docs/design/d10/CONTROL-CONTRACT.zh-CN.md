@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 控制与管理合同
 
-revision: D10-r07-independent-review-fixes-2026-09-28；状态：C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 完整独立终审返回 REVISE（P0=0、P1=1 JR001、P2=8 JR002–JR009，术语/翻译均未通过）后的作者修订候选，等待新的独立复核。本文件是 R07 管理/current-result/error 合同的唯一 D10 owner。固定上游 S 不变；UPSTREAM-AMENDMENTS 中所有 D6/D7/D3/D8/D9 条款仍是未激活提案，须后续协调接受。
+revision: D10-r08-joint-review-fixes-2026-09-28；状态：固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成 C18/18、S49/49，结论 REVISE（P0=0、P1=1 B03-P1-01、P2=10 B01/B02/B03/B10/B11 项，术语与中英语义均 REVISE）；R08 是作者统一修订，等待新的完整独立复核。固定 S 不变，所有 upstream 配套修订在后续协调接受前继续未激活。
 
 ## 1. 权威、适用范围与错误边界
 
@@ -41,7 +41,7 @@ D10 管理/control 入口的错误对象为：
         "cancelled" | "external_outcome_unknown"
     }
 
-`D10ControlError/1` 只用于 `d10_control_prepare`、`d10_host_control_commit`、`d10_control_result`、`d10_control_read`、`d10_secret_stage` 和 `d10_emergency_stop`。`D10RunStepError/1` 只用于尚未进入其它 protocol owner 的 D10 Run/step：Run admission、ContextBundle/model/tool/connector 执行、D6 前 approval/delegation 检查以及 external-effect 执行/恢复。
+`D10ControlError/1` 只用于 `d10_control_prepare`、`d10_host_control_commit`、`d10_control_result`、`d10_control_read`、`d10_secret_stage`、`d10_emergency_stop` 和 `d10_emergency_stop_result`。`D10RunStepError/1` 只用于尚未进入其它 protocol owner 的 D10 Run/step：Run admission、ContextBundle/model/tool/connector 执行、D6 前 approval/delegation 检查以及 external-effect 执行/恢复。
 
 一旦进入 D3、D6、D7、D8 或 D9 入口，就逐字返回该 owner 原 closed error/envelope。D10 不包装 D6 `not_visible`、`approval_unavailable`、`execution_stopped`、`transaction_aborted`，不包装 D7 action/effects 错误，也不改名 D3/D8/D9 错误。诊断 UI 可在 owner error 后另做当前受权的 `d10_control_read`，但该读取不得改变正式结果。
 
@@ -101,6 +101,16 @@ control id 与 incarnation 永不重用。retire、archive、revoke、close 或�
 CurrencyCode 是 exact 三位 ASCII A-Z。D10 不执行隐式外汇换算。
 
 本文其余基础标量沿用现有 closed JSON 语义：`Token` 是 D6 §1 的非空 opaque token；`Text` 是 Unicode scalar string；`Bytes` 是受相应入口字节预算约束的 byte sequence；`Boolean` 只接受 JSON true/false；`Sha256` 是 `sha256:` 加 64 位 lowercase hex；`HostPrincipal` 是受信 host authentication 映射得到的 `Token`。当前主体身份永远不能由请求自报；但已经通过 H 授权的管理操作可以在 policy、reconciler 或 ResourceUseGrant 的**目标主体字段**中填写另一个 `HostPrincipal`，这表示被管理的受权对象，不表示当前主体冒充该目标主体。`Ed25519PublicKey` 与 `Ed25519Signature` 只在受信 package/trust adapter 中出现，编码格式必须由该 adapter 的已接纳 profile 固定，普通 control caller 不能自报已验证。
+
+    HostOrWorkspacePrincipal/1 =
+        {kind:"workspace",
+         workspaceRef:D3.WorkspaceRef,
+         principal:Token}
+      | {kind:"deployment",
+         storeIncarnation:Uuid,
+         principal:HostPrincipal}
+
+`HostOrWorkspacePrincipal/1` 是 D10 对成功 safety transition 线性化 cut 上受信 authenticated actor 的 closed projection。workspace arm 把当前 D6 认证的 Workspace principal 与准确 WorkspaceRef 绑定；deployment arm 把 H 认证的 HostPrincipal 与实际 D10 storeIncarnation 绑定。两支都不是 caller 自报值、作者 EntityRef 或 capability token。
 
 受控 ASCII token 语法：
 
@@ -212,6 +222,41 @@ PackageId/1 与 D4 SemanticNamespaceId 是不同类型，即使字符串可能�
     }
 
 这不会把 `SearchContribution` 变成 ViewSpec，也不新增 `search` ContributionKind。一份 D10 Contribution 恰承载一份 D7 SearchContribution；内部对象继续逐字是 D7 的 `{contributionId,version,fieldId,textPath,role}`，沿用原 D7 owner、D4-style semantic contribution ID 词法、正 Counter version、0..8 静态 text path 与 `name|alias|content` role。
+
+R08 同时冻结一个具名、版本化的第一方 Core author adapter。它不是 generic Tool callback，也不会把 ToolValue 变成 D7 value alias：
+
+    CoreFieldMemberAdapterDescriptor/1 = {
+      kind:"d10_core_field_member_adapter",
+      wireVersion:1,
+      actionKind:"set_field_member"
+    }
+
+首代唯一 adapter identity 是 packageId `weftext.automation`、package-local contributionId `set-field-member`、Contribution kind `action`、contractVersion `{major:1,minor:0,patch:0}`。packageVersion 与 descriptorDigest 仍逐字使用普通第一方 PackageManifest/ContributionBinding 接纳规则。该 package 不是 Bundled Module，也不创建 D4 namespace 或作者事实。
+
+    SingleFieldMemberPath/1 =
+      [D4.ObjectMemberSpec.name]   // exact length 1..7
+
+    FieldMemberTask/1 = {
+      ownerNodeRef:D3.NodeRef,
+      fieldId:D4.FieldId,
+      selection:"require_exactly_one_entry",
+      memberPath:SingleFieldMemberPath/1,
+      value:D7.TypedLiteral
+    }
+
+`FieldMemberTask.value` 是原 D7 Action literal，不是 approval scalar。它只能是一个允许的 `SingleFieldMemberScalarType/1`，或恰一层 item 为该 scalar、value state 为 `some` 的 D7 Optional wrapper。`optional.none`、Ref/Locator/control token、object、list、set、union、nested Optional，以及把 ToolValue text 提升为 Ref/FieldId 都拒绝。D4 optional member 因而保留原 D7 Optional bridge，而 `SingleFieldMemberRule.memberType` 比较 present 的底层 scalar。
+
+    D10AuthorPreparationLink/1 = {
+      run:ControlRef<run>/1,
+      stepId:Counter,
+      automation:Binding<automation>/1,
+      definitionRevision:Counter,
+      taskDigest:Sha256,
+      preparedBindingToken:Token,
+      request:D6.d6_commit_request
+    }
+
+这是受保护的 Core recovery link，不是 public request，也不是第二 author decision。`preparedBindingToken` 是原 D7 PreparedActionBinding/2 的准确 token，`request` 是其原 D6 request。Core 在返回 prepared author step 或允许提交之前，必须把此 link、原 PreparedActionBinding/2 与必要 pins 原子保存。
 
 ContributionKind 闭集为：
 贡献类型闭集为：`module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`。
@@ -448,12 +493,17 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
 
 所有 maxSteps/maxInputBytes/maxOutputBytes/maxElapsedMillis 必须正且有限；costs 按 grant ref 排序唯一，currency 必须匹配 grant/account。
 
+    AutomationInvocation/1 =
+        {kind:"tool",
+         contribution:ContributionBinding/1,
+         parameters:ToolValue/1}
+      | {kind:"core_field_member",
+         contribution:ContributionBinding/1,
+         task:FieldMemberTask/1}
+
     AutomationSpec/1 = {
       label:Text,
-      invocation:{
-        contribution:ContributionBinding/1,
-        parameters:ToolValue/1
-      },
+      invocation:AutomationInvocation/1,
       schedule:AutomationSchedule/1,
       missedPolicy:"skip" | "run_once",
       queueLimit:Counter,
@@ -469,7 +519,7 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
        horizon:ScheduleHorizon/1,
        outputLimit:Counter}
 
-parameters 必须由该 contribution 的 active ToolValueProfile/1 输入类型验证。recurrence selector 只定位同一 revision 重新绑定的 D4 recurrence source，不成为 durable EntityRef。
+`tool` parameters 必须由对应 Contribution 的 active ToolValueProfile/1 输入类型验证。`core_field_member` 只接受上文准确接纳的第一方 adapter identity 和 closed `FieldMemberTask/1`；它不使用 ToolValueProfile，也不增加任何 read/write 权限。recurrence selector 只定位同一 revision 重新绑定的 D4 recurrence source，不成为 durable EntityRef。
 
     LeaseReadGrant/1 = {
       scope:<exact D6 Policy/2 grant.scope from S D6 Control §4>,
@@ -498,6 +548,19 @@ parameters 必须由该 contribution 的 active ToolValueProfile/1 输入类型�
 
 `readGrants` 只接受上面的 `LeaseReadGrant/1`；实际授权仍由当前 D6 Policy 按原 deny precedence 计算，Lease 不能增加权限。`notBefore < notAfter`，`maxRuns` 正且有限。
 
+
+一个 `core_field_member` Run step 只能按下面的确定映射执行，不存在 callback dispatch：
+
+1. 绑定当前 Automation definitionRevision、准确 invocation、ActivationBinding、Lease、当前 D6 principal 与全部有限预算。
+2. 在读取值之前，针对配置的 owner/Field/member 执行原 D7 Narrow Field Qualification 完整图，并证明所有必要的当前观察/写入 scope。Core 内部可以做完整 source 验证，但窄主体不能因此收到隐藏 source bytes。
+3. 读取 `task.ownerNodeRef/task.fieldId` 的完整 current Field。自动执行要求恰一 Entry，且配置 member 已经 present。从该准确前像取得 `expectedRevision`、真实 `occurrenceKey` 与原完整 `rawEntrySource`；Automation 配置不持久保存旧 selector。
+4. 逐字构造原 D7 intent：`{format:"weftext.action",version:1,intent:{kind:"set_field_member",selector:{owner:task.ownerNodeRef,fieldId:task.fieldId,expectedRevision:<fresh owner source revision>,occurrenceKey:<the unique current Entry key>,rawEntrySource:<the exact original Entry JSON text>},memberPath:task.memberPath,value:task.value}}`。
+5. 调用原 D7 prepare，保留其 PreparedActionBinding/2，读取并验证完整 preview/effects/MutationFootprint，再用**实际** member-change 或逐字 raw-no-op 与独立的当前 Standing Approval 比较。Approval 从不提供 target、Entry、memberPath 或本次 requested value。
+6. Core 从原 prepared semantics 构造 ApprovalUse，并用原 `d6_commit_request` 进入 D6；planning/final/replay 继续由 D6 owner。
+
+对 S `people/phone.label` 这样的 optional member，task.value 是 D7 Optional TypedLiteral：`{type:{kind:"optional",item:{kind:"semantic_code",scope:<the complete people contribution-set scope>}},value:{state:"some",value:"people/work"}}`。D4 scope 仍完整包含 `people/other|people/personal|people/work` 三个 code；approval enum 可以有意只允许其中子集。当前恰一 phone Entry 且 present `personal→work` 是真实 member-change；present `work→work` 只有完整 proposed source 与 before bytes 逐字相等时才进入既有 raw-no-op。当前 phone Entry 为零或多条时自动 profile 不适用；用户仍可交互选择第二条同值 phone 的真实 D7 selector，走普通 D7 确认路径。
+
+所有原 D2/D4/D6/D7 限额继续生效，包括 D4 raw Entry 65,528 bytes 与既有完整 source/header/carrier/entry/check budgets。Core 内部完整 source 验证不会扩大 public disclosure。重启后若 `D10AuthorPreparationLink/1` 存在，Core 只能恢复该准确原 PreparedActionBinding/request。若不存在，只有在能证明原子保存从未成功且 request 从未交付时才可新 prepare。若存在性/连续性未知则返回 `state_unavailable`；planned 或 submitted-unknown 必须恢复原 request，绝不能新建 OperationId。
 
     StandingApprovalSpec/1 = {
       notBefore:D4.zoned_instant,
@@ -549,6 +612,78 @@ Standing Approval 配置自身 malformed 时返回管理域 `D10ControlError.inv
 
 semantic_code 规范正例直接使用 S 当前目录：`people/phone` 的 `people/labeled-text-value.label` 是 optional contribution-set semantic_code。只有当前 phone Entry 的 `label` 已 present 时，D7 Action value 才是 Optional<semantic_code>.some；`SingleFieldMemberRule.memberType` 是底层 semantic_code scope。enum 可只允许 `people/personal` 与 `people/work`：present `personal→work` 是真实 member-change，`work→work` 是 raw-no-op；即便 D4 允许 `people/other`，未列入 approval enum 时也不得自动批准。
 
+R08 把 immutable external request semantics、具体 send attempt 与可变 external-effect lifecycle 明确分开：
+
+    FrozenEffectBytes/1 = {
+      bytes:Bytes,
+      byteLength:Counter,
+      digest:Sha256
+    }
+
+    ExternalTarget/1 = {
+      operation:LocalOperationId,
+      target:ToolValue/1
+    }
+
+    ExternalIdempotencyBinding/1 =
+        {kind:"none"}
+      | {kind:"bounded_key",
+         key:Text,
+         notBefore:D4.zoned_instant,
+         notAfter:D4.zoned_instant,
+         proof:FrozenEffectBytes/1}
+
+    ExternalEffectIntent/1 = {
+      effect:ControlRef<external_effect>/1,
+      workspaceRef:D3.WorkspaceRef,
+      contributionBinding:ContributionBinding/1,
+      accountBinding:Binding<external_account>/1,
+      targetBinding:ExternalTarget/1,
+      requestPayload:FrozenEffectBytes/1,
+      idempotencyBinding:ExternalIdempotencyBinding/1
+    }
+
+    ExternalRequestBinding/1 = {
+      effect:ControlRef<external_effect>/1,
+      requestDigest:Sha256
+    }
+
+    ExternalExecutionBinding/1 = {
+      sendAttemptId:Uuid,
+      intent:ExternalRequestBinding/1,
+      delegationBinding:Binding<lease>/1,
+      approvalBinding:Binding<external_approval>/1,
+      externalEffectGrant:Binding<grant>/1,
+      egressBinding:Binding<grant>/1,
+      secretGeneration:Option<{
+        secret:Binding<secret>/1,
+        secretVersionId:Token,
+        grant:Binding<grant>/1
+      }>,
+      budgetReservations:[{
+        billableAttemptId:Uuid,
+        reservation:ControlRef<reservation>/1
+      }]
+    }
+
+    ExternalEffectCurrentView/1 = {
+      kind:"external_effect_state",
+      state:"prepared" | "submitting" | "succeeded" |
+            "failed_no_effect" | "outcome_unknown" | "cancelled",
+      recoveryMode:"automatic" | "manual_required",
+      contribution:ContributionBinding/1,
+      account:Binding<external_account>/1,
+      operation:LocalOperationId,
+      requestDigest:Sha256,
+      targetDigest:Sha256
+    }
+
+`FrozenEffectBytes.byteLength` 必须等于真实 bytes 长度，digest 等于其 SHA-256。每份记录都必须落入当前 Run/Automation/Lease input 与 egress 限额的最窄有限预算。`bounded_key.key` 是非空、最多 1024 UTF-8 bytes 的文本，`notBefore < notAfter`；proof 是 accepted adapter 对同 contribution/account/operation/target/key/window 的完整 immutable 证据。该 proof 是内部 bytes，**不是** EvidenceTicket 的新 arm。
+
+`requestDigest` 是完整 frozen ExternalEffectIntent 经 D10-External-Intent/1 域 canonical 编码的 SHA-256；`targetDigest` 是完整 ExternalTarget 经 D10-External-Target/1 域的摘要。Core 保留完整原 bytes。`budgetReservations` 为 0..32，按 reservation ref 排序唯一；每项解析到 `attemptId==billableAttemptId` 的 CostReservation，之后结算推进 reservation revision 不会改写 immutable send binding。`sendAttemptId` 与每个 billableAttemptId 分域。
+
+普通 current read 只返回 `ExternalEffectCurrentView/1`；绝不返回 request payload、target ToolValue、idempotency key/proof、secret generation、approval record 或 reservation identities。即便只是 digest/account/contribution，也必须先通过原冻结 effect scope 的当前披露授权。
+
     ConsentSpec/1 =
       {kind:"planned",
        originalRequest:D6.d6_commit_request,
@@ -558,13 +693,13 @@ semantic_code 规范正例直接使用 S 当前目录：`people/phone` 的 `peop
        notBefore:D4.zoned_instant,
        notAfter:D4.zoned_instant}
     | {kind:"external",
-       intent:Binding<external_effect>/1,
+       intent:ControlRef<external_effect>/1,
        requestDigest:Sha256,
        resourceGrants:[Binding<grant>/1],
        notBefore:D4.zoned_instant,
        notAfter:D4.zoned_instant}
 
-planned 只授权原 planned request，不 reprepare、不换 OperationId、不换 target；external 只授权原 ExternalEffectIntent。
+planned 只授权原 planned request，不 reprepare、不换 OperationId、不换 target；external 只授权 exact ControlRef 与 requestDigest 都匹配的 immutable ExternalEffectIntent。合法 `prepared→submitting→...` lifecycle revision 本身不改变 frozen request digest，因此不会自行使 consent 失效；改变 contribution/account/target/payload/idempotency 必须新建 effect intent 并重新 consent。
 
 prepare 成功返回：
 
@@ -625,14 +760,41 @@ ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒
          scope:Scope/1, requestId:Uuid,
          prepared:ControlPreparedHistory/1, applied:ControlAppliedHistory/1}
 
+    ControlOperationKind/1 =
+        "automation_configure" | "consent" | "state" |
+        "workspace_limits" | "activation" |
+        "deployment_put" | "cost_reconcile"
+
+    ControlAffectedChange/1 = {
+      ref:ControlRef<K>/1,
+      change:"create" | "update" | "enable" | "disable" |
+             "revoke" | "cancel" | "archive" | "retire" |
+             "disconnect" | "close" | "settle",
+      beforeRevision:Option<Counter>,
+      proposedAfterRevision:Option<Counter>
+    }
+
+    ControlResourceUse/1 = {
+      grant:Binding<grant>/1,
+      maximum:Option<Money/1>
+    }
+
+    ControlPreviewSummary/1 = {
+      affected:[ControlAffectedChange/1],
+      resourceUses:[ControlResourceUse/1]
+    }
+
     ControlPreparedHistory/1 = {
-      canonicalIntentBytes:Bytes,
+      intentDigest:Sha256,
+      operation:ControlOperationKind/1,
       allocatedControlRefs:[ControlRef<K>/1],
-      preview:ControlPreview/1,
+      previewSummary:ControlPreviewSummary/1,
       commitOwner:"D6" | "D10"
     }
 
-prepared history 只能从原 `ControlPrepareBinding/1` 投影；不返回可继续使用的 prepareToken。Workspace arm 不通过这里返回或重建 D6 作者 request/planned-preview 作者内容；planned 作者检查继续只走 D7 `d7_planned_preview_open` 提案。`allocatedControlRefs` 按完整 canonical Ref bytes 排序且唯一。
+受保护的 `ControlPrepareBinding/1.canonicalIntentBytes` 继续保存完整 canonical control intent B，包括其中嵌套的 planned 作者请求 A；stable-key conflict 仍比较完整 bytes。`intentDigest` 只是这些 saved bytes 的 SHA-256。历史 public result 永不返回 A、完整 B、生成的 control-submit request M、prepareToken 或 planned-preview bytes/token。`operation` 恰取现有七种 ControlBody kind；`ControlAffectedChange/1` 与 `ControlResourceUse/1` 就是现有 ControlPreview item shape，成员、enum、排序、唯一性、Option 与 Money 语义不变。
+
+首次 `d10_control_prepare` 只有在当前披露资格覆盖完整 B 与任何嵌套 A scope 后，才可返回包含 M 的完整 `D10ControlPrepared/1`；之前持有 A 不等于当前读取资格。同 stable key 已有权威 applied success 时，prepare 返回同一个 `d10_control_result_applied` historical arm，绝不伪装新的 prepared object。若 applied-success existence 或 linkage 暂不可证明，则返回 `state_unavailable`，绝不降格 prepared。
 
     ControlAppliedHistory/1 =
         {kind:"workspace",
@@ -689,7 +851,7 @@ current state 使用另一个入口：
 | `lease` | `workspace` | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`；用量修订只在新的 `LeaseRunUse/1` 消耗谱系时推进；普通用量变化不会使已经准入的运行因租约修订变化而失效。 |
 | `approval` | `workspace` | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`；用量修订只随批准使用的预留、消费或终态释放变化；撤销或归档推进批准配置修订，不清除累计用量。这里的配置修订只描述批准规则和生命周期，累计使用量始终由独立用量修订追踪，二者不会相互重置、替代或隐式恢复权限。 |
 | `planned_approval` | `workspace` | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none；不在此泄露 author request/preview bytes。 |
-| `external_approval` | `workspace` | `{kind:"external_approval_state",grantingPrincipal:Token,intent:Binding<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none。 |
+| `external_approval` | `workspace` | `{kind:"external_approval_state",grantingPrincipal:Token,intent:ControlRef<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none。 |
 | `run` | `workspace` | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | durable Run/lifecycle transition 推进 binding revision；usageRevision=none，maxRuns 消耗归 Lease usage。 |
 | `workspace_budget` | `workspace` | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | 绑定修订只随限额配置变化；没有独立累计用量修订，实际费用和预留仍由授权、账户及费用预留记录持有，不建立第二预算账本。 |
 | `activation` | `workspace` | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`；successor activation 使旧 record `current:false`，不删除；usageRevision=none。 |
@@ -702,10 +864,20 @@ current state 使用另一个入口：
 | `cost_account` | `deployment` | `{kind:"cost_account_state",state:"active"|"frozen"|"closed",currency:CurrencyCode,ceiling:Counter,pricing:Option<Binding<pricing>/1>,spentMicroUnits:Counter,heldMicroUnits:Counter}` | 配置、关闭或冻结推进绑定修订；已支出和占用的费用变化推进独立用量修订；冻结不会清除既有责任。 |
 | `pricing` | `deployment` | `{kind:"pricing_state",state:"active"|"retired",account:Binding<external_account>/1,currency:CurrencyCode,fixedMicroUnits:Counter,meters:[PricingMeter/1],evidence:EvidenceTicket/1}` | pricing update/retire 推进 binding revision；usageRevision=none。 |
 | `reservation` | `deployment` | `{kind:"reservation_state",reservation:CostReservation/1}` | `binding.ref.id==reservation.reservationId` 且 `binding.revision==reservation.revision`；usageRevision=none；`uncertain` 是已有可恢复状态，不是 unknown。 |
-| `external_effect` | `workspace` | `{kind:"external_effect_state",state:"prepared"|"submitting"|"succeeded"|"failed_no_effect"|"outcome_unknown"|"cancelled",recoveryMode:"automatic"|"manual_required",intent:ExternalEffectIntent/1}` | 外部效果或恢复状态的耐久转换推进绑定修订；没有独立累计用量修订；费用和尝试次数分别仍归费用预留与资源授权记录。 |
-| `stop` | 创建 latch 时的 exact workspace 或 deployment scope | `{kind:"stop_state",latch:ExecutionStopLatch/1}` | fresh open revision=1；只有 `open→stopped` 增一次；重复 stop 是 no-op；usageRevision=none。 |
+| `external_effect` | `workspace` | `ExternalEffectCurrentView/1` | 外部效果或恢复状态的耐久转换推进绑定修订；没有独立累计用量修订；费用和尝试次数分别仍归费用预留与资源授权记录。 |
+    ExecutionStopLatchView/1 = {
+      target:ControlRef<automation|run>/1,
+      state:"open" | "stopped",
+      stoppedBy:Option<HostOrWorkspacePrincipal/1>
+    }
+
+| `stop` | 经 W 读取时为 target 的准确 Workspace scope；经 H 读取时为准确 deployment storeIncarnation | `{kind:"stop_state",latch:ExecutionStopLatchView/1}` | fresh open revision=1；只有 `open→stopped` 增一次；重复 stop 是 no-op。内部 safety sequence 不公开；无独立 usageRevision。 |
 
 对 `lease|approval|grant|cost_account`，`D10ControlCurrent.usageRevision` 必须为 `some` 且等于当前独立 usage revision；其它 kind 必须为 `none`。可信时间跨 `notBefore/notAfter` 只改变当前 eligibility，不静默修改 configuration revision 或持久化 `expired` state。revoked/retired/archived/closed 对当前有权 reader 仍可观察，永不伪装成 absence。
+
+`activation_state.current` 在同一受权 cut 中由准确 active-selector record 派生；切换时的 CAS 对象是 selector，而不是历史 ActivationBinding record。successor activation 比较准确 current predecessor selector，并把新 ActivationBinding 与 selector 原子发布。旧 generation 变为 non-current 不会改变该历史 generation 或其 Binding revision。
+
+首代不提供 `planned_approval` 或 `external_approval` 的独立提前 revoke state action。有限时间边界、准确 Lease/Activation/request binding、当前 ResourceUseGrant 状态、当前 D6 authorization 与不可逆 stop gate 都在相关 planned/send 边界重新检查。这个支持范围限制不会创造 generic approval lifecycle state，也不会绕过原 authoritative-abort 规则释放 planned work。
 
 ## 8. Idempotency、CAS 与结果重放顺序
 
@@ -924,7 +1096,7 @@ reconcile 用 expected reservation revision CAS。成功事务原子追加 CostS
 
 ## 11. Emergency stop 与线性化
 
-公开 stop：
+Public stop 是独立于普通 control prepare 的专用 safety transaction：
 
     D10EmergencyStopRequest/1 = {
       kind:"d10_emergency_stop",
@@ -936,29 +1108,80 @@ reconcile 用 expected reservation revision CAS。成功事务原子追加 CostS
       | ControlRef<run>/1
     }
 
-普通 owner 可停止自己精确拥有的 automation/run；W 限 Workspace；H 限 Deployment。stop 不要求目标 configuration revision，从而不会因为普通配置 Counter 饱和而失效；它只需要准确 id/incarnation 和当前 stop authority。
+首代要求 `requestId == target.id`。因此 requestId 是 exact target 的确定防重坐标，不是 caller 自选 capability。请求仍携带完整 target Ref；任何 text、display name、裸 UUID 或 ToolValue 都不能提升为 target。
 
-每个可执行对象首次 enable/admit 前必须预留一个持久 ExecutionStopLatch/1：
+    StopOwner/1 = {
+      storeIncarnation:Uuid,
+      workspaceRef:D3.WorkspaceRef,
+      target:ControlRef<automation|run>/1,
+      latch:ControlRef<stop>/1,
+      requestId:Uuid
+    }
+
+    StopCapacity/1 = {
+      issued:Counter,
+      reserved:Counter
+    }
+
+受保护 stop stable key 是 `("D10-Emergency-Stop/1",target.storeIncarnation,target.kind,requestId)`。`requestId==target.id`，target/latch 的 storeIncarnation 都等于 StopOwner.storeIncarnation，而且一个 exact target 恰有一个 latch。workspaceRef 来自受保护控制状态中的真实 target Workspace。D10 storeIncarnation 是绑定实际打开 D6 authority-store backend 的内部持久控制域 incarnation；它不是已冻结 D6 public API 名称、WorkspaceId、filesystem path 或 authority token。
+
+W 使用准确 Workspace scope，H 使用准确 deployment storeIncarnation。两者只有各自当前 authority gate 通过后才能访问同一 latch。scope 只是访问资格，不产生第二份 stop fact。
+
+在首次 enable/admission 前，对象创建必须原子预留一个 durable latch、一份 StopOwner 关联、一个 audit/result slot 和一个 safety-sequence capacity 单位。若无法预留，该 executable object 就不能进入可管理/可运行状态。普通 control prepare、配置 Counter 空间、budget、approval/lease count、cost 和 executor quota 都不能消费这些容量。stop 不要求 target configuration revision，也不要求先执行普通 management write。
 
     ExecutionStopLatch/1 = {
       target:ControlRef<automation|run>/1,
       state:"open" | "stopped",
-      stoppedBy:Option<HostOrWorkspacePrincipal>,
+      stoppedBy:Option<HostOrWorkspacePrincipal/1>,
       stoppedAtControlSequence:Option<Counter>
     }
 
-open→stopped 单向，不支持 clear。重复 stop 是同效果幂等。stop 不消费 maxRuns、ApprovalUse、cost、普通管理 quota 或 executor budget。
+open 时两个 Option 都必须 none；stopped 时两个都必须 some。唯一转换是 Binding revision 1/open → revision 2/stopped；没有 clear。Safety sequence 预留满足 `reserved <= MAX-issued`，MAX=2^63-1。首次 stop 原子执行 `issued:=issued+1`、`reserved:=reserved-1`，写入 sequence/actor/latch revision、immutable stop result/audit link 与必要 invalidation。因此容量耗尽只能拒绝新 executable target 建立，不能阻止既有已预留 target 的首次 stop。
+
+    D10EmergencyStopReceipt/1 = {
+      kind:"d10_emergency_stop_receipt",
+      wireVersion:1,
+      requestId:Uuid,
+      target:ControlRef<automation|run>/1,
+      latch:Binding<stop>/1,
+      state:"stopped"
+    }
+
+receipt 要求 latch revision 2，是单次 latch transition 的确定投影；它既不是 D6 author receipt，也不是第二成功账本。
+
+    D10EmergencyStopResultRequest/1 = {
+      kind:"d10_emergency_stop_result",
+      wireVersion:1,
+      requestId:Uuid,
+      scope:Scope/1,
+      target:ControlRef<automation|run>/1
+    }
+
+    D10EmergencyStopResult/1 =
+        D10EmergencyStopReceipt/1
+      | {kind:"d10_emergency_stop_not_applied",
+         wireVersion:1,
+         requestId:Uuid,
+         target:ControlRef<automation|run>/1,
+         latch:Binding<stop>/1,
+         state:"open"}
+
+`not_applied` 只在该读取线性化点已经证明 latch revision 1/open 时成立，不承诺稍后无人 stop。
+
+stop/result 固定顺序：closed decode 与 D1 automation.stop gate → 当前 authenticated principal、准确 W/H scope 与 target/stop 披露资格 → authority/fence/custody → protected stable-key/target equality → latch/result continuity → transition 或读取 → 输出前再次 current disclosure gate。hidden、missing、wrong-scope、wrong-store 统一 `not_visible`；authority/fence/custody 不可证明为 `authority_unavailable`，确定破坏为 `integrity_conflict`。已获可见性后，同 stable key 绑定不同 target 为 `control_conflict`；latch/result continuity 暂不可证明为 `state_unavailable`，绝不能返回 not_applied 或新 stop。
+
+例如 target 配置在 r5 时 stop 成功但响应丢失，另一个合法配置随后把 target 改到 r6；同 exact target/requestId 重试仍返回原 receipt。当前 r6 不会使 stop receipt 失效或改写。若之后丧失 result disclosure 权，则查询返回 `not_visible`，而 latch 继续 stopped。
 
 线性化规则：
 
-1. 新 Run admission 与 stop 在同一 store serialization domain。admission transaction 内比较 applicable latches 并原子写 occurrence claim/LeaseRunUse。stop 先提交则不准入；admission 先提交则次数保持已消费，但后续步骤继续检查 stop。
-2. D6 最终 author commit 在实际持有写锁的最终 transaction 内重新验证受保护 RunBinding 对应全部 stop latch。不能只在 prepare 或 transaction 外 check。commit 先线性化则结果保留；stop 先线性化则该新 commit 不发生。
-3. External transport 与 stop 使用同域 send fence。fence 内重验 latch、保存 ExternalEffectIntent/started evidence 与费用 hold，并保持 fence 到第一次不可撤回的真实发送交接完成；不能只入队后释放。之后等待远端响应不持有 fence。stop 先赢则不发送；send handoff 先赢则保留已发送事实，后续可能 outcome_unknown。
-4. crash 后先恢复 latch、started/send evidence、reservation 和 decision，再恢复 executor；证据不足不得把可能已发送改成 cancelled。
-5. stop 不阻断当前获权的 authoritative abort、cost settlement、evidence retention、audit retention 和 reference-safe cleanup；这些操作本身不恢复 executor 权限。
-6. 临时 disable、Lease expiry、暂时撤权或普通 cancel 不是不可逆 abort 证明。
+1. 新 Run admission 与 safety transaction 共用同一个 Authority Store serialization domain。admission 检查 latch 并原子写 occurrence claim/LeaseRunUse。stop 先完成则不能 admission；admission 先完成则已消费计数保留，后续每个 protected step 仍检查 stop。
+2. D6 final author commit 必须在真实 final author transaction 内、持有同一 write-serialization boundary 时重新检查全部关联 stop latch。commit 先完成保留 committed result；stop 先完成阻止新的 commit。
+3. External transport 与 stop 共用一个 send fence。在首次不可逆 handoff 前，Core 已冻结 immutable ExternalEffectIntent 与 exact ExternalExecutionBinding，重新检查 stop 和全部 approval/grant/secret/cost binding，durably 记录 send-attempt/started evidence 与 holds，并把 fence 持有到第一次真实 send handoff。stop 先完成则不发送，handoff 先完成则保留原 send attempt，并可后续进入 outcome_unknown。
+4. crash 后先恢复 latch、send-attempt evidence、reservation 和原 decision，再恢复 executor。unknown evidence 绝不能变成 cancelled，也不能支持新 effectId、idempotency key 或 OperationId。
+5. stop 不阻断当前受权 authoritative abort、cost settlement、evidence/audit retention 或 reference-safe cleanup；这些操作不恢复 executor authority。
+6. 临时 disable、Lease expiry、临时撤权或 ordinary cancel 不是 irreversible abort proof。
 
-D6 coordinated amendment 增加 execution_stopped/preflight：尚未 planned 的 D10-bound author request 在 current authorization/ObservationScope 通过后被不可逆 stop 阻止时返回，不写 author decision。已 planned request 只有在 current authorization、continuity、完整 RunBinding 和不可逆 stop 全部证明后，原 D6 recovery 才能以 transaction_aborted/terminal 保存 authoritative abort；同事务按既有规则释放 ApprovalUse count。费用不自动释放。
+stop safety transaction 是同一 managed Authority Store 内的专用 closed write，不是 D10ControlPrepare，也不是 D6 author transaction。配套 D6 amendment 只定义 D6 final/planned author work 怎样消费 latch，并返回 `execution_stopped/preflight` 或原 authoritative-abort 结果。stop 不伪造普通 control history，不回滚 committed 作者事实或已经发送的 external effect，也不会仅因停止执行就释放费用。
 
 ## 12. D6 Policy/2 与 bootstrap profile/3 提案边界
 
