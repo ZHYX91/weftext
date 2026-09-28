@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Terminology and Naming
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: R08 author terminology revision after complete R07 joint REVISE; all findings remain pending fresh independent review.
+revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author terminology candidate synchronized to the final author revision. All terminology and bilingual findings remain open pending fresh complete independent review.
 
 ## 1. Naming principles
 
