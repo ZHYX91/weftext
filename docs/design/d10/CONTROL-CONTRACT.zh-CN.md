@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 控制与管理合同
 
-revision: D10-r06-terminology-and-import-clarifications-2026-09-28；状态：candidate author revision，等待完整独立联合终审。本文件冻结 R05 所需的 D10 管理、授权、幂等、恢复、费用、停止和 package/contribution 控制语义。它不修改固定上游 S；所有 D6/D7 变更只在 UPSTREAM-AMENDMENTS 中作为未激活提案。
+revision: D10-r07-independent-review-fixes-2026-09-28；状态：C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 完整独立终审返回 REVISE（P0=0、P1=1 JR001、P2=8 JR002–JR009，术语/翻译均未通过）后的作者修订候选，等待新的独立复核。本文件是 R07 管理/current-result/error 合同的唯一 D10 owner。固定上游 S 不变；UPSTREAM-AMENDMENTS 中所有 D6/D7/D3/D8/D9 条款仍是未激活提案，须后续协调接受。
 
 ## 1. 权威、适用范围与错误边界
 
@@ -15,7 +15,8 @@ Core 仍是唯一作者事务权威。Workspace 作者提交、saved decision、
 
 公开能力在进入本合同前仍经过 D1 的真实 contractMajor、surface、release、policy、principal、component/configuration、reachability/version-combination 和 health 门。设计接受、文档协调激活或存在一个 control record 都不是运行时 available 证据。
 
-D10 控制入口自己的错误对象为：
+
+D10 管理/control 入口的错误对象为：
 
     D10ControlError/1 {
       kind:"d10_control_error", wireVersion:1,
@@ -26,9 +27,27 @@ D10 控制入口自己的错误对象为：
         "state_unavailable" | "budget_exceeded"
     }
 
-这些错误只用于 D10 prepare、host control、result、secret staging 和 stop。Workspace author commit 一旦进入 D6，继续返回 D6 自己的 closed error；D10 不包装或重新命名 D6 not_visible、approval_unavailable、execution_stopped 或 transaction_aborted。
+独立的 D10 Run/step 错误对象为：
 
-对象不存在、scope/audience 不匹配、主体当前无权观察对象三者统一 not_visible。authority/fence/custody 不可证明为 authority_unavailable；受保护记录或证据完整性冲突为 integrity_conflict；同 stable key 不同完整输入为 control_conflict；当前可见对象的 expected revision 不匹配为 stale_revision；可信时间、外部证据或必要连续性暂不可证明为 state_unavailable。
+    D10RunStepError/1 {
+      kind:"d10_run_step_error", wireVersion:1,
+      code:
+        "invalid_request" | "not_visible" |
+        "control_conflict" | "binding_changed" |
+        "approval_required" | "approval_expired" |
+        "delegation_expired" | "delegation_exhausted" |
+        "budget_exceeded" | "audit_unavailable" |
+        "state_unavailable" | "invalid_output" |
+        "cancelled" | "external_outcome_unknown"
+    }
+
+`D10ControlError/1` 只用于 `d10_control_prepare`、`d10_host_control_commit`、`d10_control_result`、`d10_control_read`、`d10_secret_stage` 和 `d10_emergency_stop`。`D10RunStepError/1` 只用于尚未进入其它 protocol owner 的 D10 Run/step：Run admission、ContextBundle/model/tool/connector 执行、D6 前 approval/delegation 检查以及 external-effect 执行/恢复。
+
+一旦进入 D3、D6、D7、D8 或 D9 入口，就逐字返回该 owner 原 closed error/envelope。D10 不包装 D6 `not_visible`、`approval_unavailable`、`execution_stopped`、`transaction_aborted`，不包装 D7 action/effects 错误，也不改名 D3/D8/D9 错误。诊断 UI 可在 owner error 后另做当前受权的 `d10_control_read`，但该读取不得改变正式结果。
+
+管理/control 固定顺序：closed decode 与 D1 capability 门 → 当前 principal/scope/audience/对象观察资格 → authority/fence/custody → stable-key conflict 或 exact ControlRef lookup → 受保护记录 integrity/continuity → 仅在适用时检查当前 revision/dependency/budget。对象缺失、wrong scope/audience、当前无观察权统一 `not_visible`；authority/fence/custody 不可证明为 `authority_unavailable`；受保护记录/证据确定矛盾为 `integrity_conflict`；同 stable key 不同完整输入为 `control_conflict`；当前可见对象的 expected configuration revision 不匹配为 `stale_revision`；可信时间、外部证据或必要连续性暂不可证明为 `state_unavailable`。
+
+Run/step 继续使用 Candidate §21 顺序：closed decode/version → D1 static capability/surface/release → current principal/control visibility → delegation/data observation → deployment binding → exact input/approval → budget/audit → execution。阶段先于细分；`binding_changed` 只属于 Run/step，管理 CAS 用 `stale_revision`；D6 前的 `approval_required|approval_expired` 永不替代进入 D6 后由 D6 owner 返回的 `approval_unavailable/preflight`。
 
 ## 2. 共享闭合类型
 
@@ -68,6 +87,11 @@ ControlRecordKind/1 闭集为：
     | {kind:"existing", binding:Binding<K>/1}
 
 control id 与 incarnation 永不重用。retire、archive、revoke、close 或删除显示入口都不允许以后用同 id 指向另一对象。相同显示名称重建必须得到新 id。
+
+
+`Binding<K>/1.revision` 是该 control record 唯一的 configuration/lifecycle CAS revision。已有 owner 类型若已有具名 revision，则它与 Binding revision 是同一值而非第二权威：`leaseRevision == Binding<lease>.revision`、`approvalRevision == Binding<approval|planned_approval|external_approval>.revision`、`grantRevision == Binding<grant>.revision`、`CostReservation.revision == Binding<reservation>.revision`、`DeploymentControlPolicy.revision == Binding<deployment_policy>.revision`；`ActivationBinding.activationGeneration == Binding<activation>.revision`。Automation 特意保留独立 `definitionRevision`：enable/disable/archive 只增加 control revision，不改变不可变的 semantic definition revision。
+
+独立累计 usage CAS 只有 `lease`、`approval`、`grant`、`cost_account` 使用 `usageRevision`。普通 Run admission 只推进 Lease usage，不改变 `leaseRevision`，因此另一 Run 消耗容量不会让已经 admitted 的同 Run 因 revision 漂移失效。Approval reserve/consume/released_terminal 同样只推进 approval usage，不改变 `approvalRevision`。Grant 沿用 §6 已有 usageRevision；cost-account held/spent 在下文 §7 current projection 中使用同类独立 revision。配置/lifecycle 变化不能清零累计 usage，usage 变化也不能把 revoked/retired/closed 配置复活。
 
     Money/1 = {
       currency:CurrencyCode,
@@ -178,6 +202,17 @@ PackageId/1 与 D4 SemanticNamespaceId 是不同类型，即使字符串可能�
       dependencies:[ContributionDependency/1]
     }
 
+
+`view` Contribution descriptor asset 使用 closed root dispatch：要么是 D7 原 owner 的 `ViewSpec`，要么是下列只承载 D7-owned 纯数据 SearchContribution 的 D10 carrier：
+
+    D10D7SearchDescriptor/1 = {
+      kind:"d10_d7_search_descriptor",
+      wireVersion:1,
+      search:<S D7 Query Algebra §6 的 exact SearchContribution>
+    }
+
+这不会把 `SearchContribution` 变成 ViewSpec，也不新增 `search` ContributionKind。一份 D10 Contribution 恰承载一份 D7 SearchContribution；内部对象继续逐字是 D7 的 `{contributionId,version,fieldId,textPath,role}`，沿用原 D7 owner、D4-style semantic contribution ID 词法、正 Counter version、0..8 静态 text path 与 `name|alias|content` role。
+
 ContributionKind 闭集为：
 贡献类型闭集为：`module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`。
 
@@ -198,6 +233,18 @@ dependency 是具体 dependent Contribution 的成员，不存在 package 级 am
 一个 connector contribution 不可用只使该 contribution inactive；同 package 的 template、schema、pack 或 view 只按自己的依赖和能力计算。定义历史、Contribution activation、UI visibility 继续保持三个独立轴。
 
 每个 kind 的 descriptor 由既有 owner 的闭合合同验证：schema 只引用 D4 Registry 中已有的 namespace/Facet bindings；view/action 消费 D7 closed descriptors；template/preset/importer/exporter/conversion 消费 D9 合同；tool/model/connector 的 descriptor 与运行基础设施由 D10；module 只组织产品贡献，不拥有作者事实。
+
+
+对 `D10D7SearchDescriptor/1`，进入当前 Capability Catalog 前还必须完整证明：
+
+1. `descriptorAssetId` 精确命中一个 `PackageAsset/1`；不可变 bytes 的 `byteLength` 与 SHA-256 均匹配，根 strict-decode 为 `d10_d7_search_descriptor`，active `ContributionBinding.descriptorDigest` 逐字等于同一 asset digest。
+2. D10 PackageId/packageVersion、D10 package-local `Contribution.contributionId`、D10 `contractVersion`、D7 `SearchContribution.contributionId`、D7 正 Counter `version` 是五个不同 identity/version 域；名字或数字相同不产生映射。即便 D10 contractVersion 不变，D7 search 任一 member/version 改变也必须改变 Catalog digest。
+3. D7 SearchContribution ID 的 namespace 由当前 D4 owner tuple + D10 trust/NamespaceClaim proof 证明；`fieldId` 另行在准确 `RegistryBinding/1` 下解析，证明 namespace owner、Field current-available，并把完整 alias-expanded `textPath` 验证到 D7 text 或 Optional<text>。不要求 SearchContribution ID namespace 与 Field namespace 相同。
+4. 一个当前 Catalog 内 D7 SearchContribution ID 唯一；全部 active 且 descriptor root 为 `d10_d7_search_descriptor` 的 `view` Contributions 组成完整 SearchContribution 集，按 D7 contributionId canonical bytes 排序。遗漏、重复、wrong owner、wrong digest、坏 path、必要 Field unavailable 都使 successor activation fail closed，旧 ActivationBinding 继续 current。
+5. `ActivationBinding.activationGeneration`、`capabilityCatalogDigest` 与准确 D4 `registryBinding` 共同绑定完整集合。D7 explicit selection 绑定所选 `(contributionId,version)`；D7 `all` 绑定该 generation 的完整集合。新增/删除/version/descriptor/owner/Registry 变化使旧 search dependency/result 失效，不能静默改变字段。
+6. carrier 只是纯数据，不授 `field_read`、network、secret、script、私有全文 index payload、author write 或 alias-source 权威。执行仍是 D7 `scan → explicit read → CEL match/rank → sort/project` 且逐项通过当前 D6 授权；缺失/不可用的 selected contribution 走原 D7 unavailable，不能静默跳过后宣称空结果成功。
+
+第一方正例：`weftext.people` package 的合法 `view` carrier 可承载 D7 SearchContribution `people/search-name`、version `1`、`fieldId:"people/name"`、`textPath:["text"]`、`role:"name"`。只有 D4 保留 tuple `people→(first_party,weftext.people)`、asset digest、当前 Registry proof 与完整 Catalog 都成立时才能激活；同名第三方 package、wrong digest 或仅 runtime discovery 都保持 inactive/pending。
 
 ## 5. 四个第一方 module 的唯一 package 映射
 
@@ -353,8 +400,10 @@ ControlBody/1 只有七个 variant：
    action:StateAction。
    K/action 适用闭集：
    automation→enable|disable|archive；
-   lease/approval/grant→revoke|archive；
+   lease/approval→revoke|archive；
+   grant→revoke|archive，其中 archive 映射到已有 `retired` 状态；
    run→cancel|archive；
+   trust→revoke；
    package/pricing→retire；
    external_account→disconnect；
    cost_account→close；
@@ -449,6 +498,7 @@ parameters 必须由该 contribution 的 active ToolValueProfile/1 输入类型�
 
 `readGrants` 只接受上面的 `LeaseReadGrant/1`；实际授权仍由当前 D6 Policy 按原 deny precedence 计算，Lease 不能增加权限。`notBefore < notAfter`，`maxRuns` 正且有限。
 
+
     StandingApprovalSpec/1 = {
       notBefore:D4.zoned_instant,
       notAfter:D4.zoned_instant,
@@ -457,7 +507,47 @@ parameters 必须由该 contribution 的 active ToolValueProfile/1 输入类型�
       costGrants:[Binding<grant>/1]
     }
 
-`SingleFieldMemberRule/1` 是 Candidate §14 `StandingApprovalEnvelope/1.rule` 的受控 D10 内部投影，不是独立 D6/D7 wire。它完全承接该节：动作固定为 `set_field_member`；目标限制为一个 owner/Field 下唯一 Entry 的单个 member；值类型闭集为 `text|bool|int64|integer|decimal`，约束闭集为 `any|enum|numeric_range`，并保留 raw no-op 分支。任何变化都必须先修 Candidate §14，再同步本投影；它不扩展到 create、delete、Facet、native table 或 bulk 操作。
+`CONTROL-CONTRACT` 是首版自动作者规则唯一 owner：
+
+    SingleFieldMemberRule/1 = {
+      kind:"single_field_member",
+      ownerNodeRef:D3.NodeRef,
+      fieldId:D4.FieldId,
+      selection:"require_exactly_one_entry",
+      memberPath:[D4.ObjectMemberSpec.name],
+      memberType:SingleFieldMemberScalarType/1,
+      valueConstraint:SingleFieldMemberValueConstraint/1
+    }
+
+    SingleFieldMemberScalarType/1 =
+        {kind:"bool"}
+      | {kind:"text"}
+      | {kind:"int64"}
+      | {kind:"integer"}
+      | {kind:"decimal"}
+      | {kind:"semantic_code",
+         scope:<S D7 Value §5.2 已冻结 ResolvedCodeScope 的 exact structure>}
+
+    SingleFieldMemberValueConstraint/1 =
+        {kind:"enum", values:[D7.TypedLiteral]}
+      | {kind:"numeric_range", minimum:D7.TypedLiteral, maximum:D7.TypedLiteral}
+      | {kind:"text_utf8_no_crlf", maximumUtf8Bytes:Counter}
+
+`memberPath` 恰为 1..7 个名字；每项逐字使用 D4 `ObjectMemberSpec/1.name` decoder。从完整 alias-expanded Field valueType 根开始，每个非终端只能选择 direct object member；禁止 list/set/sequence index、union arm selector、wildcard、JSON Pointer、运行时字符串和动态 FieldId。终端 member 必须在 current Entry 中实际 present。D4 根 depth=1、maximum=8，alias expansion 仍消耗原 depth，所以 1..7 只是绝对外层上限，不能绕过原 D4 depth/schema/source gate。
+
+`memberType` 是底层 scalar D7 bridge type。D4 required member 的原 D7 `set_field_member` Action literal 类型必须直接等于该 TypeSpec；D4 optional member 的 Action literal 必须是 exact `{kind:"optional",item:<memberType>}` 且 value 为 `some`，Core 只把 present scalar 抽出用于 rule/constraint 比较。`optional.none` 永不自动批准。这样保留 D7 原 optional-member bridge，不把 scalar 域与 Optional 外层混同。
+
+`enum.values` 为 0..64 个完整 scalar D7 TypedLiteral；空集合合法但不匹配任何自动操作。每项 type 必须与 `memberType` byte-equal；数组按完整 D3-CJ/3 canonical UTF-8 bytes 严格升序且唯一。membership 使用 D7 Value §2 原同型 equality：exact text 按 scalar、numeric 精确数学值、semantic_code 按完整 resolved scope + code；禁止数值 widening 或 text/code coercion。
+
+`numeric_range` 只用于 int64/integer/decimal，minimum/maximum 的完整 type 必须等于 `memberType` 并按原 D7 同型 order 满足 `minimum <= maximum`。`text_utf8_no_crlf` 只用于 exact `{kind:"text"}`；`maximumUtf8Bytes` 为 0..65528，直接受 S D4 raw Entry 最大 UTF-8 bytes 约束。候选 Unicode scalar text 编成 UTF-8 后不得超过该值，且不得包含 U+000D/U+000A；完整 proposed D4 Entry/source 仍单独经过 D4/D2 framing、escaping、nonEmpty、schema、cardinality 和 source budget。
+
+constraint 只收窄当前 D4/D7 值域；enum 命中不替代 Registry contribution availability、Narrow Field Qualification、current D6 authorization、`source_envelope_state` 或 commit 时另行必须具备的 `commit_sequence_state`。
+
+实际效果仍只有两支。member-change 要求原 D7 adapter 只产生一个 existing scalar-member MutationFootprint 与完整 owner_fields field_change，其它 source/member/qualifier/note/provenance/Entry/body/Facet/Ref/relation/control 均不变。raw-no-op 还要求同 current owner/Field/唯一 Entry/member、按上述 required/present-optional 投影后的 D7 同型 equality，以及原 adapter 的完整 proposed source 与 before bytes 逐字相同；MutationFootprint、field_change、D6 sourceVersions 都为空。仅 typed equality 不能授权 byte rewrite。
+
+Standing Approval 配置自身 malformed 时返回管理域 `D10ControlError.invalid_request`。已经合法的 D7 Action 若 scalar 值不在冻结 constraint 内，只表示 Standing Approval 不覆盖它，走 D6 前 Run/step `approval_required`；过期为 `approval_expired`。进入正式 D6 后由 D6 按 coordinated amendment 独立拥有错误。
+
+semantic_code 规范正例直接使用 S 当前目录：`people/phone` 的 `people/labeled-text-value.label` 是 optional contribution-set semantic_code。只有当前 phone Entry 的 `label` 已 present 时，D7 Action value 才是 Optional<semantic_code>.some；`SingleFieldMemberRule.memberType` 是底层 semantic_code scope。enum 可只允许 `people/personal` 与 `people/work`：present `personal→work` 是真实 member-change，`work→work` 是 raw-no-op；即便 D4 允许 `people/other`，未列入 approval enum 时也不得自动批准。
 
     ConsentSpec/1 =
       {kind:"planned",
@@ -516,6 +606,7 @@ affected 按 ref canonical bytes 排序且唯一；resourceUses 按 grant ref �
 
 ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒绝，不截断。
 
+
 查询：
 
     D10ControlResultRequest/1 = {
@@ -525,7 +616,96 @@ ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒
       requestId:Uuid
     }
 
-它返回当前有权披露的 prepare/apply 历史结果，不等价于重新执行，也不声称历史 after revision 仍是当前状态。
+历史 prepare/apply 与 current exact-record read 必须分成两个入口。
+
+    D10ControlResult/1 =
+        {kind:"d10_control_result_prepared", wireVersion:1,
+         scope:Scope/1, requestId:Uuid, prepared:ControlPreparedHistory/1}
+      | {kind:"d10_control_result_applied", wireVersion:1,
+         scope:Scope/1, requestId:Uuid,
+         prepared:ControlPreparedHistory/1, applied:ControlAppliedHistory/1}
+
+    ControlPreparedHistory/1 = {
+      canonicalIntentBytes:Bytes,
+      allocatedControlRefs:[ControlRef<K>/1],
+      preview:ControlPreview/1,
+      commitOwner:"D6" | "D10"
+    }
+
+prepared history 只能从原 `ControlPrepareBinding/1` 投影；不返回可继续使用的 prepareToken。Workspace arm 不通过这里返回或重建 D6 作者 request/planned-preview 作者内容；planned 作者检查继续只走 D7 `d7_planned_preview_open` 提案。`allocatedControlRefs` 按完整 canonical Ref bytes 排序且唯一。
+
+    ControlAppliedHistory/1 =
+        {kind:"workspace",
+         ownerReceipt:D6.d6_commit_receipt,
+         changes:[ControlRevisionDelta/1],
+         usageChanges:[ControlUsageRevisionDelta/1]}
+      | {kind:"deployment",
+         changes:[ControlRevisionDelta/1],
+         usageChanges:[ControlUsageRevisionDelta/1],
+         evidence:[EvidenceTicket/1],
+         auditRef:Token}
+
+    ControlRevisionDelta/1 = {
+      ref:ControlRef<K>/1,
+      beforeRevision:Option<Counter>,
+      afterRevision:Counter
+    }
+
+    ControlUsageRevisionDelta/1 = {
+      ref:ControlRef<lease|approval|grant|cost_account>/1,
+      beforeUsageRevision:Counter,
+      afterUsageRevision:Counter
+    }
+
+Workspace applied history 只能从同一权威 D6 saved decision 投影：`ownerReceipt` 是原不可变 receipt bytes，`changes/usageChanges` 只来自与该 decision 同事务关联的 D10 control effects。Deployment arm 只从原 `DeploymentControlDecision/1` 加 §8 同事务关联的 record/account deltas 投影。两者都不是第二成功账本。
+
+result 顺序固定为：当前 result-disclosure 授权 → authority/custody/continuity → stable key。missing/hidden 为 `not_visible`。能证明 prepare binding 且能证明没有 applied success 时才返回 prepared；权威 applied success 存在时返回 applied。D6 recorded rejection/terminal failure 仍归 D6，调用原 D6 request replay 取得；D10 result 只有在证明没有 applied success 后才可返回 prepared history。若 applied success 的存在/缺失或 linkage 暂不可证明，必须 `state_unavailable`，不能降格为 prepared；确定 decision/effect linkage 矛盾为 `integrity_conflict`。
+
+若 r5 已 applied、响应丢失，另一个合法请求后来把同对象更新到 r6，原 request 重试在当前披露授权通过后仍返回保存的 r5 applied history，绝不能临时替换成 r6。
+
+current state 使用另一个入口：
+
+    D10ControlReadRequest/1 = {
+      kind:"d10_control_read", wireVersion:1,
+      scope:Scope/1,
+      ref:ControlRef<K>/1
+    }
+
+    D10ControlCurrent/1 = {
+      kind:"d10_control_current", wireVersion:1,
+      scope:Scope/1,
+      binding:Binding<K>/1,
+      usageRevision:Option<Counter>,
+      view:ControlCurrentView<K>/1
+    }
+
+`scope` 必须等于该 record 的真实 exact scope；没有 name lookup、wildcard、list 或 display-label lookup。当前披露授权早于 existence/state。missing、wrong scope/audience、hidden 全部 `not_visible`；visible record 的受保护连续性暂不可证明为 `state_unavailable`；兼容版本中出现 unknown closed state/member 是 integrity/version failure，绝不返回 `state:"unknown"`。
+
+首版 19 类 current projection 闭集如下：
+
+| K | exact scope | exact `view` | config/domain/usage revision 语义 |
+| --- | --- | --- | --- |
+| `automation` | workspace | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` 是 control/lifecycle CAS；`definitionRevision` 只随 semantic definition 改变；usageRevision=none。 |
+| `lease` | workspace | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`；usageRevision=some，只在新的 `LeaseRunUse/1` 消耗谱系时推进；正常 usage 不使已 admitted Run 的 leaseRevision 失效。 |
+| `approval` | workspace | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`；usageRevision=some，只用于 ApprovalUse reserve/consume/released_terminal；撤销/archive 推进 approvalRevision，不清 usage。 |
+| `planned_approval` | workspace | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none；不在此泄露 author request/preview bytes。 |
+| `external_approval` | workspace | `{kind:"external_approval_state",grantingPrincipal:Token,intent:Binding<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none。 |
+| `run` | workspace | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | durable Run/lifecycle transition 推进 binding revision；usageRevision=none，maxRuns 消耗归 Lease usage。 |
+| `workspace_budget` | workspace | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | binding revision 是 limits CAS；usageRevision=none，真实 cost usage 继续在 grant/account/reservation，不建立第二 budget ledger。 |
+| `activation` | workspace | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`；successor activation 使旧 record `current:false`，不删除；usageRevision=none。 |
+| `deployment_policy` | deployment | `{kind:"deployment_policy_state",policy:DeploymentControlPolicy/1}` | `binding.revision==policy.revision`；usageRevision=none。 |
+| `trust` | deployment | `{kind:"trust_state",state:"active"|"revoked",publisherId:Text,publicKey:Ed25519PublicKey,previous:Option<Binding<trust>/1>,proof:EvidenceTicket/1,claims:[NamespaceClaim/1]}` | key/claim/rotation/revoke 推进 binding revision；usageRevision=none。 |
+| `package` | deployment | `{kind:"package_state",state:"installed"|"retired",manifest:PackageManifest/1,signature:Ed25519Signature}` | install/update/retire 推进 binding revision；packageVersion 独立；usageRevision=none。 |
+| `external_account` | deployment | `{kind:"external_account_state",state:"connected"|"disconnected",provider:ContributionBinding/1,externalAccountId:Text,endpointId:LocalOperationId,proof:EvidenceTicket/1}` | config/disconnect 推进 binding revision；usageRevision=none。 |
+| `secret` | deployment | `{kind:"secret_state",state:"active"|"revoked",account:Binding<external_account>/1,audience:ContributionBinding/1,usageKind:"authenticate",secretVersionId:Token}` | publish/rotation/rebind/revoke 推进 binding revision；永不返回 plaintext/staged bytes；usageRevision=none，使用次数归 ResourceUseGrant。 |
+| `grant` | deployment | `{kind:"grant_state",grant:ResourceUseGrant/1}` | `binding.ref.id==grant.grantId`、`binding.revision==grant.grantRevision`，usageRevision=some 且等于 `grant.usageRevision`；archive 映射现有 `retired`。 |
+| `cost_account` | deployment | `{kind:"cost_account_state",state:"active"|"frozen"|"closed",currency:CurrencyCode,ceiling:Counter,pricing:Option<Binding<pricing>/1>,spentMicroUnits:Counter,heldMicroUnits:Counter}` | config/close/freeze 推进 binding revision；held/spent reservation delta 推进 usageRevision=some；freeze 不清 liability。 |
+| `pricing` | deployment | `{kind:"pricing_state",state:"active"|"retired",account:Binding<external_account>/1,currency:CurrencyCode,fixedMicroUnits:Counter,meters:[PricingMeter/1],evidence:EvidenceTicket/1}` | pricing update/retire 推进 binding revision；usageRevision=none。 |
+| `reservation` | deployment | `{kind:"reservation_state",reservation:CostReservation/1}` | `binding.ref.id==reservation.reservationId` 且 `binding.revision==reservation.revision`；usageRevision=none；`uncertain` 是已有可恢复状态，不是 unknown。 |
+| `external_effect` | workspace | `{kind:"external_effect_state",state:"prepared"|"submitting"|"succeeded"|"failed_no_effect"|"outcome_unknown"|"cancelled",recoveryMode:"automatic"|"manual_required",intent:ExternalEffectIntent/1}` | effect/recovery durable transition 推进 binding revision；usageRevision=none；费用/attempt quota 分别归 reservation/grant。 |
+| `stop` | 创建 latch 时的 exact workspace 或 deployment scope | `{kind:"stop_state",latch:ExecutionStopLatch/1}` | fresh open revision=1；只有 `open→stopped` 增一次；重复 stop 是 no-op；usageRevision=none。 |
+
+对 `lease|approval|grant|cost_account`，`D10ControlCurrent.usageRevision` 必须为 `some` 且等于当前独立 usage revision；其它 kind 必须为 `none`。可信时间跨 `notBefore/notAfter` 只改变当前 eligibility，不静默修改 configuration revision 或持久化 `expired` state。revoked/retired/archived/closed 对当前有权 reader 仍可观察，永不伪装成 absence。
 
 ## 8. Idempotency、CAS 与结果重放顺序
 
@@ -552,7 +732,7 @@ Core 内部保存：
     ControlDependencies/1 = {
       configBindings:[Binding<K>/1],
       usageBindings:[{
-        ref:ControlRef<K>/1,
+        ref:ControlRef<lease|approval|grant|cost_account>/1,
         usageRevision:Counter
       }],
       authorityProof:Token,
@@ -628,10 +808,13 @@ configuration revision 与 usageRevision 分域；checked increment 到 Counter 
     NamespaceClaim/1 = {
       namespaceId:D4.SemanticNamespaceId,
       ownerClass:"first_party" | "publisher",
-      ownerId:Token
+      ownerId:NamespaceOwnerId/1,
+      proof:EvidenceTicket/1
     }
 
-`NamespaceClaim/1` 只把已验证 PublisherIdentity 绑定到 D4 已有 semantic namespace owner claim；它不创建第二 namespace registry，也不能覆盖 `core`、`wf` 或其它保留 owner。
+`NamespaceOwnerId/1` 只是 D10 对 D4 Registry row 既有 scalar `ownerId` 的验证名称，不是新 namespace identity。`first_party` 时必须逐字是该保留 namespace 的 D4 tuple 值（`weftext.people`、`weftext.organizations`、`weftext.calendar`、`weftext.library`）；`publisher` 时必须逐字等于 accepted trust record 的 `publisherId`，并由 `namespace_claim` EvidenceTicket 证明同一 `(namespaceId,ownerClass,ownerId)` tuple。D6 随机 Token/ticket 绝不能塞进 `ownerId`；proof 使用独立 `proof` member。
+
+`NamespaceClaim/1` 只把已验证 PublisherIdentity/first-party root 绑定到 D4 已有 semantic namespace owner tuple；不创建第二 Registry，也不能覆盖 `core`、`wf`、其它保留 owner 或另一个已验证 publisher。install order、package/display name、enablement 和字符串巧合都不是 owner proof。
 
     PricingMeter/1 = {
       meterId:LocalOperationId,
@@ -707,6 +890,9 @@ DeploymentControlDecision/1 是 host domain 成功结果：
       state:"reserved" | "uncertain" | "settled" | "released",
       actual:Option<Money/1>
     }
+
+
+每份 `CostReservation/1` 恰属于一个 billable `attemptId`、一个 actual `cost_account`、一个 grant、一个 pricing binding 和一个 currency。Run/Lease/Automation/Workspace/deployment 在同一 admission 中检查的是多层 ceiling/projection，不是本 reservation 的多个 actual account；同一费用只能记一次。若一个操作真实产生可分别归属到多个 actual account 的费用，则建立可分别归属的 attempts/reservations/evidence；若需要 group admission，可对这些 reservations 做原子准入，但不能把一份 reservation 改成 multi-account object。
 
 `actual` 仅在 state=settled 时为 some；其它状态必须为 none。
 
