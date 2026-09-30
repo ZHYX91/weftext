@@ -403,4 +403,3 @@ D6-FA-r01 目前只是作者部分联合候选：
 - 没有 fresh 独立联合审查。
 
 任何 documentation check/CI 只证明其明确检查项，不构成上述证据。完整后继候选须以固定 S 49 原输入、全部实际 replacement owner、新 D10 十八份共同接受。
-

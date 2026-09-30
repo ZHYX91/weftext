@@ -614,4 +614,3 @@ D6 wire1 commit/receipt/error, Policy/1/2, SourceVersion/1, legacy Token tags, P
 Forbidden: re-encoding an old request as wire2; adding CommitDomain/ChangeId to an old receipt; interpreting an old D4 gate as semantic_pending; using new retention to delete evidence promised by the old contract; treating equal source hash as proof that SourceVersion/1 equals a new-domain source.
 
 New v2 consumers are incomplete. Required D3/D4/D5/D7/D8/D9/D10 owner afterimages must be authored and accepted together. This candidate may not produce “v2 managed commit success” in product or conformance fixtures as activated semantics. Author documentation checks are not a substitute for the coordinated gate.
-

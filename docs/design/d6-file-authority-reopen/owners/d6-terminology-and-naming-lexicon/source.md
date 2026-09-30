@@ -145,4 +145,3 @@ In Policy/3, commit_sequence_state observes one named CommitDomain’s domainCom
 Legacy SourceVersion, Policy/1/2, D6 wire1, PreparedIntent, D7 binding/effects and historical receipts retain their original decoder and firstFreeze. firstFreeze in the machine registry is historical provenance and is never rewritten merely because FA-r01 reopens the owner.
 
 New public names may enter product/API only after every required replacement owner and consumer is jointly accepted. Presence in this candidate directory does not make a capability available and does not authorize injecting candidate names into a D10 manifest/contribution or product log as a released schema.
-

@@ -664,4 +664,3 @@ D6 wire1 commit/receipt/error、Policy/1/2、SourceVersion/1、旧 Token tag、�
 - 因相同 source hash把旧 SourceVersion/1当成新版某 domain version。
 
 新 v2 consumer尚未全部生成：D3/D4/D5/D7/D8/D9/D10缺失的owner afterimage必须先完成并联合接受。当前候选不得在产品或测试 fixture中产生“v2 managed commit成功”作为已激活语义。作者文档检查只验证文档本身，不是该联合门的替代。
-

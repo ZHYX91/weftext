@@ -245,4 +245,3 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 完整联合候选必须由新的独立评审从零读取：新proposal、全部replacement owners、D10十八份、固定S49输入。作者当前16/49全文+局部范围只属于作者阅读 provenance，不能继承旧独立49/49作为本候选通过。
 
 旧B13保持REVISE、术语/双语FAIL、P0=0/P1=3/P2=8十一OPEN。本批只提供其基础关联面，不关闭或重分类。
-

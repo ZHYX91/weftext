@@ -246,4 +246,3 @@ Documentation CI success is not product conformance or independent review.
 The complete coordinated candidate requires a new independent review from scratch over the new proposal, every replacement owner, all 18 D10 files, and the fixed S49 inputs. The author’s current 16/49 full-read plus partial-read provenance does not inherit an older independent 49/49 pass.
 
 The old B13 result remains REVISE, terminology/bilingual FAIL, P0=0/P1=3/P2=8, eleven OPEN findings. This batch only provides foundational related surfaces and closes/reclassifies none.
-

@@ -10,92 +10,111 @@ translation_status: synced
 
 Status: **candidate / partial coordinated candidate / not accepted / not activated / not implemented**.
 
-This directory is the D6 file-authority reopen candidate workspace over fixed upstream S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`. The D10 author candidate was C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` immediately before this batch. These afterimages do not modify `docs/design/snapshots/`, `docs/design/inputs.json`, or fixed S. Activation is forbidden until all required owner afterimages, D10 consumers, fresh independent joint review, and coordinated acceptance are complete.
+Fixed upstream remains S=7e18168dad3e6d120fce0dd607dc10fa7894e252 and the old D10 author-candidate baseline remains C8=d99f053b9386c9c9e1664251fdec9f00e33fac2c. This directory contains D6-FA-r01 candidate afterimages only and does not modify snapshots, inputs, or the original 18 D10 files. Activation is forbidden until every real replacement owner, D10 consumer update, fresh independent joint review, and coordinated acceptance are complete.
 
-This file only routes differences and versions. Normative operational semantics belong exclusively to the relevant files under `owners/`; this note is not a second transaction, conflict, or permission protocol.
+This file is routing/version/difference documentation only. Normative operation semantics belong only to the corresponding files under owners/; this file is not a second transaction, conflict, identity, or authorization protocol.
 
 ## 1. Decided product choices
 
-1. Current Document exact source is uniquely carried by ordinary `.adoc` files; current Resource bytes are uniquely carried by ordinary resource files. External editors may modify them and ordinary sync providers may transport their bytes.
-2. Device-local rebuildable indexes use a separate SQLite database outside the synchronized directory. It may be deleted and rebuilt and must not retain a full current-body or full-AST replica of the whole workspace.
-3. Non-reconstructible execution control facts use a distinct durable SQLite control database outside the synchronized directory. It stores original decisions/receipts, transaction recovery, unknown external effects, approval consumption, claims, Money/budget responsibility, and necessary pins. It is not the document database.
-4. Portable identity, parent/order, lifecycle, shared configuration/ACL/trust are uniquely owned by portable workspace metadata. They may not exist only in a discardable index, and the local control SQLite may not become a second writable current truth.
-5. Multiple devices may edit, create, move, and ordinarily Trash notes while offline. Synchronization exposes concurrent content/structural conflicts explicitly. Copying workspace files never copies Automation, approval-count, Money, or external-effect consumption authority.
-6. Intranet Server deployments retain multi-user concurrent editing. Multiple users/sessions may concurrently hold Drafts, read, prepare, and edit the same or different documents; durable results are serialized through the unique Server/Core commit boundary. SQLite single-writer transactions do not imply a single-user product.
-7. Real-time collaborative text editing remains on the existing D1 roadmap after G2. This candidate does not claim an implemented OT/CRDT protocol or released collaboration capability.
+1. Ordinary .adoc files uniquely carry current Document exact source; ordinary resource files uniquely carry current Resource bytes.
+2. A separate SQLite outside the synchronized directory provides device-local rebuildable indexing and may be deleted/rebuilt; it never stores a whole-workspace current-body or full-AST mirror.
+3. A different durable SQLite outside the synchronized directory stores non-reconstructible execution control: original decisions/receipts, transaction recovery, unknowns, approval/claim, Money/budget responsibility, and necessary pins.
+4. Portable identity, parent/order, lifecycle, shared configuration/ACL/trust are carried by portable workspace metadata. D3 remains their logical identity/placement/lifecycle owner while D6 owns physical storage/transactions.
+5. Multiple registered devices may perform ordinary offline edit, create, move, reorder, and Trash work, then resolve source/placement/lifecycle/policy conflicts explicitly.
+6. File copying never copies Automation, approval-count, Money, external-unknown, or stop consumption authority.
+7. Intranet Server remains multi-user. Multiple sessions may hold Draft/read/prepare state concurrently while one hosted backend still has one durable commit holder.
+8. Real-time collaborative text remains post-G2; this candidate does not claim OT/CRDT implementation and does not adopt per-keystroke author commits.
 
-## 2. Replacements produced by this batch
+## 2. Replacements now produced
 
-This batch produces complete afterimages only for:
+replacements.json lists only ten fixed-S owner replacements that actually exist.
 
-- `d6-storage-transactions-permissions-and-sync`
-- `d6-control-interfaces`
-- `d6-terminology-and-naming-lexicon`
-- `d6-terminology-registry`
-- `d6-implementation-impact-and-test-outline`
+First D6 batch:
+- d6-storage-transactions-permissions-and-sync
+- d6-control-interfaces
+- d6-terminology-and-naming-lexicon
+- d6-terminology-registry
+- d6-implementation-impact-and-test-outline
 
-Their fixed-S sources, source blobs, output paths, and version changes are recorded only in `replacements.json`. Planned future afterimages are not listed there until they exist.
+Second D1/D3 batch:
+- d1-product-surface-and-capability-boundary
+- d1-implementation-impact-and-test-outline
+- d3-identity-references-ownership-and-lifecycle
+- d3-terminology-and-naming-lexicon
+- d3-implementation-impact-and-test-outline
 
-## 3. Difference routing
+The machine list records only fixed-S sourcePath/sourceBlob, actual output paths, consumers, and real version differences. Future afterimages are not pre-registered.
 
-| Topic | Fixed-S assumption | D6-FA-r01 owner |
+## 3. Core difference routing
+
+| Topic | fixed-S assumption | Current D6-FA-r01 owner |
 |---|---|---|
-| current Document/Resource bytes | complete bytes in authority SQLite | Storage: ordinary files are current author bytes; control DB never stores a whole-workspace current-body replica |
-| identity / parent / order / lifecycle | current with payload/control in one DB transaction | Storage: portable metadata uniquely owns current facts; P stores decisions/recovery evidence only |
-| operation ledger | WorkspaceId+OperationId under one continuous authority store | Control/Storage: CommitDomain enters the v2 key; legacy saved v1/v9-v11 bytes remain unchanged |
-| ordinary multi-device writes | dual writers without continuity forced read-only/fork/reconciliation | Storage: each replicaEpoch may make ordinary replica-local commits and produce ChangeId/frontier; global execution responsibility remains separate |
-| author commit | one SQLite transaction publishes payload/control/receipt | Storage: file installation, durable-control seal, and portable publication are distinct phases; reliable save and portable publication are distinct facts |
-| source version | Ref+Counter/store incarnation | Control: SourceVersion/2 explicitly binds CommitDomain, observationEpoch, revision, ChangeId |
-| partial index | full scan or unavailable | retained; it does not block unrelated ordinary saves and never satisfies complete Action proof |
-| external file edit | checkout proposal only | file itself is current source; external change advances observation epoch and may yield conflict/unavailable |
-| pins/effects | planned/terminal decisions may retain complete source pins indefinitely | purpose-bound pins, last-reference/unknown protection, capacity and expirable historical effects; legacy promises are not retroactively weakened |
-| collaboration | Server has one commit holder; real-time later | multi-user Draft/prepare/broadcast ingress with one durable commit sequence; OT/CRDT remains unfrozen |
+| current Document/Resource bytes | complete bytes in authority SQLite | D6 Storage: ordinary files are current author bytes; P/I hold no whole-workspace current body |
+| identity / parent / order / lifecycle | current state in the payload/control database | D3 remains logical owner; D6 portable metadata is physical carrier only |
+| operation ledger | WorkspaceId+OperationId | D3 wire12 / D6 v2: WorkspaceId + CommitDomain + OperationId |
+| ordinary multi-device writes | insufficient continuity leads to global read-only/fork/reconciliation | D1/D3/D6: each active replicaEpoch has bounded ordinary operations with explicit conflict records |
+| author commit | one SQLite transaction publishes payload/control/receipt | D6: file installation -> P seal -> portable publication; reliable save differs from portable publication |
+| SourceVersion | Ref+Counter/store incarnation | D6 SourceVersion/2 binds CommitDomain, observationEpoch, revision, ChangeId |
+| partial index | complete scan or unavailable | unrelated ordinary save does not wait for complete index; complete Query/Action never consumes a gap |
+| external file edit | checkout proposal only | the file itself is current bytes; observation gaps advance observationEpoch and ABA never reuses hash continuity |
+| pins/effects | decisions may keep complete source pins indefinitely | purpose-bound pins plus last-reference/unknown protection; legacy retention is not weakened retroactively |
+| local lifecycle | strong workspace-wide closure | D3 wire12 separates replica_local Trash from managed_atomic restore/purge |
+| collaboration | Server has one commit holder; real-time later | D1 separates multi-user sessions from one durable commit holder; real-time remains post-G2 |
 
-## 4. Separate qualification layers
+## 4. Three qualification layers
 
-- **ordinary replica content**: ordinary source edits, create, local move/reorder, and Trash require only the actual source/identity/structure/policy scope they touch plus an eligible installation primitive.
-- **complete semantic/action proof**: D4/D5 relations, uniqueness, Calendar, collection membership, complete bulk operations, and purge still require their actual complete positive/negative ranges. A building/partial index is not such proof.
-- **global execution responsibility**: Automation, ApprovalUse, claim, Money, external unknown, and stop require continuous single execution responsibility and are never inferred from file sync or replica registration.
+- ordinary replica content: ordinary source save, create_node, local move/reorder, and Trash require the actual source/identity/structure/policy range plus an eligible installation primitive.
+- complete semantic/action proof: relation, unique, Calendar, collection, complete bulk, restore/purge/copy/fork/import retain their complete positive/negative ranges.
+- global execution responsibility: Automation, ApprovalUse, claim, Money, external unknown, and stop require a separate continuous and fenced responsibility domain.
 
-`semantic_pending` means a D2-valid reliable save whose applicable local typed facts have passed their local gates while one or more cross-object/global obligations remain unproved. It is not a D4/D5-complete success and may not be automatically consumed by Query/Action/automation that requires complete semantics. This affects D4/D5 operation-applicable consumers and therefore requires real later owner afterimages.
+semantic_pending means a D2-valid source is reliably saved and local typed facts passed their local gate while the listed cross-object obligations remain unproved. It is not D4/D5/D7 complete success.
 
-## 5. Version transition
+## 5. Version transitions already authored
 
-- D6 Control wire `1 -> 2`: CommitDomain, SourceVersion/2, frontier, ordinary-save and conflict interfaces, Policy/3.
-- D6 PreparedIntent `1 -> 2`: accurate InputDescriptor, PinDirectory, and exact write set; the canonical commit request remains free of complete body bytes.
-- D6 Policy `2 -> 3`: replica registration / ordinary content / conflict capabilities; Policy/1 and /2 retain their original decoders.
-- D6 SourceVersion `1 -> 2`: bare numeric revision is never comparable across CommitDomain.
-- D6 Effect/Prepared consumers require new versions. This batch does not yet produce D7/D8/D9 afterimages, so **D6-FA-r01 cannot be partially activated or produce managed v2 success**.
-- A later D3 wire12 is expected to carry CommitDomain and local-vs-complete profiles. This batch does not write D3, so fixed-S D3 wire11 remains the only currently defined D3 contract.
-- Historical D3 v9/v10/v11, D6 wire1, D7 PreparedActionBinding/1,/2, and all saved decisions continue under their original decoder, fingerprint, saved bytes, authorization and continuity gates. No field is backfilled and no saved request is re-encoded.
+Produced D6 transitions:
+- Control wire 1 -> 2
+- PreparedIntent 1 -> 2
+- Policy 2 -> 3
+- SourceVersion 1 -> 2
 
-## 6. Required future owners
+Produced D3 transitions:
+- identity operation wire 11 -> 12
+- identity_change_receipt 11 -> 12
+- resolver context/outcome 11 -> 12
+- operation ledger key from WorkspaceId+OperationId to WorkspaceId+D3-CJ/3(CommitDomain)+OperationId
+- replica_local versus managed_atomic mode matrix
+- replica registration separated from continue
+- purge active-replica Frontier gate
+- saved v9/v10/v11 original decoder/bytes/gates preserved
+
+D3-CJ/3, D3Integer, Ref/Locator lexemes, Annotation Value/3, and Result/9 do not automatically change version because wire12 changes.
+
+Only D3/D6 owner afterimages are complete so far. D4/D5/D7/D8/D9/D10 consumers remain incomplete, therefore **partial activation and coordinated managed-success product outcomes are forbidden**.
+
+## 6. Remaining required owners
 
 | Owner | Required coordinated change |
 |---|---|
-| D1 | replica qualification after external changes; shared-folder behavior limited to affected stale cuts/install ranges; preserve Server single commit holder, multi-client use and the post-G2 real-time roadmap |
-| D3 | operation-ledger key, replica registration vs continue, local Trash receipts, purge frontier, move/order conflict, wire12 and legacy replay |
-| D4 | exact semantic_pending consumption matrix for operation-applicable/relation/uniqueness/Calendar |
-| D5 | native structure/bulk/collection boundary between ordinary save and complete proof |
-| D7 | cut domain/frontier, PreparedActionBinding/3, effects-pin retention and partial-index gate |
-| D8 | Source/Live/Read, three Live-mark modes, Draft/IME/Undo/selection continuity and collaborative checkpoints |
-| D9 | scoped pins, ImportJob, exact export inputs, publication and new request/effects version consumption |
+| D4 schema/relations | exact semantic_pending consumption for relation/unique/Calendar/cross-object types |
+| D5 structures | local versus complete ranges for native/bulk/collection |
+| D7 Query/Action | CommitDomain/frontier/SourceVersion consumer, new Prepared version, effects-pin retention, partial-index gate |
+| D8 editor | Source/Live/Read, three Live marker modes, Draft/IME/Undo/selection, multi-session and collaboration checkpoint |
+| D9 import/export | scoped pins, ImportJob, exact export inputs, publication, new request/effects consumer |
 | D10 | recipient/target/payload approval, sourceOccurrenceKey continuity, Money lineage, Run/Lease/Automation/deployment execution responsibility |
 
-These are pending routes only and do not appear in `replacements.json` until actual files exist.
+These files do not enter replacements.json until they actually exist.
 
-## 7. Large workspace milestones
+## 7. First-open, large-workspace, and multi-user boundary
 
-The afterimages distinguish `T_first_open`, `T_first_edit`, `T_first_reliable_save`, `T_full_search_ready`, and `T_OCR_ready`. Ordinary reliable save does not wait for unrelated full-workspace indexing or OCR; complete Query/Action does not consume incomplete indexes. Startup does not hash the whole workspace and I does not retain a whole-workspace body/AST copy. No performance test or seconds-level guarantee is claimed by this candidate.
+The candidate measures T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready separately. Ordinary reliable save does not wait for unrelated full indexing/OCR; complete Query/Action does not consume an incomplete index. No seconds-level claim exists without performance measurements.
+
+Multiple Server users may edit the same or different documents concurrently. Durable commit ordering is not a frontend single-user lock. Post-G2 real-time collaboration still requires separate implementation evidence.
 
 ## 8. Existing D10 review state
 
-The fixed B13 result remains **REVISE**, terminology/bilingual FAIL, P0=0, P1=3, P2=8, eleven OPEN findings. This candidate supplies related foundation surfaces only and does not close, reclassify, or independently accept any finding.
+Fixed B13 remains **REVISE**, terminology/bilingual FAIL, P0=0, P1=3, P2=8, eleven OPEN findings:
 
-Open IDs remain:
+- P1: R08-B13-P1-01, R08-B13-P1-02, R08-B13-P1-03
+- P2: R08-B01-P2-01, R08-B02-P2-01, R08-B02-P2-02, R08-B02-P2-03, R08-B05-P2-01, R08-B11-P2-01, R08-B12-P2-01, R08-B13-P2-01
 
-- P1: `R08-B13-P1-01`, `R08-B13-P1-02`, `R08-B13-P1-03`
-- P2: `R08-B01-P2-01`, `R08-B02-P2-01`, `R08-B02-P2-02`, `R08-B02-P2-03`, `R08-B05-P2-01`, `R08-B11-P2-01`, `R08-B12-P2-01`, `R08-B13-P2-01`
-
-A future immutable candidate requires a fresh complete independent joint review over the new proposal, all 18 D10 files, fixed S49, and every actual replacement-owner afterimage. Author documentation checks and CI are not independent acceptance.
-
+This candidate closes, reclassifies, or independently accepts none of them. A future immutable candidate still requires fresh complete joint review of the proposal, all 18 D10 files, fixed S49, and every real replacement-owner afterimage. Author documentation checks and CI are not independent acceptance.

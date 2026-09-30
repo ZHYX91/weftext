@@ -335,4 +335,3 @@ Legacy D6 wire1, Policy/1/2, SourceVersion/1, D7 PreparedActionBinding/1,/2, D8 
 D6-FA-r01 is an author-side partial coordinated candidate only. There is no product implementation, real filesystem conditional-replace/exclusive proof, Server multi-user/real-time conformance, 10k/100k/1M-file or tens-of-GB performance evidence, complete D3/D4/D5/D7/D8/D9/D10 consumer afterimage, or fresh independent joint review.
 
 Documentation checks/CI prove only their named checks. A complete successor candidate requires fixed-S 49 inputs, every actual replacement owner, and the new D10 18 files to be reviewed together.
-

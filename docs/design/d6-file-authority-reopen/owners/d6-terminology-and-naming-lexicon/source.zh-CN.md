@@ -147,4 +147,3 @@ commit_sequence_state 在 Policy/3 中只观察指定 CommitDomain 的 domainCom
 旧 sourceVersion、Policy/1/2、D6 wire1、PreparedIntent、D7 binding/effects 和历史 receipt继续其原 decoder/firstFreeze。机器 registry 的 firstFreeze 是历史来源属性，不因 FA-r01重新冻结而改写。
 
 新 public names只有在全部 replacement owner与consumer共同接受后可进入产品/API。当前目录存在不代表 capability available，也不能把 candidate term 注入 D10 manifest/contribution或产品日志作为已发布 schema。
-

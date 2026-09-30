@@ -52,4 +52,3 @@ These are not permanent prohibitions. Future product need must be handled by the
 5. Server multi-user mode allows concurrent sessions. Back-end commit serialization does not mean a single front-end editor.
 
 All other plugin semantics remain pending for their real owner afterimages.
-

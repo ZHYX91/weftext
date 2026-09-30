@@ -61,4 +61,3 @@ translation_status: source
 5. Server 多用户必须允许并发会话；后台提交顺序不等于前台单用户。
 
 其它插件语义留给后续真实 owner 后像。
-
