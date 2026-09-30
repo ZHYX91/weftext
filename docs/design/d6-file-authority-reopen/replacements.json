@@ -1,0 +1,179 @@
+{
+  "format": "weftext.design-replacements",
+  "version": 1,
+  "status": "candidate",
+  "generation": "D6-FA-r01",
+  "sourceCommit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "d10BaseCommit": "d99f053b9386c9c9e1664251fdec9f00e33fac2c",
+  "replacements": [
+    {
+      "sourcePath": "docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md",
+      "sourceBlob": "c2673e1e72b8a2cb96f0e6cae5f4f2035cf12c6b",
+      "owner": "D6",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-4",
+        "6-13",
+        "16-17"
+      ],
+      "consumers": [
+        "D1",
+        "D3",
+        "D4",
+        "D5",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D6 Storage contract",
+          "from": "revision05-observation-bootstrap",
+          "to": "D6-FA-r01"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d6-control-interfaces/source.md",
+      "sourceBlob": "32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4",
+      "owner": "D6",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-4",
+        "6-16"
+      ],
+      "consumers": [
+        "D3",
+        "D4",
+        "D5",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D6 Control wire",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 PreparedIntent",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 Policy",
+          "from": "2",
+          "to": "3"
+        },
+        {
+          "domain": "D6 SourceVersion",
+          "from": "1",
+          "to": "2"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "6a9038fd6e70b2be3760811d73d2e5077c0ab5a2",
+      "owner": "D6",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d6-terminology-and-naming-lexicon/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d6-terminology-and-naming-lexicon/source.md"
+      },
+      "changedSections": [
+        "status",
+        "complete concept table",
+        "D6-FA-r01 controlled additions"
+      ],
+      "consumers": [
+        "D3",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D6 terminology prose",
+          "from": "revision05/D7 coordinated additions",
+          "to": "D6-FA-r01"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d6-terminology-registry/source.json",
+      "sourceBlob": "5f4b28d9cf8a237cfa7e7ed8e41143571e5731a6",
+      "owner": "D6",
+      "outputs": {
+        "kind": "machine",
+        "path": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json"
+      },
+      "changedSections": [
+        "schema",
+        "affected definitions",
+        "D6-FA-r01 concepts",
+        "crossStageBindings"
+      ],
+      "consumers": [
+        "D3",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D6-Terminology schema",
+          "from": "1",
+          "to": "2"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "35cf68fd6986d812d7f812180d7bb396d2a4f4e1",
+      "owner": "D6",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d6-implementation-impact-and-test-outline/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d6-implementation-impact-and-test-outline/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-6",
+        "D6-FA-r01 acceptance matrix"
+      ],
+      "consumers": [
+        "D1",
+        "D3",
+        "D4",
+        "D5",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D6 implementation outline",
+          "from": "revision05",
+          "to": "D6-FA-r01"
+        }
+      ]
+    }
+  ]
+}
