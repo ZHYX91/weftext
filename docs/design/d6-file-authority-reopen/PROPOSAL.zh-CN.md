@@ -1,7 +1,9 @@
 ---
-_weftext:
-  id: "2ab7d0c7-23b0-4ef4-9fb2-cb4f5413e0c1"
+source_language: zh-CN
+translation_status: source
 ---
+
+[English](PROPOSAL.md)
 
 # D6-FA-r01 文件权威重开联合候选说明
 
@@ -41,10 +43,10 @@ _weftext:
 |---|---|---|
 | 当前 Document/Resource bytes | authority SQLite 内完整 bytes | Storage 主稿：普通文件是当前作者字节；控制库不保存全库 current body |
 | identity / parent / order / lifecycle | 与 payload/control 同事务数据库 current | Storage 主稿：库内可移植元数据唯一 current；P 只保存 decision/恢复证据 |
-| operation ledger | WorkspaceId+OperationId 且与单 authority store 连续 | Control/Storage：新 CommitDomain 进入 v2 key；旧 saved v1/v9-v11 不改 bytes |
+| 操作账本 | WorkspaceId+OperationId 且与单一权威存储连续 | 控制/存储：新 CommitDomain 进入 v2 键；旧已保存 v1/v9-v11 字节不变 |
 | 多设备普通写入 | 双 writer 无 continuity 时只读/fork/reconciliation | Storage：每个 replicaEpoch 可作普通 replica-local 提交并产生 ChangeId/frontier；全局执行责任仍单独连续 |
 | author commit | 单 SQLite 事务发布 payload/control/receipt | Storage：文件安装 + durable-control seal + portable publication 分阶段；可靠保存与便携发布分开 |
-| source version | Ref+Counter / store incarnation | Control：SourceVersion/2 显式 CommitDomain、observationEpoch、revision、ChangeId |
+| 源版本 | Ref+Counter / 存储世代 | 控制：SourceVersion/2 显式绑定 CommitDomain、observationEpoch、revision、ChangeId |
 | partial index | 不足时完整扫描或 unavailable | 保留；并明确不阻塞无关普通保存，且不能满足全集 Action |
 | external file edit | checkout proposal，文件不是第二 authority | 文件本身即当前 source；外部变化提升 observation epoch，无法证明时冲突/不可用 |
 | pins/effects | planned/terminal decision 可长期保留完整 source pins | Control/Storage：purpose-bound pins、last-reference/unknown 保护、容量与可失效历史 effects；旧协议承诺不追溯删除 |
@@ -79,13 +81,13 @@ D6-FA-r01 采用显式版本化，不使用“contractMajor 2”作为万能回�
 | Owner | 必须协调的真实变化 |
 |---|---|
 | D1 product surface | 外部文件变化后的副本资格；共享文件夹从“停止全部写”修订为“停止受影响旧 cut/安装范围”；保留 Server 单提交者、多人客户端和 G2 后实时路线 |
-| D3 identity/lifecycle | operation ledger key、replica registration 与 continue 的分离、local Trash receipt、purge frontier、move/order conflict、wire12 与 legacy replay |
+| D3 身份/生命周期 | 操作账本键、副本登记与 continue 分离、局部 Trash 回执、purge 前沿、移动/顺序冲突、wire12 与历史重放 |
 | D4 schema/relations | semantic_pending 对 operation-applicable / relation / uniqueness / Calendar 的精确可消费矩阵；不能把 pending 当 validated |
 | D5 structures | native structure/bulk/collection 在局部 save 与 complete proof 下的界线 |
-| D7 Query/Action | cut domain/frontier、PreparedActionBinding/3、effects pin retention、partial-index gate |
-| D8 editor | Source/Live/Read、三种 Live 标记策略、Draft/IME/Undo/selection continuity、多人 session/checkpoint |
+| D7 Query/Action | cut 域/前沿、PreparedActionBinding/3、效果 pin 保留、部分索引门禁 |
+| D8 编辑器 | Source/Live/Read、三种 Live 标记策略、Draft/IME/Undo/选择连续性、多人会话/检查点 |
 | D9 import/export | scoped pins、ImportJob、导出精确输入、publication 与新 request/effects 版本消费 |
-| D10 | recipient/target/payload approval、sourceOccurrenceKey continuity、Money lineage、Run/Lease/Automation/deployment execution responsibility |
+| D10 | recipient/target/payload 审批、sourceOccurrenceKey 连续性、Money 谱系、Run/Lease/Automation/deployment 执行责任 |
 
 ## 7. 首开与大库边界
 
@@ -107,3 +109,4 @@ D6 后像分别定义并要求测量：
 - P2：`R08-B01-P2-01`、`R08-B02-P2-01`、`R08-B02-P2-02`、`R08-B02-P2-03`、`R08-B05-P2-01`、`R08-B11-P2-01`、`R08-B12-P2-01`、`R08-B13-P2-01`
 
 后继不可变候选必须进行 fresh 完整独立联合审查：新提案、D10 十八份、原固定 S 49 份及全部真实 replacement owner 后像。作者文档检查和 CI 不等于独立接受。
+

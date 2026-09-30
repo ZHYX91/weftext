@@ -1,7 +1,10 @@
 ---
-_weftext:
-  id: "73f8d2bd-ec8a-4c2b-8abc-69edb8ef54a1"
+source_language: zh-CN
+translation_of: PROPOSAL.zh-CN.md
+translation_status: synced
 ---
+
+[简体中文](PROPOSAL.zh-CN.md)
 
 # D6-FA-r01 File Authority Reopen — Coordinated Candidate Note
 
@@ -89,4 +92,10 @@ The afterimages distinguish `T_first_open`, `T_first_edit`, `T_first_reliable_sa
 
 The fixed B13 result remains **REVISE**, terminology/bilingual FAIL, P0=0, P1=3, P2=8, eleven OPEN findings. This candidate supplies related foundation surfaces only and does not close, reclassify, or independently accept any finding.
 
+Open IDs remain:
+
+- P1: `R08-B13-P1-01`, `R08-B13-P1-02`, `R08-B13-P1-03`
+- P2: `R08-B01-P2-01`, `R08-B02-P2-01`, `R08-B02-P2-02`, `R08-B02-P2-03`, `R08-B05-P2-01`, `R08-B11-P2-01`, `R08-B12-P2-01`, `R08-B13-P2-01`
+
 A future immutable candidate requires a fresh complete independent joint review over the new proposal, all 18 D10 files, fixed S49, and every actual replacement-owner afterimage. Author documentation checks and CI are not independent acceptance.
+

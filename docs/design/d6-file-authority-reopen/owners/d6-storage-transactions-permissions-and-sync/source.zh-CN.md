@@ -1,7 +1,11 @@
 ---
-_weftext:
-  id: "c99e6e2b-dc0c-4a3b-ab35-75a85d12ef99"
+source_language: zh-CN
+translation_status: source
 ---
+
+[English](source.md)
+
+源文档 ID：`c99e6e2b-dc0c-4a3b-ab35-75a85d12ef99`。
 
 候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中 revision05/D7/D9 的生效或候选标签只作为历史来源保留，不支配本后像。稳定文档 ID 保持不变。只有本重开所需全部 owner 后像、D10 消费者、fresh 独立联合审查和协调接受全部完成后，才可讨论激活；禁止半包启用新版受管成功。
 
@@ -171,13 +175,16 @@ managed_atomic 不把多个 rename 称为文件系统全局事务。跨文件操
 
 ### 7.1 InputDescriptor 与 pins
 
-D6 v2 canonical commit request 保持小型控制请求，不内嵌完整 Document/Resource bytes。PreparedIntent/2 保存 InputDescriptor/2：准确 Workspace/CommitDomain、intent kind、before SourceVersion/metadata versions、expected Frontier、actual scope/profile、write-set descriptors、Registry/policy/rule versions和其拥有者规范输入。完整 source/bytes 由 PinDirectory 中 purpose-bound pins 承载。
+D6 v2 canonical commit request 保持小型控制请求，不内嵌完整 Document/Resource bytes。PreparedIntent/2 保存 InputDescriptor/2：准确 Workspace/CommitDomain、intent kind、before SourceVersion/metadata versions、
+  expected Frontier、actual scope/profile、write-set descriptors、
+    Registry/policy/rule versions和其拥有者规范输入。完整 source/bytes 由 PinDirectory 中 purpose-bound pins 承载。
 
 input equality 要求 descriptor canonical bytes 与其所引用 exact pins/owners 完整一致；相同 sha256 不足以证明相同输入。修改任一 source、mapping、policy、frontier、scope 或 owner request 都需要新 prepare/OperationId，除非原协议明确为 same canonical replay。
 
 ### 7.2 Pin 分类
 
-每个 pin 必须记录 purpose、owner request/job、byteLength、payload type、source version、created control revision、last-reference policy、retention class、capacity account。允许长期保护的类别仅为：
+每个 pin 必须记录 purpose、owner request/job、byteLength、payload type、source version、
+  created control revision、last-reference policy、retention class、capacity account。允许长期保护的类别仅为：
 
 - planned/installation recovery 的 before/after；
 - unresolved conflict branch 与 merge base；
@@ -194,19 +201,25 @@ input equality 要求 descriptor canonical bytes 与其所引用 exact pins/owne
 每个 v2 content decision 保存独立 DecisionState、InstallationState、ReliableSaveState、PortablePublicationState：
 
 DecisionState：unseen → rejected | planned → committed | terminal_failed。
-InstallationState：prepared → planned → installing(k) → installed；另有 conflict | recovery_unknown | paused_authorization | paused_capacity。
+InstallationState：prepared → planned → installing(k) → installed；
+  另有 conflict | recovery_unknown | paused_authorization | paused_capacity。
 ReliableSaveState：not_saved | reliable。
 PortablePublicationState：not_published | pending | published | conflict。
 
 顺序固定：
 
-1. prepare：冻结 InputDescriptor、exact write set、before/after pins、语义 proof、preview、budget；无 author effect。
-2. planning：先证明 required pins durable/capacity reserved；P 事务保存 canonical request、fixed plan、reservation、installation recovery description 与 planned。
-3. portable installation notice：在修改任何 portable current 文件前，写入并 durable flush InstallationNotice，列 ChangeId、operation binding、guarantee、before Frontier、component/write-set descriptors；它不含 approval/Money/external payload，也不是 completed decision。
+1. prepare：冻结 InputDescriptor、exact write set、
+  before/after pins、语义 proof、preview、budget；无 author effect。
+2. planning：先证明 required pins durable/capacity reserved；P 事务保存 canonical request、
+  fixed plan、reservation、installation recovery description 与 planned。
+3. portable installation notice：在修改任何 portable current 文件前，写入并 durable flush InstallationNotice，列 ChangeId、operation binding、
+  guarantee、before Frontier、component/write-set descriptors；
+    它不含 approval/Money/external payload，也不是 completed decision。
 4. install：每项 staged after 先完整写入并 durable flush，再通过 BackendQualification 允许的 create_only/conditional_replace/exclusive window 安装；每个 component 保存实际 FileObjectBinding/outcome。move/Trash 先确保可恢复目标已 durable，不先永久删除 current。
 5. installed verification：以安装后的**自身 write set 指定 poststate**为 expected 值核对每个实际 component；不得再次要求这些目标仍等于原 before。对未写的 positive/negative dependencies、当前 policy/auth、Registry/rules、Frontier 范围和 concurrent control facts重验；自产生 ChangeId/SourceVersion 只与 fixed plan 的 planned poststate 比较。
 6. seal：全部已写 component 等于 planned poststate、未写依赖仍成立、current authorization 允许 seal 时，在 P 单一 durable transaction 写 committed decision、canonical receipt、ReliableSaveState=reliable、effects metadata、execution charges/approval consumption（适用）、outbox。此 P durable seal 是本次受管 decision 的提交点。
-7. portable publication：从 saved decision 生成 ContentCompletionProof，写入 portable metadata 并 durable flush，推进 Frontier，解除受管 portable publication barrier，PortablePublicationState=published。
+7. portable publication：从 saved decision 生成 ContentCompletionProof，写入 portable metadata 并 durable flush，
+  推进 Frontier，解除受管 portable publication barrier，PortablePublicationState=published。
 
 第 6 步成功而第 7 步失败时，decision 和 reliable save 已成功；portable publication=pending。恢复只补同一 completion proof，不重写 source、不新建 OperationId、不重复收费。远端 replica 在完整 proof+components 到齐前只看到 incomplete transport，不能把文件先到达当 committed portable version。
 
@@ -249,7 +262,8 @@ P 丢失时，原 execution decisions/unknown 不能从 files 重建。若 porta
 
 ### 9.2 Transport completeness
 
-同步 provider 只运输 ordinary files 和 portable metadata immutable/versioned records；不运输活动 control.sqlite3/WAL/SHM、derived index 或 Draft。
+同步 provider 只运输 ordinary files 和 portable metadata immutable/versioned records；
+  不运输活动 control.sqlite3/WAL/SHM、derived index 或 Draft。
 
 接收端只有在某 ChangeId 的 InstallationNotice、ContentCompletionProof 和全部 listed component bytes/metadata 到齐且互相验证后才接纳该 change 到本域 Frontier。先到 Document 后到 sidecar、先到 sidecar 后到 Resource、placeholder 尚未 materialized 都是 incomplete，不是空值、删除或成功 commit。
 
@@ -314,7 +328,8 @@ Server 托管 Workspace 仍有唯一持久 CommitDomain/提交持有者，跨全
 
 G2 后实时会话的 D6 接入合同现在冻结，但不冻结 OT/CRDT 算法：
 
-- session 绑定 Workspace/Node、committed Base SourceVersion、sessionEpoch、participant principal/session 和有序 client input sequence；
+- session 绑定 Workspace/Node、committed Base SourceVersion、
+  sessionEpoch、participant principal/session 和有序 client input sequence；
 - receive ack、broadcast、durable checkpoint 三者分离；receive/broadcast 不叫 saved；
 - 参与完整 source session 需要自身完整 source_read；一个用户不能借另一参与者资格看到隐藏 bytes；
 - IME preedit 不成为 shared author op；composition 最终确认至多形成一个 Draft input transaction；
@@ -360,7 +375,8 @@ global execution responsibility 的最小 continuity 包括：
 
 - canonical original request/decision/receipt/error；
 - current lease/claim/standing approval consumption；
-- Money budget lineage：Run、Lease、Automation、Workspace、deployment 及 reservation/charged/refund evidence；
+- Money budget lineage：Run、Lease、Automation、Workspace、
+  deployment 及 reservation/charged/refund evidence；
 - external request/send/result frozen binding 与 unknown state；
 - stop/emergency state；
 - sourceOccurrenceKey 等自动化连续性所需 evidence。
@@ -387,3 +403,4 @@ D6-FA-r01 目前只是作者部分联合候选：
 - 没有 fresh 独立联合审查。
 
 任何 documentation check/CI 只证明其明确检查项，不构成上述证据。完整后继候选须以固定 S 49 原输入、全部实际 replacement owner、新 D10 十八份共同接受。
+

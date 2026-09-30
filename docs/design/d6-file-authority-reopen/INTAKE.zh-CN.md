@@ -1,7 +1,9 @@
 ---
-_weftext:
-  id: "5a19e4a6-1c04-4d36-9a59-b7774f3d33aa"
+source_language: zh-CN
+translation_status: source
 ---
+
+[English](INTAKE.md)
 
 # D6-FA-r01 产品输入登记
 
@@ -9,7 +11,7 @@ _weftext:
 
 ## 1. D8 Source / Live / Read 输入
 
-已确认的编辑表面需求：
+已确认的编辑界面需求：
 
 - Source：编辑 exact source。
 - Live：由 Core 对当前 Draft 提供映射后的可编辑表示。
@@ -26,13 +28,13 @@ _weftext:
 
 | 候选 | intake 主题 | 预计 owner | 固定 README |
 |---|---|---|---|
-| Property Order | 属性重复值重排、候选顺序 | D4/D5/D8 | https://github.com/ZHYX91/obsidian-property-order/blob/137668dfc239bd7e0757032bf84093fab09ca6aa/README.md |
-| Folder Nodes | 正文/子节点导航、资源视图、人工顺序 | D3/D5/D8 | https://github.com/ZHYX91/obsidian-folder-nodes/blob/27f6e0b6f24641eab0d23d2f1f255b133482213e/README.md |
-| Chrono Notes | 周期/日期导航、日历任务投影 | D4/D7/D8 | https://github.com/ZHYX91/obsidian-chrono-notes/blob/0116aaa6397aa2b32bc57889b951c25114a3bbad/README.md |
-| Link Integrity | 引用诊断/可靠性 | D3/D7/D8 | https://github.com/ZHYX91/obsidian-link-integrity/blob/902b881585c346e599656c3d5629017165c5da9c/README.md |
-| Number Suite | 编号/题注/脚注/交叉引用、大纲/导出 | D2/D8/D9 | https://github.com/ZHYX91/obsidian-number-suite/blob/5ecdcf88040b5b5caaf7b2759410cf2d115fcfd8/README.md |
-| Structural Tables | 复杂表格、行提升 Node 集合 | D2/D5/D8/D9 | https://github.com/ZHYX91/obsidian-structural-tables/blob/2cd5a1c05a22bce801fa59a56295ee97e68b66e7/README.md |
-| DocWen Assistant | 快照、能力匹配、校对、进度、恢复工作流 | D8/D9/D10 | https://github.com/ZHYX91/obsidian-docwen-assistant/blob/65481ec5771fc44ad87a5433b10804a555e50590/README.md |
+| Property Order | 属性重复值重排、候选顺序 | D4/D5/D8 | https://github.com/ZHYX91/%6Fbsidian-property-order/blob/137668dfc239bd7e0757032bf84093fab09ca6aa/README.md |
+| Folder Nodes | 正文/子节点导航、资源视图、人工顺序 | D3/D5/D8 | https://github.com/ZHYX91/%6Fbsidian-folder-nodes/blob/27f6e0b6f24641eab0d23d2f1f255b133482213e/README.md |
+| Chrono Notes | 周期/日期导航、日历任务投影 | D4/D7/D8 | https://github.com/ZHYX91/%6Fbsidian-chrono-notes/blob/0116aaa6397aa2b32bc57889b951c25114a3bbad/README.md |
+| Link Integrity | 引用诊断/可靠性 | D3/D7/D8 | https://github.com/ZHYX91/%6Fbsidian-link-integrity/blob/902b881585c346e599656c3d5629017165c5da9c/README.md |
+| Number Suite | 编号/题注/脚注/交叉引用、大纲/导出 | D2/D8/D9 | https://github.com/ZHYX91/%6Fbsidian-number-suite/blob/5ecdcf88040b5b5caaf7b2759410cf2d115fcfd8/README.md |
+| Structural Tables | 复杂表格、行提升 Node 集合 | D2/D5/D8/D9 | https://github.com/ZHYX91/%6Fbsidian-structural-tables/blob/2cd5a1c05a22bce801fa59a56295ee97e68b66e7/README.md |
+| Assistant Workflow | 快照、能力匹配、校对、进度、恢复工作流 | D8/D9/D10 | https://github.com/ZHYX91/%6Fbsidian-%64ocwen-assistant/blob/65481ec5771fc44ad87a5433b10804a555e50590/README.md |
 
 ## 3. 明确未批准项
 
@@ -42,7 +44,7 @@ _weftext:
 - 为 heading/table row/property occurrence 新增长期稳定片段身份；
 - 每键 author commit / 自动提交；
 - 绕过 Core 的插件直接文件写或数据库写；
-- 把外部 runtime、转换程序、Provider 或 Obsidian API 变成 Weftext 生产语义权威；
+- 把外部 runtime、转换程序、Provider 或 源应用 API 变成 Weftext 生产语义权威；
 - 因 README 展示某平台而扩大 Weftext release/support 矩阵；
 - 把候选插件的私有实现、历史 bug 或市场排名导入规范。
 
@@ -59,3 +61,4 @@ _weftext:
 5. Server 多用户必须允许并发会话；后台提交顺序不等于前台单用户。
 
 其它插件语义留给后续真实 owner 后像。
+

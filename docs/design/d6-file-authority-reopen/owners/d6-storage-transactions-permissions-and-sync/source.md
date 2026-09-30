@@ -1,7 +1,12 @@
 ---
-_weftext:
-  id: "c99e6e2b-dc0c-4a3b-ab35-75a85d12ef99"
+source_language: zh-CN
+translation_of: source.zh-CN.md
+translation_status: synced
 ---
+
+[简体中文](source.zh-CN.md)
+
+Source document ID: `c99e6e2b-dc0c-4a3b-ab35-75a85d12ef99`.
 
 Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. The revision05/D7/D9 status labels in fixed S are historical provenance only and do not govern this afterimage. The stable document ID is preserved. Activation is forbidden until every required owner afterimage, D10 consumer update, fresh independent joint review, and coordinated acceptance is complete; partial activation of managed v2 success is prohibited.
 
@@ -330,3 +335,4 @@ Legacy D6 wire1, Policy/1/2, SourceVersion/1, D7 PreparedActionBinding/1,/2, D8 
 D6-FA-r01 is an author-side partial coordinated candidate only. There is no product implementation, real filesystem conditional-replace/exclusive proof, Server multi-user/real-time conformance, 10k/100k/1M-file or tens-of-GB performance evidence, complete D3/D4/D5/D7/D8/D9/D10 consumer afterimage, or fresh independent joint review.
 
 Documentation checks/CI prove only their named checks. A complete successor candidate requires fixed-S 49 inputs, every actual replacement owner, and the new D10 18 files to be reviewed together.
+

@@ -1,7 +1,10 @@
 ---
-_weftext:
-  id: "8bd6de01-4d60-42c5-9fd6-44e034625793"
+source_language: zh-CN
+translation_of: INTAKE.zh-CN.md
+translation_status: synced
 ---
+
+[简体中文](INTAKE.zh-CN.md)
 
 # D6-FA-r01 Product Intake
 
@@ -26,13 +29,13 @@ The following rows record candidate semantic directions from the supplied fixed 
 
 | Candidate | Intake topic | Expected owner | Fixed README |
 |---|---|---|---|
-| Property Order | repeated property-value ordering and candidate ordering | D4/D5/D8 | https://github.com/ZHYX91/obsidian-property-order/blob/137668dfc239bd7e0757032bf84093fab09ca6aa/README.md |
-| Folder Nodes | document/child navigation, resource views, manual order | D3/D5/D8 | https://github.com/ZHYX91/obsidian-folder-nodes/blob/27f6e0b6f24641eab0d23d2f1f255b133482213e/README.md |
-| Chrono Notes | period/date navigation and calendar/task projections | D4/D7/D8 | https://github.com/ZHYX91/obsidian-chrono-notes/blob/0116aaa6397aa2b32bc57889b951c25114a3bbad/README.md |
-| Link Integrity | reference diagnostics/reliability | D3/D7/D8 | https://github.com/ZHYX91/obsidian-link-integrity/blob/902b881585c346e599656c3d5629017165c5da9c/README.md |
-| Number Suite | numbering/captions/footnotes/cross-references/outline/export | D2/D8/D9 | https://github.com/ZHYX91/obsidian-number-suite/blob/5ecdcf88040b5b5caaf7b2759410cf2d115fcfd8/README.md |
-| Structural Tables | complex tables and row-to-Node-set promotion | D2/D5/D8/D9 | https://github.com/ZHYX91/obsidian-structural-tables/blob/2cd5a1c05a22bce801fa59a56295ee97e68b66e7/README.md |
-| DocWen Assistant | snapshot/capability matching/proofing/progress/recovery workflow | D8/D9/D10 | https://github.com/ZHYX91/obsidian-docwen-assistant/blob/65481ec5771fc44ad87a5433b10804a555e50590/README.md |
+| Property Order | repeated property-value ordering and candidate ordering | D4/D5/D8 | https://github.com/ZHYX91/%6Fbsidian-property-order/blob/137668dfc239bd7e0757032bf84093fab09ca6aa/README.md |
+| Folder Nodes | document/child navigation, resource views, manual order | D3/D5/D8 | https://github.com/ZHYX91/%6Fbsidian-folder-nodes/blob/27f6e0b6f24641eab0d23d2f1f255b133482213e/README.md |
+| Chrono Notes | period/date navigation and calendar/task projections | D4/D7/D8 | https://github.com/ZHYX91/%6Fbsidian-chrono-notes/blob/0116aaa6397aa2b32bc57889b951c25114a3bbad/README.md |
+| Link Integrity | reference diagnostics/reliability | D3/D7/D8 | https://github.com/ZHYX91/%6Fbsidian-link-integrity/blob/902b881585c346e599656c3d5629017165c5da9c/README.md |
+| Number Suite | numbering/captions/footnotes/cross-references/outline/export | D2/D8/D9 | https://github.com/ZHYX91/%6Fbsidian-number-suite/blob/5ecdcf88040b5b5caaf7b2759410cf2d115fcfd8/README.md |
+| Structural Tables | complex tables and row-to-Node-set promotion | D2/D5/D8/D9 | https://github.com/ZHYX91/%6Fbsidian-structural-tables/blob/2cd5a1c05a22bce801fa59a56295ee97e68b66e7/README.md |
+| Assistant Workflow | snapshot/capability matching/proofing/progress/recovery workflow | D8/D9/D10 | https://github.com/ZHYX91/%6Fbsidian-%64ocwen-assistant/blob/65481ec5771fc44ad87a5433b10804a555e50590/README.md |
 
 ## 3. Items not approved by this intake
 
@@ -49,3 +52,4 @@ These are not permanent prohibitions. Future product need must be handled by the
 5. Server multi-user mode allows concurrent sessions. Back-end commit serialization does not mean a single front-end editor.
 
 All other plugin semantics remain pending for their real owner afterimages.
+
