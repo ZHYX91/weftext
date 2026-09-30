@@ -42,7 +42,7 @@ D4 Reference Catalog 与 mandatory scenarios 只是固定只读输入，不登�
 |---|---|---|
 | Document/Resource current bytes | D2/Resource domain | ordinary files |
 | identity/parent/order/lifecycle | D3 | portable metadata + D3 wire12 |
-| Field/Facet/relation/Calendar Registry semantics | D4 | portable Registry metadata + D6 SourceVersion/control binding |
+| Field/Facet/关系/Calendar Registry 语义 | D4 | 可移植 Registry 元数据 + D6 SourceVersion/控制绑定 |
 | native table structure / Node Collection semantics | D5 | exact source / D7 result |
 | durable decision/recovery | protocol owner + D6 | local P |
 | search/parser/index candidates | source owners | rebuildable I |
@@ -112,10 +112,10 @@ hard limits继续：
 
 | Owner | 尚待协调 |
 |---|---|
-| D7 | CommitDomain/Frontier/SourceVersion complete cut、new Prepared、effects pin retention、partial-index gate |
+| D7 | CommitDomain/Frontier/SourceVersion 的完整 cut、新版 Prepared、effects pin 保留、partial-index 门禁 |
 | D8 | Source/Live/Read、Live三种标记策略、Draft/IME/Undo/selection、多会话与 collaboration checkpoint |
 | D9 | scoped pins、ImportJob、exact export inputs、publication、新 request/effects consumer |
-| D10 | recipient/target/payload approval、sourceOccurrenceKey continuity、Money谱系、Run/Lease/Automation/deployment execution responsibility |
+| D10 | recipient/target/payload 审批、sourceOccurrenceKey 连续性、Money 谱系、Run/Lease/Automation/deployment 执行责任 |
 
 新 D7 Prepared未完成前，D4/D5需要 complete D7 preparation 的 strong Action仍 unavailable；不得半包激活。
 

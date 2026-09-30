@@ -36,8 +36,8 @@ I 只缓存可重建 projection/incidence/search candidate；P只保存不可重
 | component | future impact | forbidden shortcut |
 |---|---|---|
 | D4 Registry loader | 保留 owner/digest/evolution/catalog完整验证 | 从安装顺序或display name认owner |
-| Entry decoder | closed Entry/1、exact span、raw retention | free JSON / whole-namespace blob |
-| Type engine | exact integer/decimal/calendar/instant/ref/alias | host float/date默认值 |
+| Entry 解码器 | closed Entry/1、精确 span、raw 保留 | 禁止 free JSON / whole-namespace blob |
+| 类型引擎 | 精确 integer/decimal/calendar/instant/ref/alias | 禁止 host float/date 默认值 |
 | Facet engine | declared/effective、requiredness、conflicts | implicit membership/last-wins |
 | relation engine | Context/Binding/complete incidence/post-state | index=truth、inverse双写 |
 | Calendar engine | comparator/recurrence/series scope | current page=complete range |

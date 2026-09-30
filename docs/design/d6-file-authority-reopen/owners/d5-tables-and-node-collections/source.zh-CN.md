@@ -34,9 +34,9 @@ P/I不可建立第二份 table row、collection membership、Field occurrence或
 
 | row-like thing | authoritative domain | identity/lifetime | allowed operation |
 |---|---|---|---|
-| D4 Field Value Occurrence | owning Document source + D4 Entry | revision-bound occurrenceKey selector；非durable identity | D4 Field edit |
-| D2 Document Table Row | exact-source table occurrence | current Document revision locator/ordinal | D5 native table edit |
-| D2 Document Table Cell | row内 Inline* occurrence | current revision locator/column position | D5 native cell edit |
+| D4 字段值出现项 | 所属 Document source + D4 Entry | 绑定 revision 的 occurrenceKey selector；非持久 identity | D4 Field 编辑 |
+| D2 文档表格行 | exact-source 表格出现项 | 当前 Document revision 的 locator/ordinal | D5 原生表格编辑 |
+| D2 文档表格单元格 | row 内 Inline* 出现项 | 当前 revision 的 locator/column position | D5 原生单元格编辑 |
 | NodeCollectionResult row | NodeRef | Node durable identity保持 | D7/D5 collection Action |
 | Import/worker row | external/IR | 无 Workspace identity | D9 preview/import；fresh Node on commit |
 
@@ -217,12 +217,12 @@ I. D7 new preparation，仅强 collection/bulk consumer。
 | structured row reorder | A-D + trivia-safe | 无 | ordinary或 unsupported_table_reorder |
 | column edit | A-D/F-G/H | 无 | ordinary save；不得推断D4 type |
 | D4 occurrence edit | D4完整local Entry proof | 依Field跨对象义务 | 由D4 complete/pending决定 |
-| D3 replica_local move/reorder | D3 parent/sibling proof | Node Collection membership不因此证明 | local success；collection consumer仍pending |
-| D3 replica_local Trash | D3 local closure | collection/inbound全集可缺 | local lifecycle pending，不等于bulk集合Action |
+| D3 replica_local move/reorder | D3 parent/sibling 证明 | Node Collection membership 不因此得到证明 | 局部成功；collection consumer 仍 pending |
+| D3 replica_local Trash | D3 局部 closure | collection/inbound 全集可缺 | 局部 lifecycle pending，不等于 bulk 集合 Action |
 | collection local read | authorized rows +明确coverage | 不要求写 | partial/exploratory可用 |
-| collection requireMembership create | local create prerequisites | complete Query cut/postcondition | D7新版前 unavailable；以后 complete only |
+| collection requireMembership 创建 | 局部创建前提 | 完整 Query cut/postcondition | D7 新版前 unavailable；以后仅 complete |
 | remove from collection | explicit invertible plan | complete membership/postcondition | complete only |
-| bulk update/all_result | frozen complete targets | future D7 complete cut | complete only |
+| bulk update/all_result | 已冻结的完整 targets | 未来 D7 complete cut | 仅 complete |
 | restore/purge | D3 managed_atomic | D4/D5 complete + purge Frontier | complete only |
 | typed row import to Nodes | D9 mapping + D3 identity | 完整target plan | managed path；无D7旁路 |
 

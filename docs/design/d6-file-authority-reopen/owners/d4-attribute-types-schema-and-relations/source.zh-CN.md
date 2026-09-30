@@ -163,22 +163,22 @@ unknown/pending/unavailable不能转换成 empty value、empty relation、zero m
 
 | operation | local proof | complete proof | result |
 |---|---|---|---|
-| exact source read/repair | D2 bytes + disclosure；typed可partial/unavailable | 无 | raw + explicit status |
-| body-only edit | D2 parse；D4 carrier old/new byte-equal；Facet closure不依赖；write-set不相交 | 无关namespace不全扫 | complete或真实pending；不可改 unavailable/invalid namespace |
+| 精确 source 读取/修复 | D2 bytes + 披露；typed 可为 partial/unavailable | 无 | raw + 明确 status |
+| 仅正文编辑 | D2 parse；D4 carrier 前后 byte-equal；Facet closure 不依赖；write-set 不相交 | 无关 namespace 不全扫 | complete 或真实 pending；不可改 unavailable/invalid namespace |
 | edit另一available namespace | touched Entry/Facet完整local validation；其它 unavailable/invalid raw byte-equal | 未触及跨对象可不读 | 同上 |
 | edit affected unavailable/invalid namespace | 仅repair/remove/cleanup完整计划 | 依实际计划 | ordinary typed edit拒绝 |
-| D3 replica_local create_node | 新source完整D2+D4 local typed/Facet | relation/unique/calendar/cross-object可成为obligation | semantic_pending可保存；不等于strong D4 Action |
+| D3 replica_local create_node | 新 source 完整通过 D2+D4 局部 typed/Facet | relation/unique/calendar/cross-object 可成为待证义务 | semantic_pending 可保存；不等于强 D4 Action |
 | D3 replica_local move/reorder | 仅实际predicate/permission需要的D4 facts | 不证明全局relation/collection | D3 local success可与pending并存 |
-| D3 replica_local Trash | local source/Facet/lifecycle policy | 缺inbound/relation全集形成obligation | semantic_pending local lifecycle |
+| D3 replica_local Trash | 局部 source/Facet/lifecycle policy | 缺 inbound/relation 全集形成待证义务 | semantic_pending 局部 lifecycle |
 | non-relation Entry edit |完整owner source、Field、Entry、cardinality、qualifier/provenance、requiredness | Field无跨对象义务则无需全库 | ordinary可成功；其它义务仍pending |
 | Assign/Remove/Cleanup Facet |完整local closure + relation incidence | 必须完整 | 缺范围reject/unavailable |
-| relation add/update/delete | RelationReadContext/2 + Binding/2 |完整incidence/endpoint/domain/cardinality | complete only |
-| local recurrence value edit | exact TypeSpec/calendar/tzdb/source post-state | 无series unique时可局部 | ordinary或pending |
-| series-scope unique/many | recurrence/period + policy |完整(series,periodKey,scope)正负范围 | complete only |
-| raw copy/export | exact source + status | 不声明typed success | byte-preserving + loss/status |
-| typed copy/fork/import | D3 wire12 map + D4 typed source |完整canonical-owner/requiredness | managed_atomic only |
+| 关系新增/更新/删除 | RelationReadContext/2 + Binding/2 | 完整 incidence/endpoint/domain/cardinality | 仅 complete |
+| 局部 recurrence value 编辑 | 精确 TypeSpec/calendar/tzdb/source 后状态 | 无 series unique 时可局部 | ordinary 或 pending |
+| series-scope unique/many | recurrence/period + policy | 完整 (series,periodKey,scope) 正负范围 | 仅 complete |
+| 原始字节复制/导出 | 精确 source + status | 不声明 typed success | 字节保留 + loss/status |
+| typed 复制/分叉/导入 | D3 wire12 映射 + D4 typed source | 完整 canonical-owner/requiredness | 仅 managed_atomic |
 | restore/purge | D3 managed_atomic + current D4 facts |完整relation/inbound；purge另Frontier | 缺proof拒绝 |
-| D7 all_result/bulk/automation write | local typed只是必要条件 | future D7 complete cut | D7 afterimage前 unavailable |
+| D7 all_result/bulk/automation 写入 | 局部 typed 只是必要条件 | 未来 D7 complete cut | D7 后像完成前 unavailable |
 
 D6 obligation `relation|unique|calendar|inbound|cross_object_type` 表示未证明，不表示允许失败；它绑定产生 source 的 SourceVersion/2、CommitDomain/2、Frontier/cut、RegistryBinding、Policy和pins。
 
