@@ -350,6 +350,188 @@
           "to": "D6-FA-r01"
         }
       ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md",
+      "sourceBlob": "2c03f2050dc523ccd8ffd3696f89f91a3b9c3c07",
+      "owner": "D4",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-14",
+        "D6-FA-r01 qualification and SourceVersion consumption"
+      ],
+      "consumers": [
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D4 owner contract",
+          "from": "revision37-preservation-01",
+          "to": "D6-FA-r01 candidate"
+        },
+        {
+          "domain": "D4 D6 source binding",
+          "from": "D4 inner source revision + fixed-S control binding",
+          "to": "unchanged D4 inner wire + D6 SourceVersion/2 outer binding"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "f3a2bfc10a62c62e5138598b6f96591a95963001",
+      "owner": "D4",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.md"
+      },
+      "changedSections": [
+        "status",
+        "complete fixed-S 26 concept set",
+        "D6-FA-r01 imported-name boundary"
+      ],
+      "consumers": [
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D4 terminology owner generation",
+          "from": "fixed-S D4 terminology lexicon",
+          "to": "D6-FA-r01; existing 26 concepts preserved"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "3933f08f915bcb14f630ca8459dc7c7c4043eb69",
+      "owner": "D4",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-8",
+        "D6-FA-r01 local-versus-complete acceptance matrix"
+      ],
+      "consumers": [
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D4 implementation/test outline",
+          "from": "revision37 preservation + revision36/35 obligations",
+          "to": "D6-FA-r01"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d5-tables-and-node-collections/source.md",
+      "sourceBlob": "166b1aebd43c00bb9c1152c567efbd46c7b5ffb8",
+      "owner": "D5",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-18",
+        "D6-FA-r01 local-versus-complete qualification"
+      ],
+      "consumers": [
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D5 owner contract",
+          "from": "revision02-editorial-01",
+          "to": "D6-FA-r01 candidate"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "5fb74df2d79350ae98fe0a267f994983b609de19",
+      "owner": "D5",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.md"
+      },
+      "changedSections": [
+        "status",
+        "complete fixed-S 6 concept set",
+        "D6-FA-r01 imported-name boundary"
+      ],
+      "consumers": [
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D5 terminology owner generation",
+          "from": "revision02-editorial-01",
+          "to": "D6-FA-r01; existing 6 concepts preserved"
+        }
+      ]
+    },
+    {
+      "sourcePath": "docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "c44a98baf72cd8a42f1f7e5d2819cbca9d9c7e96",
+      "owner": "D5",
+      "outputs": {
+        "kind": "bilingual",
+        "zh": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.zh-CN.md",
+        "en": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.md"
+      },
+      "changedSections": [
+        "status",
+        "1-7",
+        "D6-FA-r01 partial-index and multi-replica tests"
+      ],
+      "consumers": [
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10"
+      ],
+      "versionChanges": [
+        {
+          "domain": "D5 implementation/test outline",
+          "from": "revision02-editorial-01",
+          "to": "D6-FA-r01"
+        }
+      ]
     }
   ]
 }
