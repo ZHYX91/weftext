@@ -22,7 +22,7 @@ D3 remains the sole owner of:
 - Locator, anchor, reference lifecycle, and copy/fork/continue/import identity rules;
 - D3 operation request, receipt, resolver outcome, and fail-closed families.
 
-D6 solely owns CommitDomain/2, ReplicaEpoch, ChangeId/1, Frontier/1, SourceVersion/2, InputDescriptor/2, PreparedIntent/2, file installation, P seal, ContentCompletionProof, ConflictRecord, and execution responsibility. D3 consumes those exact types and never redefines them or creates a second writable truth.
+D6 solely owns DecisionKey/2, CommitDomain/2, ReplicaEpoch, ChangeId/1, Frontier/2, SourceVersion/2, SourceObservation/1, SourceVersionRef/1, ObservationScope/2, DependencyProof/2, OwnerInputBinding/2, InputDescriptor/2, PreparedIntent/2, D3DecisionCompanion/2, file installation, P seal, ContentCompletionProof/2, ConflictRecord, and execution responsibility. D3 consumes those exact types and never redefines them or creates a second writable truth.
 
 D2 exact source, D4 typed schema/relations, D5 structure, D7 Query/Action, D8 editor, D9 conversion, and D10 external execution remain with their owners.
 
@@ -32,7 +32,7 @@ D2 exact source, D4 typed schema/relations, D5 structure, D7 Query/Action, D8 ed
 2. Multiple registered replicas of one logical Workspace preserve the same durable refs while allowing ordinary offline content operations independently.
 3. Ordinary replica content qualification is separate from global execution responsibility.
 4. Parent/order, lifecycle, tombstones, and no-reuse facts are portable and never exist only in discardable I.
-5. replica_local success proves a reliable decision in one commit domain, not a single global current state or a complete D7 set.
+5. replica_local narrows only the semantic proof scope of this D3 operation; every D3 identity/structure/lifecycle author installation still requires WriteProtection=strict. It never implies one global current state or a complete D7 set.
 6. managed_atomic retains complete-closure, complete-range, and strong recovery semantics for operations that need them.
 7. External changes, placeholders, partial transport, and ABA never regain old continuity merely because hashes match.
 8. Saved-decision replay and current-source state are always separate.
@@ -49,27 +49,41 @@ ForeignIdentityKey, SourceBinding, OriginBinding, Provenance, LogicalOccurrenceK
 
 ## 4. wire12, commit domains, and idempotency ledger
 
-### 4.1 D6 type consumption
+### 4.1 D6 type consumption and D3-native owner input
 
-wire12 embeds CommitDomain/2, Frontier/1, and InputDescriptor/2 exactly and invokes the D6 decoders. Their canonical bytes follow D6 ownership; D3 accepts no private look-alike object.
+wire12 directly consumes and uses D6 owner decoders for DecisionKey/2, CommitDomain/2, Frontier/2, ObservationScope/2, DependencyProof/2, SourceObservation/1, OwnerInputBinding/2, and InputDescriptor/2. D3 never accepts private lookalikes or copies a D6 type into a second owner.
 
-A replica CommitDomain requires the replicaEpoch in a current active ReplicaRecord. A server CommitDomain requires the authorityInstanceId of the current hosted authority. D6 proves domain/backend/fence continuity before D3 reads its identity ledger.
+InputDescriptor/2.ownerInput has protocolOwner=D3 and ownerKind=d3_identity_operation/12. canonicalDescriptorBytes decodes to the D3-owned closed descriptor:
 
-### 4.2 OperationId ledger key
+~~~json
+{
+  "kind":"d3_identity_input",
+  "version":12,
+  "mode":<D3Mode>,
+  "writeProtection":"strict",
+  "expectedAuthority":<ExpectedAuthority?>,
+  "workspaceProposal":<WorkspaceAllocationProposal?>,
+  "intent":<D3Intent>
+}
+~~~
 
-The only new-wire ledger key is:
+Question-marked members appear only where the original mode matrix permits them and otherwise are absent. preparationBinding is cross-owner D7 input and is not part of this D3-native descriptor; wire12 top level and the future D7 preparation record bind it separately. ownerInput.pinRefs carry only typed slots for large immutable D3-descriptor input. Complete source/currentness still comes from SourceObservation/1 values in InputDescriptor sourceInputs plus protected pins.
+
+CommitDomain.replica requires the current active ReplicaRecord and CommitDomain.server requires the current hosted authorityInstanceId. D6 proves domain, backend, P continuity, and current observation/dependency qualification before D3 reads the identity ledger.
+
+### 4.2 DecisionKey/2 and OperationId ledger
+
+The single durable key for new wire12 decisions is D6 DecisionKey/2. Its workspaceRef is byte-equal to boundWorkspaceRef and its commitDomain/operationId equal the request fields. P continues to index it as:
 
     (boundWorkspaceRef.workspaceId, D3-CJ/3(commitDomain), operationId)
 
-protocolOwner=D3 is stored in the shared D6 v2 control ledger. The same Workspace and OperationId in different CommitDomain values are independent keys. One key has exactly one request fingerprint/decision.
+protocolOwner=D3 means D3 is the primary decision owner for this key; it is not part of DecisionKey and no second D6 primary decision may exist at the same key. The same Workspace/OperationId in different CommitDomains is independent. One DecisionKey has exactly one canonical request fingerprint and one decision.
 
-The state machine remains unseen -> rejected or unseen -> planned -> committed | terminal_failed. rejected/committed/terminal_failed bytes are immutable and planned can only recover its original plan.
-
-A different fingerprint on the same key returns operation_id_conflict without revealing the original request.
+State remains unseen -> rejected or unseen -> planned -> committed | terminal_failed. rejected, committed, and terminal_failed bytes are immutable; planned only resumes its original plan. A different fingerprint at the same key is operation_id_conflict without reading or disclosing the original request.
 
 ### 4.3 wire12 identity operation request
 
-New decisions accept only this closed top-level object:
+A new decision accepts only this closed top-level object:
 
 ~~~json
 {
@@ -79,7 +93,7 @@ New decisions accept only this closed top-level object:
   "boundWorkspaceRef":<WorkspaceRef>,
   "commitDomain":<D6 CommitDomain/2>,
   "guarantee":"replica_local|managed_atomic",
-  "expectedFrontier":<D6 Frontier/1>,
+  "expectedFrontier":<D6 Frontier/2>,
   "inputDescriptor":<D6 InputDescriptor/2>,
   "mode":<D3Mode>,
   "expectedAuthority":<ExpectedAuthority?>,
@@ -89,19 +103,19 @@ New decisions accept only this closed top-level object:
 }
 ~~~
 
-Question-mark members appear only where the mode matrix allows; otherwise they are absent, never null. Unknown members fail closed.
+inputDescriptor.workspaceRef, commitDomain, expectedFrontier, and guarantee are canonical-equal to top-level values; intentKind identifies D3 identity operation v12. ownerInput is byte-equal to the D3-native descriptor in §4.1, where writeProtection is fixed strict. Any observed_only value is rejected before D3 ledger access.
 
-inputDescriptor.workspaceRef, commitDomain, expectedFrontier, and guarantee must be canonical-equal to the top-level values. intentKind identifies D3 identity operation v12. ownerInput canonical descriptors are produced by D3 v12, and large Document/Resource/Annotation bytes appear only through typed D6 PinRef slots. The canonical request never permanently embeds full source bodies or attachments.
+InputDescriptor.sourceInputs bind complete SourceObservation/1, never a bare SourceVersion or revision. controlInputs and dependencyProof use D6 closed DependencyKey/stamp. Large Document/Resource/Annotation bytes use typed PinRef/2 slots only; canonical request never permanently embeds full source bodies or attachments.
 
-Exact input equality compares canonical InputDescriptor, owner descriptor, and every referenced exact pin. Equal sha256 values alone are not equal input and do not establish ABA continuity.
+Exact input equality compares InputDescriptor, the D3-native owner descriptor, every exact pin, SourceObservation, and DependencyProof. Equal sha256 is neither equal input nor ABA continuity.
 
 ### 4.4 requestFingerprint
 
 D3-CJ/3 and SHA-256 rules are unchanged. The fingerprint body includes every canonical request field except top-level operationId; workspaceProposal still enters through its complete canonical digest.
 
-Any change to commitDomain, guarantee, expectedFrontier, InputDescriptor, authority expectation, proposal, preparationBinding, intent, or plan changes the fingerprint.
+Any commitDomain, guarantee, expectedFrontier, frontierPolicy, ObservationScope, SourceObservation, DependencyProof, owner descriptor, authority expectation, proposal, preparationBinding, intent, or plan change changes the fingerprint. A strict request never weakens by mutating an old plan.
 
-### 4.5 guarantee and mode matrix
+### 4.5 guarantee, Frontier policy, and mode matrix
 
 | mode | replica_local | managed_atomic |
 |---|---|---|
@@ -116,11 +130,15 @@ Any change to commitDomain, guarantee, expectedFrontier, InputDescriptor, author
 | restore/purge | forbidden | allowed |
 | import_new | forbidden | allowed |
 
-replica_local forbids workspaceProposal, expectedAuthority, and preparationBinding. Its commit-domain fence comes from D6 active replica, portable registry/policy, and file-backend qualification.
+Every cell fixes WriteProtection=strict. replica_local means local semantic scope, never weak file installation, and cannot use observed_only.
 
-managed_atomic retains wire11 expectedAuthority modes: create/fork use create; continue uses continue; all other modes use existing. create/fork keep proposal P1/P2 and TargetLedgerCustody, and a server CommitDomain must match the current expected authority instance.
+replica_local create_node, move_node, reorder_node, and trash use frontierPolicy=scope_dependencies plus ObservationScope/2 local_structure. An unrelated Frontier/2 extension may proceed only after the original source/control/auth positive and negative dependencies revalidate; subject, parent, ordinal, closure, and proposed after never resample.
 
-D7-mediated wire12 preparation awaits the D7 owner afterimage. The outer preparationBinding token wrapper remains, but this partial candidate does not allow it to create a wire12 managed success. The D6 preparation capability returns owner_update_required with zero D3 ledger decision. D3-native typed operations may omit preparationBinding.
+Every managed_atomic D3 mode uses frontierPolicy=exact. create_workspace and fork_workspace use prepared_workspace observation upper bound; the other managed_atomic identity/lifecycle modes use workspace_constraints. Complete positive/negative ranges, current authorization, and owner versions still pass their original strong gates.
+
+replica_local forbids workspaceProposal, expectedAuthority, and preparationBinding. managed_atomic retains wire11 expectedAuthority modes: create/fork use create, continue uses continue, all others use existing. create/fork retain proposal P1/P2 and TargetLedgerCustody, and server CommitDomain matches the current expected authority instance.
+
+D7-mediated wire12 preparation still awaits the D7 owner afterimage. The outer preparationBinding token wrapper remains. Until the D7 consumer update, it returns owner_update_required with zero D3 ledger decision. D3-native typed operations may omit preparationBinding.
 
 ### 4.6 allocation and UUID no-reuse
 
@@ -130,11 +148,15 @@ If two offline replicas independently mint the same complete typed ref, the rece
 
 An accepted tombstone ID is never reused. A burned reservation is likewise unavailable for future allocation in its commit domain.
 
-### 4.7 SourceVersion/2 and ABA
+### 4.7 SourceObservation/1, SourceVersion/2, and ABA
 
-D3 Locator, selector, and prepared-evidence currentness binds D6 SourceVersion/2. A bare revision Counter has no cross-CommitDomain meaning.
+D3 Locator, selector, and prepared-evidence currentness binds the complete D6 SourceObservation/1. SourceVersion/2 still denotes the actual source version and its production CommitDomain. That production domain may differ from the current operation observerDomain and is never rejected merely for being different.
 
-An observationEpoch change invalidates old locator/preparation/action evidence. A->B->A cannot regain old continuity even if final bytes/digest match. Higher-level sourceOccurrenceKey continuity remains a D10 concern and is never inferred from path/hash by D3.
+The operation requires SourceObservation.observerDomain to equal its CommitDomain, entityRef to match the real owner, and complete FileObjectBinding, observationEpoch, and evidence pins to validate. Future D4/D5 source-bearing inner revisions likewise correspond to the actual SourceVersion inside that observation rather than a guessed revision-number plus current domain.
+
+SourceVersionRef/1 and any expectedSourceToken select the whole protected SourceObservation. The same production SourceVersion after observationEpoch change, watcher gap, external replace, or discontinuous rematerialization is not the old input. A->B->A cannot restore an old locator, preparation, or ActionEvidence merely because bytes/digest match.
+
+Higher-level sourceOccurrenceKey continuity remains owned by D10 and is never inferred from path/hash by D3.
 
 ### 4.8 legacy v9/v10/v11
 
@@ -366,7 +388,7 @@ Without authorization, conflict counts, placeholder, tombstone, and stale state 
 
 ### 12.1 identity_change_receipt v12
 
-D3 receipt retains the twelve wire11 effect arrays and per-mode exact semantics while adding scoped commit binding:
+The D3 primary receipt retains all twelve wire11 effect arrays and per-mode exact semantics while adding the effect class for the same DecisionKey. The portable variant is:
 
 ~~~json
 {
@@ -375,6 +397,7 @@ D3 receipt retains the twelve wire11 effect arrays and per-mode exact semantics 
   "operationId":"uuid-v4",
   "targetWorkspaceRef":<WorkspaceRef>,
   "commitDomain":<D6 CommitDomain/2>,
+  "effectClass":"portable",
   "changeId":<D6 ChangeId/1>,
   "guarantee":"replica_local|managed_atomic",
   "semanticState":<D6 SemanticState/1>,
@@ -395,11 +418,13 @@ D3 receipt retains the twelve wire11 effect arrays and per-mode exact semantics 
 }
 ~~~
 
-sourceWorkspaceRef, destinationOwnerRef, issuer/target authority, continuation, artifactClass, and other mode-specific members retain the exact wire11 matrix.
+sourceWorkspaceRef, destinationOwnerRef, issuer/target authority, continuation, artifactClass, and other mode-specific members retain the wire11 exact matrix. effectClass is portable|control_only|no_op. portable requires changeId and semanticState, with ChangeId allocated only at seal. control_only/no_op omit changeId/semanticState, same-decision D6 sourceVersions is empty, and Frontier/2 does not advance. no_op has all twelve effect arrays empty; equal-byte external managed admission is not no_op.
 
-changeId.commitDomain equals receipt.commitDomain and binds the same decision as the D6 seal-time receipt. D3 does not duplicate reliableSaveState/portablePublicationState: D6 receipt is immutable reliable + publication pending, while current D6 decision state later reports publication completion without modifying either receipt.
+Every D3 mode fixes WriteProtection=strict. D3 receipt does not duplicate ReliableSaveState, InstallationState, or PortablePublicationState; D6 decision state owns them. Portable D6 effect metadata lists actually changed source as SourceVersionRef/1. A pure placement/lifecycle metadata change may have empty sourceVersions while still receiving content ChangeId.
 
-A replica_local receipt has complete arrays for the local scope actually proved by this request. When SemanticState=semantic_pending, it explicitly does not claim that the named obligation has been enumerated across the whole Workspace. Only managed_atomic + complete_semantics can satisfy legacy complete-set consumers.
+The D3 primary receipt and D3DecisionCompanion/2 are saved in one P seal transaction. The companion DecisionKey equals this request, domainCommitSequence is the decision sequence in that CommitDomain, and effectsToken binds the same decision. It is not a second success receipt or ledger.
+
+A replica_local receipt has complete arrays for the actually proved local scope; SemanticState=semantic_pending does not claim whole-Workspace closure. Only managed_atomic + complete_semantics satisfies legacy strong consumers.
 
 ### 12.2 r5 replay versus current r6
 
@@ -407,33 +432,34 @@ Replaying an original committed r5 request returns the original r5 D3/D6 receipt
 
 Current r6 is read through D6 current-source/portable-state interfaces. Historical decision and current state remain separate.
 
-### 12.3 installation and P seal
+### 12.3 strict installation, P seal, and publication
 
-D3 declares the planned identity/structure/lifecycle poststate; D6 performs file installation through FileObjectBinding/InstallCapability. Hash-then-replace is not CAS and multiple renames do not make a cross-file instantaneous transaction.
+D3 declares only planned identity/structure/lifecycle poststate; every D3 mode fixes WriteProtection=strict in installationPlan. D6 installs portable components through strict create_only, conditional_replace, or a truly exclusive_write_window. D3 never accepts observed_replace or carries human ordinary source-save observed_only qualification into structure/lifecycle.
 
-Written components are compared with planned poststate during installed verification; unwritten dependencies are still checked against before/cut expectations. Revocation, third state, unsafe before restoration, or backend unavailability yields paused/conflict/recovery_unknown rather than fake committed state.
+Written components compare with planned poststate; unwritten dependencies remain checked against before/cut. Revocation, third_state, observed competition, unsafe before restoration, backend unavailability, or unknown installation provenance remains paused/conflict/recovery_unknown and never fabricates committed.
 
-D3 committed decision exists only after P seal. Failure to publish ContentCompletionProof leaves the decision reliably saved with portable publication pending.
+P seal is the only D3 author-decision commit point. A portable effect allocates ChangeId/SourceVersion only in that transaction and atomically saves the D3 primary receipt, D3DecisionCompanion/2, D6 decision/effects state, and applicable charge/outbox. control_only/no_op allocate no content ChangeId. Replay of the same DecisionKey returns only the original saved result and never reinstalls source/metadata, increments domainCommitSequence again, or reconsumes ApprovalUse/Money.
+
+Only portable effect produces ContentCompletionProof/2 and advances Frontier/2. Proof-publication failure does not roll back committed and leaves PortablePublicationState=pending. Recovery publishes only the same proof and never reruns D3 plan. control_only/no_op publication is not_applicable.
 
 ## 13. fail-closed ordering and errors
 
-wire12 retains the wire11 D3 family set, including identity_not_visible, identity_authority_unavailable, workspace_integrity_conflict, operation_id_conflict, owner_mismatch, root_operation_forbidden, identity_not_resolvable, entity_not_live, entity_not_restorable, invalid_ordinal, orphan_creation, structural_cycle, invalid_locator, stale_locator, identity_collision, cross_workspace_identity_preservation, identity_map_incomplete, operation_precondition_failed, inbound_reference_conflict, and identity_commit_aborted.
+wire12 retains the wire11 D3 error family: identity_not_visible, identity_authority_unavailable, workspace_integrity_conflict, operation_id_conflict, owner_mismatch, root_operation_forbidden, identity_not_resolvable, entity_not_live, entity_not_restorable, invalid_ordinal, orphan_creation, structural_cycle, invalid_locator, stale_locator, identity_collision, cross_workspace_identity_preservation, identity_map_incomplete, operation_precondition_failed, inbound_reference_conflict, and identity_commit_aborted.
 
-A new request has D6-owned gates before D3 ledger access:
+Before D3 DecisionKey access, D6 gates run:
+1. closed decode, current-principal minimum disclosure, ObservationScope/2 qualification;
+2. CommitDomain, backend fence, P continuity, protocolOwner=D3;
+3. OwnerInputBinding/2 is d3_identity_operation/12 and descriptor/request cross-field equality holds;
+4. SourceObservation/1, DependencyProof/2, pins, and owner version are available;
+5. exact requires complete Frontier/2 equality; scope_dependencies admits only unrelated non-regressing extension with original-dependency revalidation;
+6. ConflictRecord, placeholder/incomplete transport, or availability uncertainty never becomes business rejection;
+7. only then enter original D3 identity gates and DecisionKey lookup.
 
-1. D6 closed decode and current-principal minimum disclosure;
-2. CommitDomain/replica/server qualification and backend fence;
-3. open ConflictRecord, placeholder/incomplete transport, and P continuity;
-4. InputDescriptor/pin availability and owner version;
-5. then D3 identity gates corresponding to the old post-authorization sequence.
+A D6-gate failure uses a D6 v2 closed error such as not_visible, domain_unavailable, integrity_conflict, source_unavailable, proof_unavailable, dependency_conflict, or install_unavailable. It never invents a D3 family or reads the D3 ledger. The D3-native owner is closed by G0-B; strong paths requiring unfinished D4/D5/D7 consumers may still return owner_update_required at those version gates.
 
-A D6-gate failure returns D6 v2 error rather than inventing a D3 family, and it does not read the D3 ledger key.
+Inside D3, authorization precedes existence, authority/custody availability precedes reachable integrity, and fingerprint conflict is observed only after ledger continuity. replica_local skips proposal P1/P2/TargetLedgerCustody while managed_atomic strong gates remain. scope_dependencies revalidates only original request/dependency scope and never resamples identity, placement, closure, or after.
 
-Inside D3, authorization still precedes existence; authority/custody availability precedes reachable integrity; different fingerprint is observed only after ledger continuity. Once an earlier gate wins, later state is not probed.
-
-replica_local does not execute proposal P1/P2/TargetLedgerCustody. managed_atomic create/fork/continue and server authority retain the strong gates.
-
-After planned, terminal_failed + identity_commit_aborted is legal only when the original plan can never commit and every installation remnant is safely resolved. Capacity, revocation, or uncertain recovery is not such proof.
+After planned, terminal_failed + identity_commit_aborted is legal only when the original plan can never commit and every installation remnant is safely resolved. Capacity, revocation, unknown install, or uncertain recovery is not such proof.
 
 ## 14. operation-applicable qualification and semantic_pending
 
@@ -443,7 +469,7 @@ Existing-Document ordinary source edit is owned by D6 source-save, not D3 identi
 
 ### 14.2 replica_local create/move/reorder/Trash
 
-The local proof ranges are those in sections 7-8. Success may return complete_semantics or semantic_pending.
+The local semantic proof ranges are those in sections 7-8. replica_local only narrows dependency scope; every create/move/reorder/Trash installation still requires WriteProtection=strict. observed_only belongs only to D6 human single-Document source-save and is never selectable by a D3 request. Success may return complete_semantics or semantic_pending.
 
 relation/unique/calendar/collection/inbound/cross_object_type obligations in semantic_pending are not complete success for:
 
@@ -454,23 +480,21 @@ relation/unique/calendar/collection/inbound/cross_object_type obligations in sem
 - restore/purge/copy/fork/import strong paths;
 - D4/D5 Actions requiring complete cross-object constraints.
 
-Until the D4/D5 owner afterimages define exact consumers, those paths return owner_update_required or version-unavailable semantics. Pending is never interpreted as an empty relation or valid complete set.
+The existing D4/D5 afterimages do not yet consume the G0-A/G0-B SourceObservation/Frontier/WriteProtection contract. Until C, those consumers return owner_update_required or version-unavailable semantics. Pending is never interpreted as an empty relation or valid complete set.
 
 ### 14.3 managed_atomic
 
 managed_atomic proves the complete operation-applicable D3 closure plus the corresponding D4/D5/D7 dependencies. Failure to prove complete scope fails the operation and never silently downgrades to replica_local.
 
-## 15. purge, Frontier, and offline replicas
+## 15. purge, Frontier/2, materialized scope, and offline replicas
 
-purge preparation places the current ReplicaRecord active set and every active replica's accepted Frontier into D6 controlInputs as complete positive/negative dependencies.
+purge preparation places the current ReplicaRecord active set, each active replica's accepted Frontier/2, relevant SourceObservation/1 values, and complete DependencyProof/2 into protected D6 input. Frontier/2 proves only sealed causal prefixes, not payload materialization, placeholder download, inbound scanning, or complete constraints.
 
-The required frontier covers at least the target Trash ChangeId, all known lifecycle/placement/source heads, relevant inbound/reference proof, and current tombstone/allocation history.
+The required frontier covers at least the target Trash ChangeId, known lifecycle/placement/source heads, and tombstone/allocation history. Actual purge also obtains materialization plus complete positive/negative proof for relevant source/lifecycle/placement/inbound/reference scope.
 
-Every active replica provides an accepted head proving it has no still-valid unseen branch before the required frontier. Failure to prove this pauses/conflicts purge rather than deleting payload.
+Even when Frontier numbers satisfy causality, unreadable required payload or incomplete DependencyProof leaves purge paused/unavailable with zero payload deletion; a sync-provider complete flag never substitutes for proof. An administrator may explicitly retire a permanently unavailable replica under current policy/trust and execution-responsibility checks; retired never reactivates, and old directory data re-enters with a new ReplicaEpoch plus current SourceObservation/tombstone/ConflictRecord reconciliation.
 
-An administrator may explicitly retire a permanently unavailable replica under current policy/trust and execution-responsibility checks. A retired epoch never reactivates. Old directory data later re-enters under a new ReplicaEpoch and current tombstones.
-
-This avoids waiting for unknown never-registered devices while refusing to treat a sync provider's upload-complete flag as a completeness proof.
+The production CommitDomain of SourceVersion may differ from current purge observerDomain; a current valid SourceObservation is never rejected merely for that difference. Conversely, observationEpoch change invalidates old input even for the same production version.
 
 ## 16. Stable boundary to D4-D10
 
@@ -482,7 +506,7 @@ D5 similarly versions complete ranges for native/bulk/collection operations; D3 
 
 ### 16.2 D6
 
-D6 physical paths, portable metadata records, P/I, safe installation, ConflictRecord, SourceVersion/2, Frontier, and execution responsibility follow the D6 owner afterimage. D3 has no generic patch bypass and P never becomes logical owner of parent/order.
+D6 physical paths, portable metadata records, P/I, strict safe installation, DecisionKey/2, Frontier/2, SourceVersion/2, SourceObservation/1, DependencyProof/2, D3DecisionCompanion/2, ConflictRecord, and execution responsibility follow the D6 owner afterimage. D3 has no generic patch bypass and P never becomes logical owner of parent/order.
 
 ### 16.3 D7
 
@@ -517,15 +541,16 @@ Future collaboration produces one verifiable source/identity proposal into Core.
 Implementation requires:
 
 - D3 wire12 decoder/encoder/fingerprint;
-- CommitDomain-scoped D3 ledger lookup;
-- exact InputDescriptor/PinRef comparison;
+- single-P DecisionKey/2 + protocolOwner=D3 ledger lookup;
+- d3_identity_operation/12 OwnerInputBinding plus exact InputDescriptor/PinRef comparison;
+- Frontier/2 policy, ObservationScope/2, SourceObservation/1, and DependencyProof/2 currentness;
 - replica-local fresh-ID allocation and portable birth/tombstone facts;
 - placement/lifecycle conflict projection;
 - SourceVersion/2-aware invalidation of locators/evidence;
 - local Trash versus managed restore/purge;
 - resolver conflict/incomplete/placeholder states;
 - legacy v9/v10/v11 replay routing;
-- D6 protocolOwner=D3 decision-state integration;
+- D6 protocolOwner=D3 decision-state integration, same-P D3DecisionCompanion/2, and effectClass branches;
 - D7/D8/D9 future-consumer version gates.
 
 Implementation convenience never introduces path identity, a global mutable current table, LWW, hidden ID reminting, or a second receipt.

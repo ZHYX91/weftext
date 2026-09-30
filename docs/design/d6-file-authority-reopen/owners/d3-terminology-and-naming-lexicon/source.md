@@ -14,7 +14,7 @@ Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not ac
 
 ## 1. Authority and control rules
 
-This Lexicon still owns only the terminology boundary for D3 identity/reference/ownership/lifecycle. D6-FA-r01 names CommitDomain, ReplicaEpoch, ChangeId, Frontier, SourceVersion, SemanticState, ContentGuarantee, ConflictRecord, ReliableSaveState, and ExecutionResponsibilityRecord remain owned by D6 terminology. D3 consumes them and creates no synonymous concepts here.
+This Lexicon still owns only the terminology boundary for D3 identity/reference/ownership/lifecycle. G0-A/G0-B names DecisionKey, CommitDomain, ReplicaEpoch, ChangeId, Frontier, SourceVersion, SourceObservation, SourceVersionRef, ObservationScope, DependencyProof, OwnerInputBinding, InputDescriptor, D3DecisionCompanion, WriteProtection, SemanticState, ContentGuarantee, ConflictRecord, ReliableSaveState, and ExecutionResponsibilityRecord remain owned by D6 terminology. D3 consumes them and creates no synonymous concepts here.
 
 Each concept has one stable concept ID, one canonical Chinese/English term pair, and one exact ownedNames set. semanticNonaliases participates only when an expected concept/type is known and is not a flat denylist. The fixed-S global-retired boundary remains and never scans user Document/Annotation prose.
 
@@ -1526,26 +1526,37 @@ The copy/fork/continue/move/import/adopt/promote and subscribe/sync/connect boun
 
 ## 4. D6-FA-r01 imported names and true owners
 
-The following names are owned by D6 terminology registry D6-Terminology/2. D3 wire12 consumes them as imported types/members:
+The following names are owned by D6 terminology registry D6-Terminology/2. D3 wire12 consumes them only as imported types/members:
 
 | D6 concept | D3 consumption | Forbidden interpretation |
 |---|---|---|
-| CommitDomain | wire12 request, ledger key, receipt | new D3 authority/identity |
+| DecisionKey/2 | wire12 ledger, replay, companion | new D3 identity or second ledger |
+| CommitDomain/2 | wire12 request, DecisionKey, receipt | new D3 authority/identity |
 | ReplicaEpoch | replica CommitDomain | AuthorityInstanceId, device ID, continue token |
-| ChangeId | receipt, Frontier, conflict heads | OperationId, EntityRef |
-| Frontier | expectedFrontier, purge coverage | global time or index progress |
-| SourceVersion/2 | locator/evidence currentness | bare revision or content identity |
-| SemanticState | replica_local qualification | substitute for complete D4/D5 proof |
-| ContentGuarantee | replica_local/managed_atomic | permission or collaboration mode |
+| ChangeId/1 | portable receipt, Frontier/2, conflict heads | OperationId, EntityRef, prepare reservation |
+| Frontier/2 | expectedFrontier, purge causality | payload materialization, complete Query set, sync completion |
+| SourceVersion/2 | production version inside SourceObservation | observerDomain or bare revision |
+| SourceObservation/1 | locator/evidence/current input | second SourceVersion or file identity |
+| SourceVersionRef/1 | narrow metadata/receipt projection | full SourceVersion or permission ticket |
+| ObservationScope/2 | wire12 pre-read observation upper bound | write permission, actual readSet, DependencyProof |
+| DependencyProof/2 | positive/negative ranges and purge/strong gate | partial index or free-JSON completeness |
+| OwnerInputBinding/2 | protocolOwner=D3, ownerKind=d3_identity_operation/12 | D3-owned wrapper or second request |
+| InputDescriptor/2 | wire12 exact input | private D3 duplicate schema |
+| D3DecisionCompanion/2 | same-P D6 companion | second success receipt or second ledger |
+| WriteProtection | fixed strict in D3 owner descriptor | replica_local, permission, or observed_only |
+| SemanticState | replica_local result qualification | substitute for complete D4/D5 proof |
+| ContentGuarantee | replica_local/managed_atomic | WriteProtection, permission, or collaboration mode |
 | ConflictRecord | sync-conflict address | second D3 conflict ledger |
 | ReliableSaveState | D6 decision state | proof portable publication completed |
 | ExecutionResponsibilityRecord | D10 continuity | replica registration or content authority |
 
-wire12 fields commitDomain, guarantee, expectedFrontier, and inputDescriptor are D6 closed-type consumption sites; they create no new D3 ownedNames. D3 performs only owner decoding and cross-field equality over them.
+wire12 fields/members commitDomain, guarantee, expectedFrontier, inputDescriptor, frontierPolicy, observationScope, and ownerInput are D6 closed-type/member consumption sites and create no D3 ownedNames. D3 defines only the inner semantic members of the d3_identity_operation/12 canonical descriptor and consumes the wrapper through D6 owner decoding plus cross-field equality.
+
+D3DecisionCompanion/2 remains D6-owned while the D3 primary receipt remains D3-owned. Saving them in one P transaction creates neither terminology dual ownership nor a second durable decision owner.
 
 ## 5. wire12 and legacy names
 
-Existing D3 technical wire names such as identity_operation_request, identity_change_receipt, and identity_operation_error keep their concept ownership under wire12; a version-number change is not a new ontology concept.
+Existing D3 technical wire names such as identity_operation_request, identity_change_receipt, and identity_operation_error keep their concept ownership under wire12; a version-number change is not a new ontology concept. d3_identity_operation/12 is the D3-owned ownerKind/canonical-descriptor name and never re-owns D6 OwnerInputBinding/2.
 
 Preparation Binding, Definition Transfer, and Definition Result Segment preserve their wire11 firstFreeze history. wire12 may reuse those names, but the new backing Prepared-record version belongs to the future D7 afterimage. D3 never silently renames or upgrades PreparedActionBinding/2 into a new schema.
 
@@ -1568,16 +1579,21 @@ Implementation and later owners mechanically verify:
 
 - "replica" means a registered physical replica, not Workspace Fork.
 - "Workspace Continue" means continue_workspace only, not registering ReplicaEpoch on a new device.
-- "Reliable Save" is D6 and does not mean sync completion or portable publication.
+- "Reliable Save" is D6 and specifically means strict-path reliable; it is not sync completion or portable publication.
+- durable_observed_only is another D6 ReliableSaveState branch only for trusted human ordinary one-Document source-save; it is not an alias of D3 replica_local.
+- D3 replica_local means local semantic proof scope only; D3 create/move/reorder/Trash author installation still always uses WriteProtection=strict.
+- Frontier/2 is a sealed causal prefix, not payload materialization, placeholder download, or complete-set proof.
+- SourceVersion/2 commitDomain is the production domain while SourceObservation/1 observerDomain is the current observation domain; their difference is not a version error.
 - "Conflict" is portable D6 ConflictRecord control; typed parent/lifecycle/identity resolution remains D3.
 - "Execution Responsibility" is D6/D10 control and is not D3 Authority.
 - Chinese "来源" still belongs only to Source; Provenance remains "来源证据".
 - Owner remains distinct from Authority.
 - Path remains distinct from Node identity and parent.
-- semantic pending is not an alias for all constraints passed.
+- semantic_pending is not an alias for all constraints passed.
+- The D3 primary receipt and D3DecisionCompanion/2 are not two success receipts; the companion is only the D6 association record for the same P decision.
 
 ## 8. Acceptance boundary
 
-This Lexicon is reviewed with the D3 main afterimage and D3 Implementation Impact. D3 does not pre-own future D4/D5/D7/D8/D9/D10 names before their owner afterimages exist.
+This Lexicon is reviewed with the G0-B D3 main afterimage, D3 Implementation Impact, and the same-batch D1 afterimages. D4/D5 still await C; D3 does not pre-own future D7/D8/D9/D10 names before their owner afterimages exist.
 
 The old D10 B13 result remains REVISE, terminology/bilingual FAIL, with 3 P1 and 8 P2 findings, 11 OPEN in total. This file closes none of them.

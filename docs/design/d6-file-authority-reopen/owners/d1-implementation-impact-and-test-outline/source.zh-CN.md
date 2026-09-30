@@ -25,16 +25,19 @@ D1-FA 只改变运行模式与状态所有权，不创造新的领域对象。�
 
 ## 2. 产品状态机与界面投影
 
-各界面必须区分以下用户可观察里程碑：
+各界面必须区分以下用户可观察里程碑与状态：
 
 - T_first_open：可进入库、浏览已发现结构并打开已物化目标。
-- T_first_edit：活动 Draft 可以输入；它不等于可靠保存。
-- T_first_reliable_save：活动目标通过文件安装、D6 决议 seal 后得到可靠保存。
+- T_first_edit：活动 Draft 可以输入；它不等于文件保存。
+- input retained：proposal、实际读取前像和必要绑定已经耐久留存，但文件可能尚未安装。
+- T_first_reliable_save：仅 strict 路径完成合格文件安装和 D6 P seal 后达到；observed_only 不计入。
+- durable_observed_only：只用于已批准的受信交互单一既有 live Document 普通保存；它证明本次输入和已读取前像耐久并完成 seal，但不承诺排除从未观察到的外部竞争写。
+- recovery_unknown：无法证明安装是否发生或归属时使用；不得显示保存成功。
+- portable publication pending/published：只描述已 seal 结果的便携发布状态，不改写 receipt。
 - T_full_search_ready：声明的完整搜索范围可由完整扫描或合格候选索引+回读证明。
 - T_OCR_ready：选定附件/模型/配置的 OCR 工作完成，失败项明确。
 
-同步上传、Preview、Prepared、worker success、HTTP success、
-  Draft persistence、P planned 都不能投影成 T_first_reliable_save。
+同步上传、Preview、Prepared、worker success、HTTP success、Draft persistence、P planned 都不能投影成文件保存成功。普通产品文案不展示 P ledger 内部步骤，也不为 observed_only 增加逐次审批弹窗；稳定说明只解释其并发保护差别。
 
 ## 3. 本地实现义务
 
@@ -43,7 +46,7 @@ Desktop/CLI/Mobile 本地 host 必须：
 1. 对同一物理副本提供进程级排他提交资格。
 2. 把活动 P/I 放在同步目录之外。
 3. 把外部文件变化转为 D6 当前观察，不由 UI 自行合并。
-4. 在目标后端缺少安全 conditional/exclusive 安装原语时保留 Draft/after，并明确 install_unavailable。
+4. strict 请求缺少 conditional/exclusive 安装能力时保留 Draft/after，并明确 install_unavailable；只有受信交互、单一既有 live Document、完整 source read/replace、零或单 source 写集且无细项 deny 的普通 source-save 才可用新的 observed_only prepare，不能原地降级 strict。
 5. 只使受影响 SourceVersion、cut、prepare 和安装范围失效；重新验证后允许无关普通操作继续。
 6. 删除 I 后能够从 F/M 渐进重建，不重新 mint identity、不补 decision。
 7. P 丢失时保留可证明的普通内容，暂停无法恢复的 execution responsibility，不从文件猜旧 receipt。
@@ -113,7 +116,7 @@ OT/CRDT 的选择、编码与优化不由 D1-FA 冻结。
 | 缓存 | 冷缓存、暖缓存 |
 | 硬件 | 记录 CPU、RAM、OS、文件系统、磁盘 |
 | 生命周期 | 初次打开、删除 I、已有库新设备、建设中重启、单文件/批量修改 |
-| 输出 | 五个时间里程碑、峰值 RAM、I/P/pin 大小、读字节数、增量时间 |
+| 输出 | 五个时间里程碑、durable_observed_only 单独延迟、峰值 RAM、I/P/pin 大小、读字节数、增量时间 |
 
 这些是验收设计，不是现有性能结果；不得写“几秒完成”或具名竞品速度等未经实测结论。
 
@@ -133,10 +136,16 @@ OT/CRDT 的选择、编码与优化不由 D1-FA 冻结。
 10. partial index 对 complete Action 不能产生“全集已证明”。
 11. no-body-replica 检查 P/I/schema/FTS shadow state，拒绝全库当前正文和完整 AST 镜像。
 12. G2 前任何“实时协作已可用”声明都失败。
+13. Draft 自动留存、后台 autosave timer、worker 或 reconnect 不得自行触发 observed_only 作者安装；必须仍有受信交互 save intent。
+14. narrow Field/body 权限不得借 observed_only 获得整文件替换；whole-source replacement authority 与所有适用 deny 必须先通过。
+15. 已观察外部竞争必须 stale/conflict；未观察 race 才是 observed_only 的已批准限制。unknown install 固定 recovery_unknown，不以 hash 或最终 bytes 猜成功。
+16. strong Action 和批量执行不得使用 observed_only。
+17. Automation、批准或 Money 消费不得使用 observed_only。
+18. D3 create/move/reorder/Trash 以及 restore/purge/copy/fork/import 都不得使用 observed_only。
 
 ## 10. 跨 owner 后续义务
 
-- D3：wire12、CommitDomain scoped ledger、本地 create/move/reorder/Trash、强 purge、legacy replay。
+- D3：G0-B wire12、DecisionKey/2、D3-native owner input、严格安装、companion/replay 必须与本文件保持同步；它在本候选中完成配套，但仍未激活。
 - D4：semantic_pending 的 relation/unique/calendar/cross-object 类型消费。
 - D5：native/bulk/collection 的局部与完整范围。
 - D7：Query/Action scoped cut、Prepared 新版本、effects/pin retention。

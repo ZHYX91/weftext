@@ -13,7 +13,7 @@ translation_status: source
 
 ## 1. 权威与控制规则
 
-本 Lexicon 仍只拥有 D3 identity/reference/ownership/lifecycle 的术语边界。D6-FA-r01 新增的 CommitDomain、ReplicaEpoch、ChangeId、Frontier、SourceVersion、SemanticState、ContentGuarantee、ConflictRecord、ReliableSaveState 和 ExecutionResponsibilityRecord 仍由 D6 术语 owner拥有；D3 只消费，不在本表新增同义 concept。
+本 Lexicon 仍只拥有 D3 identity/reference/ownership/lifecycle 的术语边界。G0-A/G0-B 使用的 DecisionKey、CommitDomain、ReplicaEpoch、ChangeId、Frontier、SourceVersion、SourceObservation、SourceVersionRef、ObservationScope、DependencyProof、OwnerInputBinding、InputDescriptor、D3DecisionCompanion、WriteProtection、SemanticState、ContentGuarantee、ConflictRecord、ReliableSaveState 和 ExecutionResponsibilityRecord 仍由 D6 术语 owner 拥有；D3 只消费，不在本表新增同义 concept。
 
 每个 concept 只有一个 stable concept ID、一个 canonical 中英文 term pair 和一个 ownedNames exact set。semanticNonaliases只在 expected concept/type 已知时参与拒绝，不是全局裸词 denylist。全局 retired identifier 的 fixed-S 边界保持，不扫描用户 Document/Annotation 文本。
 
@@ -1538,26 +1538,37 @@ copy/fork/continue/move/import/adopt/promote、subscribe/sync/connect 的语义�
 
 ## 4. D6-FA-r01 导入名称与真实 owner
 
-下列名称由 D6 terminology registry D6-Terminology/2 拥有，D3 wire12只作为 imported type/member 使用：
+下列名称由 D6 terminology registry D6-Terminology/2 拥有，D3 wire12 只作为 imported type/member 使用：
 
 | D6 concept | D3 消费位置 | 禁止解释 |
 |---|---|---|
-| CommitDomain | wire12 request、ledger key、receipt | 新 D3 authority/identity |
+| DecisionKey/2 | wire12 ledger、replay、companion | 新 D3 identity 或第二 ledger |
+| CommitDomain/2 | wire12 request、DecisionKey、receipt | 新 D3 authority/identity |
 | ReplicaEpoch | replica CommitDomain | AuthorityInstanceId、device ID、continue token |
-| ChangeId | receipt、Frontier、conflict heads | OperationId、EntityRef |
-| Frontier | expectedFrontier、purge coverage | 全局时间或索引进度 |
-| SourceVersion/2 | locator/evidence currentness | 裸 revision、content identity |
-| SemanticState | replica_local result qualification | D4/D5 complete proof的替代 |
-| ContentGuarantee | replica_local/managed_atomic | permission或协作模式 |
-| ConflictRecord | sync conflict定位 | D3第二 conflict ledger |
-| ReliableSaveState | D6 decision state | portable publication已完成 |
-| ExecutionResponsibilityRecord | D10 continuity | replica registration或content authority |
+| ChangeId/1 | portable receipt、Frontier/2、conflict heads | OperationId、EntityRef、prepare reservation |
+| Frontier/2 | expectedFrontier、purge causality | payload 物化、Query 全集、同步完成 |
+| SourceVersion/2 | SourceObservation 内的生产版本 | 当前 observerDomain 或裸 revision |
+| SourceObservation/1 | locator/evidence/current input | 第二 SourceVersion、文件 identity |
+| SourceVersionRef/1 | 窄元数据/receipt 投影 | 完整 SourceVersion 或权限票据 |
+| ObservationScope/2 | wire12 前门观察上界 | 写权限、实际 readSet、DependencyProof |
+| DependencyProof/2 | 正负范围与 purge/strong gate | partial index、free JSON completeness |
+| OwnerInputBinding/2 | protocolOwner=D3、ownerKind=d3_identity_operation/12 | D3 owned wrapper 或第二 request |
+| InputDescriptor/2 | wire12 exact input | D3 私有副本 schema |
+| D3DecisionCompanion/2 | 同 P seal 的 D6 companion | 第二成功 receipt 或第二 ledger |
+| WriteProtection | D3 owner descriptor 固定 strict | replica_local、permission、observed_only |
+| SemanticState | replica_local result qualification | D4/D5 complete proof 的替代 |
+| ContentGuarantee | replica_local/managed_atomic | WriteProtection、permission 或协作模式 |
+| ConflictRecord | sync conflict 定位 | D3 第二 conflict ledger |
+| ReliableSaveState | D6 decision state | portable publication 已完成 |
+| ExecutionResponsibilityRecord | D10 continuity | replica registration 或 content authority |
 
-wire12 的 commitDomain、guarantee、expectedFrontier、inputDescriptor 字段是 D6 closed type 的消费位置；它们不在 D3 新建 ownedNames。D3 对这些字段只做 owner decoder + cross-field equality。
+wire12 的 commitDomain、guarantee、expectedFrontier、inputDescriptor、frontierPolicy、observationScope 与 ownerInput 都是 D6 closed type/member 的消费位置；它们不在 D3 新建 ownedNames。D3 只定义 d3_identity_operation/12 canonical descriptor 的内部语义成员，并通过 D6 owner decoder + cross-field equality 消费 wrapper。
+
+D3DecisionCompanion/2 仍由 D6 拥有；D3 primary receipt 继续由 D3 拥有。两者同 P 保存不构成术语或持久决议的双 owner。
 
 ## 5. wire12 与 legacy 名称
 
-identity_operation_request、identity_change_receipt、identity_operation_error 等既有 D3 technical wire 名在 wire12 保持同一概念归属；版本号改变不新建 ontology concept。
+identity_operation_request、identity_change_receipt、identity_operation_error 等既有 D3 technical wire 名在 wire12 保持同一概念归属；版本号改变不新建 ontology concept。d3_identity_operation/12 是 D3-owned ownerKind/canonical descriptor 名称，不重新拥有 D6 的 OwnerInputBinding/2。
 
 Preparation Binding、Definition Transfer、Definition Result Segment 三个既有 concept 的 firstFreeze 继续保留其 wire11 历史。wire12 可以复用这些名称，但 backing Prepared record 的新版本由未来 D7 afterimage拥有；D3 不把 PreparedActionBinding/2 自动重命名或升级为新 schema。
 
@@ -1580,16 +1591,21 @@ D3-CJ/3、D3-Symbolic-Result/9、Annotation Value/3、Ref/Locator 受控名称�
 
 - “副本”指已登记 physical replica，不是 Workspace Fork。
 - “接续工作区”只指 continue_workspace，不指在新设备注册 ReplicaEpoch。
-- “可靠保存”属于 D6，不等于同步完成或 portable publication。
-- “冲突”属于 D6 ConflictRecord 的 portable control，具体 parent/lifecycle/identity解决由 D3。
+- “可靠保存”属于 D6，特指 strict 路径的 reliable，不等于同步完成或 portable publication。
+- durable_observed_only 也是 D6 ReliableSaveState 的分支，只属于受信人工普通单 Document source-save；它不是 D3 replica_local 的同义词。
+- D3 的 replica_local 只表示局部语义证明范围；create/move/reorder/Trash 等 D3 作者安装仍全部使用 WriteProtection=strict。
+- Frontier/2 是已封存因果前缀，不等于 payload 已物化、placeholder 已下载或全集证明。
+- SourceVersion/2 的 commitDomain 是生产域；SourceObservation/1 的 observerDomain 是当前观察域，二者不同不等于版本错误。
+- “冲突”属于 D6 ConflictRecord 的 portable control，具体 parent/lifecycle/identity 解决由 D3。
 - “执行责任”属于 D6/D10 control，不等于 D3 Authority。
 - “来源”仍只属于 Source；Provenance 的中文仍是“来源证据”。
 - “所有者”仍不等于 Authority。
 - “路径”仍不等于 Node identity 或 parent。
-- “pending”语义状态不是“通过全部约束”的别名。
+- semantic_pending 不是“通过全部约束”的别名。
+- D3 primary receipt 与 D3DecisionCompanion/2 不是两份成功 receipt；companion 只是同 P 决议的 D6 关联记录。
 
 ## 8. 接受边界
 
-本 Lexicon 与 D3 主后像、D3 Implementation Impact 必须共同审查。新 D4/D5/D7/D8/D9/D10 名称在各自 afterimage 完成前不由 D3 预先占用。
+本 Lexicon 与 G0-B D3 主后像、D3 Implementation Impact 及同批 D1 后像必须共同审查。D4/D5 仍待 C 批；D7/D8/D9/D10 名称在各自 afterimage 完成前不由 D3 预先占用。
 
 旧 D10 B13 仍为 REVISE、术语/双语 FAIL、3 P1 + 8 P2 共 11 OPEN；本文件不关闭任何项。

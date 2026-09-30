@@ -31,8 +31,8 @@ This file is routing/version/difference documentation only. Normative operation 
 `replacements.json` lists only the 16 fixed-S owner replacements that actually exist:
 
 - five D6: Storage, Control, Terminology Lexicon, Terminology Registry, Implementation Impact/Test;
-- two D1: Product Surface/Capability Boundary, Implementation Impact/Test;
-- three D3: Identity/References/Ownership/Lifecycle, Terminology Lexicon, Implementation Impact/Test;
+- two D1: Product Surface/Capability Boundary, Implementation Impact/Test; G0-B generated the corresponding owner afterimages.
+- three D3: Identity/References/Ownership/Lifecycle, Terminology Lexicon, Implementation Impact/Test; G0-B generated the corresponding owner afterimages.
 - three D4: Attribute Types/Schema/Relations, Terminology Lexicon, Implementation Impact/Test;
 - three D5: Tables/Node Collections, Terminology Lexicon, Implementation Impact/Test.
 
@@ -58,7 +58,7 @@ P/I never becomes a second author truth for Field, relation, collection, or pare
 - **complete semantic/action proof**: D4 relation/strong Facet mutation/unique Calendar, D5 collection membership/bulk/requireMembership, restore/purge/copy/fork/import, D7 all_result/automation retain complete positive/negative ranges.
 - **global execution responsibility**: Automation, ApprovalUse, claim, Money, external unknown, stop use a separate continuous-responsibility domain.
 
-Existing D4/D5 afterimages remain. G0-A updates only the D6 producer. D1/D3/D4/D5 do not yet consume Frontier/2, SourceObservation/WriteProtection, or the minimal receipt/companion, so dependent new success remains gated.
+Existing D4/D5 afterimages remain. G0-A completes the D6 producer, and G0-B completes D1 product consumption plus D3 owner companion consumption. D1/D3 now register candidate consumption boundaries for Frontier/2, SourceObservation, WriteProtection, and the minimal receipt/companion, but D4/D5, D7/D8/D9/D10 have not completed their corresponding consumer updates, so dependent new success remains gated.
 
 Existing D4/D5 afterimages fix:
 - D4 namespace `available|retained_unavailable|invalid|not_present`, Node typed `complete|partial|unavailable`, D6 `complete_semantics|semantic_pending`, and future D7 complete-cut as four different dimensions.
@@ -74,6 +74,10 @@ Produced:
 - D3 identity operation/receipt/resolver 11->12 with CommitDomain-scoped ledger key.
 - D4 public Entry/Type/RelationReadContext/Binding/Recurrence/effect shapes remain; the new profile adds outer D6 InputDescriptor/2 binding for source-bearing evidence to SourceVersion/2, CommitDomain, Frontier.
 - D5 adds no durable identity wire; D5 v1 domains/limits remain while D6-FA freezes local-versus-complete consumption.
+
+G0-B also registers D1 product consumption: ReliableSaveState/InputRetention boundaries separate strict reliable save from durable_observed_only retention metrics; observed_only does not populate the old strict T_first_reliable_save.
+
+G0-B also registers D3-native descriptor, SourceObservation/1, minimal receipt/no_op, and same-P primary/companion consumption boundaries while retaining later consumer, joint-review, and activation gates.
 
 Historical D3 v9/v10/v11, D6 wire1, D7 PreparedActionBinding/1,/2 saved bytes use original decoders/gates/retention. They are never backfilled or re-encoded.
 
@@ -109,9 +113,9 @@ Narrower budgets may reduce but never expand limits; pagination prefix is not co
 
 | Owner | required coordinated work |
 |---|---|
-| D1 | ordinary-save product state/metric and strict versus ordinary-file wording |
-| D3 | D3-native owner descriptor, Frontier/2, SourceObservation, companion/receipt consumption |
-| D4 | production SourceVersion versus observerDomain and weak B->N proof scope |
+| D1 | G0-B registered ordinary-save product state/metrics and strict versus ordinary-file wording; not activated |
+| D3 | G0-B registered D3-native owner descriptor, Frontier/2, SourceObservation, companion/receipt consumption; not activated |
+| D4 | production SourceVersion versus observerDomain and weak B->N proof scope remain pending for C-batch consumption |
 | D5 | native ordinary-save protection consumption while bulk/collection stays strict |
 | D7 | CommitDomain/Frontier/SourceVersion complete cut, new Prepared, effects pin retention, partial-index gate |
 | D8 | Source/Live/Read, three Live marker modes, Draft/IME/Undo/selection, multi-session and collaboration checkpoint |
@@ -122,7 +126,7 @@ Before new D7 Prepared exists, D4/D5 strong Actions requiring complete D7 prepar
 
 ## 9. Large-workspace, conflicts, and historical result
 
-T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready stay separate, with no unmeasured seconds claim; until D1 is updated, observed_only durable_observed_only does not populate the old strict T_first_reliable_save metric.
+T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready stay separate, with no unmeasured seconds claim; G0-B registers the ReliableSaveState/InputRetention boundary between strict reliable save and durable_observed_only retention. durable_observed_only still does not populate the old strict T_first_reliable_save metric and does not remove later consumer, joint-review, or activation gates.
 
 D4/D5 local operations do not become globally read-only because unrelated I coverage is missing. A strong consumer may scan source for complete proof; otherwise it is unavailable.
 

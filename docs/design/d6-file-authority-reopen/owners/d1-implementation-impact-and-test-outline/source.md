@@ -26,15 +26,19 @@ D1-FA changes execution modes and state ownership without creating new domain ob
 
 ## 2. Product state machine and UI projection
 
-Every surface distinguishes:
+Every surface distinguishes these milestones and states:
 
 - T_first_open: enter the workspace, browse discovered structure, and open a materialized target.
-- T_first_edit: active Draft accepts input; this is not reliable save.
-- T_first_reliable_save: the active target has passed file installation and D6 decision seal.
+- T_first_edit: active Draft accepts input; this is not file save.
+- input retained: proposal, actually read before image, and required bindings are durably retained while file installation may not have happened.
+- T_first_reliable_save: reached only after a strict path completes qualified file installation and D6 P seal; observed_only never populates it.
+- durable_observed_only: only for the approved trusted-interactive ordinary save of one existing live Document; it proves durable input/read-before retention plus seal but does not promise exclusion of an external race never observed.
+- recovery_unknown: installation occurrence or provenance cannot be proved; the UI never shows save success.
+- portable publication pending/published: describes publication of an already sealed result and never rewrites the receipt.
 - T_full_search_ready: declared complete search scope is proved by complete scan or qualified candidate index plus source reread.
 - T_OCR_ready: OCR work for selected attachments/model/configuration is complete with explicit failures.
 
-Sync upload, Preview, Prepared, worker success, HTTP success, Draft persistence, and P planned never project as T_first_reliable_save.
+Sync upload, Preview, Prepared, worker success, HTTP success, Draft persistence, and P planned never project as file-save success. Product wording does not expose P-ledger internals and observed_only adds no per-save approval prompt; stable help text explains only its concurrency-protection difference.
 
 ## 3. Local implementation obligations
 
@@ -43,7 +47,7 @@ Desktop/CLI/Mobile local hosts must:
 1. provide process-level exclusive commit qualification for one physical replica;
 2. keep active P/I outside the synchronized directory;
 3. turn external file changes into D6 observations instead of UI merges;
-4. retain Draft/after and return install unavailable when the backend lacks a safe conditional/exclusive installation primitive;
+4. retain Draft/after and return install unavailable when a strict request lacks conditional/exclusive installation capability; only trusted-interactive ordinary source-save of one existing live Document with complete source read/replace, zero-or-one source write set, and no narrow deny may use a new observed_only prepare, never an in-place strict downgrade;
 5. invalidate only affected SourceVersion, cut, prepare, and installation ranges, allowing unrelated ordinary work after requalification;
 6. rebuild I progressively from F/M without reminting identity or inventing decisions;
 7. preserve provable ordinary content when P is lost, while pausing unrecoverable execution responsibility instead of guessing receipts from files.
@@ -113,7 +117,7 @@ Future benchmarks include:
 | cache | cold and warm |
 | hardware | recorded CPU, RAM, OS, filesystem, disk |
 | lifecycle | first open, deleted I, existing workspace on new device, restart during build, single/batch modification |
-| outputs | five time milestones, peak RAM, I/P/pin size, bytes read, incremental time |
+| outputs | five time milestones, separate durable_observed_only latency, peak RAM, I/P/pin size, bytes read, incremental time |
 
 These are acceptance targets, not existing performance results; no seconds-level or named-competitor speed claim is permitted without measurement.
 
@@ -133,10 +137,16 @@ Required cases include:
 10. partial index never proving a complete Action.
 11. no-body-replica checks over P/I/schema/FTS shadow state, rejecting whole-workspace current-body and full-AST mirrors.
 12. any pre-G2 statement that real-time collaboration is available failing release evidence.
+13. automatic Draft retention, background autosave timers, workers, or reconnect never trigger an observed_only author installation; a trusted interactive save intent is still required.
+14. narrow Field/body permission never gains whole-source replacement through observed_only; complete whole-source replacement authority and every applicable deny are checked first.
+15. observed external competition is stale/conflict; only an unobserved race is the approved observed_only limitation. Unknown install is recovery_unknown and never inferred successful from hash/final bytes.
+16. strong Action and bulk execution never use observed_only.
+17. Automation, approval, or Money consumption never uses observed_only.
+18. D3 create/move/reorder/Trash and restore/purge/copy/fork/import never use observed_only.
 
 ## 10. Cross-owner follow-up obligations
 
-- D3: wire12, CommitDomain-scoped ledger, local create/move/reorder/Trash, strong purge, legacy replay.
+- D3: the G0-B wire12, DecisionKey/2, D3-native owner input, strict installation, companion/replay contract must stay synchronized with this file; its companion afterimage is produced in this candidate but remains inactive.
 - D4: semantic_pending consumption for relation/unique/calendar/cross-object types.
 - D5: local versus complete ranges for native/bulk/collection operations.
 - D7: scoped Query/Action cuts, new Prepared version, effects/pin retention.

@@ -34,9 +34,9 @@ Weftext 同时满足：
 3. 托管部署通过 Server 向 Browser、Desktop、CLI、Mobile 提供同一 Core 语义，并保留多人同时工作。
 4. worker、Agent、自动化、连接器、同步服务和索引都不能获得第二条作者写入语义。
 5. 全局执行资源只由连续、可证明且被 fence 的执行责任域消费；普通内容可用性不依赖该责任域持续在线。
-6. 大库可先打开、先编辑、先可靠保存活动内容，再渐进完成 metadata、全文搜索和 OCR。
+6. 大库可先打开、先编辑并先完成活动内容的文件保存，再渐进完成 metadata、全文搜索和 OCR；其中 strict 的 reliable 与 observed_only 的 durable_observed_only 必须分开呈现和测量。
 
-最危险的失败包括：同一物理副本两个进程都认为自己能提交；文件同步被宣传为实时协作；一个离线副本复制全局费用资格；部分索引被当成全集；Server 的数据库单写者被误解为单用户产品；以及客户端 Draft 或同步上传被误报成可靠保存。
+最危险的失败包括：同一物理副本两个进程都认为自己能提交；文件同步被宣传为实时协作；一个离线副本复制全局费用资格；部分索引被当成全集；Server 的数据库单写者被误解为单用户产品；客户端 Draft、输入留存或同步上传被误报成文件保存；以及 observed_only 被展示成 strict reliable 或强 Action 资格。
 
 ## 3. 总体不变量
 
@@ -46,12 +46,13 @@ Weftext 同时满足：
 | D1-I02 | Desktop、WebUI、Server、CLI、Mobile 共享 Core 的领域结果、诊断、计划和提交语义；界面只能选择交互，不能自造身份、冲突或提交结果。 |
 | D1-I03 | WebUI 永远是 Server 客户端，不打开本地目录，不持有托管路径或数据库。 |
 | D1-I04 | Desktop、CLI、Mobile 在本地模式调用本机 Core；远端模式只调用 Server，不以本机缓存重解释 Server 结果。 |
-| D1-I05 | 普通同步服务只复制文件和可移植元数据。检测到外部变化后，依赖旧 SourceVersion、旧观察世代或受影响安装范围的资格失效；Core 保留 Draft/分支并重新取得局部资格。不得基于旧 cut 静默覆盖，但也不得把一个局部变化升级为整个副本永久只读。 |
+| D1-I05 | 普通同步服务只复制文件和可移植元数据。检测到外部变化后，依赖旧 SourceObservation、观察世代或受影响安装范围的资格失效；Core 保留 Draft/分支并重新取得局部资格。已观察竞争绝不能由 observed_only 覆盖，但一个局部变化也不得把整个副本永久变为只读。 |
 | D1-I06 | worker、Agent、自动化和连接器只能产生输入、结果或提议，最终作者提交仍由本机 Core 或 Server Core。 |
 | D1-I07 | 能力状态来自版本化能力描述，不从按钮、OS 检测、缓存或一次成功推测。 |
 | D1-I08 | 不支持、未交付、未配置、离线、版本不兼容、无权或策略拒绝都必须返回明确不可用结果，不用近似操作补位。 |
 | D1-I09 | 平台支持声明必须绑定实际构建、安装、运行和场景证据。 |
 | D1-I10 | 当前公开工件没有生产发行身份的平台签名、公证或商店分发；开发签名不能被包装成发布能力。 |
+| D1-I11 | 产品必须区分 input retained、not_saved、reliable、durable_observed_only、recovery_unknown 与 portable publication pending/published。只有受信交互的单一既有 live Document 普通 source-save 才可能使用 observed_only；Draft 自动留存不授予无人值守弱安装资格。 |
 
 D1-I01 约束“谁能把一个持久结果写入某个物理后端”，不约束“多少用户可以同时持有 Draft、阅读、准备、评论或编辑输入”。
 
@@ -129,7 +130,7 @@ L/R/H/I 的含义保持固定 S：本机承载、远端客户端、Server 承载
 
 ### 7.3 托管 Server
 
-Browser/Desktop/CLI/Mobile → authenticated Server API → authorization/audit → Core → 托管文件后端 + Server P/I。多个前端连接和多个 Draft 可以并存，只有最终可靠保存进入唯一持久提交序列。
+Browser/Desktop/CLI/Mobile → authenticated Server API → authorization/audit → Core → 托管文件后端 + Server P/I。多个前端连接和多个 Draft 可以并存；只有完成 Core seal 的受管结果进入唯一持久提交序列，Draft 或广播确认都不是保存成功。
 
 ### 7.4 故障切换
 
@@ -145,13 +146,13 @@ Server failover 必须同时 fence 控制库和作者文件写能力。只阻止
 
 ## 9. 能力归属
 
-Core 继续拥有领域解释、计划、验证和提交。D6 拥有 F/M/P/I 的物理与控制合同、可靠保存、便携发布、冲突记录和执行责任连续性。D3 拥有 identity、parent/order、lifecycle。Server 控制面拥有认证、账户、会话、审计和协作协调。任何数据库或同步程序都不是领域 owner。
+Core 继续拥有领域解释、计划、验证和提交。D6 拥有 F/M/P/I 的物理与控制合同、WriteProtection、ReliableSaveState、input retention、便携发布、冲突记录和执行责任连续性。D3 拥有 identity、parent/order、lifecycle。Server 控制面拥有认证、账户、会话、审计和协作协调。任何数据库或同步程序都不是领域 owner。
 
 ## 10. 能力探测与不可用语义
 
 原 D1 capability negotiation 和不可用 reason 顺序保持。D6 的 workspace_busy、domain_unavailable、install_unavailable、conflict、owner_update_required 等属于具体工作区/操作结果，不扩张 D1 capability reason。
 
-能力探测不是授权票据；实际提交仍重验当前 policy、后端资格、SourceVersion、frontier 和所需依赖。
+能力探测不是授权票据；实际提交仍重验当前 policy、后端资格、SourceObservation、Frontier/2 和所需依赖。strict 请求不能在提交途中原地降级为 observed_only。
 
 ## 11. 协调版本与发布声明
 
@@ -176,7 +177,7 @@ G1/G1.1/G2 的既有平台证据门保持。没有实际多人协作、性能和
 - 不把每次按键变成作者提交。
 - 不把浏览器变成本地文件 PWA。
 - 不扩大当前平台、签名或商店承诺。
-- 不把大库完整索引或 OCR 作为打开和普通可靠保存的统一前置条件。
+- 不把大库完整索引或 OCR 作为打开和普通文件保存的统一前置条件；弱保护路径的耗时也不能冒充 strict 可靠保存指标。
 
 ## 14. 替代方案与拒绝理由
 
@@ -195,7 +196,7 @@ G1/G1.1/G2 的既有平台证据门保持。没有实际多人协作、性能和
 
 ### S1 本地离线编辑
 
-断网后 Desktop 打开活动文档、编辑、可靠保存并重启恢复。无关 I/OCR 尚未完成不能让该保存永久不可用。若文件后端无法提供 D6 所需安全安装原语，保留 Draft/after 并明确不可用，不谎报成功。
+断网后 Desktop 打开活动文档并编辑。若后端具备 strict 安装资格，可显示“已可靠保存”；若只具备 observed_only 且同时满足受信交互、单一既有 live Document、完整读取和整文件替换权限、零或单 source 写集及无细项 deny，可显示“已保存 · 普通文件模式”，并稳定说明不能排除其它程序同时写入。已观察冲突、未知安装结果或不满足资格时只保留输入并显示冲突/待恢复/不可用；Draft 自动留存不得触发无人值守 observed_only 安装。
 
 ### S2 同一机器双进程
 
@@ -203,7 +204,7 @@ Desktop 与 CLI 争用同一物理副本。只有一个能取得提交持有者�
 
 ### S3 两设备文件同步
 
-A、B 离线修改同一笔记后同步。两边本地可靠保存都保留，接收端形成显式冲突，不按 mtime 选 winner。同步先到正文后到 metadata 时状态为 incomplete，不把缺 metadata 当新身份或删除。
+A、B 离线修改同一笔记后同步。两边已经 seal 的普通保存结果都保留各自真实 WriteProtection，接收端形成显式冲突，不按 mtime 选 winner，也不把 observed_only 升级为 reliable。同步先到正文后到 metadata 时状态为 incomplete，不把缺 metadata 当新身份或删除。
 
 ### S4 WebUI 断网草稿
 
@@ -219,7 +220,7 @@ A 编辑 N1，B 编辑 N2。读取和准备可并行，持久 commit 只按真�
 
 ### S7 同文档非实时并发
 
-A、B 都从 revision r5 编辑。A 先保存为 r6；B 的旧 Base 保存必须得到 stale/conflict，保留 B Draft 和 r5/r6 差异，不覆盖 A。
+A、B 都从 revision r5 编辑。A 先保存为 r6；B 的旧 Base 已属于已观察冲突，必须得到 stale/conflict，保留 B Draft 和 r5/r6 差异。observed_only 也不能覆盖 A。
 
 ### S8 后续实时协作
 
@@ -231,17 +232,17 @@ A、B 都有文件副本，但只有连续执行责任 holder 可消费同一 Ap
 
 ### S10 大库首次打开
 
-数十 GB 库可以先完成 T_first_open、T_first_edit、T_first_reliable_save，再继续 T_full_search_ready 与 T_OCR_ready。未建立性能证据前不承诺具体秒数。
+数十 GB 库可以先完成 T_first_open、T_first_edit；strict 路径达到 T_first_reliable_save 后仍可继续 T_full_search_ready 与 T_OCR_ready。observed_only 到 durable_observed_only 的延迟必须单独记录，不能填入 T_first_reliable_save。未建立性能证据前不承诺具体秒数。
 
 ## 16. 对 D2–D10 的输入约束
 
 | Owner | D1-FA 输入 |
 |---|---|
 | D2 | exact source 与对象语义跨副本/Server一致；外部 invalid bytes 不因路径而升级为合法 Document |
-| D3 | identity 与 parent/order 不依赖路径；副本登记与 Workspace continue 分开；本地普通 lifecycle 与强 purge 需版本化区分 |
+| D3 | identity 与 parent/order 不依赖路径；副本登记与 Workspace continue 分开；replica_local 只缩小语义证明范围，D3 identity/structure/lifecycle 安装仍必须 strict |
 | D4 | semantic_pending 的 typed/cross-object消费必须显式；不能把 pending 当全部约束已通过 |
 | D5 | native/collection/bulk 的完整范围门不能由部分索引代替 |
-| D6 | F/M/P/I/Draft 分域、可靠保存、便携发布、冲突、replicaEpoch 和 execution responsibility |
+| D6 | F/M/P/I/Draft 分域、WriteProtection、ReliableSaveState、input retention、便携发布、冲突、replicaEpoch 和 execution responsibility |
 | D7 | Query/Action 绑定 CommitDomain/frontier；complete 结果只能由完整范围证明产生 |
 | D8 | Source/Live/Read、Draft/IME/Undo/selection连续；多会话与协作检查点不成为第二作者源 |
 | D9 | pins/import/export/publication服从新域与版本，不用 worker 成功冒充作者 commit |
@@ -264,7 +265,7 @@ A、B 都有文件副本，但只有连续执行责任 holder 可消费同一 Ap
 5. 撤权、重连、重启和 failover 不产生第二提交 holder。
 6. 文件同步部分到达、placeholder 和冲突不伪造完整状态。
 7. T_first_open、T_first_edit、T_first_reliable_save、
-  T_full_search_ready、T_OCR_ready 分别测量。
+  T_full_search_ready、T_OCR_ready 分别测量；durable_observed_only 的保存延迟另列，不计入 T_first_reliable_save。
 8. 基准记录文件数、正文量、附件量、冷暖缓存、CPU、RAM、磁盘、峰值内存、I/P 大小与重启续建。
 9. no-body-replica 检查确认 P/I 没有全库当前正文或完整 AST 副本。
 10. 实时协作未实现时所有界面都明确报告未交付，不以文件同步代替。

@@ -35,9 +35,9 @@ Weftext must simultaneously provide:
 3. Hosted deployment through Server with the same Core semantics for Browser, Desktop, CLI, and Mobile while preserving simultaneous multi-user work.
 4. No second author-write semantics in workers, Agents, automation, connectors, sync services, or indexes.
 5. A globally consumable execution resource only when a continuous and fenced execution-responsibility domain proves authority; ordinary content availability is not conditioned on that domain being online.
-6. Large workspaces that can open, edit, and reliably save active content before metadata, full search, and OCR have completed.
+6. Large workspaces may open, edit, and complete active-file save before metadata, full search, and OCR finish; strict reliable and observed_only durable_observed_only are presented and measured separately.
 
-Critical failures include two processes believing they can commit the same physical replica, marketing file sync as collaboration, copying global spending authority with a replica, treating a partial index as a complete set, interpreting Server's single durable writer as a single-user product, or presenting a Draft or sync upload as a reliable save.
+Critical failures include two processes believing they can commit the same physical replica, marketing file sync as collaboration, copying global spending authority with a replica, treating a partial index as a complete set, interpreting Server's single durable writer as a single-user product, presenting Draft/input retention or sync upload as file-save success, or presenting observed_only as strict reliable or strong-Action qualification.
 
 ## 3. Global invariants
 
@@ -47,12 +47,13 @@ Critical failures include two processes believing they can commit the same physi
 | D1-I02 | Desktop, WebUI, Server, CLI, and Mobile share Core domain results, diagnostics, plans, and commit semantics. A surface chooses interaction but cannot invent identity, conflict, or commit outcomes. |
 | D1-I03 | WebUI is always a Server client. It never opens a local directory or holds a hosted path/database. |
 | D1-I04 | Desktop, CLI, and Mobile call local Core in local mode and Server in remote mode. Local caches never reinterpret remote results. |
-| D1-I05 | Ordinary sync services copy files and portable metadata only. An observed external change invalidates qualifications that depend on the old SourceVersion, observation epoch, or affected installation range. Core retains Draft/branches and reacquires local qualification. It never overwrites from a stale cut, but a local change does not make the entire replica permanently read-only. |
+| D1-I05 | Ordinary sync services copy files and portable metadata only. An observed external change invalidates qualifications that depend on the old SourceObservation, observation epoch, or affected installation range. Core retains Draft/branches and reacquires local qualification. observed_only never overwrites an observed competitor, while one local change still does not make the entire replica permanently read-only. |
 | D1-I06 | Workers, Agents, automation, and connectors may only produce inputs, results, or proposals. Final author commits still pass through local Core or Server Core. |
 | D1-I07 | Capability state comes from versioned capability description, not UI visibility, OS detection, cache state, or a past success. |
 | D1-I08 | Unsupported, undelivered, unconfigured, offline, incompatible, unauthorized, or policy-denied cases are explicit and never fall back to approximate writes. |
 | D1-I09 | Platform support claims require actual build, install, launch, and scenario evidence. |
 | D1-I10 | Current public artifacts have no production platform signing/notarization/store identity; development signing is not a release capability. |
+| D1-I11 | Product state distinguishes input retained, not_saved, reliable, durable_observed_only, recovery_unknown, and portable publication pending/published. observed_only is possible only for trusted interactive ordinary source-save of one existing live Document; automatic Draft retention never authorizes unattended weak installation. |
 
 D1-I01 constrains who may durably modify a physical backend. It does not constrain how many users may concurrently hold Drafts, read, prepare, comment, or enter edits.
 
@@ -130,7 +131,7 @@ Device A and B have independent replicaEpoch values and local commit domains. Th
 
 ### 7.3 Hosted Server
 
-Browser/Desktop/CLI/Mobile -> authenticated Server API -> authorization/audit -> Core -> hosted file backend plus Server P/I. Many frontend connections and Drafts may coexist; only reliable saves enter the unique durable commit sequence.
+Browser/Desktop/CLI/Mobile -> authenticated Server API -> authorization/audit -> Core -> hosted file backend plus Server P/I. Many frontend connections and Drafts may coexist; only Core-sealed managed results enter the unique durable commit sequence, and neither Draft nor broadcast acknowledgement is save success.
 
 ### 7.4 Failover
 
@@ -146,13 +147,13 @@ Revocation and commit are linearized by the authority-holding boundary. In Serve
 
 ## 9. Capability ownership
 
-Core continues to own domain interpretation, planning, validation, and commit. D6 owns F/M/P/I physical/control contracts, reliable save, portable publication, conflict records, and execution-responsibility continuity. D3 owns identity, parent/order, and lifecycle. Server control plane owns authentication, accounts, sessions, audit, and collaboration coordination. No database or sync provider becomes a domain owner.
+Core continues to own domain interpretation, planning, validation, and commit. D6 owns F/M/P/I physical/control contracts, WriteProtection, ReliableSaveState, input retention, portable publication, conflict records, and execution-responsibility continuity. D3 owns identity, parent/order, and lifecycle. Server control plane owns authentication, accounts, sessions, audit, and collaboration coordination. No database or sync provider becomes a domain owner.
 
 ## 10. Capability negotiation and unavailable semantics
 
 The original D1 capability negotiation and unavailable-reason ordering remain. D6 workspace-specific outcomes such as workspace busy, domain unavailable, install unavailable, conflict, and owner update required are operation results, not new D1 capability reasons.
 
-Capability probing is not an authorization ticket. Actual commit revalidates current policy, backend qualification, SourceVersion, frontier, and required dependencies.
+Capability probing is not an authorization ticket. Actual commit revalidates current policy, backend qualification, SourceObservation, Frontier/2, and required dependencies. A strict request never downgrades in place to observed_only.
 
 ## 11. Coordinated versions and release claims
 
@@ -177,7 +178,7 @@ Real-time collaboration does not block a safe non-real-time Server/WebUI release
 - Do not turn each keystroke into an author commit.
 - Do not turn WebUI into a local-file PWA.
 - Do not expand current platform, signing, or store claims.
-- Do not make complete indexing or OCR a universal prerequisite for opening or ordinary reliable save.
+- Do not make complete indexing or OCR a universal prerequisite for opening or ordinary file save, and never count weak-protection latency as the strict reliable-save metric.
 
 ## 14. Rejected alternatives
 
@@ -196,7 +197,7 @@ Real-time collaboration does not block a safe non-real-time Server/WebUI release
 
 ### S1 Local offline edit
 
-Desktop opens an active document while offline, edits, reliably saves, and restarts. Unrelated I/OCR work may remain incomplete. If the file backend cannot provide the required D6 safe-install primitive, Core retains Draft/after and reports unavailability rather than reliable success.
+Desktop opens an active document offline and edits it. With strict installation qualification it may show “reliably saved”. With observed_only, and only when trusted-interactive, one-existing-live-Document, complete read/whole-source replace, zero-or-one source write set, and no narrow deny all hold, it may show “saved · ordinary file mode” with a stable warning that another program may still write concurrently. Observed conflict, unknown installation, or failed eligibility retains input and shows conflict/recovery-pending/unavailable. Automatic Draft retention never triggers unattended observed_only installation.
 
 ### S2 Two local processes
 
@@ -204,7 +205,7 @@ Desktop and CLI contend for one physical replica. Only one obtains commit-holder
 
 ### S3 Two-device file sync
 
-A and B edit the same note offline and later sync. Both local reliable saves remain represented, and the receiver creates an explicit conflict instead of choosing by mtime. If source arrives before metadata, the state is incomplete; missing metadata is neither fresh identity nor deletion.
+A and B edit the same note offline and later sync. Both sealed ordinary-save results retain their actual WriteProtection, and the receiver creates an explicit conflict instead of choosing by mtime or upgrading observed_only to reliable. If source arrives before metadata, the state is incomplete; missing metadata is neither fresh identity nor deletion.
 
 ### S4 WebUI offline Draft
 
@@ -220,7 +221,7 @@ A edits N1 while B edits N2. Read and preparation may run in parallel, and durab
 
 ### S7 Same-document non-real-time concurrency
 
-A and B both edit revision r5. A saves r6 first. B's old-Base save returns stale/conflict, retains B's Draft, and preserves the r5/r6 comparison instead of overwriting A.
+A and B both edit revision r5. A saves r6 first. B's old Base is now an observed conflict and returns stale/conflict, retains B's Draft, and preserves the r5/r6 comparison. observed_only cannot overwrite A either.
 
 ### S8 Future real-time collaboration
 
@@ -232,17 +233,17 @@ A and B both have file replicas, but only the continuous execution-responsibilit
 
 ### S10 Large-workspace first open
 
-A tens-of-GB workspace may reach T_first_open, T_first_edit, and T_first_reliable_save before T_full_search_ready and T_OCR_ready. No seconds-level guarantee is made without implementation benchmarks.
+A tens-of-GB workspace may reach T_first_open and T_first_edit first; a strict path may then reach T_first_reliable_save before T_full_search_ready and T_OCR_ready. observed_only latency to durable_observed_only is recorded separately and never populates T_first_reliable_save. No seconds-level guarantee is made without implementation benchmarks.
 
 ## 16. Inputs to D2-D10
 
 | Owner | D1-FA input |
 |---|---|
 | D2 | exact-source/object semantics are the same across replicas/Server; external invalid bytes do not become valid Document because of path |
-| D3 | identity and parent/order are path-independent; replica registration differs from Workspace continue; local ordinary lifecycle and strong purge need versioned distinction |
+| D3 | identity and parent/order are path-independent; replica registration differs from Workspace continue; replica_local narrows semantic proof scope only, while D3 identity/structure/lifecycle installation remains strict |
 | D4 | semantic_pending consumption is explicit and never equivalent to all constraints passing |
 | D5 | native/collection/bulk complete-range gates are not satisfied by partial indexes |
-| D6 | F/M/P/I/Draft separation, reliable save, portable publication, conflict, replicaEpoch, execution responsibility |
+| D6 | F/M/P/I/Draft separation, WriteProtection, ReliableSaveState, input retention, portable publication, conflict, replicaEpoch, execution responsibility |
 | D7 | Query/Action binds CommitDomain/frontier; complete results require complete range proof |
 | D8 | Source/Live/Read and Draft/IME/Undo/selection continuity; multi-session/checkpoint state is not a second author source |
 | D9 | pins/import/export/publication follow the new domain/version and worker success is not author commit |
@@ -264,7 +265,7 @@ Required evidence includes:
 4. two Server users holding same- or different-document Drafts concurrently with unique durable commit ordering;
 5. revocation, reconnect, restart, and failover never producing a second commit holder;
 6. partial file-sync arrival, placeholders, and conflicts never pretending to be complete state;
-7. separate measurement of T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready;
+7. separate measurement of T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready, with durable_observed_only save latency reported separately and excluded from T_first_reliable_save;
 8. benchmark recording of file count, source bytes, attachment bytes, cold/warm cache, CPU, RAM, disk, peak memory, I/P size, and restart resume;
 9. a no-body-replica assertion for P/I, including full-current-body and full-AST negatives;
 10. explicit not-in-release behavior for unimplemented real-time collaboration rather than a file-sync fallback.

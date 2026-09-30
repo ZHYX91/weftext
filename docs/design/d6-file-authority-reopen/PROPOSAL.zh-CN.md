@@ -30,8 +30,8 @@ translation_status: source
 `replacements.json` 只登记实际存在的 16 份 fixed-S owner replacement：
 
 - D6 五份：Storage、Control、Terminology Lexicon、Terminology Registry、Implementation Impact/Test。
-- D1 两份：Product Surface/Capability Boundary、Implementation Impact/Test。
-- D3 三份：Identity/References/Ownership/Lifecycle、Terminology Lexicon、Implementation Impact/Test。
+- D1 两份：Product Surface/Capability Boundary、Implementation Impact/Test；G0-B 已生成对应 owner 后像。
+- D3 三份：Identity/References/Ownership/Lifecycle、Terminology Lexicon、Implementation Impact/Test；G0-B 已生成对应 owner 后像。
 - D4 三份：Attribute Types/Schema/Relations、Terminology Lexicon、Implementation Impact/Test。
 - D5 三份：Tables/Node Collections、Terminology Lexicon、Implementation Impact/Test。
 
@@ -60,7 +60,7 @@ P/I不能成为第二份 Field、relation、collection、parent/order作者真�
   restore/purge/copy/fork/import、D7 all_result/automation等保留完整正负范围。
 - **global execution responsibility**：Automation、ApprovalUse、claim、Money、external unknown、stop要求独立连续责任。
 
-D4/D5 既有后像保持；本 G0-A 只更新 D6 producer。D1/D3/D4/D5 尚未消费 Frontier/2、SourceObservation/WriteProtection 与最小 receipt/companion，因此相关新 success 继续 gate。
+D4/D5 既有后像保持；G0-A 完成 D6 producer，G0-B 完成 D1 产品消费与 D3 owner 配套消费。D1/D3 已登记 Frontier/2、SourceObservation、WriteProtection 与最小 receipt/companion 的候选消费边界，但 D4/D5、D7/D8/D9/D10 仍未完成对应 consumer 更新，因此相关新 success 继续 gate。
 
 D4/D5 既有后像明确：
 - D4 namespace `available|retained_unavailable|invalid|not_present`、Node typed `complete|partial|unavailable`、D6 `complete_semantics|semantic_pending` 与未来 D7 complete-cut 是四个不同维度。
@@ -79,6 +79,10 @@ D4/D5 既有后像明确：
 - D4 public Entry/Type/RelationReadContext/Binding/Recurrence/effect shapes保持；
   新 profile只在 outer D6 InputDescriptor/2把 source-bearing evidence绑定 SourceVersion/2、CommitDomain、Frontier。
 - D5 不新增 durable wire identity；保留 D5 v1 domains/limits，只新增 D6-FA local-vs-complete consumer合同。
+
+G0-B 同步登记 D1 产品消费：ReliableSaveState/InputRetention 与 strict 可靠保存、durable_observed_only 耐久保留指标边界分开；observed_only 不计入旧 strict T_first_reliable_save。
+
+G0-B 同步登记 D3-native descriptor、SourceObservation/1、最小 receipt/no_op 与同 P primary/companion 的消费边界；仍保持后续 consumer、联合审查和激活 gate。
 
 历史 D3 v9/v10/v11、D6 wire1、D7 PreparedActionBinding/1,/2 等 saved bytes按原decoder/gate/retention重放；不补新字段、不重编码。
 
@@ -115,9 +119,9 @@ hard limits继续：
 
 | Owner | 尚待协调 |
 |---|---|
-| D1 | 普通保存产品状态/指标与 strict/ordinary-file 文案消费 |
-| D3 | D3-native owner descriptor、Frontier/2、SourceObservation、companion/receipt 消费 |
-| D4 | production SourceVersion/observerDomain 分离、weak B→N证明范围 |
+| D1 | G0-B 已登记普通保存产品状态/指标与 strict/ordinary-file 文案消费；仍未激活 |
+| D3 | G0-B 已登记 D3-native owner descriptor、Frontier/2、SourceObservation、companion/receipt 消费；仍未激活 |
+| D4 | production SourceVersion/observerDomain 分离、weak B→N证明范围仍待 C 批消费 |
 | D5 | native ordinary-save保护消费；bulk/collection继续 strict |
 | D7 | CommitDomain/Frontier/SourceVersion 的完整 cut、新版 Prepared、effects pin 保留、partial-index 门禁 |
 | D8 | Source/Live/Read、Live三种标记策略、Draft/IME/Undo/selection、多会话与 collaboration checkpoint |
@@ -128,7 +132,7 @@ hard limits继续：
 
 ## 9. 大库、冲突与历史结果
 
-T_first_open、T_first_edit、T_first_reliable_save、T_full_search_ready、T_OCR_ready继续分开，不承诺未经实测秒数；D1更新前 observed_only 的 durable_observed_only 不计入旧 strict T_first_reliable_save。
+T_first_open、T_first_edit、T_first_reliable_save、T_full_search_ready、T_OCR_ready继续分开，不承诺未经实测秒数；G0-B 已登记 ReliableSaveState/InputRetention 与 strict 可靠保存、durable_observed_only 耐久保留的指标边界。durable_observed_only 仍不计入旧 strict T_first_reliable_save，不解除后续 consumer、联合审查和激活 gate。
 
 D4/D5 local operations不因无关 I coverage永久只读；strong complete consumer可扫描source，无法完成则 unavailable。
 
