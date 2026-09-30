@@ -1,7 +1,12 @@
 ---
-_weftext:
-  id: "3762120f-fb70-4cf7-9699-68602e9bf9fc"
+source_language: zh-CN
+translation_of: source.zh-CN.md
+translation_status: synced
 ---
+
+[简体中文](source.zh-CN.md)
+
+Source document ID: `3762120f-fb70-4cf7-9699-68602e9bf9fc`.
 
 Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. Historical revision05/D7/D9 acceptance prose in fixed S is provenance only. The stable document ID is preserved. This file defines future implementation/acceptance obligations only; it authorizes no code, dependency, release, deployment, or A2 work.
 
@@ -118,7 +123,7 @@ A single “startup time” is insufficient. T_first_edit is not author save; T_
 
 Also record peak RSS, index DB size, P DB size, protected-pin bytes, bytes read, file count, parse throughput, P-seal latency, portable-publication latency, resume work after restart, and single-file/bulk incremental cost.
 
-No actual data means no claim of “Obsidian-like speed”, “seconds to rebuild”, or any named performance pass.
+No actual data means no claim of named-competitor speed claims, “seconds to rebuild”, or any named performance pass.
 
 ## 4. no-body-replica acceptance
 
@@ -241,3 +246,4 @@ Documentation CI success is not product conformance or independent review.
 The complete coordinated candidate requires a new independent review from scratch over the new proposal, every replacement owner, all 18 D10 files, and the fixed S49 inputs. The author’s current 16/49 full-read plus partial-read provenance does not inherit an older independent 49/49 pass.
 
 The old B13 result remains REVISE, terminology/bilingual FAIL, P0=0/P1=3/P2=8, eleven OPEN findings. This batch only provides foundational related surfaces and closes/reclassifies none.
+

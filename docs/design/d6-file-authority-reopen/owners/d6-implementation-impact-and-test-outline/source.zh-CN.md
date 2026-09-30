@@ -1,7 +1,11 @@
 ---
-_weftext:
-  id: "3762120f-fb70-4cf7-9699-68602e9bf9fc"
+source_language: zh-CN
+translation_status: source
 ---
+
+[English](source.md)
+
+源文档 ID：`3762120f-fb70-4cf7-9699-68602e9bf9fc`。
 
 候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中 revision05/D7/D9 历史验收文字仅作来源记录。稳定文档 ID 保持。本文件只定义未来实施/验收义务，不授权代码、依赖、发布、部署或 A2。
 
@@ -14,10 +18,10 @@ D6-FA-r01 的实现必须按逻辑 owner 分开，禁止为了方便重新合并
 | 切片 | 实施职责 | 明确禁止 |
 |---|---|---|
 | F1 portable file backend | .adoc/Resource current bytes、FileBinding、safe install primitive、外部变化观察 | 用P/I中的body覆盖用户文件；hash+rename冒充CAS |
-| F2 portable metadata | identity、child order、lifecycle/Trash、Annotation、shared policy/trust、Change/Frontier/conflict记录 | 两份可独立写parent/order；把path/title当Ref |
-| P durable control | SQLite decision/recovery/unknown/approval/claim/Money、PreparedIntent、pins、execution responsibility | 保存全库current body作为读回退；被同步器merge |
-| I derived index | inventory/parser/search/OCR可删SQLite，分层coverage/checkpoint | identity/policy/receipt owner；partial index冒充全集 |
-| D Draft/session | Draft/input/selection/IME、本地或Server协作transient state | 作为author revision或commit evidence |
+| F2 可移植元数据 | 身份、子节点顺序、生命周期/Trash、Annotation、共享策略/信任、变更/前沿/冲突记录 | 两份可独立写 parent/order；把 path/title 当 Ref |
+| P 耐久控制 | SQLite 决议/恢复/未知/批准/claim/Money、PreparedIntent、pins、执行责任 | 保存全库当前正文作为读取回退；被同步器合并 |
+| I 派生索引 | 清单/解析/搜索/OCR 可删 SQLite，分层覆盖/检查点 | 身份/策略/回执 owner；部分索引冒充全集 |
+| D Draft/会话 | Draft/输入/选择/IME、本地或 Server 协作临时状态 | 作为作者 revision 或 commit evidence |
 | C coordinated consumers | D3/D4/D5/D7/D8/D9/D10新版本消费 | 半包激活、generic D6绕过原owner |
 
 Implementation 必须有静态 owner audit：每个 current truth字段恰有一个逻辑写owner。任何兼容双写、启动时silent migration、旧authority.sqlite body mirror、portable metadata↔P双向同步current state均不合格。
@@ -76,7 +80,7 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 
 ### S6 Sync/conflict
 
-- 两replica离线source/source、create/create、move/edit、move/move、Trash/edit、policy conflict、partial transport、placeholder、identity collision；
+- 两副本离线正文/正文、创建/创建、移动/编辑、移动/移动、Trash/编辑、策略冲突、部分传输、placeholder、身份碰撞；
 - conflictId稳定、new head supersedes prepared resolution；
 - source merge保留原bytes；D3-owned placement/lifecycle resolution在D3 wire12未完成时返回owner_update_required；
 - purge必须等待complete inbound + registered replica frontier或retirement。
@@ -118,7 +122,7 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 
 还必须记录峰值RSS、index DB大小、P DB大小、protected pins、读取字节、文件数、解析吞吐、P seal延迟、portable publication延迟、重启续建工作量、单文件和批量增量代价。
 
-没有实际数据不得声称“像Obsidian一样快”“几秒重建”或任何具名性能通过。
+没有实际数据不得声称“达到具名同类应用的速度”“几秒重建”或任何具名性能通过。
 
 ## 4. no-body-replica 验收
 
@@ -149,7 +153,7 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 | ID | 场景 | 必须结果 |
 |---|---|---|
 | FA01 | I全删，10万无关文档未解析，编辑一个D2-valid普通笔记 | 可达T_first_reliable_save，不等待无关index/OCR；全集Action仍不可用直到proof |
-| FA02 | existing target只有“hash then replace”，没有conditional/exclusive primitive | commit不得报reliable；保留current+Draft/after，install_unavailable |
+| FA02 | 既有目标只有“先散列后替换”，没有条件/排他安装原语 | commit 不得报 reliable；保留 current+Draft/after，返回 install_unavailable |
 | FA03 | conditional replace前第三方写B，planned before=A | 不覆盖B；conflict/paused，A/B/after证据保留 |
 | FA04 | 外部A→B→A且watcher gap | observationEpoch增加；旧map/locator/prepared/action evidence失效 |
 | FA05 | install after成功，step10仍错误比较before | 测试必须抓出该实现；规范实现按planned after通过written target，只重验unwritten deps |
@@ -172,7 +176,7 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 | FA22 | Server Alice/Bob编辑不同Document | 两Draft与prepare并行；commit各一次；SQLite writer短串行不变成UI互斥 |
 | FA23 | Server Alice/Bob同Document旧base | first seal成功；second保留Draft并stale/conflict，不覆写 |
 | FA24 | Bob revocation与checkpoint seal并发 | 唯一线性化；revocation先赢则Bob未提交贡献不能借Alice身份提交 |
-| FA25 | Server failover只fence control DB未fencefile writes | conformance fail；旧实例必须不能继续author file rename/write |
+| FA25 | Server 故障切换只隔离 control DB、未隔离文件写入 | 验收失败；旧实例必须不能继续作者文件 rename/write |
 | FA26 |协作receive ack但无checkpoint | UI/API不能显示reliable save/committed |
 | FA27 | IME preedit多事件+最终input | preedit不入author op；最终至多一个Draft transaction/checkpoint input |
 | FA28 | protected conflict pin超容量 | 新操作受限；不能删last-reference conflict evidence继续 |
@@ -212,7 +216,7 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 
 在下列后像完成并共同接受前，对应新路径保持 unavailable：
 
-- D3 wire12：CommitDomain ledger、replica-local create/move/Trash、purge frontier、legacy replay；
+- D3 wire12：CommitDomain 账本、副本局部创建/移动/Trash、purge 前沿、历史重放；
 - D4：semantic_pending local-vs-complete typed obligation矩阵；
 - D5：native结构/集合/bulk的local-vs-complete门；
 - D7：domain/frontier cut、PreparedActionBinding/3、EffectManifest新retention、Action evidence；
@@ -241,3 +245,4 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 完整联合候选必须由新的独立评审从零读取：新proposal、全部replacement owners、D10十八份、固定S49输入。作者当前16/49全文+局部范围只属于作者阅读 provenance，不能继承旧独立49/49作为本候选通过。
 
 旧B13保持REVISE、术语/双语FAIL、P0=0/P1=3/P2=8十一OPEN。本批只提供其基础关联面，不关闭或重分类。
+

@@ -1,7 +1,12 @@
 ---
-_weftext:
-  id: "680b2061-ccec-4bef-b9a8-9d7080f837fb"
+source_language: zh-CN
+translation_of: source.zh-CN.md
+translation_status: synced
 ---
+
+[简体中文](source.zh-CN.md)
+
+Source document ID: `680b2061-ccec-4bef-b9a8-9d7080f837fb`.
 
 Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. Legacy revision05/D7 coordinated terminology status in fixed S is historical provenance only. The stable document ID, every existing conceptId, ownedNames and firstFreeze are preserved. New concepts carry their own D6-FA-r01 candidate firstFreeze.
 
@@ -140,3 +145,4 @@ In Policy/3, commit_sequence_state observes one named CommitDomain’s domainCom
 Legacy SourceVersion, Policy/1/2, D6 wire1, PreparedIntent, D7 binding/effects and historical receipts retain their original decoder and firstFreeze. firstFreeze in the machine registry is historical provenance and is never rewritten merely because FA-r01 reopens the owner.
 
 New public names may enter product/API only after every required replacement owner and consumer is jointly accepted. Presence in this candidate directory does not make a capability available and does not authorize injecting candidate names into a D10 manifest/contribution or product log as a released schema.
+

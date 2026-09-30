@@ -1,7 +1,11 @@
 ---
-_weftext:
-  id: "592603c4-c7ef-4572-aee6-256aa3aa7955"
+source_language: zh-CN
+translation_status: source
 ---
+
+[English](source.md)
+
+源文档 ID：`592603c4-c7ef-4572-aee6-256aa3aa7955`。
 
 候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中 D7/D9 的生效标签与 revision05 文本只作为历史来源，不支配本后像。稳定文档 ID 保持。D3 wire11、D6 wire1、Policy/1/2、D7/D8 旧 binding 的 saved bytes 继续按原 decoder/gate 履约；本文件不允许半包激活新版 managed success。
 
@@ -189,13 +193,16 @@ InputDescriptor/2 exact：
 }
 ~~~
 
-sourceInputs 按 EntityRef canonical key、role rank before=0/dependency=1 排序，pair唯一；controlInputs 的 kind闭集为 policy|registry|placement_range|lifecycle_range|relation_range|calendar_scope|replica_registry|conflict_record|execution_resource，并按 kind rank+owner key排序。key 使用各 owner 已有 closed value；无 free JSON path。完整相等要求 InputDescriptor canonical bytes、owner descriptor bytes 和每个 referenced exact pin都相等；sha256 相等本身不等于输入相同。
+sourceInputs 按 EntityRef canonical key、role rank before=0/dependency=1 排序，pair唯一；
+  controlInputs 的 kind 闭集前四项为 policy|registry|placement_range|lifecycle_range；
+  其余为 relation_range|calendar_scope|replica_registry|conflict_record|execution_resource，并按 kind rank+owner key排序。key 使用各 owner 已有 closed value；无 free JSON path。完整相等要求 InputDescriptor canonical bytes、owner descriptor bytes 和每个 referenced exact pin都相等；sha256 相等本身不等于输入相同。
 
 ### 3.4 PreparedIntent/2
 
 PreparedIntent/2 受管 immutable record exact semantic members：
 
-kind,version,planToken,operationId,workspaceRef,commitDomain,principalAudienceToken,inputDescriptor,beforeCut,proposedState,mutationFootprint,dependencyProof,observationProof,budgetBinding,pinDirectory,installationPlan,expiresAt,previewBinding。
+kind,version,planToken,operationId,workspaceRef,commitDomain,principalAudienceToken,inputDescriptor,beforeCut,proposedState,
+  mutationFootprint,dependencyProof,observationProof,budgetBinding,pinDirectory,installationPlan,expiresAt,previewBinding。
 
 kind=d6_prepared_intent，version=2。planToken tag=d6_plan/2。pinDirectory 是全部 PinRef/2 加其受保护 exact bytes/source bindings。installationPlan 固定 component write set、planned ChangeId/SourceVersion/metadata versions、BackendQualification要求和 portable records；prepare 后不得重采样为另一个 after。previewBinding 只引用所属 owner 的完整 preview，不由 D6 发明第二效果格式。
 
@@ -245,7 +252,8 @@ d6_commit_request/2 exact：
 {"wireVersion":2,"kind":"d6_commit_request","operationId":"uuid-v4","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"expectedDomainFenceToken":<Token>,"planToken":<Token>}
 ~~~
 
-commit request不携带 source、patch、budget、preview或费用 override。expectedDomainFenceToken tag=d6_domain_fence/2，绑定当前 CommitDomain qualification：replica 时绑定 active ReplicaEpoch、portable registry/policy/backend epoch；server 时还绑定当前 D3 authority/custody/fence generation。它不是permission。
+commit request不携带 source、patch、budget、preview或费用 override。expectedDomainFenceToken tag=d6_domain_fence/2，
+  绑定当前 CommitDomain qualification：replica 时绑定 active ReplicaEpoch、portable registry/policy/backend epoch；server 时还绑定当前 D3 authority/custody/fence generation。它不是permission。
 
 v2 ledger key恰为 (workspaceId, D3-CJ/3(commitDomain), operationId)；record另保存 protocolOwner=D6。相同 key 不同 canonical request固定 operation_id_conflict。D3 future wire12与D6共享同 v2 key时 protocol owner同样互斥；在 D3 afterimage完成前不声明已实现。
 
@@ -255,15 +263,20 @@ v2 commit唯一顺序：
 
 1. closed decode/static Workspace/domain equality；失败 invalid_request/preflight，零业务 state read。
 2. 当前 authenticated principal 对所请求目标的 state disclosure、潜在 observation profile 与实际 commitDomain 使用资格；只可读最小 token/audience/domain定位映射。失败 not_visible/preflight。
-3. CommitDomain qualification：replica 检 active ReplicaEpoch、portable registry/policy、backend identity/observation continuity；server 另检 authority/custody/fence。不可证明 domain_unavailable，证实损坏 integrity_conflict。
+3. CommitDomain qualification：replica 检 active ReplicaEpoch、portable registry/policy、
+  backend identity/observation continuity；server 另检 authority/custody/fence。
+    不可证明 domain_unavailable，证实损坏 integrity_conflict。
 4. 读 v2 ledger key。different owner/request→operation_id_conflict。saved decision在当前 replay授权通过后返回原 bytes；planned恢复原 plan。replay不要求旧 preview TTL有效。
 5. unseen 时 expectedDomainFenceToken必须 current；验证 planToken tag/audience/Workspace/domain/期限，读取完整 PreparedIntent/2。missing/wrong audience/tag统一not_visible；已知本人过期 plan_expired。
 6. 重验 expectedFrontier、before source/control versions、actual MutationFootprint write permission、D2/local或complete语义proof、预算与全部未写 dependency；确定业务冲突可 recorded rejection，不确定 availability不写永久 rejection。
-7. planning CAS 同时比较 ledger unseen、domain fence、expected Frontier、必要依赖/授权，保存 fixed plan、pins、planned ChangeId/poststate 与 installation recovery；CAS loser回第3步。
+7. planning CAS 同时比较 ledger unseen、domain fence、expected Frontier、必要依赖/授权，
+  保存 fixed plan、pins、planned ChangeId/poststate 与 installation recovery；CAS loser回第3步。
 8. 在任何 current 文件修改前写 durable InstallationNotice/1；失败保持 planned。
 9. 按 installationPlan 逐 component 使用 BackendQualification。发现 expected binding不符→conflict/paused；backend不能证明安全 install→install_unavailable/paused；不得覆盖 unknown bytes。
-10. installed verification：written targets比较**planned poststate**；不再拿原 before 当 current。unwritten positive/negative dependencies、policy/auth、Registry/rules、frontier control 重新验证；自产生版本与 plan内 planned version比较。
-11. seal：全部成立后，P 单一 durable transaction写 committed、receipt、ReliableSaveState、decision effects metadata、适用 ApprovalUse/Money charge、outbox。此处是 author decision commit point。
+10. installed verification：written targets比较**planned poststate**；不再拿原 before 当 current。
+  unwritten positive/negative dependencies、policy/auth、Registry/rules、frontier control 重新验证；自产生版本与 plan内 planned version比较。
+11. seal：全部成立后，P 单一 durable transaction写 committed、receipt、ReliableSaveState、
+  decision effects metadata、适用 ApprovalUse/Money charge、outbox。此处是 author decision commit point。
 12. portable publication：写/flush ContentCompletionProof/1，推进 portable Frontier。失败不回滚第11步；current state为 reliable+publication_pending。
 13. response delivery：重新 current授权；撤权可以遮蔽 receipt delivery，但不改变 committed decision。
 
@@ -292,10 +305,7 @@ SeriesScopeConfiguration 等复杂控制仍由其 owner change/effects证明；�
 
 ComponentImage/1：
 
-absent：
-~~~json
-{"state":"absent"}
-~~~
+absent：{"state":"absent"}
 
 present：
 ~~~json
@@ -403,7 +413,7 @@ D3 v12 request尚未定义，因此当前候选可实际 decode的新版仅 prot
 
 decisionSourceVersions 属于原 decision，不是 current workspace source。r5已 committed、current为r6时，本响应仍只显示r5 decision版本；要读r6使用 current source接口。
 
-授权顺序：closed decode→当前 original-request replay disclosure/target scope→CommitDomain continuity→ledger key/fingerprint→state。权限撤销 not_visible，不修改 decision。continuity不可证明 domain_unavailable。original request mismatch统一 state_unavailable，不泄露其它 key。
+授权顺序：closed decode→当前原请求重放披露/目标范围→CommitDomain 连续性→账本键/指纹→状态。权限撤销 not_visible，不修改 decision。continuity不可证明 domain_unavailable。original request mismatch统一 state_unavailable，不泄露其它 key。
 
 ### 7.3 d6_current_source_read
 
@@ -460,7 +470,8 @@ ConflictSubject closed：
 - {"kind":"entity","ref":EntityRef}
 
 conflict kind闭集：
-source_concurrent | placement_concurrent | lifecycle_concurrent | identity_collision | policy_concurrent | incomplete_transport | placeholder。
+冲突 kind 闭集前四项为 source_concurrent | placement_concurrent | lifecycle_concurrent | identity_collision；
+其余为 policy_concurrent | incomplete_transport | placeholder。
 
 ### 9.2 ConflictKey/1 与 ConflictId
 
@@ -503,7 +514,8 @@ ConflictResolution/1 closed：
 - source_merge：{"kind":"source_merge","ownerNodeRef":NodeRef,"source":text}
 - choose_source_head：{"kind":"choose_source_head","ownerNodeRef":NodeRef,"head":ChangeId}
 - policy_choice：{"kind":"policy_choice","policy":<Policy/3>}
-- owner_resolution：{"kind":"owner_resolution","owner":"D3","action":"placement|lifecycle|identity_fresh_copy"}
+- owner_resolution：{"kind":"owner_resolution","owner":"D3",
+  "action":"placement|lifecycle|identity_fresh_copy"}
 
 owner_resolution 没有 free payload，只表示必须转交真实 D3 owner；在 D3 wire12后像未完成前 prepare 返回 owner_update_required，不产生planToken。未来 D3 adapter必须把具体 typed D3 request/preview另行冻结，D6不能在此字段塞任意 JSON。
 
@@ -580,11 +592,15 @@ d6_error/2 exact：
 ~~~
 
 code闭集：
-invalid_request | unsupported_version | not_visible | domain_unavailable | integrity_conflict | operation_id_conflict | plan_expired | dependency_conflict | semantic_rejected | budget_exceeded | install_unavailable | conflict | conflict_changed | state_unavailable | owner_update_required | effects_unavailable | transaction_aborted。
+错误 code 闭集第一组：invalid_request | unsupported_version | not_visible | domain_unavailable；
+第二组：integrity_conflict | operation_id_conflict | plan_expired | dependency_conflict；
+第三组：semantic_rejected | budget_exceeded | install_unavailable | conflict；
+第四组：conflict_changed | state_unavailable | owner_update_required | effects_unavailable | transaction_aborted。
 
 规则：
 
-- invalid_request/unsupported_version/not_visible/domain_unavailable/integrity_conflict/operation_id_conflict/plan_expired/install_unavailable（在planning前已知）仅 preflight；
+- planning 前已知的 invalid_request/unsupported_version/not_visible/domain_unavailable 仅 preflight；
+  integrity_conflict/operation_id_conflict/plan_expired/install_unavailable 也仅 preflight；
 - dependency_conflict/semantic_rejected/budget_exceeded 在第6步且确定为该 canonical intent业务失败时可 recorded；
 - install中竞争、撤权、容量或恢复不确定使用 paused，不写 rejected/terminal；
 - conflict_changed 是 prepare preflight；
@@ -607,7 +623,7 @@ invalid_request | unsupported_version | not_visible | domain_unavailable | integ
 7. mutation/install/decision；
 8. 输出前 current authorization。
 
-不得为判断“这次恰好没有秘密”先读取隐藏作者事实。ref/path/digest由调用者知道不授 existence。conflictId、ChangeId、SourceVersion、planToken 都不是 capability。
+不得为判断“这次恰好没有秘密”先读取隐藏作者事实。ref/path/digest由调用方知道不授 existence。conflictId、ChangeId、SourceVersion、planToken 都不是 capability。
 
 Policy/ACL change后 old session/prepared不是 grandfather ticket。撤权对未seal plan阻止 seal；对已committed decision只遮蔽后续receipt/effects交付，不篡改历史。
 
@@ -615,9 +631,12 @@ Policy/ACL change后 old session/prepared不是 grandfather ticket。撤权对�
 
 D6 v2 ExecutionResponsibilityRecord 是 P 内受保护 control，不进入 portable metadata。exact semantic fields：
 
-kind,version,workspaceRef,executionDomainId,holder,revision,status,approvalUses,claims,moneyLineage,externalUnknowns,stopState,lastContinuityProof。
+kind,version,workspaceRef,executionDomainId,holder,revision,status,
+  approvalUses,claims,moneyLineage,externalUnknowns,stopState,lastContinuityProof。
 
-kind=d6_execution_responsibility，version=2。executionDomainId是Core mint UUIDv4，独立于 CommitDomain/ReplicaEpoch。holder closed为 local_replica{replicaEpoch} 或 server{authorityInstanceId,deploymentId}；deploymentId为host受保护 UUID，不是作者identity。revision checked+1。
+kind=d6_execution_responsibility，version=2。executionDomainId是Core mint UUIDv4，独立于 CommitDomain/ReplicaEpoch。
+  holder closed为 local_replica{replicaEpoch} 或 server{authorityInstanceId,
+    deploymentId}；deploymentId为host受保护 UUID，不是作者identity。revision checked+1。
 
 approvalUses/claims/moneyLineage/externalUnknowns的完整子schema继续由D10/Money owner后像冻结；本文件只规定它们必须同 execution domain连续持久、takeover不得省略。未知子schema时对应能力 unavailable，不能存自由 JSON。
 
@@ -645,3 +664,4 @@ D6 wire1 commit/receipt/error、Policy/1/2、SourceVersion/1、旧 Token tag、�
 - 因相同 source hash把旧 SourceVersion/1当成新版某 domain version。
 
 新 v2 consumer尚未全部生成：D3/D4/D5/D7/D8/D9/D10缺失的owner afterimage必须先完成并联合接受。当前候选不得在产品或测试 fixture中产生“v2 managed commit成功”作为已激活语义。作者文档检查只验证文档本身，不是该联合门的替代。
+

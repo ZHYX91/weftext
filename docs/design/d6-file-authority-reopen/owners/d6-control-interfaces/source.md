@@ -1,7 +1,12 @@
 ---
-_weftext:
-  id: "592603c4-c7ef-4572-aee6-256aa3aa7955"
+source_language: zh-CN
+translation_of: source.zh-CN.md
+translation_status: synced
 ---
+
+[简体中文](source.zh-CN.md)
+
+Source document ID: `592603c4-c7ef-4572-aee6-256aa3aa7955`.
 
 Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. D7/D9 activation labels and revision05 prose in fixed S are historical provenance only and do not govern this afterimage. The stable document ID is preserved. D3 wire11, D6 wire1, Policy/1/2, and saved D7/D8 legacy bindings continue under their original decoders/gates. Partial activation of managed v2 success is forbidden.
 
@@ -609,3 +614,4 @@ D6 wire1 commit/receipt/error, Policy/1/2, SourceVersion/1, legacy Token tags, P
 Forbidden: re-encoding an old request as wire2; adding CommitDomain/ChangeId to an old receipt; interpreting an old D4 gate as semantic_pending; using new retention to delete evidence promised by the old contract; treating equal source hash as proof that SourceVersion/1 equals a new-domain source.
 
 New v2 consumers are incomplete. Required D3/D4/D5/D7/D8/D9/D10 owner afterimages must be authored and accepted together. This candidate may not produce “v2 managed commit success” in product or conformance fixtures as activated semantics. Author documentation checks are not a substitute for the coordinated gate.
+

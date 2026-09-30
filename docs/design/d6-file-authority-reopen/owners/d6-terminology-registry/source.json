@@ -939,7 +939,10 @@
       "layer": "storage/control",
       "definition": "一次D3/D6幂等decision、版本与恢复的命名空间；replica由WorkspaceRef+ReplicaEpoch，server由WorkspaceRef+AuthorityInstanceId闭合",
       "exclusions": "不是Workspace identity、global execution responsibility或跨设备余额",
-      "ownedNames": "CommitDomain,commitDomain",
+      "ownedNames": [
+        "CommitDomain",
+        "commitDomain"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -963,7 +966,10 @@
       "layer": "storage/control",
       "definition": "Core显式登记一个文件副本普通写入资格时mint且同Workspace不复用的UUIDv4",
       "exclusions": "不是AuthorityInstanceId、设备硬件ID或Automation lease",
-      "ownedNames": "ReplicaEpoch,replicaEpoch",
+      "ownedNames": [
+        "ReplicaEpoch",
+        "replicaEpoch"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -987,7 +993,10 @@
       "layer": "storage/control",
       "definition": "CommitDomain+从1连续的content change sequence，标识portable内容版本因果点",
       "exclusions": "不是EntityRef、OperationId、sourceOccurrenceKey或全局时间",
-      "ownedNames": "ChangeId,changeId",
+      "ownedNames": [
+        "ChangeId",
+        "changeId"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1011,7 +1020,10 @@
       "layer": "storage/control",
       "definition": "每CommitDomain至多一个最大已接纳ChangeId的规范向量，表达已知连续内容前缀",
       "exclusions": "不是全局提交序、Query row set或同步provider状态",
-      "ownedNames": "Frontier,frontier",
+      "ownedNames": [
+        "Frontier",
+        "frontier"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1035,7 +1047,10 @@
       "layer": "storage/control",
       "definition": "库内唯一承载identity/structure/lifecycle/shared policy/trust/portable change与conflict记录的版本化文件集合",
       "exclusions": "不保存全库current正文副本；不是durable execution ledger或index",
-      "ownedNames": "PortableWorkspaceMetadata,portableMetadata",
+      "ownedNames": [
+        "PortableWorkspaceMetadata",
+        "portableMetadata"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1059,7 +1074,10 @@
       "layer": "storage/control",
       "definition": "库外独立SQLite及私有pins，保存不可从笔记重建的decision/recovery/unknown/approval/claim/Money执行责任",
       "exclusions": "不是Document/Resource current bytes、portable parent/order或可删index",
-      "ownedNames": "DurableControlStore,durableControlStore",
+      "ownedNames": [
+        "DurableControlStore",
+        "durableControlStore"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1083,7 +1101,10 @@
       "layer": "storage/control",
       "definition": "库外设备本地可删SQLite，按版本/覆盖记录metadata、parser/search/OCR等可重建事实",
       "exclusions": "不是author source、identity/policy owner或全集证明本身",
-      "ownedNames": "DerivedIndexStore,derivedIndexStore",
+      "ownedNames": [
+        "DerivedIndexStore",
+        "derivedIndexStore"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1107,7 +1128,10 @@
       "layer": "storage/control",
       "definition": "提交结果的闭集replica_local或managed_atomic；前者仅证明本CommitDomain可靠安装，后者还证明受管范围发布屏障",
       "exclusions": "不声称任意外部工具跨文件瞬时原子或离线副本无并发",
-      "ownedNames": "ContentGuarantee,contentGuarantee",
+      "ownedNames": [
+        "ContentGuarantee",
+        "contentGuarantee"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1131,7 +1155,10 @@
       "layer": "storage/control",
       "definition": "D2-valid受管source的complete_semantics或semantic_pending及其明确未证明obligations",
       "exclusions": "external_invalid不属于成功SemanticState；pending不等于D4/D5全集通过",
-      "ownedNames": "SemanticState,semanticState",
+      "ownedNames": [
+        "SemanticState",
+        "semanticState"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1155,7 +1182,10 @@
       "layer": "storage/control",
       "definition": "触碰portable current前耐久写入的不可变ChangeId/write-set/before-after摘要记录，用于部分同步和P丢失时圈定风险",
       "exclusions": "不是commit proof、receipt、approval或execution authority",
-      "ownedNames": "InstallationNotice,installationNotice",
+      "ownedNames": [
+        "InstallationNotice",
+        "installationNotice"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1179,7 +1209,10 @@
       "layer": "storage/control",
       "definition": "P seal后发布到portable metadata的不可变证明，绑定ChangeId、semantic state、frontier推进及actual after components",
       "exclusions": "不授receipt读取、Money/approval消费或execution takeover",
-      "ownedNames": "ContentCompletionProof,contentCompletionProof",
+      "ownedNames": [
+        "ContentCompletionProof",
+        "contentCompletionProof"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1203,7 +1236,12 @@
       "layer": "storage/control",
       "definition": "由规范ConflictKey/ConflictId定位的portable并发版本记录，状态open→resolution_prepared→resolved或superseded",
       "exclusions": "不是自动merge、LWW或D3 bypass transaction",
-      "ownedNames": "ConflictRecord,conflictRecord,ConflictKey,conflictId",
+      "ownedNames": [
+        "ConflictRecord",
+        "conflictRecord",
+        "ConflictKey",
+        "conflictId"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1227,7 +1265,10 @@
       "layer": "storage/control",
       "definition": "区分not_saved与P seal后的reliable；portable publication由独立状态读取",
       "exclusions": "不等于Draft已保存、sync上传或ContentCompletionProof已发布",
-      "ownedNames": "ReliableSaveState,reliableSaveState",
+      "ownedNames": [
+        "ReliableSaveState",
+        "reliableSaveState"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1251,7 +1292,11 @@
       "layer": "storage/control",
       "definition": "连续持有Automation/ApprovalUse/claim/Money/external-unknown/stop事实的受保护执行域，独立于普通CommitDomain",
       "exclusions": "不是ReplicaEpoch、Workspace content identity或文件同步资格",
-      "ownedNames": "ExecutionResponsibility,ExecutionResponsibilityRecord,executionDomainId",
+      "ownedNames": [
+        "ExecutionResponsibility",
+        "ExecutionResponsibilityRecord",
+        "executionDomainId"
+      ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
       "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
@@ -1326,23 +1371,58 @@
     {
       "owner": "D6 FA-r01 / D3 future wire12",
       "names": [
-        "CommitDomain",
-        "ReplicaEpoch",
-        "ChangeId",
-        "Frontier"
+        "CommitDomain"
       ],
       "conceptId": "weftext.term.commit-domain",
-      "contract": "D6 Control/2 defines shapes; D3 identity/lifecycle cannot consume them for new decisions until its coordinated wire12 afterimage activates."
+      "contract": "D6 Control/2 defines the closed CommitDomain shape; D3 may not create new scoped identity decisions until its coordinated wire12 afterimage activates."
+    },
+    {
+      "owner": "D6 FA-r01 / D3 future wire12",
+      "names": [
+        "ReplicaEpoch"
+      ],
+      "conceptId": "weftext.term.replica-epoch",
+      "contract": "D6 Control/2 defines ReplicaEpoch and replica registration; registration is not execution-responsibility takeover or Workspace continue."
+    },
+    {
+      "owner": "D6 FA-r01 / D3 future wire12",
+      "names": [
+        "ChangeId"
+      ],
+      "conceptId": "weftext.term.change-id",
+      "contract": "D6 Control/2 owns replica-local portable change identity; D3 wire12 must bind it only through the coordinated commit domain."
+    },
+    {
+      "owner": "D6 FA-r01 / D3 future wire12",
+      "names": [
+        "Frontier"
+      ],
+      "conceptId": "weftext.term.frontier",
+      "contract": "D6 Control/2 owns the portable causal frontier; partial transport never proves a complete D3/D7 cut."
     },
     {
       "owner": "D6 FA-r01 / D8 future editor",
       "names": [
-        "SourceVersion/2",
-        "SemanticState",
-        "ReliableSaveState"
+        "SourceVersion/2"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "D6 Control/2 owns version/save semantics; D8 must preserve Draft/IME/selection and may not infer commit from Draft persistence."
+      "contract": "D6 Control/2 owns the version meaning; D8 must bind Draft/maps to the full scoped version and preserve legacy SourceVersion/1 decoding."
+    },
+    {
+      "owner": "D6 FA-r01 / D8 future editor",
+      "names": [
+        "SemanticState"
+      ],
+      "conceptId": "weftext.term.semantic-state",
+      "contract": "D6 owns complete_semantics versus semantic_pending; D8 presentation must not promote pending to complete Action/Query evidence."
+    },
+    {
+      "owner": "D6 FA-r01 / D8 future editor",
+      "names": [
+        "ReliableSaveState"
+      ],
+      "conceptId": "weftext.term.reliable-save-state",
+      "contract": "D6 owns reliable-save state; Draft persistence and portable publication remain separately observable."
     },
     {
       "owner": "D6 FA-r01 / D10 future execution",
@@ -1351,7 +1431,7 @@
         "executionDomainId"
       ],
       "conceptId": "weftext.term.execution-responsibility",
-      "contract": "D6 owns durable continuity container; D10/Money owns approval/claim/external/Money sub-schemas and sourceOccurrenceKey semantics."
+      "contract": "D6 owns the durable continuity container; D10/Money owns approval/claim/external/Money sub-schemas and sourceOccurrenceKey semantics."
     }
   ],
   "candidateStatus": "D6-FA-r01 partial coordinated candidate; not accepted or activated"

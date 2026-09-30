@@ -1,7 +1,11 @@
 ---
-_weftext:
-  id: "680b2061-ccec-4bef-b9a8-9d7080f837fb"
+source_language: zh-CN
+translation_status: source
 ---
+
+[English](source.md)
+
+源文档 ID：`680b2061-ccec-4bef-b9a8-9d7080f837fb`。
 
 候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中旧 revision05/D7 联合术语状态仅作历史来源。稳定文档 ID、既有 conceptId、ownedNames、firstFreeze 全部保持；新概念 firstFreeze 单独标为 D6-FA-r01 candidate。
 
@@ -84,13 +88,15 @@ ReplicaEpoch 只标识 ordinary replica writer 世代；ExecutionResponsibility 
 
 SourceVersion/1 的 ownedNames 保留给历史 decoder。新 managed producer使用 SourceVersion/2，必须绑定完整 Ref、CommitDomain、observationEpoch、revision、ChangeId；external observation使用其 closed external variant。任何 consumer 若只比较 revision 数字，都不是 D6-FA-r01 合格实现。
 
-source A→B→A、watcher gap、placeholder materialization 都可使 observation epoch/variant变化；digest相同不能恢复旧 locator、prepared、ActionEvidence 或 sourceOccurrenceKey continuity。
+source A→B→A、watcher gap、placeholder materialization 都可使 observation epoch/variant变化；
+  digest相同不能恢复旧 locator、prepared、ActionEvidence 或 sourceOccurrenceKey continuity。
 
 ### 2.4 Reliable Save 与 Portable Publication
 
 ReliableSaveState 只回答本 domain 的 planned write set是否经过合格 file install并完成 P durable seal。ContentCompletionProof/portable publication 另回答该 sealed change是否已经形成可由其它 replica接纳的完整 portable version。
 
-Draft persistence、HTTP success、worker success、sync upload、InstallationNotice 都不能称 reliable save。reliable 也不能自动称 portable published。
+Draft persistence、HTTP success、worker success、sync upload、
+  InstallationNotice 都不能称 reliable save。reliable 也不能自动称 portable published。
 
 ### 2.5 Semantic State
 
@@ -102,7 +108,8 @@ semantic_pending 不得被 D7 complete Query/Action、purge、relation/unique/Ca
 
 ## 3. 技术成员归属
 
-- CommitDomain、ReplicaEpoch、ChangeId、Frontier、SourceVersion/2、SemanticState、ContentGuarantee、InstallationNotice、ContentCompletionProof、ConflictRecord、ReliableSaveState、ExecutionResponsibilityRecord：D6。
+- CommitDomain、ReplicaEpoch、ChangeId、Frontier、SourceVersion/2、SemanticState、ContentGuarantee、
+  InstallationNotice、ContentCompletionProof、ConflictRecord、ReliableSaveState、ExecutionResponsibilityRecord：D6。
 - NodeRef/ResourceRef/AnnotationRef、OperationId、AuthorityInstanceId、D3 lifecycle receipt：D3；D6不得通过 generic commit重新定义。
 - FieldId、RegistryBinding、relation/Calendar typed semantics：D4。
 - QuerySpec、ActionSpec、PreparedActionBinding、EffectManifest/EffectBytes：D7；FA-r01新版本必须后续协调。
@@ -140,3 +147,4 @@ commit_sequence_state 在 Policy/3 中只观察指定 CommitDomain 的 domainCom
 旧 sourceVersion、Policy/1/2、D6 wire1、PreparedIntent、D7 binding/effects 和历史 receipt继续其原 decoder/firstFreeze。机器 registry 的 firstFreeze 是历史来源属性，不因 FA-r01重新冻结而改写。
 
 新 public names只有在全部 replacement owner与consumer共同接受后可进入产品/API。当前目录存在不代表 capability available，也不能把 candidate term 注入 D10 manifest/contribution或产品日志作为已发布 schema。
+
