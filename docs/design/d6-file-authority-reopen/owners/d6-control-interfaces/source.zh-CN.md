@@ -231,7 +231,7 @@ ownerNodeRef属于Workspace；expectedSourceToken tag=d6_source_observation/1且
 
 ordinary要求D2 valid和实际修改local typed facts；合法未证明complete obligations→semantic_pending。complete要求全部适用D4/D5/D7义务且不降级。
 
-observed_only 的闭合资格同时要求：受信调用类别为 interactive_source_save；目标是一个 existing live Document；保存类型为 ordinary+replica_local；调用者具有完整 source read/replace 权限且没有适用的 body/Field/node-control deny；author source write set 为空或仅包含该 Document；不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或其它 entity；Draft Base 必须等于 selected SourceObservation。
+observed_only 的闭合资格同时要求：受信调用类别为 interactive_source_save；目标是一个 existing live Document；保存类型为 ordinary+replica_local；请求主体具有完整 source read/replace 权限且没有适用的 body/Field/node-control deny；author source write set 为空或仅包含该 Document；不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或其它 entity；Draft Base 必须等于 selected SourceObservation。
 stale Base、已观察的 external change 或 continuity gap 都必须先进入 conflict/reprepare；noninteractive 只能使用 strict。
 
 owner descriptor：
