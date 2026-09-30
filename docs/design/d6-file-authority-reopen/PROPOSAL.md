@@ -23,7 +23,8 @@ This file is routing/version/difference documentation only. Normative operation 
 5. Copying portable files never copies global execution responsibility.
 6. Server remains multi-user for Draft/read/prepare/edit while one hosted backend has one durable commit holder.
 7. Real-time collaboration remains post-G2, with no OT/CRDT or per-keystroke author commit frozen here.
-8. Ordinary reliable save in a large workspace does not wait for unrelated complete index/OCR, while complete Query/Action still proves completeness.
+8. Ordinary file save in a large workspace does not wait for unrelated complete index/OCR, while complete Query/Action still proves completeness.
+9. The user approved WriteProtection=observed_only for a trusted human ordinary save of one existing live Document when complete authorization, local gates, durable input/actually-read-before retention, and the single P decision chain still hold. It relaxes only exclusion of an unobserved external race; observed conflict, revocation, idempotency, durability, and strong-Action qualification are unchanged.
 
 ## 2. Actual replacements now: 16
 
@@ -57,7 +58,9 @@ P/I never becomes a second author truth for Field, relation, collection, or pare
 - **complete semantic/action proof**: D4 relation/strong Facet mutation/unique Calendar, D5 collection membership/bulk/requireMembership, restore/purge/copy/fork/import, D7 all_result/automation retain complete positive/negative ranges.
 - **global execution responsibility**: Automation, ApprovalUse, claim, Money, external unknown, stop use a separate continuous-responsibility domain.
 
-This batch fixes:
+Existing D4/D5 afterimages remain. G0-A updates only the D6 producer. D1/D3/D4/D5 do not yet consume Frontier/2, SourceObservation/WriteProtection, or the minimal receipt/companion, so dependent new success remains gated.
+
+Existing D4/D5 afterimages fix:
 - D4 namespace `available|retained_unavailable|invalid|not_present`, Node typed `complete|partial|unavailable`, D6 `complete_semantics|semantic_pending`, and future D7 complete-cut as four different dimensions.
 - `semantic_pending` is allowed only after local typed facts pass while cross-object/complete obligations remain unproved; local type/cardinality/requiredness failure still rejects.
 - body or truly disjoint namespace edits may save when unavailable/invalid raw bytes remain byte-equal; typed edit touching those namespaces rejects.
@@ -67,7 +70,7 @@ This batch fixes:
 ## 5. Version and compatibility
 
 Produced:
-- D6 Control wire 1->2, PreparedIntent 1->2, Policy 2->3, SourceVersion 1->2.
+- D6 Control wire 1->2, PreparedIntent 1->2, Policy 2->3, SourceVersion 1->2; G0-A freezes Frontier/2, ObservationScope/2, DependencyProof/2, InstallationNotice/2, ContentCompletionProof/2, SourceObservation/1, and WriteProtection.
 - D3 identity operation/receipt/resolver 11->12 with CommitDomain-scoped ledger key.
 - D4 public Entry/Type/RelationReadContext/Binding/Recurrence/effect shapes remain; the new profile adds outer D6 InputDescriptor/2 binding for source-bearing evidence to SourceVersion/2, CommitDomain, Frontier.
 - D5 adds no durable identity wire; D5 v1 domains/limits remain while D6-FA freezes local-versus-complete consumption.
@@ -102,10 +105,14 @@ Hard limits remain:
 
 Narrower budgets may reduce but never expand limits; pagination prefix is not completeness.
 
-## 8. Owners still pending
+## 8. Consumers/owners still pending
 
 | Owner | required coordinated work |
 |---|---|
+| D1 | ordinary-save product state/metric and strict versus ordinary-file wording |
+| D3 | D3-native owner descriptor, Frontier/2, SourceObservation, companion/receipt consumption |
+| D4 | production SourceVersion versus observerDomain and weak B->N proof scope |
+| D5 | native ordinary-save protection consumption while bulk/collection stays strict |
 | D7 | CommitDomain/Frontier/SourceVersion complete cut, new Prepared, effects pin retention, partial-index gate |
 | D8 | Source/Live/Read, three Live marker modes, Draft/IME/Undo/selection, multi-session and collaboration checkpoint |
 | D9 | scoped pins, ImportJob, exact export inputs, publication, new request/effects consumer |
@@ -115,7 +122,7 @@ Before new D7 Prepared exists, D4/D5 strong Actions requiring complete D7 prepar
 
 ## 9. Large-workspace, conflicts, and historical result
 
-T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready stay separate, with no unmeasured seconds claim.
+T_first_open, T_first_edit, T_first_reliable_save, T_full_search_ready, and T_OCR_ready stay separate, with no unmeasured seconds claim; until D1 is updated, observed_only durable_observed_only does not populate the old strict T_first_reliable_save metric.
 
 D4/D5 local operations do not become globally read-only because unrelated I coverage is missing. A strong consumer may scan source for complete proof; otherwise it is unavailable.
 

@@ -47,11 +47,11 @@ Implementation 必须有静态 owner audit：每个 current truth字段恰有一
 - 实现ReplicaRecord、CommitDomain、ChangeId/Frontier、SourceVersion/2、InstallationNotice、ContentCompletionProof、ConflictRecord。
 - child order使用单一有序列表owner；move/reorder生成确定变化。
 - 新设备register新ReplicaEpoch；retired epoch不可复活。
-- 远端change接纳使用本域新ChangeId，不重放remote OperationId。
+- 远端记录接纳推进已验证 Frontier/2，不重放 remote OperationId，也不为纯运输接纳另造本域 ChangeId；本地作者 ChangeId 只在 P seal 分配。
 
 ### S4 Safe file installation
 
-至少实现并证明一种已有文件安装资格：conditional_replace或真正exclusive_write_window；仅advisory锁不能作为测试替身。新文件使用create_only。
+强路径至少实现并证明 conditional_replace 或真正 exclusive_write_window；仅 advisory 锁不能作为测试替身。另按已批准产品裁决实现受信人工单一既有 Document 的 observed_replace/WriteProtection=observed_only；它必须耐久保留 B/N、最后观察竞争状态且不能声称排除未观察 race。新文件仍用 create_only。
 
 故障注入必须覆盖：
 - stage write前；
@@ -65,7 +65,7 @@ Implementation 必须有静态 owner audit：每个 current truth字段恰有一
 - ContentCompletionProof写/flush前/后；
 - response传输丢失。
 
-每个点都验证不丢竞争字节、不重复收费、不生成第二identity、不把unknown猜成success。
+strict 路径每个点验证不丢竞争字节。observed_only 验证不覆盖任何已观察竞争、保留实际读取 before 和输入、unknown 不猜 success；两者都不得重复收费或生成第二identity。
 
 ### S5 Ordinary save 与 semantic pending
 
@@ -76,7 +76,7 @@ Implementation 必须有静态 owner audit：每个 current truth字段恰有一
 - r5 replay/current r6 分离；
 - installed write set用planned poststate验证，未写dependency继续比before/cut。
 
-D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level测试，不打开产品capability。
+D4/D5 后像已存在，但尚未消费 G0-A Frontier/2、SourceObservation 与 WriteProtection；相关新 producer/consumer 组合在 C 批前仍 owner_update_required/unavailable。
 
 ### S6 Sync/conflict
 
@@ -114,7 +114,7 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 
 - T_first_open：Workspace入口/活动目录可响应；
 - T_first_edit：活动Document Draft可输入；
-- T_first_reliable_save：活动target完成安全install+P seal；
+- T_first_reliable_save：只统计 strict 安全install+P seal；observed_only 的 durable_observed_only 单独记录，D1 更新前不填入旧 strict 指标；
 - T_full_search_ready：指定search profile/范围具备complete coverage；
 - T_OCR_ready：指定附件/OCR profile完成或明确失败。
 
@@ -153,8 +153,8 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 | ID | 场景 | 必须结果 |
 |---|---|---|
 | FA01 | I全删，10万无关文档未解析，编辑一个D2-valid普通笔记 | 可达T_first_reliable_save，不等待无关index/OCR；全集Action仍不可用直到proof |
-| FA02 | 既有目标只有“先散列后替换”，没有条件/排他安装原语 | commit 不得报 reliable；保留 current+Draft/after，返回 install_unavailable |
-| FA03 | conditional replace前第三方写B，planned before=A | 不覆盖B；conflict/paused，A/B/after证据保留 |
+| FA02 | 既有目标缺 strict 条件/排他原语 | strict 返回 install_unavailable；满足全部资格的受信人工单Document ordinary save可 observed_only，并仅在耐久安装+P seal后得到 durable_observed_only |
+| FA03 | Base=A 后第三方写B | 若 B 在安装前被观察，strict 与 observed_only 都停止并保留 A/B/N；只有最后检查后仍未观察到的 race 是 observed_only 已批准风险 |
 | FA04 | 外部A→B→A且watcher gap | observationEpoch增加；旧map/locator/prepared/action evidence失效 |
 | FA05 | install after成功，step10仍错误比较before | 测试必须抓出该实现；规范实现按planned after通过written target，只重验unwritten deps |
 | FA06 | P seal成功，ContentCompletionProof写失败 | receipt可靠成功；portablePublication=pending；retry只补proof |
@@ -216,9 +216,9 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 
 在下列后像完成并共同接受前，对应新路径保持 unavailable：
 
-- D3 wire12：CommitDomain 账本、副本局部创建/移动/Trash、purge 前沿、历史重放；
-- D4：semantic_pending local-vs-complete typed obligation矩阵；
-- D5：native结构/集合/bulk的local-vs-complete门；
+- D3：wire12 后像已存在，但 G0-A D3-native OwnerInputBinding、Frontier/2、SourceObservation 与 companion/receipt consumer仍待 B 批；
+- D4：local-vs-complete 后像已存在，但 production SourceVersion/observerDomain、Frontier/2 与 weak B→N consumer仍待 C 批；
+- D5：local-vs-complete 后像已存在，但 native ordinary-save protection consumer仍待 C 批；
 - D7：domain/frontier cut、PreparedActionBinding/3、EffectManifest新retention、Action evidence；
 - D8：Source/Live/Read、reliable-save/portable状态、conflict与collaboration session；
 - D9：ImportJob/ExportPlan新pins/version；
@@ -240,8 +240,29 @@ D4/D5 consumer afterimage未完成前，semantic_pending只允许candidate-level
 
 文档CI成功也不等于产品conformance或独立review通过。
 
-## 10. Fresh review gate
+## 10. G0-A 保存/接口增量验收
 
-完整联合候选必须由新的独立评审从零读取：新proposal、全部replacement owners、D10十八份、固定S49输入。作者当前16/49全文+局部范围只属于作者阅读 provenance，不能继承旧独立49/49作为本候选通过。
+未来实现必须另外证明：
+
+- WriteProtection 在 planning 前固定；strict request 不能原地变 observed_only。
+- observed_only 只允许受信交互、单一既有 live Document、ordinary+replica_local、完整 source read/replace、无细项 deny、零/单 source 写集；phone-only/body-only 等窄权限不得借 whole-source 弱保存扩权。
+- inputRetentionState=retained 不是 saved；故障注入分别验证输入留存、文件安装、P seal、publication pending 与响应交付。
+- 已观察 B 永不被弱模式覆盖；只有最后检查后从未观察到的 C 才属于用户批准风险，恢复/effects 不得虚构 C。
+- unknown install/provenance 固定 recovery_unknown；相同 hash 不升级 success，重试不换 OperationId。
+- ChangeId 在 seal 分配，InstallationNotice/2 不含 ChangeId；true no_op/control_only 不推进内容 Frontier。
+- SourceObservation 分离 production SourceVersion domain 与 observerDomain；observation epoch变化必须失效旧 token/selector/evidence。
+- Frontier/2 scope_dependencies 只接受可证明无关非回退扩展并重验原 DependencyKey。
+- D3-native OwnerInputBinding/2 与 D3DecisionCompanion/2 共用同一 DecisionKey/P seal，不建立第二 receipt。
+- 公开 receipt 只交付 SourceVersionRef/1；完整 Frontier/跨domain metadata须显式 capability。
+- DependencyProof/2 的负范围前半覆盖 lifecycle、placement、inbound、relation incidence、Calendar 与 Registry/rules；
+- 负范围后半覆盖 authorization、foreign binding、query scan、replica registry、conflict 与 execution resource；
+- 每个 key 都必须来自闭合 owner 类型，禁止 free JSON。
+- Windows/Linux/同步盘原语仍是未来真实平台故障注入义务；文档/API 名不能替代实测。
+
+D1/D3/D4/D5 当前后像尚未消费上述 G0-A producer；B/C 完成前相关新 success 继续 gate。D7/D8/D9/D10 门不变。
+
+## 11. Fresh review gate
+
+完整联合候选必须由新的独立评审从零读取：新proposal、全部replacement owners、D10十八份、固定S49输入。作者当前18/49 fixed-S全文+局部范围只属于作者阅读 provenance，不能继承旧独立49/49作为本候选通过。
 
 旧B13保持REVISE、术语/双语FAIL、P0=0/P1=3/P2=8十一OPEN。本批只提供其基础关联面，不关闭或重分类。

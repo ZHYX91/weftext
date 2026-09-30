@@ -103,19 +103,19 @@ Deleting the entire index leaves identity/structure/policy, original decisions, 
 
 Draft preserves the existing D8 session model: user proposal, input log, selection and base binding. It has no author revision, ChangeId, D3 locator authority, or committed status. Ordinary cache cleaning never silently removes dirty Draft. Durable save and portable publication are independently readable states; Draft persistence, worker success, HTTP 200, or sync upload never substitutes for them.
 
-## 4. CommitDomain, ReplicaEpoch, ChangeId, Frontier and SourceVersion
+## 4. CommitDomain, ReplicaEpoch, DecisionKey, ChangeId, Frontier, and source observation
 
-Control Interfaces owns the exact closed wire shapes; this section freezes storage semantics.
+Control Interfaces owns exact wire shapes. CommitDomain distinguishes replica/server: replica=WorkspaceRef+ReplicaEpoch and server=WorkspaceRef+current hosted AuthorityInstanceId. New v2 DecisionKey/2 is WorkspaceRef+complete CommitDomain+OperationId; P indexes workspaceId+D3-CJ/3(commitDomain)+operationId and one key has exactly one D3 or D6 protocol-owner/canonical decision. Different domains may reuse OperationId. Legacy v1/D3 v9-v11 saved decisions retain original decoder/continuity.
 
-CommitDomain distinguishes replica and server. A replica domain is uniquely WorkspaceRef+ReplicaEpoch; a server domain is WorkspaceRef+the hosted AuthorityInstanceId. The v2 operation-ledger key is WorkspaceId + canonical CommitDomain bytes + OperationId. Different domains may reuse the same OperationId UUID. D3/D6 protocol-owner collision remains enforced within one domain. Legacy v1 keys and D3 v9/v10/v11 saved decisions retain their original decoder and continuity rules and are not migrated into v2 keys.
+ReplicaEpoch is Core-minted only on explicit registration, UUIDv4, never reused. It grants ordinary content-domain qualification under current shared policy/trust only, not D3 continue, AuthorityInstanceId, or execution custody. File copy never creates an epoch and retired never revives.
 
-ReplicaEpoch is minted only by Core during explicit replica registration, is a canonical UUIDv4, and is never reused in the Workspace. Registration grants only ordinary content-domain qualification under current shared policy/trust. It is not D3 continue, AuthorityInstanceId, or global execution custody. Copying portable files does not create an epoch, and a retired epoch is never revived from copied metadata.
+ChangeId/1 is complete CommitDomain+monotonic sequence, first portable content change 1, checked increment/no wrap. ChangeId is allocated **only at P seal for a portable effect**; prepare/planning/staging/InstallationNotice reserve none. Failure, paused, recovery_unknown, control_only, true raw no-op create no ChangeId/hole.
 
-ChangeId is full CommitDomain + monotonic changeSequence. The first content change of a domain uses sequence 1; increment is checked and never wraps. ChangeRecord stores direct causal Frontier, actual write set, semantic state, and completion-proof binding. ChangeId is not EntityRef, OperationId, or source-occurrence identity.
+Frontier/2 is a canonical vector with at most one maximum verified continuous sealed ChangeId per domain, domain-byte sorted unique. It may admit a remote verified ChangeId without replaying remote OperationId or minting local ChangeId merely for transport. It proves neither payload materialization, placeholder download, index completeness, D7 complete cut, nor provider completion. frontierPolicy=exact|scope_dependencies; the latter permits only proved non-regressing unrelated extension and revalidates original source/control/auth/positive-negative dependencies, never changing target/Query/source/request or erasing ABA. Frontier/1 is legacy only.
 
-Frontier is a canonical vector containing at most one maximum accepted ChangeId per CommitDomain, sorted by canonical domain bytes with no duplicates. Empty Frontier is valid only for genesis/no changes. Accepting a remote change creates a new local sync-admission decision/ChangeId with that remote ChangeId as a causal predecessor; the receiver never replays the remote OperationId into its own ledger.
+SourceVersion/2 identifies actual source plus production CommitDomain; managed revision increments only on real managed change in that production domain+entity and raw no-op does not. External discontinuity advances observationEpoch; equal digest does not revive old version and bare revisions across production domains are incomparable.
 
-SourceVersion/2 binds full EntityRef, CommitDomain, observationEpoch, source revision and the ChangeId that established the current source. revision increments only for managed source changes in that domain and does not increment for raw no-op. An unknown external change advances observationEpoch and produces an external observation branch; equal digest never revives the old SourceVersion. Numeric revisions in different CommitDomains are incomparable.
+Current replica/Server observation is separately SourceObservation/1 binding observerDomain, EntityRef, SourceVersion/2, observationEpoch, FileObjectBinding, evidence pins. observerDomain=current operation domain while sourceVersion.commitDomain may differ; placeholder/missing metadata/conflict/unproved continuity yields no successful Observation. SourceVersionRef/1 opaque token selects complete Observation, not bare revision/digest/production-domain metadata.
 
 ## 5. Authorization, ordinary save, and complete semantic qualification
 
@@ -131,7 +131,7 @@ Loss of global execution responsibility suspends only that execution capability,
 
 ### 5.2 Ordinary proof scopes
 
-Ordinary full-Document edit binds target SourceVersion/2, complete current source, entity lifecycle, current policy, actual MutationFootprint, complete D2 parse, and every actually modified local typed fact with its current Registry definition. Unmodified bytes are preserved exactly. If a touched transformation needs cross-object proof that is currently unavailable, an explicitly requested ordinary-save profile may produce semantic_pending rather than complete semantics; it may not be recorded as the original strong Action success.
+Ordinary full-Document edit binds complete SourceObservation/1 (including actual production SourceVersion/2), complete current source, entity lifecycle, current policy, actual MutationFootprint, complete D2 parse, and every actually modified local typed fact with its current Registry definition. Unmodified bytes are preserved exactly. If a touched transformation needs cross-object proof that is currently unavailable, an explicitly requested ordinary-save profile may produce semantic_pending rather than complete semantics; it may not be recorded as the original strong Action success.
 
 create Node binds destination parent, full target sibling list, required ancestor/cycle proof, new identity reservation, complete new source, actual local typed admission, and old/new policy scope. move/reorder binds subject, old/new parent, both complete sibling lists, necessary ancestor/cycle proof, and old/new authorization scope. Ordinary Trash binds the selected subtree/owner-local closure, affected live/Trash sibling lists, restore membership and permission; it does not fabricate a complete workspace-wide inbound-reference enumeration.
 
@@ -147,40 +147,33 @@ Managed source state is:
 - semantic_pending: D2 valid and actually modified local typed facts passed their local gates, while one or more cross-object/complete-range obligations remain unproved;
 - external_invalid: current external bytes fail strict UTF-8 or D2 and do not correspond to a successful Core author decision; only Source/repair/raw-read paths may consume them.
 
-semantic_pending may be the current source after an ordinary reliable save. It is not eligible for mutation that requires complete D4 relation/unique/Calendar invariants, D7 ActionEvidence/all_result/post-query over a complete cut, automatic Agent/automation writes, purge, or any export/audit claim that all workspace semantics are validated. Exact source read, Source editing, exact-file search and an explicitly local projection may consume it under their own permissions and must expose pending state.
+semantic_pending may be the current source after an ordinary save; strict reliable versus durable_observed_only is represented independently by WriteProtection. It is not eligible for mutation that requires complete D4 relation/unique/Calendar invariants, D7 ActionEvidence/all_result/post-query over a complete cut, automatic Agent/automation writes, purge, or any export/audit claim that all workspace semantics are validated. Exact source read, Source editing, exact-file search and an explicitly local projection may consume it under their own permissions and must expose pending state.
 
-This branch requires real later D4/D5/D7 owner afterimages. Until those consumers exist, managed semantic_pending success cannot be activated.
+D4/D5 local-vs-complete afterimages exist but do not yet consume G0-A Frontier/2, SourceObservation, or WriteProtection; related success is owner_update_required/unavailable until C. D7 complete consumer remains future.
 
-## 6. File installation qualification and reliable save
+### 5.4 Concurrent-write boundary for human ordinary save
+
+WriteProtection is orthogonal to ContentGuarantee/SemanticState. observed_only is only trusted interactive, one existing live Document, ordinary+replica_local, complete source read/replace, no applicable body/Field/node-control deny, zero/one Document author write set, Draft Base=current SourceObservation. Sole relaxation: an external race never observed after final verification and before install may be overwritten. Observed change, watcher gap, stale Base, revocation, narrow deny, Core competition, unknown install, or lost P continuity still stops; strict never downgrades; Action/Automation/approval/Money never use observed_only and there is no per-save approval.
+
+## 6. File installation capability, WriteProtection, and reliable save
 
 ### 6.1 BackendQualification
+strict existing-file paths use real conditional_replace or exclusive_write_window; expected-absent new files may use create_only. conditional requires trusted generation and read-hash-then-rename is not CAS; exclusive excludes all threat-model writers and advisory locking is insufficient; create_only is atomic create-if-absent.
 
-Every FileBinding backend exposes trusted capabilities. Reliable replacement of an existing file is allowed only with one of:
+observed_replace is only §5.4 observed_only, records final verified object generation but is not CAS; immediately before destructive install recheck trusted object/event continuity and stop with B/N/current retained if competition is observed. Only an unobserved race belongs to the approved weak guarantee.
 
-- conditional_replace: a real compare-and-replace based on a trusted object generation/etag/file identity;
-- exclusive_write_window: the host proves that every writer in the supported threat model is unable to modify/replace/delete the target from final before verification through completed installation; advisory-only locks do not qualify;
-- create_only: atomic create-if-absent for an expected-absent target only.
-
-The backend also proves durability of staged bytes, installed file data, and directory-entry/rename persistence. “Hash immediately before replace” is not conditional_replace. If safe installation cannot be proved, Core retains the current file and the Draft/after branch and returns conflict or install_unavailable; it never reports reliable save success.
-
-Uncooperative external software may ignore Weftext coordination. The guarantee covers only the writer set actually proved by BackendQualification. If the backend cannot exclude a race, replacement of an existing file cannot succeed under the reliable-save profile. Any discovered competing bytes are preserved and never deleted or classified as ours merely because they equal an after digest.
+All paths still prove staged/target/directory-entry or rename durability, canonical containment, and installation provenance. strict without a qualified primitive -> install_unavailable/paused; an intent satisfying §5.4 may new-prepare observed_only, but existing strict plan never weakens.
 
 ### 6.2 Guarantee
-
-ContentGuarantee is:
-
-- replica_local: the fixed write set in this CommitDomain was safely installed and durably sealed; it says nothing about concurrent offline versions on another replica;
-- managed_atomic: every managed author/portable-control write of the operation was protected by one managed installation/publication barrier and managed readers observe the old or sealed new cut.
-
-managed_atomic never claims that multiple renames form a filesystem-wide transaction. External file readers may observe physical intermediate states; the product must not advertise instantaneous cross-file snapshots to arbitrary external tools.
+ContentGuarantee is separate from WriteProtection. replica_local proves fixed write set durably installed+P sealed under requested protection and says nothing about other offline replicas. managed_atomic requires all author/portable-control writes inside the managed barrier with WriteProtection=strict and promises no instantaneous multi-file atomicity to external tools. Multiple renames are not a global transaction.
 
 ## 7. Prepared input, installation, seal and portable publication
 
 ### 7.1 InputDescriptor and pins
 
-The v2 canonical commit request remains a small control request and never embeds complete Document/Resource bytes. PreparedIntent/2 stores InputDescriptor/2 containing exact Workspace/CommitDomain, intent kind, before SourceVersion/metadata versions, expected Frontier, scope/profile, write-set descriptors, Registry/policy/rule versions and owner-specific canonical input. Complete source/bytes are stored only in the purpose-bound PinDirectory.
+The v2 canonical commit request remains small and never embeds complete bytes. PreparedIntent/2 stores Workspace/CommitDomain, intent, Frontier/2+frontierPolicy, ObservationScope/2, SourceObservation/1, DependencyProof/2, scope/profile/write set, Registry/policy/rule, OwnerInputBinding/2; complete bytes remain purpose-bound pins.
 
-Input equality requires complete canonical descriptor equality plus equality of the exact referenced pins/owner inputs. Equal SHA-256 is not sufficient. A source, mapping, policy, frontier, scope or owner-request change requires a new prepare/OperationId unless the owner protocol explicitly defines canonical replay.
+Input equality requires complete canonical descriptor equality plus equality of the exact referenced pins/owner inputs. Equal SHA-256 is not sufficient. Changing source/SourceObservation, mapping, policy, frontierPolicy, scope, WriteProtection, or owner request requires new prepare; same OperationId is exact replay only, never strict downgrade.
 
 ### 7.2 Pin classes and retention
 
@@ -198,28 +191,35 @@ Each v2 content decision stores independent DecisionState, InstallationState, Re
 
 DecisionState: unseen → rejected | planned → committed | terminal_failed.
 InstallationState: prepared → planned → installing(k) → installed, plus conflict | recovery_unknown | paused_authorization | paused_capacity.
-ReliableSaveState: not_saved | reliable.
+ReliableSaveState: not_saved | reliable | durable_observed_only | not_applicable.
+InputRetentionState: not_retained | retained | unavailable.
 PortablePublicationState: not_published | pending | published | conflict.
 
 The only order is:
 
-1. prepare freezes InputDescriptor, exact write set, before/after pins, semantic proof, preview and budget; no author effect;
+1. prepare freezes InputDescriptor/write set/pins/proof/preview/budget/WriteProtection; retained requires durable proposal/read-before/bindings; no author effect and retained is not saved;
 2. planning proves required pins durable/capacity-reserved, then one durable-control transaction stores canonical request, fixed plan, reservations, installation recovery description and planned;
-3. before any portable-current modification, write and durably flush an InstallationNotice containing ChangeId, operation binding, guarantee, before Frontier and component/write-set descriptors; it contains no approval/Money/external payload and is not proof of success;
-4. install each fully written/flushed staged after only through create_only/conditional_replace/exclusive window, recording the actual FileObjectBinding/outcome; move/Trash first makes the recoverable destination durable and never permanently deletes current first;
-5. installed verification compares each written component against **the operation’s own fixed planned poststate**, not against the original before. Revalidate current authorization plus all unwritten positive/negative dependencies, policy, Registry/rules, relevant Frontier and concurrent control facts. Produced ChangeId/SourceVersion are compared to the fixed planned poststate;
-6. seal, only when every written component equals planned poststate and unwritten dependencies still hold. One durable-control transaction writes committed, canonical receipt, ReliableSaveState=reliable, effects metadata, execution charges/approval consumption where applicable, and outbox. This durable P seal is the decision commit point;
-7. portable publication derives the immutable ContentCompletionProof from the saved decision, durably writes it into portable metadata, advances Frontier, releases the portable publication barrier, and sets published.
+3. before portable-current modification, durably write InstallationNotice/2 with DecisionKey/guarantee/WriteProtection/base Frontier/2/before-after components; no ChangeId/approval/Money/external payload;
+4. install durably staged after; strict uses create_only/conditional/exclusive; observed_only only §5.4 with final object/event check, and observed competition stops retaining B/N/current. Components record binding/outcome; move/Trash/multi-object stays strict;
+5. verify written=planned after, never before; revalidate unwritten deps, policy/auth, Registry/rules, Frontier/2/control facts. Unknown provenance/third_state/late competition/revocation -> paused/conflict/recovery_unknown; no ChangeId yet;
+6. seal when written=planned after and deps/auth still hold; P transaction allocates ChangeId/SourceVersion for portable effect and writes committed/receipt/effects/charges/outbox. strict->reliable, observed_only->durable_observed_only, control_only/no_op->not_applicable with no content ChangeId. Only commit point;
+7. publication derives ContentCompletionProof/2 from sealed portable decision and advances Frontier/2; control_only/no_op is not_applicable.
 
-If step 6 succeeds and step 7 fails, the decision and reliable save remain successful while portable publication is pending. Recovery publishes the same completion proof only; it never rewrites source, creates a new OperationId, or charges again. Other replicas treat files that arrive before the complete proof/components as incomplete transport.
+If step 6 succeeds and step 7 fails, decision and reliable/durable_observed_only remains successful while publication is pending; recovery only publishes the same proof, never rewrites source/changes OperationId/recharges/reinstalls N. Other replicas treat files that arrive before the complete proof/components as incomplete transport.
 
 Revocation before seal prevents seal. If exact before can be safely restored under BackendQualification, restore and flush it. If safe restoration cannot be proved, retain before/after/current/recovery evidence and enter paused_authorization or recovery_unknown. Revocation does not turn unknown installation into permanent business rejection.
+
+### 7.4 Raw no-op
+
+Committed effectClass=portable|control_only|no_op. Only portable creates ChangeId/source changes/Frontier/2 advance; P-only control uses control_only. True no-op: empty sourceVersions, InstallationState=not_required, ReliableSaveState=not_applicable, PortablePublicationState=not_applicable; domainCommitSequence may +1 while source revision/ChangeId/Frontier stays unchanged. Equal-byte external admission is not no-op.
 
 ## 8. Crash recovery and historical results
 
 Recovery first reads durable-control decision state, then installation notice/write-set bindings/actual files. Client timeout, file presence, mtime, digest or provider status never substitutes for P.
 
 Each component is classified only as exact_before, exact_after with proved installation provenance, third_state, or unavailable. Equal bytes without installation provenance cannot be upgraded from third/unavailable to exact_after.
+
+observed_only read-before is only the actually read/pinned before, not unseen C; overwritten unseen C may have no recoverable copy, which is the approved boundary and records never invent. Observed competition stays third_state/conflict; unknown install is never guessed.
 
 Rules:
 
@@ -271,7 +271,7 @@ Startup milestones are separate:
 
 1. T_first_open: read workspace-root/portable-metadata entry and list discovered/active targets;
 2. T_first_edit: open active source and Draft;
-3. T_first_reliable_save: active target completes backend-qualified install+seal and reports reliable;
+3. T_first_reliable_save: strict install+P seal yielding reliable only; observed_only durable_observed_only is separate until D1 update;
 4. T_full_search_ready: complete coverage exists for the specified search profile/range;
 5. T_OCR_ready: selected attachment/model/version OCR is complete or explicitly failed.
 
@@ -324,9 +324,9 @@ Replica registration, FileBinding and ChangeId/Frontier confer none of these con
 
 ## 14. Versioned coordination with D3/D4/D5
 
-Fixed-S D3 wire11, ledger key, stage order, continue/fork and Trash/purge/receipt remain the current historical contract. This candidate requires a later D3 wire12 to carry CommitDomain, replica-local profile, new ledger key, local Trash receipt, purge Frontier and legacy replay. D6 does not route identity/lifecycle through a generic bypass. No D3-v12-dependent managed success may activate before the D3 afterimage exists.
+D3 wire12 exists but does not yet consume G0-A Frontier/2, D3-native OwnerInputBinding, SourceObservation, minimal companion/receipt; until B related success is owner_update_required and D6 never bypasses D3.
 
-Existing complete D4/D5 operation gates are not silently satisfied by semantic_pending. This candidate only freezes storage’s ability to persist a D2-valid pending source. Which D4/D5 facts admit local-only proof and which remain complete must be specified by later owner afterimages. Until then, dependent Action/automation paths remain unavailable.
+D4/D5 local-vs-complete afterimages exist but do not yet consume G0-A SourceObservation/Frontier/2/WriteProtection; until C related consumers are owner_update_required/unavailable and Action/automation never uses observed_only.
 
 Legacy D6 wire1, Policy/1/2, SourceVersion/1, D7 PreparedActionBinding/1,/2, D8 PreparedEditBinding/1 and their saved decisions/pins recover and replay under original decoder/retention/continuity rules. New retention does not modify saved legacy bytes or retroactively remove evidence promised by the older contract.
 

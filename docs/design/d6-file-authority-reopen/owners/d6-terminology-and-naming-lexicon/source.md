@@ -87,15 +87,15 @@ ReplicaEpoch denotes an ordinary replica writer generation. ExecutionResponsibil
 
 ### 2.3 Source Version
 
-The SourceVersion/1 controlled names remain for legacy decoders. New managed producers use SourceVersion/2 and bind complete Ref, CommitDomain, observationEpoch, revision and ChangeId; external observation uses its closed external variant. A consumer that compares only revision numbers is not FA-r01 conforming.
+The SourceVersion/1 controlled names remain for legacy decoders. SourceVersion/2 identifies the actual source version and retains its production CommitDomain; current replica/Server observation is separately bound by SourceObservation/1 to observerDomain, FileObjectBinding, observationEpoch, and evidence pins. Production domain may differ from the current operation domain; a consumer that compares only revision numbers is not conforming.
 
-A→B→A, watcher gaps and placeholder materialization may change observation epoch/variant. Equal digest never revives old locator, prepared state, ActionEvidence or sourceOccurrenceKey continuity.
+SourceVersionRef/1 sourceToken selects the complete protected SourceObservation rather than a bare revision/digest. A→B→A, watcher gaps, placeholder materialization, or discontinuous rematerialization may invalidate current observation. Equal digest never revives old locator, prepared state, ActionEvidence, or sourceOccurrenceKey continuity.
 
 ### 2.4 Reliable Save and Portable Publication
 
-ReliableSaveState answers only whether this domain’s fixed write set was installed through a qualified file primitive and passed the durable control seal. ContentCompletionProof/portable publication separately answers whether the sealed change is a complete portable version another replica may admit.
+ReliableSaveState distinguishes not_saved, strict-path reliable, human ordinary-file observed_only durable_observed_only, and not_applicable when file save does not apply. It reports the actual save-protection level of a sealed decision; input retention and portable publication are separate states.
 
-Draft persistence, HTTP success, worker success, sync upload and InstallationNotice are never reliable save. reliable is not automatically portable published.
+Draft persistence, HTTP success, worker success, sync upload, prepared/input-retained, and InstallationNotice are never file-save success. durable_observed_only only promises durable retention of this input and the before image actually read; it does not promise that an external write never observed after the final check cannot be overwritten. Neither reliable nor durable_observed_only is automatically portable published.
 
 ### 2.5 Semantic State
 
@@ -107,7 +107,7 @@ semantic_pending is never consumed as complete by complete D7 Query/Action, purg
 
 ## 3. Technical ownership
 
-- CommitDomain, ReplicaEpoch, ChangeId, Frontier, SourceVersion/2, SemanticState, ContentGuarantee, InstallationNotice, ContentCompletionProof, ConflictRecord, ReliableSaveState, ExecutionResponsibilityRecord: D6.
+- CommitDomain, DecisionKey/2, ReplicaEpoch, ChangeId, Frontier/2, SourceVersion/2, SourceObservation/1, SourceVersionRef/1, SemanticState, ContentGuarantee, DependencyProof/2, ObservationScope/2, WriteProtection, InstallationNotice/2, ContentCompletionProof/2, ConflictRecord, ReliableSaveState, ExecutionResponsibilityRecord: D6.
 - NodeRef/ResourceRef/AnnotationRef, OperationId, AuthorityInstanceId, D3 lifecycle receipt: D3. A generic D6 commit never redefines them.
 - FieldId, RegistryBinding, relation/Calendar typed semantics: D4.
 - QuerySpec, ActionSpec, PreparedActionBinding, EffectManifest/EffectBytes: D7. FA-r01 consumer versions require later coordinated afterimages.
@@ -125,6 +125,8 @@ Policy/3 retains every Policy/2 capability and adds:
 | replica_retire | retire an ordinary replica writer epoch | deletion of history or Money refund |
 | conflict_read | read an authorized ConflictRecord | conflict source bytes |
 | conflict_resolve | enter owner-specific resolution prepare | source/policy/D3 write |
+| structure_state | observe portable parent/order and structural scope | source/Field/write |
+| portable_frontier_state | observe complete Frontier/2 | decision/source/write |
 | execution_custody_admin | manage execution-responsibility continuity/takeover | new approvals, larger Money, author write |
 
 In Policy/3, commit_sequence_state observes one named CommitDomain’s domainCommitSequence. The historical Policy/2 workspace-wide meaning remains only on its legacy path and is never projected onto the offline-replica model.
@@ -137,8 +139,16 @@ In Policy/3, commit_sequence_state observes one named CommitDomain’s domainCom
 4. Frontier is never called global latest/version; it is a multi-domain causal frontier.
 5. ConflictId is a stable address of a complete ConflictKey, not independent durable content identity.
 6. DurableControlStore is not “the index”; DerivedIndexStore is not “database authority”.
-7. Product text distinguishes Draft saved, reliable author save, and portable published.
+7. Product text distinguishes Draft/input retained, strict reliable author save, observed_only ordinary-file save, and portable published.
 8. No compatibility alias is introduced for the new protocol. Historical saved evidence retains historical controlled names without text migration/deletion.
+
+## G0-A Write Protection and technical-version boundary
+
+Write Protection is owned by D6 storage/control. The closed enum is strict | observed_only; controlled owned names are WriteProtection and writeProtection with locale storage.write_protection. It is not permission, user confirmation, Query completeness, ApprovalUse, or CAS.
+
+observed_only is limited to a trusted human one-existing-live-Document ordinary save. Strong Action, Automation, approval, and Money execution require strict, and a strict request never downgrades in place during prepare/commit.
+
+The current new-decision frontier is Frontier/2. ObservationScope/2, DependencyProof/2, InstallationNotice/2, and ContentCompletionProof/2 are current D6 closed technical types. They create no content identity, author source, or second ledger. Existing conceptId, ownedNames, and firstFreeze values remain unchanged; this section adds only the Write Protection concept. Historical Frontier/1/InstallationNotice/1/ContentCompletionProof/1 remain legacy decoder/replay inputs only.
 
 ## 6. Legacy and activation boundary
 

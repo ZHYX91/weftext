@@ -22,7 +22,8 @@ translation_status: source
 5. portable file复制不复制 global execution responsibility。
 6. Server 保留多人 Draft/read/prepare/edit；一个托管后端的持久 commit holder唯一不等于单用户。
 7. 实时协作仍 post-G2；未冻结 OT/CRDT，不采用每键 author commit。
-8. 大库 ordinary reliable save 不等待无关 full index/OCR；complete Query/Action仍必须完整证明。
+8. 大库 ordinary file save 不等待无关 full index/OCR；complete Query/Action仍必须完整证明。
+9. 用户已批准：受信人工单一既有 live Document 的 ordinary save 可在完整授权、局部门、耐久输入/已读取前像和唯一P决议链保持时使用 WriteProtection=observed_only；它只放宽未观察外部竞争排除，不放宽已观察冲突、失权、幂等、耐久或强Action资格。
 
 ## 2. 当前实际 replacements：16
 
@@ -59,7 +60,9 @@ P/I不能成为第二份 Field、relation、collection、parent/order作者真�
   restore/purge/copy/fork/import、D7 all_result/automation等保留完整正负范围。
 - **global execution responsibility**：Automation、ApprovalUse、claim、Money、external unknown、stop要求独立连续责任。
 
-D4/D5 本批明确：
+D4/D5 既有后像保持；本 G0-A 只更新 D6 producer。D1/D3/D4/D5 尚未消费 Frontier/2、SourceObservation/WriteProtection 与最小 receipt/companion，因此相关新 success 继续 gate。
+
+D4/D5 既有后像明确：
 - D4 namespace `available|retained_unavailable|invalid|not_present`、Node typed `complete|partial|unavailable`、D6 `complete_semantics|semantic_pending` 与未来 D7 complete-cut 是四个不同维度。
 - `semantic_pending` 只允许“本地 typed facts已经通过、跨对象/全集义务尚未证明”；本地 type/cardinality/requiredness失败仍拒绝。
 - body/真正不相交 namespace 可以在 unavailable/invalid raw bytes byte-equal时普通保存；触及 unavailable/invalid namespace的 typed edit仍拒绝。
@@ -71,7 +74,7 @@ D4/D5 本批明确：
 ## 5. 版本与兼容
 
 已生成：
-- D6 Control wire 1→2、PreparedIntent 1→2、Policy 2→3、SourceVersion 1→2。
+- D6 控制线协议由 1 升至 2，PreparedIntent 由 1 升至 2，Policy 由 2 升至 3，SourceVersion 由 1 升至 2；G0-A 同时冻结 Frontier/2、ObservationScope/2、DependencyProof/2、InstallationNotice/2、ContentCompletionProof/2、SourceObservation/1 与 WriteProtection 的候选定义。
 - D3 identity operation/receipt/resolver 11→12，ledger key加入 CommitDomain。
 - D4 public Entry/Type/RelationReadContext/Binding/Recurrence/effect shapes保持；
   新 profile只在 outer D6 InputDescriptor/2把 source-bearing evidence绑定 SourceVersion/2、CommitDomain、Frontier。
@@ -108,10 +111,14 @@ hard limits继续：
 
 更窄budget可降低，不得放宽；pagination前N不能冒充全集。
 
-## 8. 当前仍待 owner
+## 8. 当前仍待 consumer/owner
 
 | Owner | 尚待协调 |
 |---|---|
+| D1 | 普通保存产品状态/指标与 strict/ordinary-file 文案消费 |
+| D3 | D3-native owner descriptor、Frontier/2、SourceObservation、companion/receipt 消费 |
+| D4 | production SourceVersion/observerDomain 分离、weak B→N证明范围 |
+| D5 | native ordinary-save保护消费；bulk/collection继续 strict |
 | D7 | CommitDomain/Frontier/SourceVersion 的完整 cut、新版 Prepared、effects pin 保留、partial-index 门禁 |
 | D8 | Source/Live/Read、Live三种标记策略、Draft/IME/Undo/selection、多会话与 collaboration checkpoint |
 | D9 | scoped pins、ImportJob、exact export inputs、publication、新 request/effects consumer |
@@ -121,7 +128,7 @@ hard limits继续：
 
 ## 9. 大库、冲突与历史结果
 
-T_first_open、T_first_edit、T_first_reliable_save、T_full_search_ready、T_OCR_ready继续分开，不承诺未经实测秒数。
+T_first_open、T_first_edit、T_first_reliable_save、T_full_search_ready、T_OCR_ready继续分开，不承诺未经实测秒数；D1更新前 observed_only 的 durable_observed_only 不计入旧 strict T_first_reliable_save。
 
 D4/D5 local operations不因无关 I coverage永久只读；strong complete consumer可扫描source，无法完成则 unavailable。
 

@@ -86,17 +86,15 @@ ReplicaEpoch 只标识 ordinary replica writer 世代；ExecutionResponsibility 
 
 ### 2.3 Source Version
 
-SourceVersion/1 的 ownedNames 保留给历史 decoder。新 managed producer使用 SourceVersion/2，必须绑定完整 Ref、CommitDomain、observationEpoch、revision、ChangeId；external observation使用其 closed external variant。任何 consumer 若只比较 revision 数字，都不是 D6-FA-r01 合格实现。
+SourceVersion/1 的 ownedNames 保留给历史 decoder。SourceVersion/2 标识实际来源版本并保留其生产 CommitDomain；当前副本/Server 的观察另由 SourceObservation/1 绑定 observerDomain、FileObjectBinding、observationEpoch 与 evidence pins。生产 domain 可以不同于当前 operation domain；任何 consumer 若只比较 revision 数字都不合格。
 
-source A→B→A、watcher gap、placeholder materialization 都可使 observation epoch/variant变化；
-  digest相同不能恢复旧 locator、prepared、ActionEvidence 或 sourceOccurrenceKey continuity。
+SourceVersionRef/1 的 sourceToken 选择完整受保护 SourceObservation，而不是裸 revision/digest。source A→B→A、watcher gap、placeholder materialization 或不连续 rematerialize 都可使当前观察失效；digest 相同不能恢复旧 locator、prepared、ActionEvidence 或 sourceOccurrenceKey continuity。
 
 ### 2.4 Reliable Save 与 Portable Publication
 
-ReliableSaveState 只回答本 domain 的 planned write set是否经过合格 file install并完成 P durable seal。ContentCompletionProof/portable publication 另回答该 sealed change是否已经形成可由其它 replica接纳的完整 portable version。
+ReliableSaveState 区分 not_saved、strict 路径的 reliable、人工普通文件 observed_only 路径的 durable_observed_only，以及不适用文件保存的 not_applicable。它回答一次已 seal decision 的实际保存保护级别；input retention 与 portable publication另有状态。
 
-Draft persistence、HTTP success、worker success、sync upload、
-  InstallationNotice 都不能称 reliable save。reliable 也不能自动称 portable published。
+Draft persistence、HTTP success、worker success、sync upload、prepared/input retained、InstallationNotice 都不能称已保存。durable_observed_only 只承诺本次输入与实际读取 before 已耐久，并不承诺最后观察后从未被观察的外部竞争写不会被覆盖；reliable/durable_observed_only 都不自动等于 portable published。
 
 ### 2.5 Semantic State
 
@@ -108,8 +106,9 @@ semantic_pending 不得被 D7 complete Query/Action、purge、relation/unique/Ca
 
 ## 3. 技术成员归属
 
-- CommitDomain、ReplicaEpoch、ChangeId、Frontier、SourceVersion/2、SemanticState、ContentGuarantee、
-  InstallationNotice、ContentCompletionProof、ConflictRecord、ReliableSaveState、ExecutionResponsibilityRecord：D6。
+- D6 拥有以下控制域标识与版本类型：CommitDomain、DecisionKey/2、ReplicaEpoch、ChangeId、Frontier/2、SourceVersion/2、SourceObservation/1、SourceVersionRef/1。
+- D6 还拥有以下语义与证明类型：SemanticState、ContentGuarantee、DependencyProof/2、ObservationScope/2、WriteProtection。
+- D6 同时拥有以下安装与责任类型：InstallationNotice/2、ContentCompletionProof/2、ConflictRecord、ReliableSaveState、ExecutionResponsibilityRecord。
 - NodeRef/ResourceRef/AnnotationRef、OperationId、AuthorityInstanceId、D3 lifecycle receipt：D3；D6不得通过 generic commit重新定义。
 - FieldId、RegistryBinding、relation/Calendar typed semantics：D4。
 - QuerySpec、ActionSpec、PreparedActionBinding、EffectManifest/EffectBytes：D7；FA-r01新版本必须后续协调。
@@ -127,6 +126,8 @@ Policy/3 沿用 Policy/2全部能力，并新增：
 | replica_retire | 退役ordinary replica writer epoch | 删除其历史、Money退款 |
 | conflict_read | 读取已获state scope的ConflictRecord | conflict source bytes |
 | conflict_resolve | 进入对应owner resolution prepare | source/policy/D3 write |
+| structure_state | 观察 portable parent/order 与结构范围 | source/Field/write |
+| portable_frontier_state | 观察完整 Frontier/2 | decision/source/write |
 | execution_custody_admin | 管理执行责任连续性/接管 | 新approval、扩Money、作者写 |
 
 commit_sequence_state 在 Policy/3 中只观察指定 CommitDomain 的 domainCommitSequence。旧 Policy/2 consumer 的 Workspace-wide定义只保留历史路径，禁止把它补到新离线replica模型。
@@ -139,8 +140,16 @@ commit_sequence_state 在 Policy/3 中只观察指定 CommitDomain 的 domainCom
 4. Frontier 不得称 global latest/version；它是多domain因果前沿。
 5. ConflictId 是 ConflictKey 的稳定地址，不是独立 durable content identity。
 6. DurableControlStore 不得简称 index；DerivedIndexStore 不得简称 database authority。
-7. save 文案必须区分 Draft saved / reliable author save / portable published；UI/CLI 不能把三者折叠成一个成功。
+7. save 文案必须区分 Draft/input retained、strict reliable author save、observed_only ordinary-file save、portable published；UI/CLI 不能把这些状态折叠成一个成功。
 8. 新协议没有旧别名兼容。历史 saved evidence中的旧controlled name保留，不做文本迁移或删除。
+
+## G0-A Write Protection 与技术版本边界
+
+Write Protection / 写入保护级别由 D6 storage/control 拥有。closed enum 仅 strict | observed_only；受控 owned names 为 WriteProtection、writeProtection，locale 为 storage.write_protection。它不是权限、用户确认、Query 完整性、ApprovalUse 或 CAS。
+
+observed_only 只允许受信人工单一既有 live Document ordinary save；强 Action、Automation、批准或费用消费必须 strict，且 strict request 不得在 prepare/commit 中原地降级。
+
+Frontier 的当前新决议版本是 Frontier/2；ObservationScope/2、DependencyProof/2、InstallationNotice/2、ContentCompletionProof/2 是当前 D6 closed 技术类型。它们不新增内容 identity、作者源或第二 ledger。既有 conceptId、ownedNames、firstFreeze 保持；本节只新增 Write Protection concept，历史 Frontier/1/InstallationNotice/1/ContentCompletionProof/1 等仅按历史 decoder/replay。
 
 ## 6. Legacy 与激活边界
 

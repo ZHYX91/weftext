@@ -48,11 +48,11 @@ Implementation requires a static ownership audit: each current-truth field has e
 - Implement ReplicaRecord, CommitDomain, ChangeId/Frontier, SourceVersion/2, InstallationNotice, ContentCompletionProof and ConflictRecord.
 - child order has one ordered-list owner and deterministic move/reorder changes.
 - A new device registers a new ReplicaEpoch; retired epochs never revive.
-- Remote change admission creates a local ChangeId and never replays the remote OperationId.
+- Remote record admission advances verified Frontier/2 without replaying the remote OperationId and without minting another local ChangeId merely for transport; a local author ChangeId is allocated only at P seal.
 
 ### S4 Safe file installation
 
-Implement and prove at least one qualified existing-file primitive: conditional_replace or a truly exclusive_write_window. Advisory locking is not an acceptable test substitute. New files use create_only.
+Strong paths implement and prove conditional_replace or a truly exclusive_write_window; advisory locking is not an acceptable substitute. The approved product choice additionally permits observed_replace/WriteProtection=observed_only for a trusted human one-existing-Document ordinary save, with durable B/N retention, a final observed-state check, and no claim that an unobserved race is excluded. New files still use create_only.
 
 Fault injection covers:
 - before staged write;
@@ -66,7 +66,7 @@ Fault injection covers:
 - before/after ContentCompletionProof write/flush;
 - lost response transport.
 
-Every point proves no lost competing bytes, no duplicate charge, no duplicate identity and no inference of success from unknown.
+Every strict-path point proves no lost competing bytes. observed_only proves it never overwrites an actually observed competitor, durably retains the actually read before plus input, and never infers success from unknown. Both prevent duplicate charge/identity.
 
 ### S5 Ordinary save and semantic pending
 
@@ -77,7 +77,7 @@ Every point proves no lost competing bytes, no duplicate charge, no duplicate id
 - r5 replay/current r6 separation;
 - installed write set verified against planned poststate while unwritten dependencies remain compared with before/cut.
 
-Until D4/D5 consumer afterimages exist, semantic_pending remains candidate-only and unavailable in product capability.
+D4/D5 afterimages exist but do not yet consume G0-A Frontier/2, SourceObservation, or WriteProtection; the combined new producer/consumer path remains owner_update_required/unavailable until the bounded C update.
 
 ### S6 Sync/conflict
 
@@ -115,7 +115,7 @@ Every large-workspace report separately records:
 
 - T_first_open — workspace entry/active navigation becomes responsive;
 - T_first_edit — active Document Draft accepts input;
-- T_first_reliable_save — active target completes safe install + P seal;
+- T_first_reliable_save — counts only strict safe install + P seal; observed_only durable_observed_only is recorded separately and does not populate the old strict D1 metric before D1 update;
 - T_full_search_ready — complete coverage exists for the named search profile/range;
 - T_OCR_ready — named attachment/OCR profile completes or explicitly fails.
 
@@ -154,8 +154,8 @@ All rows are future evidence obligations, not passed tests.
 | ID | Scenario | Required result |
 |---|---|---|
 | FA01 | I deleted; 100k unrelated docs unparsed; edit one D2-valid note | T_first_reliable_save can complete without unrelated index/OCR; complete Action still waits for proof |
-| FA02 | existing target offers only “hash then replace” | no reliable commit; preserve current+Draft/after and return install_unavailable |
-| FA03 | third party writes B before conditional replace; planned before=A | never overwrite B; conflict/paused with A/B/after evidence |
+| FA02 | existing target lacks a strict conditional/exclusive primitive | strict returns install_unavailable; an eligible trusted human one-Document ordinary save may use observed_only and reaches durable_observed_only only after durable install+P seal |
+| FA03 | third party writes B after Base A | if B is observed before install, strict and observed_only both stop and retain A/B/N; only a race still unobserved after the final check is the approved observed_only risk |
 | FA04 | external A→B→A plus watcher gap | observationEpoch increments; stale map/locator/prepared/evidence invalid |
 | FA05 | after install succeeds but implementation compares written target to before | test fails that implementation; conforming code compares planned after for written targets |
 | FA06 | P seal succeeds; ContentCompletionProof write fails | reliable receipt succeeds; publication pending; retry only publishes proof |
@@ -217,9 +217,9 @@ Legacy canonical requests/pins remain legacy evidence even if they carry large s
 
 The corresponding new path remains unavailable until these real afterimages exist and are jointly accepted:
 
-- D3 wire12 — CommitDomain ledger, replica-local create/move/Trash, purge Frontier, legacy replay;
-- D4 — semantic_pending local-vs-complete typed obligation matrix;
-- D5 — native structure/collection/bulk local-vs-complete gates;
+- D3 — the wire12 afterimage exists, but G0-A D3-native OwnerInputBinding, Frontier/2, SourceObservation, and companion/receipt consumption still await the B update;
+- D4 — the local-vs-complete afterimage exists, but production SourceVersion/observerDomain, Frontier/2, and weak B->N consumption still await the C update;
+- D5 — the local-vs-complete afterimage exists, but native ordinary-save protection consumption still awaits the C update;
 - D7 — domain/frontier cut, PreparedActionBinding/3, new EffectManifest retention, Action evidence;
 - D8 — Source/Live/Read, reliable/portable state, conflict and collaboration session;
 - D9 — ImportJob/ExportPlan new pins/version;
@@ -241,8 +241,27 @@ At least verify:
 
 Documentation CI success is not product conformance or independent review.
 
-## 10. Fresh review gate
+## 10. G0-A save/interface acceptance additions
 
-The complete coordinated candidate requires a new independent review from scratch over the new proposal, every replacement owner, all 18 D10 files, and the fixed S49 inputs. The author’s current 16/49 full-read plus partial-read provenance does not inherit an older independent 49/49 pass.
+Future implementation additionally proves:
+
+- WriteProtection is frozen before planning; a strict request never mutates into observed_only.
+- observed_only is limited to trusted interactive, one existing live Document, ordinary+replica_local, complete source read/replace, no narrow deny, and zero/single-source write set; phone-only/body-only authority never expands to whole-source weak save.
+- inputRetentionState=retained is not saved; fault injection separately observes retained input, file install, P seal, publication pending, and response delivery.
+- an observed B is never overwritten by weak mode; only a C still unobserved after the final check is the approved risk, and recovery/effects never invent C.
+- unknown installation/provenance is recovery_unknown; equal hash never promotes it to success and retry never changes OperationId.
+- ChangeId is allocated at seal and InstallationNotice/2 contains none; true no_op/control_only never advances content Frontier.
+- SourceObservation separates production SourceVersion domain from observerDomain; observation-epoch changes invalidate old token/selector/evidence.
+- Frontier/2 scope_dependencies admits only proved unrelated non-regressing extension and revalidates original DependencyKey values.
+- D3-native OwnerInputBinding/2 and D3DecisionCompanion/2 share one DecisionKey/P seal and create no second receipt.
+- public receipt exposes SourceVersionRef/1 only; complete Frontier/cross-domain metadata needs explicit capability.
+- DependencyProof/2 negatives cover lifecycle, placement, inbound, relation incidence, Calendar, Registry/rules, authorization, foreign binding, query scan, replica registry, conflict, and execution resource, with no free JSON.
+- Windows/Linux/sync-folder primitives remain future real-platform fault-injection obligations; documentation/API names are not evidence.
+
+Current D1/D3/D4/D5 afterimages do not yet consume this G0-A producer. Dependent new success remains gated until B/C. D7/D8/D9/D10 gates are unchanged.
+
+## 11. Fresh review gate
+
+The complete coordinated candidate requires a new independent review from scratch over the new proposal, every replacement owner, all 18 D10 files, and the fixed S49 inputs. The author’s current 18/49 fixed-S full-read plus partial-read provenance does not inherit an older independent 49/49 pass.
 
 The old B13 result remains REVISE, terminology/bilingual FAIL, P0=0/P1=3/P2=8, eleven OPEN findings. This batch only provides foundational related surfaces and closes/reclassifies none.

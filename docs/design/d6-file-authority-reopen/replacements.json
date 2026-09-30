@@ -19,7 +19,8 @@
         "status",
         "1-4",
         "6-13",
-        "16-17"
+        "16-17",
+        "G0-A DecisionKey/Frontier2/SourceObservation/WriteProtection/save recovery"
       ],
       "consumers": [
         "D1",
@@ -51,7 +52,8 @@
       "changedSections": [
         "status",
         "1-4",
-        "6-16"
+        "6-16",
+        "G0-A closed DecisionKey/Frontier2/WriteProtection/receipt interfaces"
       ],
       "consumers": [
         "D3",
@@ -82,6 +84,36 @@
           "domain": "D6 SourceVersion",
           "from": "1",
           "to": "2"
+        },
+        {
+          "domain": "D6 Frontier",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 ObservationScope",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 DependencyProof",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 InstallationNotice",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 ContentCompletionProof",
+          "from": "1",
+          "to": "2"
+        },
+        {
+          "domain": "D6 WriteProtection",
+          "from": "none",
+          "to": "1 (strict|observed_only)"
         }
       ]
     },
@@ -97,7 +129,8 @@
       "changedSections": [
         "status",
         "complete concept table",
-        "D6-FA-r01 controlled additions"
+        "D6-FA-r01 controlled additions",
+        "G0-A Write Protection and current D6 type definitions"
       ],
       "consumers": [
         "D3",
@@ -126,7 +159,8 @@
         "schema",
         "affected definitions",
         "D6-FA-r01 concepts",
-        "crossStageBindings"
+        "crossStageBindings",
+        "G0-A Write Protection and current D6 controlled definitions"
       ],
       "consumers": [
         "D3",
@@ -155,7 +189,8 @@
       "changedSections": [
         "status",
         "1-6",
-        "D6-FA-r01 acceptance matrix"
+        "D6-FA-r01 acceptance matrix",
+        "G0-A save/Frontier2/SourceObservation conformance"
       ],
       "consumers": [
         "D1",

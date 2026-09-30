@@ -370,8 +370,8 @@
       "en": "Source Version",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "SourceVersion/2将完整EntityRef与CommitDomain、observationEpoch及managed revision+ChangeId或external observation sequence绑定；跨domain裸revision不可比较",
-      "exclusions": "不是只靠摘要防ABA；不是DocumentRef；旧SourceVersion/1只服务历史decoder/replay",
+      "definition": "SourceVersion/2 identifies the actual source version and production CommitDomain; current replica observation is separately bound by protected SourceObservation/1, and SourceVersionRef/1 selects that complete observation.",
+      "exclusions": "Not bare revision, digest, DocumentRef, observer-domain identity, or proof that the current filesystem observation is continuous.",
       "ownedNames": [
         "SourceVersion",
         "sourceVersions",
@@ -429,7 +429,7 @@
       "en": "Control Commit Protocol",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "D6 own v2 ledger的闭合prepare/plan/file-install/durable-seal/receipt/replay协议；operation key含CommitDomain，D3 identity/lifecycle仍走其owner wire",
+      "definition": "D6 v2 uses one DecisionKey/P chain for prepare, plan, install, P seal, receipt and replay; portable ChangeId is allocated at seal, D3 primary receipt uses a same-P companion, and observed_only creates no second decision chain.",
       "exclusions": "不包装D3绕过其阶段；不是文件hash CAS；不是第二Action领域",
       "ownedNames": [
         "D6ControlCommit",
@@ -572,7 +572,7 @@
       "en": "Dependency Completeness Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "受信完整读取及其正负范围版本证明，绑定CommitDomain/Frontier/observation epoch；部分index只能在证明覆盖时作为扫描优化",
+      "definition": "DependencyProof/2 stores the trusted complete positive/negative DependencyKey set plus continuity stamps, bound to CommitDomain/Frontier/2; a partial index is only a scan optimization when coverage is proved.",
       "exclusions": "不是客户端readSet声明；不是building index；不自动证明结果可观察",
       "ownedNames": [
         "DependencyProof",
@@ -743,7 +743,7 @@
       "en": "Constraint Observation Scope",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "在作者/范围读取前固定的结果观察上界，覆盖空范围并按当前权限证明",
+      "definition": "ObservationScope/2 fixes local_source, owner_fields, local_structure, workspace_constraints, control_only, or prepared_workspace observation upper bounds before author/range reads.",
       "exclusions": "不是实际写集或内部完整读取证明",
       "ownedNames": [
         "ObservationScope",
@@ -1018,8 +1018,8 @@
       "en": "Frontier",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "每CommitDomain至多一个最大已接纳ChangeId的规范向量，表达已知连续内容前缀",
-      "exclusions": "不是全局提交序、Query row set或同步provider状态",
+      "definition": "Frontier/2 records verified continuous sealed causal prefixes per CommitDomain; it does not itself prove payload materialization, complete Query scope, or sync completion.",
+      "exclusions": "Not a global commit sequence, Query row set, provider status, or payload/materialization certificate; Frontier/1 is legacy only.",
       "ownedNames": [
         "Frontier",
         "frontier"
@@ -1034,7 +1034,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "接纳remote head后形成新本域change / 缺sidecar不能提前推进",
+      "exampleAndCounterexample": "accept verified remote head without replaying remote OperationId / incomplete payload or placeholder never becomes complete scope",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1180,7 +1180,7 @@
       "en": "Installation Notice",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "触碰portable current前耐久写入的不可变ChangeId/write-set/before-after摘要记录，用于部分同步和P丢失时圈定风险",
+      "definition": "InstallationNotice/2 is the immutable DecisionKey/base-Frontier/before-after component record durably written before portable current mutation; it contains no ChangeId because ChangeId is allocated only at P seal.",
       "exclusions": "不是commit proof、receipt、approval或execution authority",
       "ownedNames": [
         "InstallationNotice",
@@ -1207,7 +1207,7 @@
       "en": "Content Completion Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "P seal后发布到portable metadata的不可变证明，绑定ChangeId、semantic state、frontier推进及actual after components",
+      "definition": "ContentCompletionProof/2 is the post-seal portable proof binding DecisionKey, sealed ChangeId, semantic state, WriteProtection, actual after components/source changes, and Frontier/2 advance; restored is a separate no-ChangeId outcome.",
       "exclusions": "不授receipt读取、Money/approval消费或execution takeover",
       "ownedNames": [
         "ContentCompletionProof",
@@ -1263,7 +1263,7 @@
       "en": "Reliable Save State",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "区分not_saved与P seal后的reliable；portable publication由独立状态读取",
+      "definition": "Distinguishes not_saved, strict reliable, trusted-human ordinary-file durable_observed_only, and not_applicable; input retention and portable publication are separate state.",
       "exclusions": "不等于Draft已保存、sync上传或ContentCompletionProof已发布",
       "ownedNames": [
         "ReliableSaveState",
@@ -1279,7 +1279,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "P seal后可报reliable / proof pending仍不能报portable published",
+      "exampleAndCounterexample": "strict P seal -> reliable; eligible observed_only P seal -> durable_observed_only / neither means portable published",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1311,6 +1311,35 @@
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
+    },
+    {
+      "conceptId": "weftext.term.write-protection",
+      "zh": "写入保护级别",
+      "en": "Write Protection",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "Closed strict|observed_only exclusion level for external competing writers during one author-file installation; orthogonal to ContentGuarantee, SemanticState, ReliableSaveState, and approval.",
+      "exclusions": "Not permission, user confirmation, Query completeness, automation approval, or CAS; observed_only is restricted to the trusted human one-Document ordinary-save path.",
+      "ownedNames": [
+        "WriteProtection",
+        "writeProtection"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; no compatibility alias.",
+      "cli": "No CLI verb/flag frozen in D6; product surfaces project the actual save guarantee only after their consumer update.",
+      "localeKey": "storage.write_protection",
+      "uiZh": "写入保护级别",
+      "uiEn": "Write Protection",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "best-effort-save",
+        "weak-CAS",
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "trusted interactive one-Document ordinary save may be observed_only / Action, Automation, approval or Money execution cannot downgrade strict",
+      "firstFreeze": "D6-FA-r01 G0-A candidate; not activated",
+      "migration": "No published compatibility alias. Historical saved evidence retains its original protocol.",
+      "deletionTarget": "No historical evidence deletion."
     }
   ],
   "crossStageBindings": [
@@ -1434,5 +1463,5 @@
       "contract": "D6 owns the durable continuity container; D10/Money owns approval/claim/external/Money sub-schemas and sourceOccurrenceKey semantics."
     }
   ],
-  "candidateStatus": "D6-FA-r01 partial coordinated candidate; not accepted or activated"
+  "candidateStatus": "D6-FA-r01 G0-A D6 owner afterimages; partial coordinated candidate; not accepted or activated"
 }

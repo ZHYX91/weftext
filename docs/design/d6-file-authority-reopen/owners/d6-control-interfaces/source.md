@@ -58,43 +58,53 @@ Portable ReplicaRecord is exactly:
 
 registrationSequence starts at 1 and increments continuously per Workspace. It is distinct from content change sequence and commit sequence. retired never becomes active again; a returning/new device gets a new epoch.
 
-### 1.4 ChangeId/1 and Frontier/1
+### 1.4 DecisionKey/2, ChangeId/1, and Frontier/2
 
-ChangeId is exactly:
+DecisionKey/2 is:
+~~~json
+{"workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"operationId":"uuid-v4"}
+~~~
+P still indexes workspaceId, D3-CJ/3(commitDomain), and operationId. protocolOwner is not part of the key and one key has exactly one D3|D6 owner; changing owner or canonical request at the same key is operation_id_conflict.
 
+ChangeId/1 is:
 ~~~json
 {"commitDomain":<CommitDomain/2>,"sequence":<Counter>}
 ~~~
+sequence is 1..MAX. A portable effect receives ChangeId only by checked allocation inside P seal. prepare/planning/staging/InstallationNotice reserve no successful sequence. Failure, paused, recovery_unknown, control_only, and true no_op create no content ChangeId. ChangeId is not OperationId, EntityRef, sourceOccurrenceKey, or global time.
 
-sequence is 1..MAX. Content change sequence begins at 1 per CommitDomain and increments continuously. The domain Workspace equals the current Workspace. Ordering is CommitDomain key followed by numeric sequence.
-
-Frontier is exactly:
-
+Frontier/2 is:
 ~~~json
-{"kind":"d6_frontier","version":1,"heads":[<ChangeId>...]}
+{"kind":"d6_frontier","version":2,"heads":[<ChangeId/1>...]}
+~~~
+heads may be empty; otherwise CommitDomain-key sorted and unique by domain, meaning verified continuous sealed causal prefixes. It proves neither payload materialization, placeholder download, complete Query scope, nor execution responsibility. frontierPolicy is exact|scope_dependencies: exact requires full Frontier equality; scope_dependencies admits only a proved non-regressing unrelated extension and revalidates original source/control/authorization/positive-negative dependency scope. It never changes target, Query, source, or canonical request. Frontier/1 is legacy decoder/replay only.
+
+### 1.5 SourceVersion/2, SourceObservation/1, and SourceVersionRef/1
+
+SourceVersion/2 retains its complete closed union.
+
+Managed:
+~~~json
+{"kind":"managed_source_version","version":2,"entityRef":<EntityRef>,"commitDomain":<CommitDomain/2>,"observationEpoch":<Counter>,"revision":<Counter>,"changeId":<ChangeId/1>}
 ~~~
 
-heads may be empty only for genesis/no content changes. Otherwise they are sorted by CommitDomain key, with at most one entry per domain. An entry means the continuous accepted prefix 1..sequence. Duplicate domains, sequence 0, and foreign Workspace entries are rejected. Frontier equality is complete canonical-byte equality; a set digest is never a substitute.
-
-### 1.5 SourceVersion/2
-
-SourceVersion/2 is a closed union.
-
-Managed source:
-
-~~~json
-{"kind":"managed_source_version","version":2,"entityRef":<EntityRef>,"commitDomain":<CommitDomain/2>,"observationEpoch":<Counter>,"revision":<Counter>,"changeId":<ChangeId>}
-~~~
-
-External observation:
-
+External:
 ~~~json
 {"kind":"external_source_version","version":2,"entityRef":<EntityRef>,"commitDomain":<CommitDomain/2>,"observationEpoch":<Counter>,"externalSequence":<Counter>}
 ~~~
 
-observationEpoch, revision, and externalSequence are 1..MAX. Managed changeId.commitDomain equals commitDomain. Document entityRef is the owning NodeRef; Resource/Annotation use their complete Refs. Managed revision increments once for a real managed source change in the same domain+entity; fresh=1 and raw no-op does not increment. observationEpoch increments whenever continuity of external observation cannot be proved even if final bytes are identical. externalSequence increments for each newly observed external state within an epoch that cannot be attributed to a known ChangeRecord.
+observationEpoch/revision/externalSequence are 1..MAX. Managed changeId.commitDomain equals production commitDomain. Document entityRef is owner NodeRef; Resource/Annotation use complete Refs. Managed revision increments once only for a real managed source change in production domain+entity, fresh=1, and raw no-op does not increment. observationEpoch advances whenever external observation continuity is unproved even if bytes later match; externalSequence advances for each new external state in an epoch not attributable to a known ChangeRecord. Managed/external never compare equal and bare revisions from different production CommitDomains are incomparable.
 
-Managed and external variants are never equal. Numeric revisions from different CommitDomains are incomparable. Legacy D2/D3 revision-token lexical ownership is unchanged; a new consumer also binds SourceVersion/2 and never uses a bare Counter across domains.
+Current replica/Server observation is separately bound by SourceObservation/1:
+~~~json
+{"kind":"d6_source_observation","version":1,"observerDomain":<CommitDomain/2>,"entityRef":<EntityRef>,"sourceVersion":<SourceVersion/2>,"observationEpoch":<Counter>,"fileObjectBinding":<FileObjectBinding/1>,"evidencePins":[<PinRef/2>...]}
+~~~
+observerDomain equals current operation CommitDomain, entityRef equals sourceVersion.entityRef, and evidencePins are token-sorted/unique. Placeholder, missing metadata, conflict branch, or unproved observation continuity yields no successful SourceObservation. sourceVersion.commitDomain may differ from observerDomain.
+
+Narrow public version projection is SourceVersionRef/1:
+~~~json
+{"entityRef":<EntityRef>,"sourceToken":<Token>}
+~~~
+sourceToken tag=d6_source_observation/1 selects complete protected SourceObservation rather than bare revision/digest/production SourceVersion. Watcher gap, external replace, or discontinuous rematerialization invalidates the old token. Legacy D2/D3 revision-token lexical ownership remains unchanged.
 
 ### 1.6 SemanticState/1 and ContentGuarantee
 
@@ -116,41 +126,41 @@ Externally invalid strict-UTF8/D2 bytes are not encoded as SemanticState. Curren
 
 ContentGuarantee is the exact text enum replica_local|managed_atomic.
 
-## 2. FileObjectBinding and installation qualification (trusted internal types)
+## 2. FileObjectBinding, WriteProtection, and installation qualification (trusted internal types)
 
 FileObjectBinding/1 is never client-constructed.
 
 Absent:
-
 ~~~json
 {"kind":"absent","backendToken":<Token>,"relativePath":<PortableRelativePath>,"observationEpoch":<Counter>,"parentGenerationToken":<Token>}
 ~~~
-
 Present:
-
 ~~~json
 {"kind":"present","backendToken":<Token>,"relativePath":<PortableRelativePath>,"observationEpoch":<Counter>,"objectGenerationToken":<Token>,"byteLength":<Counter>,"sha256":"64-lowercase-hex"}
 ~~~
+PortableRelativePath remains non-empty UTF-8 with "/" separators and forbids absolute/empty/"."/".."/NUL/platform alias/reparse escape; host still proves canonical containment and path is not identity.
 
-PortableRelativePath is a non-empty UTF-8 scalar path using “/”, with no absolute form, empty component, ".", "..", NUL, platform alias, or reserved reparse escape. The host still proves canonical containment. Path is not identity.
+WriteProtection is strict|observed_only, orthogonal to ContentGuarantee/SemanticState/ReliableSaveState.
 
-FileInstallCapability/1 is one of:
-
+FileInstallCapability/2:
 ~~~json
 {"kind":"create_only","parentGenerationToken":<Token>}
 ~~~
-
+or
 ~~~json
 {"kind":"conditional_replace","expectedObjectGenerationToken":<Token>}
 ~~~
-
+or
 ~~~json
 {"kind":"exclusive_write_window","windowToken":<Token>,"expectedObjectGenerationToken":<Token>}
 ~~~
+or
+~~~json
+{"kind":"observed_replace","observedObjectGenerationToken":<Token>}
+~~~
+The first three are strict: conditional_replace uses a real trusted generation and read-hash-then-rename is not CAS; exclusive excludes all writers in the threat model and advisory locking is insufficient; create_only is expected-absent only. observed_replace is not CAS, records only the final verified observation, and is usable only under §4.1 observed_only eligibility.
 
-Only a trusted backend issues these. conditional_replace must compare a real trusted object generation; “read hash then rename” is not CAS. exclusive_write_window must exclude every writer in the supported threat model from modifying/replacing/deleting the target; advisory-only locks do not qualify.
-
-If an existing target lacks conditional_replace/exclusive_write_window, prepare may retain Draft/after pins but commit returns install_unavailable before touching current state or remains planned+paused. It never reports reliable success. create_only is valid only for expected absent.
+Every path still proves staged bytes, installed data, required directory-entry/rename durability, containment, object type, and installation provenance. Observed competition, revocation, narrow deny, competing Core writer, unknown install, or lost P continuity gets no observed_only exemption; strict never downgrades in place.
 
 ## 3. InputDescriptor/2, PinRef/2, and PreparedIntent/2
 
@@ -166,83 +176,57 @@ A source pin also stores the complete SourceVersion/2 and EntityRef in its prote
 
 ### 3.2 OwnerInputBinding/2
 
-OwnerInputBinding/2 has exact semantic members:
+~~~json
+{"kind":"d6_owner_input_binding","version":2,"protocolOwner":"D3|D6|D7|D8|D9","ownerKind":<controlled-text>,"canonicalDescriptorBytes":<immutable-bytes>,"pinRefs":[<PinRef/2>...]}
+~~~
+protocolOwner is input-descriptor owner, not final decision owner; DecisionKey still permits only D3 or D6 decision. ownerKind is owner-version frozen, never free callback/JSON; descriptor is complete and large bytes use typed PinRef slots only. D3 reserves d3_identity_operation/12 and remains owner_update_required until its consumer update; D7/D8/D9 likewise.
+
+### 3.3 ObservationScope/2
+
+Closed profiles: local_source{workspaceRef,commitDomain,ownerNodeRef}, owner_fields{workspaceRef,commitDomain,ownerNodeRef,fieldIds}, local_structure{workspaceRef,commitDomain,operation,subjects,parentCandidates}, workspace_constraints{workspaceRef,commitDomain}, control_only{workspaceRef,commitDomain}, prepared_workspace{workspaceRef,commitDomain}. local_structure.operation=create_node|move_node|reorder_node|trash. Scope is observation upper bound, not write permission/write set/completeness proof. Policy/3 explicit structure_state and portable_frontier_state disclose only portable structure and complete Frontier/2 respectively.
+
+### 3.4 DependencyProof/2
 
 ~~~json
-{"kind":"d6_owner_input_binding","version":2,"protocolOwner":"D6|D7|D8|D9","ownerKind":<controlled-text>,"canonicalDescriptorBytes":<immutable-bytes>,"pinRefs":[<PinRef/2>...]}
+{"kind":"d6_dependency_proof","version":2,"workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"baseFrontier":<Frontier/2>,"entries":[{"key":<DependencyKey/2>,"stamp":{"epoch":<Token>,"revision":<Counter>},"evidencePins":[<PinRef/2>...]}...]}
 ~~~
+entries are canonical-sorted/unique. stamp.epoch is range continuity; deleting I, watcher gap, rebuild, or owner-version change never reuses it. DependencyKey/2 is closed to source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource, each with owner-defined closed key; there is no free JSON. Empty range still needs enumeration+stamp and index-ready/hash proves nothing alone.
 
-ownerKind is frozen by the actual owner version; there is no free callback. canonicalDescriptorBytes are the complete owner-defined canonical descriptor with large source/resource byte fields replaced by typed PinRef slots; a digest alone is insufficient. pinRefs are unique and sorted by token bytes and correspond one-to-one with descriptor slots. D7/D8/D9 ownerKind values cannot produce managed v2 success until those afterimages exist.
-
-### 3.3 InputDescriptor/2
-
-InputDescriptor/2 is exactly:
+### 3.5 InputDescriptor/2
 
 ~~~json
-{
-  "kind":"d6_input_descriptor",
-  "version":2,
-  "workspaceRef":<WorkspaceRef>,
-  "commitDomain":<CommitDomain/2>,
-  "intentKind":<controlled-text>,
-  "saveProfile":"ordinary|complete|control_only",
-  "guarantee":"replica_local|managed_atomic",
-  "expectedFrontier":<Frontier/1>,
-  "sourceInputs":[{"entityRef":<EntityRef>,"sourceVersion":<SourceVersion/2>,"role":"before|dependency"}...],
-  "controlInputs":[{"kind":<closed-control-kind>,"version":<Counter>,"key":<owner-closed-key>}...],
-  "ownerInput":<OwnerInputBinding/2>
-}
+{"kind":"d6_input_descriptor","version":2,"workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"intentKind":<controlled-text>,"saveProfile":"ordinary|complete|control_only","guarantee":"replica_local|managed_atomic","expectedFrontier":<Frontier/2>,"frontierPolicy":"exact|scope_dependencies","observationScope":<ObservationScope/2>,"sourceInputs":[{"entityRef":<EntityRef>,"observation":<SourceObservation/1>,"role":"before|dependency"}...],"controlInputs":[{"key":<DependencyKey/2>,"stamp":{"epoch":<Token>,"revision":<Counter>}}...],"ownerInput":<OwnerInputBinding/2>}
 ~~~
+source/control inputs are canonical-sorted/unique; complete equality compares descriptor, owner descriptor, exact pins, and SourceObservation, never hash alone.
 
-sourceInputs sort by EntityRef canonical key then role before=0/dependency=1; each pair is unique. control kind is closed to policy|registry|placement_range|lifecycle_range|relation_range|calendar_scope|replica_registry|conflict_record|execution_resource and sorts by fixed kind rank plus owner key. key is an existing owner-defined closed value, never a free JSON path.
+### 3.6 PreparedIntent/2
 
-Complete equality requires InputDescriptor canonical bytes, owner descriptor bytes, and each referenced exact pin to match. Equal SHA-256 does not mean equal input.
+Immutable members: kind,version,planToken,operationId,workspaceRef,commitDomain,principalAudienceToken,inputDescriptor,beforeCut,proposedState,mutationFootprint,dependencyProof,observationProof,budgetBinding,pinDirectory,installationPlan,inputRetentionState,expiresAt,previewBinding.
 
-### 3.4 PreparedIntent/2
-
-PreparedIntent/2 exact semantic members are:
-
-kind, version, planToken, operationId, workspaceRef, commitDomain, principalAudienceToken, inputDescriptor, beforeCut, proposedState, mutationFootprint, dependencyProof, observationProof, budgetBinding, pinDirectory, installationPlan, expiresAt, previewBinding.
-
-kind=d6_prepared_intent and version=2. planToken tag=d6_plan/2. pinDirectory contains all PinRef/2 plus protected exact bytes/source bindings. installationPlan freezes component write set, planned ChangeId/SourceVersion/metadata versions, required BackendQualification, and portable records; commit never resamples another after state. previewBinding only references the owner’s complete preview; D6 does not invent a second effects format.
-
-PreparedIntent/2 is not an author decision. An unreferenced prepared record may release large pins after expiry according to retention. Once planned/saved or protected by external unknown/conflict/approval-money, a last-reference pin is not removed by preview TTL.
+kind=d6_prepared_intent/version=2; planToken tag=d6_plan/2. inputRetentionState=not_retained|retained|unavailable; retained requires durable proposal, actually-read before, and required bindings, and prepared/retained is not saved. installationPlan freezes write set, after bytes, owner versions, recovery, required WriteProtection/portable records, preallocates no ChangeId, and never resamples at commit. previewBinding references owner preview only; last-reference pins retain original protection/retention rules.
 
 ## 4. D6 v2 prepare and commit requests
 
 ### 4.1 Existing Document source-save prepare
 
-D6-owned ordinary/complete existing-Document source prepare is exactly:
-
 ~~~json
-{
-  "wireVersion":2,
-  "kind":"d6_source_save_prepare",
-  "workspaceRef":<WorkspaceRef>,
-  "commitDomain":<CommitDomain/2>,
-  "ownerNodeRef":<NodeRef>,
-  "expectedSourceVersion":<SourceVersion/2>,
-  "expectedFrontier":<Frontier/1>,
-  "saveProfile":"ordinary|complete",
-  "guarantee":"replica_local|managed_atomic",
-  "source":<text>,
-  "budget":<BudgetBinding>
-}
+{"wireVersion":2,"kind":"d6_source_save_prepare","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"ownerNodeRef":<NodeRef>,"expectedSourceToken":<Token>,"saveProfile":"ordinary|complete","guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","source":<text>,"budget":<BudgetBinding>}
 ~~~
+ownerNodeRef belongs to Workspace; expectedSourceToken tag=d6_source_observation/1 selects complete SourceObservation/1 under current authorization. source is immediately exact-pinned and commit carries no source. Physical-invalid external still uses repair.
 
-ownerNodeRef belongs to the Workspace; expectedSourceVersion.entityRef and domain match. source is proposal input and Core immediately pins its exact UTF-8 bytes. The canonical commit request never includes it. Physical-invalid external bytes use repair/external-observation paths, not this API.
+ordinary requires D2 valid and actually modified local typed facts; legitimate unproved complete obligations -> semantic_pending. complete requires every applicable D4/D5/D7 duty and never downgrades.
 
-ordinary requires D2 valid plus all actually modified local typed facts. Allowed unproved complete obligations become semantic_pending. complete requires every applicable D4/D5/D7 complete obligation; failure remains semantic/dependency/availability and never auto-downgrades.
+observed_only closed eligibility: trusted interactive_source_save; one existing live Document; ordinary+replica_local; complete source read/replace; no applicable body/Field/node-control deny; author-source write set empty or that Document; no identity/parent/order/lifecycle/shared policy/Registry/Calendar-scope/other-entity mutation; Draft Base=selected SourceObservation. stale Base, observed external change, or continuity gap -> conflict/reprepare; noninteractive requires strict.
 
+Owner descriptor:
+~~~json
+{"kind":"d6_source_save_input","version":2,"invocationClass":"interactive_source_save|noninteractive","expectedSourceObservation":<SourceObservation/1>,"proposedSource":<PinRef/2>,"writeProtection":"strict|observed_only"}
+~~~
 Success:
-
 ~~~json
-{"wireVersion":2,"kind":"d6_prepared_intent","planToken":<Token>,"semanticState":<SemanticState/1>}
+{"wireVersion":2,"kind":"d6_prepared_intent","planToken":<Token>,"semanticState":<SemanticState/1>,"writeProtection":"strict|observed_only","inputRetentionState":"retained"}
 ~~~
-
-This is prepared, never saved.
-
-D3 identity/lifecycle/create/move/reorder/Trash/restore/purge are forbidden here. They wait for a D3 afterimage that owns CommitDomain/profile; D6 does not create an equivalent D3 patch.
+This only means proposal/read-before/bindings are durably pinned, not saved. D3 lifecycle, D7 Action, Automation, approval, and Money never use observed_only.
 
 ### 4.2 d6_commit_request/2
 
@@ -254,27 +238,27 @@ Exactly:
 
 No source, patch, budget, preview, or cost override is carried. expectedDomainFenceToken tag=d6_domain_fence/2 binds current domain qualification: active ReplicaEpoch/portable registry/policy/backend epoch for replica and additionally current D3 authority/custody/fence generation for server. It is not permission.
 
-The v2 ledger key is exactly (workspaceId, D3-CJ/3(commitDomain), operationId), with protocolOwner=D6 in the record. Same key/different canonical request is operation_id_conflict. Future D3 wire12 sharing the v2 key also collides by protocol owner; it is not claimed implemented until the D3 afterimage exists.
+The v2 ledger key is exactly (workspaceId, D3-CJ/3(commitDomain), operationId), with protocolOwner=D6 in the record. Same key/different canonical request is operation_id_conflict. The D3 wire12 afterimage exists and shares DecisionKey owner collision, but its G0-A native-descriptor/companion consumer is not updated; until then new protocolOwner=D3 is owner_update_required with zero D3 decision.
 
 ## 5. Unique submit/install/seal/publish order
 
-The only v2 order is:
+1. closed decode/static equality; invalid_request/preflight and zero business reads.
+2. current-principal minimum disclosure, ObservationScope/2, CommitDomain qualification; not_visible on failure.
+3. domain/fence/P continuity; unproved -> domain_unavailable, proven corruption -> integrity_conflict.
+4. read DecisionKey; different owner/request -> operation_id_conflict; saved replays original bytes and planned only resumes original plan.
+5. unseen validates fence, planToken, PreparedIntent/2, inputRetentionState, current auth/owner version.
+6. under frontierPolicy revalidate Frontier/2, SourceObservation, DependencyProof/2, MutationFootprint auth, semantics, budget, unwritten deps; scope_dependencies admits only unrelated non-regressing extension.
+7. planning CAS stores fixed plan/pins/after/recovery/WriteProtection, **allocating no ChangeId**.
+8. before portable-current mutation durably write InstallationNotice/2 with DecisionKey, baseFrontier, WriteProtection, component before/after and no ChangeId.
+9. install: strict uses strict capability only; observed_only is only §4.1 and does final trusted object/event check. Observed competition -> conflict/paused with B/N/current retained; unknown install -> recovery_unknown.
+10. verify written=planned after; unwritten deps/policy/auth/Registry/rules/Frontier/2/control facts against original cut; unknown provenance/late competition/revocation remains paused/conflict/recovery_unknown; no ChangeId yet.
+11. seal: one durable P transaction rechecks plan/auth. A portable effect now allocates ChangeId/SourceVersion and writes committed/receipt/ReliableSaveState/effects/outbox/applicable charge. strict->reliable; observed_only->durable_observed_only; control_only/no_op->not_applicable with no content ChangeId. This is the only decision commit point.
+12. portable publication derives ContentCompletionProof/2 and advances Frontier/2; failure only pending, recovery never reinstalls N, changes OperationId, or recharges.
+13. delivery rechecks current authorization; revocation may hide delivery but never alters decision.
 
-1. closed decode and static Workspace/domain equality; invalid_request/preflight, zero business reads;
-2. current authenticated principal target state disclosure, potential observation profile, and actual CommitDomain-use qualification; only minimum token/audience/domain location may be read; not_visible/preflight on failure;
-3. domain qualification: replica validates active epoch, portable registry/policy, backend identity/observation continuity; server additionally authority/custody/fence. Unprovable -> domain_unavailable; proven corruption -> integrity_conflict;
-4. read v2 ledger key. Different owner/request -> operation_id_conflict. A saved decision replays original bytes after current replay authorization; planned recovers original plan. Preview TTL is irrelevant once a decision exists;
-5. for unseen, expectedDomainFenceToken must be current; validate plan token tag/audience/workspace/domain/expiry and read complete PreparedIntent/2. Missing/wrong audience/tag -> not_visible; known-self expired -> plan_expired;
-6. revalidate Frontier, before source/control versions, actual MutationFootprint authorization, local/complete semantic proof, budget and every unwritten dependency. Deterministic business conflicts may be recorded rejection; availability uncertainty is never recorded as permanent rejection;
-7. planning CAS compares ledger unseen, domain fence, expected Frontier, required dependencies/authorization and persists fixed plan, pins, planned ChangeId/poststate and installation recovery. CAS loser restarts at step 3;
-8. before modifying any current file, durably write InstallationNotice/1; failure leaves planned;
-9. install each component only through BackendQualification. Binding mismatch -> conflict/paused. Unprovable safe install -> install_unavailable/paused. Unknown competing bytes are never overwritten;
-10. installed verification compares written targets against **planned poststate**, not original before. Revalidate unwritten positive/negative dependencies, policy/auth, Registry/rules, frontier control. Produced versions compare to their planned poststate;
-11. seal: one durable-control transaction writes committed, receipt, ReliableSaveState, effects metadata, applicable ApprovalUse/Money charge, and outbox. This is the author-decision commit point;
-12. portable publication writes/flushes ContentCompletionProof/1 and advances portable Frontier. Failure does not roll back step 11; current state is reliable + publication_pending;
-13. response delivery revalidates current authorization. Revocation may hide receipt delivery but never changes a committed decision.
+For observed_only, B is only the actually read/pinned before and never enumerates unread C. Later current=C never rewrites old receipt and publication never reinstalls N. Crash recovery uses §8 and clients never guess. D6 v1/legacy retains original decoder/order.
 
-Crash in steps 9-12 is resolved from the state/read interfaces, never by client inference. D6 v1 keeps its original order/decoder and is never reinterpreted through this sequence.
+True raw no-op effectClass=no_op has empty sourceVersions, InstallationState=not_required, ReliableSaveState=not_applicable, PortablePublicationState=not_applicable; domainCommitSequence may +1 but no ChangeId/source revision/Frontier advances. P-only control uses control_only; portable F/M uses portable.
 
 ## 6. PortableComponentKey, InstallationNotice, ContentCompletionProof
 
@@ -305,136 +289,80 @@ ComponentImage/1 is either {"state":"absent"} or:
 
 version belongs to the component owner. Digest verifies listed bytes; it is not identity.
 
-### 6.2 InstallationNotice/1
+### 6.2 SourceStamp/1 and InstallationNotice/2
 
-Exactly:
-
+SourceStamp/1:
 ~~~json
-{
-  "format":"weftext.installation-notice",
-  "version":1,
-  "workspaceRef":<WorkspaceRef>,
-  "commitDomain":<CommitDomain/2>,
-  "changeId":<ChangeId>,
-  "operationId":"uuid-v4",
-  "guarantee":"replica_local|managed_atomic",
-  "frontierBefore":<Frontier/1>,
-  "components":[{"key":<PortableComponentKey/1>,"before":<ComponentImage/1>,"after":<ComponentImage/1>}...]
-}
+{"kind":"decision_source","version":1,"decisionKey":<DecisionKey/2>,"entityRef":<EntityRef>,"revision":<Counter>,"observationEpoch":<Counter>}
 ~~~
+It is pre-install determinate, not SourceVersion/2 or a second current truth; only committed ContentCompletionProof/2 for the same DecisionKey resolves to sealed SourceVersion.
 
-changeId.domain equals commitDomain. components is non-empty, uniquely keyed, and sorted by fixed PortableComponentKey rank+canonical key. Notice is durable before the first current-component install. It is not a commit proof and contains no receipt, approval, Money, external payload, or credential.
-
-### 6.3 ContentCompletionProof/1
-
-Exactly:
-
+InstallationNotice/2:
 ~~~json
-{
-  "format":"weftext.content-completion",
-  "version":1,
-  "workspaceRef":<WorkspaceRef>,
-  "commitDomain":<CommitDomain/2>,
-  "changeId":<ChangeId>,
-  "operationId":"uuid-v4",
-  "guarantee":"replica_local|managed_atomic",
-  "semanticState":<SemanticState/1>,
-  "frontierBefore":<Frontier/1>,
-  "frontierAfter":<Frontier/1>,
-  "components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...],
-  "receiptDigest":"sha256:64-lowercase-hex"
-}
+{"format":"weftext.installation-notice","version":2,"decisionKey":<DecisionKey/2>,"guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","baseFrontier":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"before":<ComponentImage/1>,"after":<ComponentImage/1>}...]}
 ~~~
+components is non-empty, fixed-rank/canonical-key sorted unique. observed_only is §4.1 only; every other portable author plan is strict. Notice is durable before first install and has no ChangeId/receipt/approval/Money/external payload/credential.
 
-frontierAfter equals frontierBefore advanced to changeId.sequence in changeId.domain, never regressing another head. components exactly match the InstallationNotice key set and actual sealed after images. receiptDigest binds control receipt bytes but never grants receipt read or execution authority to another replica. Authenticity comes from the portable trust/record chain plus actual components, not the digest alone.
+### 6.3 ContentCompletionProof/2
 
-## 7. Commit receipt, decision state, and current source state
+Committed:
+~~~json
+{"format":"weftext.content-completion","version":2,"outcome":"committed","decisionKey":<DecisionKey/2>,"changeId":<ChangeId/1>,"guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","semanticState":<SemanticState/1>,"frontierBefore":<Frontier/2>,"frontierAfter":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...],"sourceChanges":[{"entityRef":<EntityRef>,"before":<SourceVersionRef/1|"absent">,"after":<SourceVersionRef/1|"absent">}...],"receiptDigest":"sha256:64-lowercase-hex"}
+~~~
+frontierAfter is frontierBefore plus sealed changeId with no other head regression; components equals notice key set using actual after; sourceChanges is EntityRef-sorted unique. receiptDigest grants no receipt/execution authority. observed_only proves this decision installation and read-before, not absence of an unobserved competitor.
+
+Before seal after every component is safely restored to before:
+~~~json
+{"format":"weftext.content-completion","version":2,"outcome":"restored","decisionKey":<DecisionKey/2>,"baseFrontier":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...]}
+~~~
+restored forbids ChangeId/receipt/semantic success; never generate without proved safe restoration.
+
+## 7. Commit receipt, D3 companion, decision state, and current source
 
 ### 7.1 d6_commit_receipt/2
 
-Exactly:
+~~~json
+{"wireVersion":2,"kind":"d6_commit_receipt","operationId":"uuid-v4","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"domainCommitSequence":<Counter>,"effectClass":"portable|control_only|no_op","guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","sourceVersions":[<SourceVersionRef/1>...],"effectsToken":<Token>}
+~~~
+writeProtection exists only for portable; control_only/no_op omit it and sourceVersions is empty. Portable sourceVersions is EntityRef-sorted unique. Receipt exposes no full Frontier, production SourceVersion, obligations, or decision internals; full Frontier needs portable_frontier_state and domainCommitSequence needs domain-scoped commit_sequence_state. Seal-time receipt bytes are immutable across publication/current changes.
+
+### 7.2 D3DecisionCompanion/2
 
 ~~~json
-{
-  "wireVersion":2,
-  "kind":"d6_commit_receipt",
-  "operationId":"uuid-v4",
-  "workspaceRef":<WorkspaceRef>,
-  "commitDomain":<CommitDomain/2>,
-  "domainCommitSequence":<Counter>,
-  "changeId":<ChangeId>,
-  "plannedFrontierAfter":<Frontier/1>,
-  "guarantee":"replica_local|managed_atomic",
-  "reliableSave":"reliable",
-  "portablePublicationAtReceipt":"pending",
-  "semanticState":<SemanticState/1>,
-  "sourceVersions":[<managed SourceVersion/2>...],
-  "effectsToken":<Token>
-}
+{"kind":"d6_decision_companion","version":2,"decisionKey":<DecisionKey/2>,"domainCommitSequence":<Counter>,"effectsToken":<Token>}
 ~~~
+Not a second receipt; future D3 primary receipt and companion share one P transaction. Until B, new protocolOwner=D3 -> owner_update_required with zero D3 decision.
 
-domainCommitSequence is the D3/D6 committed author/control sequence inside one CommitDomain. Fresh domain starts at 0 and first commit is 1. Different domain sequences are not a workspace-global activity order. A later D7 commit_sequence_state consumer must be domain-scoped. Policy/2 legacy behavior remains historical only.
-
-sourceVersions contains only actually changed sources, sorted by EntityRef canonical key. Receipt bytes are immutable at seal, so portablePublicationAtReceipt is always pending for a file-backed content decision; later publication never rewrites receipt and is read from decision state. A raw-no-op/control decision uses the appropriate owner contract rather than inventing a content ChangeId.
-
-### 7.2 d6_decision_state_read
+### 7.3 d6_decision_state_read
 
 Request:
-
 ~~~json
 {"wireVersion":2,"kind":"d6_decision_state_read","protocolOwner":"D6|D3","request":<original-complete-request>}
 ~~~
-
-D3 wire12 does not yet exist, so the new D3 branch returns unsupported_version until coordinated activation. The complete original request is required rather than bare OperationId.
-
 Success:
-
 ~~~json
-{
-  "wireVersion":2,
-  "kind":"d6_decision_state",
-  "protocolOwner":"D6",
-  "decisionState":"planned|committed|rejected|terminal_failed",
-  "installationState":"planned|installing|installed|conflict|recovery_unknown|paused_authorization|paused_capacity",
-  "reliableSaveState":"not_saved|reliable",
-  "portablePublicationState":"not_published|pending|published|conflict",
-  "decisionSourceVersions":[<SourceVersion/2>...]
-}
+{"wireVersion":2,"kind":"d6_decision_state","protocolOwner":"D6|D3","decisionState":"planned|committed|rejected|terminal_failed","installationState":"not_required|planned|installing|installed|conflict|recovery_unknown|paused_authorization|paused_capacity","reliableSaveState":"not_saved|reliable|durable_observed_only|not_applicable","inputRetentionState":"not_retained|retained|unavailable","portablePublicationState":"not_published|pending|published|conflict|not_applicable"}
 ~~~
+strict portable -> reliable; observed_only -> durable_observed_only; control/no_op -> not_applicable. inputRetention is independent. Complete original request prevents ledger probe; auth order remains closed decode -> disclosure/scope -> domain continuity -> DecisionKey/fingerprint -> state. Revocation may return not_visible without changing history.
 
-decisionSourceVersions belong to the original decision, not current workspace source. If r5 is committed and current source is r6, this response remains r5; current source uses the separate API.
+### 7.4 d6_current_source_read
 
-Authorization order is closed decode -> current replay disclosure/target scope -> CommitDomain continuity -> ledger key/fingerprint -> state. Revoked -> not_visible without changing decision. Unprovable continuity -> domain_unavailable. Original-request mismatch -> state_unavailable and no other-key disclosure.
-
-### 7.3 d6_current_source_read
-
-Request:
-
+Request still has workspaceRef, commitDomain, entityRef and source-read permission precedes domain/backend/FileBinding.
+Managed:
 ~~~json
-{"wireVersion":2,"kind":"d6_current_source_read","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"entityRef":<NodeRef|ResourceRef|AnnotationRef>}
+{"wireVersion":2,"kind":"d6_current_source","state":"managed","sourceVersionRef":<SourceVersionRef/1>,"semanticState":<SemanticState/1>,"byteLength":<Counter>}
 ~~~
-
-Current entity/source read permission precedes domain/backend and current FileBinding/metadata access.
-
-Managed success:
-
+External:
 ~~~json
-{"wireVersion":2,"kind":"d6_current_source","state":"managed","sourceVersion":<managed SourceVersion/2>,"semanticState":<SemanticState/1>,"byteLength":<Counter>}
+{"wireVersion":2,"kind":"d6_current_source","state":"external","sourceVersionRef":<SourceVersionRef/1>,"validation":"d2_valid|unverified","byteLength":<Counter>}
 ~~~
-
-External valid/pending adoption:
-
+External-invalid:
 ~~~json
-{"wireVersion":2,"kind":"d6_current_source","state":"external","sourceVersion":<external SourceVersion/2>,"validation":"d2_valid|unverified","byteLength":<Counter>}
+{"wireVersion":2,"kind":"d6_current_source","state":"external_invalid","sourceVersionRef":<SourceVersionRef/1>,"validation":"physical_invalid|d2_invalid","byteLength":<Counter>}
 ~~~
+Bytes still use authorized source/ByteHandle/repair. Owners needing full version use protected SourceObservation/DependencyProof.
 
-External invalid:
-
-~~~json
-{"wireVersion":2,"kind":"d6_current_source","state":"external_invalid","sourceVersion":<external SourceVersion/2>,"validation":"physical_invalid|d2_invalid","byteLength":<Counter>}
-~~~
-
-These objects do not contain full bytes. Bytes use the corresponding authorized source/ByteHandle/repair path. external/unverified never means managed commit success.
+Effects metadata stores effectClass, WriteProtection, owner preview binding; observed_only before is observed_before/read_before and never claims every displaced external byte. Until D7 effects consumer update, owner_update_required.
 
 ## 8. Installation state and crash recovery
 
@@ -445,6 +373,10 @@ Recovery reads P, then classifies actual components only as exact_before, exact_
 A written exact_after component is validated against planned after in commit step 10; unwritten dependencies remain compared to before/cut expectations. This separation is mandatory and prevents the incorrect rule “after installation every expectedSourceVersion must still be before”.
 
 planned recovery reuses the original InputDescriptor, pins, ChangeId, versions, OperationId, and budget counters. If plan pins/clock/domain continuity cannot be proved, remain planned+paused/recovery_unknown; never reprepare another decision in its place.
+
+### 8.1 observed_only recovery boundary
+
+observed_only read-before is only the actually read/pinned before and never enumerates C unseen after the final check. An overwritten unseen C may have no recoverable copy; that is the approved boundary and no record invents one. Any observed competition remains third_state/conflict. Unknown install is recovery_unknown and equal hash never guesses success. Committed publication pending only resumes the same ContentCompletionProof/2 and never reinstalls N.
 
 ## 9. ConflictKey/1, ConflictRecord/1, and resolution prepare
 
@@ -506,7 +438,7 @@ source_merge/choose_source_head reload every head/base/current permission and re
 
 Policy/3 retains top-level version,revision,grants with version=3. Policy/1/2 keep their original decoders and never auto-upgrade. grants remain subject,effect,scope,capabilities with deny-before-allow and default deny. Every Policy/2 capability remains unchanged.
 
-New no-argument capabilities are replica_register | replica_retire | conflict_read | conflict_resolve | execution_custody_admin.
+New no-argument capabilities are replica_register | replica_retire | conflict_read | conflict_resolve | execution_custody_admin | structure_state | portable_frontier_state. structure_state discloses portable parent/order/structural scope only; portable_frontier_state discloses complete Frontier/2 only; neither grants source/Field/decision/write.
 
 They imply no source/Field/body/lifecycle permission:
 
@@ -563,7 +495,7 @@ d6_error/2 is exactly:
 {"wireVersion":2,"kind":"d6_error","code":<code>,"disposition":"preflight|recorded|paused|terminal"}
 ~~~
 
-code is closed to invalid_request | unsupported_version | not_visible | domain_unavailable | integrity_conflict | operation_id_conflict | plan_expired | dependency_conflict | semantic_rejected | budget_exceeded | install_unavailable | conflict | conflict_changed | state_unavailable | owner_update_required | effects_unavailable | transaction_aborted.
+code is closed to invalid_request | unsupported_version | not_visible | domain_unavailable | integrity_conflict | operation_id_conflict | plan_expired | source_unavailable | proof_unavailable | dependency_conflict | semantic_rejected | budget_exceeded | install_unavailable | conflict | conflict_changed | state_unavailable | owner_update_required | effects_unavailable | transaction_aborted.
 
 Rules:
 
@@ -609,7 +541,7 @@ Control inspection v2 adds targets decision_state (complete original request req
 
 ## 17. Legacy replay and coordinated activation
 
-D6 wire1 commit/receipt/error, Policy/1/2, SourceVersion/1, legacy Token tags, PreparedIntent, D7 PreparedActionBinding/1,/2, D8 PreparedEditBinding/1, and their planned/saved decisions continue with original bytes, fingerprint, authorization/continuity and pin-retention rules.
+D6 wire1 commit/receipt/error, Policy/1/2, SourceVersion/1, Frontier/1, InstallationNotice/1, ContentCompletionProof/1, legacy Token tags, PreparedIntent, D7 PreparedActionBinding/1,/2, D8 PreparedEditBinding/1, and their planned/saved decisions continue with original bytes, fingerprint, authorization/continuity and pin-retention rules.
 
 Forbidden: re-encoding an old request as wire2; adding CommitDomain/ChangeId to an old receipt; interpreting an old D4 gate as semantic_pending; using new retention to delete evidence promised by the old contract; treating equal source hash as proof that SourceVersion/1 equals a new-domain source.
 

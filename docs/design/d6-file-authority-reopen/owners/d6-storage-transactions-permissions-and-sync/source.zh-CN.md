@@ -100,19 +100,19 @@ Derived index 是设备本地 SQLite，状态闭集 building|ready|unavailable�
 
 Draft 与 D8 原 state machine 保持设备/session 私有。Draft 保存用户 proposal、input log、selection 与 base binding；它没有 author revision、ChangeId、D3 locator authority 或 committed status。普通 cache 清理不能静默删除 dirty Draft。durable save 与 portable publication 是独立可读状态，UI 不得以 Draft persistence、worker success、HTTP 200 或 sync provider upload 代替它们。
 
-## 4. CommitDomain、ReplicaEpoch、ChangeId、Frontier 与 SourceVersion
+## 4. CommitDomain、ReplicaEpoch、DecisionKey、ChangeId、Frontier 与来源观察
 
-closed wire 形状由 Control Interfaces 拥有；本节冻结其存储语义。
+closed wire 形状由 Control Interfaces 拥有；本节冻结其存储语义。CommitDomain 区分 replica/server：replica=WorkspaceRef+ReplicaEpoch，server=WorkspaceRef+当前托管 AuthorityInstanceId。新 v2 DecisionKey/2 是 WorkspaceRef+完整 CommitDomain+OperationId；P 以 workspaceId+D3-CJ/3(commitDomain)+operationId 索引，同键恰一 D3 或 D6 protocol owner/canonical decision。不同 domain 可复用相同 OperationId。旧 v1 key/D3 v9-v11 saved decisions按原decoder/continuity，不迁移。
 
-CommitDomain 区分 replica 与 server。replica domain 由 WorkspaceRef+ReplicaEpoch 唯一；server domain 由 WorkspaceRef+当前托管 AuthorityInstanceId 唯一。Operation ledger v2 key 为 WorkspaceId、完整 CommitDomain canonical bytes、OperationId。不同 domain 可合法复用相同 OperationId UUID；同一 domain 内 D3/D6 protocol owner 仍必须互斥。旧 v1 ledger key 及 D3 v9/v10/v11 saved decisions 继续按旧 decoder 和连续性规则履约，不迁移为 v2 key。
+ReplicaEpoch 只由 Core 显式注册时 mint、UUIDv4、同 Workspace 永不重用；它只授当前共享 policy/trust 下普通内容域资格，不是 D3 continue、AuthorityInstanceId 或 execution custody。复制文件不产生 epoch，retired 不复活。
 
-ReplicaEpoch 只由 Core 在显式 replica registration 中 mint，canonical UUIDv4，永不在同 Workspace 重用。注册 replica 只授该副本在当前共享 policy/trust 下的普通内容域资格；它不是 D3 continue、AuthorityInstanceId 或 global execution custody。复制 portable files 不自动产生 ReplicaEpoch；恢复旧副本记录也不能复活已经 retired 的 epoch。
+ChangeId/1 由完整 CommitDomain 和单调 sequence 组成，首个 portable content change 的 sequence=1；递增必须 checked，超过 MAX 不得 wrap。ChangeId **只在 portable effect 的 P seal** 分配；prepare、planning、staging、InstallationNotice 都不预留序号。失败、paused、recovery_unknown、control_only 和 true raw no-op 均无 ChangeId 或序号空洞。
 
-ChangeId 为完整 CommitDomain+单调 changeSequence。每个 domain 首个 content change sequence=1，checked increment，MAX 后拒绝新 content change，不 wrap。ChangeRecord 保存直接因果前驱 Frontier、实际 write set、semantic state 与 completion proof 绑定。ChangeId 不是 EntityRef、OperationId 或 source occurrence identity。
+Frontier/2 是每 CommitDomain 至多一个最大已验证连续 sealed ChangeId 的 canonical vector，按 domain bytes排序唯一。它可接纳remote verified ChangeId，但不重放remote OperationId，也不为transport另mint本域ChangeId；不证明payload物化、placeholder下载、index complete、D7 complete cut或provider完成。frontierPolicy=exact|scope_dependencies；后者只允许可证明非回退无关扩展并重验原source/control/auth/positive-negative dependency，不能换target/Query/source/request或消除ABA。Frontier/1只legacy。
 
-Frontier 是每 CommitDomain 至多一个最大已接纳 ChangeId 的规范向量；entries 按 CommitDomain canonical bytes 排序、无重复。空 Frontier 仅用于 workspace genesis/尚无 change。一个 replica 接纳远端 change 时形成本域新的同步接纳 decision/ChangeId，并把远端 ChangeId 作为因果前驱；不得把远端 OperationId 原样放入本域 ledger 当作已执行 operation。
+SourceVersion/2 标识实际source及生产 CommitDomain；managed revision只在该生产domain+entity真实managed change递增，raw no-op不增。外部不连续提高observationEpoch；digest相同不复活旧版本，跨生产domain裸revision不可比。
 
-SourceVersion/2 绑定完整 EntityRef、CommitDomain、observationEpoch、source revision 与造成当前 source 的 ChangeId。revision 在该 domain+entity 的受管 source 修改上 checked increment；raw no-op 不增 source revision。外部未知变化提升 observationEpoch 并产生 external observation branch，不得靠 digest 将旧 SourceVersion 复活。跨 CommitDomain 数字 revision 没有相等语义；比较必须逐项完整相等。
+当前副本/Server观察用 SourceObservation/1 另绑定 observerDomain、EntityRef、SourceVersion/2、observationEpoch、FileObjectBinding、evidence pins。observerDomain=当前operation domain，sourceVersion.commitDomain可不同；placeholder/缺metadata/conflict/continuity不明无成功Observation。SourceVersionRef/1 opaque token选择完整Observation，不是裸revision/digest/生产domain metadata。
 
 ## 5. 授权、普通保存与完整语义资格
 
@@ -128,7 +128,7 @@ D6 冻结三类互不蕴含的资格：
 
 ### 5.2 ordinary 证明范围
 
-普通完整 Document edit 至少绑定：目标 SourceVersion/2、完整当前 source、entity lifecycle、当前 policy、actual MutationFootprint、D2 完整 parse、所有被实际修改的本地 typed facts及其当前 Registry 定义。未修改的原 bytes 必须逐字保持。若变换触及需要完整 cross-object proof 的 D4/D5 条件而当前不能证明，Core 可以在显式 ordinary-save profile 下得到 semantic_pending；不能把它记录为 complete semantics。
+普通完整 Document edit 至少绑定：完整 SourceObservation/1（含实际生产 SourceVersion/2）、完整当前 source、entity lifecycle、当前 policy、actual MutationFootprint、D2 完整 parse、所有实际修改 local typed facts及当前 Registry。未修改的原 bytes 必须逐字保持。若变换触及需要完整 cross-object proof 的 D4/D5 条件而当前不能证明，Core 可以在显式 ordinary-save profile 下得到 semantic_pending；不能把它记录为 complete semantics。
 
 create Node 绑定：destination parent、完整目标 sibling list、必要祖先 chain/cycle proof、新 identity reservation、完整新 Document source、实际 local typed admission、old/new policy scope。move/reorder 绑定 subject、old/new parent、两边完整 sibling list、必要 ancestor/cycle proof、旧新授权范围；未涉及的全库 source 不作为前置。ordinary Trash 绑定明确 subtree/owner-local closure、相关 live/Trash sibling lists、restore membership 与权限；它只证明本地 lifecycle effect，不伪造完整全库 inbound-reference enumeration。
 
@@ -144,42 +144,36 @@ restore、purge、relation mutation、unique Calendar/config、collection create
 - semantic_pending：D2 valid，本次实际修改的 local typed facts 已通过，但一个或多个跨对象/全集 obligation 尚未证明；
 - external_invalid：current external bytes 无法通过 strict UTF-8/D2，因此没有成功 Core author decision；只可 Source/repair/read-raw 路径消费。
 
-semantic_pending 可以作为普通可靠保存的 current source，但不能作为以下能力的合格输入：需要完整 D4 relation/unique/Calendar invariant 的 mutation；需要 complete query cut 的 D7 ActionEvidence/all_result/post-query；自动化/Agent 自动写；purge；任何声称“整个 Workspace 约束已验证”的导出或审计。只做 exact source read、Source editor、原文件搜索或明确局部 projection 的消费者可以在自身授权下使用，并必须向用户显示 pending 状态。
+semantic_pending 可以作为普通保存的 current source；strict reliable或durable_observed_only由WriteProtection独立表示。semantic_pending不能作为以下能力的合格输入：需要完整 D4 relation/unique/Calendar invariant 的 mutation；需要 complete query cut 的 D7 ActionEvidence/all_result/post-query；自动化/Agent 自动写；purge；任何声称“整个 Workspace 约束已验证”的导出或审计。只做 exact source read、Source editor、原文件搜索或明确局部 projection 的消费者可以在自身授权下使用，并必须向用户显示 pending 状态。
 
-这一变化要求 D4/D5/D7 后续真实 owner afterimage；在那些消费者完成前，新 semantic_pending managed success 不得激活。
+D4/D5 local-vs-complete后像已存在但尚未消费G0-A Frontier/2、SourceObservation、WriteProtection；C批前相关success owner_update_required/unavailable。D7 complete consumer仍待后续owner。
 
-## 6. 文件安装能力与可靠保存
+### 5.4 人工普通保存的并发保护边界
+
+WriteProtection与ContentGuarantee/SemanticState分域。observed_only只允许受信interactive、单一existing live Document、ordinary+replica_local、完整source read/replace、无适用body/Field/node-control deny、author write set零或该Document、Draft Base=当前SourceObservation。唯一放宽：最后验证后到安装前从未观察的external race可能被覆盖。已观察change、watcher gap、stale Base、失权、细项deny、Core竞争、unknown install、P continuity缺失仍停；strict不原地降级；Action/Automation/approval/Money不用observed_only，无逐次审批。
+
+## 6. 文件安装能力、WriteProtection 与可靠保存
 
 ### 6.1 BackendQualification
+strict已有文件只允许真实conditional_replace或exclusive_write_window；expected-absent新文件可create_only。conditional必须trusted generation且read-hash-then-rename不是CAS；exclusive须排除威胁模型内全部writer，advisory锁不算；create_only原子create-if-absent。
 
-每个 FileBinding 所在 backend 必须公开受信能力，而不是由 UI 猜测。已有文件的 reliable save 只允许以下任一安装原语：
+observed_replace只服务§5.4 observed_only，记录最后验证object generation但不是CAS；破坏安装前再次检查trusted object/event continuity，已观察competition就保留B/N/current并停止。只有未观察race属于获准弱保证。
 
-- conditional_replace：后端以受信 object generation/etag/file identity 作真正 compare-and-replace，只有 expected object 完整匹配时才替换；
-- exclusive_write_window：host 能证明从最后完整 before 验证到安装完成期间，所有属于本威胁模型的 writer 都无法修改/replace/delete 该目标；仅 advisory lock 不算；
-- create_only：只用于 expected absent 的新文件，提供原子 create-if-absent。
-
-安装还必须支持 staged bytes 的完整耐久、目标文件耐久和目录项/rename 耐久证明。若平台只提供“最后 hash 再 replace”，这不是 conditional_replace。若无法证明安全安装，就保留 current file 与 Draft/after branch，返回 conflict 或 install_unavailable，绝不报告 reliable save success。
-
-外部未合作程序可能不遵守 Weftext lock。D6 的保证只覆盖 BackendQualification 明确证明的 writer 集；一旦 backend 无法排除 race，本次既有文件安装不得进入 success。发现 unknown competing bytes 时必须保留它们，不覆盖、不删除、不用 after digest 猜是本次写入。
+所有路径仍证明staged/target/directory-entry或rename耐久、canonical containment和installation provenance。strict无合格原语→install_unavailable/paused；满足§5.4的意图可新prepare observed_only，已有strict plan不能改弱。
 
 ### 6.2 Guarantee
-
-普通 commit 的 guarantee 闭集：
-
-- replica_local：证明本 CommitDomain 的固定 write set 已在合格文件原语下可靠安装并 durable sealed；不声称其它离线 replica 没有并发版本；
-- managed_atomic：证明整个受管 operation 的所有受管作者/portable-control write 位于同一排他安装/发布屏障，且读者只看到 old cut 或 sealed new cut。普通外部文件读者不保证跨多文件瞬时原子可见。
-
-managed_atomic 不把多个 rename 称为文件系统全局事务。跨文件操作使用受管发布屏障、per-component install evidence 和 durable-control seal；外部读者仍可能在中间看到物理文件，产品不得宣传为任意外部工具的瞬时多文件快照。
+ContentGuarantee与WriteProtection分开。replica_local证明本domain固定write set按请求保护级别durable install+P seal，不声明其它offline replica无并发。managed_atomic要求所有author/portable-control write进入受管barrier且WriteProtection=strict，不承诺外部工具多文件瞬时原子。多个rename不是全局事务。
 
 ## 7. Prepared、安装、seal 与 portable publication
 
 ### 7.1 InputDescriptor 与 pins
 
-D6 v2 canonical commit request 保持小型控制请求，不内嵌完整 Document/Resource bytes。PreparedIntent/2 保存 InputDescriptor/2：准确 Workspace/CommitDomain、intent kind、before SourceVersion/metadata versions、
-  expected Frontier、actual scope/profile、write-set descriptors、
-    Registry/policy/rule versions和其拥有者规范输入。完整 source/bytes 由 PinDirectory 中 purpose-bound pins 承载。
+D6 v2 的 canonical commit request 保持小型控制请求，不内嵌完整 bytes。
+PreparedIntent/2 保存 Workspace/CommitDomain、intent、Frontier/2+frontierPolicy、ObservationScope/2 与 SourceObservation/1。
+它还保存 DependencyProof/2、scope/profile/write-set、Registry/policy/rule 与 OwnerInputBinding/2。
+完整 bytes 继续放在 purpose-bound pins 中。
 
-input equality 要求 descriptor canonical bytes 与其所引用 exact pins/owners 完整一致；相同 sha256 不足以证明相同输入。修改任一 source、mapping、policy、frontier、scope 或 owner request 都需要新 prepare/OperationId，除非原协议明确为 same canonical replay。
+input equality 要求 descriptor canonical bytes 与其所引用 exact pins/owners 完整一致；相同 sha256 不足以证明相同输入。修改source/SourceObservation、mapping、policy、frontierPolicy、scope、WriteProtection或owner request需新prepare；同OperationId只exact replay，不能改plan降级strict。
 
 ### 7.2 Pin 分类
 
@@ -203,27 +197,40 @@ input equality 要求 descriptor canonical bytes 与其所引用 exact pins/owne
 DecisionState：unseen → rejected | planned → committed | terminal_failed。
 InstallationState：prepared → planned → installing(k) → installed；
   另有 conflict | recovery_unknown | paused_authorization | paused_capacity。
-ReliableSaveState：not_saved | reliable。
+ReliableSaveState：not_saved | reliable | durable_observed_only | not_applicable。
+InputRetentionState：not_retained | retained | unavailable。
 PortablePublicationState：not_published | pending | published | conflict。
 
 顺序固定：
 
-1. prepare：冻结 InputDescriptor、exact write set、
-  before/after pins、语义 proof、preview、budget；无 author effect。
+1. prepare：冻结 InputDescriptor、write set、pins、proof、preview、budget 与 WriteProtection；只有 proposal、实际 read-before 和必要 binding 已形成 durable pin 时才能进入 retained；没有 author effect，retained 也不等于 saved。
 2. planning：先证明 required pins durable/capacity reserved；P 事务保存 canonical request、
   fixed plan、reservation、installation recovery description 与 planned。
-3. portable installation notice：在修改任何 portable current 文件前，写入并 durable flush InstallationNotice，列 ChangeId、operation binding、
-  guarantee、before Frontier、component/write-set descriptors；
-    它不含 approval/Money/external payload，也不是 completed decision。
-4. install：每项 staged after 先完整写入并 durable flush，再通过 BackendQualification 允许的 create_only/conditional_replace/exclusive window 安装；每个 component 保存实际 FileObjectBinding/outcome。move/Trash 先确保可恢复目标已 durable，不先永久删除 current。
-5. installed verification：以安装后的**自身 write set 指定 poststate**为 expected 值核对每个实际 component；不得再次要求这些目标仍等于原 before。对未写的 positive/negative dependencies、当前 policy/auth、Registry/rules、Frontier 范围和 concurrent control facts重验；自产生 ChangeId/SourceVersion 只与 fixed plan 的 planned poststate 比较。
-6. seal：全部已写 component 等于 planned poststate、未写依赖仍成立、current authorization 允许 seal 时，在 P 单一 durable transaction 写 committed decision、canonical receipt、ReliableSaveState=reliable、effects metadata、execution charges/approval consumption（适用）、outbox。此 P durable seal 是本次受管 decision 的提交点。
-7. portable publication：从 saved decision 生成 ContentCompletionProof，写入 portable metadata 并 durable flush，
-  推进 Frontier，解除受管 portable publication barrier，PortablePublicationState=published。
+3. portable notice：修改 portable current 前，先耐久写入 InstallationNotice/2。
+记录包含 DecisionKey、guarantee、WriteProtection、base Frontier/2 与 before/after components。
+记录不包含 ChangeId、approval、Money 或 external payload。
+4. install：staged after 必须先耐久落盘；strict 使用 create_only/conditional/exclusive，observed_only 仅适用于 §5.4，并在安装前最后检查 object/event continuity。若已观察 competition，则保留 B/N/current 并停止。component 保存 binding/outcome；move/Trash 和多对象操作仍要求 strict。
+5. verify：written 必须等于 planned after，不再要求 before。
+unwritten deps、policy/auth、Registry/rules、Frontier/2 和 control facts 全部重验。
+出现 unknown provenance、third_state、late competition 或失权时，进入 paused/conflict/recovery_unknown；此时尚无 ChangeId。
+6. seal：written=planned after 且 deps/auth 仍成立时，由 P transaction 为 portable effect 分配 ChangeId/SourceVersion。
+随后写入 committed decision、receipt、effects、charge 与 outbox。
+strict 对应 reliable；observed_only 对应 durable_observed_only。
+control_only/no_op 对应 not_applicable，且没有 content ChangeId。
+这里是唯一的 commit point。
+7. publication：portable effect从sealed decision生成ContentCompletionProof/2并推进Frontier/2；control_only/no_op为not_applicable。
 
-第 6 步成功而第 7 步失败时，decision 和 reliable save 已成功；portable publication=pending。恢复只补同一 completion proof，不重写 source、不新建 OperationId、不重复收费。远端 replica 在完整 proof+components 到齐前只看到 incomplete transport，不能把文件先到达当 committed portable version。
+第6步成功而第7步失败时decision与reliable/durable_observed_only已成立，publication=pending；恢复只补同一proof，不重写source/不换OperationId/不重复收费，observed_only不重装N。远端 replica 在完整 proof+components 到齐前只看到 incomplete transport，不能把文件先到达当 committed portable version。
 
 撤权发生在 seal 前：停止 seal。若可以在 BackendQualification 保护下安全恢复 exact before，则恢复并 flush；如果不能证明安全恢复，保留 before/after/现文件及 recovery evidence，进入 paused_authorization 或 recovery_unknown，不覆盖第三种 bytes。撤权不将一次未知安装写成永久业务 rejection。
+
+### 7.4 raw no-op
+
+committed effectClass 的闭合取值为 portable|control_only|no_op。
+只有 portable 会产生 ChangeId、source changes 并推进 Frontier/2；P-only control 使用 control_only。
+true no-op 要求 sourceVersions=[]、InstallationState=not_required、ReliableSaveState=not_applicable、PortablePublicationState=not_applicable。
+domainCommitSequence 可增加 1，但 source revision、ChangeId 与 Frontier 都不变。
+equal-byte external admission 不属于 no-op。
 
 ## 8. 崩溃恢复与历史结果
 
@@ -237,6 +244,8 @@ PortablePublicationState：not_published | pending | published | conflict。
 - unavailable：后端无法安全读取或证明。
 
 相同 bytes 但不能证明安装归属时不能从 third/unavailable 提升到 exact_after。
+
+observed_only read-before仅实际read/pin前像，不枚举未读C；未观察C若被覆盖可能无可恢复副本，这是批准边界，record不得虚构。已观察competition仍third_state/conflict；unknown install不猜。
 
 故障规则：
 
@@ -302,7 +311,7 @@ permanent purge 保持强操作：要求完整相关 inbound/owner closure、com
 
 1. T_first_open：读取 workspace root/portable metadata 入口，列出已发现目录和活动目标；
 2. T_first_edit：打开活动 source，建立 Draft；
-3. T_first_reliable_save：活动目标通过 BackendQualification、install、seal，得到 ReliableSaveState=reliable；
+3. T_first_reliable_save：仅strict install+P seal得到reliable；observed_only durable_observed_only另记，D1更新前不填旧strict指标；
 4. T_full_search_ready：指定 search profile/范围的 complete coverage 成立；
 5. T_OCR_ready：指定附件/模型/版本的 OCR 层完整或明确失败。
 
@@ -385,9 +394,9 @@ global execution responsibility 的最小 continuity 包括：
 
 ## 14. 与 D3/D4/D5 的版本化协调边界
 
-D3 fixed S 的 wire11、ledger key、stage order、continue/fork、Trash/purge/receipt 仍是当前历史规范。本候选要求后续 D3 wire12 明确承接 CommitDomain、replica-local profile、new ledger key、local Trash receipt、purge frontier 与 legacy replay。D6 不通过“通用 commit”绕过 D3 identity/lifecycle owner；在 D3 后像完成前，不得激活需要 D3 v12 的新 managed success。
+D3 wire12后像已存在但尚未消费G0-A Frontier/2、D3-native OwnerInputBinding、SourceObservation、最小companion/receipt；B批前相关success owner_update_required，D6不绕过D3。
 
-D4/D5 的现有 complete operation gates 不能被 semantic_pending 偷偷视为已满足。本候选只冻结 storage ability to persist a D2-valid pending source；哪些 D4/D5 facts 可以 local-only 验证、哪些必须 complete，必须由后续 D4/D5 owner afterimage列出。未完成前，依赖这些新分支的 Action/automation 保持 unavailable。
+D4/D5已有local-vs-complete后像但未消费G0-A SourceObservation/Frontier/2/WriteProtection；C批前相关consumer owner_update_required/unavailable，Action/automation不能借observed_only。
 
 旧 D6 wire1、Policy/1/2、SourceVersion/1、D7 PreparedActionBinding/1,/2、D8 PreparedEditBinding/1 及其 saved decisions/pins 按原 decoder/retention/continuity 规则恢复和重放。新版本不得修改旧 saved bytes 或用新 pin-retention 政策追溯删除旧协议证据。
 
