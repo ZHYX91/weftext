@@ -370,8 +370,8 @@
       "en": "Source Version",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "SourceVersion/2 identifies the actual source version and production CommitDomain; current replica observation is separately bound by protected SourceObservation/1, and SourceVersionRef/1 selects that complete observation.",
-      "exclusions": "Not bare revision, digest, DocumentRef, observer-domain identity, or proof that the current filesystem observation is continuous.",
+      "definition": "SourceVersion/2 is the complete managed/external production-version union: both arms bind full EntityRef, production CommitDomain, and production observationEpoch; managed additionally binds the checked H(D,E)+1 revision for that entity in that production domain and the seal ChangeId, while external binds externalSequence and has no managed revision/ChangeId. H=0 is legal only for a proved complete empty managed history, observationEpoch changes do not reset H, and current observation is separately represented by SourceObservation/1 over observerDomain, current observationEpoch, FileObjectBinding, and evidence pins; SourceVersionRef/1 selects that complete observation. The new d6_source_revision/2 profile resolves only through protected RevisionTokenBinding/2 binding observerDomain/current observationEpoch to managed SourceStamp/1 or complete external SourceVersion/2 without changing the D3/D4/D5 inner wire.",
+      "exclusions": "Not a bare revision, digest, path, DocumentRef, observer-domain identity, currentness proof, or replacement for the protected d6_source_revision/2 RevisionTokenBinding/2. Equal revision numbers across production domains are not equal versions; externalSequence is not managed sourceRevision; SourceRevisionPlan/1 or SourceStamp/1 before seal is not a committed SourceVersion; equal hash/text never repairs an observation gap.",
       "ownedNames": [
         "SourceVersion",
         "sourceVersions",
@@ -391,7 +391,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "A→B→A revision不同 / path不是源identity",
+      "exampleAndCounterexample": "A production domain at r7 later resumes at r8 even after another domain creates its own r1; equal-byte external admission still creates managed H+1 / source deletion or source-unchanged portable structure does not advance managed H, while a watcher gap with equal final bytes still invalidates the old SourceObservation/source token",
       "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
       "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
       "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
@@ -572,8 +572,8 @@
       "en": "Dependency Completeness Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "DependencyProof/2 stores the trusted complete positive/negative DependencyKey set plus continuity stamps, bound to CommitDomain/Frontier/2; a partial index is only a scan optimization when coverage is proved.",
-      "exclusions": "不是客户端readSet声明；不是building index；不自动证明结果可观察",
+      "definition": "DependencyProof/2 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fourteen closed DependencyKey/2 kinds—source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource—with owner-defined complete ranges, evidence pins, and per-key continuity stamp {epoch,revision}. Completeness comes from a currently authorized consistent snapshot/range barrier or a gap-free continuous change chain plus final revalidation; D6 carries the closed keys/stamps while D3/D4/D7 retain their actual enumeration algorithms.",
+      "exclusions": "Not caller readSet/free JSON, Derived Index readiness, row count, final hash, provider-synced status, Frontier-vector comparison, partial/building index, unknown range, or no-hit evidence. Unknown/placeholder/I/O/missing-shard/hidden-unreadable state never proves empty. Deleting I alone does not reset proof while protected P/M continuity facts remain complete; actual proof/continuity loss or a gap requires a new epoch.",
       "ownedNames": [
         "DependencyProof",
         "dependencyProof",
@@ -590,7 +590,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "无索引完整扫描 / 部分索引不是空scope；live→Trash→live须使旧state依赖失效，即使源版本不变",
+      "exampleAndCounterexample": "Rebuilding I with intact protected range epoch/revision and gap-free owner history only rebuilds candidate cache; a proved unrelated sealed Frontier extension may survive scope_dependencies only after the full continuous chain and every original source/control/auth/positive-negative dependency are revalidated / a changed SourceObservation, authorization, Registry rule, membership or negative range, unknown gap, or equal final hash never counts as unrelated or empty",
       "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
       "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
       "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
@@ -1126,8 +1126,8 @@
       "en": "Content Guarantee",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "提交结果的闭集replica_local或managed_atomic；前者仅证明本CommitDomain可靠安装，后者还证明受管范围发布屏障",
-      "exclusions": "不声称任意外部工具跨文件瞬时原子或离线副本无并发",
+      "definition": "ContentGuarantee remains the closed replica_local|managed_atomic axis describing installation/publication scope for the fixed portable write set in the current CommitDomain. replica_local proves durable install plus P seal under the request's WriteProtection without claiming another offline replica is current; managed_atomic requires the managed author/portable-control barrier and WriteProtection=strict. This axis is independent of SemanticState, ReliableSaveState, and the strict|observed_only WriteProtection axis.",
+      "exclusions": "Not authorization, permission, user confirmation, instantaneous external-tool multi-file atomicity, proof that another replica has synchronized, or a route to weaken strong semantics. observed_only never qualifies managed_atomic, structural/multi-entity work, D5 structured operations, D7 strong Action/Automation, server checkpoint, Approval, or Money.",
       "ownedNames": [
         "ContentGuarantee",
         "contentGuarantee"
@@ -1142,7 +1142,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "replica_local可靠保存 / 不能称另一离线设备已同步",
+      "exampleAndCounterexample": "A fully qualified human one-existing-Document ordinary+replica_local save may use observed_only when explicitly selected before planning; its B/N remain durable even though an unseen C may be overwritten / managed_atomic or a strong structural/Action/Approval/Money path cannot downgrade from strict",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1207,8 +1207,8 @@
       "en": "Content Completion Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "ContentCompletionProof/2 is the post-seal portable proof binding DecisionKey, sealed ChangeId, semantic state, WriteProtection, actual after components/source changes, and Frontier/2 advance; restored is a separate no-ChangeId outcome.",
-      "exclusions": "不授receipt读取、Money/approval消费或execution takeover",
+      "definition": "ContentCompletionProof/3 is the new-FA post-seal portable proof binding DecisionKey, the real sealed ChangeId, ContentGuarantee, WriteProtection, SemanticState, actual frontierBefore/frontierAfter, actual component after-images, receipt digest, and sourceChanges expressed with production SourceVersion/2|absent. A receiver validates the notice/proof/components and complete continuous sealed chain before advancing Frontier and then creates its own current SourceObservation. Historical ContentCompletionProof/1 and /2 retain their original bytes, decoders, authorization, pins, and recovery/unknown obligations; /2 sourceChanges remain SourceVersionRef/1|absent.",
+      "exclusions": "Does not grant receipt read, Query/Action completeness, Money/Approval consumption, execution takeover, or permission. It never copies a sender SourceObservation token as receiver currentness, never derives unrelated scope from Frontier numbers/provider status/final hash alone, and never re-encodes /1 or /2 as /3.",
       "ownedNames": [
         "ContentCompletionProof",
         "contentCompletionProof"
@@ -1223,7 +1223,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "完整proof到齐才接纳remote change / 文件上传成功不等proof",
+      "exampleAndCounterexample": "External→managed admission records external production SourceVersion before and managed SourceVersion after; deletion records production SourceVersion before and absent after without a new managed version/H increment, while a source-unchanged portable structure effect may have the decision ChangeId with no sourceChanges / uploaded files or a larger Frontier vector without the complete continuous proof chain is not completed transport",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1234,8 +1234,8 @@
       "en": "Conflict Record",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "由规范ConflictKey/ConflictId定位的portable并发版本记录，状态open→resolution_prepared→resolved或superseded",
-      "exclusions": "不是自动merge、LWW或D3 bypass transaction",
+      "definition": "ConflictRecord/2 is the current new-FA portable conflict record addressed by the unchanged canonical ConflictKey/1 and ConflictId, with createdAtFrontier encoded as Frontier/2 and state open|resolution_prepared|resolved|superseded. ConflictKey/1 ordering, ConflictId format, and the D6-ConflictKey/1 hash domain are unchanged. Historical ConflictRecord/1 retains its original bytes, decoder, authorization/recovery obligations, and createdAtFrontier=Frontier/1.",
+      "exclusions": "Not automatic merge, LWW, D3 bypass transaction, permission, or a reason to reinterpret Record/1 as Record/2. An external race, third_state, or unknown installation with no real sealed ChangeId cannot fabricate a ConflictKey head; equal hash/mtime/path is not conflict-history evidence.",
       "ownedNames": [
         "ConflictRecord",
         "conflictRecord",
@@ -1252,7 +1252,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "两端同笔记保留两heads / 不按mtime选winner",
+      "exampleAndCounterexample": "A new sealed concurrent head creates/supersedes records under the actual complete key and /2 Frontier while the old /1 record remains byte-stable / two same-key records are not created merely to simulate a /1→/2 upgrade, and an unsealed external competition gets no invented head",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1263,8 +1263,8 @@
       "en": "Reliable Save State",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Distinguishes not_saved, strict reliable, trusted-human ordinary-file durable_observed_only, and not_applicable; input retention and portable publication are separate state.",
-      "exclusions": "不等于Draft已保存、sync上传或ContentCompletionProof已发布",
+      "definition": "ReliableSaveState is the closed not_saved|reliable|durable_observed_only|not_applicable state for file-save protection: reliable follows strict installation plus P seal; durable_observed_only follows a fully qualified trusted-human ordinary-file observed_only installation plus P seal; not_applicable is for paths with no file-save effect. PreparedIntent/input retention is not Saved and portable publication is separately tracked. A saved decision preserves its original decision/receipt and every effect/pin required by its original retention contract, then replays under current delivery authorization for its original actual-effect/result-disclosure scope without re-running old business selection.",
+      "exclusions": "Not Draft persistence, HTTP/worker success, sync upload, InstallationNotice, ContentCompletionProof publication, or permission. Saved replay never rewrites a later current source, reallocates ChangeId/revision, or charges again. planned remains the original frozen plan with no pre-seal ChangeId; unknown and legacy pin/recovery obligations are not erased by I rebuild, reauthorization, or equal hash.",
       "ownedNames": [
         "ReliableSaveState",
         "reliableSaveState"
@@ -1279,7 +1279,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "strict P seal -> reliable; eligible observed_only P seal -> durable_observed_only / neither means portable published",
+      "exampleAndCounterexample": "strict install+P seal -> reliable; fully eligible observed_only install+P seal -> durable_observed_only, with durable B/N even if an unseen C was overwritten and a later C becomes current / prepared or retained is not Saved, and receipt replay does not restore N over later current bytes",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1318,8 +1318,8 @@
       "en": "Write Protection",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Closed strict|observed_only exclusion level for external competing writers during one author-file installation; orthogonal to ContentGuarantee, SemanticState, ReliableSaveState, and approval.",
-      "exclusions": "Not permission, user confirmation, Query completeness, automation approval, or CAS; observed_only is restricted to the trusted human one-Document ordinary-save path.",
+      "definition": "WriteProtection is the closed strict|observed_only external-competing-writer protection axis for one author-file installation, orthogonal to ContentGuarantee, SemanticState, ReliableSaveState, and approval. observed_only is legal only for trusted interactive_source_save of exactly one existing live Document as ordinary+replica_local whole-source save with complete source read/replace, author-source write set empty or that Document only, no applicable body/Field/node-control deny, no identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation, Draft Base equal to the selected current SourceObservation, and explicit human selection frozen before planning starts.",
+      "exclusions": "Not permission, user confirmation, Query completeness, approval, or CAS. observed_only never excuses stale Base, watcher gap, observed competition, revocation, durability failure, third_state, or unknown installation; strict failure after planning never falls back to observed_only. Structural/multi-entity work, D5 structured operations, bulk/collection, D7 strong Action/Automation, server checkpoint, Approval, and Money remain strict.",
       "ownedNames": [
         "WriteProtection",
         "writeProtection"
@@ -1336,7 +1336,7 @@
         "weak-CAS",
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "trusted interactive one-Document ordinary save may be observed_only / Action, Automation, approval or Money execution cannot downgrade strict",
+      "exampleAndCounterexample": "Eligible human one-Document ordinary save may retain read-before B and input N under observed_only even though an external C never observed after the final check may be overwritten and a later C may replace current file; B/N retention remains / observed C, stale Base, gap or unknown install stops or remains recovery_unknown, and strong Action/Approval/Money cannot downgrade",
       "firstFreeze": "D6-FA-r01 G0-A candidate; not activated",
       "migration": "No published compatibility alias. Historical saved evidence retains its original protocol.",
       "deletionTarget": "No historical evidence deletion."
@@ -1351,7 +1351,7 @@
         "handleToken"
       ],
       "conceptId": "weftext.term.byte-handle",
-      "contract": "D2 §5.9 unchanged; D6 Interface §11"
+      "contract": "D2 §5.9 remains unchanged; D6 Control Interfaces §12 is the current Result/ByteHandle consumer boundary. Resource ByteHandle keeps its original wire1 immutable-snapshot contract, current D3 disclosure/resource_read/owner authorization on every read, original record/clock/pin continuity and lawful holder/authority takeover only when that continuity is proved; the exception is not generalized to D7 Result/Action or arbitrary source/proof changes."
     },
     {
       "owner": "D2/D3 wire / D6 version meaning",
@@ -1363,7 +1363,7 @@
         "annotationRevisionToken"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "D6 Candidate §4 and Interface §12; do not replace D3 opaque lexical decoder with Token"
+      "contract": "D2/D3 wire keeps the original opaque DocumentRevision/ResourceRevision/AnnotationRevision lexical decoders. D6 Control §1.5 separately defines protected RevisionTokenBinding/2 with d6_source_revision/2 and distinguishes production SourceVersion/2 from current SourceObservation/1; the protected binding never replaces the old D3 lexical token or D4/D5 inner selector wire, and observation gaps/replacement invalidate current-observation qualification even when revision/hash/text is equal."
     },
     {
       "owner": "D3 wire / D6 trusted proof",
@@ -1386,7 +1386,7 @@
         "RecurrenceReadBinding"
       ],
       "conceptId": "weftext.term.dependency-proof",
-      "contract": "D6 Candidate §4, no public arbitrary context API",
+      "contract": "D4 RelationReadContext/2 and RelationReadBinding/2 remain the closed D4 source/entity-state/incidence wire, and RecurrenceReadContext/RecurrenceReadBinding remain /1. D6 Control §3.4 consumes those owner shapes through the closed relation_incidence/calendar_scope/temporal_rules DependencyKey/2 evidence, stamps and pins without changing the D4 inner selectors or admitting arbitrary context JSON; affected strong consumption remains gated on the actual P2 D4 consumer and fresh joint acceptance.",
       "revision04Note": "RelationReadContext/2 and RelationReadBinding/2 distinguish source/entity-state/incidence; Recurrence remains /1. stateToken is an inherited D4 member backed by D6 DependencyProof, not a new public capability token."
     },
     {
@@ -1435,7 +1435,7 @@
         "SourceVersion/2"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "D6 Control/2 owns the version meaning; D8 must bind Draft/maps to the full scoped version and preserve legacy SourceVersion/1 decoding."
+      "contract": "D6 Control §1.5 separately owns production SourceVersion/2 and complete current SourceObservation/1/SourceVersionRef/1. D8 must bind Draft/maps to the complete current Observation including its production SourceVersion and observer-domain continuity, never treat the production version alone as current, reset/rebase on observation gaps or replacement, preserve legacy SourceVersion/1 decoding, and remain gated until the D8 consumer afterimage and fresh joint acceptance are complete."
     },
     {
       "owner": "D6 FA-r01 / D8 future editor",

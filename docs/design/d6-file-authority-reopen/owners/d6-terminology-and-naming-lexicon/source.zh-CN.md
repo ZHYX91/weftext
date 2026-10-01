@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：`680b2061-ccec-4bef-b9a8-9d7080f837fb`。
 
-候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中旧 revision05/D7 联合术语状态仅作历史来源。稳定文档 ID、既有 conceptId、ownedNames、firstFreeze 全部保持；新概念 firstFreeze 单独标为 D6-FA-r01 candidate。
+候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中旧 revision05/D7 联合术语状态仅作历史来源；固定 C 已存在的 D3 wire12 与 D4/D5 A/B/C 消费候选同样仍只是未接受、未激活的候选事实，不再表述为不存在。稳定文档 ID、全部既有 conceptId、ownedNames、firstFreeze 保持不变；本轮只同步既有公共概念及技术版本边界，不为 SourceRevisionPlan/1、RevisionTokenBinding/2、DependencyKey/2 等内部技术类型新增 public conceptId。Storage 与 Control 的最终私人作者后像已经形成并作为本 Lexicon 的实际生产者输入，但它们及本 Lexicon 都不构成独立接受或激活；机器 Registry、Impact/Test Outline、routing、P2/P3 与 D7–D10 消费者以及后续 fresh 联合接受仍是门。
 
 # D6 Terminology and Naming Lexicon
 
@@ -30,14 +30,14 @@ translation_status: source
 | weftext.term.series-scope-configuration | 系列范围配置 | Series Scope Configuration | \`SeriesScopeConfiguration\`<br>\`seriesScopeConfiguration\`<br>\`d6_series_configuration_intent\`<br>\`d6_series_configuration_remove_intent\` | 跨全部periodKey的exact series+scope受管multiplicity配置，绑定D4 Registry及policy；unique按各完整period key分别检查 | 不是每次create自行选择unique/many | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.import-job | 导入作业 | Import Job | \`ImportJob\`<br>\`importJob\`<br>\`stageInput\`<br>\`planAtomicGroups\`<br>\`commitImportBatch\` | 有限输入、不可拆groups、显式batch及真实committed前缀 | 不是全输入全局原子事务、普通import的身份合并 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.source-checkout | 编辑检出 | Source Checkout | \`SourceCheckout\`<br>\`sourceCheckout\` | 历史/显式导出编辑场景中的source proposal呈现；D6-FA-r01普通文件型Workspace的当前.adoc本身是Document author bytes，不再把日常文件编辑称为checkout | 不是普通文件型Workspace的第二活动author source，也不授write/identity | D6 revision05-observation-bootstrap candidate; not activated |
-| weftext.term.source-version | 源版本 | Source Version | \`SourceVersion\`<br>\`sourceVersions\`<br>\`sourceRevision\`<br>\`readSource\`<br>\`DocumentRevision\`<br>\`ResourceRevision\`<br>\`AnnotationRevision\` | SourceVersion/2将完整EntityRef与CommitDomain、observationEpoch及managed revision+ChangeId或external observation sequence绑定；跨domain裸revision不可比较 | 不是只靠摘要防ABA；不是DocumentRef；旧SourceVersion/1只服务历史decoder/replay | D6 revision05-observation-bootstrap candidate; not activated |
+| weftext.term.source-version | 源版本 | Source Version | \`SourceVersion\`<br>\`sourceVersions\`<br>\`sourceRevision\`<br>\`readSource\`<br>\`DocumentRevision\`<br>\`ResourceRevision\`<br>\`AnnotationRevision\` | SourceVersion/2 绑定完整 EntityRef 与生产 CommitDomain、生产 observationEpoch；managed 分支还绑定该生产域连续已封存 managed 历史中的 revision 与 ChangeId，external 分支绑定 externalSequence 且没有 managed revision/ChangeId。managed revision 由该生产域实体的 H(D,E)+1 checked 分配，各生产域分别续接；当前 observerDomain 由 SourceObservation/1 另行绑定 | 不是只靠摘要防 ABA；externalSequence 不是 managed revision；跨生产域裸 revision 不可比较；旧 SourceVersion/1 只服务历史 decoder/replay | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.principal-context | 认证主体上下文 | Principal Context | \`PrincipalContext\`<br>\`principalContext\` | host/D10认证的主体、session、delegation与policy generation | 不是客户端JSON自行声明的principal | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.commit-protocol | 控制提交协议 | Control Commit Protocol | \`D6ControlCommit\`<br>\`d6_commit_request\`<br>\`d6_commit_receipt\`<br>\`d6_error\`<br>\`commitBoundPlan\`<br>\`replayOperation\` | D6 own v2 ledger的闭合prepare/plan/file-install/durable-seal/receipt/replay协议；operation key含CommitDomain，D3 identity/lifecycle仍走其owner wire | 不包装D3绕过其阶段；不是文件hash CAS；不是第二Action领域 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.effects-token | 效果清单令牌 | Effects Token | \`EffectsToken\`<br>\`effectsToken\` | 引用同一decision保存的完整效果清单的运输token | 不是第二作者源、独立成功receipt或写能力 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.result-page-protocol | 结果分页协议 | Result Page Protocol | \`D6ResultPage\`<br>\`d6_result_page_request\`<br>\`d6_result_page\`<br>\`d6_result_error\`<br>\`readResultPage\` | 完整结果的当前受权分页与闭合错误 | 不是D7 row schema或streaming部分成功 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.attempt-allowance | 执行次数额度 | Attempt Allowance | \`AttemptAllowance\`<br>\`attemptAllowance\`<br>\`d6_attempt_allowance_intent\` | 绑定planned decision的有限执行attempt资格及管理意图 | 不扩大原语义预算或退还已耗work | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.execution-resource-summary | 执行资源摘要 | Execution Resource Summary | \`ExecutionResourceSummary\`<br>\`executionResourceSummary\` | 向当前Workspace policy_admin交付的受管计划占用与暂停类别 | 不是普通用户可枚举的作者内容或自动放弃权限 | D6 revision05-observation-bootstrap candidate; not activated |
-| weftext.term.dependency-proof | 依赖完整性证明 | Dependency Completeness Proof | \`DependencyProof\`<br>\`dependencyProof\`<br>\`readCompleteScope\`<br>\`validateDependencies\` | 受信完整读取及其正负范围版本证明，绑定CommitDomain/Frontier/observation epoch；部分index只能在证明覆盖时作为扫描优化 | 不是客户端readSet声明；不是building index；不自动证明结果可观察 | D6 revision05-observation-bootstrap candidate; not activated |
+| weftext.term.dependency-proof | 依赖完整性证明 | Dependency Completeness Proof | \`DependencyProof\`<br>\`dependencyProof\`<br>\`readCompleteScope\`<br>\`validateDependencies\` | DependencyProof/2 以十四类 closed DependencyKey/2、每范围 stamp 的 epoch/revision、必要 evidence pins 及正负范围证据绑定 Workspace/CommitDomain/base Frontier；完整性来自当前授权下的一致 snapshot/range barrier，或连续无漏变更链加最终复验。Derived Index 只缓存候选，受保护连续性事实仍完整时删除 I 不会凭空使证明失效 | 不是客户端 readSet 声明、free JSON、building/partial index 或“没有命中”；unknown/partial 不得证明 empty，Frontier 数字增长也不自动证明扩展与真实依赖无关 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.foreign-version-comparison | 外部版本比较 | Foreign Version Comparison | \`ForeignVersionComparison\`<br>\`compareForeignVersion\` | 由D9/D10固定比较器证明外部版本关系的纯读取 | 不重定义D3 SourceBinding或OriginBinding；比较不执行绑定退役或任何持久修改 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.binding-retirement-intent | 绑定退役意图 | Binding Retirement Intent | \`BindingRetirementIntent\`<br>\`retireBinding\` | 显式受权的既有SourceBinding/OriginBinding控制退役意图，由所属D9/D10输入适配并同事务提交 | 不重新定义D3绑定、不由只读版本比较自动触发 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.control-inspection-protocol | 控制状态读取协议 | Control Inspection Protocol | \`ControlInspection\`<br>\`d6_control_read_request\`<br>\`d6_control_state\`<br>\`d6_control_error\` | 向当前Workspace policy_admin读取同cut配置/CAS版本与执行资源摘要的closed协议 | 不是通用作者源API或OperationId枚举 | D6 revision05-observation-bootstrap candidate; not activated |
@@ -57,12 +57,12 @@ translation_status: source
 | weftext.term.portable-workspace-metadata | 可移植工作区元数据 | Portable Workspace Metadata | \`PortableWorkspaceMetadata,portableMetadata\` | 库内唯一承载identity/structure/lifecycle/shared policy/trust/portable change与conflict记录的版本化文件集合 | 不保存全库current正文副本；不是durable execution ledger或index | D6-FA-r01 candidate; not activated |
 | weftext.term.durable-control-store | 耐久控制库 | Durable Control Store | \`DurableControlStore,durableControlStore\` | 库外独立SQLite及私有pins，保存不可从笔记重建的decision/recovery/unknown/approval/claim/Money执行责任 | 不是Document/Resource current bytes、portable parent/order或可删index | D6-FA-r01 candidate; not activated |
 | weftext.term.derived-index-store | 派生索引库 | Derived Index Store | \`DerivedIndexStore,derivedIndexStore\` | 库外设备本地可删SQLite，按版本/覆盖记录metadata、parser/search/OCR等可重建事实 | 不是author source、identity/policy owner或全集证明本身 | D6-FA-r01 candidate; not activated |
-| weftext.term.content-guarantee | 内容提交保证 | Content Guarantee | \`ContentGuarantee,contentGuarantee\` | 提交结果的闭集replica_local或managed_atomic；前者仅证明本CommitDomain可靠安装，后者还证明受管范围发布屏障 | 不声称任意外部工具跨文件瞬时原子或离线副本无并发 | D6-FA-r01 candidate; not activated |
+| weftext.term.content-guarantee | 内容提交保证 | Content Guarantee | \`ContentGuarantee,contentGuarantee\` | 提交结果的闭集 replica_local 或 managed_atomic，描述本 CommitDomain 对固定 portable write set 的安装/受管屏障保证；它与 WriteProtection 的 strict、observed_only 保护轴正交，managed_atomic 及所有强路径保持 strict | 不扩大授权；不声称外部工具跨文件瞬时原子或离线副本无并发；observed_only 不能把结构、强 Action、Automation、Approval 或 Money 路径降级 | D6-FA-r01 candidate; not activated |
 | weftext.term.semantic-state | 语义状态 | Semantic State | \`SemanticState,semanticState\` | D2-valid受管source的complete_semantics或semantic_pending及其明确未证明obligations | external_invalid不属于成功SemanticState；pending不等于D4/D5全集通过 | D6-FA-r01 candidate; not activated |
-| weftext.term.installation-notice | 安装告知记录 | Installation Notice | \`InstallationNotice,installationNotice\` | 触碰portable current前耐久写入的不可变ChangeId/write-set/before-after摘要记录，用于部分同步和P丢失时圈定风险 | 不是commit proof、receipt、approval或execution authority | D6-FA-r01 candidate; not activated |
-| weftext.term.content-completion-proof | 内容完成证明 | Content Completion Proof | \`ContentCompletionProof,contentCompletionProof\` | P seal后发布到portable metadata的不可变证明，绑定ChangeId、semantic state、frontier推进及actual after components | 不授receipt读取、Money/approval消费或execution takeover | D6-FA-r01 candidate; not activated |
-| weftext.term.conflict-record | 冲突记录 | Conflict Record | \`ConflictRecord,conflictRecord,ConflictKey,conflictId\` | 由规范ConflictKey/ConflictId定位的portable并发版本记录，状态open→resolution_prepared→resolved或superseded | 不是自动merge、LWW或D3 bypass transaction | D6-FA-r01 candidate; not activated |
-| weftext.term.reliable-save-state | 可靠保存状态 | Reliable Save State | \`ReliableSaveState,reliableSaveState\` | 区分not_saved与P seal后的reliable；portable publication由独立状态读取 | 不等于Draft已保存、sync上传或ContentCompletionProof已发布 | D6-FA-r01 candidate; not activated |
+| weftext.term.installation-notice | 安装告知记录 | Installation Notice | \`InstallationNotice,installationNotice\` | 触碰 portable current 前耐久写入的 InstallationNotice/2，绑定 DecisionKey、guarantee、WriteProtection、原 baseFrontier 以及完整 component before/after；baseFrontier 可以包含此前已经封存的历史 ChangeId，但记录本身不含这个尚未 seal decision 的新 ChangeId | 不是 commit proof、receipt、approval、Money/external payload 或 execution authority；历史 base head 中的旧 ChangeId 不等于本 decision 已成功 | D6-FA-r01 candidate; not activated |
+| weftext.term.content-completion-proof | 内容完成证明 | Content Completion Proof | \`ContentCompletionProof,contentCompletionProof\` | 新生产路径的 ContentCompletionProof/3 是 P seal 后发布到 portable metadata 的不可变证明，绑定同一 DecisionKey/ChangeId、actual frontierBefore/frontierAfter、actual components，并以生产 SourceVersion/2 或 absent 表达 sourceChanges；接收端验证连续 sealed 链后建立自己的 current SourceObservation | 不授 receipt 读取、Money/approval 消费或 execution takeover；历史 ContentCompletionProof/1,/2 保留原 bytes/decoder/pins，/2 的 SourceVersionRef sourceChanges 不按 /3 重解 | D6-FA-r01 candidate; not activated |
+| weftext.term.conflict-record | 冲突记录 | Conflict Record | \`ConflictRecord,conflictRecord,ConflictKey,conflictId\` | 当前新生产路径使用 ConflictRecord/2，以 Frontier/2 记录 created cut；ConflictKey/1、ConflictId 的 D6-ConflictKey/1 hash domain 与排序保持不变。历史 ConflictRecord/1 继续按 Frontier/1 和原 bytes/decoder 履约 | 不是自动 merge、LWW 或 D3 bypass transaction；不得把 Record/1 重编码为 /2，也不得为未封存 external/unknown 状态伪造 head ChangeId | D6-FA-r01 candidate; not activated |
+| weftext.term.reliable-save-state | 可靠保存状态 | Reliable Save State | \`ReliableSaveState,reliableSaveState\` | 闭集区分 not_saved、strict 安装并 P seal 后的 reliable、完全满足弱保护资格并 seal 后的 durable_observed_only，以及不适用文件保存的 not_applicable；prepared/input retained 仍不是 Saved，portable publication 由独立状态读取 | 不等于 Draft 已保存、sync 上传、InstallationNotice 或 ContentCompletionProof 已发布；durable_observed_only 不声称最后检查后未观察的外部 C 不会被 N 覆盖 | D6-FA-r01 candidate; not activated |
 | weftext.term.execution-responsibility | 执行责任域 | Execution Responsibility | \`ExecutionResponsibility,ExecutionResponsibilityRecord,executionDomainId\` | 连续持有Automation/ApprovalUse/claim/Money/external-unknown/stop事实的受保护执行域，独立于普通CommitDomain | 不是ReplicaEpoch、Workspace content identity或文件同步资格 | D6-FA-r01 candidate; not activated |
 
 ## 2. D6-FA-r01 的关键消歧
@@ -86,16 +86,24 @@ ReplicaEpoch 只标识 ordinary replica writer 世代；ExecutionResponsibility 
 
 ### 2.3 Source Version
 
-SourceVersion/1 的 ownedNames 保留给历史 decoder。SourceVersion/2 标识实际来源版本并保留其生产 CommitDomain；当前副本/Server 的观察另由 SourceObservation/1 绑定 observerDomain、FileObjectBinding、observationEpoch 与 evidence pins。生产 domain 可以不同于当前 operation domain；任何 consumer 若只比较 revision 数字都不合格。
+SourceVersion/1 的 ownedNames 保留给历史 decoder。SourceVersion/2 是完整生产版本 union：managed 分支保存完整 EntityRef、生产 CommitDomain、生产 observationEpoch、managed revision 与 ChangeId；external 分支保存完整 EntityRef、生产 CommitDomain、生产 observationEpoch 与 externalSequence，并且没有 managed revision 或 ChangeId。SourceVersion/2 的生产域可以不同于当前 operation/observer 域，externalSequence 也永不填入 D3/D4/D5 的 managed sourceRevision。
 
-SourceVersionRef/1 的 sourceToken 选择完整受保护 SourceObservation，而不是裸 revision/digest。source A→B→A、watcher gap、placeholder materialization 或不连续 rematerialize 都可使当前观察失效；digest 相同不能恢复旧 locator、prepared、ActionEvidence 或 sourceOccurrenceKey continuity。
+对生产域 D 和实体 E，H(D,E) 是 D 的连续已封存 managed 生产历史中 E 的最大 revision。只有从该域 birth/registration、P continuity 与已验证 portable sealed history 证明从未为 E 封存 managed 版本时，完整空历史才允许 H=0；缺失、损坏、有 gap 或未知历史都不能当空。新的 managed after 使用 checked H+1，MAX 不 wrap，同一生产域跨生产 observationEpoch 不重置 H。一个 source 首次由另一生产域写入时使用新生产域自己的 H+1，之后跨域往返分别继续各自 H；不同生产域相同 revision 数字不等价。true raw no-op 保留原 SourceVersion/2；纯 placement/lifecycle/control 且 source 未变不增加 H；删除的 after=absent，不创建删除版 SourceVersion 也不推进 H。equal-byte external admission 仍是显式 managed 接纳，按当前生产域 H+1 形成新 managed after。
 
+当前副本或 Server 的读取资格由完整 SourceObservation/1 单独绑定 observerDomain、EntityRef、生产 SourceVersion/2、当前 observer observationEpoch、FileObjectBinding 与 evidence pins。生产 SourceVersion.observationEpoch 与当前 SourceObservation.observationEpoch 属于不同角色，即使数值相同也不合并。watcher/journal gap、external/object replacement、placeholder 状态变化或 discontinuous rematerialization 都会使旧当前观察资格失效；相同生产版本、revision、digest 或最终文本不能恢复旧观察。SourceVersionRef/1 的 sourceToken 只选择这份完整受保护 Observation，不是裸 revision、digest、I cache 或生产 SourceVersion。
+
+只在计划确实会产生新的 managed after 时，P 内部 SourceRevisionPlan/1 才冻结 before Observation 或明确 absent、同生产域该实体最后已封存 managed SourceVersion 或已证明的 none、拟议 SourceStamp/1 与 exact after pin；它在 seal 前没有本 decision 的 ChangeId。d6_source_revision/2 通过受保护 RevisionTokenBinding/2 绑定当前 observerDomain/observationEpoch 与 managed SourceStamp 或完整 external SourceVersion。拟议 managed token 只在同一原 plan 内用于受管候选/定位验证；只有 decision seal、实际 managed SourceVersion 已形成且 current SourceObservation 仍完整有效后，才能取得 currentness 资格。旧 d6d/d6r/d6a profile、D3 Locator 的 opaque revision-token 词法，以及 D4/D5 的 inner sourceRevision/selector wire 都保持原 owner 与原形状。
 ### 2.4 Reliable Save 与 Portable Publication
 
-ReliableSaveState 区分 not_saved、strict 路径的 reliable、人工普通文件 observed_only 路径的 durable_observed_only，以及不适用文件保存的 not_applicable。它回答一次已 seal decision 的实际保存保护级别；input retention 与 portable publication另有状态。
+ReliableSaveState 与 ContentGuarantee、SemanticState、WriteProtection 分轴。not_saved 表示尚无文件保存成功；reliable 只来自 strict 安装加 P seal；durable_observed_only 只来自完整满足资格的人工普通文件弱保护保存并 seal；not_applicable 用于没有文件保存效果的路径。prepare 成功、PreparedIntent/input retained、Draft persistence、worker/HTTP success、InstallationNotice 或 sync upload 都不是 Saved，portable publication 也由独立状态表示。
 
-Draft persistence、HTTP success、worker success、sync upload、prepared/input retained、InstallationNotice 都不能称已保存。durable_observed_only 只承诺本次输入与实际读取 before 已耐久，并不承诺最后观察后从未被观察的外部竞争写不会被覆盖；reliable/durable_observed_only 都不自动等于 portable published。
+observed_only 只允许受信 interactive_source_save 的人工在 planning 开始前显式选择并冻结，目标恰为一个既有 live Document，保存类型为 ordinary+replica_local，具备完整 source read/replace，author source write set 为空或仅该 Document，没有适用 body/Field/node-control deny，不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或其它 entity，并且 Draft Base 等于当前选定 SourceObservation。除此之外的 noninteractive、D3 identity/structure/lifecycle、D5 structured、bulk/collection、D7 strong Action、Automation、server checkpoint、Approval 与 Money 路径都保持 strict；strict 失败、known conflict、失权、耐久失败或 strong obligation 失败都不得在 planning 后 fallback 成 observed_only。
 
+在合格 observed_only 中，原 plan 耐久保留实际读取的 before B 与用户输入 N。唯一放宽是最后可信检查之后、安装 N 之前从未被观察的外部 C 可能被 N 覆盖，而且可能没有可恢复副本；后来另一个 C 也可以再次替换 current file，但 B/N 的耐久保留责任不因此消失。已经观察到的 competition、stale Base、watcher gap、third_state 或失权都不属于该放宽；unknown install 保持 recovery_unknown，不能用相同 hash 猜成功。
+
+planned 只恢复同一原冻结 plan：原 InputDescriptor、适用 SourceRevisionPlan/SourceStamp、before/after pins、OperationId、预算/attempt、WriteProtection、InstallationNotice 与安装状态继续沿用，不重新准备第二个 decision，也不预分配本次 ChangeId。saved/committed 则在原 request/fingerprint/continuity 定位后，按原实际 effect/mode 或结果披露范围做当前交付授权，再重放原 receipt/error/effects bytes 或补原版本 publication/outbox；不要求旧 source/Frontier/业务证明仍等于 current，不回写后来的 current source，不重分配版本或重复收费。撤权可以遮蔽交付但不改写历史 decision；unknown 与旧版本 pins/恢复责任也不能被新 wire、I 重建或重新授权抹掉。
+
+新 FA portable decision 在 seal 后使用 ContentCompletionProof/3 发布；publication pending 只补同一已封存 decision 的 proof/outbox。reliable 或 durable_observed_only 都不自动表示 portable published。
 ### 2.5 Semantic State
 
 complete_semantics 与 semantic_pending 都要求 D2 valid。pending 必须显式列出尚未证明的 closed obligation；不能用“稍后检查”自由字符串。
@@ -106,16 +114,15 @@ semantic_pending 不得被 D7 complete Query/Action、purge、relation/unique/Ca
 
 ## 3. 技术成员归属
 
-- D6 拥有以下控制域标识与版本类型：CommitDomain、DecisionKey/2、ReplicaEpoch、ChangeId、Frontier/2、SourceVersion/2、SourceObservation/1、SourceVersionRef/1。
-- D6 还拥有以下语义与证明类型：SemanticState、ContentGuarantee、DependencyProof/2、ObservationScope/2、WriteProtection。
-- D6 同时拥有以下安装与责任类型：InstallationNotice/2、ContentCompletionProof/2、ConflictRecord、ReliableSaveState、ExecutionResponsibilityRecord。
-- NodeRef/ResourceRef/AnnotationRef、OperationId、AuthorityInstanceId、D3 lifecycle receipt：D3；D6不得通过 generic commit重新定义。
-- FieldId、RegistryBinding、relation/Calendar typed semantics：D4。
-- QuerySpec、ActionSpec、PreparedActionBinding、EffectManifest/EffectBytes：D7；FA-r01新版本必须后续协调。
-- Draft/Edit Map/IME/Undo/Source-Live-Read：D8。
-- ImportJob 的转换输入、ExportPlan/Publication：D9；D6只拥有耐久控制与预算边界。
-- ApprovalUse、sourceOccurrenceKey、ToolValue、Money各级谱系、Agent/Automation/connector external effect：D10/相应Money owner；D6只拥有连续耐久 container 与无双花/不重放边界。
-
+- D6 拥有提交域、观察与生产版本的控制类型：CommitDomain、DecisionKey/2、ReplicaEpoch、ChangeId、Frontier/2、SourceVersion/2、SourceObservation/1、SourceVersionRef/1；SourceStamp/1、内部 SourceRevisionPlan/1、RevisionTokenBinding/2 与 d6_source_revision/2 也由 D6 Control 冻结技术形状，但不新增 public conceptId。
+- D6 拥有语义与依赖证明载体：SemanticState、ContentGuarantee、ObservationScope/2、DependencyProof/2、DependencyKey/2 与 WriteProtection。DependencyKey/2 的十四类 closed key、排序、stamp 与 D6 持久/校验规则归 D6；StructureRange、D4 relation/calendar 范围、D7 query_scan 等具体枚举算法仍归各自 owner，不接受 free JSON 近似替代。
+- D6 拥有安装、完成、冲突与执行连续性类型：InstallationNotice/2、ContentCompletionProof/3、ConflictRecord/2、ReliableSaveState、ExecutionResponsibilityRecord。历史 ContentCompletionProof/1,/2、ConflictRecord/1、Frontier/1、InstallationNotice/1 继续由其原 decoder/bytes/pins 解释，不按新版本静默重解。
+- NodeRef/ResourceRef/AnnotationRef、OperationId、AuthorityInstanceId、D3 lifecycle receipt 与 D3 identity/placement/lifecycle producer：D3；D6 不得用 generic commit、SourceRevisionPlan 或 companion 扩大 D3 WriteScope。固定 C 已有 D3 wire12 候选，但其 P2 native descriptor/companion consumer 仍需实际配套与 fresh 接受。
+- FieldId、RegistryBinding、relation/Calendar typed semantics：D4；relation_incidence 与 calendar_scope 的具体枚举仍由 D4 owner 提供，D6 只承载 closed dependency key/stamp/pins 与提交边界。
+- QuerySpec、ActionSpec、PreparedActionBinding、EffectManifest/EffectBytes 均归 D7 所有；query_scan 也由 D7 负责其扫描语义。完整 Result/Action 所需的 selector、授权世代、正负范围和 reset 规则同样归 D7。
+- D7 的 Query 模块负责查询消费者配套，Value-CEL 模块负责值与表达式求值消费者配套，View 模块负责视图消费者配套，Narrow Field 模块负责窄字段资格消费者配套，Definition Transfer 模块负责定义转移消费者配套，Preview-Effects 模块负责预览与效果消费者配套，Execution-Action 模块负责执行与动作消费者配套，Prepared 模块负责准备态消费者配套，Scenarios 模块负责场景处置消费者配套，Lexicon-Registry 模块负责术语与注册表消费者配套，Impact 模块负责实现影响与测试边界配套；这些模块都仍需在后续形成完整的消费者后像。
+- Draft/Edit Map/IME/Undo/Source-Live-Read：D8；ImportJob 转换输入与 ExportPlan/Publication：D9，D6 只拥有耐久控制、pins 与预算边界。
+- ApprovalUse、sourceOccurrenceKey、ToolValue、Money 各级谱系、Agent/Automation/connector external effect：D10/相应 Money owner；D6 只保存连续耐久 container 与 no-double-consume/no-replay 边界，不能用 execution_resource 或 CommitDomain 替代 D10 Run/Lease/Automation/Money/unknown 合同。
 ## 4. Policy/3 能力受控映射
 
 Policy/3 沿用 Policy/2全部能力，并新增：
@@ -145,14 +152,23 @@ commit_sequence_state 在 Policy/3 中只观察指定 CommitDomain 的 domainCom
 
 ## G0-A Write Protection 与技术版本边界
 
-Write Protection / 写入保护级别由 D6 storage/control 拥有。closed enum 仅 strict | observed_only；受控 owned names 为 WriteProtection、writeProtection，locale 为 storage.write_protection。它不是权限、用户确认、Query 完整性、ApprovalUse 或 CAS。
+Write Protection / 写入保护级别由 D6 storage/control 拥有。closed enum 仍只有 strict 与 observed_only；受控 owned names 为 WriteProtection、writeProtection，locale 为 storage.write_protection。它与 ContentGuarantee、SemanticState、ReliableSaveState 分轴，不是权限、用户确认、Query 完整性、ApprovalUse 或 CAS。本轮不因其它内部技术类型再增加 public conceptId；既有 Write Protection concept identity、owned names 与 firstFreeze 保持不变。
 
-observed_only 只允许受信人工单一既有 live Document ordinary save；强 Action、Automation、批准或费用消费必须 strict，且 strict request 不得在 prepare/commit 中原地降级。
+observed_only 只允许受信人工对恰一个既有 live Document 做 ordinary+replica_local 整源保存：必须完整 source read/replace，没有适用 body/Field/node-control deny，author source write set 为空或仅该 Document，不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或其它 entity，且 Draft Base 等于当前 SourceObservation；人工必须在 planning 开始前显式选择并冻结。已观察竞争、stale Base、watcher gap、失权、unknown install 或其它资格失败不受豁免。strict/managed_atomic、结构或多对象修改、D5 structured、bulk/collection、D7 strong Action、Automation、Approval 与 Money 都不得降为 observed_only。
 
-Frontier 的当前新决议版本是 Frontier/2；ObservationScope/2、DependencyProof/2、InstallationNotice/2、ContentCompletionProof/2 是当前 D6 closed 技术类型。它们不新增内容 identity、作者源或第二 ledger。既有 conceptId、ownedNames、firstFreeze 保持；本节只新增 Write Protection concept，历史 Frontier/1/InstallationNotice/1/ContentCompletionProof/1 等仅按历史 decoder/replay。
+当前新生产路径使用 Frontier/2、SourceVersion/2、SourceObservation/1、SourceVersionRef/1、ObservationScope/2、DependencyProof/2 与十四类 DependencyKey/2、SourceStamp/1、内部 SourceRevisionPlan/1、RevisionTokenBinding/2+d6_source_revision/2、InstallationNotice/2、ContentCompletionProof/3 和 ConflictRecord/2。InstallationNotice/2 只绑定原 DecisionKey/baseFrontier/WriteProtection/components，不保存尚未 seal 的本 decision 新 ChangeId；ContentCompletionProof/3 在 seal 后绑定真实 ChangeId、生产 SourceVersion sourceChanges 和 actual pre/post Frontier；ConflictRecord/2 使用 Frontier/2，而 ConflictKey/1/ConflictId/hash domain 不升版。
 
+Frontier/2 只证明连续 sealed 因果前缀，不证明 Query 全集、payload 已下载或 Registry/index 完整。scope_dependencies 只允许具有完整连续 sealed 证据且已证明与原 source/control/auth/正负范围无关的非回退扩展；真实依赖变化、unknown gap 或 partial proof 都不能被洗成无关。Derived Index 删除或重建本身不会破坏仍完整保存在真实 P/M owner 中的范围连续性事实，但真正丢失 proof/continuity 时必须新建 epoch，不能由相同 hash 复活旧证明。
+
+历史 Frontier/1、InstallationNotice/1、ContentCompletionProof/1,/2、ConflictRecord/1、旧 revision-token profile 与旧 saved/planned/unknown records 继续原 decoder/bytes/pins/授权/连续性。ContentCompletionProof/2 的 SourceVersionRef sourceChanges 不迁成 /3 的生产 SourceVersion，ConflictRecord/1 的 createdAtFrontier 不按 Frontier/2 重解。
 ## 6. Legacy 与激活边界
 
-旧 sourceVersion、Policy/1/2、D6 wire1、PreparedIntent、D7 binding/effects 和历史 receipt继续其原 decoder/firstFreeze。机器 registry 的 firstFreeze 是历史来源属性，不因 FA-r01重新冻结而改写。
+旧 SourceVersion/1、Policy/1/2、D6 wire1、PreparedIntent、Frontier/1、InstallationNotice/1、ContentCompletionProof/1，以及已经存在的 ContentCompletionProof/2、ConflictRecord/1、旧 revision-token profile、D3 primary receipt/companion、D7 PreparedActionBinding/1,/2、D8 PreparedEditBinding/1 和历史 receipt/plan/unknown 继续按其原 decoder、bytes/fingerprint、授权、pins、期限与 continuity 履约。存在 decoder 或候选文字不证明所有历史 prototype 都曾部署或 active；但实际存在的 saved、planned、unknown 记录不能因新合同或缺部署证据而被取消恢复、保留和防重复执行责任。机器 registry 的 firstFreeze 仍是历史来源属性，不因 FA-r01 重开而改写。
 
-新 public names只有在全部 replacement owner与consumer共同接受后可进入产品/API。当前目录存在不代表 capability available，也不能把 candidate term 注入 D10 manifest/contribution或产品日志作为已发布 schema。
+当前固定 C 已经包含 D3 wire12 以及 D4/D5 对 A/B/C 的 SourceObservation/Frontier/WriteProtection 消费候选；这些候选并非不存在，但仍未独立接受、未激活、未实现本 P1 新生产者的全部规则。实际私人 Storage/Control 作者后像现已冻结生产域 revision/H、SourceRevisionPlan/RevisionTokenBinding、十四类 DependencyKey、ContentCompletionProof/3、ConflictRecord/2、U5 Frontier/恢复等生产者合同；本 Lexicon 只是对这些真实作者字节的术语配套，不构成语义接受。
+
+依赖新生产者的 managed/strong success 仍须完成同一 P1 的机器 Registry、Impact/Test Outline、PROPOSAL/replacements routing，P2 D3/D4、P3 D5，以及 D7 Query/Value-CEL/View/Narrow Field/Definition Transfer/Preview-Effects/Execution-Action/Prepared/Scenarios/Lexicon-Registry/Impact、D8、D9、D10 的实际 consumer afterimages，并经过 fresh 独立全量联合审查与协调接受。缺少这些 strong consumer 不得半包激活；同时，不依赖缺失 strong proof 的既定 ordinary .adoc/Resource read、Draft、完整合格人工整源保存与局部离线操作也不得被永久禁用。
+
+saved 决议只在当前原实际效果/结果披露范围的交付授权下重放原 bytes 或补原版本 publication/outbox，不重新执行旧业务、覆盖后来的 current source 或重复收费；planned 只恢复原冻结 plan、版本依据、pins、预算与安装状态，不新 prepare 第二 decision；unknown 与旧 pins/外部 effect/Approval/Money/执行连续责任保持原合同，不能从 current file、I、相同 hash 或重新授权猜掉。
+
+旧十一项 OPEN、U6/U7、后续 A2 自包含重建以及 A2 后另一轮 fresh Pro 全局终审继续保留，作者不能在术语稿中自行核销或接受。当前作者阅读只覆盖本任务实际读取的两份 Lexicon 与四份私人 producer，不等于固定 S 49 原输入、双语全部 owner、D10 all18 或任何独立审查已经完成。新 public names 只有在所需 replacement owner 与 consumer 共同接受后才可进入产品/API；候选目录、fixture、文档检查或 CI 本身都不表示 capability available、schema released 或 semantics activated。

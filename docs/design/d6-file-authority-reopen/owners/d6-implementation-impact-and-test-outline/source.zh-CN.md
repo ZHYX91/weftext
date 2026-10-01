@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：`3762120f-fb70-4cf7-9699-68602e9bf9fc`。
 
-候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 中 revision05/D7/D9 历史验收文字仅作来源记录。稳定文档 ID 保持。本文件只定义未来实施/验收义务，不授权代码、依赖、发布、部署或 A2。
+候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现、未合并。固定 S 中 revision05/D7/D9 的历史验收或候选文字仅作来源记录，不支配本后像；稳定文档 ID 保持不变。P1 的 Storage、Control、Lexicon 与 machine Registry 私人唯一作者后像已经真实形成，本文件据其最终实际正文同步未来实现与验收义务；这些 producer、Registry 与本 Impact/Test Outline 都仍不是独立接受或产品激活证据。PROPOSAL/replacements routing、P2 D3/D4、P3 D5、D7–D10 实际消费者、旧十一项 OPEN、U6/U7、fresh 全量联合接受、A2 自包含重建及其后的另一轮 fresh Pro 全局终审均继续保留。本文件只定义未来 implementation/conformance evidence，不授权代码、依赖、source、CI、发布、部署或 A2 工作；任何 fixture、性能条目、平台故障注入或文档检查在实际运行前都只是要求，不能写成已经通过。
 
 # D6 Implementation Impact and Test Outline
 
@@ -37,53 +37,67 @@ Implementation 必须有静态 owner audit：每个 current truth字段恰有一
 
 ### S2 Durable control + legacy replay
 
-- 建立库外 control.sqlite3、WAL/SHM及pin区。
-- 完整支持旧 D6 wire1、Policy/1/2、旧Prepared/saved decision原decoder/replay，不把旧记录升级。
-- 新v2 schema可读写candidate fixture，但 feature gate保持not_in_release/unsupported_version，禁止产品成功路径。
-- P丢失模拟不得从portable/current files合成旧receipt、ApprovalUse、Money或unknown。
+- 建立库外 control.sqlite3、WAL/SHM 与私有 pin 区，并保存 canonical request/fingerprint、DecisionKey、planned/committed/unknown 恢复、预算/attempt、安装状态、必要 pins、ApprovalUse/claim/Money/external unknown 与执行责任；P 不是 current body 或 portable structure 的第二 owner。
+- 完整支持实际历史 D3 v9/v10/v11、D6 wire1 commit/receipt/error、Policy/1/2、SourceVersion/1、Frontier/1、InstallationNotice/1、ContentCompletionProof/1 与已经存在的 ContentCompletionProof/2、ConflictRecord/1、旧 revision-token profile、D3 primary receipt/companion、D7 PreparedActionBinding/1,/2、D8 PreparedEditBinding/1 以及实际历史 Result/ByteHandle 记录。按记录真实保存时的版本、原 bytes/fingerprint、授权、pins、clock/continuity 与恢复规则分派，禁止自动重编码或升级。
+- saved、planned、unknown 必须是不同恢复分支。saved 在共同 disclosure、CommitDomain/P continuity 与原 request/fingerprint 定位后，只按原实际 effect/mode 或结果披露范围做当前交付授权，再重放原 receipt/error/effects bytes 或补原版本 publication/outbox；不得要求旧 source/Frontier/业务依赖重新成为 current，也不得回写后来 current source、重新收费或重新分配版本。planned 只恢复原冻结 plan、InputDescriptor、适用 SourceRevisionPlan、pins、OperationId、预算/attempt、安装状态与原版本依据；未 seal 时没有本次 ChangeId，也不能 new-prepare 第二个成功。unknown 保留原 pins、外部 effect、费用/批准/claim 与执行连续责任，不从当前文件、相同 hash、I 或重新授权猜结果。
+- 新 v2 fixture 可以覆盖 SourceRevisionPlan/1、RevisionTokenBinding/2、d6_source_revision/2、ContentCompletionProof/3、ConflictRecord/2 和 DependencyKey/2，但仍必须在 feature gate 下保持 not_in_release/unsupported_version 或 owner gate；fixture 存在不表示历史 prototype 全部 active，也不表示新 producer 已被消费者接受。
+- P-loss 测试必须证明：不能从 portable/current files、Derived Index、相同 digest 或空 control DB 合成旧 receipt、ApprovalUse、Money、unknown、clock/pin continuity 或旧生产域 H(D,E)。若 portable current 完整可验证且没有未决安装风险，可按 replica registration 建新 ReplicaEpoch/CommitDomain 继续不依赖旧全局责任的 ordinary content；旧域历史责任仍不可重建。
 
 ### S3 Portable metadata + replica model
 
-- 实现ReplicaRecord、CommitDomain、ChangeId/Frontier、SourceVersion/2、InstallationNotice、ContentCompletionProof、ConflictRecord。
-- child order使用单一有序列表owner；move/reorder生成确定变化。
-- 新设备register新ReplicaEpoch；retired epoch不可复活。
-- 远端记录接纳推进已验证 Frontier/2，不重放 remote OperationId，也不为纯运输接纳另造本域 ChangeId；本地作者 ChangeId 只在 P seal 分配。
+- 此阶段要实现 ReplicaRecord、CommitDomain/2、ChangeId/1 和 Frontier/2，并实现 SourceVersion/2 的 managed 与 external 两个完整分支，以及 SourceObservation/1、SourceVersionRef/1、内部 SourceRevisionPlan/1、SourceStamp/1、RevisionTokenBinding/2 与 d6_source_revision/2、InstallationNotice/2、ContentCompletionProof/3 和当前 ConflictRecord/2。历史 Frontier/1、ContentCompletionProof/1,/2 与 ConflictRecord/1 必须继续使用原有解码规则和原始字节；旧版令牌配置也保持原语义。
+- SourceVersion/2 的生产 CommitDomain 与生产 observationEpoch 和当前 SourceObservation/1 的 observerDomain、当前 observationEpoch 分开。对生产域 D 和实体 E，H(D,E) 是连续 sealed managed 历史中的最大 revision；只有从域 birth/registration、P continuity 与已验证 portable sealed history 证明完整空历史时才允许 H=0。真实 managed after 使用 checked H+1，MAX 不 wrap，同一生产域跨 production observationEpoch 不重置 H；跨域往返各自继续各自 H，相同裸 revision 不可比较。
+- true raw no-op 保留原 SourceVersion/2；纯 placement/lifecycle/control 且 source unchanged 不推进 H；source deletion 的 after=absent，不创建删除版 SourceVersion 或 H 增量，但作为真实 portable effect 仍在 seal 获得 ChangeId；equal-byte external admission 仍是 external→managed 显式接纳，按当前生产域 H+1 形成 managed after，externalSequence 永不充当 managed sourceRevision。
+- 只有确实会产生 managed after 的原 plan 才冻结 SourceRevisionPlan/1：实际 before Observation 或明确 absent、同生产域 lastIssued/完整空史证明、拟议 SourceStamp 与 exact after pin。winning plan 后这些版本依据不可重采样；seal 前重验同域历史。plan/staging/InstallationNotice 都不分配本次 ChangeId；唯一 P seal 才把 SourceStamp 与真实 ChangeId 合成为 managed SourceVersion/2 并原子推进 H。
+- RevisionTokenBinding/2 以 d6_source_revision/2 受保护 tag 绑定当前 observerDomain/current observationEpoch 与 managed SourceStamp 或完整 external SourceVersion。拟议 managed token 只在同一原 plan 内用于候选/定位验证，seal 且完整 current SourceObservation 成立后才有 currentness 资格；watcher gap、external/object replacement 或不连续 rematerialization 即使 production SourceVersion、revision、hash、文本相同也使旧观察与旧 token 失效。D3 Locator 外层 opaque revision-token 词法、D4 inner sourceRevision/OccurrenceKey/Entry/Type/RelationReadContext/Binding/Recurrence 和 D5 revision-bound locator wire 均保持原形状。
+- Frontier/2 只表示每个 CommitDomain 已验证连续 sealed 的因果前缀；它不证明 payload 已物化、placeholder 已下载、Registry/index 完整或 D7 complete Query。远端记录接纳不重放 remote OperationId，也不为纯运输另造本域 ChangeId。
+- 新 FA transport 使用 ContentCompletionProof/3：它携真实生产 SourceVersion before/after 或 absent、actual frontierBefore/frontierAfter 和真实 components。接收端必须验证 InstallationNotice、proof、全部 components、生产版本与完整连续 sealed 链后才推进 Frontier，并用自己的 CommitDomain、FileObjectBinding、observationEpoch、evidence pins 与当前 control/Registry/incidence cut 建立新的 SourceObservation/SourceVersionRef；禁止复用发送端 sourceToken。
+- 新 conflict 使用 ConflictRecord/2+Frontier/2；ConflictKey/1、ConflictId 与 D6-ConflictKey/1 hash domain 不变，历史 Record/1 仍用 Frontier/1。child order 继续只有一个有序列表 owner；新设备注册新 ReplicaEpoch，retired epoch 不复活。
 
 ### S4 Safe file installation
 
-强路径至少实现并证明 conditional_replace 或真正 exclusive_write_window；仅 advisory 锁不能作为测试替身。另按已批准产品裁决实现受信人工单一既有 Document 的 observed_replace/WriteProtection=observed_only；它必须耐久保留 B/N、最后观察竞争状态且不能声称排除未观察 race。新文件仍用 create_only。
+强路径至少实现并证明 conditional_replace 或真正 exclusive_write_window；advisory lock、read-hash-then-rename 或最终 digest 相同都不能作为 strict CAS/排他证明。expected-absent 新文件仍用 create_only。
+
+observed_replace/WriteProtection=observed_only 只允许受信人工 interactive_source_save 在 planning 开始前显式选择并冻结，而且必须同时满足：恰一个既有 live Document；ordinary+replica_local 整源保存；完整 source read/replace；author source write set 为空或仅该 Document；没有适用 body/Field/node-control deny；不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或其它 entity；Draft Base 等于当前选定 SourceObservation。noninteractive、managed_atomic、D3 identity/structure/lifecycle、D5 structured cell/row/column/reorder、bulk/collection、D7 strong Action、Automation、server checkpoint、Approval 与 Money 都保持 strict。planning 开始后 strict capability失败、known conflict、失权、durability failure、strong obligation失败或其它资格缺失都不得 fallback 成 observed_only。
+
+observed_only 原 plan 必须耐久保留实际 read-before B 与用户输入 N。唯一放宽是最后可信检查后到 N 安装前从未观察的外部 C 可能被 N 覆盖且没有可恢复副本；以后另一个 C 也可以替换 current file，但 B/N 的耐久保留责任不消失。已观察竞争、stale Base、watcher gap、third_state 或失权不属于该风险；unknown installation/provenance 固定 recovery_unknown，相同 hash/文本不得猜 success。
 
 故障注入必须覆盖：
-- stage write前；
-- stage data flush前/后；
-- InstallationNotice flush前/后；
-- 每个component install前/后；
+- stage write 前；
+- stage data flush 前/后；
+- SourceRevisionPlan/版本依据 durable planning 前/后；
+- InstallationNotice/2 flush 前/后，并验证其中没有本 decision 尚未 seal 的 ChangeId；
+- 每个 component install 前/后；
 - file data flush；
 - directory entry flush；
 - installed verification；
-- P seal transaction前/中/后；
-- ContentCompletionProof写/flush前/后；
-- response传输丢失。
+- P seal transaction 前/中/后，并验证 seal 是唯一 decision commit point；
+- ContentCompletionProof/3 与 outbox 写/flush 前/后；
+- response/receipt delivery 丢失。
 
-strict 路径每个点验证不丢竞争字节。observed_only 验证不覆盖任何已观察竞争、保留实际读取 before 和输入、unknown 不猜 success；两者都不得重复收费或生成第二identity。
+strict 路径在每个点验证不会静默丢失已观察竞争字节；observed_only 验证不覆盖任何已观察竞争、B/N 已耐久、未观察 C 不被虚构、unknown 不猜 success。prepare/retained 都不是 Saved；只有 strict install+P seal 得到 reliable，合格 observed_only install+P seal 得到 durable_observed_only。seal 后 publication/delivery 失败只补同一原 proof/outbox 或交付原 receipt，不重装 N、不换 OperationId、不重新分配 ChangeId/managed revision、不推进 H、也不重复收费。
 
 ### S5 Ordinary save 与 semantic pending
 
-- D6 source-save ordinary/complete profile；
-- local typed gate与complete obligation分离；
-- semantic_pending consumer deny矩阵；
-- external observation epoch/ABA；
-- r5 replay/current r6 分离；
-- installed write set用planned poststate验证，未写dependency继续比before/cut。
-
-D4/D5 后像已存在，但尚未消费 G0-A Frontier/2、SourceObservation 与 WriteProtection；相关新 producer/consumer 组合在 C 批前仍 owner_update_required/unavailable。
+- D6 source-save 继续区分 ordinary 与 complete 语义资格，并与 strict|observed_only WriteProtection 分轴；ordinary 成功不自动取得 complete Query/Action 资格，strong consumer 失败也不能改写成同一 Action 的 ordinary success。
+- 普通既有 Document 整源保存绑定完整 current SourceObservation/1（含真实 production SourceVersion/2）、FileObjectBinding/evidence pins、当前 lifecycle/policy、实际 MutationFootprint、D2 parse 和实际修改的 local typed facts；合法但尚未证明跨对象/全集 obligation 时只能 semantic_pending。semantic_pending 可供明确 local Source/edit/read consumer 使用，但不能进入 relation/unique/Calendar 强 mutation、all_result/post-query、Automation、purge 或其它 complete consumer。
+- DependencyProof/2 必须消费十四类 closed DependencyKey/2：source、lifecycle、placement_range、ref_inbound、relation_incidence、calendar_scope、registry、temporal_rules、authorization、foreign_binding、query_scan、replica_registry、conflict_record、execution_resource。每个 key 的 owner、范围、epoch/revision stamp、evidence pins、正负集合与披露规则按最终 Control；禁止 free JSON、I row、provider“已同步”、最终 hash 或 Frontier 数字替代真实完整证明。
+- 完整范围来自当前授权下的一致 snapshot/range barrier，或无缺口 continuous change chain 加最终复验。空范围和非空范围使用同一标准；partial/building index、index miss、placeholder、unknown decoder、I/O failure、缺 shard 或隐藏但无权读取都不能证明 empty。只删除/重建 I 不会破坏仍完整保存在真实 P/M owner 中的 range epoch/revision 与连续链；这些 correctness facts 真正丢失或发生 gap 才使旧 proof 失效并要求新 epoch+完整重枚举。
+- frontierPolicy=exact 必须保持原完整 Frontier equality；D3 managed_atomic 仍走 exact。scope_dependencies 只能接纳从原 expectedFrontier 到当前 cut 的真实连续、已验证 sealed、非回退且能证明与原 source/control/authorization/全部正负 DependencyKey 无关的扩展。原 canonical request、InputDescriptor.expectedFrontier、DependencyProof.baseFrontier、targets、Query/selector、pins、proposed bytes、WriteProtection、owner input 与版本依据不重签、不重采样；实际绑定依赖变化或未知 gap 不得洗成“无关”。反过来，只依赖完整真实局部范围的 ordinary/local/replica_local 操作不应被无关全 Workspace Query/index gate 永久阻断。
+- 当前 Observation 的连续性和版本令牌连续性必须与生产 SourceVersion 分开检查；即使生产版本、修订号、摘要或文本相同，发生监视器事件缺口、对象替换或不连续重新物化后，也不能恢复旧 SourceObservation、SourceVersionRef 或 d6_source_revision/2 的当前有效性。
+- submit/recovery 必须先经过共同 closed decode、state disclosure、CommitDomain/fence/P continuity 与 DecisionKey/request-fingerprint 防 probe，再分 saved/planned/unseen。saved 只按原实际效果/结果披露范围做当前交付授权并重放原 bytes；planned 复用原 plan、SourceRevisionPlan、pins、预算、安装状态和版本依据且没有 pre-seal ChangeId；只有 unseen 才按当前 owner/Observation/DependencyProof 建新 business decision。当前 r6 新证明不得回溯拒绝或升级 r5 saved decision。
+- installed write set 用原 planned after 验证，未写 dependency 继续对原 before/cut；自己的安装不能自冲突。late competition、撤权、unknown provenance 与 third_state 保持 conflict/paused/recovery_unknown，不能新写业务 rejection。
+- 固定 C 已存在 D3 wire12 及 D4/D5 对较早 A/B/C SourceObservation/Frontier/WriteProtection 边界的候选消费，但本 P1 新增的生产域 H/SourceRevisionPlan/revision-token profile/DependencyKey 细化/ContentCompletionProof/3/ConflictRecord/2/U5 恢复规则仍需 P2 D3/D4 与 P3 D5 真实 afterimage 配套和 fresh 联合接受；不能把旧候选解释为自动支持新 producer，也不能因此永久取消不依赖缺失 strong consumer 的 ordinary 文件读取、Draft、合格人工整源保存或局部离线操作。
 
 ### S6 Sync/conflict
 
-- 两副本离线正文/正文、创建/创建、移动/编辑、移动/移动、Trash/编辑、策略冲突、部分传输、placeholder、身份碰撞；
-- conflictId稳定、new head supersedes prepared resolution；
-- source merge保留原bytes；D3-owned placement/lifecycle resolution在D3 wire12未完成时返回owner_update_required；
-- purge必须等待complete inbound + registered replica frontier或retirement。
+- 两副本离线正文/正文、创建/创建、移动/编辑、移动/移动、Trash/编辑、策略冲突、部分传输、placeholder、身份碰撞继续逐项测试；普通多设备/offline 内容能力不因 complete Action consumer 尚未配套而被全局冻结。
+- 每个新 FA portable change 以 InstallationNotice/2、ContentCompletionProof/3、全部 listed component bytes/metadata、真实生产 SourceVersion before/after 及从 notice.baseFrontier 经 actual frontierBefore 到 frontierAfter 的完整连续 sealed 记录链共同证明完成。任一部分缺失、placeholder 未 materialize、生产版本 metadata 不全或链有 hole 都是 incomplete，不能 mint identity、推进 Frontier、从 I 补齐或把 index/provider 状态当完成。
+- 接收端验证生产历史后建立自己的 current SourceObservation/SourceVersionRef；不得复制 sender sourceToken，也不得仅因相同 production revision/hash/text 跳过本地 FileObjectBinding、observer observationEpoch、pins 与 continuity。
+- 并发 portable heads 使用 ConflictRecord/2+Frontier/2；ConflictKey/1、ConflictId 与 D6-ConflictKey/1 hash domain 保持不变。历史 ConflictRecord/1+Frontier/1 原 bytes/decoder 保留；unsealed external competition、third_state 或 unknown install 没有真实 ChangeId 时不得捏造 head。
+- conflictId 必须稳定；new sealed head 改变完整 key 时旧 open/resolution_prepared 记录按其版本进入 superseded 并建立后继，不按 mtime/LWW 自动选 winner。source merge保留原 bytes，policy 不做 allow union。
+- 固定 C 已有 D3 wire12 候选，但 D3-owned placement/lifecycle/identity resolution 仍须 P2 的 native descriptor/companion consumer 与真实 DependencyKey/SourceRevisionPlan 恢复配套；在该门和 fresh 联合接受前相关新 resolution prepare 返回 owner_update_required，不得由 D6 generic payload 绕过 D3，也不能说“wire12 不存在”。
+- purge 仍是强操作：必须证明完整 inbound/owner closure、complete semantic proof，并取得 registered replica 对 purge Frontier 的真实接纳确认或显式 retirement；provider“已同步”、replica 数量或单一 Frontier row 都不能代替 acknowledgement。
 
 ### S7 Server multi-user
 
@@ -148,40 +162,40 @@ D4/D5 后像已存在，但尚未消费 G0-A Frontier/2、SourceObservation 与 
 
 ## 5. 正反例验收矩阵
 
-下列均为待实现证据，不是本候选已通过测试。
+下列 FA01–FA30 身份保持不变，全部都是未来实现必须取得的证据，不是本作者候选已运行或已通过的测试。每项都同时服从当前 disclosure、CommitDomain/P continuity、真实 owner 与历史恢复边界。
 
 | ID | 场景 | 必须结果 |
 |---|---|---|
-| FA01 | I全删，10万无关文档未解析，编辑一个D2-valid普通笔记 | 可达T_first_reliable_save，不等待无关index/OCR；全集Action仍不可用直到proof |
-| FA02 | 既有目标缺 strict 条件/排他原语 | strict 返回 install_unavailable；满足全部资格的受信人工单Document ordinary save可 observed_only，并仅在耐久安装+P seal后得到 durable_observed_only |
-| FA03 | Base=A 后第三方写B | 若 B 在安装前被观察，strict 与 observed_only 都停止并保留 A/B/N；只有最后检查后仍未观察到的 race 是 observed_only 已批准风险 |
-| FA04 | 外部A→B→A且watcher gap | observationEpoch增加；旧map/locator/prepared/action evidence失效 |
-| FA05 | install after成功，step10仍错误比较before | 测试必须抓出该实现；规范实现按planned after通过written target，只重验unwritten deps |
-| FA06 | P seal成功，ContentCompletionProof写失败 | receipt可靠成功；portablePublication=pending；retry只补proof |
-| FA07 | response丢失，r5已committed，后来r6编辑 | replay r5返回原receipt；current source仍r6，不重写/不收费 |
-| FA08 | 两设备离线同笔记不同编辑 | 两heads进入source_concurrent，不LWW；原字节均可取 |
-| FA09 | A move Node，B改其正文 | 可证明维度独立才组合并重验policy/structure；否则conflict |
-| FA10 | A Trash，B edit | 不默认delete-wins；保留edit branch与Trash intent |
-| FA11 | purge vs旧replica restore | tombstone不复活；old bytes只能fresh-copy/reconciliation |
-| FA12 | child_list/Document/ContentCompletionProof分批到达 | incomplete，不mint identity、不推进Frontier |
-| FA13 | placeholder size已知但bytes未下载 | not_materialized/source_unavailable，不当empty/not_found |
-| FA14 | duplicate Ref但birth不同 | identity_collision；resolver不选first；resolution需D3 owner |
-| FA15 | building index漏一个relation target | complete Query/Action拒绝或完整scan；不得以空范围成功 |
-| FA16 | semantic_pending source进入auto Action | 明确拒绝complete consumer；Source/明确local读取仍可 |
-| FA17 | P丢失、files/portable intact | 可新ReplicaEpoch处理无疑点ordinary content；旧approval/Money/unknown不可重建 |
-| FA18 | I丢失、P intact | rebuild I，不重放decision、不新mint Ref、不改变收费 |
-| FA19 | copied P数据库在两设备打开 | 不自动得到双execution holder；takeover需fence旧holder/continuity |
-| FA20 | approval一次、网络response unknown、程序crash | restart先恢复original request/provider evidence；不新OperationId、不再consume |
-| FA21 | Money work batch先charge后crash | charge保留；attempt重启不refund；预算不足保持paused |
-| FA22 | Server Alice/Bob编辑不同Document | 两Draft与prepare并行；commit各一次；SQLite writer短串行不变成UI互斥 |
-| FA23 | Server Alice/Bob同Document旧base | first seal成功；second保留Draft并stale/conflict，不覆写 |
-| FA24 | Bob revocation与checkpoint seal并发 | 唯一线性化；revocation先赢则Bob未提交贡献不能借Alice身份提交 |
-| FA25 | Server 故障切换只隔离 control DB、未隔离文件写入 | 验收失败；旧实例必须不能继续作者文件 rename/write |
-| FA26 |协作receive ack但无checkpoint | UI/API不能显示reliable save/committed |
-| FA27 | IME preedit多事件+最终input | preedit不入author op；最终至多一个Draft transaction/checkpoint input |
-| FA28 | protected conflict pin超容量 | 新操作受限；不能删last-reference conflict evidence继续 |
-| FA29 | expired新历史effect pin | effects_unavailable；不得用current file伪造old after |
-| FA30 | legacy wire1 saved decision | byte-equal旧decoder/replay，旧pin promise不被v2 retention改写 |
+| FA01 | I 全删，10 万无关文档未解析，编辑一个 D2-valid 普通笔记 | 只重建本次 ordinary save 真正依赖的 current SourceObservation、局部 DependencyProof 与安装资格；有合格 strict primitive 时可达 T_first_reliable_save，不等待无关 index/OCR 或全 Workspace Query proof。全集 Action 仍必须等待自身 complete proof |
+| FA02 | 既有目标缺 strict 条件/排他原语 | strict 返回 install_unavailable；只有受信人工在 planning 前显式选择并冻结、且满足 existing single live Document、ordinary+replica_local、完整 source read/replace、无适用 deny、无结构/其它 entity mutation、Draft Base=current Observation 的保存才可 observed_only，并仅在 durable install+P seal 后得到 durable_observed_only |
+| FA03 | Base=A 后第三方写 B | 若竞争 B 在安装前已被观察，strict 与 observed_only 都停止并保留当前竞争状态、原 read-before 与输入；observed_only 只承担最后可信检查后仍未观察的 C 可能被 N 覆盖的风险，unknown installation 保持 recovery_unknown |
+| FA04 | 外部 A→B→A 且 watcher gap | 当前 observer observationEpoch 必须变化；旧 SourceObservation/1、SourceVersionRef/1、d6_source_revision/2 binding、map/locator/prepared/evidence 均失效，即使 production SourceVersion、revision、hash 或最终文本相同 |
+| FA05 | install after 成功，但实现仍把 written target 与 before 比较 | 测试必须抓出该错误；规范实现对 written component 验证原 planned after+installation provenance，只让 unwritten dependencies 继续对原 before/cut，并按 exact 或合格 scope_dependencies 重验 |
+| FA06 | P seal 成功，ContentCompletionProof/3 写失败 | decision、真实 ChangeId、适用 managed SourceVersion/H、receipt/charge 与 ReliableSaveState 已固定；strict 为 reliable，合格 observed_only 为 durable_observed_only，portablePublication=pending；retry 只补同一 proof/outbox，不重装、不重新收费、不再次推进 H/ChangeId |
+| FA07 | response 丢失，r5 已 committed，后来 r6 编辑 | 共同 continuity 与原 request/fingerprint 定位后，只按 r5 原实际效果范围做当前交付授权并返回原 receipt bytes；不要求 r5 source/Frontier/业务 dependency 等于 r6，不重写 current r6，不重复收费；撤权只可遮蔽交付 |
+| FA08 | 两设备离线同笔记不同编辑 | 两个真实 sealed heads 形成 source_concurrent；新记录使用 ConflictRecord/2+Frontier/2，不 LWW，原分支 bytes/pins 可取；无 sealed ChangeId 的外部竞争不得伪造 head |
+| FA09 | A move Node，B 改其正文 | 只有 placement 与 source 维度独立、相关 placement_range/source/authorization proof 均完整且 destination policy/structure 重验通过才组合；否则 conflict，不能用同一 SourceVersion revision 推断结构未变 |
+| FA10 | A Trash，B edit | 不默认 delete-wins；保留 edit branch 与 Trash intent，lifecycle/placement/source 依赖分别证明，未选择 branch 的 ordinary read 不随机取一个 current |
+| FA11 | purge vs 旧 replica restore | tombstone 不复活；旧 bytes 只能 fresh-copy/reconciliation。purge 还必须有完整 inbound/owner closure 及每个参与 replica 的 purge-Frontier acknowledgement 或 retirement |
+| FA12 | child_list/Document/ContentCompletionProof 分批到达 | 只有 InstallationNotice/2、ContentCompletionProof/3、全部 listed components、生产 SourceVersion before/after 与完整连续 sealed 链互相验证后才接纳并推进 Frontier；任一部分缺失都是 incomplete，不 mint identity、不把 Frontier/provider“已同步”或相同 hash 当完成，receiver 自建 Observation 而不复制 sender token |
+| FA13 | placeholder size 已知但 bytes 未下载 | not_materialized/source_unavailable；不能当 empty/not_found、不能从旧 locator/I/cache 补 current source，也不能生成完整 source/query_scan proof |
+| FA14 | duplicate Ref 但 birth 不同 | identity_collision；resolver 不选 first；resolution 仍由 D3 owner，固定 C wire12 候选不能替代尚未完成的 P2 native descriptor/companion consumer |
+| FA15 | 构建中的索引漏掉一个关系目标 | relation_incidence 与 query_scan 的完整消费者必须返回 proof_unavailable、拒绝完整 Query/Action，或回读真实来源做完整扫描；索引未命中、只有部分结果行或重复得到相同摘要，都不能据此证明范围为空 |
+| FA16 | semantic_pending source 进入 auto Action | complete consumer 明确拒绝；Source/明确 local read/edit 仍可在自身授权与局部真实证据下继续，不能因缺无关全 Workspace proof 而永久禁用 |
+| FA17 | P 丢失、files/portable intact | 旧 production domain 的 H、planned/saved/unknown、approval/Money/external responsibility 不可从 files/I 猜回；portable current 完整可验证且无未决安装风险的范围可注册新 ReplicaEpoch/CommitDomain 继续 ordinary content，新域只从自身已证明空历史开始 H |
+| FA18 | I 丢失、P intact | 若真实 P/M range epoch/revision、pins 与连续 change facts 仍完整，只 rebuild I cache，不重签 proof、不换 epoch、不重放 decision、不 mint Ref、不改收费；若 correctness facts 实际缺失，则旧 proof 失效并须当前授权下完整重枚举，ordinary local 不依赖该 strong range 的路径仍可用 |
+| FA19 | copied P 数据库在两设备打开 | 不自动产生两个 execution holder；takeover 必须证明完整 continuity 并 fence 旧 holder，普通 replica registration 不能取得 Approval/Money/external consumption authority |
+| FA20 | approval 一次、网络 response unknown、程序 crash | restart 先恢复 original request、provider binding、pins、Money/approval/claim/unknown continuity；不新 OperationId、不再 consume、不从当前文件或相同 hash 猜 provider outcome |
+| FA21 | Money work batch 先 charge 后 crash | charge 保留；attempt/restart 不 refund，不因 P/summary absence 重置额度；continuity 或 clock 不明保持 planned/paused/unknown，不能伪造 terminal success/failure |
+| FA22 | Server Alice/Bob 编辑不同 Document | 两 Draft 与 prepare 并行；commit 各一次，仅真实 dependency range lock 与 P seal 短串行；无关 coarse sequence/Frontier head 变化若已证明与原依赖无关，不应制造全 Workspace UI 互斥 |
+| FA23 | Server Alice/Bob 同 Document 旧 base | first seal 成功；second 保留 Draft 并 stale/conflict，不覆写。相同文本或 revision 数字不能绕过当前 Observation/FileObjectBinding continuity |
+| FA24 | Bob revocation 与 checkpoint seal 并发 | 唯一线性化；revocation 先赢则 Bob 未提交贡献不能借 Alice 身份 seal，seal 后的已提交历史只允许按当前 delivery authorization 交付，不被撤权改写 |
+| FA25 | Server 故障切换只隔离 control DB、未隔离文件写入 | 验收失败；旧实例必须同时失去 P 与 author-file rename/write 能力，只有 SQLite fence 不足 |
+| FA26 | 协作仅收到接收确认但没有检查点 | UI/API 不能显示 reliable、durable_observed_only 或 committed；仅接收或广播、Draft 持久化以及输入已留存都不是 Saved |
+| FA27 | IME preedit 多事件+最终 input | preedit 不进入 author op；最终确认至多一个 Draft/checkpoint input transaction，后续 checkpoint 仍走当前授权、Observation、DependencyProof 与 seal |
+| FA28 | protected conflict pin 超容量 | 新 prepare/install 受限或 planned 进入 paused_capacity；不能删 last-reference conflict/recovery evidence 后从 I 猜回 |
+| FA29 | expired 新历史 effect pin | 按其新 retention 返回 effects_unavailable；不得用 current file、新 Observation 或相同 digest 伪造 old after。旧合同承诺的 decision-lifetime pin 不追溯删除 |
+| FA30 | legacy wire1 saved decision | 按真实旧 decoder byte-equal replay，旧 pin/授权/continuity promise 保留；不得用 SourceVersion/2、d6_source_revision/2、ContentCompletionProof/3、ConflictRecord/2 或当前 stronger proof 重编码/升级旧记录 |
 
 ## 6. 权限与非披露测试
 
@@ -198,33 +212,42 @@ D4/D5 后像已存在，但尚未消费 G0-A Frontier/2、SourceObservation 与 
 
 ## 7. Legacy 与版本矩阵
 
-实现测试必须同时保留：
+实现测试必须按“实际记录保存时的版本与 owner”同时保留并区分：
 
-- D3 v9/v10/v11 historical saved request/receipt/error；
-- D6 wire1 commit/receipt/error；
+- D3 v9/v10/v11 historical saved request/receipt/error，以及实际旧 D3 primary receipt/companion；
+- D6 wire1 commit/receipt/error 与旧 PreparedIntent/Token tag；
 - Policy/1/2；
-- SourceVersion/1；
+- SourceVersion/1，以及实际历史 d6d/d6r/d6a revision-token profile、DocumentRevision/ResourceRevision/AnnotationRevision opaque decoder；
+- Frontier/1 与 InstallationNotice/1；
+- ContentCompletionProof/1 和已经存在的 ContentCompletionProof/2；/2 的 sourceChanges 继续是 SourceVersionRef/1|absent，禁止按 /3 的 production SourceVersion/2 解码；
+- ConflictRecord/1；createdAtFrontier 继续只按 Frontier/1，ConflictKey/1、ConflictId 与 D6-ConflictKey/1 hash domain 不变；
 - D7 PreparedActionBinding/1,/2；
 - D8 PreparedEditBinding/1；
-- 已有 Result/ByteHandle历史token。
+- 已有 Result/ByteHandle 历史 token/record，以及它们原授权、pin、clock、continuity 与 expiry/reset 规则；
+- 任何实际由旧 decision/pin 引用的 SourceObservation/1、SourceVersionRef/1 或受保护 token binding，只按生成它们的原合同解析。
 
-新 v2 fixture不能通过“把wireVersion数字改2”生成。必须按本候选closed schema独立构造，并验证old→new禁止自动upgrade、new→old禁止降级。unknown owner version返回unsupported_version/owner_update_required，不fallback旧近似路径。
+decoder 或历史草稿文字存在，不等于对应 prototype 曾部署或已经 active；测试不得把“有 decoder”机械扩大成产品兼容承诺。反过来，一旦 saved、planned、unknown 记录真实存在，其原 request/decision/receipt/error、pins、期限、授权、unknown、费用/批准/claim、外部 effect 与 no-duplicate-effect 责任不能因新版本、I 重建、重新授权或缺其它 prototype 部署证据而取消。
 
-旧canonical request若保存完整source/pin是旧协议历史证据，不迁移；新PreparedIntent/2使用InputDescriptor+purpose PinRef。测试须证明相同hash不同SourceVersion/owner descriptor不会被视为same input。
+新 v2/new-FA fixture 不能通过只改 wireVersion 或复制旧 bytes 生成。必须独立构造当前 closed schema，并分别覆盖 SourceVersion/2+SourceObservation/1、SourceRevisionPlan/1、RevisionTokenBinding/2+d6_source_revision/2、DependencyProof/2+十四类 DependencyKey/2、InstallationNotice/2、ContentCompletionProof/3、ConflictRecord/2。old→new 隐式 upgrade 与 new→old fallback 都必须失败；unknown owner version 返回 unsupported_version/owner_update_required 或对应 unavailable，不走旧近似路径。
 
-## 8. D4/D5/D7/D8/D9/D10 后续消费门
+planned fixture 必须证明未 seal 时没有本 decision 的 ChangeId，恢复只续原 plan/pins/版本依据；saved fixture 证明当前 r6 业务 proof 不回溯拒绝 r5，交付撤权只遮蔽响应；unknown fixture 证明相同 hash/current file/Derived Index 不能猜 success/failure。新 current Observation 或新 revision token 不能重新签名旧 binding。
 
-在下列后像完成并共同接受前，对应新路径保持 unavailable：
+旧 canonical request 若保存完整 source/pin 是旧协议历史证据，不迁移；新 PreparedIntent/2 使用 InputDescriptor、closed owner binding 与 purpose-bound PinRef。测试须证明相同 hash、相同裸 revision 或相同最终文本但 production domain、SourceObservation、DependencyKey stamp、owner descriptor 或 pin continuity 不同，绝不能被视为 same input/currentness。
 
-- D3：wire12 后像已存在，但 G0-A D3-native OwnerInputBinding、Frontier/2、SourceObservation 与 companion/receipt consumer仍待 B 批；
-- D4：local-vs-complete 后像已存在，但 production SourceVersion/observerDomain、Frontier/2 与 weak B→N consumer仍待 C 批；
-- D5：local-vs-complete 后像已存在，但 native ordinary-save protection consumer仍待 C 批；
-- D7：domain/frontier cut、PreparedActionBinding/3、EffectManifest新retention、Action evidence；
-- D8：Source/Live/Read、reliable-save/portable状态、conflict与collaboration session；
-- D9：ImportJob/ExportPlan新pins/version；
-- D10：sourceOccurrenceKey continuity、recipient/target/payload approval、Money/claim/stop execution responsibility。
+## 8. D3/D4/D5/D7/D8/D9/D10 后续消费门
 
-不能因D6文件存在就模拟这些consumer“已经支持”。
+Storage、Control、Lexicon 与 machine Registry 的 P1 私人作者后像已经真实存在，本 Impact/Test Outline 只把它们转换为未来验收义务；它不能单边把任何下游 owner 标为已接受。依赖新 producer 的 managed/strong 路径在对应 consumer afterimage 与 fresh 联合接受完成前保持 owner_update_required、proof_unavailable 或该 owner 原有 unavailable；不依赖缺失 strong producer/consumer 的 ordinary `.adoc`/Resource 读取、Draft、完整合格人工整源保存与局部离线操作不得被永久禁用。
+
+- D3：固定 C 已有 wire12 候选，不再写成“不存在”。P2 仍必须真实消费 D3-native OwnerInputBinding/2、DecisionKey/2、Frontier/2 策略、完整 SourceObservation/1 与十四类中 D3 所拥有的 lifecycle、placement_range、ref_inbound 范围；会产生 managed after 时还要消费同一原 plan 的 SourceRevisionPlan/1 与 d6_source_revision/2，并把 primary receipt 与 D3DecisionCompanion/2 放在同一 P seal。D3 Locator 原 opaque revision-token 词法与实际 WriteScope 不得被 D6 扩张。
+- D4：固定 C 已有 local-vs-complete 和较早 A/B/C 的 SourceObservation/Frontier/WriteProtection 消费候选，但 P2 仍须配套 production SourceVersion 与 observerDomain 分离、relation_incidence、calendar_scope、registry、temporal_rules 的实际枚举/stamp、RevisionTokenBinding/2 边界、saved/planned/unseen 恢复分流以及 ContentCompletionProof/3 接收后的新 Observation。RelationReadContext/2、RelationReadBinding/2 与 Recurrence /1 的原 closed wire 不改。
+- D5：现有 local-vs-complete 候选仍须在 P3 消费新的 current Observation/currentness、revision-bound locator、DependencyProof cut、strict|observed_only 普通保存边界和恢复分流；D5 structured cell/row/column/reorder 一直 strict，不能借 ordinary weak save 降门。
+- D7：查询代数 Query Algebra 要消费完整 query_scan 与 cut；值和表达式 Value/CEL 要消费真实版本/授权依赖；视图 View 要保持结果完整性与 reset；窄字段资格 Narrow Field Qualification 要保持静态独立性与非披露；定义转移 Definition Transfer 要复用同一 candidate map、SourceStamp 与 revision binding；预览/效果 Preview/Effects 要绑定原 plan、pins 与历史 retention；执行/动作 Execution/Action 要保留 complete evidence 和 current authorization generation；准备动作绑定 Prepared Action Binding 要形成真实新 consumer 后像；场景处置 Scenario Dispositions 要覆盖 positive/negative/unknown/recovery；术语与注册表 Terminology Lexicon/Registry 要同步真实 owner；实现影响与测试 Implementation Impact/Test Outline 要同步验收面。上述任一项都不能由 D6 free JSON、只改 Prepared 一页或粗粒度 Frontier 推断代替。
+- D8：后续 Source/Live/Read 负责来源、活动状态与读取配套，Draft/Edit Map 负责草稿与编辑映射，IME/Undo 负责输入法组合与撤销，ReliableSaveState 负责可靠保存状态；可移植发布、冲突和协作会话也要在同一消费者后像中配套。这些消费者必须绑定完整的当前 SourceObservation，不能只绑定生产 SourceVersion；发生观察缺口或对象替换时必须重置或重建基线，同时继续保留 SourceVersion/1 与 PreparedEditBinding/1 的历史解码规则。
+- D9：ImportJob/ExportPlan 的新 pins/version、construction/import/export cut 与 foreign version/binding consumer 仍需真实 afterimage；D6 不替 D9 发明外部比较器或 free payload。
+- D10：十八份实际 owner 文件仍须完整消费 sourceOccurrenceKey continuity、recipient/target/payload 可审阅批准、ApprovalUse、Run/Lease/Automation/Workspace/deployment Money 谱系、claim、provider external request/result unknown、stop 与 execution responsibility。execution_resource DependencyKey 不吸收这些 D10 子合同；U6/U7 继续开放。
+- 旧十一项 OPEN、A2 前后 fresh gate 与最终另一轮 fresh Pro 全局终审均不因上述 producer 文档、machine Registry 或 fixture 存在而解除。
+
+不能因 D6 文件存在、作者形式检查通过或候选目录可读，就模拟这些 consumer “已经支持”、把它们计入产品 conformance，或把历史 decoder 全部假定为 active。
 
 ## 9. 文档/机器检查
 
@@ -242,27 +265,46 @@ D4/D5 后像已存在，但尚未消费 G0-A Frontier/2、SourceObservation 与 
 
 ## 10. G0-A 保存/接口增量验收
 
-未来实现必须另外证明：
+以下全部是未来实现与 conformance 必须取得的证据，不是本作者文档已经运行或通过的测试。
 
-- WriteProtection 在 planning 前固定；strict request 不能原地变 observed_only。
-- observed_only 只允许受信交互、单一既有 live Document、ordinary+replica_local、完整 source read/replace、无细项 deny、零/单 source 写集；phone-only/body-only 等窄权限不得借 whole-source 弱保存扩权。
-- inputRetentionState=retained 不是 saved；故障注入分别验证输入留存、文件安装、P seal、publication pending 与响应交付。
-- 已观察 B 永不被弱模式覆盖；只有最后检查后从未观察到的 C 才属于用户批准风险，恢复/effects 不得虚构 C。
-- unknown install/provenance 固定 recovery_unknown；相同 hash 不升级 success，重试不换 OperationId。
-- ChangeId 在 seal 分配，InstallationNotice/2 不含 ChangeId；true no_op/control_only 不推进内容 Frontier。
-- SourceObservation 分离 production SourceVersion domain 与 observerDomain；observation epoch变化必须失效旧 token/selector/evidence。
-- Frontier/2 scope_dependencies 只接受可证明无关非回退扩展并重验原 DependencyKey。
-- D3-native OwnerInputBinding/2 与 D3DecisionCompanion/2 共用同一 DecisionKey/P seal，不建立第二 receipt。
-- 公开 receipt 只交付 SourceVersionRef/1；完整 Frontier/跨domain metadata须显式 capability。
-- DependencyProof/2 的负范围前半覆盖 lifecycle、placement、inbound、relation incidence、Calendar 与 Registry/rules；
-- 负范围后半覆盖 authorization、foreign binding、query scan、replica registry、conflict 与 execution resource；
-- 每个 key 都必须来自闭合 owner 类型，禁止 free JSON。
-- Windows/Linux/同步盘原语仍是未来真实平台故障注入义务；文档/API 名不能替代实测。
+- WriteProtection 必须在 planning 开始前由受信人工显式选择并冻结；strict request 不能原地变 observed_only。observed_only 只能用于恰一个 existing live Document 的 ordinary+replica_local 整源保存，且要求完整 source read/replace、author source write set 为空或仅该 Document、无适用 body/Field/node-control deny、不修改 identity/parent/order/lifecycle/shared policy/Registry/Calendar scope/其它 entity、Draft Base=current SourceObservation。noninteractive、managed_atomic、结构、多对象、D5 structured、bulk/collection、D7 strong Action、Automation、server checkpoint、Approval、Money 一律 strict。
+- fault injection 必须区分 inputRetentionState=retained、InstallationState、ReliableSaveState 与 PortablePublicationState。prepare/retained 不是 Saved；strict durable install+P seal 才是 reliable，完整合格 observed_only durable install+P seal 才是 durable_observed_only。B 与 N 按原 plan 耐久保留；只有最后检查后仍未观察的 C 可以被 N 覆盖且可能没有恢复副本，later C 可再替换 current file但不得丢 B/N。已观察竞争、stale Base、watcher gap、third_state、撤权或其它资格缺失不能 fallback；unknown install/provenance 固定 recovery_unknown。
+- SourceVersion/2 测试必须分别验证 managed 与 external 生产版本、production CommitDomain/production observationEpoch 和 current observerDomain/current observationEpoch。对 H(D,E) 覆盖：完整空史才允许 H=0；fresh managed=1；同生产域 checked H+1；跨 production observationEpoch 不重置；MAX 不 wrap；跨域首次写使用新域自身 H；返回旧域继续旧域 H；equal-byte external admission 仍产生 managed H+1；true raw no-op 保留原版本；source deletion 与 source-unchanged portable structure/lifecycle 不推进 H，但真实 portable effect 仍在 seal 获取 ChangeId。
+- SourceRevisionPlan/1 测试必须证明只有会产生 managed after 的原 plan 才冻结 before Observation/absent、lastIssued/完整空史依据、SourceStamp 与 exact after pin；winning plan 后 revision、target、H 依据不可重采样。plan、stage、InstallationNotice/2 与 recovery_unknown 都没有本 decision 新 ChangeId；只有唯一 P seal 把 SourceStamp 与 seal ChangeId 合成 managed SourceVersion/2 并推进 H。seal 后 publication/delivery 失败不得二次分配 ChangeId/revision 或二次收费。
+- RevisionTokenBinding/2 与 d6_source_revision/2 必须验证同一 `(observerDomain,observationEpoch,source)` 连续期间 token 稳定；managed proposal token 在 seal 前只在原 plan 内使用。watcher gap、external/object replacement、不连续 rematerialization、observerDomain/observationEpoch 改变必须使旧 currentness 失效，即使 production SourceVersion、裸 revision、hash 或文本相同。D3 Locator 与 D4/D5 inner selector wire 继续用其原 owner 形状，不能被新 profile 静默重解。
+- SourceObservation/1 与 SourceVersionRef/1 必须绑定真实 FileObjectBinding 与 evidence pins；receiver 接纳 ContentCompletionProof/3 后必须以自己的 CommitDomain、当前 FileObjectBinding、observationEpoch、pins 和当前 control/Registry/incidence cut 建新的 Observation/Ref，禁止复用 sender sourceToken。
+- Frontier/2 只证明 verified continuous sealed causal prefix。exact 必须与原 expectedFrontier 完整相等；D3 managed_atomic 仍 exact。scope_dependencies 只有在从原 base 到当前 cut 的每个新增 head 都有完整连续 sealed 记录链、无回退/无 hole，并且原 source/control/authorization/全部正负 DependencyKey 仍有效且新增 effect 被证明无关时才可继续。原 canonical request、expectedFrontier、DependencyProof.baseFrontier、targets、Query/selector、pins、proposed bytes、WriteProtection、owner input 与版本依据都不能重签或重采样；provider“已同步”、vector 数字变大、最终 hash/bytes 相同都不够。
+- DependencyProof/2 的 stamp 保持 `{epoch,revision}`：epoch 是该完整 DependencyKey 范围的 continuity generation，新完整枚举可从 revision=0 开始；这不表示 unknown/empty/source revision0。可证明连续的同一 epoch 内，任何会影响范围的变化先使旧 proof 不再 current，再 checked 增 revision；gap、owner decoder/rule 改变、真实 proof 目录丢失或 continuity 无法证明必须新 epoch。I-only 删除/重建在受保护 P/M correctness facts 与 event chain 仍完整时只重建 cache，不换 epoch、不重签 proof；这些事实真的丢失时必须当前授权下完整重枚举。
+- 十四类 closed DependencyKey/2 都必须有正例、负例、unknown 与授权先行测试，且任何 key 都禁止 free JSON：
+  - source：正例绑定完整 current SourceObservation/准确 bytes或value pin/FileObjectBinding；absent 必须由真实 identity/lifecycle/FileBinding+受管 absent 证明。placeholder、I miss、I/O failure、无 source_read 时的对外正文披露都不能伪造成成功。
+  - lifecycle：由 D3 完整证明 birth、claim、live、Trash、tombstone、never-known 各状态及其所有者关系；必须先通过状态披露门，再读取这些生命周期事实，派生索引未命中不能证明对象不存在。
+  - placement_range：由 D3 对 StructureRange 的九类范围做完整枚举，包括同级子项列表、回收站根项、祖先链、子树、所有者本地资源和注解目录、回复闭包以及恢复成员关系；在读取隐藏的同级子项前，必须先通过结构状态披露门。
+  - ref_inbound：由 D3/实际 slot owner 完整枚举 target inbound；零入站必须有完整目录/stamp，不能从当前页或 I 空结果推断。
+  - relation_incidence：由 D4 按 RelationReadContext/2 的 fieldId、endpointNodeRef、revisionToken、完整 factSelectors 证明正负 incidence；masked/unprovable 不得 complete，原 D4 wire 不变。
+  - calendar_scope：由 D4 语义+D6 配置持久层按 binding、series、period、scope_inbound 四类 CalendarRange，完整 SeriesScope/RegistryBinding、period membership、负范围与 control inbound 证明；index empty/current hits 不决定 unique/many。
+  - registry：绑定完整同 Workspace RegistrySnapshot/1、RegistryBinding/1、必要 RegistryEvolutionProof 及 Field/Facet/alias/namespace/contribution 目录；unavailable/unknown definition 与已证明完整空集合分开。
+  - temporal_rules：绑定实际使用的 comparator、period rule、timezone/tzdb、RecurrenceReadBinding/1 与有限 horizon coverage；缺 segment、未知 rule provenance 与 unsupported business value 分开，设备时区不能补洞。
+  - authorization：principalAudienceToken 来自受信 principal/session/delegation；proof 绑定当前 Policy/3/auth generation、delegation、ObservationScope 与适用 capability，且隐藏 grant/deny 不外泄；任何影响披露/写资格的授权变化必须变 stamp。
+  - foreign_binding：D3 绑定语义、D6 目录 continuity、D9/D10/实际来源版本比较器各归原 owner；unknown profile/decoder 使 strong path proof_unavailable，不能用 UID/etag/path/hash/文本或 free wrapper 代替。
+  - query_scan：D7 owner 必须证明指定 principalAudienceToken、domain、selector 下完整可见枚举与隐藏策略 generation；headings 还要逐 source 验证准确 D2 内容。partial page、ResultHandle/cursor、CEL 或无命中不得当完整 scan。
+  - replica_registry：D6 必须证明 active/retired ReplicaRecord 全目录、registrationSequence 与无 gap continuity；purge 逐 replica 证明指定 Frontier acknowledgement 或 retirement，provider sync/count/单一 Frontier 不代替。
+  - conflict_record：选择器为 id 时，证明对应记录及其版本完全一致；选择器为 subject 时，证明覆盖该主体的完整冲突目录和真实已封存头。读取前必须先通过 conflict_read 与 subject 披露门；尚未封存的外部竞争、third_state 或安装结果未知都不得伪造 ChangeId。
+  - execution_resource：D6 只读取指定 DecisionKey+protocolOwner 原操作的 resource policy、attempt、累计 work、pins/capacity、pause category；不得枚举所有 OperationId，也不得把 absence/P loss 当退款/额度重置，更不得吸收 D10 Money、provider unknown 或 sourceOccurrenceKey。
+- 完整 range 的 empty 与 non-empty 使用同一 snapshot/range barrier 或无漏 continuous change chain+final revalidation；partial/building index、index miss、unknown decoder、placeholder、I/O failure、缺 shard、隐藏未授权对象不能 empty-success。只依赖真实完整局部证据的 ordinary/local 操作应继续按自身资格工作，不因无关 complete-query proof 不可用而永久停止。
+- ContentCompletionProof/3 测试必须验证通知、证明与组件键逐项对齐，ChangeId 确实来自封存，frontierBefore/frontierAfter 是实际封存前后的前沿，生产 SourceVersion 的前后版本正确，并覆盖 external→managed 接纳、删除后为 absent、来源未变化的可移植效果不伪造 sourceChanges，以及接收端自行建立 Observation。/3 本身不授予 Query/Action 的完整性资格。ContentCompletionProof/1,/2 继续使用原字节、解码规则和固定证据，/2 中 SourceVersionRef 的 sourceChanges 禁止按 /3 重新解释。
+- ConflictRecord/2 测试必须验证 createdAtFrontier=Frontier/2、真实 sealed heads、new-head supersession；ConflictKey/1、ConflictId 与 D6-ConflictKey/1 hash domain不变。ConflictRecord/1 仍按 Frontier/1，不能仅因支持 /2 就重编码历史。
+- D3-native OwnerInputBinding/2 与 D3DecisionCompanion/2 必须共享同一 DecisionKey/P seal，不建立第二 receipt/ledger，也不得扩张 D3 WriteScope；固定 C 已有 wire12 候选，但 P2 native consumer 未完成前依赖本 P1 新 producer 的 success 仍 gate。
+- saved/planned/unseen 顺序必须有专门 fixture：共同 disclosure/P/domain continuity 先于业务状态；saved 重放原 bytes且当前 r6 business proof 不回溯拒绝；planned 无 pre-seal ChangeId并只续原 plan/pins/版本依据；unknown 不从 files/hash/I 猜结果；撤权只遮蔽已 committed 交付，不改历史。
+- Windows、Linux、同步盘/placeholder 后端、Server failover 的 conditional/exclusive/create/observed primitive、flush、rename、event-gap 与 crash-window 都仍是未来真实平台故障注入义务；文档、API 名、fixture 清单或 CI 不能代替实测。
 
-D1/D3/D4/D5 当前后像尚未消费上述 G0-A producer；B/C 完成前相关新 success 继续 gate。D7/D8/D9/D10 门不变。
+固定 C 已经存在 D3 wire12 与 D4/D5 较早 consumer 候选，但它们尚未消费本 P1 全部 production revision、DependencyKey/Proof、CP3/Record2 与恢复规则；P2/P3 完成并 fresh 联合接受前依赖这些规则的新 strong success 继续 gate。D7、D8、D9、D10 的下游门保持 §8 所列完整范围。
 
 ## 11. Fresh review gate
 
-完整联合候选必须由新的独立评审从零读取：新proposal、全部replacement owners、D10十八份、固定S49输入。作者当前18/49 fixed-S全文+局部范围只属于作者阅读 provenance，不能继承旧独立49/49作为本候选通过。
+完整联合候选仍必须由新的独立评审从零读取：最终新 proposal/routing、全部实际 replacement owners、machine Registry、所有 D10 十八份以及固定 S49 输入，并按最终组装字节重新做跨 owner 正例、负例、unknown、恢复与历史 decoder 检查。Storage/Control/Lexicon/Registry/本 Impact 的作者产物、形式检查、design_inputs、docs、tests、diffcheck 或 CI 即使通过，也只证明实际执行的检查，不构成独立语义接受、产品实现或激活。
 
-旧B13保持REVISE、术语/双语FAIL、P0=0/P1=3/P2=8十一OPEN。本批只提供其基础关联面，不关闭或重分类。
+本作者当前阅读 provenance 只能如实记录每个作者任务真正读取的文件/范围；不能把旧独立审查的 49/49、过去某次双语覆盖、D10 all18 或其它对话的阅读升级成本候选已经完成的 fresh 独立全量阅读。本 Impact artifact 的 reading 只证明本次实际读取的两份原 C Impact 与附件中的最终私人 Storage/Control/Lexicon/Registry producer。
+
+旧 B13 的历史 REVISE 与当时术语/双语 FAIL 仅作历史状态记录；不能因为当前术语/机器检查后续改善就由作者自行宣布旧发现关闭。原 P0=0、P1=3、P2=8 共十一项 OPEN、U6/U7 均继续保持，直到其各自证据由后续 fresh 独立联合审查处置。本批不关闭、不重分类、不接受它们。
+
+P1 在本 Impact 作者后像之后仍有 PROPOSAL/replacements routing；P2 D3/D4、P3 D5、D7–D10 全部实际消费者与 fresh joint acceptance 仍未完成。之后还需 A2 自包含重建，以及 A2 后另一轮独立 fresh Pro 全局终审。候选在这些门完成前仍未接受、未激活、未实现、未合并或发布。
