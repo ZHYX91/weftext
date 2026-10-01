@@ -22,11 +22,18 @@ D2 exact source
   -> relation / Calendar / catalog validation
   -> D4 proposed semantic state
        -> D6 InputDescriptor/2
-       -> SourceVersion/2 + CommitDomain/2 + Frontier/1
+       -> SourceVersion/2 (production version)
+       -> SourceObservation/1 + SourceVersionRef/1 (current observation qualification)
+       -> ObservationScope/2 + DependencyProof/2 + Frontier/2 (current proof cut)
        -> D6 ordinary or complete qualification
+       -> strict or A§4.1-qualified observed_only protection choice
        -> file install + P seal
        -> portable publication
   -> D7 future complete Query/Action consumer
+
+`SourceVersion/2` 保留其生产 `commitDomain` 和版本历史。当前 `SourceObservation/1` 不替代生产版本语义；其 `observerDomain` 必须匹配 operation `CommitDomain`，并且其 entity、file、evidence、control、Registry、relation-incidence 依赖必须属于当前 observation cut。`SourceVersionRef/1` 通过 `sourceToken` 选择完整受保护 Observation，而不是裸 revision、hash、I cache 或 production version。
+
+Source body 仍是权威来源。可重建 I 不是正文镜像。`Frontier/2` 是已 seal 的因果/依赖前缀，不是完整 Query 结果、payload 物化证明或 Registry generation 证明。ordinary 与 complete qualification 仍是语义轴；`strict` 与 `observed_only` 仍是保护轴，且 `observed_only` 仅限已批准的受信 interactive ordinary source-save 场景。
 ~~~
 
 I 只缓存可重建 projection/incidence/search candidate；P只保存不可重建 decision/pins/control evidence。两者均不保存第二份 Field/Facet/relation current truth。
@@ -41,7 +48,7 @@ I 只缓存可重建 projection/incidence/search candidate；P只保存不可重
 | Facet engine | declared/effective、requiredness、conflicts | implicit membership/last-wins |
 | relation engine | Context/Binding/complete incidence/post-state | index=truth、inverse双写 |
 | Calendar engine | comparator/recurrence/series scope | current page=complete range |
-| D6 adapter | InputDescriptor/2 + SourceVersion/2外层绑定 | bare revision跨CommitDomain |
+| D6 adapter | InputDescriptor/2 + SourceVersion/2 + SourceObservation/1外层绑定 | bare revision、hash或production version跨观察cut复用 |
 | conflict/repair | exact source + ConflictRecord + current Registry | LWW/hash-only merge |
 | downstream D7 | complete cut/new Prepared future version | 从pending私造Action成功 |
 
@@ -57,10 +64,12 @@ I 只缓存可重建 projection/incidence/search candidate；P只保存不可重
 
 ### 3.2 local ordinary save
 
-ordinary source-save adapter计算 actual MutationFootprint，并至少证明：
+ordinary source-save adapter计算 actual MutationFootprint，并区分保存语义与 `WriteProtection` 选择。普通保存可以保持 `strict`；只有受信 `interactive_source_save` 才可显式选择 `observed_only`，并且必须同时满足：一个 existing live Document、ordinary replica_local 范围、complete source read/replace资格、无 applicable body/Field/Node-control deny、author source write set为空或仅该Document，且不涉及 identity、parent、order、lifecycle、shared policy、Registry、Calendar-scope 或其他 entity mutation。DraftBase必须对应selected current SourceObservation。
 
-1. current SourceVersion/2；
-2.完整 source；
+adapter在ordinary save前至少证明：
+
+1. current SourceVersion/2 与 current SourceObservation/1；
+2. 完整 source；
 3. current RegistryBinding；
 4. touched local Field/Facet/type/cardinality；
 5. write permission；
@@ -68,15 +77,21 @@ ordinary source-save adapter计算 actual MutationFootprint，并至少证明：
 7. D2 valid；
 8. file install qualification。
 
-未触及 unavailable/invalid namespace必须 byte-equal；触及它则普通 typed edit拒绝。只有真实跨对象/全集 obligation未证明时才能产生 semantic_pending。
+未触及 unavailable/invalid namespace必须 byte-equal；触及它则普通 typed edit拒绝。invalid local fact、retained_unavailable namespace、D2 external_invalid、stale Base 或观察连续性失败保持失败、repair或conflict/reprepare路径。只有真实跨对象/全集 obligation未证明时才能产生 semantic_pending；它不能作为strong Action完整证明。
 
 ### 3.3 strong operations
 
-Facet mutation、relation mutation、series-scope unique、
-  typed copy/fork/import、restore/purge、
-  D7 all_result/bulk/automation写都必须取得 operation-applicable complete proof；missing range不能降级ordinary。
+Facet mutation、relation mutation、series-scope unique、typed copy/fork/import、restore/purge、D7 all_result/bulk/automation 写都必须取得 operation-applicable complete proof；missing range不能降级 ordinary，也不能通过 `observed_only` 或普通保存路径完成。
 
-D7新版 Prepared 尚未定义时，需要 D7 complete preparation 的入口固定 unavailable/owner_update_required；D4不得增加私有准备token。
+未来验收必须同时覆盖 ordinary strict 与符合 A§4.1 条件的人工 weak positive case：ordinary strict 在完整 source、权限、当前观察和安装资格满足时可成功；trusted `interactive_source_save` 对一个 existing live Document、ordinary replica_local 范围、complete source read/replace、无适用 body/Field/Node-control deny、author write set为空或仅该Document、无 identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation 且 DraftBase 等于 selected current `SourceObservation` 时，才可验证 `observed_only` 成功。
+
+以下情况均不得选择或降级为 weak save：不是受信场景、不是交互式 source save、新建 Document、多 Document、不是 ordinary 范围、不是 replica_local 范围、source read/replace 不完整、body/Field/Node-control 存在 applicable deny、write set 涉及多个 entity、identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation、DraftBase 不等于当前选定 Observation。structured bulk、collection、promotion、automation、server checkpoint、Approval、Money 和任何 strong Action 均禁止使用弱保护。
+
+人工可以在 planning 前明确选择 weak profile，即使普通目录缺少 strict capability；但 `writeProtection` profile 冻结后，strict capability 缺失、已知冲突、授权失败、耐久失败或 strong obligation 失败都不得 fallback 到 weak。D4 local types、D2 valid、unavailable byte-equal、真实 source read/write 检查继续保持；`semantic_pending` 只表示真实未证明的跨对象/全集义务，不洗掉 invalid、unavailable 或强 Action 缺失。
+
+`observed_only` 只耐久保留已观察 before B 与用户输入 N。未来外部 C 可能在未被观察时存在，N 安装可能覆盖当前文件中的 C 字节；后续 C 也可能替换当前文件 N，但不丢弃已耐久的 B/N。prepare only 不是 Saved；unknown install 保持 `recovery_unknown`；observed competition、stale Base、watcher gap 和 continuity gap 进入 conflict/reprepare。
+
+D7 新版 Prepared 尚未定义时，需要 D7 complete preparation 的入口固定 unavailable/owner_update_required；D4 不得增加私有准备 token。
 
 ## 4. test outline
 
@@ -106,7 +121,9 @@ D7新版 Prepared 尚未定义时，需要 D7 complete preparation 的入口固�
 ### 4.3 occurrence and note
 
 - duplicate value仍有独立 occurrenceKey；
+- occurrenceKey保持 owner Node + FieldId + expected current source revision 的内层selector，不因 D6 outer SourceObservation/1 消费而改变wire形状；
 - reorder/copy/delete/external edit后不按(key,value)猜目标；
+- SourceVersion生产epoch/revision/externalSequence变化，或当前SourceObservation token、epoch、连续性失效后，不能仅凭key/value续认；
 - inline note absent不写空placeholder；
 - note不能承载 typed qualifier/provenance；
 - expected SourceVersion stale拒绝；
@@ -132,13 +149,20 @@ D7新版 Prepared 尚未定义时，需要 D7 complete preparation 的入口固�
 - RelationReadContext/2 source/sourceless/masked/unprovable；
 - Binding/2 source/entity/incidence exact coverage；
 - SourceVersion/2 outer绑定与 inner sourceRevision一致；
-- same inner revision + different CommitDomain/observationEpoch拒绝；
+- SourceVersion/2 的 production `commitDomain` 可以不同于当前 operation observation 域；完整当前 SourceObservation/1 合法时不得仅因 production domain 不同拒绝；
+- same inner sourceRevision 在 SourceVersion production epoch/revision/externalSequence变化后拒绝旧选择；即使 production version 相同，watcher gap、external replacement 或 discontinuous materialization 后也不能凭裸revision/hash/key/value恢复旧token；
+- SourceVersionRef/1 的 `sourceToken` 使用 `d6_source_observation/1` 选择完整当前受保护 Observation；不是裸revision、hash、I cache或production version；
+- current SourceObservation/1 要求 observerDomain 等于 operation CommitDomain，entityRef 等于 sourceVersion.entityRef，并完整覆盖当前 observationEpoch、fileObjectBinding、evidencePins、control、Registry 和 incidence 依赖；
+- observerDomain错误、entityRef不一致、fileObjectBinding/evidencePins/control/Registry/incidence缺项或非current、token/epoch/continuity失效均拒绝；
+- Frontier/2 只提供当前 sealed causal/dependency cut，不单独证明全集Query、payload或Registry完整范围；
+- masked/unprovable不能产生成功binding/readSet；expected binding必须逐项exact equality；
 - required relation field不能由incoming inverse满足；
 - new target domain/lifecycle/cardinality；
 - delete tombstoned/not_found旧target；
 - symmetric purge前incident cleanup；
 - relation source migration/copy/fork effects；
-- hidden endpoint non-disclosure。
+- hidden endpoint non-disclosure；
+- 当前授权检查、内层wire、owner双射和完整source/entity/incidence覆盖保持不变。
 
 ### 4.6 Calendar
 
@@ -185,8 +209,8 @@ Tasks:
 
 | operation | complete range缺失 | 唯一允许结果 |
 |---|---|---|
-| body/不相交namespace save | 无关 | 可成功 |
-| local nonrelation Field edit | 无跨对象义务 | 可成功 |
+| body/不相交namespace save | 无关且ordinary资格满足 | 可成功 |
+| local nonrelation Field edit | 无跨对象义务且权限/观察通过 | 可成功 |
 | local valid Field edit + relation obligation | 缺 | semantic_pending |
 | local Entry invalid | 任意 | reject |
 | Assign/Remove Facet | 缺 | reject/unavailable |
@@ -196,7 +220,12 @@ Tasks:
 | restore/purge | 缺 | reject |
 | all_result/automation write | D7未完成 | unavailable |
 
-semantic_pending必须保存 obligations exact set，不把 unknown scope 当empty。
+额外覆盖弱保存边界：
+
+- 合法 `observed_only` 只允许 trusted interactive source save；B读取后外部未观察C改变文件，随后N安装可能覆盖C字节，但已耐久保留B和用户输入N；
+- observed external C、stale Base、watcher gap、continuity gap进入 conflict/reprepare，而不是成功安装；
+- prepare only不等于saved，unknown install必须保持 `recovery_unknown`；
+- semantic_pending必须保存 obligations exact set，不把 invalid、unavailable、D2 external_invalid 或 strong scope缺失洗成成功。
 
 ### 4.9 r5/r6, I/P and external change
 
@@ -234,7 +263,7 @@ partial index可以提供已授权 local exploratory rows并显式 partial/pendi
 - RelationReadContext/2、Binding/2 unchanged inner wire；
 - RecurrenceReadContext/1 unchanged；
 - D4RelationCopyEffects/1、D4SourceMaterializationEffects/1 unchanged；
-- outer new request通过D6 InputDescriptor/2绑定SourceVersion/2；
+- outer new request通过 D6 `InputDescriptor/2` 绑定 `SourceVersion/2`，并消费当前 source observation 资格：`sourceInputs[].observation` 使用 `SourceObservation/1`，`SourceVersionRef/1` 的 `sourceToken` 使用 `d6_source_observation/1` 选择完整受保护 Observation；同时按实际 owner 定义消费 `ObservationScope/2`、`Frontier/2` 与 `DependencyProof/2`。`SourceVersion/2` 保留生产版本定义，包括自身 production `commitDomain`、epoch、revision 等语义；生产域可以不同于当前 operation observer 域。当前合法观察要求 entityRef 与 sourceVersion.entityRef 一致，并由当前 fileObjectBinding、evidencePins、control、Registry、incidence 与完整 observation cut 共同证明。
 - D3 v9/v10/v11 saved decisions用原decoder；
 - D7 PreparedActionBinding/1,/2历史恢复；
 - 不把旧corpus数字换成新版本号宣称新消费通过。
@@ -262,7 +291,7 @@ Chart/View、Office template 等由 D7/D8/D9 owner未来裁决，不能反向扩
 
 ## 9. fixed-S 有效回归义务完整保留
 
-本节把 fixed-S Impact 中仍有效的具体实现/测试义务纳入当前候选。历史测试数字、旧 wire 名和旧实现状态不升级为当前成功证据；语义义务继续有效，并按本节最后的版本映射消费 H2 D3 wire12、D6 v2 和未来 D7 owner。
+本节把 fixed-S Impact 中仍有效的具体实现/测试义务纳入当前候选。历史测试数字、旧 wire 名和旧实现状态不升级为当前成功证据；语义义务继续有效，并按本节最后的版本映射消费当前 D3 wire12、D6 v2 及未来 D7 owner。H2 相关版本仅作为历史 saved decoder/兼容映射参考，不作为当前 producer 或成功实现证据。所有 fixed-S 回归义务继续保留，并由当前 owner 合同映射消费；D4 typed semantic result、legacy bytes、saved recovery 和未来 owner gate 不因版本映射而删除。
 
 ### 9.1 source/grammar 与 parser
 
@@ -491,11 +520,11 @@ fresh Create验证result revision=1；revision0假前像、结果2、缺/重复i
 
 旧文档中“D3 v11/Result9”对应的**新 decision path**现在由D3 wire12 + D6 Control/2承担；v9/v10/v11 saved decisions仍按原decoder/bytes/gates replay。所有原关系/Calendar/Entry/Facet内wire保持其自身版本，不能因outer升级而改数字。
 
-旧D6 source revision/potentialChanges/current observation测试在新路径映射为 SourceVersion/2、CommitDomain/2、Frontier/1、InputDescriptor/2、Policy/3和D6 safe-install/P-seal/publication。测试义务不删除，只替换其外层绑定。
+旧 D6 source revision/potentialChanges/current observation 测试在新路径映射为 `SourceVersion/2`、`CommitDomain/2`、`Frontier/2`、`InputDescriptor/2`、`Policy/3` 以及 D6 safe-install/P-seal/publication。测试义务不删除，只替换其外层绑定。`SourceVersion/2` 保留生产版本及 production domain 语义；当前 operation 使用 `SourceObservation/1` 完成 observerDomain、entityRef、fileObjectBinding、evidencePins、control、Registry、incidence 与 current cut 验证。`Frontier/2` 是 sealed causal/dependency cut，不是全集 Query 或完整 Registry proof。内层 D4 wire、legacy saved decoder、bytes 与 gates 按原版本保持。D7 complete Prepared 尚未完成时，相关入口仍保持 `owner_update_required`。
 
 旧D7 revision03/PreparedActionBinding历史只保留legacy replay。新D7 complete cut/Prepared尚未完成时，相关strong D4入口必须owner_update_required/unavailable；不得把历史测试数字替换后宣称新版已过。
 
-D6 ObservationScope/权限遮蔽仍要求无权隐藏状态得到同一not_visible且零业务读取/decision；有权后才执行真实constraints。Registry、policy、Calendar scope binding和首次bootstrap必须与当前H2 authority/control合同组合，但不改变D4 typed semantic result。
+D6 `ObservationScope/2` 与权限遮蔽仍要求无权隐藏状态得到同一 `not_visible` 结果，并保持零业务读取、零 decision；获得权限后才执行真实 constraints。当前消费结合 D6 control、pins 与 current observation cut，不再依赖 H2 作为 active authority/control producer。Registry、policy、Calendar scope binding 和首次 bootstrap 仍必须与当前 authority/control 合同组合。I 不作为隐私证明或 empty 证明；D4 typed semantic result、masked/unprovable 语义和权限边界保持不变。
 
 ### 9.11 接受边界
 

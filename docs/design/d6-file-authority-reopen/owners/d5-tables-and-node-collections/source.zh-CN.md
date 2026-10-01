@@ -9,7 +9,7 @@ translation_status: source
 
 # D5 Tables and Node Collections — D6-FA-r01
 
-候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 的 D5 v1 作为来源与兼容历史；本文件是完整 D5 owner 后像，直接消费 H2 D3 wire12、H2 D6 SemanticState/SourceVersion/CommitDomain 和本批 D4 后像。没有建立 Record/RecordCollection durable domain。
+候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 的 D5 v1 继续作为来源与兼容历史；本文件是完整 D5 owner 后像，当前消费 actual A D6 的 qualified SourceVersion/2、SourceObservation/1、SourceVersionRef/1、CommitDomain/2、Frontier/2 与 SemanticState，actual B D1/D3 当前规范接口，以及本批当前 D4 后像。H2 仅保留为历史兼容与 saved-decoder 背景，不作为当前 producer 基础。本文件没有建立 Record/RecordCollection durable domain，也不据此声称独立接受、激活、实现或额外完整阅读。
 
 固定来源：
 - S=7e18168dad3e6d120fce0dd607dc10fa7894e252
@@ -53,7 +53,7 @@ Document Table 仍是 D2 native AsciiDoc table occurrence，
 
 缺失 trailing cells是真正 absent，不自动补 empty。Cell内容是 Inline*，不能从 `0012`、`true` 或日期样式推断 D4 type。
 
-table/row/cell locator均 revision-bound；相同文本/位置在新 SourceVersion不产生 identity continuity。I中的 parsed table可删重建。
+table/row/cell locator均 revision-bound，并额外受当前完整 SourceObservation/1 的观察连续性保护；对应 SourceVersion/2 仍表示生产版本历史，其 production commitDomain 可以不同于 operation observerDomain。相同文本/位置、相同裸 production version、hash 或 I cache 都不产生 identity continuity。SourceVersionRef/1.sourceToken 必须指向完整当前 Observation；watcher gap、replacement 或 discontinuous rematerialization 会使旧 token 与依赖它的 locator 失效，即使生产 version 未变。I中的 parsed table可删重建，但不能恢复旧 locator 或观察资格。
 
 ### 3.2 native table local edit
 
@@ -68,13 +68,17 @@ table/row/cell locator均 revision-bound；相同文本/位置在新 SourceVersi
 
 每个 structured operation至少绑定：
 
-- current full Document source + SourceVersion/2；
+- current full Document source + SourceVersion/2，其中 current Document revision 来自该实际生产 SourceVersion 的 revision；
+- 与该 source 对应的完整 current SourceObservation/1，并通过 SourceVersionRef/1.sourceToken 保护当前观察连续性；
+- 当前 observation cut 内真实 fileObjectBinding、evidencePins、author-control、Registry、incidence 依赖；
 - exact table locator/current revision；
 - D2 table parse和目标row/cell/column；
 - actual MutationFootprint；
 - current write permission；
 - 唯一 proposed full source；
 - D6 file install qualification。
+
+这些只是局部 structured source operation 的真实证据，不要求无关 Workspace 全 Query cut，也不自动取得 weak save 资格。current auth、local typed/full-source 检查必须实际通过；观察、pins、control、Registry、incidence 或 cut 变化使旧计划 stale/reprepare，不能用裸 version/hash/I 或最新 page 静默替换目标。
 
 如果同一 source 中 D4 unavailable/invalid namespace不相交，仍须保持其 raw bytes byte-equal；D5 structured edit不能顺手重排/重写它。
 
@@ -92,7 +96,7 @@ row reorder 只有在 D2 表内没有会被移动语义破坏的 inter-row blank
 
 D4 repeatable Field occurrences可以由表格式/列表式UI编辑，但 D5不把它们变成 Document Table Row或Record。
 
-对一个 occurrence 的 add/remove/replace/reorder/note仍走 D4 Entry/1、OccurrenceKey、TypeSpec、RegistryBinding、SourceVersion和Field权限。D5 UI可以提供 row-like interaction，但保存结果仍是 D4 source transformation。
+对一个 occurrence 的 add/remove/replace/reorder/note仍走 D4 Entry/1、OccurrenceKey、TypeSpec、RegistryBinding、SourceVersion和Field权限；其既有 sourceRevision/OccurrenceKey/Entry selector 不改 wire，并额外由同一 current SourceObservation/1、SourceVersionRef/1.sourceToken、当前 observation cut、fileObjectBinding/evidencePins、author-control、Registry/incidence 依赖保护。watcher gap、replacement 或 discontinuous rematerialization 后，旧 token/selector 不因 production version、hash、Entry bytes 或 row-like text 相同而继续有效；I 不能恢复资格。D5 UI可以提供 row-like interaction，但保存结果仍是 D4 source transformation，并继续执行当前 auth、local typed 与完整 source 检查。
 
 D4 retained_unavailable/invalid Field不可因 D5 表格UI而变 empty。
   partial typed projection可显示 raw/status，但 structured typed mutation仍服从 D4 operation matrix。
@@ -186,7 +190,7 @@ D5必须区分：
 
 批量preview后，targets必须固定到 exact NodeRefs/table locators/occurrence selectors和版本。commit不得重新执行“当前所有选中/当前前N条”扩大 target set。
 
-partial result不能生成 all_result target list。权限/SourceVersion/Frontier变化使旧preview stale或需要重新prepare，不用最新page悄换targets。
+partial result不能生成 all_result target list。preview必须冻结完整目标、实际readSet、evidence pins与所依赖的current Observation/cut；权限、SourceObservation/1、SourceVersionRef/1.sourceToken、SourceVersion/2、control、Registry、incidence、pins或Frontier/2依赖发生变化，都使旧preview stale并要求重新prepare，不用最新page、当前选择或重新求值结果悄换targets。Frontier/2只表示sealed causal/dependency prefix，不是全集Query、Registry完整性或payload物化证明。
 
 ### 9.3 atomicity
 
@@ -198,24 +202,30 @@ partial result不能生成 all_result target list。权限/SourceVersion/Frontie
 
 D5操作可能需要：
 
-A. current Document source/SourceVersion/2；
-B. table/row/cell locator或 D4 occurrence selector；
+A. current Document source + SourceVersion/2生产版本，以及由 SourceVersionRef/1.sourceToken 选择并由 InputDescriptor/2.sourceInputs[].observation 承载的完整 current SourceObservation/1；生产 SourceVersion/2 的 commitDomain/版本历史保持原义，operation CommitDomain/2可以不同于生产域；
+B. table/row/cell locator或 D4 occurrence selector，并保持其既有 production source revision/inner selector 语义；
 C. actual MutationFootprint；
 D. local D2/D4/D5 structural validity；
 E. complete Query membership/negative range；
 F. proposed full source/post-state；
-G. current authorization/policy；
-H. CommitDomain/Frontier/install；
+G. current authorization/policy，以及current Observation cut内的fileObjectBinding、evidencePins、control、Registry、incidence依赖；
+H. operation CommitDomain/2、Frontier/2和实际install evidence；Frontier/2只证明sealed causal/dependency prefix，不代替全集Query、Registry完整性或payload物化；
 I. D7 new preparation，仅强 collection/bulk consumer。
+
+这些证明仍保留原B-D/F等局部要求；current Observation或readSet/pins/cut变化必须stale/reprepare，不能用裸version/hash/I或最新page替换原目标。
 
 ### 10.2 operation matrix
 
 | operation | local proof | complete proof | result |
 |---|---|---|---|
-| raw/native table cell edit | A-D/F-G/H | 无全库membership | ordinary可靠save |
-| append/remove table row | A-D/F-G/H | 无全库membership | ordinary可靠save |
-| structured row reorder | A-D + trivia-safe | 无 | ordinary或 unsupported_table_reorder |
-| column edit | A-D/F-G/H | 无 | ordinary save；不得推断D4 type |
+| raw/native table cell edit | A-D/F-G/H | 无全库membership | ordinary语义；原生结构化单元格编辑使用strict保护 |
+| append/remove table row | A-D/F-G/H | 无全库membership | ordinary语义；native structured row edit使用strict保护 |
+| structured row reorder | A-D + trivia-safe | 无 | ordinary语义下strict保护，或 unsupported_table_reorder |
+| column edit | A-D/F-G/H | 无 | ordinary语义下strict保护；不得推断D4 type |
+
+ordinary与strict|observed_only是两条独立轴。ordinary操作可以使用strict；不要求无关Workspace全集Query并不产生weak资格。仅actual A§4.1允许的人工raw整源existing-Document save可以在planning前显式选择observed_only：必须是trusted interactive_source_save、恰一个既有live Document、ordinary + replica_local、完整source read/replace，author write set为空或仅该Document，无applicable body/Field/Node-control deny，无identity/parent/order/lifecycle/sharedPolicy/Registry/Calendar-scope/other-entity mutation，并且DraftBase等于当前选定Observation。该选择冻结在profile中；strict失败、已知冲突、授权失败、耐久失败或strong obligation失败都不得fallback为observed_only。structured table row/column/cell/reorder、bulk、collection、promotion、automation、server checkpoint、Approval、Money及所有strong Action都继续使用strict保护。这两条轴都不扩大授权、local typed/full-source检查、proposed full source或D6 install要求。
+
+observed_only只保证耐久保留已读前像B与用户输入N：安装N可能覆盖从未观察到的外部C，后来C也可能再次替换current file，但B/N不能因此丢失。已观察competition、stale Base、watcher gap或continuity gap必须conflict/reprepare；unknown install保持recovery_unknown。prepare只保存proposal/read-before/pins等准备证据，不是Saved。任何要求strict或strong保存的路径都必须取得对应真实D6 install/evidence，不能伪造耐久receipt。
 | D4 occurrence edit | D4完整local Entry proof | 依Field跨对象义务 | 由D4 complete/pending决定 |
 | D3 replica_local move/reorder | D3 parent/sibling 证明 | Node Collection membership 不因此得到证明 | 局部成功；collection consumer 仍 pending |
 | D3 replica_local Trash | D3 局部 closure | collection/inbound 全集可缺 | 局部 lifecycle pending，不等于 bulk 集合 Action |
@@ -226,7 +236,7 @@ I. D7 new preparation，仅强 collection/bulk consumer。
 | restore/purge | D3 managed_atomic | D4/D5 complete + purge Frontier | complete only |
 | typed row import to Nodes | D9 mapping + D3 identity | 完整target plan | managed path；无D7旁路 |
 
-D6 `collection` obligation表示 collection-related complete proof未完成，不是空集合。r5 pending(collection)后来r6完整求值，只证明r6/current SourceVersion/cut，不修改r5 receipt。
+D6 `collection` obligation表示 collection-related complete proof未完成，不是空集合。semantic_pending(collection)只表示缺少该全集证明；它不能把typed invalid、source invalid、缺失strong evidence或其它实际失败洗成成功，也不能授权Action、all_result或批写。r5 pending(collection)的历史receipt和原bytes保持不变；后来r6完整求值只证明r6及其current SourceObservation/SourceVersion/cut，不修改r5 receipt。
 
 ## 11. dynamic schema、nested values 与 import/export
 
@@ -303,7 +313,7 @@ D9拥有 row import/export mapping、Office template/export和loss report；D5�
 
 旧 D5 v1 semantic names与旧D7 PreparedActionBinding/1,/2 saved decisions保持历史decoder/bytes。D3 v9/v10/v11及D6 wire1旧decision按原规则恢复。
 
-D6-FA新 consumer将 SourceVersion/2、CommitDomain/Frontier、SemanticState接入 operations，但不新造 TableRowId/RecordRef/CollectionRef。
+D6-FA新 consumer将 SourceVersion/2、SourceObservation/1、SourceVersionRef/1、CommitDomain/2、Frontier/2 和 SemanticState 接入 operations，但不新造 TableRowId/RecordRef/CollectionRef。SourceVersion/2 继续保留生产版本原有的 commitDomain、observationEpoch、revision 或 externalSequence、changeId 语义；生产域可以不同于当前 observerDomain，而 current SourceObservation/1 的 observerDomain 必须等于 operation CommitDomain，entityRef 必须等于 sourceVersion.entityRef，并以当前 fileObjectBinding、evidencePins、control、Registry、incidence 与 cut 完成外层资格。SourceVersionRef/1.sourceToken 以 d6_source_observation/1 选择完整当前 Observation；它不替换 D5/D4 既有 inner sourceRevision、OccurrenceKey、Entry selector 或 locator wire。Frontier/2 只表示 sealed causal/dependency prefix，不证明全集 Query、Registry 完整性或 payload 物化。watcher gap、replacement 或 discontinuous rematerialization 即使 production version 相同也会使旧 token/locator 失效，I 不能恢复该资格。旧 D5 v1、D7 PreparedActionBinding/1,/2、D3 v9/v10/v11 和 D6 wire1 的 saved decoder、receipt bytes 与恢复规则仍按历史版本处理，不机械改写成当前 token，也不据此宣称新版 D7 success。
 
 新 D7 Prepared未完成前，collection strong Action保持unavailable；不能借ordinary D6 source-save产生“旧Action已完成”的receipt。
 
@@ -311,7 +321,7 @@ D6-FA新 consumer将 SourceVersion/2、CommitDomain/Frontier、SemanticState接�
 
 未来实现必须验证：
 
-1. native local cell/row/column edit在无关全库index缺失时仍可可靠保存；
+1. native local cell/row/column edit在无关全库index缺失时，仍可凭完整真实局部证据完成ordinary语义保存；structured cell/row/column/reorder使用strict保护。仅人工raw全文已有一个live Document的source save可在actual A §4.1全部资格满足时，于planning开始前显式选择observed_only并冻结profile；ordinary与strict|observed_only两轴不得混淆为无条件可靠或严格耐久，strict失败不得fallback，strong Action、bulk、automation、Approval、Money等路径不放宽；
 2. unrepresentable cell拒绝且source不变；
 3. ragged rows/trivia保留；
 4. unsafe reorder返回unsupported；
@@ -366,6 +376,8 @@ unsupported in D5 v1 native structured model:
 owning NodeRef
 current SourceVersion/2
 current Document revision represented by that SourceVersion
+current SourceObservation/1 selected through SourceVersionRef/1.sourceToken
+current observation cut + fileObjectBinding/evidencePins/author-control/Registry/incidence dependencies
 current table locator
 exact source range
 actual MutationFootprint
@@ -422,6 +434,8 @@ replace target exact绑定：
 owner NodeRef
 FieldId
 SourceVersion/2 / current source revision
+current SourceObservation/1 selected through SourceVersionRef/1.sourceToken
+current observation cut + fileObjectBinding/evidencePins/author-control/Registry/incidence dependencies
 occurrenceKey
 expected raw Entry
 edit mode
@@ -555,6 +569,8 @@ limit_exceeded
 ~~~text
 edit native table:
   binds owner NodeRef, SourceVersion/Document revision,
+        current SourceObservation/1 via SourceVersionRef/1.sourceToken,
+        current observation cut + fileObjectBinding/evidencePins/control/Registry/incidence,
         table locator, exact source ranges, explicit transforms
   success -> one complete valid proposed Document source
   reject  -> stale locator/revision, invalid/unrepresentable cell,
@@ -562,6 +578,8 @@ edit native table:
 
 edit Field occurrence:
   binds owner, FieldId, RegistryBinding, SourceVersion,
+        current SourceObservation/1 via SourceVersionRef/1.sourceToken,
+        current observation cut + fileObjectBinding/evidencePins/control/Registry/incidence,
         occurrenceKey, expected raw Entry, explicit edit mode
   success -> D4 proposed state + relation effects
   reject  -> stale/ambiguous/unavailable schema/
@@ -602,8 +620,12 @@ row handle、column index、caption、
 
 ### 19.8 D6-FA-r01 current composition
 
-所有native table source mutation绑定 D6 SourceVersion/2、CommitDomain/2、current Policy和实际FileObjectBinding/install能力。仅hash相同不证明row/cell locator或source continuity。
+所有 native table source mutation 都绑定 D6 `SourceVersion/2`、当前 operation 的 `CommitDomain/2`、current Policy，以及实际 `FileObjectBinding` 与 install 能力。`SourceVersion/2` 继续表示生产版本，并保留真实 `commitDomain`、`observationEpoch`、`revision` 或 `externalSequence`、`changeId` 语义；其生产域可以不同于当前 operation 的观察域，不新增任何 producing-domain 字段。
+
+当前资格由 `SourceObservation/1` 额外保护：其真实形状为 `kind=d6_source_observation`、`version=1`，`observerDomain` 必须等于 operation `CommitDomain`，`entityRef` 必须等于 `sourceVersion.entityRef`，并包含对应 `sourceVersion`、当前 `observationEpoch`、`fileObjectBinding`、`evidencePins`，同时与当前 control、Registry、incidence 依赖及当前 cut 一致。`InputDescriptor/2.sourceInputs[].observation` 承载该完整 Observation；`SourceVersionRef/1` 的 `sourceToken` 使用 `d6_source_observation/1` 标记并选择完整当前 Observation，而不是裸 revision、hash、I cache、row text 或 production version。`Frontier/2` 只表示已 seal 的 causal/dependency prefix，不单独证明全集 Query、payload 已物化或 Registry 完整。
+
+D5 现有 sourceRevision、table/row/cell locator 与 D4 occurrence inner selector 形状保持不变；当前 `SourceObservation/1` 连续性只是外层附加资格。watcher gap、external replace 或 discontinuous rematerialization 会使旧 sourceToken 和依赖该观察的 locator/selector 失效，即使 production version、hash 或 row text 相同也不能续认；I 不能恢复该资格。Policy、FileObjectBinding、install、ReadSet、pins 与 cut 任一变化都必须 stale/reprepare，不能通过读取最新 page 或重新选择当前 target 静默替换已冻结目标。
 
 collection strong action还需要 future D7 complete cut/Prepared。当前D7新版未完成时它固定 unavailable/owner_update_required；D5不创建替代token。explicit partial/pending rows只用于获权exploration，不参与all_result/bulk/requireMembership/Automation writes。
 
-D6 `collection` obligation对应的保存状态可表现为 semantic_pending(collection)：它表示完整collection proof尚未成立，不表示empty。r6后来complete只证明r6；r5 pending receipt保持原bytes。I重建、P丢失、新replica、placeholder或A→B→A都不恢复旧membership/cut proof。
+D6 `collection` obligation对应的保存状态可表现为 semantic_pending(collection)：它只表示完整collection proof尚未成立，不表示empty，也不能把typed invalid、source invalid、缺失strong evidence或其它真实失败洗成成功，更不能授权Action、all_result、bulk或Automation。r6后来complete只证明r6及其current SourceObservation/SourceVersion/cut；r5 pending receipt及其历史原bytes保持不变。I重建、P丢失、新replica、placeholder或A→B→A都不恢复旧membership/cut proof。

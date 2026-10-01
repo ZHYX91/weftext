@@ -10,7 +10,7 @@ Source document ID: 21e90c5d-66a2-476b-b852-5a77ac4e7f13.
 
 # D5 Implementation Impact and Test Outline — D6-FA-r01
 
-Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. Fixed-S D5 v1 implementation/acceptance obligations remain. This file adds validation for H2 D3/D6 and this batch's D4 local-versus-complete rules, SourceVersion/2, partial indexes, and multi-replica behavior.
+Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. Fixed-S D5 v1 implementation/acceptance obligations remain. This file currently consumes actual-A D6 production-history SourceVersion/2, SourceObservation/1, SourceVersionRef/1, CommitDomain/2, Frontier/2, and SemanticState; actual-B D1/D3 normative interfaces; and this batch's current D4 and D5 main, while continuing local-versus-complete, partial-index, and multi-replica validation. H2 D3/D6 and real saved decisions remain historical compatibility/recovery context rather than current producers, and this wording makes no claim of acceptance, activation, implementation, complete reading, or independent acceptance.
 
 ## 1. implementation effect graph
 
@@ -19,15 +19,23 @@ D2 exact source
   -> native table parser / current-revision locators
   -> D5 structured table intent
        -> local source transformation
-       -> D6 SourceVersion/2 + MutationFootprint + install
+       -> D6 SourceVersion/2 + SourceObservation/1
+       -> SourceVersionRef/1.sourceToken + InputDescriptor/2.sourceInputs[].observation
+       -> current cut / MutationFootprint / strict install
   -> D4 Field Value Occurrence editor
-       -> D4 Entry/Registry proof
+       -> D4 Entry/Registry proof + inner sourceRevision/OccurrenceKey/Entry selector
+       -> current SourceObservation/1 outer qualification
   -> D7 Query -> NodeCollectionResult
        -> exploratory partial presentation
        -> strong collection/bulk operation
             -> future D7 complete cut / Prepared
+            -> Frontier/2 sealed causal/dependency prefix
             -> D3/D4/D6 managed commit
 ~~~
+
+SourceVersion/2 remains production-version history: managed_source_version/2 retains entityRef, commitDomain, observationEpoch, revision, and changeId, with changeId.commitDomain equal to that production commitDomain; external_source_version/2 retains entityRef, commitDomain, observationEpoch, and externalSequence; the production domain may differ from the current operation domain. Complete current SourceObservation/1 requires observerDomain equal to the operation CommitDomain, entityRef equal to sourceVersion.entityRef, and current observationEpoch, fileObjectBinding, evidencePins, plus control, Registry, and incidence dependencies in the same cut. SourceVersionRef/1.sourceToken tagged d6_source_observation/1 selects that complete Observation, and InputDescriptor/2.sourceInputs[].observation carries it. A watcher gap, replacement, or discontinuous rematerialization invalidates the old token and dependent locator even when production version, hash, or row text is unchanged; I cannot restore qualification. D5 current Document revision/locators and D4 inner-selector wire remain unchanged.
+
+Frontier/2 is only a sealed causal/dependency prefix and never substitutes for complete Query membership, Registry completeness, or payload materialization. Strong D7 collection/bulk operations still wait for the future complete Prepared/current cut; their current entry points remain unavailable/owner_update_required and D5 invents no success binding.
 
 There is no durable Record/RecordCollection storage. Table parse, collection result, and membership candidate in I are rebuildable.
 
@@ -35,13 +43,13 @@ There is no durable Record/RecordCollection storage. Table parse, collection res
 
 ### 2.1 native Document Table
 
-Requires exact-source table parser, current SourceVersion/2, table/row/cell locator validation, ragged-row model, representable-cell encoder, exact trivia/line-ending preservation, patch-overlap detection, and D6 file-install adapter.
+Requires exact-source table parser; current SourceVersion/2 with the current Document revision taken from its real production revision; complete current SourceObservation/1 plus SourceVersionRef/1.sourceToken and InputDescriptor/2.sourceInputs[].observation qualification; real fileObjectBinding, evidencePins, control, Registry, and incidence dependencies in the current cut; table/row/cell locator validation; ragged-row model; representable-cell encoder; exact trivia/line-ending preservation; patch-overlap detection; complete current source and one proposed full source; current authorization plus D2/local-typed checks; and D6 safe-install, P-seal/recovery, and actual file-install evidence.
 
-Native table editor is not a D4 schema editor and does not require a whole-workspace Query.
+Native table editor is not a D4 schema editor and does not require an unrelated whole-workspace Query. That narrows semantic proof scope only and grants no weak-save qualification. Structured cell/row/column/reorder remains strict; only a human raw whole-source save of one existing live Document satisfying every actual-A §4.1 condition may explicitly select observed_only before planning starts and then freeze the profile. Ordinary and strict|observed_only are independent axes, and neither UI shape nor absence of unrelated whole-workspace proof implies weak protection.
 
 ### 2.2 D4 occurrence editor
 
-A tabular property editor invokes D4 Entry/Occurrence semantics rather than creating a TableRow/Record. Each add/remove/reorder/note binds current source and D4 Registry.
+A tabular property editor invokes D4 Entry/Occurrence semantics rather than creating a TableRow/Record. Each add/remove/reorder/note continues to bind current source, D4 Registry, and the existing inner sourceRevision, OccurrenceKey, and expected Entry selector, with additional complete current SourceObservation/1, SourceVersionRef/1.sourceToken, InputDescriptor/2.sourceInputs[].observation, and fileObjectBinding, evidencePins, control, Registry, and incidence dependencies in the same current cut. After watcher gap, replacement, or discontinuous rematerialization, the old token/selector cannot regain validity from equal production version, hash, I state, or equal value; current authorization, typed admission, complete post-state, and relation effects remain fully checked. This introduces no new request/plan wire and grants no observed_only qualification merely because the UI is tabular.
 
 ### 2.3 Node Collection
 
@@ -81,7 +89,7 @@ Row-to-Node/import mapping/loss belongs to D9 and fresh identity to D3. D5 provi
 
 ### 4.2 row/column operations
 
-Cover row append/remove, batches through 1000, column add/remove over ragged rows, header/title edit, safe and unsafe reorder, overlapping-patch rejection, exact post-source reparse, SourceVersion CAS, and D6 crash recovery.
+Cover row append/remove, batches through 1000, column add/remove over ragged rows, header/title edit, safe and unsafe reorder, overlapping-patch rejection, exact post-source reparse, SourceVersion CAS with its production revision still binding the table/row/cell Locator, and D6 crash recovery. The same operation also binds complete current SourceObservation/1, SourceVersionRef/1.sourceToken, InputDescriptor/2.sourceInputs[].observation, and fileObjectBinding, evidencePins, control, Registry, incidence, and strict-install qualification in the same current cut. Any current-observation, authorization, pin, dependency, or cut change makes the plan stale/reprepare; a bare SourceVersion, hash, I state, or equal row text never restores an old Locator. Local structured row/column work does not require an unrelated whole-Workspace Query, but structured cell/row/column/reorder remains strict and gains no weak-save qualification from locality or UI shape.
 
 ### 4.3 Field occurrence UI
 
@@ -113,11 +121,11 @@ Target-copy success plus source-Trash failure is explicit partial transfer rathe
 
 ### 4.10 multi-replica / conflicts
 
-Cover same-cell edits, different-row file-generation conflict, explicit three-way merge, concurrent collection-definition/member-fact changes, page/placeholder, equal hash with new observationEpoch, no mtime/LWW, and no hidden row identity.
+Cover same-cell edits, different-row file-generation conflict, explicit three-way merge, concurrent collection-definition/member-fact changes, page/placeholder, and equal hash with new observationEpoch. Also cover an unchanged production SourceVersion with changed current observationEpoch, fileObjectBinding, evidencePins, control, Registry, incidence, or cut: the old SourceVersionRef/1.sourceToken and dependent Locator become stale/reprepare. Watcher gap, replacement, or discontinuous rematerialization invalidates the old token/Locator even when the production version is unchanged; bare hash, I state, equal row text, or ABA never restores continuity. SourceVersion/2 production commitDomain may differ from the observation domain, while SourceObservation/1.observerDomain equals the operation CommitDomain and entityRef equals sourceVersion.entityRef. Preserve no mtime/LWW winner and no hidden row identity from merge.
 
 ### 4.11 r5/r6, I/P
 
-Cover r5 pending(collection), later r6 complete result, exact r5 replay, I rebuild without upgrade, P loss without decision/approval reconstruction, and new device fresh replicaEpoch without execution custody.
+Cover r5 pending(collection), where semantic_pending(collection) means only that complete collection proof is missing: it is not empty, never converts typed invalid, source invalid, or missing strong evidence into success, and never authorizes Action, all_result, bulk, or Automation. Cover a later r6 complete result that proves only r6 under its current SourceObservation/SourceVersion/cut; exact r5 replay retains the historical receipt and original bytes and is never upgraded by r6. Preserve I rebuild without upgrade, P loss without reconstruction of batch decision/approval/Money or execution custody, and a new device with fresh replicaEpoch, the same NodeRefs, and no execution custody.
 
 ### 4.12 partial index / complete action
 
@@ -150,7 +158,7 @@ Old D10 B13 remains REVISE, terminology/bilingual FAIL, eleven OPEN findings.
 
 ## 8. Preservation of fixed-S architecture impacts and complete regression obligations
 
-This section incorporates the fixed-S D5 architecture impacts, Record-branch retirement, and complete test cases that remain effective. D6-FA-r01 only replaces outer file authority, SourceVersion/CommitDomain/semantic-pending/multi-replica consumption and deletes none of these semantic obligations.
+This section incorporates the fixed-S D5 architecture impacts, Record-branch retirement, and complete test cases that remain effective. D6-FA-r01 currently maps them onto actual-A D6 production SourceVersion/2, SourceObservation/1, SourceVersionRef/1, InputDescriptor/2, CommitDomain/2, Frontier/2, and SemanticState; actual-B D1/D3 normative interfaces; and this batch's current D4/D5. It replaces only outer file authority, current-observation qualification, SourceVersion/CommitDomain/semantic-pending/multi-replica consumption and deletes none of the fixed-S semantic or fixture obligations. SourceVersion/2 retains its original production-version fields: managed_source_version/2 has entityRef, commitDomain, observationEpoch, revision, and changeId, with changeId.commitDomain equal to that production commitDomain; external_source_version/2 has entityRef, commitDomain, observationEpoch, and externalSequence, and its production domain may differ from the current observerDomain; SourceObservation/1.observerDomain equals the operation CommitDomain and entityRef equals sourceVersion.entityRef. Frontier/2 is only a sealed causal/dependency prefix and never substitutes for complete Query membership, Registry completeness, or payload materialization. This remains a not-accepted, not-activated, not-implemented candidate mapping and makes no claim of product implementation, independent acceptance, or additional complete reading.
 
 ### 8.1 Cross-stage architecture impact
 
@@ -160,7 +168,7 @@ D3 continues to provide NodeRef, owner-local Resource/Annotation, copy/fork/cont
 
 D4 continues to provide Registry, FieldId, TypedValue, Facet/relation common post-state, raw-source preservation, and Entry/schema admission. Table columns never override Field schema, reintroduce a people blob, or create Entry Annotation.
 
-D6 owns durable commit qualification for a physical replica/Server backend, SourceVersion/2, source patch, complete read-set/negative dependencies, safe installation, P seal/recovery, and fine-grained authorization. It creates no Record store and never widens conflict/permission through whole-namespace replacement.
+D6 owns durable commit qualification for a physical replica/Server backend, production-history SourceVersion/2, current-observation SourceObservation/1, SourceVersionRef/1, CommitDomain/2, Frontier/2, source patch, complete read-set/negative dependencies, safe installation, P seal/recovery, and fine-grained authorization. SourceVersion/2 retains its existing production-version fields: managed_source_version/2 has entityRef, commitDomain, observationEpoch, revision, and changeId, with changeId.commitDomain equal to that production commitDomain; external_source_version/2 has entityRef, commitDomain, observationEpoch, and externalSequence, and the production domain may differ from the current operation domain. SourceObservation/1 protects the current operation with observerDomain equal to the operation CommitDomain, entityRef equal to sourceVersion.entityRef, and current fileObjectBinding, evidencePins, control, Registry, incidence, and cut; InputDescriptor/2.sourceInputs[].observation carries that complete observation. Frontier/2 is only a sealed causal/dependency prefix and never substitutes for complete Query membership, Registry completeness, or payload materialization. D6 creates no Record store, never widens conflict/permission through whole-namespace replacement, and does not collapse ordinary semantics into the strict|observed_only protection axis; structured/bulk/collection/Action/automation/Approval/Money paths gain no weak protection from local UI or local proof.
 
 D7 owns deduplicated Node results, typed/occurrence results, editable columns, creation/membership proof, frozen bulk targets, paging/revocation. The Record branch retires as a set and join/group rows do not become editable Nodes automatically.
 
@@ -180,7 +188,7 @@ Future D7/implementation removes together:
 - collection UUID and record compound-ref equality/group/distinct/cache/export branches;
 - persistent Record occurrence/provenance seeds;
 - record-schema permission/read-set/lens/action-target/View passthrough;
-- corresponding decoders, capabilities, fixtures, locale/API aliases.
+- corresponding decoders, capabilities, fixtures, locale/API aliases; retirement applies to the new active Record execution domain and its dedicated API/capability/aliases, not to mechanically deleting original-version decoders or original bytes already required for promised saved-decision, receipt, and unknown-recovery behavior. Valid historical recovery for old D5, D3, D6 wire1, and D7 PreparedActionBinding/1,/2 continues under each original protocol. Historical decoders never restore current Query/strong Prepared, approval, or Money qualification, and lack of deployment evidence never promotes a prototype into fully active compatibility.
 
 Preserved generic semantics are precise NodeRef/TypedValue typing, D4 FieldId/RegistryBinding, authorized Query envelope, target/revision re-resolution, non-durable derived rows, and ActionEvidence separation.
 
@@ -188,7 +196,7 @@ Preserved generic semantics are precise NodeRef/TypedValue typing, D4 FieldId/Re
 
 Cover pipe/backslash escaping, CRLF/CR/LF, duplicate rows, ragged tables, blank/comment trivia, empty table, stale locator, legal Inline/ref, unrepresentable text, untouched-byte equality, and zero author write on failure.
 
-A structured patch reparses the complete proposed source; failed source CAS never partially saves.
+A structured patch reparses the complete proposed source and preserves both the inner production revision/selector and the outer current SourceObservation/1, SourceVersionRef/1.sourceToken, fileObjectBinding, evidencePins, control, Registry, incidence, cut, and structural strict-install qualification; I state, hash, or equal row text never fabricates those proofs. Any determinable source-CAS, current-observation, authorization, dependency, or durable-install qualification failure rejects before author write or enters conflict/reprepare, and never partially saves. If install/ack outcome is unknown, it enters real recovery_unknown and reconciles the original operation result; it never claims zero side effects or Saved and never retries the unknown result as a new operation.
 
 ### 8.4 Collection creation/membership
 
@@ -244,16 +252,22 @@ Desktop/WebUI/Server/CLI/Mobile share the same Core semantics. Surface differenc
 ### 8.11 Additional D6-FA-r01 regression
 
 On top of the fixed-S matrix cover:
-- ordinary offline native-table edit reliably saves while unrelated I is incomplete;
-- SourceVersion/2 stale/ABA;
+- ordinary and strict|observed_only as independent axes: offline native structured cell/row/column/reorder can save from complete real local evidence while unrelated I is incomplete, but uses strict protection and gains no weak qualification from absence of an unrelated complete Query or from UI shape;
+- human raw whole-source save may select observed_only only when every actual-A §4.1 qualification holds: trusted interactive_source_save, exactly one existing live Document, ordinary + replica_local, complete source read/replace, write set empty or limited to that Document, no applicable body/Field/Node-control deny, no identity/parent/order/lifecycle/sharedPolicy/Registry/Calendar-scope/other-entity mutation, and DraftBase equal to the selected current Observation; the human explicitly chooses it before planning starts and the profile then freezes;
+- any missing weak qualification, strict failure, known competition, stale Base, watcher gap, or continuity gap never falls back to weak and instead rejects or conflict/reprepares; unknown install remains recovery_unknown, and prepare records proposal/read-before/pins rather than Saved;
+- observed_only retains the read before-image B and user input N durably; installing N may overwrite an unobserved external C and a later C may replace the current file, while durable B/N retention remains;
+- structured/bulk/collection/promotion/Action/Automation/server checkpoint/Approval/Money remain strict and are not weakened by these acceptance cases;
+- SourceVersion/2 stale/ABA, plus cases where production version is unchanged but current SourceObservation/1, fileObjectBinding, evidencePins, control, Registry, incidence, or cut changes; watcher gap, replacement, or discontinuous rematerialization never lets an old SourceVersionRef/1.sourceToken or Locator continue merely because production version is unchanged;
 - same/different-row multi-replica conflict;
 - explicit three-way merge proposal;
-- semantic_pending(collection) never feeds all_result/bulk;
+- semantic_pending(collection) means only missing complete collection proof, not empty, never hides typed invalid, source invalid, or missing strong evidence, and never feeds Action, all_result, bulk, or Automation;
 - rebuilding I never restores old proof;
 - losing P never restores batch decision/approval/Money;
 - new replica preserves NodeRefs but gains no execution custody;
-- r5 pending replay stays distinct from r6 current complete result;
+- r5 pending replay stays distinct from r6 current complete result, with r6 proving only its current Observation/SourceVersion/cut and never rewriting the historical r5 receipt bytes;
 - Server multi-user table/collection Drafts coexist while durable commits remain ordered by the same backend boundary.
+
+These are future reviewable acceptance cases and do not claim that product tests have been executed or passed.
 
 ### 8.12 acceptance boundary
 

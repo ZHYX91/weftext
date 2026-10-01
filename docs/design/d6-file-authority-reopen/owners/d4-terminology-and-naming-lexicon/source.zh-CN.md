@@ -52,19 +52,23 @@ D4 只拥有 schema/value/relation/Calendar/Library 术语。D3 的 Node/Entity/
 
 ## 3. D6-FA-r01 imported names
 
-下列名称保持原 owner，D4只消费：
+下列名称保持原 owner，D4 只消费，不重新拥有：
 
 | imported name | owner | D4用途 | 不是 |
 |---|---|---|---|
-| CommitDomain/2 | D6 | operation/pin/source范围 | D4 namespace |
-| SourceVersion/2 | D6 | current author-source/ABA binding | occurrence identity |
-| Frontier/1 | D6 | complete range/cut dependency | Registry generation |
-| SemanticState/1 | D6 | save completion状态 | D4 namespace state |
-| ConflictRecord | D6 | portable conflict定位 | relation fact |
-| NodeRef/ResourceRef/AnnotationRef | D3 | typed values/relations | D4 Field identity |
+| `CommitDomain/2` | D6 | operation、pin、source observation范围 | D4 namespace |
+| `SourceVersion/2` | D6 | source-bearing owner 的生产版本与 ABA 绑定 | occurrence identity 或当前观察域 |
+| `SourceObservation/1` | D6 | 当前 observation qualification | D4 ObservationValue |
+| `SourceVersionRef/1` | D6 | 通过 `sourceToken` 选择完整当前 `d6_source_observation/1` | 裸 revision、hash、I cache 或 production version |
+| `Frontier/2` | D6 | 已 seal 因果前缀与依赖 cut | Query 全集、payload 物化或 Registry generation |
+| `SemanticState/1` | D6 | save completion状态 | D4 namespace state |
+| `ConflictRecord` | D6 | portable conflict定位 | relation fact |
+| `NodeRef/ResourceRef/AnnotationRef` | D3 | typed values/relations | D4 Field identity |
 | D3 wire12 guarantee | D3/D6 | local vs managed qualification | D4 Action kind |
 
-`complete_semantics/semantic_pending` 不与 D4 `complete/partial/unavailable` 共用一个概念；`external_invalid`也不是 `invalid` namespace。
+`SourceVersion/2` 保留自身生产 `commitDomain`、`observationEpoch`、revision 或 externalSequence 定义；它不要求等于当前 operation observation domain。当前 D6 外层资格由 `SourceObservation/1` 提供：`observerDomain` 必须等于 operation `CommitDomain`，并与 `entityRef`、当前 observation、file/control/Registry/relation-incidence 依赖共同形成保护 cut。
+
+`complete_semantics/semantic_pending` 不与 D4 `complete/partial/unavailable` 共用一个概念；`external_invalid` 也不是 `invalid` namespace。普通保存中的 `strict|observed_only` 与 D4 类型状态保持分域；`observed_only` 仅消费 D6 已定义的弱保存资格，不成为新的 D4 状态。
 
 ## 4. 术语守恒与 anti-spoof
 

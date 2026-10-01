@@ -26,7 +26,7 @@ D4 唯一拥有 Semantic Namespace、Field/FieldId、Entry/1、
 
 D4 不拥有 Document bytes、Node/Resource/Annotation identity、parent/order、文件安装、SQLite、
   Query complete cut、Editor Draft、ImportJob、Automation、Extension runtime 或 credentials。
-  当前 bytes、portable metadata、P/I、SourceVersion/2、CommitDomain/2、Frontier/1、SemanticState/1 和 ConflictRecord 直接消费 H2 D6；identity/lifecycle 直接消费 H2 D3 wire12。
+  当前 bytes、portable metadata、P/I、SourceVersion/2、SourceVersionRef/1、CommitDomain/2、Frontier/2、SemanticState/1 和 ConflictRecord 直接消费当前 D6 owner types；identity/lifecycle 继续消费 D3 wire12。历史 H2 D6/D3 saved decoder 按原版本和 retention 规则重放，不机械替换历史字段版本。D4 不拥有 Document bytes、SQLite P/I、identity/lifecycle 或 current body mirror；I 仍可重建，P 仍保存不可由 source 文件重建的 durable decision/control state。
 
 P/I cache、Registry cache、relation index、Calendar/Graph projection 和 UI property model 都不得成为第二份作者真相。
 
@@ -92,8 +92,7 @@ D4 Entry/1 保持 closed semantic members：version、FieldId、
   非法 UTF-8/JSON、budget 超限或 Field/schema mismatch 都按原 diagnostic顺序拒绝。
 
 occurrenceKey 只是 owner Node + FieldId + expected current source revision 内的 value-internal selector；
-  不是 EntityRef、Locator、OperationId、
-  RecordRef 或 cross-revision identity。相同 value 可以有多个 occurrence；外部 edit/reorder/delete+reinsert 或 SourceVersion observationEpoch变化后不能仅凭 key/value续认。
+  不是 EntityRef、Locator、OperationId、RecordRef 或 cross-revision identity。相同 value 可以有多个 occurrence；外部 edit/reorder/delete+reinsert 或 SourceVersion 生产 epoch、revision、externalSequence 变化后不能仅凭 key/value 续认。当前 D6 外层 SourceObservation/1 资格验证作为附加保护，不能改变 occurrenceKey 原有基于 owner Node + FieldId + expected current source revision 的 selector 形状。即使 production version 相同，当前 SourceObservation token/epoch 在 watcher gap、external replacement 或 discontinuous materialization 后失效，也不能恢复旧 occurrence selection。
 
 Inline Field Note 是 optional plain author text；无内容不写空占位。typed qualifier/provenance不能塞进 note后再自然语言解析。
 
@@ -198,7 +197,7 @@ fixed-S closed shape保持：
 
 D6提供可信snapshot/stateToken/source revision/incidence revision/auth；client不能自报complete或empty incidence。
 
-新 D6-FA请求不改 D4/2 inner wire，而由 InputDescriptor/2 为每个 source-bearing owner绑定 SourceVersion/2。Context owner与sourceInputs一一对应；inner sourceRevision必须是同一个managed source revision；SourceVersion.commitDomain等于operation CommitDomain；observationEpoch/ChangeId仍current；entity/incidence control inputs与RegistryBinding属于同一cut。只有inner revision相同但SourceVersion observationEpoch/domain不同仍stale/unavailable。
+新 D6-FA 请求不改 D4/2 inner wire，而由 InputDescriptor/2 为每个 source-bearing owner 绑定 SourceVersion/2。Context owner 与 sourceInputs 一一对应；inner sourceRevision 必须对应实际 source-bearing owner 的生产 revision，并与该 SourceVersion 表示的版本一致。SourceVersion/2 保留自身的生产 commitDomain、observationEpoch、revision 或 externalSequence、changeId 语义；SourceVersion.commitDomain 可以不同于当前 operation 的观察域。当前资格由 SourceObservation/1 决定：observerDomain 等于 operation CommitDomain，entityRef 等于 sourceVersion.entityRef，当前 observationEpoch、fileObjectBinding、evidencePins、control revisions、Registry 绑定以及关系 incidence 依赖共同属于当前 observation cut。SourceVersionRef/1 的 sourceToken 使用 `d6_source_observation/1` 标记并选择完整受保护 SourceObservation，而不是裸 revision、digest 或生产 SourceVersion。即使 production version 相同，watcher gap、外部替换或不连续重物化也会使旧 token 失效。D4/2 内层 wire、legacy saved decisions、owner 双射、权限与授权 gate 保持不变。
 
 relation gate保持：D3/D6 disclosure/auth → D4 closed context/binding
   → coverage → immutable cut → Registry/raw Entry/selector/revision
@@ -748,7 +747,7 @@ incidenceRevisions item:
   {fieldId,endpointNodeRef,revisionToken}
 ~~~
 
-masked/unprovable不能产生成功binding/readSet。expected binding必须逐项exact equality。D6-FA-r01额外要求outer InputDescriptor/2对每个source-bearing owner绑定SourceVersion/2；inner sourceRevision与该managed SourceVersion代表同一revision，且CommitDomain/observationEpoch/ChangeId/current control versions属于同一cut。
+masked/unprovable不能产生成功binding/readSet。expected binding必须逐项exact equality。D6-FA-r01额外要求outer InputDescriptor/2对每个source-bearing owner绑定完整SourceVersion/2与当前 SourceObservation/1 资格；inner sourceRevision与实际source-bearing owner及该managed SourceVersion代表同一生产revision。SourceVersion.commitDomain保持生产域定义，可以不同于当前operation观察域；当前 SourceObservation.observerDomain 必须等于operation CommitDomain，且entityRef、observationEpoch、fileObjectBinding、evidencePins、control、Registry与relation-incidence依赖属于同一当前proof cut。
 
 relation operation model继续是：
 
@@ -1183,9 +1182,17 @@ open bound在其余provider gate成功后产生：
 
 ### 16.7 D6-FA-r01 outer binding、pending 与 legacy
 
-上述 D4 inner wire 版本保持不变。新请求必须由 D6 InputDescriptor/2 对每个 source-bearing owner绑定完整 SourceVersion/2；CommitDomain、Frontier、Registry/Policy/control revisions和实际 source pins形成同一proof cut。裸sourceRevision、I cache、相同hash或旧stateToken不能跨replica/observationEpoch复用。
+上述 D4 inner wire 版本保持不变。新请求必须由 D6 InputDescriptor/2 对每个 source-bearing owner绑定完整 SourceVersion/2，并通过 SourceObservation/1 消费当前观察资格；SourceVersion.commitDomain 保持生产域定义，可以不同于当前operation CommitDomain。CommitDomain、Frontier/2、Registry/Policy/control revisions、当前 fileObjectBinding、evidencePins 和实际 source pins 形成同一当前proof cut。SourceVersionRef/1 的 sourceToken 选择完整受保护 Observation，而不是裸sourceRevision、I cache、相同hash或旧stateToken；这些值不能跨replica/observationEpoch连续性失效后复用。
 
-ordinary save只有在所有touched local Entry/Facet/Type/requiredness都通过后，才可把仍缺失的relation|unique|calendar|inbound|cross_object_type完整范围登记为D6 semantic_pending。invalid local fact、touched retained_unavailable namespace、D2 external_invalid或强Action缺complete proof都不得借pending成功。
+ordinary save 的保存语义与 `WriteProtection` 选择保持分离。普通保存仍可以保持 `strict`；`observed_only` 只能由受信 `interactive_source_save` 显式选择，并且仅适用于一个既有 live Document、ordinary replica-local 范围、完整 source read 与 replace 资格、没有适用的 body/Field/Node-control deny、author-source write set 仅限该 Document 或为空，且不存在 identity、parent、order、lifecycle、shared-policy、Registry、Calendar-scope 或其他 entity mutation。选择弱 profile 前，DraftBase 与当前 source 状态必须由对应当前 `SourceObservation` 表示。非交互流程、complete 或 strong Action、structured bulk、collection mutation 或 promotion、automation、server checkpoint、Approval 或 Money 相关执行均不得使用 `observed_only`。
+
+任何 ordinary save 成功前，所有 touched local `Entry`、`Facet`、`Type` 和 requiredness 规则都必须通过。invalid local fact、touched `retained_unavailable` namespace、`D2 external_invalid`、physical invalid source state 或真实 read/write 资格不足仍保持失败或独立 repair 路径，不得通过 `semantic_pending` 或弱保护转换为成功。`semantic_pending` 只登记尚未证明完整范围的 `relation|unique|calendar|inbound|cross_object_type` 义务，不把缺少 complete proof 的 strong Action 变成成功。
+
+`observed_only` 只耐久保留已观察前像 B 与用户输入 N。它不保证未观察到的外部竞争写入 C 不存在，也不保证从已观察 B 状态安装用户输入 N 时，未观察的 C 字节能够免于被 N 覆盖。如果 N 安装后又发生未观察的 C 写入并替换当前文件，这只影响当前文件状态；已耐久保留的观察前像 B 与用户输入 N 不因此丢弃。局部 typed facts 与未选 bytes 只能证明已绑定的 B→N 转换，不能声称验证所有未观察中间 source，也不能主动省略必要观察。已观察竞争、stale Base 或 continuity gap 继续走现有 conflict/reprepare 路径；未知安装保持 `recovery_unknown`。
+
+受信 interactive ordinary save 可以在 planning 阶段明确选择弱 profile，即使普通目录没有 strict capability，但 `writeProtection` 规划后必须冻结。任何已知 Base 冲突、授权失败、耐久失败、strict plan 失败或强义务失败都不得 fallback 到 `observed_only`，也不得扩大弱保护范围。
+
+Preparation 只保留后续操作所需的 durable proposal、read-before 证据和 pins；它尚未成为 saved、installed 或 sealed 结果。installed、sealed 和 unknown D6 状态必须区分。`durable_observed_only` 不是 strict reliable save，也不是 complete-set Query 或 Action 的资格证明。既有 D4 source 层、当前依赖、Registry、关系和 source observation 义务继续保持不变。
 
 补验只产生current SourceVersion的新资格；历史r5 receipt永不改写成r6 complete。I重建、P丢失、设备迁移和A→B→A均不恢复旧proof。
 

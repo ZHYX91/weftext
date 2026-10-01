@@ -51,19 +51,23 @@ A public name cannot belong to multiple concepts. A localized display label is n
 
 ## 3. D6-FA-r01 imported names
 
-These remain owned elsewhere:
+These remain owned elsewhere and are only consumed by D4:
 
 | imported name | owner | D4 use | not |
 |---|---|---|---|
-| CommitDomain/2 | D6 | operation/pin/source scope | D4 namespace |
-| SourceVersion/2 | D6 | current author-source/ABA binding | occurrence identity |
-| Frontier/1 | D6 | complete-range/cut dependency | Registry generation |
-| SemanticState/1 | D6 | save completion state | D4 namespace state |
-| ConflictRecord | D6 | portable conflict address | relation fact |
-| NodeRef/ResourceRef/AnnotationRef | D3 | typed values/relations | D4 Field identity |
+| `CommitDomain/2` | D6 | operation, pin, and source observation scope | D4 namespace |
+| `SourceVersion/2` | D6 | production version of a source-bearing owner and ABA binding | occurrence identity or current observation domain |
+| `SourceObservation/1` | D6 | current observation qualification | D4 ObservationValue |
+| `SourceVersionRef/1` | D6 | `sourceToken` selection of the complete protected `d6_source_observation/1` | bare revision, hash, I cache, or production version |
+| `Frontier/2` | D6 | sealed causal prefix and dependency cut | complete Query set, payload materialization, or Registry generation |
+| `SemanticState/1` | D6 | save completion state | D4 namespace state |
+| `ConflictRecord` | D6 | portable conflict address | relation fact |
+| `NodeRef/ResourceRef/AnnotationRef` | D3 | typed values/relations | D4 Field identity |
 | D3 wire12 guarantee | D3/D6 | local versus managed qualification | D4 Action kind |
 
-`complete_semantics/semantic_pending` is not the same concept as D4 `complete/partial/unavailable`, and `external_invalid` is not namespace `invalid`.
+`SourceVersion/2` retains its own production `commitDomain`, `observationEpoch`, revision, or externalSequence semantics. It does not require equality with the current operation observation domain. Current D6 qualification is provided by `SourceObservation/1`: `observerDomain` equals the operation `CommitDomain`, with matching `entityRef` and current observation, file, control, Registry, and relation-incidence dependencies in the protected cut.
+
+`complete_semantics/semantic_pending` is not the same concept as D4 `complete/partial/unavailable`, and `external_invalid` is not namespace `invalid`. Ordinary save `strict|observed_only` remains a D6 save-protection distinction; `observed_only` only consumes the D6-defined weak save qualification and is not introduced as a new D4 terminology state.
 
 ## 4. Terminology preservation and anti-spoof
 

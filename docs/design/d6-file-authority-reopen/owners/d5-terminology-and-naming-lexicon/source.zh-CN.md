@@ -45,17 +45,31 @@ D5 只拥有 Document Table 与 Node Collection 的结构语义术语。D4 Field
 
 | name | owner | D5 use | 不是 |
 |---|---|---|---|
-| SourceVersion/2 | D6 | current table/source binding | row identity |
-| CommitDomain/2 | D6 | local/managed scope | collection identity |
-| Frontier/1 | D6 | complete cut/batch dependency | table revision |
-| SemanticState/1 | D6 | ordinary save pending/complete | collection completeness |
+| SourceVersion/2 | D6 | table/source生产版本与内层revision绑定 | row identity或当前观察token |
+| SourceObservation/1 | D6 | 当前完整受保护source观察资格 | production SourceVersion或row identity |
+| SourceVersionRef/1 | D6 | sourceToken选择完整当前Observation | 裸revision/hash/I连续性 |
+| InputDescriptor/2 | D6 | sourceInputs[].observation承载当前Observation | D5 plan或row identity |
+| CommitDomain/2 | D6 | 当前operation域/decision scope | collection identity |
+| Frontier/2 | D6 | 已封存的因果/依赖前缀与当前证明截面 | 完整 Query/Registry/物化证明 |
+| SemanticState/1 | D6 | ordinary-save semantic pending/complete轴 | save-protection mode或collection completeness |
 | ConflictRecord | D6 | source/placement/lifecycle conflict | Record domain |
 | NodeRef | D3 | collection member identity | collection membership fact |
 | Field Value Occurrence | D4 | row-like Field editor source | table row |
 | PreparedActionBinding future version | D7 | strong collection/bulk preparation | D5-owned token |
 
-D5不把任何 imported name登记为 owned alias。
+D5不把任何 imported name登记为 owned alias，也不新增持久 TableRowId、RecordRef、CollectionRef 或其它row/Record/Collection identity。
 
+SourceVersion/2仍是生产版本/history：managed variant保留原有 entityRef、commitDomain、observationEpoch、revision、changeId，external variant保留原有 entityRef、commitDomain、observationEpoch、externalSequence。生产commitDomain可以不同于当前operation域。当前资格由完整 SourceObservation/1 提供：observerDomain必须等于operation CommitDomain，entityRef必须等于sourceVersion.entityRef，并携带对应sourceVersion及当前observationEpoch、fileObjectBinding、evidencePins；author-control、Registry、incidence依赖与cut也必须属于同一当前观察资格。InputDescriptor/2.sourceInputs[].observation实际承载该Observation，SourceVersionRef/1.sourceToken以 d6_source_observation/1 标记选择完整当前Observation，而不是裸production version、revision、hash、I cache或相同行文字。
+
+watcher gap、replacement或discontinuous rematerialization会使旧sourceToken以及依赖该观察的D5 locator失效，即使production SourceVersion相同也不能续认；I不能恢复这种资格。SourceObservation/1只是外层当前观察保护，不替换D5/D4既有inner sourceRevision、OccurrenceKey、Entry selector或revision-bound locator wire。
+
+Frontier/2仅表示已seal的causal/dependency prefix和相应proof cut，不单独证明complete Query、Registry完整性或payload物化。历史Frontier/1 decoder、旧saved bytes与其它历史恢复仍按其原版本解释，不机械替换为Frontier/2。
+
+ordinary语义与strict|observed_only保存保护是独立两轴，ordinary可以使用strict；不要求无关完整index或Workspace Query并不产生weak资格。只有满足A §4.1全部条件的人工existing-live-Document整源保存，才能在planning开始前显式选择observed_only并冻结profile：trusted interactive_source_save、恰一个既有live Document、ordinary + replica_local、完整source read/replace、author write set为空或仅该Document、无applicable body/Field/Node-control deny、无identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation，并且DraftBase等于当前选定Observation。structured、bulk、collection、promotion、Automation、server checkpoint、Approval、Money及所有strong Action都不能使用weak保护；strict失败、已知冲突、授权、耐久或strong义务失败也不能fallback为weak。
+
+observed_only的B/N耐久、未观察外部C可能被N安装覆盖、后续C可能再次替换current file、已观察competition或gap要求conflict/reprepare以及unknown install进入recovery_unknown，均继续由D6定义，D5不新增保存保证。semantic_pending(collection)只表示缺少collection全集proof，不表示empty，也不能把typed invalid、source invalid或缺少strong evidence洗成成功，更不能授权Action、all_result、bulk或Automation；后来r6的新证明只适用于r6及其当前Observation/SourceVersion/cut，不改写r5历史receipt。
+
+ConflictRecord继续由D6拥有，NodeRef继续由D3拥有，Field Value Occurrence继续由D4拥有。future PreparedActionBinding继续由D7拥有；新版D7 Prepared尚未冻结时，strong collection/bulk入口仍为unavailable/owner_update_required，D5不创建替代token。
 ## 5. compatibility 与 Gate
 
 必须机械证明 fixed-S 六个 conceptId、owner、owned wire/code/UI/locale names、firstFreeze逐项保持。不存在 `TableRowId|RecordRef|CollectionRef|ViewRef` 新 public identifier。

@@ -45,17 +45,31 @@ The bare word row is always qualified by domain: Document Table Row, Node Collec
 
 | name | owner | D5 use | not |
 |---|---|---|---|
-| SourceVersion/2 | D6 | current table/source binding | row identity |
-| CommitDomain/2 | D6 | local/managed scope | collection identity |
-| Frontier/1 | D6 | complete cut/batch dependency | table revision |
-| SemanticState/1 | D6 | ordinary-save pending/complete | collection completeness |
+| SourceVersion/2 | D6 | production table/source version and inner-revision binding | row identity or current-observation token |
+| SourceObservation/1 | D6 | complete current protected source-observation qualification | production SourceVersion or row identity |
+| SourceVersionRef/1 | D6 | sourceToken selects the complete current Observation | bare revision/hash/I continuity |
+| InputDescriptor/2 | D6 | sourceInputs[].observation carries the current Observation | D5 plan or row identity |
+| CommitDomain/2 | D6 | current operation domain/decision scope | collection identity |
+| Frontier/2 | D6 | sealed causal/dependency prefix and current proof cut | complete Query/Registry/materialization proof |
+| SemanticState/1 | D6 | ordinary-save semantic pending/complete axis | save-protection mode or collection completeness |
 | ConflictRecord | D6 | source/placement/lifecycle conflict | Record domain |
 | NodeRef | D3 | collection-member identity | collection membership fact |
 | Field Value Occurrence | D4 | source for row-like Field editor | table row |
 | future PreparedActionBinding | D7 | strong collection/bulk preparation | D5-owned token |
 
-D5 registers none of these imported names as owned aliases.
+D5 registers none of these imported names as owned aliases and introduces no durable TableRowId, RecordRef, CollectionRef, or other row/Record/Collection identity.
 
+SourceVersion/2 remains the production version/history: the managed variant retains its existing entityRef, commitDomain, observationEpoch, revision, and changeId, while the external variant retains its existing entityRef, commitDomain, observationEpoch, and externalSequence. The production commitDomain may differ from the current operation domain. Current qualification comes from the complete SourceObservation/1: observerDomain equals the operation CommitDomain, entityRef equals sourceVersion.entityRef, and it carries the corresponding sourceVersion plus current observationEpoch, fileObjectBinding, and evidencePins; author-control, Registry, incidence dependencies, and the cut must also belong to the same current-observation qualification. InputDescriptor/2.sourceInputs[].observation carries that Observation, and SourceVersionRef/1.sourceToken tagged d6_source_observation/1 selects the complete current Observation rather than a bare production version, revision, hash, I cache, or equal row text.
+
+A watcher gap, replacement, or discontinuous rematerialization invalidates the old sourceToken and any D5 locator dependent on that observation even when the production SourceVersion is unchanged; I cannot restore this qualification. SourceObservation/1 is additional outer current-observation protection and does not replace existing D5/D4 inner sourceRevision, OccurrenceKey, Entry selector, or revision-bound locator wire.
+
+Frontier/2 represents only a sealed causal/dependency prefix and the corresponding proof cut; it does not by itself prove a complete Query, Registry completeness, or payload materialization. Historical Frontier/1 decoders, old saved bytes, and other historical recovery remain interpreted under their original versions and are not mechanically rewritten as Frontier/2.
+
+Ordinary semantics and strict|observed_only save protection are independent axes, and ordinary may use strict. Absence of an unrelated complete index or whole-Workspace Query never grants weak protection. Only a human whole-source save of an existing live Document satisfying every A §4.1 condition may explicitly select observed_only before planning starts and freeze that profile: trusted interactive_source_save, exactly one existing live Document, ordinary + replica_local, complete source read/replace, author write set empty or limited to that Document, no applicable body/Field/Node-control deny, no identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation, and DraftBase equal to the selected current Observation. Structured, bulk, collection, promotion, Automation, server checkpoint, Approval, Money, and every strong Action cannot use weak protection; strict failure or a known conflict, authorization, durability, or strong-obligation failure never falls back to weak.
+
+observed_only durability for B/N, installation of N potentially overwriting an unobserved external C, a later C potentially replacing the current file again, observed competition or gaps requiring conflict/reprepare, and unknown install entering recovery_unknown remain defined by D6; D5 defines no new save guarantee. semantic_pending(collection) means only that complete collection proof is missing, not empty, and never converts typed invalid, source invalid, or missing strong evidence into success or authorizes Action, all_result, bulk, or Automation. A later r6 proof applies only to r6 under its current Observation/SourceVersion/cut and does not rewrite the historical r5 receipt.
+
+ConflictRecord remains D6-owned, NodeRef remains D3-owned, and Field Value Occurrence remains D4-owned. Future PreparedActionBinding remains D7-owned; until the new D7 Prepared contract is frozen, strong collection/bulk entry points remain unavailable/owner_update_required and D5 creates no replacement token.
 ## 5. Compatibility and Gate
 
 Mechanically prove exact preservation of all six fixed-S conceptIds, owners, owned wire/code/UI/locale names, and firstFreeze values. There is no new public `TableRowId|RecordRef|CollectionRef|ViewRef`.

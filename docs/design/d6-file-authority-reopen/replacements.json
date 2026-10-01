@@ -402,8 +402,10 @@
       },
       "changedSections": [
         "status",
-        "1-14",
-        "D6-FA-r01 qualification and SourceVersion consumption"
+        "current D4 owner contract including section 16.7 current-source qualification",
+        "D6 SourceVersion/2 production history + SourceObservation/1/SourceVersionRef/1 outer qualification",
+        "unchanged D4 inner sourceRevision/OccurrenceKey/Entry/RelationReadContext/Binding/Recurrence selectors",
+        "ordinary semantics versus strict|observed_only protection and recovery boundaries"
       ],
       "consumers": [
         "D5",
@@ -422,7 +424,7 @@
         {
           "domain": "D4 D6 source binding",
           "from": "D4 inner source revision + fixed-S control binding",
-          "to": "unchanged D4 inner wire + D6 SourceVersion/2 outer binding"
+          "to": "unchanged D4 inner wire + D6 SourceVersion/2 production version + SourceObservation/1/SourceVersionRef/1 outer qualification via InputDescriptor/2"
         }
       ]
     },
@@ -437,8 +439,8 @@
       },
       "changedSections": [
         "status",
-        "complete fixed-S 26 concept set",
-        "D6-FA-r01 imported-name boundary"
+        "complete fixed-S 26 concept set preserved",
+        "current D6 imported-name boundary: SourceVersion/2, SourceObservation/1, SourceVersionRef/1, Frontier/2, SemanticState/WriteProtection separation"
       ],
       "consumers": [
         "D5",
@@ -467,8 +469,9 @@
       },
       "changedSections": [
         "status",
-        "1-8",
-        "D6-FA-r01 local-versus-complete acceptance matrix"
+        "current D4 implementation/test outline and fixed-S preservation mapping",
+        "current-observation continuity and exact inner-selector coverage",
+        "local-versus-complete, strict|observed_only, conflict/recovery, privacy/bootstrap acceptance matrix"
       ],
       "consumers": [
         "D5",
@@ -497,8 +500,9 @@
       },
       "changedSections": [
         "status",
-        "1-18",
-        "D6-FA-r01 local-versus-complete qualification"
+        "1-19",
+        "D6 SourceVersion/2 production history + current SourceObservation/1/SourceVersionRef/1 source/locator qualification",
+        "native/Field proof, ordinary-versus-protection, semantic_pending, legacy decoder and section 19 exact-contract composition"
       ],
       "consumers": [
         "D6",
@@ -526,8 +530,8 @@
       },
       "changedSections": [
         "status",
-        "complete fixed-S 6 concept set",
-        "D6-FA-r01 imported-name boundary"
+        "complete fixed-S 6 concept set preserved",
+        "current D6 imported-name boundary: SourceVersion/2, SourceObservation/1, SourceVersionRef/1, InputDescriptor/2, Frontier/2, SemanticState/WriteProtection separation"
       ],
       "consumers": [
         "D6",
@@ -555,8 +559,9 @@
       },
       "changedSections": [
         "status",
-        "1-7",
-        "D6-FA-r01 partial-index and multi-replica tests"
+        "1-8",
+        "current producer/source-observation and native/Field implementation dependencies",
+        "partial-index, multi-replica, strict|observed_only, install/recovery, legacy-decoder and fixed-S section 8 regression matrix"
       ],
       "consumers": [
         "D6",

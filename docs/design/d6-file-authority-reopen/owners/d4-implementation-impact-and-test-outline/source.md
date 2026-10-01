@@ -23,11 +23,18 @@ D2 exact source
   -> relation / Calendar / catalog validation
   -> D4 proposed semantic state
        -> D6 InputDescriptor/2
-       -> SourceVersion/2 + CommitDomain/2 + Frontier/1
+       -> SourceVersion/2 (production version)
+       -> SourceObservation/1 + SourceVersionRef/1 (current observation qualification)
+       -> ObservationScope/2 + DependencyProof/2 + Frontier/2 (current proof cut)
        -> D6 ordinary or complete qualification
+       -> strict or A§4.1-qualified observed_only protection choice
        -> file install + P seal
        -> portable publication
   -> future D7 complete Query/Action consumer
+
+SourceVersion/2 retains its production commitDomain and version history. Current SourceObservation/1 is an outer qualification and does not redefine production version semantics; observerDomain must equal the operation CommitDomain, with matching entity/file/evidence/control/Registry/relation-incidence dependencies in the current observation cut. SourceVersionRef/1 selects the complete protected observation through sourceToken, not a bare revision, hash, I cache, or production version.
+
+Source body remains authoritative. Rebuildable I is not a body mirror. Frontier/2 is a sealed causal/dependency prefix, not a complete Query result, payload materialization proof, or Registry generation proof. Ordinary and complete qualification remain semantic axes; strict and observed_only remain protection axes, and observed_only is limited to the approved trusted interactive ordinary source-save case.
 ~~~
 
 I caches rebuildable projections/incidence/search candidates only. P stores non-reconstructible decisions/pins/control evidence. Neither carries a second current Field/Facet/relation truth.
@@ -42,7 +49,7 @@ I caches rebuildable projections/incidence/search candidates only. P stores non-
 | Facet engine | declared/effective, requiredness, conflicts | implicit membership/last-wins |
 | relation engine | Context/Binding/complete incidence/post-state | index as truth, inverse double-write |
 | Calendar engine | comparator/recurrence/series scope | current page as complete scope |
-| D6 adapter | InputDescriptor/2 + SourceVersion/2 outer binding | compare bare revision across CommitDomain |
+| D6 adapter | InputDescriptor/2 + SourceVersion/2 + SourceObservation/1 outer binding | bare revision, hash, or production version across observation cut |
 | conflict/repair | exact source + ConflictRecord + current Registry | LWW/hash-only merge |
 | downstream D7 | future complete cut/new Prepared | invent Action success from pending |
 
@@ -58,13 +65,23 @@ I caches rebuildable projections/incidence/search candidates only. P stores non-
 
 ### 3.2 local ordinary save
 
-The ordinary source-save adapter computes actual MutationFootprint and proves at least current SourceVersion/2, complete source, RegistryBinding, touched local Field/Facet/type/cardinality, write permission, one proposed source, D2 validity, and file-install qualification.
+The ordinary source-save adapter computes actual MutationFootprint and separates save semantics from `WriteProtection`. Ordinary save may remain `strict`; only a trusted `interactive_source_save` may explicitly choose `observed_only`, and only for one existing live Document with ordinary replica-local scope, complete source read/replace qualification, no applicable body/Field/Node-control deny, author source write set empty or limited to that Document, and no identity, parent, order, lifecycle, shared policy, Registry, Calendar-scope, or other-entity mutation. DraftBase must match the selected current SourceObservation.
 
-Untouched unavailable/invalid namespaces remain byte-equal. Touching one causes ordinary typed edit rejection. semantic_pending is permitted only for a real cross-object/complete-range obligation that is not proved.
+The adapter proves at least current SourceVersion/2 and current SourceObservation/1, complete source, RegistryBinding, touched local Field/Facet/type/cardinality, write permission, one proposed source, D2 validity, and file-install qualification.
+
+Untouched unavailable/invalid namespaces remain byte-equal. Touching one causes ordinary typed edit rejection. Invalid local fact, retained_unavailable namespace, D2 external_invalid, stale Base, or observation continuity failure remains failure, repair, or conflict/reprepare. semantic_pending is permitted only for a real cross-object/complete-range obligation that is not proved and never upgrades a missing strong Action proof.
 
 ### 3.3 strong operations
 
-Facet mutation, relation mutation, series-scope unique, typed copy/fork/import, restore/purge, and D7 all_result/bulk/automation write require operation-applicable complete proof. Missing range never downgrades to ordinary.
+Facet mutation, relation mutation, series-scope unique, typed copy/fork/import, restore/purge, and D7 all_result/bulk/automation write require operation-applicable complete proof. Missing range never downgrades to ordinary and never completes through `observed_only` or an ordinary-save path.
+
+Future acceptance coverage includes both ordinary strict and the approved A§4.1 human weak positive cases. Ordinary strict may succeed only with complete source, authorization, current observation, and installation qualification. A trusted `interactive_source_save` may validate `observed_only` only for one existing live Document, ordinary replica-local scope, complete source read/replace qualification, no applicable body/Field/Node-control deny, author write set empty or limited to that Document, no identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation, and DraftBase equal to the selected current `SourceObservation`.
+
+Weak protection is invalid for non-trusted, non-interactive, new or multi-Document, non-ordinary, non-replica-local, incomplete source read/replace, applicable body/Field/Node-control deny, multi-entity write set, identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation, or DraftBase mismatch. Structured bulk, collection, promotion, automation, server checkpoint, Approval, Money, and any strong Action never use weak protection.
+
+A human may explicitly select the weak profile during planning even when strict capability is unavailable in the ordinary directory; after `writeProtection` is frozen, strict capability failure, known conflict, authorization failure, durability failure, or strong obligation failure never falls back to weak. D4 local types, D2 validity, unavailable byte equality, and actual source read/write checks remain required. `semantic_pending` represents only real unproved cross-object or complete-range obligations and never converts invalid, unavailable, or incomplete strong proof into success.
+
+`observed_only` durably retains observed before B and user input N. An unobserved external C may exist, and installing N may overwrite C bytes in the current file; a later C write may also replace current file state after N, while durable B/N retention is preserved. Prepare-only is not Saved; unknown install remains `recovery_unknown`; observed competition, stale Base, watcher gap, and continuity gap require conflict/reprepare.
 
 Until a new D7 Prepared contract exists, an entry point that requires D7 complete preparation is unavailable/owner_update_required. D4 defines no private preparation token.
 
@@ -86,7 +103,7 @@ Cover integer/decimal canonical boundaries, semantic_code scope, calendar ISO da
 
 ### 4.3 occurrence and note
 
-Cover duplicate values with separate occurrenceKeys, reorder/copy/delete/external-edit target stability, absent note without placeholder, note versus typed qualifiers/provenance, stale SourceVersion, and same-value multi-replica merge without note reassignment.
+Cover duplicate values with separate occurrenceKeys, reorder/copy/delete/external-edit target stability, and preserve occurrenceKey as an inner owner Node + FieldId + expected current source revision selector. D6 outer SourceObservation/1 qualification is additional and does not replace the inner selector shape. Cover SourceVersion production epoch/revision/externalSequence changes, invalid SourceObservation token/epoch/continuity, absent note without placeholder, note versus typed qualifiers/provenance, stale SourceVersion, and same-value multi-replica merge without note reassignment.
 
 ### 4.4 Facet and availability
 
@@ -94,7 +111,15 @@ Cover declared/effective closure, missing dependency/cycle/conflict/required_fie
 
 ### 4.5 relations
 
-Cover directed single fact/inverse, symmetric canonical owner, canonical-owner flip on copy/fork, node_ref_or_text literal, every RelationReadContext/2 node-state arm, Binding/2 exact source/entity/incidence coverage, SourceVersion/2 outer binding, same inner revision with different domain/epoch rejection, requiredness not satisfied by inverse, endpoint domain/lifecycle/cardinality, cleanup before symmetric purge, source migration/copy/fork effects, and non-disclosure.
+Cover directed single fact/inverse, symmetric canonical owner, canonical-owner flip on copy/fork, node_ref_or_text literal, every RelationReadContext/2 node-state arm, and Binding/2 exact source/entity/incidence coverage.
+
+SourceVersion/2 outer binding keeps the inner sourceRevision relationship unchanged. SourceVersion/2 production `commitDomain` may differ from the current operation observation domain; a complete current SourceObservation/1 is a valid positive case and is not rejected only because production and observation domains differ. The current observation requires observerDomain equal to the operation CommitDomain, entityRef equal to sourceVersion.entityRef, and current fileObjectBinding, evidencePins, control, Registry, and incidence dependencies in the same observation cut.
+
+Negative cases cover observerDomain mismatch, entityRef mismatch, missing or stale fileObjectBinding/evidencePins/control/Registry/incidence dependencies, invalid SourceObservation token/epoch/continuity, and SourceVersion production epoch, revision, or externalSequence changes that invalidate the old inner selection. Equal production versions do not restore validity after watcher gap, external replacement, or discontinuous materialization; bare revision, hash, I cache, or key/value cannot recover the protected observation token.
+
+SourceVersionRef/1 uses `sourceToken` tagged `d6_source_observation/1` to select the complete protected Observation. Frontier/2 is only the current sealed causal/dependency cut and is not a complete Query, payload, or Registry proof. Masked/unprovable RelationReadContext/2 states never produce successful binding/readSet, expected binding remains exact per member, and authorization/privacy gates remain unchanged.
+
+Cover requiredness not satisfied by inverse, endpoint domain/lifecycle/cardinality, delete tombstoned/not_found old target handling, cleanup before symmetric purge, source migration/copy/fork effects, canonical owner preservation, and hidden endpoint non-disclosure. Preserve unchanged inner wire semantics, owner bijection, current authorization checks, and exact source/entity/incidence coverage for every binding path.
 
 ### 4.6 Calendar
 
@@ -114,8 +139,8 @@ Tasks: source-declared tasks/task, tasks/status required, dependency endpoint Ta
 
 | operation | complete range missing | only allowed result |
 |---|---|---|
-| body/disjoint namespace save | irrelevant | success possible |
-| local nonrelation Field edit | no cross-object duty | success possible |
+| body/disjoint namespace save | irrelevant and ordinary qualification satisfied | success possible |
+| local nonrelation Field edit | no cross-object duty and permission/observation valid | success possible |
 | local valid Field + relation duty | missing | semantic_pending |
 | local Entry invalid | any | reject |
 | Assign/Remove Facet | missing | reject/unavailable |
@@ -125,7 +150,12 @@ Tasks: source-declared tasks/task, tasks/status required, dependency endpoint Ta
 | restore/purge | missing | reject |
 | all_result/automation write | D7 incomplete | unavailable |
 
-semantic_pending stores exact obligations and never treats unknown scope as empty.
+Additional weak-save boundary cases:
+
+- valid `observed_only` is limited to trusted interactive source save; after B is read, an unobserved C file change may exist and N installation may overwrite C bytes, while durable B and user input N retention remains required;
+- observed C, stale Base, watcher gap, and continuity gap require conflict/reprepare rather than success;
+- prepare-only is not saved, and unknown install remains `recovery_unknown`;
+- semantic_pending stores exact obligations and never treats invalid, unavailable, D2 external_invalid, or missing strong scope as empty.
 
 ### 4.9 r5/r6, I/P, external change
 
@@ -147,7 +177,7 @@ Verify outer authorization/Registry availability before inner disclosure, UTF-8 
 - RelationReadContext/2 and Binding/2 inner wire unchanged.
 - RecurrenceReadContext/1 unchanged.
 - D4RelationCopyEffects/1 and D4SourceMaterializationEffects/1 unchanged.
-- outer new requests use D6 InputDescriptor/2 and SourceVersion/2.
+- outer new requests use D6 `InputDescriptor/2` and `SourceVersion/2`, and consume current source observation qualification through `sourceInputs[].observation` using `SourceObservation/1`. `SourceVersionRef/1` uses `sourceToken` tagged `d6_source_observation/1` to select the complete protected Observation. `ObservationScope/2`, `Frontier/2`, and `DependencyProof/2` are consumed according to their D6 owner definitions. `SourceVersion/2` retains production version semantics, including its own production `commitDomain`, epoch, and revision information; production domain may differ from the current operation observer domain. Current validity requires matching entityRef and complete fileObjectBinding, evidencePins, control, Registry, incidence, and observation-cut dependencies.
 - saved D3 v9/v10/v11 use original decoders.
 - historical D7 PreparedActionBinding/1,/2 recover under original rules.
 - historical corpus counts are never renamed to claim new consumption passed.
@@ -174,7 +204,7 @@ Old D10 B13 remains REVISE, terminology/bilingual FAIL, eleven OPEN findings.
 
 ## 9. Complete preservation of effective fixed-S regression obligations
 
-This section incorporates the concrete fixed-S implementation/test obligations that remain effective. Historical run counts, legacy wire names, and old implementation status are not upgraded into current success evidence. The semantic obligations remain and consume H2 D3 wire12, D6 v2, and the future D7 owner through the mapping in the final subsection.
+This section incorporates the concrete fixed-S implementation/test obligations that remain effective. Historical run counts, legacy wire names, and old implementation status are not upgraded into current success evidence. The semantic obligations remain and consume the current D3 wire12, D6 v2, and future D7 owner through the mapping in the final subsection. H2 versions remain historical saved-decoder/compatibility references and are not active current producers or proof of successful implementation. All fixed-S regression obligations remain, while D4 typed semantic results, legacy bytes, saved recovery behavior, and future owner gates remain unchanged.
 
 ### 9.1 source/grammar and parser
 
@@ -346,11 +376,11 @@ Fresh Create validates result revision=1. Fake revision0 pre-state, result2, mis
 
 Where the historical document says "D3 v11/Result9", the **new decision path** now consumes D3 wire12 + D6 Control/2. Saved v9/v10/v11 decisions still replay under original decoder/bytes/gates. All inner relation/Calendar/Entry/Facet wire versions remain unchanged merely because the outer binding changed.
 
-Historical D6 source-revision/potentialChanges/current-observation tests map to SourceVersion/2, CommitDomain/2, Frontier/1, InputDescriptor/2, Policy/3, and D6 safe-install/P-seal/publication. No semantic test obligation is deleted; only its outer binding is replaced.
+Historical D6 source-revision/potentialChanges/current-observation tests map to `SourceVersion/2`, `CommitDomain/2`, `Frontier/2`, `InputDescriptor/2`, `Policy/3`, and D6 safe-install/P-seal/publication. No semantic test obligation is deleted; only its outer binding is replaced. `SourceVersion/2` keeps the production version and production domain semantics, while current operation qualification is provided by `SourceObservation/1`, including observerDomain, entityRef, fileObjectBinding, evidencePins, control, Registry, incidence, and current cut checks. `Frontier/2` is a sealed causal/dependency cut and is not a complete Query or Registry proof. Inner D4 wire, legacy saved decoder versions, bytes, and gates remain unchanged. Until D7 complete Prepared exists, dependent entry points remain `owner_update_required`.
 
 Historical D7 revision03/PreparedActionBinding remains legacy replay evidence only. Until the new D7 complete-cut/Prepared owner exists, affected strong D4 entry points return owner_update_required/unavailable. Historical test counts are never renumbered to claim the new path passed.
 
-D6 ObservationScope/privacy still requires unauthorized paired hidden states to produce the same not_visible result with zero business read/decision; once authorized, real constraints are fully checked. Registry, Policy, Calendar-scope binding, and initial bootstrap compose with H2 authority/control without changing D4 typed semantic results.
+D6 `ObservationScope/2` and privacy controls still require unauthorized paired hidden states to produce the same `not_visible` result with zero business read or decision; once authorized, all real constraints are fully checked. Current consumption composes with D6 control, pins, and the current observation cut rather than treating H2 as the active authority/control producer. Registry, Policy, Calendar-scope binding, and initial bootstrap remain combined with the current authority/control contract without changing D4 typed semantic results. I is not a privacy proof or an empty proof, and masked/unprovable states retain their existing boundaries.
 
 ### 9.11 acceptance boundary
 
