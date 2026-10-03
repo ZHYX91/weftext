@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: b80e6c6f-648a-46f9-b5eb-8235f237b5f6.
 
-Candidate status: D7 file-authority coordination afterimage; not independently accepted, activated or implemented. Stage acceptance, unstarted D8/D9 labels and model counts in fixed S are historical provenance. This candidate preserves their actual semantics and evidence limits without treating those labels as current status. It consumes this package's D3 wire12/Result9, current D4 consumers and D6 Control production-version, current-observation, dependency and single-decision recovery contracts. New D3 conflict preparation and D7 /3 binding still require independent joint review of the complete package; portable Locator requalification across replicas awaits its named decision. This candidate does not claim complete closure or eligibility for activation.
+Candidate status: D7 file-authority PL-IR-01 repair consumer; not independently accepted, activated or implemented. Historical fixed-S labels/evidence retain only their original scope. This candidate consumes the authored D3/D6 stable-production-address/current-Observation repair; the exact repair still requires independent review and does not close P1. New D3 conflict preparation and D7 /3 binding retain their separate joint-review gate.
 
 # D7 Preview and Complete Effects Transport
 
@@ -155,7 +155,7 @@ restoreMembership.present applies only to that Node's current active Trash and c
 
 If entity_state_change exists, before/after equals installed/result.image individually. Original source_change/conditional_source_change separately carries complete actual source before/after with real production/proposed versions; branch_source carries every read head's bytes. canonicalStates cannot substitute for source. Equal-byte changed canonical claim/selected production version still requires source_change, using §2.1 forceAdmission only with real C conditionality. CP3 before is actual wrapper.sourceVersion and after the unique actual /2 source stamp plus sealed ChangeId. Metadata-only open resolution still has complete canonical/control projection. True resolved no-op does not readmit old head versions into current after.
 
-Preview completeness compares all actual source, structure, lifecycle, reference and portable-control effects of the same final canonical+native plan. Actual D3 ownership must close Node/Annotation typed-reference/reply and original complete disposition/structural/payload obligations. Transport only projects that admitted plan; a reference-free Resource example or displayable whole bytes cannot prove a business plan valid. Unclosed owner plans cannot prepare, and D7 adds neither write slots nor reference patches. Limited independent D3-adapter conclusions do not replace complete D3/D6/D7 joint acceptance; PL-IR-01 retains its named unresolved gate.
+PL-IR-01 now has the authored stable-production-address/current-Observation algorithm; Preview/Effects merely preserves the current Observation selected by the new preparation and never turns a stable Locator address into runtime evidence. The exact repair remains pending independent review, while unresolved owner-plan/effects integration gates stay separate.
 
 ### 6.1 Canonical plans, bytes and public semantic extension
 
