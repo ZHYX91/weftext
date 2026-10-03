@@ -10,7 +10,7 @@ Source document ID: e4e7b253-954e-4f88-84bd-24bb25aac6c8.
 
 # D8 Acceptance Matrix
 
-Candidate status: D8-FA-r01; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S is 7e18168dad3e6d120fce0dd607dc10fa7894e252. Original acceptance, model, and platform evidence retains only its original scope; this candidate is not implementation evidence. The D3 conflict adapter, current D7 effects producers, and current qualification of portable Locators across replicas still require their respective coordination and independent acceptance. These integration gates do not retroactively cancel recovery of real historical decisions.
+Candidate status: D8-FA-r01 PL-IR-01 repair consumer; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S remains 7e18168dad3e6d120fce0dd607dc10fa7894e252 and historical evidence keeps only its original scope. This matrix now consumes the authored D3/D6 stable-production-address/current-Observation repair; D6 PL01–PL18 are design obligations, not executed product tests, and the exact repair still requires independent review before P1 can be closed. D3 conflict and current D7 effects gates remain separate.
 
 Revision: D8-FA-r01; candidate. Every row has positive and negative obligations, with no implicit passed status. Actual independent review supplies semantic-review evidence; platform/real-Core-pending remain implementation gates.
 
