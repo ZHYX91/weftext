@@ -80,7 +80,7 @@ D5 只拥有 Document Table 与 Node Collection 的结构语义术语。D4 Field
 | NodeRef | D3 | collection member identity | collection membership fact |
 | Field Value Occurrence | D4 | row-like Field editor source | table row |
 | PreparedActionBinding | D7 | 实际版本的强准备与原记录恢复 | D5-owned token |
-| RevisionTokenBinding/2 + RevisionTokenSource/2 | D6 | 受保护不透明 token 选择 tagged managed stamp 或 external version | D4 整数或 portable 重资格规则 |
+| RevisionTokenBinding/2 + RevisionTokenSource/2 | D6 | 受保护不透明 token 作为到 tagged managed stamp 或 external version 的稳定生产地址绑定；当前 observer 资格另由 SourceObservation/1 证明 | D4 整数、权限、运行时 selector 证据或第二套 portable 重资格 token family |
 | SourceRevisionPlan/1 + SourceStamp/1 | D6 | 原计划冻结的拟议 managed-after 基础 | 已 seal 的当前 source 或 D5 独立分配器 |
 | DependencyProof/2 + DependencyKey/2 | D6 与实际范围 owner | 十四种闭合 key 和九种 placement StructureRange | partial index 或猜出的完整空范围 |
 | ContentCompletionProof/3 | D6 | 具有真实生产 before/after 的已 seal 可携带效果 | sender 当前观察 token 或新的执行权限 |
@@ -91,7 +91,7 @@ SourceVersion/2仍是生产版本/history：managed variant保留原有 entityRe
 
 watcher gap、replacement或discontinuous rematerialization会使旧sourceToken以及依赖该观察的D5 locator失效，即使production SourceVersion相同也不能续认；I不能恢复这种资格。SourceObservation/1只是外层当前观察保护，不替换D5/D4既有inner sourceRevision、OccurrenceKey、Entry selector或revision-bound locator wire。
 
-D3/D5 不透明 Locator revision token 通过 RevisionTokenBinding/2 及 tagged RevisionTokenSource/2 解析，managed 和 external 都是真实来源分支。D4 数字内层 sourceRevision 则必须来自真实 managed 生产 revision，externalSequence 不能提供这个整数。只有确实需要 managed 内层 selector 的路径，才先显式获权 admission/save，再在 seal 后准备新请求；raw/read/repair/Draft/ordinary 仍独立判断资格，不在读取时自动写入，也不在 admission 未知时猜版本。
+D3/D5 不透明 Locator revision token 通过已认证 canonical RevisionTokenBinding/2 与 tagged RevisionTokenSource/2 解析为稳定生产地址。managed source 的唯一 canonical token 由原 winning plan/seal 与 sealed-outbox 关联建立；一次新读取再独立证明 current SourceObservation/1 的完整 sourceVersion 与该地址逐字相等，之后才使用准确 table/range 坐标。watcher gap 会使旧 sourceToken/runtime selector 失效，但不会 mint/改写稳定地址；新读取成功也不复活旧 structured operation。D4 数字内层 sourceRevision 仍须真实 managed 生产 revision，externalSequence 永不提供该整数。external persistent position 还需原 external-event 证据与当前 exact external SourceVersion Observation；普通 raw/read/repair/Draft 保留其合法 external-source 路径。
 
 H(D,E) 是 D6 连续封存的生产域历史，不是新的 D5 counter。新 managed after 消费同一计划的 SourceRevisionPlan 和检查式 H+1；epoch 不重置 H，外域 revision/externalSequence 不捐值。真正 raw no-op 及源码未变 owner 保留完整旧基础，不新增 source version/H；相同 bytes 的 external admission 则产生真实 managed after。可携带效果与当前 Observation 仍分别处理。
 
@@ -103,7 +103,7 @@ ordinary语义与strict|observed_only保存保护是独立两轴，ordinary可�
 
 observed_only的B/N耐久、未观察外部C可能被N安装覆盖、后续C可能再次替换current file、已观察competition或gap要求conflict/reprepare以及unknown install进入recovery_unknown，均继续由D6定义，D5不新增保存保证。semantic_pending(collection)只表示缺少collection全集proof，不表示empty，也不能把typed invalid、source invalid或缺少strong evidence洗成成功，更不能授权Action、all_result、bulk或Automation；后来r6的新证明只适用于r6及其当前Observation/SourceVersion/cut，不改写r5历史receipt。
 
-ConflictRecord 仍归 D6，NodeRef 归 D3，Field Value Occurrence 归 D4，PreparedActionBinding 归 D7。当前完整结果及 preparation producer、以及 portable Locator 在另一副本的资格，仍是明确内部协调依赖；D5 不自造合同。只有缺少实际 producer 的受影响 unseen 强路径返回 unavailable/owner_update_required；真实 saved/planned/unknown 记录先通过共同披露/domain/custody 连续性及原 key/fingerprint 查找，再准确交付原 saved 结果或恢复原计划。原生 D3 wire12 没有 D6 planToken/PreparedIntent；只有 D6 d6_commit_request/2 声明这些准备输入。新 owner 门禁不能重执行旧决议或改写其 bytes。
+ConflictRecord 仍归 D6，NodeRef 归 D3，Field Value Occurrence 归 D4，PreparedActionBinding 归 D7。PL-IR-01 现已有 D6 稳定地址 + D3 fresh-current-Observation 作者修复，等待本 exact candidate 的独立复核，而不再是 owner 算法未定义依赖。另一项 current complete-result/preparation/preview producer 协调仍开放。D5 不自造合同、不重签旧 runtime evidence；saved/planned/unknown 继续先于 unseen 当前业务门恢复。
 
 必须机械证明 fixed-S 六个 conceptId、owner、owned wire/code/UI/locale names、firstFreeze逐项保持。不存在 `TableRowId|RecordRef|CollectionRef|ViewRef` 新 public identifier。
 
