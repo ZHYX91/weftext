@@ -9,7 +9,7 @@ translation_status: source
 
 # D8 Direction、双向文本与可访问性
 
-候选状态：D8-FA-r01；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原验收、模型与平台证据仅保留其原有范围；本候选的存在不是实现证明。D3 冲突适配器、D7 当前效果生产端与跨副本 Locator 当前资格的联合协调仍须分别完成并独立接受；这些整合门不追溯取消真实历史决议的恢复义务。
+候选状态：D8-FA-r01 PL-IR-01 修复消费者；完整 owner 后像，未独立接受、未激活、未实施。固定来源 S 与历史 accessibility 证据只保留原范围。本文件消费 D3/D6 稳定生产地址/current Observation 作者修复用于 portable Locator 新读取；该 exact 修复仍待独立复核，不自行关闭 P1。D3 conflict/当前 D7 effects 门保持独立。
 
 revision: D8-FA-r01；candidate，属于D8规范。此文件逐项回答2026-09-01 RTL必审输入。内容保存、bidi交互、RTL shell和UI翻译分别验收，互不推导。
 
