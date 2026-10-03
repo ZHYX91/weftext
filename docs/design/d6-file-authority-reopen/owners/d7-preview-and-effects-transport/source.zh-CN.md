@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：b80e6c6f-648a-46f9-b5eb-8235f237b5f6。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威 PL-IR-01 修复消费者；未独立接受、未激活、未实施。固定 S 的历史标签/证据只保留原范围。本候选消费 D3/D6 稳定生产地址/current Observation 作者修复；该 exact 修复仍待独立复核，不自行关闭 P1。新增 D3 conflict preparation 与 D7 /3 binding 保持各自独立联合复核门。
 
 # D7 预览与完整效果运输
 
@@ -154,7 +154,7 @@ restoreMembership 的 present 只用于该 Node 当前 active Trash 的完整 sa
 
 有 entity_state_change 时其 before/after 与 installed/result.image 逐项相等；原 source_change/conditional_source_change 另运输实际 full source 前后与真实生产/拟议版本，branch_source 运输全部已读 head bytes，不用 canonicalStates 代替 source。相同 bytes 但 changed canonical claim/selected production version 的 source admission 仍给 source_change（若含真正 C 条件则依 §2.1 的 forceAdmission），CP3 before 取实际 wrapper.sourceVersion、after 取唯一真实 /2 source stamp + seal ChangeId。metadata-only open resolution 也有完整 canonical/control 投影；true resolved no-op 不再把旧 head 版本重新 admission 到当前 after。
 
-预览完整性比较的是同一 canonical+native 最终计划的所有实际 source、结构、生命周期、引用与 portable control 效果。Node/Annotation 的 typed reference/reply 与 D3 原完整 disposition/structural/payload 责任必须由真实 D3 owner 闭合，本运输只投影其获准计划，不以一个无引用 Resource 例或可显示全部 bytes 证明业务计划合法。未闭合的 owner 计划不能准备成功，不由 D7 增加写槽或另造 reference patch。D3 adapter 的限定独立结论不代替完整 D3/D6/D7 联合接受；portable Locator PL-IR-01 仍保留其具名未决门。
+portable Locator PL-IR-01 现已有稳定生产地址/current Observation 作者算法；Preview/Effects 只保留新 preparation 选中的当前 Observation，不把稳定 Locator 地址变成运行时证据。该 exact 修复仍待独立复核，未闭合 owner-plan/effects 整合门继续独立开放。
 
 ### 6.1 Canonical 计划、字节与公共语义扩展
 
