@@ -370,8 +370,8 @@
       "en": "Source Version",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "SourceVersion/2 remains the complete managed/external production-version union. The d6_source_revision/2 stable production address is authenticated by the original same-P RevisionTokenSealArtifact/1. The artifact's trustKeyId is resolved from D6 WorkspaceAuthorizationBundle/1: a protected WorkspaceTrustAnchor/1 authenticates WorkspaceTrustRootDeclaration/1, cumulative root-signed WorkspaceTrustDeclaration/1 records bind exact CommitDomain/profile keys to real declaration DecisionKeys and CP3 activation ChangeIds, validate_historical(K,C) selects the historical verifier at the artifact causal cut, and authorize_new_sign(K,currentCut) separately requires the current non-conflicted authorization plus a usable host-protected DomainSealKeyHandle inside the one P seal. CP3/Notice shapes remain unchanged.",
-      "exclusions": "Not a bare revision/digest/path/currentness proof/permission or sender attestation. A self-signed copied root, D4 Registry seed, D10 publisher/package key, current key after rotation, equal stamp/version/hash/bytes, I cache, or caller-provided key cannot authenticate a token. Public trust history is portable; WorkspaceTrustAnchor and private key handles are protected/non-portable. Loser/aborted/unproved signatures are not seals.",
+      "definition": "SourceVersion/2 remains the complete managed/external production-version union. The d6_source_revision/2 stable production address is authenticated by the original same-P RevisionTokenSealArtifact/1. The artifact trust chain begins from protected WorkspaceTrustAnchor/1 whose WorkspaceTrustRootFingerprint/1 hashes the complete D3-CJ/3 WorkspaceTrustRootDeclaration/1 including selfSignature under D6-Workspace-Trust-Root-Declaration/1 and is distinct from rootKeyId. The same fingerprint object is used by explicit import and revision-1 trust predecessor. WorkspaceTrustDeclaration/1 records bind exact CommitDomain/profile keys to real DecisionKey→CP3 activation cuts; validate_historical(K,C) selects historical verification while authorize_new_sign(K,currentCut) separately requires current non-conflicted authorization plus a usable DomainSealKeyHandle.",
+      "exclusions": "Not a bare revision/digest/path/currentness proof/permission or sender attestation. rootKeyId cannot substitute for WorkspaceTrustRootFingerprint/1. A self-signed copied root, D4 Registry seed, D10 package key, current key after rotation, equal stamp/version/hash/bytes, I cache, or caller-provided key cannot authenticate a token.",
       "ownedNames": [
         "SourceVersion",
         "sourceVersions",
@@ -939,8 +939,8 @@
       "en": "Commit Domain",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "一次D3/D6幂等decision、版本与恢复的命名空间；replica由WorkspaceRef+ReplicaEpoch，server由WorkspaceRef+AuthorityInstanceId闭合；revision-seal新签名资格还必须有WorkspaceAuthorizationBundle历史中对该exact domain/profile的current授权及匹配host-protected key handle",
-      "exclusions": "不是Workspace identity、global execution responsibility、跨设备余额，也不因control custody/文件复制自动继承private signing key",
+      "definition": "一次D3/D6幂等decision、版本与恢复的命名空间；replica由WorkspaceRef+ReplicaEpoch，server由WorkspaceRef+AuthorityInstanceId闭合；revision-seal新签名资格还必须有WorkspaceAuthorizationBundle历史中对该exact domain/profile的current授权及匹配host-protected key handle。continuation在continuationCut对旧server domain执行history_at：current K→同decision revoke(K)+authorize(new authority)，none→仅authorize(new authority)，conflicted/unproved→不激活。",
+      "exclusions": "不是Workspace identity、global execution responsibility、跨设备余额，也不因control custody/文件复制自动继承private signing key；continuation不能重复revoke一个already-none旧domain",
       "ownedNames": [
         "CommitDomain",
         "commitDomain"
@@ -966,8 +966,8 @@
       "en": "Replica Epoch",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Core显式登记文件副本时mint且同Workspace不复用的UUIDv4；registration同一P seal还为exact replica CommitDomain追加root-signed revision-seal key authorization，joining host私有DomainSealKeyHandle仅在该transition接纳后usable",
-      "exclusions": "不是AuthorityInstanceId、设备硬件ID、Automation lease、portable private key或从ReplicaRecord自动得到的签名权",
+      "definition": "Core显式登记文件副本时mint且同Workspace不复用的UUIDv4；replica_register只允许一个专用副作用：在同一decision中为该fresh ReplicaEpoch追加恰一条固定profile d6_revision_token_seal/1的root-signed authorize declaration，joining host私有DomainSealKeyHandle仅在该transition接纳后usable。replica_retire只把exact ReplicaRecord置inactive；authorize_new_sign因active-domain/fence失败而阻止后续签名，不自动revoke或删除历史授权。",
+      "exclusions": "不是AuthorityInstanceId、设备硬件ID、Automation lease、portable private key、通用policy_admin/trust admin、其它domain add/rotate/revoke，也不因ReplicaRecord/public declaration存在自动获得签名权",
       "ownedNames": [
         "ReplicaEpoch",
         "replicaEpoch"
@@ -1047,7 +1047,7 @@
       "en": "Portable Workspace Metadata",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "库内唯一承载identity/structure/lifecycle、WorkspaceAuthorizationBundle/1（Policy/3 + anchored append-only public trust history）、portable change/conflict与RevisionTokenSealArtifact/1的版本化文件集合；private keys/WorkspaceTrustAnchor/key handles不portable",
+      "definition": "库内唯一承载identity/structure/lifecycle、WorkspaceAuthorizationBundle/1（Policy/3 + anchored append-only public trust history）、portable change/conflict与RevisionTokenSealArtifact/1的版本化文件集合；private keys/WorkspaceTrustAnchor/key handles不portable。当前bundle profile的policy ComponentImage.version精确等于bundle.authorizationRevision而非Policy/3.revision；历史profile保留原版本映射。",
       "exclusions": "不保存全库current正文副本；不是durable execution ledger或index",
       "ownedNames": [
         "PortableWorkspaceMetadata",
@@ -1063,7 +1063,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "policy component可携root-signed declaration与历史artifact一起同步 / 复制portable files不复制WorkspaceTrustAnchor或签名权",
+      "exampleAndCounterexample": "policy component可携root-signed declaration、resolve_conflict successor与历史artifact一起同步 / 复制portable files不复制WorkspaceTrustAnchor或签名权，也不能用Policy.revision冒充bundle component version",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1236,8 +1236,8 @@
       "en": "Conflict Record",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "ConflictRecord/2 is the current new-FA portable conflict record addressed by the unchanged canonical ConflictKey/1 and ConflictId, with createdAtFrontier encoded as Frontier/2 and state open|resolution_prepared|resolved|superseded. ConflictKey/1 ordering, ConflictId format, and the D6-ConflictKey/1 hash domain are unchanged. Historical ConflictRecord/1 retains its original bytes, decoder, authorization/recovery obligations, and createdAtFrontier=Frontier/1. Current ConflictResolution/1 contains only source_merge, choose_source_head and policy_choice, which D6 can actually prepare. The undeployed owner_resolution candidate arm is removed. Clients navigate placement/lifecycle/identity conflicts directly to D3ConflictResolutionPrepare/1 in D3 §10.1; final submission retains identity_operation_request wire12 with its actual preparationBinding and the same DecisionKey/P decision. D3 owns complete typed selection, three-entity selected-branch copy and native resolution consumption. D7 owns the actual PreparedActionBinding/3 record and full EffectManifest/2/current preview transport; their coordinated producer and independent acceptance remain required before new prepared execution. Resolution input requires its immutable preparationBinding/input-use guard and cannot become raw input by stripping a token; real saved/planned/unknown records recover first under their original contract.",
-      "exclusions": "Not automatic merge, LWW, D3 bypass transaction, permission, or a reason to reinterpret Record/1 as Record/2. An external race, third_state, or unknown installation with no real sealed ChangeId cannot fabricate a ConflictKey head; equal hash/mtime/path is not conflict-history evidence. No permanent route-only failing RPC, free payload, new D6 route-success result, second D6 identity submit or second ledger. Removal of an undeployed candidate arm does not assert deployment or cancel the original decoder/pin/recovery duties of any historical record that actually exists.",
+      "definition": "ConflictRecord/2 remains the current new-FA portable conflict record addressed by unchanged ConflictKey/1 and ConflictId, with createdAtFrontier=Frontier/2; historical ConflictRecord/1 keeps Frontier/1 and original bytes/decoder. Current D6 policy resolution is wireVersion3 + ConflictResolution/2: source_merge and choose_source_head remain typed D6 arms, while policy_bundle_choice must select one exact WorkspaceAuthorizationBundleAddress/1 from expectedKey.heads. When trust histories diverge, Core validates every head from the common anchored root/prefix, derives all losing-branch root-signed compromise facts into TrustConflictCarry/1, and appends at most one root-signed resolve_conflict WorkspaceTrustDeclaration/1 on the selected chain; TrustConflictOutcome/1 makes the resulting exact domain/profile current states explicit. The same original P seal installs the resulting policy component and conflict-record effect. Placement/lifecycle/identity conflicts continue to D3 typed resolution.",
+      "exclusions": "Not automatic merge, LWW, arrival-order/current-host selection, allow union, a bare Policy/3 choice, D3 bypass, second ledger/CAS/CP4, or permission. Missing/corrupt branch evidence, different roots, unproved common prefix, omitted compromise carry or unavailable required root handle cannot be repaired by guessing. Losing branch public history is retained and a compromise fact is never silently discarded. Unsealed external/unknown state still cannot fabricate a ConflictKey head.",
       "ownedNames": [
         "ConflictRecord",
         "conflictRecord",
@@ -1254,7 +1254,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "A new sealed concurrent head creates/supersedes records under the actual complete key and /2 Frontier while the old /1 record remains byte-stable / two same-key records are not created merely to simulate a /1→/2 upgrade, and an unsealed external competition gets no invented head",
+      "exampleAndCounterexample": "From common n/K1/P, branch A ordinary-rotates K1→K2 and branch B compromise-revokes K1. Selecting A's exact bundle requires carrying B's compromise into one root-signed resolve_conflict successor; K2 may remain current because the compromise names K1, while K1 historical artifacts are valid only before B's original compromise cut. Selecting merely Policy P or omitting branch B is invalid.",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1476,7 +1476,7 @@
         "annotationRevisionToken"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "D2/D3 opaque revision-token lexical decoders stay unchanged. D6 Control §1.5.1 authenticates the stable binding through the original RevisionTokenSealArtifact/1. WorkspaceAuthorizationBundle/1 is the real trust producer: protected WorkspaceTrustAnchor/1 + root-signed declaration history + declaration DecisionKey/CP3 activation cut derive RevisionTokenSealVerificationKey/1. validate_historical verifies historical artifacts at their causal cut; authorize_new_sign separately gates new same-P signing and requires a usable DomainSealKeyHandle. CP3/Notice remain closed and unchanged; sender/current-key/equal stamp/I never substitutes."
+      "contract": "D6 §1.5.1 authenticates stable RevisionTokenBinding/2 through the original RevisionTokenSealArtifact/1. WorkspaceTrustRootFingerprint/1 hashes complete D3-CJ/3 root declaration bytes including selfSignature under its own domain and is distinct from rootKeyId; protected anchor/import and revision-1 predecessor use that same object. validate_historical verifies the artifact at its causal cut, including inherited compromise facts from trust-conflict resolution; authorize_new_sign separately gates new same-P signing and requires active exact domain plus usable DomainSealKeyHandle. CP3/Notice remain closed."
     },
     {
       "owner": "D3 wire / D6 trusted proof",
@@ -1524,7 +1524,7 @@
         "ReplicaEpoch"
       ],
       "conceptId": "weftext.term.replica-epoch",
-      "contract": "D6 Control/2 defines ReplicaEpoch and registration. The one registration P seal atomically advances replica_registry plus WorkspaceAuthorizationBundle with a root-signed authorize declaration/PoP for that exact replica CommitDomain; the joining private handle becomes usable only after admission. Registration is not execution-responsibility takeover or Workspace continue."
+      "contract": "D6 Control defines ReplicaEpoch registration. replica_register can mint exactly one fresh epoch and append exactly one same-decision fixed-profile authorize declaration for that exact replica CommitDomain; it grants no general trust administration. replica_retire changes only the ReplicaRecord to inactive, so authorize_new_sign later fails active-domain/fence; trust revoke for loss/compromise is a separate root-authorized decision."
     },
     {
       "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
@@ -1611,7 +1611,7 @@
         "d10_control_self"
       ],
       "conceptId": "weftext.term.workspace-bootstrap-plan",
-      "contract": "Actual fresh bootstrap uses wireVersion3/profile3/Policy3 plus WorkspaceTrustGenesis/1. Issuer/target custody anchors the root and the same original P seal establishes exact target-server domain authorization and target activation. Current D7 symbolic producer decodes Plan3 explicitly; Plan2 was unactivated and gains no migration decoder; genuine Plan1 history remains original. D10 publisher/package trust and D4 Registry seed are not this Workspace root."
+      "contract": "Actual fresh bootstrap uses wireVersion3/profile3/Policy3 plus WorkspaceTrustGenesis/1. Issuer/target custody establishes WorkspaceTrustAnchor/1 with the exact WorkspaceTrustRootFingerprint/1 over complete canonical root declaration bytes; the same original P seal establishes exact target-server domain authorization and target activation. Current D7 symbolic producer decodes Plan3; Plan2 remains unactivated and genuine Plan1 history remains original."
     },
     {
       "owner": "D6 Storage §7.2.1 / D10 Control §16",

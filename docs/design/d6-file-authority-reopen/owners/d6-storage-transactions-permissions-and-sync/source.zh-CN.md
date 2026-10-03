@@ -48,7 +48,7 @@ Document/Resource 的 current bytes 与 portable metadata 共同形成文件型�
 - 每个 live Node 的 parent 与 sibling order；order 以每个 parent 的有序 child Ref 列表作为唯一 current 表示，child.parent 与 ordinal 由该列表机械导出，禁止两份可独立修改表示；
 - Trash forest、restore membership 与 original-location hint；
 - Annotation current closed value 及 owner；
-- portable Registry binding、共享 series/scope 配置，以及包含 `Policy/3` 与已锚定公开 revision-seal 信任历史的版本化 `WorkspaceAuthorizationBundle/1`；
+- portable Registry binding、共享 series/scope 配置，以及包含 Policy/3 与已锚定公开 revision-seal 信任历史的版本化 WorkspaceAuthorizationBundle/1；
 - Replica registration、ChangeRecord、Frontier、InstallationNotice、ContentCompletionProof、ConflictRecord；
 - sealed managed production version 的 immutable `RevisionTokenSealArtifact/1` record；
 - 必须可携带的 source semantic state 与 observation epoch。
@@ -56,6 +56,8 @@ Document/Resource 的 current bytes 与 portable metadata 共同形成文件型�
 文件路径、标题、内容摘要、mtime、inode/file-id 都不是 D3 identity。FileBinding 只说明在一个 portable version 中哪个普通文件承载指定 Ref 的当前 bytes；外部 rename/move 可经协调更新 FileBinding，不改变 Ref。Node parent/order 不从文件夹层级猜测；文件夹可作为 UI/存储映射，但不能替代结构 owner。
 
 Portable metadata 的单个记录必须采用版本化 closed format、确定排序和完整 source-of-truth 关系。一个事实不得同时在两个 sidecar 中可独立写。分片只影响物理布局，读取器必须能通过 workspace root 和版本化目录恢复唯一 current record set。
+
+当前 WorkspaceAuthorizationBundle/1 profile 继续使用既有 policy PortableComponentKey，但 ComponentImage.version 精确等于 bundle.authorizationRevision，而不是 Policy/3.revision。policy-only 与 trust-only transition 都只推进一次该 component version。历史 policy-component profile 保留产生其 bytes 的原版本映射。
 
 当前 revision-seal profile 在受管 `.weftext-meta` 根下维护一个按 `RevisionTokenSealKey/1` 逻辑寻址的 revision-token-seal collection；exact canonical artifact bytes 与唯一性是规范要求，接纳后 immutable。既有 logical policy component 另存 exact `WorkspaceAuthorizationBundle/1` bytes：独立 authorizationRevision、完整 Policy/3、一条 WorkspaceTrustRootDeclaration/1、trustRevision 与累计 root-signed WorkspaceTrustDeclaration/1 chain；不新增 PortableComponentKey kind。接收端只能从合法 bootstrap 或显式 fingerprint import 建立的受保护 WorkspaceTrustAnchor/1 认证 root，再验证 declaration signature/predecessor、每条 declaration DecisionKey→CP3 activation ChangeId 与 causal cut。self-signed copied root、sender identity、D4 Registry seed、D10 publisher/package key 或 arrival order 都不是 authority。root/domain private key 与 opaque key handle 永不 portable；sync provider 只转发 public bundle/artifact bytes，绝不是 signing authority。
 
@@ -340,7 +342,7 @@ saved、planned、unseen必须分流。saved只做原request/fingerprint/continu
 
 ### 9.1 Replica registration 不等于 execution takeover
 
-新设备获得完整 portable Workspace 时，先从受保护 WorkspaceTrustAnchor/1 认证 Workspace root，再验证 workspace identity、portable metadata chain 与 WorkspaceAuthorizationBundle/Registry，然后显式 register 新 ReplicaEpoch。joining host 在受保护存储生成 domain key；一个原 P seal 以同一 DecisionKey/ChangeId 同时推进 replica_registry 与 policy/WorkspaceAuthorizationBundle，接收端把 active ReplicaRecord 与 exact root-signed authorize declaration/PoP 交叉验证。注册只建立该 ordinary content CommitDomain 与 exact revision-seal key authorization。它不接管旧 P 的 ApprovalUse、claim、Money、external unknown 或 Automation lease，也不使用 D3 continue_workspace。
+新设备获得完整 portable Workspace 时，先从受保护 WorkspaceTrustAnchor/1 认证 Workspace root，再验证 workspace identity、portable metadata chain 与 WorkspaceAuthorizationBundle/Registry，然后显式 register 新 ReplicaEpoch。joining host 在受保护存储生成 domain key；一个原 P seal 以同一 DecisionKey/ChangeId 同时推进 replica_registry 与 policy/WorkspaceAuthorizationBundle，接收端把 active ReplicaRecord 与 exact root-signed authorize declaration/PoP 交叉验证。注册只建立该 ordinary content CommitDomain 与 exact revision-seal key authorization。replica_register capability 只授权这一条 fresh ReplicaEpoch 及其同 decision、固定 profile 的单条 authorize declaration，不是通用 trust administration。replica_retire 只把 ReplicaRecord 改为 inactive；authorize_new_sign 本来就要求 active domain/fence，因此 inactive 足以阻止该 epoch 后续签名，retire 不合成 revoke，也不删除历史授权。loss/compromise revoke 必须另走 root-authorized trust decision。注册/retire 都不接管旧 P 的 ApprovalUse、claim、Money、external unknown 或 Automation lease，也不使用 D3 continue_workspace。
 
 执行域接管必须另有完整 continuity proof，证明原 decision/receipt、charges、unknown、claims、standing approvals、stop state 全部连续且旧执行者已失效；无法证明则该执行能力暂停，但普通 replica content 继续。
 
@@ -351,7 +353,7 @@ P 丢失时，原 execution decisions/unknown 不能从 files 重建。若 porta
 同步 provider 只运输 ordinary files 和 portable metadata immutable/versioned records；
   不运输活动 control.sqlite3/WAL/SHM、derived index 或 Draft。
 
-新FA portable change使用ContentCompletionProof/3。接收端只有在某ChangeId的InstallationNotice、ContentCompletionProof/3、全部listed component bytes/metadata以及proof内生产SourceVersion before/after都到齐并互相验证后，才接纳该change到本域Frontier。对每个 non-absent managed sourceChanges.after，还必须到齐 RevisionTokenSealKey/1={proof.changeId,entityRef} 对应的 exact RevisionTokenSealArtifact/1。通过既有授权与 portable-history/trust 门后，接收端验证生产 CommitDomain 的历史 trust declaration，取得 exact RevisionTokenSealVerificationKey/1，验证 artifact 的 domain-separated Ed25519 signature 与 canonical bytes，strict decode association，并把 association.decisionKey/changeId/sourceVersion 及 SourceStamp 字段与 CP3 逐字核对。sender/forwarder 身份、相同 SourceStamp/SourceVersion/digest 或重算 token 都不够。只有两条证据链都验证成功，才能持久化 canonical token→production-version mapping。proof中的SourceVersion是生产历史，不是发送方current SourceObservation；随后接收端才根据自己的CommitDomain、当前FileObjectBinding、observationEpoch、evidence pins和continuity建立新的SourceObservation/SourceVersionRef，不能复制发送方sourceToken。
+新FA portable change使用ContentCompletionProof/3。接收端只有在某ChangeId的InstallationNotice、ContentCompletionProof/3、全部listed component bytes/metadata以及proof内生产SourceVersion before/after都到齐并互相验证后，才接纳该change到本域Frontier。对每个 non-absent managed sourceChanges.after，还必须到齐 RevisionTokenSealKey/1={proof.changeId,entityRef} 对应的 exact RevisionTokenSealArtifact/1。通过既有授权与 portable-history 门后，接收端先由受保护 anchor 认证 exact WorkspaceTrustRootFingerprint/1，再验证适用 bundle/branch history，并在 artifact 已证明 cut 上对生产 CommitDomain 运行 validate_historical，取得 exact RevisionTokenSealVerificationKey/1；随后验证 artifact 的 domain-separated Ed25519 signature 与 canonical bytes，strict decode association，并把 association.decisionKey/changeId/sourceVersion 及 SourceStamp 字段与 CP3 逐字核对。sender/forwarder 身份、相同 SourceStamp/SourceVersion/digest 或重算 token 都不够。只有两条证据链都验证成功，才能持久化 canonical token→production-version mapping。proof中的SourceVersion是生产历史，不是发送方current SourceObservation；随后接收端才根据自己的CommitDomain、当前FileObjectBinding、observationEpoch、evidence pins和continuity建立新的SourceObservation/SourceVersionRef，不能复制发送方sourceToken。
 
 ContentCompletionProof/2、InstallationNotice/1及更早saved transport继续原decoder/bytes/接纳规则，不机械改成/3。Document-before-sidecar、sidecar-before-Resource、生产版本metadata不完整、placeholder未materialized或proof/components不一致都是incomplete，不是empty/deleted/committed，也不能从I补齐。
 
@@ -363,7 +365,7 @@ ContentCompletionProof/2、InstallationNotice/1及更早saved transport继续原
 
 新FA记录使用ConflictRecord/2并把created cut绑定为Frontier/2；ConflictKey/1、ConflictSubject、ConflictId的`D6-ConflictKey/1` hash domain及排序均不升版。ConflictRecord/1继续按原Frontier/1 decoder/bytes作为历史输入，不允许version=1却按Frontier/2解释。closed shape、字段decoder和read/prepare接口由同一P1 Control正式冻结；Storage只拥有portable存储、版本选择和恢复语义。
 
-state仍含open、resolution_prepared、resolved、superseded。新head使旧open/resolution_prepared记录superseded并建立关联的新key/record；resolution绑定exact current key/heads与owner-specific plan，最终写仍编译为原D3/D6 typed request。resolved/superseded历史不重写成新version，也不按当前Frontier重新hash。
+state仍含open、resolution_prepared、resolved、superseded。新head使旧open/resolution_prepared记录superseded并建立关联的新key/record；resolution绑定exact current key/heads与owner-specific plan，最终写仍编译为原D3/D6 typed request。resolved/superseded历史不重写成新version，也不按当前Frontier重新hash。 当前 policy_concurrent 冲突由 Control §9.4 的 wireVersion3/ConflictResolution/2 处理：必须选择一个 exact head 与 WorkspaceAuthorizationBundleAddress/1，不能只给裸 Policy/3。trust history 分叉时，resolver 从共同 root/prefix 验证全部 heads，派生 losing branch 全部 compromise 事实，并在 selected chain 上写一条 root-signed resolve_conflict successor；唯一 P seal 同时安装结果 policy component 与 conflict resolution effect。losing branch bytes/public trust declarations 继续保留。禁止 arrival-order/LWW、allow union、第二 ledger 或中间 trust prefix。
 
 至少覆盖：
 

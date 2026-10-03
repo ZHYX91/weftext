@@ -199,7 +199,7 @@ strict 路径在每个点验证不会静默丢失已观察竞争字节；observe
 
 ### PL-IR-01 便携位置设计验收表
 
-PL01–PL30 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
+PL01–PL35 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
 
 | ID | 场景 | 必须结果 |
 |---|---|---|
@@ -235,6 +235,11 @@ PL01–PL30 仅是本修复候选的设计/一致性义务，**尚未作为产�
 | PL29 | 对同一 exact V 的两份非逐字相等 artifact、不同 token 都真实通过 anchored root/history 与 CP3 | 可达 integrity 矛盾；Core 不按 arrival order/current host/current key 选择，必须进入 repair/conflict；与伪造第二 artifact 的普通拒绝严格区分 |
 | PL30 | K1→K2 rotation/revoke 后删除并重建 Derived Index，但 public trust history 与 artifacts 完整 | I rebuild 只能重验受保护 anchor、累计 declarations、activation ChangeRecords 与 exact artifacts 后派生 current/historical projection；绝不创建 anchor、private handle、declaration、token、signature 或 signing authority |
 
+| PL31 | 显式 anchor import 输入 root declaration R、expected fingerprint F，而 caller 误把或恶意把 R.rootKeyId 当成 declaration fingerprint | Core strict-decode R，复核 Workspace/key/selfSignature，按包含 selfSignature 的 canonicalRootDeclarationBytes 和 D6-Workspace-Trust-Root-Declaration/1 域计算 WorkspaceTrustRootFingerprint/1，再与 F 逐字比较。rootKeyId 属于不同值/域，不能匹配或 coercion；revision-1 predecessor 使用同一个 fingerprint object |
+| PL32 | 共同 bundle n 为 Policy P、current K1；branch A 合法 ordinary rotate K1→K2，branch B 合法 revoke K1 mode=compromise；两者均为 root-signed n+1 successor，形成 policy_concurrent | 当前 wire3 policy_bundle_choice 精确选择 A 的 head+bundle address 与 P。Core 从共同 root/prefix 验证两支，把 B compromise 派生为 TrustConflictCarry/1，在 A 上 root-sign 一条 resolve_conflict declaration；由于 inherited compromise 指向 K1 而非 K2，结果 keep_current K2。两支/losing history 均保留；K1 artifact 只有在 B 原 compromise activation cut 之前才历史有效。不存在 arrival/LWW/allow-union |
+| PL33 | 同一 trust conflict 中 selected bundle digest/revision 与 head 不符、某 branch CP3/declaration bytes 缺失、roots 不同、trust 分叉但无 usable root handle，或 receiver 收到遗漏 B 的 inheritedCompromises 的 resolve_conflict | prepare 或 receiver admission 以 unavailable/integrity-conflict 失败，零 canonical successor。carry set 由 Core 派生且必须完整，caller 无法通过省略抹掉 compromise；不得 fallback 成 policy-only、猜 head、换 current key 或另做第二 repair commit |
+| PL34 | old authority 已 fenced 后 continue 到 fresh server B2 | continuationCut 上：current rotated K1b → 同 decision 追加 revoke(K1b)+authorize(B2)；此前 revoke(K1,loss) 已使状态 none → 同 decision 只 append authorize(B2)；conflicted/gapped/unproved → 不激活。一或两条 declaration 共用一个 DecisionKey/activation ChangeId且无 current 中间 prefix；此前 loss/compromise facts 保持 public history |
+| PL35 | 仅信任变化的策略组件更新、全新副本注册、随后停用副本 | 仅信任变化时，bundle.authorizationRevision 与 policy ComponentImage.version 各推进一次，而 Policy/3.revision 不变。replica_register 只能创建自身全新 ReplicaEpoch，并在同一决议追加单条固定 profile 的 authorize；不能管理其它提交域或密钥。replica_retire 只把记录置为 inactive，authorize_new_sign 随后因 active-domain gate 失败；不得隐式 revoke 或删除历史授权 |
 ## 6. 权限与非披露测试
 
 至少覆盖：
@@ -361,7 +366,7 @@ P1 在本 Impact 作者后像之后仍有 PROPOSAL/replacements routing；P2 D3/
 | 原两个 CAS 点 | planning 恰预留最后一个名额，seal 包括逐字无操作在内只消费一次；r6 之后仍重放原 r5，不重新准入或收费。 |
 | 安装与封存之间停止 | 真实物理安装后停止胜出，保留原屏障、B/N 和来源；第三状态暂停，只有安全权威中止释放计次，费用不自动退回。 |
 | 外部确认 | 受信事件只改变独立确认记录，两个 CAS 都重验；直接原 D6 请求不能绕过，保存 consent 先重放。 |
-| 引导版本 | 新 profile3、Plan2 在原 D3 决议产生准确显式 Policy3 及完整 Registry、Calendar 初始化；旧 family 替换或重放不新增授权。 |
+| 引导版本 | 新 profile3、Plan3 在原 D3 决议产生准确显式 Policy3、WorkspaceTrustGenesis1 及完整 Registry、Calendar 初始化；Plan2 保持未激活，真实旧 family Plan1 替换或重放不新增授权。 |
 | 真实 Registry 激活 | 可移植 Registry 改变获得唯一严格 ChangeId、CP3 和原子目录选择器；Registry 不变的纯 P 变化没有内容版本，源与 H 均不增加。 |
 | 调度连续性 | 无关正文或 Entry 变化可推进；删除重建或规则复原永久改变绑定；观察或收件箱缺口暂停；容量不足先原子标缺口再允许普通源继续。 |
 | 执行责任 | 验证完整及空范围，保留共享账户债务、剩余次数为零的原准入、全部发生项和发送未知及停止容量；新执行前隔离旧持有者。 |

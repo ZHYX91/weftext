@@ -1190,7 +1190,7 @@ A protected supplemental planned approval is exactly its complete planned_approv
        meters:[PricingMeter/1],
        evidence:EvidenceTicket/1}
 
-Publisher/package trust in this section is deployment-extension authenticity only. A D10 trust record, PublisherIdentity, NamespaceClaim, PackageManifest signature, package key rotation/revocation, deployment administrator, or package install order never creates or replaces D6 WorkspaceTrustAnchor/1, WorkspaceTrustRootDeclaration/1, WorkspaceTrustDeclaration/1, DomainSealKeyHandle/1, CommitDomain signing authority, Workspace policy authority, or author-write permission. D6 revision-seal trust is independently anchored and versioned inside the WorkspaceAuthorizationBundle/1; D10 package signatures cannot satisfy its bootstrap, registration, rotate/revoke, historical-validation, or authorize_new_sign gates.
+Publisher/package trust in this section is deployment-extension authenticity only. A D10 `trust` record, `PublisherIdentity`, `NamespaceClaim`, `PackageManifest` signature, package key rotation/revocation, deployment administrator, or package install order never creates or replaces D6 `WorkspaceTrustAnchor/1`, `WorkspaceTrustRootDeclaration/1`, `WorkspaceTrustDeclaration/1`, `DomainSealKeyHandle/1`, `CommitDomain` signing authority, Workspace policy authority, or author-write permission. D6 revision-seal trust is independently anchored and versioned inside the `WorkspaceAuthorizationBundle/1`; D10 package signatures cannot satisfy its bootstrap, registration, rotate/revoke, historical-validation, or `authorize_new_sign` gates.
 
     NamespaceClaim/1 = {
       namespaceId:D4.SemanticNamespaceId,
