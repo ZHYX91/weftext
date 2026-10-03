@@ -48,7 +48,7 @@ Document/Resource 的 current bytes 与 portable metadata 共同形成文件型�
 - 每个 live Node 的 parent 与 sibling order；order 以每个 parent 的有序 child Ref 列表作为唯一 current 表示，child.parent 与 ordinal 由该列表机械导出，禁止两份可独立修改表示；
 - Trash forest、restore membership 与 original-location hint；
 - Annotation current closed value 及 owner；
-- portable Registry binding、共享 series/scope config，以及包含 Policy/3 与已锚定 public revision-seal trust history 的 versioned WorkspaceAuthorizationBundle/1；
+- portable Registry binding、共享 series/scope 配置，以及包含 `Policy/3` 与已锚定公开 revision-seal 信任历史的版本化 `WorkspaceAuthorizationBundle/1`；
 - Replica registration、ChangeRecord、Frontier、InstallationNotice、ContentCompletionProof、ConflictRecord；
 - sealed managed production version 的 immutable `RevisionTokenSealArtifact/1` record；
 - 必须可携带的 source semantic state 与 observation epoch。

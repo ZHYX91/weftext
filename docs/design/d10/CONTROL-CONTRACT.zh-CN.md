@@ -1189,7 +1189,7 @@ ApprovalUse 按完整原 DecisionKey 唯一，请求必须准确派生该键。�
        meters:[PricingMeter/1],
        evidence:EvidenceTicket/1}
 
-本节 publisher/package trust 只证明 deployment extension authenticity。任何 D10 trust record、PublisherIdentity、NamespaceClaim、PackageManifest signature、package key rotation/revocation、deployment administrator 或 install order，都不能创建/替换 D6 WorkspaceTrustAnchor/1、WorkspaceTrustRootDeclaration/1、WorkspaceTrustDeclaration/1、DomainSealKeyHandle/1、CommitDomain signing authority、Workspace policy authority 或 author-write permission。D6 revision-seal trust 由 WorkspaceAuthorizationBundle/1 独立锚定和版本化；D10 package signature 不能满足其 bootstrap、registration、rotate/revoke、historical validation 或 authorize_new_sign 门。
+本节的发布方与扩展包信任只用于证明部署扩展的真实性。任何 D10 `trust` 记录、`PublisherIdentity`、`NamespaceClaim`、`PackageManifest` 签名、包密钥轮换或撤销、部署管理员资格或安装顺序，都不能创建或替换 D6 `WorkspaceTrustAnchor/1`、`WorkspaceTrustRootDeclaration/1`、`WorkspaceTrustDeclaration/1`、`DomainSealKeyHandle/1`，也不能授予 `CommitDomain` 签名资格、工作区策略管理权或作者写权限。D6 的 revision-seal 信任由 `WorkspaceAuthorizationBundle/1` 独立锚定并版本化；D10 的扩展包签名不能满足其引导、注册、密钥轮换或撤销、历史验证以及 `authorize_new_sign` 门。
 
     NamespaceClaim/1 = {
       namespaceId:D4.SemanticNamespaceId,
