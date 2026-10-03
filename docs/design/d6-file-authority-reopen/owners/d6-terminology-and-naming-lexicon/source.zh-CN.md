@@ -176,7 +176,9 @@ saved 决议只在当前原实际效果/结果披露范围的交付授权下重�
 
 ## 7. 仅供冲突解决的安装输入
 
-ConflictInstallInput/1 是 D6 Control §3.1.1 的受保护 installation-before 类型，不是 SourceObservation 或 SourceVersionRef。其 exact DecisionKey/conflict/key/installed-head/物理 source-metadata/generation/audience/preparation 关联无 ordinary read/write 用途，并与 D3ResolutionInputUse/1 不可分离。普通 conflict 无 current Observation 规则保持。SourceRevisionPlan/2 只为 D3 canonical-resolution managed after 定义显式内部 decoder；/1 保持 ordinary/fresh source decoder。二者使用同一 SourceStamp、当前生产域 H 和唯一 seal ChangeId。同 bytes 但所选生产版本/canonical claim 改变是真实 admission；metadata-only source-unchanged resolution 不增 H，全空且已证明的 resolved 选择为 no_op。这些是既有 Source Version/Conflict/Dependency Proof owner 下技术投影，不是新内容身份、公共 concept ID、alias 或 D6 业务 mutation owner。D3 拥有所选 lifecycle 矩阵与 canonical+native 合成效果；D7 拥有完整 /3 binding 和 preview 运输。真实已有 record 保留原 version/pin/guard/recovery 义务。当前候选与 D7 整合仍须独立接受。
+ConflictInstallInput/1 继续是 D6 Control §3.1.1 仅供 D3 §10.1 使用的受保护 installation-before 类型，并与 D3ResolutionInputUse/1 不可分离；SourceRevisionPlan/2 继续只解码 D3 canonical-resolution managed after。独立的 D6 §9.4 source-conflict 路径只为 source_merge/choose_source_head 使用 SourceConflictBefore/1 + SourceConflictVersionBasis/1 与 SourceRevisionPlan/3。before 绑定真实已安装 managed production version/FileObjectBinding/source+metadata pins；basis 绑定完整 sealed base/all-head production versions 或 exact chosen-head production version。两条路径都不产生普通 SourceObservation/SourceVersionRef，冲突 subject 都不进入 sourceInputs，也不能用于 Query、D8、普通 save 或另一个 owner 的 resolver；其它实际 source 读取仍使用真实 current Observation。
+
+/1 继续是 ordinary/fresh-source decoder。/2 与 /3 都保留当前 production-domain H、不可变 SourceStamp、单 planning CAS、唯一 seal ChangeId 与原 recovery。/3 中 choose_source_head 即使 bytes 相同但 selected production SourceVersion 不同，仍是真实 admission/H+1；真正 source-unchanged merge 或已经安装 exact selected version 不产生 /3/H/sourceChanges，尽管 conflict control 仍可 portable。CP3 before 永远是真实物理 before。这些只是既有 Source Version/Conflict/Dependency Proof owner 下的技术投影，不新增内容身份、公共 concept ID、alias 或第二业务 owner；现有记录保持原 decoder/pin/guard/recovery，D3 /2 授权没有扩张。
 
 ## 8. D10 控制、引导与连续性的联合名称
 
