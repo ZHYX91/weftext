@@ -1326,16 +1326,16 @@ Finite read-only delivery lifetime of a complete semantic manifest. One epoch fi
     "owner": "D6 bootstrap / D7 display / D10 consumer",
     "names": [
       "WorkspaceBootstrapPlan/1",
-      "WorkspaceBootstrapPlan/2",
+      "WorkspaceBootstrapPlan/3",
       "WorkspaceBootstrapProfile/3",
       "Policy/3",
       "d6_workspace_bootstrap_plan1",
-      "d6_workspace_bootstrap_plan2",
+      "d6_workspace_bootstrap_plan3",
       "d7_symbolic_json2",
       "d7_planned_preview_open",
       "d7_planned_preview_opened"
     ],
-    "rule": "D7 consumes actual complete D6 Plan2/Profile3/Policy3, while real already-issued families fixed to profile1/2 retain original Plan1 for their authorized replacement, uncommitted create/fork and recovery. Current symbolic-effect version2 payloadFormat is the closed Plan1|Plan2 encoding union selected by the protected family and actual decoder, not caller downgrade; no relabeling or Policy3 injection. D10 planned-preview2 restores original DecisionKey2 and actual Manifest2/EffectBytes2, not another producer or decision. Historical Plan1/symbolic1/Manifest1 real records retain exact decoding and custody; issuer A never replaces inactive target W/B domain. D7 Preview Transport section8 owns the exact wire2 D6/PAB3 planned-preview producer; D10 only consumes it and its complete original pinned semantics. D10AuthorPreparationLink is a separate atomic protected association, not a D7 member or second submit."
+    "rule": "D7 consumes actual complete D6 Plan3/Profile3/Policy3, while real already-issued families fixed to profile1/2 retain original Plan1 for their authorized replacement, uncommitted create/fork and recovery. Current symbolic-effect version2 payloadFormat is the closed Plan1|Plan2 encoding union selected by the protected family and actual decoder, not caller downgrade; no relabeling or Policy3 injection. D10 planned-preview2 restores original DecisionKey2 and actual Manifest2/EffectBytes2, not another producer or decision. Historical Plan1/symbolic1/Manifest1 real records retain exact decoding and custody; issuer A never replaces inactive target W/B domain. D7 Preview Transport section8 owns the exact wire2 D6/PAB3 planned-preview producer; D10 only consumes it and its complete original pinned semantics. D10AuthorPreparationLink is a separate atomic protected association, not a D7 member or second submit."
   }
 ]
 ```

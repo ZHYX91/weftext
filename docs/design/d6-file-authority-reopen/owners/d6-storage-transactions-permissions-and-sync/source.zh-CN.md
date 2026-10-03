@@ -24,7 +24,7 @@ D6-FA-r01 的首要变化是把当前作者字节、可移植控制事实、不�
 | Node/Resource/Annotation identity、分配、不复用事实 | Portable Workspace Metadata | 库内可移植元数据 | 可复制 |
 | Node parent/order、lifecycle、Trash 恢复 membership、文件绑定 | Portable Workspace Metadata | 库内可移植元数据 | 可复制 |
 | Annotation 当前 closed value | Portable Workspace Metadata 中的普通数据记录 | 库内可移植数据文件 | 可复制 |
-| 共享 Registry/config、ACL/policy、trust 声明 | Portable Workspace Metadata | 库内可移植控制文件；凭据/私钥除外 | 可复制并按 trust 规则验证 |
+| 共享 Registry/config 与 WorkspaceAuthorizationBundle/1（Policy/3 + 已锚定 public trust history） | Portable Workspace Metadata | 库内可移植控制文件；凭据/私钥/host key handle 除外 | 可复制，但必须通过 anchor/history 验证 |
 | 已认证 managed revision-seal artifact（`RevisionTokenSealArtifact/1`） | Portable Workspace Metadata | 受管 `.weftext-meta` 根下 immutable/versioned record | 只随原始 bytes 与 trust history 一并可复制 |
 | 原 request/decision/receipt、事务恢复、unknown、批准/claim/Money、revision-seal outbox item、必要 pins | Durable Control Store | 库外耐久 SQLite + 私有 pin 区 | 不由普通文件同步复制消费资格 |
 | metadata/search/query candidate/OCR 等派生缓存 | Derived Index Store | 库外设备本地 SQLite | 可删除重建，不同步 |
@@ -48,7 +48,7 @@ Document/Resource 的 current bytes 与 portable metadata 共同形成文件型�
 - 每个 live Node 的 parent 与 sibling order；order 以每个 parent 的有序 child Ref 列表作为唯一 current 表示，child.parent 与 ordinal 由该列表机械导出，禁止两份可独立修改表示；
 - Trash forest、restore membership 与 original-location hint；
 - Annotation current closed value 及 owner；
-- portable Registry binding、共享 series/scope config、共享 ACL/policy/trust 声明；
+- portable Registry binding、共享 series/scope config，以及包含 Policy/3 与已锚定 public revision-seal trust history 的 versioned WorkspaceAuthorizationBundle/1；
 - Replica registration、ChangeRecord、Frontier、InstallationNotice、ContentCompletionProof、ConflictRecord；
 - sealed managed production version 的 immutable `RevisionTokenSealArtifact/1` record；
 - 必须可携带的 source semantic state 与 observation epoch。
@@ -57,7 +57,7 @@ Document/Resource 的 current bytes 与 portable metadata 共同形成文件型�
 
 Portable metadata 的单个记录必须采用版本化 closed format、确定排序和完整 source-of-truth 关系。一个事实不得同时在两个 sidecar 中可独立写。分片只影响物理布局，读取器必须能通过 workspace root 和版本化目录恢复唯一 current record set。
 
-当前 revision-seal profile 在受管 `.weftext-meta` 根下维护一个按 `RevisionTokenSealKey/1` 逻辑寻址的 revision-token-seal collection。具体 shard/file 名属于 backend 私有实现，但逻辑 key、exact canonical `RevisionTokenSealArtifact/1` bytes 与唯一性是规范要求。record 一旦接纳即 immutable。artifact 的 `trustKeyId` 只能通过 association 生产 CommitDomain 的既有 shared trust-declaration history 解析；对应 private key 永不 portable。sync provider 只能原样转发 artifact，绝不是 signing authority。
+当前 revision-seal profile 在受管 `.weftext-meta` 根下维护一个按 `RevisionTokenSealKey/1` 逻辑寻址的 revision-token-seal collection；exact canonical artifact bytes 与唯一性是规范要求，接纳后 immutable。既有 logical policy component 另存 exact `WorkspaceAuthorizationBundle/1` bytes：独立 authorizationRevision、完整 Policy/3、一条 WorkspaceTrustRootDeclaration/1、trustRevision 与累计 root-signed WorkspaceTrustDeclaration/1 chain；不新增 PortableComponentKey kind。接收端只能从合法 bootstrap 或显式 fingerprint import 建立的受保护 WorkspaceTrustAnchor/1 认证 root，再验证 declaration signature/predecessor、每条 declaration DecisionKey→CP3 activation ChangeId 与 causal cut。self-signed copied root、sender identity、D4 Registry seed、D10 publisher/package key 或 arrival order 都不是 authority。root/domain private key 与 opaque key handle 永不 portable；sync provider 只转发 public bundle/artifact bytes，绝不是 signing authority。
 
 ### 2.2 文件对象与外部修改
 
@@ -340,7 +340,7 @@ saved、planned、unseen必须分流。saved只做原request/fingerprint/continu
 
 ### 9.1 Replica registration 不等于 execution takeover
 
-新设备获得完整 portable Workspace 时，先验证 workspace identity、portable metadata chain、policy/trust 与可用 current components，再显式 register 新 ReplicaEpoch。注册只建立 ordinary content CommitDomain。它不接管旧 P 的 ApprovalUse、claim、Money、external unknown 或 Automation lease，也不使用 D3 continue_workspace。
+新设备获得完整 portable Workspace 时，先从受保护 WorkspaceTrustAnchor/1 认证 Workspace root，再验证 workspace identity、portable metadata chain 与 WorkspaceAuthorizationBundle/Registry，然后显式 register 新 ReplicaEpoch。joining host 在受保护存储生成 domain key；一个原 P seal 以同一 DecisionKey/ChangeId 同时推进 replica_registry 与 policy/WorkspaceAuthorizationBundle，接收端把 active ReplicaRecord 与 exact root-signed authorize declaration/PoP 交叉验证。注册只建立该 ordinary content CommitDomain 与 exact revision-seal key authorization。它不接管旧 P 的 ApprovalUse、claim、Money、external unknown 或 Automation lease，也不使用 D3 continue_workspace。
 
 执行域接管必须另有完整 continuity proof，证明原 decision/receipt、charges、unknown、claims、standing approvals、stop state 全部连续且旧执行者已失效；无法证明则该执行能力暂停，但普通 replica content 继续。
 
@@ -505,4 +505,4 @@ D6-FA-r01 目前只是作者部分联合候选：
 
 ### PL-IR-01 稳定地址的保留边界
 
-对当前新 profile，每个 sealed managed SourceVersion/2 即使提交时尚无 Locator，也必须由 winning plan/seal 选出唯一 canonical d6_source_revision/2 binding。exact canonical RevisionTokenSealArtifact/1 bytes 是 immutable Portable Workspace Metadata；生产端 P record 同时保留对应 RevisionTokenSealOutboxItem/1 与 portable_metadata pin，直到原 publication/retry/recovery 及全部 portable-address/last-reference 义务允许释放。用于验证 trustKeyId 的历史 trust declaration/public verification key 也必须在同一期间保持可验证；private signing key rotation 绝不授权给旧 artifact 重签。Derived Index 可以缓存 token→version lookup，但不是真实性 owner。删除/重建 I 时只重新验证仍保留的 portable artifact signature/cross-fields 并重建 cache，不重构也不签名 artifact；P recovery 只重发 exact pinned bytes。若唯一真实 artifact/trust history 在 publication/admission 前丢失，相同 bytes、digest、SourceStamp、SourceVersion、revision 或重新扫描都不能修复，受影响地址保持 unavailable。本条不新增第二作者库、ledger、CAS、Notice component 或 CP3 member。
+对当前新 profile，每个 sealed managed SourceVersion/2 即使提交时尚无 Locator，也必须由 winning plan/seal 选出唯一 canonical d6_source_revision/2 binding。exact canonical RevisionTokenSealArtifact/1 bytes 是 immutable Portable Workspace Metadata；生产端 P record 同时保留对应 RevisionTokenSealOutboxItem/1 与 portable_metadata pin，直到原 publication/retry/recovery 及全部 portable-address/last-reference 义务允许释放。已锚定 WorkspaceTrustRootDeclaration/1、为任何仍保留 artifact 重建 history_at 所需的每条 WorkspaceTrustDeclaration/1，以及把 declaration 绑定到 activation ChangeId 的 policy-bundle version/ChangeRecord evidence，都是 public-history last reference，不得提前 GC。rotation/revocation 可在不再有合法 planned signer 后退役或销毁旧 private DomainSealKeyHandle；历史验签从不需要该 private key。Derived Index 可缓存 token→version/current-trust projection，但不是真实性 owner。I 重建只重新验证保留 anchor/public history/artifact signature/cross-fields 并恢复 cache。P recovery 即使 rotate/revoke/key loss 后也只重发 exact pinned artifact bytes，绝不重签。未提交/失败 P attempt 算出的 signature 只是 staging，不能冒充 seal；post-install planned/recovery_unknown 保留原 plan/pins/trust-cut 责任，后续 commit 前仍须重新通过 authorize_new_sign。required admission 前真实 artifact/public trust history 丢失，不能从相同 bytes、digest、SourceStamp、SourceVersion、revision 或 rescan 修复。不新增第二作者库、ledger、CAS、Notice component 或 CP3 member。

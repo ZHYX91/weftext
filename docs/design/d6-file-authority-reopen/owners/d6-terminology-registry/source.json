@@ -370,8 +370,8 @@
       "en": "Source Version",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "SourceVersion/2 is the complete managed/external production-version union: both arms bind full EntityRef, production CommitDomain, and production observationEpoch; managed additionally binds the checked H(D,E)+1 revision and seal ChangeId, while external binds externalSequence and has no managed revision/ChangeId. Current observation remains separately represented by SourceObservation/1 and SourceVersionRef/1. The new d6_source_revision/2 profile is a stable production address: RevisionTokenBinding/2 contains token plus RevisionTokenSource/2 only. Before C/Q materialization the original plan freezes one proposed binding; the winning P seal creates the actual managed SourceVersion and, in that same transaction, creates RevisionTokenSealAssociation/1 and domain-separated Ed25519 RevisionTokenSealArtifact/1, pins its exact D3-CJ/3 canonical bytes as portable metadata, and records RevisionTokenSealOutboxItem/1. RevisionTokenSealVerificationKey/1 is the protected normalized view of the already-authenticated historical shared trust declaration for the producing CommitDomain/profile at the seal cut. Receiver admission verifies CP3/history and the signed artifact independently and cross-checks DecisionKey, ChangeId, complete SourceVersion and SourceStamp fields before storing token→production-version mapping. CP3/Notice shapes do not gain the binding or artifact.",
-      "exclusions": "Not a bare revision, digest, path, DocumentRef, currentness proof, permission, writable selector, ActionEvidence, Draft/PAB/PreparedIntent capability, sender attestation, or replacement for SourceObservation/1. Equal revision/stamp/version/hash/bytes cannot authenticate a token without the original signed artifact and historical trust key. A loser/aborted/unproved token has no valid artifact; publication, retry and I rebuild never reconstruct or re-sign one. External equal bytes do not inherit an event/token. Two non-byte-equal artifacts for one exact managed SourceVersion are an integrity contradiction only when both independently validate from the historical portable-trust root.",
+      "definition": "SourceVersion/2 remains the complete managed/external production-version union. The d6_source_revision/2 stable production address is authenticated by the original same-P RevisionTokenSealArtifact/1. The artifact's trustKeyId is resolved from D6 WorkspaceAuthorizationBundle/1: a protected WorkspaceTrustAnchor/1 authenticates WorkspaceTrustRootDeclaration/1, cumulative root-signed WorkspaceTrustDeclaration/1 records bind exact CommitDomain/profile keys to real declaration DecisionKeys and CP3 activation ChangeIds, validate_historical(K,C) selects the historical verifier at the artifact causal cut, and authorize_new_sign(K,currentCut) separately requires the current non-conflicted authorization plus a usable host-protected DomainSealKeyHandle inside the one P seal. CP3/Notice shapes remain unchanged.",
+      "exclusions": "Not a bare revision/digest/path/currentness proof/permission or sender attestation. A self-signed copied root, D4 Registry seed, D10 publisher/package key, current key after rotation, equal stamp/version/hash/bytes, I cache, or caller-provided key cannot authenticate a token. Public trust history is portable; WorkspaceTrustAnchor and private key handles are protected/non-portable. Loser/aborted/unproved signatures are not seals.",
       "ownedNames": [
         "SourceVersion",
         "sourceVersions",
@@ -391,7 +391,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "A seals V with t and one signed RevisionTokenSealArtifact/1; B verifies the historical trust declaration, signature, association and CP3 V, then creates its own current SourceObservation and reads the unchanged Locator. A same-stamp forged t2 without a valid signature is unavailable, not a conflict. If two distinct artifacts for the same exact V both validate from the historical trust root, that is an integrity contradiction. Real production ABA, missing artifact/trust history, loser/aborted plans, or equal-byte external observation never fabricate qualification.",
+      "exampleAndCounterexample": "K1 seals V; later root-authorized K1→K2 rotation does not invalidate V because validate_historical uses V's proved cut, while new seals require K2 via authorize_new_sign. A copied Workspace without the private handle cannot sign. Same-stamp forged t2 is unavailable; two distinct artifacts for exact V are an integrity contradiction only if both genuinely validate from the anchored historical root and CP3.",
       "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
       "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
       "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
@@ -799,13 +799,13 @@
       "en": "Workspace Bootstrap Plan",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Control §10.2 owns complete WorkspaceBootstrapPlan/2 with wireVersion=2, profile/3 and Policy/3 in the original D3 fresh decision; true Plan/1 history retains its original decoder.",
+      "definition": "Control §10.2 owns WorkspaceBootstrapPlan/3 with wireVersion=3, profile/3, Policy/3 and WorkspaceTrustGenesis/1 in the original D3 fresh decision. The same bootstrap P seal establishes the anchored root, exact target-server CommitDomain key authorization, initial WorkspaceAuthorizationBundle/1 and target activation. Plan/2 was an unactivated candidate predecessor; genuine Plan/1 history retains only its proven original decoder.",
       "exclusions": "不是第二decision、可编辑请求或永久管理员",
       "ownedNames": [
         "WorkspaceBootstrapPlan",
         "workspaceBootstrapPlan",
         "d6_workspace_bootstrap_plan",
-        "WorkspaceBootstrapPlan/2"
+        "WorkspaceBootstrapPlan/3"
       ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
@@ -817,7 +817,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "原D3计划内固定首份policy/Registry/Calendar控制和主体映射并同activation发布 / 不是第二decision、可编辑请求或永久管理员",
+      "exampleAndCounterexample": "fresh W: issuer/target custody anchors root and same P seal commits initial W/B domain authorization plus source/control effects / a self-signed synchronized root or separate later repair commit cannot bootstrap authority",
       "firstFreeze": "D6 revision05-observation-bootstrap candidate; not activated",
       "migration": "No published compatibility alias introduced. Existing prototype aliases must be explicitly inventoried and replaced in the corresponding S1-S7 implementation slice before that slice publishes. No startup source migration; historical evidence and user prose exempt.",
       "deletionTarget": "Unlisted controlled aliases forbidden from first implementation of this D6 contract. No historical evidence deletion."
@@ -939,8 +939,8 @@
       "en": "Commit Domain",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "一次D3/D6幂等decision、版本与恢复的命名空间；replica由WorkspaceRef+ReplicaEpoch，server由WorkspaceRef+AuthorityInstanceId闭合",
-      "exclusions": "不是Workspace identity、global execution responsibility或跨设备余额",
+      "definition": "一次D3/D6幂等decision、版本与恢复的命名空间；replica由WorkspaceRef+ReplicaEpoch，server由WorkspaceRef+AuthorityInstanceId闭合；revision-seal新签名资格还必须有WorkspaceAuthorizationBundle历史中对该exact domain/profile的current授权及匹配host-protected key handle",
+      "exclusions": "不是Workspace identity、global execution responsibility、跨设备余额，也不因control custody/文件复制自动继承private signing key",
       "ownedNames": [
         "CommitDomain",
         "commitDomain"
@@ -966,8 +966,8 @@
       "en": "Replica Epoch",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Core显式登记一个文件副本普通写入资格时mint且同Workspace不复用的UUIDv4",
-      "exclusions": "不是AuthorityInstanceId、设备硬件ID或Automation lease",
+      "definition": "Core显式登记文件副本时mint且同Workspace不复用的UUIDv4；registration同一P seal还为exact replica CommitDomain追加root-signed revision-seal key authorization，joining host私有DomainSealKeyHandle仅在该transition接纳后usable",
+      "exclusions": "不是AuthorityInstanceId、设备硬件ID、Automation lease、portable private key或从ReplicaRecord自动得到的签名权",
       "ownedNames": [
         "ReplicaEpoch",
         "replicaEpoch"
@@ -1047,7 +1047,7 @@
       "en": "Portable Workspace Metadata",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "库内唯一承载identity/structure/lifecycle/shared policy/trust/portable change与conflict记录的版本化文件集合",
+      "definition": "库内唯一承载identity/structure/lifecycle、WorkspaceAuthorizationBundle/1（Policy/3 + anchored append-only public trust history）、portable change/conflict与RevisionTokenSealArtifact/1的版本化文件集合；private keys/WorkspaceTrustAnchor/key handles不portable",
       "exclusions": "不保存全库current正文副本；不是durable execution ledger或index",
       "ownedNames": [
         "PortableWorkspaceMetadata",
@@ -1063,7 +1063,7 @@
       "rejectedAliases": [
         "unlisted public alias"
       ],
-      "exampleAndCounterexample": "parent/order随库移动 / 不把P数据库复制成current结构",
+      "exampleAndCounterexample": "policy component可携root-signed declaration与历史artifact一起同步 / 复制portable files不复制WorkspaceTrustAnchor或签名权",
       "firstFreeze": "D6-FA-r01 candidate; not activated",
       "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
       "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
@@ -1476,7 +1476,7 @@
         "annotationRevisionToken"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "D2/D3 wire keeps the original opaque DocumentRevision/ResourceRevision/AnnotationRevision lexical decoders. D6 Control §1.5 defines RevisionTokenBinding/2 as a stable production address and §1.5.1 defines the exact signed RevisionTokenSealAssociation/1 + RevisionTokenSealArtifact/1 carrier. The sole P seal chooses the winning binding and signs/pins one artifact per managed after through RevisionTokenSealOutboxItem/1; CP3/Notice closed shapes remain unchanged. A receiver uses the historical portable-trust declaration to obtain RevisionTokenSealVerificationKey/1, verifies the domain-separated Ed25519 signature and exact canonical artifact bytes, cross-checks association DecisionKey/ChangeId/SourceVersion/SourceStamp against CP3, and only then stores the token mapping and separately establishes a current SourceObservation. Equal stamp/version/hash, sender trust, retry, I rebuild or old runtime evidence never substitutes."
+      "contract": "D2/D3 opaque revision-token lexical decoders stay unchanged. D6 Control §1.5.1 authenticates the stable binding through the original RevisionTokenSealArtifact/1. WorkspaceAuthorizationBundle/1 is the real trust producer: protected WorkspaceTrustAnchor/1 + root-signed declaration history + declaration DecisionKey/CP3 activation cut derive RevisionTokenSealVerificationKey/1. validate_historical verifies historical artifacts at their causal cut; authorize_new_sign separately gates new same-P signing and requires a usable DomainSealKeyHandle. CP3/Notice remain closed and unchanged; sender/current-key/equal stamp/I never substitutes."
     },
     {
       "owner": "D3 wire / D6 trusted proof",
@@ -1524,7 +1524,7 @@
         "ReplicaEpoch"
       ],
       "conceptId": "weftext.term.replica-epoch",
-      "contract": "D6 Control/2 defines ReplicaEpoch and replica registration; registration is not execution-responsibility takeover or Workspace continue."
+      "contract": "D6 Control/2 defines ReplicaEpoch and registration. The one registration P seal atomically advances replica_registry plus WorkspaceAuthorizationBundle with a root-signed authorize declaration/PoP for that exact replica CommitDomain; the joining private handle becomes usable only after admission. Registration is not execution-responsibility takeover or Workspace continue."
     },
     {
       "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
@@ -1604,12 +1604,14 @@
     {
       "owner": "D6 Control §10.2 / D7 symbolic producer",
       "names": [
-        "WorkspaceBootstrapPlan/2",
+        "WorkspaceBootstrapPlan/3",
         "WorkspaceBootstrapProfile/3",
+        "WorkspaceTrustGenesis/1",
+        "WorkspaceAuthorizationBundle/1",
         "d10_control_self"
       ],
       "conceptId": "weftext.term.workspace-bootstrap-plan",
-      "contract": "Actual original complete bootstrap members use explicit wireVersion2/profile3/Policy3. Current D7 symbolic producer must decode Plan2 explicitly; actual Plan1/symbolic1 history remains original. No acceptance or implementation claim."
+      "contract": "Actual fresh bootstrap uses wireVersion3/profile3/Policy3 plus WorkspaceTrustGenesis/1. Issuer/target custody anchors the root and the same original P seal establishes exact target-server domain authorization and target activation. Current D7 symbolic producer decodes Plan3 explicitly; Plan2 was unactivated and gains no migration decoder; genuine Plan1 history remains original. D10 publisher/package trust and D4 Registry seed are not this Workspace root."
     },
     {
       "owner": "D6 Storage §7.2.1 / D10 Control §16",

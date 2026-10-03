@@ -170,6 +170,8 @@ D7-mediated wire12 preparation 仍等待 D7 owner afterimage，`preparationBindi
 
 仅在 P2 后，TL 才验证 W 的唯一 `TargetLedgerCustodyRecord`、其 family/custody generation 与 issuer 暂管的 target ledger/allocation/burn/saved-decision continuity。不可达或连续性未证明先得到 `identity_authority_unavailable`，只有连续可达后发现 duplicate/corrupt custody 才是 `workspace_integrity_conflict`；两者都不读取该 operation 已保存的业务 bytes。target-domain backend/P fence 通过这份 issuer custody 证明，不要求 B 已激活。对于 unseen fresh target，target `expectedFrontier` 是 issuer 证明的空目标历史（不是 A 的 Frontier，也不能从空存储猜出）；fork source cut 仍单独绑定。创建前不要求 target `source_write`、当前 target policy、active entity 或 target `policy_admin`。初始 creator policy、Registry/Calendar control 与源状态由原 family 固定 bootstrap profile 派生并在 planning 前一起验证。planning CAS claim 同一 family 与 target-domain decision；planned 或 rejected/terminal-before-activation 时仍由 issuer 保管。唯一成功 seal 原子激活 W/B、安装初始 control 并移交 custody 给 B。saved/planned retry 保留原 proposal/profile 与 W/B key，不重新初始化已激活 target，也不替换其 authority 绑定。
 
+当前 profile 在这里消费 D6 WorkspaceBootstrapPlan/3；它在既有 policy/Registry/Calendar 状态之外携带 WorkspaceTrustGenesis/1。fresh root 的受保护 WorkspaceTrustAnchor/1 由 issuer/target-custody 证明建立，绝不从同步来的 target files 自认证；root self-signature、root-signed initial declaration 与 fresh target-server domain-key possession proof 必须在 planning 前全部通过。initial declaration 的 exact CommitDomain 就是本 D3 request 已经绑定的同一 W/B CommitDomain。唯一成功 D3/D6 P seal 原子提交作为 WorkspaceAuthorizationBundle/1 的 bootstrap policy component、初始 root/domain authorization、target activation/custody handoff 与全部 source/control effect。同一个 create/fork decision 的 managed after 只能使用 D6 明确限定的 same-P genesis 例外；其它 DecisionKey 或 later retry 不能把 self-signed root 当 bootstrap。Plan/2 是未激活候选前身；真实历史 Plan/1 只保留可证明的原 decoder，不重写。
+
 ### 4.6 allocation 与 UUID 不复用
 
 同一个 CommitDomain 内，Core 在 P 的 allocation history 上 reserve/burn fresh IDs。
@@ -363,7 +365,7 @@ standalone `copy_resource`/`copy_annotation` 的请求 primary 都必须是准�
 fork/continue 仅 managed_atomic。
 
 continue 只用于同一 authority lineage 的 exclusive continuation/failover/disaster recovery，需要完整 control ledger、
-  allocation/burn/tombstone、saved decisions 和旧 authority fence。Replica registration 绝不走 continue。
+  allocation/burn/tombstone、saved decisions 和旧 authority fence。Replica registration 绝不走 continue。 control custody 连续绝不表示 signing-key 连续。成功 continuation 若激活 fresh server AuthorityInstanceId B2，还必须消费已锚定 WorkspaceAuthorizationBundle history，并在新 authority host 上通过受信 secure-store migration/import channel 建立 usable WorkspaceTrustRootKeyHandle；复制 Workspace 文件或恢复 control backup 都不能提供该 handle。Core 为 exact server CommitDomain W/B2 生成 fresh DomainSealKeyHandle。同一个原 continuation portable decision 在既有 policy component 中原子追加两条确定顺序的连续 trust declaration：按已证明情形以 administrative|loss|compromise 撤销旧 server domain key，再以 PoP authorize W/B2 新 key；两条使用同一 DecisionKey/activation ChangeId，中间前缀绝不是 current。旧 public declaration 继续用于历史验签，只有 committed transition 后新 handle 才 usable。若 root handle 无法合法恢复/import，continuation 可以恢复可读/control history，但不能激活新的 revision-seal signing domain；必须保持 unavailable/read-only，不能假定旧 private key 随 custody 自动迁移。
 
 fork 创建 fresh WorkspaceId/AuthorityInstanceId 和所有 mapped content IDs；source 与 target没有共同提交 authority。exact fork 的 source closure 是已验证 snapshot cut 中**全部** live 与 trashed Node/Resource/Annotation，`identityMap.from` 必须恰覆盖该全集，任何 root/member 都不得 omit。每个 mapped entity 的 `resultLifecycles` 精确保留 live/trashed 两态；live Node只进入 `initialPlacements`/live tree，trashed Node只进入 `trashPlacements`/canonical Trash forest，二者对 mapped Node严格分区。trashed Node 的 `trashParentRef`/`trashOrdinal` 按 source cut 已规范化 Trash graph机械映射；original parent仍能映射时保留 mapped original location，已 purged/tombstoned/not_found 时必须是 unavailable original location，不能自动挂 root。Resource/Annotation owner、reply 和 restore-membership/independent-Trash事实按真实 source cut 映射，不因同 owner重新合并。
 
@@ -392,7 +394,7 @@ fork 的每个 source payload与实际 typed ref/locator都使用真实 pin、�
 
 正式备份的 `continue`/`fork`、全 Workspace 身份承载快照、部分身份承载传输包、普通格式导入和当前 Trash 恢复，仍按显式制品类别与模式区分；绝不根据路径、摘要、标题、根 UUID、文件名或“看起来像备份”来猜测模式。
 
-`continue_workspace` 只用于已知同一逻辑 Workspace 的 exclusive continuation/failover/disaster recovery：必须验证原 continuation cut，以及截至该 cut 的完整 allocation/burn/live/Trash/tombstone/decision/P continuity；在新的 writer 获得写资格前，旧 authority 还必须已经停止或被有效 fence。对 cut 之后的事实另有不可省略的资格门：要么证明该 cut 之后不存在任何已提交事实，要么取得足以完整承接并合并这些 cut 后已提交事实的 authoritative ledger；仅证明旧 authority 已停止/fenced，不能把 cut 后事实视为不存在。只有这些连续性与 cut 后事实条件共同闭合时才可保留原 Workspace/content refs，新的 AuthorityInstanceId仍按原受管计划产生。若无法证明旧 authority 已停止/fenced、无法证明 cut 后无提交且又没有足以合并其事实的 authoritative ledger，或 allocation/burn/tombstone/decision/P continuity 不完整，则只能只读/reconciliation或 fork，不能以相同 bytes/path冒充 continue。普通新设备 `replica registration` 只是为同一 portable Workspace 注册新的 `ReplicaEpoch` 并取得 ordinary content domain，绝不等于 continue，也不接管旧 P、Approval/Money/unknown 或执行责任。
+`continue_workspace` 只用于已知同一逻辑 Workspace 的 exclusive continuation/failover/disaster recovery：必须验证原 continuation cut，以及截至该 cut 的完整 allocation/burn/live/Trash/tombstone/decision/P continuity；在新的 writer 获得写资格前，旧 authority 还必须已经停止或被有效 fence。对 cut 之后的事实另有不可省略的资格门：要么证明该 cut 之后不存在任何已提交事实，要么取得足以完整承接并合并这些 cut 后已提交事实的 authoritative ledger；仅证明旧 authority 已停止/fenced，不能把 cut 后事实视为不存在。只有这些连续性与 cut 后事实条件共同闭合时才可保留原 Workspace/content refs，新的 AuthorityInstanceId仍按原受管计划产生。 该受管 plan 还必须冻结 §8.4 的 exact old/new server-domain trust transition；authority activation 与 revoke+authorize WorkspaceAuthorizationBundle transition 共用同一 decision/ChangeId，因此不存在 authority 已 active 但 key 未授权的窗口。若无法证明旧 authority 已停止/fenced、无法证明 cut 后无提交且又没有足以合并其事实的 authoritative ledger，或 allocation/burn/tombstone/decision/P continuity 不完整，则只能只读/reconciliation或 fork，不能以相同 bytes/path冒充 continue。普通新设备 `replica registration` 只是为同一 portable Workspace 注册新的 `ReplicaEpoch` 并取得 ordinary content domain，绝不等于 continue，也不接管旧 P、Approval/Money/unknown 或执行责任。
 
 full-workspace identity-bearing snapshot 只走 `fork_workspace`，并在 target allocation/claim/planned 前验证完整 live+trashed closure；fork 全部 target identity fresh，不能把 partial bundle 升格为 Workspace。`partial_identity_bearing_transfer_bundle` 只允许 `import_new + partial_identity_bearing_transfer_bundle`：完整 artifact manifest、source cut 与 `source_artifact` exact pins 是唯一 preimage authority，foreign typed refs只作已绑定 rewrite/provenance输入；所有 target content identity fresh。该离线模式在 stage3/4/9/14 等路径都不得在线 resolve、mount、fetch 或查询 source Workspace authority，也不能偷走 online `copy_node_subtree`/fork 语义。
 
@@ -406,7 +408,7 @@ ordinary format/UnmanagedItem/Import IR/worker output 只走 `import_new`。fres
 
 用户把完整普通文件和可移植 metadata 带到新设备后：
 
-1. 先验证 WorkspaceRef、portable trust、replica registry、birth/tombstone/structure records 与实际 files。
+1. 先建立/验证受保护 WorkspaceTrustAnchor/1，再验证 WorkspaceRef、WorkspaceAuthorizationBundle history、replica registry、birth/tombstone/structure records 与实际 files。
 2. 通过 D6 replica registration mint 新 ReplicaEpoch。
 3. 新 CommitDomain 只获得普通内容资格；已有 refs 保持。
 4. 不导入旧设备 active P/WAL/SHM。

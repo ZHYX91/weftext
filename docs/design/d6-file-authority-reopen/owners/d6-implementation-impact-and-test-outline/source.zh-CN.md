@@ -199,7 +199,7 @@ strict 路径在每个点验证不会静默丢失已观察竞争字节；observe
 
 ### PL-IR-01 便携位置设计验收表
 
-PL01–PL18 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
+PL01–PL30 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
 
 | ID | 场景 | 必须结果 |
 |---|---|---|
@@ -221,6 +221,19 @@ PL01–PL18 仅是本修复候选的设计/一致性义务，**尚未作为产�
 | PL16 | publication retry、P recovery 或 I 删除/重建时，原 RevisionTokenSealArtifact/1、outbox item/pin 与历史 trust declaration 仍完整 | 只复用/重发 exact 原 artifact bytes 并重新验证，I 仅重建 token→version cache。不得从 stamp/V/digest 重构、选择更新 trust key、mint 或重签；若必要 admission 前真实 artifact/trust history 已丢失，相同 hash/rescan 不能重建真实性 |
 | PL17 | 原 decision 为 saved、planned 或 outcome-unproved，随后当前观察/版本改变 | saved 按当前原范围交付授权返回原 bytes；planned 恢复原 proposed binding/token/map/pins/OperationId/version basis；unknown 保留原责任。都不能把新 Observation/token 换进旧 record |
 | PL18 | D7 Q 两遍物化为拟议 managed after 生成绑定 revision 的 locator | 两遍及 winning CAS 之前先固定一个 token；seal 形成 V/ChangeId 后才把该已冻结 binding 放入 RevisionTokenSealArtifact/1 签名。signature 覆盖的 domain-separated body 不含 signature/pin/outbox address，因此不产生自引用或第三遍 Q；CP3/Notice 不增加 member/component，也没有 CP4、第二 ledger 或第二 CAS |
+
+| PL19 | fresh Workspace create/fork 到第一次 managed source seal | WorkspaceBootstrapPlan/3 携 WorkspaceTrustGenesis/1。issuer/target custody 建立受保护 root anchor；root self-signature、root-signed exact W/B domain declaration 与 PoP 全验证；同一 bootstrap P seal 提交 WorkspaceAuthorizationBundle/1 与 managed after，只使用狭窄 same-P genesis 例外，不要求 target 预先已有自身 trust history |
+| PL20 | 同步/复制来的 Workspace 提供不同 self-signed root，或显式 import fingerprint 不匹配 | 拒绝 root/anchor 建立；不得把它当替换 anchor，不验证其 domain declaration，也不允许 revision seal；self-signature 只证明持钥，不授 authority |
+| PL21 | fresh device 已合法锚定 root，注册 ReplicaEpoch R 后进行第一次 managed edit | registration 的一个 P seal 以同一 DecisionKey/ChangeId 原子提交 active ReplicaRecord 与 root-signed exact R-domain authorize declaration/PoP；只有接纳后 joining DomainSealKeyHandle usable，之后第一 seal 的 history_at 解析该 key 并成功 |
+| PL22 | 普通 sync/copy 把全部 Workspace files、policy/trust history 和 revision-seal artifact 复制到没有受保护 private-key handle 的机器 | 合法 root anchoring 后可做历史验签/读取，但 authorize_new_sign 必须失败；文件占有、sender identity、Registry seed、package signature 或复制 public key 都不授旧域签名权 |
+| PL23 | K1 seal V；之后普通 root-authorized rotation K1→K2 提交；V/artifact 在 rotation 后才晚到接收端 | validate_historical 以 V 的 proved frontierBefore 选择 K1 并验原 artifact；rotation cut 后的新 seal 必须 K2。不能因为 current key=K2 重签或拒绝旧 artifact |
+| PL24 | revoke/rotate 先进入适用 current cut，旧 key author decision 后到 P seal | authorize_new_sign 重验看到新 bundle，在 commit 前拒绝旧 K。预计算 signature 只是 staging；install/recovery 保留原 plan/pins，走 paused/conflict/recovery，不伪造 seal |
+| PL25 | 旧 key author P seal 先 commit，随后 ordinary revoke/rotation 在 publication retry 前提交 | committed decision 与原 artifact bytes 仍历史有效；outbox/recovery 只在当前 delivery authorization 下发布 exact 原 bytes，后续 key 状态不触发重签或再次分配 ChangeId/H |
+| PL26 | domain private key 丢失；另一个场景是 Workspace root private key 丢失 | domain-key loss 阻止该域新 managed seal，直到 root-authorized loss_recovery rotate/add 创建新 usable handle；历史验签不受影响。root-key loss 阻止新的 trust mutation/registration/authority-domain 变更，但不使既有已授权 usable domain key 或历史签名失效；两者都不能从 portable bytes 修复 |
+| PL27 | 某 trust declaration/predecessor/root signature/PoP/DecisionKey→CP3 activation binding 损坏、缺失或重排 | 受影响 history prefix unavailable/integrity-conflicted，不能产生 RevisionTokenSealVerificationKey/1；不能按 arrival order、current key、I row 或相同 digest 补洞 |
+| PL28 | 攻击者为 V 构造同 SourceStamp 但 token=t2，而 t 是真实 winning binding | 没有 anchored root/history 授权的 domain key 与 t2 自身 valid artifact signature/cross-fields 时，t2 只被拒绝/unavailable，不成为第二 canonical mapping；相同 stamp/version/hash/bytes 均不足 |
+| PL29 | 对同一 exact V 的两份非逐字相等 artifact、不同 token 都真实通过 anchored root/history 与 CP3 | 可达 integrity 矛盾；Core 不按 arrival order/current host/current key 选择，必须进入 repair/conflict；与伪造第二 artifact 的普通拒绝严格区分 |
+| PL30 | K1→K2 rotation/revoke 后删除并重建 Derived Index，但 public trust history 与 artifacts 完整 | I rebuild 只能重验受保护 anchor、累计 declarations、activation ChangeRecords 与 exact artifacts 后派生 current/historical projection；绝不创建 anchor、private handle、declaration、token、signature 或 signing authority |
 
 ## 6. 权限与非披露测试
 

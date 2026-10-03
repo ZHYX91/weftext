@@ -1190,6 +1190,8 @@ A protected supplemental planned approval is exactly its complete planned_approv
        meters:[PricingMeter/1],
        evidence:EvidenceTicket/1}
 
+Publisher/package trust in this section is deployment-extension authenticity only. A D10 trust record, PublisherIdentity, NamespaceClaim, PackageManifest signature, package key rotation/revocation, deployment administrator, or package install order never creates or replaces D6 WorkspaceTrustAnchor/1, WorkspaceTrustRootDeclaration/1, WorkspaceTrustDeclaration/1, DomainSealKeyHandle/1, CommitDomain signing authority, Workspace policy authority, or author-write permission. D6 revision-seal trust is independently anchored and versioned inside the WorkspaceAuthorizationBundle/1; D10 package signatures cannot satisfy its bootstrap, registration, rotate/revoke, historical-validation, or authorize_new_sign gates.
+
     NamespaceClaim/1 = {
       namespaceId:D4.SemanticNamespaceId,
       ownerClass:"first_party" | "publisher",
@@ -1443,7 +1445,7 @@ The current new d6_bootstrap_profile wireVersion=3 keeps the original member nam
 
 Only an explicit issuer-profile update by current administer_issuer selects profile/3 for subsequently issued families. Existing family/profile copies, replacement, saved decisions, replay/continue/failover retain their actual original decoder and never recompute grants or restore creator authority. An existing Workspace obtains the new capability only through an explicit current policy_admin transaction that installs a complete valid Policy/3. A Field-authorized principal cannot self-grant it.
 
-D6 Control §10.2 now defines the complete WorkspaceBootstrapPlan/2 producer with original member responsibilities and explicit wireVersion=2, carrying profile/3 and Policy/3; it never puts an undeclared Policy/3 inside /1. D7's complete symbolic/current bootstrap projection must consume that real owner version. Until those actual owner afterimages are jointly complete and accepted, this is a bounded coordination requirement, not a claim that the new bootstrap path already exists or is product-available. Original profile/1/2 and actual saved BootstrapPlan/1 recovery remain available under their original contracts.
+D6 Control §10.2 now defines the complete WorkspaceBootstrapPlan/3 producer with original member responsibilities plus WorkspaceTrustGenesis/1 and explicit wireVersion=3, carrying profile/3 and Policy/3. D7's complete symbolic/current bootstrap projection consumes that real owner version. Plan/2 was an unactivated candidate predecessor and gains no compatibility/migration layer; genuine historical Plan/1 records, if proven to exist, retain their original decoder/recovery. This remains a bounded coordination requirement, not a product-availability claim.
 
 ## 13. Public capability and first-public D6 error compatibility
 
