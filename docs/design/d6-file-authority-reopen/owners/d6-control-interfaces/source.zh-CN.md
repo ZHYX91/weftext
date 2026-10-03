@@ -117,11 +117,11 @@ observerDomain 必须等于当前 operation CommitDomain，entityRef 必须等�
 ~~~
 sourceToken 的 tag 固定 d6_source_observation/1，选择完整受保护 SourceObservation，而不是裸 revision、digest、I cache 或生产 SourceVersion。它不替代 D3/D4/D5 的 inner revision/selector wire。
 
-新决议的 source revision token 由受保护 RevisionTokenBinding/2 管理。其 closed shape 为：
+新决议的 source revision token 由受保护 `RevisionTokenBinding/2` 管理。其 closed shape 为：
 ~~~json
 {"kind":"d6_revision_token_binding","version":2,"token":<Token>,"source":<RevisionTokenSource/2>}
 ~~~
-RevisionTokenSource/2 只有两个 variant：
+`RevisionTokenSource/2` 只有两个 variant：
 ~~~json
 {"kind":"managed","sourceStamp":<SourceStamp/1>}
 ~~~
@@ -129,9 +129,9 @@ RevisionTokenSource/2 只有两个 variant：
 ~~~json
 {"kind":"external","sourceVersion":<external SourceVersion/2>}
 ~~~
-external variant 必须完整通过 external SourceVersion/2 decoder；managed sourceStamp 只由 §6.2 SourceRevisionPlan/1 或 §6.2.1 具名 conflict-only /2 产生。RevisionTokenBinding/2 专职表示稳定生产版本地址：不再携当前 `observerDomain` 或当前 `SourceObservation/1.observationEpoch`，不保存 source bytes，也不授读取、写入、selector、ActionEvidence、Draft 或 preparation 能力。生产 `SourceStamp/1.observationEpoch` 仍属于生产地址。
+external variant 必须完整通过 external SourceVersion/2 decoder；managed sourceStamp 只由 §6.2 SourceRevisionPlan/1 或 §6.2.1 具名 conflict-only /2 产生。`RevisionTokenBinding/2` 专职表示稳定生产版本地址：不再携当前 `observerDomain` 或当前 `SourceObservation/1.observationEpoch`，不保存 source bytes，也不授读取、写入、selector、ActionEvidence、Draft 或 preparation 能力。生产 `SourceStamp/1.observationEpoch` 仍属于生产地址。
 
-`token` 使用 §1.1 canonical Token 词法，受保护 tag 固定 d6_source_revision/2。managed arm 的完整 SourceStamp 标识拟议生产地址；external arm 的完整 external SourceVersion/2 标识 producer event；两者都不证明当前 observer 资格。
+`token` 使用 §1.1 canonical Token 词法，受保护 tag 固定 `d6_source_revision/2`。managed arm 的完整 SourceStamp 标识拟议生产地址；external arm 的完整 external SourceVersion/2 标识 producer event；两者都不证明当前 observer 资格。
 
 凡原 plan 可能产生 managed after，Core 必须在 C/Q 或其它绑定 revision 的物化之前只分配一条拟议 revision token，并把完整 binding 随原 plan 保存；Q 两遍、restart 与 recovery 全部复用它。winning planning CAS 把 candidate map、SourceRevisionPlan、afterPin、H/empty-history 依据和该 binding 一起冻结。CAS loser、aborted/terminal-failed plan 或 seal 无法证明的 plan，即使另一 decision 后来 seal 相同数值 H+1 或逐字相同 SourceStamp，也绝不能取得 canonical production binding。
 
