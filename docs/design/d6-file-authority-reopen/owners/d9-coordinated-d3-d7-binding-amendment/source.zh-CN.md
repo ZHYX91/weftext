@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：6375684c-8a5e-4c9e-ae16-c840233f77cb。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威协调的 PL-IR-01 修复 consumer，未独立接受、未激活、未实施。本文仍保留固定 S 的能力/限制/历史证据边界，并消费当前 D3/D6/D7 单决议与稳定生产地址/current Observation 作者修复；该新 exact candidate 仍待独立复核，不自行关闭 P1，其它未接受 cross-owner producer 仍各自门控。
 
 # D9 配套 D3/D7 准备绑定修订
 
@@ -25,7 +25,7 @@ Task Template 只可由 D9 target plan 声明 targetCoreKind=ordinary 且 target
 
 当前 constructionInput 只能为 null 或 D9 Templates §6a 的完整 TemplateConstructionInput/2。非 null 只由 Core 内置 D9 node-template adapter 建立，只用于其 ordinary-import d3_operation 或受限简单 collection_create；公共 ActionSpec/d7_action_prepare 不收追加 construction JSON。它与 D3 resolutionInput 互斥：D9 构造时 resolutionInput=null，最小映射 resolutionAccess=null。文件普通 import 的 constructionInput=null，其输入/IR/mapping/loss/route 全部仍由主文 ConversionInput/2 绑定。
 
-TemplateConstruct/2 使用真实 SourceVersionRef/1 选择当前 Template、recipe 与资源；持久 Recipe/2 固定完整 managed SourceVersion/2，不能跟随 latest 或保存当前 token。inputPins 的 sourceVersion、observation、payloadKind、pin 与实际完整 source bytes、生产域和当前观察逐项相等。omittedAnnotations 只保存真实同 cut 的受权 D9EntityVersionAddress/2 目录，不要求读取 Annotation body。Templates §6b 的显式旧配方升级、原始 fixed-source 含义及 PL-IR-01 gate 全部适用。
+TemplateConstruct/2 使用真实 SourceVersionRef/1 选择当前 Template、recipe 与资源；persistent Recipe/2 固定完整 managed SourceVersion/2，不保存 current token。inputPins 的 sourceVersion/observation/payloadKind/pin 与实际 bytes 和当前观察逐项相等。Templates §6b 现明确嵌套 `body_text` Locator 的 PL-IR-01 规则：验证稳定 canonical binding/sealed-outbox 关联，要求本 preparation 的 current Observation.sourceVersion 与 recipe 固定 sourceVersion 逐字相等，再验证原 range/expectedText。这只是 fresh read qualification；绝不替换旧 /3 sourceInputs observation，也不改写 recipe。omittedAnnotations 继续原同 cut 受权 D9EntityVersionAddress/2 目录。
 
 Core 独立从完整 recipe/源/pins 重新编译，完整初始 loss/choices、sourceSubjectBindings、参数、资源选择、proposedInputs 与原请求逐项相等；不信任 worker、调用方 AST、payload hash 或 preview 采样。所有实际源读取的完整观察进入原 InputDescriptor/2.sourceInputs；其 exact {entityRef,observation,role} 项只用 before/dependency，不塞 artifact/私有 role/冲突安装 wrapper。proposedInputs 保存原 D3 Result/9 或合法具体 payload 的真正 typed pins；input descriptor owner 始终为 d3_identity_operation/12。
 
@@ -61,4 +61,4 @@ D8 producer 仍仅 protocolOwner=D6、profile=full，使用其真实 PreparedEdi
 
 当前新模板只由 /2 construction/recipe 与 /3 preparation 的实际 owner 联合生产。旧尚未形成决议且真正过期的准备可以走明确新分析；一般未提交旧配方保留 Templates §6b 的显式“按明确来源另建配方”正向入口，不能用同 Counter 猜迁移，也不永久禁用普通合法模板。
 
-本次不再把 D3 固定 S §21B 镜像复制成 current 主定义；D3 当前 §21.1 精确引用 D7 owner，D6 Control/Storage 与 D7 效果消费相同实际版本。D3/D6 IR-06/07 后像已存在但仍待独立复核，D7 当前 producer 仍在协调，PL-IR-01 不在本篇裁决。完整 source/version/pin/preview 与旧恢复门必须同批独立接受才可激活；字节哈希、作者检查或本篇引用不能代替该结论。
+本次不再把 D3 固定 S §21B 镜像复制成 current 主定义；D3 当前 §21.1 精确引用 D7 owner，D6 Control/Storage/D7 effects 消费同一实际版本。本篇现通过 Templates §6b 消费 PL-IR-01 作者修复，不再把算法留作未裁定；但该修复、D3/D6 IR-06/07、当前 D7 producer 及完整 source/version/pin/preview 门仍需独立联合复核，本文不自行接受 P1、实现或激活。

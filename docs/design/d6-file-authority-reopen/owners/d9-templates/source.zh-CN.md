@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：6ac539c2-40f1-46e6-92ac-e24bfaf8b113。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威协调的 PL-IR-01 修复 consumer，未独立接受、未激活、未实施。本文仍保留固定 S 的能力/限制/历史证据边界，并消费当前 D3/D6/D7 单决议与稳定生产地址/current Observation 作者修复；该新 exact candidate 仍待独立复核，不自行关闭 P1，其它未接受 cross-owner producer 仍各自门控。
 
 # D9 模板
 
@@ -161,7 +161,7 @@ Core在分析和准备时从上述完整pins重做deterministic recipe验证与�
 
 ## 6b. 固定生产来源、当前准入与原配方恢复
 
-Recipe/2 的 source 是精确固定的 managed 生产版本，不追随 latest。它只保存 D6 已封存的完整 SourceVersion/2，不含本地 sourceToken、observerDomain 或当前 Observation。该 SourceVersion 自有的 commitDomain/observationEpoch 是生产史，不能改成接收设备的观察域/世代。纯同步可以保留同一生产地址；是否可使用某个 body_text Locator 仍由真实 D3/D6 owner 判断，本节不重签或重定位它。
+Recipe/2 的 source 是 exact 固定 managed production version，永不跟随 latest；只保存完整 sealed SourceVersion/2，不保存 current sourceToken。纯同步可以保留该生产地址。每次新实例化在先验 disclosure/exact-cut 与显式 Template/recipe/resource SourceVersionRef 检查后，Core 为每个 recipe source 建立 current Observation 并要求 Observation.sourceVersion 与 recipe 固定版本逐字相等。每个 `body_text` DocumentRangeLocator 随后运行 D3 稳定地址算法：验证 canonical revision binding 与 original sealed-outbox 关联，解析到同一生产版本，验证接收端 current Observation、原 exact range 以及 expectedText/inert-paragraph 约束，最后重验 cut。recipe/Locator bytes 不改写、不重签。生产版本改变/不可证明时使用既有 dependency_conflict/stale/availability；没有该 Locator 的模板不因本规则被全局禁用。
 
 实例化顺序为 closed decode→当前入口/完整潜在 workspace_constraints 披露及读取资格→请求 CommitDomain/原 authority 与 P 连续性→验证显式 template/recipe/resources 的 SourceVersionRef→读取完整 recipe→在原潜在授权范围内取得每个精确生产地址的真实当前 Observation→复核完整源、live 子树、typed slots、Registry/规则和目标→完整分析/准备。recipe 内容不能扩大原潜在范围；实际新增读取资格也在读取前逐项证明。每个 source 的当前 observation.sourceVersion 必须逐字等于 recipe 中固定的完整生产版本，绝不只比 Counter、文本或摘要。显式选择的 Template 及 Resource token 必须来自真正 current-source/选择 producer，服务器不从旧 Counter 读取 latest 后补签。
 
@@ -169,7 +169,7 @@ Recipe/2 的 source 是精确固定的 managed 生产版本，不追随 latest�
 
 所有实际消费 source bytes 的观察进入最终原 InputDescriptor/2.sourceInputs，使用其完整 {entityRef,observation,role} 项及原排序规则；普通来源只用 before/dependency，不放 artifact 或 conflict installation wrapper。真实 source pins、完整正负目录、placement、Registry、授权及所有 pre/post Query 进入同一 DependencyProof/2。D7 /3 constructionInput 是本篇 /2，resolutionInput 与最小映射 resolutionAccess 为 null；constructionReadRefs 恰覆盖实际输入和完整省略读取，按每个 Ref 的真实用途先验证源读取或 state/annotation 目录披露资格，再读大记录；仅省略目录项不升级为 Annotation body 读取，也不伪造该 body 的 sourceInputs。D9EntityVersionAddress/2 的完整定义及非 current-token 边界见 Worker 与导出 §3b。parent/collection 两分支都保持原 D3 wire12、d3_identity_operation/12、strict、managed_atomic、exact Frontier 及其单 planning CAS/P seal；没有 D9 提交入口或 owner descriptor 替身。
 
-PL-IR-01 仍是具名独立整合门：生产地址本身不能使发送副本的 body_text Locator 在接收副本成为 current。只有真实 D3/D6 producer 已证明该 Locator 在当前选定来源有效时才能使用；缺少跨副本资格 producer 就按原 owner 的 stale/availability 结果停止这一受影响构造，不按相同 span/text、hash 或生产版本自行 reanchor，也不把不使用该 Locator 的其它模板一律禁用。
+PL-IR-01 现已有上文消费的 D3/D6 修复：production address 加已认证 canonical Locator binding 与接收端自己 exact current Observation 可以给**新读取**资格而不改写 recipe。它仍是本 exact candidate 的独立复核门，不再是未定义算法，也不代表 P1 已关闭。相同 span/text/hash/version Counter、取 latest 重签或 DefinitionTransfer 均不能替代。缺资格只阻止受影响 construction，其它 template 能力继续自身门禁。
 
 Recipe/1 和 node-template/1 的真实已存 analysis/preparation/decision 使用原 profile decoder。已经 planned/saved/unknown 的原 D7 /1、/2 和 D3 原 wire 请求先按原最小授权映射、custody、pins、原请求与字节恢复，不补 /2 地址、不换 token、不重新编译或创建第二实例。未成决议的旧准备只按其真实 TTL/过渡规则失效；不是把所有历史原型宣称已经部署。
 

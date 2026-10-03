@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：e73fe605-098f-4b22-b780-76475ad863fa。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威协调的 PL-IR-01 修复 consumer，未独立接受、未激活、未实施。本文仍保留固定 S 的能力/限制/历史证据边界，并消费当前 D3/D6/D7 单决议与稳定生产地址/current Observation 作者修复；该新 exact candidate 仍待独立复核，不自行关闭 P1，其它未接受 cross-owner producer 仍各自门控。
 
 # D9 Worker 与导出
 
@@ -143,7 +143,7 @@ D9EntityVersionAddress/2 exact {ref:EntityRef,sourceVersion:SourceVersion/2}；r
 
 当前输入按所选导出域先确定潜在 scope 并完成授权，再读取任何完整目录或源；实际需要的额外业务范围在原潜在边界内读取前逐项获权。Query/集合导出保持 complete Query 与原正负 query_scan、定义、Registry、规则、授权世代和所有真实来源依赖。无 Query 的准确 Document/Resource/Field 读取按其真实原读取 profile，不因无关 Workspace 扩展自动要求另一份全集 Query。每项 bound source/Observation/FileObjectBinding、目录负范围、route 安装版本、模板、资源/ForeignBinding 或权限发生变化，旧未发布准备依原规则失败或 reset；scope_dependencies 只允许有完整连续 sealed 链且逐项证明无关的 Frontier 扩展，不重签 Observation、改原 expectedFrontier 或补空目录。
 
-真正使用 D4 inner revision 的 Field/Locator 先从完整 managed 生产版本取得该值；externalSequence、相同 Counter/摘要或 I 重建不能补资格。若实际 owner 要求 managed admission，先用户明确 admission 后新准备；不在导出时静默写源。D9 不接受 ConflictInstallInput/1、历史冲突分支或未 sealed SourceStamp 冒充当前导出来源。PL-IR-01 的跨副本 Locator 当前资格仍由实际 producer 裁决，SourceVersion 地址本身不解决它。
+真正使用 D4 inner revision 的 Field/Locator 先从完整 managed production version 取得该值。persistent Locator 先由 D3 验证稳定 canonical revision binding/sealed-outbox 关联，并要求本 ExportPlan 真实 current Observation.sourceVersion 与该生产版本逐字相等，之后才能使用 exact coordinate/profile；Plan 随即冻结该 current Observation。externalSequence、相同 Counter/digest 或 I 重建不能补资格，之后另一次新读取也不能换入既有 ExportPlan。实际 owner 要求 managed admission 时，用户明确 admission 后重新 prepare。D9 不接受 ConflictInstallInput/1、历史冲突分支或未 sealed SourceStamp 冒充当前导出来源。本处消费 PL-IR-01 作者修复，仍待独立复核。
 
 ExportPlan/2 的保护记录同时冻结上述完整目录、实际完整 DependencyProof/2、所选 ObservationScope/2/PreparedIntent/2.observationProof、BudgetBinding/1、原 source/规则/route pins 与准确 staged bytes。Query pin 必须是 D7 实际完整 result producer：含原 schema/V/bag/order、原 cut/epoch/auth/完整依赖，不以一个 cursor/ResultHandle 或提前 sealed Frontier 代替。没有使用 Query、Registry 或时间规则时不构造假上下文；有使用时不遗漏实际正负依赖。
 
