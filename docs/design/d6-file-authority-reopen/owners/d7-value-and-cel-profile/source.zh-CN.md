@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：5bb6d1c7-f8f4-4a29-ade3-c7f12dc837c6。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 Value 与 CEL Profile
 
@@ -152,6 +152,6 @@ DerivedDuration桥仅输出以下closed union，variants按UTF8顺序：calendar
 
 ## 6. 当前生产版本与只读作者值
 
-本文件全部 TypeSpec、V、CEL profile/函数/总性/数值及作者provenance桥保持不变。当前 SourceVersion/2、SourceObservation/1、SourceVersionRef/1、DependencyProof/2 属执行/准备证据，不新增 CEL primitive、Ref kind、普通object隐式识别或可写作者值。公共作者provenance原Locator/token仍按 §5.1 作为原值逐字保留；显示它既不消费当前定位资格，也不裁定 portable Locator 的 PL-IR-01。真正解析或写入必须回到实际 D3当前完整门，不能把same Counter、相同结构值或其CEL equality当生产版本相等。
+本文件全部 TypeSpec、V、CEL profile/函数/总性/数值及作者 provenance 桥保持不变。SourceVersion/2、SourceObservation/1、SourceVersionRef/1、DependencyProof/2 仍属 execution/preparation evidence，不新增 value kind。公共作者 Locator/token 按 §5.1 原值逐字保留：仅显示不消费当前定位资格，也不改写/重发作者值。真正解析使用 D3 稳定生产地址/current Observation 算法，只返回这次新的读取结果；目标 current state/content/profile 仍需正常授权。该读取不是 ActionEvidence，也不能升级旧 result/preparation 输入。相同 Counter、结构、CEL equality 或 bytes 都不证明 production-version equality。
 
 Registry、calendar/tzdb/unit/code/external-scheme contribution的实际完整binding来自同cut的不可变D4 ValidatedCatalogContext/RecurrenceReadContext，进入D6真实依赖；不从cells、Value类型标签或context字符串补造受信贡献。旧结果的数学值可以在原保留结果中合法显示，原result当前授权/epoch/期限仍须成立；这种只读显示不把旧输入升级成新Action证据。

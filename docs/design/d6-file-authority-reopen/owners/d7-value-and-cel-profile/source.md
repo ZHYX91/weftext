@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: 5bb6d1c7-f8f4-4a29-ade3-c7f12dc837c6.
 
-Candidate status: D7 file-authority coordinated replacement, not independently accepted, activated or implemented. Stage acceptance, D8/D9 not-started labels and model counts in fixed S are historical source records. This candidate retains their semantics and evidence limits without treating them as current status. It consumes this package's D3 wire12/Result9, current D4 consumers and D6 Control's complete production-version, current-observation, dependency and single-decision recovery contracts. New D3 conflict preparation and D7 /3 binding require independent joint review of the complete package. Portable Locator requalification across replicas awaits its named decision; no overall closure or activation readiness is claimed.
+Candidate status: D7 file-authority coordination repair candidate; not independently accepted, activated or implemented. Historical stage labels and bounded evidence retain only their original scope. This package now consumes the authored PL-IR-01 stable-production-address/current-Observation repair together with current D3/D6 producers, but the new exact candidate still requires independent review and does not close P1 or imply overall activation.
 
 # D7 Value and CEL Profile
 
@@ -153,6 +153,6 @@ DerivedDuration is only the UTF8-ordered closed union: calendar_units→object{c
 
 ## 6. Current production versions and read-only authored values
 
-All TypeSpec/V/CEL functions, totality, arithmetic and provenance bridges above remain unchanged. SourceVersion/2, SourceObservation/1, SourceVersionRef/1 and DependencyProof/2 are execution/preparation evidence, not new primitives, Ref kinds, implicitly recognized ordinary objects or writable values. Authored Locator/tokens remain verbatim under §5.1; display consumes no current-position qualification and decides nothing about PL-IR-01. Actual resolution/writes return to complete current D3 gates. Equal Counters, structural values or CEL equality do not prove production-version equality.
+All TypeSpec/V/CEL functions, totality, arithmetic and provenance bridges above remain unchanged. SourceVersion/2, SourceObservation/1, SourceVersionRef/1 and DependencyProof/2 remain execution/preparation evidence, not new value kinds. Authored Locator/tokens remain verbatim under §5.1: displaying them consumes no current-position qualification and never mutates/reissues the author value. Actual resolution uses D3's stable-production-address/current-Observation algorithm and returns only that new read result; target state/content/profile still needs normal authorization. Such a read is not ActionEvidence and never upgrades old result/preparation inputs. Equal Counter, structure, CEL equality or bytes do not prove production-version equality.
 
 Complete actual Registry/calendar/tzdb/unit/code/external-scheme bindings come from same-cut immutable D4 ValidatedCatalogContext/RecurrenceReadContext and enter actual D6 dependencies. Cells/type labels/context strings cannot fabricate trusted contributions. Retained old mathematical results may display only with original result's current authorization/epoch/deadline intact; display does not upgrade old inputs to new Action evidence.

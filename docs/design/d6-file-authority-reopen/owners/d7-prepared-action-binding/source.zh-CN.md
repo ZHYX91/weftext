@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：5a533466-be80-4de0-987e-2db0086fda87。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 准备证据与原事务绑定
 
@@ -92,6 +92,8 @@ D7ResolutionAccess/1 =
 request 的完整 DecisionKey/2 唯一确定此 record 的 Workspace、operationId、decision owner 与 CommitDomain；preview header 的 decisionKey 与之逐项相等，protocolOwner 不是 OwnerInputBinding 的 descriptor owner。budgetBinding 使用 D6 真实 BudgetBinding/1 的真实成员与数值域，expiresAt 使用同 PreparedIntent 的可信 deadline/clock epoch；预算已耗值及 PinBudget/1 按原 D6 记录保存，重放不清零。preview 是本包《Preview and Effects Transport》定义的完整 protected preview 记录，绝非一个客户端传来的 header 或任意 dictionary；所引用的 semantic manifest、全部 slots/pins 和初始交付投影都按该 owner 完整解码，并与本 request/record 相等。
 
 sourceInputs 逐项等于最终 request 所绑定的 InputDescriptor/2.sourceInputs；每项真实为 `{entityRef,observation:SourceObservation/1,role:"before"|"dependency"}`，完整 role、排序、唯一性与跨字段规则逐字服从 D6。当前 observerDomain 等于请求 CommitDomain；观察中 sourceVersion 保留真正生产域/生产世代，不能由当前观察重签改写。当前任何 SourceVersionRef 只能解析到这份完整观察，未签 caller Ref/revision 不补成证据。sourceInputs 不是 preview bytes、历史冲突分支或 D9 artifact 的容器。
+
+persistent Locator 可以在本次 preparation 之前刚通过新读取取得资格，但本 record 必须把由此得到的**当前** Observation 保存到 sourceInputs。之后任何再次 requalification 或观察变化只能作为另一个新 preparation 的证据，绝不能换入这个不可变 /3 record、request、preview 或 saved/planned recovery。
 
 definitionInputs 按 DefinitionAddress 的 D3-CJ/3 UTF8 bytes 唯一排序，恰覆盖实际读取的全部 wrapper/Query/View；同 owner 的完整当前观察已在 sourceInputs，ownerVersion 与观察中生产 SourceVersion/2 逐字相等，payload 是其中真实完整 payload，不凭定义 label 取最新。registryInputs 是实际使用的不可变 D4 ValidatedCatalogContext 数组，包含其完整 Registry/绑定闭包；ruleInputs 恰为实际递归展开使用的 D4 RecurrenceReadContext（包括真实 Binding/规则贡献），各按 D4 owner 的完整 canonical key 唯一排序。当前语法未定义的其它规则上下文不能被自由 JSON 添加；实际未使用才为空。完整 QueryCall 继续按真实调用路径顺序保存，不能只留顶层调用或去掉负依赖。
 
