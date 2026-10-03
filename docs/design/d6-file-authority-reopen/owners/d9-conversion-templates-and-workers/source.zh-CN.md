@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：9e6c35cb-3c31-4c1d-8d64-32a9a10a1021。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威 PL-IR-01 修复 consumer，未独立接受、未激活、未实施。固定 S 的能力/限制/历史证据边界保持；本文消费稳定生产地址/current Observation 作者修复，但该新 exact candidate 仍待独立复核，不自行关闭 P1。
 
 # D9 转换、模板与 Worker
 
@@ -39,6 +39,7 @@ D9 冻结的是架构规范和有界第一代 profiles：共同探测/worker/IR/
 | U10 | 转换结果、Provenance、来源坐标与 preview 不授写入权；只有已确认原请求的真实 D3/D6 receipt 可证明 author commit。 |
 | U11 | 所有输入/目标/模板/Provider/版本/映射/损失选择/结果顺序均绑定准确版本；改变后新准备。结果未知先恢复原请求，不能换 OperationId 重做。 |
 | U12 | 源/模板不可写，预览零作者写入；准备可写隔离暂存及控制记录，不能把这叫完全零磁盘 I/O。 |
+| U13 | PL-IR-01 persistent Locator 使用 D3/D6 稳定生产地址/current Observation 作者修复：同版同步来源可以重新取得一次新读取资格而不改写 recipe/region；旧 runtime evidence 永不复活。该规则仍待独立复核。 |
 
 原型公开文档中的旧 Record、YAML envelope、H1–H9、`attr.中文键`等不能覆盖上游。本代没有未发布兼容承诺：未来实施删除旧解析器/别名，不能双读双写。当前私有架构阶段保留产品仓库原样。
 

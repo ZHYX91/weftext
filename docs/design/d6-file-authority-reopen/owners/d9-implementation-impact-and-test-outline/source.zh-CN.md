@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：45b327bf-5eb0-45f2-a5bd-11662af244bd。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威 PL-IR-01 修复 consumer，未独立接受、未激活、未实施。固定 S 的能力/限制/历史证据边界保持；本文消费稳定生产地址/current Observation 作者修复，但该新 exact candidate 仍待独立复核，不自行关闭 P1。
 
 # D9 实现影响与测试轮廓
 
@@ -72,7 +72,7 @@ r03的82个断言和历史源码继续原样保留，但它们不验证完整Off
 
 1. 先实现真实版本 decoder、当前入口 scope/授权/CommitDomain/P 连续性与 SourceObservation 生产，再读取完整 source、Registry、Entry 或业务对象。D9/2 workspace 入口与纯工件 D9/1 分开；strong 路径始终 strict，不能借 D8 人工 ordinary/observed_only 或 semantic_pending 放行。缺某个强 producer 只门控其依赖路径，不把普通外部工件处理永久关闭。
 2. TemplateRecipe/2 保存精确 managed 生产版本；TemplateConstruct/2 消费实际 SourceVersionRef；TemplateConstructionInput/2 保存真实观察与完整 PinRef。验证 A:1/B:1 不混同、生产域与观察域可以不同、epoch gap/外部替换不能靠 equal bytes 复活、固定来源变版拒绝。真正读取的源与仅省略目录项按各自先验用途授权，后者不扩成 Annotation body 读取。
-3. 显式旧配方升级完整保留参数/树/slots/资源/损失，先展示准确来源映射，再经原 create_resource 独立准备和确认另存。未知旧生产版本不能以同 Counter 自动迁移；普通未提交旧模板仍可明确选择当前来源。body_text 的跨副本 Locator 保持 PL-IR-01 具名门，不能用新生产地址自称重定位完成。
+3. 显式旧配方升级完整保留参数/树/slots/资源/损失，先展示准确来源映射，再经原 create_resource 独立准备和确认另存。未知旧生产版本不能以同 Counter 自动迁移；普通未提交旧模板仍可明确选择当前来源。PL-IR-01 现使用稳定地址/current Observation 作者算法：按 D6 PL13 验证 `body_text`，按 PL14 验证 Resource region，包括纯同步正向读取、变版 dependency_conflict/stale、不取 latest 重签，以及不改写既有 analysis/PAB/ExportPlan。本要求仍待独立复核，不再是未定义算法，也不自行关闭 P1。
 4. D7 /3 是唯一准备 owner；移除 current schema 镜像重复，保留真实 /1、/2 最小映射、pins、原 request 和恢复。D3 原 wire12 无 planToken；普通 source plan 使用真实 H/空历史及唯一 candidate map，fresh/version 不在 preview 提前分配。当前 D9 不消费 conflict-only 安装 wrapper 或 source plan /2。
 5. Job 每批绑定完整 DecisionKey/2。验证同 Workspace/OperationId 不同域不互认、未知先恢复原请求、先恢复准确 committedPrefix 才准备下一批、任何域变更不自动接管。原不可拆 group/SCC/1000 descendants/10k 实测义务保留；预算/charge 不因 worker 重跑、换 token 或 P 丢失清零。
 6. ExportInputCatalog/2 与 Plan 的实际当前证明和完整 pins 一起生成；source/Field/annotation 目录及 Query proof 按实际用途、同 cut 和正负范围验证。无关连续 sealed Frontier 扩展不代替 source currentness，也不凭一个整体 Frontier 变化丢弃真正合法的 scoped 读取。导出选择三分、bag/order、真实 projection origins、初始 loss/确认和 exact staged bytes 保持同一记录。

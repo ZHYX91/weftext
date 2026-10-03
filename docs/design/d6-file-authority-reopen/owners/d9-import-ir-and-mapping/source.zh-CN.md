@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：1f779371-93a8-45b4-9b6a-c7304fbcdd35。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威 PL-IR-01 修复 consumer，未独立接受、未激活、未实施。固定 S 的能力/限制/历史证据边界保持；本文消费稳定生产地址/current Observation 作者修复，但该新 exact candidate 仍待独立复核，不自行关闭 P1。
 
 # D9 Import IR 与映射
 
@@ -163,4 +163,4 @@ PDF页面有几何/阅读顺序/OCR不确定性；XLSX工作簿有sheet次序、
 
 workbook mapping 的 header 只选择输入的首行语义；目标 table 仍是 D2 不带任何 attribute/header option 的普通原生表格。展示用途也不能生成 header option。保留一行普通文本须作为真正的普通 cell 编码，不新增独立 header 类型或打开 D5/D8 禁止的批贴路径。
 
-d9rg1 几何不因当前 CommitDomain 改写；外层 D3 ResourceRegionLocator 的当前资格须消费真实生产版本、当前观察与原授权顺序。copy/fork 的真实新 source 仍由原 candidate map/SourceRevisionPlan/1/seal 产生，不提前签 committed Locator。PL-IR-01 的跨副本便携 Locator 重新取得当前资格尚待 owner 裁决；本篇不通过相同 bytes、geometry、Counter 或摘要替代它。真实历史 region/profile/receipt 按原 decoder 恢复，不重签成当前 token。
+d9rg1 几何不因当前 CommitDomain 改写。外层 D3 ResourceRegionLocator 的当前使用按修复后顺序：先 Resource/locator disclosure、exact Frontier 与 lifecycle；验证稳定 canonical revision binding/sealed-outbox 关联；解析 exact production SourceVersion；证明接收端 current Resource Observation.sourceVersion 逐字相等；再验证原 ResourceRegionLocator revision、该 profile 的 page/rect geometry 与最终 read barrier。返回 locator/regionToken 不改写，d9rg1 单独不授能力；相同 bytes、geometry、Counter 或 digest 都不能补版本/event 证明。转换 Resource、bytes/orientation 或 production version 改变仍 stale。copy/fork 的 fresh source 继续原 candidate map/SourceRevisionPlan/seal。本篇消费 PL-IR-01 作者修复且仍待独立复核；历史 region/profile/receipt 按原 decoder 恢复，不重签成当前 runtime evidence。
