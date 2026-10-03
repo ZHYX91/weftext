@@ -199,7 +199,7 @@ strict 路径在每个点验证不会静默丢失已观察竞争字节；observe
 
 ### PL-IR-01 便携位置设计验收表
 
-PL01–PL35 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
+PL01–PL44 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
 
 | ID | 场景 | 必须结果 |
 |---|---|---|
@@ -240,6 +240,15 @@ PL01–PL35 仅是本修复候选的设计/一致性义务，**尚未作为产�
 | PL33 | 同一 trust conflict 中 selected bundle digest/revision 与 head 不符、某 branch CP3/declaration bytes 缺失、roots 不同、trust 分叉但无 usable root handle，或 receiver 收到遗漏 B 的 inheritedCompromises 的 resolve_conflict | prepare 或 receiver admission 以 unavailable/integrity-conflict 失败，零 canonical successor。carry set 由 Core 派生且必须完整，caller 无法通过省略抹掉 compromise；不得 fallback 成 policy-only、猜 head、换 current key 或另做第二 repair commit |
 | PL34 | old authority 已 fenced 后 continue 到 fresh server B2 | continuationCut 上：current rotated K1b → 同 decision 追加 revoke(K1b)+authorize(B2)；此前 revoke(K1,loss) 已使状态 none → 同 decision 只 append authorize(B2)；conflicted/gapped/unproved → 不激活。一或两条 declaration 共用一个 DecisionKey/activation ChangeId且无 current 中间 prefix；此前 loss/compromise facts 保持 public history |
 | PL35 | 仅信任变化的策略组件更新、全新副本注册、随后停用副本 | 仅信任变化时，bundle.authorizationRevision 与 policy ComponentImage.version 各推进一次，而 Policy/3.revision 不变。replica_register 只能创建自身全新 ReplicaEpoch，并在同一决议追加单条固定 profile 的 authorize；不能管理其它提交域或密钥。replica_retire 只把记录置为 inactive，authorize_new_sign 随后因 active-domain gate 失败；不得隐式 revoke 或删除历史授权 |
+| PL36 | 共同状态为 K1；selected branch 只是无关策略变化并仍保持 K1，而 losing branch 执行 compromise rotate K1→K3 | 递归 compromise extraction 必须从 losing rotate 的 replacesTrustKeyId 产生原始 K1 fact，并保留该 rotate 的原 activation cut。完整 effective union 禁止 selected branch 继续 keep K1；没有合格 fresh recovery 时结果为 none，后续 resolver cut 绝不能冒充原 compromise cut |
+| PL37 | R1 已经携带一条原始 K1 compromise fact；之后 R1 所在分支与一条从未包含原始 compromise declaration 的分支再次冲突，第二次 resolver 选择后者 | 第二次 resolver 必须验证 R1 并递归折叠其 inheritedCompromises，重新加载原 root-signed declaration 与 CP3 activation evidence；若 selected chain 尚无该 fact，就再次携带同一原始 fact。经过两次或更多 resolution，原 activation cut 始终不变 |
+| PL38 | 同一个原始 compromise fact 同时通过直接 declaration 和一个或多个旧 resolve_conflict 到达新 resolver | 所有逐字相同实例使用同一 factId，只保留一条并按 factId ASCII 升序规范排列；同 factId 但 bytes 不同属于 integrity conflict。不得按 arrival order 选择 source metadata，且原 declaration/activation evidence 必须继续保留 |
+| PL39 | selected current key K1 被任一 effective compromise fact 命中，包括只来自 losing branch 或旧 inherited carry 的事实 | keep_current K1 非法。只有 exact affected domain/profile 符合 fresh eligibility 且显式请求恢复时才可 authorize_fresh，否则结果为 none；安全且无关的 current key 不能因为 freshAuthorizations 中出现就被 rotate |
+| PL40 | 同一 resolve_conflict 为两个不同 exact domain/profile/key tuple 生成两条 authorize_fresh outcome，随后交换两份 possessionSignature | 每份签名只能验证由父 declaration 的 workspaceRef/revision/predecessor/decisionKey 加该 outcome 自身 domain/profile/key tuple 重构出的 PoP body。交换后必须失败；possessionSignature 与 rootSignature 都不进入 PoP body，因此不存在签名递归 |
+| PL41 | 冲突只涉及策略，所有已验证 heads 对无关 domain D 都一致为 none，但 caller 把 D 放入 freshAuthorizations | D 不属于 affectedDomainProfiles，wire3 prepare 必须在生成 key 或 plan 前拒绝该无关 fresh 请求；resolver 不能退化成通用 add/rotate 入口 |
+| PL42 | source_merge 的 wire3 prepare 成功，随后客户端预览并提交 | OwnerInputBinding/2 与 InputDescriptor/2 都使用 d6_conflict_resolution/2；exact branch/base/head/proposed-source/semantic pins 固定在 ConflictResolutionInput/2 与 previewBinding。成功只返回既有 d6_prepared_intent/planToken，最终只能走 d6_commit_request/2，由唯一 P seal 提交 source 与 conflict-record effect |
+| PL43 | choose_source_head 的 wire3 prepare 成功，但提交前 chosen head 或 ConflictKey 改变 | exact selected-head source pin 与 expectedKey 已冻结在同一个 PreparedIntent/2/preview；最终重验发现变化后必须 stale/conflict_changed，commit 不能替换另一 head/source，也不能绕过既有 d6_commit_request/2 |
+| PL44 | policy_bundle_choice 已 prepare，随后在 planned 状态崩溃，或变成 saved/unknown 后重试 | immutable descriptor 必须保留全部 branch CP3/bundle pins、selected address、effective compromise union、inherited carries、outcomes、fresh PoPs、result-bundle pin 与 previewBinding。§5 saved/planned/unseen 顺序和 §8 recovery 只能恢复同一 plan/result 责任；不得用另一 Resolution2 重解析，也不得建立第二 submit、ledger/CAS 或重新派生新的 carry |
 ## 6. 权限与非披露测试
 
 至少覆盖：

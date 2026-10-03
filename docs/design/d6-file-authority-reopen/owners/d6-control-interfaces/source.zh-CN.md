@@ -177,7 +177,7 @@ anchor 重复 declaration 的 exact Workspace/key tuple，并保存按上述算�
 {"wireVersion":1,"kind":"d6_workspace_trust_anchor_import","workspaceRef":<WorkspaceRef>,"rootDeclaration":<WorkspaceTrustRootDeclaration/1>,"expectedRootFingerprint":<WorkspaceTrustRootFingerprint/1>}
 ~~~
 写入前必须有受信 local/deployment-operator 认证，并通过带外方式显式确认该完整 fingerprint object。Core strict-decode `rootDeclaration`，要求其 Workspace 与请求 Workspace 逐字相等，从 raw public key 重验 `rootKeyId`，验证 `selfSignature`，再按上文完整 canonical declaration bytes 重算 `WorkspaceTrustRootFingerprint/1`，并要求与 `expectedRootFingerprint` 逐字相等。已有 byte-equal anchor 是 exact replay；不同 anchor/fingerprint 拒绝。import 不写 Workspace author state、P decision、Frontier 或 policy。从 copied/synchronized files 读取 self-signed root，或拿 key fingerprint 替代 declaration fingerprint，都不足以建立信任。
-当前 profile 下，既有当前 profile 下，既有 `PortableComponentKey/1={"kind":"policy","workspaceRef":...}` 的 exact bytes 是：
+当前 profile 下，既有 `PortableComponentKey/1={"kind":"policy","workspaceRef":...}` 的 exact bytes 是：
 ~~~json
 {"kind":"d6_workspace_authorization_bundle","version":1,"workspaceRef":<WorkspaceRef>,"authorizationRevision":<Counter>,"policy":<Policy/3>,"trustRoot":<WorkspaceTrustRootDeclaration/1>,"trustRevision":<Counter>,"trustDeclarations":[<WorkspaceTrustDeclaration/1>...]}
 ~~~
@@ -931,57 +931,112 @@ request shape保持：
 当前/2读路径还必须验证key中的heads与createdAtFrontier之间上述连续sealed关系；portable history缺段、伪造head或record bytes损坏属于完整性/状态不可用，不把缺失head删掉后返回一个较小conflict。/1按其原历史decoder/gate，不用/2的新Frontier条件回溯改判其已保存bytes。
 ### 9.4 conflict resolution prepare
 
-当前 new-FA prepare 因 policy arm 必须选择完整 authorization/trust 状态而显式升版：
+当前 new-FA prepare 继续使用闭合 wireVersion=3 request：
 ~~~json
 {"wireVersion":3,"kind":"d6_conflict_prepare","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"budget":<BudgetBinding>}
 ~~~
 
-`ConflictResolution/2` 是闭合 union：
+`ConflictResolution/2` 继续是闭合 union：
 ~~~text
 {"kind":"source_merge","ownerNodeRef":NodeRef,"source":text}
 {"kind":"choose_source_head","ownerNodeRef":NodeRef,"head":ChangeId}
 {"kind":"policy_bundle_choice","selected":WorkspaceAuthorizationBundleAddress/1,"policy":Policy/3,"freshAuthorizations":[FreshDomainAuthorizationSpec/1...]}
 ~~~
-前两 arm 保持当前语义。`WorkspaceAuthorizationBundleAddress/1` exact：
+前两个 arm 保持原 source 语义。`WorkspaceAuthorizationBundleAddress/1` 保持：
 ~~~json
 {"kind":"d6_workspace_authorization_bundle_address","version":1,"head":<ChangeId>,"authorizationRevision":<Counter>,"trustRevision":<Counter>,"byteLength":<Counter>,"sha256":"64-lowercase-hex"}
 ~~~
-address 必须选择 `expectedKey.heads` 中恰一个 head。Core 加载该 head 已验证 CP3 的 policy-component after-image，要求 `ComponentImage.version=authorizationRevision`、byteLength/sha256 相等，严格解码完整 `WorkspaceAuthorizationBundle/1`，并要求 trustRevision 匹配。digest 是 exact canonical stored bundle bytes 的 SHA-256，只作比较证据，绝不代替 selected ChangeId 或真实 bytes。
+address 必须选择 `expectedKey.heads` 中恰一个成员。Core 加载该 head 已验证 CP3 的 policy-component after-image，要求 `ComponentImage.version=authorizationRevision`、byteLength/sha256 相等，strict-decode 完整 `WorkspaceAuthorizationBundle/1`，并要求 trustRevision 匹配。digest 只对 exact canonical stored bundle bytes 做 SHA-256 比较，绝不替代 selected ChangeId 或真实 bytes。
 
-`FreshDomainAuthorizationSpec/1` 精确为 `{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1"}`。数组可空，按完整 D3-CJ bytes 排序唯一，不含 caller public/private key。它只在下述 trust resolution 允许或要求 fresh current key 时请求 Core 内部生成新 key，不是通用 rotate/add 入口。
+`FreshDomainAuthorizationSpec/1` 仍精确为 `{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1"}`。数组可空，按 D3-CJ/3 bytes 排序唯一，不含 caller public/private key。
 
-对 `policy_concurrent` prepare，读取 branch contents 前必须通过 current `conflict_resolve`、workspace `policy_admin`、完整 subject disclosure、exact `expectedKey`、全部 head CP3/component bytes 与连续 portable-history proof。每个 head bundle 必须属于同 Workspace 并具有同一已锚定 `WorkspaceTrustRootFingerprint/1`；head 缺失/损坏、root 不同、共同历史不可证明或 key 已变化都属于 unavailable/integrity conflict，不能猜 merge。`selected` 必须精确定位一个 head/bundle；current host state、arrival order 与 LWW 都不能代选。
+处理 `policy_concurrent` 时，读取 branch contents 前必须具备 current `conflict_resolve`、workspace `policy_admin`、完整 subject disclosure、exact `expectedKey`、每个 head 的 CP3/component bytes 与连续 portable-history proof。每个 head bundle 必须同 Workspace，并具有逐字相同的已锚定 `WorkspaceTrustRootFingerprint/1`；head 缺失/损坏、root 不同、共同历史不可证明或 key 已变化都属于 unavailable/integrity conflict。`selected` 必须精确定位一个 head/bundle；current host state、arrival order 与 LWW 都不能替用户选择。
 
-Core 计算全部 head 的累计 trust declaration 最长逐字相等共同前缀，并从该前缀开始验证所有 divergent suffix。随后由 Core 派生而非 caller 提供完整 `TrustConflictCarry/1`：覆盖任一 divergent suffix 中、selected history 尚未包含的全部有效 root-signed `revoke mode=compromise` 事实：
+#### Compromise fact extraction and carry
+
+compromise fact 表示原始被泄露 key 及其原始 causal cut，不表示后来携带该事实的 resolver。闭合 `TrustConflictCarry/1` 为：
 ~~~json
-{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1","trustKeyId":"sha256:64-lowercase-hex","sourceHead":<ChangeId>,"sourceDeclarationRevision":<Counter>,"sourceDeclarationDigest":"sha256:64-lowercase-hex","sourceActivationChangeId":<ChangeId>}
+{"kind":"d6_trust_conflict_carry","version":1,"factId":"sha256:64-lowercase-hex","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1","compromisedTrustKeyId":"sha256:64-lowercase-hex","originAction":"revoke|rotate","originDecisionKey":<DecisionKey/2>,"originDeclarationRevision":<Counter>,"originDeclarationDigest":"sha256:64-lowercase-hex","originActivationChangeId":<ChangeId/1>}
 ~~~
-`sourceDeclarationDigest` 精确为 `"sha256:" + lowercase_hex(SHA-256(D3-CJ/3(complete source WorkspaceTrustDeclaration/1)))`；`sourceActivationChangeId` 从该 declaration 的 DecisionKey/CP3 绑定重新派生。losing branch bytes 与 ConflictRecord history 继续保留。administrative/loss 分支可由显式 selected head 覆盖，但已证明 compromise 事实绝不静默丢弃。
+`originDeclarationDigest` 精确为 `"sha256:" + lowercase_hex(SHA-256(D3-CJ/3(complete original WorkspaceTrustDeclaration/1 including rootSignature)))`。origin declaration 必须是直接 root-signed 的 `mode:"compromise"` declaration：若 `action:"revoke"`，则 `compromisedTrustKeyId=trustKeyId`；若 `action:"rotate"`，则 `compromisedTrustKeyId=replacesTrustKeyId`。`originDecisionKey`、revision 与 digest 定位该 exact declaration；`originActivationChangeId` 从它的 DecisionKey→CP3 activation binding 重新派生。后续 resolver ChangeId 永远不能代替这个原始 cut。
 
-若所有 head 的 trust history 逐字相同且 `freshAuthorizations` 为空，则这是纯 policy resolution：不追加 trust declaration，也不要求 root private key。否则 resolver 必须有已锚定 root 与 usable `WorkspaceTrustRootKeyHandle/1`，并在 selected trust chain 后恰追加一条 root-signed `WorkspaceTrustDeclaration/1` `action:"resolve_conflict"`：
+`factId` 精确为 `"sha256:" + lowercase_hex(SHA-256(ASCII "D6-Trust-Compromise-Fact/1" || NUL || D3-CJ/3({workspaceRef,commitDomain,profile,compromisedTrustKeyId,originAction,originDecisionKey,originDeclarationRevision,originDeclarationDigest,originActivationChangeId})))`。这些字段构成完整 fact identity。同 factId 的两份记录必须逐字相等，否则 history integrity-conflicted。
+
+对每个已验证 head，Core 先继承最长共同 trust prefix 末端已经 effective 的全部 compromise facts，再折叠该 head 的 divergent suffix，得到它的 effective compromise set。直接 `revoke mode=compromise` 产生其 trustKeyId fact；直接 `rotate mode=compromise` 产生其 replacesTrustKeyId fact；已经接纳的 `resolve_conflict` 则贡献其全部 `inheritedCompromises`。每个 inherited member 只有在 Core 重算 factId、加载并验证所指原始 declaration/root signature、核对 mode/action/key 映射、重新派生 exact 原 activation ChangeId，并验证 carrying resolve_conflict declaration 本身后才可接纳。该 fold 可递归：同一 fact 即使被一个或多个早期 resolver 携带，仍是同一原始 fact。
+
+新 resolution 的 effective set 是所有已验证 heads 的 effective compromise set 并集。只按 factId 去重；同 factId 且 byte-equal 的重复项折叠为一条，同 factId 但 bytes 不同直接拒绝。canonical order 为 factId ASCII 升序。selected chain 已经 effective 的 factId 只从新 declaration 的 `inheritedCompromises` 数组中扣除，避免重复存储；outcome 安全判断始终使用完整 effective union。因此即使 selected 是仍保持 K1 current 的纯 policy branch，只要任一合法 losing branch 已证明 K1 compromised，K1 也绝不能被复活。
+
+每条原始 compromise declaration、其 DecisionKey→CP3/ChangeRecord activation evidence、每条仍携带该 fact 的已保留 resolver declaration，以及继续引用该 carried fact 的 descendant declaration，均按 Storage §PL-IR-01 属于 public-history last reference。递归 carry 永远不改写原始 activation cut。
+
+#### Fresh authorization eligibility, outcomes and PoP
+
+定义 `affectedDomainProfiles` 为两部分并集：（a）已验证 heads 之间 current normalized trust state 确实不同的 exact domain/profile；（b）effective compromise union 中至少一个 fact 所指的 exact domain/profile。`freshAuthorizations` 每一项都必须属于 affectedDomainProfiles，并且在 selected chain 上要么 current state 为 `none`，要么 selected current key 已被 effective compromise fact 命中；否则 prepare 拒绝这个 unrelated fresh request。安全的 selected current key 不能通过本 resolver 被 rotate。因此 conflict resolution 不是 generic add/rotate surface。
+
+若所有 head 的 trust history 逐字相同且 `freshAuthorizations` 为空，则可以做 policy-only resolution，无需 root private key。否则 resolver 必须有已锚定 root 与 usable `WorkspaceTrustRootKeyHandle/1`，并在 selected trust chain 后恰追加一条 root-signed `WorkspaceTrustDeclaration/1`、`action:"resolve_conflict"`：
 ~~~json
 {"kind":"d6_workspace_trust_declaration","version":1,"workspaceRef":<WorkspaceRef>,"revision":<Counter>,"predecessor":<predecessor>,"decisionKey":<DecisionKey/2>,"action":"resolve_conflict","conflictId":<ConflictId>,"resolvedHeads":[<ChangeId>...],"selected":<WorkspaceAuthorizationBundleAddress/1>,"inheritedCompromises":[<TrustConflictCarry/1>...],"outcomes":[<TrustConflictOutcome/1>...],"rootSignature":"<86-ASCII-unpadded-base64url>"}
 ~~~
-`revision=selected.trustRevision+1`；predecessor 是 selected chain 最后 declaration 的 exact digest；resolvedHeads 必须逐字等于排序后的完整 `expectedKey.heads`；root 继续按普通 `D6-Workspace-Trust-Declaration/1` 域签名去掉 rootSignature 的 body。`TrustConflictOutcome/1` 是排序唯一的完整集合，覆盖所有 head 间 current trust state 不同、被 inheritedCompromises 提及或由 freshAuthorizations 指定的 exact domain/profile：
+`revision=selected.trustRevision+1`；predecessor 是 selected chain 最后 declaration 的 exact digest；resolvedHeads 必须逐字等于排序后的完整 `expectedKey.heads`；inheritedCompromises 必须是上文 effective-union-minus-selected-existing、按 factId canonical 排序的集合。root 继续按普通 `D6-Workspace-Trust-Declaration/1` 域对仅移除 rootSignature 的 body 签名。
+
+`TrustConflictOutcome/1` 按 `(commitDomain,profile)` 的 D3-CJ/3 排序唯一，并完整覆盖：head state 不同、effective compromise fact 命中或存在 eligible fresh request 的每个 exact domain/profile：
 ~~~text
 {"commitDomain":CommitDomain/2,"profile":"d6_revision_token_seal/1","state":"keep_current","trustKeyId":"sha256:64-lowercase-hex"}
 {"commitDomain":CommitDomain/2,"profile":"d6_revision_token_seal/1","state":"none"}
 {"commitDomain":CommitDomain/2,"profile":"d6_revision_token_seal/1","state":"authorize_fresh","trustKeyId":"sha256:64-lowercase-hex","algorithm":"ed25519","publicKey":"<43-ASCII-unpadded-base64url>","possessionSignature":"<86-ASCII-unpadded-base64url>"}
 ~~~
-selected current key 只有在 inherited compromise 未指向该 key 时才可 `keep_current`。若 selected current key 已被 losing branch 的 compromise 事实命中，则没有 fresh 请求时结果必须为 `none`；若 freshAuthorizations 含其 exact domain/profile，则 Core 生成 fresh protected key/PoP 并产生 `authorize_fresh`。selected 本来为 `none` 时同理：没有 fresh 请求继续 none，有 fresh 请求才 authorize_fresh。freshAuthorizations 不能借 conflict resolution 轮换一个本来安全的 selected current key。因此 resulting declaration 是一个 exact selected bundle 的 root-authorized successor，同时带回所有必须保留的 losing-branch compromise 事实。
+selected current key 只有在完整 effective compromise union 没有任何 fact 指向该 key 时才能 `keep_current`。若 selected current key 已 compromised，则无 fresh 请求时结果必须为 `none`；只有 exact domain/profile 同时 eligible 且列入 freshAuthorizations 时，Core 才生成 fresh protected key 并产生 `authorize_fresh`。selected 为 `none` 时也只有 eligible 且显式请求才能 authorize_fresh。fresh outcome 永不复用 caller key。
 
-`validate_historical` 对每个 inheritedCompromise 使用其 `sourceActivationChangeId`，效果与 source branch 原 compromise revoke 完全一致：该 key 的 artifact 只有可证明因果早于 source cut 才有效，并发或更晚一律拒绝。这样即使 canonical successor 选了另一 exact branch，compromise 事实也不会被抹除。resolution 前某 branch cut 上的历史 artifact 继续沿该 branch 的 anchored bundle/CP3 history 验证；resolution 不重写 losing declaration bytes。
+每个 `authorize_fresh` outcome 的 possession 复用既有 domain `D6-Domain-Seal-Key-PoP/1`，并精确签下面这个闭合 body：
+~~~json
+{"workspaceRef":<parent resolve_conflict workspaceRef>,"revision":<parent revision>,"predecessor":<parent predecessor>,"decisionKey":<parent decisionKey>,"commitDomain":<outcome commitDomain>,"profile":"d6_revision_token_seal/1","trustKeyId":<outcome trustKeyId>,"algorithm":"ed25519","publicKey":<outcome publicKey>}
+~~~
+signature 精确为 `ASCII "D6-Domain-Seal-Key-PoP/1" || NUL || D3-CJ/3(body above)`。前四个字段在 fresh-key generation 前由父 resolve_conflict 固定；后五个字段来自该 exact outcome。`possessionSignature` 本身不进入 PoP body，父 `rootSignature` 也不进入，因此不存在 signature recursion。Core 先从 raw 32-byte public key 重算 trustKeyId，再签名。多个 fresh outcomes 分别签自己的 reconstructed body；把一个 outcome 的 possessionSignature 换到另一个 outcome 必须验签失败。全部 outcome PoP 固定后，Workspace root 再对只移除 rootSignature 的完整 resolve_conflict declaration 签名。receiver 从已接纳 parent declaration 与该 exact outcome 重构同一 PoP body，并验证同一 bytes。
 
-proposed policy 必须完整。若逐字等于 selected.policy，则保留其 Policy revision；否则必须是 selected.policy 的合法 checked successor，并通过 current policy_admin 规则。结果 bundle 以 exact selected bundle 为基础，只 checked 增加一次 `authorizationRevision`，安装该 policy；若追加 conflict-resolution declaration 则 trustRevision checked +1，否则保持不变。policy ComponentImage.version 必须等于结果 authorizationRevision。
+`validate_historical` 对每个 effective compromise fact 使用其 `originActivationChangeId`：被 compromise key 的 artifact 只有在 seal ChangeId 可证明因果早于该原始 cut 时才有效，并发或更晚直接拒绝。resolution 前 branch 的历史验签继续沿该 branch 的 anchored bytes；resolver 不重写 losing declaration bytes，也不把旧 compromise 移到新 cut。
 
-planning 冻结全部 head bundle/pin、selected address、派生共同前缀与 compromise carry set、拟议 Policy/3、任何 fresh protected key handle/PoP 及 exact resulting bundle。仍只有既有一个 planning CAS 和一个最终 P seal。相同 resolution ChangeId 原子安装结果 policy component 与 ConflictRecord resolution/supersession effect；不新增第二 ledger、CAS、CP4 或中间 trust prefix。
+proposed policy 必须完整。若与 selected.policy 逐字相等，则 Policy revision 保持；否则必须是 selected.policy 的合法 checked successor 并通过 current policy_admin。结果 bundle 以 exact selected bundle 为基础，`authorizationRevision` checked +1；真正 policy-only resolution 保持 trustRevision，否则单条 resolve_conflict declaration 只让 trustRevision checked +1。policy ComponentImage.version 等于结果 authorizationRevision。
 
-接收端在接纳 canonical policy component 前，必须重验完整原 ConflictKey heads、每个 head 的 CP3 policy image、selected bundle address、共同前缀/分支后缀推导、完整 inheritedCompromises、root signature、fresh-key PoP、结果 bundle bytes/version，以及同 decision 的 conflict-record transition。任一不匹配都是 unavailable/integrity conflict，不能按 arrival order 修复。
+#### PreparedIntent/2, preview and unique submit path
 
-旧 wireVersion=2/ConflictResolution/1 候选中的 `policy_choice:{policy}` 不再是当前 new-FA prepare surface；它从未激活，因此不虚构 migration shim。任何确能证明存在的真实历史 prepared/saved/planned/unknown record 仍只按其原 decoder、request fingerprint、pins 与义务恢复。placement/lifecycle/identity conflict 继续导航到 D3 §10.1 typed resolver，保持原单一 D3 submit/P decision。
+wire3 的三个 D6-owned arm 全部复用既有 D6 v2 preparation carrier 与 final submit；wireVersion=3 只版本化本 prepare request/owner descriptor，不新建 ledger 或 commit protocol。OwnerInputBinding/2 使用 `protocolOwner="D6"`；`ownerKind` 与 `InputDescriptor.intentKind` 都固定为 `d6_conflict_resolution/2`。完整 canonical owner descriptor 为闭合 `ConflictResolutionInput/2`：
+~~~json
+{"kind":"d6_conflict_resolution_input","version":2,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"branchEvidence":[<ConflictResolutionBranchEvidence/1>...],"derivedPlan":<ConflictResolutionDerivedPlan/1>}
+~~~
+`ConflictResolutionBranchEvidence/1` exact：
+~~~json
+{"head":<ChangeId>,"changeRecordPin":<PinRef/2>,"completionProofPin":<PinRef/2>,"policyBundlePin":<PinRef/2|"absent">,"sourcePins":[{"entityRef":<EntityRef>,"sourcePin":<PinRef/2>,"metadataPin":<PinRef/2>}...]}
+~~~
+branchEvidence 必须完整覆盖 expectedKey.heads，按 ChangeId 排序；每个 pin 都是该 arm 实际消费的 exact protected/canonical evidence。sourcePins 按 EntityRef 排序，可空；缺证据不能靠省略表示。
 
-source_merge/choose_source_head 重新读取全部 heads/base/current 权限并执行 D2/local/complete gates。新 head 使 expectedKey stale -> conflict_changed；旧点击绝不复用。
-## 10. Policy/3## 10. Policy/3
+`ConflictResolutionDerivedPlan/1` 是与 arm 匹配的闭合 union：
+~~~text
+{"kind":"source","ownerNodeRef":NodeRef,"baseSourcePin":PinRef/2,"headSourcePins":[{"head":ChangeId,"sourcePin":PinRef/2}...],"proposedSourcePin":PinRef/2,"semanticPreviewPin":PinRef/2}
+{"kind":"policy_bundle","selected":WorkspaceAuthorizationBundleAddress/1,"selectedBundlePin":PinRef/2,"effectiveCompromises":[TrustConflictCarry/1...],"inheritedCompromises":[TrustConflictCarry/1...],"outcomes":[TrustConflictOutcome/1...],"resultBundlePin":PinRef/2}
+~~~
+source_merge 的 proposedSourcePin 固定请求中的准确 source 内容；choose_source_head 固定所选 head 的准确 source bytes。两个 source 分支都保留原始 base/head 的 source pins、D2/local/complete 语义证据与 preview pin。policy_bundle_choice 的 descriptor 固定所有 head 的 bundle/evidence pins、selected address/bundle、完整 effective compromise union、准确 inheritedCompromises、全部 outcomes、所有 fresh public key/PoP bytes，以及拟议 WorkspaceAuthorizationBundle/1 结果的准确 pin。受保护的 fresh private-key handle 由同一 installationPlan 绑定，绝不序列化进本 descriptor。
+
+`OwnerInputBinding/2.canonicalDescriptorBytes` 精确等于 D3-CJ/3(ConflictResolutionInput/2)，pinRefs 是 branchEvidence/derivedPlan 中全部 pin 的排序唯一并集。`InputDescriptor/2` 使用 guarantee=`managed_atomic`、frontierPolicy=`exact` 与 strict write protection。source_merge/choose_source_head 使用 saveProfile=`complete`、覆盖 ownerNodeRef 的最小既有 local_source ObservationScope、真实 current sourceInputs，以及全部 conflict/source/semantic/authorization controlInputs。policy_bundle_choice 使用 saveProfile=`control_only`、workspace_constraints ObservationScope、空 sourceInputs，以及真实 conflict_record/authorization/portable-frontier/policy-history controlInputs。任何 dependency 都不能绕过 InputDescriptor。
+
+immutable owner preview 为闭合 `ConflictResolutionPreview/1`：
+~~~json
+{"kind":"d6_conflict_resolution_preview","version":1,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"branchEvidenceDigest":"sha256:64-lowercase-hex","derivedPlan":<ConflictResolutionDerivedPlan/1>}
+~~~
+`branchEvidenceDigest` 精确为 `"sha256:" + lowercase_hex(SHA-256(D3-CJ/3(the complete branchEvidence array)))`。PreparedIntent/2.previewBinding 精确绑定该 preview record；它不是第二请求，commit 时不可编辑。pinDirectory 按 §3.6 包含全部 owner/dependency/preview pins。
+
+三个 arm prepare 成功都返回既有 response，并固定 strict write protection：
+~~~json
+{"wireVersion":2,"kind":"d6_prepared_intent","planToken":<Token>,"semanticState":<SemanticState/1>,"writeProtection":"strict","inputRetentionState":"retained"}
+~~~
+planToken 是该准确 PreparedIntent/2 的既有 `d6_plan/2` token。最终提交唯一允许既有 `d6_commit_request/2`，不得携带 resolution/source/policy override。唯一 planning CAS 冻结完整 InputDescriptor/OwnerInputBinding、全部 branch pins、previewBinding、source 或 policy 的 derived plan、fresh handle association 与结果 bytes。唯一 final P seal 重验 expectedKey、current authorization、fence 及这些准确冻结的 dependencies，再原子安装 source 或结果 policy component 与 ConflictRecord resolution/supersession effect。禁止 one-stage resolver、第二次 submit、第二 ledger/CAS、CP4 或中间 trust prefix。
+
+closed-decode 与 error 顺序继续使用既有 D6 surface：malformed wire3/Resolution2 在任何 state read 前为 invalid_request；披露/授权失败仍为 not_visible；branch/CP3/history evidence 不可用使用既有 state/proof/domain-unavailable 边界；expectedKey 改变为 conflict_changed。不新增 error union。§5 继续是唯一顺序：saved 在新业务检查前返回/恢复原 saved result；planned 恢复同一 PreparedIntent/descriptor/pins/preview/installation state，绝不重新解释不同 Resolution2；只有 unseen 才运行本 wire3 preparation。exact replay 只恢复同一个 retained plan association。改变 resolution/choice/source/expectedKey 不能复用原 planToken，必须重新走 unseen prepare；若已按分配的 OperationId 存在原 decision，则先执行 §5 saved/planned/unknown recovery，§8 继续保留该原始责任。
+
+接收端接纳 policy resolution 前必须重验完整原 ConflictKey heads、每个 head CP3/policy image、selected bundle address、递归 effective compromise fold 与 canonical dedup/order、完整 inheritedCompromises、每份 fresh-key PoP、root signature、结果 bundle bytes/version，以及同 decision conflict-record transition。source resolution 的 receiver/publication 继续既有 source/CP3 路径并使用相同 frozen source pins 与 semantic proof。任一 mismatch 都是 unavailable/integrity conflict，不能 arrival-order repair。
+
+旧 wireVersion=2/ConflictResolution/1 候选中的 `policy_choice:{policy}` 不再是当前 new-FA surface，且未激活；不虚构 migration shim。任何确能证明存在的真实历史 prepared/saved/planned/unknown record 继续只按原 decoder、request fingerprint、pins 与义务恢复。placement/lifecycle/identity conflict 继续导航到 D3 §10.1 typed resolver，并保持原单一 D3 submit/P decision。
+
+source_merge/choose_source_head 仍重新读取全部 heads/base/current 权限，并重跑 D2/local/complete gates。新 head 使 expectedKey stale -> conflict_changed；旧点击绝不复用。
+## 10. Policy/3
 
 Policy/3 的 exact top-level仍为 version,revision,grants，version=3。Policy/1/2 保留原 decoder、原 bytes、原 capability/scope语义，不自动升级。grant仍为 subject,effect,scope,capabilities；deny优先、默认拒绝。原 Policy/2 的全部 capability逐字保留，不因本次DependencyProof扩展而改变。
 

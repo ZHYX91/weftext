@@ -180,7 +180,7 @@ An existing Workspace is anchored only through the host-local closed import:
 {"wireVersion":1,"kind":"d6_workspace_trust_anchor_import","workspaceRef":<WorkspaceRef>,"rootDeclaration":<WorkspaceTrustRootDeclaration/1>,"expectedRootFingerprint":<WorkspaceTrustRootFingerprint/1>}
 ~~~
 Trusted local/deployment-operator authentication and explicit out-of-band confirmation of that complete fingerprint object precede the write. Core strict-decodes `rootDeclaration`, requires its Workspace to equal the request Workspace, rechecks `rootKeyId` from the raw public key, verifies `selfSignature`, recomputes `WorkspaceTrustRootFingerprint/1` from the complete canonical declaration bytes above, and requires byte-equality with `expectedRootFingerprint`. An already present byte-equal anchor is exact replay; a different anchor/fingerprint is rejected. Import writes no Workspace author state, P decision, Frontier or policy. Reading a self-signed root from copied/synchronized files, or substituting the key fingerprint for the declaration fingerprint, is insufficient.
-For this profile, the exact bytesFor this profile, the exact bytes of the already-existing `PortableComponentKey/1={"kind":"policy","workspaceRef":...}` are the closed:
+For this profile, the exact bytes of the already-existing `PortableComponentKey/1={"kind":"policy","workspaceRef":...}` are the closed:
 ~~~json
 {"kind":"d6_workspace_authorization_bundle","version":1,"workspaceRef":<WorkspaceRef>,"authorizationRevision":<Counter>,"policy":<Policy/3>,"trustRoot":<WorkspaceTrustRootDeclaration/1>,"trustRevision":<Counter>,"trustDeclarations":[<WorkspaceTrustDeclaration/1>...]}
 ~~~
@@ -923,57 +923,112 @@ Non-disclosure ordering remains: closed decode, then conflict_read capability pl
 The current /2 read path also validates the continuous sealed relationship between key heads and createdAtFrontier. A portable-history hole, fabricated head, or corrupt record is integrity/state unavailability and never causes Core to delete missing heads and return a smaller conflict. /1 stays under its original historical decoder/gate; new /2 Frontier conditions never retrospectively reinterpret its saved bytes.
 ### 9.4 conflict resolution prepare
 
-The current new-FA prepare is versioned because the policy arm now selects complete authorization/trust state, not only Policy/3:
+The current new-FA prepare remains the closed wireVersion=3 request:
 ~~~json
 {"wireVersion":3,"kind":"d6_conflict_prepare","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"budget":<BudgetBinding>}
 ~~~
 
-`ConflictResolution/2` is the closed union:
+`ConflictResolution/2` remains the closed union:
 ~~~text
 {"kind":"source_merge","ownerNodeRef":NodeRef,"source":text}
 {"kind":"choose_source_head","ownerNodeRef":NodeRef,"head":ChangeId}
 {"kind":"policy_bundle_choice","selected":WorkspaceAuthorizationBundleAddress/1,"policy":Policy/3,"freshAuthorizations":[FreshDomainAuthorizationSpec/1...]}
 ~~~
-The first two arms retain their current semantics. `WorkspaceAuthorizationBundleAddress/1` is:
+The first two arms retain their source semantics. `WorkspaceAuthorizationBundleAddress/1` remains:
 ~~~json
 {"kind":"d6_workspace_authorization_bundle_address","version":1,"head":<ChangeId>,"authorizationRevision":<Counter>,"trustRevision":<Counter>,"byteLength":<Counter>,"sha256":"64-lowercase-hex"}
 ~~~
-The address selects one exact member of `expectedKey.heads`. Core loads that head's verified CP3 policy-component after-image, requires `ComponentImage.version=authorizationRevision`, byteLength/sha256 equality, strict-decodes the complete `WorkspaceAuthorizationBundle/1`, and requires its trustRevision to match. The digest is SHA-256 of the exact canonical stored bundle bytes; it is comparison evidence only and never replaces the selected ChangeId or bytes.
+The address selects exactly one member of `expectedKey.heads`. Core loads that head's verified CP3 policy-component after-image, requires `ComponentImage.version=authorizationRevision`, byteLength/sha256 equality, strict-decodes the complete `WorkspaceAuthorizationBundle/1`, and requires its trustRevision to match. The digest is SHA-256 of the exact canonical stored bundle bytes; it is comparison evidence only and never replaces the selected ChangeId or bytes.
 
-`FreshDomainAuthorizationSpec/1` is exactly `{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1"}`. The array may be empty, is complete-D3-CJ sorted/unique, and never contains caller public/private key material. It requests a fresh Core-generated key only where the trust-resolution rules below require or permit a fresh current key; it is not a general rotate/add surface.
+`FreshDomainAuthorizationSpec/1` remains exactly `{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1"}`. The array may be empty and is sorted/unique by D3-CJ/3 bytes. It carries no caller public/private key.
 
-For a `policy_concurrent` prepare, current `conflict_resolve` plus workspace `policy_admin`, complete subject disclosure, exact `expectedKey`, all head CP3/component bytes, and a continuous portable-history proof are mandatory before branch contents are used. Every head bundle must have the same Workspace and the same anchored `WorkspaceTrustRootFingerprint/1`; a missing/corrupt head, different root, unproved common history, or changed key is unavailable/integrity conflict rather than a guessed merge. `selected` must identify exactly one head/bundle; current host state, arrival order and LWW never select it.
+For `policy_concurrent`, current `conflict_resolve` plus workspace `policy_admin`, complete subject disclosure, exact `expectedKey`, every head's CP3/component bytes, and continuous portable-history proof are required before branch contents are read. Every head bundle must have the same Workspace and byte-equal anchored `WorkspaceTrustRootFingerprint/1`; a missing/corrupt head, different root, unproved common history, or changed key is unavailable/integrity conflict. `selected` must identify exactly one head/bundle; current host state, arrival order and LWW never choose it.
 
-Core computes the longest byte-equal cumulative trust-declaration prefix shared by every head and validates every divergent suffix from that prefix. It then derives, rather than accepting from the caller, the complete `TrustConflictCarry/1` set for every valid root-signed `revoke mode=compromise` fact in any divergent suffix that is not already present in the selected history:
+#### Compromise fact extraction and carry
+
+A compromise fact is about the originally compromised key and its original causal cut, not about the resolver that later carries it. Closed `TrustConflictCarry/1` is:
 ~~~json
-{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1","trustKeyId":"sha256:64-lowercase-hex","sourceHead":<ChangeId>,"sourceDeclarationRevision":<Counter>,"sourceDeclarationDigest":"sha256:64-lowercase-hex","sourceActivationChangeId":<ChangeId>}
+{"kind":"d6_trust_conflict_carry","version":1,"factId":"sha256:64-lowercase-hex","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1","compromisedTrustKeyId":"sha256:64-lowercase-hex","originAction":"revoke|rotate","originDecisionKey":<DecisionKey/2>,"originDeclarationRevision":<Counter>,"originDeclarationDigest":"sha256:64-lowercase-hex","originActivationChangeId":<ChangeId/1>}
 ~~~
-`sourceDeclarationDigest` is `"sha256:" + lowercase_hex(SHA-256(D3-CJ/3(complete source WorkspaceTrustDeclaration/1)))`; `sourceActivationChangeId` is rederived from that declaration's DecisionKey/CP3 binding. Losing branch bytes and ConflictRecord history remain retained. Administrative/loss branch choices may be explicitly overridden by the selected head, but a proved compromise fact is never silently discarded.
+`originDeclarationDigest` is `"sha256:" + lowercase_hex(SHA-256(D3-CJ/3(complete original WorkspaceTrustDeclaration/1 including rootSignature)))`. The origin declaration is always a direct root-signed `mode:"compromise"` declaration: for `action:"revoke"`, `compromisedTrustKeyId=trustKeyId`; for `action:"rotate"`, `compromisedTrustKeyId=replacesTrustKeyId`. `originDecisionKey`, revision and digest name that exact declaration, and `originActivationChangeId` is rederived from its DecisionKey→CP3 activation binding. A later resolver ChangeId is never substituted for this original cut.
 
-If every head has byte-identical trust history and `freshAuthorizations` is empty, this is a policy-only resolution: no trust declaration is appended and no root private key is required. Otherwise the resolver requires the anchored root plus a usable `WorkspaceTrustRootKeyHandle/1` and appends exactly one root-signed `WorkspaceTrustDeclaration/1` `action:"resolve_conflict"` to the selected trust chain:
+`factId` is exactly `"sha256:" + lowercase_hex(SHA-256(ASCII "D6-Trust-Compromise-Fact/1" || NUL || D3-CJ/3({workspaceRef,commitDomain,profile,compromisedTrustKeyId,originAction,originDecisionKey,originDeclarationRevision,originDeclarationDigest,originActivationChangeId})))`. Those fields are the complete fact identity. Two records with the same factId must be byte-equal or the history is integrity-conflicted.
+
+For each validated head, Core starts with every compromise fact already effective at the end of the longest common trust prefix, then folds that head's divergent suffix to compute its effective compromise set. A direct `revoke mode=compromise` contributes its trustKeyId fact. A direct `rotate mode=compromise` contributes its replacesTrustKeyId fact. An already accepted `resolve_conflict` contributes every member of its `inheritedCompromises`; each inherited member is accepted only after Core recomputes factId, loads and validates the named original declaration/root signature, checks its mode/action/key mapping, rederives the exact original activation ChangeId, and validates the carrying resolve_conflict declaration itself. This fold is recursive: a fact carried by one or many earlier resolvers is still the same original fact.
+
+The effective set for the new resolution is the union of every validated head's effective compromise set. Deduplication is by factId only; duplicate byte-equal facts collapse to one, while same factId/non-byte-equal bytes reject. Canonical order is ascending ASCII factId. The selected chain's already-effective factIds are subtracted only from the new declaration's `inheritedCompromises` array to avoid duplicate storage; outcome safety is always evaluated against the full effective union, so selecting a policy-only branch that still says K1 current cannot revive K1 when any legal losing branch proved K1 compromised.
+
+Every original compromise declaration, its DecisionKey→CP3/ChangeRecord activation evidence, every retained resolver declaration that carries the fact, and every descendant declaration that still references that carried fact remain public-history last references under Storage §PL-IR-01. Recursive carrying never rewrites the original activation cut.
+
+#### Fresh authorization eligibility, outcomes and PoP
+
+Let `affectedDomainProfiles` be the union of: (a) exact domain/profile pairs whose current normalized trust state differs among the validated heads; and (b) exact domain/profile pairs named by at least one fact in the effective compromise union. Every `freshAuthorizations` member must be in affectedDomainProfiles and, on the selected chain, must either be current state `none` or have its selected current key named by an effective compromise fact. Otherwise prepare rejects the unrelated fresh request. A safe selected current key may not be rotated through this resolver. Thus conflict resolution is not a generic add/rotate surface.
+
+If every head has byte-identical trust history and `freshAuthorizations` is empty, the resolution may be policy-only and needs no root private key. Otherwise the resolver requires the anchored root plus a usable `WorkspaceTrustRootKeyHandle/1` and appends exactly one root-signed `WorkspaceTrustDeclaration/1` with `action:"resolve_conflict"` to the selected trust chain:
 ~~~json
 {"kind":"d6_workspace_trust_declaration","version":1,"workspaceRef":<WorkspaceRef>,"revision":<Counter>,"predecessor":<predecessor>,"decisionKey":<DecisionKey/2>,"action":"resolve_conflict","conflictId":<ConflictId>,"resolvedHeads":[<ChangeId>...],"selected":<WorkspaceAuthorizationBundleAddress/1>,"inheritedCompromises":[<TrustConflictCarry/1>...],"outcomes":[<TrustConflictOutcome/1>...],"rootSignature":"<86-ASCII-unpadded-base64url>"}
 ~~~
-`revision=selected.trustRevision+1`; predecessor is the selected chain's exact last-declaration digest; resolvedHeads byte-equals the sorted complete `expectedKey.heads`; the root signs the ordinary `D6-Workspace-Trust-Declaration/1` body with rootSignature removed. `TrustConflictOutcome/1` is a sorted/unique complete set over every exact domain/profile whose current trust state differs among heads, is mentioned by inheritedCompromises, or is named by freshAuthorizations:
+`revision=selected.trustRevision+1`; predecessor is the selected chain's exact last-declaration digest; resolvedHeads byte-equals sorted complete `expectedKey.heads`; inheritedCompromises is the canonical factId-sorted effective-union-minus-selected-existing set above. The root signs the ordinary `D6-Workspace-Trust-Declaration/1` body with only rootSignature removed.
+
+`TrustConflictOutcome/1` is sorted/unique by D3-CJ/3 of `(commitDomain,profile)` and is complete for every exact domain/profile whose head states differ, whose effective compromise facts target that domain/profile, or whose eligible fresh authorization is requested:
 ~~~text
 {"commitDomain":CommitDomain/2,"profile":"d6_revision_token_seal/1","state":"keep_current","trustKeyId":"sha256:64-lowercase-hex"}
 {"commitDomain":CommitDomain/2,"profile":"d6_revision_token_seal/1","state":"none"}
 {"commitDomain":CommitDomain/2,"profile":"d6_revision_token_seal/1","state":"authorize_fresh","trustKeyId":"sha256:64-lowercase-hex","algorithm":"ed25519","publicKey":"<43-ASCII-unpadded-base64url>","possessionSignature":"<86-ASCII-unpadded-base64url>"}
 ~~~
-A selected current key may be `keep_current` only when no inherited compromise names that key. If the selected current key is compromised, the result is `none` unless its exact domain/profile is in freshAuthorizations, in which case Core generates a fresh protected key and PoP and emits `authorize_fresh`. A selected `none` state likewise remains none unless a fresh authorization is explicitly requested. freshAuthorizations cannot rotate an otherwise safe selected current key. The resulting resolution declaration is therefore a root-authorized successor of one exact selected bundle while carrying every losing-branch compromise fact that must survive.
+A selected current key may be `keep_current` only when no fact in the full effective compromise union names that key. If the selected current key is compromised, the result is `none` unless its exact domain/profile is eligible and present in freshAuthorizations, in which case Core generates a fresh protected key and emits `authorize_fresh`. Selected `none` likewise remains none unless that exact pair is eligible and explicitly requested. A fresh outcome never reuses a caller key.
 
-`validate_historical` treats each inheritedCompromise exactly like its source compromise revocation at `sourceActivationChangeId`: artifacts for that key are valid only when proved causally before that source cut; concurrent/later artifacts reject. This preserves the compromise fact even when a different exact branch supplies the canonical successor. Historical verification of an artifact at a pre-resolution branch cut follows that branch's anchored bundle/CP3 history; resolution never rewrites the losing declaration bytes.
+For each `authorize_fresh` outcome, possession uses the existing domain `D6-Domain-Seal-Key-PoP/1` and this exact closed body:
+~~~json
+{"workspaceRef":<parent resolve_conflict workspaceRef>,"revision":<parent revision>,"predecessor":<parent predecessor>,"decisionKey":<parent decisionKey>,"commitDomain":<outcome commitDomain>,"profile":"d6_revision_token_seal/1","trustKeyId":<outcome trustKeyId>,"algorithm":"ed25519","publicKey":<outcome publicKey>}
+~~~
+The signature is exactly `ASCII "D6-Domain-Seal-Key-PoP/1" || NUL || D3-CJ/3(body above)`. The four parent fields are fixed before fresh-key generation; the remaining five fields come from that one outcome. `possessionSignature` itself is absent from the PoP body, and parent `rootSignature` is also absent, so there is no signature recursion. Core recomputes trustKeyId from the raw 32-byte public key before signing. Multiple fresh outcomes each sign their own reconstructed body; swapping possessionSignature values between outcomes fails verification. After all outcome PoPs are fixed, the Workspace root signs the complete resolve_conflict declaration with only rootSignature removed. A receiver reconstructs the same PoP body from the admitted parent declaration plus that exact outcome and verifies the same bytes.
 
-The proposed policy is complete. If it is byte-equal to selected.policy, its Policy revision is preserved; otherwise it must be the legal checked successor of selected.policy and pass current policy_admin rules. The resulting bundle is based on the exact selected bundle, checked-increments `authorizationRevision` once, installs that policy, and either preserves trustRevision or checked-increments it once for the single conflict-resolution declaration. Its policy ComponentImage.version is the resulting authorizationRevision.
+`validate_historical` treats every effective compromise fact at its `originActivationChangeId`: artifacts for the compromised key validate only when their seal ChangeId is causally before that original cut; concurrent/later artifacts reject. Historical validation of a pre-resolution branch still follows that branch's anchored bytes. No resolver rewrites losing declaration bytes or moves an old compromise to a new cut.
 
-Planning freezes every head bundle/pin, the selected address, derived common prefix and compromise carry set, proposed Policy/3, any fresh protected key handles/PoPs, and the exact resulting bundle. The one existing planning CAS and one final P seal remain the only decision points. The same resolution ChangeId atomically installs the resulting policy component and the ConflictRecord resolution/supersession effect; no second ledger, CAS, CP4 or intermediate trust prefix exists.
+The proposed policy is complete. If byte-equal to selected.policy, its Policy revision is preserved; otherwise it must be the legal checked successor of selected.policy and pass current policy_admin rules. The resulting bundle is based on the exact selected bundle, checked-increments `authorizationRevision` once, installs that policy, and either preserves trustRevision for a true policy-only resolution or checked-increments it once for the single resolve_conflict declaration. Its policy ComponentImage.version equals the resulting authorizationRevision.
 
-Receiver admission revalidates the complete original ConflictKey heads, each head's CP3 policy image, the selected bundle address, the common-prefix/divergent-suffix derivation, exhaustive inheritedCompromises, root signature, any fresh-key PoP, resulting bundle bytes/version, and the same-decision conflict-record transition before accepting the canonical policy component. A mismatch is unavailable/integrity conflict, never arrival-order repair.
+#### PreparedIntent/2, preview and unique submit path
 
-The former wireVersion=2/ConflictResolution/1 candidate with `policy_choice:{policy}` is not a current new-FA prepare surface; it was not activated and no migration shim is invented. Any real historical prepared/saved/planned/unknown record that can actually be proved to exist still recovers only under its original decoder, request fingerprint, pins and obligations. Placement/lifecycle/identity conflicts continue to navigate to D3 §10.1's typed resolver, with the same single D3 submit/P decision as before.
+All three D6-owned wire3 arms use the existing D6 v2 preparation carrier and final submit; wireVersion=3 changes only this prepare request/owner descriptor, not the ledger or commit protocol. OwnerInputBinding/2 has `protocolOwner="D6"`; `ownerKind` and `InputDescriptor.intentKind` are both `d6_conflict_resolution/2`. The complete canonical owner descriptor is closed `ConflictResolutionInput/2`:
+~~~json
+{"kind":"d6_conflict_resolution_input","version":2,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"branchEvidence":[<ConflictResolutionBranchEvidence/1>...],"derivedPlan":<ConflictResolutionDerivedPlan/1>}
+~~~
+`ConflictResolutionBranchEvidence/1` is exactly:
+~~~json
+{"head":<ChangeId>,"changeRecordPin":<PinRef/2>,"completionProofPin":<PinRef/2>,"policyBundlePin":<PinRef/2|"absent">,"sourcePins":[{"entityRef":<EntityRef>,"sourcePin":<PinRef/2>,"metadataPin":<PinRef/2>}...]}
+~~~
+branchEvidence is complete for expectedKey.heads, sorted by ChangeId, and every listed pin is the exact protected/canonical evidence actually consumed by the arm; sourcePins are sorted by EntityRef and may be empty. Missing evidence is not represented by omission.
 
-source_merge/choose_source_head reload every head/base/current permission and rerun D2/local/complete gates. Any new head makes expectedKey stale -> conflict_changed; an old click is never reused.
-## 10. Policy/3## 10. Policy/3
+`ConflictResolutionDerivedPlan/1` is the closed arm-matched union:
+~~~text
+{"kind":"source","ownerNodeRef":NodeRef,"baseSourcePin":PinRef/2,"headSourcePins":[{"head":ChangeId,"sourcePin":PinRef/2}...],"proposedSourcePin":PinRef/2,"semanticPreviewPin":PinRef/2}
+{"kind":"policy_bundle","selected":WorkspaceAuthorizationBundleAddress/1,"selectedBundlePin":PinRef/2,"effectiveCompromises":[TrustConflictCarry/1...],"inheritedCompromises":[TrustConflictCarry/1...],"outcomes":[TrustConflictOutcome/1...],"resultBundlePin":PinRef/2}
+~~~
+For source_merge, proposedSourcePin pins the exact request source; for choose_source_head it pins the exact selected head source bytes. Both source arms retain the original base/head source pins, D2/local/complete semantic evidence and preview pin. For policy_bundle_choice, the descriptor freezes every head bundle/evidence pin, selected address/bundle, complete effective compromise union, exact inheritedCompromises, outcomes, any fresh public key/PoP bytes, and the exact proposed resulting WorkspaceAuthorizationBundle/1 pin. Protected fresh private-key handles are bound by the same installationPlan but are never serialized into this descriptor.
+
+`OwnerInputBinding/2.canonicalDescriptorBytes` is exactly D3-CJ/3(ConflictResolutionInput/2), and its pinRefs are the sorted unique union of every pin named by branchEvidence/derivedPlan. `InputDescriptor/2` uses guarantee=`managed_atomic`, frontierPolicy=`exact`, and strict write protection. source_merge/choose_source_head use saveProfile=`complete`, the least existing local_source ObservationScope covering ownerNodeRef, the actual current sourceInputs and all conflict/source/semantic/authorization controlInputs. policy_bundle_choice uses saveProfile=`control_only`, workspace_constraints ObservationScope, empty sourceInputs, and the actual conflict_record/authorization/portable-frontier/policy-history controlInputs. No dependency bypasses InputDescriptor.
+
+The immutable owner preview is closed `ConflictResolutionPreview/1`:
+~~~json
+{"kind":"d6_conflict_resolution_preview","version":1,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"branchEvidenceDigest":"sha256:64-lowercase-hex","derivedPlan":<ConflictResolutionDerivedPlan/1>}
+~~~
+`branchEvidenceDigest` is exactly `"sha256:" + lowercase_hex(SHA-256(D3-CJ/3(the complete branchEvidence array)))`. PreparedIntent/2.previewBinding binds exactly this preview record; it is not a second request and cannot be edited at commit. The pinDirectory contains all owner/dependency/preview pins required by §3.6.
+
+Successful prepare for any of the three arms returns the existing response, with strict write protection:
+~~~json
+{"wireVersion":2,"kind":"d6_prepared_intent","planToken":<Token>,"semanticState":<SemanticState/1>,"writeProtection":"strict","inputRetentionState":"retained"}
+~~~
+planToken is the existing `d6_plan/2` token for that exact PreparedIntent/2. Final submit is exclusively the existing `d6_commit_request/2`; it carries no resolution/source/policy override. The one planning CAS freezes the complete InputDescriptor/OwnerInputBinding, branch pins, previewBinding, source or policy derived plan, fresh handle associations and resulting bytes. The one final P seal revalidates expectedKey/current authorization/fence and those exact frozen dependencies, then atomically installs the source or resulting policy component plus the ConflictRecord resolution/supersession effect. There is no one-stage resolver, second submit, ledger, CAS, CP4 or intermediate trust prefix.
+
+Closed-decode and error ordering stay on the existing D6 surfaces: malformed wire3/Resolution2 is invalid_request before state reads; disclosure/authorization remains not_visible; unavailable branch/CP3/history evidence uses the existing state/proof/domain-unavailable boundaries; expectedKey change is conflict_changed. No new error union is introduced. §5 remains authoritative: saved returns/resumes the original saved result before new business checks; planned restores the same PreparedIntent/descriptor/pins/preview/installation state and never reparses a different Resolution2; unseen alone runs this wire3 preparation. Exact replay restores the same retained plan association. A changed resolution/choice/source/expectedKey cannot reuse that planToken and requires a new unseen prepare; if an original decision already exists under its allocated OperationId, §5 saved/planned/unknown recovery runs first and §8 preserves that original responsibility.
+
+Receiver admission of a policy resolution revalidates the complete original ConflictKey heads, each head CP3/policy image, selected bundle address, recursive effective compromise fold and canonical dedup/order, exhaustive inheritedCompromises, every fresh-key PoP, root signature, resulting bundle bytes/version, and same-decision conflict-record transition before accepting the canonical component. Source-resolution receiver/publication follows the existing source/CP3 path with the same frozen source pins and semantic proof. Any mismatch is unavailable/integrity conflict, never arrival-order repair.
+
+The former wireVersion=2/ConflictResolution/1 candidate with `policy_choice:{policy}` is not a current new-FA surface and was not activated; no migration shim is invented. Any real historical prepared/saved/planned/unknown record that can actually be proved still recovers only under its original decoder, request fingerprint, pins and obligations. Placement/lifecycle/identity conflicts continue to D3 §10.1's typed resolver and its original single D3 submit/P decision.
+
+source_merge/choose_source_head still reload every head/base/current permission and rerun D2/local/complete gates. Any new head makes expectedKey stale -> conflict_changed; an old click is never reused.
+## 10. Policy/3
 
 Policy/3 retains the exact top-level members version,revision,grants with version=3. Policy/1/2 retain their original decoders, bytes, capability/scope semantics, and never auto-upgrade. grants remain subject,effect,scope,capabilities with deny-before-allow and default deny. Every Policy/2 capability remains byte-for-byte available under its original rules; DependencyProof expansion changes none of them.
 
