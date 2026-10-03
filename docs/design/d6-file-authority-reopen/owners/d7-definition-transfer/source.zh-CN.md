@@ -47,7 +47,7 @@ Q body是D3-CJ/3 exact `{transfer:<完整definitionTransfers元素>,inputPayload
 
 ## 4. revision与位置闭环
 
-内部 Ref 映射先由原 D3 stage12 ephemeral candidate map 固定。每个需要新 managed after 的 source 都使用同一 native plan 的 SourceRevisionPlan/1，以及在任何绑定 revision 的 C/Q 物化前固定的同一拟议 canonical RevisionTokenBinding/2；revision 仍只取目标 production CommitDomain 的 checked H(D,E)+1。Q 两遍、winning planning CAS 与 seal 都使用这一条拟议 token，任何一遍、commit 或 recovery 都不能重采样 token/revision。seal 前它仅是 plan-local position evidence；seal 只认证 winning binding 为结果 managed SourceVersion 的 canonical 稳定生产地址，loser/aborted/seal 不可证明的 binding 永不生效，也不增加 seal 后第三遍物化。
+内部 Ref 映射先由原 D3 stage12 ephemeral candidate map 固定。每个需要新 managed after 的 source 都使用同一 native plan 的 SourceRevisionPlan/1，以及在任何绑定 revision 的 C/Q 物化前固定的同一拟议 canonical RevisionTokenBinding/2；revision 仍只取目标 production CommitDomain 的 checked H(D,E)+1。Q 两遍与 winning planning CAS 都使用这一条拟议 token，任何一遍、commit 或 recovery 都不能重采样 token/revision。seal 前它仅是 plan-local position evidence；两遍 Q 已经完成后，唯一 D6 P seal 才形成 managed SourceVersion/ChangeId，并把该 frozen winning binding 精确签入 `RevisionTokenSealArtifact/1`；D7 既不签名也不重构 artifact。loser/aborted/seal 不可证明的 binding 永远没有有效 artifact，也不增加 seal 后第三遍物化。
 
 reissue_locator目标必须是原已验证的SavedQueryViewDefinition occurrence，在本次完整变换中有唯一对应的结果occurrence；deleted/ambiguous/非当前preimage Locator拒绝，不最近似定位。D7只重发指向SavedQueryViewDefinition的DocumentElementLocator。D2规定保存块的opener与closing delimiter独占physical line；Q按D3-CJ/3把完整JSON payload写为一行，string内部换行均escaped。因此坐标数字的宽度不会改变保存块边界的line/column，采用确定的两遍物化：
 
