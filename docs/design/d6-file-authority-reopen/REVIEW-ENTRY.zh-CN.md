@@ -19,7 +19,7 @@ translation_status: source
 
 D3 IR01–09、D4 六项、D5 两项、D8 三项修正以及 D10 历史 11 项的具名修订存在限定独立通过证据，结论只适用于实际被审版本及范围。D9 十六件完整独审结论为限定通过；其依赖的联合整合仍开放。历史 R08 的 3 个 P1、8 个 P2 不因局部修复被自动登记为全局关闭。公共历史说明若与本次完成时点不同，应按原版本解释，并在整合时逐项校准。
 
-1. **PL-IR-01 / P1 开放。** 同一完整生产版本和相同内容从副本 A 同步到 B 后，持久 body_text 等 Locator 中的 A 观察资格与 B 的当前观察资格如何分离及合法重新取得，尚待 D3/D6 裁决。不能凭裸 Counter 相同、摘要相同或旧 token 重签来证明资格，也不能因此禁用无关普通操作。
+1. **PL-IR-01 / P1 已有作者修复候选，仍待独立复核后才能关闭。** 候选令 `RevisionTokenBinding/2` 专职稳定生产地址，仅含 `token+RevisionTokenSource/2`；每个真实 sealed managed after 都由 winning plan/seal 选出唯一 canonical binding，并由 original sealed-outbox 关联认证。接收端保持该地址不变，建立自己的 fresh `SourceObservation/1`；新的 Locator 读取只有在完整 `sourceVersion` 与已解析生产版本逐字相等，且原 coordinate/profile、授权、exact Frontier 与最终 read barrier 全通过时才成功。旧 selector、ActionEvidence、PAB、Draft/map、PreparedIntent 均不复活。相同 Counter/hash/text、真实 production ABA、不可证明 gap/rematerialization、loser/aborted token 或 external 仅 bytes 相同都不构成资格。D6 PL01–PL18 只是设计要求、未执行产品测试；本作者候选必须交给独立审查者复核，之后才能裁定是否关闭 P1。
 2. **D3/D6/D7 联合审查开放。** 核对原 wire12、唯一准备描述、单决议、安装恢复、PAB3、MinimumMapping3、原生十二数组与强制完整 canonical effects 的关系，以及 D8 PB2 和 D9 Construction2 的真实消费。
 3. **D6/D10 联合审查开放。** 核对完整内部控制记录、范围 CAS、两次批准计次、动态外部确认与不可变输入分离、安装后 stop、共享预算/未知发送责任、调度历史连续性、真实旧 bootstrap family 的能力。实际 portable Registry activation 使用 strict 完整安装和原 ChangeId；只改变保护的 catalog selector 才可 control_only。其余 D10 消费者必须逐项与实际生产端一致。
 4. **A2 和最终全局接受开放。** 尚需自包含 D1–D10 整合、来源覆盖、术语和双语一致性检查及全新独立 Pro 全局终审。实现、互通、性能及历史模型证据不得由文档结构检查代替。

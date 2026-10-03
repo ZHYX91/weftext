@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: fd325b06-f122-4a6e-bbb6-e484c556ae2b.
 
-Candidate status: D9 file-authority coordination afterimage; not independently accepted, activated, or implemented. This complete document derives from fixed S 7e18168dad3e6d120fce0dd607dc10fa7894e252 and retains its capabilities, limits, scenarios, and actual historical evidence boundaries. Historical stage labels do not determine this candidate's status. Current cross-domain sources, the single D3/D6 decision, and D7 preparation/preview consumption follow their actual coordinated owners. PL-IR-01 portable Locator qualification and cross-owner producers that have not been accepted remain named integration gates; publishing this document does not close them.
+Candidate status: D9 file-authority PL-IR-01 repair terminology consumer; not independently accepted, activated, or implemented. Fixed-S names/identities remain. This lexicon now describes the authored stable-production-address/current-Observation split and keeps the new exact repair pending independent review; it does not close P1 or any other integration gate.
 
 # D9 Terminology and Naming Gate
 
@@ -67,4 +67,4 @@ ImportIR/1, WorkerInvocation/1, Office template/1, original SourceArtifact/IR co
 
 “Complete source” means the finite authorized range actually consumed or explicitly enumerated for omission by this operation, not all Workspace/body content by default. “Current” belongs to an observation/authorization cut, “production version” to source history, and “external publication” to the original publication intent. Equal digests do not give them one lifetime. semantic_pending cannot authorize import, construction, or Query export that requires complete proof, and never conceals typed/source invalidity.
 
-The named independent PL-IR-01, D3/D6 IR-06/07, and complete current D7 producer gates remain. An author's naming check does not accept the package. Actual historical saved/planned/unknown records retain their original decoder, minimum disclosure, pins, and no-repeat responsibilities; historical prototype text does not fabricate a deployed compatibility layer.
+The authored PL-IR-01 repair is now part of the current terminology surface: a revision token is a stable production address, while SourceObservation/SourceVersionRef carry current observer qualification. PL-IR-01 remains pending independent review of the exact candidate, not an undefined naming/algorithm gate. D3/D6 IR-06/07 and complete current D7 producer gates remain separate. An author's naming check does not accept the package; historical saved/planned/unknown records keep their original decoder, disclosure, pins and no-repeat duties.

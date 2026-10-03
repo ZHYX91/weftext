@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：a26b84bd-10b4-448c-9037-d5cb0bd65a4b。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威 PL-IR-01 修复消费者；未独立接受、未激活、未实施。本矩阵保留固定 S 的证据边界，并已消费稳定生产地址/current Observation 作者修复。PL-IR-01 各行只是设计义务，尚未作为产品测试执行；本 exact 修复仍待独立复核，不自行关闭 P1。其它 D3/D6/D7 整合门保持独立。
 
 # D9 接受矩阵与场景裁决
 
@@ -97,7 +97,7 @@ r03的82个断言和历史源码继续原样保留，但它们不验证完整Off
 | ID | 输入与反例 | 必需结果与边界 | 证据状态 |
 |---|---|---|---|
 | FA01 | 同 Node 在生产域 A 与 B 的 revision 都为 1，导入/模板 token 指 A 的观察 | 完整生产 SourceVersion 与当前 Observation 逐项匹配；不把 B:1 当 A:1，不由 old Counter 读 latest 补签 | 设计 oracle，未执行 |
-| FA02 | 纯同步保留 A 的生产版本，接收域 B 当前观察有效 | 允许生产域与 observerDomain 不同；完整 Ref/版本/当前 cut 成立才能准备；涉及旧 Locator 的 PL-IR-01 不自行关闭 | 设计 oracle，未执行 |
+| FA02 | 纯同步保留 A 的生产版本，接收域 B 当前观察有效 | 正向路径：认证 A 的 canonical RevisionTokenBinding/2 + original sealed-outbox 关联，证明 B 当前 Observation.sourceVersion 与 A 完整版本逐字相等，再验证原 Locator coordinate/profile 与最终 same-cut 门；payload/token 不改，旧 selector/PAB/Draft/ActionEvidence 不复活。真实 production ABA、binding/outbox 缺失、rematerialization 不可证明或 external 仅 bytes 相同仍 stale/unavailable | 设计 oracle，未执行 |
 | FA03 | Recipe/2 固定源改版，但旧 bytes 仍 pin 或生成结果相同 | 旧构造 dependency_conflict，不跟随 latest；保留原配方可读及明确新来源/新配方路径 | 设计 oracle，未执行 |
 | FA04 | Recipe/1 只剩裸 Counter，用户明确升级 | 显示真实原版本可证性与用户新选择；不猜生产域；保留全部 slots，原 create_resource 完整确认另存，不覆盖原配方 | 设计 oracle，未执行 |
 | FA05 | 模板仅枚举 omittedAnnotations，未授权其 body | 先完整 state/annotation 目录资格及正负证明，仅保存版本地址；不读 body，不把隐藏项当零或默认全量省略 | 设计 oracle，未执行 |
@@ -111,4 +111,4 @@ r03的82个断言和历史源码继续原样保留，但它们不验证完整Off
 | FA13 | table_document 输入 header=true，但目标生成展示 header option | 输入 header 与目标普通首行 cell 区分；任何 D2 table header/attribute option 拒绝，无新增语法 | 设计 oracle，未执行 |
 | FA14 | 已发布外部 bundle 被当作 CP3/Resource author receipt；或 P 丢失后凭文件匹配恢复成功 | 两类结果保持各自原 authority；原作者单 P seal/charge 不重建，未知责任保留 | 设计 oracle，未执行 |
 
-PL-IR-01、D3/D6 IR-06/07 与 D7 当前完整 consumer/producer 的独立整合门仍开放；只有完整冻结候选与实际反例经独立审查后才可改变设计接受状态。原 I01–I12 不因这些设计 oracle 或文档检查关闭。
+PL-IR-01 现已有作者修复候选；它保持为**针对本新 SHA 的独立复核门**，不再是算法未定义。必须把 D6 PL01–PL18 与 D9 的 body_text/region 专项行对照实际 D3/D6/D7/D9 正文复核。D3/D6 IR-06/07 与 D7 当前完整 consumer/producer 仍是独立整合门；任何设计 oracle 或文档检查都不能自行关闭 P1 或原 I01–I12。

@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：fd325b06-f122-4a6e-bbb6-e484c556ae2b。
 
-候选状态：D9 文件权威协调后像，未独立接受、未激活、未实施。以固定 S 7e18168dad3e6d120fce0dd607dc10fa7894e252 的完整本篇为来源，保留其能力、限制、场景与实际历史证据边界；历史阶段标签不决定本轮状态。当前跨域来源、D3/D6 单决议及 D7 准备/预览消费按同包真实 owner 协调。PL-IR-01 的便携 Locator 资格与尚未接受的跨 owner producer 仍为具名整合门，不因本篇已落盘而关闭。
+候选状态：D9 文件权威 PL-IR-01 修复术语消费者；未独立接受、未激活、未实施。固定 S 的名称/身份不变。本词表现描述稳定生产地址/current Observation 的作者修复分层，并保持该 exact 修复待独立复核；不自行关闭 P1 或其它整合门。
 
 # D9 术语与命名门
 
@@ -66,4 +66,4 @@ ImportIR/1、WorkerInvocation/1、Office template/1、原 SourceArtifact/IR 坐�
 
 “完整来源”指本操作真正消费或明确枚举省略的有限受权范围，不是默认读取全部 Workspace/body。“当前”属于当前观察/授权 cut，“生产版本”属于源历史，“外部发布”属于原 publication intent；三者不得因一个相同摘要混为同一寿命。semantic_pending 不能放行本篇需要完整证明的导入/构造/Query 导出，也不掩盖 typed/source invalid。
 
-PL-IR-01、D3/D6 IR-06/07 和 D7 当前完整 producer 的具名独立门保持；不存在作者自称命名检查通过即整包接受的规则。真实历史 saved/planned/unknown 的原 decoder、最小披露、pins 与不可重复责任依旧存在，不凭旧原型文字虚构已经部署的兼容层。
+PL-IR-01 作者修复现已进入当前术语面：revision token 表示稳定生产地址，SourceObservation/SourceVersionRef 表示当前 observer 资格。PL-IR-01 仍待对 exact candidate 独立复核，不再是术语/算法未定义门。D3/D6 IR-06/07 与 D7 当前完整 producer 仍为独立门；作者命名检查不构成整包接受，真实历史 saved/planned/unknown 保留原 decoder、披露、pins 与不可重复责任。
