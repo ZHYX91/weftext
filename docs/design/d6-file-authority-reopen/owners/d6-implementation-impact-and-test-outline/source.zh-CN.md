@@ -199,7 +199,7 @@ strict 路径在每个点验证不会静默丢失已观察竞争字节；observe
 
 ### PL-IR-01 便携位置设计验收表
 
-PL01–PL44 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
+PL01–PL55 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。本修订进一步覆盖 PR3-PLIR-P1-01 的 authenticated-carrier chain；signature/canonicalization oracle 仍只是设计要求，不是密码学产品测试证据。
 
 | ID | 场景 | 必须结果 |
 |---|---|---|
@@ -249,6 +249,17 @@ PL01–PL44 仅是本修复候选的设计/一致性义务，**尚未作为产�
 | PL42 | source_merge 的 wire3 prepare 成功，随后客户端预览并提交 | OwnerInputBinding/2 与 InputDescriptor/2 都使用 d6_conflict_resolution/2；exact branch/base/head/proposed-source/semantic pins 固定在 ConflictResolutionInput/2 与 previewBinding。成功只返回既有 d6_prepared_intent/planToken，最终只能走 d6_commit_request/2，由唯一 P seal 提交 source 与 conflict-record effect |
 | PL43 | choose_source_head 的 wire3 prepare 成功，但提交前 chosen head 或 ConflictKey 改变 | exact selected-head source pin 与 expectedKey 已冻结在同一个 PreparedIntent/2/preview；最终重验发现变化后必须 stale/conflict_changed，commit 不能替换另一 head/source，也不能绕过既有 d6_commit_request/2 |
 | PL44 | policy_bundle_choice 已 prepare，随后在 planned 状态崩溃，或变成 saved/unknown 后重试 | immutable descriptor 必须保留全部 branch CP3/bundle pins、selected address、effective compromise union、inherited carries、outcomes、fresh PoPs、result-bundle pin 与 previewBinding。§5 saved/planned/unseen 顺序和 §8 recovery 只能恢复同一 plan/result 责任；不得用另一 Resolution2 重解析，也不得建立第二 submit、ledger/CAS 或重新派生新的 carry |
+| PL45 | source_merge 解决合法 source_concurrent(H1,H2)，而冲突 subject 没有普通 current Observation | D6 从真实物理已安装 sealed head 生产 exact SourceConflictBefore/1，并从 base 加全部 head production versions 生产完整 SourceConflictVersionBasis/1；二者绑定到 d6_conflict_resolution/2。若 merged bytes 改变则冻结 SourceRevisionPlan/3。subject 不进 sourceInputs；step 6 复验 guarded before+basis；唯一 P seal 产生唯一 managed after/H+1 与 conflict effect |
+| PL46 | choose_source_head 在权限/pins/ConflictKey 都合法但 A 无普通 Observation 时选择 H1 | actual installed before 与 chosen-head production version 分别从 sealed history/pins 完整证明，并绑定同一 DecisionKey/audience/key/arm，经既有 planToken 与 d6_commit_request/2 提交；不伪造 branch-current Observation，也不借用 D3 ConflictInstallInput |
+| PL47 | 实际安装 H2 与所选 H1 的 source bytes 完全相同，但完整 production SourceVersion/2 不同 | 仍是真实 source admission：SourceRevisionPlan/3 冻结 H1 为 versionBasis、H2 真实物理版本为 before；seal 前无 ChangeId，唯一 seal 才产生当前 domain H+1，且 CP3 before=H2 物理版本、after=新 managed version。相同 bytes 不得抹掉 production-version 选择 |
+| PL48 | source_merge 输出恰等于 installed bytes 且不选择另一个 production version，或 choose_source_head 选择已经安装的 exact production version | source 真正未变：不产生 SourceRevisionPlan/3、sourceChanges 或 H increment。ConflictRecord resolve/supersede 仍是真实 portable control effect，可使用 decision ChangeId；只有原规则下所有效果均空才是 raw no_op |
+| PL49 | conflict heads 合法，但本地 physical installed head/FileObjectBinding/sourcePin/metadataPin 或其来源无法完整证明 | SourceConflictBefore/1 不可得，prepare 不能 source-success。历史 head bytes、相同 digest、selected branch evidence 或 I 都不能替代物理 before；不得伪造 H/after token/plan |
+| PL50 | complete source resolution 真实需要跨单 source 的 D4 relation_incidence 或 D7 complete query_scan | 在任何 author/range read 前，owner profile 选择能覆盖该 closure 的最小既有 wider ObservationScope，通常 workspace_constraints，随后在未改变的十四 key proof 中记录所有真实依赖；saveProfile=complete、strict、exact 均不降低 |
+| PL51 | preparation 选择 local_source，但真实 owner-required closure 需要 foreign relation/query/member range | Core 必须在越界 read 与 planning 前返回 owner_update_required/proof_unavailable；不得先读后扩 scope、静默丢 dependency 或降级 complete/strict/exact |
+| PL52 | 冲突 subject A 与另一个无冲突 source B 同时是实际依赖 | A 不进入 sourceInputs，其 source key 由 SourceConflictBefore/1+versionBasis guard；B 仍以真实 current SourceObservation 进入 sourceInputs，并有匹配 source DependencyKey/controlInputs entry。特殊路径不得吞并无关 current read |
+| PL53 | caller/transplant 提供复制 before、错误 DecisionKey/audience/expectedKey/arm、缺 metadata pin，或 choose_source_head versionBasis 指向错误 production version | cross-field/guard 在 planning 前或 step 6 按既有 invalid/unavailable/conflict 路径拒绝。相同 bytes/hash、另一 head source pin 或 fake guard 都不能授权安装 |
+| PL54 | 两个 source-resolution prepare 竞争；一个输 planning CAS，或 winner 在安装/seal 前后 crash 并 retry | loser/aborted 永不取得 ChangeId/H/token。planned recovery 只恢复 winner 原 InputDescriptor、SourceConflictBefore/VersionBasis、适用时 SourceRevisionPlan/3、pins/H/DecisionKey/preview/install state；saved recovery 只重放唯一 sealed result。不 reprepare、不重选 head、不改 H、不第二次 seal |
+| PL55 | policy_bundle_choice 构造 InputDescriptor | controlInputs 只包含真实 conflict_record、authorization 及确实读取的既有十四 key union 其它成员。Frontier 由 expectedFrontier + DependencyProof.baseFrontier + frontierPolicy 表示；policy/trust history 保存在 OwnerInputBinding/branchEvidence/bundle/declaration pins/derivedPlan。portable_frontier_state 与 policy-history 永不作为 DependencyKey kind |
 ## 6. 权限与非披露测试
 
 至少覆盖：
