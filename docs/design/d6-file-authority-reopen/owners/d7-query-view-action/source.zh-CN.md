@@ -92,4 +92,4 @@ v1 不支持任意 join、union、recursive QueryRef、用户函数、任意代�
 
 当前 D3 guarded resolution 由其完整 typed prepare、native request、D3CanonicalEffectPlan/1 与公共 D3CanonicalEffects/1、实际 D7 /3 record 和 full transport 一起闭合。原12receipt数组只表达 native，canonical extension 必需；已保存 commit 与当前 effects_unavailable 分开。D8 PreparedEditBinding/2 是 D6/full 的真实 preview producer，不新建 ActionSpec。D9 TemplateRecipe/2 是持久生产地址，TemplateConstructionInput/2 是当前完整输入；D7消费实际 runtime资格，不把recipe历史来源直接升级成Observation。D10 current计划/执行消费者只能按本组实际 /2/3 contracts，不靠其命名替代本组producer。
 
-PL-IR-01 现使用 D3/D6 稳定生产地址/current Observation 作者修复：持久 managed Locator 在另一副本只能通过 canonical sealed binding 加该副本 exact current Observation 获得新的读取资格；任何旧 result、ActionEvidence 或 preparation 都不被重签。该修复仍待独立复核。
+PL-IR-01 现使用 D3/D6 稳定生产地址/current Observation 作者修复：持久 managed Locator 在另一副本只能通过 canonical sealed binding、该副本 exact current Observation、准确 coordinate/profile 检查及原授权顺序取得**新的读取资格**；任何旧 result、ActionEvidence 或 preparation 都不被重签。缺 canonical binding/outbox、current Observation、exact production-version equality 或 coordinate/profile 证据时，按既有 stale/incomplete/unavailable 结果停止该次使用，不再保留未定义整合门。该修复仍待独立复核，不自行关闭 P1。
