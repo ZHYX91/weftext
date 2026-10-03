@@ -62,7 +62,7 @@ Document Table 仍是 D2 原生 AsciiDoc 表格出现项，作者权威是 `.ado
 
 缺失 trailing cells是真正 absent，不自动补 empty。Cell内容是 Inline*，不能从 `0012`、`true` 或日期样式推断 D4 type。
 
-table/row/cell locator均 revision-bound，并额外受当前完整 SourceObservation/1 的观察连续性保护；对应 SourceVersion/2 仍表示生产版本历史，其 production commitDomain 可以不同于 operation observerDomain。相同文本/位置、相同裸 production version、hash 或 I cache 都不产生 identity continuity。SourceVersionRef/1.sourceToken 必须指向完整当前 Observation；watcher gap、replacement 或 discontinuous rematerialization 会使旧 token 与依赖它的 locator 失效，即使生产 version 未变。I中的 parsed table可删重建，但不能恢复旧 locator 或观察资格。
+table/row/cell locator 继续是绑定 revision 的稳定生产地址，而 structured-operation selector 还必须绑定完整 current SourceObservation/1。持久 managed locator 在另一副本只能通过 D3 已认证 canonical RevisionTokenBinding/2、该副本新 current Observation 的 exact production-version equality、准确 coordinate/table parse 与最终 same-cut 门重新取得新读取资格。watcher gap/replacement 会使旧 sourceToken 和依赖它的 structured selector/preparation 失效，但不会因此改写 persistent managed 地址。相同文本/位置、裸 revision、hash 或 I 都不能证明当前 source 或恢复旧 selector。
 
 ### 3.2 native table local edit
 
@@ -75,10 +75,10 @@ table/row/cell locator均 revision-bound，并额外受当前完整 SourceObserv
 - 编辑普通首行单元格文本，或单独修改 Document 标题；
 - raw source body edit。
 
-每个 structured operation至少绑定：
+每个 structured operation 至少绑定以下证据；持久 locator 的读取成功本身不是可复用 structured-write selector，新 prepare 必须冻结本次新的 Observation/selector：
 
-- current full Document source + SourceVersion/2，其中不透明的当前 Document revision token 通过真实 RevisionTokenBinding/2 及闭合 RevisionTokenSource/2 解析，可选择 managed 或 external 生产源码；
-- 与该 source 对应的完整 current SourceObservation/1，并通过 SourceVersionRef/1.sourceToken 保护当前观察连续性；
+- current full Document source + SourceVersion/2，其中不透明 Document revision token 通过真实 RevisionTokenBinding/2/RevisionTokenSource/2 先解析稳定生产版本；
+- 与该生产版本逐字相等的完整 current SourceObservation/1，并通过 SourceVersionRef/1.sourceToken 保护本次当前观察连续性；
 - 当前 observation cut 内真实 fileObjectBinding、evidencePins、author-control、Registry、incidence 依赖；
 - exact table locator/current revision；
 - D2 table parse和目标row/cell/column；
@@ -649,7 +649,7 @@ row handle、column index、caption、
 
 当前资格由 `SourceObservation/1` 额外保护：其真实形状为 `kind=d6_source_observation`、`version=1`，`observerDomain` 必须等于 operation `CommitDomain`，`entityRef` 必须等于 `sourceVersion.entityRef`，并包含对应 `sourceVersion`、当前 `observationEpoch`、`fileObjectBinding`、`evidencePins`，同时与当前 control、Registry、incidence 依赖及当前 cut 一致。`InputDescriptor/2.sourceInputs[].observation` 承载该完整 Observation；`SourceVersionRef/1` 的 `sourceToken` 使用 `d6_source_observation/1` 标记并选择完整当前 Observation，而不是裸 revision、hash、I cache、row text 或 production version。`Frontier/2` 只表示已 seal 的 causal/dependency prefix，不单独证明全集 Query、payload 已物化或 Registry 完整。
 
-D5 既有绑定 revision 的 table/row/cell Locator，以及 D4 数字 sourceRevision/occurrence 内层 selector 形状保持不变；当前 `SourceObservation/1` 连续性只是外层附加资格。watcher gap、external replace 或 discontinuous rematerialization 会使旧 sourceToken 和依赖该观察的 locator/selector 失效，即使 production version、hash 或 row text 相同也不能续认；I 不能恢复该资格。任何已绑定 Policy、FileObjectBinding、install 资格、ReadSet 或 pins 变化都必须 stale/reprepare；Frontier 扩展按 §19.9 判断，不能通过读取最新 page 或重新选择当前 target 静默替换已冻结目标。
+D5 既有绑定 revision 的 table/row/cell Locator 与 D4 数字 sourceRevision/occurrence inner selector 形状保持不变。managed Locator token 是稳定生产版本地址；每次新读取/操作仍以 current `SourceObservation/1` 为额外资格。watcher gap/replacement 会使旧 sourceToken/selector/preparation 失效，即使 production version 未变。之后对同一个 persistent locator 的另一次新读取，只有 D3 重新验证 canonical binding、相同 exact production version、新 current Observation 与原 coordinates 后才可成功；绝不复活旧 selector。I 既不能提供地址真实性，也不能提供当前资格。
 
 新的 unseen 强集合操作还需要实际 D7 complete cut/Prepared 合同；缺少所需 owner 时返回 unavailable/owner_update_required，不建立新决议。D5 不创建替代 token。明确标出的 partial/pending 行只供探索，不参与 all_result/bulk/requireMembership/Automation 写入。真实 saved/planned/unknown 记录沿用 §19.11 恢复分支；§19.12 记录剩余 D7 协调。
 
@@ -688,4 +688,4 @@ install/P/seal 结果未知时，保留原记录、pins 和未清责任；这不
 
 ### 19.12 内部协调与接受边界
 
-本批候选仍有两个明确内部待协调项：P1 中 portable Locator 在另一副本取得当前资格的规则，以及 D7 完整结果、preparation、preview/effects 的最终协调 producer/consumer 后像。不透明 Locator token 形状仍由 D3 拥有，真实历史记录保持原义。D5 不自行选择新的 portable-token 语义，不重签旧绑定，不虚构 D7 新版，也不声称这两项已闭合。在独立接受或激活前，必须按 root 的基础裁定和实际 D7 producer 核对确切受影响新路径；这不阻止独立合格的 raw/read/repair/Draft/local 路径，也不抹除 saved 恢复。文档检查不能替代该接受门禁。
+本批此前的一个依赖现已有同包作者修复候选：PL-IR-01 使用 D6 稳定生产地址 binding 加 D3 fresh-current-Observation 新读取算法，并由上文消费；在本新 exact candidate 获独立复核前，**不得自行宣称已接受或关闭 P1**。另一项仍是 D7 complete result、preparation、preview/effects 的最终协调 producer/consumer 后像。D5 不重签旧 runtime binding、不虚构 D7 新版；真实历史记录保持原 saved/planned/unknown 恢复。独立接受前必须核对 PL01–PL18 与实际 D7 producer；已合格 raw/read/repair/Draft/local 路径继续可用。

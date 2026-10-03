@@ -73,7 +73,7 @@ Acceptance for `H(D,E)`, `SourceRevisionPlan/1`, and revision tokens covers:
 - foreign production revision, foreign production epoch, and `externalSequence` never donate the new production-domain revision.
 - H=0 is legal only for a genuinely completely proved empty history; missing/corrupt/gapped/unproved history is not empty.
 - `SourceRevisionPlan/1` freezes before Observation or proved-absent, same-domain `lastIssued`/empty-history basis, `SourceStamp/1`, exact `afterPin`, candidate map, and version basis; after winning planning CAS, H/revision/token/identity is never resampled.
-- `RevisionTokenBinding/2.source` is the closed `RevisionTokenSource/2`; new tag is `d6_source_revision/2`; bare stamp/version, old tag, and caller-selected token are rejected.
+- `RevisionTokenBinding/2` is the closed stable production-address record `{kind,version,token,source}`; `source` is `RevisionTokenSource/2` and the tag is `d6_source_revision/2`. A managed plan fixes one proposed token before C/Q materialization; winning CAS/seal selects the sole canonical binding and original sealed-outbox association, while loser/aborted/unproved tokens never borrow another seal. New read qualification separately requires exact current SourceObservation.sourceVersion equality; bare stamp/version, caller-selected token, equal hash or old runtime evidence is rejected.
 - only seal of a real source change combines the frozen stamp with the same decision's `ChangeId/1` into managed `SourceVersion/2`.
 - true raw no-op creates no managed after; source-unchanged structure/lifecycle creates no managed after/H increment; delete uses absent after with no after revision/H increment; equal-byte external admission remains external-before + managed-after.
 
