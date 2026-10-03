@@ -10,7 +10,7 @@ Source document ID: 3e8f9777-29c5-4ee7-9098-b924becd255c.
 
 # D8 Direction, Bidirectional Text, and Accessibility
 
-Candidate status: D8-FA-r01; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S is 7e18168dad3e6d120fce0dd607dc10fa7894e252. Original acceptance, model, and platform evidence retains only its original scope; this candidate is not implementation evidence. The D3 conflict adapter, current D7 effects producers, and current qualification of portable Locators across replicas still require their respective coordination and independent acceptance. These integration gates do not retroactively cancel recovery of real historical decisions.
+Candidate status: D8-FA-r01 PL-IR-01 repair consumer; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S and historical accessibility evidence retain only their original scope. This document consumes the authored D3/D6 stable-production-address/current-Observation repair for portable Locator reads; the exact repair remains pending independent review and does not close P1. D3 conflict/current D7 effects gates remain separate.
 
 Revision: D8-FA-r01; candidate and part of the D8 specification. This document answers the mandatory RTL intake dated 2026-09-01. Content preservation, bidi interaction, RTL shell, and UI translation are independently accepted; none proves another.
 
