@@ -294,7 +294,7 @@ These are future conformance obligations, not tests reported as executed:
 
 Qualification order fixtures include hidden-source and unavailable-Registry paired cases: establish disclosure/ObservationScope and actual Registry owner before protected source/Entry decoding; no forbidden read or existence leak, no timeout-based guess. Invalid source/local typed facts never become semantic_pending. Saved delivery and original recovery cannot be rejected merely because an unseen new consumer remains uncoordinated.
 
-Portable Locator cross-replica current qualification and the final D7 complete-result/Prepared/preview producers remain named internal coordination dependencies in main §19.12. The above local binding and consumer tests do not decide that foundation question or claim new D7 producers already exist. After their real contracts arrive, coordinate these six files and independently review the resulting exact hashes before acceptance.
+PL-IR-01 portable Locator cross-replica qualification now has the authored D6 stable-address + D3 fresh-current-Observation rule and is a named **independent-review obligation for this exact candidate**, not an undecided foundation question. Exercise D6 PL01–PL18 and D5 main §19.8/§19.12 against this text, especially pure-sync positive read and the rule that a new read never revives an old table/occurrence selector. Separately, final D7 complete-result/Prepared/preview producers remain a real internal coordination dependency. These local tests do not self-accept either dependency; exact new hashes still require independent review.
 
 
 ### 8.13 acceptance boundary
