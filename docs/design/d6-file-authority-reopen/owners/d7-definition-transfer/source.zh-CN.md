@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：4d94859f-3586-4b26-bf82-79db2e1eecf6。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 保存定义的typed transfer
 
@@ -47,7 +47,7 @@ Q body是D3-CJ/3 exact `{transfer:<完整definitionTransfers元素>,inputPayload
 
 ## 4. revision与位置闭环
 
-内部Ref映射先由原D3 stage12的ephemeral candidate map固定。需要新managed after的每个源使用同一原生计划的SourceRevisionPlan/1：revision只取目标生产CommitDomain中H(D,E)的checked+1，只有完整空历史证明才为1；外部externalSequence、其它生产域的revision与observationEpoch变化都不能充当或重置H。真正raw no-op保持完整旧SourceVersion/2；删除after=absent与纯结构变化不造新managed source版本。拟议token只由同一计划的SourceStamp/1及RevisionTokenBinding/2产生，不是已sealed SourceVersion，不含本decision的ChangeId，不提前授予Locator能力。seal才产生完整managed SourceVersion/2。
+内部 Ref 映射先由原 D3 stage12 ephemeral candidate map 固定。每个需要新 managed after 的 source 都使用同一 native plan 的 SourceRevisionPlan/1，以及在任何绑定 revision 的 C/Q 物化前固定的同一拟议 canonical RevisionTokenBinding/2；revision 仍只取目标 production CommitDomain 的 checked H(D,E)+1。Q 两遍、winning planning CAS 与 seal 都使用这一条拟议 token，任何一遍、commit 或 recovery 都不能重采样 token/revision。seal 前它仅是 plan-local position evidence；seal 只认证 winning binding 为结果 managed SourceVersion 的 canonical 稳定生产地址，loser/aborted/seal 不可证明的 binding 永不生效，也不增加 seal 后第三遍物化。
 
 reissue_locator目标必须是原已验证的SavedQueryViewDefinition occurrence，在本次完整变换中有唯一对应的结果occurrence；deleted/ambiguous/非当前preimage Locator拒绝，不最近似定位。D7只重发指向SavedQueryViewDefinition的DocumentElementLocator。D2规定保存块的opener与closing delimiter独占physical line；Q按D3-CJ/3把完整JSON payload写为一行，string内部换行均escaped。因此坐标数字的宽度不会改变保存块边界的line/column，采用确定的两遍物化：
 
@@ -65,4 +65,4 @@ copy/fork/import的包含Node若有未知或不可解码D7 payload，原raw可�
 
 ## 6. 当前来源与历史边界
 
-每个sourceContainer/inputOccurrence的完整前像绑定当前SourceObservation/1、完整SourceVersion/2与原DependencyProof/2，而不是仅Counter。当前Effects/2的decisionKey与原D3决定、operationId及D7 manifest完全一致，完整transfers由同一P seal保存，不成为第二决议。真实旧Effects/1、wire11与旧Q计划按原decoder/pins/授权和原字节恢复；不得改写保存的旧位置或补当前token。本节不裁定跨副本portable Locator重资格；其具名P1待决边界继续约束本候选，原两遍物化不能被当作跨副本资格证明。
+DefinitionTransfer 仍只用于显式 copy/fork/import 的 payload 变换；纯同步不运行 Q、不改写 payload、不重发 Locator，也不迁移 token。preserve 的 persistent Locator 字节保持不变，另一副本以后新读取时使用 D3 的 PL-IR-01 稳定地址/current Observation 算法；读取资格成功不是 transfer effect。反过来，本两遍物化只证明本 author decision 新结果中的位置，不能自行给另一副本资格。真实旧 Effects/1、wire11、Q plans 继续原 decoder/recovery。本修复仍待独立复核，不自行关闭 P1。

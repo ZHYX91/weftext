@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：ae07f3ef-aee1-473b-a992-a17a530d0416。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 Query Algebra
 
@@ -103,7 +103,7 @@ ScalarSpec exact二variant：`{id,kind:"aggregate_value",relation,column}`，rel
 
 QueryRef relation exact `{id,op:"query_ref",definition,arguments}`，无input，只有root。definition是下述DefinitionAddress；arguments为ValueSource object，值仅literal/parameter（caller scalar或row禁止）。callee只能访问传入值、同cut显式context及其自己的定义闭包。security-invoker：保存者/owner权限不传播。先current definition可见性，再编译closed payload，再数据权限；可读定义不等于可读数据。
 
-DefinitionAddress exact `{owner:NodeRef,at:A}`，A=`{kind:"anchor",name:text}` 或 `{kind:"locator",locator:D3Locator}`。anchor解析使用D3唯一anchor规则，丢失/重复不回退名称/title；locator必须当前精确revision和saved-definition元素kind。无独立definitionId/ViewRef。D3 owner/locator披露和D2源读取授权在查找前。地址在一个调用cut解析一次，绑定完整owner source version、实际payload、anchor/locator解析和Registry闭包。保存源更改使下一次调用重新解析，旧result按D6cut保持但不能新动作；订阅重算新的定义版本，shape改变reset。
+DefinitionAddress exact `{owner:NodeRef,at:A}`，A=`{kind:"anchor",name:text}` 或 `{kind:"locator",locator:D3Locator}`。anchor 继续使用 D3 唯一规则，不回退名称/title。locator 先做 owner/locator disclosure 与 D2 source-read 授权，再由 D3 验证 canonical 稳定 revision binding/sealed-outbox 关联、解析 exact production SourceVersion、证明本 invocation 在 exact Frontier 下的 current SourceObservation.sourceVersion 与之逐字相等，并验证 saved-definition 元素 kind/坐标。无 definitionId/ViewRef。一个 invocation cut 只解析一次，绑定完整 production ownerVersion、本 invocation sourceInputs 中的真实 current Observation、实际 payload/occurrence 与 Registry closure。当前生产版本不同按 stale/unavailable 处理，不取 latest；后续新 Observation 可给新 invocation 资格但不复活旧 result/action。cycle identity 按真实 owner + 完整 production version + saved-definition occurrence 归一，不按 token 拼写。
 
 保存Query payload为Execution§7完整SavedQueryDefinition；调用只执行其中QuerySpec，不读取其creationPolicy作普通Query计算，也不引用this。query_ref depth≤16，包含重复调用在内最多64次invocation，所有保存定义解析出node+revision+occurrence再作call-stack cycle检查；地址拼写不同不能绕过同一occurrence cycle。每次调用只导入公共terminalschema/cells，擦除order、Provenance、ActionEvidence和implicit lineage；Core内部caller namespace加callee occurrenceKey，重复rows仍独立，不按cell去重。ResultRowHandle不被import。调用后显式sort可以依内部key稳定take，callee内部identity不暴露。
 
