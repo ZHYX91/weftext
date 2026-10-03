@@ -72,7 +72,7 @@ production/current 分域必须有可执行测试：
 - foreign production revision、foreign production epoch、`externalSequence` 都不捐给新 production domain 的 revision。
 - 只有真实完整空历史才允许 H=0；missing/corrupt/gap/unproved history 不是空历史。
 - `SourceRevisionPlan/1` 冻结前像观察或已证明不存在的分支、同一生产域的 `lastIssued`/完整空历史依据、`SourceStamp/1`、精确的 `afterPin`、候选映射与版本依据；规划 CAS 胜出后不得重新采样 H、修订号、令牌或身份。
-- `RevisionTokenBinding/2.source` 必须是闭合 `RevisionTokenSource/2`，新 tag 为 `d6_source_revision/2`；bare stamp/version、旧 tag 或调用方自选 token 均拒绝。
+- `RevisionTokenBinding/2` 是闭合稳定生产地址记录 `{kind,version,token,source}`；`source` 使用 `RevisionTokenSource/2`，tag 为 `d6_source_revision/2`。managed plan 在 C/Q 物化前固定一条拟议 token；winning CAS/seal 选出唯一 canonical binding 与 original sealed-outbox 关联，loser/aborted/seal 不可证明的 token 不能借另一 seal。新的读取资格另要求 current SourceObservation.sourceVersion 精确相等；bare stamp/version、caller 自选 token、相同 hash 或旧 runtime 证据均拒绝。
 - 真实 source change 在 seal 时才把 frozen stamp 与同一决议 `ChangeId/1` 合成 managed `SourceVersion/2`。
 - 真正的原始 no-op 不产生受管后像；来源未改变的结构/生命周期操作也不产生受管后像或推进 H；删除使用 absent 后像，且不产生后像修订号或推进 H；即使外部来源字节相同，接纳后仍形成外部前像与受管后像。
 

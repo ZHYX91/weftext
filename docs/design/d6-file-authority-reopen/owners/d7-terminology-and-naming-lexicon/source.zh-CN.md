@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：745612fc-347a-42d9-8863-a59f37d0389b。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威 PL-IR-01 修复术语消费者；未独立接受、未激活、未实施。固定 S 的历史标签/证据只保留原范围。本词表消费 D3/D6 稳定生产地址/current Observation 作者修复；该 exact 修复仍待独立复核，不自行关闭 P1。其它 D3/D6/D7 门保持独立。
 
 # D7 Terminology and Naming Lexicon
 
@@ -1319,22 +1319,22 @@ Core内部逐值/item保留的asserted图事实来源证据 不是公共作者pr
       "TemplateConstructionInput/2",
       "D9EntityVersionAddress/2"
     ],
-    "rule": "D9 owns persistent fixed managed production addresses separately from current runtime SourceVersionRef and complete observation/pins. ConstructionInput2 enters PAB3 only through the built-in typed adapter. Omitted Annotation directory/state evidence does not require body sourceInputs. PL-IR-01 remains a precise unresolved Locator qualification gate."
+    "rule": "D9 owns persistent fixed managed production addresses separately from current runtime SourceVersionRef and complete observation/pins. ConstructionInput2 enters PAB3 only through the built-in typed adapter. Omitted Annotation directory/state evidence does not require body sourceInputs. PL-IR-01 now consumes the authored stable-production-address/current-Observation qualification rule; that exact repair remains pending independent review and does not turn persistent addresses into current runtime evidence."
   },
   {
     "owner": "D6 bootstrap / D7 display / D10 consumer",
     "names": [
       "WorkspaceBootstrapPlan/1",
-      "WorkspaceBootstrapPlan/2",
+      "WorkspaceBootstrapPlan/3",
       "WorkspaceBootstrapProfile/3",
       "Policy/3",
       "d6_workspace_bootstrap_plan1",
-      "d6_workspace_bootstrap_plan2",
+      "d6_workspace_bootstrap_plan3",
       "d7_symbolic_json2",
       "d7_planned_preview_open",
       "d7_planned_preview_opened"
     ],
-    "rule": "D7 consumes actual complete D6 Plan2/Profile3/Policy3, while real already-issued families fixed to profile1/2 retain original Plan1 for their authorized replacement, uncommitted create/fork and recovery. Current symbolic-effect version2 payloadFormat is the closed Plan1|Plan2 encoding union selected by the protected family and actual decoder, not caller downgrade; no relabeling or Policy3 injection. D10 planned-preview2 restores original DecisionKey2 and actual Manifest2/EffectBytes2, not another producer or decision. Historical Plan1/symbolic1/Manifest1 real records retain exact decoding and custody; issuer A never replaces inactive target W/B domain. D7 Preview Transport section8 owns the exact wire2 D6/PAB3 planned-preview producer; D10 only consumes it and its complete original pinned semantics. D10AuthorPreparationLink is a separate atomic protected association, not a D7 member or second submit."
+    "rule": "D7 consumes actual complete D6 Plan3/Profile3/Policy3, while real already-issued families fixed to profile1/2 retain original Plan1 for their authorized replacement, uncommitted create/fork and recovery. Current symbolic-effect version2 payloadFormat is the closed Plan1|Plan3 encoding union selected by the protected family and actual decoder, not caller downgrade; no relabeling or Policy3 injection. D10 planned-preview2 restores original DecisionKey2 and actual Manifest2/EffectBytes2, not another producer or decision. Historical Plan1/symbolic1/Manifest1 real records retain exact decoding and custody; issuer A never replaces inactive target W/B domain. D7 Preview Transport section8 owns the exact wire2 D6/PAB3 planned-preview producer; D10 only consumes it and its complete original pinned semantics. D10AuthorPreparationLink is a separate atomic protected association, not a D7 member or second submit."
   }
 ]
 ```

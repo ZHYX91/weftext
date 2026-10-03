@@ -9,7 +9,7 @@ translation_status: source
 
 # D8 验收矩阵
 
-候选状态：D8-FA-r01；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原验收、模型与平台证据仅保留其原有范围；本候选的存在不是实现证明。D3 冲突适配器、D7 当前效果生产端与跨副本 Locator 当前资格的联合协调仍须分别完成并独立接受；这些整合门不追溯取消真实历史决议的恢复义务。
+候选状态：D8-FA-r01 PL-IR-01 修复消费者；完整 owner 后像，未独立接受、未激活、未实施。固定来源 S 仍为 7e18168dad3e6d120fce0dd607dc10fa7894e252，历史证据只保留原范围。本矩阵已消费 D3/D6 稳定生产地址/current Observation 作者修复；D6 PL01–PL18 只是设计义务、未执行产品测试，本 exact 修复仍须独立复核后才能裁定是否关闭 P1。D3 conflict 与当前 D7 effects 门保持独立。
 
 revision: D8-FA-r01；candidate。每行都含正向与反向义务；表中不存在隐含已通过声明。semantic-review须由实际独立评审完成；platform/real-Core-pending保留后续实现门。
 

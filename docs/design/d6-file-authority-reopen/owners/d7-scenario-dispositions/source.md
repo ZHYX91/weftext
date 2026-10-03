@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: 2d01ea44-1790-431d-986c-0214dbad544f.
 
-Candidate status: D7 file-authority coordination afterimage; not independently accepted, activated or implemented. Stage acceptance, unstarted D8/D9 labels and model counts in fixed S are historical provenance. This candidate preserves their actual semantics and evidence limits without treating those labels as current status. It consumes this package's D3 wire12/Result9, current D4 consumers and D6 Control production-version, current-observation, dependency and single-decision recovery contracts. New D3 conflict preparation and D7 /3 binding still require independent joint review of the complete package; portable Locator requalification across replicas awaits its named decision. This candidate does not claim complete closure or eligibility for activation.
+Candidate status: D7 file-authority PL-IR-01 repair consumer; not independently accepted, activated or implemented. Historical fixed-S labels/evidence retain only their original scope. This candidate consumes the authored D3/D6 stable-production-address/current-Observation repair; that exact repair still requires independent review and does not close P1. Other D3/D6/D7 integration gates remain separate.
 
 # D7 Scenario Dispositions
 
@@ -246,4 +246,4 @@ These are mandatory current-design oracles, not executed results. They do not re
 | FA-13 | D10 planned read-only preview reuses original DecisionKey/Manifest2/full EffectBytes2 | No current-state Query rerun, new token meaning or digest replacing actual complete effect producer | Execution§13, Preview§1/§4 |
 | FA-14 | Real old transport1/binding1–2/saved decisions retain original bytes/pins/rights recovery | No current fields in old records, erased unknown duty or all undeployed drafts treated as permanent compatibility | Binding§4, Preview§7 |
 
-PL-IR-01 for portable Locator requalification across replicas remains a named unresolved dependency. Invent no Pro decision, approximate position/text reanchor or general ban on all exact local Locators/other Query/Action paths. Complete author reading, bilingual checks and hashes prove delivery identity/formal consistency only, not these independent design reviews or later actual product conformance.
+PL-IR-01 for portable Locator requalification across replicas now has the authored stable-production-address/current-Observation rule. Scenario review must exercise D6 PL01–PL18 and the current D3/D7 consumers; equal position/text, latest re-signing, or a global ban on exact local Locators remains forbidden. The repair is pending independent review of this exact candidate, not an unresolved algorithm and not a self-closed P1.

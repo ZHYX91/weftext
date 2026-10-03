@@ -9,7 +9,7 @@ translation_status: source
 
 # D8 编辑器与跨表面交互契约
 
-候选状态：D8-FA-r01；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原验收、模型与平台证据仅保留其原有范围；本候选的存在不是实现证明。D3 冲突适配器、D7 当前效果生产端与跨副本 Locator 当前资格的联合协调仍须分别完成并独立接受；这些整合门不追溯取消真实历史决议的恢复义务。
+候选状态：D8-FA-r01 PL-IR-01 修复消费者；完整 owner 后像，未独立接受、未激活、未实施。固定来源 S 与历史 interaction 证据只保留原范围。本文件消费 D3/D6 稳定生产地址/current Observation 作者修复；该 exact 修复仍待独立复核，不自行关闭 P1。D3 conflict/当前 D7 effects 门保持独立。
 
 revision: D8-FA-r01；状态：candidate，尚未独立接受或激活。本候选由本主稿、Editor Interfaces、Direction and Accessibility、Acceptance Matrix、Terminology、Implementation Impact及同包D7效果运输范围修订组成。架构验收不代表产品实现、平台支持或性能通过。
 
@@ -198,7 +198,7 @@ Direction and Accessibility文件定义视觉/逻辑命令、方向权威、镜�
 
 ## 14. 当前观察、保存保护与协调边界
 
-本稿中所有 Base 的 source/version 绑定均为 Interfaces 的完整 SourceObservation/1；selection、方向 override、projection、mapBinding、迟到响应与 queued transform 同样绑定完整 Base 和原 draftSerial/source。生产 CommitDomain、当前 observerDomain 与各自 epoch 分开；不能把不同域同 revision、externalSequence、相同文本或重建 I 当作旧观察。切 Base 先取得有权读取的真实完整 after 及新当前观察，receipt 本身始终保留原字节；允许更新 Base 不等于允许覆盖更晚 Draft/selection。跨副本 Locator 当前资格 PL-IR-01 尚待基础裁决，本稿不从 portable 生产版本相同推导旧 token 当前有效。
+本稿中所有 Base 的 source/version 绑定均为 Interfaces 的完整 SourceObservation/1；selection、方向 override、projection、mapBinding、迟到响应与 queued transform 同样绑定该完整 Base 和原 draftSerial/source。生产 CommitDomain 与当前 observerDomain/各自 epoch 分离。持久 managed Locator 可以通过 D3 已认证 canonical 稳定生产地址加 fresh current Observation（其 sourceVersion 必须精确相等）取得**一次新的读取资格**，但该新读取绝不改写或替换既有 Base/map/queue。仅生产版本文字/hash 相同或 I 重建都不足，旧 sourceToken/runtime evidence 也不会重新变 current。切 Base 仍须显式获权的新读取/rebase 路径，且不得覆盖更晚 Draft/selection。
 
 读取和本地提案不等于完整 Action 准入。授权 external exact source 与 Draft 保留可用；物理无效源使用专门修复入口。普通全源保存可以 ordinary+strict；只有受信任交互渠道、用户明确选择且满足 Interfaces 的全部 D6 条件时才可 ordinary+replica_local+observed_only。annotation、Undo、生成的结构/批量、自动化、managed_atomic 与完整 Action 使用 strict。保留 D7 不可解码保存定义的原保守 prepare 限制；semantic_pending 不能掩盖 D2/D4 invalid 或放宽必须完整证明的动作。
 

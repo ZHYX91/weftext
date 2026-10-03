@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：ea013942-5018-4412-b819-ac6b34d31e08。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 Implementation Impact 与 Test Outline
 
@@ -84,11 +84,11 @@ Algebra§11在D7增加共同DerivedPeriodRange read语义，不改D4作者类型
 
 本轮 /2 runtime、完整 SourceVersion/2 与 SourceObservation/1、PreparedActionBinding/3、MinimumMapping/3、Manifest/2 与 EffectBytes/2 是新的实际设计后像；所有历史有界模型均不能自动证明这些字节与语义。实施清理保留真实旧 request/preparation/plan/receipt 的原 decoder/pins/unknown 恢复，不为没有部署证据的旧草稿建立永久通用兼容层；也不能因禁新旧版提交而删除已经存在的 planned/saved 责任。
 
-1. 同 Ref、同 Counter、同 hash 的 A:1/B:1、生产域与 observerDomain 不同、observationEpoch 改变、FileObjectBinding 替换、外部来源与 placeholder/conflict、完整历史 pin 但无 current 资格，必须分别验证。selectedSources 按完整 RefKey 唯一排序且恰覆盖实际显式 revision/Locator 选择；旧 Query 的源依赖变更不能在签 ActionEvidence 时取 latest 补签，source-free exact Ref 的首次读取则保留正向路径。跨副本 portable Locator 的 PL-IR-01 未决，不将同 span 或 sourceVersion 相等当资格证明。
+1. 同 Ref、同 Counter、同 hash 的 A:1/B:1、生产域/observerDomain 不同、observation generation 换代、FileObjectBinding replace、external 与 placeholder/conflict、完整历史 pin 但无 current 资格都要分别验证。selectedSources 仍按完整 RefKey 唯一排序并恰覆盖显式 revision/Locator 选择。PL-IR-01 现已有 D3/D6 稳定地址/current Observation 作者规则：逐项覆盖 D6 PL01–PL18，尤其纯同步正向读取、真实 production ABA、loser/aborted seal、seal 时尚无 Locator、canonical-token 冲突、external event 分离，以及“新取得 Locator 读取资格只能进入**新的** ActionEvidence/preparation”。旧 Query 依赖变化仍不能取 latest 重签旧 evidence。
 2. 完整 QueryScanKey 与 source/lifecycle/placement_range/ref_inbound/relation_incidence/calendar_scope/Registry/rules/auth 各按真实用途产生正负证明；合法 entities=[] 的静态空结果不生成非法空 D6 selector，也不冒充 Workspace 空。全域强证明不足只拒绝依赖它的 Query/Action，不阻断无关 local_source 人工保存。
 3. 最小映射先验 auth/profile 顺序、RegistryBinding=null 恰对应无用途且 contexts=[]、所有 typed C/Q/分类/Field/关系必需真实绑定；D7 source_envelope_read/2 和 FieldSelection/2 从真实成功观察 producer 签窄引用，不授 body/write。两个同值电话只改所选 occurrence，secret worlds 保持完整公开 outcome 非干扰；完整 domainCommitSequence 按指定 CommitDomain，而非跨域累加。
 4. D3 typed resolution→原 wire12 preparationBinding→完整 /3 record/guard→唯一 planning CAS/P seal。分别运行 Resource 反向 canonical/copy、Node 槽增加/删除/类型改变、Annotation target/reply 同 owner 合法及跨 owner 非法、live/Trash membership、metadata-only 和 exact resolved no-op。canonical_plan 的 actual before、selected 与 result 三套完整 bytes、原 Result9/E/delete/result-only/S 与独立 canonical extension 一一匹配；原十二数组只覆盖 native。existing overlap 只有完整等价才物理去重，差异按 stage14 原顺序拒绝；same bytes 的真实 canonical/source-state admission 仍唯一 H+1，不发生第二 write/CP3。
 5. preview 必须在未 seal 时公开完整计划/符号源与所有 bytes；committed 必需 D3CanonicalEffects/1 与 primary receipt/companion/CP3 精确相等，缺交付与已封存事实区分。conditional C、普通 external→managed 同 raw、真正 no-op 各检查正确 source_change 集合。所有14种 EffectItem（rank3互斥两种）、两种 profile、分页与每个字节 slot、完整解码、重开 epoch、撤权、缺 pin、预算、unknown 与 last-reference 全部覆盖；header/digest/PinRef 本身不是公共可读完整预览。
-6. D8 PreparedEditBinding/2 必须以真实 D6/full producer 走同 Manifest/2，不携 D7 bindingToken或ConflictInstallInput；D9 Recipe/2 稳定生产地址与 ConstructionInput/2 当前观察分开，省略 Annotation 目录不升 bodyread，固定生产版本变更不能因为输出相同而复用准备。D10 planned-preview/2 只恢复原 plan/DecisionKey，不替 D7 发明 producer。WorkspaceBootstrapPlan/2、profile/3、Policy/3 使用 D6 实际完整控制计划；symbolic-json/2 只显示其准确 typed Ref 槽，同一当前运输还按原Plan/1 decoder保留真实固定profile/1或/2 family的授权replacement及未提交create/fork，不允许调用方降级；历史 /1 字节恢复单独验证。
+6. D8 PreparedEditBinding/2 必须以真实 D6/full producer 走同 Manifest/2，不携 D7 bindingToken或ConflictInstallInput；D9 Recipe/2 稳定生产地址与 ConstructionInput/2 当前观察分开，省略 Annotation 目录不升 bodyread，固定生产版本变更不能因为输出相同而复用准备。D10 planned-preview/2 只恢复原 plan/DecisionKey，不替 D7 发明 producer。WorkspaceBootstrapPlan/3、profile/3、Policy/3 使用 D6 实际完整控制计划；symbolic-json/2 只显示其准确 typed Ref 槽，同一当前运输还按原Plan/1 decoder保留真实固定profile/1或/2 family的授权replacement及未提交create/fork，不允许调用方降级；历史 /1 字节恢复单独验证。
 
 当前作者检查只包括实际全文/定向阅读、双语/closed shape/引用一致性与 diff/hash，不是执行上述实现测试。完整 current 六 caller、实际文件事务与 OS 故障、真实 Policy/Registry、所有 D3 mode/typed atom、完整 CEL parser、D8 可访问 renderer 和 D9 worker/export 均仍需独立实施证据。最后的组合审查与 PL 裁决由总控安排；本篇不自行授予重构启动或宣布全包接受。

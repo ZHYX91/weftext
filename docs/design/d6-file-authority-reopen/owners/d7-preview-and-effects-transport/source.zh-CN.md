@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：b80e6c6f-648a-46f9-b5eb-8235f237b5f6。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威 PL-IR-01 修复消费者；未独立接受、未激活、未实施。固定 S 的历史标签/证据只保留原范围。本候选消费 D3/D6 稳定生产地址/current Observation 作者修复；该 exact 修复仍待独立复核，不自行关闭 P1。新增 D3 conflict preparation 与 D7 /3 binding 保持各自独立联合复核门。
 
 # D7 预览与完整效果运输
 
@@ -41,7 +41,7 @@ subject逐字复用D3 PayloadSubjectKey中的existing/mapped/new entity三类，
 | `{kind:"semantic_extension",format,bytes:EffectBytes}` | format闭集d4_relation_copy_effects/1、d4_source_materialization_effects/1、d7_definition_transfer_effects/2、d3_canonical_effects/1；仅committed的完整extension，不能截断owners/facts/entries；preview的完整作者变换由source_change、conditional_source_change与原D3 C/Q计划表达，不伪造最终Ref版extension |
 | `{kind:"period_scope_change",subject,before:PeriodBindingImage,after:PeriodBindingImage}` | 原D6唯一派生控制scope，subject必须Node；purge删除/新period建立/managed copy均覆盖 |
 | `{kind:"series_configuration_change",seriesScope,before:SeriesConfigImage,after:SeriesConfigImage}` | 同D6完整seriesScope；仅原请求允许的完整fork/bootstrap/fresh scope初始化或独立已授权管理结果 |
-| `{kind:"workspace_bootstrap",bytes:EffectBytes}` | 完整D6控制计划：profile/3用WorkspaceBootstrapPlan/2；真实已签发的profile/1或/2 family用原Plan/1，均含其准确policy及Registry/config/binding；preview的fresh NodeRefs按下段symbolic encoding呈现 |
+| `{kind:"workspace_bootstrap",bytes:EffectBytes}` | 完整D6控制计划：profile/3用WorkspaceBootstrapPlan/3；真实已签发的profile/1或/2 family用原Plan/1，均含其准确policy及Registry/config/binding；preview的fresh NodeRefs按下段symbolic encoding呈现 |
 | `{kind:"authority_change",before:AuthorityImage,after:AuthorityImage}` | create/fork/continue当前authority及预期切换；preview的未分配continue authority明确pending，不捏造ID |
 | `{kind:"field_change",ownerNodeRef,fieldId,beforeVersion:SourceVersion/2,afterVersion:<SourceVersion/2|D7ProposedVersion/1>,before:EffectBytes,after:EffectBytes}` | 仅owner_fields；两个bytes解码完整FieldEntryImage/2，实际版本与源相等 |
 | `{kind:"conflict_branch_source",head:ChangeId/1,subject:EntityRef,sourceVersion:SourceVersion/2,payloadKind,bytes:EffectBytes/2}` | 仅 D3 resolution full preview 的完整已读 head source；细则见 §6 |
@@ -72,9 +72,9 @@ conditional_source_change不接受用户predicate、任意脚本或采样出的R
 
 EffectBytes/2 exact `{handleToken,encoding,byteLength}`。tag=`effect_bytes/2`，不能拿D6 resource_bytes/1 ByteHandle、Query result或effects cursor替代。record绑定manifest token+phase+item ordinal+该kind的唯一字节slot角色（如before、after、result或extension）+交付epoch、exact pinned bytes、encoding、audience/observation scope、有限读取预算、期限/epoch。Resource原D6 ByteHandle继续其旧合同；新handle可以承载fresh/proposed二进制而不伪造已提交ResourceRef。
 
-encoding闭集：`exact_source_utf8|resource_bytes|d3_annotation_value3|d3_symbolic_result9|d4_relation_copy_effects1|d4_source_materialization_effects1|d7_definition_transfer_effects2|d3_canonical_effects1|d6_workspace_bootstrap_plan1|d6_workspace_bootstrap_plan2|d7_symbolic_json2|field_entries2`。这些encoding唯一决定完整decoder，不允许generic_json或任意format dispatch。ordinary exact数据按相应完整原decoder验证；D3 symbolic输入按Result/9，consumer逐B/M/N/E/S/C/Q分区以symbolic subject显示、审阅全部占位关系及原bytes，不能自行分配UUID后冒称author source。
+encoding闭集：`exact_source_utf8|resource_bytes|d3_annotation_value3|d3_symbolic_result9|d4_relation_copy_effects1|d4_source_materialization_effects1|d7_definition_transfer_effects2|d3_canonical_effects1|d6_workspace_bootstrap_plan1|d6_workspace_bootstrap_plan3|d7_symbolic_json2|field_entries2`。Plan/2 是未激活候选前身，不新增兼容 decoder。这些encoding唯一决定完整decoder，不允许generic_json或任意format dispatch。ordinary exact数据按相应完整原decoder验证；D3 symbolic输入按Result/9，consumer逐B/M/N/E/S/C/Q分区以symbolic subject显示、审阅全部占位关系及原bytes，不能自行分配UUID后冒称author source。
 
-`d7_symbolic_json2`只用于本节preview Bootstrap中具有fresh refs的完整closed control对象。内容exact `{format:"weftext.symbolic-effect",version:2,payloadFormat,template,slots}`，payloadFormat闭集为d6_workspace_bootstrap_plan1|d6_workspace_bootstrap_plan2，由受保护family及其完整真实计划decoder决定，不允许调用方降级选择；template为对相应schema按typed Ref位置机械替换成`{kind:"symbolic_subject",subject:NodeSubject}`的完整对象，slots为`{path,subject}`列表；path的表示与排序逐字采用同包《Definition Transfer》§2的唯一typed-path规则（member text或Counter index的数组，text UTF8 rank0、index数值 rank1、共同prefix后短路径在前，故index 2先于10）；slots必须与所有替换处一一对应。不得允许literal位置出现placeholder或普通object冒充Ref。Core按原plan candidate map对完整模板替换后必须通过原D6/D4 decoder；最终committed encoding使用真实原格式而非symbolic。这个只读展示模板不能作为修改请求或证据输入返回Core。真实已经签发且固定profile/1或/2的family，仍可按原Plan/1完成原授权replacement及尚未提交的create/fork。当前运输显式支持这条真实family分支及其saved/planned/unknown恢复；不得把Plan/1改标为Plan/2或插入Policy/3，也不推定其它原型均已部署。新profile/3产生Plan/2。BootstrapPlan/2 的所有字段逐字采用 D6 Control §10.2 实际 decoder，initialPolicy 为完整 Policy/3，profile 为冻结 family 的 /3 副本；creatorBinding、target Registry、series configurations 与 period bindings 不被 preview 裁剪。目标 W/B 仍由原 D3 proposal 决定，issuer A 暂管不改变 DecisionKey，也不增加 targetDomain 成员。
+`d7_symbolic_json2`只用于本节preview Bootstrap中具有fresh refs的完整closed control对象。内容exact `{format:"weftext.symbolic-effect",version:2,payloadFormat,template,slots}`，payloadFormat闭集为d6_workspace_bootstrap_plan1|d6_workspace_bootstrap_plan3，由受保护family及其完整真实计划decoder决定，不允许调用方降级选择；template为对相应schema按typed Ref位置机械替换成`{kind:"symbolic_subject",subject:NodeSubject}`的完整对象，slots为`{path,subject}`列表；path的表示与排序逐字采用同包《Definition Transfer》§2的唯一typed-path规则（member text或Counter index的数组，text UTF8 rank0、index数值 rank1、共同prefix后短路径在前，故index 2先于10）；slots必须与所有替换处一一对应。不得允许literal位置出现placeholder或普通object冒充Ref。Core按原plan candidate map对完整模板替换后必须通过原D6/D4 decoder；最终committed encoding使用真实原格式而非symbolic。这个只读展示模板不能作为修改请求或证据输入返回Core。真实已经签发且固定profile/1或/2的family，仍可按原Plan/1完成原授权replacement及尚未提交的create/fork。当前运输显式支持这条真实family分支及其saved/planned/unknown恢复；不得把Plan/1改标为Plan/3或插入Policy/3，也不推定其它原型均已部署。新 profile/3 产生 Plan/3。BootstrapPlan/3 的所有字段逐字采用 D6 Control §10.2 实际 decoder，包括完整 Policy/3 initialPolicy、冻结 family profile/3 与 WorkspaceTrustGenesis/1；creatorBinding、target Registry、series configurations 与 period bindings 不被 preview 裁剪。目标 W/B 仍由原 D3 proposal 决定，issuer A 暂管不改变 DecisionKey，也不增加 targetDomain 成员。
 
 `d7_effect_bytes_read` exact `{wireVersion:2,kind:"d7_effect_bytes_read",handleToken,offset,maxBytes}`，offset Counter，maxBytes1..1048576。成功`{wireVersion:2,kind:"d7_effect_bytes_chunk",handleToken,offset,totalBytes,data,terminal}`，data为canonical无padding base64url；decoded长度恰min(maxBytes,totalBytes-offset)，terminal恰offset+len=totalBytes；offset==totalBytes可空terminal，超界cursor_invalid。完整消费者必须验证0..totalBytes无洞且使用header encoding完整decode；seek最后一byte不是完整审阅。I/O short read、pin缺失、epoch/资格变化不返回部分data或假EOF。
 
@@ -154,7 +154,7 @@ restoreMembership 的 present 只用于该 Node 当前 active Trash 的完整 sa
 
 有 entity_state_change 时其 before/after 与 installed/result.image 逐项相等；原 source_change/conditional_source_change 另运输实际 full source 前后与真实生产/拟议版本，branch_source 运输全部已读 head bytes，不用 canonicalStates 代替 source。相同 bytes 但 changed canonical claim/selected production version 的 source admission 仍给 source_change（若含真正 C 条件则依 §2.1 的 forceAdmission），CP3 before 取实际 wrapper.sourceVersion、after 取唯一真实 /2 source stamp + seal ChangeId。metadata-only open resolution 也有完整 canonical/control 投影；true resolved no-op 不再把旧 head 版本重新 admission 到当前 after。
 
-预览完整性比较的是同一 canonical+native 最终计划的所有实际 source、结构、生命周期、引用与 portable control 效果。Node/Annotation 的 typed reference/reply 与 D3 原完整 disposition/structural/payload 责任必须由真实 D3 owner 闭合，本运输只投影其获准计划，不以一个无引用 Resource 例或可显示全部 bytes 证明业务计划合法。未闭合的 owner 计划不能准备成功，不由 D7 增加写槽或另造 reference patch。D3 adapter 的限定独立结论不代替完整 D3/D6/D7 联合接受；portable Locator PL-IR-01 仍保留其具名未决门。
+portable Locator PL-IR-01 现已有稳定生产地址/current Observation 作者算法；Preview/Effects 只保留新 preparation 选中的当前 Observation，不把稳定 Locator 地址变成运行时证据。该 exact 修复仍待独立复核，未闭合 owner-plan/effects 整合门继续独立开放。
 
 ### 6.1 Canonical 计划、字节与公共语义扩展
 

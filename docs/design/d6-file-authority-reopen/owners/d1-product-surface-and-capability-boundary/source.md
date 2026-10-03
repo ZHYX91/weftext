@@ -135,11 +135,11 @@ Browser/Desktop/CLI/Mobile -> authenticated Server API -> authorization/audit ->
 
 ### 7.4 Failover
 
-Server failover fences both control storage and author-file writes. Fencing only SQLite while the old instance can still rename or replace hosted files does not satisfy unique commit ownership.
+Server failover fences both control storage and author-file writes. Fencing only SQLite while the old instance can still rename or replace hosted files does not satisfy unique commit ownership. Control custody continuity also does not imply revision-seal private-key continuity: a fresh AuthorityInstanceId obtains a fresh exact-domain signing key only through D6's anchored WorkspaceAuthorizationBundle transition and a lawful protected-key handle on the new host; copying Workspace/control files never supplies that handle.
 
 ## 8. Trust, authorization, and network boundary
 
-Authorization is revalidated at the boundary that holds the workspace backend. Client claims of authorization, sync-provider upload state, and index completeness are not authorization evidence.
+Authorization is revalidated at the boundary that holds the workspace backend. Client claims of authorization, sync-provider upload state, and index completeness are not authorization evidence. D6 WorkspaceTrustAnchor/root/domain-seal trust is independent of D10 publisher/package signing and D4 Registry seed authenticity; neither can be substituted for Workspace author/seal authority.
 
 An ordinary local operation observes only the Source, identity/lifecycle, structure, and policy ranges it actually needs. Strong Actions still prove their required complete positive and negative ranges under D4-D7. An incomplete index may be supplemented by source scan; inability to prove a required complete range blocks that strong operation, not unrelated ordinary saves.
 

@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：3240b157-f174-4ab2-a3f2-d2b3be045388。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 Query、View、Action 与 Dynamic Block
 
@@ -92,4 +92,4 @@ v1 不支持任意 join、union、recursive QueryRef、用户函数、任意代�
 
 当前 D3 guarded resolution 由其完整 typed prepare、native request、D3CanonicalEffectPlan/1 与公共 D3CanonicalEffects/1、实际 D7 /3 record 和 full transport 一起闭合。原12receipt数组只表达 native，canonical extension 必需；已保存 commit 与当前 effects_unavailable 分开。D8 PreparedEditBinding/2 是 D6/full 的真实 preview producer，不新建 ActionSpec。D9 TemplateRecipe/2 是持久生产地址，TemplateConstructionInput/2 是当前完整输入；D7消费实际 runtime资格，不把recipe历史来源直接升级成Observation。D10 current计划/执行消费者只能按本组实际 /2/3 contracts，不靠其命名替代本组producer。
 
-PL-IR-01 的 portable Locator 跨副本重资格仍待具名裁决。使用已被原 D3 decoder/current qualification 完整证明的本地精确 Locator 不受无限期一般禁用；需要未决跨副本重资格的路径保留该精确门，不通过owner/revision数值相等或服务器猜测补签。所有真实旧准备、result、effects、planned/saved/unknown records 按其实际原decoder与保留责任恢复，不把未部署草稿一律假定永久兼容，也不抹去已存在记录。
+PL-IR-01 现使用 D3/D6 稳定生产地址/current Observation 作者修复：持久 managed Locator 在另一副本只能通过 canonical sealed binding、该副本 exact current Observation、准确 coordinate/profile 检查及原授权顺序取得**新的读取资格**；任何旧 result、ActionEvidence 或 preparation 都不被重签。缺 canonical binding/outbox、current Observation、exact production-version equality 或 coordinate/profile 证据时，按既有 stale/incomplete/unavailable 结果停止该次使用，不再保留未定义整合门。该修复仍待独立复核，不自行关闭 P1。

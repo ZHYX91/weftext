@@ -76,7 +76,7 @@ D4 只拥有 schema/value/relation/Calendar/Library 术语。D3 的 Node/Entity/
 |---|---|
 | `DecisionKey/2` | D6：Workspace、完整 CommitDomain、OperationId 共同构成 key；protocolOwner 标识唯一原 decision owner，不是额外 key 成员 |
 | `SourceRevisionPlan/1`, `SourceStamp/1` | D6：原 plan 中受保护的拟议托管 after 基准，使用生产域 H 和精确 afterPin；不是已 seal 的源、当前 Observation 或提前可用的 Locator |
-| `RevisionTokenBinding/2`, `RevisionTokenSource/2`, `d6_source_revision/2` | D6：观察域及观察代与闭合 managed stamp/external version 分支的受保护稳定绑定；D3 保留 Locator 不透明词法所有权 |
+| `RevisionTokenBinding/2`, `RevisionTokenSource/2`, `d6_source_revision/2` | D6：到闭合 managed stamp/external version 分支的受保护稳定生产地址绑定；当前 observer 资格仍由 `SourceObservation/1`/`SourceVersionRef/1` 独立证明；D3 保留 Locator 不透明词法所有权 |
 | `DependencyKey/2`, `DependencyProof/2`, `StructureRange` | D6 承载，D3/D4/D7 各自提供真实枚举：十四种依赖键、九种结构范围，各键有精确完整性和连续性合同 |
 | `ContentCompletionProof/3` | D6：可移植传输已 seal 的生产 SourceVersion 前后像；不是发送方 Observation/token，也不是完整 Query 证明 |
 | `ConflictRecord/2` | D6：当前记录使用 Frontier/2；历史 /1 保持原 Frontier/1，ConflictKey/1 与 ConflictId 身份不变 |

@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：2d01ea44-1790-431d-986c-0214dbad544f。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威 PL-IR-01 修复消费者；未独立接受、未激活、未实施。固定 S 的历史标签/证据只保留原范围。本候选消费 D3/D6 稳定生产地址/current Observation 作者修复；该 exact 修复仍待独立复核，不自行关闭 P1。其它 D3/D6/D7 整合门保持独立。
 
 # D7 Scenario Dispositions
 
@@ -244,4 +244,4 @@ revision06细化：GRAPH的Family Witness以同一个graph.nodes.literal_relativ
 | FA-13 | D10 planned 只读预览复用原 DecisionKey、Manifest/2 与完整 EffectBytes/2 | 当前状态重做 Query/新 token 意义或摘要代替完整实际效果 producer | Execution§13、Preview§1/§4 |
 | FA-14 | 真实历史 /1 transport、/1–2 binding 与保存决定按原字节/pins/权限恢复 | 将当前新格式补进旧记录，删除 unknown 责任，或把无部署草稿全部当永久兼容义务 | Binding§4、Preview§7 |
 
-PL-IR-01 的跨副本 portable Locator 重新资格仍为具名未决依赖；不假造 Pro 裁决、不按位置/文本近似重锚，也不把该门扩大成所有本地精确 Locator 或其它 Query/Action 不可用。完整作者阅读、双语检查与 hash 只证明交付身份和形式一致，不能替代以上独立设计审查及后续真实实现 conformance。
+PL-IR-01 的跨副本 portable Locator 重新资格现已有稳定生产地址/current Observation 作者规则；场景复核必须覆盖 D6 PL01–PL18 与当前 D3/D7 consumer，仍禁止按相同位置/文本近似重锚、从 latest 补签或把门扩大成所有本地精确 Locator 不可用。该修复等待本 exact candidate 独立复核，不再是算法未决，也不自行关闭 P1；

@@ -1189,6 +1189,8 @@ ApprovalUse 按完整原 DecisionKey 唯一，请求必须准确派生该键。�
        meters:[PricingMeter/1],
        evidence:EvidenceTicket/1}
 
+本节的发布方与扩展包信任只用于证明部署扩展的真实性。任何 D10 `trust` 记录、`PublisherIdentity`、`NamespaceClaim`、`PackageManifest` 签名、包密钥轮换或撤销、部署管理员资格或安装顺序，都不能创建或替换 D6 `WorkspaceTrustAnchor/1`、`WorkspaceTrustRootDeclaration/1`、`WorkspaceTrustDeclaration/1`、`DomainSealKeyHandle/1`，也不能授予 `CommitDomain` 签名资格、工作区策略管理权或作者写权限。D6 的 revision-seal 信任由 `WorkspaceAuthorizationBundle/1` 独立锚定并版本化；D10 的扩展包签名不能满足其引导、注册、密钥轮换或撤销、历史验证以及 `authorize_new_sign` 门。
+
     NamespaceClaim/1 = {
       namespaceId:D4.SemanticNamespaceId,
       ownerClass:"first_party" | "publisher",
@@ -1442,7 +1444,7 @@ stop safety transaction 是同一 managed Authority Store 内的专用 closed wr
 
 只有当前 administer_issuer 的显式 issuer-profile 更新才能为以后新签发的 family 选择 profile/3。既有 family/profile 副本、replacement、已保存决议、replay/continue/failover 均保留真实原 decoder，不重算 grant 或恢复创建者权限。既有 Workspace 只能由当前 policy_admin 显式提交完整有效 Policy/3，才能取得新增能力。只有 Field 权限的主体不能自授。
 
-D6 Control §10.2 现已定义完整 WorkspaceBootstrapPlan/2 生产者，保留原完整成员职责，显式使用 wireVersion=2、profile/3 与 Policy/3，不把未声明的 Policy/3 塞进 /1。D7 完整符号/当前 bootstrap 投影须消费该真实 owner 版本。在这些实际 owner 后像共同完成并获接受前，本节是有界协调要求，不表示新 bootstrap 路径已经存在或产品可用。原 profile/1/2 及真实已保存 BootstrapPlan/1 仍按原合同恢复。
+D6 Control §10.2 现已定义完整 WorkspaceBootstrapPlan/3 生产者，在原成员职责上增加 WorkspaceTrustGenesis/1，显式使用 wireVersion=3、profile/3 与 Policy/3；D7 完整符号/当前 bootstrap 投影消费该真实 owner 版本。Plan/2 是未激活候选前身，不新增兼容/迁移层；真实历史 Plan/1 若可证明存在，仍保留原 decoder/recovery。本节仍只是有界协调要求，不表示产品已可用。
 
 ## 13. Public capability 与首版 D6 错误兼容
 

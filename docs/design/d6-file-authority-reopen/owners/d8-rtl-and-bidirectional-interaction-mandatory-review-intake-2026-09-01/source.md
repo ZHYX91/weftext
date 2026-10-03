@@ -10,7 +10,7 @@ Source document ID: 7db65eaf-0892-4e64-b62f-42b7988fdc99.
 
 # D8 RTL and Bidirectional Interaction Mandatory Intake — Disposition of the 2026-09-01 Source
 
-Candidate status: D8-FA-r01; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S is 7e18168dad3e6d120fce0dd607dc10fa7894e252. Original acceptance, model, and platform evidence retains only its original scope; this candidate is not implementation evidence. The D3 conflict adapter, current D7 effects producers, and current qualification of portable Locators across replicas still require their respective coordination and independent acceptance. These integration gates do not retroactively cancel recovery of real historical decisions.
+Candidate status: D8-FA-r01 PL-IR-01 repair consumer; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S and the original mandatory RTL intake retain their original evidence scope. This afterimage consumes the authored D3/D6 stable-production-address/current-Observation repair; the exact repair remains pending independent review and does not close P1. D3 conflict/current D7 effects gates remain separate.
 
 ## Purpose and authority boundary
 

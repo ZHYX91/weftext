@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: 9e6c35cb-3c31-4c1d-8d64-32a9a10a1021.
 
-Candidate status: D9 file-authority coordination afterimage; not independently accepted, activated, or implemented. This complete document derives from fixed S 7e18168dad3e6d120fce0dd607dc10fa7894e252 and retains its capabilities, limits, scenarios, and actual historical evidence boundaries. Historical stage labels do not determine this candidate's status. Current cross-domain sources, the single D3/D6 decision, and D7 preparation/preview consumption follow their actual coordinated owners. PL-IR-01 portable Locator qualification and cross-owner producers that have not been accepted remain named integration gates; publishing this document does not close them.
+Candidate status: D9 file-authority PL-IR-01 repair consumer; not independently accepted, activated, or implemented. Fixed-S capabilities, limits and historical evidence boundaries remain. This document consumes the authored stable-production-address/current-Observation repair, but the new exact candidate still requires independent review and does not close P1.
 
 # D9 Conversion, Templates, and Workers
 
@@ -40,6 +40,7 @@ This candidate includes explicit coordinated amendments: D3 template-result hand
 | U10 | Conversion results, Provenance, source coordinates, and previews confer no write authority. Only the original confirmed request's real D3/D6 receipt proves author commit. |
 | U11 | Inputs, targets, templates, Providers, versions, mappings, loss choices, and result order bind exact versions. Changes require new preparation. Unknown outcomes recover the original request before any replacement OperationId. |
 | U12 | Sources/templates are not writable and preview performs no author writes. Preparation may write isolated staging/control records; this is not zero disk I/O. |
+| U13 | PL-IR-01 persistent Locator use consumes the D3/D6 stable-production-address/current-Observation repair: same-version synchronized sources can be newly read-qualified without rewriting recipes/regions; old runtime evidence never revives. This authored rule remains pending independent review. |
 
 Old Record, YAML envelope, H1–H9, and `attr.中文键` forms in prototype public documentation cannot override upstream rules. This generation promises no compatibility for unpublished prototypes: future implementation removes old parsers/aliases rather than dual reading/writing. The current private architecture stage leaves the product repository unchanged.
 

@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：b0056f5d-51c1-4d32-a8be-bfe47e339229。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威 PL-IR-01 修复消费者；未独立接受、未激活、未实施。固定 S 的历史标签/证据只保留原范围。本 View 合同只消费经稳定生产地址/current Observation 作者修复后的 Query 结果；该 exact 修复仍待独立复核，不自行关闭 P1。其它 D3/D6/D7 门保持独立。
 
 # D7 View Contract
 
@@ -126,4 +126,4 @@ axis extent由以下精确数学先计算，再一次应用Domain；quantity计�
 
 本版 ViewSpec/1 与上述全部 layout、验证顺序和延期处置保持原闭集。当前 Query 的 wireVersion2 外层消费同一 D6 ResultHandle/ResultCursor 真实版本，不根据外层数字猜升级内部 token；每次 page、View 验证、导出或 Action 接续都遵守 Execution 的同 cut、当前授权、domain/epoch 和完整结果门。SourceVersion/2 与 SourceObservation/1 是 Core 的来源/依赖证明，不是可由 View 渲染时补签的 cell；renderer 无权以相同 revision、path、hash 或可见 Ref 替换 current observation。
 
-对来源状态不可用、跨域连续性不足或 portable Locator 尚未完成具名重资格的结果，View 只消费实际 Query 交付状态，不自行将其变为合法 current source 或静默省略失败行。原已交付画面可按既有规则标 stale；不能把 stale 画面、partial subscription、只取一页或未读完完整 effects 当作 Action 确认。D8 Draft/完整预览和 D9 Worker 导出继续走各自独立入口及实际能力门，不在 ViewSpec 中添私有执行 arm。
+对来源状态不可用、跨域连续性不足，或 portable Locator 的稳定地址/current Observation 作者资格失败/不可用的结果，View 只消费 Query 的实际交付状态；View 不自行重资格、不取 latest，也不 fuzzy relocation。新的 Query 读取可以使用 D3/D6 修复成功，但 stale 画面、partial subscription、只取一页或未读完 effects 都不能成为 Action 确认。

@@ -10,7 +10,7 @@ Source document ID: 38d4f1f1-958a-4b10-a3e0-7d1627f87f3e.
 
 # D8 Terminology and Naming
 
-Candidate status: D8-FA-r01; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S is 7e18168dad3e6d120fce0dd607dc10fa7894e252. Original acceptance, model, and platform evidence retains only its original scope; this candidate is not implementation evidence. The D3 conflict adapter, current D7 effects producers, and current qualification of portable Locators across replicas still require their respective coordination and independent acceptance. These integration gates do not retroactively cancel recovery of real historical decisions.
+Candidate status: D8-FA-r01 PL-IR-01 repair terminology consumer; complete owner afterimage, not independently accepted, activated, or implemented. Fixed-S terminology identities remain. This lexicon consumes the authored stable-production-address/current-Observation split; the exact repair remains pending independent review and does not close P1. D3 conflict/current D7 effects gates remain separate.
 
 Revision: D8-FA-r01; candidate. Existing D1–D7 concepts, Refs, Locators, Fields, Actions, PreparedIntent, and EffectManifest retain their domains. New concepts apply only at the explicit levels below. The complete public wire-name inventory belongs to Editor Interfaces/Direction; review tools, filenames, and test counts are not product terms.
 

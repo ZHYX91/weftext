@@ -7,7 +7,7 @@ translation_status: source
 
 源文档 ID：cf00b979-ef4d-4909-80a2-f9d9e163f1ef。
 
-候选状态：D7 文件权威协调后像，未独立接受、未激活、未实施。固定 S 中的阶段接受、D8/D9 未启动及模型计数仅为历史来源记录；本候选保留其真实语义和证据限度，不把历史标签当本轮状态。当前消费同包 D3 wire12/Result9、D4 当前消费者与 D6 Control 的完整生产版本、当前观察、依赖和单决议恢复合同。新增 D3 冲突准备与 D7 /3 绑定尚待全包独立联合审查；portable Locator 跨副本重资格仍待具名裁决，不宣称本候选已整体闭合或可激活。
+候选状态：D7 文件权威协调修复候选，未独立接受、未激活、未实施。历史阶段标签与有界证据仅保留原范围。本篇现已消费 PL-IR-01 的稳定生产地址/current Observation 作者修复及当前 D3/D6 producer，但该新 exact candidate 仍待独立复核，不自行关闭 P1，也不意味着全包可激活。
 
 # D7 Execution、Action 与 DynamicBlock
 
@@ -169,7 +169,7 @@ EntityTarget 仍 exact `{ref:EntityRef,expectedRevision:Counter}`；FieldSelecto
 
 selectedSources 恰覆盖本 ActionSpec 中**显式 source revision 或 Locator 选择**的每个 source owner：EntityTarget.ref、FieldSelector.owner、NativeSelector.owner、table/row Locator 的 owner、suggestion Annotation 与目标 Locator owner 等。复用同 owner 只列一次。原 d3_operation 自己已经携完整 InputDescriptor/2.sourceInputs，外层 selectedSources 必须空，不能制造第二份不同来源；无直接 revision/Locator 选择的 create/structure 参数不凭 parent Ref 扩成 source 选择。每个 inner expectedRevision 必须等于相应观察中真正 managed SourceVersion/2.revision；externalSequence 不充作 revision。结构源外部修改是否允许，仍由实际 D3 mode 决定；普通完整源保存/Draft 的 external 合法性不被此 inner managed selector 限制取消。
 
-SourceVersionRef 必须来自用户实际选择时可读的 D6 current-source、同 cut 的 D7 FieldSelection 或 ActionEvidence producer；服务器不能看到旧 inner Counter 后读取 latest 并补签 token。当前 rights/domain/fence/观察世代/FileObjectBinding/完整 pins 与 actual sourceVersion 全部验证，再在同一真实源中验证 inner selector 和 raw Entry；相同 text/hash/Counter 不补连续性。A:1/B:1、epoch gap、外部替换、old result 的同样显示值均不得被重签为同一次选择。portable Locator 跨副本重新取得资格的 PL-IR-01 尚未裁决，本节仅消费当前被真实 owner 证明的选择，不能据此偷定跨副本比较/迁移。
+SourceVersionRef 必须来自用户实际选择时可读的 D6 current-source、同 cut 的 D7 FieldSelection 或 ActionEvidence producer；Server 不能收到旧 inner Counter 或旧 runtime sourceToken 后读取 latest 再补签。persistent managed Locator 可以先通过 D3 canonical 稳定生产 binding + 新证明且 sourceVersion 与该地址逐字相等的 current Observation 取得**新读取资格**；随后只有新的 FieldSelection/ActionEvidence/preparation 才能捕获这次 current SourceVersionRef。它绝不更新或复活更早的 selectedSources、ActionEvidence、PreparedActionBinding、Draft/map 或 PreparedIntent。之后仍完整验证 current rights/domain/fence/observation/FileObjectBinding/pins、真实 sourceVersion 及 exact source 内 inner selector/raw Entry。相同 text/hash/Counter、真实 production-history ABA、无法证明 gap/rematerialization 或 external 相同 bytes 都不能重签成同一 selection。本 PL-IR-01 consumer 仍待独立复核。
 
 result/all_result 动态 TargetSet 没有客户端显式 inner source revision 时，prepare 在先验 complete scope 下复验原 Query 全部正负依赖/definition/rules，然后第一次读取实际 source；这一分支不能把 Query 已读过的旧 source 偷换为 latest。原 Query 若读取过目标 source，必须逐项等于该原观察；source-free exact Ref query 可在保持原完整结构/选择依赖后第一次取源。所有实际目标及来源随后进入完整 sourceInputs 和 preview，1000 上界按完整目标数，不能以第一页筛选。evidenceToken 若存在，所携 selectedSources 与其受保护原选择逐项相等；新 token 不赋予原 result 已丢失的当前 Action 资格。
 
@@ -198,6 +198,6 @@ AuthorizedCut 不是客户端 token 声称：Core 同时固定完整请求域、
 
 D3 create_workspace/fork_workspace 的 bootstrap 仍先按 issuer 的 allocate_workspace（fork 另有 source 资格）完成最低授权，使用未激活目标 W/B 的固定 CommitDomain/DecisionKey，并在 P1/P2 原恢复查询后按 issuer 暂管 target ledger 的实际规则继续；不要求目标已 active、具有目标 policy 或 source_write，不在 seal 后改 key。普通 action 不借此免除自身 current gate。D8 PreparedEditBinding/2 只使用 D6/full 的实际 Manifest/2 producer；D9 constructionInput/2 只进入具名模板记录，metadata-only omittedAnnotations 只需真实 state/annotation 目录资格，不伪造 body Observation。D10 planned-preview/2 消费原计划的完整 Manifest/2、EffectBytes/2 与完整 DecisionKey/2，不重新准备或发明本篇缺少的 effects。
 
-真实旧 wireVersion1、PreparedActionBinding/1/2、历史效果及已保存请求保留原 decoder、最小授权映射、custody、原 pins/TTL/last-reference 与 saved/planned/unknown 恢复；不能因新 runtime 外层升版而重签旧 token、把原请求升级后重做，或将旧准备声称为新全包语义。新的 unseen 准备只走当前已闭合 producer；旧版实际恢复并不要求创造没有记录证据的全功能兼容层。PL-IR-01 只保持受影响的跨副本 Locator 重新资格门，不能用服务器从 latest 补签或永久拒绝全部其它合法 Query/Action 绕过。
+真实旧 wireVersion1、PreparedActionBinding/1/2、历史效果及已保存请求保留原 decoder、最小授权映射、custody、原 pins/TTL/last-reference 与 saved/planned/unknown 恢复；不能因新 runtime 外层升版而重签旧 token、把原请求升级后重做，或将旧准备声称为新全包语义。新的 unseen 准备只走当前已闭合 producer；旧版实际恢复并不要求创造没有记录证据的全功能兼容层。PL-IR-01 现已有 D3/D6 作者算法：受影响的跨副本 Locator 只有在 canonical sealed address 与 fresh current Observation 均证明后，才能进入一次新的 selection；缺证明按既有 owner outcome 返回，禁止服务器从 latest 补签。新读取资格绝不复活旧 selectedSources、ActionEvidence、PAB、result handle 或 request。
 
 实际 D10 core_field_member adapter 消费同一个当前 d7_action_prepare/2 producer、准确 fresh FieldSelector 与 selectedSources，不增加 ActionSpec，也不绕过窄或完整资格。普通交互路径仍由用户在预览后确认；独立具名的 D10 standing-approval 路径以 Control §7 的闭合标量成员规则及 §8.2 的 Standing Approval/ApprovalUse 资格为准。D7 返回完整实际预览和 MutationFootprint，不返回 approved=true，也不用批准反推目标或请求值。D10 作者步骤返回或允许提交前，Core 原子保留原 PreparedActionBinding/3、所需 pins 与准确 D10AuthorPreparationLink/1 关联。关联选择原 bindingToken/request，不给不可变 D7 wire 加成员；关联连续性不明不能创建替代准备。只有 D6 在实际 planning/recovery/seal 门检查关联的当前批准资格，原权限与业务错误保持优先，saved 决议仍依原门重放。该协调无人值守路径在真实 D1/D6/D7/D10 能力组合共同接受前保持不可用。Preview Transport §8 提供完整 D7 planned-preview 恢复 producer，不靠 D10 发明效果来源。

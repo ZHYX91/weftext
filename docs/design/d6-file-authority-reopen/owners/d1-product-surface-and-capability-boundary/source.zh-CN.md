@@ -134,11 +134,11 @@ Browser/Desktop/CLI/Mobile → authenticated Server API → authorization/audit 
 
 ### 7.4 故障切换
 
-Server failover 必须同时 fence 控制库和作者文件写能力。只阻止旧实例写 SQLite、却仍允许它 rename/replace 托管文件，不满足唯一提交持有者。
+Server failover 必须同时 fence 控制库和作者文件写能力。只阻止旧实例写 SQLite、却仍允许它 rename/replace 托管文件，不满足唯一提交持有者。control custody 连续也不表示 revision-seal private key 连续：fresh AuthorityInstanceId 只能通过 D6 已锚定 WorkspaceAuthorizationBundle transition 与新 host 上合法受保护 key handle 获得 fresh exact-domain signing key；复制 Workspace/control files 永远不提供该 handle。
 
 ## 8. 信任、权限与网络边界
 
-权限在持有工作区后端的一侧重验。客户端提供的“已授权”、同步服务的“已上传”和本地索引的“已完成”都不是权限证据。
+权限在持有工作区后端的一侧重验。客户端提供的“已授权”、同步服务的“已上传”和本地索引的“已完成”都不是权限证据。D6 WorkspaceTrustAnchor/root/domain-seal trust 与 D10 publisher/package signing、D4 Registry seed authenticity 相互独立；后两者都不能替代 Workspace author/seal authority。
 
 普通本地操作只读取其实际需要的 Source、identity/lifecycle、结构和 policy 范围。强 Action 需要的完整正/负范围仍按 D4–D7 证明；索引未完成时可以扫描源，无法证明时只拒绝该强操作。不得为了证明一个普通段落保存而先读取无关隐藏文档。
 

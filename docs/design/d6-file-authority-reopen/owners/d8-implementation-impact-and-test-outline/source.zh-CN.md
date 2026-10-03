@@ -9,7 +9,7 @@ translation_status: source
 
 # D8 实现影响与测试轮廓
 
-候选状态：D8-FA-r01；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原验收、模型与平台证据仅保留其原有范围；本候选的存在不是实现证明。D3 冲突适配器、D7 当前效果生产端与跨副本 Locator 当前资格的联合协调仍须分别完成并独立接受；这些整合门不追溯取消真实历史决议的恢复义务。
+候选状态：D8-FA-r01 的 PL-IR-01 修复 consumer；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原证据仅保留原范围。本测试轮廓现消费稳定生产地址/current Observation 作者修复，但仍待独立复核，不自行关闭 P1。
 
 revision: D8-FA-r01；candidate。以下是后续实施义务。原来源的有限模型保留为历史证据，本次仅执行作者报告列明的文档检查，不宣称真实Core、IME、renderer、AT或性能已实现。
 
@@ -27,6 +27,8 @@ Local Core or Server Core
 Explicit user confirmation → original D3 or D6 request
               ↓ original ledger / CAS / durable commit / replay
 Committed source + receipt → invalidate / reopen projections
+
+PL-IR-01 测试消费 D6 PL01–PL18。D8 另验证：另一副本读取 exact 同一 managed production version 时可返回同一 canonical documentRevisionToken，但使用不同且有效的 current Observation/sourceToken；watcher-gap 后的 requalification 不能改写旧 Draft/map；Annotation document_range 可在新授权下 fresh resolve 并 preserve，而 Trash/live 仍是独立 lifecycle 结果；真实 production ABA 或不可证明 rematerialization 保持 stale。
 ```
 
 Core新增closed D8 read/project/text replacement/plain writing/prepare入口，复用D2 parser原始span、D3 Ref/Locator/Annotation值、D4完整typed验证、D6 scope/预算/footprint/ledger、D7定义/effects。必须传完整Draft Edit Map并实现grammar-complete EOF/site、普通raw region的空白与多行后继状态、独立readonly来源、异步输入队列及精确serial规则；native列/多row批量Source生成器本代全部关闭，不宣称D5完整实现。DraftProjection必须有独立类型，不允许把draft ranges或剪除locator后的对象送入D2 wire。

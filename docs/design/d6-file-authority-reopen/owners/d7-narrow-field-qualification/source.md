@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: 0f987339-9151-4a03-bd35-d5b207a8540f.
 
-Candidate status: D7 file-authority coordination afterimage; not independently accepted, activated or implemented. Stage acceptance, unstarted D8/D9 labels and model counts in fixed S are historical provenance. This candidate preserves their actual semantics and evidence limits without treating those labels as current status. It consumes this package's D3 wire12/Result9, current D4 consumers and D6 Control production-version, current-observation, dependency and single-decision recovery contracts. New D3 conflict preparation and D7 /3 binding still require independent joint review of the complete package; portable Locator requalification across replicas awaits its named decision. This candidate does not claim complete closure or eligibility for activation.
+Candidate status: D7 file-authority PL-IR-01 repair consumer; not independently accepted, activated or implemented. Historical fixed-S labels/evidence retain only their original scope. This candidate consumes the authored D3/D6 stable-production-address/current-Observation repair; that exact repair still requires independent review and does not close P1. New D3 conflict preparation and D7 /3 binding also retain their separate joint-review gate.
 
 # D7 Narrow Field Qualification and Public Results
 
