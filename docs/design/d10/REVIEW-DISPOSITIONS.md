@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Independent-Review Issue Dispositions
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author disposition record. Fixed R07 completed candidate18/18 + S49/49 and returned REVISE (P0=0, P1=1, P2=10). The eleven current findings remain open; this author record awaits fresh complete independent review of the fixed R08 candidate.
+revision: D10-FA-r01-2026-10-02; status: coordinated author candidate, not accepted, activated, or implemented. The last complete historical R08 review of C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=3, P2=8). All eleven historical final dispositions remain OPEN. Named repairs have limited independent reviews; actual cross-owner integration and fresh global acceptance remain incomplete. REVIEW-DISPOSITIONS separates those evidence scopes.
 
 
 ## 1. Review-coverage boundary
@@ -18,6 +18,28 @@ Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` completed its upst
 The next complete independent joint review fixed R07 at C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` and S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`. It completed **candidate 18/18 and S49/49 with no normative reading gap** and returned **REVISE**: P0=0, P1=1 (`B03-P1-01`), P2=10 (`B01-P2-01`, `B02-P2-01`, `B02-P2-02`, `B02-P2-03`, `B03-P2-01`, `B03-P2-02`, `B03-P2-03`, `B03-P2-04`, `B10-P2-01`, `B11-P2-01`). Overall verdict, terminology, and bilingual semantics all require revision. D8 and D9 each added one current finding.
 
 R08 is the author remediation of that exact fixed-R07 issue set. Old R06/R07 coverage is historical evidence only. It cannot be carried forward as an independent read, pass, or closure of the eventual R08 commit.
+
+### 1.1 Later R08 review and current repair scope
+
+The subsequent complete review bound C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` to the same S, with its own candidate18/18 and S49/49 reading, and returned REVISE with terminology/bilingual FAIL: P0=0/P1=3/P2=8. Its eleven findings below supersede the then-current R07 list. Nine earlier findings were closed within that historical scope and two were carried into the newer concrete findings; the lists are not added into twenty-two current findings. Sections 2–4 preserve earlier author dispositions and their then-current status, not today's review result.
+
+Each named correction below has a limited independent review of its recorded repair bytes. Later changes and actual owner producers require their own review. Every historical final disposition remains OPEN until fresh global acceptance; limited PASS does not transfer to a different whole-file hash.
+
+| Stable R08 ID | Original severity | Actual counterexample and current repair location | Repair scope |
+| --- | --- | --- | --- |
+| R08-B13-P1-01 | P1 | Claimed recipient A hides real target B/payload P; CONTROL §7 now requires complete trusted external-request inspection and exact confirmation | Limited PASS; D6 producer integration pending |
+| R08-B13-P1-02 | P1 | Horizon/cache/source changes duplicate one occurrence or merge distinct original starts; CONTROL §16 defines stable keys, continuity, armed/claim and whole missed-window handling | Limited PASS; actual D6 historical retention/consumption pending |
+| R08-B13-P1-03 | P1 | An uncertain 90-unit attempt loses its original budget layers after revision/restart; CONTROL §10 retains immutable five/six-layer attribution and one settlement | Limited PASS; global accounting/recovery review pending |
+| R08-B13-P2-01 | P2 | First host-control success has no unique public envelope; CONTROL §7 defines the same applied-history success for first delivery and replay | Limited PASS |
+| R08-B01-P2-01 | P2 | A direct interactive Run has no Automation; CONTROL RunOrigin/1 and admission/current projection now represent the real interactive branch | Limited PASS |
+| R08-B02-P2-01 | P2 | Public PackageManifest/Contribution misclassified as undefined IPC; TERMINOLOGY §13 names the real public carriers | Limited PASS |
+| R08-B02-P2-02 | P2 | Legitimate first-party people namespace excluded by publisher-only terminology; TERMINOLOGY preserves exact D4 first-party owner claims | Limited PASS |
+| R08-B02-P2-03 | P2 | Multiple kinds may share one interface owner; SCENARIO P18 and UPSTREAM §8 require a single-valued map, not a bijection | Limited PASS |
+| R08-B05-P2-01 | P2 | never_bound explicit Adopt was incorrectly rejected; SCENARIO U12 retains the actual D3 positive branch without enabling ICS | Limited PASS |
+| R08-B11-P2-01 | P2 | Text replacement response was incorrectly required to contain caret; UPSTREAM §8 consumes the exact D8 response | Limited PASS |
+| R08-B12-P2-01 | P2 | import_next was incorrectly required to return terminal state; UPSTREAM §8 keeps terminal inspection on import_state | Limited PASS |
+
+The new file-authority owner afterimages, public carrier mapping corrections, and D6/D7/D10 version/commit/recovery coordination are additional current work. Their presence neither closes PL/current owner findings nor supplies a full current-candidate reading record. Each actor records actual full versus dependency-scoped reading separately. No current S49/49 claim is made by inheriting a previous actor's count.
 
 ## 2. Historical R06→R07 JR001–JR009 author dispositions
 
@@ -35,7 +57,7 @@ R08 is the author remediation of that exact fixed-R07 issue set. Old R06/R07 cov
 
 The two previously clarified questions remain closed with no design change. Owner/composition verification is complete; R07 does not retain a generic "other owner combinations pending" disclaimer. This table is historical; the later fixed-R07 review above supersedes its then-pending review state.
 
-## 3. R08 B01–B11 author dispositions
+## 3. Historical R07→R08 B01–B11 author dispositions
 
 | ID | Severity | Fixed-R07 C finding location | R08 author revision now landed | Main R08 owners / consumers | Fresh-review validation target | Current status |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -87,7 +109,7 @@ Core remains the sole author-transaction authority. ApprovalUse, LeaseRunUse, Pl
 
 External `outcome_unknown` and cost `uncertain` remain. Approval/Run fixes do not turn them into automatic retry or automatic refund.
 
-All proposed D6/D7 additions exist only in UPSTREAM-AMENDMENTS. Fixed upstream U is unchanged, and those amendments do not take effect before independent acceptance and coordinated activation.
+Current design work coordinates this directory with the explicit owner afterimages and unique routing in `../d6-file-authority-reopen/`. Fixed S snapshots remain byte-unchanged. Each document has one assigned writer; author and independent reviewer roles remain separate. No product implementation, merge, release, or activation follows from this candidate. A2 integration and a fresh ordinary Chat Pro global review are required before design freeze.
 
 ## 6. Documentation-quality revision
 
@@ -95,8 +117,4 @@ The previous Chinese candidate repeatedly appended a generic sentence saying tec
 
 ## 7. Fresh independent-review requirement
 
-The next reviewer must treat the eventual fixed R08 commit as a new candidate. Because R08 changes public wire, authorization, recovery, transaction/safety, external-send, and upstream-interface ownership contracts, a differential review against R07 is insufficient. The required independent review is fresh candidate 18/18 plus fixed S49/49, with bilingual semantics and terminology judged again.
-
-Before that handoff, the author completion gate remains open: all nine bilingual pairs / 18 exact paths must agree on R08; fixed S and every non-D10 path must remain unchanged; the 125-scenario ID set and branch dispositions must match in both languages; repository documentation checks applicable to the final candidate must pass; and REVIEW/TASK/START must report actual reading and CI evidence without upgrading pending work.
-
-All eleven current findings remain open until that fresh independent verdict. Required D3/D6/D7/D8/D9 companion amendments remain proposals only; later coordinated acceptance, versioning, activation, and acceptance evidence are separate from author documentation completion. No author self-review, old R07 S49/49 coverage, CI result, or prior independent verdict can establish R08 acceptance.
+Completion requires all nine bilingual D10 pairs / 18 exact paths plus every actual required D1–D9 owner afterimage to agree at one immutable candidate; fixed S49 and its inventory remain unchanged; all 125 existing scenario IDs and their full obligations remain traceable, and any new cases are explicit. Applicable documentation/input checks, actual reading coverage, terminology, bilingual semantics, and every historical/current finding are assessed on that exact candidate. Old S49/49 coverage, named differential PASS results, and CI cannot be inherited as full acceptance. Zero open P0/P1, explicit disposition of remaining P2, and fresh independent global Pro acceptance are required for design freeze, which still is not implementation or release.

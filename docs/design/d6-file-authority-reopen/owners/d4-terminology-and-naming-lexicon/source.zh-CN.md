@@ -9,7 +9,7 @@ translation_status: source
 
 # D4 Terminology and Naming Lexicon — D6-FA-r01
 
-候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 的 D4 lexicon 26 个 concept 全部保留 stable conceptId、owner、既有 public wire/code/UI/locale names 和 firstFreeze；本批不删除、改名或转移任何既有受控名称。
+候选状态：D6-FA-r01；P2 协调作者候选；未接受、未激活、未实现。固定 S 的 D4 lexicon 26 个 concept 全部保留 stable conceptId、owner、既有 public wire/code/UI/locale names 和 firstFreeze；本批不删除、改名或转移任何既有受控名称。
 
 ## 1. 控制规则
 
@@ -69,6 +69,26 @@ D4 只拥有 schema/value/relation/Calendar/Library 术语。D3 的 Node/Entity/
 `SourceVersion/2` 保留自身生产 `commitDomain`、`observationEpoch`、revision 或 externalSequence 定义；它不要求等于当前 operation observation domain。当前 D6 外层资格由 `SourceObservation/1` 提供：`observerDomain` 必须等于 operation `CommitDomain`，并与 `entityRef`、当前 observation、file/control/Registry/relation-incidence 依赖共同形成保护 cut。
 
 `complete_semantics/semantic_pending` 不与 D4 `complete/partial/unavailable` 共用一个概念；`external_invalid` 也不是 `invalid` namespace。普通保存中的 `strict|observed_only` 与 D4 类型状态保持分域；`observed_only` 仅消费 D6 已定义的弱保存资格，不成为新的 D4 状态。
+
+### 3.1 当前 producer 概念保持原所有权
+
+| 引入概念 | owner 及 D4 的精确消费方式 |
+|---|---|
+| `DecisionKey/2` | D6：Workspace、完整 CommitDomain、OperationId 共同构成 key；protocolOwner 标识唯一原 decision owner，不是额外 key 成员 |
+| `SourceRevisionPlan/1`, `SourceStamp/1` | D6：原 plan 中受保护的拟议托管 after 基准，使用生产域 H 和精确 afterPin；不是已 seal 的源、当前 Observation 或提前可用的 Locator |
+| `RevisionTokenBinding/2`, `RevisionTokenSource/2`, `d6_source_revision/2` | D6：观察域及观察代与闭合 managed stamp/external version 分支的受保护稳定绑定；D3 保留 Locator 不透明词法所有权 |
+| `DependencyKey/2`, `DependencyProof/2`, `StructureRange` | D6 承载，D3/D4/D7 各自提供真实枚举：十四种依赖键、九种结构范围，各键有精确完整性和连续性合同 |
+| `ContentCompletionProof/3` | D6：可移植传输已 seal 的生产 SourceVersion 前后像；不是发送方 Observation/token，也不是完整 Query 证明 |
+| `ConflictRecord/2` | D6：当前记录使用 Frontier/2；历史 /1 保持原 Frontier/1，ConflictKey/1 与 ConflictId 身份不变 |
+| `WriteProtection`, `ReliableSaveState`, `InputRetentionState` | D6：安装保护、seal 后保存保证和输入耐久保留相互独立；prepared 不等于 Saved |
+
+托管 revision 属于某一生产域和实体连续 seal 的 H 历史，生产 observationEpoch 变化不重置 H。external SourceVersion 有 externalSequence，没有托管 revision 或 ChangeId。当前 SourceObservation 独立绑定操作的 observerDomain、当前观察代、精确文件对象、pins 和同 cut 的控制、Registry、关系关联；生产域和生产 epoch 可以不同。出现项选择器使用实际托管 inner sourceRevision，并叠加当前外层资格；external sequence、相同数字或 hash、I、新签 Observation 均不能替代。
+
+依赖 stamp 的 epoch 是精确 key 的证明连续性代，与两种 source epoch 都不同。完整空范围需要证明，不是 unknown、unavailable 或索引无命中。重建 I 不产生此证明，I 也不拥有其耐久连续性。D4 只拥有关系关联、Calendar、Registry 和时间规则的语义枚举，其它 key 保持原 owner。
+
+共享语义 ID 使用主文 §2.1 解码器，包括点分命名空间、独立 ID 域、字节/分段/连字符限制和精确 ASCII 比较。Field 出现项不是 Entity/Record；D4 ObservationValue 不是 D6 SourceObservation；事件断言不是 Calendar Event；Namespace Owner 不是 D3 Owner 或执行权威。引入名称不进入26项自有概念或下方精确清单。
+
+saved、planned、unseen 是原 decision 状态，不能改名为 D4 类型状态。实际历史记录保留原版本、字节、保留及恢复合同，交付时检查当前原范围授权；只有 unseen 应用新业务或 consumer 门。unknown 不表示空，也不允许重复 effect。缺少强 consumer 仅限制依赖它的新强路径，普通 source/Resource 读取、Draft、合格人工 whole-source 保存保持各自资格。
 
 ## 4. 术语守恒与 anti-spoof
 
@@ -338,3 +358,25 @@ fixed-S 26 conceptId、每项 owner/owned names/firstFreeze必须机械 exact-pr
   ]
 }
 ~~~
+
+## 7. 保留的名称与领域处分
+
+26项概念清单不变。以下只是既有概念的限定领域或代码用法，不新增实体或别名。裸 Profile 不能表示节点模式，分别使用 Facet、完整限定的 Weftext AsciiDoc Profile 或 CEL/Value Profile。Attribute 指 D2 源语法，Field 指模式，Field Value Occurrence 指作者事实，UI Property 只是标签。Source、Provenance、SourceBinding、OriginBinding 保持 D3 区分。Facet requires 表达依赖，required_field 表达必填。author_order 是源顺序，不是清单规范排序；union_variant_equal 要求全部出现项使用同一分支；缺少构造器 kind 时仍使用 kind pointer 和最近容器 span。
+
+| 限定术语 | 既有 Field/成员、代码、界面或区域键 | 边界 |
+|---|---|---|
+| Profession / 职业 | people/profession, profession; PeopleProfessionValue; people.profession | occupation 仅为显式导入词汇，可选 organization 是背景，不是任职 |
+| Engagement / 任职与隶属 | people/engagement; PeopleEngagementValue; people.engagement | appointment/affiliation 只用于领域描述或导入，不是替代 wire，不设单一 employer 标量 |
+| Position / 职务 | position; EngagementPosition; people.engagement.position | 不等于职业、职级或组织；office/jobTitle 不能成为第二 wire 名 |
+| Rank / 职级 | rank; EngagementRankValue; people.engagement.rank | system+level 作者文本均必需；grade 需显式导入映射，不推断全球职级 |
+| Department / 部门 | department; EngagementDepartment; people.engagement.department | 任职内部文本，不是组织身份、父节点或计量单位 |
+| Engagement Organization Target / 任职组织目标 | target; EngagementOrganizationTarget; people.engagement.organization_target | 普通 Node 目标不证明已分类为 Organization；organization 不是 target 别名 |
+| Measurement Unit / 计量单位 | unitId; MeasurementUnitId; measurement.unit | 注册维度而非组织单元；换算需要经过认证的贡献项 |
+
+Life Event Assertion 是 people/life-event 中既有 Event Assertion 的领域使用；Important Date 是用途，Birthday、Death Anniversary、Anniversary 是基于选定事实的派生称谓。eventCode 是 preset 语义，customLabel 是作者精确文本，eventTime 与 validity.start 不互换。Task 必须是 ordinary 且源中显式声明 tasks/task，不能仅凭有效闭包、Task Field、status 或界面标志认定。Account Identifier 的 preset/custom、自定义服务键、自定义账号值、账号用途、显示标签和备注保持独立；只有备注属于 Entry.note。中性关系描述不推断 guardian/manager/mentor 等方向角色、inverse、家族等级或另一个 Field；作者断言同事与派生同事的语义来源不同。
+
+组织主要隶属、业务指导、属地管理、明确共同领导、监管、母子公司、可独立引用品牌归属和联盟成员，保持目录中的精确 Field/inverse 方向。业务指导不限商业经营，属地管理不是地点或结构 parent，共同领导要求明确断言。品牌标签不创建组织身份，组织成员不是 Person engagement。Publication Venue 是既有 library/venue 的 Work/container 或 Organization 关系，publisher 既不是别名，也不自动映射。配偶关系是独立历史断言，“当前配偶”只能是有根据的投影。
+
+Template/Preset/导出模板/默认值，插件/扩展/模块/pack/connector/provider，导入/复制/adopt/promote/订阅/同步，历法系统/View/source，Resource/附件/文件，文献 Work/Reference/Citation，都保持真实 owner 和限定含义。日记用途不创建节点种类。裸 occurrence/key 只在闭合类型明确的 Field 编辑器或 Entry 父级内部使用，不能覆盖 D3 Occurrence 或 D7 LogicalOccurrenceKey。受控名称负向扫描只检查规范标题、schema/wire、公共 code/CLI、locale 表面，不改用户内容、第三方格式、历史证据或引用反例；每次拒绝明确预期概念及唯一替换或删除目标。
+
+D4SourceMaterializationEffects/1 沿用代码类型 D4SourceMaterializationEffects 和内部成员 sourceMaterializationEffects，与 D4RelationCopyEffects/1 并列，不新增 CLI/UI/locale 身份。C 是类型 carrier 分区，不是 Reference Slot/Entity/Locator。D3 PreparationBinding、DefinitionTransfer、Result/9.Q，D7 PreparedActionBinding/EffectManifest/EffectBytes，D6 观察和元数据能力，均按真实版本作为外部技术投影引入。历史名称只为实际原记录解码；当前 producer 消费不新增第二 schema owner 或 ledger。

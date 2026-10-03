@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 控制与管理合同
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：完整 R08 作者修订候选。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审结论为 REVISE（P0=0、P1=1、P2=10），当前11项 finding 全部保持开放。候选已完成作者交接，等待固定 R08 commit 的 fresh 完整独立联合评审；不表示已独立接受、激活、合并、发布或已形成产品实现证据。
+revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；REVIEW-DISPOSITIONS 区分各层证据。
 
 ## 1. 权威、适用范围与错误边界
 
@@ -256,7 +256,7 @@ R08 同时冻结一个具名、版本化的第一方 Core author adapter。它�
       request:D6.d6_commit_request
     }
 
-这是受保护的 Core recovery link，不是 public request，也不是第二 author decision。`preparedBindingToken` 是原 D7 PreparedActionBinding/2 的准确 token，`request` 是其原 D6 request。Core 在返回 prepared author step 或允许提交之前，必须把此 link、原 PreparedActionBinding/2 与必要 pins 原子保存。
+这是受保护的 Core recovery link，不是 public request，也不是第二 author decision。`preparedBindingToken` 是原 D7 PreparedActionBinding/3 的准确 token，`request` 是其原 D6 request。Core 在返回 prepared author step 或允许提交之前，必须把此 link、原 PreparedActionBinding/3 与必要 pins 原子保存。
 
 ContributionKind 闭集为：
 贡献类型闭集为：`module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`。
@@ -314,7 +314,7 @@ PackageId、Contribution contractVersion、D4 semanticMajor 是三个独立版�
 
 请求不能携带 principal、owner 或 authorized 布尔值。当前主体只能来自受信 host/D10 authentication mapping。
 
-Workspace 自助资格 S：当前 Workspace Policy/2 对当前主体、workspace scope 显式 allow D6 proposed capability d10_control_self。它只允许管理自己的有限 D10 控制记录，不授予 author read/write、policy_admin、registry_admin、部署账户管理或 secret 原值读取。实际 author 操作仍逐项要求原 D6/D7 权限。
+Workspace 自助资格 S：当前 Workspace Policy/3 对当前主体、workspace scope 显式 allow 协调 capability d10_control_self。它只允许管理自己的有限 D10 控制记录，不授予 author read/write、policy_admin、registry_admin、部署账户管理或 secret 原值读取。实际 author 操作仍逐项要求原 D6/D7 权限。
 
 Workspace 管理资格 W：当前 Workspace、workspace scope 的 policy_admin；涉及 Registry activation 还必须有 registry_admin。W 可以停止、撤销、归档工作区控制记录和管理工作区预算，但不能冒充另一主体创建或扩大其 Lease/Approval。
 
@@ -432,6 +432,7 @@ ControlBody/1 只有七个 variant：
    lease:Target<lease>；
    approval:Option<Target<approval>>；
    definition:AutomationSpec/1；
+   scheduleUpdate:AutomationScheduleUpdate/1；
    delegation:LeaseSpec/1；
    standing:Option<StandingApprovalSpec/1>。
    approval 与 standing 必须同为 none 或同为 some。该固定 bundle 是唯一允许一起创建/重绑 Automation、Lease、Standing Approval 的组合操作，不是通用 batch/DAG。
@@ -491,7 +492,7 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
       }]
     }
 
-所有 maxSteps/maxInputBytes/maxOutputBytes/maxElapsedMillis 必须正且有限；costs 按 grant ref 排序唯一，currency 必须匹配 grant/account。
+所有 maxSteps/maxInputBytes/maxOutputBytes/maxElapsedMillis 必须正且有限；costs 按 grant ref 排序唯一，currency 必须匹配 grant/account。 costs 为 0..32 项；Core 在配置时将每个 grant 准确解析为实际 account/currency。同一 BudgetCaps 中指向同一实际 account/currency 的多项 maximum 必须相等，否则 invalid_request；这些项共同表达一个 owner/account ceiling，各 grant 自身限制仍独立。某层无对应账户 cap 就不允许经过该层的新收费 attempt。换 grant 不改变 §10 的 owner/account 累计键。
 
     AutomationInvocation/1 =
         {kind:"tool",
@@ -506,6 +507,7 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
       invocation:AutomationInvocation/1,
       schedule:AutomationSchedule/1,
       missedPolicy:"skip" | "run_once",
+      missedWindowSeconds:CanonicalDecimal,
       queueLimit:Counter,
       budgets:BudgetCaps/1
     }
@@ -522,7 +524,7 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
 `tool` parameters 必须由对应 Contribution 的 active ToolValueProfile/1 输入类型验证。`core_field_member` 只接受上文准确接纳的第一方 adapter identity 和 closed `FieldMemberTask/1`；它不使用 ToolValueProfile，也不增加任何 read/write 权限。recurrence selector 只定位同一 revision 重新绑定的 D4 recurrence source，不成为 durable EntityRef。
 
     LeaseReadGrant/1 = {
-      scope:<exact D6 Policy/2 grant.scope from S D6 Control §4>,
+      scope:<exact current D6 Policy/3 grant.scope>,
       capabilities:[LeaseReadCapability/1]
     }
 
@@ -553,9 +555,9 @@ Option<T> 只有 {kind:"none"} 或 {kind:"some",value:T}，禁止 null。
 
 1. 绑定当前 Automation definitionRevision、准确 invocation、ActivationBinding、Lease、当前 D6 principal 与全部有限预算。
 2. 在读取值之前，针对配置的 owner/Field/member 执行原 D7 Narrow Field Qualification 完整图，并证明所有必要的当前观察/写入 scope。Core 内部可以做完整 source 验证，但窄主体不能因此收到隐藏 source bytes。
-3. 读取 `task.ownerNodeRef/task.fieldId` 的完整 current Field。自动执行要求恰一 Entry，且配置 member 已经 present。从该准确前像取得 `expectedRevision`、真实 `occurrenceKey` 与原完整 `rawEntrySource`；Automation 配置不持久保存旧 selector。
+3. 读取 `task.ownerNodeRef/task.fieldId` 的完整 current Field。自动执行要求恰一 Entry，且配置 member 已经 present。从该准确前像取得当前完整 SourceObservation/1、对应 SourceVersionRef/1、真实 managed SourceVersion/2.revision 作为 `expectedRevision`、真实 `occurrenceKey` 与原完整 `rawEntrySource`；Automation 配置不持久保存旧 selector 或 sourceToken。外部版本不能用 externalSequence 冒充 managed Counter。
 4. 逐字构造原 D7 intent：`{format:"weftext.action",version:1,intent:{kind:"set_field_member",selector:{owner:task.ownerNodeRef,fieldId:task.fieldId,expectedRevision:<fresh owner source revision>,occurrenceKey:<the unique current Entry key>,rawEntrySource:<the exact original Entry JSON text>},memberPath:task.memberPath,value:task.value}}`。
-5. 调用原 D7 prepare，保留其 PreparedActionBinding/2，读取并验证完整 preview/effects/MutationFootprint，再用**实际** member-change 或逐字 raw-no-op 与独立的当前 Standing Approval 比较。Approval 从不提供 target、Entry、memberPath 或本次 requested value。
+5. 调用原 d7_action_prepare/2，以该 Field owner 的当前 SourceVersionRef/1 构成恰一项 selectedSources，并绑定相同 Workspace、当前 commitDomain、完整 expectedFrontier 和原 budget；保留其 PreparedActionBinding/3，读取并验证完整 preview/effects/MutationFootprint，再用**实际** member-change 或逐字 raw-no-op 与独立的当前 Standing Approval 比较。Approval 从不提供 target、Entry、memberPath 或本次 requested value。
 6. Core 从原 prepared semantics 构造 ApprovalUse，并用原 `d6_commit_request` 进入 D6；planning/final/replay 继续由 D6 owner。
 
 对 S `people/phone.label` 这样的 optional member，task.value 是 D7 Optional TypedLiteral：`{type:{kind:"optional",item:{kind:"semantic_code",scope:<the complete people contribution-set scope>}},value:{state:"some",value:"people/work"}}`。D4 scope 仍完整包含 `people/other|people/personal|people/work` 三个 code；approval enum 可以有意只允许其中子集。当前恰一 phone Entry 且 present `personal→work` 是真实 member-change；present `work→work` 只有完整 proposed source 与 before bytes 逐字相等时才进入既有 raw-no-op。当前 phone Entry 为零或多条时自动 profile 不适用；用户仍可交互选择第二条同值 phone 的真实 D7 selector，走普通 D7 确认路径。
@@ -734,12 +736,47 @@ prepare 成功返回：
       resourceUses:[{
         grant:Binding<grant>/1,
         maximum:Option<Money/1>
-      }]
+      }],
+      externalRequest:Option<ExternalConsentPreview/1>
     }
 
 affected 按 ref canonical bytes 排序且唯一；resourceUses 按 grant ref 排序且唯一。canonicalIntentBytes 是本次已成功 closed-decode 的完整 D10-Control-Intent/1 bytes，因此包含 caller 已提供并获权查看的拟议控制语义；preview 不另带 secret bytes、隐藏作者值或其它用户账务。
 
-ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒绝，不截断。
+external consent 通过既有 prepare 响应获得受权的完整请求查阅路径。closed body 为 consent 且 consent 为 external 时，`externalRequest` 恰为 some；其它 body 一律为 none。Core 先验证当前主体对完整请求范围、contribution、account、target 和 payload 的权限，再由受保护最小映射定位准确 frozen intent；仅可见摘要或持有宽泛资源 grant 不足以读取全文。缺失、隐藏、错误 audience 在泄露 intent 存在前统一为 `not_visible`。Core 将完整 frozen intent 与提交的 effect Ref、request digest 比较，验证 payload 的实际长度/摘要，并把真实 bytes pin 到原 preparation。不匹配为 `control_conflict`，受保护 bytes 已证明矛盾为 `integrity_conflict`，pins/连续性暂不可证为 `state_unavailable`。真实 lifecycle transition 不改变 immutable intent；不另造 effect current-read 入口。
+
+    ExternalConsentPreview/1 = {
+      intent:ExternalRequestBinding/1,
+      workspaceRef:D3.WorkspaceRef,
+      contributionBinding:ContributionBinding/1,
+      accountBinding:Binding<external_account>/1,
+      targetBinding:ExternalTarget/1,
+      requestPayload:FrozenEffectBytes/1,
+      idempotency:
+          {kind:"none"}
+        | {kind:"bounded_key", keyDigest:Sha256,
+           notBefore:D4.zoned_instant, notAfter:D4.zoned_instant,
+           proofDigest:Sha256}
+    }
+
+    ExternalConsentConfirmation/1 = {
+      key:StableControlKey/1,
+      intent:ExternalRequestBinding/1,
+      previewDigest:Sha256,
+      principal:Token,
+      clockEpoch:Token,
+      confirmedAt:D4.zoned_instant
+    }
+
+preview 从 frozen intent 复制准确 target ToolValue、operation、完整 payload bytes、实际 account 和 contribution，不从模型描述或替代 preview 参数接收这些值。bounded-key 摘要披露已接纳的有效区间，以及 canonical key 和完整 proof 分别在 D10-External-Key/1、D10-External-Idempotency-Proof/1 域下的 SHA-256 摘要；不披露可复用 key、proof bytes 或凭据。包括这些受保护 bytes 在内的完整 intent 仍由原 request digest 固定。Secret 认证字节只在批准后通过既有可信认证通道注入，不得改变获批业务 target 或 payload。需要在业务 bytes 内替换隐藏凭据的载荷不属于此 profile。
+
+完整 canonical ControlPreview 不超过 16777216 bytes，并受更严格的入口/transport 预算约束；完整 external payload 不超过 8388608 bytes。任一超限为 `budget_exceeded`，不交付截断查阅或可确认的部分响应。这是一次完整交付，不新增分页协议。已接纳可信 UI 或有人操作的 CLI 验证全部 frozen byte length/digest 和完整 canonical preview，以不执行内容的准确表示展示所有 target 成员和 payload，并在允许确认前提供完整表示。文本控制字符转义，二进制提供无损字节视图。Adapter 摘要、模型文案、折叠前缀或单独摘要不能满足完整展示；界面无法完整展示该请求时不能确认。这只证明提供并明确确认了哪份完整请求，不声称人已逐字理解。
+
+只有当前认证用户在该可信确认界面的本次明确操作，才能建立内部 `ExternalConsentConfirmation/1`；被委托 Agent/tool/worker/connector 不能创建它、调用可信事件通道或用 JSON 标记替代。可信界面提交绑定其当前完整展示的已认证用户事件，Core 验证当前 audience、D10-Control-Preview/1 域下的完整 preview digest、准确原 stable key/intent、可信时间、consent interval 及当前 dependencies，再在独立受保护 ExternalConfirmationRecord/1 中原子记下事实。该事件是已接纳界面的内部确认操作，不是公共 control body、新作者请求或第二成功账本。没有此人工确认事件的普通认证脚本或被委托执行 session 不能制造事实；平台接纳必须证明被批准的 executable contribution 无法调用这个事件通道。
+
+不可变 ControlPrepareBinding/2 保存 ExternalConfirmationRequirement/1，§8 独立保护的 ExternalConfirmationRecord/1 保存当前已确认 fact；确认绝不修改绑定输入。fact 的 principal 必须等于 stable key 中真实 Workspace 主体，不能采用调用方自报 grantor。新 target/payload/intent、不同 preview/principal 或变化的依赖不能继承确认。调用方在中断后可按原受信事件规则重新展示仍有效的同一 preparation。历史 result/current 投影继续脱敏，不返回完整 review 或该保护 fact。
+
+对尚未决议的 external-consent commit，D10 adapter 先执行当前可见性/authority 和 stable-key/saved-result 分流，再要求此准确且当前合格的确认，才转交原 Workspace 请求。准备可见且合格但没有确认事件时，界面继续等待可信用户操作；这是展示状态，不是新增公共响应或 Run 错误。Prepare 仍返回原完整 prepared 响应。不虚构 D10 Workspace-commit 入口：唯一公共 Workspace submit 是原 D6 request，正式结果归下述 D6 拒绝规则。可信确认/时间/连续性不可证明时不能确认，在适用 D10 读取/准备中仍为 `state_unavailable`。Core 把保存的确认及完整原 preview 关联到原 D6 control plan，作为受保护准入依赖；planning CAS 和 final commit 都重验该依赖、完整当前请求披露/操作权限、consent 时间、未变 intent 及原依赖。直接提交返回的 D6 request 不能绕过。进入 D6 后，原 permission/business 错误保持优先；其余资格成立但确认缺失或不可用时返回协调的 D6 `approval_unavailable/preflight`，保留既有 planned 的恢复责任，不创建替代批准或决议。已 applied consent 先按当前结果权限重放，再考虑任何新确认门；不重新要求确认或改判失败。实际 D6 producer 和已接纳可信界面支持此关联之后，该路径才可用。
+
 
 
 查询：
@@ -792,7 +829,7 @@ ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒
       commitOwner:"D6" | "D10"
     }
 
-受保护的 `ControlPrepareBinding/1.canonicalIntentBytes` 继续保存完整 canonical control intent B，包括其中嵌套的 planned 作者请求 A；stable-key conflict 仍比较完整 bytes。`intentDigest` 只是这些 saved bytes 的 SHA-256。历史 public result 永不返回 A、完整 B、生成的 control-submit request M、prepareToken 或 planned-preview bytes/token。`operation` 恰取现有七种 ControlBody kind；`ControlAffectedChange/1` 与 `ControlResourceUse/1` 就是现有 ControlPreview item shape，成员、enum、排序、唯一性、Option 与 Money 语义不变。
+受保护的 `ControlPrepareBinding/2.canonicalIntentBytes` 继续保存完整 canonical control intent B，包括其中嵌套的 planned 作者请求 A；stable-key conflict 仍比较完整 bytes。`intentDigest` 只是这些 saved bytes 的 SHA-256。历史 public result 永不返回 A、完整 B、生成的 control-submit request M、prepareToken 或 planned-preview bytes/token。`operation` 恰取现有七种 ControlBody kind；`ControlAffectedChange/1` 与 `ControlResourceUse/1` 就是现有 ControlPreview item shape，成员、enum、排序、唯一性、Option 与 Money 语义不变。
 
 首次 `d10_control_prepare` 只有在当前披露资格覆盖完整 B 与任何嵌套 A scope 后，才可返回包含 M 的完整 `D10ControlPrepared/1`；之前持有 A 不等于当前读取资格。同 stable key 已有权威 applied success 时，prepare 返回同一个 `d10_control_result_applied` historical arm，绝不伪装新的 prepared object。若 applied-success existence 或 linkage 暂不可证明，则返回 `state_unavailable`，绝不降格 prepared。
 
@@ -821,6 +858,8 @@ ControlPreview/1 只包含当前主体已获权的控制元数据；超预算拒
 
 Workspace applied history 只能从同一权威 D6 saved decision 投影：`ownerReceipt` 是原不可变 receipt bytes，`changes/usageChanges` 只来自与该 decision 同事务关联的 D10 control effects。Deployment arm 只从原 `DeploymentControlDecision/1` 加 §8 同事务关联的 record/account deltas 投影。两者都不是第二成功账本。
 
+`d10_host_control_commit` 首次原子成功及准确成功重放的直接公开响应，都只能是已有 `D10ControlResult/1` 的 applied 分支：`{kind:"d10_control_result_applied",wireVersion:1,scope:<original deployment scope>,requestId:<original requestId>,prepared:<original ControlPreparedHistory/1>,applied:<original ControlAppliedHistory/1 deployment arm>}`。Core 从同一个保存的 decision 及其关联 preparation/effects 构造此响应；不得返回内部 `DeploymentControlDecision/1`、空确认、新 prepared object 或第二份 receipt。真实 no-op 仍返回此 applied 分支，其中配置 `changes` 为空、`usageChanges` 为实际保存的增量。之后的 r6 配置不能替换任何原 r5 字段。交付前 Core 重新验证当前主体对完整公开结果的披露资格：资格丧失返回 `D10ControlError.not_visible`；保存成功的关联暂不可证明返回 `state_unavailable`，确定矛盾返回 `integrity_conflict`。这些交付失败不改变已经提交的 decision 和效果；重试/结果查询按原有门恢复同一 applied history，不重新执行操作。
+
 result 顺序固定为：当前 result-disclosure 授权 → authority/custody/continuity → stable key。missing/hidden 为 `not_visible`。能证明 prepare binding 且能证明没有 applied success 时才返回 prepared；权威 applied success 存在时返回 applied。D6 recorded rejection/terminal failure 仍归 D6，调用原 D6 request replay 取得；D10 result 只有在证明没有 applied success 后才可返回 prepared history。若 applied success 的存在/缺失或 linkage 暂不可证明，必须 `state_unavailable`，不能降格为 prepared；确定 decision/effect linkage 矛盾为 `integrity_conflict`。
 
 若 r5 已 applied、响应丢失，另一个合法请求后来把同对象更新到 r6，原 request 重试在当前披露授权通过后仍返回保存的 r5 applied history，绝不能临时替换成 r6。
@@ -845,14 +884,25 @@ current state 使用另一个入口：
 
 首版 19 类 current projection 闭集如下：
 
+    RunOrigin/1 =
+        {kind:"interactive"}
+      | {kind:"automation",
+         automation:Binding<automation>/1,
+         definitionRevision:Counter,
+         occurrenceKey:AutomationOccurrenceKey/1}
+
+`RunOrigin/1` 是 Core 创建且不可变的来源事实，由受保护 Run 记录、`LeaseRunUse/1.origin` 和公共 `run_state.origin` 投影共同使用。interactive 分支仅有 `kind`，不要求 Automation、definition revision、occurrence claim，也不填占位值或 null。automation 分支绑定实际创建此 Run 的 Automation、不可变 definition 和完整 occurrence claim；key 内的完整 Automation Ref 必须等于 origin 的 automation.ref，原 claim 的 definitionRevision 必须等于 origin 的 definitionRevision；key 自身不包含 definitionRevision。调用方或模型不能选择或更换既有 Run 的 origin。当前 control revision 可以改变，但不能改写历史 origin binding；新的执行仍须通过当前门禁。Run 不能切换分支以逃离已有 occurrence claim 或预算谱系。
+
+交互 Run 的 Lease target 必须准确指向该 Run 的完整 ControlRef；Automation Run 则准确指向 origin 的 Automation ControlRef。两支同样受真实认证主体、Workspace、activation、准确已准入 Lease revision、有限上限、stop latch 及全部既有准入/恢复规则约束。只有 automation 分支读写 occurrence claim。受保护 Run、准入记录及实际 claim/Lease 之间存在已证明矛盾时，control read 返回 `integrity_conflict`，Run 执行前返回 `control_conflict`；连续性不可证明为 `state_unavailable`。Run 本身可见但嵌套 origin/Lease/stop binding 不可披露时，整体返回 `not_visible`；隐藏 Automation 不能投影成 interactive。此处修订尚未激活的候选类型，不授权实际历史记录的 decoder 猜测 origin。
+
 | K | exact scope | exact `view` | config/domain/usage revision 语义 |
 | --- | --- | --- | --- |
-| `automation` | `workspace` | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` 是 control/lifecycle CAS；`definitionRevision` 只随 semantic definition 改变；usageRevision=none。 |
+| `automation` | `workspace` | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,subscriptionGeneration:Counter,lowerOriginalStartUtcSeconds:CanonicalDecimal,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` 是 control/lifecycle CAS；`definitionRevision` 只随 semantic definition 改变；usageRevision=none。 |
 | `lease` | `workspace` | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`；用量修订只在新的 `LeaseRunUse/1` 消耗谱系时推进；普通用量变化不会使已经准入的运行因租约修订变化而失效。 |
 | `approval` | `workspace` | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`；用量修订只随批准使用的预留、消费或终态释放变化；撤销或归档推进批准配置修订，不清除累计用量。这里的配置修订只描述批准规则和生命周期，累计使用量始终由独立用量修订追踪，二者不会相互重置、替代或隐式恢复权限。 |
 | `planned_approval` | `workspace` | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none；不在此泄露 author request/preview bytes。 |
 | `external_approval` | `workspace` | `{kind:"external_approval_state",grantingPrincipal:Token,intent:ControlRef<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision 就是 approvalRevision；usageRevision=none。 |
-| `run` | `workspace` | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | durable Run/lifecycle transition 推进 binding revision；usageRevision=none，maxRuns 消耗归 Lease usage。 |
+| `run` | `workspace` | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",origin:RunOrigin/1,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | durable Run/lifecycle transition 推进 binding revision；usageRevision=none，maxRuns 消耗归 Lease usage。 |
 | `workspace_budget` | `workspace` | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | 绑定修订只随限额配置变化；没有独立累计用量修订，实际费用和预留仍由授权、账户及费用预留记录持有，不建立第二预算账本。 |
 | `activation` | `workspace` | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`；successor activation 使旧 record `current:false`，不删除；usageRevision=none。 |
 | `deployment_policy` | `deployment` | `{kind:"deployment_policy_state",policy:DeploymentControlPolicy/1}` | `binding.revision==policy.revision`；无独立累计用量修订。该记录只描述部署管理策略本身的配置变化，管理员和协调者列表变化都属于同一配置修订，不另建立累计使用计数。 |
@@ -901,7 +951,25 @@ Core 内部保存：
         prepareToken:Token
       }}
 
-    ControlDependencies/1 = {
+    D10WorkspaceReadDependencies/1 = {
+      workspaceRef:D3.WorkspaceRef,
+      commitDomain:D6.CommitDomain/2,
+      observationScope:D6.ObservationScope/2,
+      sourceInputs:[{
+        entityRef:D3.EntityRef,
+        observation:D6.SourceObservation/1,
+        role:"before" | "dependency"
+      }],
+      dependencyProof:D6.DependencyProof/2,
+      registryReads:[{
+        binding:D4.RegistryBinding/1,
+        snapshot:D4.RegistrySnapshot/1,
+        snapshotPin:D6.PinRef/2
+      }],
+      evidencePins:[D6.PinRef/2]
+    }
+
+    ControlDependencies/2 = {
       configBindings:[Binding<K>/1],
       usageBindings:[{
         ref:ControlRef<lease|approval|grant|cost_account>/1,
@@ -910,23 +978,47 @@ Core 内部保存：
       authorityProof:Token,
       authorizationGenerations:[Token],
       stopRefs:[ControlRef<stop>/1],
-      sourceOrRegistryBindings:[Sha256]
+      workspaceReads:Option<D10WorkspaceReadDependencies/1>,
+      recordPins:[D10ControlRecordPin/1],
+      controlRanges:[D10ControlRange/1]
     }
 
-`ControlDependencies/1` 是 Core 从实际受权读取形成的内部完整依赖集，不是 caller 输入。数组按完整 canonical bytes 排序且唯一；sourceOrRegistryBindings 只保存已有 owner 的 binding digest，不创造新作者或 Registry token。
+ControlDependencies/2 保存 Core 实际读取的完整依赖，不接受调用方断言或只有摘要的绑定。Workspace 控制的 workspaceReads 必为 some，纯 deployment 控制必为 none，deployment body 不能夹带作者读取。工作区字段等于本计划真实的 sourceInputs、observationScope 与 DependencyProof。最终 observationProof 只在外层 D6 PreparedIntent/2 中由这些准确输入和固定引用单向构造，不能嵌回 ownerInput；既不新增 ObservationProof/2 类型，也不产生自身循环。sourceInputs 沿用 D6 的排序、唯一性、role 及当前观察/pin 规则。每个 Registry 项保留实际完整 RegistrySnapshot/1 及精确 binding，使用 artifact PinRef/2 保留其规范字节，Core 验证原 D4 所有权、完整性和 schema 规则。没有 Registry 用途时数组为空，不能构造假 binding。绑定数组按完整 Ref、Registry 读取按完整 binding、pins 按 pinToken 规范排序且唯一；授权世代 token 保留原 owner 语义并规范排序去重。每个数组最多4096项，完整依赖元数据规范字节最多16777216；被固定的 source/payload bytes 另受原预算约束。超限返回 budget_exceeded，不能截断。
 
-    ControlPrepareBinding/1 = {
+D6 producer 将真实 source/Registry/authorization/range 依赖放入各自实际 DependencyKey/2 kind/stamp，保留必要 controlInputs 对应与 pins。D10 configuration/usage/stop 依赖仍以完整闭合 owner 值置于同一 InputDescriptor 的规范 ownerInput 中，在同一 planning/seal 事务对实际保护记录逐项 CAS；摘要或无关 execution_resource key 不能代替。这里不增加第十五种 DependencyKey。完整配置/历史、独立使用状态、权威证据与 pins 随 preparation 保留，planned 后按原恢复寿命保留。缺历史绝不当空依赖。只有 Lease maxRuns、批准次数、grant 累计用量及实际账户 held/spent 使用上述独立 usage binding，不能取代配置 binding。
+
+    ExternalConfirmationRequirement/1 =
+        {kind:"none"}
+      | {kind:"external_consent",
+         key:StableControlKey/1,
+         intent:ExternalRequestBinding/1,
+         previewDigest:Sha256,
+         principal:Token,
+         notBefore:D4.zoned_instant,
+         notAfter:D4.zoned_instant}
+
+    ExternalConfirmationRecord/1 = {
+      requirement:ExternalConfirmationRequirement/1,
+      revision:Counter,
+      current:Option<ExternalConsentConfirmation/1>
+    }
+
+    ControlPrepareBinding/2 = {
       key:StableControlKey/1,
       canonicalIntentBytes:Bytes,
       allocatedControlRefs:[ControlRef<K>/1],
       originalCommitRequest:PreparedCommitRequest/1,
       immutablePreview:ControlPreview/1,
-      dependencyPins:ControlDependencies/1
+      confirmationRequirement:ExternalConfirmationRequirement/1,
+      dependencyPins:ControlDependencies/2
     }
+
+external requirement 当且仅当 body 是外部 consent 时存在。key、真实发起 principal、完整冻结 intent 与 preview digest 等于原 preparation；notBefore/notAfter 精确等于原 ConsentSpec 区间且 notBefore < notAfter。它在生成原请求前即不可变。其它 body 必为 none 且不生成确认记录。每个 external requirement 恰有一份按完整 stable key 定位的保护记录，初始 revision=1、current=none。只有 §7 受信交互事件可 CAS 为已核验且匹配的确认。重复相同 fact 为 no-op；新合法受信事件的重新展示可用 checked revision+1 替换当前已不合资格的 fact，但保留 planned/recovery 引用的一切历史 fact。两者都不改变 requirement、原请求、preview、InputDescriptor 或依赖字节。MAX 时 budget_exceeded，不能回绕。planning/seal 在该保护记录 CAS 下读取当前匹配且有效的 fact；fact 是额外动态资格，不是冻结输入的可变成员。只有原 owner 授权/业务门通过后，缺失或不可用 fact 才按 approval_unavailable 处理；saved decision 重放先于新的确认。
+
+D6 d10_control/1 producer 绑定完整不可变原意图、allocated refs、真实前态/拟议效果、preview、ControlDependencies/2 和固定确认要求。它的 descriptor 不嵌入自己即将生成的 originalCommitRequest：先固定 descriptor，再由 D6 生成请求，最后在交付前原子保存 ControlPrepareBinding/2 的精确关联。planned-consent body 中嵌套的原作者请求 A 仍是合法输入；本次生成的控制提交 M 只在外层关联。任何消费者都不能把 M 哈希回生成 M 的 descriptor，也不能将后来的确认插入 InputDescriptor。真实已保存 /1 记录保留原 decoder 与精确恢复，不能把旧字节改标为 /2。
 
 canonicalIntentBytes 是完整成功 closed-decode 后的 D3-CJ/3 canonical bytes，domain tag 固定 D10-Control-Intent/1。digest 可以作为索引，冲突判定必须比较完整 bytes。prepare binding 是稳定准备/定位记录，不是第二 author decision。
 
-ControlDependencies/1 内部恰含本次实际读取的 config bindings、usage bindings、authority/fence/custody proof、authorization generations、stop refs 和必要 source/Registry bindings；客户端不能声明 complete。
 
 共同顺序固定：
 
@@ -944,6 +1036,126 @@ ControlDependencies/1 内部恰含本次实际读取的 config bindings、usage 
 失败 prepare/commit 不创建 applied decision。已存在的 prepare binding 可以在 transient state_unavailable 后用同一输入恢复；修改 expected revision/body/target 必须新 requestId。防重 binding、terminal proof、planned/unknown/uncertain pins 不能因普通 TTL 清理后让旧 requestId 再执行。
 
 configuration revision 与 `usageRevision` 分域；checked increment 到 Counter 上限时 budget_exceeded，禁止 wrap/reset。retired id/incarnation 永不复用，防止 ABA。
+
+### 8.1 完整保护记录图像与固定控制效果
+
+以下都是 Core 内部类型，不是公开读取响应、新的控制记录种类或第二账本。公开 ControlCurrentView 单独不能充当完整前像。本轮尚未部署的候选按下列形状闭合保护表示；真实已保存旧记录仍按原解码器和恢复义务处理。
+
+    D10ControlRecordImage/1 = {
+      binding:Binding<K>/1,
+      scope:Scope/1,
+      usageRevision:Option<Counter>,
+      view:ControlCurrentView<K>/1,
+      supplement:D10ControlSupplement/1
+    }
+
+    D10ControlSupplement/1 =
+        {kind:"none"}
+      | {kind:"automation", subscription:ScheduleSubscription/1,
+         stop:Binding<stop>/1, creator:Token}
+      | {kind:"run", createdBinding:Binding<run>/1,
+         principal:Token, fixedBudget:BudgetCaps/1,
+         invocation:Option<AutomationInvocation/1>,
+         admission:Option<LeaseRunUse/1>,
+         authorSteps:[D10AuthorStepResponsibility/1]}
+      | {kind:"planned_approval", originalRequest:D6.d6_commit_request/2,
+         grantedAt:D4.zoned_instant, clockEpoch:Token}
+      | {kind:"external_approval", intent:ExternalEffectIntent/1,
+         requirement:ExternalConfirmationRequirement/1}
+      | {kind:"activation", registrySnapshot:D4.RegistrySnapshot/1,
+         registryEvolution:Option<D4.RegistryEvolutionProof/1>}
+      | {kind:"reservation", attribution:CostBudgetAttribution/1,
+         settlements:[CostSettlementDecision/1]}
+      | {kind:"external_effect", intent:ExternalEffectIntent/1,
+         attempts:[D10ExternalSendRecord/1]}
+      | {kind:"stop", owner:StopOwner/1,
+         latch:ExecutionStopLatch/1, receipt:Option<D10EmergencyStopReceipt/1>}
+
+上述八类的补充标签必须等于 K；其它种类只能用 none。view 仍逐字采用 §7 的闭合形状，提供其余全部配置、生命周期和用量成员。范围、身份、修订及重叠字段必须一致。run.createdBinding 是不可变的创建绑定，fixedBudget 是在该处固定的预算；只有自动化来源的 invocation 为 some 并保存原调用，交互 Agent 运行则为 none；来源来自真实创建记录，不能用当前自动化替换。尚未准入的运行其 admission 为 none，已准入则保存完整原 LeaseRunUse。历史作者关联按 stepId 唯一且完整。计划批准保留原 A，其完整规范字节产生公开摘要。外部批准保留完整准确意图及固定确认要求。封存消费的真实确认事实与修订保存在独立保护确认记录和保存决议关联中，不能进入这个不可变拟议图像。内部保留包含安全序号的完整停止锁。凭据图像只含原凭据版本引用，受信凭据存储另行保留该不可变版本；图像和控制意图都不含凭据原值。
+
+activation.current 是特定切面的投影。真正选择器为 D10ActivationSelector/1 = {workspaceRef:D3.WorkspaceRef, revision:Counter, current:Option<Binding<activation>/1>}。每个工作区控制域只有一个永久选择器身份，在同一事务比较，选择后继时推进一次；历史激活图像及世代不改写。初始 none 只有在保护证据证明从未选择过激活时合法。automation.subscription.activeDefinition 指向图像的拟议绑定；这个有限值不是嵌入图像，不产生引用循环。
+
+    D10ControlRecordPin/1 = {
+      image:D10ControlRecordImage/1,
+      pin:D6.PinRef/2
+    }
+
+固定引用的类别为 artifact，保留类为 recovery 或 approval_money；其字节恰为 UTF-8 的 D10-Control-Record/1、一个 NUL，再接图像的 D3-CJ/3 规范字节。byteLength 与裸 SHA-256 必须匹配；D10 带前缀的摘要显示不改变 D6 摘要解码器。Core 验证原分型记录的保护存储来源后才签发引用，不能认证调用方自写字节。缺历史在披露门后为 state_unavailable，已证实图像矛盾为 integrity_conflict。ControlDependencies 中每项真实配置、用量和停止绑定都有准确图像及固定引用；多个历史修订或用量切面可并存，按完整 Ref、配置修订、可选用量修订、再按完整规范图像字节排序。同一保护切面的矛盾须拒绝，不能因修订相等而隐藏。引用既不授予公开披露权，也不让历史状态成为当前。
+
+    D10ControlRange/1 =
+        {kind:"records", scope:Scope/1, kinds:[ControlRecordKind/1],
+         epoch:Token, revision:Counter, members:[ControlRef<K>/1]}
+      | {kind:"cost_lineage", key:CostLayerKey/1,
+         epoch:Token, revision:Counter,
+         reservations:[ControlRef<reservation>/1]}
+      | {kind:"occurrences", automation:ControlRef<automation>/1,
+         epoch:Token, revision:Counter,
+         records:[AutomationOccurrenceRecord/1]}
+
+这些是同一 InputDescriptor.ownerInput 中受保护的领域范围值，不是新增 D6 依赖键或调用方自报证明。records 完整枚举准确范围及显式非空、排序唯一种类集合内的全部记录，包括保留的非当前状态。费用范围覆盖原归属中包含该准确累计键的每份预留；发生项范围覆盖该自动化全部代际，包括已武装和已处理状态。epoch/revision 来自实际控制存储持续维护的范围栅栏。每次匹配的插入、删除或相关修改都在同事务推进栅栏，包括移入或移出范围；达到上限后拒绝新的普通工作，不能回绕。完整同切面扫描证明正向和负向成员关系，包括空集；索引单独不能证明。事务比较栅栏及完整值，竞争插入不能逃离 CAS。前缀、最新一行或所选页面都不是完整集合。连续性缺失则暂停，已知冻结依赖变化则冲突。每个数组最多 4096 项、规范元数据最多 16 MiB；超限使完整准备失败，不保存部分效果。
+
+    D10ControlEffectPlan/1 = {
+      kind:"d10_control_effect_plan", version:1,
+      changes:[{
+        before:Option<D10ControlRecordImage/1>,
+        after:D10ControlRecordImage/1
+      }],
+      activationSelector:Option<{
+        before:D10ActivationSelector/1,
+        after:D10ActivationSelector/1
+      }>,
+      recordPins:[D10ControlRecordPin/1],
+      registryChange:Option<{
+        before:{snapshot:D4.RegistrySnapshot/1,binding:D4.RegistryBinding/1},
+        after:{snapshot:D4.RegistrySnapshot/1,binding:D4.RegistryBinding/1},
+        evolution:D4.RegistryEvolutionProof/1,
+        beforePin:D6.PinRef/2, afterPin:D6.PinRef/2
+      }>
+    }
+
+变化按 after.binding.ref 规范排序且唯一。既有记录要求完整原前像；创建要求 none、受保护的从未使用过的已分配 Ref，以及完整负向范围证明。真正无操作不列入。不存在删除分支。每个变化的配置或生命周期修订检查旧值加一，创建为一；纯用量变化保留配置修订，只推进实际用量修订。所有未变用量、责任、历史身份及非目标配置保留。recordPins 保存完整读取图像、必需原外部意图、计划 A、Registry 图像及原预算配置，不只保存被改行。计划从闭合 body、受信主体、已分配引用和完整同切面输入确定派生。预览的 affected/resourceUses 准确投影这些真实效果，本身不是写计划。只有激活操作可以携带选择器前后像，其它 body 必为 none。工作区适配器只创建或更新各自列明的工作区记录和真实激活、Registry 控制效果，不能借此执行部署配置、对账、凭据、任意回调或作者源编辑。既有 state 操作若指向部署记录，继续按 §7 的真实 H 和领域分派，不进入本工作区适配器。
+
+planning 将固定计划及依赖引用与原 D6 计划一起保存。seal 再比较每个尚未写入的控制前像及范围栅栏，在一个 P 事务内发布准确后像、选择器、增量和 D6 决议关联。可移植文件安装期间不提前发布或安装控制后像。记录拒绝或终态作者结果不能伪装成 D10 已应用历史。一旦封存，后续配置变化不替换保存计划或原结果。
+
+registryChange 当且仅当激活真实改变工作区可移植 Registry 时为 some。两个固定引用都是按真实 D4 owner 认证的准确 portable_metadata Registry 分量图像；完整前后快照、绑定和演进必须匹配对应激活图像与真实 Registry 依赖，使用既有 {kind:"registry",workspaceRef} 分量键。该变化按 D6 §4.3 使用完整、严格、可移植分支，产生一个真实 ChangeId 和 CP3，不推进源或 H。Registry 不变时为 none，纯目录或选择器更新保持 control_only；其它 body 必须为 none。不可变完整激活意图向获权控制预览提供拟议 Registry，内部效果计划不据此公开隐藏历史记录。
+
+### 8.2 准确运行准入与作者批准责任
+
+    LeaseRunUse/1 = {
+      lease:Binding<lease>/1, run:ControlRef<run>/1,
+      origin:RunOrigin/1, admissionClockEpoch:Token,
+      admittedAt:D4.zoned_instant
+    }
+
+    ApprovalCountReservation/1 = {
+      decisionKey:D6.DecisionKey/2,
+      approval:Binding<approval>/1,
+      state:"unreserved"|"reserved"|"consumed"|"released_terminal"
+    }
+
+    ApprovalUse/1 = {
+      approval:Binding<approval>/1, run:ControlRef<run>/1,
+      stepId:Counter, request:D6.d6_commit_request/2,
+      decisionKey:D6.DecisionKey/2,
+      preparedBindingToken:Token,
+      previewSemanticDigest:Sha256,
+      delegationBinding:Binding<lease>/1,
+      activationBinding:ActivationBinding/1,
+      count:ApprovalCountReservation/1,
+      budgetReservations:[ControlRef<reservation>/1]
+    }
+
+这些定义替代 CANDIDATE 中未分型的示意列表，属于 Core 内部值，不增加提交成员。完整控制引用包含 storeIncarnation。LeaseRunUse 按完整 Run Ref 唯一，只能由第一次受保护步骤的准入 CAS 产生，等于运行来源、准确已准入租约及可信准入时间。其创建与租约用量加一原子完成。后续步骤或原计划恢复使用同一记录，不再检查剩余次数大于零或再次消费；当前准确租约配置、时间、授权、激活及停止门仍适用。准入丢失或未知只能不可用，不能重新准入。发生项认领、武装和排队创建不消费运行次数。
+
+LeaseRunUse 正文别称是派生值，不是额外成员：leaseId 等于 lease.ref.id，leaseRevision 等于 lease.revision，runId 等于 run.id。公开 run_state.admission 准确投影这些原值及 admittedAt，不替代完整保护记录；比较身份时不能丢弃存储世代或 Ref 种类。
+
+ApprovalUse 与计划 ConsentSpec 使用的作者预览摘要为 SHA-256，其输入是 UTF-8 的 D10-Author-Preview/1、一个 NUL，再接完整原预览 EffectManifest/2 的 D3-CJ/3 字节，包括每项效果和 DecisionKey。按 D7 闭合分型解码器定位每个 EffectBytes 槽，将运输对象准确替换为 {encoding,byteLength,payloadDigest:Sha256}，摘要取该槽完整准确固定载荷。完整分型遍历只包含以下槽：source_change 中每个 present/proposed SourceImage 的 before/after.bytes；conditional_source_change 的 before.bytes 和 result.bytes；semantic_extension.bytes；workspace_bootstrap.bytes；field_change 的 before 和 after；conflict_branch_source.bytes；以及 canonical_plan.payloads 每个元素的 before、selected 和 result。absent SourceImage 没有字节槽，其余效果变体也没有 EffectBytes 槽。未知变体必须拒绝；不得按成员名递归猜测，也不得改写已解码载荷内部的 token。payloadDigest 对完整准确载荷字节直接计算 SHA-256，不纳入运输句柄，也不添加摘要前缀。原计划和请求中的不可变 preparationBinding 与用途保护 token 保留，只替换本交付世代的运输句柄。其它成员不变。这是内部确定性摘要投影，不是新的公开 EffectBytes 格式；不纳入 handleToken、游标或交付世代。Core 先核验全部字节和长度，并保留完整原语义与引用用于准确比较，不能只留摘要。因此在新的合格交付世代重新打开原计划预览，仍得到同一摘要，不复活旧 token 或改变计划。
+
+ApprovalUse 按完整原 DecisionKey 唯一，请求必须准确派生该键。受保护 token 必须选择该请求实际原 D7 PreparedActionBinding/3，语义摘要绑定不可变完整预览，与运输 token 分开。Core 保留实际准备记录、完整修改范围、源及依赖固定引用、原规则图像，验证 §7 的两个单字段分支后才能生成使用记录。字段读取或调用方 JSON 不能合成它。不增加第二 planToken、自由修改范围回调或重复作者请求。count 的键和批准等于外层使用记录；它是放在不可变准备输入旁的可变保护资格，不能反向参与该输入的哈希。
+
+未见请求的 planning 在真实权威存储序列化边界内验证当前资格及 reserved + consumed < maxSuccessfulCommits，再原子保存原计划并令 unreserved→reserved。竞争最后一个名额至多一个成功。同一 P seal 执行 reserved→consumed，包括真正逐字无操作；保存结果重放两者都不执行。只有在全部安装残余解决后的原权威终态中止，才在该中止事务执行 reserved→released_terminal。其它原因保留预留。每次真实转换都检查用量计数并推进独立用量修订；完整使用集合证明总量，配置修订不清零。费用占用保持独立。
+
+受保护的补充计划批准就是完整 planned_approval 记录图像，绑定原 A、不可变预览摘要、原租约和激活、授予主体及有限区间。恢复只有在当前授权、完整原预览、源与业务、租约、时钟和停止门通过后，才可用它替代已经失效的长期规则。它不改变计划、不释放原长期批准预留，最终成功仍消费该原预留。不把任意新批准塞进不可变描述符。所有资格记录通过原请求的保护关联定位，在 planning 与 seal 检查准确当前修订；客户端直接提交已经返回的 D6 请求也不能绕过。
 
 ## 9. Deployment value 与证据
 
@@ -1032,7 +1244,7 @@ Secret 原值只通过 trusted secret channel：
 
 stage 自身使用同主体/store/requestId stable key；受信 secret store 只有在能够证明相同 exact secret input 时才重放原 ticket。普通数据库事务随后只能发布该 immutable ticket 指向的 secret version。
 
-DeploymentControlDecision/1 是 host domain 成功结果：
+DeploymentControlDecision/1 是受保护的内部 host domain 成功记录，其公开投影是 §7 的 applied 响应：
 
     DeploymentControlDecision/1 = {
       key:StableControlKey/1,
@@ -1065,6 +1277,43 @@ DeploymentControlDecision/1 是 host domain 成功结果：
 
 
 每份 `CostReservation/1` 恰属于一个 billable `attemptId`、一个 actual `cost_account`、一个 grant、一个 pricing binding 和一个 currency。Run/Lease/Automation/Workspace/deployment 在同一 admission 中检查的是多层 ceiling/projection，不是本 reservation 的多个 actual account；同一费用只能记一次。若一个操作真实产生可分别归属到多个 actual account 的费用，则建立可分别归属的 attempts/reservations/evidence；若需要 group admission，可对这些 reservations 做原子准入，但不能把一份 reservation 改成 multi-account object。
+
+所有可收费 attempt，包括 model、普通或只读 tool、network request 及 reconciliation，都为每份真实 reservation 建立唯一受保护 `CostBudgetAttribution/1`。Core 从真实获权 Run 和原 reservation 派生，不从模型、显示名称、普通 audit 摘要或调用方自报 billing owner 构造。在任何可收费执行开始前，同一准入事务将其与 reservation 一起保存。它是一笔收费的不可变归属，不是第二账户、成功账本或新的公共 reservation payload。
+
+    CostBudgetAttribution/1 = {
+      reservation:ControlRef<reservation>/1,
+      attemptId:Uuid,
+      workspaceRef:D3.WorkspaceRef,
+      origin:RunOrigin/1,
+      layers:[CostBudgetLayer/1]
+    }
+
+    CostBudgetLayer/1 =
+        {kind:"run", binding:Binding<run>/1, ceiling:Money/1}
+      | {kind:"lease", binding:Binding<lease>/1, ceiling:Money/1}
+      | {kind:"automation", binding:Binding<automation>/1,
+         definitionRevision:Counter, ceiling:Money/1}
+      | {kind:"workspace", binding:Binding<workspace_budget>/1, ceiling:Money/1}
+      | {kind:"grant", binding:Binding<grant>/1, ceiling:Money/1}
+      | {kind:"account", binding:Binding<cost_account>/1, ceiling:Money/1}
+
+数组严格按 run、lease、仅当真实 Run origin 为 automation 时的 automation、workspace、grant、account 排序，无重复。交互 Run 恰五层，Automation Run 恰六层。`reservation`、`attemptId` 等于原 reservation；grant/account binding 与其原 grant/account 完全相等。全部 ceiling 使用同一 currency。Workspace、origin 等于受保护 Run 和原 LeaseRunUse；Lease 是 Run 实际已准入 binding。automation 层指向 origin 的同一 Automation Ref，但其 binding、definitionRevision 是此 attempt 准入时实际检查的预算配置，可以晚于不可变的来源 definition；这不改写 Run 原 invocation/claim/approval。workspace 层指向该 Workspace/control domain 唯一永久 workspace_budget 身份。必要历史配置值及准确 cap 选取证据与归属共同保留，不能用当前对象替代缺失原 binding。
+
+Core 创建 Run 时在原受保护 Run 记录中固定有限 Run BudgetCaps：Automation Run 取其不可变来源 Automation definition 的 BudgetCaps，交互 Run 取其 Run-targeted Lease 的 BudgetCaps。首版没有独立的运行中 Run-budget 扩大或重置操作。run 层 binding 是拥有此不可变预算事实的实际 Run 创建 binding；后续 execution/lifecycle revision 推进不使该事实过期，也不清用量。每次 attempt 同时检查当前合格 Lease、适用时的当前 Automation budget、当前 Workspace budget、grant 和实际 account。其它层调高不能逃离固定 Run cap，当前更窄层仍约束新 attempt。这些检查不增加 Lease/approval 权限，也不解禁其它当前门失败的原 planned request。
+
+每层累计键准确由 kind、完整 owner ControlRef、完整实际 cost-account ControlRef 和 currency 构成，按包含 storeIncarnation 的完整 canonical 值比较。配置 revision、Automation definitionRevision、grant 续期、requestId、列表位置和进程/cache epoch 都不是累计身份。account 层跨 Workspace/grant 计入该实际账户全部 reservation，grant 层计入原 grant；其它层只计保存归属中含该准确 owner key 的 reservation。因此共用 grant 的两个 Automation 不共用 Automation 上限，但仍竞争同一 grant/account 和适用 Workspace 上限。
+
+本代没有周期重置。改预算、新 definition、停启、归档、重启和换 grant 都保持原 held/spent。提高 cap 是同谱系调额；降低到该谱系已证明 spent+held 以下，管理操作以 budget_exceeded 拒绝。从 BudgetCaps 列表移除账户只禁止经过此层的新 attempt，旧责任全部保留；重新添加时仍比较原累计。真实新建 Run、Lease 或 Automation 让新的非复用 owner 有自己的层，但不搬移旧 reservation，公共 Workspace/grant/account 层继续计入旧责任。workspace_budget 身份在每 Workspace/control domain 只创建一次，不能替换清零。cost_account currency 创建后不可变；换币必须真实新建独立账户并保留原责任，不隐式换汇或改名转账。
+
+所有货币投影来自一份完整权威 reservation/attribution cut：reserved、uncertain 都把完整 upperBound 计入 held；settled 将 actual 计入 spent；released 计零。其它状态、部分账单或暂缺记录均不表示零。新 reservation 准入前，checked arithmetic 必须证明 spent+held+新上限不超过全部实际适用当前 cap，并满足原每次/次数/非货币限制。一个实际操作若需多个可分别归属账户，所需整组在同一准入事务内全部通过或全部不准入，每笔实际费用仍只独立归属一次。
+
+准入、预算配置变更和结算共用同一实际 Authority Store 序列化边界。准入比较全部相关配置 binding、Run 不可变预算来源、原 grant/account usage revision、stop/当前权限以及完整 reservation/attribution membership cut，再原子保存 reservation、归属、实际 held/次数增量、保留证据及 audit。必须由完整范围/phantom 证明或实际共享 account usage fence 覆盖影响这些键的每个并发插入；只检查先前返回的旧行不够。争最后额度的并发 attempt 至多一个赢。Run/Automation/Workspace 货币投影不新增独立 usageRevision 或余额账本；索引可重建且必须对照同一受保护事实验证。无法提供此单一原子边界的部署不能声称此准入路径可用，也不能把两个数据库各自成功拼成一次成功。
+
+已有 attempt 在任何新准入分支前恢复原 reservation 和完整归属；存在性/连续性未知时不建立替代归属或 attempt。Run 终止、Lease 过期、grant 退役、authority 恢复、stop 或普通 GC 均保留所有必要原配置/pins 及未决债务。保留证明或压缩只有仍能证明准确各键 held/spent、原 reservation/结算防重以及全部未决责任，才可替代原存储；不能把已用变成零，也不能依赖当前 Run 名称/配置。
+
+结算先恢复原完整归属，再执行原证据/revision CAS。同一事务从每个原层累计键的 held 减去 upperBound；settled 把唯一 actual 加入这些同一键的 spent，released 不加 spent。同时原子更新原 grant/account 投影、全部派生层索引或其失效、证据和 audit。当前配置或 definition 改变不重归账；同 owner/account 后继配置自动看见更新后的同谱系总量。对账不要求旧配置/grant 仍能发起新执行，但 reconcile 主体仍须有原实际账户的当前权限。归属/连续性缺失为 state_unavailable，保留全部责任；受保护事实已证明矛盾时，control read/settlement 为 integrity_conflict，Run 执行前为适用 control_conflict，均在普通可见性门之后。reservation 投影或错误不披露隐藏 Run/Lease/Automation 细节。
+
+准确 settlement 重放不二次减少 held 或返额。非 final 证据继续 uncertain 并占全额；uncertain90 后可靠 final20，在全部原适用层恰作 held-90、spent+20，返70一次。actual 超 upperBound 走原 overcharge/freeze，不借对账抬高 ceiling。author abort、TTL、cancel 或 Run terminal 不替代 never-started/final-bill 证据。公共 reservation_state 仍只返回原 CostReservation shape；能够查账户不意味着自动披露此受保护归属。
 
 `actual` 仅在 state=settled 时为 some；其它状态必须为 none。
 
@@ -1183,19 +1432,17 @@ stop/result 固定顺序：closed decode 与 D1 automation.stop gate → 当前 
 
 stop safety transaction 是同一 managed Authority Store 内的专用 closed write，不是 D10ControlPrepare，也不是 D6 author transaction。配套 D6 amendment 只定义 D6 final/planned author work 怎样消费 latch，并返回 `execution_stopped/preflight` 或原 authoritative-abort 结果。stop 不伪造普通 control history，不回滚 committed 作者事实或已经发送的 external effect，也不会仅因停止执行就释放费用。
 
-## 12. D6 Policy/2 与 bootstrap profile/3 提案边界
+## 12. 当前 Policy/3 与 bootstrap profile/3 协调
 
-固定 S 的 Policy/1 decoder、Policy/2 既有能力和所有已保存 policy/decision 保持。R05 proposed Policy/2 新增 closed no-argument capability d10_control_self，仅允许 workspace scope；它不被 Field/source/policy_admin 隐含，也不隐含其它权限。
+当前 D6 Control 拥有 Policy/3。本联合候选只在该当前版本显式加入 workspace scope 的闭合无参数 capability d10_control_self。固定 S 的 Policy/1/2 decoder、能力、scope 含义及真实已保存 policy/decision 保持原样。新能力不由任何 Field/source/policy_admin 能力蕴含，也不蕴含这些能力。
 
-固定 S profile/2 的“全部非 Field capability”在 amendment 中明确冻结为 S 当时集合：
+固定 S profile/2 的“全部非 Field capability”继续准确等于 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。以后新增能力不自动进入既有 profile/1 或 profile/2。
 
-固定集合为 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。
+当前新增 d6_bootstrap_profile wireVersion=3 保留原成员名 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope，明确生成 initialPolicy.version=3。creator 的初始 Workspace grant 为上述固定 profile/2 集合、当前 D6 新增的 `replica_register, replica_retire, conflict_read, conflict_resolve, execution_custody_admin, structure_state, portable_frontier_state`、d10_control_self，再加原完整目标 Registry 的 Field read/write 规则。deny 为空；以后新增 Registry Field 不自动获得 grant。每个能力的实际 scope/含义继续归当前 D6，包括 Policy/3 中按 CommitDomain 披露的 commit_sequence_state。
 
-profile/2 永远不自动包含以后新增的 d10_control_self。
+只有当前 administer_issuer 的显式 issuer-profile 更新才能为以后新签发的 family 选择 profile/3。既有 family/profile 副本、replacement、已保存决议、replay/continue/failover 均保留真实原 decoder，不重算 grant 或恢复创建者权限。既有 Workspace 只能由当前 policy_admin 显式提交完整有效 Policy/3，才能取得新增能力。只有 Field 权限的主体不能自授。
 
-新增 d6_bootstrap_profile wireVersion=3；其它 member shape 与 S profile/2 相同。profile/3 的 initial Policy 仍是 Policy/2，初始 creator grant 等于上面冻结集合 + d10_control_self，再加 S 原规则从 target Registry 生成的全部 Field read/write。deny 仍为空。
-
-只有当前 administer_issuer 的显式 issuer profile update 才影响以后新 family。现存 family 保存的 profile/1 或 profile/2 副本、replacement、WorkspaceBootstrapPlan、saved decisions、replay/continue/failover 均不重算或补 grant。现存 Workspace 获取 d10_control_self 只能由当前 policy_admin 走原 Policy 修改路径显式安装；Field 权限主体不能自授。
+D6 Control §10.2 现已定义完整 WorkspaceBootstrapPlan/2 生产者，保留原完整成员职责，显式使用 wireVersion=2、profile/3 与 Policy/3，不把未声明的 Policy/3 塞进 /1。D7 完整符号/当前 bootstrap 投影须消费该真实 owner 版本。在这些实际 owner 后像共同完成并获接受前，本节是有界协调要求，不表示新 bootstrap 路径已经存在或产品可用。原 profile/1/2 及真实已保存 BootstrapPlan/1 仍按原合同恢复。
 
 ## 13. Public capability 与首版 D6 错误兼容
 
@@ -1235,3 +1482,219 @@ retire/archive 不删除仍被 saved decision、planned recovery、unknown exter
 10. Calendar/Library/People/Organizations 的 PackageId、module contribution、schema contribution 与 D4 namespace/Facet 一一映射但类型不混同；第三方同名 package 不取得 first-party D4 owner。
 11. 设计文档 accepted 但 release 尚未交付、Mobile unsupported、policy deny、版本组合不允许或 provider unhealthy 时，D1 仍返回真实 unavailable reason。
 12. 当前 caller 失去对象披露权后，同 stable key result 查询返回 not_visible，但保存 decision 不删除。
+
+调度坐标及 missedWindowSeconds 复用 CanonicalDecimal 的准确字符串词法，但分别使用 §16 的坐标来源/完整键预算及正有限时长边界；它们不是 ToolValue，不要求虚构 ToolType。
+
+## 16. 稳定订阅、发生项与调度决议
+
+本节唯一拥有 AutomationSpec 和 RunOrigin 引用的闭合调度值。Core 内部在 Run 创建前进行的 Automation 扫描/arming/claim 属于 §1 的 D10RunStepError/1 调度域；管理配置仍使用 D10ControlError/1，且不增加公共调度 RPC。它修订尚未部署的候选定义；真实历史 claim 或 Run 继续使用原 decoder、完整键、配置、结果与恢复责任。不能从新定义补造缺失的历史证据。
+
+    SourceOccurrenceKey/1 =
+        {kind:"once", originalStartUtcSeconds:CanonicalDecimal}
+      | {kind:"recurrence", originalStartUtcSeconds:CanonicalDecimal}
+
+    AutomationOccurrenceKey/1 = {
+      automation:ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      sourceOccurrence:SourceOccurrenceKey/1
+    }
+
+    ScheduleSelection/1 =
+        {kind:"once"}
+      | {kind:"recurrence", source:D6.SourceVersionRef/1}
+
+    AutomationScheduleUpdate/1 =
+        {kind:"initial", selection:ScheduleSelection/1,
+         fromOriginalStart:D4.zoned_instant}
+      | {kind:"continue", selection:ScheduleSelection/1}
+      | {kind:"replace", selection:ScheduleSelection/1,
+         fromOriginalStart:D4.zoned_instant}
+
+创建只接受 initial，并从 subscriptionGeneration=1 开始；已有 Automation 只接受 continue 或显式 replace。selection 分支必须等于 definition.schedule 分支。once 没有 source；recurrence 选择绑定定义中真实 owner 和两个准确 Field occurrence key 所在的完整当前合格 Observation。当前授权及 Registry 资格先于 source/Entry 查阅。需要 managed inner revision 的源必须先通过原有显式准入；配置操作不写入或隐式准入源码。输入 sourceToken 只属于原 prepare cut，不是永久的未来当前资格。
+
+原发生坐标是从 D4 已接受 instant 以整数/十进制算术导出的、自 1970-01-01T00:00:00Z 起的精确 Gregorian UTC 秒数。once 取 at；recurrence 取 row.originalStart，绝不取 replacement 后的最终开始时间。CanonicalDecimal 去除多余零、指数写法和负零，保留全部小数位并允许负坐标。禁止转机器浮点、截到微秒或受限于宿主日期库的年份：合法本地年份 0001/9999 可能换算至 UTC 年 0/10000。等价 offset/小数拼写得到同一坐标；不同 originalStart 即使被移动至相同最终开始时间仍是不同发生项。date-only 输入不自动补午夜。完整 canonical key 上限为 131072 UTF-8 bytes；超预算拒绝，不截断或用哈希代替相等。
+
+键相等比较完整闭合值。排序依次比较完整 Automation Ref canonical bytes、generation 数值、固定 kind 顺序 once 在 recurrence 之前、精确 UTC 数值坐标。键不含 definitionRevision、source revision/token、Field occurrence key、projection horizon、Query 调用/算子/parent key、cache epoch 或最终 due 时间。subscriptionGeneration 是同一非复用 Automation 内的正 checked Counter，不新增作者身份空间。initial/replace 将 fromOriginalStart 规范为固定、包含端点的原发生下界；修改投影窗口不能改变它。
+
+实际受保护源证明保存在下列闭合内部记录中。这些记录不授予公共读取或执行权限，也不增加公共 control-record kind：
+
+    ScheduleRecurrenceEvidence/1 = {
+      observation:D6.SourceObservation/1,
+      sourcePin:D6.PinRef/2,
+      metadataPin:D6.PinRef/2,
+      dependencyProof:D6.DependencyProof/2,
+      registrySnapshot:D4.RegistrySnapshot/1,
+      registryEvolution:Option<D4.RegistryEvolutionProof/1>,
+      recurrenceContext:D4.RecurrenceReadContext/1
+    }
+
+    ScheduleSourceBinding/1 =
+        {kind:"once", atUtcSeconds:CanonicalDecimal}
+      | {kind:"recurrence", ownerNodeRef:D3.NodeRef,
+         recurrenceOccurrenceKey:D4.occurrenceKey,
+         rangeOccurrenceKey:D4.occurrenceKey,
+         initial:ScheduleRecurrenceEvidence/1,
+         checkpoint:ScheduleRecurrenceEvidence/1,
+         continuityPins:[D6.PinRef/2]}
+
+    ScheduleSubscription/1 = {
+      automation:ControlRef<automation>/1,
+      generation:Counter,
+      lowerOriginalStartUtcSeconds:CanonicalDecimal,
+      activeDefinition:Binding<automation>/1,
+      definitionRevision:Counter,
+      source:ScheduleSourceBinding/1
+    }
+
+recurrence 的 sourcePin 必须是该 Observation 完整 managed SourceVersion 和 owner 的 exact_source_document；metadataPin 是同 cut 对应的准确 portable_metadata 图像，证明 owner 的生命周期/身份，不能借另一 head 的 metadata。DependencyProof 属于当前 observerDomain/cut，完整覆盖实际 source/entity、授权、Registry、temporal rules 及 D4 producer 必需的其它业务范围。RegistrySnapshot 和除真实 bootstrap 外必需的 evolution proof 构造实际不可变 ValidatedCatalogContext。recurrenceContext 是实际完整、有限的 D4 context，包含规则来源、准确 revision 和 coverage。raw bytes 或单独解码 Entry 不代替 D4 对真实 Event/range-note Facet 与所选 calendar/recurrence、calendar/range Entry 的当前接受。initial 证据不可变；checkpoint 只有通过下述连续性证明才能推进。pins 必须是准确分型的 Core pin，按 token 排序唯一；每次 checkpoint 更新至多 4096 个 pin，完整更新的 canonical evidence 上限为 16 MiB，不计另行预留容量的不可变 source/component payload。证明不完整或超预算时不能部分推进 checkpoint。
+
+连续性是真实受保护执行依赖，不是 I cache 事实。从前一 checkpoint 到新当前 cut 的每个中间 sealed source/control 状态都必须证明：所选 owner 持续 live、所需真实 Facet 始终存在、两个准确 Field key 始终存在、完整调度业务值没有改变。业务值比较使用 D4 解码后的 canonical recurrence/range 值和实际语义定义/规则 provider；只忽略源码格式以及不参与这些调度语义的 Entry note/qualifier/provenance 成员。不能忽略 recurrence、range、相关 schema、calendar rule、timezone 或 tzdb rule version 的变更。删除再创建后复用 key/最终值、Facet/lifecycle 暂时消失、规则改后复原都不构成延续。其它无关 Entry/body 修改在完整真实链证明上述不变量时，可以自动推进 checkpoint。
+
+producer 必须保留完整、已验证的 D6 ChangeRecord/InstallationNotice/ContentCompletionProof 链及所有必要中间 source/metadata component，或者保留从该准确链与实际相关 control/rule 历史持续无间隙消费生成的受保护 witness。continuityPins 按原 decoder 固定那些原版本记录及完整 source/control 证据，不能装调用方自报结论、仅变大的 Frontier 数字或自由 proof-map 协议。witness 必须证明直到当前 checkpoint 的每条因果分支和相关控制转移，没有遗漏区间、重置或未观察前驱，并保持原 source selection 与 rule identity。只有保留的受保护 witness 仍证明相同不变量和全部未决责任时，压缩才可丢弃旧 payload。相等最终源码/hash、重建索引、变化的读取交付 token 或 provider 自称 synced 都不够。observed_only 只证明保留的 B/N，不证明不存在未观察 C；external/observer gap 或缺失中间历史不能获连续性认证。仅扩展 horizon 或重新建立本地观察本身不等于业务规则变化；必须证明实际 provider/rule 身份没变，并证明新增范围的完整 coverage。在内部验证必要历史前，先检查当前 source/Field/owner 授权；不向调用方返回隐藏历史内容，也不扩大 Lease。
+
+D6 producer 将这些订阅依赖纳入受保护执行恢复，使用既有 recovery retention class 和实际 control-store 责任。它可以持续消费已验证变更并维护受保护 witness，也可以在下一次扫描前验证已保留的完整历史；两条路径都不能在正确性证据丢失后从 I 重建。历史无法证明时以 state_unavailable 暂停新调度；已证明 source/selection/rule 不连续时，调度域返回 binding_changed，要求显式 replace。在管理 prepare 中，相同已证实不一致使用 control_conflict，绝不返回仅属于 Run 域的 binding_changed。replace 固定新的合格源和下界，不伪称恢复了旧链；原 claim 和 unknown 请求仍可恢复。此 D6 留存/消费联合合同必须实际整合后，该路径才可用。
+
+continue 保持 generation、下界和 schedule 分支：once 必须保持准确规范化 at 坐标；recurrence 必须保持真实 owner、两个所选 key 并证明上述完整连续性。改变分支、once at、source selection 或调度业务值必须显式 replace。修改 invocation、Lease、approval、budget、missed policy/window 或有限 projection horizon/limit 可以推进 definitionRevision 和配置 binding，但不能重新给已处理发生项编号。真实同定义 no-op 不虚构 revision。enable/disable/archive 也不改变历史键。replace 在同一事务中退休旧代创建新 claim 的资格，checked-increment generation，并固定新 source/lower bound；MAX 拒绝而不回绕。各代既有 claim 都保留原 Run、不可变 origin/definition、invocation、Lease/approval 关联、queued/blocked/unknown/terminal 状态及准确已保存请求。
+
+唯一定义激活点是原 automation_configure control commit 在与 occurrence 决议相同实际 Authority Store 序列化域中的成功点。先于该 commit 赢得 claim 的项保留旧定义；其后首次赢得 claim 的项采用当前新定义，包括有限 missed window 内合格、此前未处理的过去坐标。armed 尚非 claim，也不预留旧定义。不能按墙钟猜测或 cache 扫描顺序分派。配置、source-checkpoint 更新、arming、claim、跨代排除与 stop/custody 检查共用真实事务 fence；并发 source/control 变化使未提交扫描失效或重试，不能执行部分选择。
+
+    AutomationOccurrenceDisposition/1 =
+        {kind:"armed", clockEpoch:Token,
+         armedAtUtcSeconds:CanonicalDecimal}
+      | {kind:"claimed", run:ControlRef<run>/1}
+      | {kind:"skipped", reason:"missed_policy"|"outside_missed_window"}
+      | {kind:"handover_skipped", prior:AutomationOccurrenceKey/1}
+
+    AutomationOccurrenceRecord/1 = {
+      key:AutomationOccurrenceKey/1,
+      definition:Binding<automation>/1,
+      definitionRevision:Counter,
+      dueUtcSeconds:CanonicalDecimal,
+      proof:ScheduleOccurrenceProof/1,
+      disposition:AutomationOccurrenceDisposition/1
+    }
+
+    ScheduleOccurrenceProof/1 =
+        {kind:"once", at:D4.zoned_instant}
+      | {kind:"recurrence", evidence:ScheduleRecurrenceEvidence/1,
+         projection:<complete accepted D4 recurrence projection outcome>,
+         originalStart:<that outcome row's D4 originalStart>}
+
+recurrence proof 保存实际完整 D4 outcome，包括 projectionIdentity、全部 rows 和 readSet；准确 originalStart 定位唯一一行。owner、managed source revision、两个 source key、Registry/read binding 和有限 horizon 都等于实际使用的证据。它不授予 D7 Query 完整性或执行 custody。dueUtcSeconds 是该行最终 range.start 的精确 UTC 坐标；once 取 at。过滤使用原 D4 replacement-aware 算法，必须包括从窗口外移动进来的 exception。合格项按精确 final due，再按 SourceOccurrenceKey 的固定 tag/数值坐标排序；不同原坐标不因最终 due 相同而合并。
+
+armed 是同一 occurrence store 的耐久前态，不是 Run 或 LeaseRunUse。Core 只有在当前资格完整、可信读取时间严格早于 due、真实未来候选满足订阅原发生下界时，才能创建它并保留 arming 时刻及证明。clockEpoch 绑定真实可信时间来源；arming 的原子提交点重新证明 armedAtUtcSeconds < due，不能用计算开始时较早的时间倒签已经到期的项。时钟或事务点资格不可证明时不推进任何状态。不能为已过去的项补造 armed 来绕过 missed policy。完整 future projection 可以按 queue/storage 预算只武装最早的有限前缀；这个明确受限的 lookahead 不表示所有未来发生项都已武装。armed 项一旦到期，即使晚唤醒或重启也沿普通到期分支处理；due<now 本身不将它变成漏跑项。armed→claimed 前重新验证当前 subscription/source/rules/authority，并固定当前 active definition；转移在同一事务中创建唯一原 Run 及不可变 origin，替换 armed 记录，在原 Run-admission CAS 前不消耗 maxRuns。replace 后旧代 armed 记录不能 claim，也不算已经处理的坐标。
+
+AutomationSpec.missedWindowSeconds 是有限正 CanonicalDecimal 时长，最多 31557600 秒。一次可信 scanTime 下，补跑区间准确为 [scanTime−missedWindowSeconds, scanTime)。只有该区间内已到期、无 armed、此前未处理的合格坐标使用 missedPolicy；已经 claimed/skipped 和已到期 armed 的记录先恢复或处理，不能重新分类。早于该区间的 once 项耐久记录为 outside_missed_window 跳过。recurrence 更早候选不必枚举成无限 skipped 历史；当前固定 schedule 不从已过期窗口执行它们，也不伪记为逐项 claimed。后续显式 replace 仍遵循新 source/lower-bound 和实际已处理坐标排除规则。
+
+recurrence 的 configured horizon 是有限获准投影边界，不是发生项身份，也不替代补跑区间。用于一次决议的 D4 projection 必须完整覆盖整个适用补跑区间和正在处理的全部已到期 armed 项；若配置 horizon、temporal coverage、output/work/evidence 预算做不到，整个决议失败，不保存部分 disposition。future lookahead 仍在该 horizon 内。调用方不能缩小 page/window 来隐藏较新的漏跑项。有限当前投影和当前 source/rule 证明必须在当前 cut 重建；已保存 claim 在新扫描资格检查前始终先恢复原责任。
+
+一次 missed-window 选择是既有 Authority Store 内的一次原子业务决议。固定 scanTime、准确窗口、active definition、完整合格集合及排序、先前已处理排除、policy 和完整 proof，然后在同一事务中保存每项结果 disposition、选中的 Run/origin 以及 queue/capacity reservation。skip 将每个合格漏跑项标为 skipped；run_once 只 claim 按 due/key 排序最大的合格漏跑项，其余全部标 skipped。已有原 claim 或 handover 排除的项不得产生第二 Run。完整决议全部提交或没有一条 skipped/claimed 新行；写入中途崩溃不能丢掉选中的 Run，也不能让后续重扫另选第二个更早项。queueLimit 计入 queued/active claimed Run；受保护容量还必须限制 armed/lookahead 记录。容量不足使整个适用决议失败；仅创建 claim 不消耗 Lease maxRuns。已提交决议恢复准确原 rows/Run；未提交计算丢弃后，按新的当前完整 cut 重算。
+
+新代 claim 某坐标前，同一事务必须证明此 Automation 的完整先代已处理集合。准确 UTC 原坐标相同的先代 claimed、skipped 或 handover-skipped 都排除新 Run，once/recurrence 跨分支亦保守排除；新代写 handover_skipped，指向最初的非 handover 已处理 key。沿链解析到原记录，拒绝循环/矛盾，不能跟随显示名或当前 source key。unknown/terminal/blocked 原 Run 都算已处理，仅有 armed 的先代记录不算。旧代可以更新既有 claim 的 outcome，但退休后不能新建此前不存在的 claim。完整范围/phantom 保护防止竞争；缺记录或索引不证明历史为空。GC/压缩必须保留准确原键、坐标、disposition 和原 Run/unknown 责任，以便继续排除。确实要重跑已处理坐标时，必须真实新建 Automation 或另行确认普通交互 Run，不能借修改本 Automation 的 definition/generation 绕过。
+
+每个新受保护步骤仍应用当前授权、准确 Lease/activation/approval/time/budget/stop 及原请求恢复规则。subscription 已变或当前源暂无法重新证明，都不能替换 saved/planned/unknown 工作。公共 automation_state 显示 generation 和 lower bound 调度值；公共 run_state.origin 携带准确真实 claim key。完整 source proof、隐藏先代 claim、rule/history pins 和执行 custody 保持受保护。嵌套值无权时返回原不披露结果，不虚构空 schedule。
+
+D6 Storage §7.2.1 拥有实际闭合 ScheduleContinuityWitness/1 与 ScheduleContinuityStep/1 生产者、已注册有限转换收件箱、原子检查点与失效及最后引用清理。continuityPins 使用这些准确分型 artifact 解码器或完整原分型链，本节 D10 业务谓词不变。此具体候选仍须独立联合接受和实施证据。
+
+### 16.1 完整执行责任载荷
+
+这些闭合保护值是 D6 ExecutionResponsibilityRecord/2 实际消费的 D10 载荷，保留原控制身份与事实，不建立另一账户、发生项存储或作者账本。数组使用完整规范键排序且唯一，对声明的执行域完整，包括空范围。一次转交每个数组最多 4096 项、规范元数据最多 16 MiB，载荷固定引用另行预留容量；超预算则暂停转交，不能丢记录，也不禁用无关普通源工作。
+
+    CostLayerKey/1 = {
+      kind:"run"|"lease"|"automation"|"workspace"|"grant"|"account",
+      owner:ControlRef<K>/1, account:ControlRef<cost_account>/1,
+      currency:CurrencyCode
+    }
+
+    CostLayerTotal/1 = {
+      key:CostLayerKey/1, heldMicroUnits:Counter, spentMicroUnits:Counter,
+      reservations:[ControlRef<reservation>/1]
+    }
+
+K 依次为 run、lease、automation、workspace_budget、grant 或 cost_account；账户层的 owner 等于 account。总量是 §10 完整预留与归属集合的已验证投影，不是可写余额。每份匹配预留，包括已结算历史，恰参与一次；成员未知不能当零。准确原层累计键在任何配置变化后都保留。
+
+    D10ExternalSendRecord/1 = {
+      binding:ExternalExecutionBinding/1,
+      fenceToken:Token,
+      outcome:
+          {kind:"prepared"}
+        | {kind:"started"}
+        | {kind:"not_started", evidence:EvidenceTicket/1}
+        | {kind:"response", bytes:FrozenEffectBytes/1}
+        | {kind:"outcome_unknown"}
+    }
+
+栅栏 token 选择真实受保护发送栅栏记录，绑定准确 sendAttemptId、存储、持有者、意图及停止集合，不是调用方能力。prepared 已有耐久费用占用但尚未交付；started 在不可逆交付前耐久保存，崩溃后无法证明结果时保守成为 outcome_unknown，不能成为 not_started。not_started 要求原受信从未开始证据。response 是完整响应或效果证据，按不可变意图绑定的准确已接纳贡献合同解码；字节本身不证明成功、失败或最终账单。证据未知或不支持时保留未知及全部占用。协调在同一尝试下记录已验证响应；只有 CANDIDATE §17 的准确幂等或无效果资格成立后，才允许同一意图下另建重试。费用结算另有自身证据，不能从此结果推断。
+
+    D10AuthorStepResponsibility/1 =
+      {kind:"core_field_member", link:D10AuthorPreparationLink/1,
+       decisionKey:D6.DecisionKey/2, protocolOwner:"D6",
+       preparedRecordPin:D6.PinRef/2, recoveryPins:[D6.PinRef/2]}
+    | {kind:"interactive", run:ControlRef<run>/1, stepId:Counter,
+       decisionKey:D6.DecisionKey/2,
+       authorRequest:
+           {protocolOwner:"D3",request:<complete identity_operation_request wire12>}
+         | {protocolOwner:"D6",request:D6.d6_commit_request/2},
+       preparedFormat:"d7_prepared_action_binding3"|"d8_prepared_edit_binding2",
+       preparedRecordPin:D6.PinRef/2, recoveryPins:[D6.PinRef/2]}
+
+自动分支的 artifact 引用严格解码为 link.preparedBindingToken 选择的准确原 D7 PreparedActionBinding/3。交互分支的 preparedFormat 准确选择真实原 D7 PreparedActionBinding/3 或 D8 PreparedEditBinding/2；D8 要求 protocolOwner=D6，D7 则按原合同携带 D3 或 D6。完整内嵌请求、DecisionKey、主体、预览和引用必须一致。交互工作仍需真实受信用户确认及原 owner 门，不因此获得长期自动批准、新 ActionSpec 或提交入口。记录在交付或提交前原子关联原运行和步骤，不能通过另选请求重建。恢复引用包含真实存在的原 D3/D6 计划、主决议及同决议关联、安装 B/N 与来源和审计，各按原解码器处理。源引用不能冒充准备记录引用。P 仍独占当前决议及完整原回执或错误，不复制竞争的成功标记；保存、计划和未知先遵循原 owner。D9 生成的 D7 准备在同一原记录内保留真实 D9 构造输入，不另造作者请求。
+
+    D10ExecutionClaims/1 = {
+      recordPins:[D10ControlRecordPin/1],
+      prepareBindings:[ControlPrepareBinding/2],
+      leaseRuns:[LeaseRunUse/1],
+      authorSteps:[D10AuthorStepResponsibility/1],
+      subscriptions:[ScheduleSubscription/1],
+      occurrenceRecords:[AutomationOccurrenceRecord/1],
+      ranges:[D10ControlRange/1],
+      continuityPins:[D6.PinRef/2]
+    }
+
+    D10MoneyResponsibility/1 = {
+      reservations:[{
+        binding:Binding<reservation>/1,
+        value:CostReservation/1,
+        attribution:CostBudgetAttribution/1,
+        settlements:[CostSettlementDecision/1]
+      }],
+      layers:[CostLayerTotal/1],
+      recordPins:[D10ControlRecordPin/1],
+      ranges:[D10ControlRange/1],
+      evidencePins:[D6.PinRef/2]
+    }
+
+    D10ExternalResponsibility/1 = {
+      binding:Binding<external_effect>/1,
+      intent:ExternalEffectIntent/1,
+      state:ExternalEffectCurrentView/1,
+      attempts:[D10ExternalSendRecord/1],
+      evidencePins:[D6.PinRef/2]
+    }
+
+    D10StopResponsibility/1 = {
+      binding:Binding<stop>/1, owner:StopOwner/1,
+      latch:ExecutionStopLatch/1,
+      receipt:Option<D10EmergencyStopReceipt/1>
+    }
+
+    D10ExecutionInventory/1 = {
+      workspaceRef:D3.WorkspaceRef,
+      storeIncarnation:Uuid,
+      approvalUses:[ApprovalUse/1],
+      claims:D10ExecutionClaims/1,
+      moneyLineage:D10MoneyResponsibility/1,
+      externalUnknowns:[D10ExternalResponsibility/1],
+      stopState:[D10StopResponsibility/1],
+      stopCapacity:StopCapacity/1
+    }
+
+清单包含全部活动或仍被引用的运行与配置、原准备（包括完整内嵌作者 A）、计次使用、已准入租约、订阅代际与连续性见证、已武装及已处理发生项、预留归属、外部已开始或未知尝试，以及停止结果和容量。防重复收费、认领或发送所需的终态证据仍须在清单中，或由准确原分型引用保留。externalUnknowns 也保留未决工作或防重所依赖的已知结果；字段名称不允许删除仍为依赖的已完成尝试。每个引用解析到准确原记录及版本，范围在同一保护存储屏障下证明完整性。配置图像包括重算归属必需的全部历史预算输入，不能用当前配置替代。共享部署账户总量在真实账户栅栏下包括其它执行域的预留；转交一个工作区不取得共享账户所有权，也不清零。此类部署责任仍在真实 owner，并保留连续引用，新执行恢复前仍须可达且合格。
+
+只有旧执行持有者的准入、planning、发送和调度写者在一个真实存储屏障处停止后，才能生成清单。已进行的作者安装保留原屏障与恢复责任，不能为制造空清单而删除。新持有者执行要求 D6 验证完整原清单、真实隔离旧持有者、耐久保护转交，并保留 storeIncarnation 与控制引用。若新物理存储无法保留这些身份和保护连续性，接管只能不可用，不能创建空执行域。源文件复制或重建索引不能提供此证明。
+
+停止容量计数与共享账户责任一样，仍位于其实际共享存储 owner。只转交一个工作区不能把全局计数复制到第二个活动存储。要么原权威安全存储仍是可达的唯一序列化 owner，要么完整存储转交隔离全部受影响写者并保留所有目标和锁预留。无法证明该边界就暂停接管，不能重置 issued/reserved 或只转交可见子集。
+
+### 16.2 联合生产者验收场景
+
+必须覆盖：r6 之后同键重放 r5；拒绝循环塞入生成的 M 而保留内嵌 A；缺少分型历史图像；隐藏控制源；竞争最后批准名额；逐字无操作只消费一次；原计划补充批准；文件安装后但封存前停止；第三状态恢复不退款；先缺外部确认、后同准备取得合法人工事件；共享账户多自动化限额；交互运行不虚构自动化；剩余次数为零仍恢复同运行；武装项晚唤醒；完整原子漏跑窗口；无关源推进；删除重建 ABA；规则改变后复原；观察缺口；完整及空转交范围；旧持有者发送与认领栅栏。文档检查不执行这些并发、存储或界面场景，仍须新的独立设计接受、后端测试及 D1 发布资格。

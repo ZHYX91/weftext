@@ -42,14 +42,23 @@ P/I不可建立第二份 table row、collection membership、Field occurrence或
 
 UI呈现为“表格”不改变上述 domain。尤其 names/phones/addresses 等 list-of-object仍是 D4 typed values/occurrences；不能因为编辑器像表格就暗建 Record identity。
 
+完整替代方案及取舍如下：
+
+| 方案 | 实际优势 | 决定与成本 |
+|---|---|---|
+| 持久 Record 加 RecordCollection | 可紧凑保存大量同构短行 | 本代不采用：它会在 Node 之外新增作者存储、引用、schema、CRUD、权限、Trash、copy、fork 和迁移域 |
+| 把每个电话、表格行或 recurrence override 都建成 Node | 统一取得独立身份 | 不采用：产生不必要的 ID 和存储，无限 recurrence 也不可能全部物化成 Node |
+| 用普通 Document 表格作为持久数据库 | 源码可读且可编辑 | 不作为身份模型：持久行 ID 造成双重权威，无法保持外部编辑、重排和复制的语义 |
+| 只用 CSV/JSON Resource | 适合可携带的原始数据与不透明附件 | 保留这种 Resource 用途，但不作为唯一模型：行没有独立 CRUD、引用和生命周期 |
+| Node 加 D4 事实、无身份的 Document 行和派生行 | 只保留一个持久内容身份域 | 采用；短行仍承担明确的标题、parent 和源码成本，百万 Node 性能要由 D6 实测证明，不能承诺 OLAP 能力 |
+
+只有新增“无需 Document 但必须独立持久化行”、且现有模型无法以合理成本满足的硬需求，才重新打开 Record 决策。插件、缓存、行句柄或文件格式不能暗建该域，D5 也不为它预留 RecordRef discriminator。
+
 ## 3. Document Table
 
 ### 3.1 grammar与source authority
 
-Document Table 仍是 D2 native AsciiDoc table occurrence，
-  作者权威是 `.adoc` exact source。D5 structured edit必须 round-trip D2 grammar、
-  delimiter、cell separator、header/body/footer、ragged rows、
-  multi-line content、block/inline boundaries与原 trivia。
+Document Table 仍是 D2 原生 AsciiDoc 表格出现项，作者权威是 `.adoc` 精确源码。D5 按 §19.1 每行一个逻辑行的准确语法，保留 delimiter、separator、Inline* 单元格、不齐行、换行形式和未修改的 trivia；不新增多行或块级单元格、嵌套表、跨度或 header/body/footer schema 模型。
 
 缺失 trailing cells是真正 absent，不自动补 empty。Cell内容是 Inline*，不能从 `0012`、`true` 或日期样式推断 D4 type。
 
@@ -63,12 +72,12 @@ table/row/cell locator均 revision-bound，并额外受当前完整 SourceObserv
 - append/remove row；
 - append/remove logical column；
 - 在安全条件下 reorder rows；
-- 修改表头/标题；
+- 编辑普通首行单元格文本，或单独修改 Document 标题；
 - raw source body edit。
 
 每个 structured operation至少绑定：
 
-- current full Document source + SourceVersion/2，其中 current Document revision 来自该实际生产 SourceVersion 的 revision；
+- current full Document source + SourceVersion/2，其中不透明的当前 Document revision token 通过真实 RevisionTokenBinding/2 及闭合 RevisionTokenSource/2 解析，可选择 managed 或 external 生产源码；
 - 与该 source 对应的完整 current SourceObservation/1，并通过 SourceVersionRef/1.sourceToken 保护当前观察连续性；
 - 当前 observation cut 内真实 fileObjectBinding、evidencePins、author-control、Registry、incidence 依赖；
 - exact table locator/current revision；
@@ -78,7 +87,7 @@ table/row/cell locator均 revision-bound，并额外受当前完整 SourceObserv
 - 唯一 proposed full source；
 - D6 file install qualification。
 
-这些只是局部 structured source operation 的真实证据，不要求无关 Workspace 全 Query cut，也不自动取得 weak save 资格。current auth、local typed/full-source 检查必须实际通过；观察、pins、control、Registry、incidence 或 cut 变化使旧计划 stale/reprepare，不能用裸 version/hash/I 或最新 page 静默替换目标。
+这些只是局部 structured source operation 的真实证据，不要求无关 Workspace 全 Query cut，也不自动取得 weak save 资格。current auth、local typed/full-source 检查必须实际通过；任何已绑定观察、pins、control、Registry 或 incidence 依赖变化都使旧计划 stale/reprepare；Frontier 推进按 §19.9 的 exact/scope_dependencies 规则判断，不能用裸 version/hash/I 或最新 page 静默替换目标。
 
 如果同一 source 中 D4 unavailable/invalid namespace不相交，仍须保持其 raw bytes byte-equal；D5 structured edit不能顺手重排/重写它。
 
@@ -86,7 +95,7 @@ table/row/cell locator均 revision-bound，并额外受当前完整 SourceObserv
 
 ragged rows合法；D5不把短行扩成长行。column insertion/removal必须给每行确定 source transformation，不能靠 renderer补位。
 
-row reorder 只有在 D2 表内没有会被移动语义破坏的 inter-row blank/comment/trivia 时才是 structured-safe；否则固定 `unsupported_table_reorder`，用户可转 Source editor。不得移动comment到另一row或丢失CRLF。
+只有表内不存在行间空行或注释 trivia，才允许结构化行重排；否则固定 `unsupported_table_reorder`，用户可转 Source editor。不得移动comment到另一row或丢失CRLF。
 
 ### 3.4 unrepresentable cell
 
@@ -130,7 +139,7 @@ collection membership若用于显示探索，可以显式标 partial/pending并�
 
 I coverage、当前 page、未下载 cloud placeholder、旧cache都不能冒充完整 membership。
 
-D7新 Prepared contract尚未冻结时，上述强入口保持 unavailable/owner_update_required；D5不得私造一个 PreparedActionBinding/3 或 generic token。
+新的 unseen 强集合或批量操作必须取得实际已协调的 D7 完整结果及 Prepared 生产、消费合同；缺少所需合同则返回 unavailable/owner_update_required，不建立新决议。D5 不自造 Prepared binding 或旁路 token。这个新执行门禁不阻止真实 saved/planned 记录的交付或原计划恢复（§19.11）；当前 D7 协调仍按 §19.12 明确保留待完成项。
 
 ## 6. Collection Creation Policy
 
@@ -190,7 +199,7 @@ D5必须区分：
 
 批量preview后，targets必须固定到 exact NodeRefs/table locators/occurrence selectors和版本。commit不得重新执行“当前所有选中/当前前N条”扩大 target set。
 
-partial result不能生成 all_result target list。preview必须冻结完整目标、实际readSet、evidence pins与所依赖的current Observation/cut；权限、SourceObservation/1、SourceVersionRef/1.sourceToken、SourceVersion/2、control、Registry、incidence、pins或Frontier/2依赖发生变化，都使旧preview stale并要求重新prepare，不用最新page、当前选择或重新求值结果悄换targets。Frontier/2只表示sealed causal/dependency prefix，不是全集Query、Registry完整性或payload物化证明。
+partial result不能生成 all_result target list。preview必须冻结完整目标、实际readSet、evidence pins与所依赖的current Observation/cut；已绑定权限、SourceObservation/1、SourceVersionRef/1.sourceToken、SourceVersion/2、control、Registry、incidence 或 pins 变化使旧 preview stale 并要求重新 prepare。Frontier/2 扩展服从 §19.9 及实际 consumer 的重置规则，不用最新page、当前选择或重新求值结果悄换targets。Frontier/2只表示sealed causal/dependency prefix，不是全集Query、Registry完整性或payload物化证明。
 
 ### 9.3 atomicity
 
@@ -203,7 +212,7 @@ partial result不能生成 all_result target list。preview必须冻结完整目
 D5操作可能需要：
 
 A. current Document source + SourceVersion/2生产版本，以及由 SourceVersionRef/1.sourceToken 选择并由 InputDescriptor/2.sourceInputs[].observation 承载的完整 current SourceObservation/1；生产 SourceVersion/2 的 commitDomain/版本历史保持原义，operation CommitDomain/2可以不同于生产域；
-B. table/row/cell locator或 D4 occurrence selector，并保持其既有 production source revision/inner selector 语义；
+B. table/row/cell locator 保持既有不透明 revision-token 语义，D4 occurrence selector 则使用真实 managed 内层整数；
 C. actual MutationFootprint；
 D. local D2/D4/D5 structural validity；
 E. complete Query membership/negative range；
@@ -212,7 +221,7 @@ G. current authorization/policy，以及current Observation cut内的fileObjectB
 H. operation CommitDomain/2、Frontier/2和实际install evidence；Frontier/2只证明sealed causal/dependency prefix，不代替全集Query、Registry完整性或payload物化；
 I. D7 new preparation，仅强 collection/bulk consumer。
 
-这些证明仍保留原B-D/F等局部要求；current Observation或readSet/pins/cut变化必须stale/reprepare，不能用裸version/hash/I或最新page替换原目标。
+这些证明仍保留原B-D/F等局部要求；已绑定 current Observation 或 readSet/pins 变化必须 stale/reprepare；Frontier 扩展按 §19.9 判断，不能用裸version/hash/I或最新page替换原目标。
 
 ### 10.2 operation matrix
 
@@ -258,7 +267,7 @@ fixed D5 hard limits保持：
 | explicit Node targets in one collection mutation | 1000 |
 | native table structured row targets | 1000 |
 | preview detail page | 200 |
-| fetched result page | 200 |
+| fetched editable-grid page | 200 |
 | one import batch new Nodes | 1000 |
 
 更窄 runtime/policy budget可以降低，不得放宽这些上限。1000是target count，不是读取全库的许可；complete range仍按实际语义证明。
@@ -315,7 +324,7 @@ D9拥有 row import/export mapping、Office template/export和loss report；D5�
 
 D6-FA新 consumer将 SourceVersion/2、SourceObservation/1、SourceVersionRef/1、CommitDomain/2、Frontier/2 和 SemanticState 接入 operations，但不新造 TableRowId/RecordRef/CollectionRef。SourceVersion/2 继续保留生产版本原有的 commitDomain、observationEpoch、revision 或 externalSequence、changeId 语义；生产域可以不同于当前 observerDomain，而 current SourceObservation/1 的 observerDomain 必须等于 operation CommitDomain，entityRef 必须等于 sourceVersion.entityRef，并以当前 fileObjectBinding、evidencePins、control、Registry、incidence 与 cut 完成外层资格。SourceVersionRef/1.sourceToken 以 d6_source_observation/1 选择完整当前 Observation；它不替换 D5/D4 既有 inner sourceRevision、OccurrenceKey、Entry selector 或 locator wire。Frontier/2 只表示 sealed causal/dependency prefix，不证明全集 Query、Registry 完整性或 payload 物化。watcher gap、replacement 或 discontinuous rematerialization 即使 production version 相同也会使旧 token/locator 失效，I 不能恢复该资格。旧 D5 v1、D7 PreparedActionBinding/1,/2、D3 v9/v10/v11 和 D6 wire1 的 saved decoder、receipt bytes 与恢复规则仍按历史版本处理，不机械改写成当前 token，也不据此宣称新版 D7 success。
 
-新 D7 Prepared未完成前，collection strong Action保持unavailable；不能借ordinary D6 source-save产生“旧Action已完成”的receipt。
+只有缺少实际已协调 D7 producer 的受影响 unseen 强集合操作才保持 unavailable；真实 saved/planned/unknown 记录先按 §19.11 恢复。ordinary D6 source-save 不能伪造旧 Action receipt。
 
 ## 17. completion conditions
 
@@ -365,7 +374,7 @@ unsupported in D5 v1 native structured model:
   span
   cell block
   nested table
-  header option as a schema/type declaration
+  any table attribute or header option (including presentation-only headers)
 ~~~
 
 第一行从不自动成为schema，显示数字/日期不推断D4 type，读取不把ragged rows补成矩形。
@@ -375,7 +384,7 @@ unsupported in D5 v1 native structured model:
 ~~~text
 owning NodeRef
 current SourceVersion/2
-current Document revision represented by that SourceVersion
+current opaque Document revision token resolved by RevisionTokenBinding/2
 current SourceObservation/1 selected through SourceVersionRef/1.sourceToken
 current observation cut + fileObjectBinding/evidencePins/author-control/Registry/incidence dependencies
 current table locator
@@ -407,6 +416,10 @@ unsupported_table_reorder
 
 完整source保留。纯view sort不写source。
 
+
+
+原生表格的首行仍是普通 cell；不存在“设为显示表头”动作或独立 header 类型。D2 无条件禁止 table attribute/header option，即使它仅用于展示而非 schema/type。普通首行 cell 文本编辑和独立 Document title 修改仍分别使用其既有操作；不得为兑现旧“表头编辑”措辞新增语法。
+
 ### 19.2 行域、Field-cell 与 occurrence edit
 
 D5五种row-like域保持互斥：
@@ -433,7 +446,7 @@ replace target exact绑定：
 ~~~text
 owner NodeRef
 FieldId
-SourceVersion/2 / current source revision
+complete managed SourceVersion/2 / its actual inner sourceRevision
 current SourceObservation/1 selected through SourceVersionRef/1.sourceToken
 current observation cut + fileObjectBinding/evidencePins/author-control/Registry/incidence dependencies
 occurrenceKey
@@ -442,6 +455,10 @@ edit mode
 ~~~
 
 只改note保留Entry其他作者内容及所有未选中source/trivia。旧selector不因key bytes相同跨revision继续有效；若Core提出replan，必须保留base/current/proposed并重新证明目标与不相交变化，不能靠(FieldId,value)、row number、nearest text或key单独承接。
+
+集合的可编辑列仅限标题、完整 D4 Field，或 D4 明确支持编辑的结构成员。NodeRef、路径、投影有效性、逆关系及聚合列都不是通用可写单元格。新增观察应追加出现项；明确纠错才替换选定出现项。多个尚未解决的值保持可展开，偏好单值摘要不删除历史。关系编辑只写一次真实 canonical 作者端，逆向展示不能双写。
+
+D4 内层 sourceRevision 取自真实完整 managed 生产 SourceVersion/2 的整数 revision。external SourceVersion/2 只有 externalSequence，没有 managed revision；externalSequence、epoch、Locator token 和 incidence-range token 都不能冒充该整数。确实需要内层整数的 D4 结构化操作，先完成显式获权的 managed admission/save，再从成功封存的 managed 源码准备新的结构化请求。admission 结果未知就保持未知。读取不能自动接纳或写入；raw/read/repair/Draft 与独立合格的 ordinary 操作仍可用。
 
 ### 19.3 Collection Creation Policy 与 parent priority
 
@@ -455,7 +472,7 @@ final sibling ordinal
 explicit title
 initial Document source
 required initial Facet/Field author facts
-optional completed Template construction input
+optional revision-bound completed Template construction input
 requireMembership: Boolean
 definition/query binding + params + authorization/dependencies
 ~~~
@@ -474,7 +491,7 @@ ad-hoc Query没有containing definition，调用方必须显式给destination；
   same Workspace、authorized、structurally legal。
   default ordinal是commit-plan pre-state中parent child count；并发变化必须replan。
 
-Template只做一次性D9 source construction，不成为实例持续authority。冲突时拒绝，不last-wins；无Template也可由caller给显式title/body/facts创建。
+Template 只负责一次性 D9 源码构造，必须绑定预览已审阅的准确 Template revision 和完整构造结果。Template 或冲突输入发生变化使新计划失效；提交不能追随最新 Template 或悄悄重算构造。调用方也可以不用 Template，显式提供标题、正文和事实。planning CAS 一旦成功，parent 子项数量或 Template 的变化按原计划恢复规则处理，不能改写已保存的计划（§19.11）。
 
 requireMembership=false时动作明确是“create Node”，预览必须说明它可能不在当前result。requireMembership=true时在完整proposed post-state、相同Query/params/auth/dependencies下重新完整求值，证明fresh Node属于semantic result后才commit。transport page不参与；Query本身top/limit等semantic operators参与。无法证明则collection-create strong action unavailable。
 
@@ -500,14 +517,14 @@ Trash preview展示真实D3 subtree、Resources/Annotations、relation effects�
 
 bulk preview先冻结完整targets和每个target version；commit不重新执行“当前全选/当前前N”来扩大目标。要对新结果操作必须重新preview。page前N不是whole-result范围。
 
-同Workspace strong batch整体成功或拒绝；拒绝无成功receipt且作者source保持。跨Workspace遵守两份独立authority result：
+同 Workspace 强批次整体成功或拒绝。安装前已确定的拒绝没有作者写入，但保留真实 D3 recorded-rejection/决议历史；安装或封存结果未知时按 §19.11 恢复，不能声称零副作用或换新操作重试。跨 Workspace 遵守两份独立 authority result：
 
 ~~~text
 target fresh-copy receipt
 source Trash receipt (optional and separately authorized)
 ~~~
 
-target失败不删source；source Trash失败显示copied/source retained，不自动伪装atomic move。
+target失败不删source；source Trash 失败显示 copied/source retained，不冒充原子移动，也不自动重试删除。
 
 ### 19.5 row→Node、import/export 与 dynamic schema
 
@@ -538,6 +555,12 @@ quantity/resource budgets
 
 长import由显式有限batch构成；每batch原子，但整个job不冒充单一原子commit。job保存已提交batch receipts和input binding，续作重验证未提交部分。D9不能用相同row text猜重复并跳过。
 
+D4 semantic-major 身份不可变，沿用其演进账本。Field/type 的破坏性变化必须使用新 ID，并明确迁移、损失及完整拟议状态验证。闭合对象、union 与有界集合只用于 D4 允许的位置，并遵守最大嵌套深度 8、对象成员数 64、集合项数 256。导入与本地编辑都必须经过 Entry/schema admission，不能靠导入绕过限制。未知 JSON 成员必须明确保留或损失处置，不能静默丢弃；嵌套值不构成通用 record store。
+
+导出分别处理普通 Document 表格、Node 集合和 Query 值表。Office 映射属于明确的导出模板，普通 Node 不持久化仅供导出的 schema。重新导入创建新 Node，不复活行身份。保存的 Query/View 定义是所属 Node 内的出现项，没有 ViewRef；复制定义不复制派生成员。退役 Record token 必须拒绝，不能强制转换为 NodeRef。
+
+ICS 或其他同步来源中，D3 SourceBinding 定义外部来源实例、scope、映射命名空间和外键比较域；active OriginBinding 才将准确 ForeignIdentityKey 映射到 NodeRef。initial_import/adopt/upsert 及 retired/non-live 情况服从真实 D3 状态矩阵；SourceBinding、UID、标题或路径本身都不能授权 CRUD。未绑定的只读 provider 仍可用于订阅，但不能自称已有可更新的同步绑定。有限 import/adopt 以明确映射和绑定创建新 Node，不能为无限 recurrence 的每次出现创建 Node。UID、RECURRENCE-ID 和 LogicalOccurrenceKey 不是 NodeRef；VFREEBUSY/VTIMEZONE 不创建 Node，VEVENT/VTODO/VJOURNAL 必须明确映射为 event、Task 或 journal。
+
 ### 19.6 hard limits、budget 与 partial result
 
 fixed D5 hard limits：
@@ -546,7 +569,7 @@ fixed D5 hard limits：
 one Node collection mutation explicit Node targets <= 1000
 one native table structured edit row targets      <= 1000
 one preview detail page                           <= 200
-one fetched grid/result page                      <= 200
+one fetched editable-grid page                    <= 200
 one import batch new Nodes                        <= 1000
 ~~~
 
@@ -560,6 +583,8 @@ limit_exceeded
 
 数量上限不是充分budget；Core还要绑定source bytes、decoded value bytes、read dependency count、write bytes、time/cancellation和materialization budget。达到任何较窄界限整体拒绝。preview 200只是显示截面，不能使未显示effects变“已审阅”。
 
+Template 构造产生的每个新 Node（包括全部 descendants）都计入导入批次上限：单个输入行产生 1001 个 Node 也返回 limit_exceeded。这些是 D5 编辑、grid 和导入边界，不限制 D2 语法、通用 D7 Query 分页合同或 Workspace 总规模。有限 effects 全集必须可以跨预览页完整取得；详情页上限不能截断 effects 或悄悄拆开原子意图。
+
 10,000 overlapping-engagement Person Nodes的colleague查询必须按需派生，不能持久化约5000万edges。大型同构import验收至少10,000 Nodes、10 batches、failure around batch6、repeated resume和working-memory小于完整workspace input；这是未来D6/D7/D9 evidence义务，不是性能已通过。
 
 ### 19.7 D5 intent adapter 最小语义
@@ -568,7 +593,7 @@ limit_exceeded
 
 ~~~text
 edit native table:
-  binds owner NodeRef, SourceVersion/Document revision,
+  binds owner NodeRef, complete SourceVersion and opaque Document revision token,
         current SourceObservation/1 via SourceVersionRef/1.sourceToken,
         current observation cut + fileObjectBinding/evidencePins/control/Registry/incidence,
         table locator, exact source ranges, explicit transforms
@@ -624,8 +649,43 @@ row handle、column index、caption、
 
 当前资格由 `SourceObservation/1` 额外保护：其真实形状为 `kind=d6_source_observation`、`version=1`，`observerDomain` 必须等于 operation `CommitDomain`，`entityRef` 必须等于 `sourceVersion.entityRef`，并包含对应 `sourceVersion`、当前 `observationEpoch`、`fileObjectBinding`、`evidencePins`，同时与当前 control、Registry、incidence 依赖及当前 cut 一致。`InputDescriptor/2.sourceInputs[].observation` 承载该完整 Observation；`SourceVersionRef/1` 的 `sourceToken` 使用 `d6_source_observation/1` 标记并选择完整当前 Observation，而不是裸 revision、hash、I cache、row text 或 production version。`Frontier/2` 只表示已 seal 的 causal/dependency prefix，不单独证明全集 Query、payload 已物化或 Registry 完整。
 
-D5 现有 sourceRevision、table/row/cell locator 与 D4 occurrence inner selector 形状保持不变；当前 `SourceObservation/1` 连续性只是外层附加资格。watcher gap、external replace 或 discontinuous rematerialization 会使旧 sourceToken 和依赖该观察的 locator/selector 失效，即使 production version、hash 或 row text 相同也不能续认；I 不能恢复该资格。Policy、FileObjectBinding、install、ReadSet、pins 与 cut 任一变化都必须 stale/reprepare，不能通过读取最新 page 或重新选择当前 target 静默替换已冻结目标。
+D5 既有绑定 revision 的 table/row/cell Locator，以及 D4 数字 sourceRevision/occurrence 内层 selector 形状保持不变；当前 `SourceObservation/1` 连续性只是外层附加资格。watcher gap、external replace 或 discontinuous rematerialization 会使旧 sourceToken 和依赖该观察的 locator/selector 失效，即使 production version、hash 或 row text 相同也不能续认；I 不能恢复该资格。任何已绑定 Policy、FileObjectBinding、install 资格、ReadSet 或 pins 变化都必须 stale/reprepare；Frontier 扩展按 §19.9 判断，不能通过读取最新 page 或重新选择当前 target 静默替换已冻结目标。
 
-collection strong action还需要 future D7 complete cut/Prepared。当前D7新版未完成时它固定 unavailable/owner_update_required；D5不创建替代token。explicit partial/pending rows只用于获权exploration，不参与all_result/bulk/requireMembership/Automation writes。
+新的 unseen 强集合操作还需要实际 D7 complete cut/Prepared 合同；缺少所需 owner 时返回 unavailable/owner_update_required，不建立新决议。D5 不创建替代 token。明确标出的 partial/pending 行只供探索，不参与 all_result/bulk/requireMembership/Automation 写入。真实 saved/planned/unknown 记录沿用 §19.11 恢复分支；§19.12 记录剩余 D7 协调。
 
 D6 `collection` obligation对应的保存状态可表现为 semantic_pending(collection)：它只表示完整collection proof尚未成立，不表示empty，也不能把typed invalid、source invalid、缺失strong evidence或其它真实失败洗成成功，更不能授权Action、all_result、bulk或Automation。r6后来complete只证明r6及其current SourceObservation/SourceVersion/cut；r5 pending receipt及其历史原bytes保持不变。I重建、P丢失、新replica、placeholder或A→B→A都不恢复旧membership/cut proof。
+
+
+### 19.9 原依赖与 Frontier 扩展
+
+D5 消费真实 D6 DependencyProof/2，包括十四种闭合 DependencyKey/2，以及 placement_range 下九种 StructureRange；不登记一个包揽所有依赖的 D5 key。每个意图绑定 owner 实际要求的 source、control、权限、Registry、关系和集合的正负范围、pins 及物化证据。完整空范围与非空范围的证明标准相同；隐藏、不可读、未物化输入、范围连续性丢失、未知 schema 或 partial I 都不等于空。披露权限、ObservationScope 和 owner 可用性检查先于受保护读取、Entry 解码及业务验证。仅丢失可重建 I 缓存，不必使仍有真实保护证据的输入失效；丢失真实范围或当前观察证据则会失效。
+
+exact 要求原 expectedFrontier 不变；所有 D3 managed_atomic 路径继续使用 exact。只有实际操作 profile 允许 scope_dependencies 时，才可接受有完整中间记录和 proof 链的连续、已验证封存、因果不回退扩展。原来绑定的每个 Observation/token、selector、pin、权限 generation、DependencyProof stamp、Registry/rule 和正负范围都必须保持有效且不变；扩展与它们无关的证明须保存在原 P 计划中。更大的向量数值、provider 同步状态、相同最终 bytes 或 I 都不够。expectedFrontier、Notice.baseFrontier、targets、Query、拟议源码、版本基础和 token 均不改写；重新签名不能修好过期绑定。无法证明无关则 conflict/reprepare。D7 完整结果的权限及依赖重置规则仍然适用，这不是旧结果或句柄普遍存活的许可。
+
+### 19.10 生产 revision 与无改动效果
+
+managed 生产 revision 只由 D6 分配。实体 E 在生产域 D 中的 H(D,E)，是该域连续封存历史中的最大 managed revision；epoch 变化不重置 H。外域 before 的 revision 为 90，也不能给已证明完整空历史、H=0 的新域提供版本值；后者的新 managed after 为 1。P 或可携带历史缺失、有缺口都不等于空；到 MAX 时检查式递增失败，不能回绕。返回旧生产域时继续该域自己的 H，externalSequence 永不成为 managed revision。
+
+每个真正的新 managed after，都在原计划赢得 CAS 时冻结 SourceRevisionPlan/1 的 before、lastIssued 或已证明空历史基础、after SourceStamp/1 及 afterPin。D3 新身份和 D7 两遍物化共用原 candidate map 与版本基础。预览和 planning 不产生 ChangeId 或已封存 SourceVersion；只有 P seal 才把拟议 stamp 与该决议唯一 ChangeId 结合，递增一次 H 并产生真实 managed SourceVersion/2。D5 不建立另一个分配器或账本。
+
+真正 raw no-op 保留完整旧 source version 和精确 bytes，即使它来自另一生产域；它不建立 SourceRevisionPlan、source revision、H 增量、内容 ChangeId 或 Frontier head。源码未变的可携带结构或 lifecycle 效果也保留该源码基础，不产生新 source version/H 增量，但可以有该决议真实的 portable ChangeId。删除使用 after absent，不伪造“已删除源码版本”。相同 bytes 的 external-to-managed admission 是显式接纳，不是 raw no-op：它有真实 SourceRevisionPlan，并使用 after 域的 H+1。混合操作中，未变 owner 保留自己的完整旧基础，变化或新建 owner 使用各自冻结的计划；不能借另一 owner 的 revision。
+
+新的可携带发布消费 ContentCompletionProof/3，其 before/after 是真实生产 SourceVersion，并使用原来保留的 Frontier 扩展证据。回执交付或发布失败不能重复安装、分配、递增 H、收费或执行效果；恢复只重发原已封存 proof/outbox。历史 proof 版本保留原 bytes 和 decoder。
+
+### 19.11 实际入口与 saved/planned/unseen 恢复
+
+共同的闭合解码、当前最低披露权限和 ObservationScope、适用的 domain/authority/fence、P custody/continuity 检查均先于业务查账。先比较原 DecisionKey、protocol owner 和完整规范 request/fingerprint，再按状态分支；同一个 key 的不同请求或 owner 是 mismatch，不能另建决议。
+
+| 原记录状态 | D5 consumer 义务 |
+|---|---|
+| saved，包括已耐久记录的拒绝或 terminal 结果 | 按原效果或结果披露范围检查当前交付权限，交付准确原 receipt/error/effects 或恢复原发布；不再要求旧 before 仍为 current、Frontier 相等、TTL 未过期、当前 r6 完整性或新版 consumer；撤权只能隐藏交付，不能改历史 |
+| planned 且未 seal | 恢复同一 request、descriptor/owner version、identity map、适用 SourceRevisionPlan/H 基础、pins、reservations/write set、Notice、保护模式、attempts/budget 和原 preparation TTL/clock；当前权限、依赖连续性及真实安装来源只决定原计划继续、暂停、冲突或 recovery_unknown；不重选 page/Query/target，不另 prepare，不重抽身份或修改 H/after |
+| unseen | 才应用真实当前 producer/consumer 门禁及 planning CAS；缺少 strong owner 时用既有 unavailable/owner_update_required/proof_unavailable 返回且不建立新决议；不依赖该 owner、已完整合格的 ordinary/local 路径仍可用 |
+
+原生 D3 identity_operation_request wire12 使用闭合 InputDescriptor/2、d3_identity_operation/12 owner descriptor、受保护输入和原生私有计划；没有 planToken、D6 prepare 要求、PreparedIntent/2 或 expectedDomainFenceToken。只有真实 D6 d6_commit_request/2 入口才检查它实际声明的这些成员。D7 preparationBinding 只在真实 D3/D7 合同允许且要求的路径检查，不改变唯一原生提交入口或单一 P planning CAS/seal。D5 不虚构成功 preparation wire。
+
+install/P/seal 结果未知时，保留原记录、pins 和未清责任；这不是业务拒绝，也不是新重试。不能从当前文件、hash、I 或丢失的 P 推断成功、零副作用、退款、配额重置、reservation 释放、再次收费或 Approval/Money 使用，也不能换新 OperationId。真实历史 D3/D6/D7 记录保留原版本、decoder 及恢复义务；保留实际历史不意味着声称未部署原型曾经激活。跨 Workspace 的 target copy 与 source Trash 各自保留 domain、授权、DecisionKey 和 receipt，不能用一方推断另一方成功。
+
+### 19.12 内部协调与接受边界
+
+本批候选仍有两个明确内部待协调项：P1 中 portable Locator 在另一副本取得当前资格的规则，以及 D7 完整结果、preparation、preview/effects 的最终协调 producer/consumer 后像。不透明 Locator token 形状仍由 D3 拥有，真实历史记录保持原义。D5 不自行选择新的 portable-token 语义，不重签旧绑定，不虚构 D7 新版，也不声称这两项已闭合。在独立接受或激活前，必须按 root 的基础裁定和实际 D7 producer 核对确切受影响新路径；这不阻止独立合格的 raw/read/repair/Draft/local 路径，也不抹除 saved 恢复。文档检查不能替代该接受门禁。

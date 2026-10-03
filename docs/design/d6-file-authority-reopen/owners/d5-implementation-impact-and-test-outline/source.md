@@ -15,27 +15,24 @@ Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not ac
 ## 1. implementation effect graph
 
 ~~~text
-D2 exact source
-  -> native table parser / current-revision locators
-  -> D5 structured table intent
-       -> local source transformation
-       -> D6 SourceVersion/2 + SourceObservation/1
-       -> SourceVersionRef/1.sourceToken + InputDescriptor/2.sourceInputs[].observation
-       -> current cut / MutationFootprint / strict install
-  -> D4 Field Value Occurrence editor
-       -> D4 Entry/Registry proof + inner sourceRevision/OccurrenceKey/Entry selector
-       -> current SourceObservation/1 outer qualification
-  -> D7 Query -> NodeCollectionResult
-       -> exploratory partial presentation
-       -> strong collection/bulk operation
-            -> future D7 complete cut / Prepared
-            -> Frontier/2 sealed causal/dependency prefix
-            -> D3/D4/D6 managed commit
+closed intent + minimum disclosure/ObservationScope + domain/custody continuity
+  -> original DecisionKey/request lookup -> saved delivery / original planned recovery
+  -> unseen operation-applicable owner/Registry availability
+       -> complete current SourceObservation + real source/pins/dependencies
+       -> D2 exact-source parse / opaque revision-token locator
+            -> D5 native structured transform -> full proposed source / strict install
+       -> D4 carrier / strict Entry decode -> real managed inner revision / selector
+            -> typed proposed state + relation effects
+       -> D7 Query with explicit coverage
+            -> partial exploration OR actual complete result / Prepared producer
+       -> exact or permitted proved-unrelated scope_dependencies validation
+       -> one native D3 or actual D6 prepared entry / single P planning CAS
+       -> original SourceRevisionPlan where needed / install / single seal / CP3
 ~~~
 
 SourceVersion/2 remains production-version history: managed_source_version/2 retains entityRef, commitDomain, observationEpoch, revision, and changeId, with changeId.commitDomain equal to that production commitDomain; external_source_version/2 retains entityRef, commitDomain, observationEpoch, and externalSequence; the production domain may differ from the current operation domain. Complete current SourceObservation/1 requires observerDomain equal to the operation CommitDomain, entityRef equal to sourceVersion.entityRef, and current observationEpoch, fileObjectBinding, evidencePins, plus control, Registry, and incidence dependencies in the same cut. SourceVersionRef/1.sourceToken tagged d6_source_observation/1 selects that complete Observation, and InputDescriptor/2.sourceInputs[].observation carries it. A watcher gap, replacement, or discontinuous rematerialization invalidates the old token and dependent locator even when production version, hash, or row text is unchanged; I cannot restore qualification. D5 current Document revision/locators and D4 inner-selector wire remain unchanged.
 
-Frontier/2 is only a sealed causal/dependency prefix and never substitutes for complete Query membership, Registry completeness, or payload materialization. Strong D7 collection/bulk operations still wait for the future complete Prepared/current cut; their current entry points remain unavailable/owner_update_required and D5 invents no success binding.
+Frontier/2 is only a sealed causal/dependency prefix and never substitutes for complete Query membership, Registry completeness or payload materialization. Only affected unseen strong actions wait for their actual D7 complete-result/Prepared producer; D5 creates no success binding. Real saved/planned/unknown records recover first under their original contract. Main §19.9–12 defines the permitted Frontier extension, producer consumption and remaining internal coordination; it does not weaken D7 whole-result resets.
 
 There is no durable Record/RecordCollection storage. Table parse, collection result, and membership candidate in I are rebuildable.
 
@@ -43,7 +40,7 @@ There is no durable Record/RecordCollection storage. Table parse, collection res
 
 ### 2.1 native Document Table
 
-Requires exact-source table parser; current SourceVersion/2 with the current Document revision taken from its real production revision; complete current SourceObservation/1 plus SourceVersionRef/1.sourceToken and InputDescriptor/2.sourceInputs[].observation qualification; real fileObjectBinding, evidencePins, control, Registry, and incidence dependencies in the current cut; table/row/cell locator validation; ragged-row model; representable-cell encoder; exact trivia/line-ending preservation; patch-overlap detection; complete current source and one proposed full source; current authorization plus D2/local-typed checks; and D6 safe-install, P-seal/recovery, and actual file-install evidence.
+Requires exact-source table parser; complete current SourceVersion/2 with the opaque Document revision token resolved through RevisionTokenBinding/2 and tagged RevisionTokenSource/2 for managed or external source; complete current SourceObservation/1 plus SourceVersionRef/1.sourceToken and InputDescriptor/2.sourceInputs[].observation qualification; real fileObjectBinding, evidencePins, control, Registry, and incidence dependencies in the current cut; table/row/cell locator validation; ragged-row model; representable-cell encoder; exact trivia/line-ending preservation; patch-overlap detection; complete current source and one proposed full source; current authorization plus D2/local-typed checks; and D6 safe-install, P-seal/recovery, and actual file-install evidence.
 
 Native table editor is not a D4 schema editor and does not require an unrelated whole-workspace Query. That narrows semantic proof scope only and grants no weak-save qualification. Structured cell/row/column/reorder remains strict; only a human raw whole-source save of one existing live Document satisfying every actual-A §4.1 condition may explicitly select observed_only before planning starts and then freeze the profile. Ordinary and strict|observed_only are independent axes, and neither UI shape nor absence of unrelated whole-workspace proof implies weak protection.
 
@@ -53,7 +50,7 @@ A tabular property editor invokes D4 Entry/Occurrence semantics rather than crea
 
 ### 2.3 Node Collection
 
-Collection viewer consumes D7 result plus explicit coverage. Strong collection action waits for new D7 complete-result/Prepared contract. It never substitutes old Prepared/1,/2, a page, or a cache.
+Collection viewer consumes D7 result plus explicit coverage. A new unseen strong collection action requires the actual coordinated complete-result/Prepared producer. A page/cache or historical Prepared/1,/2 never fabricates current qualification; actual historical records retain original recovery. The final D7 owner set remains a named coordination dependency rather than a D5-invented version.
 
 ### 2.4 conversion/import/export
 
@@ -76,7 +73,7 @@ Row-to-Node/import mapping/loss belongs to D9 and fresh identity to D3. D5 provi
 
 ### 4.1 native source
 
-1. simple cell edit preserves delimiter/header/footer.
+1. simple cell edit preserves delimiters, ordinary rows and untouched trivia.
 2. ragged rows stay ragged.
 3. missing trailing cells stay absent.
 4. CRLF/LF preserve.
@@ -89,7 +86,9 @@ Row-to-Node/import mapping/loss belongs to D9 and fresh identity to D3. D5 provi
 
 ### 4.2 row/column operations
 
-Cover row append/remove, batches through 1000, column add/remove over ragged rows, header/title edit, safe and unsafe reorder, overlapping-patch rejection, exact post-source reparse, SourceVersion CAS with its production revision still binding the table/row/cell Locator, and D6 crash recovery. The same operation also binds complete current SourceObservation/1, SourceVersionRef/1.sourceToken, InputDescriptor/2.sourceInputs[].observation, and fileObjectBinding, evidencePins, control, Registry, incidence, and strict-install qualification in the same current cut. Any current-observation, authorization, pin, dependency, or cut change makes the plan stale/reprepare; a bare SourceVersion, hash, I state, or equal row text never restores an old Locator. Local structured row/column work does not require an unrelated whole-Workspace Query, but structured cell/row/column/reorder remains strict and gains no weak-save qualification from locality or UI shape.
+Cover row append/remove, batches through 1000, column add/remove over ragged rows, ordinary first-row cell-text editing or the separate Document-title edit, safe and unsafe reorder, overlapping-patch rejection, exact post-source reparse, SourceVersion CAS with the opaque protected revision-token binding for the table/row/cell Locator, and D6 crash recovery. The same operation also binds complete current SourceObservation/1, SourceVersionRef/1.sourceToken, InputDescriptor/2.sourceInputs[].observation, and fileObjectBinding, evidencePins, control, Registry, incidence, and strict-install qualification in the same current cut. Any bound current-observation, authorization, pin or dependency change makes the plan stale/reprepare; Frontier extension follows main §19.9 and the actual owner reset policy; a bare SourceVersion, hash, I state, or equal row text never restores an old Locator. Local structured row/column work does not require an unrelated whole-Workspace Query, but structured cell/row/column/reorder remains strict and gains no weak-save qualification from locality or UI shape.
+
+A presentation-only table header option must also reject, even without a schema declaration. Editing an ordinary first-row cell remains legal under the existing cell operation; editing Document title is a separate operation. No new header syntax or action is introduced.
 
 ### 4.3 Field occurrence UI
 
@@ -121,7 +120,7 @@ Target-copy success plus source-Trash failure is explicit partial transfer rathe
 
 ### 4.10 multi-replica / conflicts
 
-Cover same-cell edits, different-row file-generation conflict, explicit three-way merge, concurrent collection-definition/member-fact changes, page/placeholder, and equal hash with new observationEpoch. Also cover an unchanged production SourceVersion with changed current observationEpoch, fileObjectBinding, evidencePins, control, Registry, incidence, or cut: the old SourceVersionRef/1.sourceToken and dependent Locator become stale/reprepare. Watcher gap, replacement, or discontinuous rematerialization invalidates the old token/Locator even when the production version is unchanged; bare hash, I state, equal row text, or ABA never restores continuity. SourceVersion/2 production commitDomain may differ from the observation domain, while SourceObservation/1.observerDomain equals the operation CommitDomain and entityRef equals sourceVersion.entityRef. Preserve no mtime/LWW winner and no hidden row identity from merge.
+Cover same-cell edits, different-row file-generation conflict, explicit three-way merge, concurrent collection-definition/member-fact changes, page/placeholder, and equal hash with new observationEpoch. Also cover an unchanged production SourceVersion with changed current observationEpoch, fileObjectBinding, evidencePins, control, Registry or incidence dependency: the old SourceVersionRef/1.sourceToken and dependent Locator become stale/reprepare. Watcher gap, replacement, or discontinuous rematerialization invalidates the old token/Locator even when the production version is unchanged; bare hash, I state, equal row text, or ABA never restores continuity. SourceVersion/2 production commitDomain may differ from the observation domain, while SourceObservation/1.observerDomain equals the operation CommitDomain and entityRef equals sourceVersion.entityRef. Preserve no mtime/LWW winner and no hidden row identity from merge.
 
 ### 4.11 r5/r6, I/P
 
@@ -176,7 +175,7 @@ D8 surfaces distinguish table-row deletion, Field-fact deletion, collection remo
 
 D9 explicitly maps CSV/Excel/JSON with loss, fresh import, finite batches, and separated Office binding domains. It does not execute external formulas, perform implicit upsert, or require export-only schema on ordinary Nodes.
 
-D10 keeps external-source authority separate from cache and owns SourceBinding plus schema/contribution authenticity. Connector cache is not managed Record author storage and creates no second CRUD/reference domain.
+D3 owns SourceBinding/OriginBinding identity, exact foreign-key comparison scope and active/retired transition semantics; D6 persists their managed directory and continuity. D10 owns provider contributions and the genuine external-source/version profile, with D9 mapping/import. Provider cache is not a managed Record author store and creates no second CRUD/reference domain.
 
 ### 8.2 Legacy Record branch retires as a whole
 
@@ -196,7 +195,7 @@ Preserved generic semantics are precise NodeRef/TypedValue typing, D4 FieldId/Re
 
 Cover pipe/backslash escaping, CRLF/CR/LF, duplicate rows, ragged tables, blank/comment trivia, empty table, stale locator, legal Inline/ref, unrepresentable text, untouched-byte equality, and zero author write on failure.
 
-A structured patch reparses the complete proposed source and preserves both the inner production revision/selector and the outer current SourceObservation/1, SourceVersionRef/1.sourceToken, fileObjectBinding, evidencePins, control, Registry, incidence, cut, and structural strict-install qualification; I state, hash, or equal row text never fabricates those proofs. Any determinable source-CAS, current-observation, authorization, dependency, or durable-install qualification failure rejects before author write or enters conflict/reprepare, and never partially saves. If install/ack outcome is unknown, it enters real recovery_unknown and reconciles the original operation result; it never claims zero side effects or Saved and never retries the unknown result as a new operation.
+A structured patch reparses the complete proposed source and preserves both the inner opaque Locator revision-token or real managed D4 inner-selector and the outer current SourceObservation/1, SourceVersionRef/1.sourceToken, fileObjectBinding, evidencePins, control, Registry, incidence, cut, and structural strict-install qualification; I state, hash, or equal row text never fabricates those proofs. Any determinable source-CAS, current-observation, authorization, dependency, or durable-install qualification failure rejects before author write or enters conflict/reprepare, and never partially saves. If install/ack outcome is unknown, it enters real recovery_unknown and reconciles the original operation result; it never claims zero side effects or Saved and never retries the unknown result as a new operation.
 
 ### 8.4 Collection creation/membership
 
@@ -257,7 +256,7 @@ On top of the fixed-S matrix cover:
 - any missing weak qualification, strict failure, known competition, stale Base, watcher gap, or continuity gap never falls back to weak and instead rejects or conflict/reprepares; unknown install remains recovery_unknown, and prepare records proposal/read-before/pins rather than Saved;
 - observed_only retains the read before-image B and user input N durably; installing N may overwrite an unobserved external C and a later C may replace the current file, while durable B/N retention remains;
 - structured/bulk/collection/promotion/Action/Automation/server checkpoint/Approval/Money remain strict and are not weakened by these acceptance cases;
-- SourceVersion/2 stale/ABA, plus cases where production version is unchanged but current SourceObservation/1, fileObjectBinding, evidencePins, control, Registry, incidence, or cut changes; watcher gap, replacement, or discontinuous rematerialization never lets an old SourceVersionRef/1.sourceToken or Locator continue merely because production version is unchanged;
+- SourceVersion/2 stale/ABA, plus cases where production version is unchanged but a bound current SourceObservation/1, fileObjectBinding, evidencePins, control, Registry or incidence dependency changes; watcher gap, replacement, or discontinuous rematerialization never lets an old SourceVersionRef/1.sourceToken or Locator continue merely because production version is unchanged;
 - same/different-row multi-replica conflict;
 - explicit three-way merge proposal;
 - semantic_pending(collection) means only missing complete collection proof, not empty, never hides typed invalid, source invalid, or missing strong evidence, and never feeds Action, all_result, bulk, or Automation;
@@ -269,7 +268,36 @@ On top of the fixed-S matrix cover:
 
 These are future reviewable acceptance cases and do not claim that product tests have been executed or passed.
 
-### 8.12 acceptance boundary
+### 8.12 Restored fixed-S cases and current-producer regressions
+
+These are future conformance obligations, not tests reported as executed:
+
+| input / competing condition | required result |
+|---|---|
+| old Task Node/checklist union, or a Record selector/parameter/cache branch remaining after label removal | reject retired active domains; Task is an ordinary Node with its Facet, never a checklist-occurrence union; rebuild D7 provenance and ActionEvidence from real upstream domains |
+| title, full Field, supported D4 structure member, versus NodeRef/path/inverse/aggregate/projection-status columns | only the first three can expose their actual owner edit; no generic writable derived cell |
+| three historical assertions, repeated equal phones with distinct notes, preferred summary, or new observation | keep each occurrence/history; append new observation, replace only an explicit correction; inverse relation edit writes the canonical owner once |
+| Template revision changes after preview; parent child count changes before a new plan; a plan already won | reject/reprepare the new proposal with explicit review; never follow latest Template; a won plan follows original recovery without changing its source/ordinal |
+| D4 depth 8/9, members 64/65, items 256/257, nested unions/collections at disallowed positions | enforce the real D4 admission boundary in local edit and import; unknown JSON members receive explicit loss/preservation, never silent dropping |
+| one input row constructs 1001 Nodes including Template descendants; 1000 finite effects span pages | first fails limit_exceeded; second retains every effect and permits full finite retrieval, never hidden truncation/splitting; large legal D2 text/general Query is not banned by D5 grid limits |
+| same UID under distinct source instances/scopes/mapping namespaces; retired or non-live OriginBinding; unbound read-only provider | exact D3 foreign-key/transition rules, no UID/title/path implicit update; read-only subscription remains available without updatable binding |
+| external Document source with no managed integer | native opaque Locator uses the actual external RevisionTokenSource arm; D4 typed inner selector waits only for explicit authorized managed admission then a new request; raw/read/repair/Draft remain independently available; unknown admission guesses no revision |
+| managed before from domain A revision 90; domain B proved H=0; then B epoch change or return to A | B after=1; epoch does not reset B history and return continues A's own H; foreign before/externalSequence never supplies after; unknown empty history and MAX fail |
+| raw no-op with foreign managed before; unchanged owner plus another changed owner; equal-byte external admission; source deletion | retain unchanged complete version without SourceRevisionPlan/H; changed owner uses its original plan; admission is a real managed after; deletion has absent after and no invented deleted revision |
+| permitted scope_dependencies with continuous sealed unrelated extension and all bound inputs unchanged | same original plan may continue with retained P proof; original expectedFrontier/Notice baseline, targets, pins and tokens unchanged |
+| same vector increase but missing intermediate proof, changed negative membership/auth/Registry/pin, or changed Observation after watcher gap | no extension success; stale/conflict/reprepare without re-signing; D3 managed_atomic exact and D7 whole-result reset remain enforced |
+| loss of only I versus loss of real source/range continuity; complete-empty versus hidden/unmaterialized range | rebuild I without author writes if protected evidence survives; missing real evidence never means complete-empty or valid old proof |
+| raw native wire12 create with actual native descriptor versus D6 d6_commit_request/2 | native succeeds when otherwise qualified without planToken/PreparedIntent; undeclared member rejects; real D6 entry validates its carried token; required D7 resolution binding cannot be stripped into raw input |
+| same key/different owner or canonical request; saved r5 replay after r6, old TTL or current D7 missing | mismatch before new business work; saved delivers exact original bytes under current original-scope authorization, never reexecutes or rechecks old business completeness |
+| planned before/after install; unknown seal; publication failure after seal | retain original candidate/H/after/pins/budget/TTL/Notice and original operation; no new prepare or presumed zero effects; sealed publication retries only original proof/outbox with no reinstall, new ChangeId, H increment, charge or Approval/Money reuse |
+| target copy succeeds but source Trash is rejected/unknown | two original domain-bound keys and receipts; copied/source retained or explicit unknown; never automatic new source deletion or inferred atomic move |
+
+Qualification order fixtures include hidden-source and unavailable-Registry paired cases: establish disclosure/ObservationScope and actual Registry owner before protected source/Entry decoding; no forbidden read or existence leak, no timeout-based guess. Invalid source/local typed facts never become semantic_pending. Saved delivery and original recovery cannot be rejected merely because an unseen new consumer remains uncoordinated.
+
+Portable Locator cross-replica current qualification and the final D7 complete-result/Prepared/preview producers remain named internal coordination dependencies in main §19.12. The above local binding and consumer tests do not decide that foundation question or claim new D7 producers already exist. After their real contracts arrive, coordinate these six files and independently review the resulting exact hashes before acceptance.
+
+
+### 8.13 acceptance boundary
 
 These are future reviewable contract cases. Mechanical preflight, documentation CI, author self-review, and historical Pro review are not D6-D10, A2, or product-host implementation acceptance.
 

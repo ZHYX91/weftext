@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Control and Management Contract
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author-revised candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=1, P2=10). All eleven findings remain open. The candidate is complete for author handoff and awaits a fresh complete independent joint review of the fixed R08 commit; it is not independently accepted, activated, merged, released, or product implementation evidence.
+revision: D10-FA-r01-2026-10-02; status: coordinated author candidate, not accepted, activated, or implemented. The last complete historical R08 review of C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=3, P2=8). All eleven historical final dispositions remain OPEN. Named repairs have limited independent reviews; actual cross-owner integration and fresh global acceptance remain incomplete. REVIEW-DISPOSITIONS separates those evidence scopes.
 
 ## 1. Authority, scope, and error boundary
 
@@ -42,7 +42,7 @@ The separate D10 Run/step error object is:
         "cancelled" | "external_outcome_unknown"
     }
 
-`D10ControlError/1` is used only by `d10_control_prepare`, `d10_host_control_commit`, `d10_control_result`, `d10_control_read`, `d10_secret_stage`, `d10_emergency_stop`, and `d10_emergency_stop_result`. `D10RunStepError/1` is used only while a D10-owned Run/step has not entered another protocol owner: Run admission, ContextBundle/model/tool/connector execution, pre-D6 approval/delegation checks, and external-effect execution/recovery.
+`D10ControlError/1` is used only by `d10_control_prepare`, `d10_host_control_commit`, `d10_control_result`, `d10_control_read`, `d10_secret_stage`, `d10_emergency_stop`, and `d10_emergency_stop_result`. `D10RunStepError/1` is used only while a D10-owned Run/step has not entered another protocol owner: Automation scanning/arming/claim before Run creation, Run admission, ContextBundle/model/tool/connector execution, pre-D6 approval/delegation checks, and external-effect execution/recovery.
 
 Once a request enters D3, D6, D7, D8, or D9, that owner returns its original closed error/envelope unchanged. D10 never wraps D6 `not_visible`, `approval_unavailable`, `execution_stopped`, or `transaction_aborted`; never wraps D7 action/effects errors; and never renames D3/D8/D9 errors. A D10 diagnostic UI may perform a separately authorized `d10_control_read` after the owner error, but that read cannot alter the formal result.
 
@@ -257,7 +257,7 @@ The only generation-one adapter identity is packageId `weftext.automation`, pack
       request:D6.d6_commit_request
     }
 
-This is a protected Core recovery link, not a public request and not a second author decision. `preparedBindingToken` is the exact token of the original D7 PreparedActionBinding/2 and `request` is its original D6 request. Core saves this link, the original PreparedActionBinding/2, and required pins atomically before returning the prepared author step or allowing submission.
+This is a protected Core recovery link, not a public request and not a second author decision. `preparedBindingToken` is the exact token of the original D7 PreparedActionBinding/3 and `request` is its original D6 request. Core saves this link, the original PreparedActionBinding/3, and required pins atomically before returning the prepared author step or allowing submission.
 
 ContributionKind is closed to:
 The Contribution-kind closed set is `module, schema, view, action, template, preset, pack, tool, model, connector, importer, exporter, conversion, renderer, localization`.
@@ -315,7 +315,7 @@ A D4 ownerId is never automatically package-ownership proof. The table creates a
 
 Requests never carry principal, owner, or an authorized Boolean. Current identity only comes from trusted host/D10 authentication mapping.
 
-Workspace self-service qualification S is an explicit allow of proposed D6 Policy/2 capability d10_control_self for the current principal at workspace scope. It only allows management of that principal’s own finite D10 control records and grants no author read/write, policy_admin, registry_admin, deployment-account management, or secret plaintext. Actual author operations still require their original D6/D7 permissions.
+Workspace self-service qualification S is an explicit allow of current coordinated D6 Policy/3 capability d10_control_self for the current principal at workspace scope. It only allows management of that principal’s own finite D10 control records and grants no author read/write, policy_admin, registry_admin, deployment-account management, or secret plaintext. Actual author operations still require their original D6/D7 permissions.
 
 Workspace-management qualification W is policy_admin at workspace scope in the current Workspace. Registry activation additionally requires registry_admin. W may stop, revoke, archive, and manage Workspace budgets, but cannot impersonate another principal to create or enlarge that principal’s Lease/Approval.
 
@@ -433,6 +433,7 @@ ControlBody/1 has exactly seven variants:
    lease:Target<lease>;
    approval:Option<Target<approval>>;
    definition:AutomationSpec/1;
+   scheduleUpdate:AutomationScheduleUpdate/1;
    delegation:LeaseSpec/1;
    standing:Option<StandingApprovalSpec/1>.
    approval and standing are both none or both some. This fixed bundle is the only combined operation for creating/rebinding Automation, Lease, and Standing Approval and is not a generic batch/DAG.
@@ -492,7 +493,7 @@ Option<T> is only {kind:"none"} or {kind:"some",value:T}; null is forbidden.
       }]
     }
 
-All step/input/output/elapsed maxima are finite positive values. costs is sorted and unique by grant ref and currency matches the grant/account.
+All step/input/output/elapsed maxima are finite positive values. costs is sorted and unique by grant ref and currency matches the grant/account. costs has 0..32 entries. Core resolves each grant to the exact actual account/currency at configuration. Multiple entries in one BudgetCaps for the same actual account/currency must have equal maximum values, otherwise invalid_request; they jointly express one owner/account ceiling, while each grant keeps its own independent limits. A layer with no matching account cap permits no new billable attempt through that layer. Grant replacement never changes the cumulative owner/account key defined in §10.
 
     AutomationInvocation/1 =
         {kind:"tool",
@@ -507,6 +508,7 @@ All step/input/output/elapsed maxima are finite positive values. costs is sorted
       invocation:AutomationInvocation/1,
       schedule:AutomationSchedule/1,
       missedPolicy:"skip" | "run_once",
+      missedWindowSeconds:CanonicalDecimal,
       queueLimit:Counter,
       budgets:BudgetCaps/1
     }
@@ -523,7 +525,7 @@ All step/input/output/elapsed maxima are finite positive values. costs is sorted
 `tool` parameters must validate against the active ToolValueProfile/1 input type of that Contribution. `core_field_member` accepts only the exact accepted first-party adapter identity above and its closed `FieldMemberTask/1`; it does not use ToolValueProfile and grants no extra read/write authority. A recurrence selector only locates D4 recurrence source rebound to the same current revision and never becomes a durable EntityRef.
 
     LeaseReadGrant/1 = {
-      scope:<exact D6 Policy/2 grant.scope from S D6 Control §4>,
+      scope:<exact current D6 Policy/3 grant.scope>,
       capabilities:[LeaseReadCapability/1]
     }
 
@@ -554,9 +556,9 @@ For one `core_field_member` Run step, Core performs exactly this mapping and no 
 
 1. Bind the current Automation definitionRevision, exact invocation, ActivationBinding, Lease, current D6 principal, and all finite budgets.
 2. Before reading values, run the original D7 Narrow Field Qualification graph for the configured owner/Field/member and prove every required current observation/write scope. Full-source validation may occur internally, but a narrow caller never receives hidden source bytes.
-3. Read the complete current Field for `task.ownerNodeRef/task.fieldId`. Automatic execution requires exactly one Entry and the configured member must already be present. From that exact preimage obtain `expectedRevision`, its real `occurrenceKey`, and the original complete `rawEntrySource`; no stale selector is persisted in Automation configuration.
+3. Read the complete current Field for `task.ownerNodeRef/task.fieldId`. Automatic execution requires exactly one Entry and the configured member must already be present. From that exact preimage obtain the complete current SourceObservation/1, corresponding SourceVersionRef/1, real managed SourceVersion/2.revision as `expectedRevision`, its real `occurrenceKey`, and the original complete `rawEntrySource`; no stale selector or sourceToken is persisted in Automation configuration. An externalSequence never substitutes for a managed Counter.
 4. Construct the original D7 intent exactly as `{format:"weftext.action",version:1,intent:{kind:"set_field_member",selector:{owner:task.ownerNodeRef,fieldId:task.fieldId,expectedRevision:<fresh owner source revision>,occurrenceKey:<the unique current Entry key>,rawEntrySource:<the exact original Entry JSON text>},memberPath:task.memberPath,value:task.value}}`.
-5. Call the original D7 prepare path, retain its PreparedActionBinding/2, fetch and validate the complete preview/effects/MutationFootprint, then compare the **actual** member-change or byte-exact raw-no-op against the separate current Standing Approval. Approval never supplies the target, Entry, member path, or requested value.
+5. Call original d7_action_prepare/2 with exactly one selectedSources entry, the current SourceVersionRef/1 for that Field owner, and the same Workspace, current commitDomain, complete expectedFrontier and original budget; retain its PreparedActionBinding/3, fetch and validate the complete preview/effects/MutationFootprint, then compare the **actual** member-change or byte-exact raw-no-op against the separate current Standing Approval. Approval never supplies the target, Entry, member path, or requested value.
 6. Core constructs ApprovalUse from the original prepared semantics and enters D6 with the original `d6_commit_request`. Planning/final/replay remain owned by D6.
 
 For optional S `people/phone.label`, task.value is the D7 Optional TypedLiteral `{type:{kind:"optional",item:{kind:"semantic_code",scope:<the complete people contribution-set scope>}},value:{state:"some",value:"people/work"}}`. The D4 scope remains all three codes `people/other|people/personal|people/work`; an approval enum may intentionally allow only a subset. One current phone Entry with present `personal→work` is a true member-change. Present `work→work` is eligible only when the complete proposed source is byte-equal and therefore exercises the existing raw-no-op branch. Zero or multiple current phone Entries make the automatic profile inapplicable; an interactive user may still select the second same-value phone by its real D7 selector and use the ordinary D7 confirmation path.
@@ -735,12 +737,47 @@ A successful prepare returns:
       resourceUses:[{
         grant:Binding<grant>/1,
         maximum:Option<Money/1>
-      }]
+      }],
+      externalRequest:Option<ExternalConsentPreview/1>
     }
 
 affected is sorted/unique by ref canonical bytes; resourceUses is sorted/unique by grant ref. canonicalIntentBytes is the complete successfully closed-decoded D10-Control-Intent/1 byte sequence, so it carries the proposed control semantics already supplied by and visible to the caller. preview adds no secret bytes, hidden author value, or another user's billing.
 
-ControlPreview/1 contains only control metadata currently visible to the principal. Budget overflow rejects rather than truncates.
+The external arm of consent has a positive, authorized full-request review path through the existing prepare response. `externalRequest` is some exactly when the closed body is consent with external consent, and none for every other body. Core resolves the exact frozen intent from its protected mapping only after current authority to the complete request scope, contribution, account, target and payload; permission to observe a digest or use a broad resource grant is insufficient. Missing/hidden/wrong audience returns `not_visible` before revealing intent existence. Core compares the full frozen intent with the supplied effect Ref and request digest, validates the frozen payload length/digest, and pins the actual bytes in the original preparation. A mismatch returns `control_conflict`; a proven protected-byte contradiction returns `integrity_conflict`; temporarily missing pins/continuity returns `state_unavailable`. An actual lifecycle transition does not change this immutable intent. No effect-specific current-read endpoint is needed.
+
+    ExternalConsentPreview/1 = {
+      intent:ExternalRequestBinding/1,
+      workspaceRef:D3.WorkspaceRef,
+      contributionBinding:ContributionBinding/1,
+      accountBinding:Binding<external_account>/1,
+      targetBinding:ExternalTarget/1,
+      requestPayload:FrozenEffectBytes/1,
+      idempotency:
+          {kind:"none"}
+        | {kind:"bounded_key", keyDigest:Sha256,
+           notBefore:D4.zoned_instant, notAfter:D4.zoned_instant,
+           proofDigest:Sha256}
+    }
+
+    ExternalConsentConfirmation/1 = {
+      key:StableControlKey/1,
+      intent:ExternalRequestBinding/1,
+      previewDigest:Sha256,
+      principal:Token,
+      clockEpoch:Token,
+      confirmedAt:D4.zoned_instant
+    }
+
+The preview copies the exact target ToolValue, operation, complete payload bytes, actual account and contribution from the frozen intent; it never accepts these values from a model description or a replacement preview argument. The bounded-key summary discloses its accepted validity window and SHA-256 digests of the canonical key and complete proof under D10-External-Key/1 and D10-External-Idempotency-Proof/1; it conveys no reusable key, proof bytes or credential. The full intent, including those protected bytes, stays pinned under the original request digest. Secret authentication bytes are injected only after approval through the existing trusted authentication channel and cannot alter the approved business target or payload. Payloads requiring hidden credential substitution inside business bytes are not admitted by this profile.
+
+The complete canonical ControlPreview is bounded by 16777216 bytes and any stricter entrypoint/transport budget; its complete external payload is at most 8388608 bytes. Exceeding either bound returns `budget_exceeded`, with no truncated review or confirmable partial response. This is one complete delivery, not a new paging protocol. The accepted trusted UI or attended CLI verifies every frozen byte length/digest and the entire canonical preview, renders all target components and payload through an inert exact representation, and makes the full representation available before enabling confirmation. Text control characters are escaped; binary content has a lossless byte view. Adapter summaries, model prose, a collapsed prefix, or a digest alone cannot satisfy complete presentation. If the surface cannot present this request completely, it cannot confirm it. This proves which complete request was made available and explicitly confirmed, not that a person mentally read each byte.
+
+Only a fresh explicit action by the current authenticated user in that trusted confirmation surface can establish the internal `ExternalConsentConfirmation/1`; the delegated Agent/tool/worker/connector cannot create it, call the trusted event channel, or substitute a JSON flag. The trusted surface supplies an authenticated user event tied to its current complete presentation; Core verifies current audience, complete-preview digest under D10-Control-Preview/1, exact original stable key/intent, trusted time, consent interval and current dependencies, then atomically records the fact in its distinct protected ExternalConfirmationRecord/1. This event is an internal confirmation operation of the accepted surface, not a public control body, new author request, or second success ledger. An ordinary authenticated script or a delegated execution session without that attended confirmation event cannot manufacture the fact. Platform acceptance must demonstrate that this event channel cannot be invoked by the executable contribution being approved.
+
+The immutable ControlPrepareBinding/2 stores ExternalConfirmationRequirement/1, while the distinct protected ExternalConfirmationRecord/1 in §8 stores the current confirmed fact. Confirmation never mutates the bound input. The fact principal equals the actual Workspace principal in the stable key, never a caller-provided grantor. New target/payload/intent, a different preview or principal, or changed dependencies cannot inherit confirmation. A caller may re-present the same still-valid preparation after interruption under the original trusted event rules. Historical result/current projections remain redacted and never return the full review or this protected fact.
+
+For an undecided external-consent commit, after current visibility/authority and stable-key/saved-result handling, the D10 adapter requires this exact currently eligible confirmation before forwarding the original Workspace request. A visible eligible preparation with no confirmed event remains awaiting the trusted user action in that surface; this is presentation state, not a new public response or Run error. Prepare still returns the original complete prepared response. There is no invented D10 Workspace-commit endpoint: the only public Workspace submit is the original D6 request, whose rejection below owns the formal result. Unprovable trusted confirmation/time/continuity prevents confirmation and remains `state_unavailable` on applicable D10 reads/preparation. Core associates the saved confirmation and full original preview with the original D6 control plan as a protected eligibility dependency; both planning CAS and final commit revalidate it, complete current request-disclosure/operation authority, consent time, unchanged intent and original dependencies. Directly submitting the returned D6 request cannot bypass the check. After D6 entry, original permission/business errors keep precedence; an otherwise eligible but absent or unusable confirmation returns the coordinated D6 `approval_unavailable/preflight`, leaves an existing planned decision recoverable, and creates no alternative approval or decision. Saved applied consent is replayed under current result authority before any fresh-confirmation gate; it is never asked to confirm again or converted into failure. The actual D6 producer and accepted trusted surface must support this association before this path is available.
+
 
 
 Result query:
@@ -793,7 +830,7 @@ Historical prepare/apply and current exact-record reads are deliberately separat
       commitOwner:"D6" | "D10"
     }
 
-The protected `ControlPrepareBinding/1.canonicalIntentBytes` continues to store complete canonical control intent B, including any nested planned author request A; stable-key conflict still compares the complete bytes. `intentDigest` is only SHA-256 of those saved bytes. Historical public result never returns A, complete B, generated control-submit request M, prepareToken, or planned-preview bytes/token. `operation` is exactly one of the seven ControlBody kinds; `ControlAffectedChange/1` and `ControlResourceUse/1` are the existing ControlPreview item shapes with unchanged fields, enums, sorting, uniqueness, Option, and Money semantics.
+The protected `ControlPrepareBinding/2.canonicalIntentBytes` continues to store complete canonical control intent B, including any nested planned author request A; stable-key conflict still compares the complete bytes. `intentDigest` is only SHA-256 of those saved bytes. Historical public result never returns A, complete B, generated control-submit request M, prepareToken, or planned-preview bytes/token. `operation` is exactly one of the seven ControlBody kinds; `ControlAffectedChange/1` and `ControlResourceUse/1` are the existing ControlPreview item shapes with unchanged fields, enums, sorting, uniqueness, Option, and Money semantics.
 
 Initial `d10_control_prepare` may return full `D10ControlPrepared/1`, including M, only after current disclosure authority covers complete B and any nested A scope. Earlier possession of A is not current read authority. Same-key prepare after an authoritative applied success returns the same `d10_control_result_applied` historical arm, never a fresh-looking prepared object. If applied-success existence or linkage is unprovable, return `state_unavailable`; never downgrade to prepared.
 
@@ -822,6 +859,8 @@ Initial `d10_control_prepare` may return full `D10ControlPrepared/1`, including 
 
 Workspace applied history is projected from the same authoritative D6 saved decision: `ownerReceipt` is the original immutable receipt bytes and `changes/usageChanges` are only its decision-linked D10 control effects. Deployment applied history is projected from the original `DeploymentControlDecision/1` plus the record/account deltas atomically linked to that decision by §8. Neither arm is a second success ledger.
 
+The direct successful response to `d10_host_control_commit`, both on its first atomic success and on exact successful replay, is exclusively the existing `D10ControlResult/1` applied arm: `{kind:"d10_control_result_applied",wireVersion:1,scope:<original deployment scope>,requestId:<original requestId>,prepared:<original ControlPreparedHistory/1>,applied:<original ControlAppliedHistory/1 deployment arm>}`. Core constructs it from that same saved decision and its linked preparation/effects; it never returns the internal `DeploymentControlDecision/1`, an empty acknowledgement, a fresh prepared object, or a second receipt. A true no-op still returns this applied arm with empty configuration `changes` and the actual saved `usageChanges`. A later r6 configuration does not replace any original r5 field. Immediately before delivery Core rechecks current disclosure authority over the complete public result: loss of that authority returns `D10ControlError.not_visible`; temporarily unprovable saved-success linkage returns `state_unavailable`, and a proven contradiction returns `integrity_conflict`. These delivery failures preserve the already committed decision and effects; retry/result lookup recovers the same applied history after the original gates, without rerunning the operation.
+
 Result resolution order is: current result-disclosure authorization → authority/custody/continuity → stable key. Missing/hidden is `not_visible`. If a prepare binding is proven and no applied success exists, return prepared. If an authoritative applied success exists, return applied. A D6 recorded rejection/terminal failure remains owned by D6 and is obtained by replaying the original D6 request; D10 result may return prepared history only after it proves that no applied success exists. If the presence/absence or linkage of an applied success is temporarily unprovable, return `state_unavailable` rather than downgrading to prepared. Proven decision/effect linkage contradiction is `integrity_conflict`.
 
 If r5 applied, the response was lost, and another valid request later changes the same record to r6, retry of the original request returns the saved r5 applied history after current disclosure authorization. It never substitutes r6.
@@ -846,14 +885,25 @@ Current state uses a different entrypoint:
 
 The generation-one current projections are closed as follows:
 
+    RunOrigin/1 =
+        {kind:"interactive"}
+      | {kind:"automation",
+         automation:Binding<automation>/1,
+         definitionRevision:Counter,
+         occurrenceKey:AutomationOccurrenceKey/1}
+
+`RunOrigin/1` is an immutable Core-created source fact shared by the protected Run record, `LeaseRunUse/1.origin`, and the public `run_state.origin` projection. The interactive arm has exactly `kind`; it requires no Automation, definition revision, occurrence claim, or sentinel/null substitute. The automation arm binds the actual automation, immutable definition, and complete occurrence claim that created this Run; its key's complete Automation Ref equals origin.automation.ref and the original claim's definitionRevision equals origin.definitionRevision; the key itself contains no definitionRevision. No caller/model chooses or changes an existing Run's origin. A current control revision may change without rewriting the historical origin binding; new execution still passes the current gates. A Run cannot switch arms to escape an existing occurrence claim or budget lineage.
+
+For an interactive Run, the Lease target is exactly that Run's full ControlRef. For an automation Run it is exactly the origin's Automation ControlRef. In both cases the authenticated principal, Workspace, activation, exact admitted Lease revision, finite limits, stop latch, and all existing admission/recovery rules apply. Only the automation arm reads or writes an occurrence claim. A contradiction between the protected Run, its admission, and its actual claim/Lease is `integrity_conflict` on control read and `control_conflict` before Run execution; unprovable continuity is `state_unavailable`. An otherwise visible Run with an unauthorized nested origin/Lease/stop binding returns `not_visible` as a whole; a hidden Automation never becomes an interactive projection. These revisions amend the unactivated candidate types; they do not authorize guessing an origin when decoding any actual historical record.
+
 | K | exact scope | exact `view` | config/domain/usage revision semantics |
 | --- | --- | --- | --- |
-| `automation` | `workspace` | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` is the control/lifecycle CAS; `definitionRevision` changes only semantic definition. usageRevision none. |
+| `automation` | `workspace` | `{kind:"automation_state",state:"enabled"|"disabled"|"archived",definitionRevision:Counter,subscriptionGeneration:Counter,lowerOriginalStartUtcSeconds:CanonicalDecimal,definition:AutomationSpec/1,lease:Binding<lease>/1,approval:Option<Binding<approval>/1>}` | `binding.revision` is the control/lifecycle CAS; `definitionRevision` changes only semantic definition. usageRevision none. |
 | `lease` | `workspace` | `{kind:"lease_state",state:"active"|"revoked"|"archived",principal:Token,target:ControlRef<automation|run>/1,spec:LeaseSpec/1,runsConsumed:Counter}` | `binding.revision==leaseRevision`; usageRevision some and advances only when a new `LeaseRunUse/1` consumes the lineage. Normal usage never stales an already-admitted Run's leaseRevision. |
 | `approval` | `workspace` | `{kind:"approval_state",state:"active"|"revoked"|"archived",grantingPrincipal:Token,automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,spec:StandingApprovalSpec/1,reserved:Counter,consumed:Counter,releasedTerminal:Counter}` | `binding.revision==approvalRevision`; usageRevision some for ApprovalUse reserve/consume/released_terminal only. Revocation/archive advances approvalRevision without resetting usage. |
 | `planned_approval` | `workspace` | `{kind:"planned_approval_state",grantingPrincipal:Token,originalRequestDigest:Sha256,previewSemanticDigest:Sha256,lease:Binding<lease>/1,activationBinding:ActivationBinding/1,notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. No author request/preview bytes are exposed here. |
 | `external_approval` | `workspace` | `{kind:"external_approval_state",grantingPrincipal:Token,intent:ControlRef<external_effect>/1,requestDigest:Sha256,resourceGrants:[Binding<grant>/1],notBefore:D4.zoned_instant,notAfter:D4.zoned_instant}` | binding revision is its approvalRevision; usageRevision none. |
-| `run` | `workspace` | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",automation:Binding<automation>/1,definitionRevision:Counter,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | binding revision advances on durable Run/lifecycle transition. usageRevision none; maxRuns consumption belongs to Lease usage. |
+| `run` | `workspace` | `{kind:"run_state",lifecycle:"active"|"archived",executionState:"queued"|"running"|"awaiting_confirmation"|"blocked"|"cancelling"|"reconciling"|"completed"|"failed"|"cancelled",origin:RunOrigin/1,lease:Binding<lease>/1,admission:{kind:"not_admitted"}|{kind:"admitted",leaseId:Uuid,leaseRevision:Counter,admittedAt:D4.zoned_instant},stop:Binding<stop>/1}` | binding revision advances on durable Run/lifecycle transition. usageRevision none; maxRuns consumption belongs to Lease usage. |
 | `workspace_budget` | `workspace` | `{kind:"workspace_budget_state",limits:BudgetCaps/1}` | binding revision is limits CAS. usageRevision none; actual cost usage remains in grants/accounts/reservations rather than a second budget ledger. |
 | `activation` | `workspace` | `{kind:"activation_state",current:Boolean,activation:ActivationBinding/1,packages:[ContributionBinding/1],trust:Binding<trust>/1}` | `binding.revision==activation.activationGeneration`; successor activation makes earlier record `current:false` without deleting it. usageRevision none. |
 | `deployment_policy` | `deployment` | `{kind:"deployment_policy_state",policy:DeploymentControlPolicy/1}` | `binding.revision==policy.revision`; usageRevision none. |
@@ -902,7 +952,25 @@ Core internally stores:
         prepareToken:Token
       }}
 
-    ControlDependencies/1 = {
+    D10WorkspaceReadDependencies/1 = {
+      workspaceRef:D3.WorkspaceRef,
+      commitDomain:D6.CommitDomain/2,
+      observationScope:D6.ObservationScope/2,
+      sourceInputs:[{
+        entityRef:D3.EntityRef,
+        observation:D6.SourceObservation/1,
+        role:"before" | "dependency"
+      }],
+      dependencyProof:D6.DependencyProof/2,
+      registryReads:[{
+        binding:D4.RegistryBinding/1,
+        snapshot:D4.RegistrySnapshot/1,
+        snapshotPin:D6.PinRef/2
+      }],
+      evidencePins:[D6.PinRef/2]
+    }
+
+    ControlDependencies/2 = {
       configBindings:[Binding<K>/1],
       usageBindings:[{
         ref:ControlRef<lease|approval|grant|cost_account>/1,
@@ -911,23 +979,47 @@ Core internally stores:
       authorityProof:Token,
       authorizationGenerations:[Token],
       stopRefs:[ControlRef<stop>/1],
-      sourceOrRegistryBindings:[Sha256]
+      workspaceReads:Option<D10WorkspaceReadDependencies/1>,
+      recordPins:[D10ControlRecordPin/1],
+      controlRanges:[D10ControlRange/1]
     }
 
-`ControlDependencies/1` is the complete internal dependency set Core derives from actual authorized reads and is never caller input. Arrays are sorted/unique by complete canonical bytes. A usage binding exists only for lease maxRuns lineage use, Standing Approval count use, ResourceUseGrant cumulative use, or actual cost-account held/spent use; it never substitutes for that record's configuration Binding. sourceOrRegistryBindings stores binding digests owned by existing source/Registry contracts and creates no new author or Registry token.
+ControlDependencies/2 contains the complete dependencies actually read by Core, never caller assertions or only binding digests. workspaceReads is some for Workspace control and none for deployment-only control; a deployment body cannot smuggle in an author read. The Workspace fields equal the actual sourceInputs, observationScope and DependencyProof of this plan. The final observationProof is constructed only on the outer D6 PreparedIntent/2 from these exact inputs and pins, and is never embedded back into ownerInput; no ObservationProof/2 type or self-cycle exists. sourceInputs uses the original D6 order, uniqueness, roles and current-observation/pin rules. Each Registry entry preserves the complete actual RegistrySnapshot/1 and its exact binding, with an artifact PinRef/2 retaining those canonical bytes; Core validates all original D4 ownership/completeness/schema rules. An operation with no Registry use has an empty array, not a fake Registry binding. Array bindings are canonical sorted/unique by full Ref, Registry reads by full binding, and pins by pinToken. Authorization-generation tokens retain their original owner semantics and are canonical sorted/unique. Each array has at most 4096 items and complete canonical dependency metadata has at most 16777216 bytes; pinned source/payload bytes additionally obey their original budgets. Overflow is budget_exceeded, never truncation.
 
-    ControlPrepareBinding/1 = {
+The D6 producer includes each real D6 source/Registry/authorization/range dependency under its actual DependencyKey/2 kind and stamp, with the required controlInputs correspondence and pins. D10 config/usage/stop dependencies remain their complete closed owner values inside the canonical ownerInput of the same InputDescriptor. They are compared against the actual protected records in the same planning/seal transaction; neither a digest nor an unrelated execution_resource key stands in for that CAS. This defines no fifteenth DependencyKey kind. The complete referenced configuration/history, independent usage state, authority evidence and pins remain retained with the preparation, and after planning for its full original recovery lifetime. Missing history never becomes an empty dependency set. Only lease maxRuns, approval counts, grant cumulative use and actual account held/spent use have the listed independent usage bindings; they never replace configuration bindings.
+
+    ExternalConfirmationRequirement/1 =
+        {kind:"none"}
+      | {kind:"external_consent",
+         key:StableControlKey/1,
+         intent:ExternalRequestBinding/1,
+         previewDigest:Sha256,
+         principal:Token,
+         notBefore:D4.zoned_instant,
+         notAfter:D4.zoned_instant}
+
+    ExternalConfirmationRecord/1 = {
+      requirement:ExternalConfirmationRequirement/1,
+      revision:Counter,
+      current:Option<ExternalConsentConfirmation/1>
+    }
+
+    ControlPrepareBinding/2 = {
       key:StableControlKey/1,
       canonicalIntentBytes:Bytes,
       allocatedControlRefs:[ControlRef<K>/1],
       originalCommitRequest:PreparedCommitRequest/1,
       immutablePreview:ControlPreview/1,
-      dependencyPins:ControlDependencies/1
+      confirmationRequirement:ExternalConfirmationRequirement/1,
+      dependencyPins:ControlDependencies/2
     }
+
+The external requirement exists exactly for the external consent body. Its key, actual initiating principal, complete frozen intent and preview digest equal the original preparation; notBefore/notAfter exactly equal the original ConsentSpec interval and satisfy notBefore < notAfter. It is immutable before the original request is generated. Other bodies require none and create no confirmation record. Each external requirement has exactly one protected record addressed by its full stable key; initial revision is 1 and current is none. Only the trusted attended event in §7 may CAS current to a verified matching confirmation. A duplicate identical fact is a no-op; re-presentation under a new valid trusted event may replace an ineligible fact with checked revision+1 while retaining every historical fact referenced by planned/recovery. Neither operation changes the requirement, original request, preview, InputDescriptor or dependency bytes. MAX fails closed with budget_exceeded. The planning/seal gate reads the currently eligible matching fact under this protected record's CAS; the fact is additional live eligibility, not a mutable member of the frozen input. A missing/unusable fact follows approval_unavailable only after the original owner authorization/business gates, while saved-decision replay precedes fresh confirmation.
+
+The D6 d10_control/1 producer binds the complete immutable original intent, allocated refs, actual before/proposed effects, preview, ControlDependencies/2 and fixed confirmation requirement. It never embeds the generated originalCommitRequest in its own descriptor: the descriptor is finalized first, then D6 produces that request, and ControlPrepareBinding/2 atomically saves the exact association before delivery. Nested original author request A in a planned-consent body remains legitimate input; the generated control-submit M is only the outer association. No consumer may hash M into the descriptor that produces M or insert a later confirmation into the InputDescriptor. True saved /1 records retain their original decoder and exact recovery; this /2 contract does not relabel their bytes.
 
 canonicalIntentBytes is the complete D3-CJ/3 canonical byte sequence after successful closed decode with domain tag D10-Control-Intent/1. A digest may index it but conflicts compare complete bytes. The binding stabilizes preparation and lookup and is not a second author decision.
 
-ControlDependencies/1 internally and exactly contains the config bindings, usage bindings, authority/fence/custody proof, authorization generations, stop refs, and required source/Registry bindings actually read by Core. The client cannot assert completeness.
 
 The shared order is fixed:
 
@@ -945,6 +1037,126 @@ If another valid operation changes an object r5→r6 after the original r5 opera
 A failed prepare/commit creates no applied decision. An existing prepare binding may resume the same exact intent after transient state_unavailable. Changing expected revision, body, or target requires a fresh requestId. Dedup bindings, terminal proof, and planned/unknown/uncertain pins cannot be TTL-deleted so that an old requestId executes again.
 
 Configuration revision and usageRevision are distinct. Checked increment at Counter maximum returns budget_exceeded and never wraps or resets. Retired IDs/incarnations are never reused, preventing ABA.
+
+### 8.1 Complete protected record images and fixed control effects
+
+The following are internal Core types, not public read responses, new ControlRecordKind values, or a second ledger. A public ControlCurrentView alone is never a complete before-image. The current undeployed candidate closes its protected representation as follows; an actually saved older record keeps its original decoder and recovery obligations.
+
+    D10ControlRecordImage/1 = {
+      binding:Binding<K>/1,
+      scope:Scope/1,
+      usageRevision:Option<Counter>,
+      view:ControlCurrentView<K>/1,
+      supplement:D10ControlSupplement/1
+    }
+
+    D10ControlSupplement/1 =
+        {kind:"none"}
+      | {kind:"automation", subscription:ScheduleSubscription/1,
+         stop:Binding<stop>/1, creator:Token}
+      | {kind:"run", createdBinding:Binding<run>/1,
+         principal:Token, fixedBudget:BudgetCaps/1,
+         invocation:Option<AutomationInvocation/1>,
+         admission:Option<LeaseRunUse/1>,
+         authorSteps:[D10AuthorStepResponsibility/1]}
+      | {kind:"planned_approval", originalRequest:D6.d6_commit_request/2,
+         grantedAt:D4.zoned_instant, clockEpoch:Token}
+      | {kind:"external_approval", intent:ExternalEffectIntent/1,
+         requirement:ExternalConfirmationRequirement/1}
+      | {kind:"activation", registrySnapshot:D4.RegistrySnapshot/1,
+         registryEvolution:Option<D4.RegistryEvolutionProof/1>}
+      | {kind:"reservation", attribution:CostBudgetAttribution/1,
+         settlements:[CostSettlementDecision/1]}
+      | {kind:"external_effect", intent:ExternalEffectIntent/1,
+         attempts:[D10ExternalSendRecord/1]}
+      | {kind:"stop", owner:StopOwner/1,
+         latch:ExecutionStopLatch/1, receipt:Option<D10EmergencyStopReceipt/1>}
+
+The supplement tag must equal K for the eight listed kinds; all other K require none. The view still uses exactly §7's closed shape and supplies every remaining configuration/lifecycle/usage member. Scope, identities, revisions and all overlapping fields must agree. run.createdBinding is its immutable creation binding, fixedBudget is the budget frozen there, and invocation is some with the original Automation invocation only for automation origin and none for an interactive Agent Run; origin comes from actual creation, never a current Automation substitution. A not-admitted Run has admission=none; an admitted Run carries its complete original LeaseRunUse. Historical author links are complete and unique by stepId. Planned approval retains original A, whose complete canonical bytes produce the public digest. External approval retains the exact full intent and fixed confirmation requirement. The actual confirmation fact and revision consumed at seal remain in their separately protected confirmation record and saved decision association, never in this immutable proposed image. A full stop latch, including safety sequence, is retained internally. Secret images contain only the original secret-version reference: the trusted secret store retains that immutable version separately; no image or control intent contains secret bytes.
+
+activation.current is a cut-specific projection. The actual selector is D10ActivationSelector/1 = {workspaceRef:D3.WorkspaceRef, revision:Counter, current:Option<Binding<activation>/1>}. The selector has one permanent identity per Workspace/control store, is compared under the same transaction, and advances once when selecting a successor; historical activation images and generations are not rewritten. The initial none is legal only with protected proof that no activation was ever selected. automation.subscription.activeDefinition points to the image's proposed binding; this finite value is not an embedded image and creates no reference cycle.
+
+    D10ControlRecordPin/1 = {
+      image:D10ControlRecordImage/1,
+      pin:D6.PinRef/2
+    }
+
+The pin is artifact with recovery or approval_money retention, containing exactly the D3-CJ/3 canonical image bytes prefixed by UTF-8 D10-Control-Record/1 and NUL. Its byteLength and bare SHA-256 must match those bytes; D10's prefixed Sha256 display does not change D6's digest decoder. Core verifies the original typed record against protected store provenance before minting a pin. A pin does not authenticate caller-authored bytes. Missing history is state_unavailable; a proven conflicting image is integrity_conflict, after disclosure gates. Every actual config/usage/stop binding in ControlDependencies has an exact image/pin; multiple historical revisions/use cuts may coexist and are ordered by complete Ref, configuration revision, optional usage revision, then complete canonical image bytes. Same protected-cut contradictions are rejected rather than hidden by equal revisions. Pins neither grant public disclosure nor make historical state current.
+
+    D10ControlRange/1 =
+        {kind:"records", scope:Scope/1, kinds:[ControlRecordKind/1],
+         epoch:Token, revision:Counter, members:[ControlRef<K>/1]}
+      | {kind:"cost_lineage", key:CostLayerKey/1,
+         epoch:Token, revision:Counter,
+         reservations:[ControlRef<reservation>/1]}
+      | {kind:"occurrences", automation:ControlRef<automation>/1,
+         epoch:Token, revision:Counter,
+         records:[AutomationOccurrenceRecord/1]}
+
+These are protected owner-specific range values inside the same InputDescriptor.ownerInput, not new D6 DependencyKey kinds or caller-supplied proof. A records range enumerates all records, including retained non-current states, for the exact scope and explicit nonempty sorted unique kind set. Cost ranges cover every reservation whose original attribution contains that exact cumulative key; occurrence ranges cover all generations of the exact Automation, including armed and handled states. Epoch/revision comes from the real control store's continuously maintained range fence. Every matching insertion, removal or relevant update advances that fence in the same transaction, including transitions into or out of a range; MAX refuses new ordinary work, never wraps. A complete same-cut scan proves positive and negative membership, including empty. An index alone never proves it. Transactions compare the fence and complete values; a racing matching insertion cannot escape CAS. No prefix, latest row or selected page is complete. Missing continuity pauses; known changed frozen dependencies conflict. Each array is at most 4096 entries and canonical metadata at most 16 MiB; exceeding either fails the complete prepare without partial effects.
+
+    D10ControlEffectPlan/1 = {
+      kind:"d10_control_effect_plan", version:1,
+      changes:[{
+        before:Option<D10ControlRecordImage/1>,
+        after:D10ControlRecordImage/1
+      }],
+      activationSelector:Option<{
+        before:D10ActivationSelector/1,
+        after:D10ActivationSelector/1
+      }>,
+      recordPins:[D10ControlRecordPin/1],
+      registryChange:Option<{
+        before:{snapshot:D4.RegistrySnapshot/1,binding:D4.RegistryBinding/1},
+        after:{snapshot:D4.RegistrySnapshot/1,binding:D4.RegistryBinding/1},
+        evolution:D4.RegistryEvolutionProof/1,
+        beforePin:D6.PinRef/2, afterPin:D6.PinRef/2
+      }>
+    }
+
+Changes are canonical sorted/unique by after.binding.ref. Existing records require the complete original before; create requires none, a protected never-used allocated Ref, and a complete negative range proof. A true no-op is omitted. No delete arm exists. Each changed config/lifecycle revision is checked old+1 (creation=1); usage-only changes retain config revision and advance only the actual usage revision. All unchanged usage, liabilities, historical identity and non-target configuration are preserved. recordPins retains the full read images, required original external intents, planned A, Registry images and original budget configuration, not only rows changed. The plan is deterministically derived from the closed body, trusted principal, allocated refs and complete same-cut inputs. Preview affected/resourceUses exactly projects these real effects; it is not the write plan. Activation alone may carry the selector pair; all other bodies require none. Workspace body adapters may create/update only their listed workspace records and associated actual activation/Registry control effects. They never use this type to apply deployment_put, cost_reconcile, secrets, arbitrary callbacks or author-source edits. Existing workspace-qualified state actions on deployment records still follow §7's real H/domain dispatch, never this Workspace adapter.
+
+Planning saves this fixed plan and dependency pins with the original D6 plan. Seal compares each unwritten control before-image and range fence again, then publishes the exact after-images, selector, deltas and D6 decision link in one P transaction. No protected control after-image is exposed or installed early during portable file installation. A recorded/rejected/terminal author outcome cannot masquerade as a D10 applied history. Once sealed, later config changes never replace the saved plan or its original result.
+
+registryChange is some exactly when activation actually changes the Workspace portable Registry. Both pins are exact portable_metadata Registry component images authenticated under the actual D4 owner; the complete before/after snapshots, bindings and evolution must match the corresponding activation image and real Registry dependency. It uses the existing {kind:"registry",workspaceRef} component key. Such a change is complete/strict/portable under D6 §4.3 and receives one actual ChangeId/CP3, no source/H increment. With unchanged Registry, registryChange is none and a P-only Catalog/selector update is control_only. Other bodies require none. The immutable full canonical activation intent supplies the proposed Registry to the authorized control preview; no hidden historical record is publicly disclosed by the internal effect plan.
+
+### 8.2 Exact Run admission and author-approval responsibility
+
+    LeaseRunUse/1 = {
+      lease:Binding<lease>/1, run:ControlRef<run>/1,
+      origin:RunOrigin/1, admissionClockEpoch:Token,
+      admittedAt:D4.zoned_instant
+    }
+
+    ApprovalCountReservation/1 = {
+      decisionKey:D6.DecisionKey/2,
+      approval:Binding<approval>/1,
+      state:"unreserved"|"reserved"|"consumed"|"released_terminal"
+    }
+
+    ApprovalUse/1 = {
+      approval:Binding<approval>/1, run:ControlRef<run>/1,
+      stepId:Counter, request:D6.d6_commit_request/2,
+      decisionKey:D6.DecisionKey/2,
+      preparedBindingToken:Token,
+      previewSemanticDigest:Sha256,
+      delegationBinding:Binding<lease>/1,
+      activationBinding:ActivationBinding/1,
+      count:ApprovalCountReservation/1,
+      budgetReservations:[ControlRef<reservation>/1]
+    }
+
+These replace the illustrative untyped listings in CANDIDATE; they are Core-owned internal values, not additional submit members. Complete ControlRef identities include storeIncarnation. LeaseRunUse is unique by full Run Ref, and originates only in the first protected-step admission CAS. It equals Run origin, exact admitted Lease and trusted admission time. Its creation and lease usage+1 are atomic. A later step or original planned recovery restores this same use without testing remaining>0 or consuming again; current exact Lease config, time, authorization, activation and stop still apply. Lost/unknown admission is unavailable, never a new admission. Claim/arming/queue creation consumes no Run use.
+
+LeaseRunUse prose aliases are derived, not additional members: leaseId=lease.ref.id, leaseRevision=lease.revision and runId=run.id. Public run_state.admission projects exactly these original values and admittedAt; it does not replace the complete protected record. The storeIncarnation and Ref kinds are never discarded when comparing identity.
+
+The author preview digest used by ApprovalUse and planned ConsentSpec is SHA-256 with UTF-8 domain D10-Author-Preview/1, NUL, then D3-CJ/3 of the complete original preview EffectManifest/2, including every item and DecisionKey. At each EffectBytes slot identified by the D7 closed typed decoder, replace the transport object with exactly {encoding,byteLength,payloadDigest:Sha256}, using the digest of that slot's complete exact pinned payload. The exhaustive typed traversal is source_change.before/after.bytes for each present/proposed SourceImage; conditional_source_change.before.bytes and result.bytes; semantic_extension.bytes; workspace_bootstrap.bytes; field_change.before and after; conflict_branch_source.bytes; and each canonical_plan.payloads element's before, selected and result. An absent SourceImage has no byte slot. The other item variants have no EffectBytes slot. Unknown variants reject; traversal never recursively guesses from member names or rewrites tokens inside decoded payloads. payloadDigest is ordinary SHA-256 over the complete exact payload bytes, without a transport handle or extra digest prefix. Immutable preparationBinding and usage-guard tokens inside original plans/requests remain; only this delivery epoch's transport handles are replaced. Every other member is unchanged. This is an internal deterministic digest projection, not a new public EffectBytes format; handleToken, cursor and delivery epoch are excluded. Core validates all bytes/lengths first and retains the complete original semantics/pins for exact comparison, not merely the digest. Reopening a planned preview under a fresh qualified delivery epoch therefore reproduces the same digest without reviving old tokens or changing the plan.
+
+ApprovalUse is unique by the complete original DecisionKey, and its request derives exactly that key. The protected token must select the actual original D7 PreparedActionBinding/3 for that request; the semantic digest binds its immutable complete preview, independent of delivery tokens. Core retains the actual prepared record, complete footprint, source/dependency pins and original rule image, verifies the two §7 single-field branches, and creates the use from those facts. A field read or caller JSON cannot synthesize it. No second planToken field, free footprint callback, or duplicate author request is introduced. The count's key/approval equal the outer use. It is mutable protected eligibility stored beside the immutable prepared input, never hashed back into that input.
+
+For unseen, planning under the real Authority Store serialization checks current qualification and reserved + consumed < maxSuccessfulCommits, then atomically saves the original plan and changes unreserved→reserved. Concurrent uses of the last slot have at most one winner. The same P seal changes reserved→consumed, including a true raw no-op. Saved replay does neither. Only an authoritative original terminal abort after all installation remnants are resolved changes reserved→released_terminal in that abort transaction. Other causes retain the reservation. Checked usage counters and their usageRevision advance with each real transition; the complete use set proves their totals, and no configuration revision resets them. Cost holds remain independent.
+
+A protected supplemental planned approval is exactly its complete planned_approval record image. It binds original request A and immutable preview digest, original Lease/activation, granting principal and finite interval. Recovery may use it instead of a now-ineligible standing rule only after current authorization, complete original preview, source/business, Lease, clock and stop gates pass. It does not change the plan or release its standing reservation; final success consumes that original reservation. No arbitrary new approval is added to the immutable descriptor. Every eligibility record is found through the original request's protected association, and its exact current revision is checked at planning and seal; no client can bypass it by submitting the returned D6 request directly.
 
 ## 9. Deployment values and evidence
 
@@ -1033,7 +1245,7 @@ Only H may stage. secretBytes never enter the ordinary control canonical intent,
 
 Staging has its own same-principal/store/requestId stable key. The trusted secret store replays the original ticket only when it can prove the exact same secret input. The ordinary database transaction publishes only the immutable secret version referenced by the ticket.
 
-DeploymentControlDecision/1 is the host-domain success record:
+DeploymentControlDecision/1 is the protected internal host-domain success record; its public projection is the §7 applied response:
 
     DeploymentControlDecision/1 = {
       key:StableControlKey/1,
@@ -1066,6 +1278,43 @@ Only an atomically successful commit saves a decision. Preflight/authorization/C
 
 
 Each `CostReservation/1` belongs to exactly one billable `attemptId`, one actual `cost_account`, one grant, one pricing binding, and one currency. Run/Lease/Automation/Workspace/deployment limits checked during the same admission are layered ceilings/projections, not additional actual accounts for this reservation, and the same cost is recorded once. If one operation truly creates separately attributable charges against multiple actual accounts, it creates separately attributable attempts/reservations/evidence for those accounts; any required group admission is atomic over those reservations without turning one reservation into a multi-account object.
+
+Every billable attempt, including model calls, ordinary or read-only tools, network requests and reconciliation, has exactly one protected `CostBudgetAttribution/1` per real reservation. Core derives it from the actual authorized Run and original reservation, never from a model, a display name, an audit summary or a caller-supplied billing owner. The same admission transaction saves it with the reservation before any billable execution. It is immutable attribution attached to that one charge, not a second account, success ledger, or new public reservation payload.
+
+    CostBudgetAttribution/1 = {
+      reservation:ControlRef<reservation>/1,
+      attemptId:Uuid,
+      workspaceRef:D3.WorkspaceRef,
+      origin:RunOrigin/1,
+      layers:[CostBudgetLayer/1]
+    }
+
+    CostBudgetLayer/1 =
+        {kind:"run", binding:Binding<run>/1, ceiling:Money/1}
+      | {kind:"lease", binding:Binding<lease>/1, ceiling:Money/1}
+      | {kind:"automation", binding:Binding<automation>/1,
+         definitionRevision:Counter, ceiling:Money/1}
+      | {kind:"workspace", binding:Binding<workspace_budget>/1, ceiling:Money/1}
+      | {kind:"grant", binding:Binding<grant>/1, ceiling:Money/1}
+      | {kind:"account", binding:Binding<cost_account>/1, ceiling:Money/1}
+
+The array is exactly run, lease, automation if and only if the real Run origin is automation, workspace, grant, account, in that order with no duplicates. Interactive Runs have five layers and Automation Runs six. `reservation` and `attemptId` equal the original reservation; grant/account bindings exactly equal its grant/account. All ceilings use its currency. Workspace and origin equal the protected Run and original LeaseRunUse; the Lease is the Run's actual admitted binding. The automation layer addresses the same Automation Ref as origin, but its binding and definitionRevision identify the budget configuration actually checked at this attempt's admission, which may be a later configuration than the immutable originating definition. This never rewrites the Run's original invocation/claim/approval. The workspace layer addresses the one permanent workspace_budget identity for this Workspace/control domain. Required historical configuration values and their exact cap selection are retained with the attribution; a current object cannot substitute for a missing original binding.
+
+Core freezes finite Run BudgetCaps in the original protected Run record when creating it: an Automation Run takes its originating immutable Automation definition's BudgetCaps; an interactive Run takes its Run-targeted Lease's BudgetCaps. This first profile has no independent runtime Run-budget expansion/reset operation. The run layer binding is the actual Run creation binding that owns this immutable budget fact; later execution/lifecycle revision changes do not invalidate it or reset use. Every attempt also checks the current eligible Lease, current Automation budget if applicable, current Workspace budget, grant and actual account. An increase elsewhere cannot evade the fixed Run cap, while a current narrower layer still restricts new attempts. These checks confer no new Lease/approval authority and do not unblock an original planned request whose other current gates fail.
+
+The cumulative key for each layer is exactly its kind, complete owner ControlRef, complete actual cost-account ControlRef and currency. Compare complete canonical values, including storeIncarnation. Configuration revision, Automation definitionRevision, grant renewal, requestId, list position and process/cache epoch are not cumulative identity. The account layer covers all reservations for that actual account, across Workspace and grant boundaries; the grant layer covers its original grant; other layers select only reservations whose saved attribution contains that exact owner key. Thus two Automations sharing a grant do not share an Automation ceiling, but still compete for the same grant/account and applicable Workspace ceilings.
+
+There is no periodic reset in this generation. Budget edits, new definitions, enable/disable, archive, restart and grant replacement preserve original held/spent. Raising a cap adjusts the same lineage; lowering it below that lineage's proven spent plus held is rejected with management budget_exceeded. Removing an account from a BudgetCaps list disables new attempts through that layer and preserves all old liabilities; adding it again compares the same prior totals. Creating a real new Run, Lease or Automation gives that new non-reused owner its own layer but never moves old reservations, and common Workspace/grant/account layers continue to count them. workspace_budget identity is created once per Workspace/control domain and cannot be replaced to reset usage. A cost_account's currency is immutable after creation; a different currency requires a genuinely new account with separately retained original liabilities, not implicit FX or renaming.
+
+All monetary projections are defined from a complete authoritative reservation/attribution cut: reserved and uncertain each contribute the full upperBound to held, settled contributes actual to spent, released contributes zero. No other state, partial bill or temporary missing record implies zero. Before admitting a new reservation, checked arithmetic must prove spent + held + the proposed bound does not exceed every actual applicable current cap, together with all existing per-attempt/count/non-monetary limits. If one actual operation needs multiple separately attributable accounts, the entire required group passes in one admission transaction or none is admitted; each charge remains independently attributable once.
+
+Admission, budget configuration changes, and settlement use the same actual Authority Store serialization boundary. Admission compares all relevant configuration bindings, the Run's immutable budget provenance, original grant/account usage revisions, stop/current authority, and the complete reservation/attribution membership cut, then atomically writes reservation, attribution, actual held/count deltas, retained evidence and audit. A range/phantom proof or the actual shared account usage fence must cover every concurrent insertion affecting these keys; checking only previously returned rows is insufficient. Concurrent attempts for the last capacity have at most one winner. Run/Automation/Workspace monetary projections need no new independent usageRevision or balance ledger: indexes are rebuildable and must be verified against the same protected facts. A deployment with no such single atomic boundary cannot advertise this admission path as available or combine independent database successes into one success.
+
+An existing attempt restores its original reservation and complete attribution before any new-admission branch. Unknown existence/continuity never creates a replacement attribution or attempt. Every original configuration/pin and unresolved liability remains retained through Run termination, Lease expiry, grant retirement, authority recovery, stop and ordinary GC. Retained proof/compaction may replace storage only if it still proves exact per-key held/spent, original reservation/settlement deduplication and every unresolved responsibility; it cannot turn prior spending into zero or rely on current Run names/configuration.
+
+Settlement recovers the original complete attribution before applying the original evidence/revision CAS. In the same transaction it removes upperBound from held on every saved layer key and, for settled, adds the one actual amount to spent on those same keys; released adds no spent. It updates the original grant/account projections and all derived layer indexes or their invalidation, evidence and audit atomically. Current configuration or definition changes do not reassign this charge; a later configuration of the same owner/account automatically sees the updated same-lineage totals. Old configuration/grant eligibility to start work is not required for evidence-based reconciliation, while the reconciler still needs actual current authority for the original account. Missing attribution/continuity returns state_unavailable and retains the full liability; proven protected contradictions return integrity_conflict on control read/settlement and the applicable control_conflict before Run execution, after ordinary visibility gates. Hidden Run/Lease/Automation details are not disclosed through the reservation projection or error.
+
+Exact settlement replay does not remove held or return capacity twice. Non-final evidence leaves uncertain at the full bound; reliable final 20 after uncertain 90 changes every original applicable layer by held -90 and spent +20, returning 70 once. Actual above upperBound follows the existing overcharge/freeze rule and does not increase a ceiling through reconciliation. Author abort, TTL, cancellation or terminal Run state never substitutes for never-started/final-bill evidence. The public reservation_state still returns only the original CostReservation shape; this protected attribution is not automatically exposed to someone who can merely inspect the account.
 
 `actual` is some only when state=settled and is none in every other state.
 
@@ -1184,19 +1433,17 @@ Linearization rules:
 
 The stop safety transaction is a specialized closed write in the same managed Authority Store, not D10ControlPrepare and not a D6 author transaction. The coordinated D6 amendment only defines how D6 final/planned author work consumes the latch and returns `execution_stopped/preflight` or the original authoritative-abort result. Stop never fabricates ordinary control history, never rolls back committed author facts or an already-sent external effect, and never releases cost merely because execution was stopped.
 
-## 12. D6 Policy/2 and bootstrap profile/3 proposal boundary
+## 12. Current Policy/3 and bootstrap profile/3 coordination
 
-Fixed-S Policy/1 decoder, existing Policy/2 capabilities, and all saved policy/decisions remain unchanged. R05 proposed Policy/2 adds closed no-argument capability d10_control_self at workspace scope only. It is implied by no Field/source/policy_admin capability and implies nothing else.
+Current D6 Control owns Policy/3. This joint candidate adds the closed no-argument capability d10_control_self only at workspace scope to that current version. Fixed S Policy/1/2 decoders, capabilities, scope meanings and all actual saved policy/decisions remain unchanged. The new capability is implied by no Field/source/policy_admin capability and implies none of them.
 
-Under the amendment, fixed-S profile/2 “all non-Field capabilities” is frozen to the set present in S:
+Fixed S profile/2 “all non-Field capabilities” remains exactly `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`. Later capabilities never enter an existing profile/1 or profile/2 automatically.
 
-The frozen set is `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`.
+The current new d6_bootstrap_profile wireVersion=3 keeps the original member names kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope. It explicitly creates initialPolicy.version=3. Its creator Workspace grant is the frozen profile/2 set above plus the current D6 additions `replica_register, replica_retire, conflict_read, conflict_resolve, execution_custody_admin, structure_state, portable_frontier_state` and d10_control_self, plus the original complete target-Registry Field read/write rule. deny is empty; new later Registry Fields gain no automatic grants. Current D6 owns each capability's actual scope/meaning, including CommitDomain-scoped commit_sequence_state in Policy/3.
 
-profile/2 never automatically gains later d10_control_self.
+Only an explicit issuer-profile update by current administer_issuer selects profile/3 for subsequently issued families. Existing family/profile copies, replacement, saved decisions, replay/continue/failover retain their actual original decoder and never recompute grants or restore creator authority. An existing Workspace obtains the new capability only through an explicit current policy_admin transaction that installs a complete valid Policy/3. A Field-authorized principal cannot self-grant it.
 
-Add d6_bootstrap_profile wireVersion=3 with the same member shape as S profile/2. profile/3 still creates Policy/2; the initial creator grant equals the frozen set above plus d10_control_self, plus the original S rule that derives all target-Registry Field read/write grants. deny remains empty.
-
-Only an explicit issuer-profile update by current administer_issuer affects subsequently issued families. Existing families keep their stored profile/1 or profile/2 copies; replacement, WorkspaceBootstrapPlan, saved decisions, replay/continue/failover never recompute or add grants. An existing Workspace gains d10_control_self only through an explicit current policy_admin modification under the original Policy-management path. A Field-authorized principal cannot self-grant it.
+D6 Control §10.2 now defines the complete WorkspaceBootstrapPlan/2 producer with original member responsibilities and explicit wireVersion=2, carrying profile/3 and Policy/3; it never puts an undeclared Policy/3 inside /1. D7's complete symbolic/current bootstrap projection must consume that real owner version. Until those actual owner afterimages are jointly complete and accepted, this is a bounded coordination requirement, not a claim that the new bootstrap path already exists or is product-available. Original profile/1/2 and actual saved BootstrapPlan/1 recovery remain available under their original contracts.
 
 ## 13. Public capability and first-public D6 error compatibility
 
@@ -1236,3 +1483,219 @@ At minimum verify:
 10. Calendar/Library/People/Organizations PackageId, module Contribution, schema Contribution, and D4 namespace/Facet map one-to-one without type conflation; a same-named third-party package gains no first-party D4 owner.
 11. Design accepted but release not shipped, Mobile unsupported, policy denied, component combination disallowed, or provider unhealthy still yields the real D1 unavailable result.
 12. After a caller loses result-disclosure authority, same-key result query is not_visible while the saved decision remains preserved.
+
+Scheduling coordinates and missedWindowSeconds reuse the exact CanonicalDecimal string grammar with the coordinate origin/key budget and positive finite-duration bounds in §16 respectively; they are not ToolValue and require no fabricated ToolType.
+
+## 16. Stable subscription, occurrence and scheduling decision
+
+This section owns the closed scheduling values referenced by AutomationSpec and RunOrigin. It changes the unpublished candidate definition; an actual historical claim or Run retains its original decoder, complete key, configuration, outcome and recovery responsibility. Missing historical evidence is never backfilled from the new definition.
+
+    SourceOccurrenceKey/1 =
+        {kind:"once", originalStartUtcSeconds:CanonicalDecimal}
+      | {kind:"recurrence", originalStartUtcSeconds:CanonicalDecimal}
+
+    AutomationOccurrenceKey/1 = {
+      automation:ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      sourceOccurrence:SourceOccurrenceKey/1
+    }
+
+    ScheduleSelection/1 =
+        {kind:"once"}
+      | {kind:"recurrence", source:D6.SourceVersionRef/1}
+
+    AutomationScheduleUpdate/1 =
+        {kind:"initial", selection:ScheduleSelection/1,
+         fromOriginalStart:D4.zoned_instant}
+      | {kind:"continue", selection:ScheduleSelection/1}
+      | {kind:"replace", selection:ScheduleSelection/1,
+         fromOriginalStart:D4.zoned_instant}
+
+Creation accepts initial only and starts subscriptionGeneration=1. An existing Automation accepts continue or explicit replace only. The selection arm matches definition.schedule. Once has no source. Recurrence selection binds the complete currently qualified Observation for the definition's actual owner and both exact Field occurrence keys. Current authority and Registry qualification precede source/Entry inspection. A source needing managed inner revision must first pass its original explicit admission; configuration never writes or implicitly admits it. The input sourceToken belongs to the original prepare cut, not a permanent future-currentness credential.
+
+The source coordinate is the exact Gregorian UTC second count since 1970-01-01T00:00:00Z, derived with integer/decimal arithmetic from a D4-accepted instant. Once uses at; recurrence uses row.originalStart, never a replacement's final start. CanonicalDecimal removes redundant zeros/exponents and negative zero, preserves every fractional digit, and permits negative coordinates. Do not round to a machine float or microsecond, or restrict conversion to a host date library's year range: an accepted local year 0001/9999 can map into UTC year 0/10000. Equivalent offsets/fraction spellings produce the same coordinate; different originalStart values remain distinct even when moved to the same final start. Date-only input has no automatic midnight conversion. A complete canonical key is limited to 131072 UTF-8 bytes; exceeding the budget rejects without truncating or replacing equality with a hash.
+
+Key equality compares the complete closed value. Key ordering is complete Automation Ref canonical bytes, numeric generation, fixed kind order once before recurrence, then exact numeric UTC coordinate. The key includes no definitionRevision, source revision/token, Field occurrence key, projection horizon, Query invocation/operator/parent key, cache epoch or final due time. subscriptionGeneration is a positive checked Counter within the one non-reused Automation, not a new author identity namespace. Initial/replace canonicalizes fromOriginalStart into a fixed inclusive original-coordinate lower bound; changing a projection window cannot change that bound.
+
+The actual protected source proof is retained in the following closed internal records. They confer no public read or execution authority and add no public control-record kind:
+
+    ScheduleRecurrenceEvidence/1 = {
+      observation:D6.SourceObservation/1,
+      sourcePin:D6.PinRef/2,
+      metadataPin:D6.PinRef/2,
+      dependencyProof:D6.DependencyProof/2,
+      registrySnapshot:D4.RegistrySnapshot/1,
+      registryEvolution:Option<D4.RegistryEvolutionProof/1>,
+      recurrenceContext:D4.RecurrenceReadContext/1
+    }
+
+    ScheduleSourceBinding/1 =
+        {kind:"once", atUtcSeconds:CanonicalDecimal}
+      | {kind:"recurrence", ownerNodeRef:D3.NodeRef,
+         recurrenceOccurrenceKey:D4.occurrenceKey,
+         rangeOccurrenceKey:D4.occurrenceKey,
+         initial:ScheduleRecurrenceEvidence/1,
+         checkpoint:ScheduleRecurrenceEvidence/1,
+         continuityPins:[D6.PinRef/2]}
+
+    ScheduleSubscription/1 = {
+      automation:ControlRef<automation>/1,
+      generation:Counter,
+      lowerOriginalStartUtcSeconds:CanonicalDecimal,
+      activeDefinition:Binding<automation>/1,
+      definitionRevision:Counter,
+      source:ScheduleSourceBinding/1
+    }
+
+For recurrence, sourcePin is exact_source_document for that Observation's complete managed SourceVersion and owner. metadataPin is the exact corresponding portable_metadata image establishing the owner’s lifecycle/identity at the same cut; another head's metadata is invalid. DependencyProof belongs to the current observerDomain/cut and completely covers actual source/entity, authorization, Registry, temporal rules and all other business ranges needed by the D4 producer. RegistrySnapshot and, except at genuine bootstrap, its required evolution proof construct the real immutable ValidatedCatalogContext. recurrenceContext is the actual complete finite D4 context, with its rule provenance, exact revisions and coverage. Raw bytes or individual decoded Entries do not replace current D4 acceptance of real Event/range-note facets and the selected calendar/recurrence and calendar/range Entries. Initial evidence is immutable; checkpoint advances only after the continuity proof below. Pins are exact typed Core pins, token-sorted/unique, at most 4096 per checkpoint update; the whole update has a finite 16 MiB canonical evidence budget excluding separately capacity-reserved immutable source/component payloads. Incomplete or over-budget proof cannot partially advance the checkpoint.
+
+Continuity is a real protected execution dependency, not an I cache fact. Every intermediate sealed source/control state between the previous checkpoint and the new current cut must prove the selected owner continuously live, the required real facets present, both exact Field keys continuously present, and their complete scheduling business values unchanged. Business value comparison uses D4's decoded canonical recurrence/range values and the actual semantic definitions/rule providers; it ignores only source formatting and Entry note/qualifier/provenance members that do not participate in those scheduling semantics. It does not ignore a changed recurrence, range, relevant schema, calendar rule, timezone or tzdb rule version. Reused key/final value after deletion/recreation, temporary facet/lifecycle removal, or a changed-and-restored rule is not continuity. A different unrelated Entry/body edit may advance checkpoint automatically when the complete actual chain proves these invariants.
+
+The producer must retain either the complete verified D6 ChangeRecord/InstallationNotice/ContentCompletionProof chain with every necessary intermediate source/metadata component, or a protected gap-free continuously consumed witness derived from exactly that chain and the relevant actual control/rule history. continuityPins pin those original versioned records and their complete source/control evidence under their existing decoders; they are not caller-supplied statements, bare larger Frontier numbers, or a free proof-map protocol. The witness must prove every causal branch and relevant control transition through the saved checkpoint, with no omitted interval, reset or unobserved predecessor, and preserve the original source selection and rule identity. Compaction may discard an old payload only after a retained protected witness still proves those same invariants and all unresolved responsibilities. Equal final source/hash, a rebuilt index, a changed read-delivery token, or a provider saying synced is insufficient. observed_only proves its retained B/N, not absence of an unseen C; an external/observer gap or unavailable intermediate history cannot be certified continuous. A mere horizon extension or fresh local observation is not by itself a business-rule change; the actual unchanged provider/rule identity and newly needed complete coverage must be proved. Current source/field/owner authority is checked before internally verifying necessary history, and no hidden historical content is returned or added to the Lease.
+
+The D6 producer retains these subscription dependencies with protected execution recovery, using the existing recovery retention class and actual control-store responsibility. It may eagerly maintain a protected continuous witness while consuming verified changes, or verify retained complete history before the next scan. Neither path may reconstruct it from I after the correctness evidence is lost. Failure to prove history pauses new scheduling as state_unavailable; a proved source/selection/rule discontinuity is binding_changed in the scheduling domain and requires explicit replace. In management prepare, the same proved mismatch is control_conflict, never the Run-only binding_changed. A replacement fixes a newly qualified source and lower bound, without pretending to restore the old chain. Original claims and unknown requests remain recoverable. This joint D6 retention/consumer contract must actually be integrated before this path is available.
+
+continue retains generation and lower bound and requires the same schedule arm: once must retain the exact normalized at coordinate; recurrence must retain the actual owner and both selected keys and prove the complete continuity above. A different arm, once at, source selection or scheduling business value requires explicit replace. Changes to invocation, Lease, approval, budget, missed policy/window or finite projection horizon/limit may advance definitionRevision and the configuration binding but cannot re-key a previously handled occurrence. A true same-definition no-op does not invent a revision. enable/disable/archive likewise never re-key history. replace atomically retires the old generation's authority to create new claims, checked-increments generation, and fixes the new source/lower bound. MAX rejects without wrapping. Existing claims of every generation retain their original Run, immutable origin/definition, invocation, Lease/approval associations, queued/blocked/unknown/terminal state and exact saved requests.
+
+The sole definition activation point is the successful original automation_configure control commit in the same actual Authority Store serialization domain as occurrence decisions. A claim winning before that commit retains its old definition; a first claim winning after it uses the active new definition, including an eligible previously unhandled past coordinate in the finite missed window. An armed item is not yet a claim and does not reserve the old definition. There is no wall-clock guess or cache-scan ordering rule. Config, source-checkpoint updates, arming, claims, cross-generation exclusions and stop/custody checks share the real transaction fences; a competing source/control change invalidates or retries the uncommitted scan without executing a partial selection.
+
+    AutomationOccurrenceDisposition/1 =
+        {kind:"armed", clockEpoch:Token,
+         armedAtUtcSeconds:CanonicalDecimal}
+      | {kind:"claimed", run:ControlRef<run>/1}
+      | {kind:"skipped", reason:"missed_policy"|"outside_missed_window"}
+      | {kind:"handover_skipped", prior:AutomationOccurrenceKey/1}
+
+    AutomationOccurrenceRecord/1 = {
+      key:AutomationOccurrenceKey/1,
+      definition:Binding<automation>/1,
+      definitionRevision:Counter,
+      dueUtcSeconds:CanonicalDecimal,
+      proof:ScheduleOccurrenceProof/1,
+      disposition:AutomationOccurrenceDisposition/1
+    }
+
+    ScheduleOccurrenceProof/1 =
+        {kind:"once", at:D4.zoned_instant}
+      | {kind:"recurrence", evidence:ScheduleRecurrenceEvidence/1,
+         projection:<complete accepted D4 recurrence projection outcome>,
+         originalStart:<that outcome row's D4 originalStart>}
+
+Recurrence proof stores the actual complete D4 outcome, including projectionIdentity, all rows and readSet; the exact originalStart identifies one unique row. Its owner, managed source revision, both source keys, Registry/read binding and finite horizon equal the evidence actually used. It grants no D7 Query completeness or execution-custody authority. dueUtcSeconds is the exact UTC point of that row's final range.start; once uses at. Filtering uses the existing replacement-aware D4 algorithm so an exception moved into the window from outside is included. Order eligible items by exact final due, then SourceOccurrenceKey's fixed tag/numeric coordinate; different original coordinates never collapse merely because final due is equal.
+
+armed is a durable pre-state in the same occurrence store, not a Run or LeaseRunUse. Core may create it only after current qualification and a trusted time reading strictly earlier than due, for a real future eligible coordinate at or above the subscription lower bound. It retains that arming time and proof. clockEpoch binds the actual trusted time source; the atomic arming point revalidates armedAtUtcSeconds < due and cannot backdate an already-due item using the earlier computation time. Unprovable clock or transaction-point qualification advances no state. It cannot be synthesized for an already-past item to bypass missed policy. A complete future projection may arm the earliest finite prefix allowed by queue/storage budget; that explicitly bounded lookahead is not a claim that all future occurrences were armed. Once an armed item is due, it follows normal due handling even after late wake-up or restart; due<now does not turn it into a missed item. Before armed→claimed, current subscription/source/rules/authority are revalidated and the current active definition is frozen. The transition atomically creates exactly one original Run and its immutable origin, replacing the armed record; no maxRuns is consumed until the original Run-admission CAS. An old generation's armed records cannot claim after replace and do not count as previously handled coordinates.
+
+AutomationSpec.missedWindowSeconds is a finite positive CanonicalDecimal duration, at most 31557600 seconds. At one trusted scanTime, the catch-up interval is exactly [scanTime−missedWindowSeconds, scanTime). Only due, unarmed, previously unhandled eligible coordinates in this interval use missedPolicy; already claimed/skipped and due armed records are restored or handled first and never reclassified. A once item older than this interval is durably skipped with outside_missed_window. Recurrence candidates older than the interval need not be enumerated as an infinite skipped history; the current fixed schedule never executes them from an expired window. They are not falsely recorded as individually claimed, and a later explicit replacement still follows the new source/lower-bound and actual handled-coordinate exclusion rules.
+
+For recurrence, the configured horizon is a finite authorized projection boundary, not occurrence identity or a substitute for the catch-up interval. The D4 projection used for a decision must completely cover the entire applicable catch-up interval and all due armed items being processed; if its configured horizon, temporal coverage, output/work/evidence budget cannot do so, the decision fails with no partial dispositions. Future lookahead remains within that horizon. A caller cannot narrow a page/window to suppress a newer missed occurrence. The required finite current projection and current source/rule proof are rebuilt under the current cut, while previously saved claims always restore their original responsibility before any new-scan qualification.
+
+One missed-window selection is one atomic business decision in the existing Authority Store. Freeze scanTime, exact window, active definition, complete eligible set and ordering, prior-handled exclusions, policy and complete proof; then, in one transaction, persist every resulting disposition together with the selected Run/origin and any queue/capacity reservations. skip marks every eligible missed item skipped. run_once claims only the greatest eligible missed item in the due/key order and marks all other eligible missed items skipped. If an item already belongs to an original claim or handover exclusion, it cannot become a second new Run. The complete decision commits or none of its skipped/claimed rows do; crash between writes cannot lose the selected Run or let a later rescan select a second older item. queueLimit counts queued/active claimed Runs, and protected capacity also bounds armed/lookahead records; capacity exhaustion fails the whole applicable decision. Claim creation alone consumes no Lease maxRuns. Recovery of a committed decision restores its exact rows/Run; an uncommitted computation is discarded and recomputed from the now-current complete cut.
+
+Before a new generation claims a coordinate, the same transaction proves the complete earlier-generation handled set for this Automation. Any prior claimed, skipped or handover-skipped record with the same exact UTC original coordinate excludes a new Run, conservatively across once/recurrence arms; write handover_skipped pointing to the original non-handover handled key. Resolve a chain to that original record, reject cycles/contradictions, and never follow a display name or current source key. Unknown/terminal/blocked original Runs all count as handled. A prior armed-only record does not. The old generation can update an existing claim's outcome but cannot create a previously absent claim after retirement. Complete range/phantom protection prevents races; a missing record/index is not proof of empty history. GC/compaction must preserve exact original key, coordinate, disposition and original Run/unknown responsibility for this exclusion. An intentional rerun of an already handled coordinate requires a genuinely new Automation or separately confirmed interactive Run, not changing this Automation's definition or generation.
+
+Every new protected step still applies current authorization, exact Lease/activation/approval/time/budget/stop and original request recovery rules. Saved/planned/unknown work is never replaced merely because the subscription changed or its current source cannot be requalified. Public automation_state exposes generation and the lower bound as scheduling values; public run_state.origin carries the exact real claim key. Full source proof, hidden prior claims, rule/history pins and execution custody remain protected. Unauthorized nested values return the original nondisclosing result, not a synthetic empty schedule.
+
+D6 Storage §7.2.1 owns the actual closed ScheduleContinuityWitness/1 and ScheduleContinuityStep/1 producer, its registered finite transition inbox, atomic checkpoint/invalidations and last-reference GC. continuityPins uses those exact typed artifact decoders or the complete original typed chain; the accepted D10 predicate in this section is unchanged. This concrete candidate still requires independent joint acceptance and implementation evidence.
+
+### 16.1 Complete execution responsibility payloads
+
+These closed protected values are the actual D10 payloads consumed by D6 ExecutionResponsibilityRecord/2. They preserve original control identities and facts, rather than creating another account, occurrence store or author ledger. Arrays use full canonical keys, are sorted and unique, and are complete for the declared execution domain, including empty ranges. A transfer is bounded to 4096 entries per array and 16 MiB of canonical metadata plus separately reserved payload pins; an over-budget transfer pauses without dropping records or disabling unrelated ordinary source work.
+
+    CostLayerKey/1 = {
+      kind:"run"|"lease"|"automation"|"workspace"|"grant"|"account",
+      owner:ControlRef<K>/1, account:ControlRef<cost_account>/1,
+      currency:CurrencyCode
+    }
+
+    CostLayerTotal/1 = {
+      key:CostLayerKey/1, heldMicroUnits:Counter, spentMicroUnits:Counter,
+      reservations:[ControlRef<reservation>/1]
+    }
+
+K is respectively run, lease, automation, workspace_budget, grant or cost_account; account-layer owner equals account. These totals are verified projections of the complete reservation/attribution set in §10, not writable balances. Every matching reservation, including settled history, participates once; unknown membership cannot mean zero. Exact original layer keys survive all configuration changes.
+
+    D10ExternalSendRecord/1 = {
+      binding:ExternalExecutionBinding/1,
+      fenceToken:Token,
+      outcome:
+          {kind:"prepared"}
+        | {kind:"started"}
+        | {kind:"not_started", evidence:EvidenceTicket/1}
+        | {kind:"response", bytes:FrozenEffectBytes/1}
+        | {kind:"outcome_unknown"}
+    }
+
+The fence token selects the real protected send-fence record for this exact sendAttemptId, store, holder, intent and stop set. It is not a caller capability. prepared has durable holds but no handoff; started is durably recorded before irreversible handoff and conservatively becomes outcome_unknown after an unproved crash, never not_started. not_started requires the original trusted never_started evidence. response is the complete response/effect evidence decoded by the exact accepted contribution contract bound in the immutable intent; raw bytes alone do not prove success, failure or final billing. Unknown or unsupported evidence keeps outcome_unknown and all holds. Reconciliation records the verified response under that same attempt; a permitted retry creates a separate attempt under the same intent only after §17 of CANDIDATE's exact idempotency/no-effect qualification. Cost settlement has its own evidence and cannot be inferred from this outcome.
+
+    D10AuthorStepResponsibility/1 =
+      {kind:"core_field_member", link:D10AuthorPreparationLink/1,
+       decisionKey:D6.DecisionKey/2, protocolOwner:"D6",
+       preparedRecordPin:D6.PinRef/2, recoveryPins:[D6.PinRef/2]}
+    | {kind:"interactive", run:ControlRef<run>/1, stepId:Counter,
+       decisionKey:D6.DecisionKey/2,
+       authorRequest:
+           {protocolOwner:"D3",request:<complete identity_operation_request wire12>}
+         | {protocolOwner:"D6",request:D6.d6_commit_request/2},
+       preparedFormat:"d7_prepared_action_binding3"|"d8_prepared_edit_binding2",
+       preparedRecordPin:D6.PinRef/2, recoveryPins:[D6.PinRef/2]}
+
+The automatic branch's artifact pin strict-decodes the exact original D7 PreparedActionBinding/3 selected by link.preparedBindingToken. The interactive branch's declared preparedFormat selects exactly the actual original D7 PreparedActionBinding/3 or D8 PreparedEditBinding/2; D8 requires protocolOwner=D6, while D7 may carry D3 or D6 under its original contract. The complete embedded request, DecisionKey, audience, preview and pins must agree. Interactive work still requires its actual trusted user confirmation and original owner gates; it gains no standing-approval eligibility, new ActionSpec or submit. The record is atomically associated with the original Run/step before delivery/submission, never reconstructed by selecting a new request. Recovery pins include the original D3/D6 plan, primary/companion decision, installation B/N/provenance and audit where they actually exist under their original decoder. A source pin cannot masquerade as a prepared-record pin. P remains the sole owner of current decision and complete original receipt/error; no competing success flag is copied. Saved/planned/unknown follows the original owner first. D9-generated D7 preparations retain their actual D9 construction input inside that same original D7 record, not a second author request.
+
+    D10ExecutionClaims/1 = {
+      recordPins:[D10ControlRecordPin/1],
+      prepareBindings:[ControlPrepareBinding/2],
+      leaseRuns:[LeaseRunUse/1],
+      authorSteps:[D10AuthorStepResponsibility/1],
+      subscriptions:[ScheduleSubscription/1],
+      occurrenceRecords:[AutomationOccurrenceRecord/1],
+      ranges:[D10ControlRange/1],
+      continuityPins:[D6.PinRef/2]
+    }
+
+    D10MoneyResponsibility/1 = {
+      reservations:[{
+        binding:Binding<reservation>/1,
+        value:CostReservation/1,
+        attribution:CostBudgetAttribution/1,
+        settlements:[CostSettlementDecision/1]
+      }],
+      layers:[CostLayerTotal/1],
+      recordPins:[D10ControlRecordPin/1],
+      ranges:[D10ControlRange/1],
+      evidencePins:[D6.PinRef/2]
+    }
+
+    D10ExternalResponsibility/1 = {
+      binding:Binding<external_effect>/1,
+      intent:ExternalEffectIntent/1,
+      state:ExternalEffectCurrentView/1,
+      attempts:[D10ExternalSendRecord/1],
+      evidencePins:[D6.PinRef/2]
+    }
+
+    D10StopResponsibility/1 = {
+      binding:Binding<stop>/1, owner:StopOwner/1,
+      latch:ExecutionStopLatch/1,
+      receipt:Option<D10EmergencyStopReceipt/1>
+    }
+
+    D10ExecutionInventory/1 = {
+      workspaceRef:D3.WorkspaceRef,
+      storeIncarnation:Uuid,
+      approvalUses:[ApprovalUse/1],
+      claims:D10ExecutionClaims/1,
+      moneyLineage:D10MoneyResponsibility/1,
+      externalUnknowns:[D10ExternalResponsibility/1],
+      stopState:[D10StopResponsibility/1],
+      stopCapacity:StopCapacity/1
+    }
+
+The inventory includes every active or still-referenced Run/configuration, original preparation (including full nested author A), count use, admitted Lease, subscription generation/continuity witness, armed/handled occurrence, reservation/attribution, external started/unknown attempt and stop result/capacity. Terminal evidence required to prevent repeat spending/claim/send remains included or retained by exact original typed pin. externalUnknowns also retains non-unknown attempts referenced by pending work or deduplication; its member name does not permit dropping a completed attempt that is still a dependency. Every reference resolves to the exact original record/version, and ranges establish completeness under the same protected store barrier. Config images include all historical budget inputs needed to reproduce attribution; current configuration is not a substitute. Shared deployment account totals include other execution domains' reservations under the actual account fence: transferring one Workspace never claims ownership of or resets the shared account. Such deployment liabilities stay at their true owner and are continuously referenced; they must remain reachable and eligible before new execution resumes.
+
+The inventory is captured only after admission, planning, send and schedule writers for the old execution holder are stopped at one real store barrier. Author installation already in progress retains its original barriers and recovery responsibility; it cannot be discarded to make the inventory appear empty. New-holder execution requires D6's complete original-inventory verification, actual old-holder fencing, durable protected transfer and preserved storeIncarnation/ControlRefs. If a new physical store cannot preserve those identities and their protected continuity, takeover is unavailable, not a new empty execution domain. No source-file copy or rebuilt index supplies this proof.
+
+The stop-capacity counters remain at their actual shared store owner just as shared account liability does. A Workspace-only transfer cannot copy that global counter into a second active store. Either the original authoritative safety store remains the reachable serialized owner, or a complete store handoff fences every affected writer and preserves all target/latch reservations. Inability to prove that boundary pauses takeover; it never resets issued/reserved or transfers only a visible subset.
+
+### 16.2 Joint producer acceptance cases
+
+Required cases include same-key r5 replay after r6; cyclic insertion of generated M rejected while nested A survives; missing typed historical image; hidden control source; concurrent last approval slot; raw-no-op consumption once; original planned supplemental approval; stop after file install but before seal; third-state recovery with no refund; missing external confirmation followed by a valid same-preparation human event; shared-account multi-Automation limits; interactive Run with no fake Automation; Run recovery at remaining=0; armed late wake-up; complete atomic missed-window disposition; unrelated source progression; delete/recreate ABA; changed-and-restored rule; observer gap; full and empty transfer ranges; and old-holder send/claim fencing. Document checks do not execute these concurrency, storage or UI cases. Fresh independent design acceptance, backend tests and D1 release qualification remain required.

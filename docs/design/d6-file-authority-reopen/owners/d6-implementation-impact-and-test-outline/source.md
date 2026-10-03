@@ -309,3 +309,22 @@ Author reading provenance is reported only for the files/ranges actually read in
 The historical B13 REVISE result and its then-current terminology/bilingual FAIL remain historical status, not an author-side closure merely because later terminology/machine checks improved. The original P0=0, P1=3, P2=8 eleven OPEN findings and U6/U7 remain open until later fresh independent joint review disposes of them. This batch neither closes nor reclassifies nor accepts them.
 
 After this Impact author afterimage, P1 still has PROPOSAL/replacements routing. P2 D3/D4, P3 D5, all actual D7–D10 consumers, and fresh joint acceptance are still incomplete. A2 self-contained reconstruction must follow, then a separate fresh Pro global review after A2. Until those gates complete, the candidate remains unaccepted, unactivated, unimplemented, unmerged, and unreleased.
+
+## 12. D3 canonical-resolution installation qualification
+
+Add explicit producer tests for Control §3.1.1 and §6.2.1: actual installed Resource A=a plus selected canonical B=b/fresh copy A, and the reverse, both install under one D3 decision with exact physical before and full final preview. Repeat Node/Annotation, equal-byte changed claim/version, metadata-only unchanged source and exact resolved no-op; assert the unique H/ChangeId/CP3 branches. Ordinary SourceObservation/current_source/SourceVersionRef, D8/Query/source-save and raw wire12 must reject ConflictInstallInput or copied pins; no missing ordinary source evidence is replaced by this wrapper. Test malformed/mismatched key/entity/head/version/FileObjectBinding, forged audience/use association, equal hash without provenance, missing metadata, external/third-state/unknown install and complete source/conflict/range proof. Assert nondisclosure before reads and unavailable-before-reachable-integrity order. Removing the guard or transplanting it across key/token/audience never broadens qualification. Inject crashes before/after every install and seal, loss of response, revocation, head changes, wrapper/preview TTL and last-reference pressure; existing planned/saved/unknown retains its original /1 and /2 components, one candidate/H basis and original receipt, with no reprepare or repeated canonical admission. These are design oracles, not executed fixtures or product conformance. Actual final D3/D6/D7 producer bytes require joint independent review.
+
+## Joint D6/D10 producer implementation obligations
+
+This batch changes documentation only. The following are required future tests, not executed evidence. It adds no implementation, dependency or public generic control endpoint. Actual D7 symbolic-bootstrap/preview consumers and fresh independent joint acceptance remain separate gates.
+
+| Case | Required evidence |
+| --- | --- |
+| Full immutable control input | Nested original A survives, generated M/future confirmation rejected from ownerInput; complete historical record pins and exact negative ranges survive crash. |
+| Two original CAS points | Planning reserves exactly one final slot; seal consumes once including raw no-op; saved r5 replays after r6 without new qualification/charge. |
+| Stop between install and seal | Stop wins after actual physical install; original barrier/B/N/provenance retained; third-state pauses; only safe authoritative abort releases count, never cost automatically. |
+| External consent | None→some trusted event changes only the separate record; both CAS gates recheck it; direct original D6 request cannot bypass it; saved consent replays first. |
+| Bootstrap versions | New profile3/Plan2 yields exact explicit Policy3 and whole Registry/Calendar initialization in original D3 decision; old family replacement/replay never gains new grants. |
+| Actual Registry activation | Changed portable Registry gets one strict portable ChangeId/CP3 and atomic Catalog selector; unchanged Registry/P-only change gets none; source/H never increments. |
+| Schedule continuity | Unrelated body/Entry change advances; delete/recreate or changed/restored rule permanently changes binding; observer/inbox gap pauses; capacity loss atomically marks gap before ordinary source proceeds. |
+| Execution custody | Full and empty ranges verified; shared account liabilities, origin/admission at maxRuns zero, all occurrences/send/unknown/stop capacity retained; old holder fenced before new execution. |

@@ -308,3 +308,22 @@ Storage、Control、Lexicon 与 machine Registry 的 P1 私人作者后像已经
 旧 B13 的历史 REVISE 与当时术语/双语 FAIL 仅作历史状态记录；不能因为当前术语/机器检查后续改善就由作者自行宣布旧发现关闭。原 P0=0、P1=3、P2=8 共十一项 OPEN、U6/U7 均继续保持，直到其各自证据由后续 fresh 独立联合审查处置。本批不关闭、不重分类、不接受它们。
 
 P1 在本 Impact 作者后像之后仍有 PROPOSAL/replacements routing；P2 D3/D4、P3 D5、D7–D10 全部实际消费者与 fresh joint acceptance 仍未完成。之后还需 A2 自包含重建，以及 A2 后另一轮独立 fresh Pro 全局终审。候选在这些门完成前仍未接受、未激活、未实现、未合并或发布。
+
+## 12. D3 canonical-resolution 安装资格
+
+新增 Control §3.1.1/§6.2.1 producer 测试：真实 installed Resource A=a，选择 canonical B=b/fresh-copy A，以及镜像方向，都以一个 D3 decision 安装，完整绑定物理 before 与 final preview。Node/Annotation、同 bytes 改 claim/version、metadata-only source 不变和 exact resolved no-op 分别验证，断言唯一 H/ChangeId/CP3 分支。普通 SourceObservation/current_source/SourceVersionRef、D8/Query/source-save/raw wire12 必须拒 ConflictInstallInput 或移植 pins，不得用 wrapper 填补普通 source 证据。覆盖 malformed/mismatched key/entity/head/version/FileObjectBinding、伪造 audience/use 关联、equal hash 无来源、缺 metadata、external/third-state/unknown install 及完整 source/conflict/range proof，断言读前遮蔽与 unavailable 先于 reachable integrity。guard 剥离或跨 key/token/audience 移植不扩大资格。逐 install/seal 边界崩溃、lost response、撤权、head 改变、wrapper/preview TTL 和 last-reference 压力下，planned/saved/unknown 保留原 /1、/2 分量、唯一 candidate/H 基础和原 receipt，不 reprepare 或重复 canonical admission。以上是设计 oracle，不是已执行 fixture 或产品 conformance；实际最终 D3/D6/D7 producer 字节仍须联合独立审查。
+
+## D6 与 D10 联合生产者实施义务
+
+本批只修改设计文档。下列是必需未来测试，不是已经执行的证据；不增加实现、依赖或公开通用控制入口。真实 D7 符号引导及预览消费者与新的独立联合接受仍是独立门。
+
+| 场景 | 必需证据 |
+| --- | --- |
+| 完整不可变控制输入 | 保留内嵌原 A，拒绝在 ownerInput 放入生成的 M 或未来确认；崩溃后完整历史图像和准确负向范围仍可恢复。 |
+| 原两个 CAS 点 | planning 恰预留最后一个名额，seal 包括逐字无操作在内只消费一次；r6 之后仍重放原 r5，不重新准入或收费。 |
+| 安装与封存之间停止 | 真实物理安装后停止胜出，保留原屏障、B/N 和来源；第三状态暂停，只有安全权威中止释放计次，费用不自动退回。 |
+| 外部确认 | 受信事件只改变独立确认记录，两个 CAS 都重验；直接原 D6 请求不能绕过，保存 consent 先重放。 |
+| 引导版本 | 新 profile3、Plan2 在原 D3 决议产生准确显式 Policy3 及完整 Registry、Calendar 初始化；旧 family 替换或重放不新增授权。 |
+| 真实 Registry 激活 | 可移植 Registry 改变获得唯一严格 ChangeId、CP3 和原子目录选择器；Registry 不变的纯 P 变化没有内容版本，源与 H 均不增加。 |
+| 调度连续性 | 无关正文或 Entry 变化可推进；删除重建或规则复原永久改变绑定；观察或收件箱缺口暂停；容量不足先原子标缺口再允许普通源继续。 |
+| 执行责任 | 验证完整及空范围，保留共享账户债务、剩余次数为零的原准入、全部发生项和发送未知及停止容量；新执行前隔离旧持有者。 |

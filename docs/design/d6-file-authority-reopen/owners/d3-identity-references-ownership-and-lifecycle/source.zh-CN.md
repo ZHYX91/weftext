@@ -21,7 +21,7 @@ D3 继续唯一拥有：
 - Locator、anchor、reference lifecycle、copy/fork/continue/import identity 规则；
 - D3 operation request、receipt、resolver outcome 和 fail-closed family。
 
-D6 唯一拥有 DecisionKey/2、CommitDomain/2、ReplicaEpoch、ChangeId/1、Frontier/2、SourceVersion/2、SourceObservation/1、SourceVersionRef/1、ObservationScope/2、DependencyProof/2、OwnerInputBinding/2、InputDescriptor/2、PreparedIntent/2、D3DecisionCompanion/2、文件安装、P seal、ContentCompletionProof/2、ConflictRecord 和 execution responsibility。D3 只消费这些 exact 类型，不重新定义同名对象或建立第二可写真相。
+D6 唯一拥有当前 producer 与持久化语义：`DecisionKey/2`、`CommitDomain/2`、`ReplicaEpoch`、`ChangeId/1`、`Frontier/2`；完整 managed/external `SourceVersion/2`；current `SourceObservation/1` 与窄 `SourceVersionRef/1`；`SourceStamp/1`、`SourceRevisionPlan/1`、仅供 resolution 的 ConflictInstallInput/1 与 SourceRevisionPlan/2（§10.1）、closed `RevisionTokenSource/2`、`RevisionTokenBinding/2` 与 tag `d6_source_revision/2`；`ObservationScope/2`；`DependencyProof/2` 以及恰十四类 `DependencyKey/2`（`source|lifecycle|placement_range|ref_inbound|relation_incidence|calendar_scope|registry|temporal_rules|authorization|foreign_binding|query_scan|replica_registry|conflict_record|execution_resource`），其中 `placement_range` 的 `StructureRange` 恰九类（`live_children|trash_children|trash_roots|ancestor_chain|subtree|owner_resources|owner_annotations|reply_closure|restore_membership`）；`OwnerInputBinding/2`、`InputDescriptor/2`、`PreparedIntent/2`、`D3DecisionCompanion/2`、`InstallationNotice/2`；新 FA `ContentCompletionProof/3` 与历史 `/2` 的各自 decoder；current `ConflictRecord/2 + Frontier/2`、历史 `ConflictRecord/1 + Frontier/1`，而 `ConflictKey/1`、`ConflictId` 和 `D6-ConflictKey/1` hash domain 不变；以及实际 file installation、P seal、publication/recovery、execution-resource/control responsibility carrier（包括其合同实际使用的 `ExecutionResponsibilityRecord`）。D3 只消费这些 exact 类型，不重定义同名 wire/schema，不改变原 opaque D3 Locator/selector token 形状，也不建立第二可写真相。
 
 D2 exact source、D4 typed schema/relations、D5 structure、D7 Query/Action、
   D8 editor、D9 conversion 和 D10 external execution 仍由各 owner 定义。
@@ -69,9 +69,9 @@ InputDescriptor/2.ownerInput 必须满足 protocolOwner=D3、ownerKind=d3_identi
 }
 ~~~
 
-带 ? 的成员只在原 mode 矩阵允许时出现，不适用时必须省略。preparationBinding 属于 D7 交叉 owner 输入，不进入这个 D3-native descriptor；它仍由 wire12 顶层和未来 D7 准备记录独立绑定。ownerInput.pinRefs 只承载 D3 descriptor 中大型不可变输入的 typed slot；完整 source/currentness 仍通过 InputDescriptor sourceInputs 的 SourceObservation/1 与受保护 pins 证明。
+带 ? 的成员只在原 mode 矩阵允许时出现，不适用时必须省略。preparationBinding 属于 D7 交叉 owner 输入，不进入这个 D3-native descriptor；它仍由 wire12 顶层和未来 D7 准备记录独立绑定。ownerInput.pinRefs 承载 D3 descriptor 中大型不可变输入的 typed slot，并仅在 §10.1 resolution 中另承载由 /3 record 绑定、具名且 guarded 的 canonical input pins；普通 source/currentness 仍通过 InputDescriptor sourceInputs 的 SourceObservation/1 与受保护 pins 证明。唯一冲突解决安装输入特例是 §10.1.1.2 中不同类型的 D6 ConflictInstallInput/1；它在 sourceInputs 外由 guarded /3 record 绑定，不提供 canonical currentness。
 
-CommitDomain.replica 的 replicaEpoch 必须是当前 active ReplicaRecord；CommitDomain.server 的 authorityInstanceId 必须等于当前托管 authority。D6 先证明 domain、backend、P continuity 和当前 observation/dependency 资格，D3 才访问 identity ledger。
+`CommitDomain.replica.replicaEpoch` 与 `CommitDomain.server.authorityInstanceId` 继续按记录原 profile 的实际 domain 资格解释；共同前门只先证明当前主体最低披露、该原 profile 适用的授权、`CommitDomain`/backend fence/portable trust，以及 P ledger 与 custody 的连续性。availability 或 continuity 未证明必须先于 reachable integrity；不得先读取隐藏 author/business 内容、current `SourceObservation/1`、`DependencyProof/2` 或完整范围来选择一个较窄 scope。共同连续性门通过后，才按记录实际版本、完整原 canonical request/fingerprint 与 `protocolOwner` 定位同一 `DecisionKey`，再分 saved、planned、unseen 三支。只有 unseen 分支才要求当前 owner version、Observation/dependency/version-basis/Frontier 等新执行资格；saved/planned 不被这些当前业务门前置阻断。
 
 ### 4.2 DecisionKey/2 与 OperationId ledger
 
@@ -81,7 +81,7 @@ CommitDomain.replica 的 replicaEpoch 必须是当前 active ReplicaRecord；Com
 
 protocolOwner=D3 表示 D3 是该键的主 decision owner；它不进入 DecisionKey，也不允许同一键再形成 D6 主 decision。相同 Workspace 与 OperationId 在不同 CommitDomain 中是独立键；相同 DecisionKey 只能有一个 canonical request fingerprint 和一个 decision。
 
-状态仍为 unseen → rejected 或 unseen → planned → committed | terminal_failed。rejected、committed、terminal_failed bytes 不可改写；planned 只能恢复原计划。不同 fingerprint 使用同一键固定 operation_id_conflict，不读取或回显原请求内容。
+状态仍为 `unseen -> rejected` 或 `unseen -> planned -> committed | terminal_failed`；`rejected`、`committed`、`terminal_failed` 的原保存 bytes 不可改写，`planned` 只能恢复原冻结计划。共同 continuity/custody gate 通过并以记录实际版本、完整原 request/fingerprint、`protocolOwner` 定位同一 key 后，分支唯一为：原协议已经耐久保存的 committed/rejected/terminal outcome 走 saved 交付/发布恢复；已有 planned 只恢复原 plan；只有真正 unseen 才进入当前 producer/consumer 业务门并尝试建立新 plan。同一 key 的 different fingerprint 仍固定 `operation_id_conflict`，不读取或回显原请求业务内容，也不得通过准备第二个 decision 绕过。
 
 ### 4.3 wire12 identity operation request
 
@@ -134,13 +134,41 @@ D3-CJ/3 与 SHA-256 规则保持不变。fingerprint body 包含除顶层 operat
 
 所有格都固定 WriteProtection=strict。replica_local 表示 local semantic scope，不表示弱文件安装；它不得使用 observed_only。
 
-replica_local 的 create_node、move_node、reorder_node、trash 固定使用 frontierPolicy=scope_dependencies 和 ObservationScope/2 local_structure。无关 Frontier/2 扩展只能在原 source/control/auth 正负依赖逐项重验后继续，不能重选 subject、parent、ordinal、closure 或 proposed after。
+replica_local 的 create_node、move_node、reorder_node、trash 固定使用 `frontierPolicy=scope_dependencies` 和 `ObservationScope/2 local_structure`。这个分支只允许从原 `expectedFrontier`/`DependencyProof.baseFrontier` 到实际当前 cut 的**连续、已验证、无回退 sealed 扩展**继续同一原 plan：每个新增或前进的 domain head 都必须有完整连续的 portable ChangeRecord/对应 completion-proof 链，无 hole、伪造 head 或 sequence jump；仅 Frontier 数字增大、causal prefix、provider “synced”、mtime、最终 bytes/hash 相同都不足以证明扩展无关。
+
+判断“无关”还必须逐项重验原冻结 `DependencyProof/2` 的十四类真实 `DependencyKey/2`，并保持各 owner 的正/负证明语义：
+- `source(entityRef)`：D6 冻结完整 current `SourceObservation/1`、exact bytes/value pin、`FileObjectBinding`、current source validity 与本 operation 的实际使用；absence 只能由真实 identity/lifecycle/FileBinding 加 trusted absent object 证明，不能由 placeholder、I miss、I/O failure 或 not-downloaded 推导。
+- `lifecycle(ref)`：D3 冻结完整 birth/canonical claim、live/Trash/tombstoned/never-known 与适用 owner relation；absence 来自完整 identity inventory，不来自 I。
+- `placement_range(StructureRange)`：D3 冻结所选九类 `StructureRange` 的完整 boundaries、order、cycle conditions、positive members 与 absence；hidden sibling 读取前仍先过原 structure/state disclosure。
+- `ref_inbound(target)`：D3 冻结原 D3 recognized reference slots、适用 lifecycle/control inbound 与 live/Trash applicability 的完整正负目录；零 inbound 需要完整 directory/stamp，具体 foreign/control slot 仍由其真实 owner 提供。
+- `relation_incidence(fieldId,endpointNodeRef)`：D4 冻结原 `RelationReadContext/2` 的字段、端点、`revisionToken`、完整 `factSelectors`、规范所有者、来源/实体状态，以及完整的正向和负向关联集合；字面量分支、对称关系的单一事实归属，以及被遮蔽或无法证明的情形仍按 D4 原规则处理。
+- `calendar_scope(CalendarRange)`：D4 Calendar 语义结合 D6 受管配置持久化，冻结 period-scope binding、`SeriesScopeConfiguration`、Registry/policy binding、完整 period membership/negative range 与适用 control inbound；configuration absent、binding absent 和 empty period range 各有自己的版本证据。
+- `registry`：D4 语义 owner 与真实 provider/trust path 共同冻结完整同 Workspace `RegistrySnapshot/1`、`RegistryBinding/1`、所需 `RegistryEvolutionProof` 以及 Field/Facet/alias/namespace/contribution directories；unknown/unavailable definition 不等于完整 empty definition set。
+- `temporal_rules`：D4 语义、D6 binding 证据共同冻结 admitted temporal-rule directory，以及本 operation 实际读取的 comparator、period rule、timezone/tzdb rule set、`RecurrenceReadBinding/1` 与有限 horizon coverage；missing segment 或未知 provenance 不能由设备时区补洞。
+- `authorization(principalAudienceToken)`：D6 冻结 trusted principal/session/delegation 映射下的当前 `Policy/3` version/auth generation、delegation、原 `ObservationScope/2` 与适用 metadata capability；任何影响输入/结果披露或写资格的变化都使原 stamp 失效，公开 proof 不泄露 hidden grant/deny。
+- `foreign_binding`：D3 拥有 binding identity/cardinality/active-retired 语义，D6 冻结受管目录连续性，具体 source owner/D9/D10 冻结真实外部版本格式与 comparator；完整 proof 覆盖相关 `SourceBinding`/`OriginBinding` directory、active/retired history、mapping/version 与原 comparator，相同 UID/etag/path/digest/text 不替代 binding，未知 profile 不发明 generic JSON。
+- `query_scan(principalAudienceToken,domain,selector)`：D7 owner 冻结指定原闭集 domain/selector 下的完整可见枚举、hidden-policy generation 及实际读取的全部 source/control dependency；它不接受 Frontier prefix、ResultHandle、page/cursor 或 partial index 代替 complete Query，fresh 未 sealed object 也不伪造 committed scan stamp。
+- `replica_registry`：D6 冻结完整 active/retired `ReplicaRecord` directory、`registrationSequence` 与 gap-free continuity，以及适用操作要求的真实 admission/retirement；count、provider synced、单个 Frontier 或 index row 不替代 acknowledgement。
+- `conflict_record(id|subject)`：D6 冻结指定 `ConflictId` 的 exact versioned record，或 subject 的完整 conflict directory、state/supersedes relationships 与真实 heads；读取前保留 `conflict_read` + minimum subject disclosure，external competition/third_state/unknown install 无 sealed head 时不伪造 `ChangeId`。
+- `execution_resource(decisionKey,protocolOwner)`：D6 冻结原操作的资源策略版本、允许尝试次数和已耗次数、累计工作量、受保护的固定证据与容量，以及暂停类别；它既不重置额度或退款，也不吸收 D10 的资金责任谱系、提供方未知状态或 `sourceOccurrenceKey`。
+
+只有上述原 source/Observation/`FileObjectBinding`/pins、control、authorization、Registry/rules、membership/negative ranges、owner versions 和其它实际绑定依赖全部仍成立，并能证明新增 sealed effects 与这些 complete keys 无关时，`scope_dependencies` 才继续**同一个** plan。原 canonical request、`expectedFrontier`、`DependencyProof.baseFrontier`、subject、parent、ordinal、closure、proposed after、pins、owner request、version basis、`WriteProtection` 与 `InstallationNotice/2.baseFrontier` 都不得重选或改写；written component 按原 planned after 验证，unwritten dependency 按原 before/cut 验证。无关扩展的连续链、无关判断和实际当前 cut 必须与原 plan 耐久保留，不能在 P 丢失后只比较两个 Frontier 数字重建。
+
+这项放宽仅属于上述四个 replica_local D3 mode。所有 managed_atomic D3 mode 继续使用原 `frontierPolicy=exact`、`WriteProtection=strict` 和原 mode/guarantee 矩阵；create/fork 的 `prepared_workspace`、其它强 identity/lifecycle mode 的 `workspace_constraints` 及相邻正文保持原规则。缺少某个 strong owner consumer 只保留该依赖路径的具名 `owner_update_required`/`proof_unavailable` gate，不得据此永久取消不依赖该缺项且自身 local evidence 完整的 ordinary/local 操作。
 
 所有 managed_atomic D3 mode 固定 frontierPolicy=exact。create_workspace 与 fork_workspace 使用 prepared_workspace 观察上界；其余 managed_atomic identity/lifecycle mode 使用 workspace_constraints。完整正负范围、当前权限和 owner 版本仍按原强门证明。
 
-replica_local 禁止 workspaceProposal、expectedAuthority 与 preparationBinding。managed_atomic 沿用 wire11 expectedAuthority 模式：create/fork 使用 create；continue 使用 continue；其余使用 existing。create/fork 继续使用 proposal P1/P2 与 TargetLedgerCustody，server CommitDomain 还必须与 expectedAuthority 当前实例一致。
+replica_local 禁止 workspaceProposal、expectedAuthority 与 preparationBinding。managed_atomic 沿用 wire11 expectedAuthority 模式：create/fork 使用 create；continue 使用 continue；其余使用 existing。existing/continue 操作的 server CommitDomain 按请求原 authority generation 与已经证明的 custody continuity 判定资格；连续旧代仅可按 §13 进入原决议查账。create/fork 则使用下述在激活前即绑定拟议 target authority 的 bootstrap 分支。
 
-D7-mediated wire12 preparation 仍等待 D7 owner afterimage。preparationBinding 的 outer token wrapper 保留；在 D7 consumer完成前，它返回 owner_update_required 且零 D3 ledger decision。D3-native typed operations可以省略 preparationBinding。
+D7-mediated wire12 preparation 仍等待 D7 owner afterimage，`preparationBinding` 的 outer token wrapper 保持原形；这个 capability/version gate **只约束同一 key 为 unseen、正在尝试建立新执行 decision 的请求**。D7 consumer 尚未完成时，这类 unseen request 返回原 `owner_update_required`/适用 `proof_unavailable` 且零新 D3 ledger decision。已经实际存在的 saved/planned/unknown 记录先按原版本、原授权/custody/连续性和原 preparation contract 恢复或交付，不因当前 D7 consumer 未更新而追溯拒绝；D3-native typed operation 仍可在原 mode 允许时省略 `preparationBinding`。缺强 consumer 也不得永久取消一个真实不依赖该 preparation/strong proof、且 ordinary/local 资格完整的操作。
+
+#### 4.5.1 create/fork bootstrap 提交域与保管
+
+真实 proposal 由 authority A 为 fresh target Workspace W 与 target authority B 签发时，`boundWorkspaceRef=W`、`commitDomain={kind:"server",workspaceRef:W,authorityInstanceId:B}` 与 `DecisionKey/2={workspaceRef:W,commitDomain,operationId}` 从首个正式请求直到拒绝、规划、封存、重放与保管移交都绑定 W/B。`InputDescriptor/2`、receipt/companion 使用相同值。A 是 custodian，不得替代 commitDomain；B 激活不改变决议 key。proposal/framing 版本与原有 proposal 全部成员保持不变。
+
+原 stage3 在 family、target policy 或 target ledger 读取前检查当前 issuer `allocate_workspace` 与 authenticated audience；fork 另检查其既有 source authority/cut 和 source observation authorization。临时 `prepared_workspace` 资格只属于该 proposal 的 target role。stage4 验证 issuer A（以及 fork source）的 availability/fence/continuity，不要求 B 已 active。顺序精确为 `stage4 -> P1 -> P2 -> TL1 -> TL2 -> stage5`：P1 认证完整原 proposal/body/audience 与 W/B/request 相等；P2 确认 current proposal 或原 same-operation winner/rejected 绑定。P1/P2 失败仍为原 `workspace_identity_conflict + preflight_rejection`，target custody/ledger 零读取、family/successor 零效果。
+
+仅在 P2 后，TL 才验证 W 的唯一 `TargetLedgerCustodyRecord`、其 family/custody generation 与 issuer 暂管的 target ledger/allocation/burn/saved-decision continuity。不可达或连续性未证明先得到 `identity_authority_unavailable`，只有连续可达后发现 duplicate/corrupt custody 才是 `workspace_integrity_conflict`；两者都不读取该 operation 已保存的业务 bytes。target-domain backend/P fence 通过这份 issuer custody 证明，不要求 B 已激活。对于 unseen fresh target，target `expectedFrontier` 是 issuer 证明的空目标历史（不是 A 的 Frontier，也不能从空存储猜出）；fork source cut 仍单独绑定。创建前不要求 target `source_write`、当前 target policy、active entity 或 target `policy_admin`。初始 creator policy、Registry/Calendar control 与源状态由原 family 固定 bootstrap profile 派生并在 planning 前一起验证。planning CAS claim 同一 family 与 target-domain decision；planned 或 rejected/terminal-before-activation 时仍由 issuer 保管。唯一成功 seal 原子激活 W/B、安装初始 control 并移交 custody 给 B。saved/planned retry 保留原 proposal/profile 与 W/B key，不重新初始化已激活 target，也不替换其 authority 绑定。
 
 ### 4.6 allocation 与 UUID 不复用
 
@@ -153,28 +181,32 @@ D7-mediated wire12 preparation 仍等待 D7 owner afterimage。preparationBindin
 
 ### 4.7 SourceObservation/1、SourceVersion/2 与 ABA
 
-D3 Locator、selector 和 prepared evidence 的 currentness 绑定完整 D6 SourceObservation/1。SourceVersion/2 仍表示实际来源版本及其生产 CommitDomain；生产 domain 可以与当前 operation 的 observerDomain 不同，不能因二者不同误报 stale 或 domain mismatch。
+D3 Locator、selector 和 prepared evidence 的 currentness 绑定完整 D6 `SourceObservation/1`，而不是裸 revision、digest、I cache 或单独的 `SourceVersion/2`。`SourceVersion/2` 继续表示真实 source 的生产版本：managed variant 保留生产 `CommitDomain`、生产 `observationEpoch`、`revision` 和 `changeId`；external variant 保留生产 `CommitDomain`、生产 `observationEpoch` 和 `externalSequence`，没有 managed revision 或 `changeId`。生产 domain 可以与当前 operation 的 `observerDomain` 不同，不能因二者不同误报 stale 或 domain mismatch；`SourceVersion/2.observationEpoch` 是生产版本保存的生产观察世代，`SourceObservation/1.observationEpoch` 是当前 observer 的观察世代，即使数值相同也不得合并。
 
-当前 operation 只要求 SourceObservation.observerDomain 等于 operation CommitDomain、entityRef 与实际 owner一致，并验证完整 FileObjectBinding、observationEpoch 与 evidence pins。D4/D5 后续 source-bearing inner revision也必须对应该 observation 内实际 SourceVersion，而不是按“revision数字+当前domain”猜版本。
+当前 operation 的成功观察必须验证完整 `SourceObservation/1` 的 `kind`、`version`、`observerDomain`、`entityRef`、`sourceVersion`、`observationEpoch`、`fileObjectBinding` 和 `evidencePins`：`observerDomain` 等于 operation `CommitDomain`，`entityRef` 等于实际 source owner 且等于 `sourceVersion.entityRef`，并把当前 `observationEpoch`、完整 `FileObjectBinding`、受保护 `evidencePins` 以及适用的 control/Registry/incidence dependency 绑定到同一 current cut。placeholder、缺 metadata、冲突 branch 或观察连续性不可证明时不得构造成功 Observation。`SourceVersionRef/1` 仍只是 `{entityRef,sourceToken}` 的窄投影；tag=`d6_source_observation/1` 的 `sourceToken` 选择整个受保护 Observation，不是 inner revision、digest、I cache 或生产版本的替代品。
 
-SourceVersionRef/1 或任何 expectedSourceToken 都必须选择整个受保护 SourceObservation。相同生产 SourceVersion 在 observationEpoch 变化、watcher gap、external replace 或不连续 rematerialize 后不再是旧输入；A→B→A 即使最终 bytes/digest 相同，也不能恢复旧 locator、preparation 或 ActionEvidence。
+新决议的 revision token 只通过受保护 `RevisionTokenBinding/2` 解析；其完整 binding 固定 `kind=d6_revision_token_binding`、`version=2`、`token`、`observerDomain`、当前 `observationEpoch` 和 `source`。`source` 的实际类型是 closed tagged union `RevisionTokenSource/2`，只允许 `{"kind":"managed","sourceStamp":<SourceStamp/1>}` 或 `{"kind":"external","sourceVersion":<complete external SourceVersion/2>}`，不得把 `SourceStamp/1` 或 `SourceVersion/2` 裸放进 `source`、省略 tag 或改换成员名；新 profile 的 token tag 仍为 `d6_source_revision/2`。稳定性 key 是不含 token 的 `(observerDomain,observationEpoch,source)`：同一 key 在观察世代连续时 retry、重启和重新读取都必须得到同一 token；observerDomain/observationEpoch 改变、watcher gap、object/external replace、不连续 rematerialization 或 binding 内容改变都要求新 binding/token。相同生产版本、裸 revision、hash、文字或 A→B→A 的最终相同 bytes 都不能复活旧 token、Locator、preparation 或 ActionEvidence。旧 `d6d`/`d6r`/`d6a` profile、Document/Resource/Annotation 原 opaque revision decoder、既有 selector/Locator wire 和历史 saved bytes 继续只按生成它们的原合同解析；新 profile 不在旧 Locator decoder 前增加词法门。
 
-sourceOccurrenceKey 的更高层连续性仍由 D10 owner决定，D3 不按 path/hash猜测。
+对生产域 D 与实体 E，`H(D,E)` 是 D 的连续已封存生产历史中 E 的最大 managed revision。只有从该 `CommitDomain` 的 birth/registration、P continuity 和已验证 portable sealed history 完整证明 D 从未为 E 封存 managed source version 时才允许 `H=0`；缺失、损坏、有 gap 或无法证明的历史不是空历史。每次真实产生 managed after 的 source change 使用 checked `H+1`；同一生产域跨 production `observationEpoch` 不重置 H，`MAX` 不 wrap。已有 source 由另一生产域写入时只使用新生产域自己的 H，foreign before 的 revision 或 `externalSequence` 不捐号；不同生产域中相同 revision 数字也不是同一版本。
+
+除 §10.1.1.2 具名不同类型的 conflict-only /2 source plan 外，凡原 plan 会产生新的 managed after，D3 消费 D6 `SourceRevisionPlan/1` 对同一 `decisionKey`/`entityRef` 冻结的完整版本依据。`before` 若非 absent，必须是该原 plan 实际读取的完整 current `SourceObservation/1`，且 `before.entityRef` 与 plan 的 `entityRef` 相同；`before="absent"` 只允许原 D3 identity/owner plan 已证明真正 fresh/expected-absent 的分支，不能从 path 缺失、I miss 或当前看不到对象推导。`after` `SourceStamp/1.observationEpoch` 来自该原 plan 为目标 source 在 after 生产 domain 中冻结的生产观察世代；foreign `before.sourceVersion.observationEpoch` 不得捐给 after。fresh/expected-absent target 的该世代来自同一原 plan 已验证的 trusted absent `FileObjectBinding`/target-backend observation generation。版本依据还包含同生产域 `lastIssued` managed version 或经完整证明的空历史，以及 exact `afterPin`；`afterPin` 按实体类型分别绑定 Document owner NodeRef 的 `exact_source_document`、ResourceRef 的 `resource_bytes`、AnnotationRef 的 `annotation_value`，且 protected pin record 必须绑定同一个 `entityRef`，digest 相等不能替代该绑定。winning plan 冻结这些成员后，seal 前必须重新验证原 `lastIssued`/empty-history 依据、domain fence、`afterPin` 和原全部依赖；若同一生产域、同一实体已经出现新的 sealed managed version，原 plan 只能 stale/conflict，不能就地把 `after.revision` 改成新的 `H+1`、重新采样 H 或重写版本依据。`SourceRevisionPlan/1` 本身不分配本 decision 的 `ChangeId`；只有 seal 时真实产生 managed after 的 source change 才把冻结的 stamp 与当时分配的 `ChangeId` 合成为 `SourceVersion/2`。source deletion 的 after=`"absent"`、true raw no-op，以及纯 structure/lifecycle/control 且 source unchanged 的分支都不建立 `SourceRevisionPlan/1`。fresh D3 content 的 `entityRef` 与 after 只能来自原 stage12 的单一私有 candidate map；stage14/15 的符号物化、适用 D7 两遍 Q/Locator 物化和所有拟议位置验证都必须使用同一 candidate map、同一 `SourceStamp/1` 和同一 revision-token binding。任何 author write 之前，winning planning CAS 必须把这同一 candidate map 作为 winning reservation 的身份映射，与完整 `SourceRevisionPlan/1`、pins 和 H/empty-history 依据一起持久化并冻结；之后不重采样 identity、revision 或 token。`SourceStamp/1` 只是原 plan 的拟议 managed-source 地址，不是 current `SourceVersion/2`，不含本 decision 尚未 seal 的 `ChangeId`，也不提前授予 current Locator 能力；只有原 decision seal 且真实 managed `SourceVersion/2` 与该 stamp、实际 `ChangeId` 精确对应，并且当前完整 Observation 仍有效时，相关 token 才取得 currentness 验证资格。
+
+这些 currentness 与新 managed-revision 规则只约束采用本合同的新/current 消费；历史 saved/planned 记录继续按其原 decoder、原冻结 plan/pins、授权与连续性责任恢复或重放，不能因当前 Observation、profile 或新证明改变而被重新解释。更完整的 saved/planned/unseen 账本分流仍由其专门提交顺序负责。`sourceOccurrenceKey` 的更高层连续性仍由 D10 owner 决定，D3 不按 path/hash 猜测。
 
 ### 4.8 legacy v9/v10/v11
 
-v9/v10/v11 saved request、proposal、planned、receipt、error 和 PreparedActionBinding/1,
-  /2 继续用原 decoder、fingerprint、authorization、custody、pin retention 与 byte-equivalent replay。
+wire9/v10/v11 以及真实存在的旧 `PreparedActionBinding/1,/2`、proposal、planned、saved receipt/error/effects、unknown/recovery 记录继续只按**实际保存它们的**原 decoder、canonical request/fingerprint、authorization、custody、pin retention、TTL/clock、byte-equivalent replay 与 no-duplicate-effect 责任履约。存在 decoder、历史草稿或候选文字本身不证明某原型已经部署，也不把所有旧 surface 自动认作 active compatibility；但一旦能证明某 saved/planned/unknown record 确实存在，其原合同承诺不能因为其它原型缺部署证据或当前 producer 已升级而取消。
 
 禁止：
 
-- 把旧 request重编码成 wire12；
-- 给旧 receipt补 CommitDomain/ChangeId；
-- 用新 retention删除旧协议保证仍存在的 evidence；
-- 用 semantic_pending 重解释旧 complete gate；
-- 因当前文件与旧 pin hash 相同而恢复旧版本资格。
+- 把旧 request 重编码成 wire12、补当前 owner/profile 字段或用新 token 重新签名；
+- 给旧 receipt/effects 回填 `CommitDomain`、`ChangeId`、`SourceVersion/2`、新 companion 成员或当前 r6 qualification；
+- 把历史 `SourceVersionRef/1`、opaque revision token、`PreparedActionBinding/1,/2`、旧 pin 或旧 effect 按当前新 decoder 重新解释；
+- 不得利用新的保留策略、重建 I、当前文件或哈希、重新授权或新的完整证明，删除旧协议承诺按决议持久保存或作为最后引用保留的请求、回执、固定证据，以及计费、批准、权利声明和未知结果责任；
+- 用 `semantic_pending` 或新的窄 local scope 追溯替换旧 strong profile；
+- 因当前文件与旧 pin/hash 看起来相同而恢复一个已经丢失的旧 continuity、猜 seal 成功或构造第二 decision。
 
-新 decision 不接受旧 wire；旧 saved decision 不接受新语义字段。
+新 decision 不接受 legacy wire；legacy saved/planned record 也不接收新语义字段。新合同若**明确**把某历史 effects 定义为可失效且其允许清理的 effect pin 已依法失效，交付该 effect 只返回原合同规定的 `effects_unavailable`，不得读取 current file/current r6 state 冒充旧 after；这不影响旧合同仍要求耐久保留的 receipt、decision、last-reference pins、费用/批准/claim/unknown 责任。真实旧 TTL/expiry 继续按原合同：尚未形成 decision 且已合法过期的 preparation 不因新版本而复活，已有 planned/saved/unknown 则按原记录自己的恢复规则处理。
 
 ## 5. Workspace、Node、owner 与有序结构
 
@@ -192,15 +224,30 @@ Workspace 的 live Node 仍构成从 root 全连接的有序树。root parent/or
 
 move 保持 NodeRef。title/path/label 变化不改 child identity。删除 parent 若要保留 children，必须先显式 move，不能产生 live orphan。
 
+D3 对 `DependencyKey/2.kind=placement_range` 只消费 D6 冻结的 closed key、stamp 与 evidence carrier；结构/lifecycle 的完整枚举算法仍由 D3 唯一拥有。`StructureRange` 恰有九个 variant，且每个需要的范围必须分别列 key，不能用自由 `closure`、owner JSON、当前 UI selection 或一个“全结构”别名合并：
+- `live_children(parentNodeRef)`：完整读取该 live parent 的有序 child list；正向成员是列表中每个 child 及其规范 ordinal，负向部分证明同一 barrier/cut 下不存在遗漏的 live child。顺序是作者结构事实，不能按 Ref 重排。
+- `trash_children(parentNodeRef)`：完整读取该 trashed parent 的规范 Trash child list；正负证明同时覆盖全部 child、`trashOrdinal` 连续唯一及不存在遗漏成员，不能用 Ref 排序修复损坏列表。
+- `trash_roots`：完整读取 Workspace 规范 Trash forest 的全部 root 及其顺序，并证明不存在未枚举的 Trash root。
+- `ancestor_chain(nodeRef,forest)`：在指定 `live|trash` forest 中完整证明从主体到该 forest 根的每条 parent edge、边界和无环；缺一层、未知 parent 或 cycle 都不是完整链。
+- `subtree(root,forest)`：包含 root 自身并沿该 forest 的规范 child lists 遍历每一条 descendant branch；完整证明同时说明没有被遗漏的 child branch。owner-local、reply 与 restore membership 不因属于该 subtree 就自动获得证明，仍使用各自范围。
+- `owner_resources(ownerNodeRef)`：完整枚举该 owner 的 Resource 目录及每个成员的真实 lifecycle/owner 事实；不按当前 UI、下载状态或 source occurrence 筛选，并证明没有其它 owner-local Resource 被漏掉。
+- `owner_annotations(ownerNodeRef)`：同样完整枚举该 owner 的 Annotation 目录及真实 lifecycle/owner 事实；reply closure 另行证明。
+- `reply_closure(annotationRef)`：从准确 Annotation 出发按 D3 同 owner reply relation 完整遍历 closure，证明每条适用 reply edge、成员、同 owner 与无环，并证明没有遗漏 reply descendant。
+- `restore_membership(nodeRef)`：读取 portable metadata 中该 Node 的规范 Trash restore membership；成员只能来自原 Trash/lifecycle 决议保存的恢复归属，不能从 owner 相同、旧 original parent、当前路径、当前目录或 UI 分组重新推导。
+
+这些范围的正成员、负成员/absence 与有序边界属于同一完整枚举；“没有命中”只有在同一范围完整性成立后才是负证明。D3 parent/order、Trash graph、owner-local 与 reply membership 的 portable current truth 仍只有一个逻辑 owner；index、path 或另一个 sidecar 不能成为第二可写结构。
+
 ### 5.3 Resource 与 Annotation owner
 
 Resource/Annotation owner 不可变。跨 owner 语义只能 fresh-copy。owner Trash/purge 的 closure、reply 无环、Annotation target owner-local 等既有规则保持。
 
-同 owner 的 Resource bytes replace、Annotation body/target edit保持 ref，但产生新 SourceVersion/2。
+同 owner 的 Resource bytes replace、Annotation body/target edit保持 ref。只有实际改变受管 Resource bytes 或 Annotation value 的提交才产生新的 managed `SourceVersion/2`；真正的 managed byte/value no-op 保留原 `SourceVersion/2`，不会仅因同一个 ref 再次参与提交而增加 managed revision。
 
 ### 5.4 结构冲突
 
-并发 placement heads 不自动按 UUID、路径、ordinal 或 mtime修复。D6 ConflictRecord.kind=placement_concurrent 定位完整 heads；普通 resolver 不选择一个隐藏 winner。
+并发 placement heads 不自动按 UUID、路径、ordinal、mtime、最终 hash 或较大的 sequence 修复。新 FA 的 placement conflict 使用 D6 `ConflictRecord/2`，但 `ConflictSubject`、conflict kind、`ConflictKey/1`、`ConflictId` 与 `D6-ConflictKey/1` hash domain 都不因此升版。`ConflictKey/1.heads` 中每一项都必须是同一 Workspace 内真实、已验证连续 sealed 的 `ChangeId`，且对应 portable change history 必须证明该 head 与本 key 的 subjects/kind 真正相关；subjects/heads 非空、唯一并按原 canonical rule 排序。external race、unknown install、third-state bytes 或其它尚无 sealed `ChangeId` 的竞争只保留在 installation/recovery/conflict evidence 中，绝不为了凑 `ConflictKey` 伪造 head。
+
+`ConflictRecord/2.createdAtFrontier` 使用记录创建时真实、已验证连续的 `Frontier/2`，并覆盖 key 中每个真实 head 及其间完整 sealed continuity；它只证明该 conflict record 的 portable causal cut，不证明 complete Query、source materialization 或其它 owner 的正负范围。ordinary resolver 在未明确 branch/resolution 前仍不选择隐藏 winner；missing head、portable-history hole 或 corrupt record 不能通过删掉未知分支返回一个较小“成功 conflict”。
 
 冲突分支仍可被明确打开和继续编辑，但未指定 branch 的结构读取不能声称得到唯一 canonical tree。
 
@@ -209,10 +256,13 @@ Resource/Annotation owner 不可变。跨 owner 语义只能 fresh-copy。owner 
 DocumentElementLocator、DocumentRangeLocator、ResourceRegionLocator 与 l1 token 的词法、owner、revision、span、
   range、base64url 和 D3-CJ/3 规则保持不变。AuthorAnchorAddress 仍是 current-revision symbolic address，不是 entity。
 
-wire12 consumer 另外绑定 SourceVersion/2 与 CommitDomain；same text、
-  same span 或 same token payload 不能跨 observationEpoch 恢复 currentness。
+wire12 的 current Locator/selector 资格不再用“`SourceVersion/2` + 当前 `CommitDomain`”或裸 revision 猜测，而是验证完整 current `SourceObservation/1`、对应 `SourceVersionRef/1` 以及适用的受保护 `RevisionTokenBinding/2`。existing external source 可以通过其完整 external binding 表示当前 revision token；same text、same span、same token payload、相同 production revision 或相同 digest 都不能跨 observer `observationEpoch`、watcher gap、replace 或不连续 rematerialization 恢复 currentness。所有 public wire12 Locator/selector 字段、旧 opaque token 和 legacy decoder 保持原形。
 
-D2 valid managed source 才能形成普通 D3 author mutation。外部 physical-invalid 或 D2-invalid bytes 保留为真实文件字节，通过 D6 current-source/repair 入口读取和诊断；它不编码为 SemanticState，不产生成功 D3 author receipt，也不由旧 pin覆盖。
+source 未改变、也不消费 managed inner revision 或针对本次拟议 managed after 物化新 Locator 的普通 move/reorder/Trash，不要求先把当前 external source 接纳成 managed；它只按实际需要证明 structure/lifecycle、authorization、安装和其它声明依赖。此类真实 portable structure/lifecycle effect仍可在 seal 获得自己的 portable `ChangeId`，但不创建 `SourceRevisionPlan/1`、不产生 managed `SourceVersion/2`，也不推进 `H(D,E)`；source deletion 使用 after=`absent`，同样不制造“删除版本”或推进 H。true raw no-op 保留原完整 `SourceVersion/2`。
+
+如果一个路径实际修改 source，或 D4/D5 structured/typed selector 确实需要 managed inner revision，或需要针对本次拟议 managed after 签发/物化新的 revision-bound Locator，则 external 输入必须先通过真实 managed admission/save 形成相应 `SourceRevisionPlan/1` 和 managed after；`externalSequence` 永远不能填入 inner sourceRevision。equal-byte external admission 即使字节相同也不是 no-op，其 after revision 只按本次生产域的连续 sealed history `H(D,E)+1` 分配，不能借 foreign before 的 revision 或 external sequence。
+
+external physical-invalid 或 D2-invalid bytes 仍是普通文件中的真实字节，可通过 D6 current-source/repair 入口读取和诊断，并且不得由旧 pin 覆盖。依赖有效 source、managed inner revision 或完整 typed/source proof 的具体路径在证据不足时必须停止、repair 或按其合同保持 unavailable/pending；但“当前没有 managed inner revision”本身不得永久取消一个不依赖该 revision、且其它 local/ordinary 结构或 lifecycle 资格已经完整成立的离线操作，也不得把未知 source 状态伪装成成功语义。
 
 ## 7. lifecycle：普通 Trash 与强 restore/purge
 
@@ -224,42 +274,44 @@ Trash 仍保留 typed refs、payload 和恢复信息。purge 删除 payload并�
 
 ### 7.2 replica_local Trash
 
-replica_local Trash 必须完整证明：
+replica_local Trash 必须以 `WriteProtection=strict` 完整证明本操作实际触及的本地 closure，而不是把局部证明冒充全 Workspace 全集。至少包括：
 
-- target 与实际 subtree/owner-local/reply membership；
-- 受影响 live/Trash sibling lists 的连续唯一 ordinal；
-- 当前 policy 与该 closure 的 lifecycle write 权；
-- 被修改 portable metadata components 的安全安装资格。
+- target 的准确 `lifecycle`，以及需要的 `placement_range{subtree(root,forest="live")}`、受影响 source parent 的 `live_children`、目标 Trash list 的 `trash_children`/`trash_roots`；每个有序列表都必须在同一范围证明中完整、连续、唯一，既有 ordinal 损坏仍按原 integrity gate fail closed，不能用 RefKey 排序修复；
+- 本次从 live 转入 Trash 的 Node subtree 与当时实际 live 的 `owner_resources`、`owner_annotations`，以及适用的 `reply_closure`；owner-local/reply member 必须由真实 portable directory/graph 枚举，不从 UI、path、source occurrence 或 owner 相等猜 closure；
+- 当前 policy 与该 closure 的 lifecycle write 权、实际 source/control/foreign 依赖以及被修改 portable metadata components 的 strict 安装资格。
 
-它不要求为普通离线删除先扫描所有其它副本和全库所有 inbound references。未证明的 inbound/cross-object obligation 必须出现在 D6 SemanticState.semantic_pending 中，至少含 inbound；receipt 不得把其局部 referenceLifecycleTransitions 宣称为全 Workspace 完整枚举。
+Node/subtree 进入 Trash 时，新保存的 restore membership 只包含本次原 closure 中实际由 live 转为 trashed、应随该 Node 恢复的成员。此前已经独立进入 Trash 的 Resource/Annotation 保持原独立 Trash 归属；即使 owner 相同，也不得被后来 owner Trash 合并进新的 restore membership、重写 lifecycle transition 或重新编号成“本次删除”。原 sibling/final-index、canonical Trash append/flatten/splice、no-orphan、owner 与 reply 无环算法保持不变，receipt 仍只列原规则要求的真实 placement/lifecycle/reference changes。
 
-远端 source 到达后形成 delete/edit 或 lifecycle_concurrent 时显式冲突；不得默认 delete-wins 或 edit-wins。
+replica_local Trash 不要求普通离线删除预先扫描所有其它 replica 或全 Workspace 全部 inbound refs。只有本操作实际需要且已证明的正负范围属于其 local complete evidence；尚未证明但该 ordinary profile 明确允许 pending 的 inbound/cross-object obligation 进入 D6 `SemanticState.semantic_pending`，至少包含适用 inbound，receipt 不得把局部 `referenceLifecycleTransitions`、本地 `ref_inbound` 或 Frontier prefix 宣称为全 Workspace 完整枚举。缺失/partial I、placeholder、unknown/gap 也不能被记成零 inbound。
+
+远端 source 或 lifecycle head 后续到达形成 delete/edit 或 `lifecycle_concurrent` 时显式冲突；不得默认 delete-wins、edit-wins，也不得借 replica_local 的局部范围改写已冻结的 managed_atomic strong 语义。
 
 ### 7.3 managed_atomic Trash
 
-managed_atomic Trash 可在完整正/负引用范围已证明时产生 complete_semantics，并保留 wire11 的完整 suspended/reference lifecycle 证据。
+managed_atomic Trash 继续固定 `frontierPolicy=exact`、`WriteProtection=strict`，并且只有在本操作全部适用的完整正/负依赖已经由真实 owner 证明后才可产生 `complete_semantics`。D3 至少要求 target/subtree lifecycle、全部受影响 `live_children`/`trash_children`/`trash_roots`、owner-local Resource/Annotation 目录、reply closure，以及完整 D3 `ref_inbound` 正负枚举；零 inbound 必须有当前授权下的完整目录与连续 stamp，不能由 I miss、partial shard、placeholder、相同 hash 或 causal-prefix Frontier 推断。具体 foreign/control slot、D4 relation incidence、Registry/Calendar/rule 或其它约束继续由各自 owner 提供完整正负 proof，D3 不复制其算法或把自身 range 当作替代。
+
+strong Trash 保留 wire11 的完整 suspended/reference-lifecycle、no-orphan、owner/reply、ordered Trash placement 与原 compound-effect 证据。任一需要的 complete range 当前不可证明时，该 managed_atomic operation 保持 `proof_unavailable`/所属 conflict or availability path，不能自动降级 replica_local、把未知范围写成 empty，或用 `semantic_pending` 冒充 `complete_semantics`。
 
 ### 7.4 restore
 
-restore 只允许 managed_atomic。它保持 identity，精确消费 Trash graph、restore location、owner/reply closure、当前引用与完整 required dependencies。
+restore 只允许 managed_atomic，并继续固定 `frontierPolicy=exact` 与 `WriteProtection=strict`。它保持 identity，并在当前授权下精确消费规范 Trash graph、restore location、target lifecycle、适用 `trash_children`/`trash_roots`、`subtree(root,forest="trash")`、`restore_membership(nodeRef)`、owner-local Resource/Annotation 目录、reply closure、当前引用以及其它真实 owner 提供的完整 required dependencies；所有正/负范围必须使用当前连续 stamp，不能从 I、path、title、old original parent 或当前 UI 重新构造。
 
-restore 与另一个副本的 edit/move/delete head冲突时先形成/解决 ConflictRecord，不能按路径猜原位置或偷偷新建 ID。
+恢复 Node 时，`restore_membership(nodeRef)` 只承认原 Trash/lifecycle decision 为该 Node closure 保存的恢复成员，再与当前 Trash graph/lifecycle 交叉验证哪些成员仍处于可恢复状态。先于 owner 独立 Trash 的 Resource/Annotation 从未加入该 owner 的 restore membership，因此后来 restore owner 时必须继续 trashed；它们也不得被伪列成这次 restore 的 `already_live`/`tombstoned` omission。owner 相等本身不是恢复 membership。原 Node subtree、Resource/Annotation owner、Annotation reply-chain、no-orphan/no-cycle、location matrix、canonical Trash flatten/splice 与 receipt evidence 规则保持不变；独立恢复、已恢复或已经 tombstoned 的真实成员仍按原 lifecycle 规则处理，不能自动 reparent、reowner、rekey 或 fresh-create。
+
+restore 所需完整 inbound/control/foreign/D4 等范围由各自真实 owner 证明；D3 的 `ref_inbound` 或 placement proof 不能替代其它 owner 的全集。任一 required range、payload、authorization 或 continuity 不能完整证明时，不返回 empty 或强成功。restore 与另一个 replica 的 edit/move/delete head 冲突时先形成/解决 `ConflictRecord` 并重新验证原 exact dependencies；不能按路径猜原位置、按 causal prefix 猜无冲突，或偷偷新建 ID。
 
 ### 7.5 purge 与 tombstone
 
-purge 只允许 managed_atomic，并要求：
+purge 只允许 managed_atomic，并继续固定 `frontierPolicy=exact`、`WriteProtection=strict`。它与 restore 的 closure 不同：restore 只恢复原 Node Trash/lifecycle decision 保存的 `restore_membership` 中、当前仍可恢复的成员；purge 则必须处理 target 所属不可逆 owner closure 中全部当前仍 trashed 的成员，包括早于 owner 独立进入 Trash、因此从未属于 owner restore membership 的 Resource/Annotation。purge 至少要求：
 
-1. target 已 trashed；
-2. 完整 owner/reply/subtree closure；
-3. 全部适用 inbound refs与 D4/D5 强约束已证明；
-4. portable replica registry revision固定；
-5. 每个 active 已登记 replica 的已接纳 Frontier 对 purge required frontier 达到规定覆盖；
-6. retired replica 不再算 active ack，但其旧 epoch 永不可恢复 active；
-7. tombstone/no-reuse 与 ContentCompletionProof 同步发布。
+1. target 已 trashed，且当前 `lifecycle`、完整 `subtree(root,forest="trash")`、适用 `trash_children`/`trash_roots`、surviving Trash placement 及全部实际 owner/reply closure 已在同一 exact cut 上证明；原 canonical Trash flatten/splice、`trashOrdinal` 连续唯一、no-orphan/no-cycle 与 original-location 规则保持，不按 Ref、path 或 UI 顺序修复；
+2. 对被 purge Node，完整 `owner_resources`、`owner_annotations` 与适用 `reply_closure` 必须覆盖**全部当前仍 trashed 的 owned Resource/Annotation**，包括先独立 Trash 的成员；既有 tombstone 保持原 tombstone/no-reuse 事实，不重新分配、复活或重复制造 identity；
+3. 全部适用 live inbound refs、D3 `ref_inbound` 正负枚举、foreign/control dependency，以及 D4 relation incidence、Registry、Calendar/temporal 和 D5 等强约束，都由各自真实 owner 在当前授权下给出完整正负 proof。`semantic_pending`、replica_local Trash 的局部 reference evidence、I miss、placeholder、partial shard、相同 hash/count 或 causal-prefix Frontier 都不能支持 purge；
+4. 在任何隐藏 sibling、owner member、reply edge、inbound slot、foreign/control fact 或 replica state 读取前，先通过对应 state/disclosure/authorization gate。无权时按既有 not-visible/owner error 面 fail closed，不泄露负范围、成员数、冲突或“是否为空”；
+5. D6 `replica_registry` proof 固定完整 active/retired `ReplicaRecord` 目录、`registrationSequence` 与 gap-free continuity，并逐个证明所有 active 已登记 replica 对本次 purge 所要求 sealed cut 的真实 admission，或按当前 policy/trust/execution-responsibility 形成明确 retirement；仅当前在线副本、registry count、一个稳定 Frontier、provider “synced” 或最终 causal prefix 都不能代替该证明；
+6. tombstone/no-reuse、allocation/burn history 与适用 completion/publication evidence按原 owner 合同发布。purge 不把旧 bytes、backup 或 later re-entry 变成 identity continuity；retired epoch 不复活。
 
-从未登记、系统不可证明曾参与该 Workspace 的设备不形成永久阻塞者。若以后拿旧目录接入，它必须注册新的 ReplicaEpoch，并用当前 tombstone/ConflictRecord 协调；不得以旧文件复活 tombstoned ref。
-
-“同步服务显示完成”不是无 inbound ref、无离线 head 或 purge coverage 的证明。
+从未登记、且系统不能证明曾属于该 Workspace 的设备不形成永久阻塞者；旧目录后来重入时必须以新的 `ReplicaEpoch` 注册并与当前 tombstone/ConflictRecord 协调，不能以旧文件复活 tombstoned ref。purge 是 lifecycle/portable effect 时，即使对应 source bytes unchanged，也只按实际 source-change 规则决定 SourceVersion：纯 lifecycle/source-unchanged 不创建新的 managed source version 或推进 `H(D,E)`，但真实 portable purge effect仍可在 seal 获得其 ChangeId。
 
 ## 8. Create、Move、Copy、Fork、Continue 与 Import
 
@@ -282,14 +334,29 @@ managed_atomic create_node 还可要求 complete_semantics 和 D7/D4/D5完整准
 
 replica_local move/reorder 保持 NodeRef，需要 old/new parent、完整两侧 sibling list、cycle 所需 ancestor chain、当前 placement/policy 资格。最终 destinationOrdinal 仍指 commit 后 final index；数组输入顺序不决定结果。
 
+所有会产生 fresh/mapped content identity 的 create/copy/fork/import 新路径继续只使用原 stage12 **单一私有 candidate map**。只有 D6/D3 前门与该 unseen request 的既有授权/版本门通过后，Core 才为本 plan 的全部 fresh/mapped subjects 私有采样候选；Resource/Annotation 的 owner 先由同一 subject graph 中准确 Node subject 物化。此时候选不是 entity、不是 public Ref、没有 durable allocation/reservation，也不能向 caller、payload、Locator 或第二个 validator 暴露为可写 identity。
+
+stage14/15、全部 D2/D3 typed ref/locator rewrite、D4 已知 typed roots、真实 result payload 验证以及需要拟议 managed source revision 的位置物化必须使用同一个 candidate map；实际 source change还使用同一原 plan 显式解码的 `SourceRevisionPlan/1` 或 conflict-only /2、after stamp/token 和 exact after pin。任何需要两遍位置闭环的 materialization 都在这个同一 candidate/revision namespace 内完成并最终重新解析真实 result source；不能第一遍采样一套 identity/revision，第二遍换 map、换 H 或从 payload hash/用户 UUID 猜 ID。Typed DefinitionTransfer 的保存定义完整槽位与 Q 两遍细节见 §21.2 的既有 D3/D7 合同，本段不新增 D7 payload wire。
+
+只有 winning planning CAS 才重新验证原 cut/权限、candidate 仍 free、`SourceRevisionPlan`/H 依据与 pins，随后原子保存完全物化的 canonical plan、同一 candidate map、planned 与同一组 reservations。CAS loser按原 restart/winner replay规则处理；planned 以后只恢复保存的 map、pins 与版本依据，禁止重采样 identity、owner、revision 或首次运行另一套 typed validation。
+
+fresh/member/primary owner 矩阵保持 S：`create_workspace` 的成员属于新 Workspace graph；`create_node|create_resource|create_annotation` 的 member 只能使用该 mode 原来允许的 existing/new Node owner，primary Resource/Annotation 仍只属于 `destinationOwnerRef`；ordinary-format import 的 fresh owner-local对象只可属于同 fresh graph 明确声明的 new Node；copy/fork/identity-bearing import 的 mapped owner 只能来自完整 `identityMap`；standalone `copy_resource|copy_annotation` 的 mapped primary owner只取显式 destination owner。generic subject union 不能放宽这些 mode admission，Resource/Annotation owner 也绝不原地交换。
+
 并发 move/move 或 move 与 parent delete产生 placement/lifecycle conflict，不能自动挂 root或按 last writer 选位置。
 
 ### 8.3 copy 与 owner-local fresh identity
 
-copy_node_subtree、copy_resource、copy_annotation 仅 managed_atomic。wire11 的 identityMap、
-  owner rewrite、reference slot、Annotation target/reply、omission closure和 fresh identity语义全部保留。
+`copy_node_subtree`、`copy_resource`、`copy_annotation` 仅允许 `managed_atomic`，并继续固定 `frontierPolicy=exact`、`WriteProtection=strict`。wire11 既有的 `identityMap`、所有者重写、引用槽、`Annotation` 的 `target`/`reply`、遗漏闭包、新身份以及真实前像/结果负载规则全部保留；字节、标题或摘要相同都不产生身份相等，跨所有者的 `Resource`/`Annotation` 必须使用新身份。
 
-相同 bytes、title 或 digest 不产生 identity equality。跨 owner Resource/Annotation 必须 fresh。
+`copy_node_subtree` 的默认 source closure只包含准确 live root、全部 live descendant Node，以及按原 owner/reply规则实际纳入的当前 live Resources/Annotations；trashed成员不因 owner 相等或 path 相邻被 copy 复活。每个 included source payload必须有真实 preimage pin，每个 mapped result有真实 result payload/SourceRevisionPlan（若 source 实际改变）与完整 typed-slot coverage；所有 D2/D3 authored refs/locators和 D4 已知 typed roots按现有 identity-map/C-carrier规则处理。owner-local成员若按原 omission algebra合法 omit，其所有受影响 occurrence/reply closure仍必须显式 delete/rewrite/omit 闭合；Node不能以 owner-local omission 理由丢失。保存定义的 DefinitionTransfer 全槽位/Q 细节留 M3，本段不把 CEL/text/free JSON 变成 typed scan。
+
+`r1.RESOURCE_UUID` 继续是 owner-derived 例外：Node copy改变 owner 时，source Resource 在 `identityMap` 内就必须重写为 destination owner 下的 fresh ResourceRef；不在 map 内（包括 trashed Resource 不属于 live copy closure）时，该 occurrence必须在同一 plan 显式 delete/replace 或 whole copy拒绝。不得保留旧 r1 token、按相同 ResourceId leaf 在新 owner 下 ambient rebind，或因 bytes相同跳过 owner rewrite。
+
+standalone `copy_resource`/`copy_annotation` 的请求 primary 都必须是准确 live source，恰在 `identityMap.from` 出现一次且禁止 omit/omitted-only no-op；result为 same-kind fresh ref，`to.owner` 必须逐字等于显式 live `destinationOwnerRef`，不存在 reowner-in-place。它们只复制声明的 primary payload；同一 atomic plan 若显式修改 target Workspace 的既有 container，该 container 只能是原 mode 允许、由 destination owner 拥有的 Node exact-source Document 或 Annotation Value/3，并必须有同一 `existing_entity_subject` 的准确 preimage/result pair、真实 revision/slot evidence，实际改变时进入 `preserved`。destination owner 不同或 source Workspace foreign 时，source/foreign-owner Document 绝不是可修改 container；未显式绑定的 occurrence保持原样。
+
+`copy_annotation` 的 mandatory target 必须针对 destination owner 的同一真实 result source 唯一重建，并签发对应唯一的 revision-bound locator；target 的 typed reference evidence、最终 source 与 mapped primary 的最终 revision 必须彼此一致。被复制后得到的 fresh mapped primary Annotation，其**初始 reply**仍按原 reference plan/result evidence 表达：reply parent只能是同一 `identityMap` 中物化为 destination owner 下同 owner Annotation 的 mapped target，或原合同允许的 destination owner 下既存 live Annotation，并继续满足 same-owner、acyclic 与完整 typed-slot/revision 证明；这个 fresh mapped primary 绝不是 S container，不能把它自己的初始 reply 改写成 `structuralPlan`/S 表示。
+
+只有原 `copy_annotation` mode 明确允许修改的 **destination-owner existing Annotation**，才可以作为 identity-preserving reply side effect 的 S container；它必须具有原矩阵要求的同一 `existing_entity_subject` paired preimage/result payload、准确 target@0/reference evidence、reply@1 的唯一 S、`annotation_reply_change`/structural evidence，以及唯一最终 Annotation revision。该 existing Annotation 的新 reply 可以合法指向本 operation 的唯一 mapped primary Annotation，但这不把 mapped primary 本身变成 S container。`copy_node_subtree`、`fork_workspace` 和 partial identity-bearing import 不得借本规则新增 existing S。不能把 source-owner reply/ref/locator原样带入。任何 owner swap、缺 paired preimage/result、跨 Workspace/非 destination-owner existing write、reply reference result 与 S 双表示、typed slot 漏项、cross-owner/cycle，或无法唯一重建 mandatory target/reply，都按原 stage/family whole-operation fail closed；不能靠 candidate map、partial I 或 payload hash补洞。
 
 ### 8.4 Workspace fork 与 continue
 
@@ -298,15 +365,40 @@ fork/continue 仅 managed_atomic。
 continue 只用于同一 authority lineage 的 exclusive continuation/failover/disaster recovery，需要完整 control ledger、
   allocation/burn/tombstone、saved decisions 和旧 authority fence。Replica registration 绝不走 continue。
 
-fork 创建 fresh WorkspaceId/AuthorityInstanceId 和所有 mapped content IDs；source 与 target没有共同提交 authority。
+fork 创建 fresh WorkspaceId/AuthorityInstanceId 和所有 mapped content IDs；source 与 target没有共同提交 authority。exact fork 的 source closure 是已验证 snapshot cut 中**全部** live 与 trashed Node/Resource/Annotation，`identityMap.from` 必须恰覆盖该全集，任何 root/member 都不得 omit。每个 mapped entity 的 `resultLifecycles` 精确保留 live/trashed 两态；live Node只进入 `initialPlacements`/live tree，trashed Node只进入 `trashPlacements`/canonical Trash forest，二者对 mapped Node严格分区。trashed Node 的 `trashParentRef`/`trashOrdinal` 按 source cut 已规范化 Trash graph机械映射；original parent仍能映射时保留 mapped original location，已 purged/tombstoned/not_found 时必须是 unavailable original location，不能自动挂 root。Resource/Annotation owner、reply 和 restore-membership/independent-Trash事实按真实 source cut 映射，不因同 owner重新合并。
+
+fork 的每个 source payload与实际 typed ref/locator都使用真实 pin、同一个 private candidate map 和适用 `SourceRevisionPlan/1` 验证/物化。target在完整 live/trashed `identityMap` 内就重写；source tombstone、not_found、owner-mismatch 或 closure 外 foreign target必须显式 transform 或 whole fork拒绝，不能把 foreign/dangling ref提交到 target，也不能通过 omission删掉 full-fork member。旧 tombstone不复制成新 Workspace 的 allocation history，只可按原合同作为非权威 provenance 摘要。
+
+跨 Workspace 不存在保留 NodeRef 的“move”。在线 cross-Workspace copy 的唯一语义仍是 target fresh-identity copy + 完整 identityMap/ref rewrite，之后若用户还要求移除 source，再以 source Workspace 上**另一个**授权 `trash` operation软删除。两个 Workspace 各自有自己的 DecisionKey/OperationId、授权、receipt 和失败/恢复状态，没有 D3 跨 authority 原子 commit：target成功而source未尝试或失败时只能表示“copied; source not removed”，不能声称 atomic move、回滚 target 或用 target receipt代替 source delete。
+
+#### 8.4.1 带完整提交域的 transfer observation
+
+新的 wire12 协调证据使用下述 D3 自有闭合 envelope；它不是 receipt 或联合决议：
+
+~~~text
+{wireVersion:12,kind:"cross_workspace_transfer_outcome",
+ transferOperationId:UUIDv4,observationSequence:D3Integer,
+ targetWorkspaceRef:WorkspaceRef,targetDecisionKey:DecisionKey/2,
+ targetDisposition:"committed"|"failed",
+ sourceWorkspaceRef:WorkspaceRef,sourceDecisionKey?:DecisionKey/2,
+ sourceDisposition:"not_attempted"|"pending"|"committed"|"failed"}
+~~~
+
+只允许这些成员；除条件性 `sourceDecisionKey` 外全部必需。unknown/missing/duplicate/null、nested D6 key/domain 不合法或 UUID/integer 非规范均拒绝。source/target Workspace 不同且在同一 transfer 中固定；每个完整 key 的 Workspace 和内部 commitDomain Workspace 都等于相应外层 Workspace。target key 从首个 observation 固定；source key 恰在 `not_attempted` 时省略，其余状态必需，从首次出现起不可改变。两者都定位真实 `protocolOwner=D3` 决议，不能把 wrong owner 重标。wire12 禁止裸 `targetOperationId`/`sourceOperationId` 成员。不同 domain 下 OperationId UUID 相同不合并 key。
+
+`transferOperationId` 是选定 coordinator 受保护记录内的协调标识，不是内容 ref、任一 ledger key 或全局 registry。`observationSequence` 从 0 开始，对该记录严格递增；旧 observation 不可变，重复 sequence 或 identity/key 变化拒绝，projection 只采用同一记录内已验证的最高 observation。`targetDisposition` 由真实 target decision 证明并固定为 terminal committed/failed。target failed 时 source 永远 not_attempted；target committed 后 source 只按 `not_attempted -> pending -> committed|failed` 前进；已尝试但 unknown/planned 继续 pending，不猜 failed。terminal 不回退。MAX 时组合必须 terminal（target failed/source not_attempted，或 target committed/source committed|failed），之后不得再签发 observation；MAX 上 pending 或仍可尝试的 not_attempted 均无效。读取双方 saved business result 前分别检查其 decision/result scope 当前披露授权；任何一侧不可访问都不能伪造 failed summary 或泄露 reason。summary 不运输 receipt body 或隐藏细节。双方 committed 也只表示两个独立 commit，不赋予 rollback/retry/权限能力。历史 wire11 summary bytes 保留原 Workspace-local key、sequence/state 规则和 decoder，不猜测或向旧证据补入 CommitDomain。
 
 ### 8.5 import/export re-entry
 
-formal backup 的 continue/fork、identity-bearing bundle、
-  ordinary format import 和 current Trash restore 仍按显式 artifact class区分，不从 path、digest、root UUID 或文件名猜模式。
+正式备份的 `continue`/`fork`、全 Workspace 身份承载快照、部分身份承载传输包、普通格式导入和当前 Trash 恢复，仍按显式制品类别与模式区分；绝不根据路径、摘要、标题、根 UUID、文件名或“看起来像备份”来猜测模式。
 
-ordinary format/worker IR 不保留 source content identity。
-  partial identity bundle不在线查询 source Workspace authority。
+`continue_workspace` 只用于已知同一逻辑 Workspace 的 exclusive continuation/failover/disaster recovery：必须验证原 continuation cut，以及截至该 cut 的完整 allocation/burn/live/Trash/tombstone/decision/P continuity；在新的 writer 获得写资格前，旧 authority 还必须已经停止或被有效 fence。对 cut 之后的事实另有不可省略的资格门：要么证明该 cut 之后不存在任何已提交事实，要么取得足以完整承接并合并这些 cut 后已提交事实的 authoritative ledger；仅证明旧 authority 已停止/fenced，不能把 cut 后事实视为不存在。只有这些连续性与 cut 后事实条件共同闭合时才可保留原 Workspace/content refs，新的 AuthorityInstanceId仍按原受管计划产生。若无法证明旧 authority 已停止/fenced、无法证明 cut 后无提交且又没有足以合并其事实的 authoritative ledger，或 allocation/burn/tombstone/decision/P continuity 不完整，则只能只读/reconciliation或 fork，不能以相同 bytes/path冒充 continue。普通新设备 `replica registration` 只是为同一 portable Workspace 注册新的 `ReplicaEpoch` 并取得 ordinary content domain，绝不等于 continue，也不接管旧 P、Approval/Money/unknown 或执行责任。
+
+full-workspace identity-bearing snapshot 只走 `fork_workspace`，并在 target allocation/claim/planned 前验证完整 live+trashed closure；fork 全部 target identity fresh，不能把 partial bundle 升格为 Workspace。`partial_identity_bearing_transfer_bundle` 只允许 `import_new + partial_identity_bearing_transfer_bundle`：完整 artifact manifest、source cut 与 `source_artifact` exact pins 是唯一 preimage authority，foreign typed refs只作已绑定 rewrite/provenance输入；所有 target content identity fresh。该离线模式在 stage3/4/9/14 等路径都不得在线 resolve、mount、fetch 或查询 source Workspace authority，也不能偷走 online `copy_node_subtree`/fork 语义。
+
+ordinary format/UnmanagedItem/Import IR/worker output 只走 `import_new`。fresh artifact partition 由真实 manifest `ArtifactObjectKey` 与 exact source-artifact pins确定，worker/provider/IR ID、文件名、payload digest 或输入枚举顺序都不能成为 target identity。fresh partition全部使用 stage12 同一 private candidate map；owner-local fresh Resource/Annotation只能属于同 graph 明确声明的 new Node owner。existing partition只有在原合同已经由受信 `SourceBinding`/`OriginBinding`、其 active/retired/mapping/version/comparator 连续性和显式 `existingPayloadEdits` 选择时才可保持 existing identity；不能按 UID/path/title/hash/任意 UUID 自动 upsert，retired binding也不能被 ordinary re-import 静默复活。全部 existing 的 batch 不伪装成 D3 fresh import；按原 owner 路由处理。
+
+所有 artifact 模式仍绑定真实完整 source/resource payload与必要 pins；plain/canonical re-entry只按各自合同决定 bytes 保真，不赋予旧 content identity。current Workspace authority 中准确 Trash object 的 preserve-identity 路径仍是 `restore`，不是 import/export re-entry。Typed DefinitionTransfer、SavedQuery/View/DynamicBlock 的完整 typed traversal、slots、Q segment与两遍 locator物化见 §21.2；本段不定义新的 D7 payload、Definition identity、CEL/text/free-JSON scan 或第二 wire。
 
 ## 9. replica registration、新设备、丢 I 与丢 P
 
@@ -324,6 +416,12 @@ ordinary format/worker IR 不保留 source content identity。
 
 I 可全部删除。Core 从 F/M 渐进重建 inventory/parser/search/OCR，不重新 mint identity、parent/order、lifecycle、receipt 或 conflict。
 
+D3 范围证明消费 D6 为完整 `DependencyKey/2` 保存的连续性 stamp `{epoch,revision}`。`epoch` 是这个完整 key 的 proof continuity generation，不是 source production `observationEpoch`、current `SourceObservation.observationEpoch`、`CommitDomain` generation 或 Workspace 全局代次。只有完成一次真实完整枚举后，新 epoch 才可从 `revision=0` 开始；0 只表示该 range generation 的首个完整 proof revision，不表示 empty、unknown、not-scanned 或 source revision 0。相同 epoch 内，任何能够影响成员、absence、顺序、owner/lifecycle/reply/control/visibility 的连续事件都先使旧 proof 失效，再 checked 增加 revision 并完成当前重验；`MAX` 不 wrap。
+
+完整性对空范围和非空范围完全相同：先取得该范围所需 state/content/metadata 的当前披露和读取资格，再通过受信 consistent snapshot/range barrier 完整枚举，或从已知完整基线消费无缺口的连续变更流并做 final revalidation；所有适用目录、分片、owner range 和 source 都必须覆盖。placeholder、unknown decoder、I/O failure、missing shard、hidden unauthorized member、partial/building I、provider “synced”、row count、最终 hash 或“没有 candidate hit”都不能证明全集或 empty；重复扫描得到相同 hash/count 也不是 consistent cut。真实 watcher/journal gap、owner rule/decoder 版本变化、不可恢复 event gap、正确性目录丢失或 range continuity 无法证明时，旧 proof 失效并要求新的 epoch；相同最终内容不能恢复旧 epoch。
+
+correctness-critical 的 range epoch/revision、完整枚举边界、empty proof、连续消费位置和仍被 plan 引用的必要 evidence 由其真实 P/portable-metadata owner 保护，I 只缓存 candidate/enumeration。仅删除或重建 I，在这些 P/M 事实和连续事件链仍完整时，不重签 proof、不重置 epoch、也不增加 revision；如果真实 P/M correctness facts 或连续性已经丢失，则 I、旧 hash 或重扫不能复活旧 stamp，只能在当前授权下重新完整枚举并建立新 epoch。缺 strong range 只使依赖它的 complete consumer unavailable；不依赖该范围且自身资格完整的 ordinary/local 操作不得因此永久停用。
+
 ### 9.3 丢 P
 
 某 replica 的 P 丢失后，原 OperationId decision、planned install、external unknown、approval/Money 不能从当前文件重建。
@@ -336,10 +434,202 @@ I 可全部删除。Core 从 F/M 渐进重建 inventory/parser/search/OCR，不�
 
 ### 10.1 D6 ConflictRecord 是唯一 portable 冲突记录
 
-D3 不建立第二 conflict database。D6 ConflictKey/ConflictId/ConflictRecord 定位 source_concurrent、placement_concurrent、
-  lifecycle_concurrent、identity_collision、policy_concurrent、incomplete_transport 和 placeholder。
+D3 不建立第二 conflict database。D6 保持 `ConflictKey/1`/`ConflictId` 的单一 key/address authority，并按 record 自身 version 选择真实 decoder。新 FA current record 使用 `ConflictRecord/2 + Frontier/2`；其 closed state 仍是 `open|resolution_prepared|resolved|superseded`，`supersedes` 只记录历史关系，不授 merge、LWW、write 或 resolution 资格。`ConflictRecord/2` 的 version 不进入 `ConflictKey/1` 或 `ConflictId` hash input，因此 `ConflictId` 仍是 `D6-ConflictKey/1` 域下完整 key 的稳定地址，读取时必须加载并 byte-compare 完整 key。
 
-D3 拥有 placement/lifecycle/identity 的 typed resolution semantics；D6 conflict_prepare 的 owner_resolution 只能路由到这些 D3 语义，不接受自由 JSON patch。
+历史 `ConflictRecord/1` 继续只按原 `Frontier/1` decoder、bytes、authorization 与 recovery gate 读取/恢复；version=1 的 `createdAtFrontier` 绝不按 `Frontier/2` 解释，resolved/superseded history 也不因新 FA 重编码。仍可按历史路径行动的 /1 `open|resolution_prepared` record 不因 /2 存在而原地升级。只有新的真实 sealed head 改变了完整 `ConflictKey` 时，才按该旧 record version 的规则把旧项 supersede，并为新 complete key 建立 /2 successor；successor 可以在 `supersedes` 引用旧 `ConflictId`，旧 record 原字节保持。因为 `ConflictId` 由 key 导出，同一个未改变的 `ConflictKey` 不得同时存在 /1 与 /2 两个“current” record 来模拟版本升级；resolved history 不 reopen，也不按 mtime/UUID 选 winner。
+
+D3 拥有 typed placement/lifecycle/identity resolution。UI 按 conflict kind 直接导航到以下具名 D3 prepare 入口；当前未部署 D6 候选的 owner_resolution arm 由其 owner 删除，不保留死 prepare RPC 或另造 route-success wire。若证明真实历史 D6 record 存在，仍保留原 decoder 与恢复责任。D6 source/policy resolution 继续归 D6。本 D3 adapter 是完整候选合同，须先完成 D7 producer 协调与全新联合接受后激活。
+
+#### 10.1.1 D3 冲突选择与准备
+
+普通 `identity_operation_request` wire12 与 `d3_identity_input/12` 保持闭合不变。既有 preparationBinding 已能把 D7 受保护的完整选择/预览绑定到原 request fingerprint，因此这里只需 typed prepare 输入，不新增 submit 协议。`D3ConflictResolutionPrepare/1` 精确为：
+
+~~~text
+{wireVersion:1,kind:"d3_conflict_resolution_prepare",operationId:UUIDv4,
+ boundWorkspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+ expectedFrontier:Frontier/2,conflictId:ConflictId,expectedKey:ConflictKey/1,
+ selection:D3ConflictSelection/1,operation:D3IdentityInput/12,budget:BudgetBinding/1}
+~~~
+
+`D3IdentityInput/12` 指 §4.1 原样的 `d3_identity_input` descriptor，不是另一 schema。`D3ConflictSelection/1` 恰有这些分支：
+
+~~~text
+{kind:"placement",head:ChangeId/1,subjectRef:NodeRef,
+ destinationParentRef:NodeRef,destinationOrdinal:D3Integer}
+{kind:"lifecycle",head:ChangeId/1,subjectRef:EntityRef,
+ result:"trashed"|"live"}
+{kind:"identity_fresh_copy",canonicalHead:ChangeId/1,copyHead:ChangeId/1,
+ sourceRef:EntityRef}
+~~~
+
+全部所列成员必需；unknown/missing/duplicate/null 成员和未知版本拒绝。完整 ConflictKey 属于 boundWorkspaceRef，按不变 D6 hash domain 得到 conflictId，其 entity subjects 覆盖选定 subject/source；全部选定 head 都在完整已验证 head set 中。destination/owner ref 与内部 operation role 遵守原 D3 Workspace/owner 矩阵。不允许 source text、任意 patch、调用方选择 fresh Ref 或自报 audience。budget 保留 D6 生产者精确成员与整数规则。
+
+| Conflict kind / selection | 允许的 native operation projection | 精确含义 |
+|---|---|---|
+| `placement_concurrent` / placement | `move_node` 或 `reorder_node` | 所选 head 提供显式 branch basis；subject、destination 与最终 ordinal 必须等于 typed selection 和完整 native plan；reorder 的既有 parent 必须等于 destinationParentRef |
+| `lifecycle_concurrent` / lifecycle.result=trashed | `trash` | 按下文 selected-state 矩阵显式得到 trashed；真实 live→Trash 生成原 membership，保留 selected Trash 维持原 membership；完整 inbound/reply 及其它 head history 保留 |
+| `lifecycle_concurrent` / lifecycle.result=live | `restore` | 按下文 selected-state 矩阵得到显式 live 结果；真实 Trash→live 用原 restore membership/location，保留已 live selected branch 不虚构恢复 |
+| `identity_collision` 或 `lifecycle_concurrent` / identity_fresh_copy | `copy_node_subtree`、`copy_resource` 或 `copy_annotation` | canonicalHead 选择保留的既有 claim/lifecycle，copyHead 是不同的 losing/edit branch。完整所选 source closure 来自验证过的 immutable head evidence，而非有歧义的 canonical lookup，并按 native mode/owner matrix fresh-map。sourceRef 等于 native sourceRef；destination parent/owner 仍在 intent 显式给出。旧 claim 不静默 rekey。 |
+
+其它组合、source/policy conflict、placeholder/incomplete transport、只有 Workspace subject，或操作超出所选 conflict subjects 及其已经证明的必要 repair closure，均按 invalid selection matrix 拒绝，不作为静默 pending variant。source/policy resolution 仍归 D6。多 subject conflict 必须由完整 native plan 闭合全部 affected subject 及 owner/range 义务后才可解决整个 record；局部选择拒绝，不能报告 resolved。selected-branch copy 及另行具名的 canonical 物化仅属于此版本化 resolution binding 的显式特例：copy 前像用历史 branch pins 代替 canonical source lookup，完整 selection、fresh map、owner-local destination、omitted/reply/reference 与最终后态规则保持；canonical 分量恰具有 §10.1.1.2–.3 具名的额外 footprint 与 mandatory 公共语义扩展；原 native matrix 保持不变。单独 native wire12 不因此取得 branch-copy 资格。不暗建 wrapper Node、standalone import variant 或 generic patch。
+
+prepare 先检查当前 `conflict_read`、`conflict_resolve`、对全部显式 subject 与所有潜在 operation scope 的最低 state/structure disclosure，以及原 mode/Field/body/control 写权，再读 record/head/payload/range。随后证明 domain/backend/P continuity（unavailable 先于 reachable integrity），按 record 真实 decoder 加载、逐字比较完整 expectedKey，并验证所有 head 连续 sealed relevance。unknown/undisclosable conflict 统一 `not_visible`；受权且已知 changed/superseded key 为 `conflict_changed`。历史 /1 record 继续原路径，不进入本 /2 prepare。当前 /2 open/resolution_prepared 可进入；resolved 只允许下述精确 no-op 情形。此后才读取受权 branch evidence、验证 exact Frontier 与全部 native owner/semantic/closure 门，pin 所有输入/preview 并冻结唯一结果。新 head 或选择/cut 变化须显式重新准备，不重用旧 click 偷换目标。
+
+所选 branch evidence 是历史冲突输入，绝非假造 canonical live object 或可转移 current SourceObservation。真实 conflicted physical before 只使用下文 typed D6 ConflictInstallInput/1 安装资格，普通 SourceObservation 对该 branch 仍不可得；immutable 所选 bytes 保留真实 production history/pins，历史 selected revision 不向 H/revision 捐值。下面完整 lifecycle/canonical-materialization 规则禁止从普通 current resolver 或相反 head 猜补准入。
+
+#### 10.1.1.1 所选生命周期基础与真实物化
+
+所选分支是 resolution 的显式逻辑输入，绝不先通过普通 conflicted Ref resolver 假造 canonical entity。本地真实已安装状态是另一份 installation before。验证所选 head 与全部当前依赖后，open/resolution_prepared lifecycle record 恰按下表；mode 仍是原 wire12 mode，只有本 guarded、versioned resolution 路径有明确列出的准入特例。
+
+| 所选 head 状态 | 请求 result / mode | Stage9 准入及唯一 membership/location 规则 |
+|---|---|---|
+| live | live / restore | 保留所选 live 状态。不先反向 Trash，不造 restore membership，不把 selected primary 列为 already_live omission。Node 必须 explicit_location 且等于所选 live parent/ordinal；此处没有 Trash fact，original_location 为 entity_not_restorable。owner-local subject 必须 owner_local_no_placement 且原 owner live。显式 destination 不等属于绑定 postcondition 失败，不暗作 Move。 |
+| live | trashed / trash | 对所选完整 live closure 应用原 native live→Trash 算法，仅保存本次真实转换的 restore membership；此前独立 trashed 成员仍独立。 |
+| trashed | live / restore | 使用所选 Trash decision 的原 restore_membership 与 stored location，并与当前不冲突的独立 restored/tombstoned 事实求交。原 Node explicit/original location、owner_local_no_placement/owner_restore_location、reply closure 及 omission reasons 全保留，不能借另一未选 head 的 membership。 |
+| trashed | trashed / trash | 保留所选 canonical Trash graph、restore locations 和原 saved membership；不得虚构 live→Trash、再次 append/renumber、重归属更早独立删除或新建 restore membership。 |
+| tombstoned、absent、unproved | 任一 | resolution 不复活/重建：已证明 terminal/absent 按原 entity_not_restorable / identity_not_resolvable；不可用/未证明证据仍为 availability。 |
+
+两条“保留”分支的 native identity effect projection 可为空，即使 record 仍 open；解决该 record 仍改变 portable conflict control，从不是 no_op。物理安装也可能需要从独立证明的 before 到所选最终状态的真实 source/structure/lifecycle 修改。already resolved 仅按前述 retained-binding 与全效果空判据允许 true no_op；其它变化选择须有真正的新 conflict/operation，不能重开历史。raw Trash/restore 和真实旧 preparation 保留原 lifecycle 准入。
+
+所选 conflict 之外当前已经独立 restored/tombstoned 的成员不能被旧 head 回滚。omitted 成员保持当前状态，不做 canonical source installation、不进 preserved、不隐式复活。owner 相等不提供 restore membership。全部必需 owner/ancestor/reply/inbound 范围及当前不冲突事实必须复验，隐藏或不可用成员不当空集。所选 live owner 下独立 trashed 的 Resource/Annotation 仍 trashed，除非它们本来就被另一显式选择纳入原允许 repair closure。
+
+Stage4 仅证明原 domain/P/custody/record 连续性与可达 integrity；已知 unresolved record 及分别合法的 heads 不因正在 resolution 就算 duplicate-canonical corruption。head 内矛盾或安装不能证明仍报错，也不把分支业务读取搬到 stage5 前。unseen 后 stage9 使用上表 selected branch state 及当前不冲突的 owner/terminal facts；stage10 针对完整当前 affected lists 验证最终 proposed live/Trash/reply graph、parent、ordinal、cycle。stage14 先验证 native projection/canonicalization closure（identity_map_incomplete），再验原 binding/key/head/installation/postcondition 相等（operation_precondition_failed）；stage15 仍保留完整 inbound/omission/reply closure。证据不可用不伪造业务拒绝。
+
+placement selection 同样分域：head 提供所选 subject placement 基础，destinationParentRef/destinationOrdinal 是精确请求最终位置；当前完整 source/destination child lists、无关 sibling 相对顺序及原 final-index 算法决定真实结果。历史 head ordinal 不替代当前 range proof，也不覆盖无关 siblings；open record 选择已保持的位置仍是 portable conflict resolution。placement-only 选择保持 source 生产状态，不能把 source 回滚到该 head。
+
+#### 10.1.1.2 单一 D3 计划中的显式 canonical 物化
+
+受保护 resolution plan 有两个显式合成分量：所选 existing claim/state 的 canonical 物化，以及提交的 native operation projection。二者作为唯一 final proposed cut 计算与验证，共用一次 candidate map、planning CAS 和 seal，绝不是两个作者操作。selection 只授权这个具名 canonical 分量，不是自由 patch。普通 wire12 copy/Trash/restore 仍严格服从原 mode matrix；本专用特例由必需 D7 /3 binding 与不可剥离 input-use guard 选择，不靠未声明 wire member 或新 mode。
+
+identity_fresh_copy 的 canonicalHead 提供 affected closure 中保留的完整 existing birth claim、lifecycle、ownership 与 source；copyHead 提供独立 native copy preimage。二者必须是本 exact key 不同且已验证的 head。canonical existing Ref 及 encoded owner 保持。Core 在准备成功前 pin 全部必要 source 与两个 metadata cut，不能让唯一 native payloadBindings.preimage 同时代表两个来源。native projection 的 preimage 仍是 copyHead；下文受保护 canonical input 另绑定真实 installed before 和选定 canonical source，同一 plan 完整列出对应物理 source/control 改变。因此 Resource R 的 installed A=a、canonical B=b、copy A，得到一次显式 canonical R→b 安装及 native fresh R′=a；反向选择同样可表达。不造 Node wrapper、Resource→Document 转换、自报 ID，也不调用不存在的 D6 Resource source RPC。
+
+lifecycle 先取 selected head 的 canonical branch facts/source，再按 §10.1.1.1 得到请求结果；placement 只选择位置，当前已证明 source/claim/lifecycle 保持，历史 source pin 仅在完整验证同一 source 所需时使用。canonicalization 只触及完整 conflict subjects 及已证明不可缺少的 owner/structure/reply/source repair closure，所有未受影响事实来自完整 current cut。不得变更 Resource/Annotation immutable owner、复用 accepted tombstone/burned ID、加入任意 bytes、丢弃独立删除或换 head。完整 compound native plan 可另含原本允许的 typed edits；重叠只按 §10.1.1.3 的精确相等规则准入，保持一个 final physical source。写入冲突或超出两个显式分量的 closure 在 planning 前拒绝，不能依数组顺序覆盖。
+
+canonical 分量是既有 D3 private plan 的具名部分，不是另一公共 request/receipt。下文当前 D3ResolutionInput/1 增加必需 canonicalInputs；每项是 closed D3CanonicalInput/1：
+
+~~~text
+{entityRef:EntityRef,installation:ConflictInstallInput/1,
+ sourceHead:ChangeId/1,selectedSourceVersion:<managed SourceVersion/2>,
+ selectedSourcePin:PinRef/2}
+~~~
+
+对已经证明的 already-resolved true-no-op 分支，canonicalInputs 为空，不建立 ConflictInstallInput，因为该 source 已不是 unresolved branch。普通 current SourceObservations 与保留的原 resolution decision/binding 共同证明精确 selection 的最终 source/control state 仍成立，保持之前已经生产的 managed after；同一旧 head 不会把历史生产版本重新 admission 覆盖已解决后的 current after。原 branchEvidence 只作历史证明。缺 retained exact binding 或不能证明完整当前结果未变时，此 no-op 分支不可得，不能靠 source 文本相同猜测。
+
+canonicalInputs 按 RefKey 排序唯一，恰覆盖 canonical 物化或完整后置条件读取的每个 conflicted existing source，不允许未使用多余来源。identity/lifecycle 的 sourceHead 为 canonicalHead/selection.head，所选 source/version 须在该 branch cut 被证明；仅 placement 验证时 sourceHead 为 installation.installedHead，sourceVersion/sourcePin 保持，placement 选择不授 source-state 选择。每项 entityRef=installation.entityRef=selectedSourceVersion.entityRef；selectedSourcePin 用对应实体完整 payload decoder，并属于匹配 sourceHead 的 branchEvidence。head 上的完整 sourceVersion 不必恰由该 head 生产，但 sealed 历史必须证明该 cut 中有效。只有 D6 §3.1.1 能生产 installation：它是显式 ConflictInstallInput/1，不是成功 current SourceObservation，绑定真实 installed bytes/metadata/head、当前 FileObjectBinding/generation、DecisionKey、audience 及本 bindingToken。这些 inputs/pins 与普通 InputDescriptor.sourceInputs 分开，并带相同不可剥离 usage guard；此专用资格之外的 source 仍须普通完整 SourceObservation/1。
+
+Core 仅选择具名冲突事实、合成 native operation，并按原 D3/D4/D6 规则重算全部 affected canonical lists/reference outcomes，得到完整 final metadata。原 private plan 保存完整 installed-before metadata、chosen-head metadata、final metadata/source pins、实际 write set、version basis 与 recovery description。payloadKind=portable_metadata 的 pin 不是调用方自由 dictionary；其内容由真实 D3 branch/control decoder、完整前后态重建及 exact preview 相等验证。缺 physical-before 来源、source/metadata 不匹配、unknown installation、缺 selected source、reply/owner/range 不闭合或 final graph 不可证时不得准备成功；不能仅因另一 branch 先抵达就强迫用户反向选择本来合法的 head。
+
+每项真实 canonical source-state change 使用 D6 具名 conflict-only SourceRevisionPlan/2；ordinary/fresh native source 结果保持 /1。最终 bytes 不同，或明确切换 canonical birth claim/所选生产 SourceVersion，均为真实 admission，即使 bytes 相同也一样；共同 seal 以 H(当前生产域,E)+1 产生一个 managed after。claim、生产版本与 bytes 都保持时 source 不变，不造 source plan/H 增量。metadata-only open resolution 为 portable；只有全空 already-resolved 选择为 no_op。所选历史 branch 的 revision/ChangeId 不得冒作新版本或本地物理 before；CP3 before 来自 installation.sourceVersion，after 来自唯一真实 /2 after stamp 加本次 seal ChangeId。
+
+原十二个 receipt 数组只覆盖 native 分量。canonical 分量由下文单独版本化的公共 D3CanonicalEffects/1 语义扩展表达，撤回此前“原数组单独覆盖两个分量”的未闭合承诺。native receipt 按准确 selected-branch 输入解释；完整物理效果另从真实 installed before 到唯一 final cut 独立推导。Resource canonical 安装、canonical reply/reference 改变及真实 canonical placement/lifecycle 效果属于该扩展，不能塞进未声明 native 数组项。
+
+本具名 resolution profile 的完整语义验证必须同时取得原 request、已验证 protected record、native primary receipt 与下文 mandatory D3CanonicalEffects/1。仅解原 closed receipt 不能认证完整 resolution 或充作新 Action evidence；未知/缺失 record、version、guard 或 extension 不回退成 receipt-only 完整成功，真实 saved commit 与当前完整 effects 不可用必须区分。
+
+D7 conflict_resolution_change producer 还须承载其 closed canonicalStates 投影：真实 installed、selected-head 和 final EntityImage，以及各 Node 完整 active restore-membership image，按完整 Ref 唯一排序。复用 D7 EntityImage 及真实 closed membership 投影，source 版本/bytes 仍在完整 source/branch items。actual 与 selected metadata 不能仅由不可读内部 pin 或 head/digest 标签冒充；producer 定义及 exact 跨 item 相等属于配套 D7 owner 工作，membership 不完整不得 prepared 成功。
+
+D7 full preview 在确认前独立展示每个真实 before、所选 head source、native/canonical Result/9 与 typed plan，以及完整 final source/structure/control effect。preview 除原 source/entity/native item 与两类 conflict item，还必含下文 canonical_plan 的完整公共投影及 before/selected/result byte streams；committed 运输再必含最终 D3CanonicalEffects/1，并与原 native primary receipt、companion 和 CP3 对应。canonical 写入不藏在 choice、private pin 或 receipt-only 声称中；committed effects 使用同一冻结 component plans 与 actual before/final source。unknown 保留原 plan，saved replay 不重复安装或 H。
+
+#### 10.1.1.3 Canonical 证据命名空间与公共语义扩展
+
+本代尚未激活的 resolution profile 必须将 `D3CanonicalEffectPlan/1` 存入 `resolutionInput.canonicalPlan`。这是 D3 拥有的受保护输入命名空间，与保持不变的 native `intent` 数组分开；只授权上文完整 source 的 canonical 选择，不增加任意编辑、Locator 重锚或持久 slot identity。精确形状如下：
+
+~~~text
+{kind:"d3_canonical_effect_plan",version:1,decisionKey:DecisionKey/2,
+ conflictId:ConflictId,expectedKey:ConflictKey/1,
+ canonicalStates:[D7CanonicalState/1...],
+ lifecyclePlan:[<original lifecycle_only_reference_transition>...],
+ containers:[{entityRef:EntityRef,installedHead:ChangeId/1,selectedHead:ChangeId/1,
+  beforeSourceVersion:<managed SourceVersion/2>,selectedSourceVersion:<managed SourceVersion/2>,
+  beforePin:PinRef/2,selectedPin:PinRef/2,resultPin:PinRef/2,
+  resultEncoding:"exact_source_utf8"|"resource_bytes"|"d3_annotation_value3"|"d3_symbolic_result9",
+  payloadBindings:[<original D3 payload binding>...],
+  referenceDispositionPlan:[<original D3 reference disposition>...],
+  structuralPlan:[<original D3 annotation_reply entry>...]}...]}
+~~~
+
+全部成员必需且 closed；key/conflict/heads 与同一受保护 resolution 相等。canonicalStates 使用 D7 实际闭合 installed/selected/result EntityImage 与 restore-membership 投影，按 RefKey 排序唯一，包含 metadata-only canonical 效果。containers 按 RefKey 排序唯一，恰覆盖 canonical source admissions，包括相同 bytes 但 claim/生产版本改变；source 不变则无 container。各项绑定唯一 canonicalInputs：installedHead/beforeSourceVersion/beforePin 等于 installation，selectedHead/selectedSourceVersion/selectedPin 等于 sourceHead/所选 source。before 始终是真实 installed A，绝不能换成 selected B。result 是同一 existing identity 下完整所选 source，只接受 system-owned version/envelope 物化和下文原 native overlap 规则。Resource bytes、Node full exact source、Annotation Value/3 保持实际完整 decoder；pins 使用真实 payloadKind，Result/9 stream 用 effect_bytes 加显式 encoding。全部由同一 input-use guard、record、audience、decision 保留。
+
+每个 source container 恰有一个 preimage 与一个 result payloadBinding，二者均为 `existing_entity_subject(entityRef)`，payloadKind 相符。preimage hash 绑定完整真实 before；symbolic result hash 绑定完整 Result/9，否则绑定完整 concrete bytes。本 canonical source namespace 禁止 source_artifact、mapped/new subject、M/N atom、node_placement structural entry 和 fresh_annotation_reply。Node placement/lifecycle/membership 由 canonicalStates 完整绑定。lifecyclePlan 恰覆盖 canonical 中受影响且 source bytes 与 revision 均保持的 slot：只准原 trash/restore 四类 pre/post 组合，资格取本分量实际转换而不是外层 native copy mode。它保持原 exact 字段/comparator，无 payload/resultSlot/Result9 atom、不进入 rewrittenReferences，与自身 lifecycle transitions 一一对应；source-changing container 与 lifecyclePlan 不得覆盖同一 slot，absent 永不冒充 non_live_source。各数组 comparator、required/forbidden 成员、Result/9 framing/partition 与 B/E/S atom grammar 均保持原型，任何 decoder 都不暗增未版本化 atom/member。普通 native 数组继续原 mode matrix，包括 standalone copy 只能修改 destination-owner existing Annotation 的 S 限制。
+
+Core 独立解码真实 before 与完整所选 result。Node authored slot 只按两份完整 decoded sequence 中相同 `(slotOrdinal,slotKind)` 配对；ordinal 仅是这次完整 source 选择的证据投影，不承诺身份或近似对应。kind/ordinal 不同则 old delete 加 result insertion，禁止最近似 text/anchor 配对。配对 slot 使用原 preimage_reference_disposition，fromSource/from 精确指实际 before，resultSlot 是 existing：target 相同且前后 live 用 preserve_exact，前后 trashed 用 preserve_suspended，只有原 live→Trash 情况才用 suspend_with_result；其它合法 target/lifecycle 组合用 rewrite_to_existing 与精确 existingTarget，包括 bytes 相同但不满足原 preserve 前提的情况。每个 result target 按真实 slot family、owner 和 final lifecycle 验证。未匹配 old slot 用 delete，必含准确 resultContext 且无 resultSlot/existingTarget；未匹配 new slot 用 result_only_existing_reference，必含精确 existingTarget/expectedLifecycle，不造 preimage。所有 old/new slot 恰覆盖一次；不得为规避重复 fromSource 把 existing slot 改称 result-only。原 result-only 的 prestate=absent，以及 preimage live/Trash 的 target-state 规则保持。
+
+Annotation target@0 必需，使用同样的 actual-before/result typed evidence，live result 不得删除 target。reply 改变（null→P、P→null、P→Q）时恰有一个原 annotation_reply entry 与对应 Result/9 S 覆盖 reply@1；subjectRef 是保留的 existing Annotation，即使 native copy destination owner 不同。expectedAnnotationRevisionToken 证明真实 before，fromReplyTo 从其解码，replyTo 为所选精确 concrete same-owner live Ref/null，完整 final reply graph 必须无环。S 绑定该 exact entry 并保持原 base-span/CJ 规则，不再列 reference result。未变 nonnull reply 用 E 与原 reference disposition；null→null 无 reference slot 或 S。target@0、reply@1/S、全部 after address 和 structural change 共用唯一 final Annotation source version/token；历史 selected token 不能变成 after token。历史 before address 在 ConflictInstallInput 下对准确 installed production version/pinned source 认证，不通过伪造 current resolver；缺原 token/binding 证据为 unavailable。此资格不重签 portable Locator，也不裁决 PL-IR-01。
+
+canonical 选择保持 existing identities，不作 fresh-map C/Q transfer。但 Core 仍须完整解码 selected source 的 D2、全部 known D4 carrier roots 和 D7 saved payload，按 final cut 验实际完整 Registry/context、typed target、owner/canonical relation、definition schema、权限以及 exact Locator revision/position 证据；原样 raw typed root 不豁免。不能通过换证据来源、重签或藏进 B 来修复 stale C/Q Locator。只有这些门证明无需 typed transformation 时，才适用原 same-identity raw-preserving B 许可；确需 C/Q 变换仍必须有原 producer 的完整证据/算法，不能在 canonical namespace 隐式执行。native copy 保留全部原 C/Q、DefinitionTransfer 义务，包括 slots=[] transfer 与精确旧 occurrence/span 证据。普通字符串和 unknown raw namespace 按真实原规则处理，不扫描 UUID。不可证明为 availability，已证明 typed 非法依原 semantic stage/family；完整 source 的分支选择不能冒称任意 typed repair。
+
+重叠 existing 写入只有一个精确规则：在 stage14 binding/postcondition 检查之前，比较完整已认证 before 生产版本/bytes/metadata、完整物化 final bytes/metadata、version basis、逐项 reference disposition、structural entry 与 lifecycle outcome。仅在只替换两个 component label 后完全相等时允许，并记录为同一物理效果；否则 stage14 identity_map_incomplete 先于 operation_precondition_failed 拒绝。这是精确相等去重，不是顺序 patch 合成。fresh/native mapped result 与 retained canonical entity 为不同 subject，即使 bytes 相同也不合并。一个真实 existing source 只有一个 /2 SourceRevisionPlan、一个 final revision 和一个实际 write/CP3 sourceChanges；相等 native /1 candidate 只是同一物理结果的 alias，不能再次增加 H。
+
+planned record 保存 closed 内部 `D3PhysicalEffectAliases/1`，exact `{kind:"d3_physical_effect_aliases",version:1,decisionKey,refs:[EntityRef...]}`。refs 按 RefKey 排序唯一，恰为两个分量均实际改变且通过上述相等检查的 existing physical entity 交集；未变 potential write 不列。各 ref 唯一指向 native existing subject 与 canonical existing subject，原 plan entry/head-qualified input 仍完整保存在同一 record。此关联由唯一 stage12 candidate 与完整 stage14 effects 确定性推导，经原 planning CAS 保存，不能由 caller 控制或写进 primary receipt；空交集为 refs=[]，不按 digest/path/数组下标/leaf UUID 猜 alias。
+
+原十二个 primary receipt 数组现在**只表达 native 分量**，服从其 guarded selected-branch 准入与原 typed evidence/mode 规则，不再声称包含 canonical 效果。native copy preimage 仍为 copyHead，其 receipt 可记录 mapped reference，canonical evidence 则另行描述 installed A→selected B。两个分量各自保持原 fromSource/resultSlot/toSource 唯一与 canonical array comparator；同一已认证历史 fromSource 可以各出现一次，因为分别产生 existing 与 mapped 两个具名不同结果，但绝不在原十二数组内部重复，也不换 head 假造来源。精确重叠 existing 效果是显式 same-physical-effect alias，两个分量证据必须相等；公共 source/entity/control item 仍只列一次真实物理效果。
+
+D3 唯一拥有 committed 公共语义扩展 `D3CanonicalEffects/1`；它不是第二 success receipt、decision、submit 或 ledger。closed shape 如下：
+
+~~~text
+{kind:"d3_canonical_effects",version:1,decisionKey:DecisionKey/2,
+ requestFingerprint:<original D3 SHA-256 fingerprint>,receiptSha256:<SHA-256 of complete primary receipt D3-CJ/3 bytes>,
+ effectClass:"portable"|"no_op",changeId?:ChangeId/1,
+ plan:D3CanonicalPlanProjection/1,
+ sourceVersions:[{entityRef:EntityRef,before:<managed SourceVersion/2>,
+  selected:<managed SourceVersion/2>,after:<managed SourceVersion/2>}...],
+ preserved:[EntityRef...],rewrittenReferences:[<original D3 reference-result evidence>...],
+ referenceLifecycleTransitions:[<original D3 reference lifecycle transition>...],
+ structuralChanges:[<original D3 structural-change evidence>...]}
+~~~
+
+`D3CanonicalPlanProjection/1` 精确采用 D3CanonicalEffectPlan/1 的成员/kind/version，但 kind 改为 d3_canonical_plan_projection，各 container 的 beforePin/selectedPin/resultPin 分别替换为 beforeSha256/selectedSha256/resultSha256；其余每个成员/数组逐项相等。它是具名投影，不是 protected input type 或 source-reading capability。三个 hash 本身不能读取 bytes：下述 mandatory full 公共运输按准确 `(entityRef,role)` 提供全部三个完整 byte stream，使客户端能独立解码完整 canonical Result/9 和原 typed plans，而非信任 digest。requestFingerprint 按 §4.1 原算法，不建新 hash domain；receiptSha256 绑定同附原 receipt 的完整 bytes。DecisionKey/effectClass/条件 changeId 与该 receipt 及原同 P companion/effectsToken 关联相等；portable 必含 changeId，no_op 禁止。sourceVersions 按 RefKey 排序唯一、恰覆盖 canonical containers，before/selected 等于其完整生产版本，after 等于唯一 sealed source plan/CP3 after；preview 不虚构最终版本。
+
+扩展四个效果数组采用原 D3 exact element schema 与 D3-Canonical-Comparator/1 顺序，分别保持原无重复 key/evidence-origin 规则，只对 canonicalPlan/真实 installed before 解释。preserved 只列实际改变的 canonical existing entity，保持原 unselected live-sibling compaction 排除；本分量不 allocate/tombstone/omit 新身份，因此不增加 identityMap/allocated/omittedObjects 字段。Node actual before→final lifecycle/placement 唯一选择原 node_placement_change/node_trash_placement/node_restore_placement/node_trash_reparent；structure 不变则不列。Annotation reply 差异恰是唯一 S 支持的 annotation_reply_change，不再列 rewrittenReferences。reference results 与 live-source lifecycle transitions 完整、一一对应本分量 exact plan，包括 delete、result-only absent、trashed preimage non_live_source、null/nonnull S 规则。metadata-only canonical 改变具有完整 canonicalStates 与适用 preserved/structural effects，不造 source container。true resolved no-op 仍有一份空 canonical extension（states/lifecyclePlan/containers/sourceVersions/四数组均空），无 changeId、不重新 admission 历史 source；raw non-resolution wire12 没有该扩展。
+
+stage14 先以 identity_map_incomplete 验两个独立命名空间的完整 plan、原 atom、全部 typed gate、overlap 相等和联合 final graph，再以 operation_precondition_failed 验原 preparation/key/head/guard/preview 相等；stage15 保持完整 inbound/owner/reply closure。唯一 planning CAS 冻结两个 plan 及 component→physical-effect alias 关联；同一 P seal 原子保存 primary receipt、完整扩展、companion、final conflict state 和全部实际 source/version/publication 责任。native receipt 加本扩展及适用原 D4/D7 extensions 才构成本具名 profile 的完整语义证明，primary receipt 单独不能认证完整 resolution。
+
+D7 full preview 必须运输公共 canonical plan projection、每份完整 before/selected/Result9 stream、canonicalStates 和全部物理 source/entity/control change，与原 native plan 一并展示。committed full 运输必须包含完整 D3CanonicalEffects/1、同一 plan/bytes、primary receipt 和全部实际完整 source/metadata effects，与 companion/CP3 相等；preview 不能冒充最终扩展。准备必须具备完整 producer、typed plan 及可在真实 seal 时生成完整扩展的证据；任一缺失须在返回 preview 前失败，但准备阶段不要求尚未 sealed 的 committed extension bytes。真实 saved commit 后，未知/缺失 extension 或 component 不降级成 receipt-only 完整成功；已授权 effects 读取返回 effects_unavailable，但保持既有 sealed commit 事实。saved/planned/unknown 只恢复原 plans、aliases、pins 与 extension bytes，绝不重新配 slot、读取不同 head、重做结果、重复 H 或另建 decision。原 record/pin last-reference 与恢复义务全保留，不修改任何真实历史 decoder。
+
+#### 10.1.2 版本化准备、完整预览与原提交入口
+
+prepare 不产生作者决议、reservation、ChangeId、portable conflict state 修改，也不分配最终 content candidate。成功精确返回：
+
+~~~text
+{wireVersion:1,kind:"d3_conflict_resolution_prepared",
+ request:<complete identity_operation_request wire12>,
+ previewToken:Token,previewCursorToken:Token,previewManifest:<EffectManifest/2 header>}
+~~~
+
+request 仍是原闭合 wire12；本 prepared 路径必须携带既有 `preparationBinding={kind:"d7_preparation_binding",bindingToken}`。它保持同一 OperationId/Workspace/domain/Frontier，使用 complete saveProfile、managed_atomic、exact frontierPolicy、strict 安装及完整 D6 `workspace_constraints{workspaceRef,commitDomain}` observation scope。ownerInput 仍为 `protocolOwner=D3,ownerKind=d3_identity_operation/12`。原 native fingerprint 已包含 preparationBinding；不增加 submit envelope、fingerprint domain、planToken、私有 mode 或第二 commit。
+
+协调的 D7 producer 是 `PreparedActionBinding/3`：精确保留 /2 全部成员，再增加必需 `resolutionInput`。其它动作取 null，本入口取以下完整 D3-owned 对象。外层 record 仍归 D7；本节冻结 payload 和 D3 消费，不创建替代 D7 ledger。
+
+~~~text
+{kind:"d3_resolution_input",version:1,decisionKey:DecisionKey/2,
+ conflictId:ConflictId,expectedKey:ConflictKey/1,selection:D3ConflictSelection/1,
+ branchEvidence:[{head:ChangeId/1,metadataPin:PinRef/2,sourcePins:[PinRef/2...]}...],
+ canonicalInputs:[D3CanonicalInput/1...],canonicalPlan:D3CanonicalEffectPlan/1,
+ effectClass:"portable"|"no_op"}
+~~~
+
+全部所示对象闭合，除引用 schema 明确条件成员外，所示成员均必需；unknown、duplicate、missing、非法 null 拒绝。`decisionKey` 完整匹配最终 request。branchEvidence 按 ChangeId 顺序恰覆盖 expectedKey 每个 head；`metadataPin` 的 payloadKind=portable_metadata，固定完整已验证 branch/control cut 与相关性。sourcePins 按 pinToken canonical 顺序唯一排列，精确覆盖该 head 实际读取来源，保留真实 payloadKind 和完整 production SourceVersion；空数组只表示该 head 未读来源。全部 branch pins 用 conflict retention，不得由 hash 或当前文件代替。
+
+/3 record 的 action 是既有 `ActionSpec/1` 的 d3_operation arm，承载此最终 request；`constructionInput=null`，record.request 与 action.request byte-equal。外层既有 principalAudienceToken、真实 source/Registry/rule inputs、proposedInputs、DependencyProof/2、observationProof、budgetBinding、expiresAt、request 和完整 preview 原子绑定全部选择及 pins。本动作没有 Query 条件，canonicalCallInputs 和 definitionInputs 为空；Registry/rule inputs 只在真实未使用时为空。同一 record 禁止 D9 construction 与 D3 resolution 并存。Core 先生成 fresh d7_preparation token，再构造含 token 的最终 request，原子保存完整 /3 record 与最小映射，最后返回；无递归 fingerprint。选择/key/head/input/preview 变化必须显式重新准备不同 immutable token。同 DecisionKey 删换 token 或换最终 request，是原 stage5 operation_id_conflict，不成为另一个相同请求。
+
+最小映射 /3 精确为 /2 全部成员加 `resolutionAccess`；普通动作取 null，本动作精确为 `{workspaceRef,commitDomain,conflictId,readRefs:[EntityRef...]}`。readRefs 是完整潜在 subject/source/owner/structure 披露集合，按 RefKey 排序唯一，不含作者 bytes 或 branch values；Workspace/domain 匹配 record/request。stage3 先使用受保护映射验证 audience、conflict_read、最小 subject/完整 scope 披露，连同原 D3 mode 资格，再读取完整 record/conflict/branch values。missing/wrong-tag/wrong-audience/披露不足仍为 identity_not_visible。此前置门不为重放 saved decision 单独要求当前 ConflictKey 或新的 resolve/write 资格；旧 /1、/2 映射和真实 decision 保持原门。
+
+D3 另保存内部 `D3ResolutionInputUse/1` guard，精确为 `{kind:"d3_resolution_input_use",version:1,decisionKey,principalAudienceToken,bindingToken,inputDescriptor}`。它是 immutable input-purpose metadata，不是 OperationId reservation 或 outcome ledger；inputDescriptor 是最终完整 native InputDescriptor/2，按完整 canonical 值比较，不只比较 digest。输入可用前按 descriptor 和 DecisionKey 定位 guard；最小 audience/usage lookup 不读取 branch/source values。全部 resolution 产生的 owner-input/pin record 都要求此 guard，restart 后亦然；缺 guard/continuity 不允许回退 raw。stage3 按 guard 建立原最小 audience/披露资格，不因缺 token 就认为 raw 合格。stage5 仍先执行：existing key 的最终 request 变化为 operation_id_conflict；只有 unseen 才在 branch read/planning 前，对 guarded input 缺失或不同 preparationBinding 返回 identity_not_visible。复制 pins、删 token、改 descriptor 文本或重算 digest 不会重建 Core-qualified ordinary native input。无关 raw wire12 仍可用。guard/映射至少存活至所引用 input/decision 责任结束；过期只阻止 unseen 新使用，不拒绝原 saved/planned 恢复。
+
+preview 是完整可供客户端读取的 D7 full-profile manifest，不是 PinRef 读取能力或 choice/hash 摘要。previewToken 的 tag=action_preview，previewCursorToken=effects_cursor；header 是 current `EffectManifest/2` 去除 items 的完整对象，phase=preview、profile=full、protocolOwner=D3，绑定同一完整 DecisionKey。协调的 D7 current transport 使用自己的版本化 page 与 EffectBytes-read 入口；响应前已固定全部 items 和 exact byte slots。客户端在当前 full-profile 资格下读每页直到 terminal，每个 byte slot 从 0 读到 byteLength。它包含全部物理 before images、理解决议所需的每个已选历史来源、完整 symbolic native plan/拟议源与结构，以及 conflict record/canonical selection effect。复用既有 source/control/conditional-source/D3-plan items；闭合 `conflict_resolution_change` item 承载完整前后 ConflictRecord/2 及此 resolution input 的公开 selection，`conflict_branch_source` items 承载每个实际读取 head/subject/production-version/source image。精确 producer shape、排序与 current transport version 是配套协调记录中具名冻结的 D7 必需修订；完整 producer 落盘并独立接受前，本新 prepared 路径不得激活。不另造分页算法，不把 raw source 放 canonical request，不伪造 fresh Ref。任一必需 source/control/branch item 缺失或未获授权都不能报告完整 preview 成功。
+
+prepare 只用 symbolic fresh subjects；最终 ID 只在原 stage12 产生，并只由原 planning CAS reserve。同一 candidate 与 SourceRevisionPlan 贯穿 stage14/seal 的真实版本及 materialized pins。原 D7 conditional-source preview 规则表达依赖 map 的 raw equality；采样 map 或选中 head revision 都不能决定目标生产 H。准备重试不修改已保存 record；显式 reprepare 遵守 D7 原新 token/OperationId 规则，先恢复任何未知旧提交。preview 过期只阻止 unseen 新使用；planned/saved/unknown 保留原完整 inputs、guards、pins、寿命及恢复责任。
+
+#### 10.1.3 错误、单次决议与恢复
+
+prepare 失败精确为 `{wireVersion:1,kind:"d3_conflict_resolution_prepare_error",owner:"D3"|"D6",code:<closed code>}`。D3 code 为 §13 stage1–15 原 family（不含 identity_commit_aborted）；D6 code 精确为 `invalid_request|unsupported_version|not_visible|domain_unavailable|integrity_conflict|operation_id_conflict|source_unavailable|proof_unavailable|dependency_conflict|semantic_rejected|budget_exceeded|conflict_changed|state_unavailable|owner_update_required`。不返回 ref/key/detail/pin/partial preview。decode 与原 native family 顺序保持；授权先于存在，availability 先于 reachable integrity。prepare 中已授权的 expectedKey 变化在 branch read 前返回 conflict_changed。stage6 仍为空，prepare 失败不产生 decision。
+
+最终 submit 只走原 wire12。stage1–4 与最小映射/input-use 门后，stage5 在同一 DecisionKey 比较原 fingerprint，并在检查当前 expectedKey、Frontier、preview/preparation 期限或当前 branch state 之前分流 saved/planned/unseen。saved 按原 profile 交付资格返回原 D3 bytes 和同 P companion；planned/unknown 只恢复原 request、/3 record、native plan、candidate、SourceRevisionPlans 和 pins，不重新 prepare/选 head/另起 decision。prepared /3 record 是输入证据，从不是 committed 结果。
+
+只有 unseen 为新执行加载冻结 resolution payload，复验 conflict_resolve/current mode-write 权限、完整 current /2 record 和 native semantic/closure 规则。受保护历史 source 特例只在共同 lookup 得到 unseen 后、native stage7–14 检查前可用；stage14 在 identity_map_incomplete 之后最终复验完整原 request/record 相等、未过期 preparation、精确 ConflictKey/head set 及所有 source/control/observation/dependency/preview proof。已证明变化或 resolution postcondition 失败用既有 recorded `operation_precondition_failed`；证据不可用/损坏沿 availability/integrity，不伪造业务拒绝。stage15 inbound closure 仍随后执行；原 stage 顺序与唯一 rejection/planning CAS 保持。
+
+planning CAS 比较 unseen key、binding/input guard、精确 conflict stamp/heads、权限、完整依赖和 candidate uniqueness。一个 plan 包含全部 native identity/structure/lifecycle effect 和显式 canonical conflict 选择；同 P seal 保存一份原 native-component D3 receipt、mandatory D3CanonicalEffects/1、D3DecisionCompanion/2、resolved ConflictRecord 和完整实际 D6 effects/CP3 责任。D6 保持 conflict storage/install/publication owner；没有 D6 identity-submit arm 或第二 receipt。open record 解决本身是 portable control 修改，即使十二 identity arrays 全空。每个真实物理 source/structure 修改必须已在完整 native/canonical plan 和 full preview 中，不能藏于 metadata choice；§10.1.1.2 的显式 canonical-materialization 分量补齐所需 existing-source/structure 效果，包括 Resource canonical installation，并与 native projection 合并验证唯一完整计划；不假定先做另一 source-resolution 操作。超出该具名分量与原 native projection 的效果仍禁止，metadata choice 不能藏物理写。
+
+真正 no-op 只允许 placement/lifecycle：目标 /2 record 已 resolved，留存且获授权的 resolution binding 证明完全相同 selection，要求状态已经成立，全部 native/source/portable-control effects 都为空。只有此已证明 resolved-selection 情形，prepared empty native plan 验证原 mode/typed roles 和要求后态，无需人为制造反向 lifecycle transition；raw trash/restore 准入不变。不 reopen、不分配 ChangeId/H/revision；effectClass=no_op，十二 arrays 全空。open conflict 选择相同 bytes 仍为 portable；fresh-copy 必定新建身份，重试走 saved replay。planned 后新的竞争/不明安装只 pause/conflict 同一计划；terminal identity_commit_aborted/burn 仅按原 impossibility/safe-cleanup 规则。真实历史 /1、/2 preparations 和旧请求沿原 decoder/恢复责任；/3 新准入门不追溯拒绝 saved/planned。
 
 ### 10.2 两端编辑同一 Document
 
@@ -369,40 +659,62 @@ watcher gap、外部 replace、placeholder materialization 或同步不连续会
 
 ## 11. Resolver 与可见性
 
-### 11.1 wire12 resolver context
+### 11.1 wire12 resolver 输入与精确读取切点
 
-所有新 resolver request 必须显式绑定 WorkspaceRef、CommitDomain 和 expected Frontier；D6 先执行 state-disclosure 与 domain qualification，再由 D3 解析 typed ref/locator。
+D3 拥有下述闭合受保护 host 载体 `D3ResolverInput/12`。每次 Workspace、Entity 或 Locator resolver 调用都从显式选择的 Workspace/domain/frontier 与原 typed argument 构造完整不可变输入；不能用 ambient Workspace、可省略 cut、可变会话默认值或自由 owner JSON 补齐成员。这是 D3 内部输入投影，不是新内容身份、公开 Ref/Locator 词法或 D6 wire。host 单独认证 principal；调用方自报 audience 不授披露权。
 
-### 11.2 Entity outcome
+~~~text
+{kind:"d3_resolver_input",version:12,boundWorkspaceRef:WorkspaceRef,
+ commitDomain:CommitDomain/2,expectedFrontier:Frontier/2,
+ target:{kind:"workspace",ref:WorkspaceRef}
+      | {kind:"entity",ref:NodeRef|ResourceRef|AnnotationRef}
+      | {kind:"locator",locator:DocumentElementLocator|DocumentRangeLocator|ResourceRegionLocator|AuthorAnchorAddress}}
+~~~
 
-wire12 Entity outcome 保留 resolved、trashed、tombstoned、not_found、not_visible、workspace_unavailable、invalid，并增加三种非生命周期状态：
+全部外层成员和所选 target 分支成员必需；其它成员、重复、null、缺失、未知 kind/version 或 wrong union 均拒绝。D6 decoder 验证其闭合 `CommitDomain/2` 与 `Frontier/2`；受保护 version 精确为整数 12。typed argument 保留 fixed-S invalid-reason decoder 总序；受保护载体/version 或 D6 类型不合法映射 `invalid_closed_shape`，已知类型放错 target union 为 `domain_kind_mismatch`。失败只产生所选 resolver 的 `invalid`，不回显 raw input。endpoint 收到另一 resolver 的 target arm 时在访问状态前拒绝。`commitDomain.workspaceRef`、`expectedFrontier.workspaceRef` 必须等于 `boundWorkspaceRef`，target 完整 Workspace 也必须相等。可在授权前计算静态相等性，但 well-formed misbinding 只在适用 state-disclosure predicate 通过后披露为 `workspace_unavailable`，零 routing/fetch、零 target-state lookup。
 
-- conflicted：该 typed ref 当前存在未解决 identity/placement/lifecycle/source conflict，不能选择 canonical branch；
-- incomplete：portable components/records未完整到达；
-- placeholder：已知实体/资源存在但当前 bytes未物化。
+读取只有 exact 策略，不使用 `scope_dependencies`：披露授权后验证选定 domain/backend/portable-history continuity，再要求完整 verified current `Frontier/2` 与 `expectedFrontier` canonical-byte-equal。历史缺失/不可证、inactive/wrong domain、authority 不可用/不一致或 cut 不同都只返回 `workspace_unavailable`，不附私有原因、expected/current vector 或重试提示。请求 F 而当前 F+1 时，即使 target bytes 相等也不能静默读取 F+1；新调用可显式选择新 cut。返回前必须持有 trusted read barrier，或重验同一 cut、disclosure 与 observer continuity；中途变化返回 `workspace_unavailable`，不能交旧 `resolved`。Frontier 相等不证明源已物化或范围完整。历史 wire11 outcome 与真实已保存绑定继续按原 decoder/bytes/authorization，不重编码，也不新增本输入为恢复条件。
 
-这些状态不附另一 branch 的隐藏 bytes。读取具体 ConflictRecord 或 source仍走 D6当前授权入口。
+### 11.2 闭合 wire12 Workspace 与 Entity outcome
 
-### 11.3 Locator outcome
+全部 outcome 为 D3-CJ/3 闭合对象，`wireVersion=12`；unknown/missing/duplicate/null 成员拒绝。`reason` 只使用继承的 D3 closed invalid reasons。成功 decode 的 ref/locator 只按下表允许的行回显。outcome 不含 snapshot、branch、ConflictRecord、冲突数、源 bytes、path、title、repair detail、Frontier 或可选扩展；另行授权的 content/repair envelope 继续归真实 owner。
 
-Locator 先传播 owner/entity 的
-  conflicted/incomplete/placeholder/trashed/tombstoned/not_found/not_visible/workspace_unavailable。
-  只有 canonical live owner 和 locator disclosure成立后才判断 resolved/stale/anchor ambiguous。
+| Outcome kind | status | 精确必需成员 | 其它全部成员 |
+|---|---|---|---|
+| `workspace_resolution` | `available|not_visible|workspace_unavailable` | `wireVersion,kind,status,requestedRef:WorkspaceRef` | 禁止，含 `reason` |
+| `workspace_resolution` | `invalid` | `wireVersion,kind,status,reason` | 禁止，含 `requestedRef` |
+| `entity_resolution` | `resolved|trashed|tombstoned|not_found|not_visible|workspace_unavailable|conflicted|incomplete|placeholder` | `wireVersion,kind,status,requestedRef:EntityRef` | 禁止，含 `reason` |
+| `entity_resolution` | `invalid` | `wireVersion,kind,status,reason` | 禁止，含 `requestedRef` |
 
-stale 不 fuzzy reanchor。D8 可以请求 proposal，但新 locator由 Core 针对新 SourceVersion签发。
+Workspace 不具有 Entity lifecycle、not_found、conflicted、incomplete 或 placeholder 状态：非唯一/不可用 Workspace projection 仍为 `workspace_unavailable`。`mayDiscloseWorkspaceState` 与 `mayDiscloseEntityState` 先于 domain/cut/target state；适用谓词不成立时，全部 well-formed 请求状态（包括不可用 domain 或不同 Frontier）只得同形 `not_visible`。Entity `conflicted` 表示已验证未解决的 identity/placement/lifecycle/source conflict 阻止唯一 branch；`incomplete` 表示必需 portable records/components 未完整；`placeholder` 表示 canonical identity 已知但必需 current bytes 未物化。domain/cut 通过后，优先级为 conflicted、incomplete、placeholder，再到精确 canonical lifecycle。没有合法 conflict record 的 corrupt/duplicate authority 为 `workspace_unavailable`，不能选择 branch 或伪造 conflict。never-known、burned 与未提交 reserved ID 在披露授权后仍同为 `not_found`。
+
+### 11.3 闭合 wire12 Locator outcome
+
+`kind=locator_resolution`；精确 required/forbidden 矩阵如下：
+
+| status / requested locator | 精确必需成员 | 其它全部成员 |
+|---|---|---|
+| `resolved`，AuthorAnchorAddress | `wireVersion,kind,status,requestedLocator,resolvedLocator:DocumentElementLocator` | 禁止，含 `reason` |
+| `resolved`，其它合法 locator | `wireVersion,kind,status,requestedLocator` | 禁止，含 `reason,resolvedLocator` |
+| `conflicted|incomplete|placeholder|trashed|tombstoned|not_found|not_visible|workspace_unavailable|stale` | `wireVersion,kind,status,requestedLocator` | 禁止，含 `reason,resolvedLocator` |
+| `invalid`，`reason=anchor_ambiguous` | `wireVersion,kind,status,reason,requestedLocator:AuthorAnchorAddress` | 禁止，含 `resolvedLocator` |
+| 其它所有 `invalid` | `wireVersion,kind,status,reason` | 禁止，含 `requestedLocator,resolvedLocator` |
+
+owner/entity 的较早状态先于任何 coordinate read 传播。只有 canonical live resolved 才进入 `mayDiscloseLocatorState`；没有该谓词时，valid/stale/missing/duplicate anchor 均为 `not_visible`，零 coordinate-index access。resolved anchor 的唯一 element locator 必须具有同一 owner 与精确 current revision/span/kind。anchor missing 或精确 revision/coordinate 不成立为 `stale`；duplicate anchor 为 `invalid(anchor_ambiguous)`，不产生 resolvedLocator。其它 invalid 不回显 raw input。stale 不 fuzzy reanchor；Core 只可在新的合格调用中签发新 locator。显式受权 branch read 仍属于独立 D6 channel，不能塞入这些 outcome。
 
 ### 11.4 non-disclosure order
 
-顺序为：closed decode → workspace/domain binding → current state disclosure → domain/backend continuity
-  → conflict/incomplete state → exact identity lifecycle → locator disclosure → revision/coordinate。
+顺序为：closed decode/静态 binding 比较 → current state disclosure → 已授权 binding 失败 → domain/backend continuity 与精确 Frontier 相等 → conflict/incomplete state → exact identity lifecycle → locator disclosure → revision/coordinate → 最终 same-cut/current-rights 检查。静态比较不在权限前披露词法合法的失配（§11.1）。
 
-无权限时不以 conflict数量、placeholder、tombstone 或 stale状态泄露存在性。
+任何 D3 完整范围读取都必须在适用的 state/structure disclosure 与当前授权通过之后才访问隐藏 sibling、owner-local member、reply edge、inbound slot 或 restore membership；不得先扫描隐藏成员，再按结果选择一个“安全”scope/profile。随后仍须证明 domain/P/backend continuity，并在同一受信 range barrier 或无缺口连续流上取得当前正/负枚举和 stamp；授权、visibility、membership 或 owner rule 在重验时变化都会使原 proof 失效。无权限时不以 conflict数量、placeholder、tombstone、stale、隐藏成员数或 empty/non-empty 差异泄露存在性。
+
+D3 只拥有 `lifecycle`、`placement_range` 和 D3 identity/lifecycle 层的 `ref_inbound` 枚举语义，并继续约束 `foreign_binding` 中 D3 的 SourceBinding/OriginBinding identity、active/retired/cardinality 规则；具体 foreign/control slot 及其读取资格仍归真实 owner。`ref_inbound` 的零成员必须来自完整 recognized D3 reference-slot/lifecycle/control inbound 目录与连续 stamp，不能来自 I miss。`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource` 与 `source` 继续使用各自 D4/D6/D7 等 owner 的完整枚举和授权规则；一个 D3 range、Frontier causal prefix、最终 vector 数字或相同 hash 不能替它们证明全集、absence 或 complete Query。原作者值允许保留 foreign Ref 也只保留该值，不因此取得 foreign Workspace 的枚举或披露资格。
 
 ## 12. wire12 receipt、D6 seal 与历史结果
 
 ### 12.1 identity_change_receipt v12
 
-D3 primary receipt 保留 wire11 的十二类 effect arrays 和各 mode 的精确语义。
+D3 primary receipt 保留 wire11 十二个效果数组的 shape/comparator 与普通逐 mode 语义。guarded resolution profile 中这些数组只覆盖 native 分量，mandatory D3CanonicalEffects/1 另证明 canonical 分量（§10.1.1.3）；raw wire12 不取得新 footprint 或扩展。
 同一 DecisionKey 还增加 effect class；portable variant 的闭合形状如下：
 
 ~~~json
@@ -433,90 +745,84 @@ D3 primary receipt 保留 wire11 的十二类 effect arrays 和各 mode 的精�
 }
 ~~~
 
-sourceWorkspaceRef、destinationOwnerRef、issuer/target authority、continuation、artifactClass 等 mode-specific members 继续使用 wire11 的精确矩阵。
-effectClass 的闭合取值为 portable|control_only|no_op。
-portable 必须带 changeId 和 semanticState，ChangeId 只在 seal 时分配。
-control_only/no_op 省略 changeId 与 semanticState；同一 decision 的 D6 sourceVersions 为空，Frontier/2 不推进。
-no_op 的十二类 effect arrays 全空；equal-byte external managed admission 不是 no_op。
+sourceWorkspaceRef、destinationOwnerRef、issuer/target authority、continuation、artifactClass 等 mode-specific members 继续使用 wire11 的精确矩阵；D3 primary receipt 的十二类 effect arrays、字段职责和排序都不因 portable publication 升级而改变。`effectClass` 仍闭合为 `portable|control_only|no_op`：portable 必须携带本 decision 在 P seal 时分配的 `changeId` 与 `semanticState`；`control_only|no_op` 省略二者，同一 decision 不产生 content ChangeId、Frontier/2 不推进。`no_op` 的十二类 effect arrays 全空；equal-byte external→managed admission 是真实 source admission，不是 raw no-op，也不得编码成 `no_op`。
 
-所有 D3 mode 固定 WriteProtection=strict。D3 receipt 不复制 ReliableSaveState、InstallationState 或 PortablePublicationState；这些由 D6 decision state 给出。
-portable D6 effect metadata 只列真实改变 source 的 SourceVersionRef/1。纯 placement/lifecycle metadata change 可以没有 sourceVersions，但仍获得 content ChangeId。
+所有 D3 mode 继续固定 `WriteProtection=strict`。D3 receipt 不复制 `ReliableSaveState`、`InstallationState`、`PortablePublicationState`、完整 production source history 或 `ContentCompletionProof/3`；这些仍由 D6 decision/publication state 拥有。这里必须区分两个不同消费层：同 decision 的公共/当前 D6 effect metadata 中 `sourceVersions` 只列**实际改变 source** 的本地 `SourceVersionRef/1` projection，用于通过当前 observer 的受保护 `SourceObservation/1` 定位当前版本证据；它不是 portable production-version transport。新 FA 的 portable `ContentCompletionProof/3.sourceChanges` 则完整运输该 decision 实际 source-state change 的 production `SourceVersion/2|absent` before/after，两者不得互相冒充、复制字段或把 sender 的 `sourceToken` 当生产版本。
 
-D3 primary receipt 与 D3DecisionCompanion/2 在同一个 P seal transaction 保存。
-companion 的 DecisionKey 等于本 request，domainCommitSequence 是该 CommitDomain 的决议序，effectsToken 绑定同一 decision。
-它不是第二个成功 receipt，也不建立第二 ledger。
+纯 placement/lifecycle/structure portable effect 如果 source bytes/value 未改变，D6 `sourceVersions` 可以为空，`ContentCompletionProof/3.sourceChanges` 也为空，但该真实 portable metadata effect 仍在 seal 获得自己的 content `ChangeId` 并按实际规则推进 Frontier。source deletion 是真实 source-state change：portable proof 以原 production `SourceVersion/2` 为 before、`after="absent"`，但不创建删除版 managed `SourceVersion/2`、不建立 after `SourceRevisionPlan/1`、不推进该实体的 `H(D,E)`。true raw no-op 保留原 source version，不建立 managed after 或 sourceChanges。equal-byte external admission 即使 bytes 相等仍使用完整 external production `SourceVersion/2` 作为 before、当前 production domain 中由原 `SourceRevisionPlan/1` 冻结的 managed after 作为 after；`externalSequence`、foreign revision 或 foreign production epoch 都不进入 after revision 分配。
 
-replica_local receipt 的 effect arrays 对实际证明的 local scope 完整；SemanticState=semantic_pending 不宣称全 Workspace closure。
-只有 managed_atomic + complete_semantics 才满足旧强 consumer。
+任何非 absent managed after 都只能在本 decision 的真实 P seal 中，把原冻结 `SourceRevisionPlan/1.after`（或 conflict-only /2 after）`SourceStamp/1` 与**同一个** seal 分配的 `ChangeId` 唯一合成为 production `SourceVersion/2`；其 `entityRef`、production `CommitDomain`、revision 与 production `observationEpoch` 必须逐项等于该 frozen stamp，且 predecessor history 仍等于原验证过的 `lastIssued`/empty-history basis。production domain/production observation generation 与当前 observer domain/current `SourceObservation/1.observationEpoch` 继续分离，不能为方便 publication 把 observer 事实写回 production version。
+
+D3 primary receipt 与 `D3DecisionCompanion/2` 仍在**同一个 P seal transaction** 保存。companion 的 `DecisionKey` 等于本 request，`domainCommitSequence` 是该 CommitDomain 的本 decision 序号，`effectsToken` 绑定同一 decision；它只关联同一 primary receipt/D6 effects，不是第二个成功 receipt、第二个 ledger、第二个 ChangeId 或可任意补写的 companion patch。
+
+replica_local receipt 的十二类 effect arrays 只对本 decision 实际证明的 local scope 完整；`SemanticState=semantic_pending` 不宣称 whole-Workspace closure、完整 Query 或其它 strong owner 的负范围。只有原 managed_atomic + `complete_semantics` 路径满足旧强 consumer；当前尚缺某 owner consumer 的具名 gate 只限制依赖该 gate 的强路径，不永久取消不依赖它且自身 ordinary/local 资格完整的操作。
 
 ### 12.2 r5 replay 与 current r6
 
-replay 原 r5 committed request时返回原 r5 D3/D6 receipt bytes；它不能把 current r6 SourceVersion、Frontier 或 publication state写回旧 receipt。
+原 r5（或其它原协议）已经 seal 并耐久 saved 的 committed decision，在共同 continuity/custody 与同 key 原 request/fingerprint 校验通过后，只检查**该原 decision 实际 effect/mode 或原 result-disclosure scope**的当前交付授权，然后返回原 r5 D3/D6 receipt/error/effects bytes，或恢复该原版本 publication/outbox。旧 before `SourceObservation` 不必仍 current，旧 Frontier 不必等于当前 r6 cut，旧 preview/preparation TTL 不必重新有效，当前 r6 `DependencyProof`/business proof 或新 D4/D5/D7 consumer 也不重新决定历史 success。当前撤权可以统一遮蔽交付，但不修改 decision、receipt、原 `ChangeId`、charge 或历史恢复责任；重新获权后仍只恢复/交付原 decision。
 
-current r6 通过 D6 current-source/portable state读取。历史 decision 与 current state是两个接口。
+current r6 继续通过 D6 current-source/portable-state 接口读取。它可以已经有新的 `SourceVersion`、Frontier、publication state 或作者内容；历史 replay 绝不把 r6 回滚为旧 after，也不把 r6 current state 写回旧 receipt，不重装 source/metadata、不重跑 business selection、不重新 reserve/allocate、不再次增加 H/`ChangeId`/`domainCommitSequence`、不再次收费或消费 `ApprovalUse`/Money。历史 decision 与 current state 始终是两个接口；undo/restore 若要改变 current r6，必须是新的显式 operation，而不是 replay。
 
 ### 12.3 严格安装、P seal 与发布
 
-D3只声明planned identity/structure/lifecycle poststate；所有D3 mode的installationPlan固定WriteProtection=strict。D6使用strict create_only、conditional_replace或真正exclusive_write_window安装portable components；D3不接受observed_replace，也不把人工普通source-save的observed_only资格带入结构/lifecycle。
+D3 只声明 planned identity/structure/lifecycle poststate；所有 D3 mode 的 `installationPlan` 继续固定 `WriteProtection=strict`。D6 只可通过 strict `create_only`、`conditional_replace` 或真正 `exclusive_write_window` 安装 portable components；D3 不接受 `observed_replace`，也不把人工普通 source-save 的 `observed_only` 资格带入 identity/structure/lifecycle。`InstallationNotice/2.baseFrontier`、原 request、`InputDescriptor.expectedFrontier`、`DependencyProof.baseFrontier`、planned after、pins 与 version basis 在 install/publication 阶段都不改写。
 
-written components与planned poststate比较；未写dependency仍与before/cut比较。撤权、third_state、已观察竞争、不能安全恢复before、backend unavailable或安装归属不明都保持paused/conflict/recovery_unknown，不能伪造committed。
+安装和 seal 必须按原计划验证真实 components：最终 `ContentCompletionProof/3.components` 的 key set **恰等于**对应 `InstallationNotice/2.components` 的 key set与原 canonical order，每个 `after` 都是实际 installed/sealed after，不得新增 undeclared component、按 digest 猜 owner version或省略失败 component。已写 component 与原 planned after 比较；未写 dependency/component 继续与原 before/cut 比较，而不是要求本 decision 自己已经写过的 component 仍等于 before。撤权、`third_state`、已观察 competition、无法安全恢复 before、backend unavailable、component ownership/provenance 不明或 install outcome 不可证明时，只能保持原 `paused|conflict|recovery_unknown` 等恢复状态，不能因目标 bytes/hash 恰好相同猜 `committed`。
 
-P seal是唯一D3 author decision commit point。portable effect在该transaction内才分配ChangeId/SourceVersion，并同时保存D3 primary receipt、D3DecisionCompanion/2、D6 decision/effects state和适用charge/outbox。control_only/no_op不分配content ChangeId。同一DecisionKey重放只返回原保存结果，不重装source/metadata、不增加domainCommitSequence，也不重复ApprovalUse/Money。
+P seal 仍是唯一 D3 author-decision commit point。portable effect 只有在该 transaction 才分配本 decision 的真实 `ChangeId`，并原子保存 D3 primary receipt、`D3DecisionCompanion/2`、D6 decision/effects state与适用 charge/outbox。对每个实际 source change，seal 同时按原显式解码的 `SourceRevisionPlan/1` 或 conflict-only /2 验证 `lastIssued`/empty-history、domain fence、`afterPin` 与原 dependencies，并且仅在此处把冻结的 `after` `SourceStamp/1` 与**这个 decision 的同一 `ChangeId`**合成为 managed production `SourceVersion/2`、原子推进对应 `H(D,E)`。source-unchanged structure/lifecycle 不制造 source version；source deletion 使用 production before + `after="absent"` 且没有 after revision/H increment；raw no-op 不产生 managed version或 content ChangeId；equal-byte external admission仍产生真实 external-before/managed-after。`control_only|no_op` 不分配 content ChangeId。production `CommitDomain`/production `observationEpoch` 来自冻结的 source plan，当前 observer domain/observation generation 不回填生产版本。
 
-只有portable effect生成ContentCompletionProof/2并推进Frontier/2。proof发布失败时committed decision不回滚，PortablePublicationState=pending；恢复只发布同一proof，不重新运行D3 plan。control_only/no_op publication为not_applicable。
+新 FA portable committed decision 生成 `ContentCompletionProof/3`。其 `sourceChanges` 可以为空；否则完整、按 EntityRef canonical 排序唯一，并**恰好**覆盖本 decision 的实际 source-state changes。非 `"absent"` before 是原 plan before `SourceObservation/1` 或具名 conflict-only /2 plan 的 ConflictInstallInput/1 中完整 production `SourceVersion/2`；普通观察可以 managed 或 external，wrapper 必须已证明 managed，生产 domain 可以与本 decision/receiver observer domain 不同；fresh 分支的 before=`"absent"` 只来自原 plan 已证明 absent。非 `"absent"` after 只能是上述 seal 生成的 managed `SourceVersion/2`，其 `entityRef`、production domain、revision、production `observationEpoch` 和 `changeId` 必须分别与原 `SourceRevisionPlan/1.after`（或具名 conflict-only /2 after）及 proof 的同一 `changeId` 精确对应。external→managed admission 包括 equal-byte admission，始终运输 external before + managed after；`externalSequence` 不进入 managed H/revision。deletion 运输 production before + absent after，不伪造删除版；纯 source-unchanged metadata effect的 `sourceChanges=[]`。
+
+`ContentCompletionProof/3.frontierBefore` 是 seal **立即之前实际验证**的 `Frontier/2`，`frontierAfter` 恰为 `frontierBefore` 加入本 proof 的 `changeId`，其它 domain head 不回退。若 `frontierPolicy=exact`，`frontierBefore` 必须 byte-equal 原 `InputDescriptor.expectedFrontier`、原 `DependencyProof.baseFrontier` 和 `InstallationNotice/2.baseFrontier`。若 `frontierPolicy=scope_dependencies`，`frontierBefore` 可以是原 Notice base 的非回退扩展，但 seal 与 /3 生成必须同时证明：(1) base→actual cut 每个新增/推进 head 都有完整、连续、verified portable ChangeRecord/对应 completion-proof 链，无 hole、伪造 head 或 sequence jump；(2) 原冻结 `DependencyProof/2` 的全部 source/control/authorization/positive-negative range、`SourceObservation`、`FileObjectBinding`/pins、Registry/rules、membership 与其它 owner dependency 都仍成立，并证明新增 sealed effects 与它们无关；(3) 这条连续链、无关判断、原 plan、原 Notice 和 actual seal Frontier 的验证证据耐久保留在 P recovery state。proof 永不改写 `Notice.baseFrontier`，也不得在 P 丢失后仅比较两个 vector 数字重新猜“unrelated”。
+
+接收端接纳 /3 时必须验证 portable trust、`decisionKey`/`changeId` 关系、原 Notice、proof、完整 component set/bytes-owner version、全部 production `SourceVersion/2`、以及从 `notice.baseFrontier` 经 `frontierBefore` 到 `frontierAfter` 的完整连续 sealed-record history；较大的 vector sequence、最终 hash 或 component presence 不替代中间因果记录。接收端验证生产历史后，在**自己的** observer `CommitDomain`、当前 `FileObjectBinding`、current observation generation、evidence pins 与 current control/Registry/incidence cut 上建立新的 `SourceObservation/1`/`SourceVersionRef/1`；绝不能复制 sender 的 `sourceToken`、observer epoch 或当前权限。`ContentCompletionProof/3` 不是 private `DependencyProof/2` 的 portable copy，也不自动授予 receiver complete Query、Action、negative-range 或 execution-responsibility 资格；strong consumer 仍须建立自己的 current Observation 和完整 local dependency proof。
+
+若尚未 seal，且**每一个** component 都已经证明安全恢复到原 before，D6 可以发布 `ContentCompletionProof/3` 的 `outcome="restored"` 历史/恢复证据；该形状只有原 decision key、原 `baseFrontier` 与证明恢复到 before 的 components，不含 `changeId`、`guarantee`、`writeProtection`、`semanticState`、`frontierBefore`/`frontierAfter`、`sourceChanges`、`receiptDigest` 或任何 success 语义。任何 component 的 before restoration、ownership 或 continuity 不能完整证明时都不得生成 restored，也不能据此猜 terminal success/failure。
+
+历史 `ContentCompletionProof/1`、`ContentCompletionProof/2`、`InstallationNotice/1`、旧 transport/record bytes、旧 `SourceVersionRef`/token binding及其 recovery responsibility继续只走各自原 decoder、原 bytes、授权/连续性/恢复门；/3 不机械升级、重编码、回填 production version或改变历史 saved decision。尤其历史 /2 的 `sourceChanges` 仍是其原 `SourceVersionRef/1|absent` 语义，不能因为 /3 使用 production `SourceVersion/2` 就追溯重释。saved/planned/unseen 与历史交付分流由 §13 完整定义，本段不借 publication 规则提前改写该顺序。
+
+P seal 成功后，即使 `ContentCompletionProof/3` 的 portable publication/transport 随后失败，原 committed decision 也不回滚，`PortablePublicationState=pending`；恢复只能继续生成/发布**同一个 decision、同一个 ChangeId、同一 sourceChanges/components/frontier cuts** 的原 proof，不重新运行 D3 plan、不重装 N/source/metadata、不重采样 candidate/revision、不再次推进 H/Frontier/domainCommitSequence，也不再次收取 charge、消费 `ApprovalUse`/Money 或重复 outbox external effect。`control_only|no_op` publication 仍为 `not_applicable`。
 
 ## 13. fail-closed 顺序与错误
 
-wire12 保留 wire11 的 D3 错误 family。
-第一组前半为 identity_not_visible、identity_authority_unavailable、workspace_integrity_conflict。
-第一组后半为 operation_id_conflict、owner_mismatch、root_operation_forbidden。
-第二组前半为 identity_not_resolvable、entity_not_live、entity_not_restorable、invalid_ordinal。
-第二组后半为 orphan_creation、structural_cycle、invalid_locator、stale_locator。
-第三组前半为 identity_collision、cross_workspace_identity_preservation、identity_map_incomplete。
-第三组后半为 operation_precondition_failed、inbound_reference_conflict、identity_commit_aborted。
+wire12 保留 wire11 **实际完整** D3 error family 与原 stage/priority，不把此前概述中的漏项当成新的闭集。适用 family 包括：`invalid_identity_ref`、`domain_kind_mismatch`、`workspace_ref_misbound`、`identity_not_visible`、`identity_authority_unavailable`、`workspace_integrity_conflict`、`workspace_identity_conflict`、`operation_id_conflict`、`owner_mismatch`、`root_operation_forbidden`、`identity_not_resolvable`、`entity_not_live`、`entity_not_restorable`、`invalid_ordinal`、`orphan_creation`、`structural_cycle`、`invalid_locator`、`stale_locator`、`identity_collision`、`cross_workspace_identity_preservation`、`identity_map_incomplete`、`operation_precondition_failed`、`inbound_reference_conflict` 和 `identity_commit_aborted`。proposal P1/P2 的 `workspace_identity_conflict`、stage1 的 `invalid_identity_ref|domain_kind_mismatch`、stage2 的 `workspace_ref_misbound` 等继续使用原位置和遮蔽顺序；不新增私有 D3 family，也不占用原保留的空 stage6。
 
-访问 D3 DecisionKey 前先走 D6 前门：
-1. closed decode、当前主体最低披露、ObservationScope/2 资格；
-2. CommitDomain、backend fence、P continuity、protocolOwner=D3；
-3. OwnerInputBinding/2 必须是 d3_identity_operation/12，且 descriptor/request cross-field equality 成立；
-4. SourceObservation/1、DependencyProof/2、pins、owner version 可取；
-5. exact 要求 Frontier/2 完整相等；scope_dependencies 只允许无关非回退扩展并重验原依赖；
-6. ConflictRecord、placeholder/incomplete transport 或 availability 问题不能伪装成业务 rejection；
-7. 全部通过后才进入 D3 原 identity gates 与 DecisionKey lookup。
+D3 wire12 的提交/恢复只有一个共同顺序；不得把当前业务 `SourceObservation/DependencyProof/Frontier` 或新 consumer gate 统一前置到原 DecisionKey 查账之前。
 
-D6 前门失败使用 D6 v2 closed error。
-其中 not_visible、domain_unavailable、integrity_conflict 属于前门结果。
-source_unavailable、proof_unavailable、dependency_conflict、install_unavailable 也属于 D6 闭合结果。
-这些错误不发明 D3 family，也不读取 D3 ledger。
-D3-native owner 已在 G0-B 闭合；缺 D4/D5/D7 consumer 的强路径仍可在其版本门返回 owner_update_required。
+1. 先做 outer/D3 closed static decode、canonicalization 与只依赖 request bytes 的 cross-field 检查。属于 D3 owner 的原 stage1/2 仍按原 `invalid_identity_ref`、`domain_kind_mismatch`、`workspace_ref_misbound` 与其优先级 fail closed；不读取 authoritative author/business state。D6 自身 envelope/control 前门失败只使用它原有 v2 closed error，不发明 D3 family。
+2. 在当前 authenticated principal 下，按**记录原 profile**建立最低 state/result disclosure、原适用 `ObservationScope/2`/mode 授权与 prior `CommitDomain` qualification。隐藏 author facts、result members、旧 ledger business 内容或完整范围不能先被读取来选择一个更窄 scope；旧 strong profile 也不能借新 local scope 偷换交付权限。
+3. 证明 `CommitDomain`、适用的受保护 domain fence（不是原生请求未声明的成员）、portable trust/backend，以及 P ledger 与适用 custody/authority continuity。create/fork 使用 §4.5.1：先验证 issuer/source，再 P1/P2，再由 issuer custody 证明拟议 W/B target domain；绝不要求 target 已 active。availability/unproved continuity 一律先于 reachable integrity：不可证明时用原 D6 `domain_unavailable`/D3 适用 availability projection，只有已经证明 reachable/continuous 后的真实 corruption 才进入 `integrity_conflict`/`workspace_integrity_conflict`。create/fork 的原 P1/P2、TargetLedgerCustody 与 `workspace_identity_conflict` 顺序继续按原 profile运行；replica_local 仍不凭空增加 proposal/custody gate。普通 old-generation continuity 也只获得访问原 key 的 provisional 资格，不授权 unseen 新 decision。
+4. 共同 continuity/custody 成功后，按记录**实际版本**用 `(workspaceId,D3-CJ/3(commitDomain),operationId)` 定位同一 DecisionKey，校验 `protocolOwner`、完整原 canonical request/fingerprint。same key 的 wrong owner/different request 继续按原 `operation_id_conflict`/适用 owner conflict，不读取或回显旧业务内容。然后立刻按已有 ledger state 分三支：
 
-进入 D3 后，原授权优先于存在性，authority/custody availability 优先于 reachable integrity；不同 fingerprint 只在 ledger continuity 已证明后返回 operation_id_conflict。
-replica_local 不运行 proposal P1/P2/TargetLedgerCustody；managed_atomic 强门保持。
-scope_dependencies 只重验原 request/dependency scope，不重选 identity、placement、closure 或 after。
+   - **saved**：包括 committed，以及原协议已经耐久保存的 rejected/terminal outcome。只检查当前主体对该 decision **原实际 effect/mode 或原 result-disclosure scope** 的交付授权；通过后返回原 sealed receipt/error/effects bytes，或继续原版本 publication/outbox。旧 before Observation、旧 Frontier/current cut、preview/preparation TTL、当前 r6 business dependency、当前 owner-version/new D4/D5/D7 consumer 都不必重新成为成功条件，也不重新 Query/选 target。撤权只遮蔽当前交付，不编辑 decision、原 receipt/ChangeId/charge/unknown responsibility；恢复授权后仍只交付原结果。saved replay 不重装 source/metadata、不回滚 current r6、不重新 reserve/allocate、不再增 H/revision/ChangeId/domainCommitSequence，不再次收费、消费 `ApprovalUse`/Money 或发送第二个 external effect。旧 strong success 也不能被新 `semantic_pending`/local scope 降级或重新解释。
 
-planned 后只有证明原 plan 永不提交且安装残留安全处置完成，才能 terminal_failed + identity_commit_aborted。
-容量不足、撤权、unknown install 或恢复不确定都不是这种证明。
+   - **planned**：只恢复**同一个原 plan**：原 canonical request/fingerprint、`InputDescriptor`/owner binding、原 candidate map、适用 `SourceRevisionPlan/SourceStamp` 与 H/empty-history basis、before/after pins、reservation/write set、OperationId、`InstallationNotice`、`WriteProtection`、owner-version basis、attempt/budget、installation state、原 preparation record/TTL/clock 与 recovery description。当前授权、原 dependency continuity、domain/fence/P continuity 与实际 install provenance只决定该原计划能否继续，或保持 `paused|conflict|recovery_unknown`；不能 new-prepare 第二个 success、重新 Query/current page、重选 target、重采样 identity/H/revision/token、修改原 request 或借新 consumer gate写第二个 decision。未 seal 的 planned 没有本 decision 的 `ChangeId`/managed sealed version。即使所有文件/hash看起来都是 after，只要 seal outcome 未证明就必须先读 P；P 仍 planned 就不能凭文件猜 committed。原 TTL/clock 若按该 plan 的原合同真正失效，仍走原 expiry/recovery 规则，不由新版本复活。只有已经证明原 plan **永不可能提交**，且全部 installation remnant、pins/reservations/外部责任都按原合同安全清结，才可原子 `terminal_failed + identity_commit_aborted` 并按原规则 burn；容量不足、暂时撤权、当前 consumer 缺失、unknown install 或恢复不确定都不是这种 business terminal proof。
+
+   - **unseen**：只有这一支进入当前新执行门。闭合的原生 `identity_operation_request` wire12 验证其精确 `InputDescriptor/2`、`d3_identity_operation/12` owner descriptor、受保护输入/pins 与原生私有 plan；它不携带也不要求 `planToken`、D6 prepare 调用或 `PreparedIntent/2`。向该请求或闭合 descriptor 添加 `planToken` 属于 stage1 shape error。只有真实 D6 `d6_commit_request/2` 入口才按 D6 owner 验证其携带的 planToken/tag/audience 与选定 `PreparedIntent/2`/inputRetention；它不是同一 D3 决议的第二次 submit 或第二 ledger owner。D7 `preparationBinding` 只在允许的 managed-atomic 原生请求实际携带时按原 stage14 合同检查；省略不取得 D7 准备保证。两条路径随后分别验证适用的当前 owner/consumer version、`SourceObservation/1`、`DependencyProof/2`、适用 `SourceRevisionPlan` version basis、pins、`frontierPolicy`、当前 Frontier、MutationFootprint/授权、local-or-complete semantic gates、budget 与所有 unwritten dependencies，并最后进入原 planning CAS。`exact` 与 `scope_dependencies` 继续按 M4 的真实规则；`semantic_pending` 仍只允许原合同明确允许 pending 的 local obligation，不能冒充 complete Query/all_result/bulk/strong Action/Automation。缺 D4/D5/D7 coordinated consumer 的新强路径在这里返回原 `owner_update_required`/`proof_unavailable`；一个真实不依赖该 strong 缺项且自身 ordinary/local evidence 完整的操作不被永久取消。planning winner 原子保存原完整输入/plan/pins/version basis/reservations 后才成为 planned，仍不在 planning 分配本 decision `ChangeId`。
+
+D6 common/front-door failure只使用既有 D6 v2 error，如 `not_visible`、`domain_unavailable`、`integrity_conflict`、`source_unavailable`、`proof_unavailable`、`dependency_conflict`、`install_unavailable`；它不新增 D3 family、不占 stage6。进入 D3 owner stages 后继续沿 S 的原全局 primary-family 总序：授权先于存在性，authority/custody availability先于 reachable integrity，P1/P2/TL 与 stage5 冲突位置不变，stage6仍为空，stage7–15 及 `recorded_rejection`/planning CAS 边界不被本分流重新编号。
+
+P/install outcome unknown 不是第四条“重新执行”支路。必须保留原 record、pins、installation/external-effect evidence、charge/approval/claim/execution continuity 与 stop/recovery obligation；current files、equal hash、I、空 control DB、reauthorization 或新 proof 都不能猜 success/failure、换 OperationId 重发、退款/重置 quota/approval 或抹掉 unknown。已协调的 D6 Control 候选现已承认真实存在的 native descriptor/companion，并区分 raw/prepared 入口。§17 的全新独立接受和真实剩余消费者门仍适用；候选存在不赋予执行或激活资格。
 
 ## 14. operation-applicable 资格与 semantic_pending
 
 ### 14.1 ordinary Document edit
 
-existing Document 普通 source edit归 D6 source-save，不使用 D3 identity_operation_request。D3只提供 owner/lifecycle/identity前提。D2必须 valid；local typed facts必须通过当前 Registry的局部门。
+existing Document 的普通 whole-source edit 仍归 D6 `d6_source_save_prepare`/source-save，不使用 D3 `identity_operation_request`，也不新增 D3 “弱模式”。这里有两条彼此独立的轴：`ordinary|complete` 是语义证明范围，`strict|observed_only` 是安装保护；不能从 ordinary 推导 observed_only，也不能从 strict 推导 complete。D3 只提供现有 owner/lifecycle/identity 前提；普通 `.adoc` 的当前 source 权威仍是普通文件本身，Resource bytes 的当前权威仍是普通 Resource 文件，portable metadata 才是 identity、parent/order、lifecycle/Trash membership、共享 ACL/policy/Registry 等控制事实的唯一 portable owner。P 保存原 decision/recovery/responsibility 和必要 pins，但不是第二 current body/structure 数据库；I 可全部删除并重建，Draft/协作瞬态也不是 author source。多个已登记 replica 继续可以在各自合格 `CommitDomain` 下执行合同允许的 ordinary 离线内容操作；这不自动取得全 Workspace complete proof 或 D10 execution responsibility。
+
+`observed_only` 只允许受信人工 `interactive_source_save` 在 planning **开始前**显式选择并冻结，且同时满足全部闭合资格：恰一个既有 live Document；`saveProfile=ordinary` + `guarantee=replica_local`；完整 source read/replace；author-source write set 为空或仅该 Document；不存在适用 body/Field/node-control deny；不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或任何其它 entity；Draft Base 逐字绑定所选当前完整 `SourceObservation/1`。它不是 strict 先失败后的 fallback，也不新增逐次审批流程。noninteractive source save、任何 D3 identity/structure/lifecycle 操作（包括 create/move/reorder/Trash）、D5 structured cell/row/column/reorder、bulk/collection/promotion、D7 strong Action、Automation、Server checkpoint、Approval 和 Money 一律 strict。
+
+普通 source-save 仍要求 D2-valid source 与实际修改到的 local typed facts 通过当前适用 Registry/owner 局部门。`ordinary` 只允许合同明确可 pending 的真实 cross-object/complete obligation 进入 `semantic_pending`；D2 invalid、local typed invalid、deny、unknown owner/schema 或 strong proof 缺失不能被洗成 pending/empty/complete success。
 
 ### 14.2 replica_local create/move/reorder/Trash
 
-允许局部语义证明范围见§7–§8。replica_local只缩小依赖范围，所有create/move/reorder/Trash安装仍必须WriteProtection=strict；observed_only只属于D6人工单Document source-save，不能被D3 request选择。成功可以返回complete_semantics或semantic_pending。
+§7–§8 的 local semantic proof ranges 继续定义 D3 `replica_local` identity 操作可缩小到的真实依赖范围；这只缩小 semantic dependency scope，不改变安装保护。所有 D3 create/move/reorder/Trash 仍 `WriteProtection=strict`，D3 request 永远不能选择 `observed_only`。`observed_only` 只属于上段 D6 人工单 Document ordinary source-save。
 
-semantic_pending 的 relation/unique/calendar/collection/inbound/cross_object_type obligation 不能被以下 consumer 当成完整成功：
+满足弱保存资格时，原 plan 必须耐久保留实际读取/固定的 before `B` 与用户输入 `N`。在最终 trusted object/event-continuity check 之后才出现且从未被观察到的外部 `C` 可能被 `N` 覆盖，并且 `C` 可能没有可恢复副本；这就是该闭合弱保护的真实风险，不得在 receipt/proof 中虚构“最后检查后没有 C”。随后新的 C 也可以再次成为 current file，但不能抹掉已经耐久保存的 B/N 或回写旧 receipt/proof。已经观察到的竞争、stale Draft Base、watcher/event gap、revocation、适用 deny、P continuity/durability 缺失都不属于弱豁免：已知竞争按原 conflict/reprepare/paused 路径，安装归属或 outcome 无法证明时保持 `recovery_unknown`。`inputRetentionState=retained`/prepared 只证明 proposal、实际 read-before 与 bindings/pins 已耐久，不是 Saved；seal 后的 `durable_observed_only` 也不是 strict `reliable`。
 
-- D7 complete Query 的负范围证明；
-- result/all_result 派生写集；
-- bulk/collection postcondition；
-- 自动化触发的“全集无匹配/唯一”判断；
-- restore/purge/copy/fork/import strong path；
-- D4/D5 需要跨对象完整约束的 Action。
+`semantic_pending` 只表示 local typed facts 已通过，而某个合同明确允许尚未证明的 relation/unique/calendar/collection/inbound/cross_object_type 等义务仍 pending。它不能被以下 consumer 当作 complete success：D7 complete Query 的负范围或 all-result；result/all_result 派生写集；bulk/collection/promotion postcondition；Automation/强 Action 的“全集无匹配/唯一”；managed restore/purge/copy/fork/import；D4/D5 需要完整跨对象约束的 Action；Server checkpoint；Approval/Money。它也不能把 D2 invalid、typed invalid、授权失败、deny、unknown range 或 strong proof 缺失重解释为空集合或合法全集。
 
-D4/D5既有afterimage尚未消费G0-A/G0-B的SourceObservation/Frontier/WriteProtection合同；C批前这些consumer返回owner_update_required/所属版本不可用，不得把pending降级为空关系或合法全集。
+世代边界必须准确：固定 C 已经消费过原 G0-A/G0-B 的 `SourceObservation`/Frontier/WriteProtection 基线；当前 P2 D3 主文 M1–M5 承接的是 P1 新增的 production-revision、14-key/range proof、CP3/ConflictRecord2、saved/planned/unseen 等合同，但这些仍是候选规范文字，不等于产品实现或联合接受。缺少真正下游 owner afterimage 的强路径保留其具名 gate；这不永久取消真实不依赖该缺项且 local/ordinary 证据完整的操作。
 
 ### 14.3 managed_atomic
 
@@ -524,80 +830,74 @@ managed_atomic 必须证明完整 operation-applicable D3 closure和对应 D4/D5
 
 ## 15. purge、Frontier/2、物化范围与离线副本
 
-purge preparation 把 current ReplicaRecord active set、各 active replica 已接纳 Frontier/2、相关 SourceObservation/1 和完整 DependencyProof/2 作为 D6 受保护输入。
-Frontier/2 只证明 sealed 因果前缀，不证明 payload 物化、placeholder 下载、inbound 扫描或全集约束完成。
+purge preparation 把 current `replica_registry` proof、每个 active replica 对指定 purge cut 的真实 admission evidence、相关 `SourceObservation/1`、完整 `DependencyProof/2`、必要 pins 和原 exact Frontier 基线作为 D6 受保护输入。`replica_registry` 必须证明完整 active/retired `ReplicaRecord` 目录、`registrationSequence` 与无缺口连续性；显式 retirement 是该目录中的受管事实，不是“当前没在线”或超时推断。
 
-required frontier 至少覆盖 target 进入 Trash 的 ChangeId。
-它还必须覆盖已知 lifecycle/placement/source heads 以及 tombstone/allocation history。
-真正 purge 还必须对相关 source/lifecycle/placement/inbound/reference scope 取得实际物化与完整正负证明。
+purge required cut 至少覆盖 target 进入 Trash 的 sealed ChangeId，并覆盖已知 lifecycle/placement/source heads、适用 conflict heads 以及 tombstone/allocation/burn continuity。`Frontier/2` 只证明各 domain 已验证的连续 sealed 因果前缀；稳定向量、较大 sequence、causal prefix、当前在线设备列表、registry count、provider “complete/synced”、I row 或相同最终 hash 都不证明 payload 已物化、hidden member 不存在、inbound/foreign/control/D4 ranges 已完整，或所有参与副本已经真实 ack 本 purge cut。
 
-即使 Frontier 数值满足，required payload 不可读或 DependencyProof 不完整时，purge 仍暂停/不可用，零 payload deletion。
-同步 provider 的“已完成”不能替代这些证明。
-管理员可按当前 policy/trust 和 execution responsibility 显式 retire 永久离线 replica；retired epoch 不复活。
-旧目录重入使用新 ReplicaEpoch，并与当前 SourceObservation、tombstone、ConflictRecord 协调。
+真正 purge 还必须在当前授权下取得相关 source/lifecycle/placement/owner/reply/inbound/reference/foreign/control 和各真实 D4/D5 owner range 的实际物化与完整正负证明。complete empty 与 non-empty 使用同一范围标准；placeholder、missing shard、unknown decoder、I/O failure、watcher/journal gap、unknown install、不可证明 owner/version continuity 或隐藏未授权成员都不能被写成 empty、ack 或 success。无 disclosure 权时在隐藏读取之前停止，不返回负范围、冲突数量或 replica 参与细节。
 
-生产 SourceVersion 的 CommitDomain 可以与当前 purge observerDomain 不同；只要 SourceObservation 当前有效就不能误拒绝。
-相反，相同生产版本在 observationEpoch 变化后旧输入必须失效。
+即使 Frontier 数值满足，任何 required payload 不可读、DependencyProof 不完整、replica-registry continuity/ack 不可证明或真实 range 有 gap 时，purge 都保持 paused/unavailable/conflict 路径，零 payload deletion、零 tombstone success。管理员只能在当前 policy/trust 与 execution-responsibility 门下显式 retire 永久离线 replica；retirement 本身进入完整 registry 连续历史，旧 epoch 永不复活。旧目录重入使用新 `ReplicaEpoch`，并与当前 `SourceObservation/1`、tombstone、ConflictRecord 及当前 range proof 协调。
+
+生产 `SourceVersion/2` 的 `CommitDomain` 可以与当前 purge `observerDomain` 不同；只要完整 current `SourceObservation/1` 有效就不能仅因域不同误拒绝。反之，current observation generation 变化、gap 或真实 dependency 变化会使旧输入失效，即使 production version、Frontier 末值或 bytes/hash 看起来相同。
 
 ## 16. 对 D4–D10 的稳定边界
 
 ### 16.1 D4/D5
 
-D4 ref-valued fields仍用 typed refs。relation、unique、calendar 和 cross-object type 对 semantic_pending 的精确消费矩阵必须在 D4 afterimage冻结。
+D4 的 ref-valued Field/Relation/Calendar/typed-value 继续只用其真实 typed Ref/`RelationReadContext`/Registry/Calendar 合同。当前要配套的是 P1 新 production revision token、`DependencyProof/2` 14-key/range currentness、CP3/ConflictRecord2 与 M5 分流在 D4 各真实 consumer 中的 afterimage；relation/unique/calendar/cross-object type 对 `semantic_pending` 的精确消费、完整 incidence/negative range、Registry/temporal binding 仍由 D4 owner 冻结。D3 不发明 D4 schema，也不把 partial I、Frontier prefix 或 local pending 当完整 incidence/Calendar 证明。
 
-D5 native/bulk/collection 的完整范围同理必须版本化；D3不从部分索引猜完整性。
+D5 的 native structured cell/row/column/reorder、bulk/collection/promotion 与 revision-bound locator同理必须显式消费 P1 新 revision/range/portable 合同。它们保持 strict，所需完整范围缺失时只门控依赖它的 strong path；D3 不从 partial index/hash 推完整性，也不把普通 whole-source save 的 `observed_only` 扩到 structured D5。
 
 ### 16.2 D6
 
-D6 的 physical paths、portable metadata records、P/I 与 strict safe install 继续由 D6 拥有。
-DecisionKey/2、Frontier/2、SourceVersion/2、SourceObservation/1、DependencyProof/2、D3DecisionCompanion/2 由 D6 owner afterimage 定义。
-ConflictRecord 和 execution responsibility 同样归 D6；D3 不提供 generic patch 绕过 D6，也不把 P 变成 parent/order 的逻辑 owner。
+D6 继续唯一拥有 physical paths、ordinary source-save、portable metadata records、P/I、strict/observed_only 安装能力与实际 producer 类型。`SourceVersion/2` 是 production-domain 的 managed/external closed union；当前 `SourceObservation/1` 单独记录 observer domain/generation，`SourceVersionRef/1` 只投影完整受保护 Observation。新 managed-after 基础由 `SourceStamp/1`、`SourceRevisionPlan/1`、`RevisionTokenSource/2` 与 `RevisionTokenBinding/2`（tag `d6_source_revision/2`）承载。`DependencyProof/2` 仍只有十四类 closed `DependencyKey/2`，其中 `placement_range` 的 `StructureRange` 仍只有九个 variant。新 portable publication 使用 `ContentCompletionProof/3`；current conflict 使用 `ConflictRecord/2 + Frontier/2`，但 `ConflictKey/1`、`ConflictId` 与 `D6-ConflictKey/1` hash domain 不变。D3 只消费这些 exact producer，不提供 generic patch，也不把 P 变成 current body、parent/order 或 source 的逻辑 owner。
 
 ### 16.3 D7
 
-D7 Query/Action 需要新 CommitDomain/frontier/SourceVersion consumer。PreparedActionBinding/1,/2 只用于历史 saved decisions。
-
-future D7 afterimage需要定义 wire12-compatible preparation record；在它接受前，带 preparationBinding 的新 managed request不得产生成功 decision。D3不在本文件复制一份 PreparedActionBinding/3 schema。
-
-DefinitionTransfer、Result/9 Q segment等 D3-owned identity transfer algebra在 wire12继续使用；其 D7 payload decoder仍归 D7。
+D7 的 Query/Value-CEL/View/Narrow Field/Definition Transfer/Preview-Effects/Execution-Action/Prepared/Scenarios 等真实 consumer必须分别消费新的 CommitDomain/current Observation、revision binding、14-key dependency proof、Frontier policy、CP3 transport 与 M5 replay/recovery边界。`PreparedActionBinding/1,/2` 对实际历史记录继续按原合同；wire12 新 preparation 的真实 owner/version afterimage未闭合时，只门控 unseen 新执行。D3 §10.1 冻结协调的 D7 PreparedActionBinding/3 producer 所需 resolution payload 和 native stage 消费；完整 D7 record/preview/current transport 后像必须共同落盘并接受后才激活此新 prepared 路径。§21.2 定义 D3-owned DefinitionTransfer/Q identity algebra；D7 仍拥有 payload decoder/effects 与强 Query/Action 完整性。
 
 ### 16.4 D8
 
-D8 Source/Live/Read、Draft/IME/Undo/selection 和 Server collaboration checkpoint绑定 SourceVersion/2。
-  显示模式切换不改 source或 identity。
+D8 Source/Live/Read、Draft/IME/Undo/selection、editor 与 Server collaboration checkpoint需要消费**完整 current `SourceObservation/1`**及其 `FileObjectBinding`/currentness，而不是裸 production revision 或 sourceToken 文本。Draft Base 绑定选定 current Observation；普通 presentation/edit UI 不改 source/identity。Server checkpoint 属 strong strict path，不能借 human `observed_only`。未完成的 D8 consumer gate不取消普通 `.adoc`/Resource read、Draft 或已合格本地操作。
 
 ### 16.5 D9
 
-D9 import/template/export使用新 scoped pins和 CommitDomain；worker/IR ID仍不是 content identity。ImportJob unknown先恢复原 request，不能换 OperationId重做。
+D9 的导入、模板、导出和有作用域构造器使用真实的作用域固定证据、`CommitDomain`、候选映射/身份转移，以及原制品与未知结果恢复合同。工作进程、中间表示或提供方标识仍不是内容身份；`ImportJob` 结果未知时先恢复原请求、计划和固定证据，不能更换 `OperationId` 盲目重试。部分身份承载传输包、普通导入的既有/新建分区与未知结果继续按 M2/M5 边界处理；D3 不发明 D9 的构造器/作业模式定义。
 
 ### 16.6 D10
 
-D10 approval/claim/Money/sourceOccurrenceKey/stop存在 D6 ExecutionResponsibilityRecord 的连续域中。Replica registration 不复制、退款、重置或接管这些资源。
+D10 继续拥有 ApprovalUse/claim/Money、Run/Lease/Automation/Workspace/deployment execution continuity、stop/unknown 与 `sourceOccurrenceKey` 的高层连续性；这些责任不能从 path/hash、当前 source、Replica registration 或 D6普通 execution-resource key推断/重建。Replica registration只建立普通 portable content domain，不是 continue，不复制、退款、补充、重置或接管旧 Approval/Money/unknown/external-effect/execution responsibility。D10 consumer未闭合的强执行能力保留具名 gate，但不把普通离线内容能力全局禁用。
 
 ## 17. Server 多用户与 D3 序列化
 
-Server可以同时服务多个主体和多个 Draft。D3 request的 principal/audience 来自 host/D6 protected context，不由另一会话代签。
+Server 可以同时服务多个主体、多个编辑会话和多个 Draft；D3 request 的 principal/audience 始终来自当前 host/D6 protected context，不能从另一会话借用或代签。多个 Draft 的 Base/selection/input 各自保存，不因为别的会话提交就被静默重写。
 
-不同 write sets可以并行 prepare；P/文件安装和 D3 decision按实际冲突关系线性化。同文档第二个旧 Base request得到 stale/conflict并保留 Draft。
+不同 write sets 可以并行 prepare，但“可以并行准备”绝不放宽实际 commit conflict、owner dependency 或 Frontier policy。P CAS、文件安装和 D3 decision仍按真实 write/dependency 冲突线性化；同一 Document 的旧 Base request在 current Observation 已变化时按原 stale/conflict/reprepare 处理并保留 Draft。所有 managed_atomic D3 mode仍走 `frontierPolicy=exact`；不能因为 Server 能并行 prepare 就让旧 strong plan在 Frontier 已变化后借 `scope_dependencies` 继续。只有原本就是 replica_local + `scope_dependencies` 的四类 local_structure D3 mode，才可按 M4 的完整连续 sealed unrelated-extension证明继续原 plan。
 
-未来实时协作只向 Core产生一个可验证 source/identity proposal；operation stream、presence或CRDT object都不是 NodeRef/SourceVersion/receipt。
+未来实时协作只向 Core 产出一个可验证 source/identity proposal；operation stream、presence、cursor 或 CRDT object都不是 `NodeRef`、`SourceVersion/2`、current `SourceObservation/1`、receipt 或 author ledger truth。Server collaboration checkpoint仍是 strict strong consumer，需要其 D8/current-observation 配套后才可作为该能力成功依据。
 
 ## 18. 实现影响图
 
 实现需要：
 
-- D3 wire12 decoder/encoder/fingerprint；
-- DecisionKey/2 + protocolOwner=D3 的单一 P ledger lookup；
-- d3_identity_operation/12 OwnerInputBinding 与 InputDescriptor/PinRef exact comparison；
-- Frontier/2 policy、ObservationScope/2、SourceObservation/1 与 DependencyProof/2 currentness；
-- replica-local fresh ID allocation与portable birth/tombstone；
-- placement/lifecycle conflict projection；
-- SourceVersion/2-aware locator/evidence invalidation；
-- local Trash versus managed restore/purge；
-- resolver conflict/incomplete/placeholder states；
-- legacy v9/v10/v11 replay router；
-- D6 protocolOwner=D3 decision-state integration、同 P D3DecisionCompanion/2 与 effectClass 分支；
-- D7/D8/D9 future consumer version gates。
+以下均是后续实现/一致性义务，不表示本候选已经实现、运行或通过测试：
+
+- D3 wire12 closed decoder/encoder/fingerprint 与原 stage/family/DecisionKey 单决议规则；
+- M5 的共同门 → saved/planned/unseen 唯一分流，确保历史 replay、planned recovery、unknown responsibility 不被当前业务 proof 前置洗掉；
+- 对 `d3_identity_operation/12`、`OwnerInputBinding/2`、`InputDescriptor/2`、有类型的 `PinRef` 和受保护记录进行逐项精确比较；P 中的候选映射、计划、固定证据、预留项和版本依据不得漂移；
+- `SourceVersion/2` production domain 与 current `SourceObservation/1` observer domain 分离；`SourceVersionRef/1` 只选择完整 current Observation；
+- `H(D,E)`、`SourceRevisionPlan/1`、`SourceStamp/1`、`RevisionTokenSource/2`/`RevisionTokenBinding/2` 的连续 sealed-history、foreign-domain、epoch、MAX、external admission/no-op/delete/source-unchanged 规则；
+- `DependencyProof/2` 十四类 closed key、九类 `StructureRange`、授权先于隐藏读取、positive/negative/empty completeness、P/M continuity 与 I-discardable 边界；
+- `replica_local` local_structure + 真正 `scope_dependencies` unrelated extension，与所有 managed_atomic D3 `exact`/strict 的明确分流；
+- 本地 Trash、受管 `restore`/`purge`、独立进入 Trash 的所有者局部成员、副本登记表的清除覆盖、规范 Trash 放置与身份不复用；
+- create/copy/fork/import 的单一 private candidate map、owner/membership矩阵、真实 preimage/result pins、M3 DefinitionTransfer 全 typed slots/Q 双射与两遍 Locator位置闭环；
+- `ConflictRecord/2 + Frontier/2` 与历史 `/1`、不变的 `ConflictKey/1`/ConflictId hash domain、真实 sealed heads 与 D3 typed owner-resolution gate；
+- D3 primary receipt十二数组、同 P `D3DecisionCompanion/2`、local `SourceVersionRef` projection 与 portable `ContentCompletionProof/3.sourceChanges` production transport 的分离；
+- CP3 必须使用实际的 `frontierBefore/frontierAfter`，保持 Notice 基线不变，验证组件和 `sourceChanges` 的完整性，并由接收方在自身观察域重建本地观察与引用投影；封存后发布处于待处理状态时，只恢复原发布流程；
+- D6 ordinary source-save 的 ordinary/complete 与 strict/observed_only 两轴、planning 前人工冻结 observed_only、B/N 耐久和 unseen-C 风险；D3 不新增弱模式；
+- Server 多主体/Draft/并行 prepare 与真实 conflict/exact policy，不把 CRDT/presence 变成 author identity/version；
+- wire9/v10/v11 及实际历史 records 的原 decoder/replay/retention/unknown 路由，不把所有历史原型默认 active、不批量升版；
+- D4/D5/D7/D8/D9/D10 的具名 consumer gates只门控真实依赖它们的路径；普通 `.adoc`/Resource read、Draft、合格 human whole-source save 和真实 local offline operation 不因无关强 consumer 缺失永久停用。
 
 不得用实现便利新增 path identity、global mutable current table、LWW、hidden ID remint或第二 receipt。
 
@@ -605,65 +905,148 @@ Server可以同时服务多个主体和多个 Draft。D3 request的 principal/au
 
 至少覆盖：
 
-1. 两 replica 从同一 SourceVersion 离线编辑同一 Document，两个可靠 local decisions保留并同步成 source_concurrent。
-2. A create/move Node，B 编辑同一 Node source；因果可证明时组合，metadata缺失时 incomplete。
-3. A Trash，B edit；不自动 delete-wins/edit-wins。
-4. source 与 portable metadata 分批到达，不把缺一侧当删除或 fresh identity。
-5. 两个不相容 birth claim 使用同一 typed ref，形成 identity_collision，普通 resolver不选 winner。
-6. A→B→A + observation gap，使旧 locator/prepared/evidence stale，即使 digest相同。
-7. 文件安装在每个 stage崩溃；第三状态不覆盖，P seal后 publication未完仍显示 reliable + pending。
-8. 删除 I 可重建；丢 P 不重建旧 decision/unknown/Money。
-9. r5 committed replay返回 r5原 bytes，current r6另读。
-10. Server同文档两用户 Draft并存，先提交者产生新版本，后者旧 Base不覆盖。
-11. Server不同文档 prepare并发，不因无关 commit sequence误 abort。
-12. wire9/wire10/wire11 saved decision按原 decoder重放；新 request只接受wire12。
-13. partial index不能让 strong bulk/restore/purge或 complete Query通过。
-14. replica registration 保持WorkspaceId/refs且不调用continue。
-15. duplicate local UUID claim同步后显式 fresh-copy losing branch，不静默rekey。
-16. purge在active replica frontier缺失时暂停；retired旧副本重入只能新ReplicaEpoch，tombstone不复活。
-17. D2-invalid外部 bytes可repair/read但无成功D3 author receipt。
-18. hash相同、FileObject provenance不同不能证明安装属于原plan。
-19. revoked planned request不seal；已sealed request撤权只遮蔽交付，不改decision。
-20. ContentCompletionProof失败不回滚sealed receipt，后续可恢复publication。
-21. same OperationId在两个 CommitDomain独立合法；同domain不同fingerprint固定conflict。
-22. semantic_pending不能被D7 all_result、Automation或unique negative当complete。
-23. managed_atomic缺完整range时不得自动降级replica_local。
-24. D7 Prepared1/2历史恢复不被wire12重新解释；Prepared3未定义时新binding路径明确不可用。
-25. no body bytes永久嵌入wire12 canonical request；InputDescriptor+purpose pins完整比较且hash-only不足。
+以下是必须覆盖的 conformance/negative/unknown/recovery 场景清单，不表示测试已经运行或 PASS：
+
+1. 两个副本从同一生产前像/来源切点出发；每个副本都在自己的操作 `CommitDomain` 下构造并验证完整的本地当前 `SourceObservation/1`，不得复制另一副本的观察记录或 `sourceToken`。随后两端离线编辑同一文档，两个真实本地决议都保留，并汇合为真实 `source_concurrent`，不采用 LWW。
+2. production `SourceVersion/2.commitDomain` 与 current observer domain不同仍可合法 current；不能仅因域不同 stale。
+3. 同 production domain 的 `H(D,E)` 跨 production `observationEpoch` 不重置；新 managed after 使用连续 sealed history 的 H+1，`MAX` 不 wrap。
+4. 外部生产域的前像修订号或生产观察世代，以及 `externalSequence`，都不能向新的生产域提供结果修订号；不同生产域中的相同修订号也不代表同一版本。
+5. 即使字节相同，外部来源接纳仍形成外部版本前像和受管版本后像，不是原始无操作；真正的原始无操作、来源未改变的结构/生命周期操作和删除，都要验证不会虚构受管后像或推进 H。
+6. A→B→A、watcher gap、object/external replace或不连续 rematerialization 即使最终 bytes/hash相同，旧 Observation/token/Locator/prepared/evidence仍失效。
+7. `RevisionTokenBinding/2.source` 必须是 closed `RevisionTokenSource/2` wrapper；同 `(observerDomain,observationEpoch,source)` 连续时 token稳定，不能把 bare stamp/version或旧 tag混用。
+8. 九种 `StructureRange` 每种都验证完整正/负范围、有序性/无环/owner/reply/restore semantics；缺 shard、placeholder、unknown decoder、I/O failure、hidden range、partial I 或 no-hit不能证明 empty。
+9. range `revision=0` 只表示新 proof epoch 的第一份完整证明，不表示 empty；I 删除/重建在 P/M correctness continuity 完整时不 reset epoch，真实 gap/loss才新 epoch。
+10. 先独立 Trash Resource/Annotation，再 Trash owner Node；restore owner只恢复原 `restore_membership` 中本次 node-closure成员，早先独立 trashed成员保持 trashed。
+11. 对同一场景 purge owner必须覆盖全部仍 owned 且 trashed 的 Resource/Annotation，包括先独立 Trash者；local Trash `semantic_pending` 不能支持 purge。
+12. `purge` 若缺少任一活动副本的真实确认/退役证明、副本登记表连续性或完整的入站引用/控制所有者证明，就必须暂停；提供方显示“已同步”、稳定 Frontier、计数或哈希都不能证明全局覆盖。
+13. copy Node subtree默认只复制合法 live closure；owner-derived `r1` Resource 若未map必须显式 transform/reject，不能 ambient rebind。
+14. standalone `copy_resource|copy_annotation` primary 必须 fresh mapped 到显式 destination owner，owner不能原地交换；existing container write必须满足原 paired preimage/result/slot/S matrix。
+15. `copy_annotation` fresh mapped primary 的初始 reply只走 reference plan，绝不当 S container；只有原 mode允许的 destination-owner existing Annotation 才可用唯一 S 改 reply。
+16. exact fork覆盖 source cut 全部 live+trashed entities，identityMap完整、两态和 Trash placement精确分区，不能 omit member或按 owner重建 restore membership。
+17. 部分身份承载传输包只以制品/来源固定证据作为前像依据，不在线查询来源权威；普通工作进程或 IR 的 ID 不能成为内容身份。
+18. `DefinitionTransfer` 必须遍历 `TypedLiteral`/`TypeSpec` 声明的 `Ref`、`DefinitionAddress` 中的 `Locator`、调用参数与默认值、固定视图域，以及 `DynamicBlock` 绑定；普通 CEL 表达式、文本和未知 JSON 不扫描，完整 `Locator` 根也不再拆出重叠的所有者槽。
+19. 已识别且不含 `Ref` 的定义仍要求 `slots=[]`；遗漏 `QueryRef` 参数、参数默认值或 `preserve` 槽，所有者/类型错误，或 `Q` 与转移出现项未形成双射，均必须在第 14 阶段失败。
+20. 已有 copy/fork 定义互引由同 candidate map + Q支持；新作者 payload 直接互引本 operation未分配 fresh Node因无 public symbolic shape而拒绝，不能伪 UUID。
+21. Q 两遍 Locator物化使用同一 candidate map、同一 `SourceRevisionPlan`/revision token与同一最终 source；第二遍 span不等、目标多义/消失或 C/D4 provenance不兼容则整操作失败，不迭代猜位置。
+22. replica_local `scope_dependencies` 只有 base→current 的完整连续 verified-sealed无回退链且原14-key source/control/auth/Registry/rules/membership/正负范围/owner-version全部仍成立才可继续；仅 vector数增大/hash相同不成立。
+23. 同样 Frontier 扩展若 operation是 managed_atomic/exact，旧计划必须 stale/conflict，不能借上一条继续；`InstallationNotice.baseFrontier` 永不改写。
+24. CP3 `frontierBefore/frontierAfter` 必须是真实 seal cuts；缺中间 ChangeRecord/proof 或 P中的 unrelated judgement丢失时不能生成/接纳成功 /3。
+25. CP3 `sourceChanges` 运输完整 production SourceVersion before/after；receiver验证 history后用自身 observerDomain/FileObjectBinding/current epoch/pins建新 Observation/Ref，绝不复制 sender sourceToken，也不获得 complete Query/Action。
+26. 来源未改变的可移植结构/生命周期操作可以 `sourceChanges=[]`，但仍有真实的可移植 `ChangeId`；删除的后像为 `absent`，不产生“删除版本”，也不推进 H。
+27. `ConflictRecord/2` heads必须是真实连续 sealed relevant ChangeId；external competition/unknown install无sealed head时不能伪造；历史 `/1` 只按 Frontier/1 decoder，不与 `/2` 同 key双current。
+28. r5 saved/sealed后响应丢失，随后 r6 修改 source；重交原 r5请求在原实际effect/mode交付授权通过后返回原 r5 bytes，r6不回滚，旧 before/Frontier/preview TTL/新 consumer不重跑。
+29. r5 saved当前撤权只遮蔽交付；重获权仍交原bytes，不二次收费、增H/ChangeId、重装 after或把旧 strong profile降为新local。
+30. planned未seal只恢复原 InputDescriptor/candidate map/SourceRevisionPlan/H basis/pins/reservation/Notice/attempt/budget；不能重新Query/选target/采H/revision。文件都像after但P仍planned时不能猜success。
+31. P/install outcome unknown时保持原 pins、Approval/Money/claim/external-effect/stop责任；equal hash、I或空control DB不能换OperationId重试、退款或重置quota。
+32. planned容量不足、暂时撤权、consumer缺失或 unknown install不能记录business rejection；只有原plan永不可能提交且残留安全清结才允许 `terminal_failed/identity_commit_aborted`。
+33. trusted human ordinary single-Document `interactive_source_save` 在 planning 前选择/freeze `observed_only` 且全部资格满足时可走弱保护；同一资格缺任何一项即不能选弱。
+34. strict plan 开始后 strict capability failure、revocation、known conflict或strong obligation失败不能 fallback `observed_only`；不新增逐次审批。
+35. observed_only 保留 B/N；final check后 unseen C可被N覆盖且可能不可恢复，later C可替 current但不抹 B/N。已观察competition/stale Base/watcher gap走 conflict/reprepare，install provenance unknown走 `recovery_unknown`。
+36. `prepared/retained` 不等于 Saved；seal后的 `durable_observed_only` 不冒充 strict `reliable`。
+37. `semantic_pending` 不能把 D2 无效、类型化值无效或权限拒绝变成成功，也不能满足完整查询/全结果、批量操作、强动作、自动化、恢复/清除、服务器检查点或批准/资金流程所要求的完整证明。
+38. Server 同 Document 两 Draft并存：先提交者改变 current Observation，后者旧 Base不能覆盖并保留Draft；不同 write sets可并行 prepare但真实冲突/P CAS仍线性化。
+39. Server 上的 `managed_atomic` 强计划仍必须采用 `exact` 策略；即使出现无关提交，也不能借 Server 并行性把旧 `exact` 计划改成 `scope_dependencies`。
+40. 删除 I 后可按P/M事实重建；丢 P不从 current files重建旧 decision/unknown/Money/sourceOccurrenceKey。
+41. Replica registration保留 Workspace/refs并建立普通content domain，但不是 `continue_workspace`，不接管旧authority/P/Approval/Money/unknown。
+42. wire9/v10/v11 与真实历史 Prepared1/2/saved/planned/unknown 只按原decoder/bytes/TTL/retention恢复；仅存在decoder或草稿不证明原型已部署active，也不批量升级旧bytes。
+43. 历史可失效 effect pin 合法失效时只返回其合同的 `effects_unavailable`；不能读 current file冒充旧 after，decision-durable/last-reference承诺仍保留。
+44. P seal已成功但 CP3/publication失败保持 committed+pending；恢复同一 proof/outbox，不重装、不重采revision、不再增H/ChangeId/domainCommitSequence或收费。
+45. 缺 D4/D5/D7/D8/D9/D10 不相关 strong consumer时，具备真实 local evidence与strict安装资格的普通 `.adoc`/Resource read、Draft、human whole-source save或local offline operation不能被永久禁用；ordinary成功也不授 complete Query/Action/Automation。
+46. A create/move Node 与 B source edit 只有在因果、metadata/structure 与实际依赖都能证明时才可组合；缺失 metadata/transport 仍是 incomplete，不凭最终文件形状猜组合成功。
+47. A Trash 与 B edit 不存在默认 delete-wins/edit-wins；真实 sealed heads/Observation 到达后按 conflict/lifecycle规则处理。
+48. source bytes 与 portable metadata 分批到达时，缺任一侧既不表示 deletion，也不表示 fresh identity；placeholder/incomplete transport保持原状态。
+49. 两个不相容 birth claim 使用同一 typed Ref 形成 `identity_collision`；ordinary resolver不按 UUID/path/mtime挑 winner。
+50. installation 在任意阶段崩溃或相同 hash 但 `FileObjectBinding`/provenance 不同，都不能证明写入属于原 plan；third state不覆盖，未知 provenance保持 paused/conflict/`recovery_unknown`。
+51. duplicate local UUID claim 同步后只能按原 typed conflict与显式 fresh-copy losing branch解决，不能静默 rekey 或复活 tombstone。
+52. D2-invalid external bytes仍可由 D6 repair/read路径诊断，但不能产生成功 D3 author receipt，也不能靠 old pin把无效 bytes当已验证 source。
+53. 相同 OperationId 在不同完整 `CommitDomain` 下可以是独立 key；只有同 domain/same key 的不同 fingerprint固定冲突。
+54. wire12 canonical request 不永久嵌入完整 body/source/resource bytes；完整 `InputDescriptor`、owner descriptor 与 purpose-specific protected pins逐项 exact compare，hash-only/最终text相等不足。
+55. planned 在 seal 前失权不得提交；已经 seal 的 saved decision后来撤权只遮蔽交付，不回滚 decision。
+
+56. 已登记 replica domain 内合格的 unseen raw wire12 create_node，在 local_structure/scope_dependencies、完整 native descriptor 和 strict 安装下无需 preparationBinding、planToken 或 PreparedIntent 即可成功。额外 planToken 是闭合形状错误；真实 D7 prepared 请求只检查其实际版本 binding。
+57. issuer A 为未激活 W/B 签发的真实 create/fork proposal，在 seal 前后都使用 DecisionKey(W,B,O)。stage3 使用 issuer allocate_workspace 及适用 fork-source 资格，不读取或要求 target active/policy/source_write。无效 P1/P2 token 导致 custody/target ledger 零读。原 key planned 崩溃恢复和 recorded rejection 重放不激活或重初始化 W/B；committed 重放不重复激活，也不把 key 改为 A。
+58. Resolver 输入精确 Frontier F，当前 cut=F 时返回唯一闭合 outcome；即使连续无关推进到 F+1，也返回 workspace_unavailable，不静默改读新 cut。词法合法的错误 Workspace/domain binding 在当前权限前不披露，且 foreign route/fetch/lookup 零次。非法闭合输入在读取来源前拒绝。
+59. Resolver 的 conflicted/incomplete/placeholder outcome 恰含 wireVersion/kind/status/requestedRef 或 requestedLocator 四字段；额外 reason、branch head、resolvedLocator 或 source bytes 拒绝。隐藏 conflict、missing、tombstone 统一 not_visible。locator 披露资格先于 stale/coordinate/anchor ambiguity，canonical target 状态只在持有的精确 cut 上检查。
+60. 同 Workspace/OperationId、不同 CommitDomain 的两个 target decision，在 transfer summary 中仍由完整不同 key 区分；交换任一域或只给 operationId 拒绝。source not_attempted 禁止 key，pending/terminal 必须有 key；历史 wire11 summary 使用原 decoder，不猜域。
+61. Transfer observation 从 0 开始严格递增，key 和终态 target 不变，source 终态不回退。target failed 永不尝试 source；未知 source 保持 pending。MAX 时 pending 或仍可尝试的 not_attempted 拒绝。隐藏或不可用一方不被伪造为 failed，也不产生联合 commit 证明。
+62. 词典中英均要求 initial_import 只从 never_bound、有界 preview 后产生 fresh Node，且同一作者决议写 sole active OriginBinding；retired 必须显式 Adopt，Adopt 创建 Node 必须绑定同一 ForeignIdentityKey。template + exact tasks/task 禁止，其余合法 Facet 仍可用。受控名称/firstFreeze 相等不能替代此语义判据。
+
+63. D3 typed conflict prepare 返回带 immutable D7 /3 preparationBinding 的原完整 wire12 request，以及真实 full-preview transport tokens/header。读完全部页与 byte slots 必须看到所有 before/proposed/native/control/selected-branch effect；仅内部 pin 或 choice/hash 摘要不能满足 prepared 成功。
+64. identity fresh-copy 分别对 Node/copy_node_subtree、Resource/copy_resource、Annotation/copy_annotation 成功，使用精确已选历史前像、显式 destination、原完整 owner/map/reply/reference 闭环与单 P decision；不暗建 wrapper Node 或 caller ID。缺任何 branch source/metadata 或存在未被plan表达的source改写，拒绝整个选择。
+65. 删换 preparationBinding、改 selection/head/key/preview 或换 audience，均不得把历史 branch 输入变为合格 raw。原 same-key different canonical request 在 stage5 operation_id_conflict；unseen 非法用途在 branch read/planning 前失败。第56项无关普通 raw create 仍成功。
+66. 保存一次 resolution 后再 supersede conflict、推进 Frontier、过期 preview 或改变当前 source：匹配 saved 在原profile披露门后返回原bytes；planned/unknown只恢复原 /3 record/plan/candidate/pins。两者不重跑当前choice检查、不产生第二身份决议/ChangeId。
+67. prepare 后、unseen stage14/CAS 前改变已验证 head，使用原 operation_precondition_failed/restart 顺序，不局部解决或在计划胜出后另采candidate。撤权或缺branch/input proof 时，原nondisclosure/availability优先，不伪造确定拒绝或空branch。
+68. open conflict选择相同source bytes仍有portable conflict-control effect；已resolved精确placement/lifecycle选择有留存证明且全部effect空时才是真no-op。fresh-copy永不no-op；原raw lifecycle规则与真实历史 /1、/2 恢复不变。
+69. prepare没有最终fresh ID或reservation；symbolic preview、原stage12 candidate、stage14 SourceRevisionPlan/Q/C物化和single P seal使用同一最终mapping/version basis。preview过期或未读最后一页不允许部分effect，也不擦除planned/unknown留存证据。
+
+70. open/resolution_prepared lifecycle 覆盖 selected live→live、live→Trash、Trash→live、Trash→Trash，真实 installed state 另取 live/Trash 全组合。逐项断言 §10.1.1.1 的 stage9/location/membership 与净 receipt variant；无反向转换、无另一 head membership、无独立 restored/tombstoned 回滚；native projection 空时仍有 portable control。raw mode 保留原拒绝矩阵。
+71. Resource R installed A=a、canonical B=b、copy A 及镜像选择，a≠b 且全部证据可证：两向都以同一 plan/seal 得到所选保留 R 与 fresh R′。Node/Annotation 同验，并包含相同/不同 destination owner、mandatory target/reply、实际 before 相同/不同；ordinary Resource copy 仍拒 existing Resource overwrite slot。每项 canonical source/control 实际改变都进入完整 preview、native receipt 加 canonical extension 及 CP3。
+72. 同 bytes 但不同 canonical claim/所选生产版本为真实 canonical admission，仅一次 /2 H+1；claim/version/bytes 不变的 metadata-only open resolution 没有 source plan/H 增量但有 portable ChangeId；exact already-resolved 全空选择两者都无。重叠 native/canonical source edits 仅精确等价去重为一个 final after/version，否则拒绝，绝不增两次。
+73. 把 ConflictInstallInput/1 冒作 SourceObservation、SourceVersionRef、Query/D8/ordinary-save 或 raw wire12 输入；跨 key/token/audience 剥离/复制 guard/pins。必须在未获权 branch read 前拒绝。unknown/third-state/metadata mismatch 不得靠 equal bytes 补签。注入安装中断/unknown seal/撤权/preview expiry，原 /2 plan、/1 fresh plan、唯一 candidate 和 saved bytes 都保留，不重选 head 或再次 admission。
+
+74. owner N 的 Annotation A 在 installed/copy head 中 reply=null、canonical head 中 reply=P，P 为同 owner live Annotation；copy destination M≠N。canonical existing A 具有真实 before 的 target@0 证据及恰一个 reply@1 S/structural effect；M 下 fresh A′ 仅用 native initial-reply evidence。二者共用唯一 decision，A 只有一个 final version。P→null、P→Q 是正例；双 S/reference、wrong owner/token、cycle 拒绝。
+75. Node N 的 installed/copy A 含 node_link X，canonical B 含 Y。native mapped N′ 与 canonical existing N 各在自身分量使用同一已认证 A fromSource 一次；primary 数组本身不是完整 resolution 证明。覆盖不同 metadata head 共享相同生产 source、ordinal/kind 失配的准确 delete+result_only、多个相同 target，以及错误最近似配槽；不得为逃避 before 证据把 source 改称 B。
+76. canonical D4 carrier 和 D7 saved definition 在 typed roots 原样且完整合法时通过真实 gates；stale 旧 C/Q Locator、隐藏 Registry/root、未知 typed-transfer payload、藏必需 remap 的 B 均按真实 owner 拒绝。canonical 选择不作 fresh mapping，native copy 仍有完整 C/Q/slots=[] 证据；PL-IR-01 独立保持门。
+77. 重叠 existing canonical/native 的已认证 before/final 与 typed evidence 完全相等时共用一个物理结果、一个 H、一个 CP3 entry；仅改一个 byte、metadata fact、source version 或 typed disposition，stage14 identity_map_incomplete 先于 binding/postcondition failure。fresh/existing bytes 相等不合并身份。
+78. full preview 读取每份 canonical before/selected/Result9 bytes 和 plan，committed 再完整读取 D3CanonicalEffects/1 与 native receipt。缺任一分量、换 head/role/hash/resultSlot、primary 内重复 fromSource、漏 null→P S、错 receipt fingerprint/companion 都不能认证完整。preview 无最终 canonical extension；saved commit 丢 effect pin 仍 committed 且 effects_unavailable，不能重做作者决议。
+79. canonical source 不变的 restore/target-lifecycle 改变只用原四类 lifecycle_only 组合，无 resultSlot 或 rewritten reference；source 改变则用准确 before/result 证据。resolved no-op 的 canonical extension 全空且无 ChangeId/H；metadata-only portable resolution 有完整 states 和实际 structural effects，不造 source container。Budget 使用实际 closed BudgetBinding/1，不引用未定义 /2。
 
 ## 20. legacy compatibility 与联合激活
 
-D3-CJ/3、D3Integer、Ref/Locator词法、Annotation Value/3、Result/9及既有 typed identity algebra保持。wire12只改变新决议的 domain/frontier/input/guarantee 和局部/强资格。
+`D3-CJ/3`、`D3Integer`、Ref/Locator 词法、Annotation Value/3、Result/9、既有 typed identity algebra 和 opaque selector/token member保持；P1 新 producer 只为**显式采用新合同的新路径**增加 current/production/range/publication 证据，不机械改写旧 wire。
 
-旧 v9/v10/v11 saved artifacts保留原 bytes、原 pin retention、原 authority/custody gates、原 receipt/error/outcome。它们不能被转换成 wire12 来获得 replica-local语义。
+实际存在的 wire9/v10/v11、Prepared1/2、旧 Observation/Ref/token、saved/planned/unknown artifacts继续保留原 bytes、fingerprint、pin retention、authority/custody、TTL/clock、receipt/error/effects/outcome、unknown/no-duplicate-effect责任；它们不被转换成 wire12/新 P1 类型来获取 replica-local 或新 strong语义。历史 decoder、测试名、草稿或曾经的候选 prose本身不证明相应原型部署过、active或必须批量迁移；compatibility只对能够按原版本证明真实存在的 records承担。反过来，一旦真实 record存在，其原 recovery/retention/费用/Approval/claim/unknown责任也不能因为其它原型缺部署证据而取消。
 
-D3 wire12 当前只与已生成 D6-FA-r01 owner afterimage闭合。D4/D5/D7/D8/D9/D10 consumer afterimage未完成，因此本候选不能半包激活或生成“联合 v12 已通过”的产品 fixture。
+D3 main、Lexicon、Impact 的双语候选现已全部存在，承接新的 P1 production revision、range proof、CP3/ConflictRecord2、共同恢复分流及 ordinary/current-consumer 边界；它们仍是尚未接受的候选规范。协调对象只是真实 owner afterimage 与 routing 元数据，固定 S snapshots、design inputs 和 catalog 保持不可变历史字节。适用的 D4/P2、D5/P3、D7、D8、D9、D10 消费者协调与全新联合接受仍必须完成。缺少强消费者只门控依赖它的路径，不全局禁用已合格普通内容。
 
 ## 21. D7 preparation 与定义转移
 
 ### 21.1 PreparedActionBinding ownership
 
-PreparedActionBinding 当前规范 owner仍是 D7。固定 S 中 D3 §21B 对 /2 的全文镜像在本后像中退为历史来源，不再作为第二份可漂移 schema。
+`PreparedActionBinding` 当前规范 owner仍是 D7。固定 S 中 D3 §21B 对 /2 的镜像只保留为历史来源，不在本后像复制成第二份可漂移 schema。wire9/v10/v11 中**实际存在**的 saved/planned/unknown preparation 记录继续按各自原 mirror/decoder、最小定位映射、binding token、TTL/clock、授权、pins 和 recovery rule 履约；新 wire12 的 `preparationBinding` outer 仍只保存 `kind + bindingToken`，不自报 backing-record version。
 
-wire9/v10/v11 saved decisions继续按其原镜像/decoder履约。新 wire12 的 preparationBinding 外层仍只保存 kind + bindingToken；它不声明 backing record版本。
-
-在 D7 wire12 consumer afterimage接受前，任何新 request携 preparationBinding 都在进入 D3 ledger前由 D6/D7 capability gate返回 owner_update_required。D3不猜 /3 字段、不把 /2自动升级，也不建立第二 preparation ledger。
+D7 wire12 consumer afterimage 尚未接受时，只有共同门后确认 **DecisionKey=unseen** 且新请求携带 `preparationBinding`、准备建立新 author effect 的路径，才在当前 capability/version gate 返回 `owner_update_required`/适用 `proof_unavailable`，且不创建新 D3 plan/decision。已有 saved decision 不重新检查旧 preview/preparation TTL；已有 planned 只恢复原保存的 preparation record、request、pins、scope、targets 与依赖，不因当前 consumer 未更新被替换为新 prepare。原合同若规定某未成 decision 的准备记录已真正过期，则按原 expiry/reprepare 路径失效，不能借新版本复活；反之，planned/saved/unknown 的耐久记录也不能被 preview TTL 清理。D3 不猜 `/3` 字段、不把 `/1`/`/2` 自动升级，也不建立第二 preparation ledger。
 
 ### 21.2 DefinitionTransfer 与 Result/9
 
-DefinitionTransfer、definitionTransfers 数组、Result/9 Q segment、
-  D3-Symbolic-Result/9 B/M/N/E/S/C/Q partition继续由 D3 identity mutation algebra拥有；D7拥有 SavedQuery/View/DynamicBlock payload schema。
+DefinitionTransfer、`definitionTransfers` 数组、Result/9 Q segment 与 `D3-Symbolic-Result/9` 的 B/M/N/E/S/C/Q partition 继续由 D3 identity-mutation algebra 拥有；D7 只拥有 SavedQueryDefinition/ViewSpec/DynamicBlock 的 payload schema、Query/View 调用与参数语义。D3 不复制、扩张或猜测一套 D7 schema。
 
-copy/fork/identity-bearing import若涉及这些已识别 payload，仍须完整 typed traversal、source/result occurrence binding和 candidate map物化；普通 text/CEL中的UUID字符串不当Ref。
+对 copy/fork/identity-bearing import 中每个已识别保存 payload，Core 必须先用完整 D7 schema 解码，再沿静态 typed path 做唯一遍历。遍历根完整包含：`DefinitionAddress.owner` 及其中已识别的 D3 Locator；由 `TypedLiteral.type` 明确声明的 `node_ref|resource_ref|annotation_ref`，并递归进入 Optional/object/list/union 中由 TypeSpec 指定的 Ref 成员；`CollectionCreationPolicy.parent`；保存 View/Query 的调用地址；Query Selector literals；`QueryRef` arguments；parameter defaults；固定 View Domain `TypedLiteral`；以及 DynamicBlock 的 literal/context bindings。普通 CEL expression 字符串、label、任意普通 text、lexical `this` binding 和未知 JSON 不扫描，即使文本看起来像 UUID/Ref/Locator 也逐字保留。普通 object 只有 TypeSpec 明确标出的 Ref 成员才进入遍历；看起来像 Locator 的普通 object 不因成员名被升级。只有真实 `DefinitionAddress` 中已识别的完整 D3 Locator root 可作为 Locator slot；完整 Locator root 已包含 owner，禁止再为其 `owner` 列一个祖先/子孙重叠 slot。AuthorAnchorAddress 的 owner 仍是普通 Ref slot，anchor 名逐字保留并在目标结果中按原 resolver 规则验证唯一。
+
+每个 typed Ref/Locator 都继续用原 D3 完整 decoder 及原 slot/owner/locality 门。Ref 位于 `identityMap` 内时完整映射到对应 fresh Ref；同一 Workspace 但 map 外的完整 Ref 只有显式 `preserve` 才保持；跨 Workspace 且 map 外的 Ref 固定使整个操作走原 `cross_workspace_identity_preservation`，不得静默删除 default、改成 none/text、按 owner/path 猜映射或只替换 leaf UUID。ResourceRef/AnnotationRef 的完整 owner 必须随 map 一起闭合，owner 不兼容即拒绝。lexical `this.node` 仍在目标 Node 实际执行时解析，copy 不把它固化成旧 NodeRef。D4 authored provenance 与 carrier 中的 typed root 继续由原 D4/D3 typed-carrier 合同处理，不能借 D7 普通 object 补签 `ActionEvidence`、重解释历史值或形成第二 typed-root owner。
+
+保留的 `definitionTransfers` 元素形状仍是 `{kind:"d7_definition_transfer",sourceContainer,inputOccurrence,resultContainer,resultOccurrence,payloadFormat,slots}`。`sourceContainer` 只使用原允许的 `existing_entity_subject(NodeRef)` 或 `artifact_part_subject`；`inputOccurrence` 是完整已绑定 source/artifact part 中按 source order 的保存定义 ordinal；`resultContainer` 是原允许的 existing/mapped/new Node subject；`resultOccurrence` 是完整结果 D2 source 中同类保存定义 ordinal；`payloadFormat` 仍只接受原 `weftext.saved-query|weftext.view|weftext.dynamic-block` 三类。完整 source payload 必须从原 preimage 或 `source_artifact` `payloadBinding` 指向的真实完整 pin 按 `inputOccurrence` 独立恢复，完整 result payload 也从真实结果 source 独立恢复；不能把 `slots`、payload hash、preview 或 candidate text 当成完整 source/result pin 的替代。
+
+`slots` 使用原唯一 typed-path comparator：逐 segment 比较，member text 的 tag rank=0 并按原 UTF-8 bytes 排序，Counter index 的 tag rank=1 并按 D3Integer 数值排序；共同 prefix 后短路径在前，所以 index 2 必须先于 10。path 唯一且只允许完整 schema traversal 找到的 typed Ref 或完整 DefinitionAddress Locator root，禁止重复以及祖先/子孙重叠。每项仍是 `{path,before,after}`；`before` 是原完整 D3 Ref 或原 decoder 已确认 variant 的完整 DefinitionAddress Locator；`after` 只使用既有 `map|preserve|reissue_locator` 三种语义，其中 map 只指向同 kind 的 mapped/new subject，preserve 必须满足同 Workspace map 外保留规则，`reissue_locator` 只适用于原 DefinitionAddress `DocumentElementLocator` 并绑定其准确目标保存定义 occurrence。payload 中**全部** typed Ref/Locator root 都恰有一个 slot，包括不变化的 `preserve`；已识别且确实没有 Ref/Locator 的合法 payload 仍必须有一条 `slots=[]` transfer，以证明完整 schema 已读而不是把它当 opaque 跳过。
+
+`definitionTransfers` 继续按 `subjectCanonicalKey(resultContainer),resultOccurrence` 排序，result pair 唯一；同一 source pair 只有在原显式独立 copy mapping 允许时才可对应多个 result，并且每个 result 单独绑定完整 source/result occurrence。Core 从完整 source pin 重新枚举 typed roots 与 slots 精确比对，再从完整 result source 独立验证结果；漏 slot、多 slot、`before` 不等、wrong type、owner 互换、source/result occurrence 不匹配或 payloadFormat 不匹配都保持原 stage14 `identity_map_incomplete`。Q 与 transfer 一一对应：Q 只覆盖 exact-source Document 中真实 D2 SavedQueryViewDefinition 的**完整 payload span**，不含 attributes/opener/closer/anchor，不用于 Resource、Annotation、Field carrier、普通 literal/body，并且与 B/M/N/E/S/C span 互不重叠；既有 B/M/N/E/S/C partition、长度、显式 slot、C carrier 和 decoder 规则全部不变。Q 的 `inputPayload` 必须逐字等于该 `sourceContainer/inputOccurrence` 的真实原 payload bytes，Q body 绑定完整 transfer；copy/fork/identity-bearing import 中每个已识别保存 payload 都必须由 Q 承载，不能藏进 B 绕过 typed transfer，`payloadBindings.result` 仍绑定完整 Result/9 bytes。
+
+`definitionTransfers` 只描述已有 payload 的 copy/fork/identity-bearing import。新 Node 中完全新写的 SavedQueryDefinition/View/DynamicBlock 不是“从不存在的 source 转移”：若只含当前已存在的合法 Ref/DefinitionAddress，可以按原 B 路径保存，但仍须在 stage14 完整 D7 decode、读权限、全部 Ref/Locator 及 D2/D4 门验证，且不得宣称取得某个旧定义的 transfer effect。新作者 payload 直接互引本 operation 尚未分配的 fresh Node 仍没有 public symbolic `TypedLiteral`/`DefinitionAddress` 形状，不能伪造 UUID；按原 stage14 `identity_map_incomplete` 拒绝。相反，copy/fork/identity-bearing import 中**已有**定义之间的互引由同一个 D3 candidate map + Q transfer 完整支持，不能用“新作者 fresh 互引不支持”误拒绝它们。
+
+本小节 ordinary/fresh native result 用 /1，§10.1 显式 canonical 分量用 conflict-only /2；下文 source plan 指实际解码的该 plan 及其唯一 after stamp。copy/fork/identity-bearing import 涉及这些已识别 payload 时，revision 与位置闭环必须消费 M1/P1 已冻结的真实 D6 版本合同，不再使用固定 S 中“fresh revision=1、existing revision=原值+1”的简写作为独立分配规则。全部内部 Ref 映射先由同一原 D3 stage12 私有 candidate map 固定；凡 ordinary/fresh native 结果 source 会产生新的 managed after，同一个原 plan 的 `SourceRevisionPlan/1` 冻结完整 `before` Observation 或经证明的 absent、同 after 生产域的 `lastIssued`/完整空历史、`after` `SourceStamp/1` 与 exact `afterPin`，revision 只按该生产域连续 sealed history 的 `H(D,E)+1` 分配。production `observationEpoch` 变化不重置 H，foreign before 的 revision/production epoch 与 external `externalSequence` 都不向 after 捐号或捐生产世代。`RevisionTokenBinding/2.source` 继续使用真实 `RevisionTokenSource/2` tagged union：managed 为 `{"kind":"managed","sourceStamp":<SourceStamp/1>}`，external 为 `{"kind":"external","sourceVersion":<complete external SourceVersion/2>}`。D7 调用方不能指定 token、candidate、H 或 revision。拟议 managed token/stamp 只属于原 plan；planning CAS 冻结同一 candidate map、`SourceRevisionPlan/1`、pins 和 H/empty-history 依据，seal 前按原规则重验，且 token/stamp 在真实 seal 与对应 managed `SourceVersion/2`/`ChangeId` 成立前绝不成为 current source version、public fresh Ref 或提前的 Locator 能力。
+
+Q materialization 始终使用该同一 candidate map、同一 `SourceRevisionPlan/1.after`（或显式允许的 conflict-only /2 after）、同一 `RevisionTokenBinding/2` 和同一最终 source。materialize 先完整解码 `inputPayload` 并重新枚举 slots，按既有 map/preserve 机械替换 typed Refs；`reissue_locator` 只能指向原已验证且在本次完整变换中有唯一 result occurrence 的 SavedQueryViewDefinition，deleted、ambiguous、非 current preimage locator 或无法一一对应的 occurrence 都拒绝，不做 fuzzy/nearest 定位。普通 `preserve` 的外部 Locator 逐字保持并验证原当前指向，不自动更新到 latest。
+
+位置闭环继续使用确定的两遍算法，但 revision basis 改为上述真实 plan。第一遍先固定全部完整 Ref、拟议 revision token 以及 D3/C 中其它非 D7-position 变换；Q 内需要重发的位置只使用**内部**零坐标模板，Q 仍按 D3-CJ/3 canonical JSON 写成单行，string 内换行 escaped，然后拼成完整最终候选 source，由 D2 parser 取得每个映射后 SavedQueryViewDefinition element 的真实完整 `SourceSpan`。内部模板既不能交付，也不能作为合法 Locator 解析。第二遍把这些真实 span 同时填入相应 `DocumentElementLocator`，重新序列化 Q、重新拼出完整 source，再由 D2 parser 读取每个目标 element span；第二遍 span 必须与第一遍逐字相等，随后每个最终 Locator 还必须由原 D3 decoder/resolver 证明 same owner、同一拟议 revision、正确 `elementKind` 与 exact target occurrence。任一 span 不等、目标消失/多义、revision/token 不闭合、预算溢出或完整 source 无法通过验证时，整个 operation 按原 stage14 失败；不迭代猜位置、不交付中间模板，也不重新采样 candidate/revision。
+
+两遍算法只适用于完整 saved-definition element 的位置，不是 payload 内任意 byte 或普通正文 range。Q canonical JSON 单行约束保持；D3/C 处理的 Annotation 坐标、D4 authored provenance/typed-carrier 坐标继续走各自原接受器，但它们必须与 Q 绑定**同一个最终 source、同一个 revision basis 和同一个 commit**，不能拆成两个提交分别“各自正确”，也不能让 C/D4 变换破坏 Q 的单行与两遍 span 不变量。无法证明同一 plan 的所有这些变换兼容时，整计划在 stage14 fail closed；不引入自由脚本重排 source。
+
+`D7DefinitionTransferEffects/1` 继续只是 D7 owner 在**同一 decision** 上的受管 effects 扩展：它按原合同逐项携带 source/result occurrence、真实 before/after payload 与 materialized slots，且每项都必须从实际完整 before/after source 独立恢复并验证，不能只复述 request。它不是第二个 D3 receipt/ledger，不进入 D3 authored `node_link|citation` slot union，不制造 D3 `referenceLifecycleTransitions` 或持久 Definition identity，也不能把 result handle、`ActionEvidence`、preview/effects token 变成 portable definition member。
+
+包含 Node 若有未知或无法按 D7 schema 解码的 payload，原 raw bytes 可以按普通 D2 只读路径保留，但 **typed transfer 整体拒绝**，不能声称可执行引用语义已经保持；full fork 也不能因此省略该 Node 或删除该 block。已识别 payload 没有 Ref/Locator 时仍以 `slots=[]` 完成完整 schema 验证并保留 text 值。普通 body/source/literal 中看似 UUID 的字符串仍不参与 transfer；未知 member、历史 result handle、`ActionEvidence`、preview/effects token 不会被搬进新 Workspace。
+
+验证与恢复顺序保持原合同：stage3 失权时不读 payload；stage4/P/TL availability/continuity 先行；stage14 先完成原 D3/D2/D4 materialization 与 typed coverage，缺失时仍以 `identity_map_incomplete` 优先，然后才检查已授权 D7 bound pre/post condition 的 `operation_precondition_failed`；stage15 原引用/结构闭包仍完整执行。§21.1 preparation owner gate 与 §21.3 pin lifetime 原字节和责任不变：saved replay 不因旧 preparation/preview TTL 过期而被回溯拒绝，planned/unknown/continuity 不确定仍只恢复原冻结 plan、record、pins 与最小授权定位责任，不能通过新 prepare、新 candidate、当前 proof 或删除 minimum-disclosure record 来洗掉原 decision/unknown；历史 preparation/decoder 继续按生成它们的原合同处理。
 
 ### 21.3 exact input 与 pin lifetime
 
-新 D7/D3 preparation最终必须生成 D6 InputDescriptor/2：canonical owner descriptor中大型 source/resource字段换成 typed PinRef，canonical request保持小型。
+新 D7/D3 preparation 最终仍通过 D6 `InputDescriptor/2` 绑定真实输入：canonical owner descriptor 中大型 source/resource 成员以 typed `PinRef` 引用，canonical request 保持小型；pin 只承载其原 owner 定义的不可变证据，不成为 current-body mirror 或第二 identity/version owner。
 
-planned/unknown/conflict/approval-money最后引用保护的 pins不能按preview TTL删除；可失效历史 effects由D6/D7新版本明确定义。旧协议承诺永久/decision耐久的pins不追溯删除。
+任何被 saved/planned/unknown/conflict/approval-money、原 publication/outbox、安装恢复或其它原合同 last-reference 继续引用的 pin，都按该记录实际版本的 retention 责任保护，不能因 preview TTL、I rebuild、current file 可读、新 owner 版本、reauthorization 或“看起来和 after 相同”而删除。新 D6/D7 版本可以明确声明某历史 effects 可失效；只有这种合同允许的 effect pin 真正失效时，相关 effect 交付返回其规定的 `effects_unavailable`，不能拿 current file、current `SourceObservation` 或 equal hash 伪造旧 after。旧协议承诺 decision-durable/permanent/last-reference 的证据不追溯回收。
+
+P 或安装 outcome 未知时，这些 pins、原 decision/attempt/budget、ApprovalUse/Money/claim/external-effect/unknown 与 stop/recovery 责任继续保留；不得因为文件全部像 planned after 就猜 committed、改用新 OperationId 盲重试、重复发送外部 effect、重新收费、退款、重置额度/批准或从空 control DB 重建。
 
 ## 22. 候选接受边界
 
-本文件是 D6-FA-r01 的 D3完整 owner afterimage，不是独立接受。D3术语与实施后像必须与本文同步，后续 D4/D5/D7/D8/D9/D10 owner必须消费新版本后才能形成不可变联合候选。
+本主文及 Lexicon、Impact 共同形成六路径双语 D3 候选；候选存在不等于独立接受或整个 P2 完成。真实下游消费者与 routing 仍需协调，随后还需全新独立联合审查及修订复核。固定 S snapshots、inputs 和 catalog 保持不变。规范反例不是已执行的产品 fixture、CI、conformance、性能或平台测试。已获授权的 A2 自包含 D1–D10 重建等待上述协调和接受门完成；本工件不执行 A2。
 
-旧 D10 B13 继续是 REVISE、术语/双语 FAIL、3 P1 + 8 P2 共 11 OPEN；本文件不关闭任何项。
+D6 Control/Registry 候选修订现已准确表述 native D3 候选存在，并允许 InstallationNotice.baseFrontier 的历史 sealed ChangeIds、排除本尚未封存决议的新 ChangeId；精确协调字节仍须全新联合审查。旧 D10 的 3 P1 + 8 P2、U6/U7、完整消费者协调、A2 及后续全新 ordinary Chat Pro 全局终审仍保留；本 D3 作者不自评接受，也不授权实现、激活或发布。

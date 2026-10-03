@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 配套上游协调修订提案
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：与完整 R08 作者候选同步的 upstream-amendment 配套提案。固定 S 继续权威且逐字不变；提案保持未激活，当前11项 R08 finding 在固定 R08 候选完成 fresh 完整独立联合评审及后续协调接受/版本/激活前全部开放。
+revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；REVIEW-DISPOSITIONS 区分各层证据。
 
 ## 1. 修订目的和不变边界
 
@@ -21,15 +21,15 @@ revision: D10-r08-joint-review-fixes-2026-09-28；状态：与完整 R08 作者�
 
 以下保持不变：
 
-- D3 wireVersion11、Result/9、mode、identity/lifecycle stages 与 receipts；
-- D6 `d6_commit_request` 与 `d6_commit_receipt` exact shape、Workspace+OperationId ledger key 与唯一 author commit point；
-- D7 `ActionSpec`、`d7_action_prepare`、`d7_action_prepared` 与 `PreparedActionBinding/2` exact shape；
-- D7 `EffectManifest/1`、EffectBytes item/schema 与 committed transport；
-- D8 `PreparedEditBinding/1`、Draft/IME/explicit confirmation；
+- D3 wireVersion12、Result/9、mode、identity/lifecycle stages 与 receipts；
+- D6 `d6_commit_request` 与 `d6_commit_receipt` 当前 wireVersion=2 exact shape、DecisionKey/2 `(Workspace, CommitDomain, OperationId)` ledger key 与唯一 author commit point；
+- D7 `ActionSpec`、`d7_action_prepare`、`d7_action_prepared` 与 `PreparedActionBinding/3` exact shape；
+- D7 `EffectManifest/2`、EffectBytes item/schema 与 committed transport；
+- D8 `PreparedEditBinding/2`、Draft/IME/explicit confirmation；
 - D4 Registry、D7 Narrow Field Qualification 与 D6 Policy/ObservationScope；
 - 原当前授权、deny 优先级、信息不披露、authority/fence、dependency CAS、replay 与 planned 恢复规则。
 
-D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公开 unattended author-submit 合同的 code 闭集需要协调加入 `approval_unavailable` 与 `execution_stopped`。它们都是必要的 closed-enum 扩展，不伪装成既有错误，也不建立匿名 old/new D10 error profile。D7 Preview/Effects 需要增加 planned-only 只读恢复入口；原 `d7_effects_resolve/open` 继续 committed-only。R05 还提议 Policy/2 新增 `d10_control_self`、固定 bootstrap profile/2 的原非 Field 集合并新增显式 profile/3。以上都只是设计提案；独立接受/协调激活不等于产品已经实现或 D1 capability 已可用。
+D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公开 unattended author-submit 合同的 code 闭集需要协调加入 `approval_unavailable` 与 `execution_stopped`。它们都是必要的 closed-enum 扩展，不伪装成既有错误，也不建立匿名 old/new D10 error profile。D7 Preview/Effects 需要增加 planned-only 只读恢复入口；原 `d7_effects_resolve/open` 继续 committed-only。本轮当前协调提议 Policy/3 新增 `d10_control_self`、固定 bootstrap profile/2 的原非 Field 集合并新增显式 profile/3。以上都只是设计提案；独立接受/协调激活不等于产品已经实现或 D1 capability 已可用。
 
 ## 2. D6 Storage Transactions Permissions and Sync — 拟新增条款
 
@@ -47,7 +47,7 @@ D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公�
 
 建议在 D6 主文唯一 author commit point 和 planning/commit 依赖重验附近新增：
 
-> 对采用 D10 Standing Approval 的 D6-owned Action，D7 prepare 完成后，Core 必须依据已保存的 PreparedActionBinding/2、完整 owner_fields preview、实际 MutationFootprint、current D6 authorization 及 D10 当前控制记录，独立构造受管 `ApprovalUse/1`。客户端仍只持原 `d6_commit_request`；不得向 request 增加 approved、approvalId、delegation、proof、budget override 或 effect override。
+> 对采用 D10 Standing Approval 的 D6-owned Action，D7 prepare 完成后，Core 必须依据已保存的 PreparedActionBinding/3、完整 owner_fields preview、实际 MutationFootprint、current D6 authorization 及 D10 当前控制记录，独立构造受管 `ApprovalUse/1`。客户端仍只持原 `d6_commit_request`；不得向 request 增加 approved、approvalId、delegation、proof、budget override 或 effect override。
 >
 > `ApprovalUse/1` 不可变地绑定 approvalId/revision、Run/step、原完整 canonical D6 request、planToken、对应 PreparedActionBinding、完整 preview semantic binding、实际 footprint proof、DelegationLease/ActivationBinding、approval-count reservation 和全部适用 budget/cost reservations。它是附加授权证据，不是第二 author plan、第二 ledger、receipt 或 capability token。
 >
@@ -66,7 +66,7 @@ D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公�
 
 > 在正式 `d6_commit_request` 进入 D6 之前，D10 adapter 可以依据已获权控制状态返回 D10 approval_required、approval_expired、delegation_expired 或 delegation_exhausted。该 probe 不消除后续竞争。
 >
-> 一旦 D10 自动路径已把 ApprovalUse 作为内部依赖关联原 planToken 并进入 D6，只有“批准依赖在竞争中不可用、而原 D6 current author authorization/ObservationScope 与适用业务可见性仍成立”这一情况使用新增 `d6_error.code="approval_unavailable"`，disposition 固定 `preflight`。
+> 具名 D10 路径把受保护批准依赖关联原 planToken 并进入 D6 后，若该依赖缺失或不可用，而原 D6 current authorization/ObservationScope 与适用业务可见性仍成立，使用新增 `d6_error.code="approval_unavailable"`，disposition 固定 `preflight`。仅有两个 closed profile：single-field-member action 的 Standing Approval，以及下述原 external-consent control plan 的可信确认；均不创造客户端可自报的通用 approval 字段。
 >
 > 原 D6 permission failure 仍为 `not_visible/preflight`；业务 dependency、semantic、budget、authority/integrity 错误仍返回原 code/disposition。不得用 `approval_unavailable` 遮蔽它们。
 >
@@ -74,7 +74,9 @@ D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公�
 >
 > D10 adapter 必须逐字传递这个 D6 error，不包装成 D10 approval error。调用端若要显示“批准已撤销/过期/次数被抢占”等细分原因，必须另经当前受权的 D10 control read，不能从 D6 author error 偷带控制细节。
 >
-> 这是第一份共同公开 unattended author-submit D6-Control/1 error 闭集的一部分。固定 S 的 D6 是尚未发布的设计合同，不构成必须运行时兼容的旧 D10 profile。能够进入该正式 branch 的组件组合必须支持同一闭集；不兼容组合在 D1 capability/version gate 前拒绝。Policy/1/2、bootstrap profile/1/2 与历史 saved decision decoder 均保持。
+> 这是第一份共同公开 unattended author-submit D6-Control/2 error 闭集的一部分。固定 S 的 D6 是尚未发布的设计合同，不构成必须运行时兼容的旧 D10 profile。能够进入该正式 branch 的组件组合必须支持同一闭集；不兼容组合在 D1 capability/version gate 前拒绝。Policy/1/2、bootstrap profile/1/2 与历史 saved decision decoder 均保持。
+
+external-consent 控制路径另消费 CONTROL-CONTRACT §7 拥有的准确受保护 `ExternalConsentConfirmation/1`。原 D6 control plan 必须将原 ControlPrepareBinding、完整 immutable review 和可信当前确认关联为准入依赖，planning 及 final commit 都检查；直接提交原请求不能绕过。提交前可信界面等待本次用户事件，不定义新的公共 Workspace-commit 响应。进入 D6 后，若原授权和业务门已满足而确认缺失/不可用，使用同一 `approval_unavailable/preflight` 规则，保留 planned 和全部原恢复 pins。当前披露拒绝保持 not_visible 优先。已保存 consent 先重放，再考虑新确认门。这里不为外部写入增加 Standing Approval profile，不增加作者请求字段或第二决议；外部 transport 仍有独立 send fence。
 
 ### 2.4 planning CAS 原子 reserve
 
@@ -84,7 +86,7 @@ D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公�
 >
 > 只有全部成立，才能在同一 database write transaction 写 planned、完整固定 plan/pins、ApprovalUse count `unreserved→reserved` 与相关资源 reservation。两个 request 竞争最后一个 approval count 或最后预算时至多一个 winner；loser 回原 restart gate，不能把先前读取的余额当 current fact。
 >
-> same Workspace+OperationId 的 canonical replay 始终关联同一 reservation，不能重复 reserve。未进入 planned 的临时 ApprovalUse 可以按准备寿命清理；一旦 planned 引用，approval reservation 与完整恢复 pins 按原 ledger recovery 生命周期保留，不受 preview TTL、Agent session 结束或普通 cache GC 清理。
+> same DecisionKey/2 `(Workspace, CommitDomain, OperationId)` 的 canonical replay 始终关联同一 reservation，不能重复 reserve。未进入 planned 的临时 ApprovalUse 可以按准备寿命清理；一旦 planned 引用，approval reservation 与完整恢复 pins 按原 ledger recovery 生命周期保留，不受 preview TTL、Agent session 结束或普通 cache GC 清理。
 
 ### 2.5 final author commit、terminal release 与 replay
 
@@ -106,48 +108,55 @@ D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公�
 
 ### 3.1 PreparedIntent producer 分类
 
-在 §2 “有效 adapter 可生成受管 PreparedIntent”段之后新增：
+在当前 D6 Control §3.6 的受管 PreparedIntent producer 边界补充：
 
-> D10 Broker 本身不是 PreparedIntent producer。D10 Agent/Automation 的工作区修改只能调用已有 D7/D8/Core closed adapter。对于 `single_field_member`，D7 prepare 先按原合同生成 PreparedActionBinding/2、PreparedIntent、preview 和原 `d6_commit_request`；随后 Core-managed D10 approval adapter 才可从受保护记录建立 ApprovalUse。D10 runtime 不得直接构造 PreparedIntent、MutationFootprint、source bytes 或 proof。
+> D10 Broker 本身不是 PreparedIntent producer。D10 Agent/Automation 的工作区修改只能调用已有 D7/D8/Core closed adapter。对于 `single_field_member`，D7 prepare 先按原合同生成 PreparedActionBinding/3、PreparedIntent、preview 和原 `d6_commit_request`；随后 Core-managed D10 approval adapter 才可从受保护记录建立 ApprovalUse。D10 runtime 不得直接构造 PreparedIntent、MutationFootprint、source bytes 或 proof。
 >
 > ApprovalUse 不改变 `d6_commit_request` exact members、canonical request key、planToken tag、protocolOwner 或 ledger key。它通过受保护内部关联绑定原 planToken；外部 caller 没有可追加 approval 字段。
 
-### 3.2 §2 步骤5–8的完整增补
+### 3.2 实际 D6 Control §5 边界上的增补
 
-对 D10 standing-approval profile，原步骤1–8保持，只增加：
+当前 D6 owner 的算法有十四个有序步骤；旧 S 的八步编号不是当前算法。闭合解码、当前披露/ObservationScope、域/fence/custody 以及完整原 DecisionKey/request 比较均先于新的 D10 业务门。步骤4中，已保存结果按当前结果权限重放，先于任何新的批准或 stop 资格；planned 只恢复原计划、pins 和预留。
 
-> **步骤5附加：** 解析本 principal 的 planToken 后，如果该自动提交路径已经关联 ApprovalUse，只通过已授权最小 control mapping 定位其 profile/record。missing、wrong audience、wrong Workspace 保持 `not_visible`。完整 ApprovalUse 必须在 current D6 authorization/ObservationScope 通过后读取。
->
-> **步骤6附加：** 除原业务依赖、semantic、budget 验证外，验证 `single_field_member` 两个 effect 分支、current approval/delegation/activation 和 count/cost reservation candidate。若原 D6 permission/business 失败，返回原 owner error；只有这些均仍成立而 ApprovalUse 不再可消费时返回 `d6_error approval_unavailable/preflight`。对 unseen 不写 decision。
->
-> **步骤7附加：** planned CAS 原子保存 plan/pins，并把 ApprovalUse count `unreserved→reserved`；CAS loser 回原步骤3。任何 reservation 不提前产生 author effect。
->
-> **步骤8附加：** planned 恢复或 final author commit 前再次检查 current D6 authorization 和本次 approval eligibility。仅 approval 不可用时返回 `approval_unavailable/preflight` 并保持 planned；确定业务冲突仍沿原 terminal_failed 条件。成功 commit 同事务把 count `reserved→consumed`；authoritative terminal_failed 同事务把 count `reserved→released_terminal`。
+unseen 步骤5中，受权解析 planToken 后，仅通过受保护最小映射定位具名 approval/Run/confirmation 要求。映射缺失、audience/Workspace 错误保持原 not_visible 规则；原当前授权通过后才读取完整保护记录。步骤6先保留原业务、dependency、semantic、budget 错误，再核对精确 single_field_member 效果分支、当前 approval/delegation/activation、适用的完整外部确认及计次/费用预留候选。其它前提均成立而具名 approval dependency 不可消费时返回 approval_unavailable/preflight，unseen 不写决议。
 
-### 3.3 §3 回执与错误的精确扩展
+步骤8 planning CAS 原子保存原固定计划/pins，同时把 ApprovalUse count 从 unreserved→reserved 并写入适用预留。CAS 失败者重新进入原授权/域/key 路径，不能沿用旧计数。步骤9–11保持原严格安装 notice、真实前后像、受管屏障、安装溯源与恢复义务；受保护 D10 步骤不选择 observed_only。
+
+步骤12是唯一 seal/作者提交点。实际 P 事务在提交原决议及 reserved→consumed 前，重新验证原 written-after/unwritten-before 依赖、当前权限、精确受保护 D10 资格与不可逆 stop。只有原权威终止证明允许同一 abort 事务改为 reserved→released_terminal。物理安装后、seal 前 stop 赢不证明从未写入 bytes：保留 B/N、受管屏障与实际溯源，只能沿原已证明的 rollback/abort 路径处理；未知安装、third state 或不可证明 custody 继续 paused/recovery_unknown 并保留全部责任。步骤13–14发布/交付同一保存决议，不再确认、安装源、计费或消费次数。共同接受前必须把这些边界落实到实际 D6 owner 正文，本提案本身不能替代。
+
+### 3.3 当前 D6 /2 回执与错误的精确扩展
 
 将 `d6_error.code` 闭集扩展为：
 
 ```text
 invalid_request
+unsupported_version
 not_visible
-authority_unavailable
+domain_unavailable
 integrity_conflict
 operation_id_conflict
 plan_expired
-approval_unavailable
-execution_stopped
+source_unavailable
+proof_unavailable
 dependency_conflict
 semantic_rejected
 budget_exceeded
+install_unavailable
+conflict
+conflict_changed
+state_unavailable
+owner_update_required
+effects_unavailable
 transaction_aborted
+approval_unavailable
+execution_stopped
 ```
 
 `approval_unavailable` 只允许 disposition=`preflight`。它表示 coordinated D10 author-submit 的 approval dependency 在进入 D6 后不可消费，但原 D6 author permission/ObservationScope 与适用业务前提没有更早失败。它不生成 recorded rejection，不泄露 approval 内部原因。
 
 `execution_stopped` 同样只允许 disposition=`preflight`，且 current authorization/ObservationScope 必须先通过。它只表示本 request 绑定的不可逆 ExecutionStopLatch 已在线性化顺序中阻止新的 author submit；不得替代 `not_visible`、approval 错误、temporary disable、Lease expiry 或业务 dependency。unseen 不写 ledger；planned 按 §3.5 的严格 authoritative-abort 条件处理。
 
-原三阶段/key/权限/availability 规则不变；`dependency_conflict|semantic_rejected|budget_exceeded` 仍只在原步骤6可 recorded；planned 后永久 abort 仍只有 `transaction_aborted|terminal`。一个旧 consumer 未协商 D10 standing-approval capability 时不能收到新增 enum。
+当前 preflight/recorded/paused/terminal 四种 disposition 与原 key/权限/availability 规则不变；`dependency_conflict|semantic_rejected|budget_exceeded` 仍只在原步骤6可 recorded；planned 后永久 abort 仍只有 `transaction_aborted|terminal`。不兼容的组件组合在 D1 gate 拒绝；真实旧 wire1 决议保留原 decoder，不因新闭集而重编码。
 
 Standing Approval 不增加 receipt member。D10 UI 可以从受权 Run/ApprovalUse control state 显示使用来源，但它不是 author receipt。
 
@@ -161,13 +170,13 @@ ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefin
 
 这是对固定 S D6 Control 的显式协调修订，不改写 S 快照。
 
-Policy/2 capability union 增加一个无参数值 d10_control_self，只允许 workspace scope。它允许当前主体通过 R05 CONTROL-CONTRACT 的 closed Workspace control adapter 管理自己拥有的有限 Automation/Lease/Approval/Run 控制记录；它不蕴含 source/Field read-write、policy_admin、registry_admin、binding_admin、repair、commit_sequence_state 或任何 deployment resource。其它能力也不蕴含它；deny 继续优先。
+当前 Policy/3 capability union 增加一个无参数值 d10_control_self，只允许 workspace scope。它允许当前主体通过 R05 CONTROL-CONTRACT 的 closed Workspace control adapter 管理自己拥有的有限 Automation/Lease/Approval/Run 控制记录；它不蕴含 source/Field read-write、policy_admin、registry_admin、binding_admin、repair、commit_sequence_state 或任何 deployment resource。其它能力也不蕴含它；deny 继续优先。
 
 Workspace D10 control adapter 是受管 PreparedIntent producer，但只接受 CONTROL-CONTRACT §7 的 automation_configure、consent、state、workspace_limits、activation 五类 Workspace body。它不能接受 deployment_put、cost_reconcile、secret bytes 或自由 callback。producer 从真实 current principal、完整 closed body、受权读取和 stable prepare binding 生成原 d6_commit_request；external caller 仍不能声明 principal、authorized、effect 或 writer。涉及作者 payload 的最终 mutation 仍只能来自原 D7/D8/D3 adapter；普通 D10 control mutation 不能构造 author source bytes。
 
 固定 S profile/2 的“全部非 Field capability”在本 amendment 中冻结为 S 当时的受控集合 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。以后新增 capability 不自动进入 profile/2。
 
-新增 d6_bootstrap_profile wireVersion=3；成员仍为 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope。profile/3 的 initialPolicy.version 仍为 2；creator 初始 Workspace grant=上述固定 profile/2 非 Field 集合 + d10_control_self + S 原规则从 target Registry 生成的全部 Field read/write，deny 为空。
+新增 d6_bootstrap_profile wireVersion=3；成员仍为 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope。profile/3 明确生成 initialPolicy.version=3；creator 初始 Workspace grant 为上述固定 profile/2 非 Field 集合、当前 D6 的 replica_register/replica_retire/conflict_read/conflict_resolve/execution_custody_admin/structure_state/portable_frontier_state、d10_control_self，以及 S 原规则从 target Registry 生成的全部 Field read/write，deny 为空。实际新 WorkspaceBootstrapPlan/2 与 D7 bootstrap 投影按 CONTROL-CONTRACT §12 和真实 D6 owner 协调；不扩原 /1。
 
 只有当前 administer_issuer 的显式 issuer-profile 管理操作才能把以后新 family 切换为 profile/3。既有 family 保存的 profile/1/2 副本、replacement、WorkspaceBootstrapPlan、saved decisions、replay/continue/failover 不重算、不补 grant。既有 Workspace 取得 d10_control_self 只能由当前 policy_admin 走原 Policy 修改事务显式安装；Field 权限主体不能自授。
 
@@ -189,7 +198,7 @@ External send 竞争继续归 D10 transport boundary，而不是 D6：首次不�
 
 将 §5 当前“user 看到 preview 后通过原 D3/D6 提交入口确认”的语义替换为：
 
-> ActionSpec 默认确认仍是：当前用户取得并验证完整 preview 后，明确发送 prepare 返回的原 D3/D6 request。只有 D10/1 coordinated `single_field_member` profile 可以在没有本次人机点击时继续：Core 必须从这次 fresh D7 prepare 的完整 PreparedActionBinding/2、EffectManifest/EffectBytes、实际 MutationFootprint 和 current authorization 机械证明有效 ApprovalUse。这个例外不创建 D7 confirmation token、不修改 request，也不表示用户逐字阅读 preview。其它 ActionSpec kind 和 D3-owned intent 继续原交互确认。
+> ActionSpec 默认确认仍是：当前用户取得并验证完整 preview 后，明确发送 prepare 返回的原 D3/D6 request。只有 D10/1 coordinated `single_field_member` profile 可以在没有本次人机点击时继续：Core 必须从这次 fresh D7 prepare 的完整 PreparedActionBinding/3、EffectManifest/EffectBytes、实际 MutationFootprint 和 current authorization 机械证明有效 ApprovalUse。这个例外不创建 D7 confirmation token、不修改 request，也不表示用户逐字阅读 preview。其它 ActionSpec kind 和 D3-owned intent 继续原交互确认。
 
 ### 4.2 standing-approval eligibility，包括 raw no-op
 
@@ -214,7 +223,7 @@ External send 竞争继续归 D10 transport boundary，而不是 D6：首次不�
 
 ### 4.4 不可逆 stop 与 D7 prepare 的绑定
 
-D7 ActionSpec、PreparedActionBinding/2、EffectManifest/EffectBytes wire 不增加 caller-supplied stop 字段。对于 D10 自动 author-submit，Core 在 prepare 成功后用受保护内部关联把 planToken 绑定到当前 Run/Automation/Lease 与其 ExecutionStopLatch refs；调用方不能删除、替换或自报这些 refs。final submit 由 D6 §3.5 在真正 transaction 内重验 stop。D7 交互路径本身不因 stop 获得新的自动确认能力；stop 只会阻止仍未线性化的后台 submit。
+D7 ActionSpec、PreparedActionBinding/3、EffectManifest/EffectBytes wire 不增加 caller-supplied stop 字段。对于 D10 自动 author-submit，Core 在 prepare 成功后用受保护内部关联把 planToken 绑定到当前 Run/Automation/Lease 与其 ExecutionStopLatch refs；调用方不能删除、替换或自报这些 refs。final submit 由本提案 §3.5 所指定的实际 D6 seal consumer 在真正 transaction 内重验 stop。D7 交互路径本身不因 stop 获得新的自动确认能力；stop 只会阻止仍未线性化的后台 submit。
 
 ## 5. D7 Preview and Effects Transport — planned 恢复扩展
 
@@ -226,14 +235,14 @@ D7 ActionSpec、PreparedActionBinding/2、EffectManifest/EffectBytes wire 不增
 
 ```text
 d7_planned_preview_open {
-  wireVersion: 1,
+  wireVersion: 2,
   kind: "d7_planned_preview_open",
   protocolOwner: "D6",
-  request: <original d6_commit_request>
+  request: <original wireVersion=2 d6_commit_request, with its complete DecisionKey/2>
 }
 
 d7_planned_preview_opened {
-  wireVersion: 1,
+  wireVersion: 2,
   kind: "d7_planned_preview_opened",
   request,
   previewToken,
@@ -251,7 +260,7 @@ d7_planned_preview_opened {
 3. 原 D6 current authorization、原 ObservationScope 与完整 preview disclosure 资格；
 4. current authority/custody/ledger continuity；
 5. 同 key canonical request byte-equal 且 ledger state=planned；
-6. 原 PreparedActionBinding/2、其 semantic preview 与全部必要 pins 完整可证；
+6. 原 PreparedActionBinding/3、其 semantic preview 与全部必要 pins 完整可证；
 7. 建立新的有限 recovery delivery epoch，返回 fresh action_preview token/cursor/header。
 
 新 epoch 的语义 item、排序、EffectBytes payload 和 profile 必须逐字来自原 planned 保存的 immutable preview，不得重跑 Query、重新解析 current definition、重新选择 target、重新生成 proposed source 或切换 Registry。它只重新签发运输句柄。
@@ -312,13 +321,13 @@ D8 现有九个 concept ID、Editor Interfaces 的 12 个公开 request/response
 | `weftext.term.edit_draft` | 编辑草稿 / Edit Draft；D8 proposal state | 非权威用户提案与 `draftSerial`；非已保存作者源 | code type `Draft`；`d8_draft_project`、`d8_draft_text_replace`、`d8_draft_write` 输入归此；响应投影另归 Draft Projection | CLI 无；UI 继续使用已冻结“草稿已保存于此设备/待提交”等状态短语；不新增 locale key | D8 上下文可简称 Draft；禁止 author draft/source alias；删除目标为 draft-state alias/fixtures/help |
 | `weftext.term.draft_projection` | 草稿投影 / Draft Projection；D8 Core projection | Core 对一次 proposal 的可丢弃投影；非 D2 payload、Locator | code/wire `d8_draft_projection`；`d8_draft_text_replaced`、`d8_draft_written` 也返回该 projection | CLI 无；无独立 UI label/locale key，renderer 只消费结构 | 可简称 projection 仅限 D8；禁止 document_snapshot alias；删除未列 projection wire/type alias |
 | `weftext.term.draft_edit_map` | 草稿编辑映射 / Draft Edit Map；D8 Core mapping | flow/path/segment/plainRegion/site 的 proposal-local 坐标；非持久身份/Locator | code type `DraftEditMap`；由 `d8_draft_projection` 内 `editMap` 承载，文本 replace/write 请求消费其 binding | CLI/UI/locale 均无新增 | 可简称 edit map；禁止 locator/parser alias；删除 editor map registry 中未列 alias |
-| `weftext.term.prepared_edit_binding` | 编辑准备绑定 / Prepared Edit Binding；D8 protected Core record | D8 immutable prepare 记录；非 D7 PreparedActionBinding、ActionSpec 或第三 ledger | type `PreparedEditBinding/1`；internal kind `d8_prepared_edit_binding`；`d8_edit_prepare/edit_prepared` 和 `d8_undo_prepare` 消费/产生其受保护结果 | CLI/UI/locale 无新增 | 简称 Prepared Edit Binding；禁止 prepared-action alias；删除未列 binding wrapper/fixture 名 |
+| `weftext.term.prepared_edit_binding` | 编辑准备绑定 / Prepared Edit Binding；D8 protected Core record | D8 immutable prepare 记录；非 D7 PreparedActionBinding、ActionSpec 或第三 ledger | type `PreparedEditBinding/2`；internal kind `d8_prepared_edit_binding`；`d8_edit_prepare/edit_prepared` 和 `d8_undo_prepare` 消费/产生其受保护结果 | CLI/UI/locale 无新增 | 简称 Prepared Edit Binding；禁止 prepared-action alias；删除未列 binding wrapper/fixture 名 |
 | `weftext.term.composition_transaction` | 组合输入事务 / Composition Transaction；D8 UI input state | IME begin/update/commit/cancel 分组；非 D6 author transaction/receipt | code type `CompositionTransaction`；无 D8 JSON kind，新旧 input events 只映射到该 UI state | CLI/UI label/locale 无新增；辅助技术沿现有输入状态说明 | D8 上下文可简称 composition；禁止 commit transaction alias；删除 UI state registry 中未列 alias |
 | `weftext.term.caret_affinity` | 光标亲和位置 / Caret Affinity；D8 layout state | 同 logical point 的 `upstream|downstream` visual side；非 source offset/Locator | code enum `CaretAffinity`；作为 layout/caret state 成员，不新增 request kind | CLI 无；无独立 label/locale key，必要辅助说明按当前 caret 状态生成 | 可简称 affinity；禁止 source-side identity alias；删除 layout enum 未列 alias |
 | `weftext.term.layout_epoch` | 布局代 / Layout Epoch；D8 layout state | 同次 shaping/wrap/hit-test 的可丢弃世代；非 result/auth/author revision | code type `LayoutEpoch`；无 public D8 JSON kind | CLI/UI/locale 无新增 | 可简称 epoch 仅限布局上下文；禁止 result epoch alias；删除 layout cache 未列 alias |
 | `weftext.term.direction_preference` | 方向偏好 / Direction Preference；D8 presentation | device/session 的 `ltr|rtl|auto` 呈现偏好；非 locale、作者方向或 Query 排序 | code type `DirectionPreference`；值来自 Direction §2 的 shell/document/session preference，不新增 author wire | CLI 无；UI 继续使用现有方向选择器和 `ltr|rtl|auto` 选择值；不冻结新的概念 locale key | 可简称 direction preference；禁止 locale/author-dir alias；删除任何把偏好写回作者 source 的受控路径 |
 
-kind 反向归属逐 kind 固定。“technical interface owner”表示负责解析并返回该消息的 D8 接口合同，不是第十个 domain concept；领域概念只作为 consumed/returned 数据单独列出：
+kind 归属是完整单值映射：每个 kind 恰有一个 interface owner，多个 kind 可以共享该 owner。例如 d8_draft_project 与 d8_draft_projection 同归 D8 Draft Projection Interface，不要求反向唯一。“technical interface owner”表示负责解析并返回该消息的 D8 接口合同，不是第十个 domain concept；领域概念只作为 consumed/returned 数据单独列出：
 
 | kind | 唯一 technical interface owner | consumes / operates on | returns / domain concepts |
 | --- | --- | --- | --- |
@@ -327,20 +336,20 @@ kind 反向归属逐 kind 固定。“technical interface owner”表示负责�
 | `d8_draft_project` | D8 Draft Projection Interface（Editor Interfaces §3.1；草稿投影接口） | 消费 Edit Draft 与当前 author cut | 返回 `d8_draft_projection` |
 | `d8_draft_projection` | D8 Draft Projection Interface（Editor Interfaces §3.1；草稿投影接口） | 消费一份 Edit Draft proposal | 返回携带 Draft Edit Map 的 Draft Projection |
 | `d8_draft_text_replace` | D8 Draft Text Replace Interface（Editor Interfaces §3.3；草稿文本替换接口） | 消费 Edit Draft 与 Draft Edit Map 的 segment/range binding | 返回 `d8_draft_text_replaced` |
-| `d8_draft_text_replaced` | D8 Draft Text Replace Interface（Editor Interfaces §3.3；草稿文本替换接口） | 表示准确 replacement 的结果 | 返回 Draft Projection 与 caret；Draft Edit Map 只作为 projection 内消费/返回的数据，不与 kind 共 owner |
+| `d8_draft_text_replaced` | D8 Draft Text Replace Interface（Editor Interfaces §3.3；草稿文本替换接口） | 表示准确 replacement 的结果 | 返回 Draft Projection，本响应没有 caret 成员；Draft Edit Map 只作为 projection 内消费/返回的数据，不与 kind 共 owner |
 | `d8_draft_write` | D8 Draft Write Interface（Editor Interfaces §3.4；草稿写入接口） | 消费 Edit Draft 与 Draft Edit Map 给出的写入位置绑定 | 返回 `d8_draft_written` |
 | `d8_draft_written` | D8 Draft Write Interface（Editor Interfaces §3.4；草稿写入接口） | 表示准确 write 的结果 | 返回 Draft Projection 与 caret；Draft Edit Map 是数据，不是 kind owner |
 | `d8_edit_prepare` | D8 Edit Prepare Interface（Editor Interfaces §4；编辑准备接口） | 消费 Edit Draft，并按 Prepared Edit Binding 规则构造准备态 | 返回 `d8_edit_prepared`；嵌套 D6 commit request 继续归 D6 |
 | `d8_edit_prepared` | D8 Edit Prepare Interface（Editor Interfaces §4；编辑准备接口） | 消费受保护的 Prepared Edit Binding 结果 | 返回 preview/commit envelope；不声明 author success |
 | `d8_undo_prepare` | D8 Undo Prepare Interface（Editor Interfaces §7；撤销准备接口） | 消费当前 bytes/revision 与原 receipt/effects | 返回 `d8_edit_prepared`；只准备 inverse edit，不拥有 Undo history |
 | `d8_editor_error` | D8 Editor Error Interface（Editor Interfaces §6；编辑错误接口） | 表示 D8 public interface 的失败 | 返回 closed D8 editor error family；不创建 durable concept ID |
-| `d8_prepared_edit_binding` | D8 Prepared Edit Binding Internal Interface（Editor Interfaces §4.2；准备绑定内部接口） | 消费不可变 prepared request/preview/authorization coordinates | 返回受保护 `PreparedEditBinding/1`；绝不是 public response kind |
+| `d8_prepared_edit_binding` | D8 Prepared Edit Binding Internal Interface（Editor Interfaces §4.2；准备绑定内部接口） | 消费不可变 prepared request/preview/authorization coordinates | 返回受保护 `PreparedEditBinding/2`；绝不是 public response kind |
 
 `document|annotation` 继续只是 D8 intent 局部 discriminator，不是实体 kind。上述补充不增加任何 D8 wire member、error、IME 状态或自动确认路径。
 
 ### 8.2 D9 owner 词表追加条款
 
-D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的原 concept-contract `firstFreeze` 继续是已接受 D9 r04 合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它。R08 提议追加 naming 与逐 kind technical-interface-owner metadata，并具有独立 R08 candidate 来源；不能倒称这些逐项 ID/owner 已经作为 S 原行存在。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
+本命名补充自身不修改 D9 行为或 wire；下表消费实际 D9 文件权威后像的当前版本。Workspace 接口与模板/导出生产端显式采用 /2，纯工件 Worker 保持 /1，真实旧决议继续原 decoder/恢复，版本化语义归实际 D9 owner。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的原 concept-contract `firstFreeze` 继续是已接受 D9 r04 合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它。R08 提议追加 naming 与逐 kind technical-interface-owner metadata，并具有独立 R08 candidate 来源；不能倒称这些逐项 ID/owner 已经作为 S 原行存在。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
 
 迁移删除目标代码：M-import=旧 source ID/`ImportIr`/YAML proposal decoder、fixtures、help、generated samples；M-route=自由 command/fallback/provider alias 与 route inventory；M-template=旧 attr/record/H1–H9/formula-reorder/宽泛 view 模板 parser/help/samples；M-export=自由 binding dictionary、rowHandle identity、author-snapshot export、generic author-receipt alias；M-region=D9 私有 Locator kind/opaque registry identity；M-none=没有具体旧原型，仅删除实现中未列受控 alias。历史研究文本不迁移。
 
@@ -357,18 +366,18 @@ D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 conc
 | `weftext.term.import-job` | 导入作业 / Import Job；**owner D6，D9 消费** | 完整继承 D6 owned names `ImportJob`、`importJob`、`stageInput`、`planAtomicGroups`、`commitImportBatch`；D9 `d9_import_*` 只观察/操作该 D6 record | 固定有限 groups/batches；非第二 ledger/全 job 原子事务 | 继承 D6 UI/locale `storage.import_job`；firstFreeze 保持 `D6 revision05-observation-bootstrap candidate; not activated`；无 D9 兼容 alias | M-import |
 | `weftext.term.coupling-group` | 耦合组 / Coupling Group；D9 mapping | ConversionInput/prepare 内 group | 不可拆作者组；非 UI page/worker process | 无 CLI/UI/locale | M-import |
 | `weftext.term.import-batch` | 导入批次 / Import Batch；D9 mapping | 一个原 D3/D6 atomic request | 有限提交批次；非任意 1000 条切块 | UI 可显示批次进度但无新 locale key | M-import |
-| `weftext.term.conversion-input` | 转换输入证据 / Conversion Input；D9 控制域 | `ConversionInput/1` ZIP/profile | 绑定原始输入、IR、映射、损失和路由；非身份或作者源 | 无直接 UI/CLI/locale | M-import |
+| `weftext.term.conversion-input` | 转换输入证据 / Conversion Input；D9 控制域 | `ConversionInput/2` ZIP/profile | 绑定原始输入、IR、映射、损失和路由；非身份或作者源 | 无直接 UI/CLI/locale | M-import |
 | `weftext.term.worker-invocation` | Worker 调用记录 / Worker Invocation；D9 Worker 控制域 | `WorkerInvocation/1` | 固定作业、步骤、路由、输入、选项和预算；没有路径或命令字段 | 无 UI/CLI/locale；Worker 不得自报授权 | M-route |
-| `weftext.term.template-recipe` | 模板配方 / Template Recipe；D9 template | `TemplateRecipe/1`, format `weftext.node-template` | 对 D2 Template 的一次 fresh construction 配方；非第二 Template identity | Template UI 可显示配方；无独立 locale/CLI | M-template |
-| `weftext.term.template-construction-input` | 模板构造输入 / Template Construction Input；D9 control | `TemplateConstructionInput/1` | 固定 pins/recipe/params/resource/loss 证据；非 author source | 无直接 UI/CLI/locale | M-template |
+| `weftext.term.template-recipe` | 模板配方 / Template Recipe；D9 template | `TemplateRecipe/2`, format `weftext.node-template` | 对 D2 Template 的一次 fresh construction 配方；非第二 Template identity | Template UI 可显示配方；无独立 locale/CLI | M-template |
+| `weftext.term.template-construction-input` | 模板构造输入 / Template Construction Input；D9 control | `TemplateConstructionInput/2` | 固定 pins/recipe/params/resource/loss 证据；非 author source | 无直接 UI/CLI/locale | M-template |
 | `weftext.term.office-template` | Office 模板 / Office Template；D9 template | 普通 Office template profile | 普通文本模板 bytes；非宏/脚本 | UI 可称 Office 模板；无固定 locale key/CLI | M-template |
 | `weftext.term.template-placeholder` | 模板占位符 / Template Placeholder；D9 template | Templates token/binding contract | 值插入位置；非 content control/named range | 用户可见 placeholder 文本；无独立 locale key | M-template |
 | `weftext.term.style-directive` | 样式指令 / Style Directive；D9 template | Templates style directive | 可见 style 样板；非执行命令 | UI 可预览，不冻结 CLI/locale | M-template |
 | `weftext.term.repeat-band` | 重复带 / Repeat Band；D9 template | 单完整 row/column repeat contract | dataset 重复结构；非 Excel Table 增强层 | UI 可显示重复区域；无独立 locale/CLI | M-template |
 | `weftext.term.render-snapshot` | 渲染快照 / Render Snapshot；D9 export | Templates `RenderSnapshot` finite union | 已授权显式渲染投影；非 author snapshot/import | 无直接 CLI/locale；inspect UI 可展示 | M-export |
 | `weftext.term.d7-result-pin` | D7 结果固定证据 / D7 Result Pin；D9 control over D7 | `D7ResultPin` 内部 pin；嵌套 `TerminalSchema`/V 继续归 D7 | 固定完整 D7 终态结果/epoch/auth/cut；非 rowHandle identity | 无 UI/CLI/locale；禁止 D7 result identity alias | M-export |
-| `weftext.term.export-plan` | 导出计划 / Export Plan；D9 export control | `ExportPlan/1` | 当前输出不可变准备记录；非 D6 PreparedIntent/author ledger | export prepare/inspect UI 消费；无独立 locale key | M-export |
-| `weftext.term.export-input-catalog` | 导出输入目录 / Export Input Catalog；D9 export | `ExportInputCatalog/1` | Plan 的完整受权输入目录；非作者 source | 无独立 UI/CLI/locale | M-export |
+| `weftext.term.export-plan` | 导出计划 / Export Plan；D9 export control | `ExportPlan/2` | 当前输出不可变准备记录；非 D6 PreparedIntent/author ledger | export prepare/inspect UI 消费；无独立 locale key | M-export |
+| `weftext.term.export-input-catalog` | 导出输入目录 / Export Input Catalog；D9 export | `ExportInputCatalog/2` | Plan 的完整受权输入目录；非作者 source | 无独立 UI/CLI/locale | M-export |
 | `weftext.term.export-content-selection` | 导出内容选择 / Export Content Selection；D9 export | `ExportContentSelection/1` | body/bibliography 明确消费选择；非授权 grant | inspect UI 显示选择；无 locale key | M-export |
 | `weftext.term.export-projection` | 导出投影 / Export Projection；D9 export | `ExportProjection/1` | bindings/datasets 的有限 Core 投影；非自由 dictionary | 无独立 locale/CLI | M-export |
 | `weftext.term.export-input-location` | 导出输入位置 / Export Input Location；D9 evidence | `input|source_range|annotation|query_cell|query_scalar|template_range` closed union | Plan 内证据位置；非 Locator/identity | 无 UI/CLI/locale | M-export |
@@ -376,7 +385,7 @@ D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 conc
 | `weftext.term.export-loss-report` | 导出损失报告 / Export Loss Report；D9 export | `ExportLossReport/1`, format `weftext.export-loss` | 固定提案损失报告；非 import LossReport | inspect UI 显示完整报告；无独立 locale key | M-export |
 | `weftext.term.export-blocks` | 导出块投影 / Export Blocks；D9 export compiler | internal `ExportBlocks` | D2 已知结构的只读编译结果；非新 author block ID | 无 UI/CLI/locale | M-export |
 | `weftext.term.staged-output` | 暂存输出 / Staged Output；D9 publication control | validated staging record | 未发布完整输出；非 author revision | publish/state UI 消费；无独立 locale key | M-export |
-| `weftext.term.publication-receipt` | 外部发布回执 / Publication Receipt；D9 publication | `PublicationReceipt/1` | 外部文件发布事实，只绑定 plan/output/destination | UI 可显示“已发布”；无独立 locale key；**禁止 D3/D6 author receipt alias** | M-export |
+| `weftext.term.publication-receipt` | 外部发布回执 / Publication Receipt；D9 publication | `PublicationReceipt/2` | 外部文件发布事实，只绑定 plan/output/destination | UI 可显示“已发布”；无独立 locale key；**禁止 D3/D6 author receipt alias** | M-export |
 | `weftext.term.import-loss-report` | 导入损失报告 / Import Loss Report；D9 import/template | `LossReport/1` | 导入/Node Template 固定损失选择；非 export report | analysis UI 显示；无独立 locale key | M-import |
 | `weftext.term.import-loss-issue` | 导入问题 / Import Loss Issue；D9 IR | IR issue exact object | 原始观察问题；非安全批准或完整性证明 | analysis UI 可显示 message；无独立 locale key | M-import |
 | `weftext.term.template-loss-location` | 模板损失位置 / Template Loss Location；D9 模板域 | `template_source|template_annotation` union | 模板输入固定证据或明确省略证据；非 D3 Locator | 无 UI/CLI/locale | M-template |
@@ -386,9 +395,9 @@ D9 行为与 wire 保持。下表把 D9 lexicon 中的分组词拆成稳定 conc
 
 继承 owner 必须显式保持：
 
-- D2 `Template` meta-kind 仍拥有 Node Template 的作者身份；D9 只拥有 `TemplateRecipe/1`/construction evidence。
-- D7 `TerminalSchema`、V 值代数和 `PreparedActionBinding/2` 继续归 D7；`D7ResultPin` 只 pin 这些既有事实。
-- D3 `SourceBinding`、`ForeignIdentityKey`、`OriginBinding`、`ResourceRegionLocator/l1` 与 D3/D6 author receipt 继续归原 owner。D9 的 `RegionBody/d9rg1` 只是内层几何，`PublicationReceipt/1` 只能表示外部发布。
+- D2 `Template` meta-kind 仍拥有 Node Template 的作者身份；D9 只拥有 `TemplateRecipe/2`/construction evidence。
+- D7 `TerminalSchema`、V 值代数和 `PreparedActionBinding/3` 继续归 D7；`D7ResultPin` 只 pin 这些既有事实。
+- D3 `SourceBinding`、`ForeignIdentityKey`、`OriginBinding`、`ResourceRegionLocator/l1` 与 D3/D6 author receipt 继续归原 owner。D9 的 `RegionBody/d9rg1` 只是内层几何，`PublicationReceipt/2` 只能表示外部发布。
 - D6 `SourceVersion`、`BudgetBinding`、Token 与 job/commit 权威不改。
 
 D9 owner lexicon 还为17个 public kind 逐项记录唯一 technical interface owner。这些 interface-owner label 不创建17个新的 domain concept；上表36个 D9-owned concept 继续构成领域词表，D6 ImportJob 仍是唯一继承自 D6 的 concept。
@@ -407,7 +416,7 @@ D9 owner lexicon 还为17个 public kind 逐项记录唯一 technical interface 
 | `d9_import_choose` | D9 Import Analysis Interface（Main §4；导入分析接口） | 消费 analysis token 与明确 loss/mapping choices | 返回 successor analysis；不是 D6 commit |
 | `d9_import_prepare` | D9 Import Preparation Interface（Main §4；导入准备接口） | 消费 fixed analysis 与继承 D6 ImportJob 的 group/batch control | 返回 `d9_import_prepared`；真实 author plan 继续归 D7/D3/D6 |
 | `d9_import_prepared` | D9 Import Preparation Interface（Main §4；导入准备接口） | 消费准确 prepared batch | 包装/返回原 D7 prepared outcome；不创建新的 author receipt |
-| `d9_import_next` | D9 Import Preparation Interface（Main §4；导入准备接口） | 消费当前继承 D6 ImportJob 与之前 authoritative batch outcome | 返回下一有限 batch preparation 或 terminal job state |
+| `d9_import_next` | D9 Import Preparation Interface（Main §4；导入准备接口） | 消费当前继承 D6 ImportJob 与之前 authoritative batch outcome | 只为唯一下一有限 batch 返回 `d9_import_prepared`；完整/当前 job state 另由 `d9_import_state` 取得，本入口不新增 terminal success 分支 |
 | `d9_import_state` | D9 Import Job State Interface（Main §4；导入作业状态接口） | **operate on D6-owned ImportJob** | 返回 `d9_import_state_result`；interface owner 是 D9，record/concept owner 仍为 D6 |
 | `d9_import_state_result` | D9 Import Job State Interface（Main §4；导入作业状态接口） | 消费 D6 ImportJob 与关联原 receipts | 返回只读 progress/result projection；D3/D6 receipt 保留原 owner |
 | `d9_template_analyze` | D9 Node Template Analysis Interface（Templates §6；节点模板分析接口） | 消费 D2 Template 与 D9 TemplateRecipe/TemplateConstructionInput | 返回 `d9_import_analysis`；D2 Template identity 继续归 D2 |
@@ -423,7 +432,7 @@ D9 owner lexicon 还为17个 public kind 逐项记录唯一 technical interface 
 
 首版 D10 公开能力由 D10 定义、D1 发现/发布的候选 ID：automation.manage、workspace.extensions.manage、deployment.external.manage、automation.stop、automation.author_submit。它们必须先进入所选 D1 contractMajor 的正式 capability catalog，并继续经过 D1 已冻结的 release、surface、policy、principal、component/configuration、reachability/version-combination 与 health 门。unknown ID 仍为 D1 unsupported_feature；不允许的组件版本组合仍为 incompatible_version。D10/D6 不增加第二个产品级协商器。
 
-第一份共同公开 unattended author-submit D6-Control/1 error 闭集在该能力真正发布时已经包含 approval_unavailable 与 execution_stopped。不存在旧 D10 author-submit error profile、enum fallback、migration parser 或双读写。这里删除的只是未发布 D10 profile 假设；S 已冻结的 Policy/1/2、bootstrap profile/1/2、IssuerControlPolicy、D1 bootstrap/contractMajor 以及历史 saved decision decoder 全部保留。
+第一份共同公开 unattended author-submit D6-Control/2 error 闭集在该能力真正发布时已经包含 approval_unavailable 与 execution_stopped。不存在旧 D10 author-submit error profile、enum fallback、migration parser 或双读写。这里删除的只是未发布 D10 profile 假设；S 已冻结的 Policy/1/2、bootstrap profile/1/2、IssuerControlPolicy、D1 bootstrap/contractMajor 以及历史 saved decision decoder 全部保留。
 
 运行时发布前，所有 D7/D8 author proposal 仍使用当前逐次确认，planned-preview recovery 新入口和 unattended author submit 均保持真实 D1 unavailable。实现可以独立推进不涉及无人值守作者提交的 Broker、Agent proposal、Tool/MCP、Connector read 和 external-effect control，但每项仍须自己的 D1 capability 和真实实现证据。
 
@@ -452,7 +461,7 @@ D9 owner lexicon 还为17个 public kind 逐项记录唯一 technical interface 
 19. profile/2 family 在软件升级后不得自动获得 d10_control_self；profile/3 只影响显式 issuer update 后的新 family，既有 Workspace 只能由当前 policy_admin 显式授予。
 20. stop 与新 Run admission、D6 final author commit 的两种先后都必须只有一个线性化结果；stop 后仍允许受权 authoritative abort、cost settlement 和 evidence retention。
 21. same stable Workspace-control request 已成功但响应丢失，随后对象 revision 改变；当前披露授权通过后必须重放旧结果，不能重复 mutation，也不能因 current revision 改变误拒绝历史成功。
-22. D8 九 concept 与十三 kind 必须能从 owner lexicon 正反向唯一映射；任何 unlisted CLI/locale/wire alias 失败，且不得因此改变 IME/Write/Read/confirm/Undo。
-23. D9 grouped lexicon 必须拆出稳定 concept ID；`PublicationReceipt/1` 只能映射外部发布事实，`D7ResultPin` 的 nested TerminalSchema/V 仍归 D7，PreparedActionBinding/SourceBinding/OriginBinding 等继承 owner 不得被 D9 重注册。
+22. D8 九个 concept ID 保持各自独立；十三个 kind 在 owner lexicon 中必须各有且仅有一个 technical interface owner，多个 kind 可以共享 owner，包括 d8_draft_project/d8_draft_projection。领域数据所有权另列，不要求反向唯一。任何 unlisted CLI/locale/wire alias 失败，且不得因此改变 IME/Write/Read/confirm/Undo。
+23. D9 grouped lexicon 必须拆出稳定 concept ID；`PublicationReceipt/2` 只能映射外部发布事实，`D7ResultPin` 的 nested TerminalSchema/V 仍归 D7，PreparedActionBinding/SourceBinding/OriginBinding 等继承 owner 不得被 D9 重注册。
 
 这些是作者修订后的审查靶点，不表示前两批独立问题已经关闭。只有后续独立复审才能改变其审查状态。

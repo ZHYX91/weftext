@@ -144,8 +144,8 @@
       "en": "Prepared Intent",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Core保存的immutable完整意图、源计划、依赖与预算",
-      "exclusions": "不是D3 planned、content reservation或自由回调",
+      "definition": "Core-managed immutable D6 intent containing the complete owner descriptor, source plan, dependencies, authorization scope, budget, installation plan and protected pins; d6_commit_request/2 selects it with planToken.",
+      "exclusions": "Not a D3 native private plan, content reservation, free callback or requirement added to identity_operation_request wire12. Native D3 enters its own typed planning stages and shares the same DecisionKey/P decision, without a D6 prepare or second D6 identity submit.",
       "ownedNames": [
         "PreparedIntent",
         "preparedIntent",
@@ -173,8 +173,8 @@
       "en": "Plan Token",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "选择一份受管PreparedIntent的opaque运输token",
-      "exclusions": "不是identity、授权凭证或可编辑计划",
+      "definition": "Opaque D6 transport token selecting one immutable PreparedIntent under its protected tag/audience; required only by the actual D6 entry whose closed request declares it.",
+      "exclusions": "Not identity, permission, an editable plan, or an undeclared member of native D3 identity_operation_request wire12 or its d3_identity_operation/12 descriptor.",
       "ownedNames": [
         "PlanToken",
         "planToken"
@@ -370,8 +370,8 @@
       "en": "Source Version",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "SourceVersion/2 is the complete managed/external production-version union: both arms bind full EntityRef, production CommitDomain, and production observationEpoch; managed additionally binds the checked H(D,E)+1 revision for that entity in that production domain and the seal ChangeId, while external binds externalSequence and has no managed revision/ChangeId. H=0 is legal only for a proved complete empty managed history, observationEpoch changes do not reset H, and current observation is separately represented by SourceObservation/1 over observerDomain, current observationEpoch, FileObjectBinding, and evidence pins; SourceVersionRef/1 selects that complete observation. The new d6_source_revision/2 profile resolves only through protected RevisionTokenBinding/2 binding observerDomain/current observationEpoch to managed SourceStamp/1 or complete external SourceVersion/2 without changing the D3/D4/D5 inner wire.",
-      "exclusions": "Not a bare revision, digest, path, DocumentRef, observer-domain identity, currentness proof, or replacement for the protected d6_source_revision/2 RevisionTokenBinding/2. Equal revision numbers across production domains are not equal versions; externalSequence is not managed sourceRevision; SourceRevisionPlan/1 or SourceStamp/1 before seal is not a committed SourceVersion; equal hash/text never repairs an observation gap.",
+      "definition": "SourceVersion/2 is the complete managed/external production-version union: both arms bind full EntityRef, production CommitDomain, and production observationEpoch; managed additionally binds the checked H(D,E)+1 revision for that entity in that production domain and the seal ChangeId, while external binds externalSequence and has no managed revision/ChangeId. H=0 is legal only for a proved complete empty managed history, observationEpoch changes do not reset H, and current observation is separately represented by SourceObservation/1 over observerDomain, current observationEpoch, FileObjectBinding, and evidence pins; SourceVersionRef/1 selects that complete observation. The new d6_source_revision/2 profile resolves only through protected RevisionTokenBinding/2 binding observerDomain/current observationEpoch to managed SourceStamp/1 or complete external SourceVersion/2 without changing the D3/D4/D5 inner wire. D6 Control §3.1.1 ConflictInstallInput/1 is separately typed, guarded installation-before evidence only for D3 canonical resolution, never a current Observation/source token; its explicit conflict-only SourceRevisionPlan/2 uses the same current-domain H+1 and one seal ChangeId for real canonical admission, including equal-byte changed claim/selected production version. Ordinary/fresh plans retain /1.",
+      "exclusions": "Not a bare revision, digest, path, DocumentRef, observer-domain identity, currentness proof, or replacement for the protected d6_source_revision/2 RevisionTokenBinding/2. Equal revision numbers across production domains are not equal versions; externalSequence is not managed sourceRevision; SourceRevisionPlan/1 or SourceStamp/1 before seal is not a committed SourceVersion; equal hash/text never repairs an observation gap. ConflictInstallInput cannot be used as SourceObservation, SourceVersionRef, Query/D8/ordinary source-write proof or raw D3 admission.",
       "ownedNames": [
         "SourceVersion",
         "sourceVersions",
@@ -429,7 +429,7 @@
       "en": "Control Commit Protocol",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "D6 v2 uses one DecisionKey/P chain for prepare, plan, install, P seal, receipt and replay; portable ChangeId is allocated at seal, D3 primary receipt uses a same-P companion, and observed_only creates no second decision chain.",
+      "definition": "D6 and D3 retain their actual closed submit entries while sharing one DecisionKey/P planning, installation, seal, receipt and recovery chain. Only d6_commit_request/2 checks its declared expectedDomainFenceToken and planToken/PreparedIntent; native identity_operation_request wire12 uses D3 domain/authority/custody qualification, its exact InputDescriptor/2 and d3_identity_operation/12 owner descriptor, protected inputs and private plan. The common disclosure/continuity gate precedes saved/planned/unseen lookup; only unseen enters new consumer/business gates. Portable ChangeId is allocated at the sole P seal, D3 primary receipt uses a same-P companion, and observed_only creates no second decision chain.",
       "exclusions": "不包装D3绕过其阶段；不是文件hash CAS；不是第二Action领域",
       "ownedNames": [
         "D6ControlCommit",
@@ -572,7 +572,7 @@
       "en": "Dependency Completeness Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "DependencyProof/2 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fourteen closed DependencyKey/2 kinds—source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource—with owner-defined complete ranges, evidence pins, and per-key continuity stamp {epoch,revision}. Completeness comes from a currently authorized consistent snapshot/range barrier or a gap-free continuous change chain plus final revalidation; D6 carries the closed keys/stamps while D3/D4/D7 retain their actual enumeration algorithms.",
+      "definition": "DependencyProof/2 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fourteen closed DependencyKey/2 kinds—source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource—with owner-defined complete ranges, evidence pins, and per-key continuity stamp {epoch,revision}. Completeness comes from a currently authorized consistent snapshot/range barrier or a gap-free continuous change chain plus final revalidation; D6 carries the closed keys/stamps while D3/D4/D7 retain their actual enumeration algorithms. Only the guarded D3 resolution context may bind a source entry to the complete typed ConflictInstallInput/1 plus conflict/current-range evidence; it proves that original installation and never exports canonical-current Query qualification.",
       "exclusions": "Not caller readSet/free JSON, Derived Index readiness, row count, final hash, provider-synced status, Frontier-vector comparison, partial/building index, unknown range, or no-hit evidence. Unknown/placeholder/I/O/missing-shard/hidden-unreadable state never proves empty. Deleting I alone does not reset proof while protected P/M continuity facts remain complete; actual proof/continuity loss or a gap requires a new epoch.",
       "ownedNames": [
         "DependencyProof",
@@ -799,12 +799,13 @@
       "en": "Workspace Bootstrap Plan",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "原D3计划内固定首份policy/Registry/Calendar控制和主体映射并同activation发布",
+      "definition": "Control §10.2 owns complete WorkspaceBootstrapPlan/2 with wireVersion=2, profile/3 and Policy/3 in the original D3 fresh decision; true Plan/1 history retains its original decoder.",
       "exclusions": "不是第二decision、可编辑请求或永久管理员",
       "ownedNames": [
         "WorkspaceBootstrapPlan",
         "workspaceBootstrapPlan",
-        "d6_workspace_bootstrap_plan"
+        "d6_workspace_bootstrap_plan",
+        "WorkspaceBootstrapPlan/2"
       ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
@@ -827,12 +828,13 @@
       "en": "Workspace Bootstrap Profile",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "family不可变的Registry种子和显式初始范围/multiplicity选择",
+      "definition": "Explicit nested profile wireVersion=3 retains the original six members, fixed base21+seven FA capabilities+d10_control_self and complete target Registry Field grants; immutable old families/profile1/2 never auto-expand.",
       "exclusions": "不是D2 Profile或Facet，不是每次重试最新配置",
       "ownedNames": [
         "WorkspaceBootstrapProfile",
         "bootstrapProfile",
-        "d6_bootstrap_profile"
+        "d6_bootstrap_profile",
+        "WorkspaceBootstrapProfile/3"
       ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
@@ -1180,7 +1182,7 @@
       "en": "Installation Notice",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "InstallationNotice/2 is the immutable DecisionKey/base-Frontier/before-after component record durably written before portable current mutation; it contains no ChangeId because ChangeId is allocated only at P seal.",
+      "definition": "InstallationNotice/2 is the immutable DecisionKey/base-Frontier/before-after component record durably written before portable current mutation; it contains no ChangeId for this not-yet-sealed decision, whose ChangeId is allocated only at P seal; baseFrontier may contain historical sealed ChangeIds.",
       "exclusions": "不是commit proof、receipt、approval或execution authority",
       "ownedNames": [
         "InstallationNotice",
@@ -1234,8 +1236,8 @@
       "en": "Conflict Record",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "ConflictRecord/2 is the current new-FA portable conflict record addressed by the unchanged canonical ConflictKey/1 and ConflictId, with createdAtFrontier encoded as Frontier/2 and state open|resolution_prepared|resolved|superseded. ConflictKey/1 ordering, ConflictId format, and the D6-ConflictKey/1 hash domain are unchanged. Historical ConflictRecord/1 retains its original bytes, decoder, authorization/recovery obligations, and createdAtFrontier=Frontier/1.",
-      "exclusions": "Not automatic merge, LWW, D3 bypass transaction, permission, or a reason to reinterpret Record/1 as Record/2. An external race, third_state, or unknown installation with no real sealed ChangeId cannot fabricate a ConflictKey head; equal hash/mtime/path is not conflict-history evidence.",
+      "definition": "ConflictRecord/2 is the current new-FA portable conflict record addressed by the unchanged canonical ConflictKey/1 and ConflictId, with createdAtFrontier encoded as Frontier/2 and state open|resolution_prepared|resolved|superseded. ConflictKey/1 ordering, ConflictId format, and the D6-ConflictKey/1 hash domain are unchanged. Historical ConflictRecord/1 retains its original bytes, decoder, authorization/recovery obligations, and createdAtFrontier=Frontier/1. Current ConflictResolution/1 contains only source_merge, choose_source_head and policy_choice, which D6 can actually prepare. The undeployed owner_resolution candidate arm is removed. Clients navigate placement/lifecycle/identity conflicts directly to D3ConflictResolutionPrepare/1 in D3 §10.1; final submission retains identity_operation_request wire12 with its actual preparationBinding and the same DecisionKey/P decision. D3 owns complete typed selection, three-entity selected-branch copy and native resolution consumption. D7 owns the actual PreparedActionBinding/3 record and full EffectManifest/2/current preview transport; their coordinated producer and independent acceptance remain required before new prepared execution. Resolution input requires its immutable preparationBinding/input-use guard and cannot become raw input by stripping a token; real saved/planned/unknown records recover first under their original contract.",
+      "exclusions": "Not automatic merge, LWW, D3 bypass transaction, permission, or a reason to reinterpret Record/1 as Record/2. An external race, third_state, or unknown installation with no real sealed ChangeId cannot fabricate a ConflictKey head; equal hash/mtime/path is not conflict-history evidence. No permanent route-only failing RPC, free payload, new D6 route-success result, second D6 identity submit or second ledger. Removal of an undeployed candidate arm does not assert deployment or cancel the original decoder/pin/recovery duties of any historical record that actually exists.",
       "ownedNames": [
         "ConflictRecord",
         "conflictRecord",
@@ -1290,12 +1292,13 @@
       "en": "Execution Responsibility",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "连续持有Automation/ApprovalUse/claim/Money/external-unknown/stop事实的受保护执行域，独立于普通CommitDomain",
+      "definition": "Control §16 closes the exact D10 owner payloads for original approval counts, Run/Lease admission, all schedule/occurrence states, Money lineage, original send/unknown and stop/capacity at one complete protected cut; custody uses actual fencing and preserves identities and liabilities.",
       "exclusions": "不是ReplicaEpoch、Workspace content identity或文件同步资格",
       "ownedNames": [
         "ExecutionResponsibility",
         "ExecutionResponsibilityRecord",
-        "executionDomainId"
+        "executionDomainId",
+        "ExecutionResponsibilityRecord/2"
       ],
       "manifest": "none; not a D10 contribution",
       "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
@@ -1340,6 +1343,116 @@
       "firstFreeze": "D6-FA-r01 G0-A candidate; not activated",
       "migration": "No published compatibility alias. Historical saved evidence retains its original protocol.",
       "deletionTarget": "No historical evidence deletion."
+    },
+    {
+      "conceptId": "weftext.term.d10-control-input",
+      "zh": "D10 控制输入",
+      "en": "D10 Control Input",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "D6 Control §4.3 owns the closed immutable D10 Workspace adapter input; consumes actual complete D10 owner types, excludes generated M and later confirmation, produces original PreparedIntent2/request2 with protocolOwner D6.",
+      "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
+      "ownedNames": [
+        "D10ControlInput/1",
+        "d10_control/1"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
+      "localeKey": "storage.d10_control_input",
+      "uiZh": "D10 控制输入",
+      "uiEn": "D10 Control Input",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "Complete protected original owner input / no digest-only reconstruction, fallback or duplicate decision",
+      "firstFreeze": "D6/D10 joint producer candidate 2026-10-02; not accepted or activated",
+      "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
+      "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
+    },
+    {
+      "conceptId": "weftext.term.d10-control-self",
+      "zh": "D10 自助控制",
+      "en": "D10 Self Control",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "Explicit workspace-only Policy3 capability for finite current-principal self-management of D10 control records; default deny, no implicit content/resource/deployment rights.",
+      "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
+      "ownedNames": [
+        "d10_control_self"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
+      "localeKey": "storage.d10_control_self",
+      "uiZh": "D10 自助控制",
+      "uiEn": "D10 Self Control",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "Complete protected original owner input / no digest-only reconstruction, fallback or duplicate decision",
+      "firstFreeze": "D6/D10 joint producer candidate 2026-10-02; not accepted or activated",
+      "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
+      "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
+    },
+    {
+      "conceptId": "weftext.term.schedule-continuity-witness",
+      "zh": "调度连续性见证",
+      "en": "Schedule Continuity Witness",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "D6 Storage §7.2.1 continuously consumes actual complete registered source/control transitions into a protected checkpoint; unrelated changes may advance, proved business ABA marks binding_changed, gaps mark gap; no I reconstruction or hash-only proof.",
+      "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
+      "ownedNames": [
+        "ScheduleContinuityWitness/1",
+        "ScheduleContinuityStep/1",
+        "d6_schedule_continuity",
+        "d6_schedule_continuity_step",
+        "ScheduleContinuityInvalidation/1",
+        "d6_schedule_continuity_invalidation"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
+      "localeKey": "storage.schedule_continuity_witness",
+      "uiZh": "调度连续性见证",
+      "uiEn": "Schedule Continuity Witness",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "Complete protected original owner input / no digest-only reconstruction, fallback or duplicate decision",
+      "firstFreeze": "D6/D10 joint producer candidate 2026-10-02; not accepted or activated",
+      "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
+      "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
+    },
+    {
+      "conceptId": "weftext.term.execution-continuity-proof",
+      "zh": "执行连续性证明",
+      "en": "Execution Continuity Proof",
+      "owner": "D6",
+      "layer": "storage/control",
+      "definition": "Closed initial/checkpoint/handoff association of actual complete D10 inventory, protected store barrier and irreversible old-holder fencing, preserving original control identities and liabilities.",
+      "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
+      "ownedNames": [
+        "ExecutionContinuityProof/1"
+      ],
+      "manifest": "none; not a D10 contribution",
+      "codeConvention": "Types PascalCase; members camelCase; functions use exact ownedNames; namespace Weftext.Core.Storage. No alternative aliases.",
+      "cli": "No CLI verb/flag is frozen by D6-FA-r01; adapters must use this controlled mapping.",
+      "localeKey": "storage.execution_continuity_proof",
+      "uiZh": "执行连续性证明",
+      "uiEn": "Execution Continuity Proof",
+      "allowedShort": "none; use full term",
+      "rejectedAliases": [
+        "unlisted public alias"
+      ],
+      "exampleAndCounterexample": "Complete protected original owner input / no digest-only reconstruction, fallback or duplicate decision",
+      "firstFreeze": "D6/D10 joint producer candidate 2026-10-02; not accepted or activated",
+      "migration": "New decisions use the coordinated FA-r01 version only after all owner afterimages activate. Legacy saved decisions retain their original decoder/names and are not rewritten.",
+      "deletionTarget": "No historical evidence deletion. Unlisted aliases are forbidden for the first activated FA-r01 implementation."
     }
   ],
   "crossStageBindings": [
@@ -1398,7 +1511,7 @@
       "contract": "D7 downstream row ownership; not cursorToken or generic JSON fallback"
     },
     {
-      "owner": "D6 FA-r01 / D3 future wire12",
+      "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
       "names": [
         "CommitDomain"
       ],
@@ -1406,7 +1519,7 @@
       "contract": "D6 Control/2 defines the closed CommitDomain shape; D3 may not create new scoped identity decisions until its coordinated wire12 afterimage activates."
     },
     {
-      "owner": "D6 FA-r01 / D3 future wire12",
+      "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
       "names": [
         "ReplicaEpoch"
       ],
@@ -1414,7 +1527,7 @@
       "contract": "D6 Control/2 defines ReplicaEpoch and replica registration; registration is not execution-responsibility takeover or Workspace continue."
     },
     {
-      "owner": "D6 FA-r01 / D3 future wire12",
+      "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
       "names": [
         "ChangeId"
       ],
@@ -1422,7 +1535,7 @@
       "contract": "D6 Control/2 owns replica-local portable change identity; D3 wire12 must bind it only through the coordinated commit domain."
     },
     {
-      "owner": "D6 FA-r01 / D3 future wire12",
+      "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
       "names": [
         "Frontier"
       ],
@@ -1461,7 +1574,54 @@
       ],
       "conceptId": "weftext.term.execution-responsibility",
       "contract": "D6 owns the durable continuity container; D10/Money owns approval/claim/external/Money sub-schemas and sourceOccurrenceKey semantics."
+    },
+    {
+      "owner": "D6 installation producer / D3 guarded resolution / D7 protected record",
+      "names": [
+        "ConflictInstallInput/1",
+        "SourceRevisionPlan/2",
+        "D3CanonicalInput/1",
+        "D3ResolutionInputUse/1"
+      ],
+      "conceptId": "weftext.term.source-version",
+      "contract": "Control §3.1.1 and §6.2.1 own the closed installation-only wrapper and conflict-only internal plan decoder. D3 §10.1 owns canonicalInputs, D3CanonicalEffectPlan/1, the selected lifecycle matrix and usage guard. Its primary receipt arrays cover only the native component; mandatory public D3CanonicalEffects/1 proves the canonical component, with independent original-schema evidence and exact physical-effect aliases. D6 saves both at the same P seal and sourceVersions/CP3 cover every physical source effect once. D7 PreparedActionBinding/3 persists the complete input and full preview. Wrapper has no public source token, never enters InputDescriptor.sourceInputs, cannot cross key/token/audience/owner, and ordinary SourceObservation/raw-mode rules stay unchanged. One original planning CAS/P seal and historical decoder/pin/unknown responsibility remain; actual D7 producer and fresh joint acceptance are still required."
+    },
+    {
+      "owner": "D6 Control §4.3 / D10 Control §8.1–8.2",
+      "names": [
+        "D10ControlInput/1",
+        "d10_control/1",
+        "ControlDependencies/2",
+        "ControlPrepareBinding/2",
+        "D10ControlRecordImage/1",
+        "D10ControlEffectPlan/1",
+        "ApprovalUse/1",
+        "LeaseRunUse/1"
+      ],
+      "conceptId": "weftext.term.d10-control-input",
+      "contract": "D6 owns its descriptor and original submit; D10 owns complete input images/effects and live eligibility. No fifteenth DependencyKey, no self-cycle, same planning/seal/stop serialization and historical recovery."
+    },
+    {
+      "owner": "D6 Control §10.2 / D7 symbolic producer",
+      "names": [
+        "WorkspaceBootstrapPlan/2",
+        "WorkspaceBootstrapProfile/3",
+        "d10_control_self"
+      ],
+      "conceptId": "weftext.term.workspace-bootstrap-plan",
+      "contract": "Actual original complete bootstrap members use explicit wireVersion2/profile3/Policy3. Current D7 symbolic producer must decode Plan2 explicitly; actual Plan1/symbolic1 history remains original. No acceptance or implementation claim."
+    },
+    {
+      "owner": "D6 Storage §7.2.1 / D10 Control §16",
+      "names": [
+        "ScheduleContinuityWitness/1",
+        "ScheduleContinuityStep/1",
+        "ScheduleSubscription/1",
+        "ScheduleContinuityInvalidation/1"
+      ],
+      "conceptId": "weftext.term.schedule-continuity-witness",
+      "contract": "Registered finite exact-history producer plus protected continuous folding; explicit gap/binding change, atomic checkpoint/config/claim fence, full original occurrence/unknown retention and reference-safe GC."
     }
   ],
-  "candidateStatus": "D6-FA-r01 G0-A D6 owner afterimages; partial coordinated candidate; not accepted or activated"
+  "candidateStatus": "D6-FA-r01 with actual D6/D10 joint producer candidate; not independently accepted, activated or implemented; D7 joint consumer and global review remain required"
 }

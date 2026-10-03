@@ -9,13 +9,13 @@ translation_status: source
 
 ## 目标和当前状态
 
-状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`；完整 R08 作者修订候选。固定 R07 的完整联合终审结论为 REVISE（P0=0、P1=1、P2=10），当前11项 finding 全部保持开放。固定 R08 commit 必须进行 fresh 完整独立联合评审后，才能形成任何接受或协调激活结论。
+revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；REVIEW-DISPOSITIONS 区分各层证据。
 
 当前作者候选采用窄 Broker、typed Capability Catalog 与专用 executors；Core 继续是唯一 author transaction authority。候选同时包含必要的 D6/D7 Standing Approval 配套修订提案，但这些修订在独立接受和协调激活前不生效。
 
 ## 固定输入
 
-使用总控给定的固定 Git commit，并按 actor/lineage 分开记录阅读证据，不能合并继承。原作者 lineage 历史完成 S49/49；本接续作者亲自完成 S16/49 全文，D9 workers/export 与 templates 只做 dependency-scoped 局部读取，不计全文；固定 R07 的独立联合评审另行完成 S49/49。三套覆盖互不替代，workflow/tool summary 不计全文；START 记录准确来源。
+使用总控给定的固定 Git commit，并按 actor/lineage 分开记录阅读证据，不能合并继承。原作者 lineage 历史完成 S49/49；历史 R08 接续作者亲自完成 S16/49 全文，D9 workers/export 与 templates 只做 dependency-scoped 局部读取，不计全文；固定 R07 的独立联合评审另行完成 S49/49。三套覆盖互不替代，workflow/tool summary 不计全文；START 记录准确来源。
 
 上游 D1–D9 在协调修订真正接受前持续权威。快照中的旧模型、旧阶段、旧授权与历史 candidate 标签仅作为原文历史，不改变当前任务包的执行边界。
 
@@ -55,11 +55,9 @@ UPSTREAM-AMENDMENTS 必须精确给出必要 D6 主文、D6 Control Interfaces�
 
 ## 作者执行阶段
 
-同一作者会话先完成方案规划，再在同一候选分支和既有 PR 中写入完整候选、进行仓库校验并核实实际提交实物。需要重大设计收敛时可以回到作者规划，但不得因为阶段切换另建候选分支或重复 PR。
+当前设计工作将本目录与 `../d6-file-authority-reopen/` 中显式 owner 后像及唯一路由协调。固定 S 快照保持原字节；每份正文只有一位指定作者，创作与独立审查分工保持。候选不代表产品实现、合并、发布或激活；设计冻结之前仍须 A2 整合及全新普通 Chat Pro 全局终审。
 
-作者只修改 docs/design/d10/ 中必要设计材料和既有 PR 的标题/正文。不得修改输入快照、产品实现、brand、仓库权限或分支保护；不得合并、发行或开始 A2。
-
-作者完成条件是：docs/design/d10/ 九对双语/18 exact path 全部同步为 `D10-r08-joint-review-fixes-2026-09-28`；固定 S 与 docs/design/d10/ 之外全部路径逐字不变；中英文 scenario 保持相同 125 个 ID 且分支裁决一致；最终候选适用的 repository documentation/input 检查通过；所有配套 amendment 明确未激活；阅读/CI 证据如实报告，任何 pending/failure 不写成 pass。R08 已改变授权、transaction/safety、public wire、恢复、external-send 与 D8/D9 interface-owner 合同，因此作者完成后必须对固定 R08 做**fresh 完整独立联合评审：候选18/18 + S49/49**，不能继承 R07 做差分通过。
+完成条件是九对双语 D10／18 个准确路径与全部必要 D1–D9 实际 owner 后像在同一不可变候选上一致；固定 S49 及其清单保持不变；既有125个场景 ID 与完整义务可追溯，新增案例明确列出。适用文档/输入检查、真实阅读覆盖、术语、中英语义以及历史/当前发现都绑定该候选。旧 S49/49 覆盖、具名差分 PASS 和 CI 均不能继承为全文接受。设计冻结要求零开放 P0/P1、剩余 P2 明确处置以及 fresh 独立全局 Pro 接受，仍不等于实现或发布。
 
 ## 当前分批修订约束
 
@@ -90,6 +88,6 @@ R08 还冻结以下已经由 CONTROL/CANDIDATE/UPSTREAM/SCENARIO/IMPLEMENTATION 
 
 历史 C=`35fab950dabedfb92c9f12858701be8afe6faa74` 与固定 R06 C=`32a0868ae9443a3f839cfb4f5e9bbcace308314d` 继续只作为历史 REVISE 记录。固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 的完整独立联合终审完成候选18/18、S49/49，结论 REVISE：P0=0、P1=1（`B03-P1-01`）以及 REVIEW-DISPOSITIONS 中记录的十项 P2；整体、术语与中英语义均需修订。该完整 R07 review 只为作者修订提供证据，不代表 R08 已接受。
 
-九对 R08 文档全部同步且 document/input gate 通过后，应固定新的 R08 commit，并从零进行 fresh 完整独立联合评审：候选18/18 + 固定 S49/49。旧 R07 的阅读覆盖、finding、CI 或 verdict 都不能作为新的 public-wire/授权/transaction 改动已经通过的证据。必要上游修订继续未激活，须在后续 coordinated acceptance、version、activation 与验收证据阶段另行处理。
+完成条件是九对双语 D10／18 个准确路径与全部必要 D1–D9 实际 owner 后像在同一不可变候选上一致；固定 S49 及其清单保持不变；既有125个场景 ID 与完整义务可追溯，新增案例明确列出。适用文档/输入检查、真实阅读覆盖、术语、中英语义以及历史/当前发现都绑定该候选。旧 S49/49 覆盖、具名差分 PASS 和 CI 均不能继承为全文接受。设计冻结要求零开放 P0/P1、剩余 P2 明确处置以及 fresh 独立全局 Pro 接受，仍不等于实现或发布。
 
 有限 simulation、模型或 CI 不建立产品支持。真实 Core、durable fault、OS sandbox、真实 protocol provider、UI/device 和 release evidence 继续按 Implementation Impact 分层，未完成项必须保留 pending。

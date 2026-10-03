@@ -7,13 +7,13 @@ translation_status: source
 
 # D10 阅读与候选检查点
 
-状态：candidate revision `D10-r08-joint-review-fixes-2026-09-28`；完整 R08 作者修订候选，等待 fresh 完整独立联合评审。固定 R07 已按候选18/18 + S49/49 完整评审并结论 REVISE（P0=0、P1=1、P2=10）；该历史评审不等于 R08 已接受。本文件记录交接状态，不是 Gate verdict。
+revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；REVIEW-DISPOSITIONS 区分各层证据。
 
 固定输入基线已整合为 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`；S 包含旧 U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` 的原 48 份输入和新增 D4 reference catalog。作者分支：docs/d10-start。既有 Draft PR：#2，base=docs/chat-collaboration。D1–D9 快照继续权威；D10 UPSTREAM-AMENDMENTS 只是尚未激活的配套提案。
 
 ## 1. 阅读覆盖
 
-阅读证据按 actor/lineage 分账。**原作者 lineage** 历史完成 U48/48，随后又全文读取新增 D4 reference catalog，形成历史 S49/49。**当前接续作者**亲自完成 S16/49 全文；D9 workers/export 与 templates 只做 dependency-scoped 局部读取，不计全文。**固定 R07 的独立联合评审**另行完成 S49/49。任何一方都不能继承另一方的阅读计数。下列代码块继续只是原作者 lineage 的 U 48 文件清单：
+阅读证据按 actor/lineage 分账。**原作者 lineage** 历史完成 U48/48，随后又全文读取新增 D4 reference catalog，形成历史 S49/49。**历史 R08 接续作者**亲自完成 S16/49 全文；D9 workers/export 与 templates 只做 dependency-scoped 局部读取，不计全文。**固定 R07 的独立联合评审**另行完成 S49/49。任何一方都不能继承另一方的阅读计数。下列代码块继续只是原作者 lineage 的 U 48 文件清单：
 
 ```text
 docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md
@@ -91,7 +91,7 @@ docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-inta
 - D8 Acceptance Matrix Markdown 与 JSON；
 - Mandatory Scenario Intake 的大段聚合读取改为较小分段连续覆盖到文件末尾。
 
-对**原作者 lineage**，上述 48/48 以及后续 S49/49 在补读后没有已知缺行。当前接续作者按实际证据仍为 S16/49 全文，剩余33份 S 文件绝不能默认为已读。搜索摘要、工具/workflow summary、目录清单和 partial range 都不计全文。
+对**原作者 lineage**，上述 48/48 以及后续 S49/49 在补读后没有已知缺行。历史 R08 接续作者按当时实际证据为 S16/49 全文，剩余33份 S 文件绝不能默认为已读。搜索摘要、工具/workflow summary、目录清单和 partial range 都不计全文。
 
 ## 3. 从首批检查点到完整候选
 
@@ -145,10 +145,10 @@ D6/D7 Standing Approval amendment 尚未共同接受。因此即使候选文档�
 
 固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 对 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的完整独立联合终审已完成候选 **18/18**、S **49/49**，规范正文无阅读缺口。最终结果：**REVISE**，P0=0、P1=1（`B03-P1-01`）、P2=10（`B01-P2-01`、`B02-P2-01`、`B02-P2-02`、`B02-P2-03`、`B03-P2-01`、`B03-P2-02`、`B03-P2-03`、`B03-P2-04`、`B10-P2-01`、`B11-P2-01`）；整体、术语与中英语义均需修订。R08 是作者统一修订，不能靠作者声明关闭任何 finding。
 
-所有 D3/D6/D7/D8/D9 配套 amendment 继续只是未激活提案。作者检查、documentation CI 与 bounded model 只能证明自身 artifact；本交接不授权 merge、release、activation 或 A2/product implementation。
+当前设计工作将本目录与 `../d6-file-authority-reopen/` 中显式 owner 后像及唯一路由协调。固定 S 快照保持原字节；每份正文只有一位指定作者，创作与独立审查分工保持。候选不代表产品实现、合并、发布或激活；设计冻结之前仍须 A2 整合及全新普通 Chat Pro 全局终审。
 
 ## 7. 下一完成门与评审门
 
-完整 R08 作者候选由本目录九对双语 / 18 exact path 构成。固定 S 与 docs/design/d10/ 之外全部路径必须保持不变；中英文 scenario corpus 必须保持相同 125 个 ID 与分支分类；最终候选适用的 repository documentation/input 检查必须通过。阅读与 CI 证据必须按真实 actor/layer 报告，任何 pending/failure 都不能称 pass。
+当前设计工作将本目录与 `../d6-file-authority-reopen/` 中显式 owner 后像及唯一路由协调。固定 S 快照保持原字节；每份正文只有一位指定作者，创作与独立审查分工保持。候选不代表产品实现、合并、发布或激活；设计冻结之前仍须 A2 整合及全新普通 Chat Pro 全局终审。
 
-最终 R08 commit 固定后，必须**从零进行 fresh 完整独立联合评审：候选18/18 + 固定 S49/49**。R07 已完成的18/18+49/49不能继承为差分通过，因为 R08 已改变 public wire、授权、transaction/safety、恢复、external-send 与 D8/D9 interface-owner 合同。任何必要 upstream amendment 仍需后续 coordinated acceptance、version、activation 与验收证据。
+完成条件是九对双语 D10／18 个准确路径与全部必要 D1–D9 实际 owner 后像在同一不可变候选上一致；固定 S49 及其清单保持不变；既有125个场景 ID 与完整义务可追溯，新增案例明确列出。适用文档/输入检查、真实阅读覆盖、术语、中英语义以及历史/当前发现都绑定该候选。旧 S49/49 覆盖、具名差分 PASS 和 CI 均不能继承为全文接受。设计冻结要求零开放 P0/P1、剩余 P2 明确处置以及 fresh 独立全局 Pro 接受，仍不等于实现或发布。

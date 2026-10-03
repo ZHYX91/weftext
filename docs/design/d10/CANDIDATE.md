@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Agent, Automation, and External Capabilities Candidate
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author-revised candidate after the complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=1, P2=10). All eleven findings remain open. The candidate is complete for author handoff and awaits a fresh complete independent joint review of the fixed R08 commit; it is not independently accepted, activated, merged, released, or product implementation evidence.
+revision: D10-FA-r01-2026-10-02; status: coordinated author candidate, not accepted, activated, or implemented. The last complete historical R08 review of C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=3, P2=8). All eleven historical final dispositions remain OPEN. Named repairs have limited independent reviews; actual cross-owner integration and fresh global acceptance remain incomplete. REVIEW-DISPOSITIONS separates those evidence scopes.
 
 ## 1. Selection and problem boundary
 
@@ -162,7 +162,7 @@ The first generation permits only one delegation layer from a user or administra
 
 Effective eligibility is D1 capability ∩ current D6 Policy/ObservationScope ∩ DelegationLease ∩ contribution deployment policy ∩ egress grant ∩ secret-use grant ∩ external-effect approval ∩ current ActivationBinding ∩ budgets. Failure in one dimension cannot be compensated by another.
 
-R05 further separates resource **use** from resource **administration**. Workspace self-service requires proposed D6 Policy/2 capability `d10_control_self`; Workspace administration still uses `policy_admin`, and Registry activation additionally requires `registry_admin`. Deployment trust/account/secret/pricing/grant state is managed only under host DeploymentControlPolicy. A user has a positive path to create and manage a finite owned Automation, but selecting deployment cost, secret, egress, or external-effect resources requires an exact ResourceUseGrant issued by deployment administration. Grant revision/renewal never clears spent/held/attempt counters, and a new grant never erases an old attempt's liability to the actual account. Exact fields, authorization order, and stable replay are defined in CONTROL-CONTRACT §6–§9.
+R05 further separates resource **use** from resource **administration**. Workspace self-service requires current coordinated D6 Policy/3 capability `d10_control_self`; Workspace administration still uses `policy_admin`, and Registry activation additionally requires `registry_admin`. Deployment trust/account/secret/pricing/grant state is managed only under host DeploymentControlPolicy. A user has a positive path to create and manage a finite owned Automation, but selecting deployment cost, secret, egress, or external-effect resources requires an exact ResourceUseGrant issued by deployment administration. Grant revision/renewal never clears spent/held/attempt counters, and a new grant never erases an old attempt's liability to the actual account. Exact fields, authorization order, and stable replay are defined in CONTROL-CONTRACT §6–§9.
 
 Lease readScope cannot invent D6 Field ref-set permissions that D6 does not provide. Core first obtains a legal read/write scope under D6, and D10 then narrows it using exact owner, Field, and context constraints. Expiry, revocation, or generation change prevents new protected steps; already committed author decisions and externally linearized sends are not retroactively rolled back.
 
@@ -170,18 +170,9 @@ Lease readScope cannot invent D6 Field ref-set permissions that D6 does not prov
 
 Immediately before the first protected step is permitted, a Core-managed Run-admission CAS validates the exact current `leaseId/leaseRevision`, proves trusted current time lies within `notBefore..notAfter`, validates current ActivationBinding and Run/occurrence binding, validates all admission budgets, and proves cumulative consumption for the `leaseId` lineage is below `maxRuns`. The winning CAS durably creates:
 
-```text
-LeaseRunUse/1 {
-  leaseId,
-  leaseRevision,
-  runId,
-  automationId,
-  definitionRevision,
-  occurrenceKey,
-  admissionClockEpoch,
-  admittedAt
-}
-```
+LeaseRunUse/1 uses the complete closed CONTROL-CONTRACT §8.2 shape, including full Lease and Run ControlRefs, immutable RunOrigin and trusted admission time.
+
+`origin` is the exact closed `RunOrigin/1` owned by CONTROL-CONTRACT §7 and must equal the immutable source on the protected Run. A direct interactive Agent Run uses `{kind:"interactive"}` and a Lease targeted to that Run; only an Automation Run carries the actual automation binding, definition revision, and occurrence key. No placeholder Automation or fabricated occurrence is created. Both arms share this same admission CAS and `leaseId` cumulative limit. A claimed Automation occurrence cannot be reclassified as interactive, and a same-Run restart restores the identical origin with its original admission.
 
 The record and cumulative consumption are stored in the same managed control transaction. It is a Run-admission deduplication fact, not an author ledger. The successful CAS is the `maxRuns` consumption linearization point: later model or tool failure, user cancellation, a failed or cancelled Run, or process crash never refunds it. Restart of the same Run restores the original `LeaseRunUse/1` and does not consume again. Exhaustion returns D10 `delegation_exhausted` before entering D6/D7 or external transport.
 
@@ -189,6 +180,8 @@ The record and cumulative consumption are stored in the same managed control tra
 `maxRuns` is compared and consumed only on the first-admission branch where this Run has no existing `LeaseRunUse/1`. When a complete existing `LeaseRunUse/1` is bound to the same `runId`, `leaseId`, and exact `leaseRevision`, the second and later protected steps of the same Run, including recovery of an original D6 planned request inside that Run, **do not recheck remaining>0 and do not consume again**. Thus with `maxRuns=1` and cumulative consumption already equal to 1, the same admitted Run is not misclassified as a new exhausted Run. Every later step still revalidates current D6/D10 authorization, the exact admitted Lease revision, trusted time, current ActivationBinding, applicable approval, and budgets. Revocation, expiry, revision/binding change, or other current-eligibility failure still blocks execution. Only a new Run with no existing LeaseRunUse and cumulative use at maxRuns returns `delegation_exhausted`. Missing or unprovable continuity of an existing LeaseRunUse returns `state_unavailable`; recovery never guesses by consuming again.
 
 Trusted-time eligibility of the Lease is rechecked before every new protected step and before final author or external submission. Lease expiry does not depend on a cleanup task having run: once trusted current time is after `notAfter`, a new step returns `delegation_expired`. If the clock epoch or time continuity cannot be proven, return `state_unavailable` and pause rather than assuming no time elapsed. Once trusted time is re-established, adjudicate using actual current time. Already completed author commits, external effects, costs, and `LeaseRunUse/1` history are never rolled back.
+The DelegationLease/StandingApprovalEnvelope/PlannedDecisionApproval listings here are conceptual names for the complete protected lease/approval/planned_approval records owned by CONTROL-CONTRACT, not competing wire decoders. Their actual typed images are D10ControlRecordImage/1 with the closed view and mandatory supplement; read scope/resource permissions derive from exact LeaseSpec/ResourceUseGrant, and the original planned request is retained in the planned-approval supplement. Illustrative aliases do not add egress/secret members to LeaseSpec or erase full ControlRef identity.
+
 ## 9. Context, egress, and prompt injection
 
 An Agent has no ambient workspace. Each context request explicitly selects workspace, typed sources, maximum scope, purpose, target model/tool recipient, and budget. Core/Server constructs an immutable ContextBundle under current authorization, binding exact source versions/result epoch/authorization generation and the actual selected bytes; context selection follows least necessary access and data minimization.
@@ -235,14 +228,17 @@ First-generation Automation schedules one accepted invocation and does not provi
 
 A schedule may be a one-time D4 ZonedInstant or occurrences derived from an explicit Calendar recurrence/range source with finite horizon and limit. Core computes the occurrences from actual source and frozen D4 rule context; an executor may not self-assert trusted temporal context, and date-only input that does not determine an instant is not silently assigned midnight.
 
-Concurrency policy is serial. Missed policy is only skip or run_once; run_once executes only the newest missed occurrence in the current recovery window and records the rest as skipped. The recovery window has a finite policy limit and never replays an unbounded history.
+Concurrency remains serial. CONTROL-CONTRACT §16 closes finite missedWindowSeconds, the durable armed pre-state and the exact catch-up window; a previously armed item waking late follows normal due handling, not missed policy merely because due<now. Missed policy is only skip or run_once, the latter selecting the greatest item by actual final due/original-coordinate order. The chosen Run and every other skipped item commit in one complete-window transaction or none do, without unbounded replay or truncated decisions.
 
 ```text
-AutomationOccurrenceKey/1 =
-  (automationId, definitionRevision, sourceOccurrenceKey)
+AutomationOccurrenceKey/1 = {
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  sourceOccurrence:SourceOccurrenceKey/1
+}
 ```
 
-One key maps to at most one Run identity and one durable claim, including after terminal state: restart, schedule rescan, disable→enable, and scheduler-cache rebuild cannot create a second Run. Enable/disable changes control revision but not definitionRevision and does not delete claim or terminal proof. A semantic change to invocation, schedule, Lease, approval, or budget produces a new definitionRevision and takes over only occurrences after an explicit activation point.
+One complete key maps to at most one original Run and handled decision, including after terminal state, restart, rescan, disable→enable and cache rebuild. SourceOccurrenceKey uses the exact UTC original coordinate: recurrence originalStart, not the replacement final time. Query K, source revision, horizon and definitionRevision are not business identity. CONTROL-CONTRACT §16 initial/continue/replace closes source selection, subscription generation and the explicit original-coordinate lower bound. An unrelated source change advances automatically when complete continuity is proved; delete/recreate under the same key or a relevant rule change cannot fake continuity. Budget/invocation changes update only the active definition: the same-store control commit is the sole activation point, and only first claims of unhandled items afterwards use it; existing Runs/requests are never rewritten. replace retires old-generation new-claim authority and excludes already handled exact coordinates across every prior generation; an old unknown never gets a new Run.
 
 Terminal occurrence history may be compacted only into durable proof that the key already produced its original Run and terminal outcome. While a definition revision can still be rescanned or recovered, ordinary GC may not turn "already executed" back into "never seen". Recovery of the original claim always returns the original Run identity and outcome.
 
@@ -286,25 +282,9 @@ CONTROL-CONTRACT §7 gives the complete mapping. For real S `people/phone.label`
 
 Every automated author mutation consumes the exact CONTROL-CONTRACT §7 mapping: fresh complete Field selection → original D7 FieldSelector with owner/FieldId/fresh expectedRevision/real occurrenceKey/exact rawEntrySource → original `set_field_member` TypedLiteral → original `d7_action_prepare` → complete preview/effects/actual MutationFootprint → compare the separate StandingApprovalEnvelope → ApprovalUse → original D6 request. The protected `D10AuthorPreparationLink/1` is atomically saved with the original PreparedActionBinding before submission; restart/planned/submitted_unknown recovers that exact request and never creates a replacement OperationId.
 
-```text
-ApprovalUse/1 {
-  approvalId,
-  approvalRevision,
-  runId,
-  stepId,
-  request,
-  planToken,
-  preparedBindingRef,
-  previewBinding,
-  footprintProof,
-  delegationBinding,
-  activationBinding,
-  approvalCountReservation,
-  budgetReservations
-}
-```
+ApprovalUse/1 and ApprovalCountReservation/1 use only CONTROL-CONTRACT §8.2: the complete original request/DecisionKey, actual prepared binding, immutable preview digest, exact Run/Lease/activation and separate protected count state. No client submit member is added.
 
-ApprovalUse is managed authorization evidence, not an author plan, and adds no member to ActionSpec, PreparedActionBinding/2, or `d6_commit_request`. A client cannot submit approved=true. Core creates it independently from the saved prepared record, preview, and footprint. Its approval-count state is only `unreserved → reserved → consumed | released_terminal`; historical state is never deleted or rolled back.
+ApprovalUse is managed authorization evidence, not an author plan, and adds no member to ActionSpec, PreparedActionBinding/3, or `d6_commit_request`. A client cannot submit approved=true. Core creates it independently from the saved prepared record, preview, and footprint. Its approval-count state is only `unreserved → reserved → consumed | released_terminal`; historical state is never deleted or rolled back.
 
 Existing upstream text is insufficient to freeze unattended confirmation, so UPSTREAM-AMENDMENTS proposes a coordinated D6/D7 amendment. Until it is jointly accepted, unattended author commit remains unavailable and Automation may only prepare a proposal for interactive confirmation.
 
@@ -316,22 +296,22 @@ Once the unattended D10 path has associated ApprovalUse as an internal dependenc
 
 For an unseen request, `approval_unavailable/preflight` writes no author ledger, no recorded rejection, and no planned decision. The caller may retry while the original preparation remains valid under newly valid approval, or return to an interactive path. For an already planned request, the same error leaves the ledger planned and preserves the original plan, pins, and reservations; it cannot be written as `semantic_rejected` or `terminal_failed`. The D10 adapter does not wrap this D6 error in a D10 approval code. If UI needs to distinguish exhausted, revoked, or expired approval, it performs a separately authorized D10 control read.
 
-This is part of the first jointly specified public unattended author-submit contract, not an anonymous old/new D10-profile compatibility layer. Fixed-upstream D6 is not an already published old product API. On joint acceptance, the first public D6-Control/1 closed error set directly contains the code. Any component combination that can enter the formal branch must support that same set; an incompatible combination is rejected at the D1 capability/version gate and cannot enter D6 to discover compatibility through an unknown enum. Policy/1/2, bootstrap profile/1/2, and historical saved-decision decoders remain unchanged.
+This is part of the first jointly specified public unattended author-submit contract, not an anonymous old/new D10-profile compatibility layer. Fixed-upstream D6 is not an already published old product API. On joint acceptance, the first public D6-Control/2 closed error set directly contains the code. Any component combination that can enter the formal branch must support that same set; an incompatible combination is rejected at the D1 capability/version gate and cannot enter D6 to discover compatibility through an unknown enum. Policy/1/2, bootstrap profile/1/2, and historical saved-decision decoders remain unchanged.
 
 ### 15.2 Re-inspecting the original preview after planned
 
-PreparedActionBinding/2, semantic preview, and recovery pins survive with a planned decision under the original ledger-recovery lifetime, while the original preview token may expire independently. Existing `d7_effects_resolve/open` is committed-only. The D7 transport companion therefore needs a read-only planned-preview recovery entrypoint rather than extending an old token or re-preparing:
+PreparedActionBinding/3, semantic preview, and recovery pins survive with a planned decision under the original ledger-recovery lifetime, while the original preview token may expire independently. Existing `d7_effects_resolve/open` is committed-only. The D7 transport companion therefore needs a read-only planned-preview recovery entrypoint rather than extending an old token or re-preparing:
 
 ```text
 d7_planned_preview_open {
-  wireVersion: 1,
+  wireVersion: 2,
   kind: "d7_planned_preview_open",
   protocolOwner: "D6",
-  request: <original d6_commit_request>
+  request: <original wireVersion=2 d6_commit_request, with its complete DecisionKey/2>
 }
 
 d7_planned_preview_opened {
-  wireVersion: 1,
+  wireVersion: 2,
   kind: "d7_planned_preview_opened",
   request,
   previewToken,
@@ -340,7 +320,7 @@ d7_planned_preview_opened {
 }
 ```
 
-Processing order is fixed: closed decode → current authenticated audience and protected minimal locator mapping → original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility → authority/custody/ledger continuity → byte-equal request at the same key with state exactly planned → complete original PreparedActionBinding/2, semantic preview, and all pins → create a new finite recovery delivery epoch.
+Processing order is fixed: closed decode → current authenticated audience and protected minimal locator mapping → original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility → authority/custody/ledger continuity → byte-equal request at the same key with state exactly planned → complete original PreparedActionBinding/3, semantic preview, and all pins → create a new finite recovery delivery epoch.
 
 The new `previewToken` remains in the action_preview transport family but binds only the immutable preview semantics and original pins saved by the planned decision. It never reruns Query, reparses a drifted definition, reselects a target, regenerates proposed source, or changes the request. It has an independent finite delivery lifetime and neither extends nor revives the old previewToken/cursor. Page and EffectBytes reads continue to use the original D7 transport; expiration of this recovery epoch returns the preview transport's `preview_expired`. A non-planned state, request mismatch, or unprovable pins/continuity follows existing `d7_effects_error` `effects_unavailable` or an earlier original authorization error. `d7_effects_resolve/open` remains committed-only.
 
@@ -388,6 +368,8 @@ An external mutation and a Core transaction never combine into one atomic succes
 
 CONTROL-CONTRACT §7 uniquely owns the complete internal `ExternalEffectIntent/1`, `ExternalExecutionBinding/1`, and public `ExternalEffectCurrentView/1`. The immutable intent freezes the exact contribution/account/operation/target/request payload and idempotency proof; a concrete send attempt separately freezes Lease, external-effect grant, egress grant, supplemental approval, secret generation, and every attributable cost reservation. Secret bytes never enter those public projections.
 
+Before granting external consent, the current user reviews the complete actual target and payload from `ControlPreview/1.externalRequest`, produced from the frozen intent under complete request-disclosure authority. CONTROL-CONTRACT §7 owns the bounded full delivery, trusted inert presentation, and internal confirmation event bound to the exact original preview and intent. A model summary, digest-only current read, broad grant, or possession of the prepared commit request cannot substitute. Both original D6 control CAS points consume the protected confirmation dependency; saved consent replays its original decision. This control approval does not itself send anything and never exposes credentials through the review.
+
 States are prepared → submitting → succeeded | failed_no_effect | outcome_unknown; only a request proven not to have started sending may move from prepared to cancelled. Lifecycle Binding revision is distinct from immutable requestDigest, so a legal prepared→submitting transition cannot invalidate its own consent. Changing contribution/account/target/payload/idempotency creates a new effect intent and needs new consent. outcome_unknown remains unknown until reliable reconciliation; manual_required is a recovery mode, not a fake failed terminal state.
 
 Automatic retry is allowed only when the original intent contains still-valid bounded idempotency proof accepted for the exact request, or reliable failed_no_effect evidence exists. Retry keeps the same EffectIntent, semantic request, target/account, and original idempotency key and revalidates current authorization/egress/cost. Expired proof, changed target/request, or credential change that breaks the original contract stops automatic sending. A new sendAttemptId cannot substitute a new effectId or idempotency key for an unknown original request.
@@ -401,6 +383,8 @@ Compensation is a new ExternalEffectIntent with its own authorization, approval,
 The original D6 work/attempt budget remains. D10 uses the ResourceUseGrant, CostReservation, and CostSettlementDecision contracts in CONTROL-CONTRACT §6 and §10 for model, tool, network, and external cost. The narrowest remaining limits across Run, Lease, Automation, Workspace, grant, and deployment account are atomically checked in one authority-store admission transaction so concurrent Runs cannot both observe the last capacity. These layers are ceilings/projections, not multiple actual accounts: one CostReservation still binds one attempt, one actual account, one grant, one pricing version, and one currency, and one charge is recorded once. Truly separately attributable multi-account charges require separately attributable attempts/reservations/evidence, optionally admitted as one atomic group.
 
 Exact Money/1, currency, microUnits, grant/account ceilings, pricing bindings, and checked arithmetic are defined by CONTROL-CONTRACT §2 and §9. There is no implicit FX conversion and no caller-facing accounting interface for manually entering “actual cost” or a target terminal state. Every potentially billable attempt binds an independent reservation, attemptId, actual account/grant, pricing version, and finite upper bound before it begins. Grant renewal or revision never clears spent, held, or attempts, and replacing a grant never migrates or erases the old reservation/account liability.
+
+Every reservation also retains the Core-derived `CostBudgetAttribution/1` of CONTROL-CONTRACT §10 in the same admission transaction, for every billable model/tool/network attempt, not only external sends. It binds the real Run, Lease, optional Automation, Workspace budget, grant and actual account with the exact checked configurations and non-resetting owner/account/currency cumulative keys. Interactive Runs have no fabricated Automation layer. Same-account grant changes and new definition revisions preserve original liabilities; Run caps remain the finite caps fixed at Run creation. Settlement uses the original attribution for all layers, so A1's uncertain90 under its cap100 rejects A1's next20 while A2 sharing the grant may still admit20 if all common layers have capacity. Final20 releases70 once on A1's original layers, including after configuration changes or restart. Missing attribution is unavailable, never a zero balance or a reason to guess from current configuration. These projections add no actual account or second charge.
 
 The cost state machine is:
 
@@ -442,6 +426,8 @@ R08 retains irreversible emergency stop, but stop is not rollback. CONTROL-CONTR
 Stop does not block currently authorized authoritative abort, cost settlement, evidence/audit retention, or reference-safe cleanup. Temporary disable, Lease expiry, ordinary cancellation, or temporary authorization loss is not irreversible abort proof. The proposed D6 companion adds `execution_stopped/preflight` and permits an already planned request to enter the original `transaction_aborted/terminal` authoritative-abort path only after current authorization, continuity, complete RunBinding, and irreversible stop are all proven.
 
 Restart first restores durable occurrence claim, Run, LeaseRunUse, ApprovalUse/cost reservations, and original requests. Recovery of the same Run first proves continuity of the existing LeaseRunUse, then current authorization, exact Lease revision, trusted time, ActivationBinding, approval, and budgets; it never performs a second new-Run admission merely because `maxRuns` remaining is now zero. A paused Lease expires naturally without a cleanup task; once trusted time is after `notAfter`, new steps and final submissions are refused. If clock continuity cannot be proven, return `state_unavailable` and retain original control records without extending the deadline or assuming the Lease remains valid. If execution side-effect outcome cannot be proven, transition to blocked/reconciling rather than creating a new OperationId or effect ID.
+The complete protected responsibility payloads are owned by CONTROL-CONTRACT §16.1 and consumed by D6 Control §16. Public current-state projections alone never substitute for original author requests, full external intents, admitted Run budgets, schedule history or cost attribution. Stop winning after physical installation but before D6 seal prevents seal while preserving the actual installed state, managed barrier, B/N pins and provenance. Only proved safe resolution of every installation remnant and original impossibility of commit permits terminal abort/count release; unknown or third-state evidence retains the original plan and independent costs.
+
 ## 21. Errors and unavailability semantics
 
 D1 capability availability and its fixed reason precedence remain unchanged, especially `policy_denied` before component, configuration, network, version, and health details. D10 does not replace `missing_component`, `not_configured`, `offline`, `incompatible_version`, or `temporarily_unavailable` with one runtime_unavailable.
@@ -480,7 +466,7 @@ LTR/RTL, locale, screen reader, and Web/CLI transport differences affect present
 
 D1 surfaces, capability reasons, and sole commit holder remain; D2 raw source/unknown-provider preservation remains; D3 identity/SourceBinding/OriginBinding/Provenance remains; D4 Registry exact shape/evolution remains; D5 gains no persistent Record; D8 Draft/IME/explicit edit confirmation and all Editor wire remain; D9 worker/Template/ExportPlan/publication and all conversion wire remain. R08 requires the original D8/D9 owners to complete Mandatory Intake §8.5.1 terminology and technical-interface mappings in UPSTREAM-AMENDMENTS §8. Every public kind has one technical-interface owner with separate consumes/returns/operates-on relationships; D10 does not acquire those names or domain-record ownership.
 
-R08 coordinated amendments retain earlier D6/D7 standing-approval author-submit, planned-preview recovery, Policy/2 `d10_control_self`, bootstrap profile/3, and irreversible-stop clauses, and add **naming-metadata-only** D8/D9 owner-lexicon companions. UPSTREAM-AMENDMENTS contains the exact proposal and CONTROL-CONTRACT owns only D10 host/control wire. The D8/D9 lexicon amendments add no unattended editing, conversion profile, identity, author submission, or publication capability. Joint design acceptance or coordinated activation **does not mean runtime implementation or release**. `automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` must enter the official D1 capability catalog and pass every real availability gate before they can be advertised available.
+The current coordination retains the earlier D6/D7 standing-approval author-submit and planned-preview recovery semantics and binds them to current Policy/3 `d10_control_self`, bootstrap profile/3, and irreversible-stop clauses, and add **naming-metadata-only** D8/D9 owner-lexicon companions. UPSTREAM-AMENDMENTS contains the exact proposal and CONTROL-CONTRACT owns only D10 host/control wire. The D8/D9 lexicon amendments add no unattended editing, conversion profile, identity, author submission, or publication capability. Joint design acceptance or coordinated activation **does not mean runtime implementation or release**. `automation.manage|workspace.extensions.manage|deployment.external.manage|automation.stop|automation.author_submit` must enter the official D1 capability catalog and pass every real availability gate before they can be advertised available.
 
 ## 24. Security counterexamples
 

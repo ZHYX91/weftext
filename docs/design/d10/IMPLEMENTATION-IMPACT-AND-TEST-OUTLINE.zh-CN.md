@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 实现影响与测试轮廓
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：与最终作者候选同步的完整 R08 实现/测试义务。这些是设计与未来证据要求，不是已执行产品测试。固定 R07 的11项 finding 全部保持开放，等待固定 R08 候选的 fresh 完整独立联合评审。
+revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；REVIEW-DISPOSITIONS 区分各层证据。
 
 ## 1. 实现切片与状态所有者
 
@@ -52,9 +52,9 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 
 [CONTROL-CONTRACT](CONTROL-CONTRACT.zh-CN.md) 是本纲要消费的 R08 management/current/history/author-adapter/external-effect/stop wire 唯一规范 owner；实现不得另选授权、重放、记账、frozen-request 或 stop 语义。
 
-- Workspace 自助控制由 proposed D6 Policy/2 `d10_control_self` 授权；Workspace 管理由原 `policy_admin`，Registry activation 另验 `registry_admin`。deployment trust/account/secret/pricing/grant 由 D10 DeploymentControlPolicy 管理，不得借 Workspace admin 或 issuer admin。
+- Workspace 自助控制由 proposed D6 Policy/3 `d10_control_self` 授权；Workspace 管理由原 `policy_admin`，Registry activation 另验 `registry_admin`。deployment trust/account/secret/pricing/grant 由 D10 DeploymentControlPolicy 管理，不得借 Workspace admin 或 issuer admin。
 - 会影响作者提交的 Workspace 控制变更继续使用原 D6 authority store、`PreparedIntent`、决议/receipt 与作者提交点。`DeploymentControlDecision` 只保存部署控制结果；host adapter 不得写作者 source。
-- `ControlPrepareBinding/1` 使用 `(scope incarnation, principal, requestId)` 稳定键和完整规范意图字节。恢复顺序固定为：先验证当前可见性/权限，再比较同键完整输入，再重放已保存决议；只有尚无决议时才检查当前 expected revision 和执行资格。
+- `ControlPrepareBinding/2` 使用 `(scope incarnation, principal, requestId)` 稳定键和完整规范意图字节。恢复顺序固定为：先验证当前可见性/权限，再比较同键完整输入，再重放已保存决议；只有尚无决议时才检查当前 expected revision 和执行资格。
 - configuration revision 与 usageRevision 分离；control ID/incarnation 永不复用。retire/archive 不能删掉 planned、unknown、uncertain、evidence 或 dedup 仍引用的记录。
 - `ResourceUseGrant/1` 的 cost/secret/egress/external-effect 四类分别实现；grant renew/revision 不清零 spent/held/attempt/use，换 grant 也不清除旧 reservation 和实际 account liability。
 - fixed S profile/2 的旧非 Field 集合必须由测试常量逐字固定；profile/3 才增加 `d10_control_self`。升级、replay、replacement、continue/failover 不能改既有 family profile。
@@ -82,7 +82,7 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 
 这些记录应与 Workspace/authority identity、fence、current principal 和 version/CAS 一起管理。SQL table layout、index 和 GC 由实现决定，但不得改变候选的 version、atomicity、replay、masking、retention 语义。
 
-D6 author ledger 仍是 Workspace+OperationId 唯一 author decision namespace。D10 Run、Approval、LeaseRunUse 和 ExternalEffect 记录不得在恢复时生成第二个“作者 committed”事实。
+D6 author ledger 仍是 DecisionKey/2 `(Workspace, CommitDomain, OperationId)` 唯一 author decision namespace。D10 Run、Approval、LeaseRunUse 和 ExternalEffect 记录不得在恢复时生成第二个“作者 committed”事实。
 
 control history 持久化保留两种不同表示。内部 `ControlPrepareBinding.canonicalIntentBytes` 保存完整 canonical B，stable-key equality 比较完整 bytes。public `ControlPreparedHistory/1` 只含 `intentDigest`、`automation_configure|consent|state|workspace_limits|activation|deployment_put|cost_reconcile` 七值之一、allocated refs 与既有 affected/resource-use summary。
 
@@ -196,6 +196,10 @@ Windows、macOS、Linux 分开验收；存在 container/sandbox 名称不算通�
 
 ## 6. Automation 与 scheduler 实施义务
 
+通用 Run、准入及 current-read 必须使用同一个 closed `RunOrigin/1`：interactive 没有 Automation 字段，automation 则绑定真实 definition 和 occurrence。可信 Run 创建者一次固定 origin，准入复制并验证，current read 只有在完整投影获权后才投影同一事实。交互 Run 的 Lease target 是实际 Run，调度 Run 则是实际 Automation；不能合成 scheduler 对象、null 成员或仅供显示的私有分支。
+
+必要正反例：不创建 Automation，直接创建交互 Run、读取准确 origin，以 Run-targeted `maxRuns=1` Lease 首次准入，然后在 remaining=0 时继续及重启同一 Run；新 Run、虚构 Automation、origin 变化、错误 Lease target、准入连续性丢失、嵌套 binding 不可披露必须进入具名拒绝且不二次准入。另验 Automation occurrence 重启后保留真实不可变 origin 及唯一原 claim/Run，不能改为 interactive 重跑 terminal occurrence。这些是实施验收义务，不是已执行测试结果。
+
 Scheduler 必须持久化 definition revision、有限调度 horizon、sourceOccurrenceKey、claim owner、Run identity、LeaseRunUse 关联，以及真实的 skipped/started/terminal outcome。首版采用 serial 语义：
 
 - 同一个 `AutomationOccurrenceKey/1` 至多有一个 Run identity 和一个 durable claim；
@@ -227,6 +231,10 @@ dedup 历史允许压缩为 coverage proof/terminal summary，但压缩必须保
 8. source/rule generation 与 definition revision 改变，旧 K 不被新 revision 接管重跑；
 9. `maxRuns=1` 的同 Run 第二个 protected step 在 remaining=0 时仍复用原 LeaseRunUse，而新 Run 被 `delegation_exhausted` 拒绝；
 10. 同 Run 原 planned request 在 remaining=0 时恢复，验证原 LeaseRunUse 连续性后继续；缺记录/连续性不可证时为 `state_unavailable`，不能重新消费。
+调度联合验收必须直接实现 CONTROL-CONTRACT §16 的准确闭合记录，不能把旧 definitionRevision 键、D7 Query K 或旧 selector 重新命名后当作实现。D6 完整 source/control/rule 历史与受保护 recovery pins 必须真实接入；I 重建、相等最终值或 provider 同步声明不能替代连续性。配置、checkpoint、armed、整窗 claim/skipped、先代坐标排除和 stop 必须有真实同库序列化及完整范围/phantom 保护。
+
+新增必验：等价 offset/任意小数得到同坐标；合法边界年份转换不受宿主库限制；两个 originalStart 移到同一 final due 仍两项；不同 Query 调用/horizon/缓存仍同业务键；无关 body/其它 Entry 修改自动延续；删除再建、规则改后复原、外部 ABA 和缺历史不能伪延续；once 无 D4 row 的未来武装/正常到期/窗口内漏跑/窗口外跳过分支；禁止为过去项补 armed 绕过 skip；晚唤醒重启保持正常 armed 责任；continue 的 claim 前后竞态；replace 与旧 armed/queued/unknown/terminal 竞态；跨代相同 UTC 原坐标及 once/recurrence 排除；窗口必须全部投影、output/work/queue/evidence 超限零部分决议；run_once 先写 selected 或 skipped 的每个崩溃点均全有或全无；重扫不能补跑第二个更早项；授权撤回不泄露旧 source/claim；代际 MAX 不回绕。上述是设计验收义务，尚未运行产品测试。
+
 ## 7. Standing Approval 协调实现
 
 UPSTREAM-AMENDMENTS 是本切片前置条件。修订尚未共同接受时，不得把该分支隐藏在 Broker 中先上线。
@@ -243,7 +251,7 @@ Core 必须拥有 StandingApprovalEnvelope validator、ApprovalUse builder、pla
 - D6 permission 失效仍为原 `not_visible`；
 - dependency/semantic/budget 冲突仍为原 owner code，不能被 approval error 遮蔽。
 
-planned-preview recovery 必须从真实 planned 保存的 PreparedActionBinding/2、preview semantic record 与 pins 打开新有限 epoch。测试要证明旧 preview token 已过期也能在 current audience/ObservationScope/permission/continuity 下读原语义，同时 current Query/definition/target 漂移不会改变恢复内容。recovery token 过期不修改原 planned，也不复活旧 token。
+planned-preview recovery 必须从真实 planned 保存的 PreparedActionBinding/3、preview semantic record 与 pins 打开新有限 epoch。测试要证明旧 preview token 已过期也能在 current audience/ObservationScope/permission/continuity 下读原语义，同时 current Query/definition/target 漂移不会改变恢复内容。recovery token 过期不修改原 planned，也不复活旧 token。
 
 核心竞争与恢复测试至少包括：
 
@@ -292,9 +300,15 @@ R08 external-effect 测试逐字消费 CONTROL-CONTRACT §7：
 - `ConsentSpec.external` 绑定 stable effect Ref + requestDigest，因此合法 `prepared→submitting` 不会自行使 consent 失效；任何 contribution/account/target/payload/idempotency 变化都要求新 effect intent 与 consent。
 - `ExternalExecutionBinding/1` 在不可逆 send 前冻结 sendAttemptId、准确 Lease/approval/external-effect grant/egress grant、可选 secret generation 与 0..32 个可归属 cost reservation。sendAttemptId 永远不是 billableAttemptId；每份 reservation 都解析到自己的 billable attempt。
 - public `ExternalEffectCurrentView/1` 只在授权通过后暴露状态、恢复方式、贡献项、账户、操作以及 requestDigest/targetDigest；永不返回请求载荷、目标 ToolValue、幂等键/证明、secret generation、approval record 或 reservation identities。
+完整 consent 查阅测试必须覆盖：grant 同时允许 target A/B，但 frozen request 实际指向 B、payload 为 P，而模型声称 A；可信 preview 必须准确展示 B/P，只有绑定该完整 preview 的确认才能授权。payload 未获权、隐藏 source/target、摘要不符、pins 丢失、intent 改变、交付不完整/截断/超预算、恶意终端转义、不可信 callback、没有受保护事件却直接提交 D6，均不能产生 consent。另验查阅与两个 CAS 点之间撤权/过期、仅 lifecycle revision 改变但 frozen intent 未变、确认前后中断、已 applied 重放不再要求用户事件。普通 current/history 及错误细节不得泄露 payload、凭据、idempotency key 或受保护确认。必须实现准确 D6 关联及可信界面事件来源；与 Core 无关联的 UI 复选框不够。
+
 crash/reconcile mutant 尝试替换 frozen bytes、target、key、secret generation 或 effectId 必须被拒绝；`outcome_unknown` recovery 永远继续同一 immutable request。D9 conversion worker 保持 network=denied，不能借 D10 egress。D9 PublicationReceipt 只证明 publication；另存 Resource 仍需原作者协议。
 
 ## 9. Budget 与费用实现义务
+
+每个可收费 attempt 开始前，都把 `CostBudgetAttribution/1` 与原 reservation 一起保存。由原受保护归属及 reservation 状态重建交互五层或 Automation 六层投影，使用完整 owner/account/currency 键及保留配置证据。准确算法、固定 Run cap、同账户 grant 分组、不周期清零、单序列化边界、phantom 保护、原层结算及不披露均由 CONTROL-CONTRACT §10 拥有；ExternalExecutionBinding 或一行 audit 文本不能替代。
+
+必验：A1/A2 共 grant/account，各 Automation cap100，A1 uncertain90；公共层允许时 A1 新20拒绝、A2 新20成功。两个 attempt 竞争同 Run 最后额度。修改 definition/budget/grant、重启后将原90按 final20 结算，全部原层只返70一次。移除再加 cap 或同账户换 grant 不清累计；同 BudgetCaps 内同账户不同 maximum 配置拒绝。旧 grant 退役、Run 终止后仍按原归属结算。覆盖交互 model/只读tool 收费、多实际账户分别归属整组准入、重复/竞争结算、非final证据、缺失/伪造/不全归属、隐藏嵌套 owner 及 actual 超界。本清单不声称已执行产品测试。
 
 费用实现逐字服从 CONTROL-CONTRACT §6、§9–§10。一份 `CostReservation/1` 永远只对应一个实际账户；Run/Lease/Automation/Workspace/deployment 多层额度在同一准入中检查，但不是多个账户的重复计费。真实可分别归属的多账户费用使用独立 reservation/evidence，禁止对同一费用重复计算。CostReservation 的状态机为 `reserved→settled(actual)|released|uncertain` 与 `uncertain→settled(actual)|released`；只有 settled/released 是终态，uncertain 保留完整 upper bound 并可由后续证据恢复。
 
@@ -387,7 +401,7 @@ B10-01 的实现负向门：Adopt 代码路径只允许 `adopt_*` convention；�
 
 TERMINOLOGY §14 与 CONTROL-CONTRACT 还冻结 R05 新控制记录、五个 capability ID 和四个第一方 module/package/schema 映射。候选代码 symbol/namespace 和 locale key 只能作为尚未实现的 mapping 验证，不能被 CI “存在字符串”冒充实际代码或资源实现。PackageId、D4 SemanticNamespaceId、D4 namespace ownerId、FacetId 与 module ContributionId 必须按各自 owner 分型，不允许因为字符串相同合并。
 
-R08 消费两组**原 owner** naming/interface gate。D8 继续恰有九个 domain concept 与十三个 kind；每个 kind 必须从 UPSTREAM-AMENDMENTS §8.1 解析到唯一 technical-interface owner。Draft、Draft Projection、Draft Edit Map、Prepared Edit Binding、D2 snapshot、D6/D7 value 可以被 consumes/returns，但绝不与 kind 共 owner。尤其 `d8_draft_text_replace/write` 归对应 D8 interface，同时使用 Draft Edit Map 坐标。该 mapping 不改变 D8 wire、IME、显式确认、PreparedEditBinding/1 或 Undo 语义。
+R08 消费两组**原 owner** naming/interface gate。D8 继续恰有九个 domain concept 与十三个 kind；每个 kind 必须从 UPSTREAM-AMENDMENTS §8.1 解析到唯一 technical-interface owner。Draft、Draft Projection、Draft Edit Map、Prepared Edit Binding、D2 snapshot、D6/D7 value 可以被 consumes/returns，但绝不与 kind 共 owner。尤其 `d8_draft_text_replace/write` 归对应 D8 interface，同时使用 Draft Edit Map 坐标。该 mapping 不改变 D8 wire、IME、显式确认、PreparedEditBinding/2 或 Undo 语义。
 
 dirty D8 Draft 不是全局 Core 写锁：合法后台 D7 author commit 仍可发生。D8 必须排队/投影 author update、保留本地 input/composition，并要求后续 edit 按原 D8 合同 rebase/reprepare 或报告 stale。Undo 只能反演自己的原 committed edit，不能回滚后来发生的后台 commit。
 
@@ -468,7 +482,7 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 
 - CANDIDATE、CONTROL-CONTRACT、TERMINOLOGY、SCENARIO-DISPOSITIONS、UPSTREAM-AMENDMENTS 与本文互相一致；
 - TERMINOLOGY §13–§15 对 D10 自有与上游引用概念完成 Intake §8.5.1 映射；D8/D9 原 owner 的完整补充位于 UPSTREAM-AMENDMENTS §8，D10 不重复取得 owner；没有 TODO/“留实现决定”占位；
-- 阅读证据分账：原作者 lineage 保留历史 S49/49；本接续作者亲自完成 S16/49 全文，D9 workers/export 与 templates 仅做依赖局部读取且不计全文；固定 R07 的独立评审另行完成 S49/49。三套证据互不替代；
+- 阅读证据分账：原作者 lineage 保留历史 S49/49；历史 R08 接续作者亲自完成 S16/49 全文，D9 workers/export 与 templates 仅做依赖局部读取且不计全文；固定 R07 的独立评审另行完成 S49/49。三套证据互不替代；
 - D6/D7/D8/D9/D3 配套 amendment 都明确为未激活提案；
 - 没有把 unsupported/deferred 写成 available；
 - 自动 author commit 只限 single_field_member profile；
@@ -476,8 +490,8 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 - D1 surface/reason、D3 identity、D4 Registry、D8 confirmation、D9 worker/publication 不被暗改；
 - 任何实际运行证据精确分层，pending 项不被写成 pass。
 
-- 固定 R07 的完整独立终审历史结论仍为 REVISE（P0=0/P1=1/P2=10）；完整 R08 作者修订也不能靠作者声明关闭这 11 项 finding；
+- 后续完整历史 R08 评审为 REVISE，P0=0/P1=3/P2=8；REVIEW-DISPOSITIONS 记录十一项稳定 ID，并区分限定修订复核与全局接受。
 - 本纲要列的是待实现/待测试义务，不是 Core adapter、stop transaction、external transport、D8/D9 mapping 或 race corpus 已执行的证据；
-- 固定 R08 候选只有在九对双语/18 exact path 全部一致、固定 S 与非 D10 路径不变、125 个 scenario ID/分类一致且适用 documentation/input gate 通过时才算作者候选完整；之后仍需 fresh 完整独立复核。
+- 完成条件是九对双语 D10／18 个准确路径与全部必要 D1–D9 实际 owner 后像在同一不可变候选上一致；固定 S49 及其清单保持不变；既有125个场景 ID 与完整义务可追溯，新增案例明确列出。适用文档/输入检查、真实阅读覆盖、术语、中英语义以及历史/当前发现都绑定该候选。旧 S49/49 覆盖、具名差分 PASS 和 CI 均不能继承为全文接受。设计冻结要求零开放 P0/P1、剩余 P2 明确处置以及 fresh 独立全局 Pro 接受，仍不等于实现或发布。
 
 这些是候选完整性门，不是独立 Gate verdict。

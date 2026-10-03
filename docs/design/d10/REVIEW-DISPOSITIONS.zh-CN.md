@@ -7,7 +7,7 @@ translation_status: source
 
 # D10 独立审查问题处置
 
-revision: D10-r08-joint-review-fixes-2026-09-28；状态：完整 R08 作者处置记录。固定 R07 已完成候选18/18 + S49/49 并结论 REVISE（P0=0、P1=1、P2=10）。当前11项 finding 全部保持开放；本作者记录等待固定 R08 候选的 fresh 完整独立复核。
+revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；REVIEW-DISPOSITIONS 区分各层证据。
 
 
 ## 1. 审查覆盖边界
@@ -17,6 +17,28 @@ revision: D10-r08-joint-review-fixes-2026-09-28；状态：完整 R08 作者处�
 随后完整独立联合终审固定 R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，完成**候选18/18、S49/49，规范正文无阅读缺口**，最终 **REVISE**：P0=0、P1=1（`B03-P1-01`）、P2=10（`B01-P2-01`、`B02-P2-01`、`B02-P2-02`、`B02-P2-03`、`B03-P2-01`、`B03-P2-02`、`B03-P2-03`、`B03-P2-04`、`B10-P2-01`、`B11-P2-01`）。整体、术语与中英语义均需修订；D8、D9 各新增一项当前 finding。
 
 R08 是对这组固定 R07 问题的作者修订。旧 R06/R07 覆盖只作为历史证据，不能转记为最终 R08 commit 已被独立阅读、通过或关闭。
+
+### 1.1 后续 R08 评审与当前修订范围
+
+后续完整评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与同一 S，有其独立的候选18/18、S49/49阅读记录，结论 REVISE，术语/双语 FAIL：P0=0/P1=3/P2=8。下列十一项取代了当时的 R07 当前问题表；旧九项在历史范围内关闭，两项由新具体发现承接，不能相加为二十二项当前问题。§2–4 保留早期作者处置及其当时状态，不是今日评审结果。
+
+下表具名修正均有绑定其实际修订字节的限定独立复核；后续变更及实际 owner 生产端另须审查。十一项历史最终处置在 fresh 全局接受前仍为 OPEN；限定 PASS 不能转给其它全文 hash。
+
+| R08 稳定 ID | 原级别 | 实际反例与当前修订落点 | 修订范围 |
+| --- | --- | --- | --- |
+| R08-B13-P1-01 | P1 | 模型声称收件人 A，实际 target=B/payload=P；CONTROL §7 要求完整受信请求查阅与精确确认 | 限定 PASS；D6 生产端整合待完成 |
+| R08-B13-P1-02 | P1 | horizon/cache/源变化令同一发生重复，或不同 originalStart 合并；CONTROL §16 定义稳定键、连续性、armed/claim 及整个遗漏窗口 | 限定 PASS；实际 D6 历史留存/消费待完成 |
+| R08-B13-P1-03 | P1 | 90单位 uncertain attempt 在版本变化/重启后失去原预算层归属；CONTROL §10 保留不可变五/六层归属及一次结算 | 限定 PASS；全局费用/恢复审查待完成 |
+| R08-B13-P2-01 | P2 | 首次 host-control 成功没有唯一公开 envelope；CONTROL §7 固定首次与重放使用同一 applied-history 成功结果 | 限定 PASS |
+| R08-B01-P2-01 | P2 | 用户直接发起交互 Run，没有 Automation；CONTROL RunOrigin/1 与准入/当前投影现有真实交互分支 | 限定 PASS |
+| R08-B02-P2-01 | P2 | 公开 PackageManifest/Contribution 被误分为未定义 IPC；TERMINOLOGY §13 明确实际公共载体 | 限定 PASS |
+| R08-B02-P2-02 | P2 | 只允许 publisher 的术语排除合法第一方 people namespace；TERMINOLOGY 保留 D4 精确第一方 owner claim | 限定 PASS |
+| R08-B02-P2-03 | P2 | 多个 kind 可以属于同一接口 owner；SCENARIO P18 和 UPSTREAM §8 要求单值映射而非双射 | 限定 PASS |
+| R08-B05-P2-01 | P2 | never_bound 显式 Adopt 被误拒；SCENARIO U12 保留真实 D3 正向分支，不开放 ICS | 限定 PASS |
+| R08-B11-P2-01 | P2 | 文本替换响应被错误要求包含 caret；UPSTREAM §8 消费 D8 精确响应 | 限定 PASS |
+| R08-B12-P2-01 | P2 | import_next 被错误要求返回终态；UPSTREAM §8 保留 import_state 查询终态 | 限定 PASS |
+
+新文件权威 owner 后像、公开载体映射修正及 D6/D7/D10 版本/提交/恢复协调是本轮新增工作。落盘本身不关闭 PL 或当前 owner 问题，也不能代替当前候选全文阅读记录。各 actor 分别记录真实全文和依赖局部阅读；本轮不继承旧 actor 计数冒称 S49/49。
 
 ## 2. 历史 R06→R07 JR001–JR009 作者处置
 
@@ -34,7 +56,7 @@ R08 是对这组固定 R07 问题的作者修订。旧 R06/R07 覆盖只作为�
 
 此前两项已澄清问题保持关闭且不改设计。owner/组合核验已完整完成；R07 不再保留“其它 owner 组合仍待核”的笼统声明。 本表为历史记录；上文固定 R07 的后续完整评审已经取代其当时的 pending 状态。
 
-## 3. R08 B01–B11 作者处置
+## 3. 历史 R07→R08 B01–B11 作者处置
 
 | ID | 级别 | 固定 R07 C 原 finding 定位 | 已落盘 R08 作者修订 | R08 主要 owner / consumer | fresh 复核验证目标 | 当前状态 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -46,7 +68,7 @@ R08 是对这组固定 R07 问题的作者修订。旧 R06/R07 覆盖只作为�
 | B03-P2-01 | P2 | CONTROL EN706–707、EN943–949；CANDIDATE EN388–400 | 闭合 external-effect 返回树：immutable `FrozenEffectBytes/1` / `ExternalEffectIntent/1`、准确 `ExternalExecutionBinding/1`、stable effect Ref + requestDigest consent、closed `ExternalEffectCurrentView/1`，并定义 `HostOrWorkspacePrincipal/1`。lifecycle revision 不再兼任 frozen request identity。 | CONTROL §§2/7/11；CANDIDATE §17；SCENARIO E05/F17/F35；IMPLEMENTATION §§8/11.1/15 | current projection 不泄露 payload/target/key/proof/secret/reservation identity；prepared→submitting 不使 consent 自失效；frozen bytes/target 不可替换；sendAttemptId 与 billable attempt 分域；D9 worker 不继承 D10 egress | 作者修订已落盘；待 fresh 独立复核 |
 | B03-P2-02 | P2 | START EN106 / CN105 | R08 中英统一说明 `ToolValueProfile/1`、`ToolType/1`、`ToolValue/1` 是 D10 自有受限代数；具名 Core field-member adapter 明确消费原 D7 TypedLiteral/ResolvedCodeScope；普通 ToolValue 不能成为 NodeRef、FieldId、selector 或 author request。 | START §3/§5；CONTROL §3/§4/§7；TERMINOLOGY；CANDIDATE §§13–15 | 中英 owner 声明与 CONTROL 一致；旧“复用 D7 有限子集”只能作为明确已取代历史或被删除 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
 | B03-P2-03 | P2 | REVIEW EN91 / CN90；CN81 | 删除过时“仍在读旧 C”“六项”和未来 R05 当前态，改为固定 R07 C18/18+S49/49 已完成 REVISE 的记录，并新增当前 11 finding R08 作者处置表。旧 R06/R07 记录继续明确为历史。 | REVIEW §§1–7；TASK/START 交接 consumers | 当前 ID 恰为11项、1个P1+10个P2；当前文本不再声称旧 review 仍在运行，也不把 R08 写成独立接受 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
-| B03-P2-04 | P2 | TASK EN19/CN18；START EN17/CN16；IMPLEMENTATION §16 | 阅读证据分账：原作者 lineage 历史 S49/49；本接续作者全文 S16/49；D9 workers/export、templates 只算依赖局部；固定 R07 独立评审另行 S49/49。三套证据互不继承。 | TASK Fixed Inputs/Completion/Review；START §§1–2/6；IMPLEMENTATION §16 | 三套覆盖始终分开；本 R08 批次不增加 S 全文计数；workflow/tool summary 不算全文 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
+| B03-P2-04 | P2 | TASK EN19/CN18；START EN17/CN16；IMPLEMENTATION §16 | 阅读证据分账：原作者 lineage 历史 S49/49；历史 R08 接续作者全文 S16/49；D9 workers/export、templates 只算依赖局部；固定 R07 独立评审另行 S49/49。三套证据互不继承。 | TASK Fixed Inputs/Completion/Review；START §§1–2/6；IMPLEMENTATION §16 | 三套覆盖始终分开；本 R08 批次不增加 S 全文计数；workflow/tool summary 不算全文 | 本 R08 批次作者修订已落盘；待 fresh 独立复核 |
 | B10-P2-01 | P2 | UPSTREAM EN309/311/320–325；CN308/310/319–324；SCENARIO P18 | 把含糊 kind→concept 共 owner 改成每个 D8 kind 一个 technical-interface owner。13 kind 全部映射；Draft/Draft Projection/Draft Edit Map/Prepared Edit Binding 与上游 value 只是 consumes/returns 数据。D8 domain concept 仍恰为九个；wire/IME/confirm/Undo 不改。 | UPSTREAM §8.1；SCENARIO P18；IMPLEMENTATION §§13/15 | 精确 13-kind 唯一 owner 扫描；`d8_draft_text_replace/write` 消费 Draft Edit Map 但不共享 kind owner；dirty Draft 允许合法后台 D7 commit 并按 stale/rebase 处理；Undo 不回滚后续后台 commit | 作者修订已落盘；待 fresh 独立复核 |
 | B11-P2-01 | P2 | UPSTREAM EN335/386–392；CN334/385–391；SCENARIO P19 | 为17个 D9 public kind 各给一个 technical-interface owner，并把 consumes/returns/operates-on 分开。36个 D9-owned naming row 继续归 D9；继承 `weftext.term.import-job` 保留 D6 concept ID、ownedNames、`storage.import_job` 与历史 firstFreeze。D2/D3/D6/D7 名称保留原 owner。 | UPSTREAM §8.2；SCENARIO P19；IMPLEMENTATION §§13/15 | 精确 17-kind 唯一 owner + 36-D9/1-inherited-D6 naming 检查；`d9_import_state` operates on D6 ImportJob 但不拥有它；PublicationReceipt 只证明 publication；D7ResultPin nested schema/V 继续归 D7 | 作者修订已落盘；待 fresh 独立复核 |
 
@@ -86,7 +108,7 @@ Core 仍是唯一 author transaction authority。ApprovalUse、LeaseRunUse、Pla
 
 外部结果 `outcome_unknown` 与费用 `uncertain` 保持；没有为了修复批准/Run 语义而改成自动重试或自动退款。
 
-D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上游 U 没有被修改；修订在独立接受与协调激活前不生效。
+当前设计工作将本目录与 `../d6-file-authority-reopen/` 中显式 owner 后像及唯一路由协调。固定 S 快照保持原字节；每份正文只有一位指定作者，创作与独立审查分工保持。候选不代表产品实现、合并、发布或激活；设计冻结之前仍须 A2 整合及全新普通 Chat Pro 全局终审。
 
 ## 6. 文档质量修订
 
@@ -94,8 +116,4 @@ D6/D7 的新增条款全部只存在 UPSTREAM-AMENDMENTS 提案中。固定上�
 
 ## 7. Fresh 独立复核要求
 
-后续 reviewer 必须把最终固定 R08 commit 当作新候选。R08 已改变 public wire、授权、恢复、transaction/safety、external-send 与上游 interface-owner 合同，因此只对 R07 做差分复核不够；必须 fresh 完整读取候选18/18与固定 S49/49，并重新判断中英语义与术语。
-
-在该交接之前，作者完成门继续开放：九对双语/18个 exact path 必须全部一致到 R08；固定 S 与全部非 D10 路径保持不变；125 个 scenario ID 集合及分支裁决中英一致；最终候选适用的仓库文档检查通过；REVIEW/TASK/START 只能报告真实阅读与 CI 证据，不能把 pending 工作升级成通过。
-
-当前 11 项 finding 在新的独立 verdict 前全部保持开放。必要的 D3/D6/D7/D8/D9 配套修订继续只是提案；后续 coordinated acceptance、version、activation 与验收证据和作者文档完成是不同阶段。任何作者自查、旧 R07 的 S49/49 覆盖、CI 结果或旧独立 verdict 都不能建立 R08 acceptance。
+完成条件是九对双语 D10／18 个准确路径与全部必要 D1–D9 实际 owner 后像在同一不可变候选上一致；固定 S49 及其清单保持不变；既有125个场景 ID 与完整义务可追溯，新增案例明确列出。适用文档/输入检查、真实阅读覆盖、术语、中英语义以及历史/当前发现都绑定该候选。旧 S49/49 覆盖、具名差分 PASS 和 CI 均不能继承为全文接受。设计冻结要求零开放 P0/P1、剩余 P2 明确处置以及 fresh 独立全局 Pro 接受，仍不等于实现或发布。

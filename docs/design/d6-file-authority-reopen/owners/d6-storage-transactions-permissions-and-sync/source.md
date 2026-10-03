@@ -121,7 +121,9 @@ A fresh managed source is revision=1 in a proved empty history. An existing sour
 
 Current replica/Server observation separately binds observerDomain, EntityRef, complete production SourceVersion/2, current observationEpoch, FileObjectBinding, and evidence pins in SourceObservation/1. observerDomain=current operation domain while sourceVersion.commitDomain may differ. SourceVersion.observationEpoch remains production history; SourceObservation.observationEpoch is the current observer generation. Placeholder/missing metadata/conflict/unproved continuity yields no successful Observation. SourceVersionRef/1 selects the complete Observation; gap, external replacement, or discontinuous rematerialization invalidates old current qualification even when production version/hash/text is equal.
 
-For every plan that will produce a managed source version, Storage durably stores internal SourceRevisionPlan/1 in P: before current Observation or explicit absent, the last sealed managed SourceVersion for this production-domain entity or proved none, proposed SourceStamp/1, and exact after pin. SourceStamp is only the same DecisionKey’s proposed entity/revision/production-observationEpoch address. When current operation is the after production domain, that epoch is the target observation generation frozen by the original plan in the current operation domain, never copied from a foreign before production epoch. It contains no new ChangeId and is not successful SourceVersion. Closed shape is owned by the later same-P1 Control afterimage; Storage creates no second wire owner. The winning plan freezes this basis and seal revalidates last-issued history.
+Except for the explicitly separate conflict-only /2 below, for every plan that will produce a managed source version, Storage durably stores internal SourceRevisionPlan/1 in P: before current Observation or explicit absent, the last sealed managed SourceVersion for this production-domain entity or proved none, proposed SourceStamp/1, and exact after pin. SourceStamp is only the same DecisionKey’s proposed entity/revision/production-observationEpoch address. When current operation is the after production domain, that epoch is the target observation generation frozen by the original plan in the current operation domain, never copied from a foreign before production epoch. It contains no new ChangeId and is not successful SourceVersion. Closed shape is owned by the later same-P1 Control afterimage; Storage creates no second wire owner. The winning plan freezes this basis and seal revalidates last-issued history.
+
+The D3 resolution-only canonical materialization path additionally consumes Control §3.1.1 ConflictInstallInput/1 and §6.2.1 SourceRevisionPlan/2. This typed wrapper proves the actual installed sealed-head source/metadata, current FileObjectBinding and installation generation under the original DecisionKey/audience/preparation/input-use guard. It is never SourceObservation, has no sourceToken, stays outside InputDescriptor.sourceInputs and cannot qualify canonical reads, Query, D8 or ordinary writes. Ordinary/current Observation still rejects conflict. The original plan separately saves the full wrapper, source/conflict/range proof, before/selected/final pins and exact recovery state; source and metadata install under strict protection and one P seal. A changed canonical birth claim/selected production version or final bytes is a real source-state admission even at equal bytes and receives one current-domain H+1 via /2. Retaining claim/version/bytes makes no source version or H increment; metadata-only open resolution remains portable, and only a fully empty already-resolved selection is true no_op. Existing canonical identity is never fresh/absent. Fresh copy in that same decision keeps its separate /1 plan; no entity receives two final versions. CP3 carries actual installed production before and the one sealed managed after, not the historical selected version as a new version. Saved/planned/unknown preserves the original exact-version record, pins, guard and installation responsibility; no observation re-signing, head reselection, new decision or history rewrite occurs. Control is the sole shape owner, while D3 owns the explicit business selection and full net effect projection; Storage adds no generic Resource write API or raw-mode permission.
 
 The D3 stage12 private candidate map remains the sole fresh-identity candidate source. Control freezes a revision-token profile/2 and Storage persists it, binding observerDomain/current observationEpoch plus managed SourceStamp or external SourceVersion; D3 Locator/revision-token outer lexical shape and D4/D5 inner selector wire do not change. A proposed managed token is plan-internal symbolic/validation evidence until the decision seals and a complete current SourceObservation exists. Legacy profile/decoder remains unchanged; equal hash/text/revision/I never restores qualification across an observation gap.
 
@@ -185,7 +187,7 @@ ContentGuarantee is separate from WriteProtection. replica_local proves fixed wr
 
 The v2 canonical commit request remains small and never embeds complete bytes. PreparedIntent/2 stores Workspace/CommitDomain, intent, Frontier/2+frontierPolicy, ObservationScope/2, SourceObservation/1, DependencyProof/2, scope/profile/write set, Registry/policy/rule, and OwnerInputBinding/2; complete bytes remain purpose-bound pins.
 
-Whenever a plan may produce a new managed source version, its installation plan also freezes the §4 SourceRevisionPlan/1: before observation or absent, the last sealed managed version for this production-domain entity or complete-empty-history proof, proposed SourceStamp, and exact after pin. It is version-allocation evidence, not a successful version, and contains no not-yet-existing ChangeId. external→managed admission uses this branch; true raw no-op and pure structure/control source-unchanged branches create no SourceRevisionPlan.
+Ordinary/fresh source plans freeze the §4 SourceRevisionPlan/1; the named D3 canonical-resolution component alone uses Control §6.2.1 /2. The /1 record contains: before observation or absent, the last sealed managed version for this production-domain entity or complete-empty-history proof, proposed SourceStamp, and exact after pin. It is version-allocation evidence, not a successful version, and contains no not-yet-existing ChangeId. external→managed admission uses this branch; true raw no-op and pure structure/control source-unchanged branches create no SourceRevisionPlan.
 
 Complete enumeration, empty proof, range epoch/revision, current authorization, and required pins referenced by DependencyProof/2 must live in their real P/M owners and remain revalidatable under the original plan at planning, verify, and recovery; they never live only in I. D6 maintains continuity for source, authorization, replica_registry, conflict_record, and execution_resource. D3/D4/D7 provide their concrete closed keys/enumeration. An incomplete owner afterimage keeps a strong consumer owner_update_required/proof_unavailable; free JSON is rejected and an ordinary local operation that does not depend on that strong range remains available.
 
@@ -195,11 +197,73 @@ Input equality compares the descriptor, exact pins/owners, SourceObservation, De
 
 Every pin records purpose, owning request/job, byteLength, payload type, source version, creation control revision, last-reference policy, retention class and capacity account.
 
-Long-lived protection is permitted only for planned/installation recovery before/after, unresolved conflict heads and merge base, frozen external-unknown/approval/Money evidence, owner-protocol ImportJob/ExportPlan/Query pins, and explicit user history/backup policy.
+Long-lived protection is permitted only for planned/installation recovery before/after, unresolved conflict heads and merge base, frozen external-unknown/approval/Money evidence, owner-protocol ImportJob/ExportPlan/Query pins, explicit user history/backup policy, and the exact registered schedule-continuity owner of §7.2.1.
 
 Opening, parsing or indexing a workspace never creates permanent pins for every current source. Once no decision/unknown/conflict/user retention references large effect bytes and retention permits release, those bytes may expire while canonical request, decision, receipt/error, approval/Money/claim responsibility and the minimal input descriptor remain durable. Saved decisions created under legacy contracts that promised decision-lifetime/permanent pins retain the legacy promise; D6-FA-r01 does not retroactively delete them. Reading legitimately expired new historical effects returns effects_unavailable and never substitutes current files for historical after bytes.
 
 Capacity exhaustion rejects or pauses new prepare/install instead of deleting a protected last-reference pin.
+
+### 7.2.1 Protected schedule continuity producer
+
+An active D10 ScheduleSubscription/1, and a retired one still referenced by armed/claimed/unknown recovery, is an explicit permitted recovery-retention owner. Opening/parsing/indexing a Workspace creates no subscription and no permanent all-source pins. The owner is the exact non-reused Automation Ref plus subscription generation, not a Field key, path or current definition revision. Creation first passes the selected source/Field/Registry and complete scheduling gates in D10 Control §16, reserves finite retention capacity, then records the initial evidence and registration with the actual Core source/control change producer in the same configuration transaction. Failure to attach that producer creates no apparently continuous subscription.
+
+    ScheduleContinuityWitness/1 = {
+      kind:"d6_schedule_continuity", version:1,
+      automation:D10.ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      revision:Counter,
+      initial:D10.ScheduleRecurrenceEvidence/1,
+      checkpoint:D10.ScheduleRecurrenceEvidence/1,
+      status:"continuous"|"binding_changed"|"gap",
+      producerEpoch:Token,
+      consumedTransition:Counter
+    }
+
+    ScheduleContinuityStep/1 = {
+      kind:"d6_schedule_continuity_step", version:1,
+      automation:D10.ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      expectedWitnessRevision:Counter,
+      producerEpoch:Token,
+      transition:Counter,
+      before:D10.ScheduleRecurrenceEvidence/1,
+      after:D10.ScheduleRecurrenceEvidence/1,
+      portableChanges:[{
+        changeRecordPin:PinRef/2,
+        installationNoticePin:PinRef/2,
+        completionProofPin:PinRef/2
+      }],
+      dependencyBefore:DependencyProof/2,
+      dependencyAfter:DependencyProof/2,
+      retainedInputs:[PinRef/2]
+    }
+
+    ScheduleContinuityInvalidation/1 = {
+      kind:"d6_schedule_continuity_invalidation", version:1,
+      automation:D10.ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      expectedWitnessRevision:Counter,
+      producerEpoch:Token,
+      transition:Counter,
+      status:"binding_changed"|"gap",
+      evidencePins:[PinRef/2]
+    }
+
+A vanished, conflicted or invalid source may have no valid after Observation/D4 context. In that case the producer uses the closed invalidation above, retaining the last valid checkpoint rather than inventing ScheduleRecurrenceEvidence. binding_changed requires complete trusted evidence of an actual selected-business discontinuity; an unavailable/unknown after or missing history is gap. evidencePins retains the actual available original typed evidence and may be empty only when the protected producer itself proves a capture/availability gap, never to assert a business change. Invalidation compares the same current witness/registration and commits the permanent status with the next checked transition/revision atomically. Reserve the final Counter increment for invalidation: positive folding stops before MAX, and capacity/counter exhaustion consumes that reserved increment to mark gap without wrap or preventing unrelated ordinary source work. An invalidation pin uses artifact/recovery and UTF-8 D6-Schedule-Invalidation/1, NUL, then complete D3-CJ/3 bytes. It cannot reset an invalid generation.
+
+This is a protected continuously maintained control witness, not a caller proof, portable signature, general ledger or reconstructible I cache. Its initial evidence is immutable and byte-equal to the original subscription. checkpoint initially equals initial; revision=1 and consumedTransition=0 begin only with proved successful registration at that exact cut. producerEpoch identifies the actual continuously registered Core consumer and its durable transition inbox. Its numeric counter cannot create continuity: the source/control producer must retain every matching before/after transition and prove complete delivery from that same registration, including all causal branches and intermediate relevant Registry/rule/configuration states. No reset or re-created inbox may reuse the epoch. A second writer cannot update the witness independently of that producer.
+
+Each step is derived internally from actually verified same-cut states. Before equals the current witness checkpoint; expected revision/epoch and next checked transition match. The complete dependency key set covers the selected owner/identity/lifecycle, required Facets and both Entry keys, relevant source/Registry/schema/calendar/timezone/tzdb/rule inputs and applicable complete business scopes. Newly discovered dependencies are qualified before use and their entire intervening history is proved; otherwise the transition is a gap, never an expansion after reading hidden state. dependencyBefore/After correspond to those actual cuts. The full Registry snapshots/evolution and D4 RecurrenceReadContext come from before/after evidence. Core retains actual intermediate source, metadata, accepted rule assets and control images under their existing typed decoders, not hash-only replacements.
+
+For each portable transition, the three artifact pins strict-decode the original actual D6 ChangeRecord, its versioned InstallationNotice and ContentCompletionProof. They must prove the same sealed ChangeId, component images and complete causal predecessor chain; raw current files cannot reconstruct them. Source/metadata payload pins use their real exact_source_document/portable_metadata classes and production SourceVersion. Historical transitions retain their actual original decoder; new transitions use InstallationNotice/2 and CP3. P-only control/rule transitions are captured from the actual serialized before/after protected state, with complete snapshots/accepted rule assets in retainedInputs; a matching DependencyKey stamp change is never skipped merely because no portable source changed. An unregistered provider change, external write/replacement, observer gap, missing transition, unknown decoder or unproved branch marks gap before any new scan can use the witness.
+
+Core applies exactly D10's original business-continuity predicate to every intermediate transition: continuously live owner, required Facets and selected keys present, unchanged complete decoded recurrence/range values and actual relevant semantic/rule identities. Permitted unrelated body/Entry or formatting changes advance checkpoint; deletion/recreation, temporary disappearance or changed-and-restored rule marks binding_changed permanently for this generation. A bare expected/final digest equality never folds away such a transition. A horizon extension with proved unchanged rule identity and complete additional coverage is legal. observed_only B/N cannot prove that no unseen external C occurred; an affected weak installation cannot certify schedule continuity without the original strict complete history evidence.
+
+Consumption is atomic in the same P serialization domain as source/control transition publication, subscription configuration/checkpoint update, claim and stop/custody checks. The producer either (a) durably retains the complete next transition before releasing its history references, then a later authorized consumer verifies it, or (b) verifies and folds it into the witness in that transaction. A witness advance updates its revision, consumedTransition and complete checkpoint together; no partial checkpoint is visible. The saved protected witness represents the verified prefix, so a successfully folded prefix's now-unreferenced intermediate payload may be released without losing the established invariant. This compaction never replaces the immutable initial evidence, current checkpoint, pending inbox, original handled occurrence keys/dispositions or other unresolved responsibility. Full retained-chain verification is the alternative when not folded; it has the same exact completeness and predicate obligations.
+
+Source/control commits do not silently discard evidence under capacity pressure. If the registered finite inbox cannot retain a matching transition, the same producer transaction marks that subscription gap before releasing its unused history capacity; ordinary source work may then proceed, but no future scan calls it continuous. A provider/backend unable to make that atomic invalidation is unavailable for this scheduling profile. Per update, at most 4096 pins and 16 MiB canonical evidence are accepted, with source/component bytes under separately reserved PinBudget. Oversized incomplete history never partially advances. A proved mutation returns D10 binding_changed (control_conflict for management); gap returns state_unavailable. Both require explicit replace to establish a new generation after current qualification, and neither changes an original claim/unknown request. Rebuild, restart, equal latest bytes or a larger Frontier cannot reset either status to continuous.
+
+The witness and step bytes use artifact PinRef/2, recovery retention, canonical D3-CJ/3 with respectively UTF-8 D6-Schedule-Continuity/1 or D6-Schedule-Step/1 followed by NUL. Core authenticates them through protected record provenance and exact subscription/producer association, never through a digest alone. D10 continuityPins may hold these typed witness/step pins or the complete original chain, and no free proof-map arm is accepted. Reads/consumption first check current source/Field/owner authorization and disclose no hidden history. Replacement retires the old producer registration atomically with new configuration; GC releases a pin only after every subscription, original decision, occurrence, unknown, Money and other protected reference has gone and its original retention promise allows it. Old real contracts with longer pin obligations retain those obligations. No all-Workspace permanent history or automatic deletion of legacy recovery evidence is introduced.
 
 ### 7.3 State machine and ordering
 

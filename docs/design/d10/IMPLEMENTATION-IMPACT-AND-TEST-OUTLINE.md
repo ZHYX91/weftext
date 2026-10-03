@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Implementation Impact and Test Outline
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: complete R08 author implementation/test obligations synchronized to the final author candidate. These are design and future evidence obligations, not executed product tests. All eleven fixed-R07 findings remain open pending fresh complete independent joint review of the fixed R08 candidate.
+revision: D10-FA-r01-2026-10-02; status: coordinated author candidate, not accepted, activated, or implemented. The last complete historical R08 review of C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=3, P2=8). All eleven historical final dispositions remain OPEN. Named repairs have limited independent reviews; actual cross-owner integration and fresh global acceptance remain incomplete. REVIEW-DISPOSITIONS separates those evidence scopes.
 
 ## 1. Implementation slices and state owners
 
@@ -53,9 +53,9 @@ Recommended implementation order:
 
 [CONTROL-CONTRACT](CONTROL-CONTRACT.md) is the normative R08 owner for the management/current/history/author-adapter/external-effect/stop wires consumed by this outline. Implementation may not choose a different authorization, replay, accounting, frozen-request, or stop semantic.
 
-- Workspace self-control is authorized by proposed D6 Policy/2 `d10_control_self`; Workspace administration remains original `policy_admin`, with `registry_admin` additionally required for Registry activation. Deployment trust/account/secret/pricing/grant is owned by D10 DeploymentControlPolicy and cannot be inherited from Workspace admin or issuer admin.
+- Workspace self-control is authorized by proposed D6 Policy/3 `d10_control_self`; Workspace administration remains original `policy_admin`, with `registry_admin` additionally required for Registry activation. Deployment trust/account/secret/pricing/grant is owned by D10 DeploymentControlPolicy and cannot be inherited from Workspace admin or issuer admin.
 - Workspace author-affecting mutation continues through the original D6 authority store, `PreparedIntent`, decision/receipt, and author commit point. `DeploymentControlDecision` stores only host-control outcomes; the host adapter cannot write author source.
-- `ControlPrepareBinding/1` uses stable `(scope incarnation, principal, requestId)` plus complete canonical intent bytes. Recovery order is current visibility/authority → same-key comparison → saved-decision replay → only an undecided operation checks current expected revision/eligibility.
+- `ControlPrepareBinding/2` uses stable `(scope incarnation, principal, requestId)` plus complete canonical intent bytes. Recovery order is current visibility/authority → same-key comparison → saved-decision replay → only an undecided operation checks current expected revision/eligibility.
 - Configuration revision and usageRevision are separate; control ID/incarnation is never reused. Retire/archive cannot delete records still pinned by planned, unknown, uncertain, evidence, or dedup state.
 - Implement all four `ResourceUseGrant/1` variants separately: cost, secret, egress, external-effect. Grant renewal/revision never clears spent/held/attempt/use, and replacing a grant never clears an old reservation or actual-account liability.
 - The old non-Field set of fixed-S profile/2 is frozen byte-for-byte in tests; only profile/3 adds `d10_control_self`. Upgrade, replay, replacement, continue, and failover cannot alter an existing family's profile.
@@ -83,7 +83,7 @@ Managed D10 control records are needed without adding another author commit root
 
 These records are managed with Workspace/authority identity, fence, current principal, and version/CAS. SQL tables, indexes, and GC are implementation choices, but they may not alter candidate versioning, atomicity, replay, masking, or retention semantics.
 
-The D6 author ledger remains the unique Workspace+OperationId author-decision namespace. D10 Run, Approval, LeaseRunUse, and ExternalEffect records may not generate a second "author committed" fact during recovery.
+The D6 author ledger remains the unique DecisionKey/2 `(Workspace, CommitDomain, OperationId)` author-decision namespace. D10 Run, Approval, LeaseRunUse, and ExternalEffect records may not generate a second "author committed" fact during recovery.
 
 Control-history persistence keeps two different representations. Internal `ControlPrepareBinding.canonicalIntentBytes` stores complete canonical B and stable-key equality compares those full bytes. Public `ControlPreparedHistory/1` contains only `intentDigest`, exactly one of `automation_configure|consent|state|workspace_limits|activation|deployment_put|cost_reconcile`, allocated refs, and the existing affected/resource-use summary.
 
@@ -197,6 +197,10 @@ Windows, macOS, and Linux are separately accepted; a container or sandbox name i
 
 ## 6. Automation and scheduler implementation obligations
 
+Implement the common Run/admission/current-read origin as the same closed `RunOrigin/1`: interactive has no Automation fields, while automation binds its real definition and occurrence. The trusted Run creator fixes origin once; admission copies and verifies it, and current read projects the same fact only after authorization to the complete projection. Lease target is the actual Run for interactive and the actual Automation for scheduled execution. Do not synthesize a scheduler object, null members, or a display-only branch.
+
+Required positive and negative cases: directly create an interactive Run with no Automation, read its exact origin, admit it once under a Run-targeted `maxRuns=1` Lease, then continue/restart the same Run with remaining=0; a new Run, fake Automation, changed origin, wrong Lease target, lost admission continuity, or unauthorized nested binding must take the named rejection without a second admission. In parallel, an Automation occurrence keeps its real immutable origin and one original claim/Run across restart; it cannot switch to interactive to rerun a terminal occurrence. These are implementation acceptance obligations, not executed test results.
+
 Scheduler persists definition revision, finite schedule horizon, sourceOccurrenceKey, claim owner, Run identity, LeaseRunUse link, and actual skipped/started/terminal outcome. First-generation serial semantics require:
 
 - one `AutomationOccurrenceKey/1` maps to at most one Run identity and one durable claim;
@@ -228,6 +232,10 @@ Tests must do more than mock a scheduler row. At minimum exercise:
 8. source/rule-generation and definition-revision changes without rerunning old K under the successor revision;
 9. with `maxRuns=1`, the second protected step of the same Run reuses the original LeaseRunUse when remaining=0, while a new Run is rejected with `delegation_exhausted`;
 10. recovery of the same Run's original planned request at remaining=0 continues after proving LeaseRunUse continuity; missing or unprovable continuity returns `state_unavailable` and never re-consumes.
+Scheduler joint acceptance must implement the exact closed records in CONTROL-CONTRACT §16, not rename the old definitionRevision key, D7 Query K or stale selector. Integrate the real D6 source/control/rule history and protected recovery pins; I rebuild, equal final values or a provider sync statement cannot replace continuity. Config, checkpoint, armed records, whole-window claims/skips, prior-coordinate exclusion and stop require real same-store serialization and complete range/phantom protection.
+
+Additional required cases: equivalent offsets/arbitrary fractions give one coordinate; accepted edge-year conversion is not limited by the host date library; two originalStart values moved to one final due remain distinct; different Query invocation/horizon/cache retains the business key; unrelated body/other Entry edits advance automatically; delete/recreate, changed-and-restored rules, external ABA and missing history cannot fake continuity; once has independent future-arm/normal-due/in-window-missed/outside-window branches with no D4 row; past arming cannot bypass skip; late wake-up/restart retains armed responsibility; claim/config races under continue; replace versus old armed/queued/unknown/terminal state; cross-generation UTC coordinate exclusion including once/recurrence; complete-window projection and output/work/queue/evidence overflow with no partial decision; every crash after writing either selected or skipped rows in run_once is all-or-none; rescan cannot run a second older item; revoked authority does not disclose old source/claims; generation MAX never wraps. These are design acceptance obligations, not executed product tests.
+
 ## 7. Standing Approval coordinated implementation
 
 UPSTREAM-AMENDMENTS is a prerequisite for this slice. The feature may not be shipped secretly in Broker before the amendment is jointly accepted.
@@ -244,7 +252,7 @@ Error-owner tests cover the D10→D6 boundary:
 - D6 permission loss remains original `not_visible`;
 - dependency/semantic/budget conflicts remain original owner codes and cannot be masked by approval error.
 
-Planned-preview recovery uses the real PreparedActionBinding/2, preview semantic record, and pins retained by a planned decision to open a new finite epoch. Tests prove that an expired old preview token can still deliver original semantics under current audience/ObservationScope/permission/continuity and that current Query/definition/target drift cannot change recovery contents. Expiry of the recovery token changes no planned record and revives no old token.
+Planned-preview recovery uses the real PreparedActionBinding/3, preview semantic record, and pins retained by a planned decision to open a new finite epoch. Tests prove that an expired old preview token can still deliver original semantics under current audience/ObservationScope/permission/continuity and that current Query/definition/target drift cannot change recovery contents. Expiry of the recovery token changes no planned record and revives no old token.
 
 Core race/recovery tests include at least:
 
@@ -293,9 +301,15 @@ R08 external-effect tests consume CONTROL-CONTRACT §7 exactly:
 - `ConsentSpec.external` binds stable effect Ref + requestDigest, so legal `prepared→submitting` does not invalidate its own consent; any contribution/account/target/payload/idempotency change requires a new effect intent and consent.
 - `ExternalExecutionBinding/1` freezes sendAttemptId, exact Lease/approval/external-effect grant/egress grant, optional secret generation, and 0..32 attributable cost reservations before irreversible send. sendAttemptId is never a billableAttemptId; every reservation resolves to its own billable attempt.
 - public `ExternalEffectCurrentView/1` exposes only authorized state/recovery mode/contribution/account/operation/requestDigest/targetDigest and never payload, target ToolValue, idempotency key/proof, secret generation, approval record, or reservation identities.
+Full-consent review tests must include a grant allowing targets A and B while the frozen request targets B with payload P and the model claims A: the trusted preview must display B/P exactly, and only confirmation bound to that complete preview may authorize it. Missing payload authority, hidden source/target, mismatched digest, missing pins, changed intent, incomplete/truncated/over-budget delivery, malicious terminal escapes, an untrusted callback, and direct D6 submission without the protected event all deny without consent. Check revoke/expiry between review and both CAS points, same frozen intent after a lifecycle-only revision, interruption before/after confirmation, and saved applied replay without another user event. Neither ordinary current/history reads nor error details may leak payload, credentials, idempotency keys or protected confirmation. Implement the exact D6 association and trusted-surface event provenance; a UI checkbox disconnected from Core is insufficient.
+
 Crash/reconciliation mutants replace frozen bytes, target, key, secret generation, or effectId and must be rejected. `outcome_unknown` recovery always continues the same immutable request. D9 conversion workers retain network=denied and cannot borrow D10 egress. A D9 PublicationReceipt proves publication only; separately saving a Resource still requires the original author protocol.
 
 ## 9. Budget and cost implementation obligations
+
+Persist `CostBudgetAttribution/1` with every original reservation before every billable attempt. Rebuild all five interactive or six Automation layer projections from the original protected attribution and reservation state, with full owner/account/currency keys and retained configuration evidence. The exact algorithm, immutable Run caps, same-account grant grouping, no periodic reset, single serialization boundary, phantom protection, original-layer settlement and non-disclosure are owned by CONTROL-CONTRACT §10; an ExternalExecutionBinding or a text audit line is not a substitute.
+
+Required tests: A1/A2 share one grant/account and each Automation cap100, with A1 uncertain90; A1 new20 rejects and A2 new20 succeeds when common layers permit. Race two attempts against the same Run's last capacity. Change definition/budget/grant, restart, and settle the original90 at final20: every original layer releases70 exactly once. Remove/re-add a cap or replace a grant for the same account without resetting totals; reject different maxima for the same account within one BudgetCaps. Retire the old grant and terminate the Run, then settle under original attribution. Cover interactive model/read-only-tool billing, separately attributable multi-account groups, duplicate/fighting settlements, non-final evidence, missing/forged/partial attribution, hidden nested owners and actual above the bound. No actual product execution is claimed by this list.
 
 Cost implementation follows CONTROL-CONTRACT §6 and §9–§10 exactly. One `CostReservation/1` always names one actual account; layered Run/Lease/Automation/Workspace/deployment ceilings are checked together but are not multiple account charges. Separately attributable multi-account charges use separate reservations/evidence and must not double-count one cost. CostReservation state is `reserved→settled(actual)|released|uncertain` plus `uncertain→settled(actual)|released`. Only settled/released are terminal. uncertain retains the complete upper bound and may later recover from evidence.
 
@@ -388,7 +402,7 @@ B10-01 implementation negative gate: Adopt code paths use only the `adopt_*` con
 
 TERMINOLOGY §14 and CONTROL-CONTRACT additionally freeze R05 control records, five capability IDs, and four first-party module/package/schema mappings. Candidate code symbols/namespaces and locale keys are unimplemented mappings only; CI string presence is not implementation evidence. PackageId, D4 SemanticNamespaceId, D4 namespace ownerId, FacetId, and module ContributionId remain owner-typed and cannot be merged merely because strings match.
 
-R08 consumes two **original-owner** naming/interface gates. D8 keeps exactly nine domain concepts and thirteen kinds; every kind resolves to exactly one technical-interface owner from UPSTREAM-AMENDMENTS §8.1. Draft, Draft Projection, Draft Edit Map, Prepared Edit Binding, D2 snapshot, and D6/D7 values may be consumed/returned but never co-own the kind. In particular `d8_draft_text_replace/write` belong to their D8 interfaces while using Draft Edit Map coordinates. This mapping changes no D8 wire, IME, explicit confirmation, PreparedEditBinding/1, or Undo semantics.
+R08 consumes two **original-owner** naming/interface gates. D8 keeps exactly nine domain concepts and thirteen kinds; every kind resolves to exactly one technical-interface owner from UPSTREAM-AMENDMENTS §8.1. Draft, Draft Projection, Draft Edit Map, Prepared Edit Binding, D2 snapshot, and D6/D7 values may be consumed/returned but never co-own the kind. In particular `d8_draft_text_replace/write` belong to their D8 interfaces while using Draft Edit Map coordinates. This mapping changes no D8 wire, IME, explicit confirmation, PreparedEditBinding/2, or Undo semantics.
 
 A dirty D8 Draft is not a global Core write lock: a legal background D7 author commit may occur. D8 must queue/project the author update, preserve local input/composition, and require the later edit to rebase/reprepare or report stale under the original D8 contract. Undo may invert only its original committed edit and cannot roll back a later background commit.
 
@@ -469,7 +483,7 @@ The author implementation plan is ready for independent review only when:
 
 - CANDIDATE, CONTROL-CONTRACT, TERMINOLOGY, SCENARIO-DISPOSITIONS, UPSTREAM-AMENDMENTS, and this file agree;
 - TERMINOLOGY §13–§15 completes Intake §8.5.1 mapping for D10-owned and upstream-referenced concepts; complete D8/D9 original-owner additions live in UPSTREAM-AMENDMENTS §8 and D10 does not acquire their ownership; no TODO/"implementation decides" placeholder remains;
-- reading provenance is separated: the original author lineage records historical S49/49; this continuation author has personally completed S16/49 full reads, while D9 workers/export and templates were dependency-scoped partial reads and are not counted as full; the independent review of fixed R07 separately completed S49/49. None of these evidence sets substitutes for another;
+- reading provenance is separated: the original author lineage records historical S49/49; the historical R08 continuation author personally completed S16/49 full reads, while D9 workers/export and templates were dependency-scoped partial reads and are not counted as full; the independent review of fixed R07 separately completed S49/49. None of these evidence sets substitutes for another;
 - D6/D7/D8/D9/D3 companion amendments are clearly unactivated proposals;
 - unsupported/deferred is never written as available;
 - automatic author commit remains limited to single_field_member profile;
@@ -477,8 +491,8 @@ The author implementation plan is ready for independent review only when:
 - D1 surface/reason, D3 identity, D4 Registry, D8 confirmation, and D9 worker/publication are not silently changed;
 - every actually run evidence item is reported at its exact layer and pending items are not labeled pass.
 
-- fixed R07 complete independent review remains historical REVISE with P0=0/P1=1/P2=10; the complete R08 author revision closes none of those eleven findings by author assertion;
+- The later complete historical R08 review returned REVISE with P0=0/P1=3/P2=8; REVIEW-DISPOSITIONS records its eleven stable IDs and the distinction between limited repair review and global acceptance.
 - this outline contains obligations to implement/test, not evidence that the Core adapter, stop transaction, external transport, D8/D9 mappings, or race corpus has been executed;
-- the fixed R08 candidate is complete only when all nine bilingual pairs / 18 exact paths agree, fixed S and non-D10 paths remain unchanged, the 125 scenario IDs/classifications match, and applicable documentation/input gates pass; a fresh complete independent review still follows.
+- Completion requires all nine bilingual D10 pairs / 18 exact paths plus every actual required D1–D9 owner afterimage to agree at one immutable candidate; fixed S49 and its inventory remain unchanged; all 125 existing scenario IDs and their full obligations remain traceable, and any new cases are explicit. Applicable documentation/input checks, actual reading coverage, terminology, bilingual semantics, and every historical/current finding are assessed on that exact candidate. Old S49/49 coverage, named differential PASS results, and CI cannot be inherited as full acceptance. Zero open P0/P1, explicit disposition of remaining P2, and fresh independent global Pro acceptance are required for design freeze, which still is not implementation or release.
 
 These are candidate-completeness conditions, not an independent Gate verdict.

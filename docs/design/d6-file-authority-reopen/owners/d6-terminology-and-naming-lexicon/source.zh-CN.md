@@ -136,6 +136,7 @@ Policy/3 沿用 Policy/2全部能力，并新增：
 | structure_state | 观察 portable parent/order 与结构范围 | source/Field/write |
 | portable_frontier_state | 观察完整 Frontier/2 | decision/source/write |
 | execution_custody_admin | 管理执行责任连续性/接管 | 新approval、扩Money、作者写 |
+| d10_control_self | 有限管理自己的 D10 工作区控制记录 | 作者内容、资源或部署权限 |
 
 commit_sequence_state 在 Policy/3 中只观察指定 CommitDomain 的 domainCommitSequence。旧 Policy/2 consumer 的 Workspace-wide定义只保留历史路径，禁止把它补到新离线replica模型。
 
@@ -172,3 +173,22 @@ Frontier/2 只证明连续 sealed 因果前缀，不证明 Query 全集、payloa
 saved 决议只在当前原实际效果/结果披露范围的交付授权下重放原 bytes 或补原版本 publication/outbox，不重新执行旧业务、覆盖后来的 current source 或重复收费；planned 只恢复原冻结 plan、版本依据、pins、预算与安装状态，不新 prepare 第二 decision；unknown 与旧 pins/外部 effect/Approval/Money/执行连续责任保持原合同，不能从 current file、I、相同 hash 或重新授权猜掉。
 
 旧十一项 OPEN、U6/U7、后续 A2 自包含重建以及 A2 后另一轮 fresh Pro 全局终审继续保留，作者不能在术语稿中自行核销或接受。当前作者阅读只覆盖本任务实际读取的两份 Lexicon 与四份私人 producer，不等于固定 S 49 原输入、双语全部 owner、D10 all18 或任何独立审查已经完成。新 public names 只有在所需 replacement owner 与 consumer 共同接受后才可进入产品/API；候选目录、fixture、文档检查或 CI 本身都不表示 capability available、schema released 或 semantics activated。
+
+## 7. 仅供冲突解决的安装输入
+
+ConflictInstallInput/1 是 D6 Control §3.1.1 的受保护 installation-before 类型，不是 SourceObservation 或 SourceVersionRef。其 exact DecisionKey/conflict/key/installed-head/物理 source-metadata/generation/audience/preparation 关联无 ordinary read/write 用途，并与 D3ResolutionInputUse/1 不可分离。普通 conflict 无 current Observation 规则保持。SourceRevisionPlan/2 只为 D3 canonical-resolution managed after 定义显式内部 decoder；/1 保持 ordinary/fresh source decoder。二者使用同一 SourceStamp、当前生产域 H 和唯一 seal ChangeId。同 bytes 但所选生产版本/canonical claim 改变是真实 admission；metadata-only source-unchanged resolution 不增 H，全空且已证明的 resolved 选择为 no_op。这些是既有 Source Version/Conflict/Dependency Proof owner 下技术投影，不是新内容身份、公共 concept ID、alias 或 D6 业务 mutation owner。D3 拥有所选 lifecycle 矩阵与 canonical+native 合成效果；D7 拥有完整 /3 binding 和 preview 运输。真实已有 record 保留原 version/pin/guard/recovery 义务。当前候选与 D7 整合仍须独立接受。
+
+## 8. D10 控制、引导与连续性的联合名称
+
+实际生产者位于 D6 Control §4.3–4.4、§10.1–10.2、§16 及 Storage §7.2.1。它们是协调作者候选，不是已接受的运行功能。既有 firstFreeze 历史来源及真实保存、计划、未知记录的解码器不变。
+
+| 概念及英文名 | D6 所属技术名称 | 输入、输出与边界 |
+| --- | --- | --- |
+| D10 控制输入 / D10 Control Input | D10ControlInput/1; d10_control/1 | 消费准确 D10 稳定意图、完整分型控制图像、效果计划、依赖及固定确认要求，产生原 PreparedIntent/2 与 request/2。protocolOwner 仍为 D6，生成的 M 和后来的确认不进入自身不可变描述符。 |
+| D10 自助控制 / D10 Self Control | d10_control_self | Policy/3 中显式且仅限工作区的能力，允许认证主体管理自己的有限 D10 记录，不授作者、资源或部署权。 |
+| 调度连续性见证 / Schedule Continuity Witness | ScheduleContinuityWitness/1; ScheduleContinuityStep/1; ScheduleContinuityInvalidation/1; d6_schedule_continuity; d6_schedule_continuity_step | 消费实际完整的已注册源与控制转换及 D10 订阅语义，产生保护连续检查点，或该代永久的业务变化或缺口状态；不使用自由证明图或索引重建。 |
+| 执行连续性证明 / Execution Continuity Proof | ExecutionContinuityProof/1 | 消费完整 D10ExecutionInventory/1、真实保护屏障与备份及旧持有者隔离，绑定唯一执行责任记录，不建立第二账户或作者账本。 |
+| 工作区引导配置 / Workspace Bootstrap Profile | WorkspaceBootstrapProfile/3; d6_bootstrap_profile | 原六成员采用 wireVersion=3，固定显式 Policy/3 能力集合、完整目标 Registry 字段及不可变 family 绑定；IssuerControlPolicy 顶层仍为 /1。 |
+| 工作区引导计划 / Workspace Bootstrap Plan | WorkspaceBootstrapPlan/2; d6_workspace_bootstrap_plan | 原完整成员集合采用 wireVersion=2、profile/3 与 Policy/3，使用 D3 全 fresh 闭包和原唯一决议；D7 当前符号编码须明确 plan2，真实 plan1 历史保持原解码器。 |
+
+新增概念的代码约定在既有 Weftext.Core.Storage 命名空间使用上表准确 PascalCase 类型名和 camelCase 成员名，不设替代别名、manifest 贡献或新 CLI 命令。候选区域键依次为 storage.d10_control_input、storage.d10_control_self、storage.schedule_continuity_witness 和 storage.execution_continuity_proof；界面使用上表准确中英文概念名，不缩写。新实施禁止未列别名，但不为删别名改写历史记录或用户正文。D10 继续拥有完整记录图像、控制效果、批准使用和计次、租约准入、费用、订阅及发送记录的技术定义；D6 只消费这些准确闭合类型，不复制第二份 schema。

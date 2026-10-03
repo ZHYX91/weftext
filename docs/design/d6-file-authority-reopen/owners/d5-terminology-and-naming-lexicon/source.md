@@ -18,6 +18,8 @@ D5 owns structural terminology for Document Table and Node Collection only. D4 F
 
 The bare word row is always qualified by domain: Document Table Row, Node Collection result row, or external import row are not identity-equivalent. A tabular UI never transfers terminology ownership across those domains.
 
+These restrictions govern controlled product UI, API/wire, code identifiers, CLI and locale keys. They do not ban user prose, third-party formats using the word record, or explicitly identified historical/counterexample discussion. Such material never registers a Weftext identity alias.
+
 ## 2. Complete controlled concepts
 
 | conceptId | canonical names | owner/layer | definition and exclusion | owned wire/code | UI/locale | firstFreeze |
@@ -41,11 +43,33 @@ The bare word row is always qualified by domain: Document Table Row, Node Collec
 - Query `take` is semantic membership limiting; transport page size is not.
 - row number/ordinal/locator is never durable identity.
 
+### 3.1 Complete Record retirement
+
+Retire the active controlled names RecordRef, RecordCollectionRef, RecordId, RecordCollectionId, RecordSet, record_ref, record_collection_ref and record_set, together with recordCollection(...), the records Query domain and row.record.fields. Remove their complete active decoder/parameter/scan/schema/equality/group/distinct/cache/export/provenance/View Action/import branches and dedicated permissions/capabilities. Deleting only a selector label while retaining its execution domain fails retirement. None becomes an alias or coercion for NodeRef. Original decoders and bytes needed by real saved/planned/unknown records retain their original recovery duty; mere prototype/decoder existence is no deployment evidence.
+
+### 3.2 Cross-stage collision matrix
+
+| ambiguous surface | required distinction |
+|---|---|
+| Profile | D2 WeftextAsciiDocProfile is syntax admission, never a D4 Facet |
+| type/class/schema/facet/role | D4 owns their distinct schema, semantic and Facet meanings; a display column is not a type declaration |
+| plugin/module/pack/provider | qualify the actual D10 contribution/runtime/provider domain; no generic interchangeable module |
+| Template/default/export template | one-shot revision-bound construction, initial defaults and Office export mapping are separate |
+| Node/Document/Record/occurrence | durable Node identity, its Document, retired Record domain and nonidentity occurrence are distinct |
+| attribute/field/metadata | a D2 header attribute is not a D4 Field, and a table cell is not a Field or portable control fact |
+| relation/link/ref/citation | canonical relation fact and inverse presentation are one authored fact; literal value creates no entity edge, and a row link creates no RecordRef |
+| Resource/attachment/file | CSV/XLSX may be opaque Resource bytes; a preview row gains no new author identity |
+| Calendar/event/period/journal | series, derived occurrence, scholarly journal and Diary are distinct domains |
+| calendar system/view/source | date rules, presentation layout and external source authority are distinct |
+| assertion/state/observation/repeatable/relation | a shared editor does not merge their D4 semantics or overwrite history |
+| occurrenceKey/Locator/Ref | current value selector, revision-bound Document locator and durable entity reference are distinct; permanent Field-occurrence Annotation needs an explicit upstream reopen |
+
+
 ## 4. D6-FA imported names
 
 | name | owner | D5 use | not |
 |---|---|---|---|
-| SourceVersion/2 | D6 | production table/source version and inner-revision binding | row identity or current-observation token |
+| SourceVersion/2 | D6 | complete managed/external production version; only managed has an inner integer | row identity or current-observation token |
 | SourceObservation/1 | D6 | complete current protected source-observation qualification | production SourceVersion or row identity |
 | SourceVersionRef/1 | D6 | sourceToken selects the complete current Observation | bare revision/hash/I continuity |
 | InputDescriptor/2 | D6 | sourceInputs[].observation carries the current Observation | D5 plan or row identity |
@@ -55,7 +79,11 @@ The bare word row is always qualified by domain: Document Table Row, Node Collec
 | ConflictRecord | D6 | source/placement/lifecycle conflict | Record domain |
 | NodeRef | D3 | collection-member identity | collection membership fact |
 | Field Value Occurrence | D4 | source for row-like Field editor | table row |
-| future PreparedActionBinding | D7 | strong collection/bulk preparation | D5-owned token |
+| PreparedActionBinding | D7 | actual versioned strong preparation and original-record recovery | D5-owned token |
+| RevisionTokenBinding/2 + RevisionTokenSource/2 | D6 | protected opaque token selects tagged managed stamp or external version | D4 integer or portable requalification rule |
+| SourceRevisionPlan/1 + SourceStamp/1 | D6 | original frozen proposed managed-after basis | sealed current source or independent D5 allocator |
+| DependencyProof/2 + DependencyKey/2 | D6 with actual range owners | fourteen closed keys and nine placement StructureRange variants | partial index or inferred complete-empty scope |
+| ContentCompletionProof/3 | D6 | sealed portable effects with real production before/after | sender current-observation token or new execution authority |
 
 D5 registers none of these imported names as owned aliases and introduces no durable TableRowId, RecordRef, CollectionRef, or other row/Record/Collection identity.
 
@@ -63,14 +91,19 @@ SourceVersion/2 remains the production version/history: the managed variant reta
 
 A watcher gap, replacement, or discontinuous rematerialization invalidates the old sourceToken and any D5 locator dependent on that observation even when the production SourceVersion is unchanged; I cannot restore this qualification. SourceObservation/1 is additional outer current-observation protection and does not replace existing D5/D4 inner sourceRevision, OccurrenceKey, Entry selector, or revision-bound locator wire.
 
+The opaque D3/D5 Locator revision token resolves through RevisionTokenBinding/2 and its tagged RevisionTokenSource/2; managed and external are both real source alternatives. D4 numeric inner sourceRevision instead requires a real managed production revision. External externalSequence never supplies that integer. Only a path that truly needs the managed inner selector first performs explicit authorized admission/save and then prepares a new request after seal; raw/read/repair/Draft/ordinary remain independently qualified, with no read-time auto-write or guessed revision after unknown admission.
+
+H(D,E) is D6's continuous sealed production-domain history, not a new D5 counter. A new managed after consumes the same plan's SourceRevisionPlan and checked H+1; epochs do not reset H and foreign revisions/externalSequence do not donate values. True raw no-op and unchanged-source owners retain their complete old basis, with no new source version/H increment; equal-byte external admission produces a real managed after. Portable effects and current Observation remain separate.
+
+Under the owner's exact policy, Frontier must match. A permitted scope_dependencies path may retain its original plan only through a continuously verified sealed unrelated extension with unchanged original observations, pins, control/auth/Registry and complete positive/negative dependencies, and retained P proof; it rewrites no original baseline or token. D3 managed_atomic remains exact and D7 whole-result resets are not weakened.
+
 Frontier/2 represents only a sealed causal/dependency prefix and the corresponding proof cut; it does not by itself prove a complete Query, Registry completeness, or payload materialization. Historical Frontier/1 decoders, old saved bytes, and other historical recovery remain interpreted under their original versions and are not mechanically rewritten as Frontier/2.
 
 Ordinary semantics and strict|observed_only save protection are independent axes, and ordinary may use strict. Absence of an unrelated complete index or whole-Workspace Query never grants weak protection. Only a human whole-source save of an existing live Document satisfying every A §4.1 condition may explicitly select observed_only before planning starts and freeze that profile: trusted interactive_source_save, exactly one existing live Document, ordinary + replica_local, complete source read/replace, author write set empty or limited to that Document, no applicable body/Field/Node-control deny, no identity/parent/order/lifecycle/shared-policy/Registry/Calendar-scope/other-entity mutation, and DraftBase equal to the selected current Observation. Structured, bulk, collection, promotion, Automation, server checkpoint, Approval, Money, and every strong Action cannot use weak protection; strict failure or a known conflict, authorization, durability, or strong-obligation failure never falls back to weak.
 
 observed_only durability for B/N, installation of N potentially overwriting an unobserved external C, a later C potentially replacing the current file again, observed competition or gaps requiring conflict/reprepare, and unknown install entering recovery_unknown remain defined by D6; D5 defines no new save guarantee. semantic_pending(collection) means only that complete collection proof is missing, not empty, and never converts typed invalid, source invalid, or missing strong evidence into success or authorizes Action, all_result, bulk, or Automation. A later r6 proof applies only to r6 under its current Observation/SourceVersion/cut and does not rewrite the historical r5 receipt.
 
-ConflictRecord remains D6-owned, NodeRef remains D3-owned, and Field Value Occurrence remains D4-owned. Future PreparedActionBinding remains D7-owned; until the new D7 Prepared contract is frozen, strong collection/bulk entry points remain unavailable/owner_update_required and D5 creates no replacement token.
-## 5. Compatibility and Gate
+ConflictRecord remains D6-owned, NodeRef D3-owned, Field Value Occurrence D4-owned, and PreparedActionBinding D7-owned. Current complete-result/preparation producers remain an explicit internal coordination dependency, as does portable Locator qualification on another replica. D5 invents neither contract. Only an affected unseen strong path lacking its actual producer is unavailable/owner_update_required; real saved/planned/unknown records first follow common disclosure/domain/custody continuity and original key/fingerprint lookup, then exact saved delivery or original-plan recovery. Native D3 wire12 has no D6 planToken/PreparedIntent; only D6 d6_commit_request/2 declares those preparation inputs. No new owner gate reexecutes an old decision or changes its bytes.
 
 Mechanically prove exact preservation of all six fixed-S conceptIds, owners, owned wire/code/UI/locale names, and firstFreeze values. There is no new public `TableRowId|RecordRef|CollectionRef|ViewRef`.
 

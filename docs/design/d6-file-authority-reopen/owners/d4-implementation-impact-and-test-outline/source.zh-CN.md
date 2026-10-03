@@ -9,24 +9,26 @@ translation_status: source
 
 # D4 Implementation Impact and Test Outline — D6-FA-r01
 
-候选状态：D6-FA-r01；partial coordinated candidate；未接受、未激活、未实现。固定 S 的 revision37 preservation / revision36 admission / revision35 integration 义务全部保留；本文件增加 D6-FA-r01 的 SourceVersion/2、SemanticState 和 local-vs-complete 消费验证，不把历史运行当作新版本通过。
+候选状态：D6-FA-r01；P2 协调作者候选；未接受、未激活、未实现。固定 S 的 revision37 preservation / revision36 admission / revision35 integration 义务全部保留；本文件增加 D6-FA-r01 的 SourceVersion/2、SemanticState 和 local-vs-complete 消费验证，不把历史运行当作新版本通过。
 
 ## 1. implementation effect graph
 
 ~~~text
-D2 exact source
-  -> D4 carrier/Entry decode
-  -> RegistryBinding
+D6/D3 outer visibility/permission + authorized ObservationScope/2 upper bound
+  -> outer namespace owner + RegistryBinding/schema/contribution availability
+  -> authenticated Registry/catalog context
+  -> qualified SourceObservation/1 + SourceVersionRef/1 (current source input)
+       containing SourceVersion/2 (production version, not currentness alone)
+  -> D2 exact source + raw carrier/span extraction
+  -> D4 strict Entry decode
   -> TypeSpec / qualifiers / provenance
   -> declared/effective Facet closure
-  -> relation / Calendar / catalog validation
+  -> authorized relation / Calendar / catalog validation
   -> D4 proposed semantic state
-       -> D6 InputDescriptor/2
-       -> SourceVersion/2 (production version)
-       -> SourceObservation/1 + SourceVersionRef/1 (current observation qualification)
-       -> ObservationScope/2 + DependencyProof/2 + Frontier/2 (current proof cut)
-       -> D6 ordinary or complete qualification
-       -> strict or A§4.1-qualified observed_only protection choice
+       -> D6 InputDescriptor/2 + actual DependencyProof/2 + Frontier/2 proof cut
+       -> operation-applicable ordinary or complete semantic qualification
+       -> strict or fully A§4.1-qualified human observed_only choice BEFORE planning
+       -> planning CAS freezes protection; no fallback after planning starts
        -> file install + P seal
        -> portable publication
   -> D7 future complete Query/Action consumer
@@ -91,7 +93,7 @@ Facet mutation、relation mutation、series-scope unique、typed copy/fork/impor
 
 `observed_only` 只耐久保留已观察 before B 与用户输入 N。未来外部 C 可能在未被观察时存在，N 安装可能覆盖当前文件中的 C 字节；后续 C 也可能替换当前文件 N，但不丢弃已耐久的 B/N。prepare only 不是 Saved；unknown install 保持 `recovery_unknown`；observed competition、stale Base、watcher gap 和 continuity gap 进入 conflict/reprepare。
 
-D7 新版 Prepared 尚未定义时，需要 D7 complete preparation 的入口固定 unavailable/owner_update_required；D4 不得增加私有准备 token。
+只有真正依赖未完成 D7 consumer 的新 unseen 强入口才是 unavailable/owner_update_required；实际 saved/planned/unknown 记录先按原合同恢复；D4 不得增加私有准备 token。
 
 ## 4. test outline
 
@@ -388,8 +390,7 @@ Facet继续覆盖 source reorder semantic equality、
 
 text↔NodeRef、NodeRef→text、NodeRef→NodeRef必须绑定完整before/after owner revisions、
   canonical-owner relocation和stable occurrenceKey。
-  任一CAS/auth/collision/cardinality/lifecycle/projection failure逐字回滚raw source、
-  revision、projection和allocation且write set为空。
+  任何 CAS、授权、冲突、数量、生命周期或投影失败，都逐字回滚适用 D4 拟议源、revision 和 projection，write set 为空；不抹除原 D3 分配、预留、烧号或 custody 历史。
 
 expectedSourceRevisions必须是D3Integer，7.0不得等于7，true不得等于1。sourceRevisionOwners只覆盖source-bearing inventory；sourceless endpoint不得伪造revision。
 
@@ -514,7 +515,7 @@ recursive provenance diagnostic覆盖external/node/resource/transform及nested r
 
 D4SourceMaterializationEffects/1必须由真实source assembly独立复核：跨同namespace carriers定位Field尾、Field缺席使用绑定carrier、先迁出/迁入再删除空carrier、same-owner原位更新、多迁入canonical排序、comments/CRLF/unknown namespace/unselected raw保持。before/after不能从待验effect反推。
 
-fresh Create验证result revision=1；revision0假前像、结果2、缺/重复initial Entry、existing owner冒用fresh origin全部拒绝。普通existing改写仍只+1。
+当前新路径 Create 验证同一冻结 SourceRevisionPlan.after.revision；只有生产域 H 历史已证明为空才得到1。拒绝虚构 revision0、偏离冻结计划的结果、缺失或重复 initial Entry、既有 owner 冒用 fresh origin。既有源改写使用该生产域检查后的 H+1，不能任取 before+1；no-op/source-unchanged 保留已经存在的完整托管来源版本，不产生新的 managed after 或 SourceRevisionPlan；deletion 不产生 managed after。固定 S 的 fresh=1/old+1 只用于确实存在且按原分配器恢复的历史记录。
 
 ### 9.10 fixed-S 版本义务到 D6-FA-r01 的映射
 
@@ -531,3 +532,33 @@ D6 `ObservationScope/2` 与权限遮蔽仍要求无权隐藏状态得到同一 `
 这些项目全部是当前候选的未来conformance义务。纯Python/model结果、historical fixture count、文档CI、作者自查都不证明产品host、D6物理事务、D7新Prepared、D8 UI或D9/D10已实现。
 
 旧D10 B13仍REVISE、术语/双语FAIL、11 OPEN。
+
+## 10. P2 当前 producer 验证与完整场景映射
+
+主文 §§2–17 是被验证的精确合同；其 §14.1 与本文件 §9 共同保留全部强制类别和原十五项当前路径案例。验证必须比较真实完整源、独立重建的 effects、精确诊断序列/readSet/writeSet 及原 owner outcome；仅照抄自身 request/effect 的模型不是独立证据。固定57项 A2 行、125行矩阵和302条命题保持可追溯证据义务，涵盖全部 D5/D7/D8/D9/D10 consumer 门及七插件入口；未提供的外部场景工件明确记缺口。适用 executable-model、contract-check、integrity-check、contract-review 都保留要求的独立语义审查。历史 fixture 数量和工件 hash 不证明新 consumer 成功。
+
+新增必需案例与组件改动：
+
+1. Registry 加载器实现共同点分命名空间、Field/Facet/code 解码器，完整不可变 RegistrySnapshot/Binding/Evolution 与 ValidatedCatalogContext，以及七类贡献身份。policyId 在同 snapshot 中验证 owner，policyVersion 非空，policySchemaDigest 对完整闭合 CalendarSeriesScopePolicy/1 先做 D3-CJ/3 再做 SHA-256。覆盖同 generation 替换、policy 子集 digest、owner 错误、语义漂移、tombstone 和禁止复活。
+2. 源适配器区分生产 CommitDomain/epoch 与 observerDomain/当前 epoch，允许外来生产域配合法当前 Observation，禁止 externalSequence 充当 inner revision。覆盖 H 跨生产 epoch、跨域返回、真实空历史与缺失历史、MAX、真 no-op、源不变可移植结构、删除 absent-after、等字节 external admission 仍产生真实托管版本。
+3. 每个托管 after plan 在 SourceRevisionPlan/1 中冻结真实 before/lastIssued/after/afterPin，包括受信 fresh absence 和 after 域观察代。D4 消费该拟议 revision 与原 candidate map；重试和重启保持 RevisionTokenBinding/2 精确标签分支及稳定 key，ABA/gap/新观察代使旧绑定失效。seal 前拟议 stamp/token 不是 current。Q 两遍保存定义物化与 D4 C/来源变换共用一个最终 source、revision、pin、seal，不二次采样身份或 revision。
+4. 由实际 owner 实现并独立覆盖十四种 DependencyKey、九种 StructureRange，每项操作只使用适用 key。D4 证明完整正/负/空 incidence、Calendar binding/series/period/scope-inbound、完整 Registry 和有限时间规则覆盖。当前披露先于枚举。区分删除 I 缓存与真实正确性证据丢失，覆盖完整证据下 epoch 不变、gap 后新 epoch、独立 absent/configuration/empty stamp、隐藏双世界和 incomplete/unavailable 不得空成功。
+5. scope_dependencies 要求完整连续 seal 延伸链、所有绑定 source/control/auth/Registry/rules/ranges 不变，以及已保留的无关性证明；只有向量增大不够。原 request/base Frontier/proof/pins/targets/writeProtection/版本基准全部冻结。已写组件比较原计划 after，未写依赖比较原 before/cut，覆盖合法无关推进和每种真实依赖变化。
+6. 新可移植发布消费 ContentCompletionProof/3 的生产前后版本、真实 seal ChangeId 和精确 Notice 组件集，接收者建立自己的 Observation。覆盖 absent 删除、源不变且 sourceChanges 为空、external admission、无成功语义的 restored、历史 /1,/2 重放、ConflictRecord/2 与 /1 及不变 ConflictId、seal 后发布失败不得重复安装/收费/推进 H。Notice baseFrontier 可以含历史 seal head，但不能含本次尚未 seal decision 的新 ChangeId。
+7. 覆盖全部弱资格与 U4 时序：人工在 planning 前选择，从 planning 开始冻结，strict 失败不降级。最终检查后未观察 C 可能丢失，但实际 B/N 保留；已知竞争/gap/stale Base/撤权不在弱放宽内。prepare 只表示 retained，不是 Saved；安装未知保留 pins/recovery_unknown。strict/observed_only 与 ordinary/complete 相互独立；D3 结构/Trash、D5 结构化 cell/row/column/reorder、D4 强操作、bulk/collection/promotion、D7 Action/Automation、server checkpoint、Approval、Money 保持 strict。本地 invalidity/cardinality/requiredness/deny/unavailable 不能洗为 pending。
+8. 验证共同原 profile 披露、domain/fence/trust/P-custody 和实际版本 request/fingerprint/protocolOwner 定位先于 saved/planned/unseen。saved 返回经过当前授权的原 receipt/error/effects 或恢复原 outbox，不重新要求旧 current、TTL 或新 consumer。planned 恢复原 candidate map/版本计划/pins/reservations/Notice/budget/attempt/TTL-clock/安装状态，只继续该 plan。unknown 保留原 pins、Approval/Money/claim/outbox/stop 及不重复 effect 责任；文件/hash/I/空 DB 不得猜结果、允许重试、退款或重置。原生 D3 unseen 请求遵循真实类型请求及 owner 阶段；D6 planToken/PreparedIntent 资格只由 D6 prepared-submit 路径或真实适用 preparation 合同要求，不向 D3 wire12 添加字段。
+9. 完整覆盖主文 §10 正向目录规则和 §4 精确 TypeSpec：别名缺席标签语义；People 名称、account preset/custom、冲突事件/状态及任职 rank；全部 Organization 标量/关系和 Library work/venue/version；Calendar selector 默认、精确时间排序/覆盖、rebase/例外/horizon/预算及 policy proof；可用性后独立诊断聚合，envelope 缺一个或多个成员只报一项 invalid_entry_json，嵌套缺成员 pointer/span，以及 D4 回滚保留独立 D3 reservation/burn 历史。
+
+本文件不声称所列 fixture 已运行。产品文件系统或安装证明、适配器行为、真实桌面/服务测试、性能、新 D7 完整 consumer、D10 上游接受和全新完整独立联合审查仍是独立证据门。A2 已获人类授权，在这些门通过后执行，之后另由全新普通 Chat Pro 全局终审并形成冻结启动包；本文不启动产品实现、不关闭11项 OPEN 或 U6/U7。
+
+六个具名边界还要求后续一致性证据：until=anchor 以及 until 恰等于后续基础起始时间时，都包含该次出现；monthly byWeekday=monday 应得到所选月份内全部匹配星期一，包括同月多次匹配。混合新建或修改操作中的未变化 C owner 即使来自外生产域，也保留完整版本、字节及内层 revision，仍列入效果且不为它创建来源计划；借用另一 owner 的计划必须失败。Cleanup 只接受二键选择器，并绑定独立的三键前态 Entry 引用；在选择器添加 rawEntrySource 必须拒绝。measurement_unit_dimension 是唯一合法名称，改名别名必须拒绝，height+kg 仍非法。预检需有调用观测：不可用命名空间的 malformed raw Entry 触发零次内部解析；仅隐藏 Calendar 成员不同的两个世界，在获权观察范围门通过前均为零隐藏业务读取。保护选择在 planning 前冻结，失败后不得降级。这些是应验证用例，不是已运行的测试结果。
+
+## 11. 保留的源保护与验证方法
+
+revision35–37 的有效义务继续落实为具体未来检查。关系更新和重复规则编辑保留与结果脱离的完整前态，不经过编码或 JSON 往返；有序替换使用同一无损复制方法。无关不可用 raw 文本保持不透明，不新增整个状态或操作的字节上限。复制效果验证先确定精确有序清单与身份，再与独立接纳的预期源比较 raw 前后像，最后比较类型 JSON 结构。Boolean/整数、数组顺序严格区分；字典顺序影响状态保留，但不影响语义对象相等。解码 Entry 缓存使用共享类型比较器，不能先编码未验证缓存。
+
+记录真实 parser/span/materializer 和源编码器、状态往返解码器的调用，覆盖小型合法对照、早期遮蔽失败、字节边界、重复别名、独立规范编码成本、非 bootstrap 完整后继定义、声明不符、结果脱离和精确 raw/成员顺序。有序变换先于共同后态验证。保留全部24个可重复关系 Field、历史76项顺序/方向/迁移情况、196项公共 Create/Assign 约束组合及21项构造器定位/拒绝案例作为义务，不声称历史运行认证了本版本。已有错误 kind 定位其 token，缺 kind 定位最近容器，非对象定位自身；独立同级分支继续验证，不可用的内部构造器保持不透明。
+
+完整版本桥覆盖还保留 row/checklist promotion、创建 Resource 并改既有出现项、既有 Annotation reply 指向同 owner 新 reply、归 D6 的纯既有 upsert、混合 D3 批次、fresh Task SCC、完整 Template、C carrier 物化、S fresh reply、全部类型化 provenance/Locator 根、同源 revision 和实际授权/custody。真实 D3 回执数组和当前 mode 解码器仍归 D3。不能从待验 effect 反推预期源。覆盖安全失败、撤权、ABA、冲突、崩溃、重放、水位及公共操作入口，源 owner 不符必须在解析前失败且不产生新写入。
+
+历史可重现义务保留 operation-world 来源语料、独立预期 case ID/disposition/closure/testScope 和独立案例生成器；缺少生成输出时须重建为相同字节。normal、-O、-OO 的验证器输出一致。使用该历史语料时，隔离的 d4_relation_state.py、d4_relation_test_support.py 仍是必需输入；写出名称不证明它们存在于本仓库或已经运行。新的包装或命题 hash 不能替代完整源比较及独立语义审查。当前产品源、受保护用户 checkout 和无关资产不在本次作者范围。D6 bootstrap、scope 迁移/配置删除/控制入向及 D7 窄 Field、DefinitionTransfer、effects 仍需真实 owner 资格和完整未来测试；历史 H2 profile 不能仅凭名字成为当前权威。

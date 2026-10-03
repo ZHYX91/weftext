@@ -8,7 +8,7 @@ translation_status: synced
 
 # D10 Coordinated Upstream Amendment Proposal
 
-revision: D10-r08-joint-review-fixes-2026-09-28; status: companion upstream-amendment proposal synchronized to the complete R08 author candidate. Fixed S remains authoritative and byte-unchanged. The proposal is inactive and all eleven R08 findings remain open until the fixed R08 candidate receives a fresh complete independent joint review and later coordinated acceptance/versioning/activation.
+revision: D10-FA-r01-2026-10-02; status: coordinated author candidate, not accepted, activated, or implemented. The last complete historical R08 review of C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=3, P2=8). All eleven historical final dispositions remain OPEN. Named repairs have limited independent reviews; actual cross-owner integration and fresh global acceptance remain incomplete. REVIEW-DISPOSITIONS separates those evidence scopes.
 
 ## 1. Purpose and unchanged boundaries
 
@@ -22,15 +22,15 @@ This proposal still opens only one narrow automatic author profile from the D10 
 
 The following remain unchanged:
 
-- D3 wireVersion11, Result/9, modes, identity/lifecycle stages, and receipts;
-- exact shapes of D6 `d6_commit_request` and `d6_commit_receipt`, the Workspace+OperationId ledger key, and the unique author commit point;
-- exact shapes of D7 `ActionSpec`, `d7_action_prepare`, `d7_action_prepared`, and `PreparedActionBinding/2`;
-- D7 `EffectManifest/1`, EffectBytes item/schema, and committed transport;
-- D8 `PreparedEditBinding/1`, Draft/IME/explicit confirmation;
+- D3 wireVersion12, Result/9, modes, identity/lifecycle steps, and receipts;
+- current wireVersion=2 exact shapes of D6 `d6_commit_request` and `d6_commit_receipt`, the DecisionKey/2 `(Workspace, CommitDomain, OperationId)` ledger key, and the unique author commit point;
+- exact shapes of D7 `ActionSpec`, `d7_action_prepare`, `d7_action_prepared`, and `PreparedActionBinding/3`;
+- D7 `EffectManifest/2`, EffectBytes item/schema, and committed transport;
+- D8 `PreparedEditBinding/2`, Draft/IME/explicit confirmation;
 - D4 Registry, D7 Narrow Field Qualification, and D6 Policy/ObservationScope;
 - existing current authorization, deny precedence, non-disclosure, authority/fence, dependency CAS, replay, and planned recovery.
 
-The D6 `d6_error` object shape and disposition set remain, but the first jointly specified public unattended author-submit contract needs coordinated closed-set additions `approval_unavailable` and `execution_stopped`. Both are real closed-enum extensions rather than overloaded existing errors, and they create no anonymous old/new D10 error profile. D7 Preview/Effects needs a planned-only read-only recovery entrypoint while existing `d7_effects_resolve/open` remains committed-only. R05 also proposes Policy/2 `d10_control_self`, freezing the original non-Field set for bootstrap profile/2, and explicit profile/3. These remain design proposals: independent acceptance/coordinated activation is not product implementation or D1 capability availability.
+The D6 `d6_error` object shape and disposition set remain, but the first jointly specified public unattended author-submit contract needs coordinated closed-set additions `approval_unavailable` and `execution_stopped`. Both are real closed-enum extensions rather than overloaded existing errors, and they create no anonymous old/new D10 error profile. D7 Preview/Effects needs a planned-only read-only recovery entrypoint while existing `d7_effects_resolve/open` remains committed-only. This current coordination proposes Policy/3 `d10_control_self`, freezing the original non-Field set for bootstrap profile/2, and explicit profile/3. These remain design proposals: independent acceptance/coordinated activation is not product implementation or D1 capability availability.
 
 ## 2. D6 Storage Transactions Permissions and Sync — proposed additions
 
@@ -48,7 +48,7 @@ Add after the D6 main-document current `PrincipalContext`, generation, and revoc
 
 Add near the unique D6 author commit point and planning/commit dependency revalidation rules:
 
-> For a D6-owned Action using D10 Standing Approval, after D7 prepare completes, Core independently constructs managed `ApprovalUse/1` from the saved PreparedActionBinding/2, complete owner_fields preview, actual MutationFootprint, current D6 authorization, and current D10 control records. The client still holds only the original `d6_commit_request`; it cannot add approved, approvalId, delegation, proof, budget override, or effect override to the request.
+> For a D6-owned Action using D10 Standing Approval, after D7 prepare completes, Core independently constructs managed `ApprovalUse/1` from the saved PreparedActionBinding/3, complete owner_fields preview, actual MutationFootprint, current D6 authorization, and current D10 control records. The client still holds only the original `d6_commit_request`; it cannot add approved, approvalId, delegation, proof, budget override, or effect override to the request.
 >
 > `ApprovalUse/1` immutably binds approvalId/revision, Run/step, complete canonical D6 request, planToken, corresponding PreparedActionBinding, complete preview semantic binding, actual footprint proof, DelegationLease/ActivationBinding, approval-count reservation, and every applicable budget/cost reservation. It is additional authorization evidence, not a second author plan, second ledger, receipt, or capability token.
 >
@@ -67,7 +67,7 @@ Add the following error contract to both the D6 main document and Control Interf
 
 > Before formal `d6_commit_request` entry, the D10 adapter may return D10 approval_required, approval_expired, delegation_expired, or delegation_exhausted from already observable control state. That probe does not eliminate later races.
 >
-> Once the unattended path has associated ApprovalUse as an internal dependency of the original planToken and entered D6, exactly one case uses new `d6_error.code="approval_unavailable"`, always with disposition `preflight`: the approval dependency becomes unusable in a race while original D6 current author authorization/ObservationScope and applicable business visibility still hold.
+> Once a named D10 path has associated its protected approval dependency with the original planToken and entered D6, new `d6_error.code="approval_unavailable"`, always with disposition `preflight`, applies when that dependency is absent or unusable while original D6 current authorization/ObservationScope and applicable business visibility still hold. The two closed profiles are Standing Approval for the single-field-member action and the original external-consent control plan's trusted confirmation defined below; neither creates a generic client-asserted approval field.
 >
 > Original D6 permission failure remains `not_visible/preflight`; business dependency, semantic, budget, authority, and integrity failures keep their original code/disposition and cannot be masked by `approval_unavailable`.
 >
@@ -75,7 +75,9 @@ Add the following error contract to both the D6 main document and Control Interf
 >
 > The D10 adapter passes this D6 error through verbatim. UI that wants to distinguish revoked, expired, or race-lost approval performs a separately authorized D10 control read and does not smuggle control detail through the author error.
 >
-> This is part of the first jointly specified public D6-Control/1 unattended author-submit error set. Fixed-S D6 is an unpublished design contract rather than an already deployed old D10 profile. Any component combination that can enter the formal branch supports the same closed set; incompatible combinations are rejected at the D1 capability/version gate. Policy/1/2, bootstrap profile/1/2, and historical saved-decision decoders remain unchanged.
+> This is part of the first jointly specified public D6-Control/2 unattended author-submit error set. Fixed-S D6 is an unpublished design contract rather than an already deployed old D10 profile. Any component combination that can enter the formal branch supports the same closed set; incompatible combinations are rejected at the D1 capability/version gate. Policy/1/2, bootstrap profile/1/2, and historical saved-decision decoders remain unchanged.
+
+The external-consent control path additionally consumes the exact protected `ExternalConsentConfirmation/1` defined in CONTROL-CONTRACT §7. Its original D6 control plan must bind the original ControlPrepareBinding, full immutable review, and trusted current confirmation as an eligibility dependency at both planning and final commit. The direct original request cannot bypass it. Before submission the trusted surface waits for the explicit user event; it defines no new public Workspace-commit response. After D6 entry, a missing/unusable confirmation with original authorization and business gates otherwise satisfied uses the same `approval_unavailable/preflight` rule, preserving planned and all original recovery pins. Current disclosure denial retains not_visible precedence. Saved consent replays before fresh confirmation gates. This adds no Standing Approval profile for external mutation, no author request field, and no second decision; the external transport still has its separate send fence.
 
 ### 2.4 planned CAS atomically reserves
 
@@ -85,7 +87,7 @@ Extend D6 planned CAS:
 >
 > Only when all are true may the same database write transaction store planned, the complete fixed plan/pins, ApprovalUse count `unreserved→reserved`, and related resource reservations. Two requests racing for the last approval count or budget produce at most one winner; the loser returns to the original restart gate and cannot reuse a previously observed balance.
 >
-> Replay of the same canonical Workspace+OperationId request remains bound to the same reservation and never reserves twice. Temporary ApprovalUse that never reaches planned may expire with preparation lifetime. Once referenced by planned, the approval reservation and recovery pins follow original ledger-recovery lifetime and are not reclaimed by preview TTL, Agent-session exit, or ordinary cache GC.
+> Replay of the same canonical DecisionKey/2 `(Workspace, CommitDomain, OperationId)` request remains bound to the same reservation and never reserves twice. Temporary ApprovalUse that never reaches planned may expire with preparation lifetime. Once referenced by planned, the approval reservation and recovery pins follow original ledger-recovery lifetime and are not reclaimed by preview TTL, Agent-session exit, or ordinary cache GC.
 
 ### 2.5 final author commit, terminal release, and replay
 
@@ -107,48 +109,55 @@ Extend D6 final transaction and recovery:
 
 ### 3.1 PreparedIntent producer classification
 
-After §2's paragraph describing valid closed adapters that produce managed PreparedIntent, add:
+At the current D6 Control §3.6 managed PreparedIntent producer boundary, add:
 
-> D10 Broker itself is not a PreparedIntent producer. A D10 Agent/Automation workspace mutation can only call an existing D7/D8/Core closed adapter. For `single_field_member`, D7 prepare first produces PreparedActionBinding/2, PreparedIntent, preview, and the original `d6_commit_request` under its normal contract; only then may a Core-managed D10 approval adapter build ApprovalUse from protected records. D10 runtime cannot directly construct PreparedIntent, MutationFootprint, source bytes, or proof.
+> D10 Broker itself is not a PreparedIntent producer. A D10 Agent/Automation workspace mutation can only call an existing D7/D8/Core closed adapter. For `single_field_member`, D7 prepare first produces PreparedActionBinding/3, PreparedIntent, preview, and the original `d6_commit_request` under its normal contract; only then may a Core-managed D10 approval adapter build ApprovalUse from protected records. D10 runtime cannot directly construct PreparedIntent, MutationFootprint, source bytes, or proof.
 >
 > ApprovalUse changes no exact `d6_commit_request` member, canonical request key, planToken tag, protocolOwner, or ledger key. It is associated with the original planToken only through protected internal records; no external caller can append an approval field.
 
-### 3.2 Complete additions to §2 steps 5–8
+### 3.2 Additions at the actual D6 Control §5 boundaries
 
-For the D10 standing-approval profile, original steps 1–8 remain with these additions only:
+The current D6 owner has fourteen ordered steps; the old S eight-step numbering is not the current algorithm. Keep closed decode, current disclosure/ObservationScope, domain/fence/custody, and full original DecisionKey/request comparison before new D10 business gates. At step 4, saved results replay under current result authority before any fresh approval or stop eligibility. Planned records restore only their original plan/pins/reservations.
 
-> **Step 5 addition:** after resolving this principal's planToken, when the unattended path has associated ApprovalUse, use only the already authorized minimal control mapping to locate its profile/record. missing, wrong audience, or wrong Workspace stays `not_visible`. Complete ApprovalUse is read only after current D6 authorization/ObservationScope passes.
->
-> **Step 6 addition:** besides original business dependency, semantic, and budget validation, verify both `single_field_member` effect branches, current approval/delegation/activation, and count/cost reservation candidate. If original D6 permission or business semantics fail, return the original owner error. Only when those still hold and ApprovalUse alone cannot be consumed return `d6_error approval_unavailable/preflight`. An unseen request writes no decision.
->
-> **Step 7 addition:** planned CAS atomically stores plan/pins and changes ApprovalUse count `unreserved→reserved`; a CAS loser returns to original step 3. No reservation creates author effects early.
->
-> **Step 8 addition:** before planned recovery or final author commit, recheck current D6 authorization and current approval eligibility. If approval alone is unavailable, return `approval_unavailable/preflight` and keep planned. Deterministic business conflict follows the original terminal_failed rules. Successful commit changes count `reserved→consumed` in the same transaction; authoritative terminal_failed changes it `reserved→released_terminal` in the same abort transaction.
+At unseen step 5, after authorized planToken resolution, use only the protected minimal mapping to locate the named approval/Run/confirmation requirement. Missing/wrong-audience/wrong-Workspace mappings keep the original not_visible rule. The complete protected record is read only after current original authorization. At step 6, preserve original business, dependency, semantic and budget errors before checking the exact single_field_member effect branch, current approval/delegation/activation, complete external-consent confirmation when applicable, and count/cost reservation candidates. An otherwise eligible named approval dependency that cannot be consumed returns approval_unavailable/preflight, with no unseen decision.
 
-### 3.3 Exact extension of §3 receipt and error contract
+Step 8 planning CAS atomically saves the fixed original plan/pins and changes ApprovalUse count unreserved→reserved together with applicable reservations. A CAS loser re-enters the original authorization/domain/key path; it never reuses a stale count. Steps 9–11 retain the original strict installation notice, actual before/after, managed barrier, provenance and recovery obligations; a protected D10 step never chooses observed_only.
+
+Step 12 is the sole seal/author commit. Its real P transaction revalidates original written-after/unwritten-before dependencies, current authorization, exact protected D10 eligibility and irreversible stop before committing the original decision and reserved→consumed. Only the original authoritative terminal abort can atomically change reserved→released_terminal. A stop after physical installation but before seal does not prove that no bytes were installed: preserve B/N, the managed barrier and actual provenance, and use only the original proved rollback/abort path. Unknown installation, third state or unproved custody remains paused/recovery_unknown with all responsibility retained. Steps 13–14 publish/deliver the same saved decision without new confirmation, source install, charge or count consumption. Actual D6 owner text must implement these boundaries before joint acceptance; this proposal alone does not do so.
+
+### 3.3 Exact extension of the current D6 /2 receipt and error contract
 
 Extend the `d6_error.code` closed set to:
 
 ```text
 invalid_request
+unsupported_version
 not_visible
-authority_unavailable
+domain_unavailable
 integrity_conflict
 operation_id_conflict
 plan_expired
-approval_unavailable
-execution_stopped
+source_unavailable
+proof_unavailable
 dependency_conflict
 semantic_rejected
 budget_exceeded
+install_unavailable
+conflict
+conflict_changed
+state_unavailable
+owner_update_required
+effects_unavailable
 transaction_aborted
+approval_unavailable
+execution_stopped
 ```
 
 `approval_unavailable` permits only disposition=`preflight`. It means the coordinated D10 author-submit approval dependency cannot be consumed after D6 entry while original D6 author permission/ObservationScope and applicable business prerequisites did not fail earlier. It creates no recorded rejection and reveals no internal approval cause.
 
 `execution_stopped` likewise permits only disposition=`preflight`, after current authorization/ObservationScope succeeds. It means only that an irreversible ExecutionStopLatch bound to this request has won the linearization ordering and blocks a new author submit. It cannot replace `not_visible`, approval errors, temporary disable, Lease expiry, or business dependency errors. An unseen request writes no ledger; a planned request follows the strict authoritative-abort conditions in §3.5.
 
-Original phase/key/permission/availability rules remain; `dependency_conflict|semantic_rejected|budget_exceeded` remain recorded only under the original step-6 contract, and permanent abort after planned remains only `transaction_aborted|terminal`. A consumer that did not negotiate D10 standing-approval capability cannot receive the new enum.
+Current four-disposition preflight/recorded/paused/terminal and original key/permission/availability rules remain; `dependency_conflict|semantic_rejected|budget_exceeded` remain recorded only under the original step-6 contract, and permanent abort after planned remains only `transaction_aborted|terminal`. Incompatible component combinations reject at the D1 gate; actual historical wire1 decisions retain their original decoder and are never re-encoded because this new set exists.
 
 Standing Approval adds no receipt member. D10 UI may display use origin from an authorized Run/ApprovalUse control state, but that control evidence is not an author receipt.
 
@@ -162,13 +171,13 @@ Durable D10 control state such as ActivationBinding, DelegationLease, StandingAp
 
 This is an explicit coordinated amendment to fixed-S D6 Control and does not modify the S snapshot.
 
-Add one no-argument Policy/2 capability d10_control_self, valid only at workspace scope. It lets the current principal use the R05 CONTROL-CONTRACT closed Workspace control adapter to manage that principal's own finite Automation/Lease/Approval/Run control records. It implies no source/Field read-write, policy_admin, registry_admin, binding_admin, repair, commit_sequence_state, or deployment resource. No other capability implies it and deny precedence remains.
+Add one no-argument Policy/3 capability d10_control_self, valid only at workspace scope. It lets the current principal use the R05 CONTROL-CONTRACT closed Workspace control adapter to manage that principal's own finite Automation/Lease/Approval/Run control records. It implies no source/Field read-write, policy_admin, registry_admin, binding_admin, repair, commit_sequence_state, or deployment resource. No other capability implies it and deny precedence remains.
 
 The Workspace D10 control adapter is a managed PreparedIntent producer only for CONTROL-CONTRACT §7 Workspace bodies automation_configure, consent, state, workspace_limits, and activation. It cannot accept deployment_put, cost_reconcile, secret bytes, or a free callback. The producer derives the original d6_commit_request from the real current principal, complete closed body, authorized reads, and stable prepare binding; an external caller still cannot assert principal, authorized, effect, or writer. Any final author-payload mutation can still come only from the original D7/D8/D3 adapter; an ordinary D10 control mutation cannot construct author source bytes.
 
 Under this amendment the fixed-S profile/2 phrase “all non-Field capabilities” is frozen to the controlled set `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state` present in S. Later capabilities never enter profile/2 automatically.
 
-Add d6_bootstrap_profile wireVersion=3 with the same members kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope. profile/3 still creates initialPolicy.version=2. Its creator Workspace grant equals the frozen profile/2 non-Field set above plus d10_control_self plus the original S rule generating all target-Registry Field read/write grants; deny is empty.
+Add d6_bootstrap_profile wireVersion=3 with the same members kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope. profile/3 explicitly creates initialPolicy.version=3. Its creator Workspace grant is the frozen profile/2 non-Field set above, current D6 replica_register/replica_retire/conflict_read/conflict_resolve/execution_custody_admin/structure_state/portable_frontier_state, d10_control_self, and the original S rule generating all target-Registry Field read/write grants; deny is empty. The actual new WorkspaceBootstrapPlan/2 and D7 bootstrap projection coordinate under CONTROL-CONTRACT §12 and the real D6 owner; the original /1 is not expanded.
 
 Only an explicit issuer-profile management operation by current administer_issuer can select profile/3 for subsequently issued families. Stored profile/1/2 copies of existing families, replacement, WorkspaceBootstrapPlan, saved decisions, replay/continue/failover are never recomputed or augmented. An existing Workspace acquires d10_control_self only through the original Policy-management transaction by current policy_admin; a Field-authorized principal cannot self-grant it.
 
@@ -190,7 +199,7 @@ External send competition remains owned by the D10 transport boundary rather tha
 
 Replace the current §5 semantics that the user confirms through the original D3/D6 submission after seeing preview with:
 
-> Default ActionSpec confirmation remains: after obtaining and validating a complete current preview, the current user explicitly sends the original D3/D6 request returned by prepare. Only the D10/1 coordinated `single_field_member` profile may continue without this operation's human click: Core must mechanically prove valid ApprovalUse from the complete PreparedActionBinding/2, EffectManifest/EffectBytes, actual MutationFootprint, and current authorization of this fresh D7 prepare. This exception creates no D7 confirmation token, changes no request, and does not claim a user read preview item by item. Every other ActionSpec kind and D3-owned intent keeps original interactive confirmation.
+> Default ActionSpec confirmation remains: after obtaining and validating a complete current preview, the current user explicitly sends the original D3/D6 request returned by prepare. Only the D10/1 coordinated `single_field_member` profile may continue without this operation's human click: Core must mechanically prove valid ApprovalUse from the complete PreparedActionBinding/3, EffectManifest/EffectBytes, actual MutationFootprint, and current authorization of this fresh D7 prepare. This exception creates no D7 confirmation token, changes no request, and does not claim a user read preview item by item. Every other ActionSpec kind and D3-owned intent keeps original interactive confirmation.
 
 ### 4.2 standing-approval eligibility including raw no-op
 
@@ -215,7 +224,7 @@ Add:
 
 ### 4.4 Irreversible stop binding for D7 prepare
 
-D7 ActionSpec, PreparedActionBinding/2, and EffectManifest/EffectBytes add no caller-supplied stop field. For D10 unattended author-submit, after successful prepare Core creates a protected internal association from planToken to the current Run/Automation/Lease and its ExecutionStopLatch refs; the caller cannot remove, replace, or self-assert those refs. Final submission is rechecked by D6 §3.5 inside the real transaction. The D7 interactive path gains no new automatic-confirmation authority from stop; stop only prevents a background submit that has not yet linearized.
+D7 ActionSpec, PreparedActionBinding/3, and EffectManifest/EffectBytes add no caller-supplied stop field. For D10 unattended author-submit, after successful prepare Core creates a protected internal association from planToken to the current Run/Automation/Lease and its ExecutionStopLatch refs; the caller cannot remove, replace, or self-assert those refs. Final submission is rechecked by the actual D6 seal consumer specified in this proposal §3.5 inside the real transaction. The D7 interactive path gains no new automatic-confirmation authority from stop; stop only prevents a background submit that has not yet linearized.
 
 ## 5. D7 Preview and Effects Transport — planned recovery extension
 
@@ -227,14 +236,14 @@ Add:
 
 ```text
 d7_planned_preview_open {
-  wireVersion: 1,
+  wireVersion: 2,
   kind: "d7_planned_preview_open",
   protocolOwner: "D6",
-  request: <original d6_commit_request>
+  request: <original wireVersion=2 d6_commit_request, with its complete DecisionKey/2>
 }
 
 d7_planned_preview_opened {
-  wireVersion: 1,
+  wireVersion: 2,
   kind: "d7_planned_preview_opened",
   request,
   previewToken,
@@ -252,7 +261,7 @@ The unique order is:
 3. original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility;
 4. current authority/custody/ledger continuity;
 5. byte-equal canonical request at the same key with ledger state=planned;
-6. complete original PreparedActionBinding/2, semantic preview, and all required pins;
+6. complete original PreparedActionBinding/3, semantic preview, and all required pins;
 7. create a new finite recovery delivery epoch and return a fresh action_preview token/cursor/header.
 
 The new epoch's semantic items, order, EffectBytes payloads, and profile come byte-equivalently from the immutable preview saved with the planned decision. It cannot rerun Query, parse a current drifted definition, reselect a target, regenerate proposed source, or switch Registry. It only reissues transport handles.
@@ -313,13 +322,13 @@ Common rule: every concept's original `firstFreeze` remains its accepted D8 r03 
 | `weftext.term.edit_draft` | 编辑草稿 / Edit Draft; D8 proposal state | non-authoritative user proposal plus `draftSerial`; not saved author source | code type `Draft`; inputs `d8_draft_project`, `d8_draft_text_replace`, `d8_draft_write`; successful projection is owned separately | no CLI; UI keeps existing Draft-saved/pending status phrases; no new locale key | Draft allowed only in D8 context; no author-draft/source alias; delete unlisted draft-state aliases |
 | `weftext.term.draft_projection` | 草稿投影 / Draft Projection; D8 Core projection | discardable projection of one proposal; not D2 payload/Locator | code/wire `d8_draft_projection`; also returned by `d8_draft_text_replaced` and `d8_draft_written` | no direct CLI/UI/locale | “projection” only in D8; no document_snapshot alias; delete unlisted projection aliases |
 | `weftext.term.draft_edit_map` | 草稿编辑映射 / Draft Edit Map; D8 Core mapping | proposal-local flow/path/segment/plainRegion/site coordinates; not durable identity/Locator | code type `DraftEditMap`; carried as `editMap` inside `d8_draft_projection` and consumed by replace/write | no CLI/UI/locale | “edit map” allowed; no locator/parser alias; delete unlisted editor-map aliases |
-| `weftext.term.prepared_edit_binding` | 编辑准备绑定 / Prepared Edit Binding; protected D8 Core record | immutable D8 prepare record; not D7 PreparedActionBinding, ActionSpec, or third ledger | `PreparedEditBinding/1`, internal kind `d8_prepared_edit_binding`; `d8_edit_prepare/edit_prepared` and `d8_undo_prepare` consume or expose its protected result | no CLI/UI/locale | formal name only; no prepared-action alias; delete unlisted binding wrappers/fixtures |
+| `weftext.term.prepared_edit_binding` | 编辑准备绑定 / Prepared Edit Binding; protected D8 Core record | immutable D8 prepare record; not D7 PreparedActionBinding, ActionSpec, or third ledger | `PreparedEditBinding/2`, internal kind `d8_prepared_edit_binding`; `d8_edit_prepare/edit_prepared` and `d8_undo_prepare` consume or expose its protected result | no CLI/UI/locale | formal name only; no prepared-action alias; delete unlisted binding wrappers/fixtures |
 | `weftext.term.composition_transaction` | 组合输入事务 / Composition Transaction; D8 UI input state | IME begin/update/commit/cancel group; not D6 author transaction/receipt | code type `CompositionTransaction`; no D8 JSON kind | no CLI or standalone UI/locale key; accessibility uses current input-state description | “composition” only in D8; no commit-transaction alias; delete unlisted UI-state aliases |
 | `weftext.term.caret_affinity` | 光标亲和位置 / Caret Affinity; D8 layout state | `upstream|downstream` visual side of one logical point; not source offset/Locator | code enum `CaretAffinity`; member of layout/caret state, no new request kind | no CLI or standalone label/locale key | “affinity” allowed; no source-side identity alias; delete unlisted layout-enum aliases |
 | `weftext.term.layout_epoch` | 布局代 / Layout Epoch; D8 layout state | discardable shaping/wrap/hit-test generation; not result/auth/author revision | code type `LayoutEpoch`; no public D8 JSON kind | no CLI/UI/locale | “epoch” only with layout qualifier; no result-epoch alias; delete unlisted layout-cache aliases |
 | `weftext.term.direction_preference` | 方向偏好 / Direction Preference; D8 presentation | device/session `ltr|rtl|auto` preference; not locale, authored direction, or Query ordering | code type `DirectionPreference`; values come from Direction §2 shell/document/session preference, no author wire | no CLI; UI keeps the existing direction selector and `ltr|rtl|auto` values; no new concept locale key | “direction preference” allowed; no locale/author-dir alias; delete any controlled path that writes preference into author source |
 
-Reverse kind ownership is fixed per kind. “Technical interface owner” names the D8 interface contract that decodes/returns the message; it is not a tenth domain concept. Domain concepts are listed separately as consumed/returned data:
+Kind ownership is a complete single-valued mapping: each kind has exactly one interface owner, while multiple kinds may share that owner. In particular, d8_draft_project and d8_draft_projection share the D8 Draft Projection Interface; no inverse uniqueness is required. “Technical interface owner” names the D8 interface contract that decodes/returns the message; it is not a tenth domain concept. Domain concepts are listed separately as consumed/returned data:
 
 | kind | unique technical interface owner | consumes / operates on | returns / domain concepts |
 | --- | --- | --- | --- |
@@ -328,20 +337,20 @@ Reverse kind ownership is fixed per kind. “Technical interface owner” names 
 | `d8_draft_project` | D8 Draft Projection Interface (Editor Interfaces §3.1) | Edit Draft + current author cut | `d8_draft_projection` |
 | `d8_draft_projection` | D8 Draft Projection Interface (Editor Interfaces §3.1) | one Edit Draft proposal | Draft Projection carrying Draft Edit Map |
 | `d8_draft_text_replace` | D8 Draft Text Replace Interface (Editor Interfaces §3.3) | Edit Draft + Draft Edit Map segment/range binding | `d8_draft_text_replaced` |
-| `d8_draft_text_replaced` | D8 Draft Text Replace Interface (Editor Interfaces §3.3) | result of exact replacement | Draft Projection + caret; Draft Edit Map remains consumed/returned inside projection, not co-owner of the kind |
+| `d8_draft_text_replaced` | D8 Draft Text Replace Interface (Editor Interfaces §3.3) | result of exact replacement | Draft Projection, with no caret member in this response; Draft Edit Map remains consumed/returned inside projection, not co-owner of the kind |
 | `d8_draft_write` | D8 Draft Write Interface (Editor Interfaces §3.4) | Edit Draft + Draft Edit Map site/path binding | `d8_draft_written` |
 | `d8_draft_written` | D8 Draft Write Interface (Editor Interfaces §3.4) | result of exact write | Draft Projection + caret; Draft Edit Map remains data, not kind owner |
 | `d8_edit_prepare` | D8 Edit Prepare Interface (Editor Interfaces §4) | Edit Draft + Prepared Edit Binding construction rules | `d8_edit_prepared`; nested D6 commit request remains D6-owned |
 | `d8_edit_prepared` | D8 Edit Prepare Interface (Editor Interfaces §4) | protected Prepared Edit Binding result | preview/commit envelope; no author success claim |
 | `d8_undo_prepare` | D8 Undo Prepare Interface (Editor Interfaces §7) | current bytes/revision + original receipt/effects | `d8_edit_prepared`; it prepares an inverse edit, it does not own Undo history |
 | `d8_editor_error` | D8 Editor Error Interface (Editor Interfaces §6) | failures from D8 public interfaces | closed D8 editor error family; no durable concept ID |
-| `d8_prepared_edit_binding` | D8 Prepared Edit Binding Internal Interface (Editor Interfaces §4.2) | immutable prepared request/preview/authorization coordinates | protected `PreparedEditBinding/1`; never public response kind |
+| `d8_prepared_edit_binding` | D8 Prepared Edit Binding Internal Interface (Editor Interfaces §4.2) | immutable prepared request/preview/authorization coordinates | protected `PreparedEditBinding/2`; never public response kind |
 
 `document|annotation` remain local D8 intent discriminators, not entity kinds. This addition changes no D8 wire member, error, IME state, or automatic-confirmation path.
 
 ### 8.2 D9 owner-lexicon addition
 
-D9 behavior and wire remain unchanged. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's original concept-contract `firstFreeze` remains its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R08 proposes additional naming and per-kind technical-interface-owner metadata with its own candidate provenance; it does not retroactively claim those per-kind IDs/owners were already lines in S. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
+This naming addition itself changes no D9 behavior or wire; the table consumes the current versions of the actual D9 file-authority afterimages. Workspace interfaces and template/export producers explicitly use /2, pure artifact workers remain /1, and real historical decisions retain their original decoder/recovery. Those versioned semantics remain owned by the actual D9 owner. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's original concept-contract `firstFreeze` remains its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R08 proposes additional naming and per-kind technical-interface-owner metadata with its own candidate provenance; it does not retroactively claim those per-kind IDs/owners were already lines in S. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
 
 Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decoder, fixtures, help, generated samples; M-route=free-command/fallback/provider aliases and route inventory; M-template=old attr/record/H1–H9/formula-reorder/broad-view template parser/help/samples; M-export=free binding dictionary, rowHandle identity, author-snapshot export, generic author-receipt alias; M-region=D9-private Locator kind/opaque registry identity; M-none=no specific predecessor, only unlisted controlled aliases. Historical research text is not migrated.
 
@@ -358,18 +367,18 @@ Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decode
 | `weftext.term.import-job` | 导入作业 / Import Job; **owner D6, consumed by D9** | inherit exact D6 owned names `ImportJob`, `importJob`, `stageInput`, `planAtomicGroups`, `commitImportBatch`; D9 `d9_import_*` only observes/operates the D6 record | finite groups/batches; not second ledger/job-wide atomic transaction | inherit D6 UI/locale `storage.import_job`; firstFreeze remains `D6 revision05-observation-bootstrap candidate; not activated`; no D9 compatibility alias | M-import |
 | `weftext.term.coupling-group` | 耦合组 / Coupling Group; D9 mapping | group inside ConversionInput/prepare | indivisible author group; not UI page/worker process | no CLI/UI/locale | M-import |
 | `weftext.term.import-batch` | 导入批次 / Import Batch; D9 mapping | one original D3/D6 atomic request | finite commit batch; not arbitrary 1000-row slicing | UI may show batch progress; no locale key | M-import |
-| `weftext.term.conversion-input` | 转换输入证据 / Conversion Input; D9 control | `ConversionInput/1` ZIP/profile | binds raw/IR/mapping/loss/route; not identity/author source | no direct UI/CLI/locale | M-import |
+| `weftext.term.conversion-input` | 转换输入证据 / Conversion Input; D9 control | `ConversionInput/2` ZIP/profile | binds raw/IR/mapping/loss/route; not identity/author source | no direct UI/CLI/locale | M-import |
 | `weftext.term.worker-invocation` | Worker 调用记录 / Worker Invocation; D9 worker control | `WorkerInvocation/1` | fixed job/step/route/inputs/options/budget; no path/command | no UI/CLI/locale; worker cannot self-authorize | M-route |
-| `weftext.term.template-recipe` | 模板配方 / Template Recipe; D9 template | `TemplateRecipe/1`, format `weftext.node-template` | one fresh construction recipe over D2 Template; no second Template identity | Template UI may show recipe; no standalone locale/CLI | M-template |
-| `weftext.term.template-construction-input` | 模板构造输入 / Template Construction Input; D9 control | `TemplateConstructionInput/1` | fixed pins/recipe/params/resources/loss evidence; not author source | no direct UI/CLI/locale | M-template |
+| `weftext.term.template-recipe` | 模板配方 / Template Recipe; D9 template | `TemplateRecipe/2`, format `weftext.node-template` | one fresh construction recipe over D2 Template; no second Template identity | Template UI may show recipe; no standalone locale/CLI | M-template |
+| `weftext.term.template-construction-input` | 模板构造输入 / Template Construction Input; D9 control | `TemplateConstructionInput/2` | fixed pins/recipe/params/resources/loss evidence; not author source | no direct UI/CLI/locale | M-template |
 | `weftext.term.office-template` | Office 模板 / Office Template; D9 template | ordinary Office-template profile | ordinary text-template bytes; not macro/script | UI may say Office Template; no fixed locale key/CLI | M-template |
 | `weftext.term.template-placeholder` | 模板占位符 / Template Placeholder; D9 template | Templates token/binding contract | value insertion position; not content control/named range | placeholder text may be visible; no standalone locale key | M-template |
 | `weftext.term.style-directive` | 样式指令 / Style Directive; D9 template | Templates style directive | visible style sample; not executable command | previewable; no CLI/locale | M-template |
 | `weftext.term.repeat-band` | 重复带 / Repeat Band; D9 template | single complete row/column repeat contract | dataset repetition; not Excel Table enhancement | UI may show repeat region; no standalone locale/CLI | M-template |
 | `weftext.term.render-snapshot` | 渲染快照 / Render Snapshot; D9 export | finite Templates `RenderSnapshot` union | explicit authorized rendering projection; not author snapshot/import | no direct CLI/locale; inspect UI may show | M-export |
 | `weftext.term.d7-result-pin` | D7 结果固定证据 / D7 Result Pin; D9 control over D7 | internal `D7ResultPin`; nested `TerminalSchema`/V remain D7-owned | pins complete terminal result/epoch/auth/cut; not rowHandle identity | no UI/CLI/locale; no D7-result identity alias | M-export |
-| `weftext.term.export-plan` | 导出计划 / Export Plan; D9 export control | `ExportPlan/1` | immutable current-output preparation record; not D6 PreparedIntent/author ledger | consumed by export prepare/inspect UI; no standalone locale key | M-export |
-| `weftext.term.export-input-catalog` | 导出输入目录 / Export Input Catalog; D9 export | `ExportInputCatalog/1` | complete authorized Plan input catalog; not author source | no standalone UI/CLI/locale | M-export |
+| `weftext.term.export-plan` | 导出计划 / Export Plan; D9 export control | `ExportPlan/2` | immutable current-output preparation record; not D6 PreparedIntent/author ledger | consumed by export prepare/inspect UI; no standalone locale key | M-export |
+| `weftext.term.export-input-catalog` | 导出输入目录 / Export Input Catalog; D9 export | `ExportInputCatalog/2` | complete authorized Plan input catalog; not author source | no standalone UI/CLI/locale | M-export |
 | `weftext.term.export-content-selection` | 导出内容选择 / Export Content Selection; D9 export | `ExportContentSelection/1` | explicit body/bibliography consumption choice; not permission grant | inspect UI shows choice; no locale key | M-export |
 | `weftext.term.export-projection` | 导出投影 / Export Projection; D9 export | `ExportProjection/1` | bounded Core bindings/datasets projection; not free dictionary | no standalone locale/CLI | M-export |
 | `weftext.term.export-input-location` | 导出输入位置 / Export Input Location; D9 evidence | closed `input|source_range|annotation|query_cell|query_scalar|template_range` union | Plan-local evidence position; not Locator/identity | no UI/CLI/locale | M-export |
@@ -377,7 +386,7 @@ Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decode
 | `weftext.term.export-loss-report` | 导出损失报告 / Export Loss Report; D9 export | `ExportLossReport/1`, format `weftext.export-loss` | fixed-proposal loss report; not import LossReport | inspect UI shows full report; no standalone locale key | M-export |
 | `weftext.term.export-blocks` | 导出块投影 / Export Blocks; D9 export compiler | internal `ExportBlocks` | read-only compilation of known D2 structures; no author block ID | no UI/CLI/locale | M-export |
 | `weftext.term.staged-output` | 暂存输出 / Staged Output; D9 publication control | validated staging record | complete unpublished output; no author revision | consumed by publish/state UI; no standalone locale key | M-export |
-| `weftext.term.publication-receipt` | 外部发布回执 / Publication Receipt; D9 publication | `PublicationReceipt/1` | external-file publication fact bound only to plan/output/destination | UI may say Published; no standalone locale key; **never an alias of D3/D6 author receipt** | M-export |
+| `weftext.term.publication-receipt` | 外部发布回执 / Publication Receipt; D9 publication | `PublicationReceipt/2` | external-file publication fact bound only to plan/output/destination | UI may say Published; no standalone locale key; **never an alias of D3/D6 author receipt** | M-export |
 | `weftext.term.import-loss-report` | 导入损失报告 / Import Loss Report; D9 import/template | `LossReport/1` | fixed import/Node-Template loss choice; not export report | shown in analysis UI; no standalone locale key | M-import |
 | `weftext.term.import-loss-issue` | 导入问题 / Import Loss Issue; D9 IR | exact IR issue | raw observed issue; not security approval/completeness proof | analysis UI may show message; no standalone locale key | M-import |
 | `weftext.term.template-loss-location` | 模板损失位置 / Template Loss Location; D9 template | `template_source|template_annotation` union | template-pin/omission evidence; not D3 Locator | no UI/CLI/locale | M-template |
@@ -387,9 +396,9 @@ Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decode
 
 Inherited ownership remains explicit:
 
-- D2 `Template` meta-kind retains Node-Template author identity; D9 owns only `TemplateRecipe/1` and construction evidence.
-- D7 `TerminalSchema`, V algebra, and `PreparedActionBinding/2` remain D7-owned; `D7ResultPin` only pins those existing facts.
-- D3 `SourceBinding`, `ForeignIdentityKey`, `OriginBinding`, `ResourceRegionLocator/l1`, and D3/D6 author receipts remain original-owner concepts. D9 `RegionBody/d9rg1` is inner geometry only, and `PublicationReceipt/1` can represent only external publication.
+- D2 `Template` meta-kind retains Node-Template author identity; D9 owns only `TemplateRecipe/2` and construction evidence.
+- D7 `TerminalSchema`, V algebra, and `PreparedActionBinding/3` remain D7-owned; `D7ResultPin` only pins those existing facts.
+- D3 `SourceBinding`, `ForeignIdentityKey`, `OriginBinding`, `ResourceRegionLocator/l1`, and D3/D6 author receipts remain original-owner concepts. D9 `RegionBody/d9rg1` is inner geometry only, and `PublicationReceipt/2` can represent only external publication.
 - D6 `SourceVersion`, `BudgetBinding`, Token, and job/commit authority remain unchanged.
 
 The D9 owner lexicon also records a unique technical interface owner for each of the 17 public kinds. These interface-owner labels do not create 17 new domain concepts; the 36 D9-owned concept rows above remain the domain lexicon, and D6 ImportJob remains the one inherited D6 concept.
@@ -408,7 +417,7 @@ The D9 owner lexicon also records a unique technical interface owner for each of
 | `d9_import_choose` | D9 Import Analysis Interface (Main §4) | analysis token + explicit loss/mapping choices | successor analysis; not a D6 commit |
 | `d9_import_prepare` | D9 Import Preparation Interface (Main §4) | fixed analysis + inherited D6 ImportJob group/batch control | `d9_import_prepared`; actual author plan remains D7/D3/D6-owned |
 | `d9_import_prepared` | D9 Import Preparation Interface (Main §4) | exact prepared batch | wraps/returns original D7 prepared outcome; no new author receipt |
-| `d9_import_next` | D9 Import Preparation Interface (Main §4) | current inherited D6 ImportJob + prior authoritative batch outcome | next finite batch preparation or terminal job state |
+| `d9_import_next` | D9 Import Preparation Interface (Main §4) | current inherited D6 ImportJob + prior authoritative batch outcome | `d9_import_prepared` for the unique next finite batch only; complete/current job state is obtained separately through `d9_import_state`, not through a new terminal success arm here |
 | `d9_import_state` | D9 Import Job State Interface (Main §4) | **operates on D6-owned ImportJob** | `d9_import_state_result`; interface owner is D9, record/concept owner remains D6 |
 | `d9_import_state_result` | D9 Import Job State Interface (Main §4) | D6 ImportJob + linked original receipts | read-only progress/result projection; D3/D6 receipts keep their owners |
 | `d9_template_analyze` | D9 Node Template Analysis Interface (Templates §6) | D2 Template + D9 TemplateRecipe/TemplateConstructionInput | `d9_import_analysis`; D2 Template identity stays D2 |
@@ -424,7 +433,7 @@ These amendments change the specification only after independent acceptance, con
 
 Candidate first-public D10 capability IDs are defined by D10 and discovered/published by D1: automation.manage, workspace.extensions.manage, deployment.external.manage, automation.stop, and automation.author_submit. They first enter the official capability catalog of the selected D1 contractMajor and remain subject to D1-frozen release, surface, policy, principal, component/configuration, reachability/version-combination, and health gates. Unknown IDs remain D1 unsupported_feature; disallowed component-version combinations remain incompatible_version. D10/D6 adds no second product-level negotiator.
 
-When the capability is actually released, the first jointly specified public unattended author-submit D6-Control/1 error set already contains approval_unavailable and execution_stopped. There is no legacy D10 author-submit error profile, enum fallback, migration parser, or dual-read/dual-write. Only the unpublished D10-profile assumption is removed; S-frozen Policy/1/2, bootstrap profile/1/2, IssuerControlPolicy, D1 bootstrap/contractMajor, and historical saved-decision decoders all remain.
+When the capability is actually released, the first jointly specified public unattended author-submit D6-Control/2 error set already contains approval_unavailable and execution_stopped. There is no legacy D10 author-submit error profile, enum fallback, migration parser, or dual-read/dual-write. Only the unpublished D10-profile assumption is removed; S-frozen Policy/1/2, bootstrap profile/1/2, IssuerControlPolicy, D1 bootstrap/contractMajor, and historical saved-decision decoders all remain.
 
 Before runtime release, every D7/D8 author proposal continues to use current per-operation confirmation and the planned-preview recovery entrypoint plus unattended author submit remain truthfully unavailable under D1. Broker, Agent proposals, Tool/MCP, Connector read, and external-effect control that do not perform unattended author submit may progress independently, but each still requires its own D1 capability and real implementation evidence.
 
@@ -453,7 +462,7 @@ Historical committed D3/D6 decisions replay under their original decoder/bytes a
 19. A profile/2 family must not gain d10_control_self after software upgrade; profile/3 affects only new families after explicit issuer update, and an existing Workspace can receive it only through current policy_admin.
 20. Both orderings of stop versus new Run admission and D6 final author commit must have exactly one linearized result; authorized authoritative abort, cost settlement, and evidence retention still work after stop.
 21. A stable Workspace-control request succeeded but its response was lost and another request later changed the object revision; after current disclosure authorization, retry must replay the old result without duplicate mutation and without falsely rejecting historical success because current revision changed.
-22. The nine D8 concepts and thirteen kinds must map uniquely in both directions from the owner lexicon; any unlisted CLI/locale/wire alias fails, with no change to IME/Write/Read/confirm/Undo behavior.
-23. D9 grouped lexicon terms must split into stable concept IDs; `PublicationReceipt/1` maps only to external publication, nested TerminalSchema/V inside `D7ResultPin` remains D7-owned, and inherited PreparedActionBinding/SourceBinding/OriginBinding concepts cannot be re-registered by D9.
+22. The nine D8 concept IDs remain distinct. All thirteen kinds must each have exactly one technical interface owner in the owner lexicon; several kinds may share an owner, including d8_draft_project/d8_draft_projection. Domain data ownership is separate and inverse uniqueness is not required. Any unlisted CLI/locale/wire alias fails, with no change to IME/Write/Read/confirm/Undo behavior.
+23. D9 grouped lexicon terms must split into stable concept IDs; `PublicationReceipt/2` maps only to external publication, nested TerminalSchema/V inside `D7ResultPin` remains D7-owned, and inherited PreparedActionBinding/SourceBinding/OriginBinding concepts cannot be re-registered by D9.
 
 These are author-revision review targets, not a claim that the first two independent-review batches are closed. Only later independent re-review can change their review status.

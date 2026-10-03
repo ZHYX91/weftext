@@ -10,7 +10,7 @@ Source document ID: 362b6465-71ed-4176-9e74-6207fe3fab24.
 
 # D4 Terminology and Naming Lexicon — D6-FA-r01
 
-Candidate status: D6-FA-r01; partial coordinated candidate; not accepted, not activated, not implemented. All 26 fixed-S D4 concepts preserve stable conceptId, owner, existing public wire/code/UI/locale names, and firstFreeze. This batch deletes, renames, or transfers none of them.
+Candidate status: D6-FA-r01; P2 coordinated author candidate; not accepted, not activated, not implemented. All 26 fixed-S D4 concepts preserve stable conceptId, owner, existing public wire/code/UI/locale names, and firstFreeze. This batch deletes, renames, or transfers none of them.
 
 ## 1. Control rules
 
@@ -68,6 +68,26 @@ These remain owned elsewhere and are only consumed by D4:
 `SourceVersion/2` retains its own production `commitDomain`, `observationEpoch`, revision, or externalSequence semantics. It does not require equality with the current operation observation domain. Current D6 qualification is provided by `SourceObservation/1`: `observerDomain` equals the operation `CommitDomain`, with matching `entityRef` and current observation, file, control, Registry, and relation-incidence dependencies in the protected cut.
 
 `complete_semantics/semantic_pending` is not the same concept as D4 `complete/partial/unavailable`, and `external_invalid` is not namespace `invalid`. Ordinary save `strict|observed_only` remains a D6 save-protection distinction; `observed_only` only consumes the D6-defined weak save qualification and is not introduced as a new D4 terminology state.
+
+### 3.1 Current producer concepts remain imported
+
+| Imported concept | Owner and precise D4 consumption |
+|---|---|
+| `DecisionKey/2` | D6: Workspace + complete CommitDomain + OperationId; protocolOwner selects the single original decision owner and is not another key field |
+| `SourceRevisionPlan/1`, `SourceStamp/1` | D6: the original plan's protected proposed managed-after basis, using production-domain H and exact afterPin; not sealed source, current Observation, or early Locator capability |
+| `RevisionTokenBinding/2`, `RevisionTokenSource/2`, `d6_source_revision/2` | D6: protected stable binding of observer domain/generation and the closed managed-stamp or external-version arm; D3 retains opaque Locator lexical ownership |
+| `DependencyKey/2`, `DependencyProof/2`, `StructureRange` | D6 carrier; D3/D4/D7 real enumeration owners: fourteen key kinds and nine structure ranges, with exact key-specific completeness and continuity |
+| `ContentCompletionProof/3` | D6: portable transport of sealed production SourceVersion before/after; never sender Observation/token or complete Query proof |
+| `ConflictRecord/2` | D6: Frontier/2 current record; historical /1 remains original Frontier/1, while ConflictKey/1 and ConflictId retain identity |
+| `WriteProtection`, `ReliableSaveState`, `InputRetentionState` | D6: installation protection, sealed save guarantee and durable input retention remain independent; prepared is not Saved |
+
+Managed revision belongs to one production domain/entity's continuously sealed H history; production observationEpoch does not reset H. External SourceVersion has externalSequence and no managed revision or ChangeId. Current SourceObservation separately binds the operation's observerDomain/current generation, exact file object, pins and same-cut control/Registry/incidence; production domain/epoch may differ. An occurrence selector uses its actual managed inner sourceRevision plus this current outer qualification. External sequence, equal number/hash, I, or a newly signed Observation never substitutes.
+
+Dependency stamp epoch is the continuity generation of its exact key, distinct from both source epochs. Complete empty is a proved range, not unknown, unavailable or no index hit. I rebuild neither creates such proof nor owns its durable continuity. D4 owns only relation-incidence, Calendar, Registry and temporal semantic enumeration; other keys retain their original owners.
+
+Shared semantic IDs use the main text §2.1 decoder, including dotted namespaces, distinct ID domains, byte/segment/hyphen limits and exact ASCII comparison. Field occurrence is not Entity/Record; D4 ObservationValue is not D6 SourceObservation; event assertion is not Calendar Event; namespace owner is not D3 Owner or execution authority. No imported name enters the 26 owned concepts or the exact inventory below.
+
+Saved, planned and unseen are original decision states, not renamed D4 typed states. Actual historical records keep original version/bytes/retention/recovery and current original-scope delivery authorization; only unseen applies the new business/consumer gate. Unknown never implies empty or permits repeat effects. Missing strong consumers gate only the dependent new strong path; ordinary source/Resource reads, Draft and qualified human whole-source saves retain their own qualification.
 
 ## 4. Terminology preservation and anti-spoof
 
@@ -337,3 +357,25 @@ The JSON below is only the mechanical exact-preservation inventory for fixed-S c
   ]
 }
 ~~~
+
+## 7. Retained naming and domain dispositions
+
+The 26 concept inventory remains unchanged. These are the existing concepts' qualified domain/code usages, not new entities or aliases. Bare Profile does not name a Node schema: use Facet, fully qualified Weftext AsciiDoc Profile, or fully qualified CEL/Value Profile. Attribute names D2 source syntax; Field names schema; Field Value Occurrence names an authored fact; UI Property is only a label. Source, Provenance, SourceBinding and OriginBinding retain D3 distinctions. Facet requires is dependency, while required_field expresses requiredness. author_order means source order; it is not canonical inventory sorting. union_variant_equal means one common branch across all occurrences. Missing constructor kind still has its kind pointer and nearest-container span.
+
+| Qualified term | Existing Field/member; code; UI/locale | Boundary |
+|---|---|---|
+| Profession / 职业 | people/profession, profession; PeopleProfessionValue; people.profession | occupation is explicit import vocabulary only; optional organization is context, not engagement |
+| Engagement / 任职与隶属 | people/engagement; PeopleEngagementValue; people.engagement | appointment/affiliation are domain/import vocabulary, not alternative wire; no employer scalar |
+| Position / 职务 | position; EngagementPosition; people.engagement.position | not profession/rank/organization; office/jobTitle are not second wire names |
+| Rank / 职级 | rank; EngagementRankValue; people.engagement.rank | required system+level author text; grade needs explicit import mapping, no global inferred rank |
+| Department / 部门 | department; EngagementDepartment; people.engagement.department | text within engagement, not organization identity, parent, or measurement unit |
+| Engagement Organization Target / 任职组织目标 | target; EngagementOrganizationTarget; people.engagement.organization_target | ordinary Node target, not proof of Organization classification; organization is not an alias for target |
+| Measurement Unit / 计量单位 | unitId; MeasurementUnitId; measurement.unit | registered dimension, not organizational unit; conversion requires authenticated contribution |
+
+Life Event Assertion is the existing Event Assertion in people/life-event; Important Date is a use, and Birthday/Death Anniversary/Anniversary are selected-fact derivations. eventCode is preset semantics, customLabel exact author text; eventTime and validity.start are not interchangeable. Task is ordinary plus explicit source-declared tasks/task, never effective-only, a Task Field, status or UI flag. Account Identifier's preset/custom arms, Custom Account Service Key, Custom Account Identifier, Account Usage, Account Display Label and Account Note remain distinct; note alone belongs to Entry.note. Neutral relationship descriptors do not infer directed guardian/manager/mentor roles, inverse roles, family rank, or another Field. Asserted colleague and derived colleague are distinct sources of meaning.
+
+Organization Primary Affiliation, Business Guidance, Territorial Administration, Explicit Joint Leadership, Supervision, Subsidiary, independently referenceable Brand Affiliation and Alliance Membership retain the exact Field/inverse directions in the catalog. Business guidance is professional guidance, not merely commercial activity; territorial administration is not location or structural parent. Joint leadership requires an explicit assertion. A brand label does not create organization identity; organization membership is not Person engagement. Publication Venue is the existing library/venue Work/container-or-Organization relationship; publisher is neither alias nor automatic mapping. Spouse Relationship is an independent historical assertion, with current spouse only a justified projection.
+
+Template/Preset/export template/default, plugin/extension/module/pack/connector/provider, import/copy/adopt/promote/subscribe/sync, Calendar system/View/source, Resource/attachment/file, and Bibliographic Work/Reference/Citation retain their real owners and qualified meanings. A diary use creates no Node kind. Bare occurrence/key is permitted only inside a closed typed Field-editor/Entry parent and never overwrites D3 Occurrence or D7 LogicalOccurrenceKey. Negative controlled-name scans cover normative headings, schema/wire, public code/CLI and locale surfaces only; they do not rewrite user content, third-party formats, historical evidence or quoted counterexamples. Each rejection identifies its expected concept and unique replacement/deletion target.
+
+D4SourceMaterializationEffects/1 uses existing code D4SourceMaterializationEffects and internal sourceMaterializationEffects; D4RelationCopyEffects/1 is parallel, with no new CLI/UI/locale identity. C is a typed carrier partition, not a Reference Slot/Entity/Locator. D3 PreparationBinding, DefinitionTransfer and Result/9.Q, D7 PreparedActionBinding/EffectManifest/EffectBytes, and D6 observation/metadata capabilities remain imported technical projections under their actual versions. Historical names are decoded only for actual original records; current producer consumption adds no second schema owner or ledger.

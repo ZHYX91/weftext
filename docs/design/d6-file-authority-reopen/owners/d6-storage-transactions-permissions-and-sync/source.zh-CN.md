@@ -118,7 +118,9 @@ fresh managed source在完整空历史上revision=1。已有source首次由另�
 
 当前副本/Server观察用 SourceObservation/1 另绑定 observerDomain、EntityRef、完整生产 SourceVersion/2、当前observationEpoch、FileObjectBinding与evidence pins。observerDomain=当前operation domain，sourceVersion.commitDomain可不同；生产SourceVersion的observationEpoch保留生产历史，SourceObservation.observationEpoch表示当前observer世代。placeholder/缺metadata/conflict/continuity不明无成功Observation。SourceVersionRef/1 token选择完整Observation；gap、external replacement或discontinuous rematerialization即使生产version/hash/文本相同也使旧当前资格失效。
 
-Storage在P中为每个将产生managed source version的plan耐久保存内部 SourceRevisionPlan/1：before当前Observation或明确absent、同生产域该实体最后已封存managed SourceVersion或经证明的none、拟议SourceStamp/1以及exact after pin。SourceStamp仅含同DecisionKey下的拟议entity/revision/生产observationEpoch地址；当前operation作为after生产域时，其epoch取原plan冻结的当前operation-domain target观察世代，不复制foreign before的生产epoch。它没有本次ChangeId，不是成功SourceVersion。closed shape由后续同一P1 Control正式冻结；Storage不建第二wire owner。winning plan固定这一依据，seal前重验last-issued history。
+除下文具名独立 conflict-only /2 外，Storage在P中为每个将产生managed source version的plan耐久保存内部 SourceRevisionPlan/1：before当前Observation或明确absent、同生产域该实体最后已封存managed SourceVersion或经证明的none、拟议SourceStamp/1以及exact after pin。SourceStamp仅含同DecisionKey下的拟议entity/revision/生产observationEpoch地址；当前operation作为after生产域时，其epoch取原plan冻结的当前operation-domain target观察世代，不复制foreign before的生产epoch。它没有本次ChangeId，不是成功SourceVersion。closed shape由后续同一P1 Control正式冻结；Storage不建第二wire owner。winning plan固定这一依据，seal前重验last-issued history。
+
+D3 仅供冲突解决的 canonical 物化路径另消费 Control §3.1.1 ConflictInstallInput/1 与 §6.2.1 SourceRevisionPlan/2。此不同类型的 wrapper 在原 DecisionKey/audience/preparation/input-use guard 下证明真实已安装 sealed-head source/metadata、当前 FileObjectBinding 与安装世代。它绝非 SourceObservation，没有 sourceToken，不进 InputDescriptor.sourceInputs，不提供 canonical read、Query、D8 或普通写资格；普通/current Observation 对 conflict 仍拒绝。原 plan 独立保存完整 wrapper、source/conflict/range proof、before/selected/final pins 和 exact recovery state，source/metadata 经 strict protection 与唯一 P seal 安装。canonical birth claim/所选生产版本或最终 bytes 不同，均为真实 source-state admission，即使 bytes 相同也通过 /2 取当前域一次 H+1；claim/version/bytes 保持则不造 source version/H 增量。metadata-only open resolution 仍 portable，只有全空 already-resolved 选择为 true no_op。existing canonical identity 不得称 fresh/absent；同 decision 的 fresh copy 保留独立 /1 plan，单实体不产生两版最终 source。CP3 运输真实已安装生产 before 与唯一 sealed managed after，不把历史所选版本当新版本。saved/planned/unknown 保留原 exact-version record、pins、guard 和安装责任，不重签 Observation、不重选 head、不新 decision 或改历史。Control 唯一拥有 shape，D3 拥有显式业务选择和完整净效果投影；Storage 不新增通用 Resource write API 或 raw-mode 权限。
 
 D3 stage12私有candidate map仍是fresh identity唯一候选来源。新的revision-token profile/2由Control冻结、Storage保存，绑定observerDomain/current observationEpoch以及managed SourceStamp或external SourceVersion；D3 Locator/revision-token外层词法和D4/D5 inner selector wire不改。拟议managed token只供同一原plan符号/验证，decision seal并形成完整current SourceObservation后才取得current locator资格。旧profile/decoder原样保留，相同hash/文字/revision/I不能跨观察gap续认。
 
@@ -182,7 +184,7 @@ ContentGuarantee与WriteProtection分开。replica_local证明本domain固定wri
 
 D6 v2 的规范提交请求保持为小型控制请求，不内嵌完整正文或资源字节。PreparedIntent/2 保存工作区与提交域（Workspace/CommitDomain）、意图 intent、内容前沿及其策略 Frontier/2+frontierPolicy、观察范围 ObservationScope/2、当前来源观察 SourceObservation/1、依赖证明 DependencyProof/2、保存范围与配置 scope/profile/write-set、Registry/policy/rule，以及所有者输入 OwnerInputBinding/2；完整字节继续存放在按用途绑定的 pins 中。
 
-凡plan可能产生新的managed source version，installation plan同时冻结§4 SourceRevisionPlan/1：before观察或absent、该生产域该实体last sealed managed版本/完整空历史证明、拟议SourceStamp和exact after pin。它只是版本分配依据，不是成功版本，不含本次尚不存在的ChangeId；external→managed接纳也走该分支，true raw no-op和纯structure/control source-unchanged分支不造SourceRevisionPlan。
+ordinary/fresh source plan冻结§4 SourceRevisionPlan/1；仅具名D3 canonical-resolution分量使用Control §6.2.1的/2。/1 record包含：before观察或absent、该生产域该实体last sealed managed版本/完整空历史证明、拟议SourceStamp和exact after pin。它只是版本分配依据，不是成功版本，不含本次尚不存在的ChangeId；external→managed接纳也走该分支，true raw no-op和纯structure/control source-unchanged分支不造SourceRevisionPlan。
 
 DependencyProof/2引用的完整枚举、empty证明、range epoch/revision、当前授权和必要pins必须存在于真实P/M owner并可在planning、verify与recovery按原plan复验，不能只存在于I。D6维护source、authorization、replica_registry、conflict_record、execution_resource连续性；D3/D4/D7提供其具体closed key/enumeration。未完成owner后的strong consumer保持owner_update_required/proof_unavailable；不接受free JSON，也不阻断不依赖该strong range的ordinary局部操作。
 
@@ -202,6 +204,70 @@ input equality 要求descriptor、exact pins/owners、SourceObservation、Depend
 打开/解析/索引 Workspace 不能自动为每份 current source 建永久 pin。decision 不再引用、无 unknown/冲突/用户保留且达到 retention policy 后，大 effects bytes 可以失效；canonical request、decision state、receipt/error、费用/批准/claim 责任和最小 input descriptor 继续耐久。旧 D6/D7 协议已经承诺永久/decision-lifetime pins 的 saved decision 不追溯删 pin；新 retention 只适用于新版本记录。历史 effects pin 已合法回收后读取返回 effects_unavailable，不能回读 current file 冒充旧 after。
 
 容量不足在开始新 installation 前失败或暂停，不删除 protected pin。planned/unknown pin 的最后引用不能由 TTL、preview expiry 或用户关闭窗口解除。
+
+§7.2.1 的准确已注册调度连续性 owner 亦属于本节允许的长期恢复保留用途；只保留所选订阅实际需要的证据，不扩大为全工作区永久固定。
+
+### 7.2.1 受保护调度连续性生产者
+
+活动 D10 ScheduleSubscription/1，以及仍被武装、认领或未知恢复引用的退休订阅，是明确允许的恢复保留 owner。打开、解析或索引工作区不创建订阅，也不为全部源永久固定。owner 是准确且不复用的自动化控制引用与订阅代际，不是 Field key、路径或当前定义修订。创建先通过 D10 Control §16 所选源、字段、Registry 和完整调度门，预留有限保留容量，再在同一配置事务保存初始证据并注册到真实 Core 源与控制变化生产者。注册失败不能产生看似连续的订阅。
+
+    ScheduleContinuityWitness/1 = {
+      kind:"d6_schedule_continuity", version:1,
+      automation:D10.ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      revision:Counter,
+      initial:D10.ScheduleRecurrenceEvidence/1,
+      checkpoint:D10.ScheduleRecurrenceEvidence/1,
+      status:"continuous"|"binding_changed"|"gap",
+      producerEpoch:Token,
+      consumedTransition:Counter
+    }
+
+    ScheduleContinuityStep/1 = {
+      kind:"d6_schedule_continuity_step", version:1,
+      automation:D10.ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      expectedWitnessRevision:Counter,
+      producerEpoch:Token,
+      transition:Counter,
+      before:D10.ScheduleRecurrenceEvidence/1,
+      after:D10.ScheduleRecurrenceEvidence/1,
+      portableChanges:[{
+        changeRecordPin:PinRef/2,
+        installationNoticePin:PinRef/2,
+        completionProofPin:PinRef/2
+      }],
+      dependencyBefore:DependencyProof/2,
+      dependencyAfter:DependencyProof/2,
+      retainedInputs:[PinRef/2]
+    }
+
+    ScheduleContinuityInvalidation/1 = {
+      kind:"d6_schedule_continuity_invalidation", version:1,
+      automation:D10.ControlRef<automation>/1,
+      subscriptionGeneration:Counter,
+      expectedWitnessRevision:Counter,
+      producerEpoch:Token,
+      transition:Counter,
+      status:"binding_changed"|"gap",
+      evidencePins:[PinRef/2]
+    }
+
+源已消失、冲突或无效时，可能不存在有效后态 Observation 或 D4 上下文。此时生产者使用上述闭合失效记录，保留最后有效检查点，不能虚构 ScheduleRecurrenceEvidence。binding_changed 要求完整受信证据证明所选业务真实不连续；后态不可用、未知或历史缺失都是 gap。evidencePins 保留实际可得的原分型证据，只有保护生产者自身证明采集或可用性缺口时才允许为空，不能据此声称业务变化。失效比较同一当前见证和注册，原子保存永久状态及下一个 checked 转换和修订。最后一个 Counter 增量专门预留给失效：正向折叠在 MAX 前停止，容量或计数耗尽使用该保留增量标记缺口，不回绕，也不阻止无关普通源工作。失效引用使用 artifact/recovery，字节为 UTF-8 的 D6-Schedule-Invalidation/1、一个 NUL，再接完整 D3-CJ/3 字节，不能重置已经失效的代际。
+
+这是持续维护的保护控制见证，不是调用方证明、可移植签名、通用账本或可重建索引缓存。initial 不可变，逐字等于原订阅证据。checkpoint 初始等于 initial；只有在准确切面成功注册得到证明后，才从 revision=1、consumedTransition=0 开始。producerEpoch 标识真实连续注册的 Core 消费者及其耐久转换收件箱。数值计数不能创造连续性；源与控制生产者必须保留每次匹配前后转换，证明从同一注册点完整交付，覆盖所有因果分支及中间相关 Registry、规则和配置状态。重置或重建收件箱不能复用世代，第二写者不能独立更新见证。
+
+每一步都从实际已验证的同切面状态内部派生。before 等于当前见证 checkpoint，预期修订、世代及下一个 checked 转换序号匹配。完整依赖键集合覆盖所选 owner、身份及生命周期、必需 Facet 和两个 Entry key、相关源、Registry、schema、历法、时区、tzdb 和规则输入，以及适用完整业务范围。新发现依赖必须先取得资格，并证明其全部中间历史，否则为缺口，不能先读隐藏状态再扩范围。前后依赖证明对应真实切面；完整 Registry 快照、演进证明及 D4 RecurrenceReadContext 来自前后证据。Core 按既有分型解码器保留真实中间源、元数据、已接纳规则资产和控制图像，不能只用摘要替代。
+
+每次可移植转换的三个 artifact 引用严格解码为真实原 D6 ChangeRecord、其版本化 InstallationNotice 及 ContentCompletionProof，必须证明同一已封存 ChangeId、分量图像及完整因果前驱链，不能从当前文件重建。源及元数据载荷使用真实 exact_source_document 或 portable_metadata 类和生产 SourceVersion。历史转换保持真实原解码器；新转换使用 InstallationNotice/2 和 CP3。纯 P 控制或规则转换从真实序列化的保护前后状态采集，retainedInputs 保存完整快照及已接纳规则资产；不能因为没有源变化就跳过匹配依赖键的修订。未注册的提供者变化、外部写入或替换、观察缺口、转换缺失、解码器未知或分支不可证，均须在新扫描使用见证前标记 gap。
+
+Core 对每个中间转换准确应用 D10 原业务连续性谓词：owner 持续 live，必需 Facet 和所选 key 持续存在，完整解码的 recurrence/range 值及真实相关语义规则身份不变。合法无关正文、Entry 或格式变化可推进 checkpoint；删除重建、暂时消失或规则改变后复原则将本代永久标为 binding_changed。单纯预期与最终摘要相等不能折叠掉这些转换。规则身份不变且新增范围完整覆盖得到证明时，扩大 horizon 合法。observed_only 的 B/N 不证明未观察的外部 C 从未出现；受影响弱安装没有原严格完整历史证据时，不能认证调度连续性。
+
+消费与源控制转换发布、订阅配置和检查点更新、认领、停止及责任检查共用同一 P 序列化域。生产者要么先耐久保留完整下一转换再释放历史引用，稍后由获权消费者验证；要么在该事务中验证并折入见证。推进时修订、转换序号及完整检查点一起更新，不暴露部分检查点。保存的保护见证代表已验证前缀，因此成功折叠后已无引用的中间载荷可释放，而不丢掉已建立的不变量。压缩不能替代不可变初始证据、当前检查点、未消费收件箱、原已处理发生键与处置，或其它未决责任。不折叠时可以验证完整保留链，其完整性及谓词义务相同。
+
+容量不足时源控制提交不能静默丢证据。若已注册有限收件箱无法保留匹配转换，同一生产者事务必须先将订阅标记为 gap，才能释放不再使用的历史容量；普通源工作随后可以继续，但未来扫描不能再称连续。后端或提供者不能原子执行该失效时，本调度配置不可用。每次更新最多 4096 个引用、16 MiB 规范证据；源和分量字节另按 PinBudget 预留。超大或不完整历史不能部分推进。已证明业务变化在调度域为 binding_changed、管理域为 control_conflict；缺口为 state_unavailable。两者都需要当前资格下显式 replace 建立新代，不改变原认领或未知请求。重建、重启、相同最新字节或更大 Frontier 都不能重置为 continuous。
+
+见证及转换字节使用 artifact PinRef/2、recovery 保留类，分别采用 UTF-8 的 D6-Schedule-Continuity/1 或 D6-Schedule-Step/1、一个 NUL，再接 D3-CJ/3 规范字节。Core 通过保护记录来源及准确订阅、生产者关联认证，不能只凭摘要认证。D10 continuityPins 可以保存这些分型见证与转换引用，或完整原链，不接受自由 proof-map。读取或消费先检查当前源、字段及 owner 授权，不披露隐藏历史。replace 与新配置在同一事务退休旧生产者注册；只有全部订阅、原决议、发生项、未知、费用及其它保护引用都消失，并符合原保留承诺后，GC 才能释放引用。真实旧合同的较长固定义务继续保留，不引入全工作区永久历史或自动删除旧恢复证据。
 
 ### 7.3 状态机
 

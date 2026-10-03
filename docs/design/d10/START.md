@@ -8,13 +8,13 @@ translation_status: synced
 
 # D10 Reading and Candidate Checkpoint
 
-Status: candidate revision `D10-r08-joint-review-fixes-2026-09-28`; complete R08 author-revised candidate awaiting a fresh complete independent joint review. Fixed R07 was fully reviewed at candidate18/18 + S49/49 and returned REVISE (P0=0, P1=1, P2=10); that historical review is not R08 acceptance. This file records handoff state, not a Gate verdict.
+revision: D10-FA-r01-2026-10-02; status: coordinated author candidate, not accepted, activated, or implemented. The last complete historical R08 review of C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` returned REVISE (P0=0, P1=3, P2=8). All eleven historical final dispositions remain OPEN. Named repairs have limited independent reviews; actual cross-owner integration and fresh global acceptance remain incomplete. REVIEW-DISPOSITIONS separates those evidence scopes.
 
 The integrated fixed-input baseline is S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`; S contains the original 48 inputs from U=`f205831c848729f7ddbc3ba0cf32b689459c0c98` plus the added D4 reference catalog. Author branch: docs/d10-start. Existing Draft PR: #2, base=docs/chat-collaboration. D1-D9 snapshots remain authoritative; D10 UPSTREAM-AMENDMENTS is only an unactivated companion proposal.
 
 ## 1. Reading coverage
 
-Reading evidence is separated by actor/lineage. The **original author lineage** historically completed U48/48 and then the supplemental D4 reference catalog, for historical S49/49. The **current continuation author** has personally completed S16/49 full reads. D9 workers/export and templates were dependency-scoped partial reads only and are not counted as full. The **independent joint review of fixed R07** separately completed S49/49. None of these records inherits another actor's read count. The code block below remains the original author-lineage 48-file U inventory:
+Reading evidence is separated by actor/lineage. The **original author lineage** historically completed U48/48 and then the supplemental D4 reference catalog, for historical S49/49. The **historical R08 continuation author** personally completed S16/49 full reads. D9 workers/export and templates were dependency-scoped partial reads only and are not counted as full. The **independent joint review of fixed R07** separately completed S49/49. None of these records inherits another actor's read count. The code block below remains the original author-lineage 48-file U inventory:
 
 ```text
 docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md
@@ -92,7 +92,7 @@ Some retrieval calls returned truncated output. A truncated call was never count
 - D8 Acceptance Matrix Markdown and JSON;
 - Mandatory Scenario Intake, where a large aggregate range was replaced by smaller continuous segments through end of file.
 
-For the **original author lineage**, the recorded 48/48 and later S49/49 had no known unread ranges after those rereads. The current continuation author remains at S16/49 full reads by design; the remaining 33 S files are not silently claimed read. Search summaries, tool/workflow summaries, directory listings, and partial ranges never count as full reads.
+For the **original author lineage**, the recorded 48/48 and later S49/49 had no known unread ranges after those rereads. The historical R08 continuation author remained at S16/49 full reads by design; the remaining 33 S files are not silently claimed read. Search summaries, tool/workflow summaries, directory listings, and partial ranges never count as full reads.
 
 ## 3. From first checkpoint to complete candidate
 
@@ -146,10 +146,10 @@ Historical fixed C=`35fab950dabedfb92c9f12858701be8afe6faa74` and fixed R06 C=`3
 
 The complete independent joint review of fixed R07 C=`cf46461848d5dfe4dcd0f482ede934243cd098a4` against S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` completed candidate **18/18** and S **49/49** with no normative reading gap. Final result: **REVISE**, P0=0, P1=1 (`B03-P1-01`), P2=10 (`B01-P2-01`, `B02-P2-01`, `B02-P2-02`, `B02-P2-03`, `B03-P2-01`, `B03-P2-02`, `B03-P2-03`, `B03-P2-04`, `B10-P2-01`, `B11-P2-01`). Overall, terminology, and bilingual semantics all require revision. R08 is the author remediation and closes none of these findings by author assertion.
 
-All D3/D6/D7/D8/D9 companion amendments remain inactive proposals. Author checks, documentation CI, and bounded models prove only their artifacts; no merge, release, activation, or A2/product implementation is authorized by this handoff.
+Current design work coordinates this directory with the explicit owner afterimages and unique routing in `../d6-file-authority-reopen/`. Fixed S snapshots remain byte-unchanged. Each document has one assigned writer; author and independent reviewer roles remain separate. No product implementation, merge, release, or activation follows from this candidate. A2 integration and a fresh ordinary Chat Pro global review are required before design freeze.
 
 ## 7. Next completion and review gate
 
-The complete R08 author candidate consists of the nine bilingual pairs / 18 exact paths in this directory. Fixed S and every path outside docs/design/d10/ must remain unchanged; the English/Chinese scenario corpus must retain the same 125 IDs and branch classifications; and the applicable repository documentation/input checks must pass. Reading and CI evidence must be reported at the actual actor/layer and no pending/failure may be called pass.
+Current design work coordinates this directory with the explicit owner afterimages and unique routing in `../d6-file-authority-reopen/`. Fixed S snapshots remain byte-unchanged. Each document has one assigned writer; author and independent reviewer roles remain separate. No product implementation, merge, release, or activation follows from this candidate. A2 integration and a fresh ordinary Chat Pro global review are required before design freeze.
 
-After the final R08 commit is fixed, perform a **fresh complete independent joint review from scratch: candidate18/18 + fixed S49/49**. R07's completed 18/18+49/49 review cannot be inherited as a differential pass because R08 changes public wire, authorization, transaction/safety, recovery, external-send, and D8/D9 interface-owner contracts. Any required upstream amendment still needs later coordinated acceptance, versioning, activation, and acceptance evidence.
+Completion requires all nine bilingual D10 pairs / 18 exact paths plus every actual required D1–D9 owner afterimage to agree at one immutable candidate; fixed S49 and its inventory remain unchanged; all 125 existing scenario IDs and their full obligations remain traceable, and any new cases are explicit. Applicable documentation/input checks, actual reading coverage, terminology, bilingual semantics, and every historical/current finding are assessed on that exact candidate. Old S49/49 coverage, named differential PASS results, and CI cannot be inherited as full acceptance. Zero open P0/P1, explicit disposition of remaining P2, and fresh independent global Pro acceptance are required for design freeze, which still is not implementation or release.

@@ -9,7 +9,7 @@ translation_status: source
 
 # D4 属性类型、Schema 与关系
 
-候选状态：D6-FA-r01；部分联合候选；未接受、未激活、未实现。固定 S 的 D4 revision37-preservation-01 只作为来源和兼容历史。本文件是 D4 的完整候选 owner 后像；只有与 D1/D3/D5/D6 及后续 D7/D8/D9/D10 消费者共同接受后才可激活。本文件不授权产品实现、A2、发布或 catalog 变更。
+候选状态：D6-FA-r01 / P2 D4 协调作者候选；未接受、未激活、未实现。主文及配套术语、实现影响消费当前 P1 producer，同时保留固定 S 的有效语义和真实历史恢复义务。不可变 catalog 不改。联合接受、已授权且受门槛约束的 A2 与终审见 §15。
 
 固定来源：
 - S=7e18168dad3e6d120fce0dd607dc10fa7894e252
@@ -50,25 +50,62 @@ reserved tuples 原样保留：
 
 `wf` 永远不可分配；`user` 绑定 current WorkspaceId。复制库或注册新 replica 不产生新的 namespace owner，也不把 first-party namespace 转成 user namespace。
 
+所有 Field、Facet、别名、反向语义码、单位、历法和外部标识方案使用同一套精确标识符解码规则。`SemanticNamespaceId` 逐字继承 D2 的 `namespace-token`：由一个或多个非空的小写 ASCII 段以点连接；每段以 `a`–`z` 开头，后续仅可使用 `a`–`z`、`0`–`9` 或位于内部且不连续的连字符。禁止首尾连字符、连续连字符和空段。整个命名空间长 1..63 个 ASCII 字节；允许多段命名空间，不能把它收窄为单段 kebab 名称。
+
+`FacetId=namespace/facet-name`：facet-name 是符合相同小写字母及连字符规则的一段，长 1..63 个 ASCII 字节；完整 ID 长 1..127 个 ASCII 字节。`FieldId=namespace/local-field-path` 与 `SemanticCodeId=namespace/code-path`：路径包含 1..8 个点分段，每段长 1..63 个 ASCII 字节并遵循相同规则；完整 ID 最多 255 个 ASCII 字节。比较采用精确 ASCII 字节，不去除空白、不折叠大小写、不做 Unicode 规范化、百分号解码或区域转换。即使字节相同，这三个标识域也不合并；显示标签不能补出缺失的 ID。
+
 ### 2.2 RegistrySnapshot / RegistryBinding
 
-RegistrySnapshot 是 portable shared configuration 的 D4 semantic truth；D6 只负责其物理承载、版本与权限。一个受信 snapshot 必须完整验证 namespace ownership、Field/Facet/QualifierSet/alias closed shape、
-  contribution tables、alias closure、requires/conflicts graph、
-  active definitions、tombstone/migration ledger、semantic digests 与 catalog limits。
+注册表是可移植共享配置的 D4 语义真相；D6 继续只负责其物理承载、版本、权限、当前性证明与受管提交，不因此成为 D4 schema 的第二所有者。D4 与 D10 的握手边界仍是不可变、绑定世代且只读的 `RegistrySnapshot/1`。其精确成员集合为 `kind,registryGeneration,snapshotDigest,predecessor,rows,calendarComparators,calendarPeriodRuleContributions,calendarSeriesScopePolicyContributions,tzdbContributions,unitContributions,semanticCodeContributions,externalSchemeContributions,fieldSemanticBindings,facetSemanticBindings,semanticTombstones,semanticMigrations`；不得省略成员、用别名替换、增加未知成员或以开放 JSON 扩展。
 
-RegistryBinding继续绑定 exact generation + snapshot digest；不能只比较 generation 名。一次 decode/operation只使用一个固定 snapshot，不得中途 refresh。
+`snapshotDigest` 是 D10 认证后交给 D4 的完整规范快照内容摘要，覆盖除 `snapshotDigest` 自身之外的全部成员；`registryGeneration` 仍是计划/重试绑定令牌，二者不可互相替代。每次解码、目录装载、验证或操作规划都必须携带 exact `RegistryBinding/1={expectedRegistryGeneration,expectedSnapshotDigest}`，并逐字同时匹配同一快照的 `registryGeneration` 与 `snapshotDigest`。在同一世代下换成另一份自洽快照仍固定 `incompatible_schema`；一次解码/操作只消费这一份已绑定快照，不得中途刷新、混用世代，也不得把缓存或物化检查副本当成新的注册表真相。
 
-Registry evolution保持 monotonic ledger：同 ID major-1 definition digest必须 byte-equal；
-  breaking change使用 fresh ID + exact tombstone + migration。
-  复制 portable Registry bytes只复制 shared configuration事实，不赋予 replica 推进 Registry generation 的管理权；Registry mutation仍要求 current Policy、Registry admin资格和适用 D6 control/execution responsibility。
+语义所有者类别的闭集继续是 `core | first_party | publisher | workspace_user`。保留所有者元组逐字保持为 `core→(core,weftext.core)`、`d4→(core,weftext.d4)`、`tasks→(core,weftext.tasks)`、`people→(first_party,weftext.people)`、`organizations→(first_party,weftext.organizations)`、`calendar→(first_party,weftext.calendar)`、`library→(first_party,weftext.library)`、`user→(workspace_user,<current WorkspaceId>)`。`tasks` 仍由 Core 独占；`people`、`organizations`、`calendar`、`library` 仍为第一方保留命名空间；`user.ownerId` 必须逐字等于 D10 已认证的当前 D3 WorkspaceId；`wf` 永久不可分配，snapshot 中出现任何 `wf` row 都拒绝。同一命名空间不得有两个活动所有者；安装顺序、当前启用状态、显示名称或本地化标签都不是所有者证明。所有者无法证明或发生冲突时，D2 原始来源仍可在其自身权限下读取，但 D4 类型化状态不得被解释成已知集合或空集合，任何触及或依赖该 namespace 的类型化操作都不能继续作为成功路径。
+
+每个命名空间行的精确成员集合为 `namespaceId,ownerClass,ownerId,aliasDefinitionsState,aliasSchemaDigestSet,facetDefinitionsState,facetSchemaDigestSet,fieldDefinitionsState,fieldSchemaDigestSet,registryGeneration,verificationState`。`aliasDefinitionsState`、`facetDefinitionsState`、`fieldDefinitionsState` 三个定义状态彼此独立，且各自只允许 `complete|unavailable`：`complete` 配空摘要集合表示“已完整装载且确实没有定义”；`unavailable` 时对应摘要集合必须为空，表示定义集合无法证明。两者不能互换。D4 只接受 `verificationState=verified` 且同一 namespace 恰有一个所有者的行。
+
+七类贡献项继续使用 fixed-S 已冻结的闭合对象：
+- 日历比较器：`{kind:"calendar_comparator_contribution",calendarId,calendarVersion,precision,comparatorId,orderedLexemes}`；
+- 日历周期规则：`{kind:"calendar_period_rule_contribution",calendarId,calendarVersion,periodKind,periodRuleId,keyProfile}`；
+- 日历 series/scope policy：`{kind:"calendar_series_scope_policy_contribution",policyId,policyVersion,policySchemaDigest}`；
+- 时区数据库：`{kind:"tzdb_contribution",tzdbVersion,zoneIds}`；
+- 单位：`{kind:"unit_contribution",unitId,dimensionId}`；
+- 语义代码：`{kind:"semantic_code_contribution",codeId}`；
+- 外部方案：`{kind:"external_scheme_contribution",schemeId}`。
+
+所有集合成员都必须先证明其容器是真正的 JSON 数组；空对象、字符串、`null`、Boolean 或 number 都不能冒充空数组，畸形容器或元素必须返回闭合集不兼容结果，而不是抛出宿主异常。所有数组按各自已冻结身份元组的 `D3-CJ/3` 规范字节严格升序，并保证身份唯一；未知成员、非法 `null`、重复、乱序、超界、非法 ID、profile、zone 或 lexeme，或不属于已验证所有者的贡献项，都会使整个 snapshot `incompatible_schema`。七类贡献项的身份分别保持日历比较器 `(calendarId,calendarVersion,precision)`、周期规则 `(calendarId,calendarVersion,periodKind,periodRuleId)`、series/scope policy `(policyId,policyVersion)`、时区数据库 `tzdbVersion`、单位 `unitId`、语义代码 `codeId`、外部方案 `schemeId`。`calendarPeriodRuleContributions` 仍执行 closed `periodKind↔keyProfile` 映射：`day→iso-date-v1|week→iso-week-v1|month→iso-month-v1|quarter→iso-quarter-v1|year→iso-year-v1`，不得把合法 profile 重新配给另一 kind。`dimensionId` 是 verified-owner `SemanticCodeId`；数量值的维度约束由当前 `unitContributions[].dimensionId` 与相应 namespace owner proof 共同成立，单位名称本身不暗示维度，也不要求 `dimensionId` 另列入 `semanticCodeContributions`；测量约束中的 `byCode` 仍必须匹配当前单位贡献项账本。
+
+命名空间所有者查找与 `RegistryBinding/1` 验证必须在读取、解析或解释 Entry 内部 JSON 之前完成。零个已验证行固定 `namespace_owner_unprovable`，多个可用所有者行固定 `namespace_owner_conflict`，世代与计划不一致固定 `registry_generation_changed`，快照摘要或已装载定义摘要不兼容固定 `incompatible_schema`；这些失败路径不得调用内部解析器。保留元组不匹配同样在 Entry 解析前返回 `namespace_owner_unprovable`。签名、发布者身份、包安装/信任/撤销以及行如何经认证产生，继续由 D10 冻结；D4 不读取包安装顺序或凭据来补充证明，D10 的认证机制也不得改变已经验证的 D4 schema 语义。
+
+每个已装载别名、`FieldDefinition`、`FacetSchema` 必须先完整展开别名、通过闭合验证、按 `D3-CJ/3` 计算语义摘要，并命中对应已验证命名空间行的声明摘要集合。任何标为 `complete` 的别名/Field/Facet 集合还必须证明反向完整覆盖：实际已装载摘要集合与 Registry 声明摘要集合逐项完全相同，漏载或多载都会使上下文构造失败。只有完整集合才能判断定义是否已知；完整空集合可以产生真正的未知定义结果，而 `unavailable` 必须在 Entry 内部解析前统一走 `provider_or_schema_unavailable`。日历比较器、周期规则、series/scope policy、时区数据库 zone、单位、注册表作用域语义代码与外部方案还必须命中同一 `RegistryBinding/1` 下相应贡献项表，不能只证明命名空间所有者。
+
+成功的 `ValidatedCatalogContext` 必须不可变地绑定一个已认证的当前工作区 ID。该工作区可以来自 D10 提供的显式宿主工作区，也可以来自同一已认证注册表中唯一已验证的 `user` 所有者行；两者同时提供时必须逐字一致，否则上下文构造失败。公共 Entry、Facet、Relation、Calendar/recurrence 接受路径中的来源所属所有者必须属于该上下文工作区；不匹配时，在 Entry 内部解析或语义规划前固定 `namespace_owner_unprovable`，失败时保持完整原状态、无写集、无成功读集。注册表结构校验只确认 `user` 绑定合法 D3 工作区 ID 与 `workspace_user` 类别，不把一致性测试夹具中的工作区常量当作产品身份。这个来源所有者约束不改写或禁止普通值/来源证据中合法的跨工作区 NodeRef；这些引用是否可解析、可披露或符合目标域，继续由其原合同裁决。
+
+`fieldSemanticBindings` 与 `facetSemanticBindings` 分别按 `(fieldId,semanticMajor)` 与 `(facetId,semanticMajor)` 规范排序。Field 项精确为 `{fieldId,semanticMajor,semanticDigest}`，Facet 项精确为 `{facetId,semanticMajor,semanticDigest}`。Field 摘要覆盖完整展开 `valueType` 以及 `shape,qualifierSetId,cardinality,occurrenceOrder,duplicatePolicy,constraints,relation`；Facet 摘要覆盖 `requires,conflicts,fields,relations,constraints`。因此，同一个语义身份的摘要不能由包版本、映射遍历顺序或显示元数据替代。
+
+`predecessor` 只有两个闭合分支：只允许一次且受 D10 信任根认证的 `{kind:"registry_bootstrap",bootstrapId:"weftext-d4-semantic-ledger-v1"}`，或后续每一代必需的 `{kind:"registry_predecessor",registryGeneration,snapshotDigest}`。每个非初始代引导验证计划都必须提供 closed `RegistryEvolutionProof/1={previousSnapshot,currentSnapshot}`；`currentSnapshot.predecessor` 必须 exact 绑定 `previousSnapshot` 的 generation 与完整 digest，previous/current 两份 snapshot 都要先各自完成 D10 认证前提和 D4 闭合验证，不能只把当前账本与自己比较。`proof.currentSnapshot` 必须就是本次完整当前快照，`previousSnapshot` 必须命中 `predecessor`。
+
+目录/注册表装载的唯一成功输出是不可变 `ValidatedCatalogContext`：先完成 `RegistryBinding/1`、闭合快照与必要的 `RegistryEvolutionProof/1`，再在同一绑定下完整装载目录。非初始代缺少演化证明时，不得暴露可供 Entry 或操作验收使用的定义。公共 Entry、Facet、Calendar/Relation 规划器只消费这一上下文与显式绑定修订号的输入；物化检查副本、低层 schema 解码器或单个测试谓词都不能替代上下文或单独签发完整验收结果。这个一致性验证工厂可以检查结构、摘要与演化，但 D10 的真实签名、发布者身份与 trust-root 认证始终是明确的上游输入前提；任何 Python/对象封装都不被描述成已经实现提供方信任。
+
+单份快照在进入目录、上下文或迁移入口之前还必须通过自身历史一致性：活动身份与墓碑身份互斥；每个墓碑恰有一个 from identity/digest 匹配的 migration；每个迁移记录的目标摘要必须命中当前活动绑定或后来已经退役的墓碑；历史链无环且最终到达活动身份。初始 bootstrap 只允许没有退役与迁移历史的首次账本，不能把历史导入伪装成新 bootstrap。上游认证成立也不豁免这些结构与语义检查。
+
+逐代比较同时覆盖 Field 与 Facet。保留的同 ID、major 版本 1 摘要必须逐字节相等；同 ID 提升 major 版本、换摘要或静默删除固定 `incompatible_schema`。每个从活动集合消失的 ID 必须在当前代出现精确墓碑 `{kind:"semantic_tombstone",semanticKind,semanticId,semanticMajor:1,semanticDigest,retiredInGeneration,reasonCode:"replaced_by_migration"}`，其中新墓碑的 `retiredInGeneration` 必须逐字等于首次记录该退役事实的当前代 `registryGeneration`，以后各代只能原样累计。每个退役 ID 还必须有恰一个精确迁移记录 `{kind:"semantic_migration",migrationId,semanticKind,fromId,fromDigest,toId,toDigest}` 指向新的活动 ID；`fromDigest`/`toDigest` 分别命中前一代/当前代账本，`fromId != toId`。孤立墓碑、孤立迁移记录、没有迁移记录的删除、没有墓碑的替换、摘要不符或退役世代不符都必须拒绝。迁移记录身份固定为 `(semanticKind,fromId,toId)`；`migrationId` 只是不可变 UUID 载荷，同一迁移批次可在不同身份记录中复用，绝不能以 `migrationId` 有损归并历史记录。
+
+`semanticTombstones` 与 `semanticMigrations` 是跨后续全部世代累计、逐项字节不可变的历史账本：当前代必须原样包含前一代的全部记录，任何已形成墓碑的 ID 永久不得再次成为活动定义，不能隔一代删除历史再以新摘要复活。七个贡献项表同样采用单调身份账本：已有日历比较器、周期规则、series/scope policy、时区数据库版本、unitId、codeId、schemeId 不能删除，也不能在相同身份下修改载荷；新的语义必须使用新的身份。与旧语义没有替换关系的新的 Field/Facet 可以独立新增且不得伪造迁移记录。bootstrap、wrong predecessor、同 ID mutation、silent deletion、fresh replacement 缺项、完整 replacement、tombstone mismatch、retirement-generation mismatch、standalone addition、多代复活攻击和同 contribution identity payload mutation 都继续是未来语料库/验收义务；本候选正文不把这些场景声明为已执行或 PASS。
+
+贡献项预检与结构诊断继续共用声明位置的构造器识别前提：先由 Field/QualifierSet 或 D3 引用位置确定允许的构造器/闭合分支。构造器缺失、未知或不匹配时，只报告该位置的类型诊断，不解释其内部成员，也不解析内部贡献项 ID；已经独立可解释的同级成员仍继续。D3 未标记的来源片段不凭空增加 `kind` 要求。构造器识别成功后，所有由贡献项支撑的标识符必须在包含对象的结构/类型被解释之前，使用同一已绑定 snapshot 递归完成可用性预检与 namespace owner proof；覆盖对象/联合/集合内部值、范围边界、限定符 `validity|eventTime|observedAt|status`、外部来源证据的 `scheme|observedAt`、注册表作用域语义代码、日历 ID/版本/比较器、时区数据库版本/zone、单位 ID、外部方案、别名 ID 和每个有向关系 inverse code。语法合法但 owner 或具体 contribution 无法证明时，不得降级为普通未知字符串，也不得被外层封装归一成 `invalid_value|invalid_qualifier|invalid_provenance`；原始来源保留并进入 `retained_unavailable`，或在真正触及它的操作中拒绝该路径。一次解码始终只看同一固定快照。
+
+可移植注册表字节继续属于共享配置事实；把这些字节复制到副本不复制注册表管理权限或 execution custody，也不授权推进 `registryGeneration`。注册表修改仍需要当前策略、注册表管理权限资格和适用 D6 控制/执行责任。当前 P1 D6 的 `registry` `DependencyKey/2`/证明只负责把本操作使用的注册表快照/绑定、完整目录与连续性纳入同一受保护当前证明切点；D4 不在这里复制它的 D6 承载格式/schema，也不让该证明取代上述 D4 Registry 语义。
+
+每项 `calendarSeriesScopePolicyContributions` 以 `(policyId,policyVersion)` 为贡献项身份，`policyVersion` 必须非空。`policyId` 必须在同一绑定 snapshot 中通过已经验证的 Namespace Owner 预检。`policySchemaDigest` 是 §16.6 定义的**完整闭合 `CalendarSeriesScopePolicy/1` 值**经 D3-CJ/3 规范编码后的 SHA-256；标签、子集、Registry digest 或另一 snapshot 的 policy 均不能替代。SeriesScope 消费前必须同时核对该完整值、行身份和 digest。
 
 ### 2.3 Reference Catalog v1
 
-固定 catalog继续逐字定义 4 QualifierSetSpec、22 aliases、61 FieldDefinition、7 FacetSchema 和 1 CalendarSeriesScopePolicy。本批不创建 catalog replacement。
+固定目录继续逐字定义 4 个 `QualifierSetSpec`、22 个别名、61 个 `FieldDefinition`、7 个 `FacetSchema` 和 1 个 `CalendarSeriesScopePolicy`。本批只恢复既有 D4 注册表/目录合同，不创建目录替代版本，也不修改 fixed-S 目录字节。
 
-limits原样保持：
+限额原样保持：
 
-| limit | value |
+| 限额 | 值 |
 |---|---:|
 | maximumTypeDepth | 8 |
 | maximumObjectMembers | 64 |
@@ -78,28 +115,27 @@ limits原样保持：
 | maximumSchemaUtf8Bytes | 65536 |
 | maximumProvenanceAtoms | 16 |
 
-catalog任一结构/语义失败使整个 catalog unavailable，不做“部分成功”。
+目录必须在 §2.2 已完成的同一 `RegistryBinding/1`、同一不可变 `ValidatedCatalogContext`、同一工作区绑定和适用演化证明下整体装载。别名闭包、所有 Field/Facet 的精确成员集合、QualifierSet、requires/conflicts 依赖图、语义绑定摘要、贡献项可用性、全局限额与各项规范排序/唯一性任一失败，都使整个目录/上下文不可用；不能返回可用于 Entry/Facet/Relation/Calendar 的验收的“部分成功”定义，也不能把装载成功的一部分当成完整目录。标记 `complete` 的命名空间仍必须满足实际已装载摘要集合与注册表声明摘要集合的反向完全覆盖；`unavailable` 与真正的完整空集合继续严格区分。
 
-## 3. Entry/1 与作者 source
+所有后续 D4 解析器/规划器只能消费这个完整上下文；单个 schema/解码器、缓存、物化检查副本、部分目录或当前界面/模块启用状态都不能替代它。固定 catalog 中既有 TypeSpec/Facet/Relation/Calendar/People/Organizations/Library/Task 的既有语义、递归深度与字节/集合预算继续由后续章节及该目录自身约束，本次协调不改任何这些域规则、来源选择器或修订号线格式。
 
-D4 Field Value Occurrence 始终来自 owning Node 的 D2 exact-source Document。
-  Attribute Carrier Block/Lexical Attribute Entry 是 current-revision lexical occurrences，
-  不是 Entity、Record、sidecar 或 DB row。
+## 3. Entry/1 与作者源
 
-D4 Entry/1 保持 closed semantic members：version、FieldId、
-  occurrenceKey、typed value、optional qualifiers、optional note、
-  optional provenance。unknown/duplicate member、wrong constructor、
-  非法 UTF-8/JSON、budget 超限或 Field/schema mismatch 都按原 diagnostic顺序拒绝。
+D4 字段值出现项始终来自所属节点的 D2 精确源文档。属性载体块和词法属性项只是当前修订中的词法出现项，不是实体、记录、旁置文件或数据库行。
 
-occurrenceKey 只是 owner Node + FieldId + expected current source revision 内的 value-internal selector；
-  不是 EntityRef、Locator、OperationId、RecordRef 或 cross-revision identity。相同 value 可以有多个 occurrence；外部 edit/reorder/delete+reinsert 或 SourceVersion 生产 epoch、revision、externalSequence 变化后不能仅凭 key/value 续认。当前 D6 外层 SourceObservation/1 资格验证作为附加保护，不能改变 occurrenceKey 原有基于 owner Node + FieldId + expected current source revision 的 selector 形状。即使 production version 相同，当前 SourceObservation token/epoch 在 watcher gap、external replacement 或 discontinuous materialization 后失效，也不能恢复旧 occurrence selection。
+D4 `Entry/1` 保持原闭合语义成员：版本、字段标识、出现项键、类型化值，以及可选的限定信息、备注和来源信息。未知或重复成员、错误构造器、非法 UTF-8/JSON、预算超限、字段与模式不匹配，都按原诊断顺序拒绝；本合同不改变 `Entry/1`、`occurrenceKey` 或选择器的线格式版本。
 
-Inline Field Note 是 optional plain author text；无内容不写空占位。typed qualifier/provenance不能塞进 note后再自然语言解析。
+`occurrenceKey` 仍只是 owner Node + FieldId + expected current source revision 内的 value-internal selector，不是 EntityRef、Locator、OperationId、RecordRef 或 cross-revision identity。对使用本 P1 新合同的新 managed 路径，这个 inner expected source revision 必须逐字等于该实际 source-bearing owner 的完整 managed production `SourceVersion/2.revision`；该生产版本自己的 production `CommitDomain` 与 production `observationEpoch` 仍保留在外层 `SourceVersion/2` 中，不塞进 inner integer。一个合法当前 managed 前像的 production domain 可以不同于当前 operation 的 observer domain；这种跨 production-domain 观察本身不是 stale/domain mismatch。禁止的是把 foreign before 的 revision 当作 after production domain 的 H、把它冒充另一 owner/另一 production version，或把 external `externalSequence` 填进 managed inner revision。
 
-raw Entry、carrier framing、comments、line endings、
-  unknown namespace bytes和未选中 occurrences必须按 D2/D4 lossless规则保持。
-  structured mutation绑定完整 before source、selector/span、
-  current SourceVersion/2 与 RegistryBinding；相同 hash 不证明 continuity 或 ABA。
+当前资格仍由当前 operation `CommitDomain` 下的完整 `SourceObservation/1` 证明：其 `observerDomain`、`entityRef`、完整 production `sourceVersion`、当前 `observationEpoch`、`FileObjectBinding`、evidence pins 与适用 control/Registry/dependency cut 必须一致；`SourceVersionRef/1` 只选择这份完整受保护 Observation。若当前 selector/Locator 还需要受保护 revision-token currentness，只消费真实 `RevisionTokenBinding/2`，且其 `source` 必须是闭合 `RevisionTokenSource/2`；该 token/binding 绝不替代 D4 inner integer，也不把 production epoch、observer epoch 或 token 本身解释成 `sourceRevision`。Relation `incidenceScopes[].revisionToken` 仍是 relation-incidence 范围版本 token，不是上述 source revision binding。
+
+external `SourceVersion/2` 没有 managed revision。合法 external bytes 仍可按其自身授权用于 raw/source read、D2 repair、Draft 和普通离线/人工 whole-source 工作；缺少 managed inner integer 不得永久禁用这些路径。只有真正需要 D4 managed inner revision 的 structured/typed selector 路径，才必须先经过显式、受权的 managed admission/save；例如合格人工 whole-source save 在成功 seal 后产生真实 managed production `SourceVersion/2`，随后新 structured request 才使用其中的 managed revision。读取 external source 不得为了制造 revision 自动写回、静默接纳或新增 Approval。若 admission/save 的 seal 或 outcome 不能证明，就保留原计划/pins/unknown 边界，该 structured request 不得从相同 bytes/hash、externalSequence 或当前文件形状猜 revision；raw/read/repair/Draft/ordinary 能力继续按自身资格独立。
+
+相同 value 可以有多个 occurrence；external edit/reorder/delete+reinsert，或 production/observer continuity 变化后，不能仅凭 key/value 延续旧 selection。即使 production version 相同，watcher gap、external replacement 或 discontinuous materialization 也会使旧 Observation/token 资格失效。
+
+Inline Field Note 仍是 optional plain author text；无内容不写空占位。typed qualifier/provenance 不能塞进 note 后再自然语言解析。
+
+raw Entry、carrier framing、comments、line endings、unknown namespace bytes 和未选中 occurrences 继续按 D2/D4 lossless 规则保持。structured mutation 绑定完整 before source、原 selector/span、真实 managed before revision、外层完整 `SourceVersion/2`/`SourceObservation/1` 与 `RegistryBinding`；相同 hash、相同 bare revision 或相同 token payload 都不能证明 continuity 或排除 ABA。历史 saved/planned/legacy bytes 继续由产生它们的原 decoder/revision contract 解释，本 P1 bridge 不倒追升级。
 
 ## 4. TypeSpec、Typed Value 与 Field Shape
 
@@ -118,6 +154,24 @@ quantity保持 exact decimal + namespaced unitId；没有 verified conversion co
 
 Field Semantic Shape closed为 fact、event_assertion、observation、relation。shape决定合法 qualifier/projection；事件、状态、观测、关系不能因为 UI 都像一行而压成无类型 list item。
 
+### 4.1 标量和时间值的精确语义
+
+文本保留作者原文。模式选择精确比较或 `nfc-for-compare`；NFC 比较不改写源字节。声明 `nonEmpty` 时其值只能为 true。可选成员缺席就是缺席，不能替换为 null、空文本、零或默认值。Boolean 不能充当整数。D4 integer 只接受 `0|-?[1-9][0-9]*`；D3 控制计数继续使用独立且有界的 `D3Integer`。D4 decimal 只接受 `(?:0|-?[1-9][0-9]*|-?(?:0|[1-9][0-9]*)\.[0-9]*[1-9])`：`0`、`0.5`、`-0.5` 合法，`-0`、`0.0`、`-0.0`、`1.20` 和指数写法不合法。两种数值都不增加宿主语言的整数位数、浮点或 Decimal 上下文精度上限。显式精度事实使用其声明的模式表达，不能靠多余的零编码。
+
+`zoned_instant` 验证 ASCII RFC3339 数字、0001..9999 年内真实的公历本地日期、`T`、00..23 时、00..59 分秒、可选任意长度的小数秒，以及 `Z` 或带符号的 00..23 时和 00..59 分偏移。拒绝未知偏移 `-00:00` 和闰秒 60。精确的延伸公历运算允许合法本地瞬时解码到 UTC 第 0 年或第 10000 年；不能因宿主日期范围、浮点舍入或微秒截断而拒绝或改值。文本偏移原样保留，不要求与独立 IANA `timeZone` 的偏移相等。时区和 `tzdbVersion` 必须经过验证；在本地时间缺口或重叠处创建瞬时必须明确选定最终瞬时，不能使用设备默认值。
+
+日期按经过验证的 `(calendar,calendarVersion,precision)` 比较器比较，两个有界端点必须使用相同基准；字典序不能充当所有历法的比较器。瞬时按精确解码的 UTC 值比较，包括跨偏移相等和任意小数精度。范围至少有一个端点；两端都存在时必须严格满足 `start < endExclusive`。开放端点与不可用不同。量值的精确 decimal、经过验证的单位贡献项和维度必须一致；没有相应经过验证的贡献项就不能隐式换算。
+
+### 4.2 闭合递归、约束和验证上限
+
+§16 的 TypeSpec、ObjectMemberSpec、UnionVariantSpec、限定信息、来源信息及 Field/Facet 合同仍是唯一闭合形状。有界序列或集合只能出现在对象成员中，包括递归对象成员；不能作为 Field 或别名的根类型，也不能直接作为集合元素。可重复 Field 使用多个独立 Entry。禁止通用 array、map、any、binary、可执行表达式和提供方 JSON 逃生口。别名展开必须在同一不可变 Registry 中验证全部引用定义，拒绝缺失或循环；根深度为 1，沿别名、对象、联合体、集合元素边计算，最大深度为 8。
+
+权限和可用性预检通过后，先检查 Entry 字节上限，再分配解析器、嵌套位置或候选结构；Facet 前像、初始 Entry 和 Cleanup 输入也适用。模式验证通过记忆化计算展开尺寸，并在分配前采用饱和且检查溢出的运算；UTF-8 字节、转义、标点、重复展开的别名和外层 Field/Facet 都计入。既有数量上限和字节上限相互独立，不新增依赖链深度或宿主数值、时间上限。
+
+`mutually_exclusive_members` 中的名字必须是根对象或根联合体中每个对象分支的直接成员，且至少存在一个对象分支；运行时只检查已经验证的当前对象。`measurement_unit_dimension` 必须覆盖完整合法命名空间码域：指定贡献集合的全部码，或所声明命名空间的全部码；不能把 Field 局部码冒充命名空间 ID。各码映射的维度必须与单位贡献一致；身高为长度、体重为质量。增加新的合法命名空间码时必须同时补全映射。`union_variant_equal` 要求两个 Field 的所有出现项使用同一个分支；两边各自含有相同的混合分支集合仍不合法。
+
+所有 D3 Ref/Locator 使用共享的精确 D3 解码器。Resource/Annotation 值保持 owner 局部性；node 来源信息中的 Locator 与 node Ref 的 owner 必须一致。external 来源必须有经过验证的 scheme 和非空 identifier；transform 使用 `D3Integer` 引用来源数组中更早的位置，并保留原 operation UUID。时间、状态、置信度、选择等限定信息遵循各自模式；role 等值成员仍属于 value。内嵌备注是独立纯文本，不能覆盖二者。按 §11 完整检查所有允许解释的独立分支；缺少贡献项时不推测解析内部结构。
+
 ## 5. FacetSchema
 
 D2 source `facetMemberships` 是 declared membership唯一作者源。D4将其解释为 unordered exact FacetId set；source order无 precedence/override/last-wins。effective closure只由当前 Registry requires graph机械派生，可删除重建，不回写作者 source。
@@ -125,12 +179,16 @@ D2 source `facetMemberships` 是 declared membership唯一作者源。D4将其�
 missing dependency、cycle、conflict 或 incompatible Field definition使相关 typed state unavailable/invalid并阻断触及操作。
   每个 FacetSchema closed声明 fields、relations、requires、conflicts、constraints；不存在 implicit membership、priority 或 shadow。
 
-当前 Task规则保持：ordinary Node + source-declared exact `tasks/task` Facet 才是 Task；Template仍是 D2/Core meta-kind，Template + exact tasks/task冲突。D4不恢复旧 specialization 双权威。
+当前 Task规则保持：ordinary Node + source-declared exact `tasks/task` Facet 才是 Task；Template仍是 D2/Core meta-kind，Template + exact `tasks/task` 冲突。D4不恢复旧 specialization 双权威。
 
 显式 Assign/Remove/Cleanup Facet是强 typed Action：需要完整 source/Registry、
   declared/effective closure、相关 Field requiredness、
   相关 relation incidence、current Policy/auth 和 exact proposed post-state。
   ordinary save允许 pending不等于 Facet Action可降级。
+
+requires 图不能有自环或循环；conflicts 必须对称且不能指向自身，并在整个有效闭包上检查。既有上限为 Registry 中 1024 个 Facet、源文档中 32 个声明 Facet。通过迭代和记忆化遍历支持合法的长有向无环图，不另加依赖深度限制，也不能把宿主递归栈溢出当作语义规则。即使节点没有关系，只在有效闭包出现而未在源中显式声明 `tasks/task` 仍构成冲突；扩展只有在节点同时显式声明 Task 时才可要求 Task。节点分类必须来自完整源绑定的 D2 ordinary/Template 分类，不能相信调用方的 `isTask` 标志。
+
+Create/Assign 使用有序初始 Entry。Assign 后的 membership 恰为原序列追加所请求的 Facet，保留既有源。Remove 一次只移除一个声明 Facet，必须先移除依赖它的 Facet，不隐含原子批量移除；Field 字节保留为 `retained_without_membership`。Cleanup 只删除剩余有效 Facet 均不使用且被明确选择的 Field Entry，在可用性预检后使用准确的 `{fieldId,occurrenceKey}` 选择器。每个选择器绑定前态中相应的 Entry 引用 `{fieldId,occurrenceKey,rawEntrySource}`；rawEntrySource 不是选择器成员。未选 Entry、顺序及原始字节保持不变。真实后态必须重新验证 requiredness 和所有受影响关系端点、域。托管结果 revision 来自 §3/§16.3 中同一 D6 source plan，不能自行采用 fresh=1 或 old+1 分配器。
 
 ## 6. typed availability 与 D6 SemanticState
 
@@ -158,7 +216,15 @@ unknown/pending/unavailable不能转换成 empty value、empty relation、zero m
 
 ## 7. operation-applicable proof matrix
 
-每个操作分别证明：current source/SourceVersion/2；RegistryBinding/touched definitions；actual MutationFootprint；local Entry/Facet closure；真实需要的正负跨对象范围；unique proposed post-state；current Policy/permission；D6 CommitDomain/Frontier/install；以及仅在强consumer需要时的 D7 complete cut/preparation。本地可证明项不能因 pending省略。
+每个新 D4 操作只为适用证明义务消费真实 D6 `DependencyProof/2`；原始读取和修复不因此增加无关全集要求，也不要求每项操作枚举全部十四种键；不接受 free owner JSON、粗粒度 `Frontier/2`、Derived Index 命中或 caller 自报“完整”。`DependencyKey/2` 的闭集恰为十四类：`source`、`lifecycle`、`placement_range`、`ref_inbound`、`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`foreign_binding`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource`。其中 `placement_range` 的 `StructureRange` 闭集恰为九类：`live_children`、`trash_children`、`trash_roots`、`ancestor_chain`、`subtree`、`owner_resources`、`owner_annotations`、`reply_closure`、`restore_membership`。D4 不复制其它 owner 的枚举算法：D3 继续拥有 lifecycle/placement/ref-inbound 与结构范围算法，D6 继续拥有 source/authorization/replica_registry/conflict_record/execution_resource 的 carrier 与相应控制证明，D7 继续拥有 `query_scan` 完整查询枚举，foreign binding 的具体版本比较仍归 D3/D9/D10 或实际来源 owner。D4 自己必须完整实现并证明 `relation_incidence`、`calendar_scope`、`registry` 与 `temporal_rules` 的语义枚举；D6 只承载它们的 closed key、stamp、evidence pins、currentness 与提交/恢复消费边界。
+
+D4 对四类自有 key 的最小完整语义如下。`relation_incidence(fieldId,endpointNodeRef)` 逐字复用 `RelationReadContext/2.incidenceScopes` 的 `fieldId`、`endpointNodeRef`、当前 incidence `revisionToken` 与全部 `factSelectors={ownerNodeRef,fieldId,occurrenceKey}`，并证明 canonical owner、每个 source/entity state、真实旧/新 endpoint 以及完整正事实、负事实和空范围；literal arm 没有 target Node lookup/incidence、target cardinality/inverse/graph/lifecycle，symmetric 同一作者事实在同一 endpoint 只计一次。`calendar_scope` 按 D6 closed `CalendarRange` 的 `binding|series|period|scope_inbound` 分支证明真实绑定/configuration revision、同一 `RegistryBinding`/policy、完整 period membership 与 negative range、以及适用 control inbound；configuration absent、binding absent 和 complete-empty period range 是三个各自带版本证据的状态。`registry` 证明同一 Workspace 的完整 `RegistrySnapshot/1`、`RegistryBinding/1`、必要 `RegistryEvolutionProof/1`、已闭合的不可变 `ValidatedCatalogContext` 以及本次实际使用的 alias/Field/Facet/namespace/contribution 目录；D6 `registry` key 不能抹掉或摘要这些 D4 合同。`temporal_rules` 绑定本次实际读取的 calendar comparator、period rule、timezone/tzdb rule set、`RecurrenceReadBinding/1` 和有限 horizon coverage；不物化无限时间，设备当前时区也不能补缺段。
+
+所有十四类 proof 共享同一完整性规则。先在适用的 `ObservationScope/2`、当前 `Policy/3` 和 owner disclosure 下证明允许观察该 key 的状态/范围，再读取 hidden sibling/member/incidence/calendar/Registry 内容；空范围与非空范围采用相同的完整枚举标准。每个 `stamp={epoch,revision}` 的 `epoch` 是该 exact `DependencyKey/2` 的 proof-continuity generation，不是 production `SourceVersion/2.observationEpoch`、current `SourceObservation/1.observationEpoch`、CommitDomain generation 或 Workspace-global epoch。真实 complete enumeration 可在新 epoch 从 revision 0 开始；0 只表示该范围世代的第一个完整 proof revision，不表示 empty、unknown、not-scanned 或 source revision 0。watcher/journal gap、owner rule/decoder version 变化、无法恢复的事件缺口、真正丢失 correctness-evidence directory 或无法证明连续性时，旧 stamp 失效并进入新的 proof continuity generation；相同最终 bytes/hash/count 不能恢复。仅删除/重建 I 时，如果真正的 P/portable-metadata correctness boundary 与 gap-free continuity 仍完整，则只重建缓存，不重签 proof、不换 epoch。
+
+P/portable metadata 继续保存真实 closed key、stamp、complete-enumeration boundary、last-reference pins 和连续消费证据；I 只缓存 candidates/enumerations。`source` proof 使用完整当前 `SourceObservation/1`、真实 production `SourceVersion/2`、`FileObjectBinding`、exact source/value pin 和当前 source validity。一次可提交的 D4 proof cut 中，source Observation/FileObjectBinding/pins、control、Registry/rules、authorization 与实际读取的所有 range stamps 必须相互一致；`Frontier/2` 只证明其 own verified sealed causal prefix，绝不证明某个范围完整。unavailable/unknown、missing shard、placeholder、I/O failure、partial/building I、no-hit、相同 hash/member count、provider “synced” 或 causal-Frontier prefix 都不能冒充 complete 或 empty。
+
+每个操作仍分别证明其本地事实和它真正依赖的完整正负范围；`semantic_pending` 不能省略可在本地判定的 Entry/Facet/type/cardinality/requiredness、真实 deny、touched `retained_unavailable` 或 D2-invalid gate。ordinary/local 语义范围与 `strict|observed_only` 安装保护轴继续正交；本合同不扩大弱保护。缺少一个无关 strong-range proof 不会永久禁用本来不依赖它的合格 ordinary/local 路径，但依赖 complete proof 的 Facet/Relation/Calendar strong Action、unique/many、typed copy/fork/import、restore/purge 与 D7 complete Action 仍必须取得其真实完整 proof，且这些 strong/structured 路径继续 `strict`。
 
 | operation | local proof | complete proof | result |
 |---|---|---|---|
@@ -169,19 +235,19 @@ unknown/pending/unavailable不能转换成 empty value、empty relation、zero m
 | D3 replica_local create_node | 新 source 完整通过 D2+D4 局部 typed/Facet | relation/unique/calendar/cross-object 可成为待证义务 | semantic_pending 可保存；不等于强 D4 Action |
 | D3 replica_local move/reorder | 仅实际predicate/permission需要的D4 facts | 不证明全局relation/collection | D3 local success可与pending并存 |
 | D3 replica_local Trash | 局部 source/Facet/lifecycle policy | 缺 inbound/relation 全集形成待证义务 | semantic_pending 局部 lifecycle |
-| non-relation Entry edit |完整owner source、Field、Entry、cardinality、qualifier/provenance、requiredness | Field无跨对象义务则无需全库 | ordinary可成功；其它义务仍pending |
-| Assign/Remove/Cleanup Facet |完整local closure + relation incidence | 必须完整 | 缺范围reject/unavailable |
-| 关系新增/更新/删除 | RelationReadContext/2 + Binding/2 | 完整 incidence/endpoint/domain/cardinality | 仅 complete |
-| 局部 recurrence value 编辑 | 精确 TypeSpec/calendar/tzdb/source 后状态 | 无 series unique 时可局部 | ordinary 或 pending |
-| series-scope unique/many | recurrence/period + policy | 完整 (series,periodKey,scope) 正负范围 | 仅 complete |
+| non-relation Entry edit | 完整owner source、Field、Entry、cardinality、qualifier/provenance、requiredness | Field无跨对象义务则无需全库 | ordinary可成功；其它义务仍pending |
+| Assign/Remove/Cleanup Facet | 完整local closure + relation incidence | 必须完整 | 缺范围reject/unavailable |
+| 关系新增/更新/删除 | `RelationReadContext/2` + `RelationReadBinding/2` | 完整 incidence/endpoint/domain/cardinality | 仅 complete |
+| 局部重复规则值编辑 | 精确类型、历法、时区和源后态 | 不涉及系列唯一性时可局部证明 | 普通保存或待补证明 |
+| series-scope unique/many | recurrence/period + policy | 完整 `(series,periodKey,scope)` 正负范围 | 仅 complete |
 | 原始字节复制/导出 | 精确 source + status | 不声明 typed success | 字节保留 + loss/status |
 | typed 复制/分叉/导入 | D3 wire12 映射 + D4 typed source | 完整 canonical-owner/requiredness | 仅 managed_atomic |
-| restore/purge | D3 managed_atomic + current D4 facts |完整relation/inbound；purge另Frontier | 缺proof拒绝 |
+| 恢复或永久清除 | D3 托管原子资格和当前 D4 事实 | 完整关系与入向范围；永久清除另需真实副本和 cut 证明 | 缺证明则拒绝 |
 | D7 all_result/bulk/automation 写入 | 局部 typed 只是必要条件 | 未来 D7 complete cut | D7 后像完成前 unavailable |
 
-D6 obligation `relation|unique|calendar|inbound|cross_object_type` 表示未证明，不表示允许失败；它绑定产生 source 的 SourceVersion/2、CommitDomain/2、Frontier/cut、RegistryBinding、Policy和pins。
+D6 obligation `relation|unique|calendar|inbound|cross_object_type` 仍只表示“尚未证明”，从不表示“允许违反”。已知相关 scope/stamp 变化必须按原 owner 进入 stale/conflict/reprepare；无法证明 continuity/completeness 是 unavailable/unknown，而不是 constraint 已通过。D3 local Trash 仍可在原合同允许时留下真实 pending obligation；restore/purge 不能复用这个 pending 当 strong proof。
 
-r6后来补验成功只证明r6；不能改写r5 receipt。删/重建I、hash相同、设备迁移、replica注册、外部A→B→A或observationEpoch变化都不会恢复old proof。
+r6 后来补验成功只证明 r6/current；不能改写 r5 receipt、旧 readSet 或历史强资格。删除/重建 I、hash 相同、设备迁移、replica 注册、外部 A→B→A 或 observation generation 变化都不会恢复旧 proof。
 
 ## 8. Relations
 
@@ -197,88 +263,135 @@ fixed-S closed shape保持：
 
 D6提供可信snapshot/stateToken/source revision/incidence revision/auth；client不能自报complete或empty incidence。
 
-新 D6-FA 请求不改 D4/2 inner wire，而由 InputDescriptor/2 为每个 source-bearing owner 绑定 SourceVersion/2。Context owner 与 sourceInputs 一一对应；inner sourceRevision 必须对应实际 source-bearing owner 的生产 revision，并与该 SourceVersion 表示的版本一致。SourceVersion/2 保留自身的生产 commitDomain、observationEpoch、revision 或 externalSequence、changeId 语义；SourceVersion.commitDomain 可以不同于当前 operation 的观察域。当前资格由 SourceObservation/1 决定：observerDomain 等于 operation CommitDomain，entityRef 等于 sourceVersion.entityRef，当前 observationEpoch、fileObjectBinding、evidencePins、control revisions、Registry 绑定以及关系 incidence 依赖共同属于当前 observation cut。SourceVersionRef/1 的 sourceToken 使用 `d6_source_observation/1` 标记并选择完整受保护 SourceObservation，而不是裸 revision、digest 或生产 SourceVersion。即使 production version 相同，watcher gap、外部替换或不连续重物化也会使旧 token 失效。D4/2 内层 wire、legacy saved decisions、owner 双射、权限与授权 gate 保持不变。
+新 D6-FA 请求保持 D4/2 inner wire、`RelationReadContext/2`、`RelationReadBinding/2`、`sourceRevision`、`expectedSourceRevisions` 与 `incidenceScopes[].revisionToken` 的原形状。外层 `InputDescriptor/2` 为每个 source-bearing owner 绑定完整 `SourceVersion/2`，Context owner 与 `sourceInputs` 一一对应；当该 owner 是 managed source 时，inner `sourceRevision` 必须逐字等于这份完整 managed production `SourceVersion/2.revision`。`SourceVersion/2` 继续携带自己的 production `commitDomain`、production `observationEpoch`、managed `revision/changeId` 或 external `externalSequence`；合法 managed before 的 production domain 可以与当前 operation observer domain 不同，不能仅因“foreign production domain”拒绝。真正禁止的是把 foreign before revision 捐给 after-domain `H(D,E)`、把它当成另一 owner/version 的整数，或把 `externalSequence` 填进 managed inner revision。
 
-relation gate保持：D3/D6 disclosure/auth → D4 closed context/binding
-  → coverage → immutable cut → Registry/raw Entry/selector/revision
-  → complete incidence → proposed state →
-  domain/lifecycle/cardinality/Facet requiredness → D6 CAS → author commit。
+当前 qualification 由 operation `CommitDomain` 下的完整 `SourceObservation/1` 决定：`observerDomain` 等于 operation domain，`entityRef` 与 `sourceVersion.entityRef` 一致，当前 `observationEpoch`、`FileObjectBinding`、evidence pins、control revisions、Registry binding 与 relation-incidence dependencies 属于同一 current cut；`SourceVersionRef/1` 的 `d6_source_observation/1` sourceToken 只选择这份受保护 Observation。若具体 proposed/current selector 需要 revision-token currentness，只借真实 `RevisionTokenBinding/2`/closed `RevisionTokenSource/2`；它不改变 inner integer。`incidenceScopes[].revisionToken` 继续只版本化完整 relation-incidence 范围，绝不能当成 source revision token/binding。
 
-masked/unprovable必要端点不能产生成功readSet。新/retargeted NodeRef target必须live且domain-valid；删除旧事实可以读取确定 tombstoned/not_found endpoint而不伪造Document。symmetric endpoint purge前必须显式清除全部incident facts。
+external source 没有 managed inner integer。raw/read/repair/Draft/ordinary 路径仍按自身资格可用；需要 relation structured mutation 的新请求必须先取得真实 managed admission/save 后的 managed production revision。读取不得自动 admission/write，也不新增 Approval。admission/seal unknown 时不猜 revision、不产生 relation success。旧 D4/2 wire、legacy saved decisions、owner 双射、权限/授权门与历史 revision bytes 全部保持原合同。
 
-D4RelationCopyEffects/1保持原shape与owner，不进入D3 ref-slot union。
-  D3 wire12 typed copy/fork/import只有 managed_atomic + complete D4 proof才能消费；
-  raw byte-preserving copy不能冒充typed fork。
+relation gate 继续按 D3/D6 disclosure/auth → D4 closed context/binding → coverage → immutable cut → Registry/raw Entry/selector/revision → complete incidence → proposed state → domain/lifecycle/cardinality/Facet requiredness → D6 CAS → author commit 的次序执行。这里的 complete incidence 必须由真实 `DependencyKey/2.kind=relation_incidence` 与 D4 自有枚举算法共同证明，而不是由 `Frontier/2`、I、`RelationReadBinding/2` 的存在本身或 caller 的 complete 标志推断。
+
+每个被本操作实际需要的 `(fieldId,endpointNodeRef)` 都有一个完整 `relation_incidence` proof，逐字对应 `RelationReadContext/2.incidenceScopes` 的 `revisionToken` 与全部 `factSelectors`。正向证据覆盖真实 source facts、source owner、canonical owner、source/entity lifecycle/state；负向证据证明同一 cut 下没有遗漏的 active incidence。关系新增/retarget 对 subject、新 target、旧 target（当旧事实的删除/计数仍需它）、旧/新 canonical owner 以及所有会受 endpoint-total cardinality、requiredness 或 purge cleanup 影响的 endpoint 都列出实际需要的 scopes。空 `factSelectors` 只有在同一完整目录/范围与 stamp 下完成 negative enumeration 后才是 empty，I miss、hidden/unreadable endpoint 或 partial source 不得生成空 scope。
+
+`node_ref_or_text` 的 literal arm 保持原边界：不做 target Node lookup、target incidence、target cardinality、inverse、graph 或 target lifecycle；它仍只受 containing subject、source cardinality、Entry/type/qualifier/requiredness 与作者源规则约束。NodeRef arm 才进入 endpoint proof。symmetric NodeRef relation 仍只有一份 canonical authored fact，同一事实在一个 endpoint 的 incidence/cardinality 中只计一次；两端 endpoint-total cardinality、canonical owner relocation、旧/新 source owner CAS 与 `explicit_remove_before_either_endpoint_purge` 均保持 fixed-S 合同。Trash 只改变已证明的 lifecycle/resolution，不能把仍存在的 relation fact 从 incidence 集合中抹掉；restore 也不凭 owner equality 新造事实。purge 前所有仍 active 的 symmetric incident facts 必须按原合同显式清除并取得完整 scope。
+
+masked/unprovable 必要端点继续不能产生成功 readSet。新/retargeted NodeRef target 必须 live 且 domain-valid；删除旧事实可以读取确定的 tombstoned/not_found endpoint，而不伪造 Document，也不重新要求旧 target 满足“新关系”准入，但必须证明真实 before fact、selector/source revision、旧 incidence 与本操作所需 cardinality/requiredness。known incidence stamp/source/entity state 改变使原计划 stale/conflict/reprepare；无法证明完整 incidence 则是 proof unavailable/unknown，不把 constraint 当作已通过。
+
+`D4RelationCopyEffects/1` 保持原 shape 与 owner，不进入 D3 ref-slot union。D3 wire12 typed copy/fork/import 只有在 `managed_atomic` + complete D4 proof 下才能消费；其结果关系仍重新证明每个 mapped/preserved endpoint、canonical owner、完整正负 incidence、requiredness 与同一 final source。raw byte-preserving copy 仍不能冒充 typed fork。任何失败继续完整 rollback：原 raw source/revisions/projections/allocations 保持、write set 为空、无可观察 intermediate state。
+
+### 8.1 作者顺序、数量与类型化复制
+
+同 owner、同 Field 的更新在所选出现项原位替换。迁移先从旧序列移除，再追加到目标 Field 在全部同命名空间 carrier 中的尾部；若 Field 缺席，则追加到目标 owner 序列，并使用已经绑定的 carrier。每个未受影响的出现项、注释、原始字节和相对顺序都保留。规范排序只用于无序绑定或派生清单，不能排序整个作者序列；全部迁出迁入完成后才删除空 carrier。
+
+literal 文本保持源局部性，Field 模式允许时空文本也合法，不参与 Node 目标数量。directed 目标数量统计精确 Field 和 target 下全部活跃作者 NodeRef 分支事实，包括目标处于保留 suspended、tombstoned、not-visible、unprovable 状态的事实；计数不授予隐藏状态披露权，也不能让未证明 binding 成功。symmetric maximum 来自 Field 数量规则，按每个语义端点统计唯一关联 NodeRef 事实和该端本地 literal 事实。不存第二份 subject：操作 subject 必须是原 source owner，或对 symmetric NodeRef 事实为原另一端。域验证使用实际规范 owner 和作者 target，包括合法扩展中的非对称谓词。无源状态没有 Entry，也不能虚构 revision0。
+
+typed copy/fork/import 用唯一 D3 映射重写内部类型引用，只有原 D3 规则允许时才保留外部引用。同 Workspace、闭包外的 live/trashed 目标可保留；foreign、not-found、tombstoned 目标不能获得新的接纳资格。跨 Workspace fork/transfer 不能保留未映射外域目标。纳入的每条作者事实恰映射一次，不能把 inverse 当作源复制。directed 保持映射后的 source owner，literal 保持映射后的包含 owner；symmetric NodeRef 只在 fresh mapped 闭包中重选规范 owner。若保留关系需要写入既有端点，整次类型操作失败，不能扩大闭包、重抽 ID、丢弃事实或静默改成文本。
+
+OccurrenceKey 字节可在新 owner 域中保留，但永不进入 identityMap。owner 迁移必须复核每个局部 Resource/Annotation/来源根，不能隐式改 owner、删除或修复。映射后 owner 原有作者顺序保留，迁入事实按完整源选择器 `(sourceOwnerNodeRef,fieldId,occurrenceKey)` 追加。包括被迁空者在内，每个映射 owner 都通过完整后态 requiredness、数量和域检查；incoming inverse 不能满足作者 required Field。fresh ID 顺序可能使非对称端点谓词失败，此时整次操作拒绝。有损变换必须另行明确预览。D4 回滚保留精确前态，独立 D3 分配、预留、烧号和 custody 历史仍按原 D3 失败合同处理。
 
 ## 9. Calendar
 
-CalendarPeriod、Temporal Range、Calendar Event Semantics继续分域：period是calendar-defined周期；range是date/instant range；event是在range外增加status/recurrence/participant/reminder的Facet语义。View命中/跨日/title模式不自动Assign Event。
+CalendarPeriod、Temporal Range、Calendar Event Semantics 继续分域：period 是 calendar-defined 周期；range 是 date/instant range；event 在 range 之外增加 status/recurrence/participant/reminder 的 Facet 语义。View 命中、跨日显示或 title 模式仍不会自动 Assign Event。
 
-`calendar/recurrence-value` 保持date/instant同质分支；count与until互斥；RDATE/EXDATE/exception集合上限256。derived occurrence可重建且无Node identity；projection绑定真实Registry/calendar/tzdb/rule contributions、current source和显式horizon/budget，coverage不足不返回partial rows冒充complete。
+`calendar/recurrence-value` 保持 date/instant 同质分支、count/until 互斥以及 RDATE/EXDATE/exception 上限 256。derived occurrence 可重建且没有 Node identity。projection 除真实 current source 外，还必须消费 D4 自有 `registry` 与 `temporal_rules` 完整 proof：同一 Workspace 的完整 `RegistrySnapshot/1`、`RegistryBinding/1`、必要 `RegistryEvolutionProof/1`、不可变 `ValidatedCatalogContext` 及实际使用的 calendar/tzdb/rule contributions；以及实际 comparator、period rule、timezone/tzdb rule sets、`RecurrenceReadBinding/1`、明确 horizon 与 finite coverage。coverage 不足、rule provenance 不明或缺 segment 时不能用 OS timezone、cache 或 partial rows 补成 complete。
 
-Catalog唯一 `calendar/series-scope` v1保持 key=(series,periodKey,scope)，scopeKinds=node|workspace，multiplicity=many|unique。
-  unique mutation需要完整正负range + current Registry/Policy/SourceVersion/Frontier；
-  building I、当前page、provider cache或path collision都不能证明unique。
+Catalog 唯一 `calendar/series-scope` v1 继续使用 key=`(series,periodKey,scope)`、scopeKinds=`node|workspace`、multiplicity=`many|unique`。D4 对 `DependencyKey/2.kind=calendar_scope` 逐分支消费 D6 closed `CalendarRange`：`binding` 证明一个 period Node 的真实 `CalendarPeriodScopeBinding`、独立 binding revision、实际 source period/series 与 current configuration；`series` 证明一个 series+scope 的完整 periodKey membership、`SeriesScopeConfiguration`、complete negative range 与适用 control inbound；`period` 证明一个完整 `{series,periodKey,scope}` 范围中的全部 members，unique/many 只能来自当前已验证 configuration；`scope_inbound` 证明所有指向该 scope 的 period bindings/configuration/control inbound。configuration absent、binding absent 与 complete-empty period range 各自有真实 version/stamp，绝不能由 current page、path、provider cache、I 无命中或“目标看起来为空”推断。
 
-ordinary save可保存本地合法Calendar facts为 semantic_pending(calendar)，但不能声称strong“创建唯一period/event”Action成功。
+所有 Calendar positive/negative/empty ranges 在读取前先通过同 cut 的 `ObservationScope/2`、Policy/disclosure；未获权时不读取 hidden period members、scope inbound 或 conflict count。完整 `calendar_scope` proof 与本次 source `SourceObservation/1`/`FileObjectBinding`/pins、Registry/rules、authorization 和 temporal-rules stamps 属于同一可提交 cut。`Frontier/2` 的 causal prefix、provider “synced”、相同 count/hash、building/partial I 都不证明 Calendar scope complete。范围 stamp 的 epoch 是该 exact Calendar dependency key 的 proof generation；真实 gap/decoder change/continuity loss 使旧 stamp 失效，而只重建 I 不会在 P/M correctness evidence 仍完整时重签。
 
-## 10. catalog正向消费
+局部 recurrence value edit 在不触发 series uniqueness 时仍可只按其真实局部合同成为 ordinary 或 real pending；但 series-scope `unique|many` strong mutation 必须完整证明当前 configuration、key、positive/negative membership 与 temporal/Registry inputs，`unique` 才能判断冲突，`many` 也不能跳过 key/config proof。copy/fork 对 scope 的重绑定必须按 D3 map 和 D6 current configuration 形成真实 target proof，不能因为新目标当前没有索引行而省略 unique/many 验证。
 
-fixed catalog `people/labeled-text-value` 保持：
-- text required、exact、non-empty；
-- label optional semantic_code，contribution-set codes为 `people/other|people/personal|people/work`；
-- customLabel optional exact non-empty。
+ordinary save 仍可在本地 Calendar facts 全部有效而 complete Calendar range 尚不可证明时记录合同允许的 `semantic_pending(calendar)`；这不等于 strong“创建唯一 period/event”Action 成功，也不满足 D7 complete Query/Action。invalid local Calendar value、D2 invalid、deny、touched unavailable Registry/rule、known conflict 或 complete proof 明确失败都不能被 pending 洗成成功。强 Calendar Action 继续是 strict 路径，本合同不扩大 `observed_only`。
 
-`people/phone`、people/email、people/address、people/website消费同一alias。label absent表示作者没提供label，不是empty、unknown、people/other或typed-unavailable；localized display label绝不回写为SemanticCodeId。phone alias必须先验证alias/Registry，再验证closed object，不能把同名label字符串猜成semantic code。
+## 10. 目录中的正向领域语义
 
-People各names/life-event/measurement/state/profession/engagement/relation仍是独立Fields；
-  people只是namespace，
-  不存在single people blob。engagement Node arm接受 ordinary Node，
-  Organizations Facet只增强UI/query，不是NodeRef admission前提。
+### 10.1 Tasks 与 People
 
-Organizations structural parent与organizations/parent分域；move不改组织关系，关系edit不move。identifier/classification不是identity；symmetric/directed关系保持各自canonical owner/inverse。
+`tasks/task` 要求 `tasks/status`。dependency 是有向、可重复的关系，主端和目标端都必须通过源绑定的显式 Task 分类；反向关系只是投影。关闭界面模块不能删除语义或 requiredness。Task 与 Calendar recurrence 不隐式创建身份、执行任务或完整范围证明。
 
-`library/work` 是 Bibliographic Work Facet，不是project work/task；
-  DOI/ISBN/provider ID不是NodeRef，Citation occurrence不等于Work identity。
+`people/name` 可重复，包含必需的非空文本（使用 `nfc-for-compare`）、必需 role（`alias|former|legal|ordinary|transliteration`）、可选 language/script 和 validity 限定信息。名称 Field 的 `atMostOnePreferred` 仅作用于该 Field。标题可以从选定名称初始化一次，此后不自动同步；同名节点仍是不同身份。
 
-tasks/task仍required tasks/status；tasks/dependency两端Task domain必须完整证明。
+`people/phone`、`people/email`、`people/address`、`people/website` 使用 `people/labeled-text-value`：必需的精确非空 text、可选 label（仅 `people/other|people/personal|people/work`）和可选的精确非空 customLabel。缺少 label 表示作者没有填写标签，不等于 other、unknown、空或不可用。区域显示标签不能替代 SemanticCodeId，note 独立保存。
+
+`people/account` 可重复，必需 identifier 是闭合联合体：preset 为仅限 `people/facebook|people/qq|people/wechat|people/x` 的 external identifier；custom 为 `{serviceKey,identifier}`，两者均为精确非空文本。可选 usage 使用相同的三个联系标签码；可选 customLabel 是精确文本，目录允许空值。不能从自定义服务拼写推断 preset，向全局 Registry 增加 external scheme 不会扩展 preset 集合。值相同但 occurrenceKey 不同的出现项相互独立，不能把服务和标识文本拼接成虚构身份。
+
+`people/life-event` 保留独立且可能冲突的断言。preset value 必需 eventCode，限 birth/death/employment-start/graduation/marriage，可带非空 customLabel 和精确 description；custom value 必需非空 customLabel，可带精确 description，不能带 preset code。`eventTime` 必需，confidence/selection 可选。整个 Field 不设“最多一个 preferred”：preferred birth、death 或相互冲突的断言可以并存，消费者必须明确选择，不能自动取最新、最大或猜 preferred。纪念日只能由明确选定的断言，或经过验证并选定的 spouse/engagement validity.start 派生，不能复制作者事实或创建全局事件 ID。年/月精度不能伪造日；无法表示的无年份输入必须报告明确损失。编辑所选断言与新增断言不同，其它事实全部保留。后续 Calendar/D7/D10 执行仍需各自明确合同。
+
+`people/nationality-state`、`people/legal-sex-state`、`people/gender-identity-state` 是三个独立、可重复、精确非空文本的状态断言，分别保留 validity/provenance；不引入全球枚举、跨 Field 推断、最后写入覆盖或冲突历史覆盖。缺少 validity 表示未知，不表示永久或当前。measurement 必需 height/weight 码、quantity 和 observedAt，维度与每次历史观察均显式保留。`people/profession` 必需精确 text，可带 organization Node/text 作为背景，但不创建 engagement；不能给目录未声明的文本增加 nonEmpty 限制。
+
+`people/engagement` 的主端为 Person，目标为 Node/text；Node 分支接受任何 ordinary Node，不要求 Organizations Facet。position/department 是可选精确文本。可选 rank 为闭合 `{system,level}`，两者均为精确非空文本；不同制度下同名 level 不意味着统一数字等级。validity/status 属于限定信息。作者事实只存于 Person，组织名册是派生结果，不双写。
+
+其余九个 People 关系 Field 均保留 Node/text 分支。`parent` 为有向 family，反向是 child；`guardian` 为有向 general，反向是 ward；`manager`、`mentor` 为有向 ranked，反向分别是 direct-report、mentee。`spouse`、`sibling` 为对称 family，可重复，不施加单配偶或覆盖历史约束。`family-related`、`social-related`、`professional-relation` 为对称 general，必需中性的 relationship 描述：preset 分别限 extended-relative；acquaintance/classmate/friend；colleague，或 custom 精确非空文本。描述不能改变方向或 Field。未解析人物可保留为文本，不自动建节点。可以从经过证明的重叠 engagement 派生同事视图，不能物化 O(N²) 对作者事实；明确填写的同事关系仍独立。avatar 最多一个且为 owner 局部 Resource。
+
+### 10.2 Organizations 与 Library
+
+Organizations 保留七个可重复标量 Field：使用 NFC 比较的 name；带 validity 的命名空间 status；external identifier；以 Organizations 命名空间 scheme 配精确 value 的 classification；精确文本 site；以及使用自身 labeled-text 别名的 address/contact。该别名要求精确 text，可带 Organizations label 和精确 customLabel；不能套入 People 的非空限制。
+
+十二个组织关系 Field 全部仅接受 Node，域为 Organization→Organization。`parent` 最多一个，派生 child；`governs` 派生 governed-by，`owns` 派生 owned-by；`allied-with`、`related` 对称。其余七个均有向且可重复，分别保持独立：business-guided-by/business-guides、territorially-administered-by/territorially-administers、jointly-led-by/jointly-leads、supervised-by/supervises、subsidiary-of/has-subsidiary、brand-of/has-brand、member-of/has-member-organization。同一对组织可以有多个角色，业务指导、治理、使命或背景文本、共同领导不能互相推断。人员任职属于 People engagement。结构 parent/order 独立：移动不改 organizations/parent，关系编辑也不移动节点。国家、状态、分类目录不是硬编码的全球枚举。改名保留身份，合并或拆分必须明确执行身份操作，必要时分配新身份；外部 identifier 从不成为身份。
+
+`library/work` 是普通文献节点：可选且最多一个 work-kind，限 article/book/dataset/report/standard；可重复 publication-state，限 accepted/draft/published；可重复 external identifier；可重复 creator，域为 Work→Person|Organization，可带 Library role；最多一个 venue，域为 Work→Work|Organization，反向 hosts-work；最多一个 version-of，域为 Work→Work，反向 has-version；可重复 owner 局部 Resource。期刊可以是 Work，不自动变成出版机构 Organization。draft→published 可以保留同一 Work；需要独立引用的版次或版本使用新 Work 和显式关系。My Works 是派生视图，不新增 Facet。DOI/ISBN/提供方 ID 是外部数据；Citation 是文档中的出现项，不是 Work 身份、通用 Reference 实体或 Resource 身份。
+
+### 10.3 Calendar 周期、范围、事件与重复规则
+
+§16.6 的闭合形状具有权威性。period 绑定经过验证的精确 calendar/version、timeZone/tzdbVersion、periodKind/rule、seriesKey 和 periodKey；必需的精确文本 seriesKey 允许为空。ISO-v1 key 分别为 `YYYY-MM-DD`、`YYYY-Www`、`YYYY-MM`、`YYYY-Qq`、`YYYY`；除词法外还验证真实日期、实际存在的 ISO 第53周、季度或月份范围以及非零年份。基于贡献项的 TypedText token 先于包装结构预检，但构造器门必须已经识别类型；独立历法、时区错误在各自第一个未证明 token 聚合，periodKey 错误定位其自身 span。
+
+`calendar/period-note` 要求 period；`calendar/range-note` 要求 range；`calendar/event` 要求 range-note 和同一个 range，可增加 event-status、recurrence、participant、reminder intent。range 与 recurrence 保持 `union_variant_equal`；范围本身不自动具有 Event 语义。date recurrence 使用同基准的公历 `calendar/iso8601` v1 day 值；instant recurrence 使用同一经过验证的 timezone/tzdb。存在 recurrence 时模板 range 两端均有界，start 与 anchor 在相同基准上相等。日期时长为历法天数，瞬时时长为精确经过秒数，不是每次复用民用结束时刻。replacement 提供完整范围；端点不可表示时失败，不截断。
+
+anchor 即使不匹配 selector 仍是第一个基础出现项；之后的候选不早于 anchor 并去重。daily 按天差对 interval 取模；weekly 按 anchor 所在周分桶，weekStart 默认星期一，weekday 默认 anchor 的星期。monthly 按月差计算，仅在 byMonthDay 和 byWeekday 都缺席时默认 anchor 日。yearly 按年差计算：仅在 month/day/weekday 三种选择器都缺席时默认 anchor 月；byMonthDay/byWeekday 均缺席时默认 anchor 日。若 yearly 指定了日或星期但未指定 byMonth，则全部月份参与。不同选择维度取交集，同一维度内取并集；monthly weekday 表示所选月份内符合 byWeekday 的所有日期。weekStart 只用于 weekly；不存在的民用日期跳过，不夹取到月末。
+
+instant recurrence 在固定 tzdb 下保留 anchor 的本地时刻及任意小数精度；缺口跳过，重叠选较早 UTC，但显式 anchor 保留作者实际选择的瞬时，包括较晚重叠分支。不能使用操作系统当前时区或每次加86400秒替代民用递推。count 为 1..2147483647，与 until 互斥；until 是包含端点的基础起始时间上界；先按精确时间排序、去重基础出现项，再应用 count 和例外。民用遍历顺序可能不同于 UTC，边界证明必须使用 ±86400 秒偏移包络，不能遇到首个超出 until 的民用候选就停止。覆盖或工作预算不足时整体失败，不能返回虚假的空集或部分成功。
+
+RDATE 可以早于 anchor 或超出 count/until，不消耗 count。基础集合与 RDATE 按时间相等去重，包括不同偏移表示的同一瞬时。优先级为 cancel > replace > EXDATE > template。未命中的 EXDATE 保留；每个例外的 originalStart 必须证明集合归属。replacement title 非空，空 note 明确清除，eventStatus 闭合；缺席覆盖项继承原值，不改写源。单次 participant/reminder 覆盖不可表示，D9 必须显式映射或报告损失。set_exception 只改所选例外，删除已经孤立的例外合法。edit_series 对每个旧 selector 明确 keep/remap/drop；drop/remap 不要求旧归属，但完整后态必须合法，不能发生冲突或按显示标签重绑。所有阶段共用同一总工作预算。
+
+公共投影绑定完整作者依赖：Entry 包装的 Field/key 必须与 raw Entry 相等，重复 Field/key 对拒绝；无关命名空间原样保留，不强制解析。投影要求 Event+range+recurrence，不对每个无关 Event 功能做全局接受检查。缓存身份包含全部源、Registry、规则、读取绑定和 horizon。必须检查从窗口两侧移入的 replacement，再按最终区间相交过滤，并按 originalStart 排序；失败不泄出部分 rows。派生瞬时使用规范 UTC Z，保留任意小数精度并去除小数尾零，源字节不改。有限连续 UTC 规则段及 ±86400 候选包络必须先证明完整覆盖，才能认定缺口；纯日期求值仍使用其空时区规则上下文并计入工作预算。
+
+series-scope 的 unique/many 使用经过验证的 policy、独立且当前的 binding/configuration revision 和完整 `{series,periodKey,scope}` 范围。同一 typed key 重试只返回正确绑定的原结果；标题、路径和当前命中项不能决定范围或唯一性。many 同样要求配置和证明。DerivedDuration 使用经过验证的历法日/月/年或表索引比较器，或精确经过秒数；开放时长也须先通过提供方检查，不能用作者填写的 duration 替代事实。Calendar pack 是 Workspace/View 上下文，保留 pack 身份、版本、来源和适用性；多个 pack 不写成通用 isHoliday 事实。ICS UID 保持外部身份；VFREEBUSY/VTIMEZONE 不创建节点，VTODO/VJOURNAL 必须显式映射并预览。
 
 ## 11. diagnostics、权限与 source materialization
 
-D4 diagnostic仍是closed envelope，无free-form details map。稳定排序sourceStart、rank、stable code。
+D4 诊断保持 §16.5 定义的闭合封装和稳定 `(sourceStart,rank,stableCode)` 排序。权限以及 owner、schema、contribution 可用性门先于结构解释。在已授权且允许解释的范围内，统一验证路径聚合当前源字节能够独立证明的全部错误，不因首个结构或类型错误停止；独立的同级成员、备注、限定信息、来源信息、value 及后续语义错误继续收集，关系、Calendar 和依赖语义则必须等待必要结构、类型和贡献项门通过。
 
-preflight顺序：outer D6/D3 visibility/permission → Registry owner/binding/contribution → D2 carrier/span
-  → strict JSON → Field/Facet → typed
-  value/qualifier/provenance → operation-applicable post-state。
-  Registry unavailable时不先解析inner JSON泄露schema；missing member不为不存在token制造span。
+原始输入无法解析时只报告真实解析失败，不制造嵌套错误。已解析的 envelope 缺少**一个或多个**必需成员时，对整个 envelope 只产生一项 `invalid_entry_json`。已建立的嵌套对象内部缺少成员时，才使用语义 pointer 和最近有效对象 span；不能虚构不存在 token 的位置。D4 失败按适用合同回滚本次拟议变化，闭合 outcome 中 `writeSetOwners` 为空且 `readSet=null`，但不抹除 D3 已有分配、预留、烧号或 custody 历史责任；中间失败状态不可观察。不能先读取隐藏 Field、关系或 Calendar 数据再选择诊断。unknown/unavailable 不等于空，也不禁止无关合法 raw 读取、不相交编辑或符合条件的 ordinary pending 保存。
 
-external strict UTF-8/D2 invalid属于D6 external_invalid repair，不包装成D4 semantic_pending success。
+preflight 顺序继续是：outer D6/D3 visibility/permission → Registry owner/binding/contribution → D2 carrier/span → strict JSON → Field/Facet → typed value/qualifier/provenance → operation-applicable post-state。对本 P1 dependency contract，`ObservationScope/2` 是在任何 D4 hidden range/business evaluation 之前建立的保守授权观察上界，不是 completeness proof 或 write permission。当前 `Policy/3`/principal disclosure 必须先证明本次允许读取哪些 Field、relation incidence、Calendar membership、Registry/contribution 与其它 owner 依赖；Registry unavailable 时不先解析 inner JSON 泄露 schema，missing member 也不为不存在 token 制造 span。
 
-Field-level权限必须先静态证明可能write footprint，不得先读取hidden Field再判断。materialization后重验 actual footprint；所有未选中author bytes/comments/CRLF/unknown namespace保持。两个replica改不同Field仍可产生file-level conflict，必须由D6 ConflictRecord保留bytes/SourceVersion；D4 semantic merge proposal不能绕file CAS。
+完整 proof 与 disclosure 是两个独立条件：即使 D6/P 中存在完整 `DependencyProof/2`，无当前 principal disclosure 也不能先读取 hidden fact 再决定“这次没关系”。两个只在 hidden incidence/member/unique conflict 上不同的世界，在业务求值前必须得到同一外层 `not_visible`/不可披露结果，并保持零 hidden business read/decision。反过来，获权只允许真实读取，不自动证明 complete；完整性仍由对应 owner 的 positive/negative enumeration、stamp 与 current cut 证明。
+
+Field-level 或 narrow-field 路径必须在 hidden read 前静态证明可能读取/写入依赖的上界，并在实际执行后用 read tracking 证明真实 footprint 仍位于该上界且与未授权范围独立。静态上界和实际追踪两者任一不能证明独立，就使用该操作真实完整 scope；绝不能先看 hidden sibling/Field/incidence 后再收窄。materialization 后继续重验 actual MutationFootprint、source/Registry/range stamps 与 current authorization。所有未选中 author bytes/comments/CRLF/unknown namespace 保持逐字不变。
+
+external strict UTF-8/D2 invalid 仍属于 D6 `external_invalid` repair/raw-read 路径，不能包装成 D4 `semantic_pending` success。局部 D4 typed invalid、requiredness/cardinality 失败、deny 或 touched `retained_unavailable` 同样不能用缺 strong proof 的名义跳过。unknown/proof unavailable 只表示无法建立所需完整范围；它不是“约束成立”。
+
+D4/D6 同一提交使用的 source `SourceObservation/1`、真实 production `SourceVersion/2`、`FileObjectBinding`、pins、Registry/rules、authorization 与 range stamps 必须来自一个相容 current cut。两个 replica 即使修改不同 Field 仍可能发生 file-level conflict，必须由 D6 `ConflictRecord`/source version 保存真实分支；D4 semantic merge proposal 不能绕过 file CAS、真实 dependency revalidation 或 rollback。历史 r5 receipt/readSet 不因 r6 获得新的 disclosure/proof 而被改写。
 
 最终 commit eligibility仍为：D2 eligible AND operation-applicable
   D4 gate AND D6 gate AND applicable D7 gate。
 
-## 12. I、P、partial index 与 r5/r6
+## 12. I、P、当前状态与历史恢复
 
-I只缓存Registry parse、typed projection、incidence、Calendar projection或search candidates；删除重建不创建新D4 validation decision。
+I 只缓存 Registry 解析、类型投影、关系关联、Calendar 投影和搜索候选；它不拥有当前作者字节、正确性所需的范围连续性、耐久 decision 或执行责任。真实 P/可移植元数据中的范围证据完整时，重建 I 仅补缓存，不改变 proof epoch、不重新签发 token；真实证据或连续性丢失时，旧 proof 继续失效，必须重新取得当前授权并完整枚举，建立新的证明代。部分探索必须明确标记，不能证明关系、unique、Calendar 负范围，D5 完整成员集，D7 all_result/bulk 或 Automation 资格。
 
-P丢失不能从current source猜old strong Action/readSet/pending validation。r5如果pending，r6后来complete只产生r6/current资格；重放r5仍返回原bytes/status。
+提交与恢复共用一个顺序：闭合静态解码；当前最低披露与**原 profile**适用授权；CommitDomain/fence、可移植信任、后端和 P-custody 连续性；然后按记录实际版本、完整原始 canonical request/fingerprint 和 protocolOwner 定位同一 key。不能读取隐藏业务事实后才选范围。同 key 的 owner/request 不同进入原冲突，不创建第二 decision；当前业务证明或新 consumer 门不能前置到该定位之前。
 
-partial index可以在明确权限下显示 exploratory local projection，并标partial/pending；但不能满足 relation negative incidence、
-  unique negative、Calendar unique、D5 collection membership、D7 all_result/bulk或Automation write。
+| 原状态 | 必须执行的续接 | 禁止的替代 |
+|---|---|---|
+| 已耐久保存的 committed/rejected/terminal | 按原实际 effect/mode 或 result-disclosure 范围检查当前交付授权，返回原 receipt/error/effects 字节，或恢复原 publication/outbox | 重新要求旧 before Observation、Frontier、preview TTL 或新版业务/consumer proof 有效；重装 after；重分配 H/revision/ChangeId；重复收费或消费 |
+| 尚未 seal 的 planned | 恢复同一 request、InputDescriptor/owner binding、candidate map、保留原 H 基准和 afterPin 的 SourceRevisionPlan、前后 pins、reservation/write set、Notice、WriteProtection、owner version、attempt/budget、原 TTL/clock 和安装状态；当前授权、依赖连续性及安装归属仅决定同 plan 继续或 paused/conflict/recovery_unknown | 重新 prepare、重选 Query/target/当前页、重新采样身份/H/revision、修改 after 或虚构 ChangeId |
+| unknown 或结果未证明 | 按原 owner 保留 pins、decision/安装/外部证据、Approval/Money/claim/outbox/stop 及不重复 effect 的连续责任 | 凭当前文件、相同 hash、I、空控制库猜 Saved；换 OperationId 盲重试；重发、退款、重置配额或批准 |
+| 真正 unseen | 应用当前 SourceObservation、真实生产版本计划、实际 DependencyProof、语义/profile 和适用 consumer 门 | 把历史成功或部分证据变成新的强资格 |
 
-## 13. 下游与兼容
+原合同的最后引用或永久 pin 承诺继续有效。确实过期且尚未形成 decision 的 preparation 或 effect 按其原版本过期规则处理，不能复活；preview 过期不能清理 planned/saved/unknown 责任。撤权可以隐藏历史交付，不能改写已保存 decision；恢复授权只允许在连续性仍可证明时按原合同恢复。r5 pending 与后来的 r6 complete 相互独立，r6 proof 不改 r5、旧 readSet 或历史强资格。相同字节、ABA、新设备注册、I 重建、P 丢失均不能重建缺失的 P 历史。Undo/restore 是新显式操作，不是重放 receipt 把当前源倒退。
 
-D5消费真实Field Value Occurrence/Document Table/Node Collection域，不能把D4 occurrence变Record identity。
+## 13. 下游与版本所有权
 
-D7未来冻结complete cut、Prepared新版、Search；D4不私造 PreparedActionBinding/3，也不从历史 /1,/2 生成新版success。D7 afterimage前，需要其complete proof的D4 Action unavailable。
+D5 拥有 Document Table、Node Collection 域；D4 Field Value Occurrence 不能变成 Record 身份。D7 必须实际协调的 owner 集包括 Query Algebra、Value/CEL、View、Narrow Field Qualification、Definition Transfer、Preview/Effects、Execution/Action、Prepared Action Binding、Scenario Dispositions、Lexicon/Registry 和 Impact；它们按操作需要消费真实 source Observation、十四种依赖键、九种结构范围、版本基准和完整结果 cut。只改 Prepared 不能替代这些 owner。D4 不发明 PreparedActionBinding/3 或新的 D7 wire。
 
-D8 UI label不是FieldId；D9 import/export不按label猜Field/semantic code；
-  D10 runtime/credentials/execution responsibility不因 portable Registry复制而转移。
+D8 拥有 Draft/base、selection/IME 和编辑呈现，标签不等于 FieldId。D9 拥有构造、导入导出、Office/template 和 ICS 的显式映射与损失；不能按本地化标签猜 code、把外部标识变成 D3 身份，或静默丢弃不可表示的关系。D10 拥有经过认证的扩展/提供方入口、运行时、凭据和执行责任，包括 approval、recipient-target-payload、sourceOccurrenceKey、Money、unknown 连续性；复制可移植 Registry 不转移这些执行权。Table/query/chart 呈现不引入隐式转换，缺席可选值、真实 consumer 允许的 null、空值、不可用和完整有界范围保持区分。
 
-D4 Entry/1、TypeSpec、catalog v1、RelationReadContext/2、RelationReadBinding/2、RecurrenceReadContext/1、D4RelationCopyEffects/1、
-  D4SourceMaterializationEffects/1保持原semantic shape。新 D6-FA consumer只在outer InputDescriptor/2加入SourceVersion/2/CommitDomain/Frontier binding，不重编码旧saved decisions。
+固定候选已经含有 D3 wire12 及消费上一代文件权威边界的 D4/D5 候选。本 P2 D4 消费 P1 的真实生产域 revision plan、受保护 revision-token binding、扩展 DependencyProof、ContentCompletionProof/3、ConflictRecord/2 和历史恢复分支；既有 native shape 不等于已经接受当前 producer。D3 当前文稿同样只是作者候选，D5/D7–D10 仍需后续协调。D6 拥有 native descriptor/companion 协调和 InstallationNotice 定义：D3 候选已经存在，但不因此获得接受；baseFrontier 可以包含历史已 seal ChangeId，本次尚未 seal 决议则没有新 ChangeId。D4 消费这些 producer 规则，不发明私有 wire 绕过。
+
+Entry/1、TypeSpec、catalog v1、RelationReadContext/2、RelationReadBinding/2、RecurrenceReadContext/1、D4RelationCopyEffects/1、D4SourceMaterializationEffects/1 保持闭合内层形状。D3 v9–v11、D6 wire1、旧 token，以及实际存在的 PreparedActionBinding/1,/2 saved/planned/unknown 记录保留原解码器、字节、保留期限、custody、授权和恢复义务。没有部署或记录证据的历史原型不自动成为现役兼容面；但实际记录的义务不能因此取消。
+
+完成原 key 定位后，只有真正依赖未完成 consumer 的 unseen 强路径才受 owner 门约束，不能产生新成功。已授权的普通 `.adoc`/Resource 读取、repair、Draft、合格人工 whole-source 保存和独立本地、离线操作按各自资格继续。反过来，ordinary pending、部分或本地成功不能证明完整 Query、all_result、post-query、强 Action、Automation 或另一 owner 的完整负范围。
 
 ## 14. 强制场景与验收
 
@@ -305,11 +418,27 @@ fixed mandatory scenarios只作为pressure obligations，不是功能批准。�
 
 这些是未来验收义务，不是已通过产品测试或性能秒数声明。
 
+### 14.1 完整保留的测试与场景义务
+
+上列十五项继续全部要求。配套 Impact §9 保留固定 S 的全部有效回归类别，包括精确诊断序列和全部27个关系 Field，不能用代表性示例充当完整覆盖。当前新增项按适用合同分别覆盖正向、负向、不可用或未知、恢复及原版本情况：
+
+- 标识符与 Registry：全部字节和分段边界、保留 owner、经过认证的 host Workspace、generation+digest 替换、全部贡献项及 policy 身份/digest/owner 预检、别名图和展开上限、61 Field/7 Facet、前驱/tombstone/migration 和跨三代禁止复活、不可变 ValidatedCatalogContext 及完整引用/owner/digest 语料。
+- Entry/类型：全部严格 JSON、封装、span、数量/key、限定信息、备注、递归来源和闭合 TypeSpec 情况；任意精度数值和瞬时、UTC 年界、开放/相等/逆序范围、量值维度、集合/成员/深度/字节上限、构造器先于贡献项和可用性先于内部解析、独立错误聚合及隐藏信息不披露。
+- Facet 与领域：声明/有效依赖图、Task/Template、Create/Assign/Remove/Cleanup、真实源顺序与物化；People 全部名称/联系/账户/事件/状态/测量/职业/任职/rank/关系/avatar；Organizations 全部标量、有向、对称及语义 parent；Library 全部 work/creator/venue/version/resource/Citation；缺席标签、合法空值和冲突历史明确覆盖。
+- 关系：真实单事实状态存储及全部27个 Field 的方向、inverse、域、数量、生命周期；literal/Node 转换；两种 fresh-ID 排序下规范 owner 翻转；来源 owner 局部性；保源迁移与完整 incidence；Context/Binding 全部分支、masked/unprovable 不得空成功、过期 source/entity/incidence token、包括被清空 mapped owner 的 requiredness、不可写既有端点和整次 copy 失败；不回滚独立 D3 烧号历史。
+- Calendar：§10.3 全部规则、重复相位/默认/过滤组合、闰年或非法日期、精确小数和 UTC 排序、显式 fold anchor/gap/lookahead 覆盖、count/until/RDATE/EXDATE/例外优先级及 rebase、replacement 从窗口两侧移入移出、共用 work/output/cancellation 预算且无部分 rows、duration/pack、many/unique 并发范围与配置变化、同 snapshot policy digest、删除缓存后等字节派生、ICS 外部映射与损失。
+- 当前 producer：生产域与观察域不同、生产 epoch 与观察 epoch 不同；H 跨 epoch 和跨域返回；真实空 H 与历史丢失；raw no-op/源不变结构/删除与等字节 external admission 区分；SourceRevisionPlan 冻结 before/lastIssued/after/afterPin 和 MAX；带标签 RevisionTokenBinding 在重试/重启时稳定、ABA/gap 后失效；原 D3 candidate map 与 Q 两遍物化共用最终 revision；十四键/九范围、独立缺席/空 stamp、当前授权、仅重建 I 与真实证据丢失、合法和非法 scope_dependencies 延伸链。
+- 保存和恢复：逐项验证 ordinary strict 与批准的弱资格；U4 三段时序；最终检查后未观察 C 与已知竞争；B/N 保留及后续 current C；invalid/deny/unavailable 不洗 pending；prepare/installed/sealed/unknown 区分；安装 before/after/third/unavailable 分类；saved/planned/unseen 定位、原 request/owner 冲突、撤权及重新授权下 r5 交付、原 TTL/最后引用 pins、seal 后发布失败不得重装/收费/推进 H、unknown 的 Approval/Money/claim/outbox/stop 连续性、真实旧解码器及禁止虚构现役原型。
+
+完整固定 `D4–D10–A2 Mandatory Scenario Inputs` 仍是压力输入。People/Organizations/Calendar/ICS/Library 与保源场景对应 §§4–11 和 Impact §9；Table/域/计算值、Query/View/Search/chart、部分与完整结果对应具名 D5/D7 门；编辑和呈现属于 D8；Office/template/导入导出及有损往返属于 D9；提供方或插件安装/关闭/不可用、语义 owner 认证、授权、approval/recipient-target-payload、sourceOccurrenceKey、外部 unknown 和 Money 属于 D10。七插件入口不登记新 D4 Field、不激活包。身份共享、区域和名称冲突、禁止第二权威、源/控制/索引分离适用于全部场景。
+
+输入中的57项 A2 验收行、125行矩阵和302条命题继续是证据义务，不是已完成测试。每项适用义务需要真实 executable-model、contract-check、integrity-check 或 contract-review 证据，并按要求保留 `independentSemanticReviewRequired=true`。精确 hash 只证明工件完整性。固定输入没有附上的外部场景或证据工件保持明确缺口，不能从数量或摘要猜内容；作者自查、历史数字、文档 CI 或 fixture 名称都不能关闭它们。
+
 ## 15. 候选接受边界
 
-这是作者修订候选，不是独立接受。catalog仍是固定S原blob，不登记replacement。后继immutable candidate仍需fresh独立联合审查与项目协议协调接受。
+本稿是主文、术语、实现影响组成的 P2 D4 协调作者候选，不是独立接受或激活。固定 S snapshots、inputs 和 catalog 不变。全部必需 owner 后像、D10 上游接受、全新完整独立联合审查及修复复核仍是门槛。A2 自包含重建已获人类授权，只在这些门槛完成后启动，无需重复询问批准；A2 后再由另一个全新普通 Chat Pro 做全局终审，并形成冻结和启动包。这些步骤不授权产品实现、依赖或 CI 修改、合并、发布或部署。
 
-旧D10 B13保持REVISE、术语/双语FAIL、P1=3、P2=8、共11 OPEN；本文件不关闭或重分类任何finding。
+旧 D10 B13 保持 REVISE，术语/双语 FAIL，P1=3、P2=8，共11项 OPEN；U6/U7 及 producer 协调修改的独立复核继续由其 owner 跟踪。本作者不关闭、重新分类或独立接受任何 finding；文档检查只证明实际执行的具名检查。
 
 ## 16. 规范性 exact-contract 恢复
 
@@ -357,7 +486,9 @@ FieldId展开固定为 namespaceToken + "/" + field。Entry不能重复声明nam
 
 同owner同Field第二个相同key固定reject，即使value相同；不同Field可以复用相同key bytes。检查跨该Field在所有同namespace blocks的entries进行，不按block重置且没有last-wins。
 
-occurrenceKey只在当前owner+Field+expected source revision内精确选择duplicate values的patch/reorder/note目标。mutation必须同时绑定owner NodeRef、FieldId、occurrenceKey与current SourceVersion/2；它不进入D3 EntityRef/Locator/AnnotationTarget，不可独立resolve/授权/跨owner查询。delete无tombstone/restore；同key重新出现是新source fact。Node move/rename可保留Entry bytes；fresh-owner copy/import可保留key bytes，但同owner+Field内复制occurrence必须fresh key。D3 identityMap从不包含occurrenceKey。
+`occurrenceKey` 只在当前 owner + FieldId + expected source revision 内精确选择 duplicate values 的 patch/reorder/note 目标，原 wire 与 UUID 语义不变。对本 P1 新 managed 路径，expected source revision 是该 owner 真实完整 managed production `SourceVersion/2.revision` 的 inner integer；production `CommitDomain`/`observationEpoch` 仍由外层完整版本保存，当前 qualification 另由 operation-domain 的 `SourceObservation/1`/`SourceVersionRef/1`、`FileObjectBinding`、pins 与同 cut dependencies 证明。合法 current managed before 可以来自不同 production domain；它仍是自己的完整 before version，但其 revision 不能捐给另一个 after production domain 的 `H(D,E)`。mutation 继续同时绑定 owner NodeRef、FieldId、occurrenceKey 与该完整 current source evidence；`RevisionTokenBinding/2` 若适用只是受保护 currentness/version evidence，不取代 occurrenceKey 或 integer selector。
+
+external source 的 `externalSequence` 不能充当可填入该 selector 的 managed revision；需要这个 selector 的新 structured mutation 必须等待显式 managed admission/save 成功 seal。raw/read/repair/Draft/ordinary 路径不因此失效，unknown admission 也不能从 `externalSequence`、hash 或文本猜 revision。`occurrenceKey` 仍不进入 D3 EntityRef/Locator/AnnotationTarget，不可独立 resolve/授权/跨 owner 查询；delete 无 tombstone/restore，同 key 重新出现是新 source fact。Node move/rename 可保留 Entry bytes；fresh-owner copy/import 可保留 key bytes，但同 owner+Field 内复制 occurrence 必须 fresh key。D3 identityMap 永不包含 occurrenceKey，历史 selector/saved bytes 不升级。
 
 普通D2 header attribute不因名称相似而成为D4 Field。显式Map Attribute Action必须预览exact source range、target FieldId、conversion、fresh occurrence keys、loss、schema依赖及删除/保留原source的选择；commit只留下一个chosen canonical target。flat export/cache永不是Weftext Document authority。
 
@@ -643,7 +774,11 @@ outcome exact：
  intermediateStateObservable:false}
 ~~~
 
-成功existing source变更只增加一次owner revision；trusted D3 fresh create验证完整result revision=1而不是再加到2。Remove只改declared membership；Cleanup只删request列出且已证明unused的occurrences。失败返回byte-exact pre-state、空write set、null成功read sets且无intermediate state。
+成功的 existing-source Facet 变更仍只产生一个真实 managed after，但其 owner revision 不再由“before revision + 1”独立计算：对新 P1 路径，它必须逐字等于 winning plan 冻结的 `SourceRevisionPlan/1.after.revision = H(afterProductionDomain,E)+1`。同一 production domain 的 `H(D,E)` 跨 production `observationEpoch` 连续且不重置；foreign before revision/epoch 与 external `externalSequence` 都不捐值。只有该 after production domain 的 birth/registration、P continuity 与 verified continuous sealed history 完整证明该实体从未封存 managed version，才能证明 H=0，此时 frozen after revision 才是 1；fresh D3 identity 本身不构成这个证明。checked increment 到 `MAX` 后必须拒绝而不 wrap。
+
+`SourceRevisionPlan/1` 在 winning planning CAS 中同时冻结实际 current before `SourceObservation/1` 或 proved-absent、same-domain `lastIssued` 或 proved-empty history、`SourceStamp/1`、exact `afterPin`，并冻结原计划适用的 candidate map/pins/reservations 与版本依据；pre-seal 没有本 decision 的 `ChangeId` 或 current managed `SourceVersion/2`。若同 production-domain entity 在 seal 前出现新的 managed sealed version，原计划只能 stale/conflict/reprepare，不能在原计划内重采 H 或把 after revision 改成新的值。seal 时只有真实 source change 才把 frozen stamp 与同 decision 的 seal-allocated `ChangeId` 合成 managed `SourceVersion/2`。
+
+Remove 仍只改 declared membership；Cleanup 仍只删除 request 列出且已证明 unused 的 occurrences。source 没有变化的真正 no-op 不增 H/revision，也不伪造 managed after。任何失败都保留适用 D4 的精确前态，返回空写集和 null 成功读取集，且 `intermediateStateObservable=false`；原 D3 已有分配、预留、烧号或 custody 历史仍按 D3 合同保留；本合同不改变 Facet request/outcome wire、回滚或 read-set 语义。历史 saved/planned revision bytes 继续按其原合同恢复。
 
 ### 16.4 relation exact contracts
 
@@ -747,7 +882,11 @@ incidenceRevisions item:
   {fieldId,endpointNodeRef,revisionToken}
 ~~~
 
-masked/unprovable不能产生成功binding/readSet。expected binding必须逐项exact equality。D6-FA-r01额外要求outer InputDescriptor/2对每个source-bearing owner绑定完整SourceVersion/2与当前 SourceObservation/1 资格；inner sourceRevision与实际source-bearing owner及该managed SourceVersion代表同一生产revision。SourceVersion.commitDomain保持生产域定义，可以不同于当前operation观察域；当前 SourceObservation.observerDomain 必须等于operation CommitDomain，且entityRef、observationEpoch、fileObjectBinding、evidencePins、control、Registry与relation-incidence依赖属于同一当前proof cut。
+masked/unprovable 继续不能产生成功 binding/readSet，expected binding 仍必须逐项 exact equality。D6-FA-r01 外层 `InputDescriptor/2` 为每个 source-bearing owner 绑定完整 `SourceVersion/2` 与当前 `SourceObservation/1`；对于 managed owner，`RelationReadContext/2.nodeStates[].sourceRevision`、`RelationReadBinding/2.nodeRevisions[].sourceRevision`、operation `sourceRevisions/expectedSourceRevisions` 中对应的 inner integer 都必须表示该 owner 同一完整 managed production `SourceVersion/2.revision`。合法 before production `CommitDomain` 可以不同于当前 operation 的 observer `CommitDomain`；这种 foreign-production managed before 仍可作为当前前像，只是其 revision/epoch 绝不能用于分配另一个 after production domain 的 H，也不能冒充另一 owner/version。
+
+当前 `SourceObservation/1.observerDomain` 必须等于 operation `CommitDomain`，并把 `entityRef`、完整 production sourceVersion、当前 `observationEpoch`、`FileObjectBinding`、evidence pins、control、Registry 与 relation-incidence dependencies 固定在同一 current proof cut；`SourceVersionRef/1` 只投影这份 Observation。需要 protected source-revision currentness 时只借 `RevisionTokenBinding/2` 及其 closed `RevisionTokenSource/2`；它不替换任何 D4 inner integer。特别地，`RelationReadContext/2.incidenceScopes[].revisionToken` 和 `RelationReadBinding/2.incidenceRevisions[].revisionToken` 仍是完整 incidence range 的版本证据，不是 `RevisionTokenBinding/2`、不是 production source revision，也不能彼此偷换。
+
+external `SourceVersion/2` 没有 managed revision，因此不能直接构造上述 managed inner integers。合法 external source 仍可 raw/read/repair/Draft/ordinary；若新 relation mutation 真正需要 managed inner revision，必须先通过显式受权 managed admission/save，并在成功 seal 后使用其真实 managed production revision。admission/P seal unknown 时保持 unknown，不能从 `externalSequence`、相同 hash/text 或 current file 猜 sourceRevision。Relation/Binding closed shapes、权限门、literal arm、symmetric owner 规则与 legacy saved bytes 全部不升版。
 
 relation operation model继续是：
 
@@ -775,7 +914,17 @@ outcome:
 
 injectFailureAt仅conformance harness，不能成为产品自授权字段。sourceRevisionOwners只映射source-bearing inventory；sourceRevisions与expectedSourceRevisions键集完全相同并用D3Integer exact比较。
 
-关系公共gate的顺序固定为：outer disclosure/auth → closed context/request/binding → source/sourceless coverage → immutable cut/binding equality → Registry/raw Entry/selector/revision →完整旧/新incidence →唯一proposed state → subject/target domain+lifecycle+cardinality+Facet requiredness → D6 Policy/version CAS → author commit。masked/unprovable必要端点失败；new/retarget target必须live；删除旧事实不重新接受旧target，但必须证明真实before与完整incidence；保留directed tombstoned/not_found事实只能按retain_fact_explicit_cleanup保留，不能作新域断言。symmetric endpoint purge前所有active incident facts显式清除。
+关系公共验证保持唯一顺序：外层披露和授权 → 闭合上下文、请求及绑定 → 有源与无源对象覆盖 → 不可变 cut 及绑定相等 → Registry、原始 Entry、选择器及修订 → 完整新旧关系关联范围 → 唯一拟议后态 → 主端和目标端的域、生命周期、数量及 Facet 必需项 → D6 策略与版本 CAS → 作者提交。`RelationReadContext/2`、`RelationReadBinding/2`、`incidenceScopes[].revisionToken`、`incidenceRevisions[].revisionToken` 的现有线格式和含义不变；其中 `revisionToken` 证明完整关系关联范围的版本，不是源的 `RevisionTokenBinding/2` 或托管 sourceRevision。
+
+完整 incidence 通过 `DependencyKey/2={kind:"relation_incidence",workspaceRef,fieldId,endpointNodeRef}` 对每个实际需要的 endpoint 独立证明。对应 D4 枚举必须完整读取该 Field/endpoint 在同一 cut 的真实 source facts，并把每个 fact 还原为唯一 `{ownerNodeRef,fieldId,occurrenceKey}` selector；同时证明 fact 所在 source owner、canonical owner、source revision、entity lifecycle/stateToken 与适用 Registry/Facet 分类。positive side 恰好覆盖所有 active authored incidences；negative side 证明没有遗漏的 source owner/fact。empty scope 也必须有完整目录与 current stamp，绝不能由无 index row、current page、隐藏 endpoint、not downloaded 或 coarse Frontier 推断。
+
+对 relation update 的 before/proposed diff，新增、owner relocation、retarget 和 copy 产生的新 NodeRef fact 必须证明 new endpoint live、domain-valid，并对 subject/new target/new canonical owner 以及所有受 source/target endpoint-total cardinality 影响的 endpoint 使用完整 scope。删除旧 fact 必须证明真实 before、selector/source revision、旧 target 的确定 state 与完整旧 incidence；删除不重新要求旧 tombstoned/not_found target 满足新关系准入，但 A 的 current subject domain、最终 requiredness 和受影响 cardinality 仍完整求值。原样保留 directed tombstoned/not_found target 只继续按 `retain_fact_explicit_cleanup` 保留，不能作为新 domain assertion；masked/unprovable 必要端点固定失败。literal arm 不建立 target incidence 或 target lifecycle，不能因同名文本去查 Node。
+
+symmetric NodeRef fact 仍只有一份 canonical source。D4 对每个 semantic endpoint 聚合同一 Field 的全部 active NodeRef facts，再加该 endpoint 本地 authored literal facts来执行 endpoint-total cardinality；同一个 canonical NodeRef fact 在同一个 endpoint 只计一次，storage owner 不替代 endpoint。canonical owner relocation 仍是原子 remove-old/add-new，保留 occurrenceKey 和其余 Entry members/raw order。`endpointPurgePolicy=explicit_remove_before_either_endpoint_purge` 不变：任一 endpoint purge 前，所有 active symmetric incident facts 都必须在同一强事务中显式删除；Trash/suspended/hidden 不表示 fact 消失。独立 Trash/restore 只改变真实 lifecycle/resolution，不能凭 owner equality 增删 incidence。
+
+Facet Assign/Remove/Cleanup 与 relation occurrence update 继续共用完整 proposed-relation-state 语义。membership 变化读取受影响 owner 的所有适用 relation Fields scopes；relation 变化读取旧/新 owner 与 NodeRef target 在对应 Field 的 scopes，但不会递归扩张成所有未触及 endpoint 的所有 Field。只有真实 constraint algebra 所需范围进入 proof。每个 scope stamp 与 source Observation、Registry、authorization 同 cut；known stamp/source/entity change 使原 plan stale/conflict/reprepare，unknown/missing complete proof 返回 unavailable/owner gate，而不是接受。
+
+所有必要端点和范围通过后才允许计算唯一 proposed state 与 write set。任一结构、版本、来源、绑定、范围、domain/lifecycle/cardinality/requiredness、权限、CAS 或 injected precommit failure 都保留 byte-exact pre-state、raw author source、revisions、projections、allocations，返回空 write set/null 成功 readSet 且 `intermediateStateObservable=false`。强 relation mutation 与 typed copy/fork/import 继续 `strict`，不得因 local pending/partial I 降级。
 
 D4RelationCopyEffects/1 exact：
 
@@ -835,10 +984,16 @@ entries item:
  referenceChanges}
 ~~~
 
-sourceBytes是canonical no-padding base64url exact UTF-8 bytes；
-  before absent只用于同D3 receipt fresh Node。
-  owners覆盖C-carrier全部result owners和实际改写existing source containers。
-  entries按source subject key、FieldId、OccurrenceKey排序唯一；beforeRawEntrySource仅fresh initial Entry可null。effect与D3 request/candidate-map/receipt和D6 decision同一原decision保存；它不是第二作者源。
+`sourceBytes` 继续是规范无填充 base64url 编码的精确 UTF-8 字节；`before absent` 仍只适用于同一 D3 回执中的新建 Node。每个有来源的 owner，其非 absent `before.sourceRevision` 对应原 current SourceObservation 选定的真实完整托管生产版本中的 `SourceVersion/2.revision`。后像版本依据明确分为两支：
+
+- 本操作为该 owner 实际产生新的 managed after 时，`after.sourceRevision` 逐字等于同一 winning plan 冻结的 `SourceRevisionPlan/1.after.revision`。这不是 D4 独立执行 before+1，也不是把 fresh 固定为1；只有后像生产域的完整已封存空历史证明 H=0，计划才冻结 after=1。外域前像的 revision/epoch 与 external `externalSequence` 都不捐值；seal 前没有本次决议的 `ChangeId`，也没有本次新封存的 managed after。
+- 既有 C-carrier 结果 owner 保留逐字相同的来源时，before 与 after 保留同一个完整、已经封存的托管生产 SourceVersion 及精确源字节。这包括一个混合操作新建或修改其它 owner、同时保留某个既有 raw-no-op pair 的情况。其后像内层 revision 在原 Observation 下等于前像内层 revision，即使生产域不同于操作域也如此。这个 owner 没有新的 SourceRevisionPlan、拟议 source stamp、H 增量或来源版本；不能借其它 owner 的计划或当前域 H 取值。来源未变的可移植结构、生命周期效果同样使用这份保留的来源依据。external 输入不能通过此分支获得虚构的托管内层 revision。
+
+`owners` 仍覆盖 C-carrier 的全部 result owners 和实际改写的 existing source containers；`entries` 仍按 source subject key、FieldId、OccurrenceKey 排序唯一，`beforeRawEntrySource` 仍只在显式 fresh initial Entry 时可为 null。所有 D4 source/materialization 与 relation-copy 效果必须消费同一原 D3 私有 candidate map、allocation/burn 结果和同一个 final source：实际修改或新建的 managed after 使用该 owner 的同一 `SourceRevisionPlan/1`、`afterPin` 与 revision binding；未改写的既有 owner 则使用上述保留的完整生产版本、当前观察依据及精确 pins。覆盖范围仍包含每个未变化的 C 结果 owner；不得重抽 ID、扩大 closure、另造第二份 source 或在 effect 阶段重新采 H。
+
+`D4SourceMaterializationEffects/1` 与 `D4RelationCopyEffects/1` 必须从真实完整 before/after source 独立重算，并与同一 D3 decision 的 receipt/effects、完整 typed DefinitionTransfer slots、Result/9 C/Q partition 及 Q 两遍最终 span 逐项一致。Q、C 与 D4 transformation 必须共同绑定同一 final source/revision basis；任一重算不一致使原操作失败，不能把两个局部正确的结果拆成两次提交。effect 与 D3 request/candidate-map/receipt 及 D6 decision 仍保存于同一原 decision，它不是第二作者源。
+
+真正 raw no-op 或 source-unchanged structure/lifecycle 不得为 D4 effect 伪造新的 managed source revision/H increment；whole-source deletion 的 D6 portable after 为 absent 且无 after `SourceRevisionPlan/1`，D4 不通过本 /1 effect 发明“deleted source revision”。旧 `D4SourceMaterializationEffects/1`/`D4RelationCopyEffects/1` wire 本身不升版，历史 effect/saved bytes 仍按原 decoder解释。
 
 ### 16.5 Diagnostic/1、sourceRange 与完整错误聚合
 
@@ -1025,7 +1180,9 @@ lifecycle必须live。outcome exact：
  recurrence:<RecurrenceReadBinding/1>}
 ~~~
 
-no-op accept不改source/revision/cache。实际source变化只增series owner revision一次；任一错误返回完整pre-state、空write owners、null readSet、空invalidations。inject-failure仅测试harness。
+no-op accept 继续不改 source/revision/cache。真实 recurrence source 变化仍只产生一个 series owner managed after，但新 P1 路径的 after revision 必须使用 winning plan 冻结的 `SourceRevisionPlan/1.after.revision = H(afterProductionDomain,E)+1`，而不是由 D4 对 current integer 再做一次“+1”。同一 production domain 跨 production `observationEpoch` 不重置 H；foreign before revision/epoch 与 external `externalSequence` 不捐值。只有完整证明 after domain 的 sealed history 为空、H=0 时 frozen after 才为 1；`MAX` 溢出必须拒绝。
+
+`expectedOwnerRevision`、recurrence selector、projection/readSet 中的 inner revision member 形状全部不变，并在新 managed request 中绑定真实完整 managed production before/after revision；外层 production domain/epoch 与当前 `SourceObservation/1` qualification 仍分开。若 seal 前同域同实体出现新 managed version，原 recurrence plan stale/conflict/reprepare，不在原计划中重采 H/revision。任一错误仍返回完整 pre-state、空 write owners、null readSet、空 invalidations，且 failure injection 仍仅属于测试 harness；历史 saved recurrence bytes 不受新 allocator 倒追改写。
 
 Recurrence projection request exact：
 
@@ -1157,7 +1314,15 @@ scope :=
 multiplicity := unique | many
 ~~~
 
-policy以RegistryBinding + policyId + policyVersion + policySchemaDigest解析。series必须从已验证author Entry完整还原，periodKey必须由同snapshot规则canonical验证。unique在同key已有/并发第二个不同NodeRef时返回calendar_series_scope_conflict且零写；many允许。retry使用同key + current revision；path/index从不去重。
+policy 继续只通过 `RegistryBinding + policyId + policyVersion + policySchemaDigest` 解析。`series` 必须从已通过公共 D4 Entry 校验的作者 `calendar/period` 值完整还原，periodKey 必须由同一 snapshot 中已验证的 period-rule contribution canonical 解码；path、folder、View row、title、locale、current page 或 caller 报告都不是 key 成员。
+
+对每个 strong unique/many 操作，D4 必须消费真实 `DependencyKey/2.kind=calendar_scope`。若检查一个 `{series,periodKey,scope}`，对应 `CalendarRange.period` proof 完整枚举该 key 的全部 current members 与 negative range，并绑定 `SeriesScopeConfiguration`、configuration revision、scope binding、`RegistryBinding`/policy 和 control inbound；若操作依赖整条 series，另使用 `CalendarRange.series` 完整证明该 series+scope 的全部 periodKey membership 与负范围；建立/修改 period scope binding 时使用 `binding`，删除/迁移 scope 时按实际需要使用 `scope_inbound`。每个 empty range 都要有自己的 complete stamp，不能由 I 无命中或 target 看起来为空推断。
+
+同一 operation 还消费 `registry` 与 `temporal_rules` proof：已闭合的完整 `RegistrySnapshot/1`/`RegistryEvolutionProof/1`/`ValidatedCatalogContext`、真实 policy contribution、period rule、calendar comparator、tzdb/timezone rule sets、`RecurrenceReadBinding/1` 与本次有限 horizon coverage 都属于同一 current cut。缺 rule segment、unknown decoder、configuration/binding unavailable 或 continuity gap 时，strong result 是 unavailable/owner gate，绝不回退设备时区或把未证明范围当 empty。
+
+`unique` 只有在完整范围证明同 key 已有/并发第二个不同 NodeRef 时才返回 `calendar_series_scope_conflict` 且零写；完整证明无第二个 member 时才可成功。`many` 允许不同 NodeRef，但仍必须证明相同 typed key、policy/config binding 与范围 currentness；它不是“无需 proof”。retry 逐字复用同一 key 并使用 current revision/stamp，任何 key 替换、configuration revision 或相关 dependency 变化都按原 owner 进入 stale/conflict/reprepare。unknown proof 不等于 conflict absent。
+
+ordinary local Calendar edit 若不依赖 complete series scope，可继续按其真实 local/pending 合同；但 strong unique/many、Calendar Action、typed copy/fork 对 target scope 的验证继续 `strict`，不能借 `semantic_pending`、partial I 或缺 D7 consumer 获得强成功。历史 saved r5 结果不因当前 r6 新 proof/stamp 改写。
 
 DerivedDuration/1不是authorable Field。bounded date_range产生：
 
@@ -1182,21 +1347,19 @@ open bound在其余provider gate成功后产生：
 
 ### 16.7 D6-FA-r01 outer binding、pending 与 legacy
 
-上述 D4 inner wire 版本保持不变。新请求必须由 D6 InputDescriptor/2 对每个 source-bearing owner绑定完整 SourceVersion/2，并通过 SourceObservation/1 消费当前观察资格；SourceVersion.commitDomain 保持生产域定义，可以不同于当前operation CommitDomain。CommitDomain、Frontier/2、Registry/Policy/control revisions、当前 fileObjectBinding、evidencePins 和实际 source pins 形成同一当前proof cut。SourceVersionRef/1 的 sourceToken 选择完整受保护 Observation，而不是裸sourceRevision、I cache、相同hash或旧stateToken；这些值不能跨replica/observationEpoch连续性失效后复用。
+上述 D4 inner wire 版本保持不变。新请求必须由 D6 InputDescriptor/2 对每个 source-bearing owner绑定完整 SourceVersion/2，并通过 SourceObservation/1 消费当前观察资格；SourceVersion.commitDomain 保持生产域定义，可以不同于当前operation CommitDomain。CommitDomain、Frontier/2、Registry/Policy/control revisions、当前 fileObjectBinding、evidencePins 和实际 source pins 形成同一当前proof cut。SourceVersionRef/1 的 sourceToken 使用 `d6_source_observation/1` 标签选择完整受保护 Observation，而不是裸sourceRevision、I cache、相同hash或旧stateToken；这些值不能跨replica/observationEpoch连续性失效后复用。
 
-ordinary save 的保存语义与 `WriteProtection` 选择保持分离。普通保存仍可以保持 `strict`；`observed_only` 只能由受信 `interactive_source_save` 显式选择，并且仅适用于一个既有 live Document、ordinary replica-local 范围、完整 source read 与 replace 资格、没有适用的 body/Field/Node-control deny、author-source write set 仅限该 Document 或为空，且不存在 identity、parent、order、lifecycle、shared-policy、Registry、Calendar-scope 或其他 entity mutation。选择弱 profile 前，DraftBase 与当前 source 状态必须由对应当前 `SourceObservation` 表示。非交互流程、complete 或 strong Action、structured bulk、collection mutation 或 promotion、automation、server checkpoint、Approval 或 Money 相关执行均不得使用 `observed_only`。
+ordinary save 的保存语义与 `WriteProtection` 选择保持分离。普通保存仍可以保持 `strict`；`observed_only` 只能由受信 `interactive_source_save` 显式选择，并且仅适用于一个既有 live Document、ordinary replica-local 范围、完整 source read 与 replace 资格、没有适用的 body/Field/Node-control deny、author-source write set 仅限该 Document 或为空，且不存在 identity、parent、order、lifecycle、shared-policy、Registry、Calendar-scope 或其他 entity mutation。planning 开始前，DraftBase 必须等于所选完整当前 `SourceObservation`。非交互流程、complete 或 strong Action、structured bulk、collection mutation 或 promotion、automation、server checkpoint、Approval 或 Money 相关执行均不得使用 `observed_only`。
 
-任何 ordinary save 成功前，所有 touched local `Entry`、`Facet`、`Type` 和 requiredness 规则都必须通过。invalid local fact、touched `retained_unavailable` namespace、`D2 external_invalid`、physical invalid source state 或真实 read/write 资格不足仍保持失败或独立 repair 路径，不得通过 `semantic_pending` 或弱保护转换为成功。`semantic_pending` 只登记尚未证明完整范围的 `relation|unique|calendar|inbound|cross_object_type` 义务，不把缺少 complete proof 的 strong Action 变成成功。
+任何 ordinary save 成功前，所有实际修改的本地 `Entry`、`Facet`、`Type`、数量和必需项规则都必须通过。invalid local fact、touched `retained_unavailable` namespace、`D2 external_invalid`、physical invalid source state 或真实 read/write 资格不足仍保持失败或独立 repair 路径，不得通过 `semantic_pending` 或弱保护转换为成功。`semantic_pending` 只登记尚未证明完整范围的 `relation|unique|calendar|inbound|cross_object_type` 义务，不把缺少 complete proof 的 strong Action 变成成功。
 
 `observed_only` 只耐久保留已观察前像 B 与用户输入 N。它不保证未观察到的外部竞争写入 C 不存在，也不保证从已观察 B 状态安装用户输入 N 时，未观察的 C 字节能够免于被 N 覆盖。如果 N 安装后又发生未观察的 C 写入并替换当前文件，这只影响当前文件状态；已耐久保留的观察前像 B 与用户输入 N 不因此丢弃。局部 typed facts 与未选 bytes 只能证明已绑定的 B→N 转换，不能声称验证所有未观察中间 source，也不能主动省略必要观察。已观察竞争、stale Base 或 continuity gap 继续走现有 conflict/reprepare 路径；未知安装保持 `recovery_unknown`。
 
-受信 interactive ordinary save 可以在 planning 阶段明确选择弱 profile，即使普通目录没有 strict capability，但 `writeProtection` 规划后必须冻结。任何已知 Base 冲突、授权失败、耐久失败、strict plan 失败或强义务失败都不得 fallback 到 `observed_only`，也不得扩大弱保护范围。
+对于受信 interactive ordinary save，人工可以在 planning 开始前明确选择弱 profile，即使普通目录没有 strict capability；从 planning 开始，`writeProtection` 必须冻结。任何已知 Base 冲突、授权失败、耐久失败、strict plan 失败或强义务失败都不得 fallback 到 `observed_only`，也不得扩大弱保护范围。
 
 Preparation 只保留后续操作所需的 durable proposal、read-before 证据和 pins；它尚未成为 saved、installed 或 sealed 结果。installed、sealed 和 unknown D6 状态必须区分。`durable_observed_only` 不是 strict reliable save，也不是 complete-set Query 或 Action 的资格证明。既有 D4 source 层、当前依赖、Registry、关系和 source observation 义务继续保持不变。
 
-补验只产生current SourceVersion的新资格；历史r5 receipt永不改写成r6 complete。I重建、P丢失、设备迁移和A→B→A均不恢复旧proof。
-
-历史 D3 v9/v10/v11、D6 wire1、D7 PreparedActionBinding/1,/2 继续按原 decoder/bytes/gates/retention重放。新 D7 Prepared 未完成前，需要完整D7 preparation的D4 strong Action返回owner_update_required/unavailable且零新版managed-success；D4不私造新版Prepared。
+历史 saved/planned/unknown 恢复遵循 §12 的完整顺序和 §13 的版本边界。只有真正 unseen 请求进入新版当前业务或 consumer 门；后续当前验证不改旧 receipt、pins 或恢复义务。D3 结构/Trash、D5 结构化 cell/row/column/reorder、bulk/collection/promotion、D4 强 Relation/Facet/Calendar、D7 Action/Automation、server checkpoint、Approval、Money 全部保持 strict。缺少无关强 consumer 不阻止独立符合资格的普通读取、Draft 或人工 whole-source 保存。
 
 ## 17. D6-FA-r01 当前跨 owner 桥接条款
 
@@ -1229,39 +1392,46 @@ portable Registry复制到replica只复制shared fact，不复制Registry admin/
 
 ### 17.3 D3 wire12 fresh source composition
 
-旧fixed-S §15中“D3 v11 fresh candidate map”在新decision路径替换为H2 D3 wire12 + D6 PreparedIntent/2/InputDescriptor/2。语义义务保持：
+fixed-S §15 的历史 D3 v11 candidate-map 表述，在当前新决议候选中由已经完成作者编写、尚未独立接受、激活或实现的 P2 D3 wire12 候选，与本 P1 D6 `PreparedIntent/2`（仅限实际准备合同要求的路径）、`InputDescriptor/2`、`SourceRevisionPlan/1` 和 revision-token producer 共同承接。这里只同步现已实际形成的候选合同，不把历史 H2 简写当成当前规则，也不因 D3 作者候选已交付而绕过 D4/D5/D7 或 fresh 联合接受门。原有前验义务全部保持：
 
-- fresh Node/Resource/Annotation candidate必须来自已验证D3 intent/plan，而不是caller自造；
-- D4 initial Entries、Template结果、copy/fork typed refs在planning reservation前对真实拟议完整source执行；
-- candidate identity map、allocation/burn、source payload、
-  lifecycle与current Registry/Policy属于同一原decision proof；
-- symmetric relation source assembly仍按result endpoints重新计算canonical owner；
-- 不得为满足D4约束重抽已承诺ID、扩大closure、删provenance或改Facet；
-- D4SourceMaterializationEffects/1与D4RelationCopyEffects/1必须从真实before/after source独立重算并与D3 receipt/effects一致。
+- 新 Node/Resource/Annotation 候选只能来自同一原 D3 第12阶段的私有候选映射、意图和计划；调用方、载荷 UUID、hash 或第二验证器都不能另造身份；
+- D4 initial Entries、Template 结果、copy/fork/import typed refs 与所有 known D4 typed roots，在 winning planning CAS 前必须针对同一真实拟议完整 final source 完成验证；所有 fresh/mapped identity、owner materialization、allocation/burn 都使用同一 candidate map；
+- 每个会产生 managed after 的 source-bearing owner 都使用同一原计划冻结的 `SourceRevisionPlan/1`：实际 current before `SourceObservation/1` 或 proved absent、same-production-domain `lastIssued` 或 proved empty history、`SourceStamp/1`、exact `afterPin`、candidate map、pins/reservations 与版本依据共同冻结。`after.revision` 只来自 `H(afterProductionDomain,E)+1`；production `observationEpoch` 变化不重置 H，foreign before revision/epoch 与 external `externalSequence` 不捐值，缺失/gapped history 绝不是 empty；
+- after revision 只有在 after production domain 的 birth/registration、P continuity 与 verified continuous sealed history 完整证明 H=0 时才是 1。fresh identity 本身不硬编码 revision=1，existing/foreign before 也不意味着 before+1；checked H 到 `MAX` 时拒绝；
+- planning CAS 胜出后，候选映射、分配及烧号记录、`SourceRevisionPlan/1`、afterPin、修订 token 绑定、源载荷、生命周期和当前 Registry/Policy 都属于同一原始决议证明，并保持冻结。seal 前不存在本决议的 `ChangeId`、当前托管 `SourceVersion/2` 或可公开的新 Ref。同域并发 seal 使原计划过期、冲突或需要重新准备，不能在原计划内重新采样 H、revision、身份或 token；
+- protected revision evidence 只借真实 `RevisionTokenBinding/2`，其 `source` 是 closed `RevisionTokenSource/2`。instance token、D4 inner integer、production `observationEpoch` 与 observer `observationEpoch` 是不同角色，不能互相编码或比较成同一 revision；
+- symmetric relation source assembly 继续按 result endpoints 重新计算 canonical owner；不得为了满足 D4 约束重抽已承诺 ID、扩大 closure、删 provenance 或改 Facet；
+- 完整 typed DefinitionTransfer、Result/9 的 C/Q 分区、全部 typed slots 与 Q 双射继续使用同一 candidate map、同一 frozen `SourceRevisionPlan/1.after`/revision binding 和同一个 final source。Q 的两遍 materialization 必须在同一 source 上得到稳定 span；C、Q 与 D4 authored transformation 必须彼此兼容，任何不一致整次失败，不迭代猜位置、不拆成第二 commit；
+- `D4SourceMaterializationEffects/1` 与 `D4RelationCopyEffects/1` 必须从这同一真实 before/final-after source 独立重算，并与 D3 receipt/effects、DefinitionTransfer/C/Q、owner mapping 和 frozen revision basis 逐项一致。
 
-fresh create的D4语义pre-state仍是同一已绑定完整拟议结果source，prospective sourceRevision=1；成功不二次append、不把revision加到2。普通existing owner不能借fresh-origin绕CAS。
+因此 fresh create 的 D4 语义 pre-state 仍是同一已绑定完整拟议结果 source，但 prospective `sourceRevision` 对新 P1 路径不再硬编码为 1：它逐字等于该 owner 的 frozen `SourceRevisionPlan/1.after.revision`；只有已完整证明 after-domain H=0 的 fresh managed source 才得到 1。成功仍只物化/提交一次，不二次 append，也不在 D4 effect 层再加一次 revision。普通 existing owner 不能借 fresh-origin 绕 CAS；真正 no-op/source-unchanged branch 不增 H，source deletion after=absent 不建立 after SourceRevisionPlan/1。如果 P/seal outcome 未知，不从 source bytes、C/Q、effect projection 或相同 hash 猜 committed/revision，而只恢复原 frozen plan。旧 D3/D4/D6 saved/planned/legacy bytes 继续按其原 decoder、整数与恢复合同处理，本合同不倒追升级。
 
 ### 17.4 D6 ObservationScope 与 disclosure
 
-完整依赖读集不等于principal有权观察constraint结果。D6在D4值/range求值前提供与同一CommitDomain/SourceVersion/Registry/Policy cut绑定的保守 ObservationScope/受保护read dependencies，包括可能为空的negative range。
+完整依赖读集不等于 principal 有权观察 constraint 结果。D6 在任何 D4 value/range/business 求值前提供与当前 `CommitDomain`、完整 source `SourceObservation/1`、Registry、Policy 和计划范围相容的保守 `ObservationScope/2`，并通过实际 `DependencyProof/2`/Policy 建立受保护 read dependencies；这包括可能真正为空的 negative range。`ObservationScope/2` 只是授权观察上界，不是 completeness proof、write permission 或“本次依赖都存在”的声明。
 
-无权时，两个仅在隐藏状态不同的世界必须在D4业务求值前得到同一外层not_visible/不可披露结果，且零隐藏业务读取/decision；获得披露权限后才可执行真实unique/cardinality/incoming/cross-Field检查。
+无权时，两个仅在 hidden Field、relation incidence、Calendar membership、Registry contribution、sibling/member 或负范围上不同的世界，必须在 D4 业务求值之前得到同一外层 `not_visible`/不可披露结果，且零 hidden business read/decision。不能先扫描 hidden range 再选择一个较窄 profile，也不能因为 P 中已经有某个旧 proof 就绕过当前 disclosure。获得披露权限后才执行真实 unique/cardinality/incoming/cross-Field/Registry/Calendar 检查；获权本身仍不证明范围完整。
 
-D4不新增permission token，也不信任client声称“范围完整”。局部Field路径只有在静态依赖上界与实际读取追踪都证明独立时才成立；否则使用实际完整operation scope。该规则与Diagnostic authority masking一致。
+D4 不新增 permission token，也不信任 client 声称“范围完整”。local/narrow Field 路径只有在两项都成立时才可使用：一是静态 dependency upper bound 已证明不会依赖隐藏/外部范围，二是实际 read tracking 也证明本次读取没有越界；任一条件不成立就使用该 operation 的实际完整 scope。该规则与 Diagnostic authority masking 完全一致。
+
+本候选的新 D4 强证明只消费 D6 `DependencyProof/2` 定义的十四类闭合依赖键：`source|lifecycle|placement_range|ref_inbound|relation_incidence|calendar_scope|registry|temporal_rules|authorization|foreign_binding|query_scan|replica_registry|conflict_record|execution_resource`；其中 `placement_range` 只接受九类闭合 `StructureRange`：`live_children|trash_children|trash_roots|ancestor_chain|subtree|owner_resources|owner_annotations|reply_closure|restore_membership`。D4 不从任意 JSON、通用所有者回调或 `Frontier/2` 推导新依赖键。D4 只拥有 `relation_incidence`、`calendar_scope`、`registry`、`temporal_rules` 的具体语义枚举；其它依赖键的枚举算法继续由其真实所有者提供。
+
+每个 proof stamp 的 epoch 只表示 exact DependencyKey 的连续证明世代；它不同于 production `SourceVersion/2.observationEpoch` 和 current `SourceObservation/1.observationEpoch`。在同一 gap-free proof generation 中，任何会影响 source、membership、order、Registry/rule、authorization、visibility 或范围内容的真实变化先使旧 proof 失效，再在完整 current revalidation 后 checked-increment revision。watcher/journal gap、owner decoder/rule 版本改变、真正丢失 correctness directory 或无法证明 event continuity 时必须进入新的 epoch；相同 hash/count/text 不复活旧 stamp。若 P/portable metadata 中的 correctness boundary 与连续事件链仍完整，删除/重建 I 只重建 candidate cache，不改 stamp；若这些真实 facts 已丢失，则只能在当前授权下重新完整枚举并建立新 epoch。
+
+空与非空范围证明采用相同标准：先取得对应状态、内容和元数据的披露资格，再遍历全部适用目录、分片、所有者范围和源；以一致性屏障，或从已知完整基线开始且无缺口的事件流完成最终复核。占位文件、缺分片、未知解码器、读取失败、隐藏未授权成员、部分或构建中的 I、无命中、提供方自称已同步、相同 hash 或数量、因果 Frontier 前缀，均不能产生空成功。P 或可移植元数据保留依赖键、stamp、完整边界、证据 pins 和连续性，I 不拥有证明。
+
+同一个可提交 cut 中，D4 实际使用的 `SourceObservation/1`、production `SourceVersion/2`、`FileObjectBinding`、source/evidence pins、control、Registry/rules、authorization 与所有 D4 range stamps 必须相容。known dependency/stamp change 进入原 owner 的 stale/conflict/reprepare；unknown continuity/completeness 进入 `proof_unavailable`/owner-specific unavailable 或恢复状态，不被解释为 constraint passed。缺少 unrelated strong proof 不永久阻断不依赖它的合格 ordinary/local operation，但它也不会因此取得 complete Query/Action 资格。
 
 ### 17.5 Calendar scope control
 
-calendar/period作者value仍只有period + seriesKey，不增加scope Field。
-  完整CalendarSeriesScopePolicy key中的scope来自D6同cut的portable/control scope binding，
-  而不是path、folder、View row或ambient locale。
+`calendar/period` 作者 value 仍只有 period + seriesKey，不增加 scope Field。完整 `CalendarSeriesScopePolicy/1` key 中的 scope 只能来自 D6 在同一 current cut 上维护的 portable/control scope binding，而不是 path、folder、View row、title、current page 或 ambient locale。D4 继续拥有 series/period/scope key 的 typed 语义，D6 继续拥有 scope binding/configuration 的持久化、版本 stamp、创建、显式迁移/删除、control inbound 与 CAS；本节不复制第二份 D6 schema。
 
-scope binding的建立、显式迁移/删除、control inbound与版本CAS由D6 owner承担；D4只验证同Registry policy下的typed key与unique|many语义。新period在需要workspace scope时必须有显式当前配置；copy/fork按D3 map重绑合法scope，不能因为target“看起来为空”省略unique/many验证。
+D4 对这个控制面必须消费真实 `DependencyKey/2.kind=calendar_scope`。`CalendarRange.binding(nodeRef)` 证明该 period Node 的真实 scope binding、独立 binding revision、作者 period/series 解释与 current configuration；`series(seriesScope)` 证明完整 series+scope membership、`SeriesScopeConfiguration`、negative range 与 control inbound；`period(seriesScope,periodKey)` 证明完整 `{series,periodKey,scope}` member set；`scope_inbound(scope)` 证明所有引用该 scope 的 binding/configuration/control inbound。需要多个事实时列出多个真实 keys，不能用一个 free “calendar closure” 或 coarse Frontier 代替。
 
-### 17.6 D7 consumer boundary
+policy/configuration 必须与同 cut 的 `registry` proof 对齐：`RegistryBinding/1`、policyId、policyVersion、policySchemaDigest 与 完整的完整 Registry context 都必须匹配；periodKey/series 仍从真实已验证 author Entry 重建。Calendar temporal interpretation 同时受 `temporal_rules` proof 约束，实际 comparator、period rule、tzdb/timezone revisions、`RecurrenceReadBinding/1` 与有限 horizon coverage 都不能从当前设备默认值补齐。
 
-D4 C carrier、Entry/Facet/Relation/Registry/Recurrence/DerivedDuration仍由D4拥有。D7只消费保存定义、Query/Action和effects transport，不能取得D4 author typed-value权威。
+新 period 若需要 workspace scope，必须有显式 current configuration；configuration absent 不是“默认 unique/many”。copy/fork 必须按 D3 identity map 与目标 Workspace 的合法 current binding 重新建立 scope proof；node scope 映射到 fresh Node 时仍要证明对应 target configuration 和 complete negative/positive range。不能因为 target 新、当前索引为空、path 不冲突或 current page 没命中就跳过 unique/many。`unique|many` 的 strong 结果继续依赖完整 proof 并保持 strict；普通 local Calendar save 不依赖这些强范围时仍按自身 local/pending 合同处理，不会因缺 D7 complete consumer 被永久禁用。
 
-历史 PreparedActionBinding/1,/2 与旧D3 saved decisions只用于legacy replay。未来D7 owner必须定义与CommitDomain/Frontier/SourceVersion/2相容的complete cut和Prepared contract。在其实际后像接受前：
-- D4 ordinary local source-save按D6 complete/pending规则可用；
-- 需要D7 complete proof的relation/Facet/Calendar strong Action固定owner_update_required/unavailable；
-- 不得从历史binding、I cache或当前page伪造新版success。
+### 17.6 D7 consumer 边界
+
+D4 的 C carrier、Entry/Facet/Relation/Registry/Recurrence/DerivedDuration 仍由 D4 拥有；D7 拥有其 Query/Value/View、准备、Action 和 effects 消费。完整 owner 集及按操作适用的新 decision 门见 §13。实际存在的 /1,/2 preparation 与 saved/planned/unknown 记录按 §12 和原合同恢复，当前新 owner 的可用性不能追溯取消该责任。真正依赖未完成 D7 consumer 的 unseen 强路径返回既有 owner_update_required/proof_unavailable，不产生新托管成功；合格普通文件或 Resource 读取、Draft、人工 whole-source 保存及独立本地操作继续。历史 binding、I 缓存、当前页、semantic_pending 或 seal 前 SourceStamp 均不能伪造完整新版证明。
