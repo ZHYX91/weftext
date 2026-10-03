@@ -9,7 +9,7 @@ translation_status: source
 
 # D8 Editor Interfaces
 
-候选状态：D8-FA-r01；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原验收、模型与平台证据仅保留其原有范围；本候选的存在不是实现证明。D3 冲突适配器、D7 当前效果生产端与跨副本 Locator 当前资格的联合协调仍须分别完成并独立接受；这些整合门不追溯取消真实历史决议的恢复义务。
+候选状态：D8-FA-r01 的 PL-IR-01 修复 consumer；完整 owner 后像，尚未独立接受、激活或实现。固定来源 S 为 7e18168dad3e6d120fce0dd607dc10fa7894e252。原验收/模型/平台证据仅保留原范围。本候选现消费 D3/D6 的 portable Locator 稳定生产地址/current Observation 作者修复；该新 exact 修复仍待独立复核，不自行关闭 P1。其它 D3 conflict/D7 effects 门仍分别待决，也不追溯取消真实历史决议恢复。
 
 revision: D8-FA-r01；candidate。所有新接口由本机或Server内同一Core实现；客户端不拥有canonical parser。新接口只增加D8准备/草稿读取入口，提交仍是原D6；D3新身份/生命周期仍走D7/D3。禁止把本文件新kind注入D7 ActionSpec/1或D3 mode闭集。
 
@@ -21,13 +21,13 @@ D8 JSON严格UTF-8，单个object，重复key、未知/缺失成员、未知kind
 
 完整观察包括真实生产 SourceVersion/2、当前 observerDomain/observationEpoch、FileObjectBinding 与 evidencePins；Core 在受保护原始证据上逐项比对，客户端自报 object 不产生资格。生产 commitDomain、生产 observationEpoch 与当前观察域/epoch 不混同。managed 的 revision 与 external 的 externalSequence 分属闭集；外部源不能伪造内层 sourceRevision。普通授权读取和 Draft 可消费 external 的完整观察；需要 D4 内层 Counter selector 的动作另行取得其真实 managed 准入。未 seal 的 SourceStamp/SourceRevisionPlan 不是当前源。
 
-`draftSerial`只是本次客户端proposal的回传标记，不是服务器存储对象、revision或权限。`documentRevisionToken`只有Core对已提交源按D6生成；不得给未提交Draft伪造revision token、l1 Locator或DocumentRef。D8返回的sourceRange只定位返回时绑定的完整Draft字符串，不能流入D3 AnnotationTarget。
+`draftSerial`只是本次客户端 proposal 的回传标记，不是服务器对象、revision 或权限。对已提交 managed source，`documentRevisionToken` 是该生产版本原 seal 选定的 canonical stable d6_source_revision/2 token，不是新 mint 的 current-observer token。另一副本读取 exact 同一 managed production SourceVersion 时，可以返回同一 documentRevisionToken，而其 `sourceObservation`/sourceToken 必须重新在本地取得当前资格。external token 继续遵守原 event-evidence 规则。Draft 不得伪造 revision token、l1 Locator 或 DocumentRef；D8 sourceRange 只定位本次返回的完整 Draft 字符串，不是 D3 AnnotationTarget。
 
 ## 2. 已提交文档读取
 
 请求exact `{wireVersion:2,kind:"d8_document_read",workspaceRef,commitDomain,ownerNodeRef,budget}`。Core按closed decode → 当前workspace/entity-state、完整source_read及源Envelope状态资格 → authority/cut → exact source及D2解析 → 当前交付gate执行。budget为D6 BudgetBinding，客户端不能增大policy资源。
 
-成功exact `{wireVersion:2,kind:"d8_document",workspaceRef,commitDomain,ownerNodeRef,sourceObservation,documentRevisionToken,domainFenceToken,snapshot}`。sourceObservation.entityRef=ownerNodeRef，sourceObservation.observerDomain=commitDomain；sourceObservation 为本次读取完整当前观察，保留实际 managed/external 生产史。documentRevisionToken 是 D6 RevisionTokenBinding/2 对该真实当前源的原 token，不能把生产 revision 重签为当前域 revision；domainFenceToken 使用 D6 已有 d6_domain_fence/2 tag，绑定此 commitDomain 当前 replica/backend/policy 或 Server custody/fence 资格，不是权限；snapshot为完整D2 `document_snapshot`，exact `{wireVersion:2,kind:"document_snapshot",ownerNodeRef,document:<D2 document_payload>}`。外层ownerNodeRef、snapshot.ownerNodeRef及sourceObservation.entityRef必须逐字相同，snapshot及全部元数据来自同一cut。document_payload只出现在原D2合法的snapshot.document位置；D8不新增D2嵌入例外，也不返回额外NodeSnapshot。invalid D2仍通过snapshot.document的完整invalid branch给已获权source，不能输出partial body。physical decode失败不给D2 payload，使用source_unavailable；专门D6物理repair另行授权。
+成功 exact `{wireVersion:2,kind:"d8_document",workspaceRef,commitDomain,ownerNodeRef,sourceObservation,documentRevisionToken,domainFenceToken,snapshot}`。`sourceObservation` 是本次读取完整 current Observation。managed source 的 `documentRevisionToken` 必须通过已认证 canonical RevisionTokenBinding/2 解析到与 `sourceObservation.sourceVersion` 完全相同的生产版本；它可以跨副本保持同一字节，而 sourceObservation/sourceToken 各自在本地当前化。external source 则由原 external-event 与 current Observation 独立证明 exact 同一完整 external SourceVersion。这只产生读取资格：不能更新先前 Draft Base/map 或 PreparedEditBinding。domainFenceToken 保持既有当前域 fence 语义，snapshot 仍是同 cut 完整 D2 document_snapshot。D2-invalid 只通过受权完整 invalid snapshot branch 返回，physical decode failure 仍为 source_unavailable。
 
 当前主体无完整source read时整个入口not_visible，不能返回删去Field的伪exact源。类型/locator/Ref存在性仍按上游当前授权顺序；读取source原值不自动解析所有作者Ref获取目标信息。D2必须验证的引用门使用Core当前cut，不能网络fetch。
 
@@ -139,7 +139,7 @@ document执行D2完整profile、D4完整operation-applicable gate（含raw保持
 
 普通Source编辑是作者对完整源的显式提案，Core不能从结果字节证明其由人手工输入。D8 v2明确关闭全部UI生成的native列/多row/ragged批量Source路线，包括菜单、快捷键、拖动、TSV粘贴、表单或把批量操作拆成多个D8 prepare；这些命令不得调用document入口。保留D7既有set_native_cell、insert_native_row、remove_native_row、reorder_native_rows、toggle_checklist、promote_native_row、promote_checklist及真正通用Source编辑；逐项使用其原完整形状与门，尤其插行不是单个NativeSelector，既有重排不因涉及多行而关闭。1000-row结构操作上限仅由有完整结构意图的原D7/D5适配器执行；本通用Source入口不从diff反推意图，不按修改行数执行该结构限额，仍完整执行D6 source/write/decoded/work预算及实际footprint权限。没有尚缺的native-column/多row批量生成适配器，就不能声称D5全部结构功能已实现；这不删除现有reorder_native_rows。此为产品能力边界，不是防止任意外部程序生成Source的安全承诺；本接口无“人工来源证明”字段或伪造的Core校验。
 
-annotation先取得annotation_read/write、entity/locator-state和full workspace_constraints资格，再读取当前完整Value/3。targetPolicy=preserve必须target逐字等于旧target；replace_current必须明确提供同owner新的合法target，不搜索或自动选择候选。两者的proposed target均必须在当前author revision精确resolve；旧stale target不因此自动变新。reply同owner且acyclic；purpose/body/suggestion沿D2原closed语义。suggestion的range与expectedDocumentRevisionToken须绑定同一当前Document，新target可显式保留原replacement作为新提案，但须完整显示其上下文及效果；不会自动接受建议或改Document。Field/carrier target拒绝，即使客户端把它编码成普通document range。
+annotation 先取得 annotation_read/write、entity/locator-state 和 full workspace_constraints，再读取当前完整 Value/3。持久 target/document_range 可以先通过 D3 稳定生产地址/current Observation 算法取得一次新的读取资格，同时验证当前 lifecycle 与 exact coordinate/profile。`preserve` 随后要求 proposed target 字节仍等于原 target 且 fresh qualification 成立；`replace_current` 明确提供新的合法同 owner target。两条路径都不能为了 requalify 改写已存 target，Trash/live lifecycle 与 target exactness 继续分离。新取得资格的 target 只能用于这次新 preparation；旧 suggestion evidence、Draft/map、PreparedEditBinding 或 Undo evidence 都不复活。reply、purpose/body/suggestion 及 Field/carrier 拒绝规则保持原义。
 
 准备顺序固定：closed decode及静态Workspace/Ref关系 → 当前principal和先验scope/全preview资格 → authority/cut → current exact target/revision及proposed输入 → 独立实际footprint与权限 → 全部适用语义门/依赖/预算 → 完整效果与immutable PreparedEditBinding → 返回prepared。失败没有ledger或作者写。D6 commit 按 Control §5 的真实 D6 路径，在原决议查询之后于步骤5/6验证该计划、完整 descriptor、证据与依赖，随后只以同一 planning CAS 和 seal 决定结果；准备成功不保证提交。
 

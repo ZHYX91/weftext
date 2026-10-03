@@ -10,7 +10,7 @@ Source document ID: a370f683-ad9d-468d-8a92-eb38b0fe872d.
 
 # D8 Implementation Impact and Test Outline
 
-Candidate status: D8-FA-r01; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S is 7e18168dad3e6d120fce0dd607dc10fa7894e252. Original acceptance, model, and platform evidence retains only its original scope; this candidate is not implementation evidence. The D3 conflict adapter, current D7 effects producers, and current qualification of portable Locators across replicas still require their respective coordination and independent acceptance. These integration gates do not retroactively cancel recovery of real historical decisions.
+Candidate status: D8-FA-r01 PL-IR-01 repair consumer; complete owner afterimage, not independently accepted, activated, or implemented. Fixed source S is 7e18168dad3e6d120fce0dd607dc10fa7894e252. Original evidence retains its original scope. This outline now consumes the authored stable-production-address/current-Observation repair but still requires independent review and does not close P1.
 
 Revision: D8-FA-r01; candidate. These are subsequent implementation obligations. Bounded models from the original source remain historical evidence; this authoring batch performs only the document checks identified in its report. It does not claim an implemented Core, IME, renderer, assistive technology, or measured performance.
 
@@ -28,6 +28,8 @@ Local Core or Server Core
 Explicit user confirmation → original D3 or D6 request
               ↓ original ledger / CAS / durable commit / replay
 Committed source + receipt → invalidate / reopen projections
+
+PL-IR-01 tests consume D6 PL01–PL18. D8-specific assertions include: same managed production version on another replica returns the same canonical documentRevisionToken with a different valid current Observation/sourceToken; watcher-gap requalification never mutates an old Draft/map; Annotation document_range can be freshly resolved and preserved under new authorization while Trash/live remains a separate lifecycle result; real production ABA or unproved rematerialization stays stale.
 ```
 
 Core adds closed D8 read/project/text replacement/plain writing/prepare interfaces and reuses D2 parser spans, D3 Ref/Locator/Annotation values, complete D4 typed validation, D6 scope/budget/footprint/ledger, and D7 definitions/effects. It must transport the complete Draft Edit Map and implement grammar-complete EOF/sites, blank and multiline successors of raw regions, independent read-only origins, asynchronous input queues, and exact serial rules. Generated native-column/multirow Source batches remain disabled; this does not claim full D5 implementation. DraftProjection is a separate type: neither Draft ranges nor objects with Locators removed enter D2 wire.
