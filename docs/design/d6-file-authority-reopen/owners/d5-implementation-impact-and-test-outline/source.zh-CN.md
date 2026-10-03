@@ -29,7 +29,7 @@ closed intent + minimum disclosure/ObservationScope + domain/custody continuity
        -> original SourceRevisionPlan where needed / install / single seal / CP3
 ~~~
 
-SourceVersion/2继续表示生产版本历史：managed_source_version/2保留entityRef、commitDomain、observationEpoch、revision、changeId，其中changeId.commitDomain等于该生产commitDomain；external_source_version/2保留entityRef、commitDomain、observationEpoch、externalSequence；生产域可以不同于当前operation域。完整current SourceObservation/1要求observerDomain等于operation CommitDomain、entityRef等于sourceVersion.entityRef，并以当前observationEpoch、fileObjectBinding、evidencePins及同一cut内的control、Registry、incidence依赖提供外层保护。SourceVersionRef/1.sourceToken以d6_source_observation/1选择该完整Observation，InputDescriptor/2.sourceInputs[].observation实际承载它。watcher gap、replacement或discontinuous rematerialization即使production version、hash或row text相同也使旧token和依赖它的locator失效；I不能恢复资格。D5 current Document revision/locator及D4 inner selector wire保持不变。
+SourceVersion/2继续表示生产版本历史：managed_source_version/2保留entityRef、commitDomain、observationEpoch、revision、changeId，其中changeId.commitDomain等于该生产commitDomain；external_source_version/2保留entityRef、commitDomain、observationEpoch、externalSequence；生产域可以不同于当前operation域。完整current SourceObservation/1要求observerDomain等于operation CommitDomain、entityRef等于sourceVersion.entityRef，并以当前observationEpoch、fileObjectBinding、evidencePins及同一cut内的control、Registry、incidence依赖提供外层保护。SourceVersionRef/1.sourceToken以d6_source_observation/1选择该完整Observation，InputDescriptor/2.sourceInputs[].observation实际承载它。watcher gap、replacement 或 discontinuous rematerialization 即使 production version、hash 或 row text 相同，也会使旧 SourceVersionRef/sourceToken 及依赖该 current Observation 的 runtime selector/preparation 失效。managed persistent Locator 只继续表示稳定生产地址；只有 D3 重新证明 canonical binding、exact production version、新 current Observation 与原 coordinates，才可取得一次新的读取资格；I 不能恢复地址真实性或当前资格。D5 current Document revision/locator及D4 inner selector wire保持不变。
 
 Frontier/2 只表示已封存的因果和依赖前缀，不替代全集 Query、Registry 完整性或 payload 物化证明。只有受影响的 unseen 强操作等待实际 D7 完整结果及 Prepared producer；D5 不制造成功 binding。真实 saved/planned/unknown 记录先按原合同恢复。主文 §19.9–12 定义允许的 Frontier 扩展、producer 消费和剩余内部协调，不放宽 D7 完整结果重置规则。
 
@@ -191,7 +191,7 @@ row→Node/import由D9负责mapping/loss，D3负责fresh identity。D5只提供 
 - 一个副本只有分页或占位；
 - hash 相同但 observationEpoch 已变化；
 - production SourceVersion相同但 current observationEpoch、fileObjectBinding、evidencePins、control、Registry 或 incidence 依赖改变时，旧 SourceVersionRef/1.sourceToken 与依赖它的 Locator 必须 stale/reprepare；
-- watcher gap、replacement 或 discontinuous rematerialization 即使 production version 相同也使旧 token/Locator 失效；裸 hash、I、相同行文字或 ABA 都不能恢复 continuity；
+- watcher gap、replacement 或 discontinuous rematerialization 会使旧 SourceVersionRef/sourceToken 及依赖它的 runtime selector/preparation 失效；即使 production version 相同，后续 persistent Locator 也只能经新的 canonical-binding + current-Observation + original-coordinate 校验取得新读取资格，不能恢复旧 selector。裸 hash、I、相同行文字或 production ABA 都不能恢复旧 Observation/selector continuity；
 - SourceVersion/2 的 production commitDomain 可以不同于当前观察域，但 SourceObservation/1.observerDomain 必须等于 operation CommitDomain，entityRef 必须等于 sourceVersion.entityRef；
 - 不按 mtime/LWW 决定胜者；
 - 合并不创建隐藏行身份。
