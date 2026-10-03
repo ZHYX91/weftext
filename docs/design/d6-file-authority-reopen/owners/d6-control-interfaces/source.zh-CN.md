@@ -314,6 +314,24 @@ InputDescriptor/2.sourceInputs 仍只接 closed 的普通 SourceObservation/1 �
 
 未被 decision 引用且已过期的 preparation 不得建立新决定。一旦 planned/saved/unknown decision 引用 wrapper/guard/mapping/pins，就保留该决定原 last-reference、预算、安装和恢复义务。只有 resolution 真正 seal 后再独立建立普通 current observation，才可能产生公共 current source token。本节仅是安装输入 producer，不是新的 identity/source-resolution 业务 owner，也不是第二 ledger。
 
+### 3.1.2 SourceConflictBefore/1 与 SourceConflictVersionBasis/1：D6 source conflict 安装输入
+
+这两个受保护类型仅由 §9.4 中 D6 所属的 `source_merge` 与 `choose_source_head` arm 生产和消费，刻意与 D3 §10.1 的 `ConflictInstallInput/1` 分离：D3 保持原 guard 与 SourceRevisionPlan/2 decoder，D6 source arm 不取得 D3 resolution 授权。未解决的 `source_concurrent` subject 仍不能产生成功的普通 current `SourceObservation/1`。
+
+`SourceConflictBefore/1` 是完整真实物理 installed-before：
+~~~json
+{"kind":"d6_source_conflict_before","version":1,"decisionKey":<DecisionKey/2>,"principalAudienceToken":<Token>,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"ownerNodeRef":<NodeRef>,"installedHead":<ChangeId/1>,"sourceVersion":<managed SourceVersion/2>,"observationEpoch":<Counter>,"fileObjectBinding":<present FileObjectBinding/1>,"sourcePin":<PinRef/2>,"metadataPin":<PinRef/2>}
+~~~
+全部成员必需且 closed。§9.4 producer 只有在 closed decode、最低 subject disclosure、当前 `conflict_resolve` 加实际 source/body/Field/control 读写权限、exact `expectedKey`、CommitDomain/P/backend 连续性以及下文“读取前选择 ObservationScope”均通过后才能运行。`expectedKey.kind=source_concurrent`；ownerNodeRef 是准确 entity subject；installedHead 是 expectedKey.heads 中一个已验证成员。该 installedHead 的 sealed history 必须证明此 entity 的 sourceVersion 以及该 cut 上实际安装的 claim/metadata；sourceVersion 是当前物理安装的完整 managed production version，不是后来选择的历史 alternative。observationEpoch 是当前安装世代且等于 fileObjectBinding.observationEpoch。present FileObjectBinding、exact sourcePin 与 metadataPin 必须由同一可信 snapshot/write barrier 或无缺口安装历史加最终复验共同取得。placeholder、absent、external/third-state bytes、缺失物理 metadata、借用另一 head 的 pin、只有 digest 相等无来源，或 unknown installation 都不能生产本类型。
+
+`SourceConflictVersionBasis/1` 是完整 typed branch production basis，必须与 arm 精确匹配：
+~~~text
+{"kind":"source_merge","baseSourceVersion":<managed SourceVersion/2>,"headSourceVersions":[{"head":<ChangeId/1>,"sourceVersion":<managed SourceVersion/2>}...]}
+{"kind":"choose_source_head","head":<ChangeId/1>,"sourceVersion":<managed SourceVersion/2>}
+~~~
+source_merge 的 baseSourceVersion 是 baseSourcePin 绑定的 exact common/base production version；headSourceVersions 对 expectedKey.heads 完整覆盖、按 ChangeId 排序唯一，每个完整 sourceVersion 都与对应 head sourcePin 的受保护 record 逐字相同。choose_source_head 的 head 必须等于 resolution.head，sourceVersion 是该 head 的 exact source pin/history 证明的完整 production version。每个 version 都来自真实 sealed branch evidence；相同 bytes、digest、裸 revision、I cache 或 caller 构造的 version 均不能替代。完整受保护 ConflictResolutionInput/2、branch/source/metadata pins 及这两个 typed object 必须在同一个不可变 resolution-use 关联中绑定同一 DecisionKey、principalAudienceToken、expectedKey 与 exact resolution arm。把任一 object/pin 复制到另一 plan、key、audience 或 arm 必须 fail closed。
+
+这两个类型都不进入 `InputDescriptor.sourceInputs`，不产生 sourceToken/SourceVersionRef，也不能用于普通 read/save、Query、D8 或其它 owner。冲突 subject 的 exact `source` DependencyKey 只能在这个具名 D6 resolution guard 内由完整 before+basis 加当前 conflict/source/control continuity 建立；它不是可复用 canonical-current source proof。同一 preparation 若实际读取其它无冲突 source，则这些 source 仍必须具有真实 current SourceObservation/1 并进入 sourceInputs。一旦 planned/saved/unknown decision 引用这些记录，其完整 bytes、pins、关联与恢复状态都保留原 last-reference 义务；retry 不得从 current file 或 I 重建。
 ### 3.2 OwnerInputBinding/2
 
 ~~~json
@@ -494,7 +512,7 @@ refs 来自 D7 原 Query selector 的已验证求值结果，而不是客户端�
 
 #### 十四类的 owner、完整性与披露规则
 
-- `source`：D6 拥有观察/版本/文件绑定证明，内容语义仍归对应 Node/Resource/Annotation owner。正例必须绑定完整 current SourceObservation/1、准确 bytes/value pin、FileObjectBinding、当前 source validity 与本操作实际用途；SourceObservation.entityRef 必须等于 key.entityRef。若证明 source absent，必须从真实 identity/lifecycle/FileBinding 与受管 absent object 得到，不能从 placeholder、I miss、I/O失败或“文件没下载”推断。窄 Field 路径可以让 Core 在受信边界内完整读取并原样保留 source，但没有 source_read 时不得向主体输出正文。
+- `source`：D6 拥有观察/版本/文件绑定证明，内容语义仍归对应 Node/Resource/Annotation owner。除两个明确 guarded conflict-resolution 上下文外，正例必须绑定完整 current SourceObservation/1、准确 bytes/value pin、FileObjectBinding、当前 source validity 与本操作实际用途；SourceObservation.entityRef 必须等于 key.entityRef。D3 §10.1 只能在 D3 resolution guard 下由 ConflictInstallInput/1 建立其 exact source entry；D6 §9.4 source_merge/choose_source_head 只能在 d6_conflict_resolution/2 下由 SourceConflictBefore/1 + SourceConflictVersionBasis/1 建立冲突 subject 的 exact source entry。两种例外都不产生 canonical current Observation 或可复用 source proof。若证明 source absent，必须从真实 identity/lifecycle/FileBinding 与受管 absent object 得到，不能从 placeholder、I miss、I/O失败或“文件没下载”推断。窄 Field 路径可以让 Core 在受信边界内完整读取并原样保留 source，但没有 source_read 时不得向主体输出正文。
 - `lifecycle`：D3 owner。证明完整 birth/canonical claim、live/Trash/tombstoned/never-known 状态及适用 owner 关系，且其变化与 source revision 分域。必须先通过 D3 原 state-disclosure gate，再读取存在/lifecycle；absence 依赖完整 identity directory，不从 derived index miss推断。
 - `placement_range`：D3 owner。按 StructureRange 完整枚举 sibling list、祖先链、子树、owner-local目录、reply closure 或 restore membership，证明边界、顺序、无环和缺项。structure_state/原D3结构披露先于读取隐藏 sibling；不得扫描后再选择“刚好安全”的范围。
 - `ref_inbound`：D3 identity/lifecycle 引用闭包 owner，具体 foreign/control slot仍归各原 owner。对 key.target 完整枚举 D3 已冻结的引用槽位、lifecycle/control inbound 与 live/Trash 适用矩阵；零入站必须来自完整目录/stamp。D7 SavedQueryDefinition 或其它未来定义不会因此被偷塞进 D3 node_link/citation union。
@@ -537,7 +555,7 @@ closed shape保持：
 ~~~
 实际 sourceInputs/controlInputs 可以为空或包含多项；member set、版本号与union不变。
 
-workspaceRef/commitDomain必须逐字等于外层plan对应成员；DependencyProof/2.workspaceRef/commitDomain必须与之相等，DependencyProof.baseFrontier必须逐字等于 expectedFrontier。sourceInputs按完整item的D3-CJ/3 canonical bytes排序唯一；每项entityRef=observation.entityRef，observation.observerDomain=commitDomain。sourceInputs携真实current Observation，不以SourceVersionRef、hash或I状态替代。
+workspaceRef/commitDomain必须逐字等于外层plan对应成员；DependencyProof/2.workspaceRef/commitDomain必须与之相等，DependencyProof.baseFrontier必须逐字等于 expectedFrontier。sourceInputs按完整item的D3-CJ/3 canonical bytes排序唯一；每项entityRef=observation.entityRef，observation.observerDomain=commitDomain。sourceInputs携真实current Observation，不以SourceVersionRef、hash或I状态替代。D3 §10.1 或 D6 §9.4 的冲突 subject 明确不进入 sourceInputs，只能由各自具名受保护 owner input/plan 携带；该例外绝不允许伪造 Observation。同一 preparation 实际读取的其它无冲突 source 仍是普通 sourceInputs item，必须带各自真实 current Observation。
 
 controlInputs同样按其DependencyKey/2的固定kind rank+D3-CJ/3 key bytes排序唯一。每个controlInputs项必须在同一DependencyProof.entries中有且只有一个byte-equal key，并且stamp逐字相等；DependencyProof中用于本intent的control dependency不得通过另一个不同stamp旁路InputDescriptor。source类DependencyKey若代表sourceInputs中的currentness证明，必须指向同entityRef并与该Observation的fileObject/pins/currentcut一致；不能把另一生产域相同revision数字当作匹配。
 
@@ -653,7 +671,7 @@ D10 配置、用量、停止完整值及完整范围栅栏都属于此 InputDesc
    - D6 的 d6_commit_request/2 校验所携 planToken 的类型标记与受众、选定的 PreparedIntent/2、inputRetentionState、owner 版本，以及固定的 InputDescriptor、DependencyProof、ObservationProof 和 pins。
    - 原生 D3 的 identity_operation_request wire12 按 D3 阶段校验其完整 InputDescriptor/2、d3_identity_operation/12 所属者描述、受保护输入与 pins，以及原生私有计划。它不携带也不要求 planToken、D6 prepare 调用、PreparedIntent/2 或 expectedDomainFenceToken；添加未声明成员即为闭合解码失败。获准 managed_atomic 请求中的 D7 preparationBinding 按实际版本的 D3/D7 合同检查。D3 §10.1 产生的 resolution 输入必须有其不可变 preparationBinding 和 D3ResolutionInputUse/1 用途保护；删去 token 不能把这种输入变成合格 raw 请求。最小映射和用途披露检查先于 branch 读取，既有 key 的 fingerprint 比较先于新业务验证，只有 unseen 才检查新的选择、head、期限与 producer 门禁。无关原生输入仅在原 mode 允许时省略 binding；省略不授予 D7 准备资格。
    各入口保留实际 owner 与错误检查顺序，并共用唯一 DecisionKey/P 的 planning CAS；这项分流不创建第二个 D6 身份提交入口。缺少配套 owner 消费合同的强路径在此返回 owner_update_required/proof_unavailable；不依赖该强范围的合格普通文件路径不因此永久禁用。
-6. unseen 在进入 planning 之前，按 frontierPolicy 重验 Frontier/2、普通完整 current SourceObservation/1 或 §3.1.1 guarded resolution-only ConflictInstallInput/1、按显式decoder读取的SourceRevisionPlan版本依据、DependencyProof/2、MutationFootprint authorization、本次适用 local/complete semantic gates、预算和全部未写依赖。exact 使用 §1.4 的完整 equality；scope_dependencies 只接受 §1.4/§6.3 可证明无关的连续非回退扩展。semantic_pending 只能表达已经通过本地 typed facts、但仍欠允许 pending 的跨对象/全集义务；它不能授权 all_result、bulk、strong Action、Automation 或其它要求完整证明的成功。
+6. unseen 在进入 planning 之前，按 frontierPolicy 重验 Frontier/2、全部普通完整 current SourceObservation/1、适用时仅 D3 使用的 §3.1.1 ConflictInstallInput/1，或 §9.4 D6 source arm 的 SourceConflictBefore/1 + SourceConflictVersionBasis/1，并同时重验按显式 decoder 读取的 SourceRevisionPlan 版本依据、DependencyProof/2、MutationFootprint authorization、本次适用 local/complete semantic gates、预算和全部未写依赖。exact 使用 §1.4 的完整 equality；scope_dependencies 只接受 §1.4/§6.3 可证明无关的连续非回退扩展。semantic_pending 只能表达已经通过本地 typed facts、但仍欠允许 pending 的跨对象/全集义务；它不能授权 all_result、bulk、strong Action、Automation 或其它要求完整证明的成功。
 7. 对人工 ordinary whole-source save，observed_only 必须由受信 `interactive_source_save` 的人工选择在**planning 开始前**显式完成并冻结。资格仍全部要求：恰一个 existing live Document、ordinary+replica_local、完整 source read/replace、author source write set 为空或仅该 Document、无适用 body/Field/node-control deny、不修改 identity、parent/order、lifecycle、shared policy、Registry、Calendar scope 或其它 entity，并且 Draft Base 等于选定 current SourceObservation。noninteractive、D3 identity/parent/order/lifecycle、D5 structured cell/row/column/reorder、bulk/collection/promotion、D7 strong Action、Automation、server checkpoint、Approval、Money 一律 strict。planning 开始后 strict capability失败、known conflict、失权、durability failure、strong obligation失败或其它资格缺失都不得 fallback 为 observed_only。
 8. planning CAS 原子保存 canonical request、fixed plan、InputDescriptor、DependencyProof、适用 SourceRevisionPlan、write set、exact before/after pins、budget/reservation、recovery description、required WriteProtection、版本依据及 planned。winning plan 后不重新采样。这里只固定拟议 SourceStamp；**不分配 ChangeId，不把 SourceStamp/RevisionToken 当成 sealed SourceVersion，也不公开 fresh D3 Ref**。
 9. 修改任何 portable current component 前，先耐久写 InstallationNotice/2。它保存原 DecisionKey、guarantee、WriteProtection、notice.baseFrontier 与完整 component before/after。baseFrontier 可以含此前已封存的历史 ChangeId；notice 本身没有这个尚未 seal decision 的新 ChangeId，也没有 receipt、Approval/Money 或 external payload。
@@ -747,6 +765,21 @@ CP3 sourceChanges.before 取 wrapper 的真实已安装生产 SourceVersion；af
 
 D3 §10.1.1.3 另拥有受保护 D3CanonicalEffectPlan/1 和公共 D3CanonicalEffects/1 语义扩展。前者、全部 exact before/selected/Result9 pins 与原 native plan 由既有 D7 /3 record、native descriptor 和 input-use guard 原子绑定，不增 ownerKind 或 submit。原十二个 primary receipt 数组只覆盖 native 分量；扩展以独立原 schema reference/S/lifecycle 证据及显式 physical-effect aliases 证明真实 canonical 分量。D6 在同一 P seal 保存完整两个分量和 D7 full 公共投影，以及同一主 receipt/companion。D6 sourceVersions 与 CP3 恰覆盖全部实际物理 source change 一次，包括主数组之外的 canonical 改变；alias 不重复 write 或 H。缺 mandatory extension 不得新的 prepare/seal 成功；真实 seal 后缺交付证据则 effects_unavailable，不能改历史 commit。saved/planned/unknown 保留原完整 plans/extension/pins，普通 Observation 和真实历史 decoder 规则不变。
 
+### 6.2.2 D6 source-conflict SourceRevisionPlan/3
+
+只有 D6 所属 §9.4 `source_merge` 与 `choose_source_head` arm 可使用这个独立内部 decoder。D3 canonical resolution 仍只能使用 /2，ordinary/fresh source production 仍使用 /1；不修改 public commit wire、InputDescriptor 成员集、SourceObservation、SourceStamp、CP3 或 DependencyKey union。
+
+~~~json
+{"kind":"d6_source_revision_plan","version":3,"decisionKey":<DecisionKey/2>,"entityRef":<EntityRef>,"before":<SourceConflictBefore/1>,"versionBasis":<SourceConflictVersionBasis/1>,"lastIssued":<managed SourceVersion/2|"none">,"after":<SourceStamp/1>,"afterPin":<PinRef/2>}
+~~~
+
+/1 对 outer DecisionKey/entityRef、当前 production domain exact H 或完整空历史证明、checked H+1、不可变 SourceStamp、exact after pin、strict install、单 planning CAS、单 P seal 与 recovery 的规则全部适用。before.decisionKey/entity 及完整 resolution-use 关联必须与 outer plan 一致；versionBasis arm 必须与已冻结 ConflictResolution/2 arm 一致。after.observationEpoch 取本操作 production domain 中 before.observationEpoch 所证明的可信当前安装世代，不得取任一历史 head 的 production epoch。没有 absent branch，也不能用普通 Observation 冒充。
+
+对 `choose_source_head`，只要最终 exact bytes/value 与 before.sourcePin 不同，**或** versionBasis.sourceVersion 与 before.sourceVersion 不逐字相同，就必须形成真实 source-state admission。因此两个 sealed head 即使 bytes 相同但 production SourceVersion/2 不同，选择另一个 production version 仍产生一个 /3 managed after 并 checked H+1。若所选 head 的 exact production version 与最终 bytes/value 都已等于 installed before，则 source 未变：不产生 /3 plan、CP3 sourceChanges 或 H increment，但 conflict-record resolution 仍是实际 portable control effect。对 `source_merge`，versionBasis 证明 exact base/all-head lineage；当 proposed exact merged bytes/value 与 before 不同时形成 source-state admission。真正 bytes 相同且不选择另一个历史 production version 的 merge 属 source-unchanged，同样不产生 /3。
+
+winning planning CAS 保存完整 before、versionBasis、branch/base/head/proposed pins、H basis、after pin、semantic preview 与原 ConflictResolutionInput/2。losing/aborted prepare、changed expectedKey、changed installed physical before、错误 selected production version、arm 不匹配、缺 pin/proof 或 H basis 不可证明，都不能原地改成 winner，也不分配 ChangeId/H。step 6 必须复验所有这些 exact 成员与当前 dependencies；进入 planning 后的 crash/retry 只按 §5/§8 恢复该冻结 plan。
+
+唯一 P seal 中，真实 /3 source admission 才把冻结 after SourceStamp 与本 decision 唯一 ChangeId 组合，H 只推进一次，产生恰一个 managed SourceVersion/2 及其普通 revision-token seal artifact；CP3.sourceChanges.before 来自 before.sourceVersion，after 来自该 managed version。历史 chosen head/versionBasis 绝不能替代真实物理 before。安装或 seal provenance 不明时保持 paused/recovery_unknown；相同 bytes 或后来 current file 都不能猜 success。saved recovery 只补发/重放原 sealed bytes；planned recovery 不重新取得普通 Observation、不重选 head、不改 versionBasis/H，也不建立第二次 seal。
 ### 6.3 ContentCompletionProof/3 与历史 /2
 
 新 FA portable decision 使用 ContentCompletionProof/3。committed 的 closed shape 为：
@@ -759,8 +792,8 @@ D3 §10.1.1.3 另拥有受保护 D3CanonicalEffectPlan/1 和公共 D3CanonicalEf
 - decisionKey.workspaceRef 与所有 components/sourceChanges 的 Workspace一致；changeId.commitDomain=decisionKey.commitDomain。receiptDigest 只校验同decision原receipt bytes，不授receipt读取、approval/Money消费或execution takeover。
 - components 与该 decision 的 InstallationNotice/2 key集合逐项相等、按原固定rank/canonical key唯一排序，且 after 必须是实际安装并封存的 after。proof不能添加notice未声明的component，也不能用digest相等代替真实component bytes/owner version验证。
 - sourceChanges 可以为空；非空时按完整 EntityRef canonical key唯一排序，恰覆盖本decision实际发生的source状态变化。source unchanged的structure/lifecycle portable effect不列假sourceChanges。
-- before 若不是 `"absent"`，必须是原 plan 的 before SourceObservation/1 或具名 conflict-only /2 plan 的 ConflictInstallInput/1 中完整生产 SourceVersion/2；普通观察可以是managed或external，wrapper必须已证明managed，生产commitDomain可不同于本decision域。before=`"absent"`只用于原plan已经证明的fresh branch。
-- after 若不是 `"absent"`，必须是managed SourceVersion/2；其entityRef等于sourceChanges.entityRef，commitDomain=decisionKey.commitDomain，changeId逐字等于proof.changeId，revision/observationEpoch逐字等于该实体实际解码的SourceRevisionPlan/1或conflict-only /2的after SourceStamp，且其前一生产历史与lastIssued/empty-history验证一致。一个SourceRevisionPlan只能产生这一项sealed after。
+- before 若不是 `"absent"`，必须是原 plan 的 before SourceObservation/1、D3-only /2 plan 的 ConflictInstallInput/1，或 D6 source-conflict /3 plan 的 SourceConflictBefore/1 中完整 production SourceVersion/2；普通观察可以是managed或external，两个 guarded wrapper 都必须按其具名路径证明，生产commitDomain可不同于本decision域。CP3 永远记录真实安装/观察到的物理 before，不能只记录后来选择的历史 branch version。before=`"absent"`只用于原plan已经证明的fresh branch。
+- after 若不是 `"absent"`，必须是managed SourceVersion/2；其entityRef等于sourceChanges.entityRef，commitDomain=decisionKey.commitDomain，changeId逐字等于proof.changeId，revision/observationEpoch逐字等于该实体实际解码的SourceRevisionPlan/1、D3 conflict-only /2 或 D6 source-conflict /3 的 after SourceStamp，且其前一生产历史与lastIssued/empty-history验证一致。一个SourceRevisionPlan只能产生这一项sealed after。
 - 从 external 到 managed 的接纳（包括相同字节接纳）以 external 生产版本作为 before、managed 生产版本作为 after；externalSequence 不迁入 after。来源删除以生产 SourceVersion 作为 before，after=`"absent"`；此分支不产生 after SourceRevisionPlan、managed SourceVersion 或 H 增量，但仍是本次 portable decision 的实际来源删除，并由 proof.changeId 标识。真正的 raw no-op 不产生 /3 portable source change。
 - observed_only只证明原decision实际read-before B、输入N的耐久安装和seal，不证明最后观察后不存在未观察C；proof不得补造C或把later current bytes改写成原after。
 
@@ -1010,12 +1043,16 @@ branchEvidence 必须完整覆盖 expectedKey.heads，按 ChangeId 排序；每�
 
 `ConflictResolutionDerivedPlan/1` 是与 arm 匹配的闭合 union：
 ~~~text
-{"kind":"source","ownerNodeRef":NodeRef,"baseSourcePin":PinRef/2,"headSourcePins":[{"head":ChangeId,"sourcePin":PinRef/2}...],"proposedSourcePin":PinRef/2,"semanticPreviewPin":PinRef/2}
+{"kind":"source","ownerNodeRef":NodeRef,"baseSourcePin":PinRef/2,"headSourcePins":[{"head":ChangeId,"sourcePin":PinRef/2}...],"conflictedBefore":<SourceConflictBefore/1>,"versionBasis":<SourceConflictVersionBasis/1>,"proposedSourcePin":PinRef/2,"semanticPreviewPin":PinRef/2}
 {"kind":"policy_bundle","selected":WorkspaceAuthorizationBundleAddress/1,"selectedBundlePin":PinRef/2,"effectiveCompromises":[TrustConflictCarry/1...],"inheritedCompromises":[TrustConflictCarry/1...],"outcomes":[TrustConflictOutcome/1...],"resultBundlePin":PinRef/2}
 ~~~
-source_merge 的 proposedSourcePin 固定请求中的准确 source 内容；choose_source_head 固定所选 head 的准确 source bytes。两个 source 分支都保留原始 base/head 的 source pins、D2/local/complete 语义证据与 preview pin。policy_bundle_choice 的 descriptor 固定所有 head 的 bundle/evidence pins、selected address/bundle、完整 effective compromise union、准确 inheritedCompromises、全部 outcomes、所有 fresh public key/PoP bytes，以及拟议 WorkspaceAuthorizationBundle/1 结果的准确 pin。受保护的 fresh private-key handle 由同一 installationPlan 绑定，绝不序列化进本 descriptor。
+source_merge 的 proposedSourcePin 固定请求中的准确 source 内容；choose_source_head 固定所选 head 的准确 source bytes。两个 source 分支都保留原始 base/head 的 source pins、D2/local/complete 语义证据与 preview pin。conflictedBefore 是 §3.1.2 的真实已安装物理 before，绝不是 branch-current Observation；versionBasis 是完整且与 arm 匹配的 production-version basis。缺 physical before、缺 branch version、selected version 错误、arm/DecisionKey/audience/key 不匹配或复制 guard，都按既有 unavailable/invalid 边界拒绝，不能用相同 bytes/hash 或 I 修补。policy_bundle_choice 的 descriptor 固定所有 head 的 bundle/evidence pins、selected address/bundle、完整 effective compromise union、准确 inheritedCompromises、全部 outcomes、所有 fresh public key/PoP bytes，以及拟议 WorkspaceAuthorizationBundle/1 结果的准确 pin。受保护的 fresh private-key handle 由同一 installationPlan 绑定，绝不序列化进本 descriptor。
 
-`OwnerInputBinding/2.canonicalDescriptorBytes` 精确等于 D3-CJ/3(ConflictResolutionInput/2)，pinRefs 是 branchEvidence/derivedPlan 中全部 pin 的排序唯一并集。`InputDescriptor/2` 使用 guarantee=`managed_atomic`、frontierPolicy=`exact` 与 strict write protection。source_merge/choose_source_head 使用 saveProfile=`complete`、覆盖 ownerNodeRef 的最小既有 local_source ObservationScope、真实 current sourceInputs，以及全部 conflict/source/semantic/authorization controlInputs。policy_bundle_choice 使用 saveProfile=`control_only`、workspace_constraints ObservationScope、空 sourceInputs，以及真实 conflict_record/authorization/portable-frontier/policy-history controlInputs。任何 dependency 都不能绕过 InputDescriptor。
+`OwnerInputBinding/2.canonicalDescriptorBytes` 精确等于 D3-CJ/3(ConflictResolutionInput/2)，pinRefs 是 branchEvidence/derivedPlan 中全部 pin 的排序唯一并集，包括 conflictedBefore/versionBasis 的 source 与 metadata pins。`InputDescriptor/2` 使用 guarantee=`managed_atomic`、frontierPolicy=`exact` 与 strict write protection。
+
+source_merge/choose_source_head 使用 saveProfile=`complete`。在任何 author/source-semantic/D4/D5/D7 range read **之前**，Core 只能在 closed decode、最低 subject disclosure 以及已经授权、只用于判定 arm 的 conflict/control identity 基础上，按 owner profile 选择能够覆盖完整 required closure 的最小既有 ObservationScope。只有当预先声明的 complete owner profile 能证明所有适用 author dependency 只有单一 ownerNodeRef source，且绝不会读取 relation_incidence、query_scan、foreign Field/structure/member range 或其它跨对象依赖时，才可选择 `local_source`。若任一适用 complete obligation 可能要求更宽读取，必须预先选择最小足够的既有 wider profile，通常为 `workspace_constraints`。不能先看 author value 再扩/缩 scope。若实际 owner-required DependencyKey 超出已选 scope，必须在该越界读取和 planning 前走既有 owner_update_required/proof_unavailable；不新增 ObservationScope kind。冲突 ownerNodeRef 本身不得进入 sourceInputs：它的 `source` DependencyKey/controlInputs entry 只能通过 §3.1.2 before+basis 与本 exact owner guard 绑定。同一准备中实际读取的其它无冲突 source 仍进入普通 sourceInputs，并携真实 current Observation。
+
+policy_bundle_choice 使用 saveProfile=`control_only`、与实际控制读取匹配的既有 control-only/workspace control scope，sourceInputs 为空。真实 `conflict_record`、`authorization` DependencyKey/2 entries，以及确实读取时同一固定十四类 union 内的其它 key，进入 controlInputs。Frontier 只能由 InputDescriptor.expectedFrontier + DependencyProof.baseFrontier + frontierPolicy 表示；`portable_frontier_state` 是 Policy capability，不是 DependencyKey。完整 policy/trust history 由 OwnerInputBinding/ConflictResolutionInput.branchEvidence、exact bundle/declaration pins 与 derivedPlan 携带；不存在 `policy-history` DependencyKey。不新增第十五/十六 key，也不允许真实依赖绕过 InputDescriptor。
 
 immutable owner preview 为闭合 `ConflictResolutionPreview/1`：
 ~~~json
@@ -1027,7 +1064,7 @@ immutable owner preview 为闭合 `ConflictResolutionPreview/1`：
 ~~~json
 {"wireVersion":2,"kind":"d6_prepared_intent","planToken":<Token>,"semanticState":<SemanticState/1>,"writeProtection":"strict","inputRetentionState":"retained"}
 ~~~
-planToken 是该准确 PreparedIntent/2 的既有 `d6_plan/2` token。最终提交唯一允许既有 `d6_commit_request/2`，不得携带 resolution/source/policy override。唯一 planning CAS 冻结完整 InputDescriptor/OwnerInputBinding、全部 branch pins、previewBinding、source 或 policy 的 derived plan、fresh handle association 与结果 bytes。唯一 final P seal 重验 expectedKey、current authorization、fence 及这些准确冻结的 dependencies，再原子安装 source 或结果 policy component 与 ConflictRecord resolution/supersession effect。禁止 one-stage resolver、第二次 submit、第二 ledger/CAS、CP4 或中间 trust prefix。
+planToken 是该准确 PreparedIntent/2 的既有 `d6_plan/2` token。最终提交唯一允许既有 `d6_commit_request/2`，不得携带 resolution/source/policy override。唯一 planning CAS 冻结完整 InputDescriptor/OwnerInputBinding、全部 branch pins、previewBinding、source 或 policy 的 derived plan、fresh handle association 与结果 bytes。source arm 若真实改变 source state，还必须冻结恰一个 SourceRevisionPlan/3；已证明 source-unchanged 的 source arm 不冻结 /3。唯一 final P seal 重验 expectedKey、current authorization、fence、step-6 conflicted-before/version-basis/H 及这些准确冻结的 dependencies，再原子安装 source 或结果 policy component 与 ConflictRecord resolution/supersession effect。禁止 one-stage resolver、第二次 submit、第二 ledger/CAS、CP4 或中间 trust prefix。
 
 closed-decode 与 error 顺序继续使用既有 D6 surface：malformed wire3/Resolution2 在任何 state read 前为 invalid_request；披露/授权失败仍为 not_visible；branch/CP3/history evidence 不可用使用既有 state/proof/domain-unavailable 边界；expectedKey 改变为 conflict_changed。不新增 error union。§5 继续是唯一顺序：saved 在新业务检查前返回/恢复原 saved result；planned 恢复同一 PreparedIntent/descriptor/pins/preview/installation state，绝不重新解释不同 Resolution2；只有 unseen 才运行本 wire3 preparation。exact replay 只恢复同一个 retained plan association。改变 resolution/choice/source/expectedKey 不能复用原 planToken，必须重新走 unseen prepare；若已按分配的 OperationId 存在原 decision，则先执行 §5 saved/planned/unknown recovery，§8 继续保留该原始责任。
 
