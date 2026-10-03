@@ -304,11 +304,11 @@ observed_only read-before is only the actually read/pinned before, not unseen C;
 Rules:
 
 - no planned: clean only proven-unreferenced staging; a proposed SourceStamp/H candidate that never won a plan creates no history;
-- planned/not installed: recover the same InputDescriptor, SourceRevisionPlan, pins, reservation, OperationId, and budget counters; never resample identity, H, revision token, or current page, and there is no ChangeId for this decision;
+- planned/not installed: recover the same InputDescriptor, SourceRevisionPlan, proposed RevisionTokenBinding, pins, reservation, OperationId, and budget counters; never resample identity, H, revision token, or current page, and there is no ChangeId for this decision; a loser/aborted record never becomes canonical through another decision's seal;
 - installing: only before/after with continuous installation lineage resumes the same plan; third_state preserves current bytes/pins/version basis and enters conflict/recovery_unknown;
 - all after but seal unknown: read P first. committed uses saved ChangeId/SourceVersions/receipt; planned resumes original plan and never guesses committed from files/hash/SourceStamp;
 - committed response lost: after current delivery authorization for the **original saved effect scope**, return original receipt bytes. Old before SourceObservation, old Frontier, or r5 business dependencies need not equal current r6. No files/Frontier/H/charge is rewritten. Current revocation may hide delivery but never changes saved decision;
-- committed with portable publication pending: publish only the protocol proof derived from original sealed versions; new FA uses ContentCompletionProof/3 while historical decisions keep original /1 or /2 decoder. Never reinstall N or allocate ChangeId again;
+- committed with portable publication pending: publish only the protocol proof and canonical managed RevisionTokenBinding sealed by the original decision, including its original sealed-outbox association; new FA uses ContentCompletionProof/3 without adding the binding to CP3/Notice, while historical decisions keep original /1 or /2 decoder. Never mint a replacement token, reinstall N, or allocate ChangeId again;
 - derived-index/outbox failure: rebuild/catch up under its owner without rolling back author decision or reconstructing P responsibility from I.
 
 saved, planned, and unseen are separate branches. saved performs original request/fingerprint/continuity lookup, current applicable disclosure/delivery authorization, and original-byte replay. planned only restores the original plan and continues/pauses according to actual installation/dependency state. Only unseen applies current owner version, SourceObservation, DependencyProof, and frontierPolicy to create a new business decision. Current r6 proof never retrospectively rejects r5 and never grants r5 a new strong qualification.
@@ -429,3 +429,8 @@ These producer revisions still require complete bilingual afterimages, positive/
 D6-FA-r01 is an author-side partial coordinated candidate only. There is no product implementation, real filesystem conditional-replace/exclusive proof, Server multi-user/real-time conformance, 10k/100k/1M-file or tens-of-GB performance evidence, complete D3/D4/D5/D7/D8/D9/D10 consumer afterimage, or fresh independent joint review.
 
 Documentation checks/CI prove only their named checks. A complete successor candidate requires fixed-S 49 inputs, every actual replacement owner, and the new D10 18 files to be reviewed together.
+
+
+### PL-IR-01 stable-address retention boundary
+
+For the current new profile, every sealed managed SourceVersion/2 has one canonical d6_source_revision/2 binding selected by its winning plan and seal even when no Locator existed at commit time. The protected binding and its original sealed-outbox association are minimum portable version metadata and remain available while any portable address or original saved/planned/unknown/last-reference obligation needs them. Derived Index may cache token→version lookup but is never the authenticity source. Deleting/rebuilding I may rebuild that cache from intact protected metadata; losing the protected seal/outbox association cannot be repaired by equal bytes, digest, revision or a rescan. This adds no second author store, ledger, CAS, Notice component or CP3 member.

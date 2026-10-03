@@ -49,7 +49,7 @@ Implementation 必须有静态 owner audit：每个 current truth字段恰有一
 - SourceVersion/2 的生产 CommitDomain 与生产 observationEpoch 和当前 SourceObservation/1 的 observerDomain、当前 observationEpoch 分开。对生产域 D 和实体 E，H(D,E) 是连续 sealed managed 历史中的最大 revision；只有从域 birth/registration、P continuity 与已验证 portable sealed history 证明完整空历史时才允许 H=0。真实 managed after 使用 checked H+1，MAX 不 wrap，同一生产域跨 production observationEpoch 不重置 H；跨域往返各自继续各自 H，相同裸 revision 不可比较。
 - true raw no-op 保留原 SourceVersion/2；纯 placement/lifecycle/control 且 source unchanged 不推进 H；source deletion 的 after=absent，不创建删除版 SourceVersion 或 H 增量，但作为真实 portable effect 仍在 seal 获得 ChangeId；equal-byte external admission 仍是 external→managed 显式接纳，按当前生产域 H+1 形成 managed after，externalSequence 永不充当 managed sourceRevision。
 - 只有确实会产生 managed after 的原 plan 才冻结 SourceRevisionPlan/1：实际 before Observation 或明确 absent、同生产域 lastIssued/完整空史证明、拟议 SourceStamp 与 exact after pin。winning plan 后这些版本依据不可重采样；seal 前重验同域历史。plan/staging/InstallationNotice 都不分配本次 ChangeId；唯一 P seal 才把 SourceStamp 与真实 ChangeId 合成为 managed SourceVersion/2 并原子推进 H。
-- RevisionTokenBinding/2 以 d6_source_revision/2 受保护 tag 绑定当前 observerDomain/current observationEpoch 与 managed SourceStamp 或完整 external SourceVersion。拟议 managed token 只在同一原 plan 内用于候选/定位验证，seal 且完整 current SourceObservation 成立后才有 currentness 资格；watcher gap、external/object replacement 或不连续 rematerialization 即使 production SourceVersion、revision、hash、文本相同也使旧观察与旧 token 失效。D3 Locator 外层 opaque revision-token 词法、D4 inner sourceRevision/OccurrenceKey/Entry/Type/RelationReadContext/Binding/Recurrence 和 D5 revision-bound locator wire 均保持原形状。
+- RevisionTokenBinding/2 使用受保护 d6_source_revision/2，形状只含 token+RevisionTokenSource/2，专职稳定生产版本地址，与当前 SourceObservation 分离。计划在 C/Q 位置物化前固定一条拟议 token；winning CAS 将它冻结，唯一 seal 即使当时没有 Locator 也把它选为该 managed SourceVersion 的唯一 canonical binding，并通过 original sealed-outbox 关联认证后运输。loser/aborted token 不能借另一 seal 生效。新的 observer 只有独立证明 current SourceObservation 的完整 sourceVersion 与已解析地址相等，才能取得一次新读取资格；watcher gap 会废掉旧 observation/runtime 证据，但不会因此改写稳定地址。D3 Locator 外层 opaque 词法、D4 inner sourceRevision/OccurrenceKey/Entry/Type/RelationReadContext/Binding/Recurrence 以及 D5 revision-bound locator wire 保持原形。
 - Frontier/2 只表示每个 CommitDomain 已验证连续 sealed 的因果前缀；它不证明 payload 已物化、placeholder 已下载、Registry/index 完整或 D7 complete Query。远端记录接纳不重放 remote OperationId，也不为纯运输另造本域 ChangeId。
 - 新 FA transport 使用 ContentCompletionProof/3：它携真实生产 SourceVersion before/after 或 absent、actual frontierBefore/frontierAfter 和真实 components。接收端必须验证 InstallationNotice、proof、全部 components、生产版本与完整连续 sealed 链后才推进 Frontier，并用自己的 CommitDomain、FileObjectBinding、observationEpoch、evidence pins 与当前 control/Registry/incidence cut 建立新的 SourceObservation/SourceVersionRef；禁止复用发送端 sourceToken。
 - 新 conflict 使用 ConflictRecord/2+Frontier/2；ConflictKey/1、ConflictId 与 D6-ConflictKey/1 hash domain 不变，历史 Record/1 仍用 Frontier/1。child order 继续只有一个有序列表 owner；新设备注册新 ReplicaEpoch，retired epoch 不复活。
@@ -169,7 +169,7 @@ strict 路径在每个点验证不会静默丢失已观察竞争字节；observe
 | FA01 | I 全删，10 万无关文档未解析，编辑一个 D2-valid 普通笔记 | 只重建本次 ordinary save 真正依赖的 current SourceObservation、局部 DependencyProof 与安装资格；有合格 strict primitive 时可达 T_first_reliable_save，不等待无关 index/OCR 或全 Workspace Query proof。全集 Action 仍必须等待自身 complete proof |
 | FA02 | 既有目标缺 strict 条件/排他原语 | strict 返回 install_unavailable；只有受信人工在 planning 前显式选择并冻结、且满足 existing single live Document、ordinary+replica_local、完整 source read/replace、无适用 deny、无结构/其它 entity mutation、Draft Base=current Observation 的保存才可 observed_only，并仅在 durable install+P seal 后得到 durable_observed_only |
 | FA03 | Base=A 后第三方写 B | 若竞争 B 在安装前已被观察，strict 与 observed_only 都停止并保留当前竞争状态、原 read-before 与输入；observed_only 只承担最后可信检查后仍未观察的 C 可能被 N 覆盖的风险，unknown installation 保持 recovery_unknown |
-| FA04 | 外部 A→B→A 且 watcher gap | 当前 observer observationEpoch 必须变化；旧 SourceObservation/1、SourceVersionRef/1、d6_source_revision/2 binding、map/locator/prepared/evidence 均失效，即使 production SourceVersion、revision、hash 或最终文本相同 |
+| FA04 | external A→B→A 加 watcher gap | 当前 observer observationEpoch 变化，旧 SourceObservation/1、SourceVersionRef/1、selector/map/prepared/evidence 资格失效。managed d6_source_revision/2 canonical binding 只继续表示稳定生产地址；只有受保护历史证明仍为同一 exact production SourceVersion，且新的 current Observation 独立合格时，后续新读取才可使用它。相同 bytes/hash 或 external event 不构成该证明 |
 | FA05 | install after 成功，但实现仍把 written target 与 before 比较 | 测试必须抓出该错误；规范实现对 written component 验证原 planned after+installation provenance，只让 unwritten dependencies 继续对原 before/cut，并按 exact 或合格 scope_dependencies 重验 |
 | FA06 | P seal 成功，ContentCompletionProof/3 写失败 | decision、真实 ChangeId、适用 managed SourceVersion/H、receipt/charge 与 ReliableSaveState 已固定；strict 为 reliable，合格 observed_only 为 durable_observed_only，portablePublication=pending；retry 只补同一 proof/outbox，不重装、不重新收费、不再次推进 H/ChangeId |
 | FA07 | response 丢失，r5 已 committed，后来 r6 编辑 | 共同 continuity 与原 request/fingerprint 定位后，只按 r5 原实际效果范围做当前交付授权并返回原 receipt bytes；不要求 r5 source/Frontier/业务 dependency 等于 r6，不重写 current r6，不重复收费；撤权只可遮蔽交付 |
@@ -196,6 +196,31 @@ strict 路径在每个点验证不会静默丢失已观察竞争字节；observe
 | FA28 | protected conflict pin 超容量 | 新 prepare/install 受限或 planned 进入 paused_capacity；不能删 last-reference conflict/recovery evidence 后从 I 猜回 |
 | FA29 | expired 新历史 effect pin | 按其新 retention 返回 effects_unavailable；不得用 current file、新 Observation 或相同 digest 伪造 old after。旧合同承诺的 decision-lifetime pin 不追溯删除 |
 | FA30 | legacy wire1 saved decision | 按真实旧 decoder byte-equal replay，旧 pin/授权/continuity promise 保留；不得用 SourceVersion/2、d6_source_revision/2、ContentCompletionProof/3、ConflictRecord/2 或当前 stronger proof 重编码/升级旧记录 |
+
+### PL-IR-01 便携位置设计验收表
+
+PL01–PL18 仅是本修复候选的设计/一致性义务，**尚未作为产品测试执行**，也不因此自行关闭 P1、接受联合设计或证明实现。
+
+| ID | 场景 | 必须结果 |
+|---|---|---|
+| PL01 | A seal managed V 和 locator token t；完整运输把 V/源同步到已登记副本 B，源未改变 | B 验证原 canonical binding+sealed-outbox 关联，建立自己的 current Observation O_B 且 O_B.sourceVersion=V；新的受权读取用原 locator/token 成功。B 的 sourceToken 属本地当前观察，不要求等于 A；portable payload 字节不改 |
+| PL02 | 同一 sealed V 仍是真实当前生产版本，但 B 的 current observation generation 合法换代并完整重建 | 新读取可从新的完整 Observation 重新取得同一稳定地址资格；旧 sourceToken、selector、ActionEvidence、PAB、Draft/map、PreparedIntent 仍失效且绝不被改写 |
+| PL03 | 真实生产史为 V_A1→V_B→V_A2，最终 bytes/坐标与 V_A1 相同 | 指向 V_A1 的 locator 对当前 V_A2 仍 stale；比较完整生产版本/历史，不能比较文本/hash/裸 revision |
+| PL04 | watcher gap、object replacement 或 discontinuous rematerialization 最后得到相同 bytes，但 exact production-version continuity 无法证明 | 旧当前资格仍 unavailable/stale；rescan/hash/I 不得声称持久地址等于当前源 |
+| PL05 | 两个 preparation 的 SourceStamp 字段相同，只有一个赢 planning CAS 并 seal | 只有 winning plan 冻结的 exact token/binding 成为 canonical；loser token 绝不借 winner seal 生效 |
+| PL06 | 拟议 plan aborted/terminal-failed 或 seal 不可证明，后续 decision 复用同数值 H+1 | 旧拟议 token 永不 canonical；revision 数值复用不能借后续 seal |
+| PL07 | managed 版本 seal 时还没有 Locator，A/B 后来才第一次需要定位 | 原 seal 已预先选定并发布唯一 canonical binding；两副本都不得为 V 延迟 mint 新 token |
+| PL08 | 受保护元数据对同一 exact sealed managed SourceVersion 出现两条分别可认证的 canonical token | 作为可达 integrity 矛盾/repair 状态处理；不得 first/last wins，也不得静默 alias |
+| PL09 | B 独立观察到与 A external source 相同 bytes，但没有 A 的原 external-event 证据 | B 不继承 A external token/event；普通 external read 继续使用 B 自己的 Observation |
+| PL10 | 原 external-event 证据存在，且 B 独立 current Observation 证明 exact 同一完整 external SourceVersion | 新的受权读取可使用该 external 地址而不转 managed；当前 selector/write 仍需各自证据 |
+| PL11 | Annotation target/document_range 指向同步到 B 的 managed V；目标 Node 后续按普通 lifecycle 进入 Trash/恢复 live | 源版本/坐标合格时 B 新读取可解析 exact target；D2 target exactness 与 D3 lifecycle 分开。新 Annotation edit 只有 fresh qualification 后才可 preserve target；旧 suggestion/edit preparation 不复活 |
+| PL12 | QueryRef DefinitionAddress.locator 指向同步 V 中 saved definition | 新 invocation 依授权、exact Frontier、canonical version address、B 当前 Observation 和 exact saved-definition occurrence 一次解析；cycle identity 用真实 owner/version/occurrence 归一，不用 token 拼写；旧 ResultRowHandle/ActionEvidence 不复用 |
+| PL13 | TemplateRecipe/2 固定 V，body_text 保存原 DocumentRangeLocator | B 的当前 selected Observation 必须等于 V，locator 还要通过 new-read 算法及 expectedText/inert-paragraph 门；版本变化为 dependency_conflict/stale；不使用该 locator 的模板不被全局禁用 |
+| PL14 | PDF/image V 的 ResourceRegionLocator 同步到 B | 当前 Resource 授权/Observation 等于 V 时，原 page/profile/geometry 重新验证后同一地址可读；转换 Resource 或 bytes/orientation/version 变化仍 stale；d9rg1 单独不授能力 |
+| PL15 | 调用方缺 owner/locator/source/definition 适用披露权限 | 在读取受保护 binding/source/definition/geometry 前返回原 non-disclosing outcome；不能泄露 stale/version/conflict/count |
+| PL16 | I 删除/重建，但 protected canonical binding、original sealed-outbox 关联和 current-observation continuity 仍完整 | 只重建 cache，不 mint/重签 token；若真正丢失受保护证据或真实 continuity，相同 hash/rescan 不能重建真实性 |
+| PL17 | 原 decision 为 saved、planned 或 outcome-unproved，随后当前观察/版本改变 | saved 按当前原范围交付授权返回原 bytes；planned 恢复原 proposed binding/token/map/pins/OperationId/version basis；unknown 保留原责任。都不能把新 Observation/token 换进旧 record |
+| PL18 | D7 Q 两遍物化为拟议 managed after 生成绑定 revision 的 locator | 两遍前固定一个 token，两遍及 winning CAS 使用同一 token，seal 只认证这条 binding；不增加 seal 后第三遍、自引用 ChangeId/digest 循环、CP3 member/component、CP4、第二 ledger 或第二 CAS |
 
 ## 6. 权限与非披露测试
 

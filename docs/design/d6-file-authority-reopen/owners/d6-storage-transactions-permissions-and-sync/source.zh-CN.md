@@ -320,11 +320,11 @@ observed_only read-before仅实际read/pin前像，不枚举未读C；未观察C
 故障规则：
 
 - 无 planned：只清理已证明无引用 staging；未赢得plan的拟议SourceStamp/H候选不产生历史。
-- planned、未 install：恢复同一 InputDescriptor、SourceRevisionPlan、pins、reservation、OperationId和budget counters；不重新sample identity、H、revision token或当前页，也没有本次ChangeId。
+- planned、未 install：恢复同一 InputDescriptor、SourceRevisionPlan、拟议 RevisionTokenBinding、pins、reservation、OperationId和budget counters；不重新sample identity、H、revision token或当前页，也没有本次ChangeId；loser/aborted 记录不能借另一 decision 的 seal 变成 canonical。
 - installing：only before/after且installation lineage连续可证时恢复同一plan；third_state保留current bytes/pins/版本依据并进入conflict/recovery_unknown。
 - 全部 after 但 seal 未知：先读P。P committed使用已保存ChangeId/SourceVersions/receipt；P planned只恢复原plan，不能凭files、hash或SourceStamp猜committed。
 - committed 但 response 丢失：通过当前**原saved效果范围的交付授权**后返回原receipt bytes；不要求旧before SourceObservation、旧Frontier或r5业务dependency仍等于current r6，也不再写files/Frontier/H/费用。当前撤权可以遮蔽交付，但不改saved decision。
-- committed、portable publication pending：只发布由原sealed版本生成的原协议proof；新FA为ContentCompletionProof/3，历史decision继续原/1或/2 decoder，不重装N、不再分配ChangeId。
+- committed、portable publication pending：只发布原 decision 已 seal 的协议 proof、canonical managed RevisionTokenBinding 及其 original sealed-outbox 关联；新FA继续使用 ContentCompletionProof/3，但不把 binding 加入 CP3/Notice，历史decision继续原/1或/2 decoder；不 mint 替代 token、不重装N、不再分配ChangeId。
 - derived index/outbox 更新失败：按owner重建/补消费，不回滚author decision或从I恢复P责任。
 
 saved、planned、unseen必须分流。saved只做原request/fingerprint/continuity定位、当前适用披露/交付授权和原bytes重放；planned只恢复原plan并按实际安装/依赖状态继续或暂停；只有unseen才以当前owner版本、SourceObservation、DependencyProof和frontierPolicy建立新业务decision。当前r6新证明不能回溯拒绝r5，也不给r5新增强资格。
@@ -496,3 +496,8 @@ D6-FA-r01 目前只是作者部分联合候选：
 - 没有 fresh 独立联合审查。
 
 任何 documentation check/CI 只证明其明确检查项，不构成上述证据。完整后继候选须以固定 S 49 原输入、全部实际 replacement owner、新 D10 十八份共同接受。
+
+
+### PL-IR-01 稳定地址的保留边界
+
+对当前新 profile，每个 sealed managed SourceVersion/2 即使提交时尚无 Locator，也必须由 winning plan/seal 选出唯一 canonical d6_source_revision/2 binding。受保护 binding 及 original sealed-outbox 关联属于最小 portable 版本元数据；只要还有 portable 地址或原 saved/planned/unknown/last-reference 义务需要它们，就不能回收。Derived Index 可以缓存 token→version lookup，但不是真实性 owner。仅删除/重建 I 时，可从仍完整的受保护元数据重建 cache；真正丢失 seal/outbox 关联时，不能用相同 bytes、digest、revision 或重新扫描修复。本条不新增第二作者库、ledger、CAS、Notice component 或 CP3 member。
