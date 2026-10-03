@@ -1063,7 +1063,7 @@
         "TemplateConstructionInput/2",
         "D9EntityVersionAddress/2"
       ],
-      "rule": "D9 owns persistent fixed managed production addresses separately from current runtime SourceVersionRef and complete observation/pins. ConstructionInput2 enters PAB3 only through the built-in typed adapter. Omitted Annotation directory/state evidence does not require body sourceInputs. PL-IR-01 remains a precise unresolved Locator qualification gate."
+      "rule": "D9 owns persistent fixed managed production addresses separately from current runtime SourceVersionRef and complete observation/pins. ConstructionInput2 enters PAB3 only through the built-in typed adapter. Omitted Annotation directory/state evidence does not require body sourceInputs. PL-IR-01 now consumes the authored stable-production-address/current-Observation qualification rule; that exact repair remains pending independent review and does not turn persistent addresses into current runtime evidence."
     },
     {
       "owner": "D6 bootstrap / D7 display / D10 consumer",
