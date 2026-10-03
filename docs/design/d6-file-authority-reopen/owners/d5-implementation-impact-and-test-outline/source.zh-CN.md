@@ -427,7 +427,7 @@ Desktop/WebUI/Server/CLI/Mobile在同一Core语义下处理上述意图；surfac
 
 资格顺序用例还包括隐藏 source 和 Registry 不可用的成对情景：先取得披露权限、ObservationScope 和实际 Registry owner，再读受保护 source 或解码 Entry；不能产生禁读、存在性泄露或按超时猜状态。无效 source/本地 typed 事实不能进入 semantic_pending。仅因 unseen 新 consumer 尚未协调，不能拒绝 saved 交付和原恢复。
 
-Portable Locator 跨副本当前资格及最终 D7 完整结果、Prepared、preview producer 仍是主文 §19.12 具名内部依赖。上述本地绑定与消费用例不裁定该基础问题，也不声称 D7 新 producer 已存在。真实合同到齐后，需统一协调这六文件，并按新的准确 hash 独立审查后才能接受。
+PL-IR-01 portable Locator 跨副本资格现已有 D6 稳定地址 + D3 fresh-current-Observation 作者规则；它是**针对本 exact candidate 的独立复核义务**，不再是基础算法未决。应按 D6 PL01–PL18 与 D5 主文 §19.8/§19.12 核对，特别覆盖纯同步正向读取以及“新读取绝不复活旧 table/occurrence selector”。另一项最终 D7 complete-result/Prepared/preview producer 仍是真实内部协调依赖。上述本地测试都不能自行接受任一依赖，仍需对新的准确 hash 独立复核。
 
 
 ### 8.13 接受边界
