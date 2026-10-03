@@ -8,7 +8,7 @@ translation_status: synced
 
 Source document ID: 745612fc-347a-42d9-8863-a59f37d0389b.
 
-Candidate status: D7 file-authority coordination afterimage; not independently accepted, activated or implemented. Stage acceptance, unstarted D8/D9 labels and model counts in fixed S are historical provenance. This candidate preserves their actual semantics and evidence limits without treating those labels as current status. It consumes this package's D3 wire12/Result9, current D4 consumers and D6 Control production-version, current-observation, dependency and single-decision recovery contracts. New D3 conflict preparation and D7 /3 binding still require independent joint review of the complete package; portable Locator requalification across replicas awaits its named decision. This candidate does not claim complete closure or eligibility for activation.
+Candidate status: D7 file-authority PL-IR-01 repair terminology consumer; not independently accepted, activated or implemented. Historical fixed-S labels/evidence retain only their original scope. This lexicon consumes the authored D3/D6 stable-production-address/current-Observation repair; the exact repair remains pending independent review and does not close P1. Other D3/D6/D7 gates remain separate.
 
 # D7 Terminology and Naming Lexicon
 
@@ -1320,7 +1320,7 @@ Finite read-only delivery lifetime of a complete semantic manifest. One epoch fi
       "TemplateConstructionInput/2",
       "D9EntityVersionAddress/2"
     ],
-    "rule": "D9 owns persistent fixed managed production addresses separately from current runtime SourceVersionRef and complete observation/pins. ConstructionInput2 enters PAB3 only through the built-in typed adapter. Omitted Annotation directory/state evidence does not require body sourceInputs. PL-IR-01 remains a precise unresolved Locator qualification gate."
+    "rule": "D9 owns persistent fixed managed production addresses separately from current runtime SourceVersionRef and complete observation/pins. ConstructionInput2 enters PAB3 only through the built-in typed adapter. Omitted Annotation directory/state evidence does not require body sourceInputs. PL-IR-01 now consumes the authored stable-production-address/current-Observation qualification rule; that exact repair remains pending independent review and does not turn persistent addresses into current runtime evidence."
   },
   {
     "owner": "D6 bootstrap / D7 display / D10 consumer",
