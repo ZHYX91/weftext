@@ -572,7 +572,7 @@
       "en": "Dependency Completeness Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "DependencyProof/2 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fourteen closed DependencyKey/2 kinds—source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource—with owner-defined complete ranges, evidence pins, and per-key continuity stamp {epoch,revision}. Completeness comes from a currently authorized consistent snapshot/range barrier or a gap-free continuous change chain plus final revalidation; D6 carries the closed keys/stamps while D3/D4/D7 retain their actual enumeration algorithms. Only the guarded D3 resolution context may bind a source entry to the complete typed ConflictInstallInput/1 plus conflict/current-range evidence; it proves that original installation and never exports canonical-current Query qualification.",
+      "definition": "DependencyProof/2 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fourteen closed DependencyKey/2 kinds—source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource—with owner-defined complete ranges, evidence pins, and per-key continuity stamp {epoch,revision}. Completeness comes from a currently authorized consistent snapshot/range barrier or a gap-free continuous change chain plus final revalidation; D6 carries the closed keys/stamps while D3/D4/D7 retain their actual enumeration algorithms. The guarded D3 resolution context may bind its conflicted source entry only to complete typed ConflictInstallInput/1 plus conflict/current-range evidence; the separate guarded D6 source_merge/choose_source_head context may bind its conflicted source entry only to complete SourceConflictBefore/1 + SourceConflictVersionBasis/1 plus exact conflict/source/control continuity. Neither exception creates canonical-current Observation or Query qualification, and unrelated source reads remain ordinary SourceObservation inputs.",
       "exclusions": "Not caller readSet/free JSON, Derived Index readiness, row count, final hash, provider-synced status, Frontier-vector comparison, partial/building index, unknown range, or no-hit evidence. Unknown/placeholder/I/O/missing-shard/hidden-unreadable state never proves empty. Deleting I alone does not reset proof while protected P/M continuity facts remain complete; actual proof/continuity loss or a gap requires a new epoch.",
       "ownedNames": [
         "DependencyProof",
@@ -1576,15 +1576,18 @@
       "contract": "D6 owns the durable continuity container; D10/Money owns approval/claim/external/Money sub-schemas and sourceOccurrenceKey semantics."
     },
     {
-      "owner": "D6 installation producer / D3 guarded resolution / D7 protected record",
+      "owner": "D6 installation producer / guarded D3 and D6 conflict resolution / D7 protected record",
       "names": [
         "ConflictInstallInput/1",
         "SourceRevisionPlan/2",
+        "SourceConflictBefore/1",
+        "SourceConflictVersionBasis/1",
+        "SourceRevisionPlan/3",
         "D3CanonicalInput/1",
         "D3ResolutionInputUse/1"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "Control §3.1.1 and §6.2.1 own the closed installation-only wrapper and conflict-only internal plan decoder. D3 §10.1 owns canonicalInputs, D3CanonicalEffectPlan/1, the selected lifecycle matrix and usage guard. Its primary receipt arrays cover only the native component; mandatory public D3CanonicalEffects/1 proves the canonical component, with independent original-schema evidence and exact physical-effect aliases. D6 saves both at the same P seal and sourceVersions/CP3 cover every physical source effect once. D7 PreparedActionBinding/3 persists the complete input and full preview. Wrapper has no public source token, never enters InputDescriptor.sourceInputs, cannot cross key/token/audience/owner, and ordinary SourceObservation/raw-mode rules stay unchanged. One original planning CAS/P seal and historical decoder/pin/unknown responsibility remain; actual D7 producer and fresh joint acceptance are still required."
+      "contract": "Control §3.1.1 + §6.2.1 keep ConflictInstallInput/1 + SourceRevisionPlan/2 exclusively on guarded D3 canonical resolution. Control §3.1.2 + §6.2.2 separately bind D6 source_merge/choose_source_head to actual physical SourceConflictBefore/1, complete sealed SourceConflictVersionBasis/1 and SourceRevisionPlan/3. Neither conflicted subject enters sourceInputs or gains ordinary current qualification. /3 preserves actual physical CP3 before, current-domain H, one planning CAS/P seal and original recovery; same bytes with a different chosen production SourceVersion is admission, while a truly source-unchanged resolution emits no /3/H. No wrapper crosses key/audience/owner/arm or replaces the other owner guard."
     },
     {
       "owner": "D6 Control §4.3 / D10 Control §8.1–8.2",
