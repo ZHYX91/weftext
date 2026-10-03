@@ -1553,7 +1553,7 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 | `SourceStamp/1` | 原计划冻结的拟议受管后像地址 | 当前 `SourceVersion/2`、`ChangeId/1`、公开的新 Ref 或提前取得的 Locator 能力 |
 | `SourceRevisionPlan/1` | 仅当计划将产生受管后像时使用的 P 内受保护版本依据 | 公开 wire、第二版本账本、删除/无操作版本或可变重试计数器 |
 | `RevisionTokenSource/2` | 受保护修订令牌绑定的闭合带标签来源分支 | 裸 `SourceStamp/1`、裸 `SourceVersion/2` 或自由 owner JSON |
-| `RevisionTokenBinding/2` | 当前观察域/世代到 `RevisionTokenSource/2` 的受保护绑定 | 公开来源版本、调用方自选令牌或历史不透明解码器的替代 |
+| `RevisionTokenBinding/2` | 一个不透明 token 到闭合 `RevisionTokenSource/2` 的受保护稳定生产地址绑定；managed canonicality 只来自 winning plan/seal 与 original sealed-outbox 关联 | 当前 observer 资格、权限、公开来源版本、调用方自选 token 或历史不透明 decoder 的替代 |
 | `d6_source_revision/2` | 仅作为新受保护修订令牌配置的标记 | `d6d`、`d6r`、`d6a` 的替代标记，或新的 D3 定位器词法 |
 | `ObservationScope/2` | 受权的潜在观察上界 | 写集、单独权限或完整性证明 |
 | `DependencyProof/2` | 受保护的完整正/负依赖证据 | 调用方读取集合、部分 I、自由 JSON、“没有命中”或较大前沿捷径 |
@@ -1574,7 +1574,7 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 
 `SourceVersion/2` 与当前 `SourceObservation/1` 明确处于不同的语义域。受管和外部生产版本都绑定完整实体引用、生产 `CommitDomain/2` 与生产 `observationEpoch`；受管分支另外携带按生产域连续历史检查分配的修订号和封存 `ChangeId/1`，外部分支则携带 `externalSequence`，没有受管修订号/ChangeId。当前观察另行绑定 `observerDomain`、当前 `observationEpoch`、`FileObjectBinding` 与证据 pins。`SourceVersionRef/1` 只选择这份完整本地观察。不同生产域中的相同修订号不可比较；外部生产域的修订号、生产观察世代或 `externalSequence` 都不能贡献给新的受管后像修订号。`H(D,E)` 表示生产域 D 的连续已封存历史中实体 E 的最大受管修订号；生产观察世代变化不重置 H，缺失或有缺口的历史不是空历史，真正的原始无操作或来源未改变的结构/生命周期效果也不推进 H。即使字节相同，外部来源接纳仍是真实的外部前像/受管后像接纳。
 
-凡计划确实会产生受管后像，都为该实体冻结一份 `SourceRevisionPlan/1`：它绑定完整当前前像观察或已证明的不存在分支、同一生产域最后已签发的受管版本或经完整证明的空历史、拟议 `SourceStamp/1` 与精确后像 pin。修订令牌绑定的 `source` 必须恰好使用闭合 `RevisionTokenSource/2`：受管分支包裹 `SourceStamp/1`，外部分支包裹完整外部 `SourceVersion/2`。受保护 profile tag 是 `d6_source_revision/2`。规划阶段不分配 `ChangeId/1`；只有同一决议的 P 封存才能把冻结 stamp 与真实封存 ChangeId 合成为受管生产版本。删除的后像为不存在，不产生后像修订号，也不推进 H。D3 既有 Locator/selector 成员继续携带原有不透明修订令牌字符串，历史解码器保持不变。
+凡计划确实会产生 managed after，都在 C/Q 或其它绑定 revision 的物化之前，为该实体冻结一份 `SourceRevisionPlan/1` 和恰好一条拟议 `RevisionTokenBinding/2`。binding 的 `source` 使用闭合 `RevisionTokenSource/2`，不携 current observerDomain/current observationEpoch。winning planning CAS 将 token、版本依据与 pins 一起冻结；唯一 P seal 通过 original sealed-outbox 关联把该 exact binding 认证为所得 managed SourceVersion 的唯一 canonical 稳定地址，即使当时还没有 Locator。loser/aborted/seal 不可证明的 binding 不能借另一 seal。后来的 observer 先解析稳定地址，再独立证明完整 current `SourceObservation/1.sourceVersion` 与之相等；这只可给一次新读取资格，绝不复活旧 selector、PAB/Draft/map、ActionEvidence 或 PreparedIntent。planning 仍不分配 `ChangeId/1`；delete/no-op/source-unchanged 保持既有不产生 after version 的规则。D3 Locator 词法形状与历史 decoder 不改。
 
 `DependencyProof/2` 恰好包含十四类 `DependencyKey/2`：`source`、`lifecycle`、`placement_range`、`ref_inbound`、`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`foreign_binding`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource`。D6 拥有这些闭合载体种类、排序、stamp/pin 持久化及提交/恢复验证；具体枚举语义仍归真实 owner。对于 D3 的 `placement_range`，`StructureRange` 恰有九类：`live_children`、`trash_children`、`trash_roots`、`ancestor_chain`、`subtree`、`owner_resources`、`owner_annotations`、`reply_closure`、`restore_membership`。空范围和非空范围使用完全相同的完整枚举标准。placeholder、未知解码器、缺失分片、I/O 失败、隐藏且未授权的成员、构建中/部分 I、提供方状态、相同计数/哈希或“没有命中”都不能证明完整空集。D4 继续拥有关系/Calendar/Registry 语义，D7 继续拥有完整查询语义；D3 不能用一个粗粒度的 Frontier 前缀替代这些证明。
 

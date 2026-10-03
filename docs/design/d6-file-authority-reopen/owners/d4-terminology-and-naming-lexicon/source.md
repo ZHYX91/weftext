@@ -75,7 +75,7 @@ These remain owned elsewhere and are only consumed by D4:
 |---|---|
 | `DecisionKey/2` | D6: Workspace + complete CommitDomain + OperationId; protocolOwner selects the single original decision owner and is not another key field |
 | `SourceRevisionPlan/1`, `SourceStamp/1` | D6: the original plan's protected proposed managed-after basis, using production-domain H and exact afterPin; not sealed source, current Observation, or early Locator capability |
-| `RevisionTokenBinding/2`, `RevisionTokenSource/2`, `d6_source_revision/2` | D6: protected stable binding of observer domain/generation and the closed managed-stamp or external-version arm; D3 retains opaque Locator lexical ownership |
+| `RevisionTokenBinding/2`, `RevisionTokenSource/2`, `d6_source_revision/2` | D6: protected stable production-address binding to the closed managed-stamp/external-version arm; current observer qualification remains separate in `SourceObservation/1`/`SourceVersionRef/1`; D3 retains opaque Locator lexical ownership |
 | `DependencyKey/2`, `DependencyProof/2`, `StructureRange` | D6 carrier; D3/D4/D7 real enumeration owners: fourteen key kinds and nine structure ranges, with exact key-specific completeness and continuity |
 | `ContentCompletionProof/3` | D6: portable transport of sealed production SourceVersion before/after; never sender Observation/token or complete Query proof |
 | `ConflictRecord/2` | D6: Frontier/2 current record; historical /1 remains original Frontier/1, while ConflictKey/1 and ConflictId retain identity |
