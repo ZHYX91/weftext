@@ -551,6 +551,73 @@ pending 的 confirmation 为 confirmed|needs_reconfirmation；accepted/rejected 
 - delete：nonempty document_range；expectedText required；replacementSource=null；pointAffinity=null；
 - insert：zero-width document_range；expectedText=null；replacementSource nonempty；pointAffinity left|right。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
+### 9.6 Portable Metadata authority、canonical bytes、revision 与 CAS
+
+current Annotation 的唯一 portable author authority 是现有 Node-local `weftext.annotations.json` Portable Metadata entry。SCHEMAS §7 的 current logical record 是 `PortableAnnotationRecord/4`：durable `annotationRef`、opaque `annotationRevisionToken` 与完整 `D3-Annotation-Value/4`。D2 historical Annotation-v2 outer snapshot 不再是 current author value；它只保留历史 decoder/projection。其 plain-text body、`replace_plain_text` suggestion 与 resolved/stale 两态 targetStatus 都不能约束 current Value/4。
+
+current annotation payload 的唯一规范 bytes 为：
+
+```text
+annotationValueBytes = D3-CJ/3(complete D3-Annotation-Value/4)
+annotationValueSha256 =
+  "sha256:" + lowercase_hex(SHA-256(annotationValueBytes))
+```
+
+current `payloadBindings` 中 payloadKind=`annotation_value` 的条目、Annotation 的 D6 `SourceRevisionPlan/1.afterPin`、D8 proposed-value pin、current EffectBytes 的 `d3_annotation_value4` encoding，以及 current materialized postimage，都必须指向同一组 canonical bytes。Portable Metadata envelope、AnnotationRef 与 revision token 不进入 `annotationValueSha256`。相同 digest 不能证明 identity、currentness 或 CAS。
+
+`annotationRevisionToken` 继续是 nonempty opaque JSON string，不参与 content identity。已有 Annotation 在 planning 前必须同时匹配 exact current token 与 exact current SourceObservation。若完整 editable proposal 与 current editable projection 逐字节等价，则属于真正 value no-op：Core 不改 attribution、不分配新 token、不建立 SourceRevisionPlan 或新 managed SourceVersion，也不能因为 Annotation 参与了请求就推进 H。只要 editable value 实际有变化，Core 就构造一份新的完整 Value/4，为该 Annotation state 分配一个从未用于其它 state 的 token，并把二者冻结进 winning plan；target/reply slot address、structural evidence、source change、receipt 与 materialization 全部使用同一个 final token。即使之后 Value/4 bytes 回到旧值，也必须使用 fresh token，禁止 ABA 复用。
+
+可由作者修改的 value fields 恰为 purpose、target、replyTo、body、appearance、labels、reviewState、suggestion。任何其中字段的实际 committed change 都是 Value/4 mutation，必须推进 Annotation revision。四个 attribution fields 不是 caller mutation input。interactive/current creation 时，trusted Core 从实际执行 principal 与可信时钟生成 creator/authoredAt，并令 lastEditor=creator、editedAt=authoredAt。later actual mutation 必须 byte-preserve creator/authoredAt，并由 Core 根据真实执行 principal/time 重写 lastEditor/editedAt。caller 不能提交 trusted/verified、人类来源、自报 actor/time 等字段来取得真实性；closed request shape 必须拒绝这些字段。
+
+actor/time 仅作显示与历史归因，不参与 authentication、permission、排序或 LWW。trusted same-Workspace copy 可以保留既有四个 attribution snapshots；trusted cross-Workspace transfer 保留其 originWorkspaceRef 作为历史来源。ordinary untrusted import 若要保留 display/time 文本，importer 必须把对应 snapshots materialize 为 `imported_unverified`，不能伪装成 `workspace_authenticated_origin` 或 `prepare_server_clock`。此后本地真实 mutation 继续 byte-preserve imported creator/authoredAt，并用当前实际执行者/时间重写 lastEditor/editedAt。
+
+### 9.7 Value/4 的 D3 mutation binding、slots、receipt 与 lifecycle
+
+current wire13 annotation mutation 复用 fixed D3 mutation algebra，但 base decoder 改为 current Value/4；historical wire9–12 继续按真实 Value/3 bytes 解码。两个 logical slot 不变：
+
+```text
+annotation_target  slotOrdinal=0  reference
+annotation_reply   slotOrdinal=1  nonnull时是reference；
+                                  existing identity reply变化时只走structural S
+```
+
+span 必须从实际 D3-CJ/3(Value/4) member value 计算，因此 Value/4 新字段可以改变 byte offset，却不能改变 logical ordinal。purpose、body、appearance、labels、reviewState、suggestion、creator、authoredAt、lastEditor、editedAt 对 D3 identity mutation 都属于 nonreference bytes。AnnotationInlineBody/1 内的 inline AsciiDoc 继续使用既有 R6 profile，不产生隐藏 D3 slots；target identity 与 reply structure 只由上面两个 slot 表达。
+
+current existing-Annotation result 因而必须有一对完整 Value/4 preimage/result payload。target@0 始终保留完整 reference plan/evidence。nonnull 且未改变的 reply 使用普通 reference evidence；同一 existing Annotation 的 P→Q、P→null、null→Q 恰使用一个 annotation_reply structural plan/S segment 加一个 `annotation_reply_change`，reply slot 禁止再出现 reference result。fresh 或 mapped fresh Annotation 的初始 nonnull reply 仍由 reference plan/result slot 表达，绝不能作为 S container。任何 current Value/4 result，包括只改 reviewState 或 labels，都按 retained payload-binding rule hash 完整 Value/4 base 或完整 Symbolic Result bytes；不能因为 target/reply 未改就漏掉 nonreference mutation。
+
+fixed D3 mode-admission matrix 继续 load-bearing。`copy_resource` 不能分配 fresh Annotation；ordinary import 的 new-owner-only 规则不能让 fresh imported Annotation 成为 existing Annotation 的同owner fresh reply；copy_node_subtree、fork、partial identity-bearing import 不能因为 Value4 successor 而新增 existing-Annotation S side effect。generic subject union 不得扩大这些模式。
+
+若 restore trashed Annotation A 的同时把 reply P→Q，target@0 与 nonnull reply@1 的 prestate 都是 non_live_source，poststate 都是 resolved；所有 A 的 toSource、reply structural change 与 receipt reference 必须使用唯一 final annotationRevisionToken。若旧 reply=null，只有 reply prestate=absent，target 仍是 non_live_source。只要 Value/4 有变化，就不能用 lifecycle-only 替代 typed target preimage 或 reply S。独立 Trash/restore 若 Value/4 byte-equal，不得生成新 Annotation revision；lifecycle 是独立 portable metadata。
+
+copy/fork/import materialization 只能按既有 identityMap/candidate-map 规则改写 target/reply，然后物化唯一 final Value/4 与唯一 final revision token。receipt 的 source version、target/reply toSource address 与 `annotation_reply_change.toAnnotationRevisionToken` 必须全部指向这一个 final revision。backup/export 只按既有 disclosure 携带 portable identity/value，不携带 current permission、ActionEvidence 或 executable preparation。
+
+### 9.8 D8 current Annotation edit surface
+
+current D8 edit preparation 使用 SCHEMAS §6.3 的 version-3 successor。`D8EditIntent/3` 保留 document arm，只把 current annotation arm 接到 Value/4。caller 提交 `AnnotationEditableValue/1`，不能提交完整 Value/4 attribution；同时提交 exact expected current Annotation revision token 与 targetPolicy。Core 独立读取完整 current PortableAnnotationRecord/4、SourceObservation 与权限，按 §9.6 构造完整 proposed Value/4，并 pin exact D3-CJ/3(proposed Value/4)。`PreparedEditBinding/3.intent` 必须恰为 `D8EditIntent/3`；`D8EditInput/3` 是 current OwnerInputBinding descriptor。不得再保留 `<D8 current intent>` 占位，也不存在 caller-provided actor/time。
+
+Annotation edit 必须使用 complete profile 与 strict write protection。它先建立 Annotation disclosure、annotation_read/write 与 exact current Annotation CAS。targetPolicy=preserve 要求 stored target bytes/identity byte-equal，但允许 freshly requalify exact/mapped 状态而不写 stored target；targetPolicy=replace_current 要求在 current target disclosure/qualification 下显式选择合法 same-owner target。candidate/ambiguous/fuzzy location 只能 read-only，直到用户 explicit manual reattach 选定一个 exact target，并以新的 Value/4 mutation prepare。pure synchronization 或 stable locator 新近重新取得资格，只要 Value/4 bytes 不变，就不是 edit，不能刷新 lastEditor/editedAt、不能推进 token，也不能复活旧 PAB/EditBinding/ActionEvidence。
+
+body editor 只有一个 source truth：`AnnotationInlineBody/1.source`。visual mode 只是同一 R6 `AnnotationInlineProfile/1` 的可丢弃 render，不得保存 HTML 或第二套 rich body。local Draft 中 inline source invalid 时，必须保留 exact draft source 与 diagnostics，同时 visual rendering 与 prepare unavailable。只有 annotation_read 没有 annotation_write 的 principal 获得 authorized current value 的 read-only surface，不能因为 render 成功就得到 writable Draft。Portable Metadata corrupt/undecodable 时禁止 partial projection：normal read 走现有 unavailable/integrity boundary；有权限的 repair/backup surface 可以暴露 exact raw portable bytes，但不得补造 Value/4 members。
+
+historical D8 wire1/wire2、PreparedEditBinding/1-/2、Value/3 proposed pins 与真实 saved/planned/unknown requests 都按其原 decoder/pins 恢复。current editor 支持 Value/4 不得把它们转换成 EditBinding3/Value4。
+
+### 9.9 D7 current suggestion actions
+
+current new D7 author preparation 使用 SCHEMAS §6.1 的 `D7ActionSpec/2` 与 `D7ActionPrepareRequest/3`。所有非 suggestion 的 ActionSpec/1 arm byte-for-byte 继承；旧 `apply_suggestion(annotation:EntityTarget,targetLocator)` 只作 historical。current closed suggestion arms 为：
+
+```text
+apply_suggestion  -> accept stored pending Suggestion/3
+reject_suggestion -> reject stored pending Suggestion/3
+```
+
+两者只携带 AnnotationRef 与 exact expectedAnnotationRevisionToken；caller 不能另传 targetLocator、replacement bytes、expectedText、point affinity、actor/time 或预先算好的 source patch。
+
+apply_suggestion prepare 必须 fresh read current Annotation 与其 stored Suggestion/3，要求 pending+confirmed，再 fresh qualify stored target 与真实 target source，并做唯一 kind mapping：replace→一个使用 replacementSource 的 SourceTransform replace；delete→replacement bytes 长度为0的 replace；insert→stored zero-width point 上、使用 stored pointAffinity 的 SourceTransform insert。replace/delete 必须用 fresh exact bytes 验 current expectedText；insert 必须验证 point/basis。mapped/candidate geometry 只可作为 fresh exact qualification 的输入。target SourceOrigin 决定真实 writable owner；AnnotationRef owner 与 reply structure 本身不授 target write authority。
+
+accept 建立一个 immutable D6 plan，同时包含 target source after-image 与同一 Annotation 的 Value/4（Suggestion.state=accepted、confirmation=not_applicable，并由 Core 写入 lastEditor/editedAt）。两个 source changes 使用同一 DecisionKey、一个 planning CAS、一个 P seal；只改 target 不改 accepted state，或只改 accepted state 不改 target，都不是合法 success。target Document branch 在可表达时使用既有 CoreSourceEditPlan/2/SourceTransform evidence；旧 PreparedIntent/PAB 不能复活。
+
+reject_suggestion 只要求 Annotation state disclosure、annotation_read/write 与 exact current Annotation token；它不读取 target source，也不要求 target-read permission。它只把 Annotation Value/4 改为 rejected/not_applicable，并使用同一 CAS/revision/actor-time 规则。accept 与 reject 或其它 body/review/label/appearance/reply/suggestion edit 竞争时只有一个 token winner；loser 按 stale/conflict 重新 fresh read/prepare。
+
 ## 10. Annotation targets/current qualification
 
 ### 10.1 source target
@@ -849,17 +916,21 @@ Record2、Proof1、Inventory1 保留其历史 decoder 与 payload domain。Recor
 
 ## 15. Annotation suggestion生命周期
 
-Suggestion与reviewState分离；唯一生命周期 authority 是 §9.5 的 Suggestion/3.state 与 confirmation，不得再定义第二个 SuggestionState 类型。
+Suggestion 与 reviewState 继续正交；唯一生命周期 authority 是完整 Value/4 中的 Suggestion/3。pending 使用 confirmed|needs_reconfirmation；accepted/rejected 都是 terminal 且 confirmation=not_applicable。current executable actions 只有 §9.9 的 D7ActionSpec/2 apply_suggestion 与 reject_suggestion。
 
-reject只需先取得annotation state disclosure + annotation_read/write；不需要读取target source，也不建立blind-write profile。它以同一 Annotation current-revision CAS 将 Suggestion/3.state 从 pending 改为 rejected，并令 confirmation=not_applicable；其它已授权修改按 Value/4 规则处理。accept必须取得annotation和target disclosure、fresh current target qualification、current expected bytes/point与新的D7 prepare；mapped geometry只是fresh qualification输入，不复活旧 PreparedIntent/ActionEvidence。
+explicit manual reattach/reanchor 是普通 Value/4 target mutation：写入一个新的 exact same-owner target，把 pending suggestion 改成 needs_reconfirmation，推进 Annotation revision，并记录实际 Core editor/time。reconfirmation 是另一个显式 current mutation：必须 fresh qualify 该 exact target，重新计算 targetBasisSha256 与 expectedText/point，再以新的 Annotation revision 回到 pending+confirmed。mapped/candidate geometry 与 pure sync requalification 都不能自动改变 Value/4。
 
-显式reanchor保持 state=pending，将 confirmation 改为 needs_reconfirmation；必须在fresh current exact target重新确认expected bytes/point、更新target basis后才回 confirmed。accept在**一个D6 seal**同时写Document after与 Annotation 的 Suggestion/3.state=accepted, confirmation=not_applicable；accept/reject race只有一个current Annotation revision winner。geometry可映射但expected bytes变化仍不能accept。accepted/rejected均为terminal，不提供reopen。
+accept/reject 均以 exact current Annotation CAS 为前提。accept 按 §9.9 的三种 kind mapping 和 one-seal Document+Annotation atomicity 执行。reject 存在明确的 target-unreadable 正向路径：只要 Annotation disclosure 与 annotation_read/write 成功，即使 target hidden/unavailable 也不阻断 reject，因为该路径不读取或写入 target bytes。并发 body/review/label/appearance/reply/suggestion edit 都改变同一 revision token，因此旧 suggestion action 必须 stale。accepted/rejected均为terminal，不提供reopen。
 
 ## 16. Copy/import/export/backup Annotation
 
-Node copy产生fresh AnnotationRefs，完整rewrite reply graph并通过真实source/resource identityMap重发targets；creator/authoredAt/lastEditor/editedAt作为attribution保留，但不能复制旧locator或按文本猜position。copy owner/target mismatch、mandatory reply/target无法重建时整个typed copy失败；raw byte copy不冒充typed success。
+Node copy 产生 fresh AnnotationRefs，完整 rewrite reply graph，并只通过真实 source/resource identityMap 重建 targets。fresh/mapped Annotation 的 target@0 与初始 nonnull reply@1 继续使用继承的 reference-plan/result 规则，不是 existing-Annotation structural S。每个 materialized copied Value/4 只有一个 final Annotation revision；attribution 按 §9.6 处理。旧 locator 不能复制，position 不能靠文本猜测。mandatory target/reply 无法重建时 typed copy 整体失败；raw byte copy 不冒充 typed success。
 
-import将可证明的managed identity/source/resource target映射到fresh refs；无法证明owner/provenance的target保留为需要用户处理的candidate/unavailable，不自动fuzzy写入。export/Review Bundle按当前权限决定是否包含source excerpt/history/mediaregion；HTML/PDF输出不能因为renderer convenience升级target resolution。portable backup包含Annotation JSON和其portable identity/value；消费型execution authority不随普通文件copy传播。
+ordinary import 只按继承 owner rules 创建 fresh imported Annotation identity；可证明的 target/reply 通过真实 import mapping 改写。无法证明的 target 只有在 import profile 明确允许时才能作为 imported-unverified/candidate repair 表示保留，并且不能授权 navigation/write；不得按文本自动重绑。D3 mode matrix 禁止时，fresh imported Annotation 不能借机给 existing Annotation 增加 structural reply mutation。
+
+portable backup 携带 current PortableAnnotationRecord/4 JSON value/identity 与历史 attribution display data，但不携带 current permission、SourceObservation、revision-token signing capability、PAB、ActionEvidence 或 executable authorization。restore/recovery 必须先按真实 recorded version 分派：真正 old D2 Annotation-v2/Value3 record 用历史 decoder；current Value/4 record strict-decode Value/4。corrupt/unknown bytes 保持 repair/backup data，不能成为 partial trusted current Annotation。
+
+export/Review Bundle 只有在每项对应 disclosure permission 成功时才能包含 Annotation body、source/history excerpt 与 media-region context。resource-region annotation 保留 target contract 要求的 exact resource identity/version/profile/geometry。renderer convenience 不能把 candidate/ambiguous/orphaned/unavailable 升级，也不能把 hidden source 变成 exported context。
 
 ## 17. Error、recovery与版本边界
 
@@ -894,6 +965,12 @@ PreparedActionBinding/4
 EffectManifest/3
 EffectBytes/3
 PreparedEditBinding/3
+PortableAnnotationRecord/4
+AnnotationEditableValue/1
+D8EditIntent/3
+D8EditInput/3
+D7ActionSpec/2
+D7ActionPrepareRequest/3
 ExportPlan/3
 PublicationReceipt/3
 PortableTransformCompilation/1
