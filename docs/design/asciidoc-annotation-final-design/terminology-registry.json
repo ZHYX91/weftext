@@ -562,7 +562,7 @@
       "status": "current",
       "replaces": "PreparedActionBinding/3",
       "section": "SCHEMAS §6.1; SPEC §9.9",
-      "notes": "Current D7 successor consuming D7ActionSpec/2, including current apply/reject suggestion arms. Genuine saved/planned PAB3 keeps exact decoder/bytes/pins/recovery."
+      "notes": "Current D7 successor consuming D7ActionSpec/2. D6 action branch binds D7ActionInput/3; D3 identity branch keeps d3_identity_operation/13. Genuine saved/planned PAB3 keeps exact decoder/bytes/pins/recovery."
     },
     {
       "name": "EffectManifest/3",
@@ -1507,6 +1507,14 @@
       "replaces": null,
       "section": "SCHEMAS §6.1; SPEC §9.9",
       "notes": "Trusted current interactive Annotation creation input. Caller supplies owner plus AnnotationEditableValue/1; Core injects attribution and constructs the complete wire13 create_annotation request/Value4 payload."
+    },
+    {
+      "name": "D7ActionInput/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "D7ActionInput/2",
+      "section": "SCHEMAS §6.1",
+      "notes": "Current D6-owned D7 action OwnerInput descriptor using D7ActionSpec/2; six-member fixed-parent shape retained, canonicalDescriptorBytes and pin coverage remain owner-bound."
     }
   ]
 }
