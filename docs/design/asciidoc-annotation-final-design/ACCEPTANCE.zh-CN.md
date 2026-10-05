@@ -583,8 +583,8 @@ translation_status: source
 
 本次 schema 补全**不新增、不删除、不重编号**554条设计义务；它把已有验收引用的类型从悬空名称变成公开 closed shape。直接覆盖关系为：
 
-- retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
-- M37 producer-site、snapshot/cut、namespace与producer-time carrier规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
+- 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
+- M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
 - AnnotationInlineBody/1 / AsciiDocInlineBody/1 alias 与唯一 AnnotationInlineProfile/1：AN2-08，并继续受AD2完整2.0.26语言Gate约束。
 
 这些条目仍是未运行设计要求；schema补全不把它们改写成已通过实现测试。
