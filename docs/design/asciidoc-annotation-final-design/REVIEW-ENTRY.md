@@ -37,7 +37,7 @@ This is a non-author independent design review, not implementation acceptance, A
 - D3/D4/D5/PAB4/Edit3/ExportPlan3/D10 mixed-holder closure is complete; historical bytes are not reencoded.
 - VersionedControlPrepareBinding has exactly Binding1/2/3 arms and cross-version StableControlKey uniqueness.
 - Provider availability is separate from language validity; this PR has no provider runtime PASS evidence.
-- Bilingual ACCEPTANCE has exactly 438 core +293 coordination =731 unique obligations, all unexecuted.
+- Bilingual ACCEPTANCE has exactly 438 core +312 coordination =750 unique obligations, all unexecuted.
 
 ## Verdict
 Report P0/P1/P2, named findings, dispositions, reading coverage, unverified implementation scope, and whether the candidate may proceed to later A2/global work. Documentation consistency is not implementation evidence.
