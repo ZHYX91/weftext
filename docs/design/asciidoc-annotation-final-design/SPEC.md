@@ -895,6 +895,6 @@ ManagedDocumentSemanticQualification/1
 
 ## 19. Acceptance and evidence boundary
 
-The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md: 438 core design oracles and 138 actual-owner coordination fixtures, 576 obligations total. They are **unexecuted design obligations**, not implementation test results.
+The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md: 438 core design oracles and 163 actual-owner coordination fixtures, 601 obligations total. They are **unexecuted design obligations**, not implementation test results.
 
 This PR did not install or execute the Ruby oracle, Asciidork, Mermaid CLI, browser/Puppeteer, STEM/PDF providers, product SQLite/storage code, replica/crash/crypto paths, real Automation scheduling, or execution-custody handoff. Author checks are limited to document/JSON/router consistency. Independent design review must bind to the exact stopped PR head SHA.
