@@ -1217,7 +1217,7 @@ D2NativeAttributeSet/1 是唯一允许可变命名属性的 native attribute car
 
 D2SourceOriginGraph/2 只在一个 snapshot 内有效。origin id 必须从0连续无洞；每个 input id 都小于引用它的 node id，因此 graph 无环且不形成第二 identity namespace。authored 恰有一个 physical source range；reference 记录真实 authored reference site 与其 input；substitution/generated 记录固定 transformation family 与全部真实 inputs；multi_origin 至少两个 inputs。sourceOrigins.originIds 排序唯一且都存在。writableSource 从这些 origin 机械导出：只有所有 retained path 最终收敛到同一个 byte-equal authored writable range 才是 unique；generated、non-author、ambiguous 或 multi-source 都只能 structured-read。exact Source read/save 继续由原 authorization 独立提供。
 
-D2SourceOwner/1 必须 version-exact。root_document 与 managed_include 携带求值实际使用的 SourceObservation/1；artifact/network source unit 携带 exact immutable pin；全部 variant 都携带 processor environment 中的 logicalPath。不得由 path/title/hash 推导 source unit。current managed D2DocumentSnapshot/3 强制 processorEnvironment.input.kind=managed_file，其 ownerNodeRef 与 snapshot.ownerNodeRef byte-equal；rootSource.kind=managed 且 owner/SourceObservation/logicalPath 全部相等。includeSources 与 processorEnvironment.includeEnvironment.sourceUnits byte-equal。processorEnvironmentSha256 唯一为：
+D2SourceOwner/1 必须 version-exact。root_document 与 managed_include 携带求值实际使用的 SourceObservation/1；artifact/network source unit 携带 exact immutable pin；全部 variant 都携带 processor environment 中的 logicalPath。不得由 path/title/hash 推导 source unit。current managed D2DocumentSnapshot/3 强制 processorEnvironment.input.kind=managed_file，其 ownerNodeRef 与 snapshot.ownerNodeRef byte-equal；rootSource.kind=managed 且 owner/SourceObservation/logicalPath 全部相等。includeSources 与 processorEnvironment.includeEnvironment.sourceUnits byte-equal。processorEnvironmentSha256 唯一为：；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ```text
 "sha256:" + lowercase_hex(
@@ -1601,7 +1601,7 @@ EffectBytes/3 = {
 }
 ```
 
-EffectItem/3 保留 fixed-parent 的十四个 arm，并只新增一个 current owner-specific arm：presentation_policy_change:D8PresentationPolicyEffect/1。它与 series_configuration_change 属于同一类 typed shared-configuration owner effect，不是新的 PortableComponentKey、Policy/3 mutation、Registry value、author source 或 generic JSON。全部 byte slot 使用 EffectBytes/3，Annotation source image 使用 Value/4，current workspace bootstrap 允许 Plan4。historical EffectItem/1-/2 decoder 绝不扩张。
+EffectItem/3 保留 fixed-parent 的十四个 arm，并只新增一个 current owner-specific arm：presentation_policy_change:D8PresentationPolicyEffect/1。它与 series_configuration_change 属于同一类 typed shared-configuration owner effect，不是新的 PortableComponentKey、Policy/3 mutation、Registry value、author source 或 generic JSON。全部 byte slot 使用 EffectBytes/3，Annotation source image 使用 Value/4，current workspace bootstrap 允许 Plan4。historical EffectItem/1-/2 decoder 绝不扩张。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 6.3 PreparedEditBinding/3
 
@@ -1995,9 +1995,9 @@ D9TemplateBindingChoice/1 只在真实 ambiguous binding 且 authorized template
 
 D9ExportTemplateBinding/1.inputIndex 必须选择 inputCatalog.items[index] 中恰一个 payload.kind=template 项；pin 与该 item.pin byte-equal。profileId/profileVersion 必须选择能成功解码这些 exact bytes 的 accepted decoder；profile mismatch/unavailable 是 template unavailable，不得 fallback。不存在第二 template registry 或 filename lookup。
 
-nonnull route 的 steps 非空并从0连续。每一步 input/output profile 都由该 exact provider/version 接受。terminal output profile 必须与 target 相等：html/pdf/docx/odt/xlsx/ods 使用 target.profileId；csv_utf8 固定 "text/csv-utf8/1"；tsv_utf8 固定 "text/tsv-utf8/1"。routeBinding.profileId/profileVersion 指向包含这条 exact terminal chain 的 accepted route profile。target/terminal mismatch 直接拒绝 prepare，不可自动换 route。
+nonnull route 的 steps 非空并从0连续。每一步 input/output profile 都由该 exact provider/version 接受。terminal output profile 必须与 target 相等：html/pdf/docx/odt/xlsx/ods 使用 target.profileId；csv_utf8 固定 "text/csv-utf8/1"；tsv_utf8 固定 "text/tsv-utf8/1"。routeBinding.profileId/profileVersion 指向包含这条 exact terminal chain 的 accepted route profile。target/terminal mismatch 直接拒绝 prepare，不可自动换 route。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
-document render 时，documentSnapshotPin 选择 ownerNodeRef/sourceObservation 对应的 exact D2-Document-Snapshot/3 bytes。snapshot evaluation 的 root SourceObservation 与 ManagedDocumentSemanticQualification.sourceObservation 都必须 byte-equal sourceObservation，document_format 必须 current，而且 §4.4 的全部 include/environment/dependency 必须在 final export read barrier 验证。presentation 恰是生成 staged output 使用的 D8PresentationDecision/1。explicit/no-body/conflict-fallback decision 不含 Workspace policy pin；workspace_default 才包含实际消费的 exact current D8 policy binding。后来 source/include/policy 改变都不能修改或 rerender 已 prepared plan；fresh prepare 才读取 fresh current bindings。
+document render 时，documentSnapshotPin 选择 ownerNodeRef/sourceObservation 对应的 exact D2-Document-Snapshot/3 bytes。snapshot evaluation 的 root SourceObservation 与 ManagedDocumentSemanticQualification.sourceObservation 都必须 byte-equal sourceObservation，document_format 必须 current，而且 §4.4 的全部 include/environment/dependency 必须在 final export read barrier 验证。presentation 恰是生成 staged output 使用的 D8PresentationDecision/1。explicit/no-body/conflict-fallback decision 不含 Workspace policy pin；workspace_default 才包含实际消费的 exact current D8 policy binding。后来 source/include/policy 改变都不能修改或 rerender 已 prepared plan；fresh prepare 才读取 fresh current bindings。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 Pins(X) 表示只沿 closed typed value X 中 schema 真正声明为 PinRef/2 的 member（或含这些 member 的 closed type）递归取得 PinRef/2；text/digest/handle 都不算。推导 ExportPlan/3.evidencePins 时不得递归自身 evidencePins。于是 evidencePins 恰为以下并集按 pinToken 排序去重：
 
@@ -2017,7 +2017,7 @@ recoveryPins 自身按 pinToken 排序唯一，只允许 fixed-parent recovery c
 
 ### 6.5.1 Native table → Office SET/COLUMN naming
 
-native table dataset name 只从 authorized D2TableBlock/3 product projection 与 Office template 推导；ordinary Node 不增加任何 export configuration。text comparison 使用 exact Unicode scalar sequence，normalization=none、case-sensitive、保留 whitespace。CJK、RTL、combining-character 因而都有 host-independent 单一规则。
+native table dataset name 只从 authorized D2TableBlock/3 product projection 与 Office template 推导；ordinary Node 不增加任何 export configuration。text comparison 使用 exact Unicode scalar sequence，normalization=none、case-sensitive、保留 whitespace。CJK、RTL、combining-character 因而都有 host-independent 单一规则。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 对每个 physical table column，按 head-row source order 构造 headerPath。一个 head cell 的 [columnStart,columnStart+colspan) 覆盖该 column 时，其 semantic inline text 贡献一次；rowspan 在后续 logical row 不重复同一 cell。空 header cell 贡献 empty string。column leaf 是最后一个 segment，没有 head segment 时是 empty。table title 是完整 semantic title text 或 null。
 
@@ -2026,11 +2026,11 @@ selector 只允许按以下固定次序选择最短唯一 qualifier：
 1. candidate tables 中 leaf text alone；
 2. 以 leaf 结尾的最短 headerPath suffix；
 3. 同一 header suffix 加 exact table title；
-4. 同样 facts 再加 zero-based table occurrence（在 byte-equal title/path candidate 中）以及必要时 zero-based column occurrence（同一 table 内 byte-equal full header path）。
+4. 同样 facts 再加 zero-based table occurrence（在 byte-equal title/path candidate 中）以及必要时 zero-based column occurrence（同一 table 内 byte-equal full header path）。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 每一级：0 match 为 mapping_required；1 个即选中；>1 才进入下一层。最终 occurrence 层仍不是1个时 ambiguous_binding。禁止 first/last winner、猜 suffix、current UI order、filename、rowHandle、path guess 或强迫修改 author source。同一 repeat SET 的全部 binding 必须解析到同一 table/rowset。
 
-SET/COLUMN external name 继续使用现有 ASCII [a-z][a-z0-9_]{0,63}。unqualified native-table SET 固定 "native_table"。leaf-only COLUMN 若本身满足 ASCII grammar 且 unique，直接用 exact leaf。所有 qualified 或 non-ASCII selector 使用唯一 deterministic ASCII token：
+SET/COLUMN external name 继续使用现有 ASCII [a-z][a-z0-9_]{0,63}。unqualified native-table SET 固定 "native_table"。leaf-only COLUMN 若本身满足 ASCII grammar 且 unique，直接用 exact leaf。所有 qualified 或 non-ASCII selector 使用唯一 deterministic ASCII token：；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ```text
 SET    = "nt_" + base32hex_lower(SHA-256(
@@ -2045,11 +2045,11 @@ base32hex_lower 是完整256-bit digest 的52字符 lowercase RFC4648 base32hex�
 
 后来新增 same-name column/table 可以让旧 short selector 变成不唯一；fresh prepare 必须 ambiguous_binding，直到 template 使用新 required qualified token。old prepared ExportPlan 已冻结 table projection/selector/staged bytes，因此保持 immutable。
 
-ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保持 fixed-parent closed shape/semantics。D9NativeTableTokenBinding/1 只记录 existing dataset SET/COLUMN name 的 derivation，不新增第二 dataset schema。每个 native-table dataset column/cell 的 projection origins 必须指向 binding 选择的同一个 inputIndex/tableLocator，table grid facts 只取 D2TableCell/3。
+ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保持 fixed-parent closed shape/semantics。D9NativeTableTokenBinding/1 只记录 existing dataset SET/COLUMN name 的 derivation，不新增第二 dataset schema。每个 native-table dataset column/cell 的 projection origins 必须指向 binding 选择的同一个 inputIndex/tableLocator，table grid facts 只取 D2TableCell/3。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 D9ExportConfirmation/1 不能改变 catalog、projection、route、target、destination、generation policy、report、budget、presentation 或 staged bytes。lossChoices 按 lossKey 排序唯一并恰覆盖 requires_choice/blocking；reject 取消，blocking 不可 accept。PublicationReceipt/3 对每个重复 member 必须与 protected Plan/confirmation byte-match，并记录实际 published output digests。
 
-current plan token 只能使用 d9_export_plan/3，current publication token 只能使用 d9_publication/3。lookup/inspect/confirmation/unknown recovery 必须先按 token tag 分派，再 strict-decode record.version。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 保持原 token tags、exact bytes、pins、permissions、confirmation、unknown-publication state 和 recovery；旧 token 永不 repin/reencode 成 /3。
+current plan token 只能使用 d9_export_plan/3，current publication token 只能使用 d9_publication/3。lookup/inspect/confirmation/unknown recovery 必须先按 token tag 分派，再 strict-decode record.version。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 保持原 token tags、exact bytes、pins、permissions、confirmation、unknown-publication state 和 recovery；旧 token 永不 repin/reencode 成 /3。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 
 # 7. Annotation closed values
