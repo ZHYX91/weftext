@@ -1407,7 +1407,7 @@ The current D7 action successor is exact inheritance, not a free extension. D7Ac
 D7CreateAnnotationIntent/2 = {
   kind:"create_annotation",
   destinationOwnerRef:NodeRef,
-  value:AnnotationEditableValue/1
+  value:AnnotationEditableProposal/1
 }
 
 D7ApplySuggestionIntent/2 = {
@@ -1445,7 +1445,7 @@ D7ActionInput/3 = {
   definitionInputs:[D7DefinitionInput/2...],
   registryInputs:[ValidatedCatalogContext...],
   ruleInputs:[RecurrenceReadContext...],
-  proposedInputs:[D7ProposedInput/2...]
+  proposedInputs:[D7ProposedInput/3...]
 }
 
 PreparedActionBinding/4 = {
@@ -1460,7 +1460,7 @@ PreparedActionBinding/4 = {
   sourceInputs:[{entityRef:EntityRef,observation:SourceObservation/1,
                  role:"before"|"dependency"}...],
   constructionInput:null|TemplateConstructionInput/2,
-  proposedInputs:[D7ProposedInput/2...],
+  proposedInputs:[D7ProposedInput/3...],
   dependencyProof:DependencyProof/3,
   observationProof:<PreparedIntent/3.observationProof>,
   budgetBinding:BudgetBinding/1,expiresAt:<D6 protected deadline>,
@@ -1470,7 +1470,21 @@ PreparedActionBinding/4 = {
 }
 ```
 
-MinimumMapping/3, D7DefinitionInput/2, D7ProposedInput/2, and D7ResolutionAccess/1 remain unchanged exact fixed-parent types.
+MinimumMapping/3, D7DefinitionInput/2, and D7ResolutionAccess/1 retain their exact fixed-e8aa shapes. D7ProposedInput/2 is retained only for genuine historical d7_action/2 / PAB3 decoding and is never widened in place.
+
+```text
+D7ProposedInput/3 = {
+  subject:PayloadSubjectKey,
+  payloadKind:
+    "exact_source_document"|"resource_bytes"|"annotation_value",
+  encoding:
+    "exact_source_utf8"|"resource_bytes"|
+    "d3_annotation_value4"|"d3_symbolic_result9",
+  pin:PinRef/2
+}
+```
+
+The only legal current `/3` cross-fields are exact_source_document↔exact_source_utf8, resource_bytes↔resource_bytes, and annotation_value↔d3_annotation_value4|d3_symbolic_result9. A protocolOwner=D6 current concrete Annotation after uses d3_annotation_value4 and pins exactly D3-CJ/3(the complete D3-Annotation-Value/4). d3_symbolic_result9 remains legal only for the inherited current D3 symbolic-result branch under its real Result/9 subject/pin rules. `d3_annotation_value3` is invalid in `/3`. OwnerInputBinding/2.pinRefs exactly covers every `/3` proposed pin plus actually protected evidence. Historical PAB3/Input2 continues byte-for-byte with D7ProposedInput/2 and d3_annotation_value3 and is never repinned or re-encoded.
 
 For protocolOwner=D6 current D7 actions, InputDescriptor/3.ownerInput has protocolOwner=D7 and ownerKind=intentKind=d7_action/3; canonicalDescriptorBytes is exactly D3-CJ/3(D7ActionInput/3). The six D7ActionInput/3 members equal their PreparedActionBinding/4 counterparts individually, and ownerInput.pinRefs continues to cover exactly proposed pins plus actually protected source/definition/rule evidence under D6 sorted/unique pin rules. protocolOwner=D3 identity actions such as create_annotation keep D3's own d3_identity_operation/13 owner descriptor; PAB4 binds cross-owner preparation and creates no second D3 request authority. Historical d7_action/2/PAB3 keeps its original decoder, bytes and recovery.
 
@@ -1510,8 +1524,11 @@ D8EditIntent/3 =
   | {kind:"annotation",
      target:D8SourceTarget/2,
      expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
-     value:AnnotationEditableValue/1,
+     value:AnnotationEditableProposal/1,
      targetPolicy:"preserve"|"replace_current"}
+  | {kind:"annotation_reconfirm_suggestion",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1}
 
 D8PinnedEditIntent/3 =
     {kind:"document",
@@ -1522,6 +1539,10 @@ D8PinnedEditIntent/3 =
      expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
      proposedValue:PinRef/2,
      targetPolicy:"preserve"|"replace_current"}
+  | {kind:"annotation_reconfirm_suggestion",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
+     proposedValue:PinRef/2}
 
 D8EditInput/3 = {
   kind:"d8_edit_input",version:3,
@@ -1581,6 +1602,49 @@ PreparedEditBinding/3 = {
 For document intent, proposedInputs.pin selects exact UTF-8 source. For annotation intent, proposedInputs has exactly one item whose entityRef equals target.ref and whose PinRef/2 payloadKind is annotation_value; the pinned bytes are exactly D3-CJ/3(the complete Core-constructed D3-Annotation-Value/4), never AnnotationEditableValue/1 alone. target.ref is AnnotationRef and expectedAnnotationRevisionToken equals the current PortableAnnotationRecord/4 token at prepare. Annotation requires saveProfile=complete and writeProtection=strict. observed_only remains restricted to the retained qualified interactive Document path.
 
 OwnerInputBinding/2 current ownerKind/intentKind is d8_edit/3 and canonicalDescriptorBytes is D3-CJ/3(D8EditInput/3). Its pinRefs are exactly the sorted/unique pins named by D8PinnedEditIntent/3 plus the retained origin evidence. D8EditInput/3.intent is mechanically derived from PreparedEditBinding/3.intent by replacing only source/value bytes with the corresponding proposed pin; no actor/time or trust flag exists in either request shape. Historical d8_edit_prepare wire1/2 and PreparedEditBinding/1/2 keep their original intent/value decoders and recovery.
+
+### 6.3.1 Current Annotation read / Draft producer and operation-class input
+
+```text
+D8AnnotationReadRequest/1 = {
+  wireVersion:1,kind:"d8_annotation_read",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  annotationRef:AnnotationRef
+}
+
+D8AnnotationBodyRead/1 =
+    {state:"absent",exactSource:null,semanticText:""}
+  | {state:"valid",exactSource:text,semanticText:text}
+  | {state:"invalid",exactSource:text,semanticText:null,
+     diagnostics:[CoreDiagnostic/1...]}
+
+D8AnnotationReadResponse/1 = {
+  kind:"d8_annotation_read",version:1,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  annotationRef:AnnotationRef,
+  sourceObservation:SourceObservation/1,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  value:D3-Annotation-Value/4,
+  targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+  body:D8AnnotationBodyRead/1
+}
+
+D8AnnotationDraftOpenRequest/1 = {
+  wireVersion:1,kind:"d8_annotation_draft_open",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  annotationRef:AnnotationRef
+}
+
+D8AnnotationDraftOpenResponse/1 = {
+  kind:"d8_annotation_draft_open",version:1,
+  read:D8AnnotationReadResponse/1,
+  draft:D8AnnotationDraftProjection/1
+}
+```
+
+These are real Core/D8 entries, not response-only shapes. `d8_annotation_read` returns the complete Value/4 at the final authorized read barrier, including creator/authoredAt/lastEditor/editedAt for display. Draft still stores/edits only AnnotationEditableValue/1 and is never a second author authority. `d8_annotation_draft_open` reuses the same current read: draft.access=editable with annotation_write and readonly otherwise; readonly cannot enter D8EditPrepareRequest/3. Draft baseObservation/baseRevisionToken equal read.sourceObservation/read.annotationRevisionToken, and at serial=0 its editable projection equals the seven editable fields of read.value. Local Draft may subsequently diverge, but prepare and the final read barrier revalidate the original base token/Observation.
+
+The D8EditIntent/3 operation class is mechanically derived from its closed arm and targetPolicy, never from a caller trusted flag: annotation+preserve=ordinary_edit, annotation+replace_current=manual_reattach, annotation_reconfirm_suggestion=reconfirm_suggestion. Caller AnnotationEditableProposal/1 carries no Suggestion lifecycle/evidence. Core constructs the unique proposed Value/4 from current before + operation class + proposal before pinning. The reconfirm arm carries no caller value; its proposedValue is entirely produced by a fresh Core target read/recomputation.
 
 ## 6.4 D8 workspace presentation policy and render binding
 
@@ -2059,6 +2123,55 @@ For current wire13 D3 mutation, the Value/4 base decoder keeps the inherited log
 Current payloadBindings with payloadKind=annotation_value dispatch by actual request family: wire13 current mutation strict-decodes Value/4, while genuine historical wire9-12 plans keep their Value/3 decoder. D3-Symbolic-Result/9 framing is unchanged; its annotation base bytes and slot spans are computed from the decoder selected by that request family. This does not widen the historical decoder.
 
 The current Portable Metadata path does not materialize D2 Annotation-v2 outer wire as author state. Historical D2 v2 annotation snapshots, Value/3, plain_text body, replace_plain_text suggestion and targetStatus resolved/stale retain their real historical decoder/recovery only. Current body bytes are AnnotationInlineBody/1 and use exactly the single AnnotationInlineProfile/1; no plain-text compatibility fallback or second parser exists.
+
+## 7.1 Caller proposal and Node-local physical aggregate
+
+```text
+SuggestionAuthorProposal/1 = {
+  kind:"replace"|"delete"|"insert",
+  replacementSource:null|text
+}
+
+AnnotationEditableProposal/1 = {
+  purpose:"comment"|"mark"|"suggestion",
+  target:D3-Annotation-Target-Projection/1,
+  replyTo:AnnotationRef|null,
+  body:AnnotationInlineBody/1|null,
+  appearance:AnnotationAppearance/1|null,
+  labels:[text...],
+  reviewState:"open"|"resolved"|"not_applicable",
+  suggestion:SuggestionAuthorProposal/1|null
+}
+
+AnnotationAggregate/1 = {
+  format:"weftext.annotations",version:1,
+  ownerNodeRef:NodeRef,
+  records:[PortableAnnotationRecord/4...]
+}
+
+AnnotationAggregateObservation/1 = {
+  kind:"d6_annotation_aggregate_observation",version:1,
+  workspaceRef:WorkspaceRef,
+  ownerNodeRef:NodeRef,
+  observerDomain:CommitDomain/2,
+  fileObjectBinding:<D6 Storage §2.2 trusted FileObjectBinding>,
+  aggregateBytesPin:PinRef/2
+}
+
+AnnotationAggregateInstall/1 = {
+  kind:"d6_annotation_aggregate_install",version:1,
+  ownerNodeRef:NodeRef,
+  before:"absent"|AnnotationAggregateObservation/1,
+  after:"absent"|PinRef/2,
+  changedAnnotationRefs:[AnnotationRef...]
+}
+```
+
+SuggestionAuthorProposal/1 contains only author-proposed kind/replacementSource: replace requires replacementSource (which may be empty), delete requires null, and insert requires nonempty replacementSource. state, confirmation, targetBasisSha256, expectedText, and pointAffinity are never caller proposal fields. AnnotationEditableProposal/1 keeps the same purpose/reply/body/appearance/labels/review invariants as AnnotationEditableValue/1; the Core operation-class gate produces the controlled Suggestion/3 before→after.
+
+The current physical bytes of `weftext.annotations.json` are exactly D3-CJ/3(the complete AnnotationAggregate/1), with no BOM, trailing newline, or second envelope. records is nonempty, sorted by complete canonical AnnotationRef bytes and unique; every annotationRef.owner equals ownerNodeRef, every nonnull replyTo has that owner, and the complete records reply graph is acyclic. The unique physical representation of an empty set is an absent sidecar. Unknown/missing members, duplicate JSON keys, unknown version, owner mismatch, duplicate Ref, or reply cycle fail the whole aggregate strict decode; a normal current read never partially trusts records that happen to look valid.
+
+AnnotationAggregateObservation/1 is a physical-file observation, not an Annotation SourceVersion/SourceObservation, revision token, or identity. aggregateBytesPin has payloadKind=portable_metadata and exact complete physical JSON bytes. fileObjectBinding is the real D6 Storage §2.2 binding with backend identity/path/object-generation/observer-epoch/length/digest; a digest alone is never CAS. AnnotationAggregateInstall/1 is only a named file-write coordination binding inside the existing D6 InstallationPlan, not a new ledger/CAS/author store. A present after PinRef selects the complete after aggregate; changedAnnotationRefs is canonical sorted/unique and exactly the logical record difference between before and after. A DecisionKey has at most one AnnotationAggregateInstall/1 for one Node.
 
 # 8. SourceTransform
 
@@ -2864,4 +2977,4 @@ Provider closed shapes are in SPEC §4. They qualify ecosystem renderers and nev
 
 # 13. Acceptance reference
 
-Every schema and cross-field rule above has explicit positive/negative design obligations in [ACCEPTANCE.md](ACCEPTANCE.md): 438 core + 217 coordination = 655, all unexecuted. Those row bodies are normative obligations; the count is not a substitute for them.
+Every schema and cross-field rule above has explicit positive/negative design obligations in [ACCEPTANCE.md](ACCEPTANCE.md): 438 core + 251 coordination = 689, all unexecuted. Those row bodies are normative obligations; the count is not a substitute for them.
