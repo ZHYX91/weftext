@@ -522,15 +522,15 @@ translation_status: source
 | FC34-ST-19 | SPEC §§11–13 | 跨generated anchors无法保持boundary slot时返回 PortableTransformCompilation.unavailable；ordinary save仍可继续，但不得制造空events CoreSourceEditPlan或transform artifact。 |
 | FC34B-D10-01 | SPEC §14 | 当前 unseen Workspace control prepare 使用 D10WorkspaceReadDependencies/2 + DependencyProof/3；解析 managed Document 时包含 document_format。真实 saved/planned 历史记录必须先按其 recorded owner version 恢复。 |
 | FC34B-D10-02 | SPEC §14 | 用 D10WorkspaceReadDependencies/1 + proof2 建立同一个 current unseen prepare 必须在 current owner gate 失败；这不能反向否定真实历史 saved/planned dependency record。 |
-| FC34B-D10-03 | SPEC §14 | 对当前尚未建立决议的 control operation，依赖链固定为 D10WorkspaceReadDependencies/2 → ControlDependencies/3 → D10ControlInput/2 → ControlPrepareBinding/3；它必须与 D6 Descriptor3/Proof3 的 inputs 在同一 cut 逐项一致。 |
+| FC34B-D10-03 | SPEC §14 | 对当前尚未建立决议的 control operation，依赖链固定为 D10WorkspaceReadDependencies/2 → ControlDependencies/3 → D10ControlInput/2 → ControlPrepareBinding/3，并与 D6 Descriptor3/Proof3 inputs 同 cut 逐项一致；current external consent 在 Binding3 内保留原 ExternalConfirmationRequirement/Record 语义，已证明的 saved Binding2 继续精确历史恢复。 |
 | FC34B-D10-04 | SPEC §14 | ControlDependencies3中workspaceReads被deployment-only body偷偷设some；FAIL。 |
-| FC34B-D10-05 | SPEC §14 | recurrence source V不变、format M1→M2；Step2必须 binding_changed，不能continuous。 |
-| FC34B-D10-06 | SPEC §14 | source/profile bytes相同，但document_format proof continuity gap产生新epoch；Step2必须gap。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34B-D10-07 | SPEC §14 | 无format change且完整CP4 chain证明真正无关正文变化；Step2可advance。 |
-| FC34B-D10-08 | SPEC §14 | Schedule Step2使用Notice2/CP3解析FC current transition；FAIL。 |
-| FC34B-D10-09 | SPEC §14 | old Subscription1通过explicit continue且完整证明期间无format/rule discontinuity → same generation Subscription2；PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34B-D10-10 | SPEC §14 | old Subscription1历史包含format transition，却continue而不replace；FAIL。 |
-| FC34B-D10-11 | SPEC §14 | 新的自动 author preparation 必须绑定 PAB4 与 D10-Author-Preview/2 的 EffectManifest3 digest，并构造当前 ApprovalUse2。已保存或已规划的 PAB3、Effect2、ApprovalUse1 responsibility 继续保留原 decoder 与 pins。 |
+| FC34B-D10-05 | SPEC §14 | recurrence source V 不变但 document_format M1→M2 时，current Storage producer 必须记录 ScheduleContinuityInvalidation/2 的 binding_changed；即使 recurrence output 恰好相等，也不能把 Witness2 连续推进。 |
+| FC34B-D10-06 | SPEC §14 | source/profile bytes 相等但 document_format proof continuity 出现 gap 时，current producer 必须记录 ScheduleContinuityInvalidation/2 的 gap 并保留最后合法 checkpoint；不能伪造 Evidence2 或 continuous Step2。 |
+| FC34B-D10-07 | SPEC §14 | 没有 format/rule discontinuity，且完整 current ChangeRecord1 + Notice3 + CP4 chain 证明正文变化真正无关时，ScheduleContinuityStep2 才可原子推进 Witness2。 |
+| FC34B-D10-08 | SPEC §14 | current ScheduleContinuityStep2 若把新的 current portable transition 按 Notice2/CP3 解码则失败；retained historical transition 只能按其真实旧 decoder 继续。 |
+| FC34B-D10-09 | SPEC §14 | 旧 Subscription1 继续是合法的历史 retention owner；只有完整 retained history 证明期间没有 format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut，才可显式 continue 为同 generation 的 Subscription2；旧 Witness1/Step1/Invalidation1 bytes 不重编码。 |
+| FC34B-D10-10 | SPEC §14 | old Subscription1 的 retained history 若出现 format/rule/business discontinuity，就不能继续原 generation，必须 explicit replace；后台 migration 或 reset invalid generation 均失败。 |
+| FC34B-D10-11 | SPEC §14 | fresh automatic author preparation 必须在返回前原子保存 D10AuthorPreparationLink2、精确 PAB4 与所需 Effect3 evidence/pins，再从完整 current preparation 构造 ApprovalUse2；已证明的 saved/planned Link1/PAB3/Effect2/ApprovalUse1 responsibility 保留原 decoder、bytes、pins、request 与 OperationId。 |
 | FC34B-D10-12 | SPEC §14 | fresh interactive author responsibility 必须声明 owner contract 选定的 exact current PAB4 或 EditBinding3；current type 不匹配则失败。真实 saved/planned PAB3/EditBinding2 属于历史恢复，不能被升级。 |
 | FC34B-TR-01 | SPEC §13 | Declaration1用原 CP3 activation；PASS。 |
 | FC34B-TR-02 | SPEC §13 | Declaration2用 exact CP4 + Bundle2 policy after-image首次追加；PASS。 |
