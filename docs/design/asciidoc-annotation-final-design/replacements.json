@@ -16,7 +16,9 @@
         "§8.1",
         "§8.2",
         "§16",
-        "§16.1"
+        "§16.1",
+        "§4",
+        "§7"
       ],
       "changedSections": [
         "proof3 Workspace reads and current D10ControlInput/2 chain",
@@ -24,7 +26,10 @@
         "EffectPlan2 exact old-before/new-after and subscription continuation",
         "Money/Claims/Inventory2 canonical ordering and one-barrier completeness",
         "ExecutionResponsibilityRecord/3 + Proof2 exact Inventory2/store/StopCapacity cross-check",
-        "historical saved/planned decoders and recovery retained"
+        "historical saved/planned decoders and recovery retained",
+        "fresh current D10AuthorPreparationLink2 + PAB4 + ApprovalUse2 producer",
+        "current external-confirmation ControlPrepareBinding3 with original requirement/record/error semantics",
+        "historical Link1/PAB3/ApprovalUse1/Binding2 recovery retained"
       ]
     },
     {
@@ -233,7 +238,8 @@
         "§12",
         "§13",
         "§14",
-        "§17"
+        "§17",
+        "§7.2.1"
       ],
       "changedSections": [
         "portable document_format",
@@ -244,7 +250,9 @@
         "CP4 receiver component/version/continuous-chain admission",
         "SourceTransform canonical artifact replay/no-resign boundary",
         "SourceTransformEvidence/2 exact whole-before hash receiver cross-check",
-        "mixed Carry1/Carry2 original activation-cut retention across policy resolution"
+        "mixed Carry1/Carry2 original activation-cut retention across policy resolution",
+        "fresh ScheduleSubscription2 + Witness2/Step2/Invalidation2 continuity producer",
+        "historical Subscription1/Witness1/Step1/Invalidation1 retention and explicit same-generation continue"
       ]
     },
     {
@@ -278,7 +286,8 @@
       "changedSections": [
         "all FC-3.4d current successor names and historical dispositions",
         "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
-        "FreshDomainAuthorizationSpec2, PolicyBundleHeadEvidence2, ConflictResolutionInput3/PolicyDerivedPlan2, Carry2/Outcome2"
+        "FreshDomainAuthorizationSpec2, PolicyBundleHeadEvidence2, ConflictResolutionInput3/PolicyDerivedPlan2, Carry2/Outcome2",
+        "D10AuthorPreparationLink2 and ScheduleContinuityWitness2/Step2/Invalidation2 current names"
       ]
     },
     {
