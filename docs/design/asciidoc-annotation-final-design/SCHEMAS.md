@@ -2154,15 +2154,16 @@ AnnotationAggregateObservation/1 = {
   workspaceRef:WorkspaceRef,
   ownerNodeRef:NodeRef,
   observerDomain:CommitDomain/2,
-  fileObjectBinding:<D6 Storage §2.2 trusted FileObjectBinding>,
-  aggregateBytesPin:PinRef/2
+  fileObjectBinding:FileObjectBinding/1,
+  aggregateBytesPin:PinRef/2|null
 }
 
 AnnotationAggregateInstall/1 = {
   kind:"d6_annotation_aggregate_install",version:1,
   ownerNodeRef:NodeRef,
-  before:"absent"|AnnotationAggregateObservation/1,
+  before:AnnotationAggregateObservation/1,
   after:"absent"|PinRef/2,
+  installCapability:FileInstallCapability/2,
   changedAnnotationRefs:[AnnotationRef...]
 }
 ```
@@ -2171,7 +2172,7 @@ SuggestionAuthorProposal/1 contains only author-proposed kind/replacementSource:
 
 The current physical bytes of `weftext.annotations.json` are exactly D3-CJ/3(the complete AnnotationAggregate/1), with no BOM, trailing newline, or second envelope. records is nonempty, sorted by complete canonical AnnotationRef bytes and unique; every annotationRef.owner equals ownerNodeRef, every nonnull replyTo has that owner, and the complete records reply graph is acyclic. The unique physical representation of an empty set is an absent sidecar. Unknown/missing members, duplicate JSON keys, unknown version, owner mismatch, duplicate Ref, or reply cycle fail the whole aggregate strict decode; a normal current read never partially trusts records that happen to look valid.
 
-AnnotationAggregateObservation/1 is a physical-file observation, not an Annotation SourceVersion/SourceObservation, revision token, or identity. aggregateBytesPin has payloadKind=portable_metadata and exact complete physical JSON bytes. fileObjectBinding is the real D6 Storage §2.2 binding with backend identity/path/object-generation/observer-epoch/length/digest; a digest alone is never CAS. AnnotationAggregateInstall/1 is only a named file-write coordination binding inside the existing D6 InstallationPlan, not a new ledger/CAS/author store. A present after PinRef selects the complete after aggregate; changedAnnotationRefs is canonical sorted/unique and exactly the logical record difference between before and after. A DecisionKey has at most one AnnotationAggregateInstall/1 for one Node.
+AnnotationAggregateObservation/1 is a physical-file observation, not an Annotation SourceVersion/SourceObservation, revision token, or identity. `FileObjectBinding/1` and `FileInstallCapability/2` are reused **byte-for-byte from fixed D6 Control Interfaces §2**, not versioned here: absent binding=`{kind:"absent",backendToken,relativePath,observationEpoch,parentGenerationToken}`; present binding=`{kind:"present",backendToken,relativePath,observationEpoch,objectGenerationToken,byteLength,sha256}`; capabilities remain create_only(parentGenerationToken), conditional_replace(expectedObjectGenerationToken), exclusive_write_window(windowToken,expectedObjectGenerationToken), and observed_replace(observedObjectGenerationToken). PortableRelativePath, Token/Counter, 64-lowercase-hex, containment, and continuity retain that owner's exact rules. fileObjectBinding.kind=absent requires aggregateBytesPin=null; kind=present requires a PinRef/2 with payloadKind=portable_metadata whose bytes are the complete physical JSON above. A digest alone is never CAS. AnnotationAggregateInstall/1 is only a named file-write coordination binding inside the existing D6 installation plan, not a new ledger/CAS/author store; before is always the fresh Observation, never a bare `"absent"`. A PinRef after selects the complete after aggregate and `"absent"` deletes the last record. installCapability cross-fields exactly with the before FileObjectBinding: absent→create_only with equal parentGenerationToken; present→a D6-permitted replace capability with exact generation/window token. The managed_atomic strong path still accepts only that owner's strict capabilities; observed_replace remains valid only where D6 §4.1 already grants observed_only eligibility and never becomes CAS. changedAnnotationRefs is canonical sorted/unique and exactly the logical record difference between before and after. A DecisionKey has at most one AnnotationAggregateInstall/1 for one Node.
 
 # 8. SourceTransform
 
