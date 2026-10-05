@@ -1921,6 +1921,7 @@ ScheduleContinuityInvalidation/2 = {
   status:"binding_changed"|"gap",
   evidencePins:[PinRef/2...]
 }
+```
 
 当前 continuity artifact 的编码按版本精确分域：
 
@@ -1942,6 +1943,7 @@ Invalidation2ArtifactBytes =
 
 decoder 必须先按 authenticated artifact domain 闭合分派，再解 inner object。D6-Schedule-Continuity/1 只能解 historical ScheduleContinuityWitness/1；D6-Schedule-Step/1 只能解 historical ScheduleContinuityStep/1；D6-Schedule-Invalidation/1 只能解 historical ScheduleContinuityInvalidation/1。D6-Schedule-Continuity/2 只能解 ScheduleContinuityWitness/2；D6-Schedule-Step/2 只能解 ScheduleContinuityStep/2；D6-Schedule-Invalidation/2 只能解 ScheduleContinuityInvalidation/2。unknown domain、已知 domain 搭配错误 kind/version、其它 prefix、缺失 NUL 或非 canonical object bytes 都必须按原 disclosure/error boundary fail closed。禁止 fallback decoder、扩展 /1 decoder、repin 或重新编码历史 bytes。
 
+```text
 D10AuthorPreparationLink/2 = {
   kind:"d10_author_preparation_link",
   version:2,
