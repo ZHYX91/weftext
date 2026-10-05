@@ -210,7 +210,8 @@
         "specialized replica registration two-handle/two-Declaration2 one-CP4 producer",
         "current policy conflict OwnerInputBinding2 exact descriptor/pin union and ConflictResolutionPreview2",
         "source Input2/Plan1/Preview1 vs policy Input3/Plan2/Preview2 arm dispatch inside current PreparedIntent3",
-        "D8 presentation default reuses the existing complex shared-configuration owner-effect/P-plan pattern rather than adding PortableComponentKey or mutating Policy3/Registry"
+        "D8 presentation default reuses the existing complex shared-configuration owner-effect/P-plan pattern rather than adding PortableComponentKey or mutating Policy3/Registry",
+        "D8 presentation shared configuration binds stamped head-set OwnerInput and one ordinary ChangeRecord/P owner effect while preserving the /1 logical current value"
       ]
     },
     {
@@ -268,7 +269,8 @@
         "§9.3 current conflict direct-consumer arm dispatch, mixed Carry validation pins, Preview2/pinDirectory and historical recovery",
         "§7.2.1 Witness2/Step2 exact /2 artifact bytes, PinRef coverage and closed current/historical decoder dispatch",
         "fold/compaction/receiver/recovery preserve exact /1 or /2 typed schedule artifacts without fallback or repin",
-        "Portable Workspace Metadata stores immutable D8 presentation records/head ancestry; sync/admission/retention and one-P recovery preserve conflicting heads without LWW or second ledger"
+        "Portable Workspace Metadata stores immutable D8 presentation records/head ancestry; sync/admission/retention and one-P recovery preserve conflicting heads without LWW or second ledger",
+        "presentation record activation ChangeId plus receipt/EffectManifest/ChangeRecord association is required for sync/admission; head-set stamp continuity prevents revision/LWW guessing"
       ]
     },
     {
@@ -392,7 +394,8 @@
         "WorkspaceBootstrapPlan/4 encoding",
         "D10 preview digest",
         "closed WorkspaceBootstrapPlan/4 encoding",
-        "current annotation source images and EffectBytes use complete D3 Annotation Value4 canonical bytes; historical d3_annotation_value3 bytes retain decoder"
+        "current annotation source images and EffectBytes use complete D3 Annotation Value4 canonical bytes; historical d3_annotation_value3 bytes retain decoder",
+        "EffectItem/3 adds only typed presentation_policy_change for the D8 complex shared-configuration owner effect; historical EffectItem1/2 stay exact"
       ]
     },
     {
@@ -539,7 +542,8 @@
         "Annotation inline body/profile closed schema",
         "D2DocumentSnapshot3/Draft full-product Source fallback and D8 workspace presentation policy",
         "independent JSON Annotation current Source/visual/edit lifecycle uses one R6 inline source, Value4 CAS and Core actor/time without a second rich-body authority",
-        "explicit run-in/separate/conflict/no-body presentation remains usable without Workspace policy; implicit default binds one-head D8 shared configuration and real currentness"
+        "explicit run-in/separate/conflict/no-body presentation remains usable without Workspace policy; implicit default binds one-head D8 shared configuration and real currentness",
+        "workspace_default binds the /1 logical current value plus /2 portable record and stamped head-set; explicit/no-body paths remain policy-free"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -569,7 +573,8 @@
         "Annotation inline body/profile closed schema",
         "current d8_document/Draft D2DocumentSnapshot3 consumer and run-in policy/render-cache binding",
         "D8EditIntent/3 and PreparedEditBinding/3 close current Value4 annotation edit/CAS/proposed-pin/read-only/invalid-body paths; historical Value3/EditBinding2 recovery retained",
-        "current D8 document/Draft/render consumers validate product evaluation binding and consume Workspace presentation policy only on actual workspace_default decision"
+        "current D8 document/Draft/render consumers validate product evaluation binding and consume Workspace presentation policy only on actual workspace_default decision",
+        "presentation policy mutation owner input freezes the exact stamped head-set and saved/planned recovery preserves that observation"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -741,7 +746,8 @@
         "current D2DocumentSnapshot3 complete native AsciiDoc product projection and historical wire2 boundary",
         "source-origin ranges and stable Node/Resource/citation identity adapters after native parsing",
         "historical D2 Annotation outer v2 plain_text/replace_plain_text/targetStatus model retained only as historical decoder; current author authority is portable Value4 metadata",
-        "current product /3 complete fixed-Ruby per-kind semantics, typed native attributes, SourceOrigin graph, exact environment/include dependency binding and arbitrary-precision effective levels"
+        "current product /3 complete fixed-Ruby per-kind semantics, typed native attributes, SourceOrigin graph, exact environment/include dependency binding and arbitrary-precision effective levels",
+        "current product /3 also retains public block common slots and native inline subtype semantics (icon/ref-bibref/footnote/callout) without free JSON or second parsing"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
