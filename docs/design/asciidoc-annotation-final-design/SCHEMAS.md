@@ -1723,6 +1723,7 @@ ScheduleContinuityInvalidation/2 = {
   status:"binding_changed"|"gap",
   evidencePins:[PinRef/2...]
 }
+```
 
 The current continuity artifact encodings are exact and version-separated:
 
@@ -1744,6 +1745,7 @@ Each corresponding PinRef/2 has payloadKind=artifact and retentionClass=recovery
 
 Decoder dispatch is closed by the authenticated artifact domain before inner decoding. D6-Schedule-Continuity/1 accepts only historical ScheduleContinuityWitness/1; D6-Schedule-Step/1 accepts only historical ScheduleContinuityStep/1; D6-Schedule-Invalidation/1 accepts only historical ScheduleContinuityInvalidation/1. D6-Schedule-Continuity/2 accepts only ScheduleContinuityWitness/2; D6-Schedule-Step/2 accepts only ScheduleContinuityStep/2; D6-Schedule-Invalidation/2 accepts only ScheduleContinuityInvalidation/2. Unknown domains, a known domain paired with the wrong kind/version, alternate prefixes, missing NUL, or non-canonical object bytes fail closed through the original disclosure/error boundary. There is no fallback decoder, widening of a /1 decoder, repinning, or re-encoding of historical bytes.
 
+```text
 D10AuthorPreparationLink/2 = {
   kind:"d10_author_preparation_link",
   version:2,
