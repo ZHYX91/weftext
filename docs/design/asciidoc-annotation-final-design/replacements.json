@@ -203,7 +203,9 @@
         "Record3/Proof2 exact Inventory2 five-payload/store/StopCapacity cross-check",
         "dual-profile policy_bundle_choice CP3/CP4 + Bundle1/2 strict dispatch",
         "Carry2 /2 fact domain, mixed recursive compromise fold and Outcome2 resolver",
-        "specialized replica registration two-handle/two-Declaration2 one-CP4 producer"
+        "specialized replica registration two-handle/two-Declaration2 one-CP4 producer",
+        "current policy conflict OwnerInputBinding2 exact descriptor/pin union and ConflictResolutionPreview2",
+        "source Input2/Plan1/Preview1 vs policy Input3/Plan2/Preview2 arm dispatch inside current PreparedIntent3"
       ]
     },
     {
@@ -223,7 +225,8 @@
         "D10 mixed inventory",
         "current D10 routing and exact mixed-holder implementation/acceptance obligations",
         "dual-profile policy-conflict resolver and replica producer obligations",
-        "SourceTransform whole-before hash negative receiver case"
+        "SourceTransform whole-before hash negative receiver case",
+        "current resolver owner-preview/pin closure and Storage §9.1/§9.3 direct-consumer obligations"
       ]
     },
     {
@@ -239,7 +242,9 @@
         "§13",
         "§14",
         "§17",
-        "§7.2.1"
+        "§7.2.1",
+        "§9.1",
+        "§9.3"
       ],
       "changedSections": [
         "portable document_format",
@@ -252,7 +257,9 @@
         "SourceTransformEvidence/2 exact whole-before hash receiver cross-check",
         "mixed Carry1/Carry2 original activation-cut retention across policy resolution",
         "fresh ScheduleSubscription2 + Witness2/Step2/Invalidation2 continuity producer",
-        "historical Subscription1/Witness1/Step1/Invalidation1 retention and explicit same-generation continue"
+        "historical Subscription1/Witness1/Step1/Invalidation1 retention and explicit same-generation continue",
+        "§9.1 dual-profile replica registration/admission two Handle2/two Declaration2 same CP4/ChangeRecord/P and exact recovery",
+        "§9.3 current conflict direct-consumer arm dispatch, mixed Carry validation pins, Preview2/pinDirectory and historical recovery"
       ]
     },
     {
@@ -271,7 +278,8 @@
         "ExecutionRecord3",
         "SourceTransform",
         "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
-        "dual-profile conflict resolver input/plan/head evidence and Carry2/Outcome2"
+        "dual-profile conflict resolver input/plan/head evidence and Carry2/Outcome2",
+        "ConflictResolutionPreview2 and per-head TrustConflictCarryValidation evidence names"
       ]
     },
     {
@@ -287,7 +295,8 @@
         "all FC-3.4d current successor names and historical dispositions",
         "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
         "FreshDomainAuthorizationSpec2, PolicyBundleHeadEvidence2, ConflictResolutionInput3/PolicyDerivedPlan2, Carry2/Outcome2",
-        "D10AuthorPreparationLink2 and ScheduleContinuityWitness2/Step2/Invalidation2 current names"
+        "D10AuthorPreparationLink2 and ScheduleContinuityWitness2/Step2/Invalidation2 current names",
+        "TrustConflictCarryValidationHop1/Evidence1 and ConflictResolutionPreview2"
       ]
     },
     {
