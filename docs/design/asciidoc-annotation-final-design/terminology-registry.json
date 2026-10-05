@@ -1490,7 +1490,7 @@
       "status": "current",
       "replaces": "ActionSpec/1",
       "section": "SCHEMAS §6.1; SPEC §9.9",
-      "notes": "Exact successor: all fixed-parent non-suggestion ActionSpec/1 arms unchanged, historical apply_suggestion removed, current apply/reject suggestion arms added."
+      "notes": "Exact successor: all fixed-parent arms unchanged except historical apply_suggestion is replaced; adds trusted create_annotation plus current apply/reject suggestion arms."
     },
     {
       "name": "D7ActionPrepareRequest/3",
@@ -1499,6 +1499,14 @@
       "replaces": "d7_action_prepare wire2",
       "section": "SCHEMAS §6.1",
       "notes": "Current action-prepare envelope carrying D7ActionSpec/2; historical wire2 requests remain historical recovery."
+    },
+    {
+      "name": "D7CreateAnnotationIntent/2",
+      "owner": "D7/D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Trusted current interactive Annotation creation input. Caller supplies owner plus AnnotationEditableValue/1; Core injects attribution and constructs the complete wire13 create_annotation request/Value4 payload."
     }
   ]
 }
