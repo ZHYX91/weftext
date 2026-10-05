@@ -11,8 +11,8 @@ translation_status: synced
 Status: **design obligations only; not executed**.
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 137
-- total: 575
+- actual-owner coordination fixtures: 138
+- total: 576
 
 Each row is a normative obligation of this candidate. Words such as PASS/FAIL describe the future acceptance condition and do not claim execution in this PR.
 
@@ -459,7 +459,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M39-10 | SPEC §§2–3 | document/0 positive: the actual returned top-level Document carrier is published first and the later bind callback still holds the exact same Ruby object. |
 | M39-11 | SPEC §§2–3 | document/0 negative: binding before publication, or later re-finding a Document by title/source/text, fails even if final entry0 is correct. |
 
-## Actual-owner coordination — 137
+## Actual-owner coordination — 138
 
 | ID | Spec area | Requirement |
 |---|---|---|
@@ -604,7 +604,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 
 ## PR4 schema repair coverage (no new acceptance IDs)
 
-The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 575; no prior ID body is replaced.
+The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced.
 
 - retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
 - M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
@@ -616,4 +616,4 @@ The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D row
 
 ## Not executed
 
-This PR did not execute these 575 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
+This PR did not execute these 576 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
