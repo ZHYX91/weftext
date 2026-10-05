@@ -1352,7 +1352,7 @@ D3IdentityInput/13 = {
   kind:"d3_identity_input",version:13,
   mode:D3Mode,
   writeProtection:"strict",
-  expectedAuthority:ExpectedAuthority,
+  expectedAuthority?:ExpectedAuthority,
   workspaceProposal?:WorkspaceAllocationProposal,
   intent:D3Intent
 }
@@ -1367,14 +1367,14 @@ D3IdentityOperationRequest/13 = {
   expectedFrontier:Frontier/2,
   inputDescriptor:InputDescriptor/3,
   mode:D3Mode,
-  expectedAuthority:ExpectedAuthority,
+  expectedAuthority?:ExpectedAuthority,
   workspaceProposal?:WorkspaceAllocationProposal,
   preparationBinding?:PreparationBinding,
   intent:D3Intent
 }
 ```
 
-D3IdentityInput/13 has the exact D3IdentityInput/12 six-member semantic set: only the nested D6 descriptor family changes to current InputDescriptor/3 at the outer request boundary; mode/authority/proposal/intent and writeProtection=strict retain their fixed-parent decoders and mode matrix. Optional members marked ? are absent when the fixed-parent mode matrix forbids them; JSON null is not a substitute. D3IdentityOperationRequest/13 is the exact wire12 top-level member set with wireVersion=13 and InputDescriptor/3. Its cross-field equalities, guarantee/frontier policy, ownerInput protocolOwner=D3/ownerKind=d3_identity_operation/13, requestFingerprint rule, DecisionKey/OperationId ledger ordering, saved/planned/unseen branching, and error/disclosure order are inherited unchanged. Historical wire9–12 are not widened or re-encoded.
+D3IdentityInput/13 has the exact D3IdentityInput/12 semantic member set: only the nested D6 descriptor family changes to current InputDescriptor/3 at the outer request boundary. expectedAuthority, workspaceProposal and preparationBinding are genuinely optional members, never nullable placeholders. replica_local permits only create_node/move_node/reorder_node/trash and requires all three members absent. managed_atomic follows the fixed-parent matrix exactly: create/fork require expectedAuthority=create and the required proposal; continue requires expectedAuthority=continue; other managed_atomic modes require expectedAuthority=existing; preparationBinding appears only where the inherited D7-mediated mode admits it. A forbidden member is invalid_request even when its value would otherwise decode, and JSON null is always invalid. D3IdentityOperationRequest/13 is the exact wire12 top-level member set with wireVersion=13 and InputDescriptor/3. Descriptor/request mode, authority and proposal are byte-equal wherever present; guarantee/frontier policy, ownerInput protocolOwner=D3/ownerKind=d3_identity_operation/13, requestFingerprint rule, DecisionKey/OperationId ledger ordering, saved/planned/unseen branching, and error/disclosure order are inherited unchanged. Historical wire9–12 are not widened or re-encoded.
 
 ## 6.1 PreparedActionBinding/4
 
@@ -1475,7 +1475,7 @@ EffectBytes/3 = {
 }
 ```
 
-EffectItem/3 has the same fourteen semantic arms as the fixed-parent EffectItem/2: source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, and canonical_plan; every byte slot uses EffectBytes/3, Annotation source images use Value/4, and current workspace bootstrap admits Plan4. No generic/free payload arm exists.
+EffectItem/3 retains the fixed-parent fourteen arms and adds exactly one current owner-specific arm, presentation_policy_change:D8PresentationPolicyEffect/1. This is the same pattern as series_configuration_change: it is a typed shared-configuration owner effect, not a new PortableComponentKey, Policy/3 mutation, Registry value, author source, or generic JSON. Every byte slot uses EffectBytes/3, Annotation source images use Value/4, and current workspace bootstrap admits Plan4. Historical EffectItem/1-/2 decoders are not widened.
 
 ## 6.3 PreparedEditBinding/3
 
@@ -1561,55 +1561,122 @@ OwnerInputBinding/2 current ownerKind/intentKind is d8_edit/3 and canonicalDescr
 
 ## 6.4 D8 workspace presentation policy and render binding
 
+Presentation preference is shared Workspace configuration in existing Portable Workspace Metadata, but it is a D8-owned complex configuration like SeriesScopeConfiguration. It deliberately does not add a PortableComponentKey arm or reuse Policy/3/Registry. Currentness is proved by the complete D8 head set below and the same D6 planning CAS/P decision that writes its owner effect.
+
 ```text
-D8WorkspacePresentationPolicy/1 = {
-  kind:"d8_workspace_presentation_policy",version:1,
+D8PresentationPolicyAddress/1 = {
   workspaceRef:WorkspaceRef,
+  revision:Counter,
+  recordSha256:"sha256:<64 lowercase hex>"
+}
+
+D8WorkspacePresentationPolicy/2 = {
+  kind:"d8_workspace_presentation_policy",version:2,
+  workspaceRef:WorkspaceRef,
+  revision:Counter,
+  parents:[D8PresentationPolicyAddress/1...],
+  defaultPresentation:"separate"|"run_in"
+}
+
+D8PresentationPolicyHeadSet/1 = {
+  kind:"d8_presentation_policy_heads",version:1,
+  workspaceRef:WorkspaceRef,
+  metadataEpoch:Token,
+  heads:[D8PresentationPolicyAddress/1...]
+}
+
+D8WorkspacePresentationPolicyBinding/2 = {
+  policy:D8WorkspacePresentationPolicy/2,
+  address:D8PresentationPolicyAddress/1,
+  headSet:D8PresentationPolicyHeadSet/1,
+  pin:PinRef/2
+}
+
+D8PresentationPolicyProposal/1 = {
+  workspaceRef:WorkspaceRef,
+  parents:[D8PresentationPolicyAddress/1...],
   revision:Counter,
   defaultPresentation:"separate"|"run_in"
 }
 
-D8WorkspacePresentationPolicyBinding/1 = {
-  policy:D8WorkspacePresentationPolicy/1,
-  pin:PinRef/2
-}
-
-D8PresentationPolicySetRequest/1 = {
-  wireVersion:1,
+D8PresentationPolicySetRequest/2 = {
+  wireVersion:2,
   kind:"d8_presentation_policy_set",
   workspaceRef:WorkspaceRef,
-  expectedRevision:Counter,
+  commitDomain:CommitDomain/2,
+  expectedFrontier:Frontier/2,
+  expectedHeads:[D8PresentationPolicyAddress/1...],
   defaultPresentation:"separate"|"run_in",
   budget:BudgetBinding/1
 }
 
+D8PresentationPolicyInput/1 = {
+  kind:"d8_presentation_policy_input",version:1,
+  workspaceRef:WorkspaceRef,
+  expectedHeads:[D8PresentationPolicyAddress/1...],
+  defaultPresentation:"separate"|"run_in"
+}
+
+D8PresentationPolicyEffect/1 = {
+  kind:"presentation_policy_change",version:1,
+  before:D8PresentationPolicyHeadSet/1,
+  proposal:D8PresentationPolicyProposal/1,
+  committed:null|D8WorkspacePresentationPolicy/2
+}
+
+D8PresentationDecision/1 =
+    {kind:"explicit",
+     sourceOverride:"run_in"|"separate"|"conflict",
+     effective:"run_in"|"separate",
+     diagnostic:null|"role_conflict"}
+  | {kind:"no_eligible_body",effective:"separate"}
+  | {kind:"workspace_default",
+     policy:D8WorkspacePresentationPolicyBinding/2,
+     effective:"run_in"|"separate"}
+
 D8PresentationResult/1 = {
   heading:DocumentElementLocator,
   body:DocumentElementLocator|null,
-  sourceOverride:"run_in"|"separate"|"default"|"conflict",
-  effective:"run_in"|"separate",
-  policyRevision:Counter,
-  diagnostic:null|"role_conflict"
+  decision:D8PresentationDecision/1
 }
 
 D8DocumentRenderBinding/1 = {
   sourceObservation:SourceObservation/1,
   documentFormat:DocumentFormatCurrentQualification/1,
   documentSnapshotPin:PinRef/2,
-  presentationPolicy:D8WorkspacePresentationPolicyBinding/1,
+  presentation:D8PresentationDecision/1,
   rendererProfileSha256:"sha256:<64 lowercase hex>"
 }
 ```
 
-Every active Workspace has one presentation-policy record, initialized at revision=1/defaultPresentation=separate. Mutation requires policy_admin, expectedRevision equality, checked increment, and one protected configuration write. The policy pin is artifact/recovery over UTF8("D8-Workspace-Presentation-Policy/1") || NUL || D3-CJ/3(complete policy). It is not author source and grants no source write. Current visual rendering uses D8DocumentRenderBinding/1; documentSnapshotPin selects exact D2-Document-Snapshot/3 bytes for sourceObservation.entityRef, and documentFormat belongs to that same owner/current read. Cache identity includes the complete binding.
+D8WorkspacePresentationPolicy/2 record bytes are exactly:
 
-Run-in resolution is closed: conflict => Separate+role_conflict; explicit separate => Separate; explicit run-in => RunIn only for the existing eligible first-paragraph rule; default uses policy only when neither role exists and retains the stricter implicit physical-adjacency rule. No eligible body => Separate. Source role commands mutate source roles only, never this policy.
+```text
+UTF8("D8-Workspace-Presentation-Policy/2") || NUL ||
+D3-CJ/3(complete policy)
+```
+
+recordSha256 hashes those complete prefixed bytes. PinRef/2 selects those exact bytes with payloadKind=portable_metadata and recovery retention; address.workspaceRef/revision equal the record. parents are sorted/unique by (revision,recordSha256), all belong to the same Workspace, and every parent record must be retained and valid. The initial record has revision=1, parents=[] and defaultPresentation=separate. Any successor has parents equal the complete protected current head set at preparation/seal and revision=checked(max(parent.revision)+1). Thus two offline writers may both create revision 2, but their different hashes remain two heads; revision alone, arrival order and LWW never choose a winner.
+
+D8PresentationPolicyHeadSet/1 is a complete protected read of all maximal valid policy records in Portable Workspace Metadata at one metadataEpoch. It is not caller evidence or an index scan. heads are sorted/unique; [] means not initialized, one head is current, and more than one is a conflict. A gap, unknown parent decoder, missing retained record or unproved metadata continuity is unavailable, never an empty/current set. A current binding requires headSet.heads == [address], byte-equal policy/pin/address, and exact retained ancestry.
+
+D8PresentationPolicySetRequest/2 is managed_atomic/strict. policy_admin and presentation-state disclosure precede reading the head set. expectedHeads must byte-equal the complete current head set; [] initializes an eligible existing Workspace, one head is ordinary update, and multiple heads are explicit conflict resolution. The new record becomes the sole successor of every expected head in one D6 planning CAS and one final P commit with exactly one presentation_policy_change owner effect. It creates no D3 identity, source version, author ChangeId, Policy/3 revision, Registry revision, or second ledger/CAS. OwnerInputBinding/2 uses protocolOwner=D8, ownerKind=intentKind=d8_presentation_policy/1 and canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1). Saved/planned/unknown recovery restores the exact original head set, proposal, pins and P decision; it never resamples current heads or silently chooses a branch.
+
+Sync/admission validates each immutable record domain, canonical bytes, ancestry and retained P/effect association before adding it to the portable head graph. Conflicting heads remain visible as a conflict state until an authorized explicit multi-parent successor resolves them. Compaction may release a non-head record only after every descendant/recovery reference that needs it is retained elsewhere under the existing last-reference rules. No device-local preference or hidden host default can replace this Workspace-wide record.
+
+Run-in resolution is conditional. role_conflict is explicit+Separate and consumes no policy. Explicit separate consumes no policy. Explicit run-in consumes no policy and becomes RunIn only when the existing explicit-role semantic-adjacency body is eligible; otherwise no_eligible_body. With neither role, no eligible body is no_eligible_body and consumes no policy. Only a body eligible for the implicit-default physical-adjacency rule uses workspace_default and therefore requires a current one-head policy binding. Missing/conflicted policy makes only that default-dependent presentation unavailable.
+
+D8 cache identity contains the complete D8DocumentRenderBinding/1. A policy change invalidates only cache entries whose presentation.kind=workspace_default and whose policy binding is no longer current. Explicit role/no-body/conflict results remain valid when unrelated Workspace policy changes, subject to their normal source/product dependencies.
+
 
 ## 6.5 ExportPlan/3 / PublicationReceipt/3
 
-The following current export types close fields that were only prose in the fixed-parent ExportPlan/2 contract.
+The current /3 family keeps the fixed-parent ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1 and ExportLossReport/1. Per-plan generation choices are finite and belong in the immutable Plan; there is no separate generation-policy registry or hash-only descriptor authority.
 
 ```text
+D9ExportPlanToken/3 := D6 Token tagged "d9_export_plan/3"
+D9PublicationToken/3 := D6 Token tagged "d9_publication/3"
+
 D9ExportInputDomain/1 =
   "document"|"native_table"|"node_collection"|"query_rows"|"query_json"|"resource"
 
@@ -1658,19 +1725,61 @@ D9ExportStyleBundleBinding/1 = {
   pin:PinRef/2
 }
 
-D9ExportGenerationPolicyBinding/1 = {
-  profileId:text,
-  version:Counter,
-  descriptorSha256:"sha256:<64 lowercase hex>",
-  pin:PinRef/2
+D9TemplateBindingChoice/1 = {
+  templatePath:text,
+  inputIndex:Counter
 }
+
+D9MissingPolicyChoice/1 = {
+  templatePath:text,
+  action:"empty"
+}
+
+D9ImageSizeChoice/1 = {
+  resource:ResourceRef,
+  widthMicrometres:Counter,
+  heightMicrometres:Counter
+}
+
+D9LayoutChoice/1 = {
+  resource:ResourceRef,
+  choice:"preserve_aspect_within_box"|"use_exact_dimensions"
+}
+
+D9NativeTableSelector/1 = {
+  inputIndex:Counter,
+  tableLocator:DocumentElementLocator,
+  tableQualifier:
+      {kind:"unqualified"}
+    | {kind:"title",text:text}
+    | {kind:"occurrence",title:text|null,ordinal:Counter},
+  columnQualifier:
+      {kind:"leaf",text:text}
+    | {kind:"header_suffix",segments:[text...]}
+    | {kind:"occurrence",segments:[text...],ordinal:Counter}
+}
+
+D9NativeTableTokenBinding/1 = {
+  setName:text,
+  columnName:text,
+  selector:D9NativeTableSelector/1
+}
+
+D9ExportGenerationPolicy/1 =
+    {kind:"none"}
+  | {kind:"render",
+     bindingChoices:[D9TemplateBindingChoice/1...],
+     missingPolicy:[D9MissingPolicyChoice/1...],
+     imageSizes:[D9ImageSizeChoice/1...],
+     layoutChoices:[D9LayoutChoice/1...],
+     nativeTableBindings:[D9NativeTableTokenBinding/1...]}
 
 D9DocumentRenderBinding/1 = {
   ownerNodeRef:NodeRef,
   sourceObservation:SourceObservation/1,
   documentSnapshotPin:PinRef/2,
   semanticQualification:ManagedDocumentSemanticQualification/1,
-  presentationPolicy:D8WorkspacePresentationPolicyBinding/1
+  presentation:D8PresentationDecision/1
 }
 
 D9ExportDestinationIntent/1 =
@@ -1684,7 +1793,7 @@ D9ExportLossChoice/1 = {
 }
 
 D9ExportConfirmation/1 = {
-  planToken:Token,
+  planToken:D9ExportPlanToken/3,
   lossChoices:[D9ExportLossChoice/1...]
 }
 
@@ -1703,7 +1812,8 @@ D9PublishedOutput/1 = {
 
 ExportPlan/3 = {
   kind:"d9_export_plan",version:3,
-  planToken:Token,workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  planToken:D9ExportPlanToken/3,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   principalAudienceToken:Token,authorizationGeneration:Token,
   inputDomain:D9ExportInputDomain/1,
   inputCatalog:ExportInputCatalog/2,
@@ -1713,7 +1823,7 @@ ExportPlan/3 = {
   templateBinding:D9ExportTemplateBinding/1|null,
   routeBinding:D9ExportRouteBinding/1|null,
   styleBundles:[D9ExportStyleBundleBinding/1...],
-  generationPolicy:D9ExportGenerationPolicyBinding/1,
+  generationPolicy:D9ExportGenerationPolicy/1,
   target:D9ExportTarget/1,
   initialLossReport:ExportLossReport/1,
   outputBudget:BudgetBinding/1,
@@ -1721,13 +1831,15 @@ ExportPlan/3 = {
   observationScope:ObservationScope/2,
   dependencyProof:DependencyProof/3,
   observationProof:ObservationProof,
+  recoveryPins:[PinRef/2...],
   evidencePins:[PinRef/2...],
   stagedOutputs:[D9ExportStagedOutput/1...]
 }
 
 PublicationReceipt/3 = {
   kind:"d9_publication_receipt",version:3,
-  publicationToken:Token,planToken:Token,
+  publicationToken:D9PublicationToken/3,
+  planToken:D9ExportPlanToken/3,
   workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   outputs:[D9PublishedOutput/1...],
   lossReport:ExportLossReport/1,
@@ -1736,20 +1848,74 @@ PublicationReceipt/3 = {
   templateBinding:D9ExportTemplateBinding/1|null,
   routeBinding:D9ExportRouteBinding/1|null,
   styleBundles:[D9ExportStyleBundleBinding/1...],
-  presentationPolicy:D8WorkspacePresentationPolicyBinding/1|null,
+  generationPolicy:D9ExportGenerationPolicy/1,
+  presentation:D8PresentationDecision/1|null,
   destinationDisplay:text
 }
 ```
 
-ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1, and ExportLossReport/1 retain the complete fixed-parent D9 closed shapes and semantics. D9ExportRouteBinding/1 steps are continuous from zero and the route is the exact accepted finite acyclic route; evidencePins in each step are pinToken-sorted/unique. styleBundles sort uniquely by styleBundleId; plan evidencePins sort uniquely by pinToken; stagedOutputs and receipt outputs sort uniquely by controlled relative name. lossChoices sort by lossKey, are unique, and exactly cover requires_choice/blocking items under the retained severity matrix. A reject choice cancels; a blocking item can never be accepted.
+Exact-source/resource-exact/query-json plans require generationPolicy={kind:"none"}, templateBinding=null, routeBinding=null and documentRenderBinding=null; their projection contains no renderer-derived values. They remain preparable when template/provider/generation registries are unavailable because this contract requires none of them. Rendered HTML/PDF/DOCX/ODT and finite table outputs use generationPolicy.render; each array may be empty when that policy class is not used.
 
-asciidoc_source and resource_exact require routeBinding=null, templateBinding=null, documentRenderBinding=null, and projection contains no renderer-derived values. query_json likewise serializes the exact D7 result under its retained static profile and has no template binding. html/pdf/docx/odt require inputDomain=document, a nonnull documentRenderBinding, and a nonnull accepted route. docx/odt may require templateBinding according to the selected route profile. csv/tsv/xlsx/ods require the retained finite RenderSnapshot projection and a matching route/profile. No target arm is inferred from filename.
+D9TemplateBindingChoice/1 is required only for an actually ambiguous binding that the authorized template/profile permits the user to resolve; inputIndex selects the exact frozen catalog item and cannot grant an unselected read. D9MissingPolicyChoice/1 may name only an existing exact template path whose authorized projection value is none; action=empty cannot hide an unknown path, unreadable input, type error or unavailable schema. imageSizes are ResourceRef-key sorted/unique, dimensions are positive, and every resource equals an authorized resource catalog input. layoutChoices are ResourceRef-key sorted/unique, require the same resource in imageSizes, and are present exactly when the fixed Templates rule requires an explicit layout choice. preserve_aspect_within_box deterministically scales to the largest same-ratio size not exceeding both chosen dimensions; use_exact_dimensions uses both chosen dimensions and records the required layout loss.
 
-For document rendering, documentSnapshotPin selects exact D2-Document-Snapshot/3 canonical bytes whose owner equals ownerNodeRef and sourceObservation.entityRef. semanticQualification.sourceObservation is byte-equal to sourceObservation. presentationPolicy is the exact policy revision used to compute run-in presentation. A later presentation-policy change does not invalidate or mutate an already prepared immutable plan, but every fresh prepare uses the then-current binding. A source observation, document-format qualification, route/template/profile/style/Query/authorization change follows the retained D9 invalidation/reset rules.
+D9ExportTemplateBinding/1.inputIndex selects exactly one inputCatalog.items[index] whose payload.kind=template; pin is byte-equal to that item's pin. profileId/profileVersion select the accepted decoder that successfully parsed those exact bytes; profile mismatch or an unavailable decoder is template unavailable, never a fallback. No second template registry or filename lookup participates.
 
-D9ExportDestinationIntent/1 is protected intent, not permission. external_bundle is create-only and follows the retained same-volume staging/atomic-rename/durability/unknown state machine. server_download follows per-chunk current authorization. resource_handoff does not create a Resource; after export confirmation, the exact staged bytes enter a separate current D3 create_resource prepare/confirmation/receipt.
+For a nonnull route, steps are nonempty and numbered continuously from zero. Every step's input/output profile is accepted by that exact provider/version. The terminal output profile equals the target: html/pdf/docx/odt/xlsx/ods use target.profileId; csv_utf8 uses "text/csv-utf8/1"; tsv_utf8 uses "text/tsv-utf8/1". routeBinding.profileId/profileVersion identifies the accepted route profile that contains this exact terminal chain. A target/terminal mismatch rejects preparation rather than choosing another route.
 
-D9ExportConfirmation/1 never changes catalog, projection, route, target, destination, policies, report, budget, or staged bytes. PublicationReceipt/3 proves external publication only and must byte-match the protected original plan/confirmation for every repeated member. Historical ExportPlan/1-/2 and PublicationReceipt/1-/2 retain exact original decoders, permissions, confirmations, staged bytes, unknown duties, and recovery ordering.
+For document rendering, documentSnapshotPin selects exact D2-Document-Snapshot/3 bytes for ownerNodeRef and sourceObservation. The snapshot evaluation root SourceObservation and ManagedDocumentSemanticQualification.sourceObservation are byte-equal to sourceObservation, document_format is current, and every snapshot include/environment/dependency is validated under §4.4 at the final export read barrier. presentation is the exact D8PresentationDecision/1 used to stage output. An explicit/no-body/conflict-fallback decision contains no Workspace policy pin; workspace_default contains the exact current D8 policy binding consumed. Later source/include/policy changes never mutate or rerender an already prepared plan; a fresh prepare uses fresh current bindings.
+
+Define Pins(X) as the recursively reached PinRef/2 members of the closed typed value X, following only members whose schema is PinRef/2 (or a closed type containing such members), never text/digests/handles. While deriving ExportPlan/3.evidencePins, do not traverse the plan's evidencePins member itself. Then evidencePins is exactly the pinToken-sorted/unique union of:
+
+```text
+Pins(inputCatalog) +
+Pins(documentRenderBinding) +
+Pins(templateBinding) +
+Pins(routeBinding) +
+Pins(styleBundles) +
+Pins(dependencyProof) +
+Pins(observationProof) +
+Pins(stagedOutputs) +
+recoveryPins
+```
+
+recoveryPins is itself pinToken-sorted/unique and contains only original route/rule/destination/unknown-publication pins that the retained fixed-parent recovery contract actually requires and that are not otherwise reachable above. It is not an extension point. Omitting a reachable typed pin, adding an unrelated pin, or duplicating semantic evidence under a different pin makes the Plan invalid. This uniquely closes FC4A-EXP-05 without making evidencePins another authority.
+
+### 6.5.1 Native table → Office SET/COLUMN naming
+
+Native table dataset naming is derived only from the authorized D2TableBlock/3 product projection and the Office template; ordinary Nodes gain no export configuration. Text comparison uses exact Unicode scalar sequences with normalization=none, case-sensitive and whitespace-preserving. CJK, RTL and combining-character text therefore has one host-independent comparison rule.
+
+For each physical table column, construct headerPath in head-row source order. A head cell contributes its semantic inline text once when its [columnStart,columnStart+colspan) covers that column; rowspan does not duplicate the same cell on later logical rows. Empty header cells contribute the empty string. The column leaf is the last segment, or empty when there is no head segment. Table title is its complete semantic title text or null.
+
+The selector is the shortest unique qualifier in this exact sequence:
+
+1. leaf text alone across candidate tables;
+2. shortest suffix of headerPath ending at that leaf;
+3. the same header suffix plus exact table title;
+4. the same facts plus zero-based table occurrence among byte-equal titled/path candidates and, if needed, zero-based column occurrence among byte-equal full header paths in that table.
+
+At each level: zero matches is mapping_required; one is selected; more than one proceeds to the next level. After the final occurrence level, anything other than one is ambiguous_binding. No first/last winner, source suffix invention, current UI order, filename, rowHandle, path guess or author-source edit is permitted. All members of one repeat SET must resolve to the same table/rowset.
+
+SET/COLUMN external names remain the existing ASCII [a-z][a-z0-9_]{0,63}. The unqualified native-table SET is "native_table". A leaf-only COLUMN that already matches that ASCII grammar uses the exact leaf when unique. Every qualified or non-ASCII selector uses a deterministic ASCII token:
+
+```text
+SET    = "nt_" + base32hex_lower(SHA-256(
+           UTF8("D9-Native-Table-Set/1") || NUL ||
+           D3-CJ/3(tableQualifier)))
+COLUMN = "nc_" + base32hex_lower(SHA-256(
+           UTF8("D9-Native-Table-Column/1") || NUL ||
+           D3-CJ/3({tableQualifier,columnQualifier})))
+```
+
+base32hex_lower is the 52-character lowercase RFC4648 base32hex encoding of the full 256-bit digest with no padding, so both names fit the 63-byte grammar. Plan stores D9NativeTableTokenBinding/1, so the token is never used as identity or inverted by guess; Core recomputes candidate tokens from the current product projection and requires the stored selector to be the unique match. A digest collision between non-byte-equal selectors is ambiguous_binding/integrity failure, not equality.
+
+Adding a later same-name column/table can make an earlier short selector non-unique; a new prepare must then fail ambiguous_binding until the template contains the newly required qualified token. The old prepared ExportPlan remains immutable because it already froze its table projection, selector and staged bytes.
+
+ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1, and ExportLossReport/1 retain their fixed-parent closed shapes and semantics. D9NativeTableTokenBinding/1 records how the existing dataset SET/COLUMN names were derived; it does not add a second dataset schema. Projection origins for every native-table dataset column/cell must point to the same inputIndex/tableLocator selected by its binding, with table grid facts taken from D2TableCell/3.
+
+D9ExportConfirmation/1 never changes catalog, projection, route, target, destination, generation policy, report, budget, presentation or staged bytes. lossChoices sort by lossKey, are unique, and exactly cover requires_choice/blocking items; a reject cancels and blocking cannot be accepted. PublicationReceipt/3 byte-matches the protected Plan and confirmation for every repeated member and records actual published output digests.
+
+Current plan tokens are only d9_export_plan/3 and current publication tokens only d9_publication/3. Lookup/inspect/confirmation/unknown recovery dispatches token tag before strict record.version decoding. Historical ExportPlan/1-/2 and PublicationReceipt/1-/2 keep their original token tags, exact bytes, pins, permissions, confirmation, unknown-publication state and recovery; no old token is repinned/reencoded as /3.
+
 
 # 7. Annotation closed values
 
