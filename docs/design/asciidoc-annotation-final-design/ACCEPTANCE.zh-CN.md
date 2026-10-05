@@ -498,10 +498,10 @@ translation_status: source
 | FC34-TR-06 | SPEC §13 | crash planned恢复同一 staged handle associations；不重生成。 |
 | FC34-TR-07 | SPEC §13 | real Bundle1若以后首次授权 transform，产生 Bundle2 successor，历史 Declaration1 exact prefix保留。 |
 | FC34-TR-08 | SPEC §13 | 把 old Declaration1改version2后继续称原签名有效，拒绝。 |
-| FC34-TR-09 | SPEC §13 | mixed Bundle1/Bundle2 policy conflict按各自decoder fold；同root才可resolve。 |
-| FC34-TR-10 | SPEC §13 | source-transform compromise用 fresh revision-token key“修复”，拒绝。 |
-| FC34-TR-11 | SPEC §13 | replica register3同P建立fresh ReplicaEpoch及两个profile授权；retire后两profile均不能new sign。 |
-| FC34-TR-12 | SPEC §13 | replica_register capability被用作generic transform rotate/revoke，拒绝。 |
+| FC34-TR-09 | SPEC §13 | policy conflict 同时含 CP3+Bundle1 与 CP4+Bundle2 head 时，必须按 proof/bundle version 严格分派每个 head，验证 exact address/root/history evidence 并折叠两个 profile state；合法 current policy_bundle_choice 必须有正向 resolution 路径，decoder fallback 或永久拒绝全部合法 mixed conflict 都失败。 |
+| FC34-TR-10 | SPEC §13 | 未选 branch 的 transform compromise 仍必须以原 activation cut 保留在 effective Carry1/Carry2 union；选择其它 branch 不能复活 compromised key。合法 affected transform pair 可通过 FreshDomainAuthorizationSpec2 产生 fresh transform Outcome2/PoP2。 |
+| FC34-TR-11 | SPEC §13 | current d6_replica_register_prepare 保持 wire2 request，mint 一个 ReplicaEpoch，并按 revision-token 后 source-transform 固定顺序恰生成两个 staged Handle2；同一 DecisionKey 下追加两条 Declaration2，且两把 handle 只有经同一 CP4/ChangeRecord 的一个 P seal 才能一起 usable。 |
+| FC34-TR-12 | SPEC §13 | generic dual-profile trust management 不能替代 replica_register authority，也不能产生只 admission 一个 profile 的 replica；replica recovery 必须恢复原 staged pair/declarations，绝不重新生成 key。 |
 | FC34-TR-13 | SPEC §13 | D10 PublisherIdentity/package signature被拿作 SourceTransform trust，拒绝。 |
 | FC34-H-01 | SPEC §17 | old D3 wire12 saved decision在新runtime重放原receipt，不要求 InputDescriptor3。 |
 | FC34-H-02 | SPEC §17 | old PreparedActionBinding3 planned继续原恢复，不原地升级PAB4。 |
@@ -515,8 +515,8 @@ translation_status: source
 | FC34-FMT-20 | SPEC §§5–8 | PortableComponentKey/2必须 document,document_format,resource,...,conflict；把document_format排在conflict之后必须失败。 |
 | FC34-ST-13 | SPEC §§11–13 | current plan/evidence出现 SourceTransformEdit/1 或 SourceTransformPortableEdit/2 必须失败。 |
 | FC34-ST-14 | SPEC §§11–13 | required plan 的 D3-CJ/3(plan.edits) 与 D3-CJ/3(evidence.edits) 不相等时必须拒绝seal。 |
-| FC34-ST-15 | SPEC §§11–13 | Event3 必须先验证 UTF-8 boundaries、replace/insert ranges、removedByteLength=end-start 及 removedSha256 对 before bytes；随后 original-coordinate mixed fixture 必须得到 range=[11,15)、point14 left=15、right=17；信任冲突字段或逐 event 先更新 s/e 再分类都失败。 |
-| FC34-ST-16 | SPEC §§11–13 | generatedOutputSpan 必须由规范 before/after replay cursor 推导，且 delta(R)=replacementByteLength-(endByte-startByte)；after source 含两个 byte-equal replacement 片段时只能由该机械 span 选 payload，内容搜索命中另一片段必须失败。 |
+| FC34-ST-15 | SPEC §§11–13 | Event3 先验证 UTF-8 boundary、replace/insert range、removedByteLength=end-start 与 exact before slice 的 removedSha256；SourceTransformEvidence2.beforeSourceSha256 还必须独立等于 evidence.before 所选完整精确 before source 的 SHA-256。即使所有 Event slice 与 replay 都匹配，whole-before hash 错误也必须失败。 |
+| FC34-ST-16 | SPEC §§11–13 | generatedOutputSpan 只能由 normative before/after replay cursor 与 delta(R)=replacementByteLength-(endByte-startByte) 派生；receiver 必须重新取得历史 exact-before bytes，不能用 current-file bytes、slice hash 或 SourceVersion 字段相等替代。 |
 | FC34-ST-17 | SPEC §§11–13 | replace [5,10)->X + insert@10->Y 必须保留两个event及canonical boundary order，保持 X\|Y；合并为导致 XY\| 的单replacement失败。 |
 | FC34-ST-18 | SPEC §§11–13 | required seal必须同时重验profile、expectedTrustRevision、expectedTrustKeyId与usable handle；只验当前存在某transform key失败。 |
 | FC34-ST-19 | SPEC §§11–13 | 跨generated anchors无法保持boundary slot时返回 PortableTransformCompilation.unavailable；ordinary save仍可继续，但不得制造空events CoreSourceEditPlan或transform artifact。 |
@@ -536,9 +536,9 @@ translation_status: source
 | FC34B-TR-02 | SPEC §13 | Declaration2用 exact CP4 + Bundle2 policy after-image首次追加；PASS。 |
 | FC34B-TR-03 | SPEC §13 | Declaration2只找到同DecisionKey CP3，没有CP4；FAIL。 |
 | FC34B-TR-04 | SPEC §13 | mixed /1,/2 history分别按CP3/CP4 activation fold；PASS。 |
-| FC34B-TR-05 | SPEC §13 | Carry2字段声称origin cut，但original Declaration2+CP4重派生不同；FAIL。 |
+| FC34B-TR-05 | SPEC §13 | Carry2 factId 使用 D6-Trust-Compromise-Fact/2 与精确九字段 body；direct revoke compromise 映射 trustKeyId，direct rotate compromise 映射 oldTrustKeyId，originDeclarationDigest 哈希完整 Declaration2，originActivationChangeId 经原 CP4/ChangeRecord 重派生，不能使用 resolver 时间。 |
 | FC34B-TR-06 | SPEC §13 | 当前 wireVersion3 的 transform profile 轮换必须使用 mode=ordinary，并验证 PoP、rotate、root 的精确签名域和签名体以及真实根授权 producer；K1 签署 transform 后普通轮换到 K2，远端仍以 producing CP4.frontierBefore 验证 K1。 |
-| FC34B-TR-07 | SPEC §13 | K1 compromise与transform seal causal-concurrent；即使arrival顺序显示seal先到也必须FAIL。 |
+| FC34B-TR-07 | SPEC §13 | transform KT1 分叉为 ordinary KT2 与 compromise KT3 时，选择 ordinary branch 仍必须在 canonical recursive union 中保留 losing branch 的原 KT1 compromise fact；同 factId 不同 bytes 为 integrity_conflict，安全 selected key 或合法 fresh transform recovery 均按完整 Outcome2 规则处理。 |
 | FC34B-TR-08 | SPEC §13 | 普通transform receiver使用current Bundle而非producing CP4.frontierBefore；FAIL。 |
 | FC34B-CONT-01 | SPEC §13 | Bundle2中revision current K仍由Declaration1授权且Handle1 usable；revision-token new signing PASS，transform signing FAIL。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-02 | SPEC §13 | 当前未见过的 add/rotate/revoke 使用已闭合的 wireVersion3 双 profile prepare family，caller 不携带 key material；Declaration2 将 revision profile 普通轮换到 K2 后，只有 Handle2(K2) 可新签名，而已保存/已规划的 wireVersion2 record 继续原 recovery。 |
