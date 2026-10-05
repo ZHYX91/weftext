@@ -320,7 +320,7 @@
       "changedSections": [
         "PAB4 current action qualification",
         "Annotation suggestion accept/reject",
-        "D7ActionSpec/2 current apply_suggestion/reject_suggestion; replace/delete/insert fresh target preparation and one-seal target+Annotation acceptance"
+        "D7ActionSpec/2 trusted create_annotation plus current apply_suggestion/reject_suggestion; Core-built Value4 attribution, replace/delete/insert fresh target preparation and one-seal target+Annotation acceptance"
       ]
     },
     {
