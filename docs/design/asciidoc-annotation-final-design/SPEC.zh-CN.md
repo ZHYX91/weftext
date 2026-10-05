@@ -948,6 +948,6 @@ ExecutionContinuityProof/2
 
 ## 19. 验收与证据边界
 
-逐项设计义务见 ACCEPTANCE.zh-CN.md / ACCEPTANCE.md：438条core design oracles +117条actual-owner coordination fixtures，共555条。它们是**未运行的设计验收义务**，不是实现测试结果。
+逐项设计义务见 ACCEPTANCE.zh-CN.md / ACCEPTANCE.md：438条core design oracles +137条actual-owner coordination fixtures，共575条。它们是**未运行的设计验收义务**，不是实现测试结果。
 
 本PR没有安装或运行 Ruby oracle、Asciidork、Mermaid CLI、浏览器/Puppeteer、STEM/PDF providers，也没有运行产品SQLite/replica/crash/crypto/Automation handoff测试。作者自检只能证明文档/JSON/路由的一致性；独立接受必须绑定本PR停止写入后的exact head SHA。
