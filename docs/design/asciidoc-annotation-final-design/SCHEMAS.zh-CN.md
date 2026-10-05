@@ -666,7 +666,7 @@ EffectBytes/3 = {
 }
 ```
 
-EffectItem/3闭集与fixed-e8aa EffectItem/2的十三种语义arm一一对应：
+EffectItem/3闭集与fixed-e8aa EffectItem/2的十四种语义arm一一对应：
 `source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, canonical_plan`；所有其中的EffectBytes slot使用/3，Annotation source image使用Value/4，workspace_bootstrap current允许Plan4。不得出现generic_json/free payload。
 
 ## 6.3 PreparedEditBinding/3
@@ -1296,6 +1296,156 @@ ExecutionContinuityProof/2 =
 inventoryPin exact payload domain：
 `UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2)`。
 Record2/Proof1/Inventory1历史domain不变；只有真实responsibility mutation/checkpoint/handoff才形成Record3。
+
+## 10.1 D10 current schedule / author-step 直接类型
+
+以下类型是 §10 mixed wrappers 所引用的 current exact inner values；不是 wrapper 自行发明的自由对象。
+
+```text
+D10ControlInput/2 = {
+  kind:"d10_control",
+  version:2,
+  key:StableControlKey/1,
+  operationId:Uuid,
+  canonicalIntentBytes:Bytes,
+  allocatedControlRefs:[ControlRef<K>/1],
+  preview:ControlPreview/1,
+  dependencies:ControlDependencies/3,
+  effectPlan:D10ControlEffectPlan/2,
+  confirmationRequirement:ExternalConfirmationRequirement/1
+}
+
+ScheduleRecurrenceEvidence/2 = {
+  kind:"d10_schedule_recurrence_evidence",
+  version:2,
+  observation:SourceObservation/1,
+  sourcePin:PinRef/2,
+  metadataPin:PinRef/2,
+  dependencyProof:DependencyProof/3,
+  registrySnapshot:RegistrySnapshot/1,
+  registryEvolution:Option<RegistryEvolutionProof/1>,
+  recurrenceContext:RecurrenceReadContext/1
+}
+
+ScheduleSourceBinding/2 =
+    {kind:"once",atUtcSeconds:CanonicalDecimal}
+  | {kind:"recurrence",
+     ownerNodeRef:NodeRef,
+     recurrenceOccurrenceKey:occurrenceKey,
+     rangeOccurrenceKey:occurrenceKey,
+     initial:ScheduleRecurrenceEvidence/2,
+     checkpoint:ScheduleRecurrenceEvidence/2,
+     continuityPins:[PinRef/2...]}
+
+ScheduleSubscription/2 = {
+  kind:"d10_schedule_subscription",
+  version:2,
+  automation:ControlRef<automation>/1,
+  generation:Counter,
+  lowerOriginalStartUtcSeconds:CanonicalDecimal,
+  activeDefinition:Binding<automation>/1,
+  definitionRevision:Counter,
+  source:ScheduleSourceBinding/2
+}
+
+ScheduleOccurrenceProof/2 =
+    {version:2,kind:"once",at:zoned_instant}
+  | {version:2,kind:"recurrence",
+     evidence:ScheduleRecurrenceEvidence/2,
+     projection:<complete accepted D4 recurrence projection outcome>,
+     originalStart:<the selected outcome row's D4 originalStart>}
+
+AutomationOccurrenceRecord/2 = {
+  kind:"d10_automation_occurrence_record",
+  version:2,
+  key:AutomationOccurrenceKey/1,
+  definition:Binding<automation>/1,
+  definitionRevision:Counter,
+  dueUtcSeconds:CanonicalDecimal,
+  proof:ScheduleOccurrenceProof/2,
+  disposition:AutomationOccurrenceDisposition/1
+}
+
+ScheduleContinuityWitness/2 = {
+  kind:"d6_schedule_continuity",
+  version:2,
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  revision:Counter,
+  initial:ScheduleRecurrenceEvidence/2,
+  checkpoint:ScheduleRecurrenceEvidence/2,
+  status:"continuous"|"binding_changed"|"gap",
+  producerEpoch:Token,
+  consumedTransition:Counter
+}
+
+ScheduleContinuityStep/2 = {
+  kind:"d6_schedule_continuity_step",
+  version:2,
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  expectedWitnessRevision:Counter,
+  producerEpoch:Token,
+  transition:Counter,
+  before:ScheduleRecurrenceEvidence/2,
+  after:ScheduleRecurrenceEvidence/2,
+  portableChanges:[{
+    changeRecordPin:PinRef/2,
+    installationNoticePin:PinRef/2,
+    completionProofPin:PinRef/2
+  }...],
+  dependencyBefore:DependencyProof/3,
+  dependencyAfter:DependencyProof/3,
+  retainedInputs:[PinRef/2...]
+}
+
+D10AuthorPreparationLink/2 = {
+  kind:"d10_author_preparation_link",
+  version:2,
+  run:ControlRef<run>/1,
+  stepId:Counter,
+  automation:Binding<automation>/1,
+  definitionRevision:Counter,
+  taskDigest:Sha256,
+  preparedBindingToken:Token,
+  request:d6_commit_request/2
+}
+
+ApprovalUse/2 = {
+  version:2,
+  approval:Binding<approval>/1,
+  run:ControlRef<run>/1,
+  stepId:Counter,
+  request:d6_commit_request/2,
+  decisionKey:DecisionKey/2,
+  preparedBindingToken:Token,
+  previewSemanticDigest:Sha256,
+  delegationBinding:Binding<lease>/1,
+  activationBinding:ActivationBinding/1,
+  count:ApprovalCountReservation/1,
+  budgetReservations:[ControlRef<reservation>/1...]
+}
+
+D10AuthorStepResponsibility/2 =
+    {version:2,kind:"core_field_member",
+     link:D10AuthorPreparationLink/2,
+     decisionKey:DecisionKey/2,protocolOwner:"D6",
+     preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
+  | {version:2,kind:"interactive",
+     run:ControlRef<run>/1,stepId:Counter,decisionKey:DecisionKey/2,
+     authorRequest:
+         {protocolOwner:"D3",request:<complete identity_operation_request wire13>}
+       | {protocolOwner:"D6",request:d6_commit_request/2},
+     preparedFormat:
+       "d7_prepared_action_binding4"|"d8_prepared_edit_binding3",
+     preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
+```
+
+`ApprovalUse/2.preparedBindingToken` 必须选择 exact PAB4。其 preview digest 固定为
+`SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))`；
+EffectBytes/3 slot只替换为 `{encoding,byteLength,payloadDigest}`，不按成员名递归猜测。
+
+Schedule current proof中真实解析 managed Document 时必须含 `source + document_format` dependency。source/profile bytes未变但format proof continuity gap得到 `gap`；binding发生真实改变得到 `binding_changed`，即使最终recurrence/range值碰巧相同。旧 Subscription1 只有在 explicit continue 且完整历史证明无format/rule discontinuity时才可同generation形成Subscription2；否则要求replace。
 
 # 11. 历史分派与单一 authority
 
