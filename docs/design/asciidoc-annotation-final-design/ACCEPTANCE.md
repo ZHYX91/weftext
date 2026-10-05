@@ -466,7 +466,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34-FMT-02 | SPEC §§5–8 | The old PortableComponentKey/1 decoder rejects {kind:"document_format"}; CP3 cannot treat it as a legal component. |
 | FC34-FMT-03 | SPEC §§5–8 | Legacy/unbound source remains available for authorized raw read/repair; missing format binding does not delete or hide the original bytes. |
 | FC34-FMT-04 | SPEC §§5–8 | Legacy/unbound source containing [weftext-attributes] does not automatically become WeftextManaged. |
-| FC34-FMT-05 | SPEC §§5–8 | A future managed weftext_managed/1 -> /2 profile-only migration with unchanged source uses one ChangeId, one document_format transition, and CP4 sourceChanges=[]; absent/Baseline-to-managed is not mislabeled as profile migration. |
+| FC34-FMT-05 | SPEC §§5–8 | A future managed weftext_managed/1 -> /2 profile-only migration keeps source unchanged; the same Notice3/CP4 component set carries exactly the document_format transition with sourceChanges=[], creates no SourceRevisionPlan/SourceVersion/H advance, and absent/Baseline-to-managed is not mislabeled as profile migration. |
 | FC34-FMT-06 | SPEC §§5–8 | A managed profile-only migration does not create a SourceVersion or advance H(D,E). |
 | FC34-FMT-07 | SPEC §§5–8 | If SourceVersion is unchanged but the format stamp changes, an old InputDescriptor/PAB/EditBinding/ExportPlan cannot continue. |
 | FC34-FMT-08 | SPEC §§5–8 | After a format change, dirty Draft bytes remain while projection/map/preview are invalidated and requalified. |
@@ -489,9 +489,9 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34-ST-08 | SPEC §§11–13 | A public key authorized only for the revision-token profile cannot validate a transform artifact. |
 | FC34-ST-09 | SPEC §§11–13 | Even if the same raw public key is separately root-authorized for both profiles later, verification still requires the exact profile and artifact domain. |
 | FC34-ST-10 | SPEC §§11–13 | A CAS loser's staging signature cannot enter the portable outbox. |
-| FC34-ST-11 | SPEC §§11–13 | After seal, publication failure republishes exact pinned transform bytes and never resigns. |
+| FC34-ST-11 | SPEC §§11–13 | SourceTransform signs exactly ASCII D6-Source-Transform-Seal/1 || NUL || D3-CJ/3(the complete artifact with only signature removed); English and Chinese state the same message, and after seal publication failure republishes exact canonical pinned artifact bytes and never resigns. |
 | FC34-ST-12 | SPEC §§11–13 | A SourceTransform artifact is not a PortableComponent and cannot appear in CP4 components. |
-| FC34-TR-01 | SPEC §13 | Bootstrap4 has one root and Genesis2 has exactly two declarations: rev1 revision-token then rev2 transform, with the correct predecessor chain. |
+| FC34-TR-01 | SPEC §13 | Bootstrap4 keeps D3 proposalId as the canonical lowercase UUID and uses closed Profile4/creator/Registry/series/period helper types; it has one root and Genesis2 has exactly two declarations, rev1 revision-token then rev2 transform, with the correct predecessor chain. |
 | FC34-TR-02 | SPEC §13 | Genesis2 with one or three declarations is rejected. |
 | FC34-TR-03 | SPEC §13 | Two otherwise correct profile declarations both using revision=1 are rejected. |
 | FC34-TR-04 | SPEC §13 | The two bootstrap declarations share one DecisionKey/activation ChangeId and a history cut includes both or neither. |
@@ -516,8 +516,8 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34-FMT-20 | SPEC §§5–8 | PortableComponentKey/2 rank is document, document_format, resource, ..., conflict; placing document_format after conflict fails. |
 | FC34-ST-13 | SPEC §§11–13 | A current plan/evidence using SourceTransformEdit/1 or SourceTransformPortableEdit/2 is rejected. |
 | FC34-ST-14 | SPEC §§11–13 | A required plan with unequal D3-CJ/3(plan.edits) and D3-CJ/3(evidence.edits) cannot seal. |
-| FC34-ST-15 | SPEC §§11–13 | The original-coordinate mixed fixture yields range [11,15), point14 left=15 and right=17; an implementation that updates s/e before classifying later events fails. |
-| FC34-ST-16 | SPEC §§11–13 | When after source contains two byte-equal replacement fragments, payload is selected only by mechanical generatedOutputSpan; content-searching the other fragment fails. |
+| FC34-ST-15 | SPEC §§11–13 | Event3 first validates UTF-8 boundaries, replace/insert ranges, removedByteLength=end-start and removedSha256 against before bytes; then the original-coordinate mixed fixture yields range [11,15), point14 left=15 and right=17. Trusting inconsistent event fields or updating s/e before classifying later events fails. |
+| FC34-ST-16 | SPEC §§11–13 | generatedOutputSpan is derived by the normative before/after replay cursor and delta(R)=replacementByteLength-(endByte-startByte); when after source contains two byte-equal replacement fragments, only that mechanical span selects payload and content-searching the other fragment fails. |
 | FC34-ST-17 | SPEC §§11–13 | replace [5,10)->X + insert@10->Y retains two events and canonical boundary order to yield X\|Y; merging into one replacement that yields XY\| fails. |
 | FC34-ST-18 | SPEC §§11–13 | A required seal rechecks profile, expectedTrustRevision, expectedTrustKeyId, and a usable handle; checking only that “some transform key exists” fails. |
 | FC34-ST-19 | SPEC §§11–13 | If a cross-generated-anchor edit cannot preserve boundary slots, compilation returns unavailable; ordinary save may continue but no empty-event CoreSourceEditPlan or artifact is fabricated. |
@@ -538,11 +538,11 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34B-TR-03 | SPEC §13 | A Declaration2 with only same-DecisionKey CP3 and no CP4 is invalid. |
 | FC34B-TR-04 | SPEC §13 | A mixed /1,/2 trust history folds /1 activation through CP3 and /2 activation through CP4. |
 | FC34B-TR-05 | SPEC §13 | A Carry2 whose stored origin cut differs from rederivation using the original Declaration2+CP4 fails. |
-| FC34B-TR-06 | SPEC §13 | K1 signs a transform, later rotates normally to K2, and a receiver still validates K1 at the producing CP4.frontierBefore. |
+| FC34B-TR-06 | SPEC §13 | Current wireVersion3 transform-profile rotate uses mode=ordinary, the exact PoP/rotate/root signature domains and bodies, and a usable root-authorized producer; after K1 signs a transform and rotates normally to K2, a receiver still validates K1 at the producing CP4.frontierBefore. |
 | FC34B-TR-07 | SPEC §13 | A K1 compromise causally concurrent with the transform seal rejects the artifact even if arrival order shows the seal first. |
 | FC34B-TR-08 | SPEC §13 | A normal transform receiver using current Bundle state instead of producing CP4.frontierBefore fails. |
 | FC34B-CONT-01 | SPEC §13 | In Bundle2, revision current K still authorized by Declaration1 with usable Handle1 may sign new revision tokens, while transform signing with that handle fails. |
-| FC34B-CONT-02 | SPEC §13 | After a Declaration2 rotation of the revision profile to K2, only Handle2(K2) can perform new signing. |
+| FC34B-CONT-02 | SPEC §13 | Current unseen add/rotate/revoke uses the closed wireVersion3 dual-profile prepare family with no caller key material; after a Declaration2 ordinary rotation of the revision profile to K2, only Handle2(K2) can perform new signing, while saved/planned wireVersion2 records keep their original recovery. |
 | FC34B-CONT-03 | SPEC §13 | Old states revision=current, transform=none produce revoke revision + authorize B2 revision + authorize B2 transform in one CP4. |
 | FC34B-CONT-04 | SPEC §13 | Old states revision=none, transform=current produce revoke transform + authorize both B2 profiles in one CP4. |
 | FC34B-CONT-05 | SPEC §13 | If either profile is conflicted/gapped/unproved, the clean profile's B2 handle cannot become usable early. |
@@ -552,11 +552,11 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34B-HOLDER-03 | SPEC §§7–8 | For a D4 strong relation operation, unchanged source with changed format stamp invalidates the old proof and requires stale/reprepare. |
 | FC34B-HOLDER-04 | SPEC §§7–8 | D5 native table edit also consumes source+format; a format change stales the old preparation even when table locator/SourceVersion happen to match. |
 | FC34B-HOLDER-05 | SPEC §§7–8 | Mechanical version bumps of D4/D5 inner RelationReadContext, table locator, occurrenceKey, or numeric sourceRevision merely to match /3 are rejected. |
-| FC34B-CR-01 | SPEC §6.3 | A current portable decision freezes ChangeRecord1, Notice3, and CP4 in the same P with matching DecisionKey/ChangeId/frontiers/digests. |
+| FC34B-CR-01 | SPEC §6.3 | A current portable decision freezes ChangeRecord1, Notice3, and CP4 in the same P; CP4 component keys equal Notice3 exactly in canonical order, each after is the actual installed/sealed owner-versioned image, and DecisionKey/ChangeId/frontiers/digests match. |
 | FC34B-CR-02 | SPEC §6.3 | ChangeRecord1 pointing to the correct CP4 but the wrong Notice3 digest fails. |
-| FC34B-CR-03 | SPEC §6.3 | A mismatch between CP4 frontierBefore/After and ChangeRecord fails. |
+| FC34B-CR-03 | SPEC §6.3 | A mismatch between CP4 frontierBefore/After and ChangeRecord fails; frontierAfter is exactly frontierBefore plus this ChangeId with no other-domain regression, and scope_dependencies requires the complete continuous ChangeRecord/completion chain plus retained unrelatedness proof. |
 | FC34B-CR-04 | SPEC §6.3 | Pre-FC bytes without a proven decoder cannot be interpreted as ChangeRecord1. |
-| FC34B-CR-05 | SPEC §6.3 | When schedule/scope_dependencies encounters an unknown historical ChangeRecord decoder, the strong path stops with gap/proof_unavailable while ordinary source read/save retains its independent qualification. |
+| FC34B-CR-05 | SPEC §6.3 | Receiver admission requires exact Notice3/CP4 bytes, every actual component byte and owner version, complete sourceChanges and production SourceVersions, restored-arm exclusions, and the continuous chain; an unknown historical decoder or missing proof stops the strong path with gap/proof_unavailable while ordinary source read/save retains its independent qualification. |
 | FC34D-MIX-01 | SPEC §14 | ControlPrepareBinding/1(K1) and ControlPrepareBinding/3(K2), K1!=K2, may coexist in one Claims2/Inventory2/Record3; each uses its exact decoder, sorts by StableControlKey, and retains its own bytes/pins. |
 | FC34D-MIX-02 | SPEC §14 | ControlPrepareBinding/1(K) plus ControlPrepareBinding/3(K) in one Claims2 is a duplicate StableControlKey responsibility and fails even when canonicalIntentBytes/originalCommitRequest match; no LWW, new-version preference, or silent drop is allowed. |
 | FC34C-MIX-01 | SPEC §14 | One ControlDependencies3 may contain an old stop Pin1 and a new automation Pin2 when each binding is complete at the same cut. |
