@@ -601,9 +601,11 @@ body editor 只有一个 source truth：`AnnotationInlineBody/1.source`。visual
 
 historical D8 wire1/wire2、PreparedEditBinding/1-/2、Value/3 proposed pins 与真实 saved/planned/unknown requests 都按其原 decoder/pins 恢复。current editor 支持 Value/4 不得把它们转换成 EditBinding3/Value4。
 
-### 9.9 D7 current suggestion actions
+### 9.9 D7 current Annotation creation 与 suggestion actions
 
-current new D7 author preparation 使用 SCHEMAS §6.1 的 `D7ActionSpec/2` 与 `D7ActionPrepareRequest/3`。所有非 suggestion 的 ActionSpec/1 arm byte-for-byte 继承；旧 `apply_suggestion(annotation:EntityTarget,targetLocator)` 只作 historical。current closed suggestion arms 为：
+current interactive Annotation creation 使用专用 `D7CreateAnnotationIntent/2` arm。caller 只能提交 destinationOwnerRef 与 AnnotationEditableValue/1。经过原 destination-owner disclosure/create authorization 后，Core 验证 target/reply owner rules 与 R6 body，按 §9.6 注入 creator/authoredAt/lastEditor/editedAt，再构造完整 current D3IdentityOperationRequest/13 mode=create_annotation：沿用 inherited fresh primary Annotation subject、Value/4 result payload binding、target@0 reference plan 与可选 initial reply@1 reference plan。PAB4 绑定这份 exact generated request 与 Value/4 pin。caller 通过 generic d3_operation 自己嵌 actor/time snapshots 不能冒充 trusted current interactive creation；copy/import/create-member 路径继续使用各自 named owner preparation 与 attribution rules。
+
+其它 current new D7 author preparation 继续使用 SCHEMAS §6.1 的 `D7ActionSpec/2` 与 `D7ActionPrepareRequest/3`。fixed-parent 非 suggestion ActionSpec/1 arms 全部 byte-for-byte 继承，只为上述实际创建需求增加 create_annotation arm。旧 `apply_suggestion(annotation:EntityTarget,targetLocator)` 只作 historical。current closed suggestion arms 为：
 
 ```text
 apply_suggestion  -> accept stored pending Suggestion/3
