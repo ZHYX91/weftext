@@ -270,10 +270,10 @@
     {
       "name": "AsciiDocInlineBody/1",
       "owner": "D2/D8",
-      "status": "schema_alias",
+      "status": "current",
       "replaces": "AnnotationInlineBody/1",
       "section": "SCHEMAS §7",
-      "notes": "Schema alias only for the earlier candidate name; identical canonical bytes, no second wire and no deployment claim."
+      "notes": "Schema alias only for the earlier candidate name; identical canonical bytes to AnnotationInlineBody/1, no second wire/version, no deployment claim."
     },
     {
       "name": "OracleSemanticWitness/7",
