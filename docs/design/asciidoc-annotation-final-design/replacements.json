@@ -472,7 +472,13 @@
       "changedSections": [
         "Source-only fallback",
         "run-in/deep-heading rendering",
-        "Annotation appearance/review"
+        "Annotation appearance/review",
+        "Annotation inline body/profile closed schema"
+      ],
+      "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "schemaAnchors": [
+        "§7"
       ]
     },
     {
@@ -493,7 +499,13 @@
         "Draft source+format base",
         "PreparedEditBinding/3",
         "deep heading/run-in editor",
-        "Annotation UX"
+        "Annotation UX",
+        "Annotation inline body/profile closed schema"
+      ],
+      "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "schemaAnchors": [
+        "§7"
       ]
     },
     {
@@ -645,7 +657,17 @@
         "Witness7/CSP/PropertyProfile",
         "managed format semantic ownership",
         "provider profiles",
-        "portable Annotation semantics"
+        "portable Annotation semantics",
+        "Witness7 retained document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence closed schemas",
+        "Oracle observer manifest + M37 producer-site closure",
+        "AnnotationInlineBody/1 alias and single AnnotationInlineProfile/1"
+      ],
+      "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "schemaAnchors": [
+        "§1",
+        "§4",
+        "§7"
       ]
     }
   ],
@@ -653,5 +675,21 @@
     "zh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
     "en": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
     "semantics": "Normative closed current shapes, canonical ordering, cross-field checks and historical dispatch for all replacement entries."
+  },
+  "normative_companions": {
+    "schemas": {
+      "zh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "en": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "role": "closed current schemas, retained oracle evidence types, canonical ordering, and exact historical dispatch"
+    },
+    "acceptance": {
+      "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "role": "554 unexecuted design obligations; no additional private acceptance source"
+    },
+    "terminology": {
+      "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "role": "schema/version/name registry"
+    }
   }
 }
