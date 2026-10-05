@@ -53,7 +53,8 @@
         "fresh BootstrapPlan4 retains D3 proposal UUID/authenticity/custody chain",
         "current wire13 Annotation Value4 mutation binding inherits target@0/reply@1 reference+structural algebra, one final revision/CAS/receipt/materialization; historical Value3 plans recover unchanged",
         "wire13 expectedAuthority/proposal/preparationBinding preserve exact wire12 optional mode matrix; replica_local omits forbidden members and historical wire9-12 stay exact",
-        "Annotation operation-class matrix preserves copy/import/Trash/restore/history semantics without treating carried terminal state as a fresh target-mutation decision"
+        "Annotation operation-class matrix preserves copy/import/Trash/restore/history semantics without treating carried terminal state as a fresh target-mutation decision",
+        "fresh WorkspaceBootstrapPlan4 create/fork freezes initial D8 presentation parents=[] revision1/separate and materializes it under the original allocation/custody decision and final P"
       ]
     },
     {
@@ -214,7 +215,8 @@
         "D8 presentation default reuses the existing complex shared-configuration owner-effect/P-plan pattern rather than adding PortableComponentKey or mutating Policy3/Registry",
         "D8 presentation shared configuration binds stamped head-set OwnerInput and one ordinary ChangeRecord/P owner effect while preserving the /1 logical current value",
         "AnnotationAggregateObservation/1 and AnnotationAggregateInstall/1 consume exact fixed FileObjectBinding/1 + FileInstallCapability/2 absent/present/strict/observed cross-fields without widening those D6 types",
-        "D8 presentation SetRequest concrete PreparedIntent3+d6_commit_request2 producer freezes Proposal/head evidence at planning and materializes ChangeId-dependent record/hash/pin/outbox only inside final P"
+        "D8 presentation SetRequest concrete PreparedIntent3+d6_commit_request2 producer freezes Proposal/head evidence at planning and materializes ChangeId-dependent record/hash/pin/outbox only inside final P",
+        "fresh Plan4 mandatory D8 presentation bootstrap init shares the original OperationId/planning CAS/DecisionKey/final P, with no pre-P committed record and no second ledger/CAS"
       ]
     },
     {
@@ -405,7 +407,8 @@
         "closed WorkspaceBootstrapPlan/4 encoding",
         "current annotation source images and EffectBytes use complete D3 Annotation Value4 canonical bytes; historical d3_annotation_value3 bytes retain decoder",
         "EffectItem/3 adds only typed presentation_policy_change for the D8 complex shared-configuration owner effect; historical EffectItem1/2 stay exact",
-        "presentation_policy_change preview remains committed=null before P; final P alone installs the committed record plus protected exact-record outbox association"
+        "presentation_policy_change preview remains committed=null before P; final P alone installs the committed record plus protected exact-record outbox association",
+        "WorkspaceBootstrapPlan4 preview carries typed presentation_policy_change committed=null and the original final P alone materializes the committed record/outbox association"
       ]
     },
     {
@@ -555,7 +558,8 @@
         "independent JSON Annotation current Source/visual/edit lifecycle uses one R6 inline source, Value4 CAS and Core actor/time without a second rich-body authority",
         "explicit run-in/separate/conflict/no-body presentation remains usable without Workspace policy; implicit default binds one-head D8 shared configuration and real currentness",
         "workspace_default binds the /1 logical current value plus /2 portable record and stamped head-set; explicit/no-body paths remain policy-free",
-        "field-level product provenance gates structured author edits without changing ordinary exact Source/Draft/whole-source-save availability"
+        "field-level product provenance gates structured author edits without changing ordinary exact Source/Draft/whole-source-save availability",
+        "fresh active Plan4 has an immediately usable one-head Workspace default while explicit run-in/separate/conflict/no-body remain policy-independent and later D9 frozen bindings stay immutable"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -589,7 +593,8 @@
         "presentation policy mutation owner input freezes the exact stamped head-set and saved/planned recovery preserves that observation",
         "actual d8_annotation_read + d8_annotation_draft_open producers return complete Value4 attribution/current basis while Draft remains an editable projection",
         "manual_reattach and annotation_reconfirm_suggestion operation classes with Core-owned target evidence",
-        "presentation policy SetRequest error order, no-change arm, exact head evidence, PreparedIntent3/request carrier, final-P materialization, revocation and saved/planned/unknown recovery"
+        "presentation policy SetRequest error order, no-change arm, exact head evidence, PreparedIntent3/request carrier, final-P materialization, revocation and saved/planned/unknown recovery",
+        "fresh unseen create/fork Plan4 atomically activates one revision1/separate presentation head; proved [] is initialization only and missing/corrupt/unproved state remains unavailable"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -693,7 +698,8 @@
       "changedSections": [
         "Descriptor3/Proof3/PAB4 template construction qualification",
         "native-table Office SET/COLUMN shortest-unique selector over multi-row/merged/repeated/CJK/RTL headers and finite per-plan missing/image/layout choices",
-        "bindingChoices and missingPolicy canonical templatePath ordering/uniqueness plus nativeTableBindings (setName,columnName) ordering and duplicate-conflict closure"
+        "bindingChoices and missingPolicy canonical templatePath ordering/uniqueness plus nativeTableBindings (setName,columnName) ordering and duplicate-conflict closure",
+        "bindingChoices/missingPolicy templatePath comparator is exact Unicode-scalar lexicographic, normalization none, case-sensitive, shorter exact scalar prefix first"
       ]
     },
     {
@@ -731,7 +737,8 @@
         "fully closed ExportPlan3 route/template/target/destination/loss-confirmation/evidence/staged-output types",
         "D2DocumentSnapshot3 rendered export and frozen D8 presentation-policy binding",
         "ExportPlan3 current token/version dispatch, inline closed generation policy, exact template/route/pin cross-fields, product include currentness and frozen conditional presentation decision",
-        "ExportPlan3 canonical set-like collections: route-step evidencePins, styleBundles, staged/receipt outputs, binding/missing/native-table choices; prepare canonicalizes before freeze and readers reject noncanonical records"
+        "ExportPlan3 canonical set-like collections: route-step evidencePins, styleBundles, staged/receipt outputs, binding/missing/native-table choices; prepare canonicalizes before freeze and readers reject noncanonical records",
+        "staged/receipt output names use unsigned UTF-8 lexical ordering only after inherited safe-relative/alias/conflict validation; template choices use the exact scalar comparator and recovery still rejects noncanonical bytes"
       ]
     },
     {
@@ -768,7 +775,8 @@
         "current product /3 complete fixed-Ruby per-kind semantics, typed native attributes, SourceOrigin graph, exact environment/include dependency binding and arbitrary-precision effective levels",
         "current product /3 also retains public block common slots and native inline subtype semantics (icon/ref-bibref/footnote/callout) without free JSON or second parsing",
         "field-level SourceOrigin/write gate for NativeAttributeEntry, common/per-kind semantics, block/inline slots and unique-authored structured-edit positive path",
-        "complete fixed-Ruby Document observable product: backend/safe/doctype/title partition, structured author components, revision and final effective attributes without fabricated source ranges"
+        "complete fixed-Ruby Document observable product: backend/safe/doctype/title partition, structured author components, revision and final effective attributes without fabricated source ranges",
+        "effectiveAttributes preserve fixed-Ruby final null/Boolean/String/Integer/ordered-string-Array value classes through the closed D2NativeSemanticValue domain; unsupported arbitrary extension objects make rich product unavailable instead of to_s/free JSON"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -869,7 +877,8 @@
         "Annotation mutation/value implementation obligations are not replaced by this Stage4A entry",
         "historical plain Annotation implementation obligations superseded for current paths by portable Value4 plus single R6 AnnotationInlineProfile while raw historical recovery remains",
         "current product implementation consumes one complete typed D2 snapshot/evaluation binding for read/query/render/write gating; no second parser or flat-origin shortcut",
-        "current product implementation carries per-slot provenance and complete fixed-Ruby document metadata/effective attribute state; no second parser or fullname/source reconstruction"
+        "current product implementation carries per-slot provenance and complete fixed-Ruby document metadata/effective attribute state; no second parser or fullname/source reconstruction",
+        "current D7/D8/D9 product consumers receive typed effective Document attributes and same-evaluation provenance; no name/source reparsing or string flattening"
       ]
     },
     {
@@ -937,7 +946,7 @@
     "acceptance": {
       "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "role": "731 unexecuted design obligations; no additional private acceptance source"
+      "role": "750 unexecuted design obligations; no additional private acceptance source"
     },
     "terminology": {
       "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
