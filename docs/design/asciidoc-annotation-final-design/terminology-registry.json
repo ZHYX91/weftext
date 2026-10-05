@@ -657,7 +657,7 @@
       "status": "current",
       "replaces": "ControlPrepareBinding/2",
       "section": "SPEC §14",
-      "notes": "Current unseen prepare binding. Historical ControlPrepareBinding/1 is the exact six-member shape and /2 keeps its exact confirmation+Dependencies2 shape; neither is migrated."
+      "notes": "Current unseen prepare binding, including external-consent ExternalConfirmationRequirement/1 with the original separate confirmation-record semantics. Historical Binding1/2 retain exact decoders and recovery."
     },
     {
       "name": "D10ControlRecordImage/2",
@@ -697,7 +697,7 @@
       "status": "current",
       "replaces": "ApprovalUse/1",
       "section": "SPEC §14",
-      "notes": "Fresh/current D10 author-approval responsibility. Genuine saved/planned ApprovalUse/1 remains exact historical responsibility."
+      "notes": "Fresh/current D10 author-approval responsibility created from exact Link2/PAB4/Effect3 current preparation. Genuine saved/planned ApprovalUse/1 remains exact historical responsibility."
     },
     {
       "name": "D10AuthorStepResponsibility/2",
@@ -705,7 +705,7 @@
       "status": "current",
       "replaces": "D10AuthorStepResponsibility/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current author-step responsibility; core_field_member uses D10AuthorPreparationLink/2 and exact PAB4 recovery pinning."
     },
     {
       "name": "ScheduleRecurrenceEvidence/2",
@@ -721,7 +721,7 @@
       "status": "current",
       "replaces": "ScheduleSubscription/1",
       "section": "SPEC §14",
-      "notes": "Current scheduling successor; historical Subscription1 remains exact and legal continue may retain the same generation."
+      "notes": "Current scheduling successor and fresh Storage §7.2.1 producer owner. Historical Subscription1 remains exact; explicit same-generation continue requires complete retained continuity."
     },
     {
       "name": "ScheduleOccurrenceProof/2",
@@ -1106,6 +1106,38 @@
       "replaces": "ConflictResolutionInput/2 policy_bundle_choice owner descriptor",
       "section": "SPEC §13",
       "notes": "Protected current owner descriptor only; public d6_conflict_prepare remains wireVersion3/ConflictResolution2 and source arms remain on the fixed-parent descriptor."
+    },
+    {
+      "name": "D10AuthorPreparationLink/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10AuthorPreparationLink/1",
+      "section": "SPEC §14",
+      "notes": "Fresh current core_field_member recovery link; preparedBindingToken selects exact PAB4 and is atomically saved with PAB4/effect/recovery pins before return."
+    },
+    {
+      "name": "ScheduleContinuityWitness/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ScheduleContinuityWitness/1",
+      "section": "SPEC §14",
+      "notes": "Fresh Subscription2 continuity witness with ScheduleRecurrenceEvidence2, current producerEpoch, and original continuous-producer retention semantics."
+    },
+    {
+      "name": "ScheduleContinuityStep/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ScheduleContinuityStep/1",
+      "section": "SPEC §14",
+      "notes": "Current positive continuity step using DependencyProof3 and current ChangeRecord1/Notice3/CP4 evidence while retained historical transitions keep original decoders."
+    },
+    {
+      "name": "ScheduleContinuityInvalidation/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ScheduleContinuityInvalidation/1",
+      "section": "SPEC §14",
+      "notes": "Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses D6-Schedule-Invalidation/2 artifact domain."
     }
   ]
 }
