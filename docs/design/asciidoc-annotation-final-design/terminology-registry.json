@@ -385,7 +385,7 @@
       "status": "current",
       "replaces": "ContentCompletionProof/3",
       "section": "SPEC §6",
-      "notes": ""
+      "notes": "Current component family; inherits CP3 committed/restored admission, sourceChanges, frontier, receipt and receiver invariants while using PortableComponentKey/2 and ChangeRecord/1."
     },
     {
       "name": "ChangeRecord/1",
@@ -441,7 +441,7 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §§12-13",
-      "notes": ""
+      "notes": "Exact signed body is SourceTransformSealSignedBody/1; message domain is D6-Source-Transform-Seal/1 and complete artifact transport is canonical D3-CJ/3."
     },
     {
       "name": "SourceTransformSealKey/1",
@@ -473,7 +473,7 @@
       "status": "current",
       "replaces": "WorkspaceTrustDeclaration/1",
       "section": "SPEC §13",
-      "notes": "/1 remains historical revision-token-only."
+      "notes": "Dual-profile current successor; complete root predecessor object, exact PoP/rotate/root signature bodies, ordinary|loss_recovery|compromise rotate, and separate revoke modes."
     },
     {
       "name": "WorkspaceAuthorizationBundle/2",
@@ -505,7 +505,7 @@
       "status": "current",
       "replaces": "WorkspaceBootstrapPlan/3",
       "section": "SPEC §13",
-      "notes": ""
+      "notes": "Fresh create/fork only; proposalId remains the D3 canonical UUID and all profile/creator/Registry/series/period members are closed public types."
     },
     {
       "name": "D3IdentityInput/13",
@@ -954,6 +954,110 @@
       "replaces": null,
       "section": "SPEC §§6-14",
       "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "SourceTransformSealSignedBody/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": "Complete SourceTransformSealArtifact/1 with only signature removed."
+    },
+    {
+      "name": "WorkspaceTrustPredecessor/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Root arm carries complete WorkspaceTrustRootFingerprint/1; declaration arm carries previous revision and canonical declaration digest."
+    },
+    {
+      "name": "DomainSealKeyPoPBody/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Exact /2 domain-seal key possession signed body."
+    },
+    {
+      "name": "DomainSealKeyRotateContinuityBody/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Exact ordinary-rotation continuity signed body."
+    },
+    {
+      "name": "WorkspaceTrustDeclarationSignedBody/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Complete WorkspaceTrustDeclaration/2 with only rootSignature removed."
+    },
+    {
+      "name": "DomainSealKeyAddPrepare/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Current unseen dual-profile trust add prepare; no caller key material."
+    },
+    {
+      "name": "DomainSealKeyRotatePrepare/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Current unseen dual-profile trust rotate prepare with ordinary|loss_recovery|compromise."
+    },
+    {
+      "name": "DomainSealKeyRevokePrepare/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Current unseen dual-profile trust revoke prepare with administrative|loss|compromise."
+    },
+    {
+      "name": "WorkspaceBootstrapProfile/4",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceBootstrapProfile/3",
+      "section": "SPEC §13",
+      "notes": "Same closed member set and issuer semantics as Profile3; selects dual-profile fresh genesis."
+    },
+    {
+      "name": "WorkspaceBootstrapCreatorBinding/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed creator principal/audience binding used by WorkspaceBootstrapPlan/4."
+    },
+    {
+      "name": "WorkspaceBootstrapTargetRegistry/1",
+      "owner": "D6/D4",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed Registry snapshot/binding pair used by WorkspaceBootstrapPlan/4."
+    },
+    {
+      "name": "WorkspaceBootstrapSeriesConfiguration/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed bootstrap series scope/multiplicity/revision member."
+    },
+    {
+      "name": "WorkspaceBootstrapPeriodScopeBinding/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed bootstrap period NodeRef/CalendarScope/revision member."
     }
   ]
 }
