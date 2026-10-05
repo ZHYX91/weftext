@@ -11,7 +11,7 @@ translation_status: source
 
 ## 0. 优先级、范围与不可分拆理由
 
-本文件是 `docs/design/asciidoc-annotation-final-design/replacements.json` 所列 actual-owner 章节的完整 replacement body。未被 replacement router 点名的 fixed-e8aa owner正文保持原义。S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的49个 snapshots 与 `docs/design/inputs.json` 不修改。
+本文件与 [SCHEMAS.zh-CN.md](SCHEMAS.zh-CN.md) 共同组成 `replacements.json` 所列 actual-owner 章节的完整 normative replacement：本文件冻结行为/算法/owner边界，SCHEMAS冻结closed current shapes、排序、cross-field与历史分派；本文件中的摘要措辞不得扩张或缩减SCHEMAS。未被 replacement router 点名的 fixed-e8aa owner正文保持原义。S=`7e18168dad3e6d120fce0dd607dc10fa7894e252` 的49个 snapshots 与 `docs/design/inputs.json` 不修改。
 
 本候选把已经独立核销的核心 v3.10 与 FC-3.4→a→b→c→d 合成为公开、可独立审查的 current proposal。旧候选名、私有聊天、作者自评都不是协议依赖。
 
