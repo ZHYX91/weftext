@@ -1465,19 +1465,17 @@ legacy Handle1 只在 exact Declaration1-authorized key 仍 current、safe、usa
 
 # 10. D10 mixed-version current outer schemas
 
+以下均为 current outer-holder schema。每个 versioned carrier 都必须按 tag 严格解码对应的精确 inner type，并保留其原 canonical bytes 与 pins；未知 tag 必须 fail closed。carrier 只负责选择 decoder，不增加 authority、不建立 decision/CAS，也不迁移 inner record。
+
 ```text
 D10WorkspaceReadDependencies/2 = {
-  kind:"d10_workspace_read_dependencies",
-  version:2,
-  workspaceRef:WorkspaceRef,
-  commitDomain:CommitDomain/2,
+  kind:"d10_workspace_read_dependencies",version:2,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   observationScope:ObservationScope/2,
-  sourceInputs:[{entityRef:EntityRef,
-                 observation:SourceObservation/1,
+  sourceInputs:[{entityRef:EntityRef,observation:SourceObservation/1,
                  role:"before"|"dependency"}...],
   dependencyProof:DependencyProof/3,
-  registryReads:[{binding:RegistryBinding/1,
-                  snapshot:RegistrySnapshot/1,
+  registryReads:[{binding:RegistryBinding/1,snapshot:RegistrySnapshot/1,
                   snapshotPin:PinRef/2}...],
   evidencePins:[PinRef/2...]
 }
@@ -1487,12 +1485,9 @@ D10VersionedControlRecordImage/1 =
   | {schema:"d10_control_record_image/2",value:D10ControlRecordImage/2}
 
 D10ControlRecordImage/2 = {
-  kind:"d10_control_record_image",
-  version:2,
-  binding:Binding<K>/1,
-  scope:Scope/1,
-  usageRevision:Option<Counter>,
-  view:ControlCurrentView<K>/1,
+  kind:"d10_control_record_image",version:2,
+  binding:Binding<K>/1,scope:Scope/1,
+  usageRevision:Option<Counter>,view:ControlCurrentView<K>/1,
   supplement:
       {kind:"automation",subscription:ScheduleSubscription/2,
        stop:Binding<stop>/1,creator:Token}
@@ -1502,14 +1497,9 @@ D10ControlRecordImage/2 = {
        admission:Option<LeaseRunUse/1>,
        authorSteps:[D10VersionedAuthorStepResponsibility/1...]}
 }
-```
 
-Image2只允许automation/run。其它record kinds（包括planned_approval、external_approval、activation、reservation、external_effect、stop及none）继续exact Image1。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
-
-```text
 D10ControlRecordPin/2 = {
-  image:D10ControlRecordImage/2,
-  pin:PinRef/2
+  image:D10ControlRecordImage/2,pin:PinRef/2
 }
 
 D10VersionedControlRecordPin/1 =
@@ -1524,8 +1514,7 @@ D10ControlRange/2 =
      epoch:Token,revision:Counter,
      reservations:[ControlRef<reservation>/1]}
   | {kind:"occurrences",version:2,
-     automation:ControlRef<automation>/1,
-     epoch:Token,revision:Counter,
+     automation:ControlRef<automation>/1,epoch:Token,revision:Counter,
      records:[D10VersionedAutomationOccurrenceRecord/1...]}
 
 D10VersionedControlRange/1 =
@@ -1538,8 +1527,7 @@ D10VersionedControlPrepareBinding/1 =
   | {schema:"d10_control_prepare_binding/3",value:ControlPrepareBinding/3}
 
 ControlPrepareBinding/1 = {
-  key:StableControlKey/1,
-  canonicalIntentBytes:Bytes,
+  key:StableControlKey/1,canonicalIntentBytes:Bytes,
   allocatedControlRefs:[ControlRef<K>/1],
   originalCommitRequest:PreparedCommitRequest/1,
   immutablePreview:ControlPreview/1,
@@ -1547,8 +1535,7 @@ ControlPrepareBinding/1 = {
 }
 
 ControlPrepareBinding/2 = {
-  key:StableControlKey/1,
-  canonicalIntentBytes:Bytes,
+  key:StableControlKey/1,canonicalIntentBytes:Bytes,
   allocatedControlRefs:[ControlRef<K>/1],
   originalCommitRequest:PreparedCommitRequest/1,
   immutablePreview:ControlPreview/1,
@@ -1557,65 +1544,41 @@ ControlPrepareBinding/2 = {
 }
 
 ControlPrepareBinding/3 = {
-  kind:"d10_control_prepare_binding",
-  version:3,
-  key:StableControlKey/1,
-  canonicalIntentBytes:Bytes,
+  kind:"d10_control_prepare_binding",version:3,
+  key:StableControlKey/1,canonicalIntentBytes:Bytes,
   allocatedControlRefs:[ControlRef<K>/1],
   originalCommitRequest:PreparedCommitRequest/1,
   immutablePreview:ControlPreview/1,
   confirmationRequirement:ExternalConfirmationRequirement/1,
   dependencyPins:ControlDependencies/3
 }
-```
 
-ControlDependencies/3：
-
-```text
-{
-  kind:"d10_control_dependencies",
-  version:3,
+ControlDependencies/3 = {
+  kind:"d10_control_dependencies",version:3,
   configBindings:[Binding<K>/1],
-  usageBindings:[{
-    ref:ControlRef<lease|approval|grant|cost_account>/1,
-    usageRevision:Counter
-  }...],
-  authorityProof:Token,
-  authorizationGenerations:[Token...],
+  usageBindings:[{ref:ControlRef<lease|approval|grant|cost_account>/1,
+                  usageRevision:Counter}...],
+  authorityProof:Token,authorizationGenerations:[Token...],
   stopRefs:[ControlRef<stop>/1...],
   workspaceReads:Option<D10WorkspaceReadDependencies/2>,
   recordPins:[D10VersionedControlRecordPin/1...],
   controlRanges:[D10VersionedControlRange/1...]
 }
-```
 
-D10ControlEffectPlan/2：
-
-```text
-{
-  kind:"d10_control_effect_plan",
-  version:2,
-  changes:[{
-    before:Option<D10VersionedControlRecordImage/1>,
-    after:D10VersionedControlRecordImage/1
-  }...],
-  activationSelector:Option<{
-    before:D10ActivationSelector/1,
-    after:D10ActivationSelector/1
-  }>,
+D10ControlEffectPlan/2 = {
+  kind:"d10_control_effect_plan",version:2,
+  changes:[{before:Option<D10VersionedControlRecordImage/1>,
+            after:D10VersionedControlRecordImage/1}...],
+  activationSelector:Option<{before:D10ActivationSelector/1,
+                             after:D10ActivationSelector/1}>,
   recordPins:[D10VersionedControlRecordPin/1...],
   registryChange:Option<{
     before:{snapshot:RegistrySnapshot/1,binding:RegistryBinding/1},
     after:{snapshot:RegistrySnapshot/1,binding:RegistryBinding/1},
     evolution:RegistryEvolutionProof/1,
-    beforePin:PinRef/2,afterPin:PinRef/2
-  }>
+    beforePin:PinRef/2,afterPin:PinRef/2}>
 }
-```
 
-old Image1 automation/run → new Image2是合法current configure；old before不得重编码为Image2。
-
-```text
 D10VersionedAuthorStepResponsibility/1 =
     {schema:"d10_author_step_responsibility/1",
      value:D10AuthorStepResponsibility/1}
@@ -1635,12 +1598,9 @@ D10VersionedAutomationOccurrenceRecord/1 =
 D10VersionedApprovalUse/1 =
     {schema:"d10_approval_use/1",value:ApprovalUse/1}
   | {schema:"d10_approval_use/2",value:ApprovalUse/2}
-```
 
-```text
 D10ExecutionClaims/2 = {
-  kind:"d10_execution_claims",
-  version:2,
+  kind:"d10_execution_claims",version:2,
   recordPins:[D10VersionedControlRecordPin/1...],
   prepareBindings:[D10VersionedControlPrepareBinding/1...],
   leaseRuns:[LeaseRunUse/1...],
@@ -1652,25 +1612,24 @@ D10ExecutionClaims/2 = {
 }
 
 D10MoneyResponsibility/2 = {
-  kind:"d10_money_responsibility",
-  version:2,
-  reservations:[{
-    binding:Binding<reservation>/1,
-    value:CostReservation/1,
-    attribution:CostBudgetAttribution/1,
-    settlements:[CostSettlementDecision/1...]
-  }...],
+  kind:"d10_money_responsibility",version:2,
+  reservations:[{binding:Binding<reservation>/1,
+                 value:CostReservation/1,
+                 attribution:CostBudgetAttribution/1,
+                 settlements:[CostSettlementDecision/1...]}...],
   layers:[CostLayerTotal/1...],
   recordPins:[D10VersionedControlRecordPin/1...],
   ranges:[D10VersionedControlRange/1...],
   evidencePins:[PinRef/2...]
 }
 
+StopCapacity/1 = {
+  issued:Counter,reserved:Counter
+}
+
 D10ExecutionInventory/2 = {
-  kind:"d10_execution_inventory",
-  version:2,
-  workspaceRef:WorkspaceRef,
-  storeIncarnation:Uuid,
+  kind:"d10_execution_inventory",version:2,
+  workspaceRef:WorkspaceRef,storeIncarnation:Uuid,
   approvalUses:[D10VersionedApprovalUse/1...],
   claims:D10ExecutionClaims/2,
   moneyLineage:D10MoneyResponsibility/2,
@@ -1678,23 +1637,14 @@ D10ExecutionInventory/2 = {
   stopState:[D10StopResponsibility/1...],
   stopCapacity:StopCapacity/1
 }
-```
 
-prepareBindings统一按inner StableControlKey canonical bytes排序唯一，跨版本同key拒绝。其它mixed arrays按SPEC §14的semantic identity跨版本唯一，不能LWW。
-
-D6 current direct holder：
-
-```text
 ExecutionResponsibilityRecord/3 = {
-  kind:"d6_execution_responsibility",
-  version:3,
-  workspaceRef:WorkspaceRef,
-  executionDomainId:Uuid,
+  kind:"d6_execution_responsibility",version:3,
+  workspaceRef:WorkspaceRef,executionDomainId:Uuid,
   holder:
       {kind:"local_replica",replicaEpoch:Uuid}
     | {kind:"server",authorityInstanceId:Uuid,deploymentId:Uuid},
-  revision:Counter,
-  status:"active"|"paused"|"transferring",
+  revision:Counter,status:"active"|"paused"|"transferring",
   approvalUses:[D10VersionedApprovalUse/1...],
   claims:D10ExecutionClaims/2,
   moneyLineage:D10MoneyResponsibility/2,
@@ -1714,9 +1664,27 @@ ExecutionContinuityProof/2 =
      barrierToken:Token,oldHolderFenceToken:Token}
 ```
 
-inventoryPin exact payload domain：
-UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2)。
-Record2/Proof1/Inventory1历史domain不变；只有真实responsibility mutation/checkpoint/handoff才形成Record3。
+Image2 只允许 automation/run；其它 record kind 继续使用精确 Image1。Pin1 保留历史 D10-Control-Record/1 前缀与 decoder。Pin2 的完整内容是 UTF8 D10-Control-Record/2、NUL 与 D3-CJ/3(Image2)；PinRef/2 的 payloadKind 是 artifact，retention 沿用 recovery 或 approval_money，byteLength 与 SHA-256 必须覆盖完整前缀内容。schema tag 与 payload domain 不一致必须失败，Pin2 不得重新 pin Image1。
+
+对 D10VersionedControlRecordPin/1 数组，先令 I=carrier.value.image。排序依次使用 D3-CJ/3(I.binding.ref)、binding.revision 数值、usageRevision 的 none 先于 some、some 时的 usageRevision 数值、最后 D3-CJ/3(I)。同 cut identity 是 I.binding.ref、I.binding.revision、I.usageRevision。相同 identity 的第二个 byte-equal image 属于重复并拒绝；bytes 不同则是 integrity_conflict。version 不能拆分该 identity。
+
+Range kind rank 固定为 records=0、cost_lineage=1、occurrences=2。跨版本 logical identity 分别是 scope 加完整排序后的 kinds、CostLayerKey、Automation Ref。mixed range 先按 rank 再按 identity canonical bytes 排序；每个 identity 只能出现一次。occurrences range 的内部记录按 AutomationOccurrenceKey 排序；一个 key 不能同时出现 V1 与 V2。
+
+D10ControlEffectPlan/2.changes 按完整 after.value.binding.ref 的 canonical bytes 排序唯一。before 存在时，before.binding.ref 与 after.binding.ref 必须相等，recordPins 还必须含有与真实存储 before schema 完全匹配的 versioned pin。Image1 before 配 Pin2 非法。Image1 Automation+Subscription1 → Image2+Subscription2 是合法 current configure。若 scheduling owner 的 continue 规则成立，普通 configure 可以让旧 subscription 保持同一 generation；mixed 支持不能强迫 replace 或后台 migration。
+
+ControlDependencies/3 的数组保持 owner 排序：configBindings 与 usageBindings 按完整 Ref；authorizationGenerations 按 token；stopRefs 按完整 Ref；recordPins/ranges 按上述 mixed 顺序。每个 config binding 都有精确匹配 image/pin；每个 usage binding 都有相同 usageRevision 的 image；每个 stopRef 都有精确 stop Image1/Pin1。current binding、usage revision、range fence、pin 与 Workspace evidence 必须来自同一个真实 Authority Store barrier。barrier A 的 V1 evidence 与 barrier B 的 V2 evidence 不能拼成 complete dependency snapshot。缺失必要历史 bytes、decoder 或 pin 时，在 disclosure 之后返回 state_unavailable；同 cut 矛盾是 integrity_conflict。
+
+D10ExecutionClaims/2 的 canonical identity 固定如下：recordPins 使用上面的规则；prepareBindings 在 Binding1/2/3 之间统一按 inner StableControlKey；leaseRuns 按完整 Run ControlRef；authorSteps 在版本间统一按 run Ref 加 stepId；subscriptions 在版本间统一按 Automation Ref 加 generation；occurrenceRecords 按 AutomationOccurrenceKey；ranges 使用上面的规则；continuityPins 按 pinToken。每个 identity 跨版本唯一。Binding1(K) 与 Binding3(K) 即使 canonicalIntentBytes 和 originalCommitRequest byte-equal 也不能共存。Binding1 保留历史六成员精确 shape；不能增加 kind、version、confirmationRequirement 或 /2-/3 dependency field，也不能 LWW、repin。
+
+D10MoneyResponsibility/2 的 reservation 按完整 Binding<reservation>/1 canonical bytes 排序唯一；layer 按 CostLayerKey canonical bytes 排序唯一；recordPins/ranges 使用 mixed 规则；evidencePins 按 pinToken 排序唯一。D10ExecutionInventory/2 的 approvalUses 按 DecisionKey canonical bytes 跨版本唯一，externalUnknowns 与 stopState 均按 binding.ref canonical bytes 排序唯一。所有 pending、unknown、dedup、stop responsibility，以及仍被引用的已完成 external attempt 都必须保留。只有在 admission、planning、send、schedule writer 都停在同一个真实 store barrier 后才能捕获 inventory。
+
+Inventory2 artifact 的精确 payload 是 UTF8 D6-Execution-Inventory/2、NUL、D3-CJ/3(D10ExecutionInventory/2)。PinRef/2 为 artifact/recovery，byteLength 与 SHA-256 覆盖完整前缀 bytes。Inventory1 保留 D6-Execution-Inventory/1，绝不重新 pin 成 /2。
+
+Record3.workspaceRef 必须等于 Inventory2.workspaceRef。Record3 的 approvalUses、claims、moneyLineage、externalUnknowns、stopState 五类 payload 分别与 Inventory2 对应成员 byte-equal。Proof2.inventoryPin 必须选择这一份精确 Inventory2，且 Inventory2.storeIncarnation 等于 Proof2.storeIncarnation。受保护的 birth/barrier/fence token mapping 必须证明同一实际 store 与 capture barrier；不新增独立 caller-supplied store-incarnation proof object。
+
+Inventory2.stopCapacity 必须是同一 authoritative safety-store barrier 下的精确 fixed-parent StopCapacity/1。StopCapacity/1 仍只有 issued、reserved，不在 Record3 中重复。Workspace-only handoff 不能把 shared safety counter 复制到第二个 active store。完整 store handoff 必须 fence 全部受影响 writer，并保留所有 target/latch reservation 与 safety capacity；边界不可证明时 takeover unavailable。
+
+Record2、Proof1、Inventory1 都保留历史 decoder/domain。Record3 只在真实 responsibility mutation、checkpoint 或 custody handoff 时产生，必须保持 executionDomainId；unchanged holder 不做后台 migration。
 
 ## 10.1 D10 current schedule / author-step 直接类型
 
