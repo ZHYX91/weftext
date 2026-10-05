@@ -298,9 +298,11 @@ DocumentFormatCurrentQualification/1 binds a document-format DependencyKey/stamp
 
 ```text
 DocumentFormatCurrentQualification/1 = {
+  kind:"d2_document_format_current_qualification",version:1,
   key:DocumentFormatDependencyKey/1,
   stamp:{epoch:Token,revision:Counter},
-  componentImage:ComponentImage/1,
+  componentImage:{state:"present",version:Counter,
+                  byteLength:Counter,sha256:"64-lowercase-hex"},
   binding:ManagedDocumentFormatBinding/1,
   bindingPin:PinRef/2
 }
@@ -593,10 +595,12 @@ CoreSourceEditPlan/2 freezes the /3 events, exact before observation, exact afte
 
 ```text
 CoreSourceEditPlan/2 = {
+  kind:"d6_core_source_edit_plan",version:2,
   decisionKey,ownerNodeRef,beforeObservation,
   coordinateProfile:"utf8-byte-half-open/1",
   edits:[SourceTransformPortableEvent/3...],
-  afterPin,transformEmission:TransformEmissionPlan/1
+  afterPin:PinRef/2,
+  transformEmission:TransformEmissionPlan/1
 }
 ``` Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
 
@@ -606,7 +610,10 @@ SourceTransformEvidence/2 binds DecisionKey, ChangeId, owner, managed before/aft
 
 ```text
 SourceTransformEvidence/2 = {
-  decisionKey,changeId,ownerNodeRef,before,after,
+  kind:"d6_source_transform_evidence",version:2,
+  decisionKey,changeId,ownerNodeRef,
+  before:managed SourceVersion/2,
+  after:managed SourceVersion/2,
   beforeSourceSha256,afterSourceSha256,
   coordinateProfile:"utf8-byte-half-open/1",
   affinityProfile:"annotation-range-affinity/1",
