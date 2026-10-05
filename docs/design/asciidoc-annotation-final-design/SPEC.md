@@ -575,9 +575,11 @@ The body editor has one source truth: `AnnotationInlineBody/1.source`. Visual mo
 
 Historical D8 wire1/wire2, PreparedEditBinding/1-/2, Value/3 proposed pins and genuine saved/planned/unknown requests recover under their original decoders and pins. They are not converted into EditBinding3/Value4 merely because the current editor understands Value/4.
 
-### 9.9 D7 current suggestion actions
+### 9.9 D7 current Annotation creation and suggestion actions
 
-Current new D7 author preparation uses `D7ActionSpec/2` and `D7ActionPrepareRequest/3` from SCHEMAS §6.1. Every non-suggestion ActionSpec/1 arm is inherited byte-for-byte. The old `apply_suggestion(annotation:EntityTarget,targetLocator)` arm remains historical only. The current closed suggestion arms are:
+Current interactive Annotation creation uses the dedicated `D7CreateAnnotationIntent/2` arm. The caller supplies only destinationOwnerRef plus AnnotationEditableValue/1. After the normal destination-owner disclosure/create authorization, Core validates target/reply owner rules and the R6 body, injects creator/authoredAt/lastEditor/editedAt under §9.6, then constructs the complete current D3IdentityOperationRequest/13 mode=create_annotation with the inherited fresh primary Annotation subject, Value/4 result payload binding, target@0 reference plan and optional initial reply@1 reference plan. The same PAB4 binds that exact generated request and Value/4 pin. A caller-supplied generic d3_operation cannot claim trusted current interactive creation by embedding its own actor/time snapshots; copy/import/create-member paths use their named owner preparation and attribution rules instead.
+
+Current new D7 author preparation otherwise uses `D7ActionSpec/2` and `D7ActionPrepareRequest/3` from SCHEMAS §6.1. Every fixed-parent non-suggestion ActionSpec/1 arm is inherited byte-for-byte, with the new create_annotation arm added for the need above. The old `apply_suggestion(annotation:EntityTarget,targetLocator)` arm remains historical only. The current closed suggestion arms are:
 
 ```text
 apply_suggestion  -> accept the stored pending Suggestion/3
