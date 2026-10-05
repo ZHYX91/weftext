@@ -42,7 +42,8 @@
         "wire13 outer input",
         "D3ResolutionInputUse/2",
         "Annotation identity/reply/copy",
-        "dual-profile continuation"
+        "dual-profile continuation",
+        "fresh BootstrapPlan4 retains D3 proposal UUID/authenticity/custody chain"
       ]
     },
     {
@@ -182,7 +183,11 @@
         "document_format component + CP4/ChangeRecord",
         "SourceTransform",
         "dual-profile trust",
-        "D10 mixed holders"
+        "D10 mixed holders",
+        "CP4 exact CP3-invariant inheritance + ChangeRecord admission",
+        "dual-profile trust prepare/3 and exact /2 signature bodies",
+        "closed BootstrapProfile4/Plan4 member family",
+        "Event3 geometry/replay span + SourceTransform signed body"
       ]
     },
     {
@@ -221,7 +226,9 @@
         "ChangeRecord/1",
         "transform outbox retention",
         "trust public history",
-        "D10 mixed inventory"
+        "D10 mixed inventory",
+        "CP4 receiver component/version/continuous-chain admission",
+        "SourceTransform canonical artifact replay/no-resign boundary"
       ]
     },
     {
@@ -238,7 +245,8 @@
         "Notice3/CP4",
         "Bootstrap4",
         "ExecutionRecord3",
-        "SourceTransform"
+        "SourceTransform",
+        "trust prepare/3, BootstrapProfile4, SourceTransform signed body"
       ]
     },
     {
@@ -251,7 +259,8 @@
         "current terminology registry"
       ],
       "changedSections": [
-        "all FC-3.4d current successor names and historical dispositions"
+        "all FC-3.4d current successor names and historical dispositions",
+        "trust prepare/3, BootstrapProfile4, SourceTransform signed body"
       ]
     },
     {
@@ -332,7 +341,8 @@
       "changedSections": [
         "EffectManifest/3 + EffectBytes/3",
         "WorkspaceBootstrapPlan/4 encoding",
-        "D10 preview digest"
+        "D10 preview digest",
+        "closed WorkspaceBootstrapPlan/4 encoding"
       ]
     },
     {
