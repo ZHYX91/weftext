@@ -608,7 +608,7 @@ copy/fork/import materialization 只能按既有 identityMap/candidate-map 规�
 
 ### 9.8 D8 current Annotation edit surface
 
-current D8 edit preparation 使用 SCHEMAS §6.3 的 version-3 successor。`D8EditIntent/3` 保留 document arm，只把 current annotation arm 接到 Value/4。caller 提交 `AnnotationEditableValue/1`，不能提交完整 Value/4 attribution；同时提交 exact expected current Annotation revision token 与 targetPolicy。Core 独立读取完整 current PortableAnnotationRecord/4、SourceObservation 与权限，按 §9.6 构造完整 proposed Value/4，并 pin exact D3-CJ/3(proposed Value/4)。`PreparedEditBinding/3.intent` 必须恰为 `D8EditIntent/3`；`D8EditInput/3` 是 current OwnerInputBinding descriptor。不得再保留 `<D8 current intent>` 占位，也不存在 caller-provided actor/time。
+current D8 edit preparation 使用 SCHEMAS §6.3 的 version-3 successor。`D8EditIntent/3` 保留 document arm；current annotation mutation arm 接受 `AnnotationEditableProposal/1` + exact expected current Annotation revision token + targetPolicy，显式 reconfirm arm只带 Annotation target/token。caller 不能提交完整 Value/4 attribution，也不能提交 Suggestion state/confirmation/basis/expectedText/pointAffinity。Core 独立读取完整 current PortableAnnotationRecord/4、SourceObservation 与权限，按 §9.10 operation-class gate 构造唯一完整 proposed Value/4，再 pin exact D3-CJ/3(proposed Value/4)。`PreparedEditBinding/3.intent` 必须恰为 `D8EditIntent/3`；`D8EditInput/3` 是 current OwnerInputBinding descriptor。不得再保留 `<D8 current intent>` 占位，也不存在 caller-provided actor/time/lifecycle evidence。
 
 Annotation edit 必须使用 complete profile 与 strict write protection。它先建立 Annotation disclosure、annotation_read/write 与 exact current Annotation CAS。targetPolicy=preserve 要求 stored target bytes/identity byte-equal，但允许 freshly requalify exact/mapped 状态而不写 stored target；targetPolicy=replace_current 要求在 current target disclosure/qualification 下显式选择合法 same-owner target。candidate/ambiguous/fuzzy location 只能 read-only，直到用户 explicit manual reattach 选定一个 exact target，并以新的 Value/4 mutation prepare。pure synchronization 或 stable locator 新近重新取得资格，只要 Value/4 bytes 不变，就不是 edit，不能刷新 lastEditor/editedAt、不能推进 token，也不能复活旧 PAB/EditBinding/ActionEvidence。
 
@@ -618,7 +618,7 @@ historical D8 wire1/wire2、PreparedEditBinding/1-/2、Value/3 proposed pins 与
 
 ### 9.9 D7 current Annotation creation 与 suggestion actions
 
-当前交互式 Annotation 创建使用专用 `D7CreateAnnotationIntent/2` 分支。调用方只能提交 destinationOwnerRef 与 AnnotationEditableValue/1。通过原有目标 owner 状态披露与创建授权后，Core 验证 target/reply 的 owner 约束和 R6 正文，再按 §9.6 注入 creator/authoredAt/lastEditor/editedAt，随后构造完整当前 D3IdentityOperationRequest/13 mode=create_annotation：沿用既有 fresh primary Annotation subject、Value/4 结果 payload binding、target@0 reference plan 与可选初始 reply@1 reference plan。PAB4 绑定这份精确生成的 request 与 Value/4 pin。调用方不能通过 generic d3_operation 自行嵌入 actor/time snapshots 来冒充可信当前交互创建；copy/import/create-member 路径继续使用各自具名 owner preparation 与 attribution 规则。
+当前交互式 Annotation 创建使用专用 `D7CreateAnnotationIntent/2` 分支。调用方只能提交 destinationOwnerRef 与 `AnnotationEditableProposal/1`；proposal 不含 Suggestion terminal/lifecycle/evidence。通过原有目标 owner 状态披露与创建授权后，Core 验证 target/reply 的 owner 约束和 R6 正文，执行 §9.10 interactive_create gate（首版 suggestion 只可 pending，confirmed evidence 只能 fresh target recompute），再按 §9.6 注入 creator/authoredAt/lastEditor/editedAt，随后构造完整当前 D3IdentityOperationRequest/13 mode=create_annotation：沿用既有 fresh primary Annotation subject、Value/4 结果 payload binding、target@0 reference plan 与可选初始 reply@1 reference plan。PAB4 绑定这份精确生成的 request 与 Value/4 pin。调用方不能通过 generic d3_operation 或非交互构造入口自行嵌入 actor/time/lifecycle snapshots 来冒充可信当前交互创建；copy/import/create-member 路径继续使用各自具名 owner preparation 与 attribution 规则。
 
 其它 current new D7 author preparation 继续使用 SCHEMAS §6.1 的 `D7ActionSpec/2` 与 `D7ActionPrepareRequest/3`。fixed-parent 非 suggestion ActionSpec/1 arms 全部 byte-for-byte 继承，只为上述实际创建需求增加 create_annotation arm。旧 `apply_suggestion(annotation:EntityTarget,targetLocator)` 只作 historical。current closed suggestion arms 为：
 
@@ -1017,11 +1017,22 @@ ChangeRecord/1
 D3IdentityInput/13
 D3ResolutionInputUse/2
 PreparedActionBinding/4
+D7ProposedInput/3
 EffectManifest/3
 EffectBytes/3
 PreparedEditBinding/3
 PortableAnnotationRecord/4
 AnnotationEditableValue/1
+AnnotationEditableProposal/1
+SuggestionAuthorProposal/1
+AnnotationAggregate/1
+AnnotationAggregateObservation/1
+AnnotationAggregateInstall/1
+D8AnnotationReadRequest/1
+D8AnnotationReadResponse/1
+D8AnnotationBodyRead/1
+D8AnnotationDraftOpenRequest/1
+D8AnnotationDraftOpenResponse/1
 D8EditIntent/3
 D8EditInput/3
 D7CreateAnnotationIntent/2
