@@ -409,13 +409,13 @@ resource_region{kind:"resource_region",locator:ResourceRegionLocator}
 
 每个 variant 只允许列出的字段。owner/locator/resourceRef 必须与 AnnotationRef.owner 相同；不允许 AnnotationRef、裸NodeRef、AuthorAnchorAddress或跨owner locator/ref替代target。outer wire与 Projection/1 必须双向唯一materialize；path/title/hash/ambient owner不得补字段。
 
-### 9.3 Annotation inline body 与唯一 evaluation profile
+### 9.3 Annotation 行内正文与唯一求值配置
 
 `AnnotationInlineBody/1`、其兼容 schema alias `AsciiDocInlineBody/1`，以及唯一 `AnnotationInlineProfile/1` 的 exact closed shape 由 [SCHEMAS.zh-CN.md §7](SCHEMAS.zh-CN.md#7-annotation-closed-values) 规范。SPEC 不再维护第二份同名 profile 字面量。
 
-portable body 保留四成员数据shape：format/version/languageBaseline/source；body不是processor profile。求值profile固定 Ruby 2.0.26 exact commit、doctype=inline、processorBackend=`html5-semantic/1`、secure safe mode以及已闭合的资源/效果限制。body中的短 baseline literal只标识其portable source数据版本，必须与profile的commit-qualified 2.0.26 baseline一致，不能用于选择另一个实现版本。
+`AnnotationInlineBody/1` 保留四个成员：format、version、languageBaseline、source；它只是可移植正文值，不是处理器配置。求值配置固定 Ruby 2.0.26 的确切提交，并固定 doctype 为 inline、processorBackend 为 `html5-semantic/1`、safe mode 为 secure，同时应用已闭合的资源与效果限制。正文中的短 languageBaseline 字面量只标识可移植 source 数据版本，必须对应求值配置固定的 2.0.26 提交，不能用于选择另一实现版本。
 
-完整 source 必须只形成一个 paragraph（允许 soft wraps 与 trailing whitespace）；第二paragraph、heading、list、delimited block、table、block macro均 `invalid_annotation_body`，不能被 inline doctype 静默忽略。允许固定2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote等；n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters在此profile不激活。
+完整 source 必须只形成一个段落（允许软换行与末尾空白）；第二段、标题、列表、定界块、表格或块宏均为 `invalid_annotation_body`，不能被 inline doctype 静默忽略。固定2.0.26允许的行内 strong/emphasis/mono/mark/role、URL link、xref、STEM、footnote 等仍可使用；n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in 这些 managed adapter 在此配置中不激活。
 
 ### 9.4 Appearance、Actor 与时间
 
