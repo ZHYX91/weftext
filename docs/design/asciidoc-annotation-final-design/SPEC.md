@@ -39,7 +39,13 @@ Native title-separator semantics remain unchanged: default : , with [separator=:
 
 ### 1.2 Processor environment
 
-The Core Gate freezes AsciiDocProcessorEnvironment/3 instead of consulting ambient host state. It closes doctype, semantic backend profile, safe mode, base/input/output directories, ordered hard/soft set/unset attribute operations, user-home, locale/encoding, date/time/epoch inputs, include resolver, file/network permissions, extension registry, provider profile, and every other environment input that can change fixed-2.0.26 observable semantics. Authored attribute events are provenance-distinct from host/builtin/include inputs. Weftext root controls such as wf-kind and wf-facets consume root-authored provenance only; host injection or included text cannot take over root Node classification.
+The Core Gate freezes AsciiDocProcessorEnvironment/3 instead of consulting ambient host state. Its canonical bytes explicitly carry doctype, backend semantic profile, safe mode, standalone mode, base/input/output identity, the ordered API attribute-event sequence, user-home, UTF-8 source encoding, locale profile, date/time/epoch inputs, include resolution and file/network authority, extension registry, provider profiles, and every other registered input that can change fixed-2.0.26 observable semantics. Authored attribute events remain provenance-distinct from host/builtin/include inputs. Weftext root controls such as wf-kind and wf-facets consume root-authored provenance only; host injection or included text cannot take over root Node classification.
+
+attributeOverrides is the ordered API-event sequence received from options[:attributes], not a name-sorted set. Each input pair is normalized exactly as fixed Ruby 2.0.26 handles ! / @ syntax, then lowercases the name and records one of hard_set, soft_set, hard_unset, or soft_unset. Array order is the API Hash enumeration order and D3-CJ/3 preserves it. Repeated lowercase names are legal events: the first occurrence fixes that key's ordered-map position and a later same-name event replaces its state without moving the key. Sorting, deduplicating, or collapsing to final values is forbidden.
+
+That order is observable. For embedded processing (standalone=false), when both notitle and showtitle are present, fixed 2.0.26 examines which of those keys is last in ordered attr_overrides and derives the opposite alias from that key. Therefore API order notitle="" then showtitle="" and the reverse order cannot share ProcessorEnvironment canonical bytes or an oracle/cache identity.
+
+The managed/source Gate admits UTF-8 source bytes only, so sourceEncoding is the closed constant UTF-8; another encoding requires explicit import/transcoding rather than oracle inference. localeProfile is an explicit controlled oracle-harness descriptor with no ambient-host fallback. Fixed 2.0.26 does not currently auto-load locale attribute files from lang; lang remains a document attribute. providerProfiles lists only provider profiles actually allowed/selected for the evaluation and may be empty when no provider is used; provider availability remains separate from core-language validity.
 
 ### 1.3 Native headings, deep authored headings, and run-in rendering
 
@@ -87,37 +93,51 @@ modelPropertyObservations:[OracleModelPropertyObservation/1...]
 
 Model observation only copies fields, attributes, relationships, and actual producer results that already exist. Section state, caption/numeral, final table widths, final Cell object/style/alignment/span, ListItem checklist/coids, authored named/positional/rekey provenance, and temporary converter writes must be captured at the real producer. projectRuby never reimplements Ruby parser/model algorithms to fill missing facts.
 
-### 2.3 Snapshot/reference/cut contract
+### 2.3 Snapshot, bind, and cut base invariants
 
-modelPropertyObservations[].observationId is unique and strictly append-monotonic in that array. A snapshot's identity is its observationId; there is no second snapshot-ID namespace. Each subject has one immediate-predecessor chain: the first snapshot has null previous; each later snapshot points exactly to that subject's directly preceding snapshot.
+modelPropertyObservations[].observationId is unique only within that array namespace and is strictly monotonic in actual append order. A snapshot's identity is its observationId; there is no second snapshot-ID namespace. For each subject, its snapshots ordered by observationId form one immediate-predecessor chain: the first has previousSnapshotObservationId=null and every later snapshot points exactly to the directly preceding snapshot of the same subject.
 
-Bind and cut snapshot references must exist, belong to the subject, and select the latest snapshot at that point. Cut heads are numerically sorted by subjectId, exactly one per live semantic subject, and satisfy:
+Define latestSnapshotBefore(subjectId,o) as the same-subject snapshot with the greatest observationId strictly less than o. Every bind snapshotObservationId exists, belongs to the same subject, is strictly earlier than the bind, and equals latestSnapshotBefore(subjectId,bind.observationId). A cut head likewise selects latestSnapshotBefore(subjectId,cut.observationId). heads are strictly sorted by numeric subjectId and subjectId is unique.
 
-```text
-set(cut.heads.subjectId) == reachableSemanticClosure(cut)
-```
+### 2.4 Exact semantic-head closure
 
-Forward discovery uses actual semantic relations such as header/child/dlist/table-column/final-cell/cell-inner-document. parent and cell_column are reverse consistency checks and cannot revive stale objects. A treeprocessor-returned Document becomes the root. A Cell replaced by reinitialize is not live beside its replacement.
+For each cut C, select rootBind(C) as the latest valid bind before C whose carrier.stream="document" and carrier.entry=0. It binds a document subject and C.documentSubjectId equals rootBind(C).subjectId. If a treeprocessor actually returns a new Document, the new M37-14 document/0 publication and bind establish the new root; the former root remains historical evidence but is not live merely because it used to be root.
 
-model_ready occurs after the actual top-level Document#parse completes, including attribute restoration/treeprocessors and the actual returned Document. A successful selected-backend evaluation produces exactly one evaluation_complete; abnormal termination produces none. Real post-ready semantic writes require successor heads; temporary physical writes cannot be hidden by selecting an older head.
+Structural closure starts with C.documentSubjectId and traverses the latest snapshot of each queued subject at C. ForwardSemanticRole/1 is exactly header, child, dlist_term, dlist_description, table_column, table_head_cell, table_body_cell, table_foot_cell, and cell_inner_document; only these roles add subjects. Every target exists and has a semantic-head kind. parent and cell_column are backedges only: after forward traversal their targets are already in structural closure. A backedge never expands the closure or revives a stale Cell or Document.
 
-### 2.4 Namespace separation and producer-time carrier binding
+Supplementary subjects use only two closed rules. An inline subject is live only when a valid pre-cut bind targets inlineObservations and its latest snapshot has a parent relation to an already-live structural subject. A catalog_record is live only when a valid pre-cut bind targets catalogEvents and its latest snapshot has exactly one catalog-ownership parent to the Document subject that actually received Document#register, with that Document already in structural closure. There is no owner relation and an inner-Document catalog record cannot be reassigned to the top-level root. attribute_buffer and table_parser_context are always supporting-only and never become heads merely because snapshots exist.
 
-Numeric ordering applies only to references inside the modelPropertyObservations.observationId namespace: previous/bind/cut snapshots and model-slot observation references. operationId, inlineEventId, valueId/observedStringId, and callId use their retained namespaces and DAG rules. ModelCarrierReference.entry is a zero-based index into its named carrier array. No global event ordinal exists.
-
-Cross-stream chronology is a controlled producer invariant, not something the final decoder can infer from numbers. At the actual bind callback, the target carrier entry must already be appended (entry < targetStream.lengthAtBind) and the producer must still hold the exact same Ruby object. document/0 uses the equivalent publication rule for the actual returned Document. The final decoder checks final existence/type/index and object-binding structure only. Appending a carrier later cannot cure an invalid earlier bind.
-
-### 2.5 Catalog parent and temporary physical state
-
-A catalog subject has exactly one ownership relation:
+Let R be structural closure plus those live inline/catalog supplementary subjects, and H=set(C.heads[].subjectId). A valid cut strictly requires:
 
 ```text
-parent -> subject of the actual Document#register receiver
+H == R
 ```
 
-An inner AsciiDoc-cell Document owns its own registered catalog facts; they are not reassigned to the top-level Document.
+Each head also points to that subject's latest physical snapshot at C. Physical membership/latest selection is separate from final CSP survival: temporary/internal snapshots, supporting evidence, or a final physical absent value never authorize the verifier to pick an older head. PropertyProfile/CSP independently chooses author-semantic winners from A/P/F/I provenance.
 
-DocBook root-option evidence follows the real physical execution (for example authored value -> internal set_option temporary value -> remove_attr absent/deleted). The observer cannot synthesize a restore write. The latest physical snapshot and the PropertyProfile's authored semantic winner are distinct layers: internal cleanup does not erase earlier authored provenance, nor can it revive an authored value that was genuinely overwritten or deleted later.
+### 2.5 Supporting-evidence closure
+
+Build a typed worklist from every cut-head snapshot, rootBind(C), and every valid pre-cut bind whose subjectId is in R. A snapshot recursively follows previousSnapshotObservationId, every ModelPropertyProvenance.inputs in fields/attributes, and all nested string/array/map ModelObservedValue members. The five ModelPropertyInput/1 arms have fixed edges: model_slot -> the named model snapshot and slot; observed_value -> OracleObservedString; observed_slice -> the named OracleObservedString plus byte-half-open range validation; operation -> OracleStringOperation; inline_field -> OracleInlineObservation plus fieldPath validation.
+
+OracleStringOperation follows its callId, all input/removed slices, outputValueId, and every run: exact_copy follows its slice; derived follows all slices plus its referenced operationId; generated follows inlineEventId when non-null. The operation graph obeys its retained DAG contract. OracleEvaluationCall recursively follows parentCallId only within the call namespace. OracleInlineObservation follows callId, parentCallId, producingOperationId, all nested OracleFieldValue members in nodeType/fields, and returnValueId. OracleFieldValue recursively follows observed_string, array, and entries values. OracleContentObservation follows callId, resultValueIds, and contributingInlineEventIds. OracleObservedSlice resolves its valueId to OracleObservedString and validates bounds; ObservedString is a leaf.
+
+Every bind also statically resolves ModelCarrierReference. document permits entry=0 only; every other entry is a zero-based index into blockEvents, collectionEvents, catalogEvents, inlineObservations, contentObservations, or calls and must have the stream's exact type. Inline, Content, and Call carriers continue through the recursive edges above. Block/Collection/Catalog/document carriers retain their own closed shape/ordinal validation but create no cross-array event chronology.
+
+The support closure may contain old intermediate snapshots, attribute_buffer, table_parser_context, old Cells, and temporary-writer evidence without adding those subjects to H. Any dangling or wrong-kind reference, invalid slice/index, illegal operation/call DAG edge, or missing provenance input makes Witness evidence invalid/incomplete rather than shrinking valid AsciiDoc. No parser or getter may be called again to manufacture missing evidence.
+
+### 2.6 Namespace separation, producer-time binding, and cut cardinality
+
+Only references in the modelPropertyObservations.observationId namespace use numeric backward/latest checks: previous/bind/cut snapshot references and model_slot observations. operationId, inlineEventId, valueId/observedStringId, and callId are resolved only in their own namespaces under their retained existence/type/DAG rules; subjectId is object identity and carrier.entry is an array index. Cross-namespace comparisons such as operationId < modelObservationId or inlineEventId < modelObservationId are forbidden, and no global ordinal is introduced.
+
+Bind-time chronology cannot be proven by the final wire. Complete Witness validity requires both static-decoder validity and producer-conformance validity. At the real bind callback the controlled observer has already published the target carrier, entry < targetStream.lengthAtBind, and still holds the exact same Ruby object represented by that carrier; only then may it append the bind. document/0 likewise publishes the actual returned Document carrier first. Later filling of the final array can never cure an earlier invalid bind, and text/title/source/path/hash lookup cannot reconstruct object identity afterward.
+
+A complete top-level Witness/7 has exactly one model_ready cut. If selected-backend evaluation never occurs or terminates abnormally, there is no valid evaluation_complete. If actual evaluation returns normally, there is exactly one evaluation_complete, later than model_ready and using the same top-level documentSubjectId. Nested inner Documents do not create another top-level cut namespace.
+
+### 2.7 Catalog ownership and temporary state
+
+Catalog ownership is only parent -> the actual Document#register receiver Document subject. That parent is used for supplementary liveness and reverse consistency; it never pulls a stale Document outside structural closure into R.
+
+A temporary overlay closes before a valid evaluation_complete only through a real restore write or a real cleanup delete/closure on the fixed source path; the observer never fabricates a restore. The load-bearing DocBook root-option path is, for example, authored value -> internal set_option temporary value -> remove_attr absent/deleted, and evaluation_complete selects the latest physical cleanup snapshot. PropertyProfile may still preserve the earlier valid authored winner through provenance. If a later genuine authored overwrite/delete occurred, temporary cleanup cannot resurrect an older authored value.
 
 ## 3. CoreSemanticProjection/1 and canonical property profile
 
@@ -741,6 +761,6 @@ ManagedDocumentSemanticQualification/1
 
 ## 19. Acceptance and evidence boundary
 
-The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md and acceptance-matrix.json: 437 core design oracles and 117 actual-owner coordination fixtures, 554 obligations total. They are **unexecuted design obligations**, not implementation test results.
+The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md and acceptance-matrix.json: 438 core design oracles and 117 actual-owner coordination fixtures, 555 obligations total. They are **unexecuted design obligations**, not implementation test results.
 
 This PR did not install or execute the Ruby oracle, Asciidork, Mermaid CLI, browser/Puppeteer, STEM/PDF providers, product SQLite/storage code, replica/crash/crypto paths, real Automation scheduling, or execution-custody handoff. Author checks are limited to document/JSON/router consistency. Independent design review must bind to the exact stopped PR head SHA.
