@@ -1747,7 +1747,7 @@ D8AnnotationDraftOpenResponse/1 = {
 
 这两个是真实 Core/D8 entry，不是 response-only shape。`d8_annotation_read` 在最终 authorized read barrier 返回完整 Value/4，因此 creator/authoredAt/lastEditor/editedAt 可显示；Draft 仍只保存/编辑 AnnotationEditableValue/1，绝不是第二 author authority。`d8_annotation_draft_open` 复用同一次 current read：有 annotation_write 时 draft.access=editable，否则为 readonly；readonly 不能进入 D8EditPrepareRequest/3。Draft 的 baseObservation/baseRevisionToken 必须分别等于 read.sourceObservation/read.annotationRevisionToken，serial=0 时 editable projection 必须等于 read.value 的七个 editable fields。local Draft 后续可以变化，但 prepare 与最终 read barrier 必须再次验证原 base token/Observation。
 
-D8EditIntent/3 的 operation class 由 closed intent arm 与 targetPolicy 机械决定，绝不是 caller trusted flag：annotation+preserve=ordinary_edit，annotation+replace_current=manual_reattach，annotation_reconfirm_suggestion=reconfirm_suggestion。caller 的 AnnotationEditableProposal/1 不携带 Suggestion lifecycle/evidence；Core 根据 current before、operation class 与 proposal 构造唯一 proposed Value/4 后才 pin。reconfirm arm 没有 caller value；其 proposedValue 完全由 Core fresh target read/recompute 产生。
+D8EditIntent/3 的操作类别由封闭的 intent 分支与 targetPolicy 机械决定，绝不能由调用方提交可信标志：annotation+preserve 对应 ordinary_edit，annotation+replace_current 对应 manual_reattach，annotation_reconfirm_suggestion 对应 reconfirm_suggestion。调用方的 AnnotationEditableProposal/1 不携带 Suggestion 的生命周期状态或证明；Core 根据当前 before、操作类别与 proposal 构造唯一 proposed Value/4 后才固定字节。reconfirm 分支没有 caller value，其 proposedValue 完全由 Core 重新读取真实目标并重算产生。
 
 ## 6.4 D8 workspace presentation policy 与 render binding
 
@@ -2274,7 +2274,7 @@ AnnotationAggregateInstall/1 = {
 }
 ```
 
-SuggestionAuthorProposal/1 只承载作者可提议的 kind/replacementSource；replace 的 replacementSource required（允许空），delete 必须 null，insert required 且 nonempty。state、confirmation、targetBasisSha256、expectedText、pointAffinity 永远不是 caller proposal 字段。AnnotationEditableProposal/1 的 purpose/reply/body/appearance/labels/review invariants 与 AnnotationEditableValue/1 相同；Core 的 operation-class gate 决定 Suggestion/3 的受控 before→after。
+SuggestionAuthorProposal/1 只承载作者可提议的 kind/replacementSource。replace 必须带 replacementSource（允许空串），delete 必须为 null，insert 必须带非空内容。state、confirmation、targetBasisSha256、expectedText、pointAffinity 永远不属于 caller proposal。AnnotationEditableProposal/1 的 purpose、reply、body、appearance、labels 与 review 约束继续与 AnnotationEditableValue/1 相同；Core 通过操作类别 gate 决定 Suggestion/3 受控的 before→after。
 
 `weftext.annotations.json` 的 current physical bytes 恰为 D3-CJ/3(完整 AnnotationAggregate/1)，无 BOM、无额外换行或第二 envelope。records 必须非空，按完整 AnnotationRef canonical bytes 升序且唯一；每个 annotationRef.owner 必须等于 ownerNodeRef，nonnull replyTo 必须同 owner 且整张 records reply graph 无环。空集合唯一物理表示是 sidecar absent，禁止同时保留空 aggregate。unknown/missing member、duplicate JSON key、unknown version、owner mismatch、duplicate Ref 或 reply cycle 都使整个 aggregate strict-decode 失败；normal current read 不能部分信任其中“看起来合法”的记录。
 
