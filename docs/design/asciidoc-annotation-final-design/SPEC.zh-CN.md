@@ -409,25 +409,13 @@ resource_region{kind:"resource_region",locator:ResourceRegionLocator}
 
 每个 variant 只允许列出的字段。owner/locator/resourceRef 必须与 AnnotationRef.owner 相同；不允许 AnnotationRef、裸NodeRef、AuthorAnchorAddress或跨owner locator/ref替代target。outer wire与 Projection/1 必须双向唯一materialize；path/title/hash/ambient owner不得补字段。
 
-### 9.3 AnnotationInlineProfile/1
+### 9.3 Annotation inline body 与唯一 evaluation profile
 
-```text
-AnnotationInlineProfile/1 = {
-  languageBaseline:"asciidoctor-ruby/2.0.26@0b99b39c9df884d4aec13bba45f03cdbab505769",
-  doctype:"inline",
-  processorBackend:"html5-semantic/1",
-  safeMode:"secure",
-  maxSourceBytes:65536,
-  maxRenderedBytes:262144,
-  maxInlineSemanticNodes:4096,
-  managedAdapters:"disabled",
-  networkEffects:"denied",
-  fileEffects:"denied",
-  processEffects:"denied"
-}
-```
+`AnnotationInlineBody/1`、其兼容 schema alias `AsciiDocInlineBody/1`，以及唯一 `AnnotationInlineProfile/1` 的 exact closed shape 由 [SCHEMAS.zh-CN.md §7](SCHEMAS.zh-CN.md#7-annotation-closed-values) 规范。SPEC 不再维护第二份同名 profile 字面量。
 
-完整 source 必须只形成一个 paragraph（允许 soft wraps 与 trailing whitespace）；第二paragraph、heading、list、delimited block、table、block macro均 invalid_annotation_body，不能被 inline doctype 静默忽略。允许固定2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote等；n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters在此profile不激活。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+portable body 保留四成员数据shape：format/version/languageBaseline/source；body不是processor profile。求值profile固定 Ruby 2.0.26 exact commit、doctype=inline、processorBackend=`html5-semantic/1`、secure safe mode以及已闭合的资源/效果限制。body中的短 baseline literal只标识其portable source数据版本，必须与profile的commit-qualified 2.0.26 baseline一致，不能用于选择另一个实现版本。
+
+完整 source 必须只形成一个 paragraph（允许 soft wraps 与 trailing whitespace）；第二paragraph、heading、list、delimited block、table、block macro均 `invalid_annotation_body`，不能被 inline doctype 静默忽略。允许固定2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote等；n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters在此profile不激活。
 
 ### 9.4 Appearance、Actor 与时间
 
