@@ -546,7 +546,7 @@
       "status": "current",
       "replaces": "D3IdentityInput/12",
       "section": "SPEC §7",
-      "notes": "Current D3 native input successor: exact wire12 semantic member set with current InputDescriptor/3 at the outer request boundary; historical wire9-12 remain exact."
+      "notes": "Current D3 native input successor: exact wire12 semantic member/mode matrix with InputDescriptor/3; expectedAuthority/proposal/preparationBinding retain genuine optionality and replica_local absence rules; historical wire9-12 remain exact."
     },
     {
       "name": "D3ResolutionInputUse/2",
@@ -594,7 +594,7 @@
       "status": "current",
       "replaces": "ExportPlan/2",
       "section": "SPEC §8",
-      "notes": "Current fully closed export preparation: exact input/projection, D2 product render binding when applicable, D8 presentation policy, template/route/profile/style/policy/target/destination, proofs/evidence pins, loss report and staged outputs."
+      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/per-plan generation policy, deterministic native-table bindings, exact typed-pin derivation, target/destination/loss/staged bytes and recovery."
     },
     {
       "name": "PublicationReceipt/3",
@@ -602,7 +602,7 @@
       "status": "current",
       "replaces": "PublicationReceipt/2",
       "section": "SPEC §8",
-      "notes": "Current external-publication receipt bound byte-for-byte to ExportPlan/3, confirmation choices, exact output digests and selected target/route/template/style/presentation-policy evidence."
+      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact target/template/route/style/generation/presentation selection and actual output digests."
     },
     {
       "name": "D3-Annotation-Value/4",
@@ -1258,7 +1258,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §4.4",
-      "notes": "Current product Document snapshot successor; historical wireVersion2 document_snapshot remains historical-only."
+      "notes": "Current product Document snapshot with complete fixed-Ruby typed semantics, SourceOrigin graph, exact processor environment/root/include source bindings and DependencyProof/3 currentness; historical wireVersion2 remains historical-only."
     },
     {
       "name": "D3IdentityOperationRequest/13",
@@ -1266,23 +1266,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6",
-      "notes": "Current native D3 identity request: exact wire12 top-level semantic set with InputDescriptor/3 and wireVersion13."
-    },
-    {
-      "name": "D8WorkspacePresentationPolicy/1",
-      "owner": "D8",
-      "status": "current",
-      "replaces": null,
-      "section": "SCHEMAS §6.4",
-      "notes": "Protected per-Workspace run-in default with checked revision; source roles override but do not mutate it."
-    },
-    {
-      "name": "D8WorkspacePresentationPolicyBinding/1",
-      "owner": "D8",
-      "status": "current",
-      "replaces": null,
-      "section": "SCHEMAS §6.4",
-      "notes": "Exact protected binding/pin for one D8 workspace presentation policy revision."
+      "notes": "Current wire13 native D3 request: wire12 top-level semantics plus InputDescriptor/3; expectedAuthority/proposal/preparationBinding are optional exactly under the inherited mode matrix, null is invalid."
     },
     {
       "name": "D8PresentationPolicySetRequest/1",
@@ -1298,7 +1282,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Derived Separate/RunIn result retaining distinct heading/body locators and policy revision."
+      "notes": "Derived presentation result over closed D8PresentationDecision/1; Workspace policy is present only when workspace_default actually consumes it."
     },
     {
       "name": "D8DocumentRenderBinding/1",
@@ -1306,7 +1290,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Current D8 render/cache binding over source observation, format qualification, D2 snapshot, presentation policy and renderer profile."
+      "notes": "Current D8 render/cache binding over source observation, format qualification, exact D2 snapshot and the actual presentation decision; explicit/no-body/conflict decisions carry no Workspace-policy dependency."
     },
     {
       "name": "D9ExportTarget/1",
@@ -1347,14 +1331,6 @@
       "replaces": null,
       "section": "SCHEMAS §6.5",
       "notes": "Exact style-bundle version/pin frozen by ExportPlan/3."
-    },
-    {
-      "name": "D9ExportGenerationPolicyBinding/1",
-      "owner": "D9",
-      "status": "current",
-      "replaces": null,
-      "section": "SCHEMAS §6.5",
-      "notes": "Registered binding/missing/image/layout generation policy descriptor frozen by the plan."
     },
     {
       "name": "D9DocumentRenderBinding/1",
@@ -1515,6 +1491,158 @@
       "replaces": "D7ActionInput/2",
       "section": "SCHEMAS §6.1",
       "notes": "Current D6-owned D7 action OwnerInput descriptor using D7ActionSpec/2; six-member fixed-parent shape retained, canonicalDescriptorBytes and pin coverage remain owner-bound."
+    },
+    {
+      "name": "D2ProductInteger",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Arbitrary-precision canonical decimal domain for fixed-Ruby effective section levels; nonnegative for headings and never Counter/int64-clamped."
+    },
+    {
+      "name": "D2NativeAttributeSet/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed-value carrier for arbitrary legal fixed-native attribute names; not free JSON and not a second parser."
+    },
+    {
+      "name": "D2SourceOrigin/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed provenance node for authored/reference/substitution/generated/synthetic/multi-origin product semantics and unique-writable-source derivation."
+    },
+    {
+      "name": "D2SourceOriginGraph/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Dense acyclic per-snapshot product provenance graph; not a durable identity namespace."
+    },
+    {
+      "name": "D2SourceOriginSet/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Per-semantic-value origin references plus mechanically derived unique/no-writable-source state."
+    },
+    {
+      "name": "D2ProductEvaluationBinding/1",
+      "owner": "D2/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Exact processor environment, root/include SourceUnitBinding values, final read barrier, scope and DependencyProof/3 binding that proves product-snapshot currentness."
+    },
+    {
+      "name": "D7HeadingProjection/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current headings projection with arbitrary-precision canonical decimal level; old int64 result shapes remain historical."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicy/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Immutable Workspace presentation-default record in Portable Workspace Metadata with complete parent-head ancestry; owner-specific shared configuration, not Policy/3 or PortableComponentKey."
+    },
+    {
+      "name": "D8PresentationPolicyAddress/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Workspace/revision/full-record-digest address for immutable presentation-policy records."
+    },
+    {
+      "name": "D8PresentationPolicyHeadSet/1",
+      "owner": "D8/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Complete protected maximal-head observation for Workspace presentation configuration; multiple same-revision heads remain conflict, never LWW."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicyBinding/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Exact one-head current binding over policy/address/head-set/pin, used only by workspace_default presentation."
+    },
+    {
+      "name": "D8PresentationPolicySetRequest/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Managed-atomic strict policy_admin request over the complete expected presentation head set."
+    },
+    {
+      "name": "D8PresentationPolicyEffect/1",
+      "owner": "D8/D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Typed owner effect for one presentation-policy shared-configuration transition; no generic JSON/second ledger."
+    },
+    {
+      "name": "D8PresentationDecision/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Closed conditional presentation dependency: explicit/no-body arms are policy-free; workspace_default alone carries current policy binding."
+    },
+    {
+      "name": "D9ExportPlanToken/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Protected current export plan token tagged d9_export_plan/3; historical token tags dispatch separately."
+    },
+    {
+      "name": "D9PublicationToken/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Protected current publication token tagged d9_publication/3."
+    },
+    {
+      "name": "D9ExportGenerationPolicy/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Finite per-plan generation choices for template binding disambiguation, missing empty, image sizes/layout and native-table token bindings; none arm covers exact policy-independent targets."
+    },
+    {
+      "name": "D9NativeTableSelector/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5.1",
+      "notes": "Shortest-unique native-table/table-header selector over exact product table semantics."
+    },
+    {
+      "name": "D9NativeTableTokenBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5.1",
+      "notes": "Frozen SET/COLUMN external token plus exact native-table selector; token is not identity."
     }
   ]
 }
