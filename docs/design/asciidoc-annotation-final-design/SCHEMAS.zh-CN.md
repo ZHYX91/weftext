@@ -1498,7 +1498,7 @@ current D7 action successor 使用精确继承，不是自由扩展。D7ActionSp
 D7CreateAnnotationIntent/2 = {
   kind:"create_annotation",
   destinationOwnerRef:NodeRef,
-  value:AnnotationEditableValue/1
+  value:AnnotationEditableProposal/1
 }
 
 D7ApplySuggestionIntent/2 = {
@@ -1536,7 +1536,7 @@ D7ActionInput/3 = {
   definitionInputs:[D7DefinitionInput/2...],
   registryInputs:[ValidatedCatalogContext...],
   ruleInputs:[RecurrenceReadContext...],
-  proposedInputs:[D7ProposedInput/2...]
+  proposedInputs:[D7ProposedInput/3...]
 }
 
 PreparedActionBinding/4 = {
@@ -1558,7 +1558,7 @@ PreparedActionBinding/4 = {
     role:"before"|"dependency"
   }...],
   constructionInput:null|TemplateConstructionInput/2,
-  proposedInputs:[D7ProposedInput/2...],
+  proposedInputs:[D7ProposedInput/3...],
   dependencyProof:DependencyProof/3,
   observationProof:<PreparedIntent/3.observationProof>,
   budgetBinding:BudgetBinding/1,
@@ -1569,7 +1569,21 @@ PreparedActionBinding/4 = {
 }
 ```
 
-MinimumMapping/3、D7DefinitionInput/2、D7ProposedInput/2、D7ResolutionAccess/1保持fixed-e8aa exact shape。
+MinimumMapping/3、D7DefinitionInput/2 与 D7ResolutionAccess/1 保持 fixed-e8aa exact shape。D7ProposedInput/2 仅保留给真实 historical d7_action/2 / PAB3 decoder，绝不原地扩展。
+
+```text
+D7ProposedInput/3 = {
+  subject:PayloadSubjectKey,
+  payloadKind:
+    "exact_source_document"|"resource_bytes"|"annotation_value",
+  encoding:
+    "exact_source_utf8"|"resource_bytes"|
+    "d3_annotation_value4"|"d3_symbolic_result9",
+  pin:PinRef/2
+}
+```
+
+current `/3` cross-field 唯一合法组合是 exact_source_document↔exact_source_utf8、resource_bytes↔resource_bytes，以及 annotation_value↔d3_annotation_value4|d3_symbolic_result9。protocolOwner=D6 的 current Annotation concrete after 必须使用 d3_annotation_value4，并且 pin bytes 恰为 D3-CJ/3(完整 D3-Annotation-Value/4)；d3_symbolic_result9 只允许继承的 current D3 symbolic-result 分支，并按 Result/9 的真实 subject/pin 规则绑定。`d3_annotation_value3` 在 `/3` 中非法。OwnerInputBinding/2.pinRefs 必须精确覆盖 `/3` 中全部 proposed pins 与实际受保护 evidence；historical PAB3/Input2 继续逐字节使用 D7ProposedInput/2 与 d3_annotation_value3，不能 repin/reencode。
 
 protocolOwner=D6 的 current D7 action 使用 InputDescriptor/3.ownerInput：protocolOwner=D7，ownerKind=intentKind=d7_action/3；canonicalDescriptorBytes 恰为 D3-CJ/3(D7ActionInput/3)。D7ActionInput/3 的六个成员与 PreparedActionBinding/4 对应成员逐项相等，ownerInput.pinRefs 继续恰覆盖 proposed pins 与实际受保护 source/definition/rule evidence，并按 D6 规则排序唯一。protocolOwner=D3 的 create_annotation 等 identity action 仍使用 D3 自己的 d3_identity_operation/13 owner descriptor；PAB4 只绑定 cross-owner preparation，不创建第二 D3 request authority。historical d7_action/2/PAB3 保留原 decoder、bytes 与 recovery。
 
@@ -1613,8 +1627,11 @@ D8EditIntent/3 =
   | {kind:"annotation",
      target:D8SourceTarget/2,
      expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
-     value:AnnotationEditableValue/1,
+     value:AnnotationEditableProposal/1,
      targetPolicy:"preserve"|"replace_current"}
+  | {kind:"annotation_reconfirm_suggestion",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1}
 
 D8PinnedEditIntent/3 =
     {kind:"document",
@@ -1625,6 +1642,10 @@ D8PinnedEditIntent/3 =
      expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
      proposedValue:PinRef/2,
      targetPolicy:"preserve"|"replace_current"}
+  | {kind:"annotation_reconfirm_suggestion",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
+     proposedValue:PinRef/2}
 
 D8EditInput/3 = {
   kind:"d8_edit_input",version:3,
@@ -1684,6 +1705,49 @@ PreparedEditBinding/3 = {
 document intent 的 proposedInputs.pin 选择精确 UTF-8 source。annotation intent 的 proposedInputs 恰一项，entityRef 等于 target.ref，且 PinRef/2 payloadKind=annotation_value；pin bytes 必须是 Core 构造的完整 D3-Annotation-Value/4 的 D3-CJ/3，而不是只 pin AnnotationEditableValue/1。target.ref 必须是 AnnotationRef，expectedAnnotationRevisionToken 必须等于 prepare 时 current PortableAnnotationRecord/4 token。Annotation 强制 saveProfile=complete 与 writeProtection=strict；observed_only 仍只允许原已资格化 interactive Document 路径。
 
 OwnerInputBinding/2 的 current ownerKind/intentKind=d8_edit/3，canonicalDescriptorBytes=D3-CJ/3(D8EditInput/3)。pinRefs 恰为 D8PinnedEditIntent/3 命名的 pins 与 retained origin evidence 的排序去重集合。D8EditInput/3.intent 必须从 PreparedEditBinding/3.intent 机械派生，只把 source/value bytes 替换为对应 proposed pin；任何 request shape 都没有 actor/time 或 trust flag。historical d8_edit_prepare wire1/2 与 PreparedEditBinding/1/2 继续原 intent/value decoder 与 recovery。
+
+### 6.3.1 Current Annotation read / Draft producer 与 operation-class input
+
+```text
+D8AnnotationReadRequest/1 = {
+  wireVersion:1,kind:"d8_annotation_read",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  annotationRef:AnnotationRef
+}
+
+D8AnnotationBodyRead/1 =
+    {state:"absent",exactSource:null,semanticText:""}
+  | {state:"valid",exactSource:text,semanticText:text}
+  | {state:"invalid",exactSource:text,semanticText:null,
+     diagnostics:[CoreDiagnostic/1...]}
+
+D8AnnotationReadResponse/1 = {
+  kind:"d8_annotation_read",version:1,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  annotationRef:AnnotationRef,
+  sourceObservation:SourceObservation/1,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  value:D3-Annotation-Value/4,
+  targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+  body:D8AnnotationBodyRead/1
+}
+
+D8AnnotationDraftOpenRequest/1 = {
+  wireVersion:1,kind:"d8_annotation_draft_open",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  annotationRef:AnnotationRef
+}
+
+D8AnnotationDraftOpenResponse/1 = {
+  kind:"d8_annotation_draft_open",version:1,
+  read:D8AnnotationReadResponse/1,
+  draft:D8AnnotationDraftProjection/1
+}
+```
+
+这两个是真实 Core/D8 entry，不是 response-only shape。`d8_annotation_read` 在最终 authorized read barrier 返回完整 Value/4，因此 creator/authoredAt/lastEditor/editedAt 可显示；Draft 仍只保存/编辑 AnnotationEditableValue/1，绝不是第二 author authority。`d8_annotation_draft_open` 复用同一次 current read：有 annotation_write 时 draft.access=editable，否则为 readonly；readonly 不能进入 D8EditPrepareRequest/3。Draft 的 baseObservation/baseRevisionToken 必须分别等于 read.sourceObservation/read.annotationRevisionToken，serial=0 时 editable projection 必须等于 read.value 的七个 editable fields。local Draft 后续可以变化，但 prepare 与最终 read barrier 必须再次验证原 base token/Observation。
+
+D8EditIntent/3 的 operation class 由 closed intent arm 与 targetPolicy 机械决定，绝不是 caller trusted flag：annotation+preserve=ordinary_edit，annotation+replace_current=manual_reattach，annotation_reconfirm_suggestion=reconfirm_suggestion。caller 的 AnnotationEditableProposal/1 不携带 Suggestion lifecycle/evidence；Core 根据 current before、operation class 与 proposal 构造唯一 proposed Value/4 后才 pin。reconfirm arm 没有 caller value；其 proposedValue 完全由 Core fresh target read/recompute 产生。
 
 ## 6.4 D8 workspace presentation policy 与 render binding
 
@@ -2165,6 +2229,55 @@ PortableAnnotationRecord/4 是现有 Node 内 annotations JSON authority 中的�
 当前 payloadBindings 的 payloadKind=annotation_value 必须按真实 request family 分派：wire13 当前 mutation 严格解码 Value/4；真正历史 wire9–12 继续使用 Value/3 decoder。D3-Symbolic-Result/9 framing 不变，但 Annotation 基础字节与 slot span 必须由该 request family 选择的 decoder 计算；禁止扩大历史 decoder。
 
 当前 Portable Metadata 不再把 D2 Annotation-v2 outer wire 物化为作者状态。历史 D2 v2 Annotation snapshot、Value/3、plain_text 正文、replace_plain_text suggestion 与 targetStatus resolved/stale 只保留真实历史 decoder/recovery。当前正文 bytes 只能是 AnnotationInlineBody/1，并使用唯一 AnnotationInlineProfile/1；不存在 plain-text 兼容回退或第二 parser。
+
+## 7.1 Caller proposal 与 Node-local physical aggregate
+
+```text
+SuggestionAuthorProposal/1 = {
+  kind:"replace"|"delete"|"insert",
+  replacementSource:null|text
+}
+
+AnnotationEditableProposal/1 = {
+  purpose:"comment"|"mark"|"suggestion",
+  target:D3-Annotation-Target-Projection/1,
+  replyTo:AnnotationRef|null,
+  body:AnnotationInlineBody/1|null,
+  appearance:AnnotationAppearance/1|null,
+  labels:[text...],
+  reviewState:"open"|"resolved"|"not_applicable",
+  suggestion:SuggestionAuthorProposal/1|null
+}
+
+AnnotationAggregate/1 = {
+  format:"weftext.annotations",version:1,
+  ownerNodeRef:NodeRef,
+  records:[PortableAnnotationRecord/4...]
+}
+
+AnnotationAggregateObservation/1 = {
+  kind:"d6_annotation_aggregate_observation",version:1,
+  workspaceRef:WorkspaceRef,
+  ownerNodeRef:NodeRef,
+  observerDomain:CommitDomain/2,
+  fileObjectBinding:<D6 Storage §2.2 trusted FileObjectBinding>,
+  aggregateBytesPin:PinRef/2
+}
+
+AnnotationAggregateInstall/1 = {
+  kind:"d6_annotation_aggregate_install",version:1,
+  ownerNodeRef:NodeRef,
+  before:"absent"|AnnotationAggregateObservation/1,
+  after:"absent"|PinRef/2,
+  changedAnnotationRefs:[AnnotationRef...]
+}
+```
+
+SuggestionAuthorProposal/1 只承载作者可提议的 kind/replacementSource；replace 的 replacementSource required（允许空），delete 必须 null，insert required 且 nonempty。state、confirmation、targetBasisSha256、expectedText、pointAffinity 永远不是 caller proposal 字段。AnnotationEditableProposal/1 的 purpose/reply/body/appearance/labels/review invariants 与 AnnotationEditableValue/1 相同；Core 的 operation-class gate 决定 Suggestion/3 的受控 before→after。
+
+`weftext.annotations.json` 的 current physical bytes 恰为 D3-CJ/3(完整 AnnotationAggregate/1)，无 BOM、无额外换行或第二 envelope。records 必须非空，按完整 AnnotationRef canonical bytes 升序且唯一；每个 annotationRef.owner 必须等于 ownerNodeRef，nonnull replyTo 必须同 owner 且整张 records reply graph 无环。空集合唯一物理表示是 sidecar absent，禁止同时保留空 aggregate。unknown/missing member、duplicate JSON key、unknown version、owner mismatch、duplicate Ref 或 reply cycle 都使整个 aggregate strict-decode 失败；normal current read 不能部分信任其中“看起来合法”的记录。
+
+AnnotationAggregateObservation/1 是物理文件观察，不是 Annotation 的 SourceVersion/SourceObservation、revision token 或 identity。aggregateBytesPin 的 payloadKind=portable_metadata，bytes 必须等于上述完整 physical JSON；fileObjectBinding 使用 D6 Storage §2.2 的真实 backend identity/path/object-generation/observer-epoch/length/digest binding，digest 单独永远不是 CAS。AnnotationAggregateInstall/1 只是现有 D6 InstallationPlan 的一个具名 file-write coordination binding，不创建新 ledger/CAS/author store。after=present 时 PinRef 指向完整 after aggregate；changedAnnotationRefs 按 Ref canonical bytes 排序唯一，并恰等于 before/after logical record 差集。一个 Node 在一个 DecisionKey 下最多一个 AnnotationAggregateInstall/1。
 
 # 8. SourceTransform
 
@@ -3044,4 +3157,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +217 coordination，共655，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +251 coordination，共689，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
