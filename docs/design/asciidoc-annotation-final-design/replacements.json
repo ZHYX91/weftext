@@ -50,7 +50,8 @@
         "D3ResolutionInputUse/2",
         "Annotation identity/reply/copy",
         "dual-profile continuation",
-        "fresh BootstrapPlan4 retains D3 proposal UUID/authenticity/custody chain"
+        "fresh BootstrapPlan4 retains D3 proposal UUID/authenticity/custody chain",
+        "current wire13 Annotation Value4 mutation binding inherits target@0/reply@1 reference+structural algebra, one final revision/CAS/receipt/materialization; historical Value3 plans recover unchanged"
       ]
     },
     {
@@ -66,7 +67,8 @@
         "wire13",
         "Descriptor3/Proof3",
         "CP4",
-        "format/annotation obligations"
+        "format/annotation obligations",
+        "current portable Annotation Value4 canonical payload/revision/CAS, copy/reply/restore evidence and historical Value3 recovery obligations"
       ]
     },
     {
@@ -317,7 +319,8 @@
       ],
       "changedSections": [
         "PAB4 current action qualification",
-        "Annotation suggestion accept/reject"
+        "Annotation suggestion accept/reject",
+        "D7ActionSpec/2 current apply_suggestion/reject_suggestion; replace/delete/insert fresh target preparation and one-seal target+Annotation acceptance"
       ]
     },
     {
@@ -366,7 +369,8 @@
       "changedSections": [
         "PreparedActionBinding/4",
         "Annotation accept preparation",
-        "D10 current author responsibility"
+        "D10 current author responsibility",
+        "PreparedActionBinding/4 consumes D7ActionSpec/2 for current suggestion actions while historical ActionSpec1/PAB3 recovery remains exact"
       ]
     },
     {
@@ -384,7 +388,8 @@
         "EffectManifest/3 + EffectBytes/3",
         "WorkspaceBootstrapPlan/4 encoding",
         "D10 preview digest",
-        "closed WorkspaceBootstrapPlan/4 encoding"
+        "closed WorkspaceBootstrapPlan/4 encoding",
+        "current annotation source images and EffectBytes use complete D3 Annotation Value4 canonical bytes; historical d3_annotation_value3 bytes retain decoder"
       ]
     },
     {
@@ -528,7 +533,8 @@
         "run-in/deep-heading rendering",
         "Annotation appearance/review",
         "Annotation inline body/profile closed schema",
-        "D2DocumentSnapshot3/Draft full-product Source fallback and D8 workspace presentation policy"
+        "D2DocumentSnapshot3/Draft full-product Source fallback and D8 workspace presentation policy",
+        "independent JSON Annotation current Source/visual/edit lifecycle uses one R6 inline source, Value4 CAS and Core actor/time without a second rich-body authority"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -556,7 +562,8 @@
         "deep heading/run-in editor",
         "Annotation UX",
         "Annotation inline body/profile closed schema",
-        "current d8_document/Draft D2DocumentSnapshot3 consumer and run-in policy/render-cache binding"
+        "current d8_document/Draft D2DocumentSnapshot3 consumer and run-in policy/render-cache binding",
+        "D8EditIntent/3 and PreparedEditBinding/3 close current Value4 annotation edit/CAS/proposed-pin/read-only/invalid-body paths; historical Value3/EditBinding2 recovery retained"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -723,7 +730,8 @@
         "Witness7 exact root/forward/supplementary/support closure verifier and producer-time carrier conformance",
         "AnnotationInlineBody/1 alias and single AnnotationInlineProfile/1",
         "current D2DocumentSnapshot3 complete native AsciiDoc product projection and historical wire2 boundary",
-        "source-origin ranges and stable Node/Resource/citation identity adapters after native parsing"
+        "source-origin ranges and stable Node/Resource/citation identity adapters after native parsing",
+        "historical D2 Annotation outer v2 plain_text/replace_plain_text/targetStatus model retained only as historical decoder; current author authority is portable Value4 metadata"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -821,7 +829,8 @@
         "current implementation uses complete fixed-Asciidoctor-2.0.26 D2DocumentSnapshot3 product projection rather than the historical Profile-v2 closed subset",
         "open/native AsciiDoc include passthrough and fixed-baseline constructs use lossless Source fallback when structural UI is unavailable",
         "historical single-source authority authorization exact-source and invalid-repair safeguards retained",
-        "Annotation mutation/value implementation obligations are not replaced by this Stage4A entry"
+        "Annotation mutation/value implementation obligations are not replaced by this Stage4A entry",
+        "historical plain Annotation implementation obligations superseded for current paths by portable Value4 plus single R6 AnnotationInlineProfile while raw historical recovery remains"
       ]
     },
     {
