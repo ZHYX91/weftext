@@ -1254,7 +1254,7 @@ D3IdentityOperationRequest/13 = {
 }
 ```
 
-D3IdentityInput/13 精确保留 D3IdentityInput/12 的六成员语义集合；只在 outer request boundary 把嵌套 D6 descriptor family 更新为 current InputDescriptor/3，mode/authority/proposal/intent 与 writeProtection=strict 均继续 fixed-parent decoder 和 mode matrix。标 ? 的成员只在 fixed-parent mode matrix 允许时出现；JSON null 不能代替 absence。D3IdentityOperationRequest/13 恰为 wire12 top-level member set，把 wireVersion 改成13并把 inputDescriptor 改为 InputDescriptor/3。原 cross-field equality、guarantee/frontier policy、ownerInput protocolOwner=D3/ownerKind=d3_identity_operation/13、requestFingerprint、DecisionKey/OperationId ledger ordering、saved/planned/unseen branching 与 error/disclosure order 全部不变。historical wire9–12 不扩 decoder、不重编码。
+D3IdentityInput/13 精确保留 D3IdentityInput/12 原有六个语义成员；只在当前外层请求中把嵌套的 D6 descriptor family 更新为 InputDescriptor/3。mode、authority、proposal、intent 和固定的 writeProtection=strict 继续使用 fixed-parent decoder 与原 mode matrix。带 ? 的成员仅在该矩阵允许时出现，JSON null 不能代替真正缺省。D3IdentityOperationRequest/13 保留 wire12 顶层成员集合，只把 wireVersion 更新为13并把 inputDescriptor 更新为 InputDescriptor/3。原有跨字段相等关系、guarantee/frontier policy、ownerInput 的 D3 ownerKind、requestFingerprint、DecisionKey/OperationId 单一账本顺序、saved/planned/unseen 分支和 error/disclosure 顺序全部保持；historical wire9–12 不扩 decoder、不重编码。
 
 ## 6.1 PreparedActionBinding/4
 
@@ -1391,7 +1391,7 @@ D8DocumentRenderBinding/1 = {
 }
 ```
 
-每个 active Workspace 恰有一条 presentation-policy record，初始化为 revision=1/defaultPresentation=separate。mutation 要求 policy_admin、expectedRevision 相等、checked increment 与一次 protected configuration write。policy pin 是 artifact/recovery，完整 bytes 为 UTF8("D8-Workspace-Presentation-Policy/1") || NUL || D3-CJ/3(complete policy)。它不是 author source，也不授 source write。current visual rendering 使用 D8DocumentRenderBinding/1；documentSnapshotPin 必须选择 sourceObservation.entityRef 的 exact D2-Document-Snapshot/3 bytes，documentFormat 也属于同一 owner/current read。cache identity 包含完整 binding。
+每个 active Workspace 恰有一条 presentation-policy record，初始值为 revision=1/defaultPresentation=separate。修改要求 policy_admin、expectedRevision 相等、计数安全递增，并只执行一次受保护配置写入。policy pin 使用 artifact/recovery；完整字节是 UTF8("D8-Workspace-Presentation-Policy/1")、一个 NUL，再接 D3-CJ/3(complete policy)。它不是作者源文本，也不授予 source write。当前视觉渲染使用 D8DocumentRenderBinding/1；documentSnapshotPin 必须选择 sourceObservation.entityRef 对应的精确 D2-Document-Snapshot/3 字节，documentFormat 也必须属于同一 owner 和同一次 current read。缓存身份包含完整 binding。
 
 run-in resolution 闭合为：conflict => Separate+role_conflict；显式 separate => Separate；显式 run-in 仅按既有 eligible first-paragraph rule 得到 RunIn；default 只在两个 role 都不存在时读取 policy，并继续较严格的 implicit physical-adjacency rule；无 eligible body => Separate。Source role command 只改 source roles，绝不能写该 policy。
 
@@ -1533,13 +1533,13 @@ PublicationReceipt/3 = {
 
 ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保留 fixed-parent D9 的完整 closed shape 与语义。D9ExportRouteBinding/1.steps 从0连续编号且必须是 exact accepted finite acyclic route；每个 step 的 evidencePins 按 pinToken 排序唯一。styleBundles 按 styleBundleId 排序唯一；plan evidencePins 按 pinToken 排序唯一；stagedOutputs 与 receipt outputs 按 controlled relative name 排序唯一。lossChoices 按 lossKey 排序唯一，并依原 severity matrix 恰覆盖 requires_choice/blocking；reject 会取消确认，blocking 永远不能 accept。
 
-asciidoc_source 与 resource_exact 强制 routeBinding=null、templateBinding=null、documentRenderBinding=null，projection 不得含 renderer-derived value。query_json 同样只按 retained static profile 序列化 exact D7 result，不使用 template binding。html/pdf/docx/odt 强制 inputDomain=document，且 documentRenderBinding 与 accepted route 均 nonnull；docx/odt 是否需要 templateBinding 由 selected route profile 决定。csv/tsv/xlsx/ods 使用 retained finite RenderSnapshot projection 与匹配 route/profile。filename 不能反推 target arm。
+asciidoc_source 与 resource_exact 强制 routeBinding=null、templateBinding=null、documentRenderBinding=null，projection 不能含渲染器派生值。query_json 只按保留的静态配置序列化精确 D7 result，不使用 template binding。html、pdf、docx、odt 强制 inputDomain=document，且 documentRenderBinding 与已接受 route 都必须存在；docx/odt 是否还需要 templateBinding 由选定 route profile 唯一决定。csv、tsv、xlsx、ods 使用既有有限 RenderSnapshot projection 与匹配的 route/profile。文件名不能反推 target arm。
 
 document render 时，documentSnapshotPin 必须选择 exact D2-Document-Snapshot/3 canonical bytes，owner 等于 ownerNodeRef 且 sourceObservation.entityRef；semanticQualification.sourceObservation 与 sourceObservation byte-equal；presentationPolicy 是计算 run-in 时使用的 exact policy revision。后来 policy 改变不会使既有 immutable prepared plan 失效或被改写，但 fresh prepare 必须使用当时 current binding。source observation、document-format qualification、route/template/profile/style/Query/authorization 改变继续按 retained D9 invalidation/reset 规则处理。
 
-D9ExportDestinationIntent/1 是 protected intent，不是 permission。external_bundle 只能 create-only，并继续原 same-volume staging/atomic rename/durability/unknown state machine；server_download 每个 chunk 按 current authorization；resource_handoff 本身不创建 Resource，export confirmation 后 exact staged bytes 必须进入独立 current D3 create_resource prepare/confirmation/receipt。
+D9ExportDestinationIntent/1 是受保护的目标意图，不是权限。external_bundle 只能 create-only，并继续原有同卷 staging、atomic rename、durability 与 unknown 状态机；server_download 的每个 chunk 都重新检查 current authorization；resource_handoff 本身不能创建 Resource，export confirmation 后的精确 staged bytes 必须进入一条独立的 current D3 create_resource prepare/confirmation/receipt。
 
-D9ExportConfirmation/1 不得改变 catalog、projection、route、target、destination、policies、report、budget 或 staged bytes。PublicationReceipt/3 只证明 external publication；所有重复成员都必须与 protected original plan/confirmation byte-match。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 保留 exact original decoder、permissions、confirmations、staged bytes、unknown duties 与 recovery ordering。
+D9ExportConfirmation/1 不得改变 catalog、projection、route、target、destination、policies、report、budget 或 staged bytes。PublicationReceipt/3 只证明外部发布；其中所有重复成员都必须与受保护的原 plan/confirmation 逐字节一致。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 继续保留原 decoder、原权限、原 confirmation、原 staged bytes、unknown 责任和原 recovery ordering。
 
 # 7. Annotation closed values
 
