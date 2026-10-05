@@ -1295,6 +1295,16 @@ D7ActionPrepareRequest/3 = {
   evidenceToken?:Token
 }
 
+D7ActionInput/3 = {
+  kind:"d7_action_input",version:3,
+  action:D7ActionSpec/2,
+  canonicalCallInputs:[QueryCall...],
+  definitionInputs:[D7DefinitionInput/2...],
+  registryInputs:[ValidatedCatalogContext...],
+  ruleInputs:[RecurrenceReadContext...],
+  proposedInputs:[D7ProposedInput/2...]
+}
+
 PreparedActionBinding/4 = {
   kind:"d7_prepared_action_binding",
   version:4,
@@ -1326,6 +1336,8 @@ PreparedActionBinding/4 = {
 ```
 
 MinimumMapping/3、D7DefinitionInput/2、D7ProposedInput/2、D7ResolutionAccess/1保持fixed-e8aa exact shape。
+
+protocolOwner=D6 的 current D7 action 使用 InputDescriptor/3.ownerInput：protocolOwner=D7，ownerKind=intentKind=d7_action/3；canonicalDescriptorBytes 恰为 D3-CJ/3(D7ActionInput/3)。D7ActionInput/3 的六个成员与 PreparedActionBinding/4 对应成员逐项相等，ownerInput.pinRefs 继续恰覆盖 proposed pins 与实际受保护 source/definition/rule evidence，并按 D6 规则排序唯一。protocolOwner=D3 的 create_annotation 等 identity action 仍使用 D3 自己的 d3_identity_operation/13 owner descriptor；PAB4 只绑定 cross-owner preparation，不创建第二 D3 request authority。historical d7_action/2/PAB3 保留原 decoder、bytes 与 recovery。
 
 ## 6.2 EffectManifest/3 / EffectBytes/3
 
