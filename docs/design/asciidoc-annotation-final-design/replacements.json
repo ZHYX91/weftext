@@ -52,7 +52,8 @@
         "dual-profile continuation",
         "fresh BootstrapPlan4 retains D3 proposal UUID/authenticity/custody chain",
         "current wire13 Annotation Value4 mutation binding inherits target@0/reply@1 reference+structural algebra, one final revision/CAS/receipt/materialization; historical Value3 plans recover unchanged",
-        "wire13 expectedAuthority/proposal/preparationBinding preserve exact wire12 optional mode matrix; replica_local omits forbidden members and historical wire9-12 stay exact"
+        "wire13 expectedAuthority/proposal/preparationBinding preserve exact wire12 optional mode matrix; replica_local omits forbidden members and historical wire9-12 stay exact",
+        "Annotation operation-class matrix preserves copy/import/Trash/restore/history semantics without treating carried terminal state as a fresh target-mutation decision"
       ]
     },
     {
@@ -270,7 +271,10 @@
         "§7.2.1 Witness2/Step2 exact /2 artifact bytes, PinRef coverage and closed current/historical decoder dispatch",
         "fold/compaction/receiver/recovery preserve exact /1 or /2 typed schedule artifacts without fallback or repin",
         "Portable Workspace Metadata stores immutable D8 presentation records/head ancestry; sync/admission/retention and one-P recovery preserve conflicting heads without LWW or second ledger",
-        "presentation record activation ChangeId plus receipt/EffectManifest/ChangeRecord association is required for sync/admission; head-set stamp continuity prevents revision/LWW guessing"
+        "presentation record activation ChangeId plus receipt/EffectManifest/ChangeRecord association is required for sync/admission; head-set stamp continuity prevents revision/LWW guessing",
+        "node-local weftext.annotations.json AnnotationAggregate/1 physical envelope, deterministic ordering/duplicate-owner/reply-graph validation and absent empty state",
+        "AnnotationAggregateObservation/1 + AnnotationAggregateInstall/1 reuse trusted FileObjectBinding and strict one-file CAS while keeping per-Annotation logical revisions separate",
+        "multi-record same-file prepare/install/one-P coalescing, unchanged-record observation refresh, external JSON/sync/conflict/backup/copy/Trash/restore/purge boundaries"
       ]
     },
     {
@@ -325,7 +329,8 @@
       "changedSections": [
         "PAB4 current action qualification",
         "Annotation suggestion accept/reject",
-        "D7ActionSpec/2 trusted create_annotation plus current apply_suggestion/reject_suggestion; Core-built Value4 attribution, replace/delete/insert fresh target preparation and one-seal target+Annotation acceptance"
+        "D7ActionSpec/2 trusted create_annotation plus current apply_suggestion/reject_suggestion; Core-built Value4 attribution, replace/delete/insert fresh target preparation and one-seal target+Annotation acceptance",
+        "operation-class Suggestion transition gate; apply/reject remain sole terminal current decisions and target-hidden reject remains legal"
       ]
     },
     {
@@ -375,7 +380,8 @@
         "PreparedActionBinding/4",
         "Annotation accept preparation",
         "D10 current author responsibility",
-        "PreparedActionBinding/4 consumes D7ActionSpec/2; D6 actions bind D7ActionInput/3, D3 create_annotation keeps d3_identity_operation/13, and historical ActionSpec1/PAB3 recovery remains exact"
+        "PreparedActionBinding/4 consumes D7ActionSpec/2; D6 actions bind D7ActionInput/3, D3 create_annotation keeps d3_identity_operation/13, and historical ActionSpec1/PAB3 recovery remains exact",
+        "D7ProposedInput/3 current carrier with d3_annotation_value4 concrete Annotation after and retained d3_symbolic_result9; historical /2 stays exact"
       ]
     },
     {
@@ -414,7 +420,8 @@
         "query grammar retained",
         "format invalidation",
         "headings/body_text consume D2DocumentSnapshot3 and complete D2 product body family",
-        "current headings product adapter uses arbitrary-precision D7 integer and validates complete D2 evaluation/include dependencies at final read barrier"
+        "current headings product adapter uses arbitrary-precision D7 integer and validates complete D2 evaluation/include dependencies at final read barrier",
+        "annotation_body current replacement reads Value4/R6 semantic text at the final barrier; invalid R6 is source_unavailable with no D2 plain_text fallback"
       ]
     },
     {
@@ -574,7 +581,9 @@
         "current d8_document/Draft D2DocumentSnapshot3 consumer and run-in policy/render-cache binding",
         "D8EditIntent/3 and PreparedEditBinding/3 close current Value4 annotation edit/CAS/proposed-pin/read-only/invalid-body paths; historical Value3/EditBinding2 recovery retained",
         "current D8 document/Draft/render consumers validate product evaluation binding and consume Workspace presentation policy only on actual workspace_default decision",
-        "presentation policy mutation owner input freezes the exact stamped head-set and saved/planned recovery preserves that observation"
+        "presentation policy mutation owner input freezes the exact stamped head-set and saved/planned recovery preserves that observation",
+        "actual d8_annotation_read + d8_annotation_draft_open producers return complete Value4 attribution/current basis while Draft remains an editable projection",
+        "manual_reattach and annotation_reconfirm_suggestion operation classes with Core-owned target evidence"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -914,7 +923,7 @@
     "acceptance": {
       "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "role": "655 unexecuted design obligations; no additional private acceptance source"
+      "role": "689 unexecuted design obligations; no additional private acceptance source"
     },
     "terminology": {
       "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
