@@ -1204,6 +1204,16 @@ D7ActionPrepareRequest/3 = {
   evidenceToken?:Token
 }
 
+D7ActionInput/3 = {
+  kind:"d7_action_input",version:3,
+  action:D7ActionSpec/2,
+  canonicalCallInputs:[QueryCall...],
+  definitionInputs:[D7DefinitionInput/2...],
+  registryInputs:[ValidatedCatalogContext...],
+  ruleInputs:[RecurrenceReadContext...],
+  proposedInputs:[D7ProposedInput/2...]
+}
+
 PreparedActionBinding/4 = {
   kind:"d7_prepared_action_binding",version:4,
   bindingToken:Token,protocolOwner:"D3"|"D6",
@@ -1227,6 +1237,8 @@ PreparedActionBinding/4 = {
 ```
 
 MinimumMapping/3, D7DefinitionInput/2, D7ProposedInput/2, and D7ResolutionAccess/1 remain unchanged exact fixed-parent types.
+
+For protocolOwner=D6 current D7 actions, InputDescriptor/3.ownerInput has protocolOwner=D7 and ownerKind=intentKind=d7_action/3; canonicalDescriptorBytes is exactly D3-CJ/3(D7ActionInput/3). The six D7ActionInput/3 members equal their PreparedActionBinding/4 counterparts individually, and ownerInput.pinRefs continues to cover exactly proposed pins plus actually protected source/definition/rule evidence under D6 sorted/unique pin rules. protocolOwner=D3 identity actions such as create_annotation keep D3's own d3_identity_operation/13 owner descriptor; PAB4 binds cross-owner preparation and creates no second D3 request authority. Historical d7_action/2/PAB3 keeps its original decoder, bytes and recovery.
 
 ## 6.2 EffectManifest/3 / EffectBytes/3
 
