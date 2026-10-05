@@ -1,0 +1,1824 @@
+{
+  "schema_version": 1,
+  "status": "candidate-design-not-implemented",
+  "fixed_parent_commit": "e8aa0b341630a57c786c0891d4bbd1620247441d",
+  "entries": [
+    {
+      "name": "AsciiDocProcessorEnvironment/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§1-3",
+      "notes": "Frozen Ruby-oracle processor environment with ordered API attribute events plus explicit UTF-8, locale and provider-profile closure; not a product runtime dependency."
+    },
+    {
+      "name": "ProcessorLocaleProfile/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §1",
+      "notes": "Registered controlled locale descriptor; no ambient-host fallback."
+    },
+    {
+      "name": "AcceptedProcessorProviderProfile/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §1",
+      "notes": "Exact provider profile admitted for the current evaluation; provider availability remains separate from core-language validity."
+    },
+    {
+      "name": "ManagedDocumentFormatProfile/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "ManagedDocumentFormatBinding/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "DocumentFormatCurrentQualification/1",
+      "owner": "D2/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "ManagedDocumentSemanticQualification/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "OracleBaseline/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Typed Witness/7 Ruby baseline; binds the fixed source commit and observer-manifest digest."
+    },
+    {
+      "name": "OracleObserverManifest/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Canonical reviewed instrumentation manifest; test evidence only."
+    },
+    {
+      "name": "OracleObserverSite/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "One exact source instrumentation site in OracleObserverManifest/1."
+    },
+    {
+      "name": "OracleDocumentState/2",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained document-level Ruby evidence shape used by Witness/7."
+    },
+    {
+      "name": "OracleBlockContext/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed block-context enum for OracleBlockEvent/2."
+    },
+    {
+      "name": "OracleContentModel/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed content-model enum for OracleBlockEvent/2."
+    },
+    {
+      "name": "OracleBlockEvent/2",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained block evidence; not the obsolete inline-event observer."
+    },
+    {
+      "name": "OracleCollectionEvent/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained list-item/table-cell evidence."
+    },
+    {
+      "name": "OracleCatalogEvent/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained catalog evidence; no indexterm fallback."
+    },
+    {
+      "name": "OracleDiagnostic/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Exact Ruby evidence diagnostic; CSP common diagnostic projection remains separate."
+    },
+    {
+      "name": "OracleObservedString/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Immutable observed Ruby string version."
+    },
+    {
+      "name": "OracleObservedSlice/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Byte half-open slice of one OracleObservedString/1."
+    },
+    {
+      "name": "OracleEvaluationCallKind/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed actual-evaluation call-kind enum."
+    },
+    {
+      "name": "OracleEvaluationCall/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Actual Ruby call instance; observer-added calls are forbidden."
+    },
+    {
+      "name": "OracleStringOperationKind/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed observed string-operation enum."
+    },
+    {
+      "name": "OracleOutputRunRelation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Exact-copy/derived/generated output-origin relation."
+    },
+    {
+      "name": "OracleOutputRun/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Complete non-overlapping output interval relation."
+    },
+    {
+      "name": "OracleStringOperation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Actual string transformation record with complete output runs."
+    },
+    {
+      "name": "OracleFieldPathSegment/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed field/attribute/position/array path segment."
+    },
+    {
+      "name": "OracleFieldEntryKey/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed key type for ordered observed field entries."
+    },
+    {
+      "name": "OracleFieldValue/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Finite recursive typed observed value; no arbitrary Ruby-object to_s."
+    },
+    {
+      "name": "OracleFieldObservation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Typed path/value observation for a real Inline field."
+    },
+    {
+      "name": "OracleInlineContext/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed current inline-observation context enum."
+    },
+    {
+      "name": "OracleInlineObservation/3",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Out-of-band actual Inline arguments/return evidence; not obsolete InlineEvent."
+    },
+    {
+      "name": "OracleContentRole/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed role enum for actual content-return evidence."
+    },
+    {
+      "name": "OracleContentObservation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Actual content/list/cell/title/reftext return evidence."
+    },
+    {
+      "name": "M37Site/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed model-property writer-site record; group/site validity is fixed by the public producer manifest."
+    },
+    {
+      "name": "AnnotationInlineBody/1",
+      "owner": "D2/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Sole current canonical portable four-member AsciiDoc inline source value; distinct from the evaluation profile."
+    },
+    {
+      "name": "AsciiDocInlineBody/1",
+      "owner": "D2/D8",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Compatibility schema alias only; canonicalOf AnnotationInlineBody/1, identical canonical bytes, no successor migration, second wire/version, or deployment claim.",
+      "canonicalOf": "AnnotationInlineBody/1"
+    },
+    {
+      "name": "OracleSemanticWitness/7",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §2",
+      "notes": "Test-only witness; exact physical semantic-head closure, typed supporting-evidence recursion, namespace separation, and producer-time carrier conformance; no product authority."
+    },
+    {
+      "name": "ForwardSemanticRole/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed forward-only relation-role set for Witness/7 structural semantic closure."
+    },
+    {
+      "name": "SemanticHeadSubjectKind/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed set of subject kinds eligible for physical cut heads; support-only subjects remain excluded."
+    },
+    {
+      "name": "CoreSemanticProjection/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§2-3",
+      "notes": "Implementation-independent oracle comparison surface."
+    },
+    {
+      "name": "CoreSemanticPropertyProfile/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §3",
+      "notes": ""
+    },
+    {
+      "name": "MermaidProviderProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": "Provider remains unavailable until exact runtime/browser/font/config inputs are registered."
+    },
+    {
+      "name": "StemProviderProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": ""
+    },
+    {
+      "name": "HtmlRendererProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": ""
+    },
+    {
+      "name": "PdfRendererProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": ""
+    },
+    {
+      "name": "DependencyKey/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "DependencyKey/2",
+      "section": "SPEC §6",
+      "notes": "15-arm current union; document_format rank 1."
+    },
+    {
+      "name": "DependencyProof/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "DependencyProof/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "InputDescriptor/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "InputDescriptor/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "PreparedIntent/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "PreparedIntent/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "PortableComponentKey/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "PortableComponentKey/1",
+      "section": "SPEC §6",
+      "notes": "document_format rank 1."
+    },
+    {
+      "name": "InstallationNotice/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "InstallationNotice/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "ContentCompletionProof/4",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ContentCompletionProof/3",
+      "section": "SPEC §6",
+      "notes": "Current component family; inherits CP3 committed/restored admission, sourceChanges, frontier, receipt and receiver invariants while using PortableComponentKey/2 and ChangeRecord/1."
+    },
+    {
+      "name": "ChangeRecord/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §6",
+      "notes": "First normatively closed design family; unknown pre-FC bytes are never relabelled."
+    },
+    {
+      "name": "PortableTransformCompilation/1",
+      "owner": "D6/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §11",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformPortableEvent/3",
+      "owner": "D6/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §11",
+      "notes": ""
+    },
+    {
+      "name": "CoreSourceEditPlan/2",
+      "owner": "D6/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§11-12",
+      "notes": ""
+    },
+    {
+      "name": "TransformEmissionPlan/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformEvidence/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": "Current signed transform evidence; beforeSourceSha256 is the SHA-256 of the exact complete historical before-source bytes selected by evidence.before, independently rechecked by receivers."
+    },
+    {
+      "name": "SourceTransformSealArtifact/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§12-13",
+      "notes": "Exact signed body is SourceTransformSealSignedBody/1; message domain is D6-Source-Transform-Seal/1 and complete artifact transport is canonical D3-CJ/3."
+    },
+    {
+      "name": "SourceTransformSealKey/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformSealOutboxItem/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformSealVerificationKey/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": ""
+    },
+    {
+      "name": "WorkspaceTrustDeclaration/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceTrustDeclaration/1",
+      "section": "SPEC §13",
+      "notes": "Dual-profile current successor; exact PoP/rotate/root signature bodies. resolve_conflict additionally binds conflictId, complete resolvedHeads, selected bundle address, mixed Carry1/2 and complete Outcome2."
+    },
+    {
+      "name": "WorkspaceAuthorizationBundle/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceAuthorizationBundle/1",
+      "section": "SPEC §13",
+      "notes": "Current dual-profile bundle; may retain an exact Declaration1 prefix and is strict-dispatched against Bundle1 in mixed policy-conflict heads."
+    },
+    {
+      "name": "DomainSealKeyHandle/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "DomainSealKeyHandle/1",
+      "section": "SPEC §13",
+      "notes": "Current profile-tagged handle. Replica registration creates exactly two staged handles in revision-token then source-transform order and activates them together only with the same CP4/P commit."
+    },
+    {
+      "name": "WorkspaceTrustGenesis/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceTrustGenesis/1",
+      "section": "SPEC §13",
+      "notes": ""
+    },
+    {
+      "name": "WorkspaceBootstrapPlan/4",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceBootstrapPlan/3",
+      "section": "SPEC §13",
+      "notes": "Fresh create/fork only; proposalId remains the D3 canonical UUID, initialPresentationPolicy is mandatory, and the original planning CAS/DecisionKey/final P atomically materializes revision1/separate D8 policy with target activation. Historical Plan1/Plan3 and non-bootstrap recovery are not widened."
+    },
+    {
+      "name": "D3IdentityInput/13",
+      "owner": "D3",
+      "status": "current",
+      "replaces": "D3IdentityInput/12",
+      "section": "SPEC §7",
+      "notes": "Current D3 native input successor: exact wire12 semantic member/mode matrix with InputDescriptor/3; expectedAuthority/proposal/preparationBinding retain genuine optionality and replica_local absence rules; historical wire9-12 remain exact."
+    },
+    {
+      "name": "D3ResolutionInputUse/2",
+      "owner": "D3",
+      "status": "current",
+      "replaces": "D3ResolutionInputUse/1",
+      "section": "SPEC §7",
+      "notes": ""
+    },
+    {
+      "name": "PreparedActionBinding/4",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "PreparedActionBinding/3",
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Current D7 successor consuming D7ActionSpec/2. D6 action branch binds D7ActionInput/3; D3 identity branch keeps d3_identity_operation/13. Genuine saved/planned PAB3 keeps exact decoder/bytes/pins/recovery."
+    },
+    {
+      "name": "EffectManifest/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "EffectManifest/2",
+      "section": "SPEC §§8,14",
+      "notes": "Fresh/current D7 effect successor used by current D10 author preparation; genuine saved/planned EffectManifest/2/EffectBytes/2 remain historical."
+    },
+    {
+      "name": "EffectBytes/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "EffectBytes/2",
+      "section": "SPEC §§8,14",
+      "notes": ""
+    },
+    {
+      "name": "PreparedEditBinding/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "PreparedEditBinding/2",
+      "section": "SCHEMAS §6.3; SPEC §9.8",
+      "notes": "Current D8 prepared-edit successor with closed D8EditIntent/3. Annotation proposed pin is complete D3-CJ/3(Value/4); historical /1-/2 records recover under their original decoder."
+    },
+    {
+      "name": "ExportPlan/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportPlan/2",
+      "section": "SPEC §8",
+      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/generation/presentation selection and typed pins; fresh output names use D9ControlledRelativeOutputName/1, output ordering remains exact unsigned UTF-8 after deterministic portable validity/alias/prefix/reserved checks, and canonicalization precedes freeze."
+    },
+    {
+      "name": "PublicationReceipt/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "PublicationReceipt/2",
+      "section": "SPEC §8",
+      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact selection and the complete actual outputs; names use D9ControlledRelativeOutputName/1 and the same validated raw-name unsigned UTF-8 comparator as stagedOutputs."
+    },
+    {
+      "name": "D9ControlledRelativeOutputName/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5; SPEC §8.3",
+      "notes": "Fresh-current byte-preserving portable relative output-name predicate. '/' is the only separator; unsafe/rooted/device forms are closed-rejected. PortableAlias is Unicode 15.1.0 NFC + full default C/F case fold + NFC per component, locale-free and rejection-only; exact stored names still sort by raw unsigned UTF-8. Host destination capability may only reject additional names, never rename or redefine protocol aliasing."
+    },
+    {
+      "name": "D3-Annotation-Value/4",
+      "owner": "D3/D2/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§9,15-16",
+      "notes": "Canonical current portable Annotation value and current annotation_value mutation payload. Any actual editable-value change uses one fresh AnnotationRevisionToken; historical Value/3 remains historical recovery."
+    },
+    {
+      "name": "D3-Annotation-Target-Projection/1",
+      "owner": "D3",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§9-10",
+      "notes": "Closed same-owner target union."
+    },
+    {
+      "name": "AnnotationInlineProfile/1",
+      "owner": "D2/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7 / SPEC §9.3",
+      "notes": "Single exact evaluation profile: commit-qualified Ruby 2.0.26 baseline and processorBackend=html5-semantic/1; distinct from AnnotationInlineBody/1."
+    },
+    {
+      "name": "AnnotationAppearance/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §9",
+      "notes": ""
+    },
+    {
+      "name": "AnnotationActorSnapshot/1",
+      "owner": "D8/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §9",
+      "notes": "Attribution only; not identity or LWW authority."
+    },
+    {
+      "name": "AnnotationTimeSnapshot/2",
+      "owner": "D8/Core",
+      "status": "current",
+      "replaces": "AnnotationTimeSnapshot/1",
+      "section": "SPEC §9",
+      "notes": "Preparation-time provenance, not global ordering."
+    },
+    {
+      "name": "Suggestion/3",
+      "owner": "D3/D8",
+      "status": "current",
+      "replaces": "Suggestion/2",
+      "section": "SPEC §§9,15",
+      "notes": "Single suggestion lifecycle authority."
+    },
+    {
+      "name": "D10WorkspaceReadDependencies/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10WorkspaceReadDependencies/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ControlDependencies/3",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ControlDependencies/2",
+      "section": "SPEC §14",
+      "notes": "Current D10 dependency successor with mixed Pin1/2 and Range1/2 carriers captured at one actual Authority Store barrier."
+    },
+    {
+      "name": "D10ControlInput/2",
+      "owner": "D10/D6",
+      "status": "current",
+      "replaces": "D10ControlInput/1",
+      "section": "SPEC §14",
+      "notes": "Current unseen D10 Workspace-control input; preserves historical D10ControlInput/1 records under their actual recovery contract."
+    },
+    {
+      "name": "ControlPrepareBinding/3",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ControlPrepareBinding/2",
+      "section": "SPEC §14",
+      "notes": "Current unseen prepare binding, including external-consent ExternalConfirmationRequirement/1 with the original separate confirmation-record semantics. Historical Binding1/2 retain exact decoders and recovery."
+    },
+    {
+      "name": "D10ControlRecordImage/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlRecordImage/1",
+      "section": "SPEC §14",
+      "notes": "Only automation/run move to /2; unchanged record kinds remain valid Image/1."
+    },
+    {
+      "name": "D10ControlRecordPin/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlRecordPin/1",
+      "section": "SPEC §14",
+      "notes": "Authenticates only Image2 under D10-Control-Record/2; Pin1 retains the /1 domain and Image1 is never repinned."
+    },
+    {
+      "name": "D10ControlRange/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlRange/1",
+      "section": "SPEC §14",
+      "notes": "Current range successor; mixed holders retain Range1 and Range2 with cross-version logical range identity and canonical rank."
+    },
+    {
+      "name": "D10ControlEffectPlan/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlEffectPlan/1",
+      "section": "SPEC §14",
+      "notes": "Current mixed effect plan; actual stored Image1 before may transition to current Image2 after without reencoding or forced subscription-generation replacement."
+    },
+    {
+      "name": "ApprovalUse/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ApprovalUse/1",
+      "section": "SPEC §14",
+      "notes": "Fresh/current D10 author-approval responsibility created from exact Link2/PAB4/Effect3 current preparation. Genuine saved/planned ApprovalUse/1 remains exact historical responsibility."
+    },
+    {
+      "name": "D10AuthorStepResponsibility/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10AuthorStepResponsibility/1",
+      "section": "SPEC §14",
+      "notes": "Current author-step responsibility; core_field_member uses D10AuthorPreparationLink/2 and exact PAB4 recovery pinning."
+    },
+    {
+      "name": "ScheduleRecurrenceEvidence/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ScheduleRecurrenceEvidence/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ScheduleSubscription/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ScheduleSubscription/1",
+      "section": "SPEC §14",
+      "notes": "Current scheduling successor and fresh Storage §7.2.1 producer owner. Historical Subscription1 remains exact; explicit same-generation continue requires complete retained continuity."
+    },
+    {
+      "name": "ScheduleOccurrenceProof/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ScheduleOccurrenceProof/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "AutomationOccurrenceRecord/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "AutomationOccurrenceRecord/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10MoneyResponsibility/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10MoneyResponsibility/1",
+      "section": "SPEC §14",
+      "notes": "Current mixed Money holder with canonical reservation/layer/pin/range/evidence ordering and no new balance authority."
+    },
+    {
+      "name": "D10ExecutionClaims/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ExecutionClaims/1",
+      "section": "SPEC §14",
+      "notes": "Current mixed claims holder; Binding1/2/3 are all explicit carriers and inner StableControlKey is globally unique across versions."
+    },
+    {
+      "name": "D10ExecutionInventory/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ExecutionInventory/1",
+      "section": "SPEC §14",
+      "notes": "Current complete mixed execution snapshot captured at one real store barrier; carries actual StopCapacity/1 and exact storeIncarnation."
+    },
+    {
+      "name": "ExecutionResponsibilityRecord/3",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ExecutionResponsibilityRecord/2",
+      "section": "SPEC §14",
+      "notes": "Current D6/D10 responsibility successor. Its five payload members must be byte-equal to pinned Inventory2; no background migration from Record2."
+    },
+    {
+      "name": "ExecutionContinuityProof/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ExecutionContinuityProof/1",
+      "section": "SPEC §14",
+      "notes": "Current proof whose inventoryPin selects exact D6-Execution-Inventory/2 and whose storeIncarnation equals Inventory2; protected tokens prove the same store/barrier."
+    },
+    {
+      "name": "D10VersionedControlRecordImage/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Mixed-holder discriminator only; preserves exact inner bytes."
+    },
+    {
+      "name": "D10VersionedControlRecordPin/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Mixed-holder discriminator only; exact cross-version record-cut identity/order is normative and inner pins retain their original payload domains."
+    },
+    {
+      "name": "D10VersionedControlRange/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Mixed-holder discriminator only; one logical range identity across Range1/2 with records/cost_lineage/occurrences rank 0/1/2."
+    },
+    {
+      "name": "D10VersionedControlPrepareBinding/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Exactly Binding/1, /2, /3 arms. Binding1 has no kind/version/confirmation; all arms retain exact bytes and are globally unique by inner StableControlKey."
+    },
+    {
+      "name": "D10VersionedAuthorStepResponsibility/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedScheduleSubscription/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedAutomationOccurrenceRecord/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedApprovalUse/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "PinRef/2",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "ComponentImage/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "OwnerInputBinding/2",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "ObservationScope/2",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "D3DecisionCompanion/2",
+      "owner": "D3",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "RelationReadContext/2",
+      "owner": "D4",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "RelationReadBinding/2",
+      "owner": "D4",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "WorkspaceTrustRootDeclaration/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "WorkspaceTrustAnchor/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "RevisionTokenSealVerificationKey/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "LeaseRunUse/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "D10ExternalResponsibility/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "D10StopResponsibility/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "StopCapacity/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Retained fixed-parent {issued,reserved} safety-store counters. Inventory2 carries the actual same-barrier value; Record3 does not duplicate it and handoff cannot reset/copy a subset."
+    },
+    {
+      "name": "SourceTransformSealSignedBody/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": "Complete SourceTransformSealArtifact/1 with only signature removed."
+    },
+    {
+      "name": "WorkspaceTrustPredecessor/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Root arm carries complete WorkspaceTrustRootFingerprint/1; declaration arm carries previous revision and canonical declaration digest."
+    },
+    {
+      "name": "DomainSealKeyPoPBody/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Exact /2 domain-seal key possession signed body."
+    },
+    {
+      "name": "DomainSealKeyRotateContinuityBody/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Exact ordinary-rotation continuity signed body."
+    },
+    {
+      "name": "WorkspaceTrustDeclarationSignedBody/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Complete WorkspaceTrustDeclaration/2 with only rootSignature removed."
+    },
+    {
+      "name": "DomainSealKeyAddPrepare/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Current unseen dual-profile trust add prepare; no caller key material."
+    },
+    {
+      "name": "DomainSealKeyRotatePrepare/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Current unseen dual-profile trust rotate prepare with ordinary|loss_recovery|compromise."
+    },
+    {
+      "name": "DomainSealKeyRevokePrepare/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Current unseen dual-profile trust revoke prepare with administrative|loss|compromise."
+    },
+    {
+      "name": "WorkspaceBootstrapProfile/4",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceBootstrapProfile/3",
+      "section": "SPEC §13",
+      "notes": "Same closed member set and issuer semantics as Profile3; selects dual-profile fresh genesis."
+    },
+    {
+      "name": "WorkspaceBootstrapCreatorBinding/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed creator principal/audience binding used by WorkspaceBootstrapPlan/4."
+    },
+    {
+      "name": "WorkspaceBootstrapTargetRegistry/1",
+      "owner": "D6/D4",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed Registry snapshot/binding pair used by WorkspaceBootstrapPlan/4."
+    },
+    {
+      "name": "WorkspaceBootstrapSeriesConfiguration/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed bootstrap series scope/multiplicity/revision member."
+    },
+    {
+      "name": "WorkspaceBootstrapPeriodScopeBinding/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Closed bootstrap period NodeRef/CalendarScope/revision member."
+    },
+    {
+      "name": "TrustConflictCarry/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "TrustConflictCarry/1",
+      "section": "SPEC §13",
+      "notes": "Dual-profile compromise carry. factId uses D6-Trust-Compromise-Fact/2; rotate compromise maps oldTrustKeyId; origin cut is the original Declaration2 CP4/ChangeRecord activation and is retained through per-head validation evidence."
+    },
+    {
+      "name": "TrustConflictOutcome/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "TrustConflictOutcome/1",
+      "section": "SPEC §13",
+      "notes": "Dual-profile resolver outcome over SealProfileId/1; authorize_fresh uses the exact Declaration2 PoP/2 body."
+    },
+    {
+      "name": "FreshDomainAuthorizationSpec/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "FreshDomainAuthorizationSpec/1",
+      "section": "SPEC §13",
+      "notes": "Current policy-conflict fresh authorization request with the same two-member JSON shape and full SealProfileId/1 union."
+    },
+    {
+      "name": "PolicyBundleHeadEvidence/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Protected strict dispatch for policy-conflict heads: CP3 implies Bundle1; CP4 uses ChangeRecord1 and exact Bundle1/2 version dispatch."
+    },
+    {
+      "name": "ConflictResolutionPolicyDerivedPlan/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ConflictResolutionDerivedPlan/1 policy_bundle arm",
+      "section": "SPEC §13",
+      "notes": "Current policy_bundle_choice plan freezing mixed head dispatch, per-head Carry validation evidence, Carry1/2 union, Outcome2, exact selected/result bundle pins and recovery representation."
+    },
+    {
+      "name": "ConflictResolutionInput/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ConflictResolutionInput/2 policy_bundle_choice owner descriptor",
+      "section": "SPEC §13",
+      "notes": "Protected current policy owner descriptor; ownerKind/intentKind=d6_conflict_resolution/3 and canonicalDescriptorBytes are exact. Public d6_conflict_prepare remains wireVersion3/ConflictResolution2; source arms retain Input2/Plan1/Preview1."
+    },
+    {
+      "name": "D10AuthorPreparationLink/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10AuthorPreparationLink/1",
+      "section": "SPEC §14",
+      "notes": "Fresh current core_field_member recovery link; preparedBindingToken selects exact PAB4 and is atomically saved with PAB4/effect/recovery pins before return."
+    },
+    {
+      "name": "ScheduleContinuityWitness/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ScheduleContinuityWitness/1",
+      "section": "SPEC §14",
+      "notes": "Fresh Subscription2 continuity witness. Exact artifact bytes are UTF8 D6-Schedule-Continuity/2 + NUL + D3-CJ/3(complete Witness2), pinned as artifact/recovery; /1 remains historical Witness1-only."
+    },
+    {
+      "name": "ScheduleContinuityStep/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ScheduleContinuityStep/1",
+      "section": "SPEC §14",
+      "notes": "Current positive continuity step using DependencyProof3 and current ChangeRecord1/Notice3/CP4 evidence. Exact artifact bytes are UTF8 D6-Schedule-Step/2 + NUL + D3-CJ/3(complete Step2), pinned as artifact/recovery; /1 remains historical Step1-only."
+    },
+    {
+      "name": "ScheduleContinuityInvalidation/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ScheduleContinuityInvalidation/1",
+      "section": "SPEC §14",
+      "notes": "Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses exact D6-Schedule-Invalidation/2 artifact domain. /1 remains historical Invalidation1-only and no invalid generation resets."
+    },
+    {
+      "name": "TrustConflictCarryValidationHop/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Version-dispatched retained activation evidence for one direct compromise or resolver carrier hop; pins exact ChangeRecord/completion proof/policy bundle."
+    },
+    {
+      "name": "TrustConflictCarryValidationEvidence/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Per expected-head/fact exact origin plus every traversed carrier hop used by the current mixed Carry1/2 fold."
+    },
+    {
+      "name": "ConflictResolutionPreview/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ConflictResolutionPreview/1 policy_bundle arm",
+      "section": "SPEC §13",
+      "notes": "Immutable current policy preview binding exact Input3 resolution, branchEvidence digest, and complete Plan2; source arms retain Preview1."
+    },
+    {
+      "name": "D2SourceRange/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Exact source-owner byte/line range used by current product projection; never grants write authority."
+    },
+    {
+      "name": "D2IdentityAdapter/1",
+      "owner": "D2/D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Typed stable Node/Resource/citation identity attached only after native AsciiDoc occurrence parsing."
+    },
+    {
+      "name": "D2ProductInline/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed current complete product inline family for fixed-2.0.26 observable inline semantics plus narrow identity adapters."
+    },
+    {
+      "name": "D2Heading/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current product heading with distinct authoredLevel/effectiveLevel, exact locator and source origins."
+    },
+    {
+      "name": "D2ProductBlock/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed current product block family covering the fixed baseline and named Weftext extension blocks; no opaque arm."
+    },
+    {
+      "name": "D2DocumentBody/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current product document body containing ordered D2ProductBlock/3 children."
+    },
+    {
+      "name": "D2DocumentPayload/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current valid/invalid exact-source product payload with available/unavailable semantic projection."
+    },
+    {
+      "name": "D2DocumentSnapshot/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current product Document snapshot with complete fixed-Ruby typed semantics, SourceOrigin graph, exact processor environment/root/include source bindings and DependencyProof/3 currentness; historical wireVersion2 remains historical-only."
+    },
+    {
+      "name": "D3IdentityOperationRequest/13",
+      "owner": "D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6",
+      "notes": "Current wire13 native D3 request: wire12 top-level semantics plus InputDescriptor/3; expectedAuthority/proposal/preparationBinding are optional exactly under the inherited mode matrix, null is invalid."
+    },
+    {
+      "name": "D8PresentationPolicySetRequest/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Policy-admin guarded checked-revision mutation request for the Workspace run-in default."
+    },
+    {
+      "name": "D8PresentationResult/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Derived presentation result over closed D8PresentationDecision/1; Workspace policy is present only when workspace_default actually consumes it."
+    },
+    {
+      "name": "D8DocumentRenderBinding/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Current D8 render/cache binding over source observation, format qualification, exact D2 snapshot and the actual presentation decision; explicit/no-body/conflict decisions carry no Workspace-policy dependency."
+    },
+    {
+      "name": "D9ExportTarget/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Closed current export target union including exact source/resource, HTML/PDF/Office/tabular and query JSON."
+    },
+    {
+      "name": "D9ExportTemplateBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact template input/profile/version/pin binding for ExportPlan/3."
+    },
+    {
+      "name": "D9ExportRouteStepBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "One exact accepted route step with provider/version/profiles/options/budget/evidence."
+    },
+    {
+      "name": "D9ExportRouteBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact finite accepted export route/revision/profile and ordered step bindings."
+    },
+    {
+      "name": "D9ExportStyleBundleBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact style-bundle version/pin frozen by ExportPlan/3."
+    },
+    {
+      "name": "D9DocumentRenderBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact current D2 product snapshot, semantic qualification and D8 presentation policy frozen for document rendering."
+    },
+    {
+      "name": "D9ExportDestinationIntent/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Protected external-bundle/server-download/resource-handoff destination intent; not permission."
+    },
+    {
+      "name": "D9ExportLossChoice/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact one-loss accept/reject choice used only through D9ExportConfirmation/1."
+    },
+    {
+      "name": "D9ExportConfirmation/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Immutable planToken plus complete sorted loss choices; cannot rewrite plan/staged bytes."
+    },
+    {
+      "name": "D9ExportStagedOutput/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact D9ControlledRelativeOutputName/1, byte length, digest and retained pin for one complete fresh-current staged member; the full set includes Core-generated loss-report.json and manifest.json."
+    },
+    {
+      "name": "D9PublishedOutput/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact D9ControlledRelativeOutputName/1, byte length and digest for one actual PublicationReceipt/3 member; current receipts preserve the Plan's exact names and portable conflict domain."
+    },
+    {
+      "name": "AnnotationRevisionToken/1",
+      "owner": "D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Opaque nonempty per-Annotation value-state CAS token; fresh for every changed committed Value/4 state and preserved for a true no-op."
+    },
+    {
+      "name": "PortableAnnotationRecord/4",
+      "owner": "D3/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7; SPEC §9.6",
+      "notes": "Current logical record in the existing node-local weftext.annotations.json Portable Metadata authority; binds AnnotationRef, AnnotationRevisionToken/1 and Value/4."
+    },
+    {
+      "name": "AnnotationEditableValue/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Current/Draft Value/4 editable projection excluding Core-owned attribution fields; not a direct current caller mutation wire."
+    },
+    {
+      "name": "D8EditIntent/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "D8 edit intent /2",
+      "section": "SCHEMAS §6.3; SPEC §9.8",
+      "notes": "Current closed D8 edit intent; annotation arm uses expected AnnotationRevisionToken/1 plus AnnotationEditableProposal/1 and targetPolicy, while reconfirm carries no caller value."
+    },
+    {
+      "name": "D8PinnedEditIntent/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3",
+      "notes": "Protected pinned counterpart of D8EditIntent/3 used by D8EditInput/3; annotation proposedValue pin contains complete Value/4 canonical bytes."
+    },
+    {
+      "name": "D8EditInput/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "D8EditInput/2",
+      "section": "SCHEMAS §6.3",
+      "notes": "Current OwnerInputBinding descriptor for d8_edit/3; no caller actor/time/trust fields."
+    },
+    {
+      "name": "D8EditPrepareRequest/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "d8_edit_prepare wire2",
+      "section": "SCHEMAS §6.3",
+      "notes": "Current D8 prepare envelope carrying D8EditIntent/3; historical wire1/2 saved/planned requests retain their original decoder."
+    },
+    {
+      "name": "D8AnnotationDraftProjection/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3",
+      "notes": "Discardable Value/4 Annotation Draft projection returned by D8AnnotationDraftOpenResponse/1; complete attribution/current record data stays in the paired read response, so Draft is not a second author authority."
+    },
+    {
+      "name": "D7ApplySuggestionIntent/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Current accept-suggestion arm; carries only AnnotationRef and exact expected Annotation revision, then fresh-reads the stored Suggestion/3 and target."
+    },
+    {
+      "name": "D7RejectSuggestionIntent/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Current reject-suggestion arm; carries only AnnotationRef and exact expected Annotation revision and requires no target-source read."
+    },
+    {
+      "name": "D7ActionSpec/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "ActionSpec/1",
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Exact successor: all fixed-parent arms unchanged except historical apply_suggestion is replaced; adds trusted create_annotation plus current apply/reject suggestion arms."
+    },
+    {
+      "name": "D7ActionPrepareRequest/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "d7_action_prepare wire2",
+      "section": "SCHEMAS §6.1",
+      "notes": "Current action-prepare envelope carrying D7ActionSpec/2; historical wire2 requests remain historical recovery."
+    },
+    {
+      "name": "D7CreateAnnotationIntent/2",
+      "owner": "D7/D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Trusted current interactive Annotation creation input. Caller supplies owner plus AnnotationEditableProposal/1; Core applies the operation-class gate, injects attribution and constructs the complete wire13 create_annotation request/Value4 payload."
+    },
+    {
+      "name": "D7ActionInput/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "D7ActionInput/2",
+      "section": "SCHEMAS §6.1",
+      "notes": "Current D6-owned D7 action OwnerInput descriptor using D7ActionSpec/2; six-member fixed-parent shape retained, canonicalDescriptorBytes and pin coverage remain owner-bound."
+    },
+    {
+      "name": "D2ProductInteger",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Arbitrary-precision canonical decimal domain for fixed-Ruby effective section levels; nonnegative for headings and never Counter/int64-clamped."
+    },
+    {
+      "name": "D2NativeAttributeSet/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed-value carrier for arbitrary legal fixed-native named attributes; paired with D2BlockCommonSemantics/1 for positional/common block slots, not free JSON and not a second parser."
+    },
+    {
+      "name": "D2SourceOrigin/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed provenance node for authored/reference/substitution/generated/synthetic/multi-origin product semantics and unique-writable-source derivation."
+    },
+    {
+      "name": "D2SourceOriginGraph/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Dense acyclic per-snapshot product provenance graph; not a durable identity namespace."
+    },
+    {
+      "name": "D2SourceOriginSet/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Per-semantic-value origin references plus mechanically derived unique/no-writable-source state."
+    },
+    {
+      "name": "D2ProductEvaluationBinding/1",
+      "owner": "D2/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Exact processor environment, root/include SourceUnitBinding values, final read barrier, scope and DependencyProof/3 binding that proves product-snapshot currentness."
+    },
+    {
+      "name": "D7HeadingProjection/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current headings projection with arbitrary-precision canonical decimal level; old int64 result shapes remain historical."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicy/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Immutable portable Workspace presentation history record with parent-head ancestry and activation ChangeId; not a replacement storage authority for the /1 logical current value."
+    },
+    {
+      "name": "D8PresentationPolicyAddress/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Workspace/revision/full-record-digest address for immutable presentation-policy records."
+    },
+    {
+      "name": "D8PresentationPolicyHeadSet/1",
+      "owner": "D8/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Complete protected maximal-head observation with owner-specific epoch/revision stamp; [] is only a proved uninitialized owner state, missing/corrupt/unproved evidence is unavailable, and multiple same-revision heads remain conflict rather than LWW."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicyBinding/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Exact one-head current binding over /1 logical value, /2 record, address, stamped head-set and pin; used only by workspace_default presentation."
+    },
+    {
+      "name": "D8PresentationPolicySetRequest/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Managed-atomic strict policy_admin request over the complete expected presentation head set."
+    },
+    {
+      "name": "D8PresentationPolicyEffect/1",
+      "owner": "D8/D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Typed complex shared-configuration owner effect committed under the original D6 DecisionKey/P/ChangeRecord chain; no PortableComponentKey expansion, generic JSON, or second ledger."
+    },
+    {
+      "name": "D8PresentationDecision/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Closed conditional presentation dependency: explicit/no-body arms are policy-free; workspace_default alone carries current policy binding."
+    },
+    {
+      "name": "D9ExportPlanToken/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Protected current export plan token tagged d9_export_plan/3; historical token tags dispatch separately."
+    },
+    {
+      "name": "D9PublicationToken/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Protected current publication token tagged d9_publication/3."
+    },
+    {
+      "name": "D9ExportGenerationPolicy/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Finite per-plan generation choices; bindingChoices/missingPolicy share the exact Unicode-scalar templatePath comparator, native-table and Resource choices retain their established keys, and none covers exact policy-independent targets."
+    },
+    {
+      "name": "D9NativeTableSelector/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5.1",
+      "notes": "Shortest-unique native-table/table-header selector over exact product table semantics."
+    },
+    {
+      "name": "D9NativeTableTokenBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5.1",
+      "notes": "Frozen SET/COLUMN external token plus exact native-table selector; token is not identity."
+    },
+    {
+      "name": "D2BlockCommonSemantics/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed public AbstractBlock slots style/caption/numeral/subs/positional values that are not recoverable solely from the named native attribute map."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicy/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Logical current Workspace presentation value projected from the unique current /2 history record; not separately persisted and unavailable while multiple heads conflict."
+    },
+    {
+      "name": "D7ProposedInput/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "D7ProposedInput/2",
+      "section": "SCHEMAS §6.1; SPEC §9.11",
+      "notes": "Current PAB4 proposed-input carrier; concrete Annotation after uses d3_annotation_value4, while d3_symbolic_result9 remains only for the legal D3 symbolic branch. Historical /2 stays exact."
+    },
+    {
+      "name": "AnnotationEditableProposal/1",
+      "owner": "D7/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.10",
+      "notes": "Current D7/D8 caller proposal containing editable author fields but no Suggestion lifecycle/evidence or attribution; Core applies the operation-class gate, expands a complete candidate Value4, then performs candidate-vs-before no-op comparison."
+    },
+    {
+      "name": "D8AnnotationReadRequest/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Actual current Annotation read entry request."
+    },
+    {
+      "name": "D8AnnotationReadResponse/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Complete current Value4/token/SourceObservation/attribution body read surface."
+    },
+    {
+      "name": "D8AnnotationDraftOpenRequest/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Actual Draft-open entry request sharing the current Annotation read barrier."
+    },
+    {
+      "name": "D8AnnotationDraftOpenResponse/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Pairs the complete current Annotation read with a discardable editable/readonly Draft projection."
+    },
+    {
+      "name": "AnnotationAggregate/1",
+      "owner": "D6 Storage",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.12",
+      "notes": "Sole current physical JSON envelope for one Node's weftext.annotations.json, with deterministic unique PortableAnnotationRecord/4 ordering."
+    },
+    {
+      "name": "AnnotationAggregateObservation/1",
+      "owner": "D6 Storage",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.12",
+      "notes": "Physical sidecar observation binding owner Node, trusted FileObjectBinding and exact aggregate bytes pin; distinct from logical Annotation SourceObservation."
+    },
+    {
+      "name": "AnnotationAggregateInstall/1",
+      "owner": "D6 Storage",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.12",
+      "notes": "Named existing-InstallationPlan file-write coordination binding that coalesces all same-Node Annotation record changes into one strict physical install."
+    },
+    {
+      "name": "SuggestionAuthorProposal/1",
+      "owner": "D7/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.10",
+      "notes": "Caller author-content subset for a pending suggestion; contains kind/replacementSource only and never lifecycle or target evidence."
+    },
+    {
+      "name": "D8AnnotationBodyRead/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Read projection separating exact Annotation inline source from R6 semantic text and invalid-source diagnostics."
+    },
+    {
+      "name": "D2DocumentBackendState/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "Fixed-Ruby final backend/basebackend/filetype/outfilesuffix product state with field-level SourceOrigin bindings."
+    },
+    {
+      "name": "D2DocumentAuthor/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "Complete fixed-2.0.26 structured author value preserving name/firstname/middlename/lastname/initials/email and per-field provenance."
+    },
+    {
+      "name": "D2DocumentRevision/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "Document revision number/date/remark with field-level provenance."
+    },
+    {
+      "name": "D2EffectiveDocumentAttribute/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "One final effective Document#attributes entry using the closed D2NativeSemanticValue/1 type domain plus same-evaluation authored/substitution/generated provenance; final Ruby value class is preserved and no physical range is fabricated."
+    },
+    {
+      "name": "D8PresentationPolicyHeadEvidence/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4; SPEC §8.2",
+      "notes": "Frozen parent policy address plus exact retained record pin used by the concrete SetRequest prepare producer."
+    },
+    {
+      "name": "D8PresentationPolicyPrepareResult/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4; SPEC §8.2",
+      "notes": "Current no-change or changing prepare result binding Input/Proposal/head evidence to one PreparedIntent3, d6_commit_request2 and preview."
+    },
+    {
+      "name": "D8PresentationPolicyOutboxItem/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4; SPEC §8.2",
+      "notes": "Protected original-P publication item selecting the exact P-materialized portable presentation-policy record bytes."
+    },
+    {
+      "name": "D8PresentationPolicyBootstrapInit/1",
+      "owner": "D8/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4, §9; SPEC §§8.2,13.2",
+      "notes": "Fresh unseen WorkspaceBootstrapPlan/4-only helper freezing a custody-proved empty D8 head set plus parents=[]/revision1/separate proposal before the original bootstrap final P; it carries no pre-P activation ChangeId, committed record, pin or outbox."
+    }
+  ]
+}

@@ -81,3 +81,9 @@ The next task is [Agent, automation and external capabilities](d10/TASK.md). D10
 | D9 | [D9 Implementation Impact and Test Outline](snapshots/d9-implementation-impact-and-test-outline/source.md) | implementation-obligations |
 | D4-D10-A2 | [D4-D10-A2 Mandatory Scenario Inputs 2026-08-28](snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md) | scenario-intake |
 | D8 | [D8 RTL and Bidirectional Interaction Mandatory Review Intake 2026-09-01](snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md) | scenario-intake |
+
+## AsciiDoc / Annotation final design candidate
+
+The current author candidate is at [asciidoc-annotation-final-design/README.md](asciidoc-annotation-final-design/README.md), pinned to parent commit `e8aa0b341630a57c786c0891d4bbd1620247441d`. Its [replacements.json](asciidoc-annotation-final-design/replacements.json) explicitly replaces named fixed-parent actual-owner sections; S49 snapshots and this directory's `inputs.json` remain unchanged.
+
+The candidate contains the complete AsciiDoc/extensions design, independent portable JSON Annotation, managed document format, SourceTransform/trust, and D2-D10 actual-owner coordination. Bilingual SPEC files own behavior/algorithms and bilingual SCHEMAS files own closed current schemas/historical dispatch. The bilingual ACCEPTANCE files contain 438 core design oracles plus 322 coordination fixtures, 760 total, all unexecuted. Status remains design candidate pending non-author exact-head review, not implementation, A2/global, or release acceptance.

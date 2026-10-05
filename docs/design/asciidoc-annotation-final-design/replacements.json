@@ -1,0 +1,959 @@
+{
+  "schema_version": 1,
+  "status": "candidate-design-not-implemented",
+  "fixed_parent_commit": "e8aa0b341630a57c786c0891d4bbd1620247441d",
+  "fixed_input_commit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "replacement_semantics": "Each entry replaces only the named normative concerns/sections at the exact fixed-parent source blob. SPEC defines behavior, SCHEMAS defines closed current wire/types, ACCEPTANCE defines design obligations, and terminology-registry defines names/version disposition. Unlisted fixed-parent owner semantics remain. Listed stale current-version statements are superseded, not simultaneously current. Snapshots and docs/design/inputs.json remain byte-for-byte inputs.",
+  "replacements": [
+    {
+      "owner": "D10",
+      "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
+      "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§8.1",
+        "§8.2",
+        "§16",
+        "§16.1",
+        "§4",
+        "§7"
+      ],
+      "changedSections": [
+        "proof3 Workspace reads and current D10ControlInput/2 chain",
+        "mixed Image/Pin/Range/PrepareBinding1-3 exact dispatch",
+        "EffectPlan2 exact old-before/new-after and subscription continuation",
+        "Money/Claims/Inventory2 canonical ordering and one-barrier completeness",
+        "ExecutionResponsibilityRecord/3 + Proof2 exact Inventory2/store/StopCapacity cross-check",
+        "historical saved/planned decoders and recovery retained",
+        "fresh current D10AuthorPreparationLink2 + PAB4 + ApprovalUse2 producer",
+        "current external-confirmation ControlPrepareBinding3 with original requirement/record/error semantics",
+        "historical Link1/PAB3/ApprovalUse1/Binding2 recovery retained",
+        "§16 continuityPins exact schedule artifact /1-/2 decoder dispatch and version-mixed retained-chain consumption"
+      ]
+    },
+    {
+      "owner": "D3",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§7",
+        "§9",
+        "§13",
+        "§16"
+      ],
+      "changedSections": [
+        "wire13 outer input",
+        "D3ResolutionInputUse/2",
+        "Annotation identity/reply/copy",
+        "dual-profile continuation",
+        "fresh BootstrapPlan4 retains D3 proposal UUID/authenticity/custody chain",
+        "current wire13 Annotation Value4 mutation binding inherits target@0/reply@1 reference+structural algebra, one final revision/CAS/receipt/materialization; historical Value3 plans recover unchanged",
+        "wire13 expectedAuthority/proposal/preparationBinding preserve exact wire12 optional mode matrix; replica_local omits forbidden members and historical wire9-12 stay exact",
+        "Annotation operation-class matrix preserves copy/import/Trash/restore/history semantics without treating carried terminal state as a fresh target-mutation decision",
+        "fresh WorkspaceBootstrapPlan4 create/fork freezes initial D8 presentation parents=[] revision1/separate and materializes it under the original allocation/custody decision and final P"
+      ]
+    },
+    {
+      "owner": "D3-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version implementation obligations"
+      ],
+      "changedSections": [
+        "wire13",
+        "Descriptor3/Proof3",
+        "CP4",
+        "format/annotation obligations",
+        "current portable Annotation Value4 canonical payload/revision/CAS, copy/reply/restore evidence and historical Value3 recovery obligations"
+      ]
+    },
+    {
+      "owner": "D3-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "schema/version references"
+      ],
+      "changedSections": [
+        "DependencyProof/3",
+        "InputDescriptor/3",
+        "PAB4",
+        "CP4 terminology"
+      ]
+    },
+    {
+      "owner": "D4",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.md",
+      "sourceBlob": "42f3e6015ad7986eb285f4c2c8dd67b842608ab3",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§7"
+      ],
+      "changedSections": [
+        "InputDescriptor/3 + DependencyProof/3 outer consumption",
+        "document_format dependency",
+        "inner D4 types retained"
+      ]
+    },
+    {
+      "owner": "D4-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "534fd5c65ffaf6da37a59b66d4ff385a43be7285",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current outer qualification obligations"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3/document_format invalidation"
+      ]
+    },
+    {
+      "owner": "D4-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "b7bb81f5f191774bc0f694cfc16944c7b2b414df",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "schema/version references"
+      ],
+      "changedSections": [
+        "Proof3 current outer terminology"
+      ]
+    },
+    {
+      "owner": "D5-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "2f45513d35e444c7c852c4238a091227e8e40e42",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current outer qualification obligations"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3/document_format stale cases"
+      ]
+    },
+    {
+      "owner": "D5",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md",
+      "sourceBlob": "5ebd6aa535bfed698f5a1031060ec729864829e6",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§5",
+        "§7"
+      ],
+      "changedSections": [
+        "full AsciiDoc table baseline",
+        "proof3/descriptor3 outer consumption",
+        "format-stamp invalidation"
+      ]
+    },
+    {
+      "owner": "D5-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "6187958f97d8791b7d58df4cc0f48bf1ced70b18",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "schema/version references"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3 terminology"
+      ]
+    },
+    {
+      "owner": "D6-Control",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md",
+      "sourceBlob": "e69c34e74aa8fbca00f77c89ac52778186630032",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§6",
+        "§11",
+        "§12",
+        "§13",
+        "§14",
+        "§17",
+        "§4.3",
+        "§4.4",
+        "§16",
+        "§9.4"
+      ],
+      "changedSections": [
+        "Dependency/Descriptor/Intent successors",
+        "document_format component + CP4/ChangeRecord",
+        "SourceTransform",
+        "dual-profile trust",
+        "D10 mixed holders",
+        "CP4 exact CP3-invariant inheritance + ChangeRecord admission",
+        "dual-profile trust prepare/3 and exact /2 signature bodies",
+        "closed BootstrapProfile4/Plan4 member family",
+        "Event3 geometry/replay span + SourceTransform signed body",
+        "current D10ControlInput/2 + ControlDependencies/3 + EffectPlan2 producer",
+        "current ApprovalUse2/PAB4 eligibility with historical saved/planned recovery",
+        "Record3/Proof2 exact Inventory2 five-payload/store/StopCapacity cross-check",
+        "dual-profile policy_bundle_choice CP3/CP4 + Bundle1/2 strict dispatch",
+        "Carry2 /2 fact domain, mixed recursive compromise fold and Outcome2 resolver",
+        "specialized replica registration two-handle/two-Declaration2 one-CP4 producer",
+        "current policy conflict OwnerInputBinding2 exact descriptor/pin union and ConflictResolutionPreview2",
+        "source Input2/Plan1/Preview1 vs policy Input3/Plan2/Preview2 arm dispatch inside current PreparedIntent3",
+        "D8 presentation default reuses the existing complex shared-configuration owner-effect/P-plan pattern rather than adding PortableComponentKey or mutating Policy3/Registry",
+        "D8 presentation shared configuration binds stamped head-set OwnerInput and one ordinary ChangeRecord/P owner effect while preserving the /1 logical current value",
+        "AnnotationAggregateObservation/1 and AnnotationAggregateInstall/1 consume exact fixed FileObjectBinding/1 + FileInstallCapability/2 absent/present/strict/observed cross-fields without widening those D6 types",
+        "D8 presentation SetRequest concrete PreparedIntent3+d6_commit_request2 producer freezes Proposal/head evidence at planning and materializes ChangeId-dependent record/hash/pin/outbox only inside final P",
+        "fresh Plan4 mandatory D8 presentation bootstrap init shares the original OperationId/planning CAS/DecisionKey/final P, with no pre-P committed record and no second ledger/CAS"
+      ]
+    },
+    {
+      "owner": "D6-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "7b57cd4c3d8b31a0eac5eeb85bcb5f62c6f2934f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version implementation obligations"
+      ],
+      "changedSections": [
+        "format",
+        "SourceTransform",
+        "CP4/ChangeRecord",
+        "trust",
+        "D10 mixed inventory",
+        "current D10 routing and exact mixed-holder implementation/acceptance obligations",
+        "dual-profile policy-conflict resolver and replica producer obligations",
+        "SourceTransform whole-before hash negative receiver case",
+        "current resolver owner-preview/pin closure and Storage §9.1/§9.3 direct-consumer obligations",
+        "schedule Witness2/Step2 canonical artifact encoding and /1-/2 decoder dispatch obligations"
+      ]
+    },
+    {
+      "owner": "D6-Storage",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "sourceBlob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§6",
+        "§12",
+        "§13",
+        "§14",
+        "§17",
+        "§7.2.1",
+        "§9.1",
+        "§9.3"
+      ],
+      "changedSections": [
+        "portable document_format",
+        "ChangeRecord/1",
+        "transform outbox retention",
+        "trust public history",
+        "D10 mixed inventory",
+        "CP4 receiver component/version/continuous-chain admission",
+        "SourceTransform canonical artifact replay/no-resign boundary",
+        "SourceTransformEvidence/2 exact whole-before hash receiver cross-check",
+        "mixed Carry1/Carry2 original activation-cut retention across policy resolution",
+        "fresh ScheduleSubscription2 + Witness2/Step2/Invalidation2 continuity producer",
+        "historical Subscription1/Witness1/Step1/Invalidation1 retention and explicit same-generation continue",
+        "§9.1 dual-profile replica registration/admission two Handle2/two Declaration2 same CP4/ChangeRecord/P and exact recovery",
+        "§9.3 current conflict direct-consumer arm dispatch, mixed Carry validation pins, Preview2/pinDirectory and historical recovery",
+        "§7.2.1 Witness2/Step2 exact /2 artifact bytes, PinRef coverage and closed current/historical decoder dispatch",
+        "fold/compaction/receiver/recovery preserve exact /1 or /2 typed schedule artifacts without fallback or repin",
+        "Portable Workspace Metadata stores immutable D8 presentation records/head ancestry; sync/admission/retention and one-P recovery preserve conflicting heads without LWW or second ledger",
+        "presentation record activation ChangeId plus receipt/EffectManifest/ChangeRecord association is required for sync/admission; head-set stamp continuity prevents revision/LWW guessing",
+        "node-local weftext.annotations.json AnnotationAggregate/1 physical envelope, deterministic ordering/duplicate-owner/reply-graph validation and absent empty state",
+        "AnnotationAggregateObservation/1 + AnnotationAggregateInstall/1 reuse trusted FileObjectBinding and strict one-file CAS while keeping per-Annotation logical revisions separate",
+        "multi-record same-file prepare/install/one-P coalescing, unchanged-record observation refresh, external JSON/sync/conflict/backup/copy/Trash/restore/purge boundaries",
+        "D8 presentation policy P-owned portable record/outbox publication and receiver admission retain original EffectManifest/receipt/ChangeRecord/ancestry association with exact-byte crash retry"
+      ]
+    },
+    {
+      "owner": "D6-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "205f43f938653722df81dca074ffdc190c30ea6d",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "Dependency3",
+        "Notice3/CP4",
+        "Bootstrap4",
+        "ExecutionRecord3",
+        "SourceTransform",
+        "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
+        "dual-profile conflict resolver input/plan/head evidence and Carry2/Outcome2",
+        "ConflictResolutionPreview2 and per-head TrustConflictCarryValidation evidence names",
+        "ScheduleContinuityWitness2/Step2 exact artifact-domain disposition"
+      ]
+    },
+    {
+      "owner": "D6-Registry",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
+      "sourceBlob": "80debdd50d91154aa0e1acb43b2a543daca9495a",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current terminology registry"
+      ],
+      "changedSections": [
+        "all FC-3.4d current successor names and historical dispositions",
+        "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
+        "FreshDomainAuthorizationSpec2, PolicyBundleHeadEvidence2, ConflictResolutionInput3/PolicyDerivedPlan2, Carry2/Outcome2",
+        "D10AuthorPreparationLink2 and ScheduleContinuityWitness2/Step2/Invalidation2 current names",
+        "TrustConflictCarryValidationHop1/Evidence1 and ConflictResolutionPreview2",
+        "ScheduleContinuityWitness2/Step2/Invalidation2 exact artifact domains and historical decoder boundary"
+      ]
+    },
+    {
+      "owner": "D7-Execution",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-execution-and-action-interfaces/source.md",
+      "sourceBlob": "b919463604407022d3f76fff328f2cfe53be62df",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§15"
+      ],
+      "changedSections": [
+        "PAB4 current action qualification",
+        "Annotation suggestion accept/reject",
+        "D7ActionSpec/2 trusted create_annotation plus current apply_suggestion/reject_suggestion; Core-built Value4 attribution, replace/delete/insert fresh target preparation and one-seal target+Annotation acceptance",
+        "operation-class Suggestion transition gate; apply/reject remain sole terminal current decisions and target-hidden reject remains legal"
+      ]
+    },
+    {
+      "owner": "D7-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "30c12de85daf294452f541a5b0929f39d7bac483",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version implementation obligations"
+      ],
+      "changedSections": [
+        "PAB4",
+        "Effect3",
+        "Edit3",
+        "Bootstrap4"
+      ]
+    },
+    {
+      "owner": "D7-Narrow",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-narrow-field-qualification/source.md",
+      "sourceBlob": "4f0cfeded1c0471988e2d5d712ab997ac4d90adb",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§7",
+        "§8"
+      ],
+      "changedSections": [
+        "document_format dependency without widening source disclosure",
+        "proof3 outer holder"
+      ]
+    },
+    {
+      "owner": "D7-PAB",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.md",
+      "sourceBlob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§14",
+        "§15"
+      ],
+      "changedSections": [
+        "PreparedActionBinding/4",
+        "Annotation accept preparation",
+        "D10 current author responsibility",
+        "PreparedActionBinding/4 consumes D7ActionSpec/2; D6 actions bind D7ActionInput/3, D3 create_annotation keeps d3_identity_operation/13, and historical ActionSpec1/PAB3 recovery remains exact",
+        "D7ProposedInput/3 current carrier with d3_annotation_value4 concrete Annotation after and retained d3_symbolic_result9; historical /2 stays exact"
+      ]
+    },
+    {
+      "owner": "D7-Effects",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.md",
+      "sourceBlob": "32e9a5f889a6627e05a397d9738ff171982f0838",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§13",
+        "§14"
+      ],
+      "changedSections": [
+        "EffectManifest/3 + EffectBytes/3",
+        "WorkspaceBootstrapPlan/4 encoding",
+        "D10 preview digest",
+        "closed WorkspaceBootstrapPlan/4 encoding",
+        "current annotation source images and EffectBytes use complete D3 Annotation Value4 canonical bytes; historical d3_annotation_value3 bytes retain decoder",
+        "EffectItem/3 adds only typed presentation_policy_change for the D8 complex shared-configuration owner effect; historical EffectItem1/2 stay exact",
+        "presentation_policy_change preview remains committed=null before P; final P alone installs the committed record plus protected exact-record outbox association",
+        "WorkspaceBootstrapPlan4 preview carries typed presentation_policy_change committed=null and the original final P alone materializes the committed record/outbox association"
+      ]
+    },
+    {
+      "owner": "D7-Query",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-query-algebra/source.md",
+      "sourceBlob": "11e0137865a08b5cb6cfb898be3c299748174286",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§5",
+        "§8"
+      ],
+      "changedSections": [
+        "format-aware heading/body/ref/saved-definition dependencies",
+        "query grammar retained",
+        "format invalidation",
+        "headings/body_text consume D2DocumentSnapshot3 and complete D2 product body family",
+        "current headings product adapter uses arbitrary-precision D7 integer and validates complete D2 evaluation/include dependencies at final read barrier",
+        "annotation_body current replacement reads Value4/R6 semantic text at the final barrier; invalid R6 is source_unavailable with no D2 plain_text fallback"
+      ]
+    },
+    {
+      "owner": "D7-QueryViewAction",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-query-view-action/source.md",
+      "sourceBlob": "6d75b79fa3173772d5cb996c264c41c06c6a4315",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§15",
+        "SCHEMAS D7"
+      ],
+      "changedSections": [
+        "PAB4",
+        "Effect3",
+        "EditBinding3 references",
+        "current D2 product projection and D8 presentation-policy aware view/render inputs"
+      ]
+    },
+    {
+      "owner": "D7-Scenario",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-scenario-dispositions/source.md",
+      "sourceBlob": "e24f74601b3ad68d0212e58d7b7e63080946d7ce",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version scenario dispositions"
+      ],
+      "changedSections": [
+        "Effect3/EditBinding3 scenario references"
+      ]
+    },
+    {
+      "owner": "D7-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "470cd345ee5c766f493b7d0e1c39003c2e285f59",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "Proof3",
+        "PAB4",
+        "Effect3",
+        "Edit3",
+        "Bootstrap4"
+      ]
+    },
+    {
+      "owner": "D7-Registry",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-terminology-registry/source.json",
+      "sourceBlob": "3cab5124f46822729093d5d955908b05eb65bb87",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current terminology registry"
+      ],
+      "changedSections": [
+        "PAB4/Effect3/Edit3/Bootstrap4 current versions"
+      ]
+    },
+    {
+      "owner": "D7-ValueCEL",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-value-and-cel-profile/source.md",
+      "sourceBlob": "eeb402e78a51191c5f653c4d9fe80ae87bb9d941",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "SCHEMAS D7"
+      ],
+      "changedSections": [
+        "proof3 qualification only; CEL/value language remains unchanged"
+      ]
+    },
+    {
+      "owner": "D8-Acceptance-JSON",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-acceptance-matrix/source.json",
+      "sourceBlob": "52d34409e15b7a378042a6e78ef32419c3829943",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D8 obligations"
+      ],
+      "changedSections": [
+        "PreparedEditBinding3",
+        "format-aware Draft",
+        "Annotation v4"
+      ]
+    },
+    {
+      "owner": "D8-Acceptance",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-acceptance-matrix/source.md",
+      "sourceBlob": "f4f8ffe1bc5dcd9cd466a9a9cbf2ce7445653210",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D8 obligations"
+      ],
+      "changedSections": [
+        "PreparedEditBinding3",
+        "format-aware Draft",
+        "Annotation v4"
+      ]
+    },
+    {
+      "owner": "D8-CrossSurface",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.md",
+      "sourceBlob": "3fdf8a8279752818af2c0adc21d2d070eea1ea39",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§4",
+        "§9",
+        "§10",
+        "§15"
+      ],
+      "changedSections": [
+        "Source-only fallback",
+        "run-in/deep-heading rendering",
+        "Annotation appearance/review",
+        "Annotation inline body/profile closed schema",
+        "D2DocumentSnapshot3/Draft full-product Source fallback and D8 workspace presentation policy",
+        "independent JSON Annotation current Source/visual/edit lifecycle uses one R6 inline source, Value4 CAS and Core actor/time without a second rich-body authority",
+        "explicit run-in/separate/conflict/no-body presentation remains usable without Workspace policy; implicit default binds one-head D8 shared configuration and real currentness",
+        "workspace_default binds the /1 logical current value plus /2 portable record and stamped head-set; explicit/no-body paths remain policy-free",
+        "field-level product provenance gates structured author edits without changing ordinary exact Source/Draft/whole-source-save availability",
+        "fresh active Plan4 has an immediately usable one-head Workspace default while explicit run-in/separate/conflict/no-body remain policy-independent and later D9 frozen bindings stay immutable"
+      ],
+      "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "schemaAnchors": [
+        "§7"
+      ]
+    },
+    {
+      "owner": "D8-Interfaces",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "sourceBlob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§5",
+        "§8",
+        "§9",
+        "§10",
+        "§15"
+      ],
+      "changedSections": [
+        "Draft source+format base",
+        "PreparedEditBinding/3",
+        "deep heading/run-in editor",
+        "Annotation UX",
+        "Annotation inline body/profile closed schema",
+        "current d8_document/Draft D2DocumentSnapshot3 consumer and run-in policy/render-cache binding",
+        "D8EditIntent/3 and PreparedEditBinding/3 close current Value4 annotation edit/CAS/proposed-pin/read-only/invalid-body paths; historical Value3/EditBinding2 recovery retained",
+        "current D8 document/Draft/render consumers validate product evaluation binding and consume Workspace presentation policy only on actual workspace_default decision",
+        "presentation policy mutation owner input freezes the exact stamped head-set and saved/planned recovery preserves that observation",
+        "actual d8_annotation_read + d8_annotation_draft_open producers return complete Value4 attribution/current basis while Draft remains an editable projection",
+        "manual_reattach and annotation_reconfirm_suggestion operation classes with Core-owned target evidence",
+        "presentation policy SetRequest error order, no-change arm, exact head evidence, PreparedIntent3/request carrier, final-P materialization, revocation and saved/planned/unknown recovery",
+        "fresh unseen create/fork Plan4 atomically activates one revision1/separate presentation head; proved [] is initialization only and missing/corrupt/unproved state remains unavailable"
+      ],
+      "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "schemaAnchors": [
+        "§7"
+      ]
+    },
+    {
+      "owner": "D8-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6ddeffd5e656881ed5f0e37682917266e6bbf141",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D8 obligations"
+      ],
+      "changedSections": [
+        "EditBinding3",
+        "Draft invalidation",
+        "Annotation current qualification"
+      ]
+    },
+    {
+      "owner": "D8-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "b6c4e2045ea07d1b154c34eed541481fcb8685aa",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "Proof3/Descriptor3/Effect3/EditBinding3/Annotation4"
+      ]
+    },
+    {
+      "owner": "D9-Conversion",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.md",
+      "sourceBlob": "b9ff7da0ab0bcce23fe3f4b6510a8743b6138f8f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§4",
+        "§8",
+        "§16",
+        "SCHEMAS D7/D9"
+      ],
+      "changedSections": [
+        "PAB4",
+        "Effect3",
+        "provider profiles",
+        "no implicit adoc probe arm",
+        "managed AsciiDoc current product projection for semantic/rendered paths while d9_probe input union remains unchanged",
+        "render/export consumes complete product semantic profiles and exact route/target terminal profile without reparsing source or ambient generation defaults",
+        "render/export consumes complete structured author/final effective document metadata directly from D2 product without fullname/raw-source/ambient-default reconstruction"
+      ]
+    },
+    {
+      "owner": "D9-Binding",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "sourceBlob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§7",
+        "§8",
+        "§16"
+      ],
+      "changedSections": [
+        "wire13/PAB4 coordination",
+        "fresh managed format",
+        "Annotation identity-map transfer"
+      ]
+    },
+    {
+      "owner": "D9-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "5c1cf0f02114df93d6e4a69e9c715f0d48559551",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D9 obligations"
+      ],
+      "changedSections": [
+        "ExportPlan3/PublicationReceipt3",
+        "format/provider/export cases",
+        "canonical collection permutation/duplicate/conflict cases and complete product document-state consumption",
+        "portable output-name positive/negative, alias/prefix/reserved, host-capability separation, strict current admission and historical/unknown-publication recovery obligations"
+      ]
+    },
+    {
+      "owner": "D9-Templates",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.md",
+      "sourceBlob": "bc79681ffdb05b59869f558c958a9a606cb98a5f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§16",
+        "SCHEMAS D7/D9"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3/PAB4 template construction qualification",
+        "native-table Office SET/COLUMN shortest-unique selector over multi-row/merged/repeated/CJK/RTL headers and finite per-plan missing/image/layout choices",
+        "bindingChoices and missingPolicy canonical templatePath ordering/uniqueness plus nativeTableBindings (setName,columnName) ordering and duplicate-conflict closure",
+        "bindingChoices/missingPolicy templatePath comparator is exact Unicode-scalar lexicographic, normalization none, case-sensitive, shorter exact scalar prefix first"
+      ]
+    },
+    {
+      "owner": "D9-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "077d3d9c7d6b3203318d2b31edec5d5e7983a8ff",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "PAB4",
+        "ExportPlan3",
+        "PublicationReceipt3",
+        "D9ControlledRelativeOutputName1"
+      ]
+    },
+    {
+      "owner": "D9-Export",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-workers-and-export/source.md",
+      "sourceBlob": "24f561ba98f78d0a54290f3e338987fbfae66228",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§4",
+        "§8",
+        "§16"
+      ],
+      "changedSections": [
+        "ExportPlan/3 + PublicationReceipt/3",
+        "format-aware rendered export",
+        "Annotation export",
+        "provider profiles",
+        "fully closed ExportPlan3 route/template/target/destination/loss-confirmation/evidence/staged-output types",
+        "D2DocumentSnapshot3 rendered export and frozen D8 presentation-policy binding",
+        "ExportPlan3 current token/version dispatch, inline closed generation policy, exact template/route/pin cross-fields, product include currentness and frozen conditional presentation decision",
+        "ExportPlan3 canonical set-like collections: route-step evidencePins, styleBundles, staged/receipt outputs, binding/missing/native-table choices; prepare canonicalizes before freeze and readers reject noncanonical records",
+        "staged/receipt output names use unsigned UTF-8 lexical ordering only after inherited safe-relative/alias/conflict validation; template choices use the exact scalar comparator and recovery still rejects noncanonical bytes",
+        "fresh-current D9ControlledRelativeOutputName1 closes controlled-relative-name lexical validity, Unicode-15.1 portable aliasing, reserved bundle members and file/directory prefix conflicts while preserving raw UTF-8 output ordering and historical recovery"
+      ]
+    },
+    {
+      "owner": "D2",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§2",
+        "§3",
+        "§4",
+        "§5",
+        "§9",
+        "§10",
+        "§15",
+        "§16"
+      ],
+      "changedSections": [
+        "complete AsciiDoc language/processor contract",
+        "Witness7/CSP/PropertyProfile",
+        "managed format semantic ownership",
+        "provider profiles",
+        "portable Annotation semantics",
+        "Witness7 retained document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence closed schemas",
+        "Oracle observer manifest + M37 producer-site closure",
+        "ordered AsciiDoc API attribute environment plus explicit UTF-8/locale/provider closure",
+        "Witness7 exact root/forward/supplementary/support closure verifier and producer-time carrier conformance",
+        "AnnotationInlineBody/1 alias and single AnnotationInlineProfile/1",
+        "current D2DocumentSnapshot3 complete native AsciiDoc product projection and historical wire2 boundary",
+        "source-origin ranges and stable Node/Resource/citation identity adapters after native parsing",
+        "historical D2 Annotation outer v2 plain_text/replace_plain_text/targetStatus model retained only as historical decoder; current author authority is portable Value4 metadata",
+        "current product /3 complete fixed-Ruby per-kind semantics, typed native attributes, SourceOrigin graph, exact environment/include dependency binding and arbitrary-precision effective levels",
+        "current product /3 also retains public block common slots and native inline subtype semantics (icon/ref-bibref/footnote/callout) without free JSON or second parsing",
+        "field-level SourceOrigin/write gate for NativeAttributeEntry, common/per-kind semantics, block/inline slots and unique-authored structured-edit positive path",
+        "complete fixed-Ruby Document observable product: backend/safe/doctype/title partition, structured author components, revision and final effective attributes without fabricated source ranges",
+        "effectiveAttributes preserve fixed-Ruby final null/Boolean/String/Integer/ordered-string-Array value classes through the closed D2NativeSemanticValue domain; unsupported arbitrary extension objects make rich product unavailable instead of to_s/free JSON"
+      ],
+      "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "schemaAnchors": [
+        "§1",
+        "§4",
+        "§7"
+      ]
+    },
+    {
+      "owner": "D10-Candidate",
+      "sourcePath": "docs/design/d10/CANDIDATE.md",
+      "sourceBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§15",
+        "§15.2"
+      ],
+      "changedSections": [
+        "fresh/current protected images",
+        "fresh author PAB4/Effect3/ApprovalUse2",
+        "planned/saved original-version recovery retained"
+      ]
+    },
+    {
+      "owner": "D10-Impact",
+      "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
+      "sourceBlob": "50031c9db36232ec439aa2c96d312465250dab04",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "§1.1",
+        "§7",
+        "§13",
+        "§14–§16"
+      ],
+      "changedSections": [
+        "current Binding3/PAB4/Effect3/Edit3 implementation obligations",
+        "mixed canonicality and one-barrier responsibility tests",
+        "historical saved/planned exact recovery retained"
+      ]
+    },
+    {
+      "owner": "D10-Terminology",
+      "sourcePath": "docs/design/d10/TERMINOLOGY.md",
+      "sourceBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "§3",
+        "§13.1",
+        "§14.1",
+        "§15"
+      ],
+      "changedSections": [
+        "current D7/D8/D10 successor names",
+        "ControlPrepareBinding1/2/3 historical dispositions",
+        "Schedule/Approval/execution mixed-holder terminology"
+      ]
+    },
+    {
+      "owner": "D10-Upstream",
+      "sourcePath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
+      "sourceBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§2.2",
+        "§3.1",
+        "§4.1",
+        "§4.4",
+        "§5.1"
+      ],
+      "changedSections": [
+        "fresh/current PAB4/EffectManifest3/PreparedEditBinding3 references",
+        "fresh ApprovalUse2 author path",
+        "exact saved/planned old-version recovery retained"
+      ]
+    },
+    {
+      "owner": "D2-Impact",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§2 parser/profile",
+        "§3.5 AsciiDoc retirement",
+        "§4.2 AsciiDoc unsupported handling"
+      ],
+      "changedSections": [
+        "current implementation uses complete fixed-Asciidoctor-2.0.26 D2DocumentSnapshot3 product projection rather than the historical Profile-v2 closed subset",
+        "open/native AsciiDoc include passthrough and fixed-baseline constructs use lossless Source fallback when structural UI is unavailable",
+        "historical single-source authority authorization exact-source and invalid-repair safeguards retained",
+        "Annotation mutation/value implementation obligations are not replaced by this Stage4A entry",
+        "historical plain Annotation implementation obligations superseded for current paths by portable Value4 plus single R6 AnnotationInlineProfile while raw historical recovery remains",
+        "current product implementation consumes one complete typed D2 snapshot/evaluation binding for read/query/render/write gating; no second parser or flat-origin shortcut",
+        "current product implementation carries per-slot provenance and complete fixed-Ruby document metadata/effective attribute state; no second parser or fullname/source reconstruction",
+        "current D7/D8/D9 product consumers receive typed effective Document attributes and same-evaluation provenance; no name/source reparsing or string flattening"
+      ]
+    },
+    {
+      "owner": "D7-DefinitionTransfer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-definition-transfer/source.md",
+      "sourceBlob": "6d92b30604515709fc7c9d1cd54eea03e9f5c4db",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "current carrier statement",
+        "definitionTransfers current submission",
+        "historical recovery"
+      ],
+      "changedSections": [
+        "new current D3 submission uses D3IdentityOperationRequest13",
+        "definitionTransfers and Result9 inner semantics retained",
+        "genuine saved/planned wire12 transfer recovery retained"
+      ]
+    },
+    {
+      "owner": "D9-ImportIR",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.md",
+      "sourceBlob": "d9eb42eef8537b7b7fe5f3d60819c3ed3403c1d8",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "current author submission",
+        "D3 current wire reference",
+        "historical recovery"
+      ],
+      "changedSections": [
+        "new current author submission uses D3IdentityOperationRequest13",
+        "ImportIR Mapping ConversionInput file-safety and loss semantics retained",
+        "genuine saved/planned wire12 import recovery retained"
+      ]
+    },
+    {
+      "owner": "D9-Acceptance",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+      "sourceBlob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "D9-04 heading mapping",
+        "S12 heading depth"
+      ],
+      "changedSections": [
+        "obsolete five-heading-level premise replaced by current authored6-9 and uncapped effective-level product projection",
+        "target depth limitations are explicit export loss/degradation or provider unavailability rather than source rejection",
+        "current ExportPlan3 canonical collection ordering/uniqueness and complete fixed-Ruby document-state/product provenance obligations"
+      ]
+    }
+  ],
+  "schema_companion": {
+    "zh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+    "en": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+    "semantics": "Normative closed current shapes, canonical ordering, cross-field checks and historical dispatch for all replacement entries."
+  },
+  "normative_companions": {
+    "schemas": {
+      "zh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "en": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "role": "closed current schemas, retained oracle evidence types, canonical ordering, and exact historical dispatch"
+    },
+    "acceptance": {
+      "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "role": "760 unexecuted design obligations; no additional private acceptance source"
+    },
+    "terminology": {
+      "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "role": "schema/version/name registry"
+    }
+  }
+}

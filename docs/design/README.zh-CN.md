@@ -80,3 +80,9 @@ translation_status: source
 | D9 | [D9 Implementation Impact and Test Outline](snapshots/d9-implementation-impact-and-test-outline/source.md) | implementation-obligations |
 | D4-D10-A2 | [D4-D10-A2 Mandatory Scenario Inputs 2026-08-28](snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md) | scenario-intake |
 | D8 | [D8 RTL and Bidirectional Interaction Mandatory Review Intake 2026-09-01](snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md) | scenario-intake |
+
+## AsciiDoc / Annotation 最终设计候选
+
+当前作者候选位于 [asciidoc-annotation-final-design/README.zh-CN.md](asciidoc-annotation-final-design/README.zh-CN.md)，固定父提交 `e8aa0b341630a57c786c0891d4bbd1620247441d`。它以 [replacements.json](asciidoc-annotation-final-design/replacements.json) 对 fixed-parent actual-owner sections 做显式替换，S49 snapshots 与本目录 `inputs.json` 保持不变。
+
+该候选包含完整 AsciiDoc/必要扩展、独立 portable JSON Annotation、managed document format、SourceTransform/trust 及 D2–D10 actual-owner coordination；行为/算法见双语 SPEC，closed current schema 与历史分派见双语 SCHEMAS。双语 ACCEPTANCE 现含 438 条 core design oracle 与 322 条 coordination fixture，共 760 条，均未运行。状态仍是 design candidate，等待 exact-head 非作者独立复核；不是实现、A2/global 或发布接受。
