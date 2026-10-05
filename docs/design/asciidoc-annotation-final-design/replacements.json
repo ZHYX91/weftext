@@ -712,6 +712,8 @@
         "portable Annotation semantics",
         "Witness7 retained document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence closed schemas",
         "Oracle observer manifest + M37 producer-site closure",
+        "ordered AsciiDoc API attribute environment plus explicit UTF-8/locale/provider closure",
+        "Witness7 exact root/forward/supplementary/support closure verifier and producer-time carrier conformance",
         "AnnotationInlineBody/1 alias and single AnnotationInlineProfile/1"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
@@ -810,7 +812,7 @@
     "acceptance": {
       "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "role": "554 unexecuted design obligations; no additional private acceptance source"
+      "role": "555 unexecuted design obligations; no additional private acceptance source"
     },
     "terminology": {
       "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
