@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 138
-- total: 576
+- actual-owner coordination fixtures: 163
+- total: 601
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -458,10 +458,35 @@ translation_status: source
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
 | M39-11 | SPEC §§2–3 | document/0 反例：先 bind document/0、之后才发布 actual returned Document，或 bind 时按 title/source/text 重新寻找 D；即使最终 entry0 正确也必须失败。 |
 
-## Actual-owner coordination — 138
+## Actual-owner coordination — 163
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
+| FC4B-VAL-01 | SPEC §§9.6–9.8 | current Annotation 创建必须只在现有 Node-local Portable Metadata authority 中保存一个 PortableAnnotationRecord/4；creator/authoredAt 由 trusted Core 根据真实执行 principal/time 写入，并初始化 lastEditor/editedAt。caller 提供的 actor/time/trusted flag 必须 closed-decode 失败。 |
+| FC4B-VAL-02 | SPEC §§9.6–9.7 | 仅把 reviewState 从 open 改为 resolved 也会改变完整 Value/4：必须只分配一个 fresh annotationRevisionToken，经既有 SourceRevisionPlan 路径推进 managed Annotation SourceVersion，byte-preserve creator/authoredAt，并由 Core 重写 lastEditor/editedAt；使用旧 token 并发 prepare 的另一编辑必须输掉 CAS。 |
+| FC4B-VAL-03 | SPEC §§9.6–9.7 | 仅修改 appearance 或 labels 仍是实际 Value/4 mutation，必须使用同一个 one-token/one-managed-after 规则；不能因为 target/body/reply 未变化就复用旧 token。 |
+| FC4B-VAL-04 | SPEC §9.6 | 完整 editable Annotation value 与 current state 相等时必须是真正 no-op：attribution、annotationRevisionToken、SourceVersion、H 都不变，不建立 SourceRevisionPlan，也不伪造 source_change。 |
+| FC4B-VAL-05 | SPEC §§9.6–9.7 | current annotation_value 的 payloadBindings、proposed pins、effects 与 result materialization 都必须绑定完整 Value/4 的 exact D3-CJ/3 bytes 与 SHA-256；PortableAnnotationRecord envelope/ref/token 不进入 value hash，相同 digest 不能代替 identity/currentness/CAS。 |
+| FC4B-VAL-06 | SPEC §9.7 | 同一 existing Annotation 同时修改 target@0 与 reply@1 时，target 必须保留完整 reference evidence；identity-preserving reply change 恰有一个 S/annotation_reply_change，禁止重复 reply reference result。target/reply toSource、receipt source version 与 toAnnotationRevisionToken 必须全部使用唯一 final Annotation revision。 |
+| FC4B-VAL-07 | SPEC §9.7 | restore trashed Annotation A 同时把 reply P→Q 时，target@0 与 nonnull reply@1 都以 non_live_source 为 prestate、resolved 为 poststate；旧 reply=null 时只有 reply 使用 absent，target 仍是 non_live_source。typed target/reply evidence 不能被 lifecycle-only 取代，也不能按 slot 分别增 revision。 |
+| FC4B-VAL-08 | SPEC §§9.6,16–17 | current Portable Annotation JSON corrupt/unknown 时不得产生 partial trusted Value/4 projection。有权限的 repair/backup 可以读取 exact raw portable bytes；真正 historical D2 Annotation-v2/Value3 record 只按 recorded decoder 恢复，禁止猜成或迁移成 Value/4。 |
+| FC4B-D8-01 | SPEC §9.8 | current d8_edit_prepare annotation intent 必须是 D8EditIntent/3，包含 exact expectedAnnotationRevisionToken、AnnotationEditableValue/1 与 targetPolicy；PreparedEditBinding/3.intent 必须是这个 closed type，proposedInputs pin 的是 Core 构造的完整 D3-CJ/3(Value/4)，不能只 pin editable subset。 |
+| FC4B-D8-02 | SPEC §§9.6,9.8 | D8 Annotation prepare 必须拒绝 caller 提供的 actor/time/authentication/trusted-origin 字段。Core 在 current authorization/CAS 后构造 attribution 并冻结在同一 immutable plan；replay 不重新采样。 |
+| FC4B-D8-03 | SPEC §§9.3,9.8 | Annotation inline Draft 若不满足唯一 R6 AnnotationInlineProfile，必须保留 exact source 与 diagnostics，同时 visual rendering 和 prepare unavailable；不得回退 plain_text，也不得调用第二 parser。 |
+| FC4B-D8-04 | SPEC §9.8 | 只有 annotation_read 而没有 annotation_write 的 principal 可以取得已授权 current Value/4 的 read-only Annotation Draft/projection，但不能因为 render 或 target resolution 成功就 prepare write。 |
+| FC4B-D8-05 | SPEC §§9.8,10 | pure synchronization 或 stable-locator 重新取得资格只要不改变 Value/4 bytes，就不得推进 annotationRevisionToken、SourceVersion 或 lastEditor/editedAt，也不能复活旧 PreparedEditBinding/PAB/ActionEvidence。 |
+| FC4B-SUG-01 | SPEC §§9.9,15 | current apply_suggestion 的 replace 分支必须 fresh-read pending+confirmed Suggestion/3 与 exact target，验证 expectedText，用 stored replacementSource 唯一映射一个 SourceTransform replace，并在同一 DecisionKey/planning CAS/P seal 原子提交 target after-image 与 Annotation accepted/not_applicable state。 |
+| FC4B-SUG-02 | SPEC §§9.9,15 | current apply_suggestion 的 delete 分支必须 fresh 验证 expectedText，并唯一映射到 replacement bytes 长度为0的 SourceTransform replace；target 删除与 Annotation accepted state 不能只提交一边。 |
+| FC4B-SUG-03 | SPEC §§9.9,15 | current apply_suggestion 的 insert 分支必须 fresh 验证 stored zero-width point/basis 与 pointAffinity，并使用 stored replacementSource 唯一映射一个 SourceTransform insert；caller 不能用 targetLocator/patch bytes 覆盖 stored suggestion。 |
+| FC4B-SUG-04 | SPEC §§9.9,15 | reject_suggestion 只要 Annotation state disclosure、annotation_read/write 与 exact current Annotation token 成功，即使 target source hidden/unreadable 也必须可走正向路径；它不读写 target，只把 Value/4 改为 rejected/not_applicable，并遵守正常 revision/actor-time 规则。 |
+| FC4B-SUG-05 | SPEC §§9.6,9.9,15 | accept 与 reject、body edit、reviewState edit、labels/appearance edit、reply edit 或其它 suggestion edit 都竞争同一个 Annotation revision token；同一 old-token prepare 最多一个 winner，loser 必须 fresh-read/reprepare。 |
+| FC4B-SUG-06 | SPEC §§9.8–10,15 | mapped/candidate geometry 本身永远不授权 suggestion accept 或 edit。manual reattach 必须 fresh 选择一个 exact same-owner target，通过新的 Value/4 mutation 把 pending 改为 needs_reconfirmation，再由 reconfirmation/fresh prepare 重算 basis/expected bytes；旧 PAB/PreparedIntent 不得复活。 |
+| FC4B-LIFE-01 | SPEC §§9.7,16 | fresh/mapped fresh Annotation 的初始 nonnull reply 继续用 inherited reference plan/result slot，绝不能用 structural S。只有 mode matrix 明确允许的 destination-owner existing Annotation 才可走 inherited existing-reply S；同时必须保留 target@0 evidence，reply 禁止双记。 |
+| FC4B-LIFE-02 | SPEC §§9.7,16 | Node/copy_annotation copy 必须分配 fresh AnnotationRefs，通过真实 identityMap/candidate map 重写 target 和完整 same-owner reply graph，并为每个 result 物化唯一 final Value/4/revision；禁止复制旧 locator 或按文本/相同 hash 猜位置。 |
+| FC4B-LIFE-03 | SPEC §§9.6–9.7,16 | ordinary import 只能按 inherited owner rules 创建 fresh Annotation identity；imported attribution 必须明确 imported_unverified。D3 mode matrix 禁止时，fresh imported Annotation 不能被用作 existing Annotation 的额外 same-owner structural reply mutation。 |
+| FC4B-LIFE-04 | SPEC §§9.6–9.7,16 | 独立 Annotation Trash/restore 若 Value/4 byte-equal，只改变 lifecycle，不 mint Annotation revision。restore 同时发生实际 Value/reply change 时，必须走 typed preimage/S/non_live_source 规则并使用一个 final revision。 |
+| FC4B-LIFE-05 | SPEC §§10,16 | portable backup/export 只在相应 disclosure rule 下保留 Annotation identity/value 与 exact resource-region/source-origin facts；它不授予 current permission、SourceObservation、ActionEvidence 或 execution authority，target SourceOrigin、Annotation identity、reply structure 必须保持三者分离。 |
+| FC4B-ALIAS-01 | SPEC §9.3; SCHEMAS §7 | AnnotationInlineBody/1 是唯一 current canonical type；AsciiDocInlineBody/1 只能以 canonicalOf=AnnotationInlineBody/1、replaces=null 的 alias 存在，registry consumer 不得推导 successor migration 或第二 wire/version。 |
 | FC4A-PROD-01 | SPEC §§3.4,8 | current managed Document 含 authored level-6 section 时，必须 strict-decode 为 D2DocumentSnapshot/3，且 D2Heading/3 的 authoredLevel=6、effectiveLevel 来自 native 状态机；D8 read、D7 headings scan、D9 document rendering 必须消费同一个 occurrence，不能再由 historical document_snapshot wire2 拒绝。 |
 | FC4A-PROD-02 | SPEC §§3.4,8 | 固定2.0.26合法的 open/example/sidebar/admonition/list/table/pass/STEM/native-inline 组合，即使 rich editor 没有结构控件，也必须可 parse/read 并经 exact Source 无损保存；任何 product consumer 都不得删除未知 UI 的合法 D2ProductBlock/3 或 D2ProductInline/3 arm。 |
 | FC4A-PROD-03 | SPEC §3.4 | 已获授权但语法无效的 AsciiDoc 必须保留精确源文本并返回有序的 D2 诊断，同时把产品语义投影标记为不可用、提交资格标记为拒绝；不得返回不完整的语义树。若失败来自物理 source envelope，则继续使用原有 source_unavailable 错误类别，不能伪装成语法错误。 |
@@ -603,7 +628,7 @@ translation_status: source
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -615,4 +640,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 576 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 601 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
