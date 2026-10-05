@@ -180,7 +180,8 @@
         "§17",
         "§4.3",
         "§4.4",
-        "§16"
+        "§16",
+        "§9.4"
       ],
       "changedSections": [
         "Dependency/Descriptor/Intent successors",
@@ -194,7 +195,10 @@
         "Event3 geometry/replay span + SourceTransform signed body",
         "current D10ControlInput/2 + ControlDependencies/3 + EffectPlan2 producer",
         "current ApprovalUse2/PAB4 eligibility with historical saved/planned recovery",
-        "Record3/Proof2 exact Inventory2 five-payload/store/StopCapacity cross-check"
+        "Record3/Proof2 exact Inventory2 five-payload/store/StopCapacity cross-check",
+        "dual-profile policy_bundle_choice CP3/CP4 + Bundle1/2 strict dispatch",
+        "Carry2 /2 fact domain, mixed recursive compromise fold and Outcome2 resolver",
+        "specialized replica registration two-handle/two-Declaration2 one-CP4 producer"
       ]
     },
     {
@@ -212,7 +216,9 @@
         "CP4/ChangeRecord",
         "trust",
         "D10 mixed inventory",
-        "current D10 routing and exact mixed-holder implementation/acceptance obligations"
+        "current D10 routing and exact mixed-holder implementation/acceptance obligations",
+        "dual-profile policy-conflict resolver and replica producer obligations",
+        "SourceTransform whole-before hash negative receiver case"
       ]
     },
     {
@@ -236,7 +242,9 @@
         "trust public history",
         "D10 mixed inventory",
         "CP4 receiver component/version/continuous-chain admission",
-        "SourceTransform canonical artifact replay/no-resign boundary"
+        "SourceTransform canonical artifact replay/no-resign boundary",
+        "SourceTransformEvidence/2 exact whole-before hash receiver cross-check",
+        "mixed Carry1/Carry2 original activation-cut retention across policy resolution"
       ]
     },
     {
@@ -254,7 +262,8 @@
         "Bootstrap4",
         "ExecutionRecord3",
         "SourceTransform",
-        "trust prepare/3, BootstrapProfile4, SourceTransform signed body"
+        "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
+        "dual-profile conflict resolver input/plan/head evidence and Carry2/Outcome2"
       ]
     },
     {
@@ -268,7 +277,8 @@
       ],
       "changedSections": [
         "all FC-3.4d current successor names and historical dispositions",
-        "trust prepare/3, BootstrapProfile4, SourceTransform signed body"
+        "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
+        "FreshDomainAuthorizationSpec2, PolicyBundleHeadEvidence2, ConflictResolutionInput3/PolicyDerivedPlan2, Carry2/Outcome2"
       ]
     },
     {
