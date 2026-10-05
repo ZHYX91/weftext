@@ -29,7 +29,8 @@
         "historical saved/planned decoders and recovery retained",
         "fresh current D10AuthorPreparationLink2 + PAB4 + ApprovalUse2 producer",
         "current external-confirmation ControlPrepareBinding3 with original requirement/record/error semantics",
-        "historical Link1/PAB3/ApprovalUse1/Binding2 recovery retained"
+        "historical Link1/PAB3/ApprovalUse1/Binding2 recovery retained",
+        "§16 continuityPins exact schedule artifact /1-/2 decoder dispatch and version-mixed retained-chain consumption"
       ]
     },
     {
@@ -226,7 +227,8 @@
         "current D10 routing and exact mixed-holder implementation/acceptance obligations",
         "dual-profile policy-conflict resolver and replica producer obligations",
         "SourceTransform whole-before hash negative receiver case",
-        "current resolver owner-preview/pin closure and Storage §9.1/§9.3 direct-consumer obligations"
+        "current resolver owner-preview/pin closure and Storage §9.1/§9.3 direct-consumer obligations",
+        "schedule Witness2/Step2 canonical artifact encoding and /1-/2 decoder dispatch obligations"
       ]
     },
     {
@@ -259,7 +261,9 @@
         "fresh ScheduleSubscription2 + Witness2/Step2/Invalidation2 continuity producer",
         "historical Subscription1/Witness1/Step1/Invalidation1 retention and explicit same-generation continue",
         "§9.1 dual-profile replica registration/admission two Handle2/two Declaration2 same CP4/ChangeRecord/P and exact recovery",
-        "§9.3 current conflict direct-consumer arm dispatch, mixed Carry validation pins, Preview2/pinDirectory and historical recovery"
+        "§9.3 current conflict direct-consumer arm dispatch, mixed Carry validation pins, Preview2/pinDirectory and historical recovery",
+        "§7.2.1 Witness2/Step2 exact /2 artifact bytes, PinRef coverage and closed current/historical decoder dispatch",
+        "fold/compaction/receiver/recovery preserve exact /1 or /2 typed schedule artifacts without fallback or repin"
       ]
     },
     {
@@ -279,7 +283,8 @@
         "SourceTransform",
         "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
         "dual-profile conflict resolver input/plan/head evidence and Carry2/Outcome2",
-        "ConflictResolutionPreview2 and per-head TrustConflictCarryValidation evidence names"
+        "ConflictResolutionPreview2 and per-head TrustConflictCarryValidation evidence names",
+        "ScheduleContinuityWitness2/Step2 exact artifact-domain disposition"
       ]
     },
     {
@@ -296,7 +301,8 @@
         "trust prepare/3, BootstrapProfile4, SourceTransform signed body",
         "FreshDomainAuthorizationSpec2, PolicyBundleHeadEvidence2, ConflictResolutionInput3/PolicyDerivedPlan2, Carry2/Outcome2",
         "D10AuthorPreparationLink2 and ScheduleContinuityWitness2/Step2/Invalidation2 current names",
-        "TrustConflictCarryValidationHop1/Evidence1 and ConflictResolutionPreview2"
+        "TrustConflictCarryValidationHop1/Evidence1 and ConflictResolutionPreview2",
+        "ScheduleContinuityWitness2/Step2/Invalidation2 exact artifact domains and historical decoder boundary"
       ]
     },
     {
