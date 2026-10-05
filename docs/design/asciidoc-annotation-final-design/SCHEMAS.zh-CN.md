@@ -284,14 +284,252 @@ marks/atoms：link必须target；xref必须target/refid/path；image/icon使用�
 
 显式author foo-option=bar 同时生成 options=["foo"] 与 named/foo-option="bar"；显式空值保留空字符串。由 %foo/options=foo/opts=foo 产生的物理空 foo-option 只表达membership，不伪造named author value。temporary/internal writer（例如DocBook root-option）不能按字段名冒充author。
 
-# 4. Witness/7 model evidence
+# 4. Witness/7 retained evidence 与 model evidence
+
+## 4.1 Oracle baseline、observer manifest 与 retained evidence closed types
+
+以下类型全部是**测试 oracle 证据**，不是产品持久 authority、第二 parser 或 renderer wire。它们只记录固定 Ruby 2.0.26 实际求值已经产生的事实；observer 不得为了填充成员重新调用 parser/getter、改 evaluator string、替换 converter 返回值、插 marker/sentinel 或向文档语义写入状态。
 
 ```text
+OracleBaseline/1 = {
+  kind:"asciidoctor_ruby_baseline",
+  version:1,
+  repository:"asciidoctor/asciidoctor",
+  release:"2.0.26",
+  sourceCommit:"0b99b39c9df884d4aec13bba45f03cdbab505769",
+  observerContract:"ruby_actual_evaluation_observer/1",
+  observerManifestSha256:"sha256:<64 lowercase hex>"
+}
+
+OracleObserverManifest/1 = {
+  kind:"ruby_actual_evaluation_observer_manifest",
+  version:1,
+  sourceCommit:"0b99b39c9df884d4aec13bba45f03cdbab505769",
+  rubyRuntime:{
+    implementation:text,
+    version:text,
+    buildId:text
+  },
+  sites:[OracleObserverSite/1...]
+}
+
+OracleObserverSite/1 = {
+  siteId:UInt,
+  file:text,
+  fileBlobSha1:"<40 lowercase hex>",
+  method:text,
+  callSite:text,
+  observedOperation:text,
+  captureRule:text,
+  rangeTransferRule:text
+}
+
+OracleDocumentState/2 = {
+  backend:text,
+  basebackend:text,
+  doctype:"article"|"book"|"manpage"|"inline",
+  safeMode:"unsafe"|"safe"|"server"|"secure",
+
+  doctitle:{
+    combined:text|null,
+    main:text|null,
+    subtitle:text|null
+  },
+
+  authors:[{
+    name:text,
+    firstname:text|null,
+    middlename:text|null,
+    lastname:text|null,
+    initials:text|null,
+    email:text|null
+  }...],
+
+  revision:null|{
+    number:text|null,
+    date:text|null,
+    remark:text|null
+  },
+
+  attributes:[{name:text,value:text}...]
+}
+
+OracleBlockContext/1 =
+    "admonition"|"audio"|"colist"|"dlist"|"document"|"example"|
+    "floating_title"|"image"|"listing"|"literal"|"olist"|"open"|
+    "page_break"|"paragraph"|"pass"|"preamble"|"quote"|"section"|
+    "sidebar"|"stem"|"table"|"thematic_break"|"toc"|"ulist"|
+    "verse"|"video"
+
+OracleContentModel/1 =
+    "compound"|"simple"|"verbatim"|"raw"|"empty"
+
+OracleBlockEvent/2 = {
+  ordinal:UInt,
+  parentOrdinal:UInt|null,
+  context:OracleBlockContext/1,
+  contentModel:OracleContentModel/1|null,
+  level:CanonicalSignedDecimal|null,
+  style:text|null,
+  id:text|null,
+  title:text|null,
+  roles:[text...],
+  options:[text...],
+  attributes:[{name:text,value:text}...]
+}
+
+OracleCollectionEvent/1 =
+    {kind:"list_item",
+     listOrdinal:UInt,itemOrdinal:UInt,
+     listContext:"ulist"|"olist"|"colist"|"dlist_term"|"dlist_description",
+     marker:text|null,style:text|null,text:text|null,
+     checklist:"none"|"checked"|"unchecked"}
+
+  | {kind:"table_cell",
+     tableOrdinal:UInt,
+     section:"head"|"body"|"foot",
+     rowOrdinal:UInt,columnOrdinal:UInt,
+     colspan:UInt,rowspan:UInt,
+     style:text|null,text:text|null}
+
+OracleCatalogEvent/1 =
+    {kind:"ref",id:text,reftext:text|null,
+     targetKind:"section"|"inline_ref"|"bibref"|"other"}
+  | {kind:"footnote",index:UInt,id:text|null,text:text|null}
+  | {kind:"link",target:text}
+  | {kind:"image",target:text}
+  | {kind:"include",target:text}
+  | {kind:"callout",listOrdinal:UInt,itemOrdinal:UInt}
+
+OracleDiagnostic/1 = {
+  severity:"debug"|"info"|"warn"|"error"|"fatal",
+  semanticCode:text,
+  exactMessage:text,
+  logicalFile:text|null,
+  line:UInt|null
+}
+
+OracleObservedString/1 = {
+  valueId:UInt,
+  rubyEncoding:text,
+  bytesBase64:text,
+  byteLength:UInt
+}
+
+OracleObservedSlice/1 = {
+  valueId:UInt,
+  startByte:UInt,
+  endByte:UInt
+}
+
+OracleEvaluationCallKind/1 =
+    "parse"|"attribute_playback"|"content"|"title"|"list_text"|
+    "cell_text"|"cell_content"|"apply_subs"|"substitution_stage"|
+    "inline_convert"|"block_convert"|"metadata_access"|"effect"
+
+OracleEvaluationCall/1 = {
+  callId:UInt,
+  parentCallId:UInt|null,
+  siteId:UInt,
+  nodeOrdinal:UInt|null,
+  invocationOrdinal:UInt,
+  kind:OracleEvaluationCallKind/1
+}
+
+OracleStringOperationKind/1 =
+    "copy"|"slice"|"concat"|"join"|"regex_replace"|"split_piece"|
+    "character_map"|"trim"|"delete"|"normalize"|"encode"|
+    "converter_return"|"scalar_assign"
+
+OracleOutputRunRelation/1 =
+    {kind:"exact_copy",input:OracleObservedSlice/1}
+  | {kind:"derived",inputs:[OracleObservedSlice/1...],operationId:UInt}
+  | {kind:"generated",siteId:UInt,inlineEventId:UInt|null}
+
+OracleOutputRun/1 = {
+  startByte:UInt,
+  endByte:UInt,
+  relation:OracleOutputRunRelation/1
+}
+
+OracleStringOperation/1 = {
+  operationId:UInt,
+  callId:UInt,
+  siteId:UInt,
+  kind:OracleStringOperationKind/1,
+  inputs:[OracleObservedSlice/1...],
+  outputValueId:UInt,
+  runs:[OracleOutputRun/1...],
+  removedInputs:[OracleObservedSlice/1...]
+}
+
+OracleFieldPathSegment/1 =
+    {kind:"field",name:text}
+  | {kind:"attribute",name:text}
+  | {kind:"position",index:UInt}
+  | {kind:"array",index:UInt}
+
+OracleFieldEntryKey/1 =
+    {kind:"name",value:text}
+  | {kind:"position",index:UInt}
+  | {kind:"symbol",value:text}
+
+OracleFieldValue/1 =
+    null
+  | {kind:"boolean",value:Boolean}
+  | {kind:"integer",decimal:CanonicalSignedDecimal}
+  | {kind:"symbol",value:text}
+  | {kind:"observed_string",valueId:UInt}
+  | {kind:"array",items:[OracleFieldValue/1...]}
+  | {kind:"entries",
+     items:[{key:OracleFieldEntryKey/1,value:OracleFieldValue/1}...]}
+
+OracleFieldObservation/1 = {
+  path:[OracleFieldPathSegment/1...],
+  value:OracleFieldValue/1
+}
+
+OracleInlineContext/1 =
+    "anchor"|"break"|"button"|"callout"|"footnote"|"image"|
+    "indexterm"|"kbd"|"menu"|"quoted"
+
+OracleInlineObservation/3 = {
+  eventId:UInt,
+  callId:UInt,
+  parentCallId:UInt|null,
+  producingOperationId:UInt|null,
+  context:OracleInlineContext/1,
+  nodeType:OracleFieldValue/1,
+  fields:[OracleFieldObservation/1...],
+  returnValueId:UInt|null
+}
+
+OracleContentRole/1 =
+    "body"|"title"|"list_item"|"table_cell"|
+    "footnote_body"|"reftext"|"raw_content"
+
+OracleContentObservation/1 = {
+  callId:UInt,
+  role:OracleContentRole/1,
+  resultValueIds:[UInt...],
+  contributingInlineEventIds:[UInt...]
+}
+
+M37Site/1 = {
+  group:
+    "M37-01"|"M37-02"|"M37-03"|"M37-04"|"M37-05"|"M37-06"|
+    "M37-07"|"M37-08"|"M37-09"|"M37-10"|"M37-11"|"M37-12"|
+    "M37-13"|"M37-14"|"M37-15"|"M37-16"|"M37-17"|"M37-18",
+  file:text,
+  method:text,
+  point:text
+}
+
 OracleSemanticWitness/7 = {
   format:"weftext.asciidoc-oracle-witness",
   version:7,
-  baseline,
-  processorEnvironmentSha256,
+  baseline:OracleBaseline/1,
+  processorEnvironmentSha256:"sha256:<64 lowercase hex>",
   document:OracleDocumentState/2,
   blockEvents:[OracleBlockEvent/2...],
   collectionEvents:[OracleCollectionEvent/1...],
@@ -387,6 +625,58 @@ OracleModelPropertyObservation/1 =
      phase:"model_ready"|"evaluation_complete",documentSubjectId:UInt,
      heads:[{subjectId:UInt,snapshotObservationId:UInt}...]}
 ```
+
+## 4.2 retained evidence canonical rules 与 producer manifests
+
+`OracleBaseline/1.observerManifestSha256` 必须等于 `SHA-256(D3-CJ/3(OracleObserverManifest/1))`；`processorEnvironmentSha256` 必须等于 exact `AsciiDocProcessorEnvironment/3` canonical bytes 的 SHA-256。manifest 不是 caller 可替换的 coverage 声明：每个 siteId 唯一并按数值升序；fileBlobSha1 必须是固定 sourceCommit 下该文件的真实 Git blob；method/callSite/observedOperation/captureRule/rangeTransferRule 必须对应被独立核过的固定插桩点。缺 site、未知必要分支或 manifest/source 不匹配均为 `oracle_observation_incomplete`，不得把合法 AsciiDoc 改判不支持。
+
+实际 evaluation observer 的完整 producer family 为：
+
+| producer family | 必须记录的实际事实 |
+|---|---|
+| `AbstractBlock#convert` | attribute playback 后原转换调用、node/parent关联；不替换converter。 |
+| `Block#content` | 原输入行、content model、原apply_subs调用与最终返回；包括raw/verbatim裁空行与join。 |
+| `Substitutors#apply_subs` | 原 substitutions 实际顺序、每步输入/输出、passthrough提取/恢复关联。 |
+| `sub_quotes / convert_quoted_text` | 原 MatchData/captures、Inline构造参数、真实converter返回值。 |
+| `sub_attributes / sub_replacements` | 原match区间、替换结果、drop/drop-line以及counter/set副作用。 |
+| `sub_macros` | 原macro match/captures与Inline text/target/id/refid/path/attributes。 |
+| `sub_post_replacements` | 原split/slice/HardLineBreakRx输入区间及break完整text。 |
+| `Inline#convert / selected converter` | 实际context/type/scalar参数与返回值；observer不得增加getter调用。 |
+| `AttributeList` | 原StringScanner位置/scan/get-byte结果和产生的scalar；不重跑attribute-list parser。 |
+| `ListItem#text / Cell#text/#content` | 原getter调用、实际输出和a-cell inner-document调用关系。 |
+| `title / reftext` | 原第一次计算、cache hit及实际scalar返回；不为日志触发读取。 |
+| footnote/counter/catalog写点 | 原操作输入和实际结果；不二次执行。 |
+
+`OracleObservedString/1.valueId`、`OracleEvaluationCall/1.callId`、`OracleStringOperation/1.operationId`、`OracleInlineObservation/3.eventId` 分别只在各自数组namespace内唯一。相同bytes来自不同来源仍得到不同valueId；Ruby String原地修改后产生新的不可变快照。bytesBase64使用RFC4648 canonical padded Base64，decode长度必须等于byteLength。slice为对应字符串版本的字节半开区间，必须满足 `0 <= startByte <= endByte <= byteLength`；evaluation-string byte位置不冒充.adoc source range。
+
+`OracleStringOperation/1.runs` 按startByte升序、无重叠并完整覆盖实际输出；exact_copy必须逐字复制input slice；derived保留全部真实输入，不能伪称一一source mapping；generated记录实际site及可选inline observation。removedInputs保留真实被删除输入，零输出的concealed行为不能因此消失。
+
+`OracleInlineObservation/3.fields` 路径按 `D3-CJ/3(path)` 排序唯一；字符串leaf必须引用真实ObservedString。OracleFieldValue不接受Ruby object的 `to_s` 逃逸。ContentObservation的resultValueIds按原String/Array返回结构顺序，普通文本来自真实content/list/cell/title/reftext返回而不是HTML flatten。BlockEvent roles/options保留Ruby当前顺序，attributes按name排序唯一；DocumentState attributes同样按name排序唯一。CatalogEvent没有indexterm fallback，因为固定2.0.26 catalog不保存 `:indexterms`。Diagnostic exactMessage保留在evidence；跨实现CSP仍只比较已定义common diagnostic projection。
+
+M37 writer-site闭集如下；`M37Site/1` 的 `(group,file,method,point)` 必须命中对应固定 producer family，point是manifest中的稳定分支标识而不是自由字符串：
+
+| group | fixed producer family | capture point |
+|---|---|---|
+| M37-01 | `AbstractNode#initialize`, `AbstractBlock#initialize`, `Inline#initialize` | 原构造赋值完成后。 |
+| M37-02 | `AttributeList#parse_attribute/#parse_into/.rekey` | named/positional/options expansion/copy/rekey真实写后。 |
+| M37-03 | `Parser.parse_block_metadata_line/process_attribute_entry/store_attribute/parse_style_attribute/yield_buffered_attribute` | metadata/shorthand/set/unset真实写后。 |
+| M37-04 | `Parser.next_block/build_block` | style/media/source/quote/admonition/STEM等赋值后、返回block前。 |
+| M37-05 | `AbstractNode#set_attr/remove_attr/set_option/update_attributes/role=/add_role/remove_role`及真实direct Hash writes | 原mutation后，保留真实caller provenance。 |
+| M37-06 | `Parser.initialize_section` | sectname/special/numbered/update_attributes完成后。 |
+| M37-07 | `AbstractBlock#assign_numeral/#assign_caption`及section attach | numeral/caption/counter写完成后。 |
+| M37-08 | `Table#initialize/#create_columns` | table width/orientation/columns/colcount产生后。 |
+| M37-09 | `Table::Column#initialize/#assign_width`, `Table#assign_column_widths` | 每次真实width赋值后，最终组快照必须在末列balance之后。 |
+| M37-10 | `Table::Cell#initialize/#reinitialize`, `Table#partition_header_footer` | final Cell对象与head/body/foot membership确定后。 |
+| M37-11 | `Parser.parse_colspecs/parse_cellspec/parse_table`, `Table::ParserContext#initialize/#close_cell/#close_row/#close_table` | 原parser已得到spec/result和真实列/行/Cell关系后。 |
+| M37-12 | `ListItem#initialize/#fold_first`, `Parser.parse_list_item/parse_list/parse_description_list` | marker/checklist/style/fold与term-description组装完成后。 |
+| M37-13 | `Parser.parse_callout_list`, `Callouts#register/#callout_ids` 原调用返回点 | late coids真实结果写入后。 |
+| M37-14 | `Document#parse`, 原 `AbstractBlock#convert`, `Inline#convert` 与collection consumer入口 | model_ready cutoff；不额外执行parse/convert。 |
+| M37-15 | actual inline/converter/alt/title/reftext/media scalar consumer sites | 复用既有求值证据并绑定当时model/attr state。 |
+| M37-16 | `Document#register` actual catalog insertion | catalog record primitive fields及parent→actual receiver。 |
+| M37-17 | fixed converter temporary model/map writes | temporary写及真实restore或cleanup delete后。 |
+| M37-18 | actual root evaluation return | evaluation_complete cutoff；只观察既有state。 |
+
+M37-02/M37-03/M37-05还必须覆盖固定代码中的直接Hash赋值/update/delete/clear，不能只观察wrapper。具体manifest与固定源码共同构成producer-conformance，不允许projector从字段名、source文本或最终HTML补推。
 
 同subject snapshots形成immediate-predecessor单链；cut heads按subjectId数值升序且恰覆盖reachable semantic closure。只有model observation namespace里的previous/bind/cut/model_slot引用做数值先后检查；operation/inline/value/call各用自身namespace。carrier.entry是目标数组index，不与model observationId比较。
 
@@ -775,10 +1065,20 @@ D3-Annotation-Target-Projection/1 =
   | {kind:"resource",resourceRef:ResourceRef}
   | {kind:"resource_region",locator:ResourceRegionLocator}
 
-AnnotationInlineProfile/1 = {
+AnnotationInlineBody/1 = {
+  format:"asciidoc-inline",
+  version:1,
   languageBaseline:"asciidoctor-ruby/2.0.26",
+  source:text
+}
+
+AsciiDocInlineBody/1 := AnnotationInlineBody/1
+
+AnnotationInlineProfile/1 = {
+  languageBaseline:
+    "asciidoctor-ruby/2.0.26@0b99b39c9df884d4aec13bba45f03cdbab505769",
   doctype:"inline",
-  processorBackend:"html5_semantic_environment/1",
+  processorBackend:"html5-semantic/1",
   safeMode:"secure",
   maxSourceBytes:65536,
   maxRenderedBytes:262144,
@@ -819,6 +1119,8 @@ Suggestion/3 = {
   replacementSource:null|text
 }
 ```
+
+`AnnotationInlineBody/1` 是current唯一名称并保留早期 `AsciiDocInlineBody/1` 的四成员数据shape；`AsciiDocInlineBody/1` 仅是**schema alias**，其 canonical bytes 与 `AnnotationInlineBody/1` 完全相同，不形成第二wire/version，也不声称历史部署。body只是portable source value，不能承载processor环境。求值必须使用同一节唯一 `AnnotationInlineProfile/1`；body的 `languageBaseline="asciidoctor-ruby/2.0.26"` 必须与profile所固定的2.0.26@commit版本一致。完整source必须只形成一个paragraph（允许soft wraps与trailing whitespace）；第二paragraph、heading、list、delimited block、table或block macro为 `invalid_annotation_body`，不能静默忽略。
 
 replyTo非null强制same-owner、acyclic、purpose=comment、suggestion=null、reviewState=not_applicable。root reviewState只能open|resolved。pending confirmation只能confirmed|needs_reconfirmation；accepted/rejected terminal且confirmation=not_applicable。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
