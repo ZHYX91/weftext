@@ -44,6 +44,238 @@
       "notes": ""
     },
     {
+      "name": "OracleBaseline/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Typed Witness/7 Ruby baseline; binds the fixed source commit and observer-manifest digest."
+    },
+    {
+      "name": "OracleObserverManifest/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Canonical reviewed instrumentation manifest; test evidence only."
+    },
+    {
+      "name": "OracleObserverSite/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "One exact source instrumentation site in OracleObserverManifest/1."
+    },
+    {
+      "name": "OracleDocumentState/2",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained document-level Ruby evidence shape used by Witness/7."
+    },
+    {
+      "name": "OracleBlockContext/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed block-context enum for OracleBlockEvent/2."
+    },
+    {
+      "name": "OracleContentModel/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed content-model enum for OracleBlockEvent/2."
+    },
+    {
+      "name": "OracleBlockEvent/2",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained block evidence; not the obsolete inline-event observer."
+    },
+    {
+      "name": "OracleCollectionEvent/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained list-item/table-cell evidence."
+    },
+    {
+      "name": "OracleCatalogEvent/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Retained catalog evidence; no indexterm fallback."
+    },
+    {
+      "name": "OracleDiagnostic/1",
+      "owner": "D2 test oracle",
+      "status": "retained",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Exact Ruby evidence diagnostic; CSP common diagnostic projection remains separate."
+    },
+    {
+      "name": "OracleObservedString/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Immutable observed Ruby string version."
+    },
+    {
+      "name": "OracleObservedSlice/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Byte half-open slice of one OracleObservedString/1."
+    },
+    {
+      "name": "OracleEvaluationCallKind/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed actual-evaluation call-kind enum."
+    },
+    {
+      "name": "OracleEvaluationCall/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Actual Ruby call instance; observer-added calls are forbidden."
+    },
+    {
+      "name": "OracleStringOperationKind/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed observed string-operation enum."
+    },
+    {
+      "name": "OracleOutputRunRelation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Exact-copy/derived/generated output-origin relation."
+    },
+    {
+      "name": "OracleOutputRun/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Complete non-overlapping output interval relation."
+    },
+    {
+      "name": "OracleStringOperation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Actual string transformation record with complete output runs."
+    },
+    {
+      "name": "OracleFieldPathSegment/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed field/attribute/position/array path segment."
+    },
+    {
+      "name": "OracleFieldEntryKey/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed key type for ordered observed field entries."
+    },
+    {
+      "name": "OracleFieldValue/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Finite recursive typed observed value; no arbitrary Ruby-object to_s."
+    },
+    {
+      "name": "OracleFieldObservation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Typed path/value observation for a real Inline field."
+    },
+    {
+      "name": "OracleInlineContext/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed current inline-observation context enum."
+    },
+    {
+      "name": "OracleInlineObservation/3",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Out-of-band actual Inline arguments/return evidence; not obsolete InlineEvent."
+    },
+    {
+      "name": "OracleContentRole/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed role enum for actual content-return evidence."
+    },
+    {
+      "name": "OracleContentObservation/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Actual content/list/cell/title/reftext return evidence."
+    },
+    {
+      "name": "M37Site/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed model-property writer-site record; group/site validity is fixed by the public producer manifest."
+    },
+    {
+      "name": "AnnotationInlineBody/1",
+      "owner": "D2/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Portable four-member AsciiDoc inline source value; distinct from the evaluation profile."
+    },
+    {
+      "name": "AsciiDocInlineBody/1",
+      "owner": "D2/D8",
+      "status": "schema_alias",
+      "replaces": "AnnotationInlineBody/1",
+      "section": "SCHEMAS §7",
+      "notes": "Schema alias only for the earlier candidate name; identical canonical bytes, no second wire and no deployment claim."
+    },
+    {
       "name": "OracleSemanticWitness/7",
       "owner": "D2 test oracle",
       "status": "current",
@@ -360,8 +592,8 @@
       "owner": "D2/D8",
       "status": "current",
       "replaces": null,
-      "section": "SPEC §9",
-      "notes": ""
+      "section": "SCHEMAS §7 / SPEC §9.3",
+      "notes": "Single exact evaluation profile: commit-qualified Ruby 2.0.26 baseline and processorBackend=html5-semantic/1; distinct from AnnotationInlineBody/1."
     },
     {
       "name": "AnnotationAppearance/1",
