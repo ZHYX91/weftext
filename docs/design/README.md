@@ -87,3 +87,7 @@ The next task is [Agent, automation and external capabilities](d10/TASK.md). D10
 The current author candidate is at [asciidoc-annotation-final-design/README.md](asciidoc-annotation-final-design/README.md), pinned to parent commit `e8aa0b341630a57c786c0891d4bbd1620247441d`. Its [replacements.json](asciidoc-annotation-final-design/replacements.json) explicitly replaces named fixed-parent actual-owner sections; S49 snapshots and this directory's `inputs.json` remain unchanged.
 
 The candidate contains the complete AsciiDoc/extensions design, independent portable JSON Annotation, managed document format, SourceTransform/trust, and D2-D10 actual-owner coordination. Bilingual SPEC files own behavior/algorithms and bilingual SCHEMAS files own closed current schemas/historical dispatch. The bilingual ACCEPTANCE files contain 438 core design oracles plus 322 coordination fixtures, 760 total, all unexecuted. Status remains design candidate pending non-author exact-head review, not implementation, A2/global, or release acceptance.
+
+## A2 final-design integration candidate
+
+A new A2 candidate is being integrated on top of the fixed PR4 design head. Its [entry](a2-final-design/README.md) currently contains a self-contained D1 and D2 first batch plus exact source/disposition tracking. D3–D10 remain explicit TODOs and the candidate is not independently accepted, implemented, merged, or released.

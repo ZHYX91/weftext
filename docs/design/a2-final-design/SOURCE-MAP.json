@@ -1,0 +1,1831 @@
+{
+  "schema_version": 1,
+  "status": "a2-candidate-batch-d1-d2",
+  "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
+  "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+  "protected_inputs_expected_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+  "source_inventory": [
+    {
+      "path": "docs/design/snapshots/d4-reference-catalog-registry/source.json",
+      "title": "D4 Reference Catalog Registry v1",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": false,
+      "bytes": 102856,
+      "lines": 3685,
+      "blobAtFixedS": "ca6ed9232864ba1bbc49e9aaa81f9290a78fe6cb",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "title": "D1 Product Surface and Capability Boundary",
+      "role": "accepted-design-input",
+      "topic": "D1",
+      "main": true,
+      "bytes": 49189,
+      "lines": 510,
+      "blobAtFixedS": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D1"
+    },
+    {
+      "path": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "title": "D2 Document Content and Domain Objects",
+      "role": "accepted-design-input",
+      "topic": "D2",
+      "main": true,
+      "bytes": 98763,
+      "lines": 1188,
+      "blobAtFixedS": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D2"
+    },
+    {
+      "path": "docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md",
+      "title": "D3 Identity References Ownership and Lifecycle",
+      "role": "accepted-design-input",
+      "topic": "D3",
+      "main": true,
+      "bytes": 351167,
+      "lines": 2037,
+      "blobAtFixedS": "bc23922ae2de4c80dadc7b91e945c87ce154b55a",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
+      "title": "D3 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D3",
+      "main": false,
+      "bytes": 74040,
+      "lines": 702,
+      "blobAtFixedS": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md",
+      "title": "D4 Attribute Types Schema and Relations",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": true,
+      "bytes": 173344,
+      "lines": 888,
+      "blobAtFixedS": "2c03f2050dc523ccd8ffd3696f89f91a3b9c3c07",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md",
+      "title": "D4 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": false,
+      "bytes": 31552,
+      "lines": 160,
+      "blobAtFixedS": "f3a2bfc10a62c62e5138598b6f96591a95963001",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d5-tables-and-node-collections/source.md",
+      "title": "D5 Tables and Node Collections",
+      "role": "accepted-design-input",
+      "topic": "D5",
+      "main": true,
+      "bytes": 28034,
+      "lines": 150,
+      "blobAtFixedS": "166b1aebd43c00bb9c1152c567efbd46c7b5ffb8",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md",
+      "title": "D5 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D5",
+      "main": false,
+      "bytes": 8169,
+      "lines": 51,
+      "blobAtFixedS": "5fb74df2d79350ae98fe0a267f994983b609de19",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d6-control-interfaces/source.md",
+      "title": "D6 Control Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 83610,
+      "lines": 324,
+      "blobAtFixedS": "32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md",
+      "title": "D6 Storage Transactions Permissions and Sync",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": true,
+      "bytes": 49757,
+      "lines": 231,
+      "blobAtFixedS": "c2673e1e72b8a2cb96f0e6cae5f4f2035cf12c6b",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md",
+      "title": "D6 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 25128,
+      "lines": 81,
+      "blobAtFixedS": "6a9038fd6e70b2be3760811d73d2e5077c0ab5a2",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d6-terminology-registry/source.json",
+      "title": "D6 Terminology Registry",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 57101,
+      "lines": 991,
+      "blobAtFixedS": "5f4b28d9cf8a237cfa7e7ed8e41143571e5731a6",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-definition-transfer/source.md",
+      "title": "D7 Definition Transfer",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 11815,
+      "lines": 59,
+      "blobAtFixedS": "4adeac0b31bd16cd2d8fce5ada35e30f0e15353c",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-execution-and-action-interfaces/source.md",
+      "title": "D7 Execution and Action Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 33878,
+      "lines": 159,
+      "blobAtFixedS": "b163966f42efb875907a734e611122f304a5d55f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-narrow-field-qualification/source.md",
+      "title": "D7 Narrow Field Qualification",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 10577,
+      "lines": 48,
+      "blobAtFixedS": "624ef9921a818014ef041a3db65960d3c4d22d4f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-prepared-action-binding/source.md",
+      "title": "D7 Prepared Action Binding",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 11363,
+      "lines": 57,
+      "blobAtFixedS": "af7c1231b4937e15ca2527336abf72bb3f05c977",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-preview-and-effects-transport/source.md",
+      "title": "D7 Preview and Effects Transport",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 25222,
+      "lines": 123,
+      "blobAtFixedS": "0677a2cf98def5fc61f43c66197716f18fc51cd1",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-query-algebra/source.md",
+      "title": "D7 Query Algebra",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 42472,
+      "lines": 231,
+      "blobAtFixedS": "bd5f861cf0d207edb6be43acfedbd7481f05c092",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-query-view-action/source.md",
+      "title": "D7 Query View Action",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": true,
+      "bytes": 12702,
+      "lines": 79,
+      "blobAtFixedS": "feddfc703e9dc63c7606d1ed4a872a6124b33a94",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "title": "D7 Scenario Dispositions",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 23171,
+      "lines": 220,
+      "blobAtFixedS": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-terminology-and-naming-lexicon/source.md",
+      "title": "D7 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 58480,
+      "lines": 845,
+      "blobAtFixedS": "51996db30be35c029851aac856e806d4dad9d9c6",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-terminology-registry/source.json",
+      "title": "D7 Terminology Registry",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 61730,
+      "lines": 1012,
+      "blobAtFixedS": "4615d8c03df22ba9630728f946715de8e4308438",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-value-and-cel-profile/source.md",
+      "title": "D7 Value and CEL Profile",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 27655,
+      "lines": 147,
+      "blobAtFixedS": "a9afa8c8c916918497126f04577b7d7f23c2adf7",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-view-contract/source.md",
+      "title": "D7 View Contract",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 21581,
+      "lines": 119,
+      "blobAtFixedS": "fccf7c99b7ca3125d4001fe58db36c5dae36835f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-acceptance-matrix/source.json",
+      "title": "D8 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 78383,
+      "lines": 1287,
+      "blobAtFixedS": "ff8b4e9b65d35c91862e02dc4160dbae51f8b5ea",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-acceptance-matrix/source.md",
+      "title": "D8 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 60887,
+      "lines": 177,
+      "blobAtFixedS": "549e6cfb0f8f4b840f99c64545d3f6b91fabc782",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-direction-and-accessibility/source.md",
+      "title": "D8 Direction and Accessibility",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 16615,
+      "lines": 120,
+      "blobAtFixedS": "30a2f69fe3e2e314618da6649dd81b699405269e",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md",
+      "title": "D8 Editor and Cross-Surface Interaction",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": true,
+      "bytes": 28744,
+      "lines": 192,
+      "blobAtFixedS": "8bef38395d3debb82b2b3ffa2461825b270cf742",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-editor-interfaces/source.md",
+      "title": "D8 Editor Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 40338,
+      "lines": 226,
+      "blobAtFixedS": "25cc65e63ad15211024f76053ae9eb335bd5de2f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-terminology-and-naming-lexicon/source.md",
+      "title": "D8 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 4614,
+      "lines": 34,
+      "blobAtFixedS": "a0478a53a7ba191c068610a51c526e64841aad66",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-acceptance-matrix/source.md",
+      "title": "D9 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 13182,
+      "lines": 88,
+      "blobAtFixedS": "433872d86808debd6ac05bafe1b7c2b10cde14dc",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-conversion-templates-and-workers/source.md",
+      "title": "D9 Conversion Templates and Workers",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": true,
+      "bytes": 25714,
+      "lines": 129,
+      "blobAtFixedS": "09ae93591c8394c9ca01f4972a052713e08eaa05",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "title": "D9 Coordinated D3 D7 Binding Amendment",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 14894,
+      "lines": 85,
+      "blobAtFixedS": "01efb97587a33670f4a63783015843070a3099db",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-import-ir-and-mapping/source.md",
+      "title": "D9 Import IR and Mapping",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 26824,
+      "lines": 153,
+      "blobAtFixedS": "05ea6c59b0687062765e3cfb5ef29e2741ef0764",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-templates/source.md",
+      "title": "D9 Templates",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 35053,
+      "lines": 171,
+      "blobAtFixedS": "f3318ee0f8de190b95758898a434ec4c17c0f61c",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md",
+      "title": "D9 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 6168,
+      "lines": 47,
+      "blobAtFixedS": "9dd39f6fe1e8d6924ca492ec596f902b158eb32b",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-workers-and-export/source.md",
+      "title": "D9 Workers and Export",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 32593,
+      "lines": 149,
+      "blobAtFixedS": "e0698ccab275b02681ece827c79d982001a987a4",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "title": "D1 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D1",
+      "main": false,
+      "bytes": 7522,
+      "lines": 95,
+      "blobAtFixedS": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D1_acceptance"
+    },
+    {
+      "path": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "title": "D2 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D2",
+      "main": false,
+      "bytes": 8050,
+      "lines": 101,
+      "blobAtFixedS": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D2_acceptance"
+    },
+    {
+      "path": "docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md",
+      "title": "D3 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D3",
+      "main": false,
+      "bytes": 19979,
+      "lines": 171,
+      "blobAtFixedS": "357fa155b7ab97f4220055148ba8de1b8f4c14ca",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md",
+      "title": "D4 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D4",
+      "main": false,
+      "bytes": 44559,
+      "lines": 310,
+      "blobAtFixedS": "3933f08f915bcb14f630ca8459dc7c7c4043eb69",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md",
+      "title": "D5 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D5",
+      "main": false,
+      "bytes": 8048,
+      "lines": 57,
+      "blobAtFixedS": "c44a98baf72cd8a42f1f7e5d2819cbca9d9c7e96",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md",
+      "title": "D6 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D6",
+      "main": false,
+      "bytes": 10713,
+      "lines": 74,
+      "blobAtFixedS": "35cf68fd6986d812d7f812180d7bb396d2a4f4e1",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md",
+      "title": "D7 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D7",
+      "main": false,
+      "bytes": 14074,
+      "lines": 77,
+      "blobAtFixedS": "d4528248f0d1a3e9c47dd5e3b7a06005969061a7",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md",
+      "title": "D8 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D8",
+      "main": false,
+      "bytes": 7640,
+      "lines": 66,
+      "blobAtFixedS": "9856514edfe5f843566a7b5c1f79642683391a39",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md",
+      "title": "D9 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D9",
+      "main": false,
+      "bytes": 9931,
+      "lines": 64,
+      "blobAtFixedS": "cbf53ac8b0a4096ea16705bcd06894db597fd9bf",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "title": "D4-D10-A2 Mandatory Scenario Inputs 2026-08-28",
+      "role": "scenario-intake",
+      "topic": "D4-D10-A2",
+      "main": false,
+      "bytes": 179938,
+      "lines": 1141,
+      "blobAtFixedS": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md",
+      "title": "D8 RTL and Bidirectional Interaction Mandatory Review Intake 2026-09-01",
+      "role": "scenario-intake",
+      "topic": "D8",
+      "main": false,
+      "bytes": 7259,
+      "lines": 69,
+      "blobAtFixedS": "a7c1984777307d3a1945e2cd373f98be7bf1ad44",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    }
+  ],
+  "current_read_evidence": [
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.md",
+      "blob": "1bdf16ea6c5f7deddd7d5e06dce0cddb7be28cbb",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "blob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-implementation-impact-and-test-outline/source.md",
+      "blob": "ad122240e58c288ff9cb4ee408eb81ccfa81243b",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "ad79351e2435401414704ea6ae34117e6903eb75",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
+      "read": "D2 §§1-5 plus D2-intersecting §§8-10"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "blob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+      "read": "D2 §§1-5 plus D2-intersecting §§8-10"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
+      "read": "D2 §§1-4.4 complete"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "blob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
+      "read": "D2 §§1-4.4 complete"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "blob": "f5f5b9b212b281838aabc281171217623285820e",
+      "read": "D2-related row groups"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "blob": "466f3b2d7ee4e735cddc3ee4a466dcb45e065571",
+      "read": "D2-related row groups"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "blob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "read": "§8 create/copy/fork/import neighborhood and title-admission intersection"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "blob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "read": "partial relevant §§5-8; not full module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "blob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "read": "partial relevant §§2-5,9; not full module"
+    },
+    {
+      "path": "docs/design/d10/TASK.md",
+      "blob": "52b51f14cbca8107fdf13ddf29fab6d9cd04bb5b",
+      "read": "task/navigation; D10 module not integrated"
+    }
+  ],
+  "obligation_groups": [
+    {
+      "id": "D1-fixed-core",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§§1-9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§1-6"
+      },
+      "disposition": "retain_with_named_afterimage",
+      "basis": "five surfaces/Core authority retained; global single-device interpretation replaced by per-physical-replica/hosted-backend holder",
+      "oracles": []
+    },
+    {
+      "id": "D1-capability",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§7"
+      },
+      "disposition": "retain",
+      "basis": "ten reasons/order/masking and stable semantics copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D1-release",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§§11-12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§8"
+      },
+      "disposition": "retain",
+      "basis": "G1/G1.1/G2 artifacts/evidence/signing/parallel dependencies copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S1",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S1"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S2",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S2"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S3",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S3"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S4",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S4"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S5",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S5"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S6",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S6"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S7",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S7"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S8",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S8"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S9",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S9"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S10",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S10"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-01",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 1"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-02",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 2"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-03",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 3"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-04",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 4"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-05",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 5"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-06",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 6"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-07",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 7"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-08",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 8"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-09",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 9"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-10",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 10"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-11",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 11"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-12",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 12"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-13",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 13"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-afterimage",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§§1-10,16-18",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§1-6,9-10,12.2"
+      },
+      "disposition": "retain_and_integrate",
+      "basis": "registered replicas/per-backend holder/multi-session/execution responsibility/large-workspace state are current",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S1",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S1"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S2",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S2"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S3",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S3"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S4",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S4"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S5",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S5"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S6",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S6"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S7",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S7"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S8",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S8"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S9",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S9"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S10",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S10"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D2-domain",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§§1-3,7-10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,7-9"
+      },
+      "disposition": "retain",
+      "basis": "Node/Document/order/Task facet/Template/owner-local Resource+Annotation/occurrence-only View/separate Record remain current",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-profile",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§4 Weftext AsciiDoc Profile v2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§10"
+      },
+      "disposition": "supersede_fresh_current_retain_historical",
+      "basis": "closed subset is not current language ceiling; genuine historical wire/profile tests remain",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-wire",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§5 wire v2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,14"
+      },
+      "disposition": "historical_only",
+      "basis": "fresh product uses /3; historical decoder/bytes recovery retained",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-title",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§3.2 title admission + §4.2 explicit title grammar",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§4"
+      },
+      "disposition": "supersede_fresh_current",
+      "basis": "current native-valid titleless source is positive; no synthesized authored title",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-annotation",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§5.10 Annotation snapshots",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§8"
+      },
+      "disposition": "supersede_fresh_current_retain_historical",
+      "basis": "current portable Value/4+R6+aggregate CAS; old Value3/plain paths historical",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-01",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-02",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-03",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-04",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-05",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-06",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-07",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-08",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-09",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-10",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-11",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "profile-specific cases split between historical and current native semantics",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-12",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "profile-specific cases split between historical and current native semantics",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-13",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-14",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 14",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-15",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 15",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-16",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 16",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-01",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-02",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "historical Profile-v2/plain-Annotation expectations versioned; remaining condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-03",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-04",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-05",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-06",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "historical Profile-v2/plain-Annotation expectations versioned; remaining condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-07",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-08",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-09",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-10",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-11",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-12",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-01",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-02",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-03",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-04",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-05",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-06",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-07",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-08",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-09",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-10",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-11",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-12",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-current-spec",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "sourceBlob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+      "sourceSection": "§§1-5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§2-3,6-7,11"
+      },
+      "disposition": "retain_copy_into_A2",
+      "basis": "complete fixed-2.0.26 language, environment, Witness/CSP/product/provider/managed-format semantics copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D2-current-schema",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "sourceBlob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
+      "sourceSection": "§§1-4.4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§12"
+      },
+      "disposition": "retain_copy_into_A2",
+      "basis": "current processor/oracle/Witness/product closed schemas copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D2-title-D3-consumer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "sourceSection": "§8.1 create_node",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§4"
+      },
+      "disposition": "consumer_evidence",
+      "basis": "create_node requires D2-valid source and adds no title gate",
+      "oracles": []
+    },
+    {
+      "id": "D2-read-D8-consumer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "sourceBlob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "sourceSection": "§§2-5,9 relevant",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§4-5,9,14"
+      },
+      "disposition": "consumer_evidence_partial",
+      "basis": "current read/Draft/source prepare/recovery uses exact source and D2 snapshot; current overlay supplies /3 product",
+      "oracles": []
+    },
+    {
+      "id": "D2-save-D6-consumer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "sourceBlob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "sourceSection": "§§5-8 relevant",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§5,9,14"
+      },
+      "disposition": "consumer_evidence_partial",
+      "basis": "ordinary save/strict-observed distinction/SourceRevisionPlan/seal/recovery intersect D2 exact source",
+      "oracles": []
+    },
+    {
+      "id": "D2-D7D9-consumers",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "sourceBlob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+      "sourceSection": "§§8.1-8.4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§9"
+      },
+      "disposition": "retain_copy_semantics",
+      "basis": "D7 consumes product projection; D9 exact source/resource/query_json generationPolicy none; historical direct holders remain versioned",
+      "oracles": []
+    },
+    {
+      "id": "D2-current-acceptance",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "sourceBlob": "466f3b2d7ee4e735cddc3ee4a466dcb45e065571",
+      "sourceSection": "AD2/O34/P35/N36/M37/M38/M39/FC4A-PROD/FC4F-PROD rows",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "current rows copied as unexecuted design obligations; prior limited review is not global acceptance",
+      "oracles": []
+    }
+  ],
+  "next_batch": "D3",
+  "global_acceptance": "not_performed"
+}

@@ -86,3 +86,7 @@ translation_status: source
 当前作者候选位于 [asciidoc-annotation-final-design/README.zh-CN.md](asciidoc-annotation-final-design/README.zh-CN.md)，固定父提交 `e8aa0b341630a57c786c0891d4bbd1620247441d`。它以 [replacements.json](asciidoc-annotation-final-design/replacements.json) 对 fixed-parent actual-owner sections 做显式替换，S49 snapshots 与本目录 `inputs.json` 保持不变。
 
 该候选包含完整 AsciiDoc/必要扩展、独立 portable JSON Annotation、managed document format、SourceTransform/trust 及 D2–D10 actual-owner coordination；行为/算法见双语 SPEC，closed current schema 与历史分派见双语 SCHEMAS。双语 ACCEPTANCE 现含 438 条 core design oracle 与 322 条 coordination fixture，共 760 条，均未运行。状态仍是 design candidate，等待 exact-head 非作者独立复核；不是实现、A2/global 或发布接受。
+
+## A2 最终设计整合候选
+
+新的 A2 candidate 正在 fixed PR4 design head 之上分批整合。[入口](a2-final-design/README.zh-CN.md) 当前只完成自包含 D1、D2 第一批与精确 source/disposition tracking；D3–D10 仍是明确 TODO。该候选未独立接受、未实现、未合并、未发布。
