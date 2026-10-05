@@ -580,45 +580,49 @@ Replica registration remains its specialized same-record producer and is dual-pr
 
 ## 14. D10 mixed-version control and execution responsibility
 
-### 14.1 Record images
+### 14.1 Current-owner routing and historical dispatch
 
-Current Workspace reads use D10WorkspaceReadDependencies/2 with DependencyProof/3. ControlDependencies/3, D10ControlInput/2, and ControlPrepareBinding/3 connect that evidence to the D6 current descriptor/intent family.
+For a current unseen/fresh D10 Workspace-control operation, the coordinated chain is D10WorkspaceReadDependencies/2 with DependencyProof/3 -> ControlDependencies/3 -> D10ControlInput/2 -> ControlPrepareBinding/3. A fresh unattended D10 author step uses PreparedActionBinding/4 and EffectManifest/3 / EffectBytes/3 to construct ApprovalUse/2. A fresh current interactive author step uses the exact current PreparedActionBinding/4 or PreparedEditBinding/3 selected by its owner contract. New scheduling uses the current ScheduleSubscription/2 and AutomationOccurrenceRecord/2 families.
 
-D10ControlRecordImage/2 is only for automation and run records whose nested schema changed. Other record kinds, including external_effect, stop, reservation, planned/external approval, activation, and supplement=none records, may remain exact Image1 current records. Versioned image/pin/range carriers explicitly retain exact V1/V2 values. Pin1 continues to authenticate D10-Control-Record/1 || NUL || D3-CJ/3(Image1); Pin2 uses the /2 domain. Historical pins are never repinned into a new domain.
+This replaces only fresh/current clauses in the fixed-parent D10 CANDIDATE, CONTROL-CONTRACT, IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE, TERMINOLOGY, and UPSTREAM-AMENDMENTS concerns named by replacements.json. It is not a global search-and-replace of version names. A genuinely saved/planned/unknown record continues under the exact decoder and recovery contract that actually stored it: historical PreparedActionBinding/3, EffectManifest/2 / EffectBytes/2, PreparedEditBinding/2, ApprovalUse/1, ScheduleSubscription/1, AutomationOccurrenceRecord/1, ControlPrepareBinding/1 or /2, their original pins, canonical request, OperationId, and recovery evidence remain byte-exact when those are the recorded formats. A current mixed holder may reference those old responsibilities through explicit versioned carriers without migrating or repinning them.
 
-D10ControlEffectPlan/2 accepts an actual Image1 or Image2 before-image and the exact current after-image, which makes Image1(Automation+Subscription1) -> Image2(Automation+Subscription2) a valid configure path without a preliminary migration transaction.
+The fixed-parent D6 direct consumer follows the same split. Current unseen D10 control uses D10ControlInput/2, ControlDependencies/3 and D10ControlEffectPlan/2 instead of the fixed-parent /1-/2 producer prose; current unseen automatic author use consumes ApprovalUse/2 plus PAB4/Effect3. Saved/planned historical associations are recovered before current qualification and are never rewritten merely because current successors exist.
 
-### 14.2 Prepare binding three generations
+### 14.2 Images, pins, ranges, and effect plans
 
-The prepare-binding mixed carrier is exactly three arms:
+D10ControlRecordImage/2 exists only for automation and run records whose nested current schema changed. Other record kinds, including planned_approval, external_approval, activation, reservation, external_effect, stop, and supplement=none records, continue to use exact Image1. Image2 cannot be downgraded to Image1, and an old Image1 is never re-encoded merely to enter a mixed holder.
 
-```text
-D10VersionedControlPrepareBinding/1 =
-  {schema:"d10_control_prepare_binding/1",value:ControlPrepareBinding/1}
-| {schema:"d10_control_prepare_binding/2",value:ControlPrepareBinding/2}
-| {schema:"d10_control_prepare_binding/3",value:ControlPrepareBinding/3}
-```
+Pin1 continues to authenticate the fixed-parent D10-Control-Record/1 payload. Pin2 authenticates the exact D10-Control-Record/2 prefix plus D3-CJ/3(Image2), with artifact payload kind, the original recovery or approval_money retention class, and exact byteLength/SHA-256. Pin2 never repins Image1.
 
-The historical /1 value is exactly the following closed shape:
+A mixed record-pin array is ordered by the inner image: canonical binding.ref bytes, numeric binding.revision, usageRevision with none before some, numeric usageRevision when present, then complete canonical image bytes. The logical same-cut identity is binding.ref + binding.revision + usageRevision. Two entries with that identity and byte-equal image are duplicate responsibility and are rejected; two with different image bytes are integrity_conflict. Schema version is never a reason to retain two values for one cut.
 
-```text
-ControlPrepareBinding/1 = {
-  key:StableControlKey/1,
-  canonicalIntentBytes:Bytes,
-  allocatedControlRefs:[ControlRef<K>/1],
-  originalCommitRequest:PreparedCommitRequest/1,
-  immutablePreview:ControlPreview/1,
-  dependencyPins:ControlDependencies/1
-}
-``` e8aa explicitly retains the exact decoder/recovery for true saved `/1` records; this does not assert universal deployment. Claims2 sorts all three by inner StableControlKey and rejects the same key across versions. The wrapper only selects a decoder; it does not migrate bytes, grant authority, create a CAS, or alter original dependencies/pins.
+Range kind rank is records=0, cost_lineage=1, occurrences=2. The logical range identity is respectively scope plus the complete sorted kind set, CostLayerKey, or Automation Ref. A mixed range array orders by kind rank and canonical logical-identity bytes and contains each logical identity at most once across Range1/Range2. An occurrences range orders its inner records by AutomationOccurrenceKey; V1/V2 values with one occurrence key cannot coexist.
 
-### 14.3 Complete execution responsibility
+D10ControlEffectPlan/2 changes are sorted uniquely by the complete canonical after.value.binding.ref. A non-none before must have the same binding.ref as after and exactly one matching versioned record pin for the actual stored before schema. Image1 before with Pin2 is invalid. Current Automation configure may legitimately move Image1+Subscription1 to Image2+Subscription2. A true continuation may retain the same subscription generation when the D10 scheduling owner says continue; generation replacement occurs only when that owner rule requires replace. Mixed-holder uniqueness is a snapshot rule, not a requirement to replace every old subscription.
 
-D10MoneyResponsibility/2, D10ExecutionClaims/2, and D10ExecutionInventory/2 use version-dispatched pins/ranges/preparations/author steps/subscriptions/occurrences/ApprovalUses. ExternalResponsibility/1, StopResponsibility/1, and StopCapacity/1 remain unchanged because their closed members do not embed the changed types, but Inventory2 must include them completely.
+### 14.3 ControlDependencies/3 and the one-cut rule
 
-A legal Inventory2 may simultaneously retain old ApprovalUse1/PAB3/Subscription1/Occurrence1/Pin1/PrepareBinding1-or-2 and new ApprovalUse2/PAB4/Subscription2/Occurrence2/Pin2/PrepareBinding3 when semantic identities differ. The same DecisionKey, StableControlKey, (Automation,generation), OccurrenceKey, or same record cut cannot appear twice across versions; no LWW applies.
+ControlDependencies/3 retains the complete actual configBindings, usageBindings, authority proof, authorization generations, stopRefs, optional Workspace reads, versioned record pins, and versioned ranges. Config bindings remain canonical by full Ref; usage bindings by full Ref; authorization-generation tokens by canonical token bytes; stop refs by full Ref; record pins and ranges use the mixed rules above.
 
-The D6 current successor is ExecutionResponsibilityRecord/3 + ExecutionContinuityProof/2, with exact inventory-pin domain D6-Execution-Inventory/2. Historical Record2/Proof1/Inventory1 remain on their own domains. A Record2 becomes Record3 only on a real responsibility mutation, checkpoint, or custody handoff, never by background schema migration. Handoff freezes admission/planning/send/schedule writers at one store barrier, captures all old and new liabilities, and proves irreversible old-holder fencing. Missing an old pin/PAB/subscription/stop/external unknown pauses takeover; it does not fabricate a partial inventory or block unrelated ordinary source work.
+Every configBinding has the exact matching record image/pin. Every usageBinding has a matching image at the same usageRevision. Every stopRef has its exact stop Image1/Pin1 because stop is not mechanically upgraded. Current range fences, bindings, usage revisions, record images and the protected Workspace evidence used for one preparation come from one real Authority Store barrier. A V1 value captured at barrier A cannot be combined with a V2 value captured at barrier B and called complete. A historical image referenced by current responsibility remains immutable evidence and does not become current configuration merely by appearing in the holder. Missing required old bytes/pins/decoder is state_unavailable after the ordinary disclosure gates; contradictory same-cut evidence is integrity_conflict. No current Image2 may substitute for a required old Pin1.
+
+### 14.4 Claims, Money, and Inventory canonicality
+
+D10ExecutionClaims/2 keeps all mixed responsibilities complete. recordPins use the mixed pin order. prepareBindings are ordered by inner StableControlKey canonical bytes and that key is globally unique across Binding1, Binding2 and Binding3. leaseRuns are ordered uniquely by full Run ControlRef. authorSteps are unique by run Ref plus stepId across Step1/Step2. subscriptions are unique by Automation Ref plus generation across Subscription1/Subscription2. occurrenceRecords are unique by AutomationOccurrenceKey. ranges use the mixed range order. continuityPins are ordered uniquely by pinToken. Wrappers select an exact decoder only; they do not add kind/version/confirmation fields to Binding1, do not LWW, and do not alter original pins or dependencies.
+
+D10MoneyResponsibility/2 orders reservations uniquely by the complete Binding<reservation>/1 canonical key, layers uniquely by CostLayerKey canonical bytes, recordPins and ranges by the mixed rules, and evidencePins uniquely by pinToken. Contradictory values for one reservation identity cannot be represented as two liabilities, and CostLayerTotal remains a verified projection of the complete reservation/attribution set rather than a balance reconstructed from current configuration.
+
+D10ExecutionInventory/2 orders ApprovalUse carriers uniquely by DecisionKey canonical bytes across versions, externalUnknowns uniquely by binding.ref canonical bytes, and stopState uniquely by binding.ref canonical bytes. It includes every responsibility still needed for pending work, recovery, deduplication or irreversible stop, including completed external attempts that remain referenced. Inventory2 is captured only after admission, planning, send, and schedule writers for the old holder are stopped at one real store barrier; mixing old and new values from different barriers is forbidden.
+
+### 14.5 Inventory pin, Record3 equality, store incarnation, and StopCapacity
+
+The Inventory2 artifact is exactly UTF8 D6-Execution-Inventory/2, one NUL byte, then D3-CJ/3(D10ExecutionInventory/2). Its PinRef/2 has payloadKind=artifact, retentionClass=recovery, and byteLength/SHA-256 for those complete prefixed bytes. Inventory1 keeps its historical D6-Execution-Inventory/1 domain and is never repinned or re-encoded as Inventory2.
+
+ExecutionResponsibilityRecord/3 and its pinned Inventory2 must agree exactly: workspaceRef is equal, and the five responsibility payloads approvalUses, claims, moneyLineage, externalUnknowns, and stopState are byte-equal canonical values. ExecutionContinuityProof/2.inventoryPin must select that exact Inventory2. Inventory2.storeIncarnation is byte-equal to ExecutionContinuityProof/2.storeIncarnation, and the protected birth/barrier/fence token mapping must prove that actual store and the same capture barrier; no separate caller-provided store-incarnation proof object is introduced.
+
+Inventory2.stopCapacity is the exact StopCapacity/1 value from the authoritative safety store at that same barrier. StopCapacity/1 remains the fixed-parent {issued,reserved} counter pair and is not duplicated as a Record3 member. A Workspace-only custody move cannot copy those shared counters into a second active store. Either the original authoritative safety store remains the reachable serialized owner, or a complete store handoff fences every affected writer and preserves all target/latch reservations and capacity. Unproved store continuity or safety capacity makes takeover unavailable; zero, a visible subset, or a rebuilt value is never accepted.
+
+Record2/Proof1/Inventory1 retain their historical decoder and payload domain. Record3 is formed only for a real responsibility mutation, checkpoint, or custody handoff. Such a transition strict-decodes every retained historical responsibility, captures one complete mixed Inventory2, pins it once, creates Proof2, checked-increments the record revision when applicable, and preserves executionDomainId. It never mints replacement ControlRefs, requests, approvals, reservations, claims, or a second execution ledger.
 
 ## 15. Suggestion lifecycle
 
