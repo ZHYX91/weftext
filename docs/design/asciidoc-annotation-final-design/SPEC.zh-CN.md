@@ -583,11 +583,13 @@ required plan必须：
 D3-CJ/3(plan.edits) == D3-CJ/3(evidence.edits)
 ```
 
-SourceTransformSealSignedBody/1 恰好是完整 SourceTransformSealArtifact/1 删除唯一 signature 成员后的 closed object，因此仍含 format、version、trustKeyId 与完整 SourceTransformEvidence/2，不能增删其它字段。signature 的 lexical form 恰为 86 个 ASCII unpadded-base64url 字符，decode 后必须是 64-byte Ed25519 signature。选中的 verification public key 恰为 43 个 ASCII unpadded-base64url 字符，decode 后必须是 32 bytes；trustKeyId 必须恰为 `"sha256:" + lowercase_hex(SHA-256(raw public-key bytes))`。
+SourceTransformSealSignedBody/1 恰好是完整 SourceTransformSealArtifact/1 删除唯一 signature 成员后的 closed object，因此仍含 format、version、trustKeyId 与完整 SourceTransformEvidence/2，不能增删其它字段。signature 的 lexical form 恰为 86 个 ASCII unpadded-base64url 字符，decode 后必须是 64-byte Ed25519 signature。选中的 verification public key 恰为 43 个 ASCII unpadded-base64url 字符，decode 后必须是 32 bytes；trustKeyId 必须恰为 "sha256:" + lowercase_hex(SHA-256(raw public-key bytes))。
 
 待签消息两语完全相同，固定为 `ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1)`。transport/store 的 artifact bytes 必须恰为含 signature 的完整 SourceTransformSealArtifact/1 的 D3-CJ/3；即使其它 JSON serialization 解出相同值，也必须拒绝。signature 不覆盖自身、outbox address 或后来的 trust cut。
 
-outbox key 固定 {changeId,ownerNodeRef}，artifactPin=portable_metadata 且 pin 的是 exact canonical artifact bytes。required sealed decision 恰一个 item，disabled 为零；同 key 两份不同 artifact 是 integrity conflict。required seal 在原 P seal 中重验 frozen exact profile/trustRevision/trustKeyId 与 usable handle。publication/recovery 只重发原 pin bytes，永不重编译 events、按 current source/hash/trust 搜索或重签。
+outbox key 固定为 {changeId,ownerNodeRef}；artifactPin 保存 portable_metadata 的精确规范 artifact bytes。required 决策密封后恰有一个 item，disabled 则为零；同一 key 出现两份不同 artifact 属于 integrity conflict。
+required seal 在原 P seal 中重新验证冻结的 profile/trustRevision/trustKeyId 与 usable handle。
+publication/recovery 只重发原 pin bytes，永不重编译 event，也不按当前 source/hash/trust 搜索或重新签名。
 
 SourceTransform artifact不是PortableComponent，不进入Notice/CP component set；它与source decision共用同一P seal/ChangeId。
 
@@ -597,21 +599,40 @@ SourceTransform artifact不是PortableComponent，不进入Notice/CP component s
 
 Declaration2 的 revision 1 predecessor 必须是 `{kind:"root",fingerprint:WorkspaceTrustRootFingerprint/1}`，其中 fingerprint 是完整 retained object，不能降成裸 digest。该 fingerprint 必须与 retained root declaration 重算值以及唯一 protected WorkspaceTrustAnchor/1 中保存的值 byte-equal。后续 predecessor 使用前一 declaration 的 exact revision 与其 D3-CJ/3 bytes 的 SHA-256。rootKeyId 永远不能代替 predecessor fingerprint。
 
-Declaration2 的 publicKey 恰为 43 个 ASCII unpadded-base64url 字符，decode 后必须是 32-byte Ed25519 key。所有 Ed25519 signature 成员恰为 86 个 ASCII unpadded-base64url 字符，decode 后必须是 64 bytes。每个 trustKeyId/newTrustKeyId 必须等于 `"sha256:" + lowercase_hex(SHA-256(raw_32_byte_public_key))`；uppercase hex、padded base64、alternate serialization 或 closed prepare protocol 之外的 caller key bytes 一律拒绝。
+Declaration2 的 publicKey 恰为 43 个 ASCII unpadded-base64url 字符，解码后必须是 32-byte Ed25519 key；所有 Ed25519 signature 成员恰为 86 个 ASCII unpadded-base64url 字符，解码后必须是 64 bytes。
+每个 trustKeyId/newTrustKeyId 必须等于 `"sha256:" + lowercase_hex(SHA-256(raw_32_byte_public_key))`。uppercase hex、padded base64、其它 serialization 或 closed prepare protocol 之外的 caller key bytes 一律拒绝。
 
-authorize 与 rotate 的 possessionSignature 必须认证 `ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2)`。PoP body 是 containing declaration 的 workspaceRef、revision、predecessor、decisionKey，加上 exact action commitDomain/profile 与新 key tuple 的 closed projection；rotate 将 newTrustKeyId 规范化放入 body 的 trustKeyId 成员。TrustConflictOutcome/2 的 authorize_fresh 使用同一 PoP domain/body，由 enclosing Declaration2 common fields 与该 outcome 的 exact commitDomain/profile/key tuple 重建。PoP 不能搬到另一 declaration revision、DecisionKey、domain、profile 或 key。
+authorize 与 rotate 的 possessionSignature 必须认证 `ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2)`。
+PoP body 取外层 declaration 的 workspaceRef、revision、predecessor 与 decisionKey。
+随后加入 action 的 commitDomain/profile 与新 key tuple。
+rotate 把 newTrustKeyId 规范化到 body 的 trustKeyId。
+TrustConflictOutcome/2 的 authorize_fresh 使用同一 PoP domain/body，并从外层 Declaration2 的 common fields 重建。
+它再绑定该 outcome 的 commitDomain/profile/key tuple；PoP 不得搬到另一 declaration revision、DecisionKey、domain、profile 或 key。
 
-ordinary rotate 的 mode 必须是 `ordinary`，continuitySignature 是被替换旧 key 对 `ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2)` 的 Ed25519 signature。该 closed body 包含 declaration common fields 与除 continuitySignature/rootSignature 外的完整 rotate action，包括 old/new key IDs、publicKey、possessionSignature 与 mode="ordinary"。mode 为 loss_recovery 或 compromise 时，continuitySignature 必须是 literal `"not_required"`，不要求也不接受旧 key signature。revoke 使用独立 closed mode 集 administrative|loss|compromise。
+ordinary rotate 的 mode 必须是 ordinary；continuitySignature 是被替换旧 key 对 `ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2)` 的 Ed25519 signature。
+该 closed body 包含 declaration common fields 与完整 rotate action。
+除 continuitySignature/rootSignature 外，还必须包含 old/new key IDs、publicKey、possessionSignature 与 mode="ordinary"。
+mode 为 loss_recovery 或 compromise 时，continuitySignature 必须使用 literal `"not_required"`，不要求也不接受旧 key signature；revoke 使用独立的 closed mode 集 administrative|loss|compromise。
 
 rootSignature 必须认证 `ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2)`；WorkspaceTrustDeclarationSignedBody/2 就是完整 Declaration2 只删除 rootSignature。因此 root 会绑定完整 action、PoP/continuity、conflict outcomes/carries、predecessor 与 DecisionKey。
 
-current unseen 普通 trust administration 只通过 SCHEMAS §9 的 closed wireVersion3 add/rotate/revoke prepare successor。profile 使用 SealProfileId/1，因此 revision-token 与 source-transform 两个 profile 都有真实 public producer。request 不携带 public/private key material；add/rotate 的 key 与 PoP 由 Core 在 admitted secure store 内生成。gate 保持 current workspace policy_admin、exact expected trust revision、current disclosure、anchored root 与 usable root handle。rotate 的 mode 为 ordinary|loss_recovery|compromise；revoke 独立为 administrative|loss|compromise。操作只通过原 planning/install/single-P/CP4 路径更新现有 policy/WorkspaceAuthorizationBundle component，不新增 trust ledger、Boolean validator、CAS 或 commit point。真实 saved/planned wireVersion2 trust request 保留 exact decoder/recovery，绝不改写为 /3。
+当前未见过的普通 trust administration 只通过 SCHEMAS §9 的闭合 wireVersion3 add/rotate/revoke prepare successor。profile 使用 SealProfileId/1，因此 revision-token 与 source-transform 两个 profile 都有真实 public producer。
+request 不携带 public/private key material。
+add/rotate 的 key 与 PoP 由 Core 在 admitted secure store 内生成。
+gate 保持当前 workspace policy_admin 与精确 expected trust revision。
+还必须保留 current disclosure、anchored root 与 usable root handle。
+rotate 的 mode 为 ordinary|loss_recovery|compromise；revoke 独立为 administrative|loss|compromise。
+操作只通过原 planning/install/single-P/CP4 路径更新现有 policy/WorkspaceAuthorizationBundle component，不新增 trust ledger、Boolean validator、CAS 或 commit point。
+真实 saved/planned wireVersion2 trust request 保留 exact decoder/recovery，绝不改写为 /3。
 
 Declaration1 activation 继续走原 DecisionKey -> CP3/public-history 规则。Declaration2 activation 必须由其 DecisionKey -> committed CP4 + ChangeRecord/1 -> 首次追加该 declaration sequence 的 exact policy after-image 重派生。共享同一 DecisionKey 的 declarations 共用一个 activation ChangeId，在 history_at(C) 中全进或全不进。TrustConflictCarry/2 必须从原 Declaration2 与原 CP4/ChangeRecord 重派生 origin；后来的 resolver cut 不能替代 origin cut。
 
 普通 SourceTransform receiver 验证 producing ChangeRecord/CP4，并用 C=CP4.frontierBefore 做 historical key verification。后续 ordinary rotation 不会让在 C 合法的 artifact 失效。compromise 必须比较 artifact seal ChangeId 与原 compromise activation ChangeId 的 causal order；causal-concurrent 或更晚的 old-key seal 无论 arrival order 都失败。DomainSealKeyHandle/1 只在 exact Declaration1-authorized key 仍 current、safe、usable 时继续 revision-token 新签名；它永远不获得 transform authority，也不改编码成 Handle2。
 
-WorkspaceBootstrapProfile/4 与 Profile3 使用同一 closed member set 和 issuer semantics，只把 fresh-target trust genesis family 改为 WorkspaceTrustGenesis/2。WorkspaceBootstrapPlan/4 保留 D3 allocation chain 的 canonical lowercase UUID proposalId 以及其它 UUID 成员。creator binding、target Registry binding、series configuration 与 period-scope binding 都使用 SCHEMAS §9 的 closed helper types，不留描述性 placeholder。
+WorkspaceBootstrapProfile/4 与 Profile3 使用同一闭合成员集合和 issuer semantics，只把 fresh-target trust genesis family 改为 WorkspaceTrustGenesis/2。
+WorkspaceBootstrapPlan/4 保留 D3 allocation chain 的 canonical lowercase UUID proposalId 以及其它 UUID 成员。
+creator binding 与 target Registry binding 使用 SCHEMAS §9 的闭合 helper type。
+series configuration 与 period-scope binding 同样使用闭合 helper type，不留描述性 placeholder。
 
 Plan4 只用于 current unseen fresh create_workspace/fork_workspace bootstrap。原 D3 proposal authenticity、issuer/target-custody ordering、一个 planning CAS、一个 DecisionKey、一个 P seal 全部保持。create 从 frozen eligible seed 派生 target Registry；fork 在 fixed source cut 携带并映射完整 source Registry/configuration history。fresh bootstrap 只有一个 root，并严格按顺序生成两个 Declaration2 authorize：revision 1 revision-token，revision 2 source-transform；两者同 DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。两个 staged handle 只有在这一个 seal commit 后才变 usable，不存在可观察的一-profile prefix。
 
