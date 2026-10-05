@@ -21,10 +21,11 @@ This directory turns the independently reviewed complete AsciiDoc design, Weftex
 ## Reading order
 
 1. [REVIEW-ENTRY.md](REVIEW-ENTRY.md)
-2. [SPEC.md](SPEC.md)
-3. [ACCEPTANCE.md](ACCEPTANCE.md)
-4. [terminology-registry.json](terminology-registry.json)
-5. [replacements.json](replacements.json)
+2. [SPEC.md](SPEC.md) — behavior, algorithms, and owner replacements
+3. [SCHEMAS.md](SCHEMAS.md) — current closed shapes, ordering, and historical dispatch
+4. [ACCEPTANCE.md](ACCEPTANCE.md) — 554 explicit unexecuted design obligations
+5. [terminology-registry.json](terminology-registry.json)
+6. [replacements.json](replacements.json)
 
 `replacements.json` binds fixed-e8aa actual-owner blobs and normative concerns to replacement sections in SPEC. Unlisted fixed-parent semantics remain; listed conflicting contracts are replaced rather than patched by private-chat appendices.
 
