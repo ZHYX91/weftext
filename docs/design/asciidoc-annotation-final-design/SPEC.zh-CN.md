@@ -38,7 +38,13 @@ Ruby Asciidoctor 只用于独立 conformance oracle，不进入生产依赖。�
 
 ### 1.2 ProcessorEnvironment
 
-Core Gate 的环境必须冻结而不是读取 ambient host状态。AsciiDocProcessorEnvironment/3 至少闭合：doctype、backend语义profile、safe mode、base/input/output dir、attribute hard/soft set/unset四态及顺序、user-home、locale/encoding、时间/日期/epoch输入、include resolver、网络/文件读取授权、extension registry、provider profile和所有会改变固定2.0.26 observable semantics的输入。source authored attribute events与host/builtin/include provenance分开；wf-kind/wf-facets 等 Weftext authored control只能消费 root-authored provenance，不能由 host注入或 included source反向接管 root Node classification。
+Core Gate 的环境必须冻结而不是读取 ambient host 状态。AsciiDocProcessorEnvironment/3 的 canonical bytes 明确包含 doctype、backend semantic profile、safe mode、standalone、base/input/output identity、API attribute event 序列、user-home、UTF-8 source encoding、locale profile、时间/日期/epoch输入、include resolver、网络/文件读取授权、extension registry、provider profiles，以及其它会改变固定 2.0.26 observable semantics 的已登记输入。source authored attribute events 与 host/builtin/include provenance 分开；wf-kind/wf-facets 等 Weftext authored control 只能消费 root-authored provenance，不能由 host 注入或 included source 反向接管 root Node classification。
+
+attributeOverrides 是固定 Ruby 2.0.26 接收 options[:attributes] 时的有序 API event 序列，不是按名字排序的集合。每个输入 pair 按固定源码的 ! / @ 语法先归一化为 lowercase name 加 hard_set、soft_set、hard_unset、soft_unset 四态；数组顺序就是 API Hash 的枚举顺序，D3-CJ/3 必须原样编码该顺序。相同 lowercase name 可以再次出现：第一次出现决定 ordered-map 的 key 位置，后续同名 event 只替换该 key 的状态而不移动位置；不得排序、去重或按最终值折叠。
+
+这项顺序本身可观察。embedded/standalone=false 时，固定 2.0.26 在 notitle 与 showtitle 同时存在时检查 ordered attr_overrides 中二者最后出现的 key，并从该 key 派生另一个 alias。因此 API 顺序 notitle="" 后 showtitle="" 与 showtitle="" 后 notitle="" 不能得到同一 ProcessorEnvironment canonical bytes，也不能被 oracle/cache 当作语义等价环境。
+
+本候选的 managed/source Gate 只接收 UTF-8 source bytes，sourceEncoding 因而冻结为 UTF-8；其它编码必须先经过显式 import/transcode，而不是由 oracle 隐式猜测。localeProfile 是 oracle harness 的显式受控 locale 描述，不允许回退到未记录 host locale。固定 2.0.26 当前并不会按 lang 自动加载 locale attribute 文件；lang 仍是普通 document attribute。providerProfiles 只列本次 evaluation 实际允许/选择的 provider profile，未使用 provider 时可为空；provider availability 仍与 core-language validity 分离。
 
 ### 1.3 标准标题、深层标题与 run-in
 
@@ -86,37 +92,51 @@ modelPropertyObservations:[OracleModelPropertyObservation/1...]
 
 model观察只旁路复制实际 producer已经写入的 primitive field/attribute/关系，不额外求值。Section三态、caption/numeral、最终Table列宽、final Cell对象/style/alignment/span、ListItem checklist/coids、真实author named/positional/rekey、临时converter写均必须从固定producer取得，不由projector重跑Ruby model算法。
 
-### 2.3 snapshot/reference/cut
+### 2.3 snapshot、bind 与 cut 基础不变量
 
-modelPropertyObservations[].observationId 在本数组内唯一、严格随append递增。snapshot identity就是其 observationId；不存在第二snapshot ID namespace。每个subject形成 immediate-predecessor单链：首snapshot previous=null，其后必须恰指同subject直接前一snapshot。
+modelPropertyObservations[].observationId 只在本数组 namespace 内唯一，并严格随真实 append 递增。snapshot identity 就是该 snapshot 的 observationId；不存在第二 snapshot ID namespace。对每个 subject，按 observationId 取全部 snapshot 后必须形成 immediate-predecessor 单链：第一个 previousSnapshotObservationId=null，之后每一个都恰好指向同 subject 的直接前一个 snapshot。
 
-bind/cut snapshot引用必须存在、同subject且是相应时点的 latest snapshot。cut heads按数值subjectId排序，每个live semantic subject恰一head，并满足：
+定义 latestSnapshotBefore(subjectId,o) 为同 subject 且 observationId<o 的 snapshot 中 observationId 最大者。每个 bind 的 snapshotObservationId 必须存在、同 subject、严格早于 bind，并且恰等于 latestSnapshotBefore(subjectId,bind.observationId)。每个 cut head 同理必须指向 latestSnapshotBefore(subjectId,cut.observationId)。heads 按 subjectId 数值严格升序且 subjectId 唯一。
 
-```text
-set(cut.heads.subjectId) == reachableSemanticClosure(cut)
-```
+### 2.4 exact semantic head closure
 
-forward discovery只沿真实header/child/dlist/table-column/final-cell/cell-inner-document等semantic关系；parent/cell_column只做反向一致性，不把stale对象重新拉入。treeprocessor返回的新Document成为真正root；旧Cell被 reinitialize 替换后不得同时live。
+对每个 cut C，先在 C 之前的合法 bind 中选择 carrier.stream="document" 且 carrier.entry=0 的最新一项 rootBind(C)。它必须绑定 document subject，并且 C.documentSubjectId 必须等于 rootBind(C).subjectId。treeprocessor 若真实返回新 Document，M37-14 发布的新 document/0 carrier 与 bind 决定新 root；旧 root 只保留为历史 evidence，不因曾经是 root 自动进入 cut。
 
-model_ready 恰在实际 top-level Document#parse 完成（包括restore attrs/treeprocessors及实际returned Document）后产生。成功selected-backend evaluation恰一个 evaluation_complete；异常退出不得伪造complete cut。post-ready真实semantic write进入新head；temporary物理write不能通过挑旧head绕过。
+structural closure 从 C.documentSubjectId 开始，以每个 subject 在 C 时刻的 latest snapshot 做 worklist traversal。ForwardSemanticRole/1 的闭集恰为 header、child、dlist_term、dlist_description、table_column、table_head_cell、table_body_cell、table_foot_cell、cell_inner_document；只有这些 relation 可以新增 subject。每个 target 必须存在且属于 semantic-head kind。parent 与 cell_column 是 backedge，只检查一致性：forward traversal 完成后其 target 必须已经在 structural closure 中，绝不能靠 backedge 扩张 closure 或把 stale Cell/Document 拉回。
 
-### 2.4 namespace分类与 producer-time bind
+supplementary subject 只按两个闭合规则加入。inline subject 必须在 cut 前有合法 inlineObservations carrier bind，且其 latest snapshot 恰有 parent 指向已经 live 的 structural subject。catalog_record 必须在 cut 前有合法 catalogEvents carrier bind，且 latest snapshot 恰有一个用于 catalog ownership 的 parent，指向 structural closure 中真实执行 Document#register 的 Document subject；不存在 owner relation，也不能把 inner Document 的 record 改挂 top-level root。attribute_buffer 与 table_parser_context 永远是 supporting-only subject，不能仅因存在 snapshot 成为 head。
 
-只有同属 modelPropertyObservations.observationId 的 previous/bind/cut snapshot和 model-slot observation引用使用数值先后比较。operationId、inlineEventId、valueId/observedStringId、callId 各按自己既有namespace的存在/类型/DAG规则；ModelCarrierReference.entry 是对应carrier数组的0-based index，绝不与model observationId比较。不存在global event ordinal。
-
-bind-time chronology不能由最终wire静态证明。受控observer producer必须在真实callback中满足：目标carrier已经append，entry < targetStream.lengthAtBind，且producer仍持有exact同一Ruby object；随后才append bind。document/0同理，实际returned Document carrier必须先发布。最终decoder只能验证最终stream/index/type与object-binding closed关系，不能声称单靠最终数组证明跨stream先后。后来补齐carrier不能治愈此前非法bind。
-
-### 2.5 catalog 与 temporary state
-
-catalog subject的唯一ownership关系是：
+令 R 为 structural closure 加上上述 live inline/catalog supplementary subjects，令 H=set(C.heads[].subjectId)。有效 cut 必须严格满足：
 
 ```text
-parent -> actual Document#register receiver Document subject
+H == R
 ```
 
-inner AsciiDoc cell的inner Document注册catalog时parent必须指inner Document，不指top-level root。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+并且每个 head 都指向该 subject 在 cut 时刻的 latest physical snapshot。这里的 physical membership/latest 与最终 CSP survival 是两层：temporary/internal snapshot、supporting evidence 或最终 physical absent 都不能让 verifier 回退选择旧 head；PropertyProfile/CSP 另按 A/P/F/I provenance 决定 author-semantic winner。
 
-DocBook root-option load-bearing物理路径按固定源码记录真实行为，例如 authored value → internal set_option temporary value → remove_attr absent/deleted；observer不得伪造restore写。latest physical snapshot与PropertyProfile的author semantic winner是两层：internal cleanup不能抹掉此前合法author provenance，也不能复活真正后来的author overwrite/delete。
+### 2.5 supporting evidence closure
+
+从每个 cut head 的 snapshot、rootBind(C)、以及 C 前 subjectId 属于 R 的全部合法 bind 建立 typed worklist。snapshot 递归跟随 previousSnapshotObservationId、fields/attributes 中每个 ModelPropertyProvenance.inputs，以及 ModelObservedValue 内所有 string/array/map 子值。ModelPropertyInput/1 五个 arm 的边固定为：model_slot → 指定 model snapshot 与 slot；observed_value → OracleObservedString；observed_slice → 指定 OracleObservedString 并验证 byte half-open range；operation → OracleStringOperation；inline_field → OracleInlineObservation 并验证 fieldPath。
+
+OracleStringOperation 继续到自己的 callId、所有 input/removed slice、outputValueId，以及每个 run：exact_copy 跟随其 slice；derived 跟随全部 slices 与 referenced operationId；generated 在 inlineEventId 非 null 时跟随该 Inline observation。operation graph 必须满足既有 DAG 合同。OracleEvaluationCall 只在 call namespace 中递归 parentCallId。OracleInlineObservation 递归 callId、parentCallId、producingOperationId、nodeType/fields 中所有 OracleFieldValue，以及 returnValueId；OracleFieldValue 的 observed_string、array、entries 逐层递归。OracleContentObservation 递归 callId、resultValueIds 与 contributingInlineEventIds。OracleObservedSlice 最终解析到其 valueId 对应的 OracleObservedString 并验证边界；ObservedString 是叶子。
+
+每个 bind 还必须静态解析 ModelCarrierReference：document 只允许 entry=0；其它 stream 的 entry 是对应 blockEvents、collectionEvents、catalogEvents、inlineObservations、contentObservations 或 calls 数组的 0-based index，并验证目标类型。carrier 若落到 Inline、Content 或 Call，继续按上一段递归。Block/Collection/Catalog/document carrier 继续执行各自 retained closed shape/ordinal 规则，但不发明跨数组 event 顺序。
+
+support closure 可以包含旧 intermediate snapshot、attribute_buffer、table_parser_context、旧 Cell 或 temporary writer evidence；它们不会因此进入 H。任何 dangling、wrong-kind、invalid slice/index、非法 operation/call DAG、缺失 provenance 输入都会使 Witness evidence invalid/incomplete，而不是把合法 AsciiDoc 降级为 unsupported，也不得通过再次调用 parser/getter 补证据。
+
+### 2.6 namespace 分类、producer-time bind 与 cut cardinality
+
+只有 modelPropertyObservations.observationId namespace 内的 previous/bind/cut snapshot 与 model_slot observation 引用使用数值 backward/latest 比较。operationId、inlineEventId、valueId/observedStringId、callId 分别只在自己的 namespace 按存在、类型和 retained DAG/reference 规则验证；subjectId 是对象身份；carrier.entry 是数组 index。禁止任何 operationId < modelObservationId、inlineEventId < modelObservationId 等跨 namespace 数值时序推断，也不新增 global ordinal。
+
+bind-time chronology 不能由最终 wire 静态证明。完整 Witness validity 同时要求 static decoder valid 与 producer-conformance valid。受控 observer 在真实 bind callback 中必须已经发布目标 carrier，满足 entry < targetStream.lengthAtBind，并仍持有 carrier 对应的 exact 同一 Ruby object，然后才 append bind；document/0 同样要求实际 returned Document carrier 先发布。最终数组后来补齐 entry 永远不能洗白 earlier invalid bind，也禁止按 text/title/source/path/hash 事后重新寻找对象。
+
+一个完整 top-level Witness/7 恰有一个 model_ready cut。若 selected-backend evaluation 未发生或异常退出，则没有有效 evaluation_complete；若实际 evaluation 正常返回，则恰有一个 evaluation_complete，且它晚于 model_ready 并使用同一 top-level documentSubjectId。nested inner Document 不创建第二套 top-level cut namespace。
+
+### 2.7 catalog 与 temporary state
+
+catalog ownership 只有 parent -> actual Document#register receiver Document subject；该 parent 只用于 supplementary live 判定与反向一致性，不会把不在 structural closure 的 stale Document 拉入 R。
+
+temporary overlay 必须在合法 evaluation_complete 前按固定源码真实路径由实际 restore write 或实际 cleanup delete/closure 结束；observer 不得伪造 restore。DocBook root-option 的 load-bearing 物理路径例如 authored value → internal set_option temporary value → remove_attr absent/deleted，evaluation_complete head 必须是 cleanup 后 latest physical snapshot。PropertyProfile 仍可由 provenance 保留此前合法 authored winner；若之后存在真正 authored overwrite/delete，temporary cleanup 不能复活更旧值。
 
 ## 3. CoreSemanticProjection/1 与 PropertyProfile
 
@@ -872,6 +892,6 @@ ExecutionContinuityProof/2
 
 ## 19. 验收与证据边界
 
-逐项设计义务见 ACCEPTANCE.zh-CN.md / ACCEPTANCE.md：437条core design oracles +117条actual-owner coordination fixtures，共554条。它们是**未运行的设计验收义务**，不是实现测试结果。
+逐项设计义务见 ACCEPTANCE.zh-CN.md / ACCEPTANCE.md：438条core design oracles +117条actual-owner coordination fixtures，共555条。它们是**未运行的设计验收义务**，不是实现测试结果。
 
 本PR没有安装或运行 Ruby oracle、Asciidork、Mermaid CLI、浏览器/Puppeteer、STEM/PDF providers，也没有运行产品SQLite/replica/crash/crypto/Automation handoff测试。作者自检只能证明文档/JSON/路由的一致性；独立接受必须绑定本PR停止写入后的exact head SHA。
