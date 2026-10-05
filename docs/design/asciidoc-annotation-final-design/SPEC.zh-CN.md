@@ -635,6 +635,44 @@ accept 建立一个 immutable D6 plan，同时包含 target source after-image �
 
 reject_suggestion 只要求 Annotation 状态披露、annotation_read/write 与精确当前 Annotation token；它不读取 target source，也不要求 target-read 权限。它只把 Annotation Value/4 改成 rejected/not_applicable，并使用同一 CAS、revision 与 actor-time 规则。accept 与 reject，或其它正文、review、label、appearance、reply、suggestion 编辑发生竞争时，只能有一个 token 胜者；失败方按 stale/conflict 重新读取并准备。
 
+### 9.10 Suggestion operation-class transition gate
+
+`AnnotationEditableValue/1` 仍是 current/Draft editable projection，但不再直接作为 current caller mutation wire；D7 create 与 D8 edit 使用 SCHEMAS §7.1 的 `AnnotationEditableProposal/1`，其中没有 state/confirmation/basis/expectedText/pointAffinity。Core 必须先读取 complete current before，再从真实 entry 机械确定 operation class，并执行下面唯一 before+operation+proposal→after 规则；不存在 generic trusted flag、第二 decision 或 UI-only gate。
+
+| producer / operation | 允许的 Suggestion before→after | 必须的 Core 行为 |
+|---|---|---|
+| D7 create_annotation / interactive_create | none→pending only；禁止首版 accepted/rejected | kind/replacementSource 来自 proposal；Core 对实际 selected target fresh qualification。能够读取/验证真实 target 时才可产生 confirmed，并重算 targetBasis/expectedText/point；否则只可 pending+needs_reconfirmation，绝不相信 caller evidence。 |
+| D8 annotation+preserve / ordinary_edit | pending 保持 pending；terminal accepted/rejected 保持同一 terminal Suggestion/3；禁止 pending→accepted/rejected、terminal→pending 或 accepted↔rejected | body/appearance/labels/review/reply 等合法普通字段可编辑。terminal 情况 Suggestion/3 必须 byte-equal；pending 的作者可编辑 kind/replacementSource，但 caller lifecycle/evidence 全被忽略，任何需要重新目标资格的变化强制 needs_reconfirmation。 |
+| D8 annotation+replace_current / manual_reattach | 仅 pending；after 强制 pending+needs_reconfirmation | 在 annotation disclosure/read/write + token CAS 后才进行 target disclosure/qualification；选择 exact same-owner target，Core 重算 targetBasis 及 kind 所需 expectedText/point，但不能在同一 reattach 自报 confirmed。terminal Suggestion 不允许借 reattach 改 target。 |
+| D8 annotation_reconfirm_suggestion / reconfirm_suggestion | pending+needs_reconfirmation→pending+confirmed | caller 不传 value/evidence。Core fresh 读取 stored target 与真实 target source/point，重算全部 targetBasis/expectedText/pointAffinity；任一 currentness/permission/bytes 不符则零 mutation。 |
+| D7 apply_suggestion | pending+confirmed→accepted+not_applicable only | 继续执行 §9.9 fresh target read、三 kind transform、target after + Annotation after 的同一 D6 plan/one CAS/one P。 |
+| D7 reject_suggestion | pending+confirmed\|needs_reconfirmation→rejected+not_applicable only | 只需要 Annotation disclosure/read/write 与 exact token，不读取 target；target hidden/unavailable 仍可 reject。 |
+| D3 copy/import owner、Trash/restore、recovery | 不把携带的 terminal display state 解释为 fresh apply/reject decision | 按真实 identityMap/归因/历史 decoder 保留既有正向功能；copy/import 可保存 terminal 展示状态与 attribution，但没有当前 Workspace 的 apply receipt/target source change 就不能声称“曾提交目标修改”。fresh ordinary import 的归因按 imported_unverified；pure Trash/restore byte-equal 保留 token/Value，不产生新 decision。 |
+
+显式 manual reattach/reconfirm 的错误顺序保持 closed decode → Annotation state disclosure → annotation_read → annotation_write（若 mutation）→ exact token/current Annotation → target disclosure → target source availability/qualification → semantics/budget。target hidden 时必须在读出 target bytes/expectedText 前 not_visible；provider/source unavailable 不能伪装为 orphaned。reconfirm 失败保留原 pending+needs_reconfirmation；不会通过 noninteractive/generic constructor 重新开放同一旁路。
+
+### 9.11 Current proposed carrier 与 Annotation read chain
+
+`D7ProposedInput/3` 是 D7ActionInput/3/PAB4 的唯一 current proposed-input carrier。D6-owned apply/reject/其它 concrete current Annotation after 必须 `payloadKind=annotation_value, encoding=d3_annotation_value4`，pin 完整 Value/4 canonical bytes；D3 合法 symbolic-result 分支继续使用 `d3_symbolic_result9`。真实 PAB3/D7ProposedInput/2 保持 d3_annotation_value3 的原 decoder/bytes/pins，current decoder 不接受把 Value4 塞进 /2。
+
+fixed D7 Query Algebra §2 的 `{kind:"annotation_body"}` 当前句由本段替换：from 仍是 AnnotationRef、输出仍是 text，但 producer 必须在最终 authorized query read barrier 读取 current PortableAnnotationRecord/4，并以唯一 AnnotationInlineProfile/1 求值。body=null 投影为 `""`；valid body 输出 **R6 semantic text**，不是 exact source。因此 source `*Alice*` 的 query text 是 `Alice`，而 exact source 只在 D8 read/Draft surface 中返回。invalid R6 在 annotation_read/currentness 成功后使整次 read 按 existing D7 `source_unavailable` 失败；禁止退回历史 D2 plain_text、strip-markup 猜测或 partial semantic text。
+
+SCHEMAS §6.3.1 的 `d8_annotation_read` 与 `d8_annotation_draft_open` 是实际 Core/D8 producer。read 先做 Annotation disclosure/annotation_read，再取得 current aggregate-backed record、Annotation SourceObservation/token 与 target-resolution；它返回完整 Value/4（含 creator/authoredAt/lastEditor/editedAt）以及 body exactSource+semanticText/diagnostics。target 本身 hidden/unavailable 时，Annotation 本体若可读仍可返回，targetResolution=unavailable 且不泄露 target source bytes。Draft-open 同时返回该 complete read 与 discardable editable projection；无 annotation_write 时 access=readonly，不能 prepare。editable prepare 必须绑定 base token/Observation，并在 planning 前和最终 read barrier 重验 current record、aggregate observation、authorization 与 dependency cut；任何一项移动都 stale/reprepare，不能靠相同 Value hash 或 locator 继续。
+
+### 9.12 `weftext.annotations.json` physical aggregate 与 D6 安装
+
+逻辑 authority 仍只有 Portable Workspace Metadata；Node-local `weftext.annotations.json` 是它的 Annotation physical carrier，不是第二 metadata root、DB、ledger 或 CAS。当前物理格式只有 SCHEMAS §7.1 `AnnotationAggregate/1`。sidecar 位置由当前 Node FileBinding/managed-node boundary 与固定 basename 机械确定，path 不存进 aggregate；协调 rename 只更新 FileBinding/physical observation，ownerNodeRef、AnnotationRef、Value4 与 revision token 不变。其它 `.weftext-meta` portable facts 保持 D6 原 owner；未来 sharding 只有 closed layout successor 能改变物理布局，并必须给每个 AnnotationRef 唯一 deterministic shard owner，绝不双写。
+
+每条改变的 Annotation 仍各自拥有一个 logical `PortableAnnotationRecord/4`、一个 final AnnotationRevisionToken、一个 Value4/source-revision result；整文件 canonical bytes/FileObjectBinding/AnnotationAggregateObservation/安装 pin 是另一个**物理层**。一个 record 改变会让同文件旧 aggregate observation 与依赖其 FileObjectBinding 的 current read observation stale，但不会给其它 byte-equal record 分配新 AnnotationRevisionToken、Value4、managed SourceVersion 或 H。合法 fresh read 重新读取/strict-decode 完整 aggregate 并给未改 logical record 重新建立 current observation；这是 observation refresh，不是 source mutation。
+
+准备写入时，Storage 从 fresh AnnotationAggregateObservation/1（或 proved absent）开始，把本 DecisionKey 的全部 logical record changes 应用到同一内存 aggregate，保持未改 records 的 logical bytes，然后只生成一个 AnnotationAggregateInstall/1 after pin。strict 安装必须沿用 D6 §6 的 create_only/conditional_replace/exclusive_write_window 资格；before FileObjectBinding/object generation 不匹配就 stale/paused，read-hash-then-rename 或 digest equality 不是 CAS。两个并发操作改同一 sidecar 时最多一个 physical CAS 先成功；失败方 fresh re-read 后重新构造包含胜者 records 的 after，不能 LWW 覆盖。
+
+同一决策若修改同一 Node 的多个 Annotation，InstallationNotice3/CP4 仍逐项列出每个实际 `PortableComponentKey.annotation` logical component after，并与各 Annotation sourceChanges/final revision 对齐，但 InstallationPlan 对 sidecar 恰一个 physical after。P seal 前验证完整 aggregate after、每个 changed logical component、SourceRevisionPlan/value pin 与 file install 一致；一个失败则整组不 seal。sealed production history/旧 PreparedIntent 永远不因后来重写 aggregate container 而更新、复活或 repin。
+
+sync/admission 先按原 D6 ChangeRecord/Notice/CP/current conflict 连续链验证，再 strict-decode 整个 aggregate；arrival order、mtime、revision number、hash 相等或 provider “latest” 不能选 winner。duplicate Ref、owner 错、reply cycle、duplicate JSON key、截断、unknown format/version 或 component/aggregate mismatch 均不得 partial trust：strong path incomplete/integrity_conflict，authorized raw repair/backup 可取得 exact original bytes 但不能补造成员。外部直接编辑 JSON 即使 syntactically valid 也不是 trusted Core decision；只有 verified portable transition 或 explicit import/admission 才能建立新 current state，且 caller actor/lifecycle 字段不能因此变成 trusted apply/reject evidence，ordinary import attribution 仍按 imported_unverified。
+
+backup 在显式 Frontier 保存 ordinary files + exact portable sidecar bytes，不携带 current permission/PAB/ActionEvidence。Node copy/import 通过既有 identityMap/candidate-map 生成 fresh AnnotationRefs、改写 target/reply，并输出新 owner 的唯一 aggregate；terminal Suggestion 可作为历史展示数据保留，但不会制造 destination target mutation receipt。Trash/restore 若 Value4 不变只移动原 lifecycle/portable ownership 状态并保留 token；restore 后 fresh read 重新绑定物理 observation。purge 删除相应 record；最后一个 record 被 purge 时 canonical after 是 sidecar absent。reply graph、history retention 与 no-reuse 仍按 §9.7/D3 原规则，container rewrite 不改变它们。
+
 ## 10. Annotation targets/current qualification
 
 ### 10.1 source target
@@ -1044,6 +1082,6 @@ ExecutionContinuityProof/2
 
 ## 19. 验收与证据边界
 
-逐项设计义务见 ACCEPTANCE.zh-CN.md / ACCEPTANCE.md：438条core design oracles +217条actual-owner coordination fixtures，共655条。它们是**未运行的设计验收义务**，不是实现测试结果。
+逐项设计义务见 ACCEPTANCE.zh-CN.md / ACCEPTANCE.md：438条core design oracles +251条actual-owner coordination fixtures，共689条。它们是**未运行的设计验收义务**，不是实现测试结果。
 
 本PR没有安装或运行 Ruby oracle、Asciidork、Mermaid CLI、浏览器/Puppeteer、STEM/PDF providers，也没有运行产品SQLite/replica/crash/crypto/Automation handoff测试。作者自检只能证明文档/JSON/路由的一致性；独立接受必须绑定本PR停止写入后的exact head SHA。
