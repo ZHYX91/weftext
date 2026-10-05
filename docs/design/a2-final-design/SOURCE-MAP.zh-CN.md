@@ -39,7 +39,7 @@ fixed97 AsciiDoc/Annotation candidate 已读取完整 D2 language/processor/Witn
 
 已读取 D6 中与 current authorization、普通保存、installation、seal 和 recovery 直接相交的段落，用于确认 exact-source save、strict/observed-only、pin、SourceRevisionPlan、no-op 与恢复边界。
 
-已读取 D8 的 committed read、Draft/edit prepare、submission 与 historical recovery 相关段，用于确认 current exact-source read/save。
+已读取 D8 中 committed read、Draft/edit prepare、submission 和旧版本恢复的相关段，用于确认 current exact-source 的读取与保存路径。
 fresh current projection 使用 fixed97 D2 overlay 的当前模型；historical limited document_snapshot product 只继续服务旧版本恢复。
 
 D7/D9 的 D2 direct-consumer 行为通过 fixed97 current overlay 实际读取：D7 heading/body 消费 D2DocumentSnapshot/3；D9 exact source/resource/query_json 的 generationPolicy none 不依赖 provider。D10 已读取 TASK/导航，但本批不整合 D10。
