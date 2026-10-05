@@ -13,15 +13,15 @@ translation_status: source
 - actual-owner coordination fixtures: 117
 - total: 554
 
-每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 `SPEC.zh-CN.md` 的对应关系由 ID 前缀和下表“规范域”给出。
+每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
 ## Core — 437
 
 | ID | 规范域 | 必须满足的条件 |
 |---|---|---|
 | AD2-01 | SPEC §§1–4 | 所有 core-language oracle固定 asciidoctor-ruby/2.0.26@0b99b39…；rolling docs/latest版本不得改变该 corpus 结果。 |
-| AD2-02 | SPEC §§1–4 | 文字、escape、specialchars、quotes、attribute substitution、replacements、macros、post-replacements按2.0.26实际 substitution order相等。 |
-| AD2-03 | SPEC §§1–4 | hard-set API attr可以改变 generic effective attributes；它不能成为 wf-kind/wf-facets authored control authority。 |
+| AD2-02 | SPEC §§1–4 | 文字、escape、specialchars、quotes、attribute substitution、replacements、macros、post-replacements按2.0.26实际 substitution order相等。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| AD2-03 | SPEC §§1–4 | hard-set API attr可以改变 generic effective attributes；它不能成为 wf-kind/wf-facets authored control authority。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-04 | SPEC §§1–4 | source无 wf-kind、host只注入同名attr时，generic environment可有该值，但 Node仍 ordinary。 |
 | AD2-05 | SPEC §§1–4 | soft-set与 hard-set必须可区分；source可覆盖 soft-set但不能覆盖 hard-set。 |
 | AD2-06 | SPEC §§1–4 | 完整重放2.0.26 authored attribute events及其顺序/set/unset/substitution；RootAuthoredControlProjection必须消费同一 parser产生的 authored provenance，不能另写一个简化 assignment parser。 |
@@ -30,24 +30,24 @@ translation_status: source
 | AD2-09 | SPEC §§1–4 | root control引用另一个 root-authored attribute时可生效；如果 control最终值依赖 host/include/builtin provenance，则 generic AsciiDoc仍可有效，但 Weftext Node-control必须 unavailable/invalid而非接管。 |
 | AD2-10 | SPEC §§1–4 | link:n1.W.N[label]先由标准 link grammar处理，再由 Weftext adapter投影 NodeLink；不能存在第二 link parser。 |
 | AD2-11 | SPEC §§1–4 | n1 target合法时不要求自造 ++ passthrough canonical syntax。 |
-| AD2-12 | SPEC §§1–4 | link/citation label corpus覆盖 Doe, 2025、a=b、合法 ] escaping、single/double quote、comma、role attrs及2.0.26允许的 multiline attr-list情况；全部由 baseline attr-list parser处理。 |
+| AD2-12 | SPEC §§1–4 | link/citation label corpus覆盖 Doe, 2025、a=b、合法 ] escaping、single/double quote、comma、role attrs及2.0.26允许的 multiline attr-list情况；全部由 baseline attr-list parser处理。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-13 | SPEC §§1–4 | native bibliography anchor/xref与 Weftext citation role可同文档并存，不自动合并 provenance/identity。 |
 | AD2-14 | SPEC §§1–4 | derived Weftext bibliography placement的删除只删除 placement，不删除 cited Node或引用事实。 |
 | AD2-15 | SPEC §§1–4 | r1.UUID只能按 containing Node解析 owner-local Resource；另一个 owner的同 UUID leaf不是同 ResourceRef。 |
-| AD2-16 | SPEC §§1–4 | image alt/width/height等使用 native image semantics；copy rewrite只重写 Resource identity，不损失 occurrence presentation。 |
+| AD2-16 | SPEC §§1–4 | image alt/width/height等使用 native image semantics；copy rewrite只重写 Resource identity，不损失 occurrence presentation。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-17 | SPEC §§1–4 | audio使用其实际 title/start/end/options等 native attrs，不凭 image模型添加字段。 |
 | AD2-18 | SPEC §§1–4 | video poster/width/height/start/end/options按固定2.0.26语义。 |
-| AD2-19 | SPEC §§1–4 | D4 carrier inner payload取 exact authored literal range；renderer escaping不得成为 typed input。 |
+| AD2-19 | SPEC §§1–4 | D4 carrier inner payload取 exact authored literal range；renderer escaping不得成为 typed input。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-20 | SPEC §§1–4 | payload包含默认 delimiter行时 emitter选择合法不碰撞 delimiter；parse→source round-trip payload byte-equal。 |
 | AD2-21 | SPEC §§1–4 | included managed source中的 carrier/query/view仍归真实 source owner。 |
 | AD2-22 | SPEC §§1–4 | local include、tags、lines、indent、leveloffset等获准时与 Ruby 2.0.26 semantic witness相等。 |
-| AD2-23 | SPEC §§1–4 | include因 file permission被拒时 source syntax仍 valid；EvaluationStatus为 effect_denied/incomplete，directive bytes保留。 |
+| AD2-23 | SPEC §§1–4 | include因 file permission被拒时 source syntax仍 valid；EvaluationStatus为 effect_denied/incomplete，directive bytes保留。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-24 | SPEC §§1–4 | URL include只能消费 exact authorized snapshot；相同URL后续新bytes不得继承旧 current proof。 |
-| AD2-25 | SPEC §§1–4 | unmanaged snapshot可 one-shot read/preview/export，但不能充当长期 current Query/Action dependency。 |
+| AD2-25 | SPEC §§1–4 | unmanaged snapshot可 one-shot read/preview/export，但不能充当长期 current Query/Action dependency。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-26 | SPEC §§1–4 | attribute/include/substitution出现多个 source origins时必须保留完整 origin graph；Write/Annotation不能自动挑最近 origin。 |
-| AD2-27 | SPEC §§1–4 | unordered/ordered/description/callout/checklist/hybrid/mixed list以及 list continuation/attached blocks均完整。 |
-| AD2-28 | SPEC §§1–4 | checklist/list continuation + attached table等历史 parser edge case不得 panic/silent flatten；不等价即 core Gate fail。 |
-| AD2-29 | SPEC §§1–4 | PSV/CSV/DSV/TSV、cols、header/footer、span/dup/alignment/style、a AsciiDoc cell完整进入 semantic corpus。 |
+| AD2-27 | SPEC §§1–4 | unordered/ordered/description/callout/checklist/hybrid/mixed list以及 list continuation/attached blocks均完整。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| AD2-28 | SPEC §§1–4 | checklist/list continuation + attached table等历史 parser edge case不得 panic/silent flatten；不等价即 core Gate fail。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| AD2-29 | SPEC §§1–4 | PSV/CSV/DSV/TSV、cols、header/footer、span/dup/alignment/style、a AsciiDoc cell完整进入 semantic corpus。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AD2-30 | SPEC §§1–4 | Complex Source↔Write corpus必须同时含 deep level6–9 heading、run-in、table/list/STEM；只改一个普通 paragraph后，所有未触及 bytes（含 marker、role、trivia）逐字节保持；随后 HTML/PDF/DOCX仍分别满足 deep/run-in backend规则。 |
 | AD2-31 | SPEC §§1–4 | rich editor没有某控件时，该合法 construct仍能 parse/read/source-edit/save；不能以控件缺失判 unsupported syntax。 |
 | AD2-32 | SPEC §§1–4 | STEM provider缺失只影响 BackendStatus，不影响 core language validity。 |
@@ -65,8 +65,8 @@ translation_status: source
 | AN2-04 | SPEC §§9–16 | 同一 reply concurrent edit必须通过 Annotation revision/CAS/ConflictRecord处理。 |
 | AN2-05 | SPEC §§9–16 | reviewState与 target resolution状态正交。 |
 | AN2-06 | SPEC §§9–16 | reopen只改 root reviewState，不自动修改 target/reanchor。 |
-| AN2-07 | SPEC §§9–16 | highlight/underline/squiggle/strike × yellow/red/green/blue/purple/pink/gray portable round-trip。 |
-| AN2-08 | SPEC §§9–16 | Annotation inline body完整支持其 frozen doctype=inline profile中的 CJK/RTL/emoji/strong/emphasis/link/STEM等。 |
+| AN2-07 | SPEC §§9–16 | highlight/underline/squiggle/strike × yellow/red/green/blue/purple/pink/gray portable round-trip。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| AN2-08 | SPEC §§9–16 | Annotation inline body完整支持其 frozen doctype=inline profile中的 CJK/RTL/emoji/strong/emphasis/link/STEM等。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AN2-09 | SPEC §§9–16 | trusted insertion在 target前时 exact range按 transform机械移动，无需人工 reanchor。 |
 | AN2-10 | SPEC §§9–16 | insertion在 range start时按 fixed affinity保留原选择文字。 |
 | AN2-11 | SPEC §§9–16 | insertion在 range end时不自动扩大旧 selection。 |
@@ -91,7 +91,7 @@ translation_status: source
 | AN2-30 | SPEC §§9–16 | raw backup已交付 bytes不能被后续 revoke神奇收回；在线 API仍服从当前权限。 |
 | AN2-31 | SPEC §§9–16 | Review Bundle无 history权限时实际不包含 historical excerpts。 |
 | AN2-32 | SPEC §§9–16 | root-authored source span的 Annotation owner=root Node。 |
-| AN2-33 | SPEC §§9–16 | managed included Node source span的 Annotation owner=被 include Node；root permission不能代替。 |
+| AN2-33 | SPEC §§9–16 | managed included Node source span的 Annotation owner=被 include Node；root permission不能代替。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | AN2-34 | SPEC §§9–16 | unmanaged/network included bytes不能直接建立 durable exact target，可 annotate directive或先 adopt。 |
 | AN2-35 | SPEC §§9–16 | synthetic multi-origin text不能自动选择一个 owner。 |
 | AN2-36 | SPEC §§9–16 | PDF/image normalized rect绑定 exact ResourceVersion，zoom/shell变化不改变它。 |
@@ -160,17 +160,17 @@ translation_status: source
 | WFX-R14 | SPEC §1.3 | heading/body inline AST分别解析，不把拼接文本重新 parse。 |
 | WFX-R15 | SPEC §1.3 | RTL/CJK/emoji不插入硬编码 LTR punctuation。 |
 | WFX-R16 | SPEC §1.3 | synthetic visual join没有 writable source scalar。 |
-| WFX-R17 | SPEC §1.3 | Copy Text必须得到 rendered heading text + U+0020 + rendered first paragraph text；Copy Source Fragment必须保留 heading source、两者之间全部真实 blank/comment/attribute trivia及 paragraph source，不能把 synthetic join写回 source。 |
+| WFX-R17 | SPEC §1.3 | Copy Text必须得到 rendered heading text + U+0020 + rendered first paragraph text；Copy Source Fragment必须保留 heading source、两者之间全部真实 blank/comment/attribute trivia及 paragraph source，不能把 synthetic join写回 source。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | WFX-R18 | SPEC §1.3 | Enable仅保留 .run-in；Disable仅保留 .separate；Use Default移除两者。 |
 | WFX-R19 | SPEC §1.3 | body Enter形成第二 paragraph后只有第一段继续 run-in。 |
 | WFX-R20 | SPEC §1.3 | body-start Backspace不能默默消灭 heading structure。 |
 | WFX-R21 | SPEC §1.3 | authored deep heading 6–9同样支持 run-in。 |
 | WFX-R22 | SPEC §1.3 | backend不支持时只允许 presentation degradation，heading/body semantics必须保留。 |
-| T3-ENV-01 | SPEC §§1.2,4 | 同 source在 html5与docbook processor backend下，ifdef::backend-html5[]结果及 context digest不同。 |
+| T3-ENV-01 | SPEC §§1.2,4 | 同 source在 html5与docbook processor backend下，ifdef::backend-html5[]结果及 context digest不同。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-ENV-02 | SPEC §§1.2,4 | SERVER/SECURE safe mode对 docdir/docfile masking与 SAFE结果一致于2.0.26。 |
 | T3-ENV-03 | SPEC §§1.2,4 | logical docfile/baseDir变化正确改变 {docfile} / relative include及 context digest。 |
 | T3-ENV-04 | SPEC §§1.2,4 | SOURCE_DATE_EPOCH变化正确改变 local/doc intrinsic time attrs。 |
-| T3-ENV-05 | SPEC §§1.2,4 | hard_set、soft_set、hard_unset、soft_unset四态逐项复现 Ruby value/value@/nil/false precedence。 |
+| T3-ENV-05 | SPEC §§1.2,4 | hard_set、soft_set、hard_unset、soft_unset四态逐项复现 Ruby value/value@/nil/false precedence。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-ENV-06 | SPEC §§1.2,4 | managed include SourceObservation变化使旧 evaluation dependency stale。 |
 | T3-ENV-07 | SPEC §§1.2,4 | external immutable pin byte-equal时可 exact replay；不同 pin不能复用旧 evaluation。 |
 | T3-ENV-08 | SPEC §§1.2,4 | safe<SERVER下两个 ambientUserHome值使 {user-home}结果/context不同。 |
@@ -196,13 +196,13 @@ translation_status: source
 | T3-ORACLE-16 | SPEC §§2–3 | Alpha. 与 Beta. 在其它 metadata/catalog/diagnostics相同时必须产生不同 text fragments。 |
 | T3-ORACLE-17 | SPEC §§2–3 | literal block仅普通 text不同必须产生不同 witness。 |
 | T3-ORACLE-18 | SPEC §§2–3 | pass/raw block实际合法 substitutions的结果必须进入 text fragment，不能只比较 node.source。 |
-| T3-ORACLE-19 | SPEC §§2–3 | mixed Alpha *{name}* Beta必须保留 ordered text → strong start → resolved text → strong end → text。 |
+| T3-ORACLE-19 | SPEC §§2–3 | mixed Alpha *{name}* Beta必须保留 ordered text → strong start → resolved text → strong end → text。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-ORACLE-20 | SPEC §§2–3 | 一个 {counter:x} 每次只自增一次；semantic probe不能因额外 content访问导致双增。 |
 | T3-ORACLE-21 | SPEC §§2–3 | 连续 counter在 document traversal得到1、2、3等真实 stateful顺序。 |
 | T3-ORACLE-22 | SPEC §§2–3 | footnote注册/编号只发生一次，fragment event与最终 catalog一致。 |
-| T3-ORACLE-23 | SPEC §§2–3 | quoted node中后续 attribute/macro substitutions仍可运行；probe marker不得使 quote payload opaque。 |
+| T3-ORACLE-23 | SPEC §§2–3 | quoted node中后续 attribute/macro substitutions仍可运行；probe marker不得使 quote payload opaque。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-ORACLE-24 | SPEC §§2–3 | 同一 scope被 semantic pass求值第二次必须直接使 oracle adapter失败。 |
-| T3-ORACLE-25 | SPEC §§2–3 | Backend Gate必须使用 fresh Ruby Document，不能复用已被 semantic pass counter/footnote mutation过的 Document。 |
+| T3-ORACLE-25 | SPEC §§2–3 | Backend Gate必须使用 fresh Ruby Document，不能复用已被 semantic pass counter/footnote mutation过的 Document。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-PROFILE-01 | SPEC §§5–8 | managed Node不能由 caller切成 BaselineOnly。 |
 | T3-PROFILE-02 | SPEC §§5–8 | ordinary import source含 deep marker时 DeltaReport列 deep_section。 |
 | T3-PROFILE-03 | SPEC §§5–8 | ordinary source含 .run-in 时列 explicit_run_in。 |
@@ -218,16 +218,16 @@ translation_status: source
 | T3-PROFILE-13 | SPEC §§5–8 | fresh import Notice必须同时含 document 与 document_format component。 |
 | T3-PROFILE-14 | SPEC §§5–8 | 只有 Document bytes、缺 format component时状态是 incomplete/proof_unavailable，不得 default任何 profile。 |
 | T3-PROFILE-15 | SPEC §§5–8 | completion proof component set缺 document_format时 receiver不得加入 Frontier。 |
-| T3-PROFILE-16 | SPEC §§5–8 | profile-only migration即使 source byte-equal仍是 portable metadata change，有 ChangeId。 |
+| T3-PROFILE-16 | SPEC §§5–8 | profile-only migration即使 source byte-equal仍是 portable metadata change，有 ChangeId。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-PROFILE-17 | SPEC §§5–8 | profile+source migration时两个 components同一 plan/CAS/seal。 |
 | T3-PROFILE-18 | SPEC §§5–8 | same-Workspace copy fresh Node bindingRevision=1并保留 source profile generation。 |
 | T3-PROFILE-19 | SPEC §§5–8 | fork不自动升级 profile generation。 |
-| T3-PROFILE-20 | SPEC §§5–8 | formal restore恢复 exact historical binding；ordinary import fresh identity走 import gate。 |
+| T3-PROFILE-20 | SPEC §§5–8 | formal restore恢复 exact historical binding；ordinary import fresh identity走 import gate。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-PROFILE-21 | SPEC §§5–8 | 每个 managed semantic read同时取得 exact SourceObservation与 DocumentFormatCurrentQualification。 |
 | T3-PROFILE-22 | SPEC §§5–8 | strong DependencyProof同时含 source(owner) 与 document_format(owner)。 |
-| T3-PROFILE-23 | SPEC §§5–8 | profile-only /1→/2、source unchanged时 source dependency不变但 format stamp改变；旧 D7 prepare必须 stale。 |
+| T3-PROFILE-23 | SPEC §§5–8 | profile-only /1→/2、source unchanged时 source dependency不变但 format stamp改变；旧 D7 prepare必须 stale。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-PROFILE-24 | SPEC §§5–8 | scope_dependencies不得把已消费 document_format的 stamp变化判 unrelated。 |
-| T3-PROFILE-25 | SPEC §§5–8 | D2 AST cache必须以 format stamp/profile为 key；metadata-only migration使旧 AST stale。 |
+| T3-PROFILE-25 | SPEC §§5–8 | D2 AST cache必须以 format stamp/profile为 key；metadata-only migration使旧 AST stale。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-PROFILE-26 | SPEC §§5–8 | D4 typed projection随 format stamp失效并重算。 |
 | T3-PROFILE-27 | SPEC §§5–8 | D8 old Draft文本保留，但旧 projection不能直接 prepare，必须按 current profile reproject。 |
 | T3-PROFILE-28 | SPEC §§5–8 | D9 frozen export绑定 exact format qualification；执行前变化需 reprepare。 |
@@ -355,7 +355,7 @@ translation_status: source
 | T3-INLINE-01 | SPEC §§1–4,9 | 一个 paragraph中 strong/emphasis/link等合法 inline完整解析。 |
 | T3-INLINE-02 | SPEC §§1–4,9 | soft line wraps仍属于一个 paragraph并允许。 |
 | T3-INLINE-03 | SPEC §§1–4,9 | blank line产生第二 paragraph时 complete-consumption Gate拒绝整个 Annotation body。 |
-| T3-INLINE-04 | SPEC §§1–4,9 | heading/list/table/delimited block等不能被 inline profile静默忽略，必须 invalid_annotation_body。 |
+| T3-INLINE-04 | SPEC §§1–4,9 | heading/list/table/delimited block等不能被 inline profile静默忽略，必须 invalid_annotation_body。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | T3-INLINE-05 | SPEC §§1–4,9 | inline STEM语法可有效；renderer缺失只影响 render。 |
 | T3-INLINE-06 | SPEC §§1–4,9 | Annotation body中的 n1/r1只按普通 inline语法处理，不偷偷取得 Weftext stable reference adapter authority。 |
 | T3-INLINE-07 | SPEC §§1–4,9 | source/body/render limits在 N/N+1边界 fail closed。 |
@@ -436,14 +436,14 @@ translation_status: source
 | M38-05 | SPEC §§2–3 | Bind freshness bind必须引用存在、同subject、严格更早且恰为bind时刻latest snapshot；引用旧snapshot拒绝。 |
 | M38-06 | SPEC §§2–3 | Cut head uniqueness heads按subjectId数值升序且每subject恰一项；duplicate head拒绝。 |
 | M38-07 | SPEC §§2–3 | Root replacement treeprocessor返回新Document时，model_ready.documentSubjectId必须来自最新 document/0 bind；旧root不得被自动纳入head closure。 |
-| M38-08 | SPEC §§2–3 | Exact reachable coverage header、child、List、ListItem、Column、final Cell、inner Document通过forward roles全部进入 closure；遗漏任一 live subject拒绝。 |
-| M38-09 | SPEC §§2–3 | No stale expansion parent / cell_column backedge不得扩大closure；attribute_buffer、table_parser_context不得仅因存在snapshot进入heads。 |
+| M38-08 | SPEC §§2–3 | Exact reachable coverage header、child、List、ListItem、Column、final Cell、inner Document通过forward roles全部进入 closure；遗漏任一 live subject拒绝。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| M38-09 | SPEC §§2–3 | No stale expansion parent / cell_column backedge不得扩大closure；attribute_buffer、table_parser_context不得仅因存在snapshot进入heads。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | M38-10 | SPEC §§2–3 | Width balance Column第一次width snapshot与balance后snapshot同时存在时，cut只能引用后者。 |
 | M38-11 | SPEC §§2–3 | New Cell Cell#reinitialize返回新对象且final row指向新Cell时，new Cell必须有head；old Cell不得是额外head。 |
 | M38-12 | SPEC §§2–3 | Late facts late coids、assign_numeral/caption后的snapshot必须成为对应subject head；较早snapshot拒绝。 |
 | M38-13 | SPEC §§2–3 | Model-ready vs evaluation-complete model_ready后发生合法semantic mutation时，evaluation_complete必须引用后续snapshot；不能复用model_ready旧head。 |
 | M38-14 | SPEC §§2–3 | Temporary write temporary write后有真实restore时，evaluation_complete head指restore后的latest snapshot且作者winner保持；temporary未闭合时不得产生合法evaluation_complete cut。 |
-| M38-15 | SPEC §§2–3 | Dangling / omission / extra dangling ref、forward ref、missing required live subject、extra unreachable semantic head、stale intermediate head均明确拒绝；不能降级成合法语法unsupported。 |
+| M38-15 | SPEC §§2–3 | Dangling / omission / extra dangling ref、forward ref、missing required live subject、extra unreachable semantic head、stale intermediate head均明确拒绝；不能降级成合法语法unsupported。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | M38-16 | SPEC §§2–3 | Supporting evidence closure head引用的previous/provenance/operation/string/inline evidence必须全部存在且类型正确；internal supporting evidence允许存在而不成为head。完整合法proof不调用parser或getter补证据。 |
 | M39-01 | SPEC §§2–3 | 跨 namespace 大ID不得误拒 真实 evidence： operationId = 100 model observationId = 10 且 operation存在、类型正确、原 operation DAG合法。 ModelPropertyInput引用 operation100： PASS 不得因： 100 < 10 == false 拒绝 Witness。 |
 | M39-02 | SPEC §§2–3 | 跨 namespace 小ID不得伪造时序 inlineEventId = 1 model observationId = 100 即使： 1 < 100 也不能单凭数值认为 inline event已合法先发生。 PASS条件： inline event真实存在 + 类型正确 + 原inline evidence reference contract成立 若 event1不存在或类型不对： FAIL 即使数值更小。 |
@@ -451,7 +451,7 @@ translation_status: source
 | M39-04 | SPEC §§2–3 | Carrier entry 不是 event ID 例如： carrier.stream="catalogEvents" carrier.entry=3 model observationId=2 如果 catalogEvents[3]真实存在且类型正确： PASS 不要求： 3 < 2 若数组只有3项、index3越界： FAIL |
 | M39-05 | SPEC §§2–3 | Root catalog parent top-level root： Document D1 实际执行： D1.register(:refs/footnotes/...) M37-16必须记录 catalog record： parent → D1 且在D1 live时允许该record进入 supplementary closure。 出现不存在的： owner → D1 必须 decoder FAIL。 |
 | M39-06 | SPEC §§2–3 | Inner Document catalog parent 结构： root D1 → table → final Cell → cell_inner_document D2 实际 catalog register发生于： D2.register(...) 要求： catalogRecord.parent → D2 D2已经通过 cell_inner_document进入 closure，所以 record可live。 错误： catalogRecord.parent → D1 若实际receiver是D2，则： FAIL 不能因top-level root更方便而重写parent。 |
-| M39-07 | SPEC §§2–3 | DocBook真实 cleanup delete 输入具有作者： root-option="bar" 固定DocBook流程真实得到： Sauthor  "bar" → Stemp    "" → Sdelete  absent/deleted 要求： evaluation_complete physical head = Sdelete 同时： CSP authored semantic property: named/root-option="bar" options=["root"] observer日志中不得出现伪造的： restore "bar" |
+| M39-07 | SPEC §§2–3 | DocBook真实 cleanup delete 输入具有作者： root-option="bar" 固定DocBook流程真实得到： Sauthor  "bar" → Stemp    "" → Sdelete  absent/deleted 要求： evaluation_complete physical head = Sdelete 同时： CSP authored semantic property: named/root-option="bar" options=["root"] observer日志中不得出现伪造的： restore "bar" ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | M39-08 | SPEC §§2–3 | Temporary cleanup不得复活旧 authored 值 真实顺序： authored "A" → authored "B" → temporary "" → internal cleanup delete 要求： physical head = absent semantic author winner = "B" 不得得到： "A" 若 "B" 之后还有真正 authored delete： semantic winner = absent temporary cleanup不能改变真正 author write chronology。 |
 | M39-09 | SPEC §§2–3 | Future carrier reject：T1 产生 snapshot S；T2 bind(stream=inlineObservations,entry=7)；T3 才 append inlineObservations[7]。即使最终数组存在 entry 7，producer-conformance 仍失败；后来补齐 carrier 不能把此前无效 run 重新判有效。 |
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
@@ -461,11 +461,11 @@ translation_status: source
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
-| FC34-FMT-01 | SPEC §§5–8 | fresh managed Document同一P安装 source + ManagedDocumentFormatBinding/1；bindingRevision=1，profile固定 exact Ruby SHA + weftext_managed/1。 |
+| FC34-FMT-01 | SPEC §§5–8 | fresh managed Document同一P安装 source + ManagedDocumentFormatBinding/1；bindingRevision=1，profile固定 exact Ruby SHA + weftext_managed/1。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34-FMT-02 | SPEC §§5–8 | 把 {kind:"document_format"} 放进 PortableComponentKey/1 必须旧decoder拒绝；不得认为这是 CP3 合法component。 |
 | FC34-FMT-03 | SPEC §§5–8 | legacy/unbound source可按原授权 raw read/repair；不因 profile未绑定删除/隐藏原bytes。 |
 | FC34-FMT-04 | SPEC §§5–8 | legacy/unbound source仅因包含 [weftext-attributes] 就自动切 WeftextManaged，拒绝。 |
-| FC34-FMT-05 | SPEC §§5–8 | 已 managed Node 执行 future weftext_managed/1→/2 profile-only migration，source unchanged；一个 ChangeId、document_format component transition、CP4 sourceChanges=[]；不把 absent/Baseline→managed 当 migration。 |
+| FC34-FMT-05 | SPEC §§5–8 | 已 managed Node 执行 future weftext_managed/1→/2 profile-only migration，source unchanged；一个 ChangeId、document_format component transition、CP4 sourceChanges=[]；不把 absent/Baseline→managed 当 migration。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34-FMT-06 | SPEC §§5–8 | managed profile-only migration不得增加 SourceVersion 或 H(D,E)。 |
 | FC34-FMT-07 | SPEC §§5–8 | sourceVersion相同但 format stamp变化，旧 InputDescriptor/PAB/EditBinding/ExportPlan继续使用，拒绝。 |
 | FC34-FMT-08 | SPEC §§5–8 | format变化后 dirty Draft bytes仍保存；projection/map/preview失效并重新qualification。 |
@@ -478,8 +478,8 @@ translation_status: source
 | FC34-FMT-15 | SPEC §§5–8 | Trash→restore保持 exact profile；purge同P物理删除 format component。 |
 | FC34-FMT-16 | SPEC §§5–8 | derived index 没有 format row就宣称 component absent，拒绝。 |
 | FC34-FMT-17 | SPEC §§5–8 | 在当前 D9 wire1 probe union里直接新增 adoc而不升 D9 owner版本，拒绝。 |
-| FC34-ST-01 | SPEC §§11–13 | representable PortableTransformCompilation/1 + exact transform trust 时，planning 冻结 CoreSourceEditPlan/2，events=SourceTransformPortableEvent/3[]、emission=required；同P生成 Evidence/2、artifact及恰一个outbox item。 |
-| FC34-ST-02 | SPEC §§11–13 | transform profile unavailable时 TransformEmissionPlan/1=disabled{reason:"transform_profile_unavailable"}；ordinary合法source save仍可commit且无transform outbox item。 |
+| FC34-ST-01 | SPEC §§11–13 | representable PortableTransformCompilation/1 + exact transform trust 时，planning 冻结 CoreSourceEditPlan/2，events=SourceTransformPortableEvent/3[]、emission=required；同P生成 Evidence/2、artifact及恰一个outbox item。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| FC34-ST-02 | SPEC §§11–13 | transform profile unavailable时 TransformEmissionPlan/1=disabled{reason:"transform_profile_unavailable"}；ordinary合法source save仍可commit且无transform outbox item。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34-ST-03 | SPEC §§11–13 | source提交后再从before/after做diff并补签 artifact，拒绝。 |
 | FC34-ST-04 | SPEC §§11–13 | frozen required{profile,expectedTrustRevision,expectedTrustKeyId} 在seal时 profile/revision/key不再匹配，则原 plan 不得降级为无transform save，必须按原pause/reprepare规则处理。 |
 | FC34-ST-05 | SPEC §§11–13 | insertion恰在 point p，left/right affinity分别得到规范不同结果。 |
@@ -511,7 +511,7 @@ translation_status: source
 | FC34-H-06 | SPEC §17 | SourceTransform缺失时复活旧 Draft selector/PAB/ActionEvidence，拒绝。 |
 | FC34-H-07 | SPEC §17 | current format或transform证据重新取得后，只能建立新的 current qualification；不修改旧 saved record。 |
 | FC34-FMT-18 | SPEC §§5–8 | BaselineOnly ordinary分析成功但portable component不存在；不得生成 ManagedDocumentFormatBinding(profile=baseline)。 |
-| FC34-FMT-19 | SPEC §§5–8 | DependencyKey/3 canonical rank必须 source,document_format,lifecycle,...,execution_resource；把document_format append至末尾必须失败。 |
+| FC34-FMT-19 | SPEC §§5–8 | DependencyKey/3 canonical rank必须 source,document_format,lifecycle,...,execution_resource；把document_format append至末尾必须失败。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34-FMT-20 | SPEC §§5–8 | PortableComponentKey/2必须 document,document_format,resource,...,conflict；把document_format排在conflict之后必须失败。 |
 | FC34-ST-13 | SPEC §§11–13 | current plan/evidence出现 SourceTransformEdit/1 或 SourceTransformPortableEdit/2 必须失败。 |
 | FC34-ST-14 | SPEC §§11–13 | required plan 的 D3-CJ/3(plan.edits) 与 D3-CJ/3(evidence.edits) 不相等时必须拒绝seal。 |
@@ -525,10 +525,10 @@ translation_status: source
 | FC34B-D10-03 | SPEC §14 | ControlInput2 dependencies3与InputDescriptor3/proof3逐项相等；PASS。 |
 | FC34B-D10-04 | SPEC §14 | ControlDependencies3中workspaceReads被deployment-only body偷偷设some；FAIL。 |
 | FC34B-D10-05 | SPEC §14 | recurrence source V不变、format M1→M2；Step2必须 binding_changed，不能continuous。 |
-| FC34B-D10-06 | SPEC §14 | source/profile bytes相同，但document_format proof continuity gap产生新epoch；Step2必须gap。 |
+| FC34B-D10-06 | SPEC §14 | source/profile bytes相同，但document_format proof continuity gap产生新epoch；Step2必须gap。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-D10-07 | SPEC §14 | 无format change且完整CP4 chain证明真正无关正文变化；Step2可advance。 |
 | FC34B-D10-08 | SPEC §14 | Schedule Step2使用Notice2/CP3解析FC current transition；FAIL。 |
-| FC34B-D10-09 | SPEC §14 | old Subscription1通过explicit continue且完整证明期间无format/rule discontinuity → same generation Subscription2；PASS。 |
+| FC34B-D10-09 | SPEC §14 | old Subscription1通过explicit continue且完整证明期间无format/rule discontinuity → same generation Subscription2；PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-D10-10 | SPEC §14 | old Subscription1历史包含format transition，却continue而不replace；FAIL。 |
 | FC34B-D10-11 | SPEC §14 | automatic author新准备严格绑定PAB4 + D10-Author-Preview/2 EffectManifest3 digest；PASS。 |
 | FC34B-D10-12 | SPEC §14 | new interactive author responsibility声称preparedFormat3但pin实际PAB4，或Format3对应EditBinding2；FAIL。 |
@@ -540,15 +540,15 @@ translation_status: source
 | FC34B-TR-06 | SPEC §13 | K1签transform后ordinary rotate K2，远端以 producing CP4.frontierBefore 验K1；PASS。 |
 | FC34B-TR-07 | SPEC §13 | K1 compromise与transform seal causal-concurrent；即使arrival顺序显示seal先到也必须FAIL。 |
 | FC34B-TR-08 | SPEC §13 | 普通transform receiver使用current Bundle而非producing CP4.frontierBefore；FAIL。 |
-| FC34B-CONT-01 | SPEC §13 | Bundle2中revision current K仍由Declaration1授权且Handle1 usable；revision-token new signing PASS，transform signing FAIL。 |
+| FC34B-CONT-01 | SPEC §13 | Bundle2中revision current K仍由Declaration1授权且Handle1 usable；revision-token new signing PASS，transform signing FAIL。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-02 | SPEC §13 | revision后由Declaration2 rotate到K2；只有Handle2(K2)可new sign。 |
-| FC34B-CONT-03 | SPEC §13 | old states (revision=current, transform=none) → revoke revision；authorize B2 revision；authorize B2 transform；同一CP4。PASS。 |
-| FC34B-CONT-04 | SPEC §13 | old states (revision=none, transform=current) → revoke transform；authorize两个B2 profiles。PASS。 |
+| FC34B-CONT-03 | SPEC §13 | old states (revision=current, transform=none) → revoke revision；authorize B2 revision；authorize B2 transform；同一CP4。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| FC34B-CONT-04 | SPEC §13 | old states (revision=none, transform=current) → revoke transform；authorize两个B2 profiles。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-05 | SPEC §13 | 任何profile conflicted/gapped/unproved，却先让clean profile的B2 handle usable；FAIL。 |
 | FC34B-CONT-06 | SPEC §13 | 完整continuation declarations不是固定rank顺序或存在可观察中间prefix；FAIL。 |
 | FC34B-HOLDER-01 | SPEC §§7–8 | wire13 conflict resolution保存 D3ResolutionInputUse/2 + InputDescriptor3；PASS。 |
 | FC34B-HOLDER-02 | SPEC §§7–8 | wire13仍保存InputDescriptor2 guard；FAIL。 |
-| FC34B-HOLDER-03 | SPEC §§7–8 | D4 strong relation operation source不变而format stamp变；old proof不能继续，必须stale/reprepare。 |
+| FC34B-HOLDER-03 | SPEC §§7–8 | D4 strong relation operation source不变而format stamp变；old proof不能继续，必须stale/reprepare。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-HOLDER-04 | SPEC §§7–8 | D5 native table edit同样消费source+format；format变而旧table locator/sourceVersion碰巧相同，仍stale。 |
 | FC34B-HOLDER-05 | SPEC §§7–8 | D4/D5为了配 /3 而机械升级RelationReadContext、table locator、occurrenceKey或numeric sourceRevision；FAIL。 |
 | FC34B-CR-01 | SPEC §6.3 | FC current portable decision同P冻结 ChangeRecord1、Notice3、CP4；三者DecisionKey/ChangeId/frontiers/digests一致。PASS。 |
@@ -559,23 +559,23 @@ translation_status: source
 | FC34D-MIX-01 | SPEC §14 | ControlPrepareBinding/1(K1)+ControlPrepareBinding/3(K2)，K1!=K2，同时存在于同一 D10ExecutionClaims/2.prepareBindings 并进入 Inventory2/Record3；/1 与 /3 各按 exact decoder，按 StableControlKey canonical order，原 bytes/pins分别保留。 |
 | FC34D-MIX-02 | SPEC §14 | ControlPrepareBinding/1(K)+ControlPrepareBinding/3(K) 出现在同一 Claims2；即使 canonicalIntentBytes/originalCommitRequest相同也必须作为重复 StableControlKey责任拒绝，不得LWW、优先新版本或静默丢旧版本。 |
 | FC34C-MIX-01 | SPEC §14 | 一个 ControlDependencies3 同时包含 old stop Pin1 与 new automation Pin2；同cut完整匹配各自binding。PASS。 |
-| FC34C-MIX-02 | SPEC §14 | external_effect current record仍为 Image1/Pin1，并可被 current Dependencies3/Inventory2完整携带。PASS。 |
+| FC34C-MIX-02 | SPEC §14 | external_effect current record仍为 Image1/Pin1，并可被 current Dependencies3/Inventory2完整携带。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34C-MIX-03 | SPEC §14 | 尝试用 Image2 表示 stop/external_effect/reservation；FAIL closed decode。 |
-| FC34C-MIX-04 | SPEC §14 | Automation： before Image1+Subscription1 after Image2+Subscription2 同一个 EffectPlan2合法，不重编码before。PASS。 |
+| FC34C-MIX-04 | SPEC §14 | Automation： before Image1+Subscription1 after Image2+Subscription2 同一个 EffectPlan2合法，不重编码before。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34C-MIX-05 | SPEC §14 | Image2 automation/run → Image1 downgrade；FAIL。 |
 | FC34C-MIX-06 | SPEC §14 | Pin1 payload实际使用 D10-Control-Record/1，Pin2使用 /2；schema tag与pin domain不匹配必须FAIL。 |
 | FC34C-MIX-07 | SPEC §14 | Range2 occurrence数组同时有旧K1和新K2，按真实OccurrenceKey排序。PASS。 |
 | FC34C-MIX-08 | SPEC §14 | Occurrence1(K) + Occurrence2(K) 同key；FAIL。 |
 | FC34C-MIX-09 | SPEC §14 | 同一 record cut出现Pin1与Pin2两份不同image；integrity_conflict。 |
-| FC34C-MIX-10 | SPEC §14 | ControlDependencies3中 range/barrier来自cut B但 recordPin/current binding来自cut A；FAIL same-cut qualification。 |
+| FC34C-MIX-10 | SPEC §14 | ControlDependencies3中 range/barrier来自cut B但 recordPin/current binding来自cut A；FAIL same-cut qualification。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34C-EXEC-01 | SPEC §14 | Claims2同时包含 Binding2/3、Step1/2、Subscription1/2、Occurrence1/2和Pin1/2，所有semantic key互异。PASS。 |
 | FC34C-EXEC-02 | SPEC §14 | MoneyResponsibility2同时需要旧reservation Pin1和新Automation budget Pin2，并有Range1/Range2；PASS。 |
-| FC34C-EXEC-03 | SPEC §14 | Inventory2完整携： old ApprovalUse1 new ApprovalUse2 Claims2 Money2 ExternalResponsibility1 StopResponsibility1 PASS。 |
+| FC34C-EXEC-03 | SPEC §14 | Inventory2完整携： old ApprovalUse1 new ApprovalUse2 Claims2 Money2 ExternalResponsibility1 StopResponsibility1 PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34C-EXEC-04 | SPEC §14 | ApprovalUse1与Use2拥有同一个DecisionKey；FAIL duplicate responsibility。 |
 | FC34C-EXEC-05 | SPEC §14 | old Subscription1与new Subscription2同Automation但不同generation；PASS。相同generation则FAIL。 |
 | FC34C-EXEC-06 | SPEC §14 | Inventory2遗漏仍处于started/outcome_unknown的ExternalResponsibility1或已stopped latch；FAIL completeness。 |
-| FC34C-D6-01 | SPEC §14 | Record3的Proof2 inventoryPin strict-decode exact D6-Execution-Inventory/2，且五类payload与Inventory2 byte-equal。PASS。 |
-| FC34C-D6-02 | SPEC §14 | execution custody由Record2 holder交给新holder；Inventory2保留全部old责任，Record3 revision=old+1，不改executionDomainId。PASS。 |
+| FC34C-D6-01 | SPEC §14 | Record3的Proof2 inventoryPin strict-decode exact D6-Execution-Inventory/2，且五类payload与Inventory2 byte-equal。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| FC34C-D6-02 | SPEC §14 | execution custody由Record2 holder交给新holder；Inventory2保留全部old责任，Record3 revision=old+1，不改executionDomainId。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34C-D6-03 | SPEC §14 | 没有handoff、checkpoint或真实责任变化时，仅因为runtime支持FC，不后台把Record2改Record3。PASS。 |
 | FC34C-D6-04 | SPEC §14 | handoff无法取得某个旧Pin1/PAB3/Subscription1或stop responsibility的原 decoder/bytes；必须暂停/不可用，不能构造“其余部分完整”的Inventory2。普通source操作不受此execution缺口全局阻塞。 |
 
