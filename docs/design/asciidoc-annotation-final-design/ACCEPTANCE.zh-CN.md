@@ -9,13 +9,13 @@ translation_status: source
 
 状态：**design obligations only; not executed**。
 
-- core design oracles: 437
+- core design oracles: 438
 - actual-owner coordination fixtures: 117
-- total: 554
+- total: 555
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
-## Core — 437
+## Core — 438
 
 | ID | 规范域 | 必须满足的条件 |
 |---|---|---|
@@ -59,6 +59,7 @@ translation_status: source
 | AD2-38 | SPEC §§1–4 | diagnostics比较 severity/semantic code/location；exact message仍保留以发现 normalization过度。 |
 | AD2-39 | SPEC §§1–4 | 任何真实 core-language mismatch不得登记成 backend/environment/Weftext-domain exception。 |
 | AD2-40 | SPEC §§1–4 | Asciidork补齐成本大小不改变“完整2.0.26”验收范围。 |
+| AD2-41 | SPEC §§1–4 | embedded 模式下，API attributes 按 notitle="" 后 showtitle="" 与相反顺序输入时必须是两个不同环境：固定 Ruby 2.0.26 依据 ordered attr_overrides 中二者最后出现的 key 派生另一个 alias；canonical environment bytes 与最终 title/effective-attribute 观察都必须保留该 API 顺序，按名字排序合并为同一环境必须失败。 |
 | AN2-01 | SPEC §§9–16 | 每个 root/reply均是独立 AnnotationRef；不存在 ThreadMessage identity。 |
 | AN2-02 | SPEC §§9–16 | thread机械等于 D3 same-owner reply_closure，cycle必须拒绝。 |
 | AN2-03 | SPEC §§9–16 | 两个 concurrent fresh replies可同时存在，不使用时间戳 LWW。 |
@@ -448,7 +449,7 @@ translation_status: source
 | M39-01 | SPEC §§2–3 | 跨 namespace 大ID不得误拒 真实 evidence： operationId = 100 model observationId = 10 且 operation存在、类型正确、原 operation DAG合法。 ModelPropertyInput引用 operation100： PASS 不得因： 100 < 10 == false 拒绝 Witness。 |
 | M39-02 | SPEC §§2–3 | 跨 namespace 小ID不得伪造时序 inlineEventId = 1 model observationId = 100 即使： 1 < 100 也不能单凭数值认为 inline event已合法先发生。 PASS条件： inline event真实存在 + 类型正确 + 原inline evidence reference contract成立 若 event1不存在或类型不对： FAIL 即使数值更小。 |
 | M39-03 | SPEC §§2–3 | 同 namespace 仍严格 backward ModelPropertyInput.model_slot.observationId 必须引用同一 modelPropertyObservations namespace中的实际 snapshot，且： targetObservationId < containingModelObservationId forward、self、非snapshot target均拒绝。 本测试证明本轮没有误删 v3.8 已通过的 model reference时序规则。 |
-| M39-04 | SPEC §§2–3 | Carrier entry 不是 event ID 例如： carrier.stream="catalogEvents" carrier.entry=3 model observationId=2 如果 catalogEvents[3]真实存在且类型正确： PASS 不要求： 3 < 2 若数组只有3项、index3越界： FAIL |
+| M39-04 | SPEC §§2–3 | Carrier entry 不是 event ID，也绝不与 model observationId 做数值比较。PASS 必须同时满足：最终 stream/index/type 静态有效；producer-conformance 证明真实 bind callback 当时 entry < targetStream.lengthAtBind；callback 当时持有 exact 同一 Ruby object。未来才补齐 carrier 不能使此前无效 bind 变为有效。 |
 | M39-05 | SPEC §§2–3 | Root catalog parent top-level root： Document D1 实际执行： D1.register(:refs/footnotes/...) M37-16必须记录 catalog record： parent → D1 且在D1 live时允许该record进入 supplementary closure。 出现不存在的： owner → D1 必须 decoder FAIL。 |
 | M39-06 | SPEC §§2–3 | Inner Document catalog parent 结构： root D1 → table → final Cell → cell_inner_document D2 实际 catalog register发生于： D2.register(...) 要求： catalogRecord.parent → D2 D2已经通过 cell_inner_document进入 closure，所以 record可live。 错误： catalogRecord.parent → D1 若实际receiver是D2，则： FAIL 不能因top-level root更方便而重写parent。 |
 | M39-07 | SPEC §§2–3 | DocBook真实 cleanup delete 输入具有作者： root-option="bar" 固定DocBook流程真实得到： Sauthor  "bar" → Stemp    "" → Sdelete  absent/deleted 要求： evaluation_complete physical head = Sdelete 同时： CSP authored semantic property: named/root-option="bar" options=["root"] observer日志中不得出现伪造的： restore "bar" ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
@@ -581,7 +582,7 @@ translation_status: source
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-本次 schema 补全**不新增、不删除、不重编号**554条设计义务；它把已有验收引用的类型从悬空名称变成公开 closed shape。直接覆盖关系为：
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为：
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -593,4 +594,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 554 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 555 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
