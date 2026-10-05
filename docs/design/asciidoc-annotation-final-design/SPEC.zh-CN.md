@@ -971,8 +971,10 @@ PortableAnnotationRecord/4
 AnnotationEditableValue/1
 D8EditIntent/3
 D8EditInput/3
+D7CreateAnnotationIntent/2
 D7ActionSpec/2
 D7ActionPrepareRequest/3
+D7ActionInput/3
 ExportPlan/3
 PublicationReceipt/3
 PortableTransformCompilation/1
