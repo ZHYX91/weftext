@@ -11,7 +11,7 @@ translation_status: source
 
 - core design oracles: 438
 - actual-owner coordination fixtures: 217
-- total: 655
+- total: 689
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -680,9 +680,44 @@ translation_status: source
 | FC34C-D6-03 | SPEC §14 | 没有 handoff、checkpoint 或真实 responsibility mutation 时，仅因支持 current FC schema 不得后台迁移 Record2/Proof1/Inventory1，也不得把历史 bytes repin 成 Record3/Proof2/Inventory2。 |
 | FC34C-D6-04 | SPEC §14 | handoff 若拿不到任一旧 Pin1/PAB3/Binding1/Subscription1/stop/external responsibility 的原 decoder、bytes、pins，或无法证明 authoritative store/capacity barrier，必须暂停或 unavailable，不能构造部分 Inventory2；无关 ordinary source operation 继续原资格。 |
 
+| FC4C-SUG-01 | SPEC §9.10 | pending+confirmed suggestion 通过普通 D8 ordinary_edit 直接提交 accepted/not_applicable；必须在 transition gate 拒绝，且不得产生 target write、Value4 revision 或 P。 |
+| FC4C-SUG-02 | SPEC §9.10 | pending suggestion 通过普通 D8 ordinary_edit 直接提交 rejected/not_applicable；FAIL，只有 reject_suggestion 可产生 rejected。 |
+| FC4C-SUG-03 | SPEC §9.10 | accepted 或 rejected terminal Suggestion 经普通 edit 变回 pending/confirmed；FAIL，即使 expected token/current Value4 都正确。 |
+| FC4C-SUG-04 | SPEC §9.10 | interactive create_annotation 的首版 proposal 企图制造 accepted/rejected；FAIL；合法 suggestion 首版只能由 Core 构造 pending。 |
+| FC4C-SUG-05 | SPEC §9.10 | caller proposal 夹带 confirmed、targetBasis、expectedText 或 pointAffinity 不能进入 current wire；合法首版 pending+confirmed 只有在 Core fresh exact target read 后重算全部 target evidence 才成立。 |
+| FC4C-SUG-06 | SPEC §9.10 | manual reattach 选择新的 exact same-owner target 后，after 必须 pending+needs_reconfirmation；即使 caller/UI 声称 confirmed 也不能同次升级。 |
+| FC4C-SUG-07 | SPEC §9.10 | 显式 annotation_reconfirm_suggestion 对 pending+needs_reconfirmation fresh 读取 target 后重算 basis/expected/point 并得到 pending+confirmed；target hidden 时在泄露 target bytes 前 not_visible，零 mutation。 |
+| FC4C-SUG-08 | SPEC §9.10 | terminal Annotation 可修改 body/appearance/labels/review/reply 等仍合法字段，但 Suggestion/3 必须 byte-equal；改 kind/replacement/evidence 或 reopen terminal 均失败。 |
+| FC4C-SUG-09 | SPEC §§9.9–9.10 | pending+needs_reconfirmation 的 suggestion 在 target hidden/unavailable 时仍可 reject：只核 Annotation disclosure/read/write+token，得到 rejected/not_applicable，不读取 target。 |
+| FC4C-SUG-10 | SPEC §§9.7,9.10,9.12 | copy/import/backup 恢复的 terminal Suggestion 可保留历史展示状态与 attribution，但没有当前 Workspace apply receipt/target source change 就不证明目标曾被修改；fresh ordinary import 使用 imported_unverified。 |
+| FC4C-CARRIER-01 | SPEC §9.11 | replace apply 的 concrete Annotation after 在 PAB4/D7ActionInput3 使用 D7ProposedInput/3 + d3_annotation_value4，pin 完整 Value4；用 /2+d3_annotation_value3 装同一 bytes 失败。 |
+| FC4C-CARRIER-02 | SPEC §9.11 | delete apply 的 Annotation accepted after 同样使用 current /3 concrete Value4 carrier，并与 target zero-replacement source change 同一 P。 |
+| FC4C-CARRIER-03 | SPEC §9.11 | insert apply 的 Annotation accepted after 同样使用 current /3 concrete Value4 carrier，保存 pointAffinity 的 target transform 与 Value4 pin 同一 preparation。 |
+| FC4C-CARRIER-04 | SPEC §9.11 | 真实 historical PAB3/Input2 的 d3_annotation_value3 按原 decoder/bytes/pins 恢复；把 old record 升成 /3 或把 current Value4 降装 /2 都失败。 |
+| FC4C-CARRIER-05 | SPEC §9.11 | 合法 current D3 symbolic branch 继续使用 d3_symbolic_result9；OwnerInputBinding.pinRefs 精确覆盖 /3 proposed pins 与真实 protected evidence，Concrete Value4 与 symbolic Result9 不能串 tag。 |
+| FC4C-READ-01 | SPEC §9.11 | Value4 body exact source 为 `*Alice*` 时，D8 read 返回 exactSource=`*Alice*` 且 semanticText=`Alice`；D7 annotation_body 唯一输出 `Alice`。 |
+| FC4C-READ-02 | SPEC §9.11 | invalid R6 body：D8 read 保留 exact source+diagnostics、semanticText=null；D7 annotation_body 在 authorization/currentness 后 source_unavailable，禁止 plain_text/strip-markup fallback。 |
+| FC4C-READ-03 | SPEC §9.11 | d8_annotation_read 返回完整 Value4、annotationRevisionToken、SourceObservation 与 creator/authoredAt/lastEditor/editedAt；只返回 AnnotationEditableValue/1 不足。 |
+| FC4C-READ-04 | SPEC §9.11 | 只有 annotation_read 的 principal 可获得完整 readonly read + readonly Draft projection，但不能进入 D8EditPrepareRequest/3；render 成功不授予 write。 |
+| FC4C-READ-05 | SPEC §9.11 | 有 annotation_write 时 draft_open 的 base token/Observation 与 read 精确相等；prepare 后若 aggregate/record/token/dependency barrier 任一移动，最终 barrier stale/reprepare，即使 Value hash 相等。 |
+| FC4C-READ-06 | SPEC §9.11 | Annotation 本体可读而 target hidden/unavailable 时仍可读完整 Annotation attribution/body；targetResolution=unavailable 且不泄露 target source bytes/expectedText。 |
+| FC4C-READ-07 | SPEC §9.11 | body=null 的 annotation_body 唯一语义 text 为 empty string；不得把 absent body 解释成历史 D2 plain_text 或调用另一 parser。 |
+| FC4C-STORE-01 | SPEC §9.12 | 同一 aggregate 有 A/B 两条记录，只改 A 时 after 必须完整保留 B 的 logical record；B token/Value4/managed SourceVersion/H 均不变。 |
+| FC4C-STORE-02 | SPEC §9.12 | 两个并发 plan 分别改同 sidecar 的 A/B：最多一个 strict file CAS 先成功；失败者 fresh re-read 后重建包含胜者 change 的 aggregate，禁止 LWW 覆盖。 |
+| FC4C-STORE-03 | SPEC §9.12 | aggregate records 出现重复 AnnotationRef，即使 bytes 相同也整文件 strict-decode FAIL；不同 bytes 是 integrity conflict，不能 last-one-wins。 |
+| FC4C-STORE-04 | SPEC §9.12 | record owner 与 envelope owner 不同、replyTo 跨 owner 或完整 reply graph 成环，均整 aggregate FAIL，不能只丢坏记录继续。 |
+| FC4C-STORE-05 | SPEC §9.12 | truncated JSON、duplicate key、unknown format/version 或 malformed member 不得 partial trust；normal current read unavailable/conflict，authorized raw repair/backup 只能取得 exact raw bytes。 |
+| FC4C-STORE-06 | SPEC §9.12 | Node/adoc 协调 rename 只更新 FileBinding/physical observation；ownerNodeRef、AnnotationRef、Value4、revision token 保持，fresh aggregate read 后恢复 currentness。 |
+| FC4C-STORE-07 | SPEC §9.12 | 显式 backup 保存 exact aggregate bytes+Frontier，但不携带 current permission/PAB/ActionEvidence；restore 仍需完整 strict decode、owner/reply/history 与原 D6 admission。 |
+| FC4C-STORE-08 | SPEC §9.12 | Node copy/import 用真实 identityMap/candidate-map 生成 fresh AnnotationRefs、改写 target/reply 并生成新 owner aggregate；terminal display 可保留但不能制造 destination apply receipt。 |
+| FC4C-STORE-09 | SPEC §9.12 | pure Trash/restore 对 byte-equal Value4 保留 token 且无 source revision；purge 删除 record，最后一条 purge 后 canonical physical state 是 sidecar absent。 |
+| FC4C-STORE-10 | SPEC §9.12 | 同一 DecisionKey 修改一个 Node 的两个 Annotation 时 Notice3/CP4 各有两个 logical annotation components/source changes，但 InstallationPlan 只有一个完整 sidecar after 与一个 physical install。 |
+| FC4C-STORE-11 | SPEC §9.12 | A 改动导致 sidecar FileObjectBinding 更新后，B 的旧 aggregate-backed current observation stale；fresh read 可把未改 B 重新绑定到新物理 observation，不分配新 token/SourceVersion/H。 |
+| FC4C-STORE-12 | SPEC §9.12 | verified ChangeRecord/Notice/CP 连续链可 admission canonical aggregate；直接外部 JSON/mtime/provider latest/equal hash 均不能当 trusted transition，explicit import/admission 仍执行 imported_unverified attribution 与 lifecycle gate。 |
+
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -694,4 +729,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 655 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 689 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
