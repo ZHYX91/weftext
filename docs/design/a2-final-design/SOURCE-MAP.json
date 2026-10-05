@@ -1158,8 +1158,8 @@
         "file": "docs/design/a2-final-design/D2.md",
         "section": "§§1,7-9"
       },
-      "disposition": "retain",
-      "basis": "Node/Document/order/Task facet/Template/owner-local Resource+Annotation/occurrence-only View/separate Record remain current",
+      "disposition": "retain_with_current_D5_record_supersession",
+      "basis": "Node/Document/order/Task facet/Template/owner-local Resource+Annotation/occurrence-only View remain current. The fixed-S option for a separate durable Record domain is historical only: current D5 owner §§1-2 defines no persistent Record/RecordCollection domain and reserves no RecordRef; D4 facts/value occurrences, native Document rows/cells, derived NodeCollection rows, and external/IR rows retain their real domains and gain no new durable identity or NodeRef coercion.",
       "oracles": []
     },
     {
@@ -1823,6 +1823,19 @@
       },
       "disposition": "retain_unexecuted",
       "basis": "current rows copied as unexecuted design obligations; prior limited review is not global acceptance",
+      "oracles": []
+    },
+    {
+      "id": "D5-current-record-boundary",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md",
+      "sourceBlob": "5ebd6aa535bfed698f5a1031060ec729864829e6",
+      "sourceSection": "§§1-2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,10"
+      },
+      "disposition": "supersede_historical_record_option_for_current_generation",
+      "basis": "Current D5 rejects a persistent Record/RecordCollection domain for this generation and reserves no RecordRef. D4 facts/value occurrences, native Document row/cell occurrences, derived NodeCollection rows, and external/IR rows remain distinct without new durable identity; no NodeRef coercion or ad-hoc discriminator is introduced.",
       "oracles": []
     }
   ],
