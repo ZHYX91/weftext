@@ -1442,7 +1442,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.3",
-      "notes": "Discardable Value/4 Annotation Draft projection with exact source for valid/invalid inline body, target-resolution state and editable/read-only access."
+      "notes": "Discardable Value/4 Annotation Draft projection returned by D8AnnotationDraftOpenResponse/1; complete attribution/current record data stays in the paired read response, so Draft is not a second author authority."
     },
     {
       "name": "D7ApplySuggestionIntent/2",
@@ -1659,6 +1659,78 @@
       "replaces": null,
       "section": "SCHEMAS §6.4",
       "notes": "Logical current Workspace presentation value projected from the unique current /2 history record; not separately persisted and unavailable while multiple heads conflict."
+    },
+    {
+      "name": "D7ProposedInput/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "D7ProposedInput/2",
+      "section": "SCHEMAS §6.1; SPEC §9.11",
+      "notes": "Current PAB4 proposed-input carrier; concrete Annotation after uses d3_annotation_value4, while d3_symbolic_result9 remains only for the legal D3 symbolic branch. Historical /2 stays exact."
+    },
+    {
+      "name": "AnnotationEditableProposal/1",
+      "owner": "D7/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.10",
+      "notes": "Caller proposal containing editable author fields but no Suggestion lifecycle/evidence; Core applies the operation-class transition gate to construct Value4."
+    },
+    {
+      "name": "D8AnnotationReadRequest/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Actual current Annotation read entry request."
+    },
+    {
+      "name": "D8AnnotationReadResponse/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Complete current Value4/token/SourceObservation/attribution body read surface."
+    },
+    {
+      "name": "D8AnnotationDraftOpenRequest/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Actual Draft-open entry request sharing the current Annotation read barrier."
+    },
+    {
+      "name": "D8AnnotationDraftOpenResponse/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Pairs the complete current Annotation read with a discardable editable/readonly Draft projection."
+    },
+    {
+      "name": "AnnotationAggregate/1",
+      "owner": "D6 Storage",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.12",
+      "notes": "Sole current physical JSON envelope for one Node's weftext.annotations.json, with deterministic unique PortableAnnotationRecord/4 ordering."
+    },
+    {
+      "name": "AnnotationAggregateObservation/1",
+      "owner": "D6 Storage",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.12",
+      "notes": "Physical sidecar observation binding owner Node, trusted FileObjectBinding and exact aggregate bytes pin; distinct from logical Annotation SourceObservation."
+    },
+    {
+      "name": "AnnotationAggregateInstall/1",
+      "owner": "D6 Storage",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.12",
+      "notes": "Named existing-InstallationPlan file-write coordination binding that coalesces all same-Node Annotation record changes into one strict physical install."
     }
   ]
 }
