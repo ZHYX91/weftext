@@ -1258,9 +1258,15 @@ D3IdentityInput/13 精确保留 D3IdentityInput/12 原有六个语义成员；�
 
 ## 6.1 PreparedActionBinding/4
 
-current D7 action successor 使用精确继承，不是自由扩展。D7ActionSpec/2 的顶层对象等于 fixed-parent ActionSpec/1 仅把 version 改为2；其 intent decoder 恰为 fixed-parent intent union 删除 historical apply_suggestion arm 后，再加入下面两个 closed arms。全部非 suggestion arm 的成员与语义逐字节沿用 fixed-parent。
+current D7 action successor 使用精确继承，不是自由扩展。D7ActionSpec/2 的顶层对象等于 fixed-parent ActionSpec/1 仅把 version 改为2；其 intent decoder 恰为 fixed-parent intent union 删除 historical apply_suggestion arm 后，再加入下面三个 closed Annotation arms。其它 fixed-parent arm 的成员与语义逐字节沿用。
 
 ```text
+D7CreateAnnotationIntent/2 = {
+  kind:"create_annotation",
+  destinationOwnerRef:NodeRef,
+  value:AnnotationEditableValue/1
+}
+
 D7ApplySuggestionIntent/2 = {
   kind:"apply_suggestion",
   annotation:AnnotationRef,
@@ -1276,7 +1282,8 @@ D7RejectSuggestionIntent/2 = {
 D7ActionSpec/2 :=
   ActionSpec/1 的 top-level version 改为2，
   删除 fixed-parent apply_suggestion arm，
-  再加入 D7ApplySuggestionIntent/2 与 D7RejectSuggestionIntent/2
+  再加入 D7CreateAnnotationIntent/2、
+         D7ApplySuggestionIntent/2 与 D7RejectSuggestionIntent/2
 
 D7ActionPrepareRequest/3 = {
   wireVersion:3,kind:"d7_action_prepare",
