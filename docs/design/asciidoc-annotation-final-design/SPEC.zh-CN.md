@@ -177,7 +177,7 @@ null | {logicalFile:text|null,line:UInt|null}
 
 CoreSemanticProjection/1 继续只作为 test oracle 比较数据，绝不能成为产品 read/edit/query wire。current managed AsciiDoc 产品读取只使用 D2DocumentSnapshot/3 与 SCHEMAS §4.4 的 closed product family。exact source 始终是唯一 author authority；product projection、editor map、index、render tree、Query value 都只是可丢弃 derived state。
 
-产品 family 的完整性按 **fixed Ruby 可观察 semantics** 判定，而不只是按 AST 外形。每个 block/inline arm 都携带该 kind 的 dedicated fixed-derived facts，并另带闭合 D2NativeAttributeSet/1，以容纳合法的 arbitrary native attribute name；但 value 仍只能使用有限 typed grammar。这样既禁止 free JSON escape，也不会因为 Weftext 没有枚举作者属性名就缩小合法 AsciiDoc。
+产品 family 的完整性按 **fixed Ruby 可观察 semantics** 判定，而不只是按 AST 外形。每个 block/inline arm 都携带该 kind 的 dedicated fixed-derived facts、允许合法可变 named native attribute 的闭合 D2NativeAttributeSet/1，以及承载不能由 named map 还原的 public block slot（style/caption/numeral/subs/positional value）的 D2BlockCommonSemantics/1。这样既禁止 free JSON escape，也不会因为 Weftext 没枚举属性名或 positional semantics 就缩小合法 AsciiDoc。
 
 至少必须完整保存以下 fixed-derived semantics，且不限于这些举例：
 
@@ -185,14 +185,14 @@ CoreSemanticProjection/1 继续只作为 test oracle 比较数据，绝不能成
 - source/listing 的 language、linenums、start、indent、tabsize、highlight、line-comment；
 - quote/verse 的 attribution 与 citetitle；
 - admonition 的 name/textlabel/icon，list 的 style/start/reversed/checklist/interactive/coids，table 的 format/grid/frame/stripes/physical grid position，以及 TOC levels；
-- quoted inline 的 id/roles，xref 的 refid/path，visible/concealed indexterm 与 see/see-also，footnote/callout metadata，以及 inline image semantics；
+- quoted inline 的 id/roles，xref 的 refid/path，ref/bibref anchor 区分，visible/concealed indexterm 与 see/see-also，footnote ref/xref state、exact callout guard，以及 inline image/icon 区分；
 - image/audio/video 的 target-specific dimensions、timing、poster、preload、playlist/list、theme/lang、controls 等 fixed-2.0.26 converter-observable options。
 
-这些 facts 只由同一 fixed native parser/model 解析一次，再投影进一个 product family。D7/D8/D9 不能为了找回 source language、quote credit、section kind、index semantics 或 media option 而重新 parse exact source。
+这些 facts 只由同一 fixed native parser/model 解析一次，再投影进一个 product family。D7/D8/D9 不能为了找回 source language、quote credit、section kind、caption/numeral/subs、icon/bibliography-anchor kind、index semantics 或 media option 而重新 parse exact source。
 
 每个 semantic value 还引用 D2SourceOriginGraph/2。graph 必须区分 authored range、authored reference site、substitution、generated value、synthetic value 与 multi-origin result；只有全部 retained provenance path 最终收敛到同一个 exact authored range 时，才导出 single writable source。flat range list 不足以表达这层关系。generated/ambiguous/multi-origin 值的 structured edit 必须 fail closed，但 authorized exact Source read/save 独立继续可用。
 
-root/include source unit 必须 version-exact。managed root/include 保留 evaluation 实际读取的 SourceObservation/1；artifact/network input 保留 exact immutable pin。D2DocumentSnapshot/3 冻结 exact AsciiDocProcessorEnvironment/3、canonical digest、root/include SourceUnitBinding、ObservationScope 和同一个 authorized read barrier 上的 complete DependencyProof/3。proof 必须包含每个 managed source unit，以及 projection 实际消费的 Registry/foreign/authorization dependency。include Node SourceObservation、artifact/network pin、processor environment 或真实 used dependency 任一变化，都让旧 semantic tree stale，即使 root source 与 document_format 没变化。
+root/include source unit 必须 version-exact。current managed D2DocumentSnapshot/3 只能来自 owner 与 snapshot owner 相同的 managed_file processor input，root SourceUnitBinding/SourceObservation 必须与这个 exact input 相等。managed include 保留 evaluation 实际读取的 SourceObservation/1；artifact/network input 保留 exact immutable pin。D2DocumentSnapshot/3 冻结 exact AsciiDocProcessorEnvironment/3、canonical digest、root/include SourceUnitBinding、ObservationScope 和同一个 authorized read barrier 上的 complete DependencyProof/3。proof 必须包含每个 managed source unit，以及 projection 实际消费的 Registry/foreign/authorization dependency。include Node SourceObservation、artifact/network pin、processor environment 或真实 used dependency 任一变化，都让旧 semantic tree stale，即使 root source 与 document_format 没变化。
 
 因此 snapshot pin 只回答“当时生成了哪棵 tree”，evaluation binding 才回答“这棵 tree 现在是否仍 current”。D7/D8/D9 在自己的 final read barrier 消费 projection 前必须验证完整 evaluation binding。later barrier 只有沿既有 scope_dependencies continuity proof，证明所有 bound source/environment/control/negative dependency 未变时才合法。无关且未被 closed dependency set 消费的 global failure 不得阻塞该 consumer。
 
@@ -428,7 +428,7 @@ D7 definition-transfer 保留完整 definitionTransfers/Result9 semantics。fres
 
 D8 outer document entry 仍为 wireVersion2。current d8_document.snapshot 是 root observation 相同的 D2DocumentSnapshot/3，并携带 exact product evaluation binding/origin graph。D8 必须在 projection/map 作为 current 之前验证完整 root/include/environment dependency set；managed include 变化即使 root bytes 不变也必须失效旧 tree。D2 invalid source 继续既有 exact Draft/repair 行为，不暴露 partial projection。
 
-Workspace run-in default 是 Portable Workspace Metadata 中的 D8-owned shared configuration；它不是 Document source、Policy/3 authorization、Registry data、PortableComponentKey 或 device-local preference。current immutable record/head-set contract 在 SCHEMAS §6.4。普通 mutation 与 conflict resolution 都要求 policy_admin、exact complete expectedHeads、一个 D6 planning CAS 与一个 P decision。两个 offline successor 即使 numeric revision 相同，只要 canonical record bytes 不同就保留两个 heads；禁止 revision-number winner、arrival order 与 LWW。多个 heads 只让真正依赖 default 的 presentation unavailable，直到授权的 explicit multi-parent successor 解决。saved/planned/unknown 恢复 frozen head set，绝不重新采样 branch。
+Workspace run-in default 是 Portable Workspace Metadata 中的 D8-owned shared configuration；它不是 Document source、Policy/3 authorization、Registry data、PortableComponentKey 或 device-local preference。current immutable record/head-set contract 在 SCHEMAS §6.4。单 head 时 D8WorkspacePresentationPolicy/1 仍是唯一 logical current value；/2 record 只是其 immutable portable history carrier，不是第二 value authority。head-set 同时携带 owner-specific current observation stamp。普通 mutation/conflict resolution 都要求 policy_admin、exact observed head-set/stamp、一个 D6 planning CAS 与一个 P decision；同一 portable decision 分配 ordinary ChangeId/ChangeRecord 并提交恰一个 presentation_policy_change owner effect，不新增 ledger/CAS 或 Policy/Registry revision。两个 offline successor 即使 numeric revision 相同，只要 canonical record bytes/ChangeId 不同就保留两个 heads；禁止 revision-number winner、arrival order 与 LWW。多个 heads 只让真正依赖 default 的 presentation unavailable，直到授权的 explicit multi-parent successor 解决。sync/admission 必须验证 retained ChangeRecord/receipt/effect association 与 ancestry 后才能把 head 当 current。saved/planned/unknown 恢复 frozen head-set stamp，绝不重新采样 branch。
 
 presentation **条件消费** Workspace record。显式 .run-in、显式 .separate、role_conflict→Separate、no-eligible-body 都不读取或绑定 Workspace policy。两个 role 都没有时，只有满足 implicit-default physical-adjacency 的 eligible body 才消费一个 current policy head。因此 policy missing/corrupt/conflicted 不会阻断显式 separate/run-in 文档，但 Use Default 真正需要 default 时必须 unavailable。
 
@@ -448,7 +448,7 @@ template binding inputIndex 必须选择 exact template catalog item，pin/profi
 
 Plan evidencePins 只有一个 derivation：input catalog、document render binding、template、route、styles、dependency/observation proof、staged outputs 中递归可达的 typed PinRef，加 explicit retained recoveryPins，再按 pinToken 排序去重。漏 reachable pin 或加入 unrelated evidence 都改变/破坏 Plan。PublicationReceipt3 必须重复 exact target/template/route/styles/generation-policy/presentation selection 与实际 output digest。
 
-native table→Office dataset name 完全按 SCHEMAS §6.5.1，不给 ordinary Node 增加 export metadata。Core 从 D2TableBlock/3/D2TableCell/3 导出 physical column，包括 multi-row head 与 colspan/rowspan。text comparison 固定 exact Unicode scalar sequence、normalization=none、case-sensitive、保留 whitespace。resolver 依次尝试 leaf、最短更长 header suffix、exact table title、确定性 table/column occurrence ordinal。0 candidate 为 mapping_required；最终仍多 candidate 为 ambiguous_binding；禁止 first/last、猜 suffix 或改 author source。简单唯一 lowercase-ASCII leaf 保留 short COLUMN token；qualified/CJK/RTL/combining selector 使用 SCHEMAS 固定 ASCII digest token。后来新增同名 table/column 可以让 fresh short binding 变 ambiguous；already prepared Plan 因已冻结原 projection/selector/staged bytes 而保持 immutable。
+native table→Office dataset name 完全按 SCHEMAS §6.5.1，不给 ordinary Node 增加 export metadata。Core 从 D2TableBlock/3/D2TableCell/3 导出 physical column，包括 multi-row head 与 colspan/rowspan。text comparison 固定 exact Unicode scalar sequence、normalization=none、case-sensitive、保留 whitespace。resolver 依次尝试 leaf、最短更长 header suffix、exact table title、确定性 table/column occurrence ordinal。例如唯一 lowercase-ASCII leaf `amount` 可直接用 `data.native_table.amount`；Q1/Q2 下都有 Amount 时，bare Amount 必须 ambiguous，只能选 Q1/Amount 或 Q2/Amount 的 qualified selector/token；两张同标题表 full path 也相同则必须再加 frozen occurrence qualifier。0 candidate 为 mapping_required；最终仍多 candidate 为 ambiguous_binding；禁止 first/last、猜 suffix 或改 author source。简单唯一 lowercase-ASCII leaf 保留 short COLUMN token；qualified/CJK/RTL/combining selector 使用 SCHEMAS 固定 ASCII digest token。后来新增同名 table/column 可以让 fresh short binding 变 ambiguous；already prepared Plan 因已冻结原 projection/selector/staged bytes 而保持 immutable。
 
 原 D9 permission/state machine 继续 load-bearing：potential scope/authorization 在敏感读取前；inspect/confirmation/publish/delivery 重验 current authorization；unreadable 不能变 none；不同 Query authorization generation 不混用；create-only external publication 保留 durability/unknown-outcome；Save-as-Resource 是独立 current D3 create_resource preparation/receipt。fresh current D3 request 服从修正后的 optional expectedAuthority mode matrix。
 
@@ -459,7 +459,7 @@ replacement router 必须显式接管 D2 implementation impact、D7 Definition T
 
 禁止全局字符串替换去升级 historical wire12、document_snapshot wire2 或 ExportPlan/1-/2 record。saved/planned/unknown recovery 必须先于 current producer gate，并保持原 bytes、permissions、errors、confirmation 与 publication responsibility。
 
-Stage4A 当时明确把 Annotation mutation/alias 留给独立后续批；current candidate 已在随后 Stage4B 的 §§9–16 与 SCHEMAS §§6–7 完成 Value/4/D8/D7/alias chain。本次 A-residual repair 不重写该链；唯一直接依赖触碰是 generic wire13 expectedAuthority optionality 修正，后续应与本 fixed head 一起做直接增量非作者复核。
+Stage4A 当时明确把 Annotation mutation/alias 留给独立后续批；current candidate 已在随后 Stage4B 的 §§9–16 与 SCHEMAS §§6–7 完成 Value/4/D8/D7/alias chain。本次 A-residual repair 不重写该链；直接共享合同触碰只包括 generic wire13 expectedAuthority optionality 修正，以及 current EffectItem/3 新增 typed presentation_policy_change owner effect，后续都应与本 fixed head 一起做直接增量非作者复核。fixed19f Annotation 的三个独立残余 finding 与 physical-JSON aggregate source gap 仍明确留在本批范围外。
 
 ## 9. 独立 portable JSON Annotation
 
