@@ -667,7 +667,7 @@ EffectBytes/3 = {
 ```
 
 EffectItem/3 闭集与 fixed-e8aa EffectItem/2 的十四种语义分支一一对应：
-source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, canonical_plan；其中全部 EffectBytes 字段使用 /3，Annotation source image 使用 Value/4，workspace_bootstrap 现行路径允许 Plan4，不得出现 generic_json/free payload。以上英文名称均为协议标识、字段名或固定字面量，必须按闭合集严格解释，不改变本句中文语义。
+source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, canonical_plan；其中全部 EffectBytes 字段使用 /3，Annotation source image 使用 Value/4，workspace_bootstrap 现行路径允许 Plan4，不得出现 generic_json/free payload。以上英文名称均为协议标识、字段名或固定字面量，必须严格按本设计的闭合集逐项解释，不改变本句中文语义。
 
 ## 6.3 PreparedEditBinding/3
 
