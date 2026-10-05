@@ -370,7 +370,7 @@
         "PreparedActionBinding/4",
         "Annotation accept preparation",
         "D10 current author responsibility",
-        "PreparedActionBinding/4 consumes D7ActionSpec/2 for current suggestion actions while historical ActionSpec1/PAB3 recovery remains exact"
+        "PreparedActionBinding/4 consumes D7ActionSpec/2; D6 actions bind D7ActionInput/3, D3 create_annotation keeps d3_identity_operation/13, and historical ActionSpec1/PAB3 recovery remains exact"
       ]
     },
     {
