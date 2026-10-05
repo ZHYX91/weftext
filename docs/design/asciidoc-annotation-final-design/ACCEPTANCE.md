@@ -11,8 +11,8 @@ translation_status: synced
 Status: **design obligations only; not executed**.
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 117
-- total: 555
+- actual-owner coordination fixtures: 137
+- total: 575
 
 Each row is a normative obligation of this candidate. Words such as PASS/FAIL describe the future acceptance condition and do not claim execution in this PR.
 
@@ -459,10 +459,31 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M39-10 | SPEC §§2–3 | document/0 positive: the actual returned top-level Document carrier is published first and the later bind callback still holds the exact same Ruby object. |
 | M39-11 | SPEC §§2–3 | document/0 negative: binding before publication, or later re-finding a Document by title/source/text, fails even if final entry0 is correct. |
 
-## Actual-owner coordination — 117
+## Actual-owner coordination — 137
 
 | ID | Spec area | Requirement |
 |---|---|---|
+| FC4A-PROD-01 | SPEC §§3.4,8 | A current managed Document containing an authored level-6 section strict-decodes as D2DocumentSnapshot/3 with D2Heading/3 authoredLevel=6 and the native effectiveLevel; D8 read, D7 headings scan, and D9 document rendering consume that same occurrence rather than rejecting it through historical document_snapshot wire2. |
+| FC4A-PROD-02 | SPEC §§3.4,8 | A legal fixed-2.0.26 open/example/sidebar/admonition/list/table/pass/STEM/native-inline combination remains parseable/readable and exact-Source savable even when the rich editor lacks a structural control; no product consumer may drop an unhandled legal D2ProductBlock/3 or D2ProductInline/3 arm. |
+| FC4A-PROD-03 | SPEC §3.4 | Authorized invalid AsciiDoc returns exact source plus ordered D2 diagnostics with product projection unavailable and commit eligibility reject; it never returns a partial semantic tree, and a physical source-envelope failure remains the original source_unavailable class. |
+| FC4A-PROD-04 | SPEC §8.1 | D7 headings scan over D2DocumentSnapshot/3 emits the existing owner/title/level object using D2Heading/3.effectiveLevel and retains the exact current locator internally; an invalid projection fails the applicable complete scan instead of silently skipping the heading. |
+| FC4A-PROD-05 | SPEC §8.1 | D7 body_text recursively consumes the complete D2DocumentBody/3 family, including lists/tables/literal-source payload and explicit inline labels; it is never exact source, never writable, and a legal arm with no defined text mapping makes that adapter unavailable instead of shrinking D2 syntax. |
+| FC4A-PROD-06 | SPEC §§1.4,3.4 | A native link/xref/image/citation is parsed before D2IdentityAdapter/1 attaches stable identity; a managed include retains its own source owner/ranges, so path/title/hash cannot infer identity and inclusion cannot grant the root Document write authority over the included source. |
+| FC4A-D8-01 | SPEC §8.2 | Current outer D8 wireVersion2 d8_document returns D2DocumentSnapshot/3 at the same SourceObservation and current valid Draft projection preserves every legal /3 body arm; a genuine saved old D2 wire2 snapshot remains historical recovery only. |
+| FC4A-RUN-01 | SPEC §8.2 | Every active Workspace has exactly one D8WorkspacePresentationPolicy/1 starting revision1/separate; policy_admin + expected revision is required to change it, and a successful change checked-increments the protected policy without changing Document source or SourceVersion. |
+| FC4A-RUN-02 | SPEC §8.2 | Explicit run-in/separate roles override the Workspace policy while Enable/Disable/Use Default mutate only source roles; Use Default removes both and resumes the current policy, and none of the three commands writes D8WorkspacePresentationPolicy/1. |
+| FC4A-RUN-03 | SPEC §8.2 | Changing only presentation-policy revision invalidates a D8 render-cache binding while preserving heading/body identities, source bytes, SourceVersion and authored roles; unavailable policy never silently falls back to an ambient host default. |
+| FC4A-RUN-04 | SPEC §8.3 | A D9 plan prepared under presentation-policy revision P keeps exact binding P and identical staged bytes if the Workspace later changes to P+1; a fresh plan consumes P+1. |
+| FC4A-EXP-01 | SPEC §8.3 | Authorized target asciidoc_source exports the exact selected Document bytes with routeBinding/templateBinding/documentRenderBinding null; unavailable HTML/PDF/DOCX providers do not make the source invalid or block this exact-source path. |
+| FC4A-EXP-02 | SPEC §8.3 | HTML document export requires the exact D2DocumentSnapshot/3, format qualification, presentation-policy binding, accepted route/profile and staged bytes; deep heading/run-in presentation is derived from that frozen product projection rather than a second parser. |
+| FC4A-EXP-03 | SPEC §8.3 | DOCX/ODT export preserves explicit effective Heading1–Heading9 when the selected accepted profile supports them; deeper/unsupported target structure produces an explicit ExportLossReport item or target unavailability, never D2 source rejection. |
+| FC4A-EXP-04 | SPEC §8.3 | PDF export with an unavailable route/provider returns export unavailable while the same current D2 snapshot remains valid and exact-source export remains eligible; an accepted route freezes its target-specific layout/font/accessibility losses. |
+| FC4A-EXP-05 | SPEC §8.3 | Two implementations encoding the same ExportPlan/3 must agree byte-for-byte on inputDomain/catalog/selection/projection, document render binding, template, route steps and profile versions, styles, generation policy, target, destination, proof/evidence pins, loss report and staged outputs; a free-form or omitted replacement for any named member fails strict decode. |
+| FC4A-EXP-06 | SPEC §8.3 | D9ExportConfirmation/1 exactly covers the retained requires_choice/blocking loss set and cannot rewrite route/target/destination/staged bytes; inspect/confirm/publish/delivery recheck original authorization, and external publish/unknown recovery retains the original create-only and saved-intent rules. |
+| FC4A-ROUTE-01 | SPEC §8.4 | A new D7 Definition Transfer current submission uses D3IdentityOperationRequest/13 while complete definitionTransfers/Result9 semantics are unchanged; a genuine saved/planned wire12 transfer continues with its original decoder, fingerprint, effects and recovery. |
+| FC4A-ROUTE-02 | SPEC §8.4 | Current D9 Import IR preparation binds new author submission through D3IdentityOperationRequest/13 while ImportIR/Mapping/ConversionInput/file-safety/loss rules remain unchanged; historical wire12 import jobs are not migrated in place. |
+| FC4A-ROUTE-03 | SPEC §8.4 | The former D9 S12 premise “D2 has only five levels” is not current: WeftextManaged authored H6–H9 pass through D2/D7/D8/D9, and a target-specific depth limit is reported as loss/degradation or provider unavailability rather than mandatory source loss/rejection. |
+| FC4A-IMPACT-01 | SPEC §§3.4,8.4 | The routed D2 implementation-impact companion no longer makes open/native AsciiDoc, include, passthrough or fixed-baseline extensions categorically unsupported; current implementation must parse/read/Source-save every legal fixed-baseline construct while retaining the old single-authority, exact-source, authorization and invalid-repair safeguards. |
 | FC34-FMT-01 | SPEC §§5–8 | A fresh managed Document installs source plus ManagedDocumentFormatBinding/1 in the same P, with bindingRevision=1 and the exact pinned Ruby baseline + weftext_managed/1 profile. |
 | FC34-FMT-02 | SPEC §§5–8 | The old PortableComponentKey/1 decoder rejects {kind:"document_format"}; CP3 cannot treat it as a legal component. |
 | FC34-FMT-03 | SPEC §§5–8 | Legacy/unbound source remains available for authorized raw read/repair; missing format binding does not delete or hide the original bytes. |
@@ -583,7 +604,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 
 ## PR4 schema repair coverage (no new acceptance IDs)
 
-The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is:
+The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 575; no prior ID body is replaced.
 
 - retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
 - M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
@@ -595,4 +616,4 @@ The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D row
 
 ## Not executed
 
-This PR did not execute these 555 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
+This PR did not execute these 575 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
