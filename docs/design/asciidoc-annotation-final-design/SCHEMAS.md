@@ -715,6 +715,269 @@ A complete top-level Witness/7 has exactly one model_ready cut. If selected-back
 
 Catalog ownership remains only parent -> actual Document#register receiver. A temporary overlay closes before a valid evaluation_complete through the fixed source's real restore write or cleanup delete/closure; the observer never fabricates a restore.
 
+## 4.4 D2 current product Document projection
+
+This family is product data, not OracleSemanticWitness/7 or CoreSemanticProjection/1.
+
+```text
+D2SourceOwner/1 =
+    {kind:"root_document",ownerNodeRef:NodeRef}
+  | {kind:"managed_include",ownerNodeRef:NodeRef}
+  | {kind:"artifact_include",pin:PinRef/2}
+  | {kind:"network_snapshot",pin:PinRef/2}
+
+D2SourceRange/2 = {
+  source:D2SourceOwner/1,
+  startByte:Counter,endByte:Counter,
+  startLine:Counter,startColumn:Counter,
+  endLine:Counter,endColumn:Counter
+}
+
+D2ProductDiagnostic/1 = {
+  severity:"debug"|"info"|"warn"|"error",
+  semanticCode:text,
+  message:text,
+  sourceRange:D2SourceRange/2|null
+}
+
+D2TextProjection/2 = {
+  text:text,
+  sourceOrigins:[D2SourceRange/2...]
+}
+
+D2DocumentMetadata/3 = {
+  doctype:"article"|"book"|"manpage"|"inline",
+  title:D2TextProjection/2|null,
+  subtitle:D2TextProjection/2|null,
+  authors:[{name:text,email:text|null}...],
+  revision:null|{number:text|null,date:text|null,remark:text|null},
+  headerAttributes:[{name:text,value:text|null,
+                    sourceRange:D2SourceRange/2}...]
+}
+
+D2AttributeCarrierBlock/2 = {
+  kind:"attribute_carrier_block",
+  namespaceToken:text,
+  sourceRange:D2SourceRange/2,
+  namespaceRange:D2SourceRange/2,
+  entries:[{kind:"lexical_attribute_entry",rawEntrySource:text,
+            sourceRange:D2SourceRange/2}...]
+}
+
+D2IdentityAdapter/1 =
+    {kind:"node_link",target:NodeRef}
+  | {kind:"resource",target:ResourceRef}
+  | {kind:"citation",target:NodeRef,citationKey:text|null}
+
+D2ProductInline/3 =
+    {kind:"text",text:text,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"quoted",style:"strong"|"emphasis"|"monospaced"|"mark"|
+                         "superscript"|"subscript"|"double"|"single",
+     children:[D2ProductInline/3...],sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"link",nativeTarget:text,label:[D2ProductInline/3...],
+     adapter:D2IdentityAdapter/1|null,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"xref",nativeTarget:text,label:[D2ProductInline/3...],
+     adapter:D2IdentityAdapter/1|null,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"anchor",id:text,reftext:text|null,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"image",nativeTarget:text,alt:text|null,
+     adapter:D2IdentityAdapter/1|null,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"footnote",id:text|null,children:[D2ProductInline/3...],
+     sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"indexterm",terms:[text...],sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"stem",notation:"tex"|"asciimath",source:text,
+     sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"kbd",keys:[text...],sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"menu",path:[text...],sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"button",label:text,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"callout",label:text,sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"line_break",sourceOrigins:[D2SourceRange/2...]}
+  | {kind:"passthrough",text:text,sourceOrigins:[D2SourceRange/2...]}
+
+D2Heading/3 = {
+  kind:"heading",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,
+  sourceOrigins:[D2SourceRange/2...],
+  authoredLevel:integer(1..9),
+  effectiveLevel:Counter,
+  inlines:[D2ProductInline/3...],
+  anchor:text|null,
+  roles:[text...],
+  options:[text...]
+}
+
+D2ParagraphBlock/3 = {
+  kind:"paragraph",locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  anchor:text|null,title:[D2ProductInline/3...],
+  roles:[text...],options:[text...],
+  inlines:[D2ProductInline/3...]
+}
+
+D2SectionBlock/3 = {
+  kind:"section",locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  heading:D2Heading/3,
+  children:[D2ProductBlock/3...]
+}
+
+D2ListItem/3 = {
+  kind:"list_item",locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  marker:text|null,checked:Boolean|null,
+  terms:[[D2ProductInline/3...]...],
+  inlines:[D2ProductInline/3...],
+  children:[D2ProductBlock/3...]
+}
+
+D2ListBlock/3 = {
+  kind:"list",listKind:"unordered"|"ordered"|"description"|"callout",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  anchor:text|null,title:[D2ProductInline/3...],
+  roles:[text...],options:[text...],
+  items:[D2ListItem/3...]
+}
+
+D2TableColumn/3 = {
+  ordinal:Counter,width:text|null,halign:text|null,valign:text|null,
+  style:text|null,sourceOrigins:[D2SourceRange/2...]
+}
+
+D2TableCell/3 = {
+  kind:"table_cell",locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  colspan:Counter,rowspan:Counter,style:text|null,
+  halign:text|null,valign:text|null,
+  content:
+      {kind:"inline",inlines:[D2ProductInline/3...]}
+    | {kind:"blocks",children:[D2ProductBlock/3...]}
+}
+
+D2TableRow/3 = {
+  kind:"table_row",locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,
+  section:"head"|"body"|"foot",
+  cells:[D2TableCell/3...]
+}
+
+D2TableBlock/3 = {
+  kind:"table",locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  anchor:text|null,title:[D2ProductInline/3...],
+  roles:[text...],options:[text...],
+  columns:[D2TableColumn/3...],
+  rows:[D2TableRow/3...]
+}
+
+D2DelimitedBlock/3 = {
+  kind:"delimited",
+  blockKind:"listing"|"literal"|"source"|"pass"|"stem"|"quote"|"verse",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  anchor:text|null,title:[D2ProductInline/3...],
+  roles:[text...],options:[text...],
+  style:text|null,
+  content:
+      {kind:"text",text:text}
+    | {kind:"inline",inlines:[D2ProductInline/3...]}
+    | {kind:"blocks",children:[D2ProductBlock/3...]}
+}
+
+D2ContainerBlock/3 = {
+  kind:"container",
+  blockKind:"example"|"sidebar"|"open"|"admonition"|"preamble",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  anchor:text|null,title:[D2ProductInline/3...],
+  roles:[text...],options:[text...],
+  children:[D2ProductBlock/3...]
+}
+
+D2MediaBlock/3 = {
+  kind:"media",mediaKind:"image"|"audio"|"video",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  nativeTarget:text,alt:text|null,title:[D2ProductInline/3...],
+  roles:[text...],options:[text...],
+  adapter:D2IdentityAdapter/1|null
+}
+
+D2AtomicBlock/3 = {
+  kind:"atomic",
+  blockKind:"floating_title"|"page_break"|"thematic_break"|"toc",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,sourceOrigins:[D2SourceRange/2...],
+  level:Counter|null,
+  title:[D2ProductInline/3...],
+  roles:[text...],options:[text...]
+}
+
+D2SavedDefinitionBlock/3 = {
+  kind:"saved_query_view_definition",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2,
+  definitionKind:"query"|"view"|"dynamic_block",
+  payload:text
+}
+
+D2BibliographyPlacementBlock/3 = {
+  kind:"bibliography_placement",
+  locator:DocumentElementLocator,
+  sourceRange:D2SourceRange/2
+}
+
+D2ProductBlock/3 =
+    D2SectionBlock/3 | D2ParagraphBlock/3 | D2ListBlock/3 |
+    D2TableBlock/3 | D2DelimitedBlock/3 | D2ContainerBlock/3 |
+    D2MediaBlock/3 | D2AtomicBlock/3 |
+    D2SavedDefinitionBlock/3 | D2BibliographyPlacementBlock/3
+
+D2DocumentBody/3 = {
+  kind:"document_body",
+  children:[D2ProductBlock/3...]
+}
+
+D2DocumentPayload/3 =
+    {source:text,
+     parse:{status:"valid",diagnostics:[D2ProductDiagnostic/1...]},
+     projection:{state:"available",
+                 metadata:D2DocumentMetadata/3,
+                 attributeCarrierBlocks:[D2AttributeCarrierBlock/2...],
+                 body:D2DocumentBody/3},
+     d2CommitEligibility:"eligible",
+     repairVisibility:"not_required"}
+  | {source:text,
+     parse:{status:"invalid",diagnostics:[D2ProductDiagnostic/1...]},
+     projection:{state:"unavailable"},
+     d2CommitEligibility:"reject",
+     repairVisibility:"exact_source_only"}
+
+D2DocumentSnapshot/3 = {
+  wireVersion:3,
+  kind:"document_snapshot",
+  ownerNodeRef:NodeRef,
+  document:D2DocumentPayload/3
+}
+```
+
+All product unions are strict: unknown/missing members, unknown arms, duplicate JSON keys, illegal nulls, and cross-arm members reject. D2ProductBlock/3 is the current complete product block family for the fixed baseline plus the named Weftext extensions; there is no generic/opaque block or inline escape. Semantic sequences preserve parser order. roles/options preserve their language-defined order; unique sets are explicitly named as such by their owner.
+
+For an available projection, every addressable product occurrence has the exact current D3 DocumentElementLocator required by its type. D2SourceRange/2 byte intervals are half-open and line/column endpoints refer to the same source owner; start is not after end. sourceOrigins is nonempty whenever a semantic value is produced from source. A managed include uses its included owner NodeRef, and an artifact/network include uses the exact authorized pin; no path/title/hash infers an owner. A product locator or origin grants no write permission.
+
+BaselineOnly accepts only headings the fixed Ruby baseline actually parses. WeftextManaged additionally admits authoredLevel 6–9. effectiveLevel is the uncapped result of the native section/leveloffset state machine and may exceed 9. D2SectionBlock/3.heading and the corresponding section locator/range refer to the same actual section occurrence. A re-renderer cannot recompute a different level.
+
+D2IdentityAdapter/1 may appear only after the enclosing native occurrence has parsed successfully. node_link and citation targets must be D3-qualified stable identity; resource targets are owner-local and their owner equals the Document/source-owner rule that created the occurrence. The adapter is additional typed identity, never a replacement native parser or a writable source target.
+
+The canonical protected pin for a complete current product snapshot is artifact/recovery over:
+
+```text
+UTF8("D2-Document-Snapshot/3") || NUL ||
+D3-CJ/3(complete D2DocumentSnapshot/3)
+```
+
+Historical document_snapshot wireVersion2 and its limited BodyBlock/Inline decoder remain historical-only and are never widened to accept /3.
+
 # 5. Managed format and D6 successors
 
 ```text
@@ -874,7 +1137,33 @@ D3ResolutionInputUse/2 = {
   bindingToken:Token,inputDescriptor:InputDescriptor/3
 }
 
+D3IdentityInput/13 = {
+  kind:"d3_identity_input",version:13,
+  mode:D3Mode,
+  writeProtection:"strict",
+  expectedAuthority:ExpectedAuthority,
+  workspaceProposal?:WorkspaceAllocationProposal,
+  intent:D3Intent
+}
+
+D3IdentityOperationRequest/13 = {
+  wireVersion:13,
+  kind:"identity_operation_request",
+  operationId:UUIDv4,
+  boundWorkspaceRef:WorkspaceRef,
+  commitDomain:CommitDomain/2,
+  guarantee:"replica_local"|"managed_atomic",
+  expectedFrontier:Frontier/2,
+  inputDescriptor:InputDescriptor/3,
+  mode:D3Mode,
+  expectedAuthority:ExpectedAuthority,
+  workspaceProposal?:WorkspaceAllocationProposal,
+  preparationBinding?:PreparationBinding,
+  intent:D3Intent
+}
 ```
+
+D3IdentityInput/13 has the exact D3IdentityInput/12 six-member semantic set: only the nested D6 descriptor family changes to current InputDescriptor/3 at the outer request boundary; mode/authority/proposal/intent and writeProtection=strict retain their fixed-parent decoders and mode matrix. Optional members marked ? are absent when the fixed-parent mode matrix forbids them; JSON null is not a substitute. D3IdentityOperationRequest/13 is the exact wire12 top-level member set with wireVersion=13 and InputDescriptor/3. Its cross-field equalities, guarantee/frontier policy, ownerInput protocolOwner=D3/ownerKind=d3_identity_operation/13, requestFingerprint rule, DecisionKey/OperationId ledger ordering, saved/planned/unseen branching, and error/disclosure order are inherited unchanged. Historical wire9–12 are not widened or re-encoded.
 
 ## 6.1 PreparedActionBinding/4
 
@@ -895,7 +1184,7 @@ PreparedActionBinding/4 = {
   dependencyProof:DependencyProof/3,
   observationProof:<PreparedIntent/3.observationProof>,
   budgetBinding:BudgetBinding/1,expiresAt:<D6 protected deadline>,
-  request:<D3 wire13|d6_commit_request/2>,
+  request:D3IdentityOperationRequest/13|d6_commit_request/2,
   preview:<complete EffectManifest/3>,
   resolutionInput:null|D3ResolutionInput/1
 }
@@ -951,46 +1240,197 @@ PreparedEditBinding/3 = {
 
 proposedInputs contains exactly one item and its entityRef equals intent.target.ref. OwnerInputBinding/2 remains unchanged; current ownerKind is d8_edit/3.
 
-## 6.4 ExportPlan/3 / PublicationReceipt/3
+## 6.4 D8 workspace presentation policy and render binding
 
 ```text
+D8WorkspacePresentationPolicy/1 = {
+  kind:"d8_workspace_presentation_policy",version:1,
+  workspaceRef:WorkspaceRef,
+  revision:Counter,
+  defaultPresentation:"separate"|"run_in"
+}
+
+D8WorkspacePresentationPolicyBinding/1 = {
+  policy:D8WorkspacePresentationPolicy/1,
+  pin:PinRef/2
+}
+
+D8PresentationPolicySetRequest/1 = {
+  wireVersion:1,
+  kind:"d8_presentation_policy_set",
+  workspaceRef:WorkspaceRef,
+  expectedRevision:Counter,
+  defaultPresentation:"separate"|"run_in",
+  budget:BudgetBinding/1
+}
+
+D8PresentationResult/1 = {
+  heading:DocumentElementLocator,
+  body:DocumentElementLocator|null,
+  sourceOverride:"run_in"|"separate"|"default"|"conflict",
+  effective:"run_in"|"separate",
+  policyRevision:Counter,
+  diagnostic:null|"role_conflict"
+}
+
+D8DocumentRenderBinding/1 = {
+  sourceObservation:SourceObservation/1,
+  documentFormat:DocumentFormatCurrentQualification/1,
+  documentSnapshotPin:PinRef/2,
+  presentationPolicy:D8WorkspacePresentationPolicyBinding/1,
+  rendererProfileSha256:"sha256:<64 lowercase hex>"
+}
+```
+
+Every active Workspace has one presentation-policy record, initialized at revision=1/defaultPresentation=separate. Mutation requires policy_admin, expectedRevision equality, checked increment, and one protected configuration write. The policy pin is artifact/recovery over UTF8("D8-Workspace-Presentation-Policy/1") || NUL || D3-CJ/3(complete policy). It is not author source and grants no source write. Current visual rendering uses D8DocumentRenderBinding/1; documentSnapshotPin selects exact D2-Document-Snapshot/3 bytes for sourceObservation.entityRef, and documentFormat belongs to that same owner/current read. Cache identity includes the complete binding.
+
+Run-in resolution is closed: conflict => Separate+role_conflict; explicit separate => Separate; explicit run-in => RunIn only for the existing eligible first-paragraph rule; default uses policy only when neither role exists and retains the stricter implicit physical-adjacency rule. No eligible body => Separate. Source role commands mutate source roles only, never this policy.
+
+## 6.5 ExportPlan/3 / PublicationReceipt/3
+
+The following current export types close fields that were only prose in the fixed-parent ExportPlan/2 contract.
+
+```text
+D9ExportInputDomain/1 =
+  "document"|"native_table"|"node_collection"|"query_rows"|"query_json"|"resource"
+
+D9ExportTarget/1 =
+    {kind:"asciidoc_source"}
+  | {kind:"resource_exact"}
+  | {kind:"html",profileId:text}
+  | {kind:"pdf",profileId:text}
+  | {kind:"docx",profileId:text}
+  | {kind:"odt",profileId:text}
+  | {kind:"csv_utf8"}
+  | {kind:"tsv_utf8"}
+  | {kind:"xlsx",profileId:text}
+  | {kind:"ods",profileId:text}
+  | {kind:"query_json"}
+
+D9ExportTemplateBinding/1 = {
+  inputIndex:Counter,
+  profileId:text,
+  profileVersion:text,
+  pin:PinRef/2
+}
+
+D9ExportRouteStepBinding/1 = {
+  step:Counter,
+  providerId:text,
+  providerVersion:text,
+  inputProfileId:text,
+  outputProfileId:text,
+  optionsSha256:"sha256:<64 lowercase hex>",
+  stepBudget:BudgetBinding/1,
+  evidencePins:[PinRef/2...]
+}
+
+D9ExportRouteBinding/1 = {
+  routeId:text,
+  routeRevision:Token,
+  profileId:text,
+  profileVersion:text,
+  steps:[D9ExportRouteStepBinding/1...]
+}
+
+D9ExportStyleBundleBinding/1 = {
+  styleBundleId:text,
+  version:Counter,
+  pin:PinRef/2
+}
+
+D9ExportGenerationPolicyBinding/1 = {
+  profileId:text,
+  version:Counter,
+  descriptorSha256:"sha256:<64 lowercase hex>",
+  pin:PinRef/2
+}
+
+D9DocumentRenderBinding/1 = {
+  ownerNodeRef:NodeRef,
+  sourceObservation:SourceObservation/1,
+  documentSnapshotPin:PinRef/2,
+  semanticQualification:ManagedDocumentSemanticQualification/1,
+  presentationPolicy:D8WorkspacePresentationPolicyBinding/1
+}
+
+D9ExportDestinationIntent/1 =
+    {kind:"external_bundle",destinationHandle:Token,basename:text,createOnly:true}
+  | {kind:"server_download",downloadToken:Token,basename:text}
+  | {kind:"resource_handoff",ownerNodeRef:NodeRef,resourceName:text}
+
+D9ExportLossChoice/1 = {
+  lossKey:Counter,
+  choice:"accept_loss"|"reject"
+}
+
+D9ExportConfirmation/1 = {
+  planToken:Token,
+  lossChoices:[D9ExportLossChoice/1...]
+}
+
+D9ExportStagedOutput/1 = {
+  name:text,
+  byteLength:Counter,
+  sha256:"sha256:<64 lowercase hex>",
+  pin:PinRef/2
+}
+
+D9PublishedOutput/1 = {
+  name:text,
+  byteLength:Counter,
+  sha256:"sha256:<64 lowercase hex>"
+}
+
 ExportPlan/3 = {
   kind:"d9_export_plan",version:3,
   planToken:Token,workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   principalAudienceToken:Token,authorizationGeneration:Token,
+  inputDomain:D9ExportInputDomain/1,
   inputCatalog:ExportInputCatalog/2,
   contentSelection:ExportContentSelection/1,
   projection:ExportProjection/1,
-  templateBinding:null|<exact template bytes/version binding>,
-  routeBinding:<exact route/profile/version binding>,
-  targetFormat:<D9 closed export target>,
+  documentRenderBinding:D9DocumentRenderBinding/1|null,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicyBinding/1,
+  target:D9ExportTarget/1,
   initialLossReport:ExportLossReport/1,
   outputBudget:BudgetBinding/1,
-  destinationIntent:<protected destination intent>,
+  destination:D9ExportDestinationIntent/1,
   observationScope:ObservationScope/2,
   dependencyProof:DependencyProof/3,
-  observationProof:<PreparedIntent/3.observationProof>,
-  sourceRuleRoutePins:[PinRef/2...],
-  stagedOutputs:[{name:text,byteLength:Counter,
-                  sha256:"sha256:<64 lowercase hex>",pin:PinRef/2}...]
+  observationProof:ObservationProof,
+  evidencePins:[PinRef/2...],
+  stagedOutputs:[D9ExportStagedOutput/1...]
 }
-```
 
-```text
 PublicationReceipt/3 = {
   kind:"d9_publication_receipt",version:3,
   publicationToken:Token,planToken:Token,
   workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
-  outputs:[{name:text,byteLength:Counter,
-            sha256:"sha256:<64 lowercase hex>"}...],
+  outputs:[D9PublishedOutput/1...],
   lossReport:ExportLossReport/1,
-  lossChoices:[<exact original confirmation choice>...],
-  routeProfileStyleVersions:[<exact bound version>...],
+  lossChoices:[D9ExportLossChoice/1...],
+  target:D9ExportTarget/1,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  presentationPolicy:D8WorkspacePresentationPolicyBinding/1|null,
   destinationDisplay:text
 }
 ```
 
-PublicationReceipt proves external publication only; it is not a D6 author receipt. Historical export/publication versions retain original decoders.
+ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1, and ExportLossReport/1 retain the complete fixed-parent D9 closed shapes and semantics. D9ExportRouteBinding/1 steps are continuous from zero and the route is the exact accepted finite acyclic route; evidencePins in each step are pinToken-sorted/unique. styleBundles sort uniquely by styleBundleId; plan evidencePins sort uniquely by pinToken; stagedOutputs and receipt outputs sort uniquely by controlled relative name. lossChoices sort by lossKey, are unique, and exactly cover requires_choice/blocking items under the retained severity matrix. A reject choice cancels; a blocking item can never be accepted.
+
+asciidoc_source and resource_exact require routeBinding=null, templateBinding=null, documentRenderBinding=null, and projection contains no renderer-derived values. query_json likewise serializes the exact D7 result under its retained static profile and has no template binding. html/pdf/docx/odt require inputDomain=document, a nonnull documentRenderBinding, and a nonnull accepted route. docx/odt may require templateBinding according to the selected route profile. csv/tsv/xlsx/ods require the retained finite RenderSnapshot projection and a matching route/profile. No target arm is inferred from filename.
+
+For document rendering, documentSnapshotPin selects exact D2-Document-Snapshot/3 canonical bytes whose owner equals ownerNodeRef and sourceObservation.entityRef. semanticQualification.sourceObservation is byte-equal to sourceObservation. presentationPolicy is the exact policy revision used to compute run-in presentation. A later presentation-policy change does not invalidate or mutate an already prepared immutable plan, but every fresh prepare uses the then-current binding. A source observation, document-format qualification, route/template/profile/style/Query/authorization change follows the retained D9 invalidation/reset rules.
+
+D9ExportDestinationIntent/1 is protected intent, not permission. external_bundle is create-only and follows the retained same-volume staging/atomic-rename/durability/unknown state machine. server_download follows per-chunk current authorization. resource_handoff does not create a Resource; after export confirmation, the exact staged bytes enter a separate current D3 create_resource prepare/confirmation/receipt.
+
+D9ExportConfirmation/1 never changes catalog, projection, route, target, destination, policies, report, budget, or staged bytes. PublicationReceipt/3 proves external publication only and must byte-match the protected original plan/confirmation for every repeated member. Historical ExportPlan/1-/2 and PublicationReceipt/1-/2 retain exact original decoders, permissions, confirmations, staged bytes, unknown duties, and recovery ordering.
 
 # 7. Annotation closed values
 
@@ -1848,7 +2288,7 @@ D10AuthorStepResponsibility/2 =
   | {version:2,kind:"interactive",
      run:ControlRef<run>/1,stepId:Counter,decisionKey:DecisionKey/2,
      authorRequest:
-         {protocolOwner:"D3",request:<complete identity_operation_request wire13>}
+         {protocolOwner:"D3",request:D3IdentityOperationRequest/13}
        | {protocolOwner:"D6",request:d6_commit_request/2},
      preparedFormat:
        "d7_prepared_action_binding4"|"d8_prepared_edit_binding3",
