@@ -386,18 +386,13 @@ resource_region {kind:"resource_region",locator:ResourceRegionLocator}
 
 Each variant allows only those fields. The owner/locator/resource must match AnnotationRef.owner. AnnotationRef, a bare target NodeRef, AuthorAnchorAddress, and cross-owner locators/refs are invalid. Outer wire and Projection/1 materialize bijectively; path/title/hash/ambient owner cannot fill missing identity.
 
-### 9.3 AnnotationInlineProfile/1
+### 9.3 Annotation inline body and the single evaluation profile
 
-```text
-AnnotationInlineProfile/1 = {
-  languageBaseline:"asciidoctor-ruby/2.0.26@0b99b39c9df884d4aec13bba45f03cdbab505769",
-  doctype:"inline",processorBackend:"html5-semantic/1",safeMode:"secure",
-  maxSourceBytes:65536,maxRenderedBytes:262144,maxInlineSemanticNodes:4096,
-  managedAdapters:"disabled",networkEffects:"denied",fileEffects:"denied",processEffects:"denied"
-}
-```
+The exact closed shapes of `AnnotationInlineBody/1`, its compatibility schema alias `AsciiDocInlineBody/1`, and the single `AnnotationInlineProfile/1` are normative in [SCHEMAS.md §7](SCHEMAS.md#7-annotation-closed-values). SPEC no longer maintains a second literal definition of that profile.
 
-The complete source must form exactly one paragraph, with soft wraps and trailing whitespace allowed. A second paragraph, heading, list, delimited block, table, or block macro is invalid_annotation_body rather than silently ignored. Fixed-2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote and similar inline constructs remain available. n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters are disabled in this body profile.
+The portable body retains its four-member data shape: format/version/languageBaseline/source; the body is not a processor profile. The evaluation profile fixes the exact Ruby 2.0.26 commit, doctype=inline, processorBackend=`html5-semantic/1`, secure safe mode, and the closed resource/effect limits. The short baseline literal stored in the body identifies the portable source-data version and must correspond to the profile's commit-qualified 2.0.26 baseline; it cannot select another implementation version.
+
+The complete source must form exactly one paragraph, with soft wraps and trailing whitespace allowed. A second paragraph, heading, list, delimited block, table, or block macro is `invalid_annotation_body` rather than silently ignored. Fixed-2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote and similar inline constructs remain available. n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters are disabled in this body profile.
 
 ### 9.4 Appearance, actor, and time
 
