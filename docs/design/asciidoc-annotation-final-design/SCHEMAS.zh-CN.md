@@ -1258,7 +1258,38 @@ D3IdentityInput/13 精确保留 D3IdentityInput/12 原有六个语义成员；�
 
 ## 6.1 PreparedActionBinding/4
 
+current D7 action successor 使用精确继承，不是自由扩展。D7ActionSpec/2 的顶层对象等于 fixed-parent ActionSpec/1 仅把 version 改为2；其 intent decoder 恰为 fixed-parent intent union 删除 historical apply_suggestion arm 后，再加入下面两个 closed arms。全部非 suggestion arm 的成员与语义逐字节沿用 fixed-parent。
+
 ```text
+D7ApplySuggestionIntent/2 = {
+  kind:"apply_suggestion",
+  annotation:AnnotationRef,
+  expectedAnnotationRevisionToken:AnnotationRevisionToken/1
+}
+
+D7RejectSuggestionIntent/2 = {
+  kind:"reject_suggestion",
+  annotation:AnnotationRef,
+  expectedAnnotationRevisionToken:AnnotationRevisionToken/1
+}
+
+D7ActionSpec/2 = {
+  format:"weftext.action",version:2,
+  intent:<exact fixed-parent non-suggestion ActionSpec/1 arm> |
+         D7ApplySuggestionIntent/2 |
+         D7RejectSuggestionIntent/2
+}
+
+D7ActionPrepareRequest/3 = {
+  wireVersion:3,kind:"d7_action_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  expectedFrontier:Frontier/2,
+  action:D7ActionSpec/2,
+  selectedSources:[SourceVersionRef/1...],
+  budget:BudgetBinding/1,
+  evidenceToken?:Token
+}
+
 PreparedActionBinding/4 = {
   kind:"d7_prepared_action_binding",
   version:4,
@@ -1267,7 +1298,7 @@ PreparedActionBinding/4 = {
   operationId:UUIDv4,
   workspaceRef:WorkspaceRef,
   principalAudienceToken:Token,
-  action:ActionSpec,
+  action:D7ActionSpec/2,
   canonicalCallInputs:[QueryCall...],
   definitionInputs:[D7DefinitionInput/2...],
   registryInputs:[ValidatedCatalogContext...],
@@ -1325,29 +1356,84 @@ source_change, conditional_source_change, entity_state_change, d3_plan, d3_recei
 ## 6.3 PreparedEditBinding/3
 
 ```text
+D8EditIntent/3 =
+    {kind:"document",
+     target:D8SourceTarget/2,
+     source:text}
+  | {kind:"annotation",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
+     value:AnnotationEditableValue/1,
+     targetPolicy:"preserve"|"replace_current"}
+
+D8PinnedEditIntent/3 =
+    {kind:"document",
+     target:D8SourceTarget/2,
+     proposedSource:PinRef/2}
+  | {kind:"annotation",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
+     proposedValue:PinRef/2,
+     targetPolicy:"preserve"|"replace_current"}
+
+D8EditInput/3 = {
+  kind:"d8_edit_input",version:3,
+  invocationClass:"interactive_source_save"|"noninteractive",
+  writeProtection:"strict"|"observed_only",
+  intent:D8PinnedEditIntent/3,
+  origin:{kind:"direct"}|{kind:"undo",originalRequest:OriginalD6Request}
+}
+
+D8EditPrepareRequest/3 = {
+  wireVersion:3,kind:"d8_edit_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  saveProfile:"ordinary"|"complete",
+  guarantee:"replica_local"|"managed_atomic",
+  writeProtection:"strict"|"observed_only",
+  intent:D8EditIntent/3,
+  budget:BudgetBinding/1
+}
+
+D8AnnotationDraftProjection/1 =
+    {kind:"d8_annotation_draft",version:1,
+     annotationRef:AnnotationRef,
+     baseObservation:SourceObservation/1,
+     baseRevisionToken:AnnotationRevisionToken/1,
+     draftSerial:Counter,
+     access:"editable"|"readonly",
+     value:AnnotationEditableValue/1,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     body:{state:"valid",source:text}}
+  | {kind:"d8_annotation_draft",version:1,
+     annotationRef:AnnotationRef,
+     baseObservation:SourceObservation/1,
+     baseRevisionToken:AnnotationRevisionToken/1,
+     draftSerial:Counter,
+     access:"editable"|"readonly",
+     value:AnnotationEditableValue/1,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     body:{state:"invalid",source:text,diagnostics:[CoreDiagnostic/1...]}}
+
 PreparedEditBinding/3 = {
-  kind:"d8_prepared_edit_binding",
-  version:3,
-  workspaceRef:WorkspaceRef,
-  commitDomain:CommitDomain/2,
-  operationId:UUIDv4,
-  principalAudienceToken:Token,
+  kind:"d8_prepared_edit_binding",version:3,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  operationId:UUIDv4,principalAudienceToken:Token,
   inputDescriptor:InputDescriptor/3,
-  intent:<D8 current closed edit intent>,
-  origin:{kind:"direct"}|{kind:"undo",originalRequest:<OriginalD6Request>},
-  sourceInputs:<InputDescriptor/3.sourceInputs>,
+  intent:D8EditIntent/3,
+  origin:{kind:"direct"}|{kind:"undo",originalRequest:OriginalD6Request},
+  sourceInputs:InputDescriptor/3.sourceInputs,
   proposedInputs:[{entityRef:EntityRef,pin:PinRef/2}],
   registryInputs:[ValidatedCatalogContext...],
   dependencyProof:DependencyProof/3,
-  observationProof:<PreparedIntent/3.observationProof>,
-  budgetBinding:BudgetBinding/1,
-  expiresAt:<D6 protected deadline>,
-  request:d6_commit_request/2,
-  preview:<complete EffectManifest/3>
+  observationProof:PreparedIntent/3.observationProof,
+  budgetBinding:BudgetBinding/1,expiresAt:PreparedDeadline,
+  request:d6_commit_request/2,preview:EffectManifest/3
 }
 ```
 
-proposedInputs恰一项且entityRef等于intent.target.ref；OwnerInputBinding/2保持，current ownerKind=d8_edit/3。
+document intent 的 proposedInputs.pin 选择精确 UTF-8 source。annotation intent 的 proposedInputs 恰一项，entityRef 等于 target.ref，且 PinRef/2 payloadKind=annotation_value；pin bytes 必须是 Core 构造的完整 D3-Annotation-Value/4 的 D3-CJ/3，而不是只 pin AnnotationEditableValue/1。target.ref 必须是 AnnotationRef，expectedAnnotationRevisionToken 必须等于 prepare 时 current PortableAnnotationRecord/4 token。Annotation 强制 saveProfile=complete 与 writeProtection=strict；observed_only 仍只允许原已资格化 interactive Document 路径。
+
+OwnerInputBinding/2 的 current ownerKind/intentKind=d8_edit/3，canonicalDescriptorBytes=D3-CJ/3(D8EditInput/3)。pinRefs 恰为 D8PinnedEditIntent/3 命名的 pins 与 retained origin evidence 的排序去重集合。D8EditInput/3.intent 必须从 PreparedEditBinding/3.intent 机械派生，只把 source/value bytes 替换为对应 proposed pin；任何 request shape 都没有 actor/time 或 trust flag。historical d8_edit_prepare wire1/2 与 PreparedEditBinding/1/2 继续原 intent/value decoder 与 recovery。
 
 ## 6.4 D8 workspace presentation policy 与 render binding
 
@@ -1544,6 +1630,26 @@ D9ExportConfirmation/1 不得改变 catalog、projection、route、target、dest
 # 7. Annotation closed values
 
 ```text
+AnnotationRevisionToken/1 := nonempty opaque JSON string
+
+PortableAnnotationRecord/4 = {
+  kind:"portable_annotation",version:4,
+  annotationRef:AnnotationRef,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  value:D3-Annotation-Value/4
+}
+
+AnnotationEditableValue/1 = {
+  purpose:"comment"|"mark"|"suggestion",
+  target:D3-Annotation-Target-Projection/1,
+  replyTo:AnnotationRef|null,
+  body:AnnotationInlineBody/1|null,
+  appearance:AnnotationAppearance/1|null,
+  labels:[text...],
+  reviewState:"open"|"resolved"|"not_applicable",
+  suggestion:Suggestion/3|null
+}
+
 D3-Annotation-Value/4 = {
   kind:"d3_annotation_value",
   version:4,
@@ -1626,6 +1732,14 @@ Suggestion/3 = {
 `AnnotationInlineBody/1` 是current唯一名称并保留早期 `AsciiDocInlineBody/1` 的四成员数据shape；`AsciiDocInlineBody/1` 仅是**schema alias**，其 canonical bytes 与 `AnnotationInlineBody/1` 完全相同，不形成第二wire/version，也不声称历史部署。body只是portable source value，不能承载processor环境。求值必须使用同一节唯一 `AnnotationInlineProfile/1`；body的 `languageBaseline="asciidoctor-ruby/2.0.26"` 必须与profile所固定的2.0.26@commit版本一致。完整source必须只形成一个paragraph（允许soft wraps与trailing whitespace）；第二paragraph、heading、list、delimited block、table或block macro为 `invalid_annotation_body`，不能静默忽略。
 
 replyTo非null强制same-owner、acyclic、purpose=comment、suggestion=null、reviewState=not_applicable。root reviewState只能open|resolved。pending confirmation只能confirmed|needs_reconfirmation；accepted/rejected terminal且confirmation=not_applicable。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+
+PortableAnnotationRecord/4 是现有 Node-local annotations JSON authority 中的 current logical Portable Metadata record；annotationRef.owner 必须等于 containing Node。D3-Annotation-Value/4 canonical bytes 恰为 D3-CJ/3(value)；current annotation_value payload binding 与 PinRef/2 hash/pin 的是这些 bytes，而不是 outer PortableAnnotationRecord/4。annotationRevisionToken 是 opaque token，不能由 value digest 推导，并且同一 AnnotationRef 的每个 committed Value/4 state 都必须唯一。
+
+current wire13 D3 mutation 使用 Value/4 base decoder，同时保留 inherited logical slots：annotation_target ordinal0、annotation_reply ordinal1。target 永远是 reference slot；replyTo nonnull 时是 reference slot，existing-Annotation identity-preserving reply change 使用 inherited structural S，禁止重复产生 reply reference result。其它 Value/4 members 都是 nonreference bytes。任何 changed current Value/4 只有一个新的 final AnnotationRevisionToken/1；target/reply toSource addresses、annotation_reply_change evidence、SourceRevisionPlan/result pin、source change 与 receipt 都必须使用同一 token。若 current editable proposal byte-equivalent，则 no-op，保留 current token/SourceVersion/attribution。
+
+current payloadBindings 的 payloadKind=annotation_value 必须按 actual request family 分派：wire13 current mutation strict-decode Value/4；真正 historical wire9–12 继续 Value/3 decoder。D3-Symbolic-Result/9 framing 不变，但 annotation base bytes 与 slot spans 必须由该 request family 选出的 decoder 计算；不能扩 historical decoder。
+
+current Portable Metadata 不再把 D2 Annotation-v2 outer wire materialize 为 author state。historical D2 v2 annotation snapshot、Value/3、plain_text body、replace_plain_text suggestion 与 targetStatus resolved/stale 只保留真实 historical decoder/recovery。current body bytes 只能是 AnnotationInlineBody/1，并使用唯一 AnnotationInlineProfile/1；不存在 plain-text compatibility fallback 或第二 parser。
 
 # 8. SourceTransform
 
