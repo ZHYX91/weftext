@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 278
-- total: 716
+- actual-owner coordination fixtures: 293
+- total: 731
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -516,7 +516,7 @@ translation_status: source
 | FC4R-WIRE-02 | SPEC §§7–8 | 同一 replica_local request 若出现 expectedAuthority、workspaceProposal、preparationBinding，或把这些 member 编成 JSON null，都必须 closed-decode/mode validation 失败。 |
 | FC4R-WIRE-03 | SPEC §§7–8 | managed_atomic create/fork 要求 expectedAuthority=create 与 inherited required proposal；continue 要求 continue；其它 managed_atomic mode 要求 existing；descriptor/request 中存在的值必须 exact match。 |；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 | FC4R-WIRE-04 | SPEC §§7–8 | current D7/D8/D9 路径若生成 wire13 D3 request，必须选择实际可编码的 inherited optional-member shape；不能仅因 /13 schema 存在就强迫加入 mode 禁止的 member。 |
-| FC4B-VAL-01 | SPEC §§9.6–9.9 | 当前交互式 Annotation 创建必须使用 D7CreateAnnotationIntent/2；调用方只能提供 destinationOwnerRef 与 AnnotationEditableValue/1。经过正常 owner/create 授权后，Core 注入 creator/authoredAt/lastEditor/editedAt、构造 wire13 create_annotation graph，并保存一个 PortableAnnotationRecord/4。调用方提供 actor/time/trusted flag 或借 generic d3_operation 冒充可信创建都必须失败。 |
+| FC4B-VAL-01 | SPEC §§9.6–9.9 | 当前交互式 Annotation 创建必须使用 D7CreateAnnotationIntent/2；调用方只能提供 destinationOwnerRef 与 AnnotationEditableProposal/1。经过正常 owner/create 授权后，Core 注入 creator/authoredAt/lastEditor/editedAt、构造 wire13 create_annotation graph，并保存一个 PortableAnnotationRecord/4。调用方提供 actor/time/trusted flag 或借 generic d3_operation 冒充可信创建都必须失败。 |
 | FC4B-VAL-02 | SPEC §§9.6–9.7 | 仅把 reviewState 从 open 改为 resolved 也会改变完整 Value/4：必须只分配一个 fresh annotationRevisionToken，经既有 SourceRevisionPlan 路径推进 managed Annotation SourceVersion，byte-preserve creator/authoredAt，并由 Core 重写 lastEditor/editedAt；使用旧 token 并发 prepare 的另一编辑必须输掉 CAS。 |
 | FC4B-VAL-03 | SPEC §§9.6–9.7 | 仅修改 appearance 或 labels 仍是实际 Value/4 mutation，必须使用同一个 one-token/one-managed-after 规则；不能因为 target/body/reply 未变化就复用旧 token。 |
 | FC4B-VAL-04 | SPEC §9.6 | 完整 editable Annotation value 与 current state 相等时必须是真正 no-op：attribution、annotationRevisionToken、SourceVersion、H 都不变，不建立 SourceRevisionPlan，也不伪造 source_change。 |
@@ -524,7 +524,7 @@ translation_status: source
 | FC4B-VAL-06 | SPEC §9.7 | 同一 existing Annotation 同时修改 target@0 与 reply@1 时，target 必须保留完整 reference evidence；identity-preserving reply change 恰有一个 S/annotation_reply_change，禁止重复 reply reference result。target/reply toSource、receipt source version 与 toAnnotationRevisionToken 必须全部使用唯一 final Annotation revision。 |
 | FC4B-VAL-07 | SPEC §9.7 | restore trashed Annotation A 并把 reply P→Q 时，target@0 与非空 reply@1 都以 non_live_source 为前态、resolved 为后态；旧 reply=null 时只有 reply 使用 absent，target 仍是 non_live_source。typed target/reply evidence 不能被 lifecycle-only 取代，也不能按 slot 分别增加 revision。 |
 | FC4B-VAL-08 | SPEC §§9.6,16–17 | current Portable Annotation JSON corrupt/unknown 时不得产生 partial trusted Value/4 projection。有权限的 repair/backup 可以读取 exact raw portable bytes；真正 historical D2 Annotation-v2/Value3 record 只按 recorded decoder 恢复，禁止猜成或迁移成 Value/4。 |
-| FC4B-D8-01 | SPEC §9.8 | 当前 d8_edit_prepare 的 Annotation intent 必须是 D8EditIntent/3，包含精确 expectedAnnotationRevisionToken、AnnotationEditableValue/1 与 targetPolicy；PreparedEditBinding/3.intent 必须使用这个 closed type，proposedInputs 必须 pin Core 构造的完整 D3-CJ/3(Value/4)，不能只 pin editable subset。 |
+| FC4B-D8-01 | SPEC §9.8 | 当前 d8_edit_prepare 的 Annotation intent 必须是 D8EditIntent/3，包含精确 expectedAnnotationRevisionToken、AnnotationEditableProposal/1 与 targetPolicy；PreparedEditBinding/3.intent 必须使用这个 closed type，proposedInputs 必须 pin Core 构造的完整 D3-CJ/3(Value/4)，不能只 pin editable subset。 |
 | FC4B-D8-02 | SPEC §§9.6,9.8 | D8 Annotation prepare 必须拒绝 caller 提供的 actor/time/authentication/trusted-origin 字段。Core 在 current authorization/CAS 后构造 attribution 并冻结在同一 immutable plan；replay 不重新采样。 |
 | FC4B-D8-03 | SPEC §§9.3,9.8 | Annotation inline Draft 若不满足唯一 R6 AnnotationInlineProfile，必须保留 exact source 与 diagnostics，同时 visual rendering 和 prepare unavailable；不得回退 plain_text，也不得调用第二 parser。 |
 | FC4B-D8-04 | SPEC §9.8 | 只有 annotation_read 而没有 annotation_write 的 principal 可以取得已授权 current Value/4 的 read-only Annotation Draft/projection，但不能因为 render 或 target resolution 成功就 prepare write。 |
@@ -742,10 +742,25 @@ translation_status: source
 | FC4D-EXP-04 | SPEC §8.3 | generationPolicy.render.bindingChoices 与 missingPolicy 分别按 templatePath canonical sorted/unique；同 path 不能有两个 inputIndex/action，也不能同时落入两类 choice，duplicate key 不能静默覆盖。 |
 | FC4D-EXP-05 | SPEC §8.3 | nativeTableBindings 按 exact controlled (setName,columnName) sorted/unique；同 key 不同 token/selector 失败；既有 ResourceRef imageSizes/layoutChoices、lossKey lossChoices、pinToken top-level evidencePins/recoveryPins 保持既定 comparator。所有比较键都使用既定规范顺序，重复键绝不能覆盖旧值。 |
 | FC4D-EXP-06 | SPEC §8.3 | D9 prepare 在冻结 Plan bytes/token/pins/staged manifest/confirmation basis 前先检测 duplicate/conflict 并 canonical-sort 全部合法 set-like input permutation，使置换得到 byte-identical Plan；frozen/received/recovery record 若已乱序/重复则 fail，不能读时排序。 |
+| FC4E-GATE-01 | SPEC §§9.8–9.10 | D7CreateAnnotationIntent/2 与 current D8 Annotation arm 只接收 AnnotationEditableProposal/1，绝不接收 AnnotationEditableValue/1；caller 提交 state/confirmation/basis/expectedText/point/actor/time/trusted 字段必须拒绝，完整 Value/4 只能由 Core 构造。 |
+| FC4E-GATE-02 | SPEC §9.10 | interactive_create 必须区分 absent_annotation 与已有 no_suggestion value，并正向支持合法 root comment、root mark、reply 以 suggestion=null 创建；只有合法 root suggestion 才进入 pending，首版绝不能 accepted/rejected。 |
+| FC4E-GATE-03 | SPEC §9.10 | ordinary_edit 必须正向支持 no_suggestion→no_suggestion，包括普通字段编辑和满足既有 Value/4 cross-field 的合法 purpose/root↔reply 变化；stored target content 不变时不得新增 target-source-read 权限要求，reply 改动继续使用继承的 structural S 规则。 |
+| FC4E-GATE-04 | SPEC §9.10 | no_suggestion→pending 只能经 current D8 ordinary_edit，在 Annotation 授权/token current 且真实 stored target fresh qualification 后合法；Core 自行计算 target evidence，但强制 pending+needs_reconfirmation，因此 caller/类别转换不能制造 confirmed/accepted/rejected。 |
+| FC4E-GATE-05 | SPEC §9.10 | pending suggestion 可由 ordinary_edit 清成满足 cross-field 的 no_suggestion root comment/mark/reply，且清除本身不要求 target-source read；accepted/rejected terminal 不能清成 null、换 purpose/reply、重开 pending 或互换 terminal。 |
+| FC4E-GATE-06 | SPEC §9.10 | manual_reattach 对 no_suggestion→no_suggestion 与 pending→pending+needs_reconfirmation 都有 exact 合法同 owner target 的正向路径；reattach 不能同时做类别转换，terminal suggestion 禁止 reattach。 |
+| FC4E-GATE-07 | SPEC §9.10 | caller 试图通过 Proposal、targetPolicy、generic d3_operation、stale Draft 或 historical recovery input 偷带 lifecycle/evidence 时，均不能制造 accepted/rejected/confirmed，也不能绕过具名 operation-class gate。 |
+| FC4E-GATE-08 | SPEC §9.10 | 继承的披露/错误顺序按操作实际消费保持：不消费目标内容的 no-suggestion 普通编辑与 pending 清除不要求 target-source read；类别创建、reattach、reconfirm、apply 只在各自具名 qualification/read 阶段读取目标，隐藏目标字节不得泄露。 |
+| FC4E-NOOP-01 | SPEC §§9.6,9.10 | Core 绝不把 caller Proposal bytes 直接与 Draft/current AnnotationEditableValue/1 比较；完成 decode/auth/currentness 和 operation-class gate 后，先展开一份保留 before attribution 的完整 candidate Value/4，再比较 canonical candidate Value/4 与 canonical current Value/4，只有相等才是真 no-op。 |
+| FC4E-NOOP-02 | SPEC §§9.6,9.10 | 未改动的 pending+confirmed ordinary prepare 必须是真 no-op：confirmation、targetBasis/expectedText/pointAffinity、attribution、annotationRevisionToken、SourceVersion、H 全部逐字保留且无 SourceRevisionPlan；ordinary prepare 不能隐式 reconfirm。 |
+| FC4E-NOOP-03 | SPEC §§9.6,9.10 | 未改动的 pending+needs_reconfirmation ordinary prepare 必须是真 no-op：needs/evidence/token/SourceVersion/H/attribution 保持不变且无计划；只有显式 reconfirm 在 fresh target read 后才能转 confirmed。 |
+| FC4E-NOOP-04 | SPEC §§9.6,9.10 | 未改动的 terminal suggestion 与未改动的普通 no-suggestion comment/mark/reply 都在 Core 展开后成为真 no-op；terminal evidence byte-equal，两个场景都不改 attribution、不分配 revision。 |
+| FC4E-NOOP-05 | SPEC §9.6 | expanded candidate 真正不同时，Core 才写 fresh lastEditor/editedAt、分配从未使用的 final AnnotationRevisionToken 并冻结唯一 SourceRevisionPlan/value pin；即使 Value bytes 回到旧值也必须 fresh token，ABA 不能复用旧 revision identity。 |
+| FC4E-NOOP-06 | SPEC §§9.6,9.10 | permission revocation、并发 token/Observation 变化、stale base Observation/Draft 或 final read barrier 失败时，必须保持继承的 failure/reprepare 顺序并零变更，即使原本 expanded candidate 会等于 current content；no-op 不授予额外 authority。 |
+| FC4E-NOOP-07 | SPEC §§9.8–9.10 | 旧 selector、PAB/EditBinding/ActionEvidence、saved Draft 或 historical recovery record 继续绑定原 token/Observation/decoder，不能借 equal candidate bytes、no-op prepare、类别转换或新目标资格复活。 |
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。 本次三项A残余集中修复只新增 FC4D-PROD-01..11、FC4D-POL-01..10 与 FC4D-EXP-01..06，使累计清单变为716条；此前689条 row 正文逐字节保留，不新增 finding ID。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。 本次三项A残余集中修复当时只新增 FC4D-PROD-01..11、FC4D-POL-01..10 与 FC4D-EXP-01..06，使停止 head 的累计清单变为716条。本次 B226 operation-gate 修复对旧 row 只做两条具名 current-contract 更正：FC4B-VAL-01 与 FC4B-D8-01 将 stale caller 类型 AnnotationEditableValue/1 改为 AnnotationEditableProposal/1，同时完整继承原 owner/create 授权、Core attribution、完整 Value4 pinning 与防伪造义务；除此以外既有 row 正文不变。随后只新增 FC4E-GATE-01..08 与 FC4E-NOOP-01..07，使累计清单变为731条；不新增 finding ledger/version store。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -757,4 +772,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 716 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 731 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
