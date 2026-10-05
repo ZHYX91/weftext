@@ -195,7 +195,7 @@ D2Heading/3 将 authoredLevel 与 effectiveLevel 分开。WeftextManaged 允许 
 
 native link/xref/image/citation grammar 必须先由唯一 AsciiDoc parser 解析；只有已经存在 native occurrence，且 Weftext target syntax 独立验证通过后，才应用 D2IdentityAdapter/1。adapter 可以附加 stable NodeRef、owner-local ResourceRef 或 citation target，但不能改变 native label/source grammar，也不能从 path/title/text/hash 推断身份。backlink 仍是 derived。managed include 保留 included source 自己的 owner 到 D2SourceOrigin/2；include 不改变 root Node identity，也不会授予 including Document 对被 include source 的 write authority。
 
-旧 Profile v2 中会拒绝 native 合法构造的限制不再是 current managed AsciiDoc 规则。尤其某个 native delimited block 内看起来像另一类 delimiter 的行，必须由固定 native parser 决定是否具有结构意义；D2 不再自行制造跨 delimiter family 的 invalid-document 错误。Weftext attribute-carrier extension 只在自己的显式 root-carrier grammar 中保留 reserved 语义，不能泛化为第二 block parser。旧 implementation input 中对 open AsciiDoc/include/pass/extension 的禁止只保留历史证据；current implementation obligation 由本完整 fixed-baseline 产品合同替代。
+旧 Profile v2 中会拒绝 native 合法构造的限制不再是 current managed AsciiDoc 规则。尤其某个 native delimited block 内看起来像另一类 delimiter 的行，必须由固定 native parser 决定是否具有结构意义；D2 不再自行制造跨 delimiter family 的 invalid-document 错误。Weftext attribute-carrier extension 只在自己的显式 root-carrier grammar 中保留 reserved 语义，不能泛化为第二 block parser。旧 implementation input 中对 open AsciiDoc/include/pass/extension 的禁止只保留历史证据；current implementation obligation 由本完整 fixed-baseline 产品规范替代。
 
 invalid source 仍保留经过授权的 exact source 与有序 diagnostics，但 product projection unavailable，D2 commit eligibility reject。physical decode/source-envelope failure 继续是 D6 error，不得伪装成 D2 invalid syntax。因此即使 D7 Query、rich visual projection 或 rendered export 无法取得合法 semantic projection，repair/Source surface 仍按原授权可用。
 
