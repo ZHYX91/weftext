@@ -276,12 +276,224 @@ Marks/atoms: link requires target; xref target/refid/path; image/icon their medi
 
 Authored foo-option=bar yields both option membership and named/foo-option="bar"; an authored empty value preserves the empty string. Physical empty foo-option created by %foo/options=foo/opts=foo expresses membership only. Temporary/internal writers such as DocBook root-option never become authored merely by key name.
 
-# 4. Witness/7 model evidence
+# 4. Witness/7 retained evidence and model evidence
+
+## 4.1 Oracle baseline, observer manifest, and retained closed evidence types
+
+Every type in this subsection is **test-oracle evidence**, not product persistent authority, a second parser, or a renderer wire. It records facts already produced by the fixed Ruby 2.0.26 evaluation. The observer must not rerun parsers/getters, mutate evaluator strings, replace converter return values, insert markers/sentinels, or write semantic state merely to populate evidence.
 
 ```text
+OracleBaseline/1 = {
+  kind:"asciidoctor_ruby_baseline",
+  version:1,
+  repository:"asciidoctor/asciidoctor",
+  release:"2.0.26",
+  sourceCommit:"0b99b39c9df884d4aec13bba45f03cdbab505769",
+  observerContract:"ruby_actual_evaluation_observer/1",
+  observerManifestSha256:"sha256:<64 lowercase hex>"
+}
+
+OracleObserverManifest/1 = {
+  kind:"ruby_actual_evaluation_observer_manifest",
+  version:1,
+  sourceCommit:"0b99b39c9df884d4aec13bba45f03cdbab505769",
+  rubyRuntime:{implementation:text,version:text,buildId:text},
+  sites:[OracleObserverSite/1...]
+}
+
+OracleObserverSite/1 = {
+  siteId:UInt,
+  file:text,
+  fileBlobSha1:"<40 lowercase hex>",
+  method:text,
+  callSite:text,
+  observedOperation:text,
+  captureRule:text,
+  rangeTransferRule:text
+}
+
+OracleDocumentState/2 = {
+  backend:text,
+  basebackend:text,
+  doctype:"article"|"book"|"manpage"|"inline",
+  safeMode:"unsafe"|"safe"|"server"|"secure",
+  doctitle:{combined:text|null,main:text|null,subtitle:text|null},
+  authors:[{name:text,firstname:text|null,middlename:text|null,
+            lastname:text|null,initials:text|null,email:text|null}...],
+  revision:null|{number:text|null,date:text|null,remark:text|null},
+  attributes:[{name:text,value:text}...]
+}
+
+OracleBlockContext/1 =
+    "admonition"|"audio"|"colist"|"dlist"|"document"|"example"|
+    "floating_title"|"image"|"listing"|"literal"|"olist"|"open"|
+    "page_break"|"paragraph"|"pass"|"preamble"|"quote"|"section"|
+    "sidebar"|"stem"|"table"|"thematic_break"|"toc"|"ulist"|
+    "verse"|"video"
+
+OracleContentModel/1 =
+    "compound"|"simple"|"verbatim"|"raw"|"empty"
+
+OracleBlockEvent/2 = {
+  ordinal:UInt,
+  parentOrdinal:UInt|null,
+  context:OracleBlockContext/1,
+  contentModel:OracleContentModel/1|null,
+  level:CanonicalSignedDecimal|null,
+  style:text|null,
+  id:text|null,
+  title:text|null,
+  roles:[text...],
+  options:[text...],
+  attributes:[{name:text,value:text}...]
+}
+
+OracleCollectionEvent/1 =
+    {kind:"list_item",listOrdinal:UInt,itemOrdinal:UInt,
+     listContext:"ulist"|"olist"|"colist"|"dlist_term"|"dlist_description",
+     marker:text|null,style:text|null,text:text|null,
+     checklist:"none"|"checked"|"unchecked"}
+  | {kind:"table_cell",tableOrdinal:UInt,section:"head"|"body"|"foot",
+     rowOrdinal:UInt,columnOrdinal:UInt,colspan:UInt,rowspan:UInt,
+     style:text|null,text:text|null}
+
+OracleCatalogEvent/1 =
+    {kind:"ref",id:text,reftext:text|null,
+     targetKind:"section"|"inline_ref"|"bibref"|"other"}
+  | {kind:"footnote",index:UInt,id:text|null,text:text|null}
+  | {kind:"link",target:text}
+  | {kind:"image",target:text}
+  | {kind:"include",target:text}
+  | {kind:"callout",listOrdinal:UInt,itemOrdinal:UInt}
+
+OracleDiagnostic/1 = {
+  severity:"debug"|"info"|"warn"|"error"|"fatal",
+  semanticCode:text,
+  exactMessage:text,
+  logicalFile:text|null,
+  line:UInt|null
+}
+
+OracleObservedString/1 = {
+  valueId:UInt,
+  rubyEncoding:text,
+  bytesBase64:text,
+  byteLength:UInt
+}
+
+OracleObservedSlice/1 = {
+  valueId:UInt,
+  startByte:UInt,
+  endByte:UInt
+}
+
+OracleEvaluationCallKind/1 =
+    "parse"|"attribute_playback"|"content"|"title"|"list_text"|
+    "cell_text"|"cell_content"|"apply_subs"|"substitution_stage"|
+    "inline_convert"|"block_convert"|"metadata_access"|"effect"
+
+OracleEvaluationCall/1 = {
+  callId:UInt,
+  parentCallId:UInt|null,
+  siteId:UInt,
+  nodeOrdinal:UInt|null,
+  invocationOrdinal:UInt,
+  kind:OracleEvaluationCallKind/1
+}
+
+OracleStringOperationKind/1 =
+    "copy"|"slice"|"concat"|"join"|"regex_replace"|"split_piece"|
+    "character_map"|"trim"|"delete"|"normalize"|"encode"|
+    "converter_return"|"scalar_assign"
+
+OracleOutputRunRelation/1 =
+    {kind:"exact_copy",input:OracleObservedSlice/1}
+  | {kind:"derived",inputs:[OracleObservedSlice/1...],operationId:UInt}
+  | {kind:"generated",siteId:UInt,inlineEventId:UInt|null}
+
+OracleOutputRun/1 = {
+  startByte:UInt,
+  endByte:UInt,
+  relation:OracleOutputRunRelation/1
+}
+
+OracleStringOperation/1 = {
+  operationId:UInt,
+  callId:UInt,
+  siteId:UInt,
+  kind:OracleStringOperationKind/1,
+  inputs:[OracleObservedSlice/1...],
+  outputValueId:UInt,
+  runs:[OracleOutputRun/1...],
+  removedInputs:[OracleObservedSlice/1...]
+}
+
+OracleFieldPathSegment/1 =
+    {kind:"field",name:text}
+  | {kind:"attribute",name:text}
+  | {kind:"position",index:UInt}
+  | {kind:"array",index:UInt}
+
+OracleFieldEntryKey/1 =
+    {kind:"name",value:text}
+  | {kind:"position",index:UInt}
+  | {kind:"symbol",value:text}
+
+OracleFieldValue/1 =
+    null
+  | {kind:"boolean",value:Boolean}
+  | {kind:"integer",decimal:CanonicalSignedDecimal}
+  | {kind:"symbol",value:text}
+  | {kind:"observed_string",valueId:UInt}
+  | {kind:"array",items:[OracleFieldValue/1...]}
+  | {kind:"entries",items:[{key:OracleFieldEntryKey/1,
+                             value:OracleFieldValue/1}...]}
+
+OracleFieldObservation/1 = {
+  path:[OracleFieldPathSegment/1...],
+  value:OracleFieldValue/1
+}
+
+OracleInlineContext/1 =
+    "anchor"|"break"|"button"|"callout"|"footnote"|"image"|
+    "indexterm"|"kbd"|"menu"|"quoted"
+
+OracleInlineObservation/3 = {
+  eventId:UInt,
+  callId:UInt,
+  parentCallId:UInt|null,
+  producingOperationId:UInt|null,
+  context:OracleInlineContext/1,
+  nodeType:OracleFieldValue/1,
+  fields:[OracleFieldObservation/1...],
+  returnValueId:UInt|null
+}
+
+OracleContentRole/1 =
+    "body"|"title"|"list_item"|"table_cell"|
+    "footnote_body"|"reftext"|"raw_content"
+
+OracleContentObservation/1 = {
+  callId:UInt,
+  role:OracleContentRole/1,
+  resultValueIds:[UInt...],
+  contributingInlineEventIds:[UInt...]
+}
+
+M37Site/1 = {
+  group:
+    "M37-01"|"M37-02"|"M37-03"|"M37-04"|"M37-05"|"M37-06"|
+    "M37-07"|"M37-08"|"M37-09"|"M37-10"|"M37-11"|"M37-12"|
+    "M37-13"|"M37-14"|"M37-15"|"M37-16"|"M37-17"|"M37-18",
+  file:text,
+  method:text,
+  point:text
+}
+
 OracleSemanticWitness/7 = {
   format:"weftext.asciidoc-oracle-witness",version:7,
-  baseline,processorEnvironmentSha256,
+  baseline:OracleBaseline/1,
+  processorEnvironmentSha256:"sha256:<64 lowercase hex>",
   document:OracleDocumentState/2,
   blockEvents:[OracleBlockEvent/2...],
   collectionEvents:[OracleCollectionEvent/1...],
@@ -377,6 +589,58 @@ OracleModelPropertyObservation/1 =
      phase:"model_ready"|"evaluation_complete",documentSubjectId:UInt,
      heads:[{subjectId:UInt,snapshotObservationId:UInt}...]}
 ```
+
+## 4.2 Retained evidence canonical rules and producer manifests
+
+`OracleBaseline/1.observerManifestSha256` must equal `SHA-256(D3-CJ/3(OracleObserverManifest/1))`. `processorEnvironmentSha256` must equal SHA-256 of the exact canonical `AsciiDocProcessorEnvironment/3` bytes. The manifest is not caller-selected coverage: siteId is unique and numerically sorted; fileBlobSha1 must be the real Git blob at the fixed sourceCommit; method/callSite/observedOperation/captureRule/rangeTransferRule must identify the independently reviewed instrumentation point. A missing site, uncovered required branch, or manifest/source mismatch is `oracle_observation_incomplete`, never permission to narrow valid AsciiDoc.
+
+The complete actual-evaluation observer producer families are:
+
+| producer family | required actual facts |
+|---|---|
+| `AbstractBlock#convert` | Original conversion call after attribute playback and node/parent association; converter is not replaced. |
+| `Block#content` | Real input lines, content model, original apply_subs invocation and final return, including raw/verbatim trimming/join. |
+| `Substitutors#apply_subs` | Actual substitution order, each stage input/output, and passthrough extract/restore linkage. |
+| `sub_quotes / convert_quoted_text` | Original MatchData/captures, Inline constructor arguments, and actual converter return. |
+| `sub_attributes / sub_replacements` | Original match ranges, replacement results, drop/drop-line behavior, and counter/set effects. |
+| `sub_macros` | Actual macro match/captures and Inline text/target/id/refid/path/attributes. |
+| `sub_post_replacements` | Actual split/slice/HardLineBreakRx input ranges and complete break text. |
+| `Inline#convert / selected converter` | Actual context/type/scalar arguments and return value with no observer-added getter. |
+| `AttributeList` | Original StringScanner positions/scan/get-byte results and produced scalars; no second attribute-list parse. |
+| `ListItem#text / Cell#text/#content` | Original getter calls, actual outputs, and a-cell inner-document call relationship. |
+| `title / reftext` | Original first computation, cache hit, and actual scalar return without observer-triggered reads. |
+| footnote/counter/catalog mutation sites | Original operation inputs and actual results without executing them again. |
+
+`OracleObservedString/1.valueId`, `OracleEvaluationCall/1.callId`, `OracleStringOperation/1.operationId`, and `OracleInlineObservation/3.eventId` are unique only within their own array namespaces. Equal bytes from distinct origins receive distinct valueIds; an in-place-mutated Ruby String produces a new immutable snapshot. bytesBase64 is canonical padded RFC4648 Base64 whose decoded length equals byteLength. A slice is a byte half-open interval on that exact string version and must satisfy `0 <= startByte <= endByte <= byteLength`; evaluation-string positions are never .adoc source ranges.
+
+`OracleStringOperation/1.runs` sort by startByte, do not overlap, and completely cover the actual output. exact_copy copies its input slice byte-for-byte; derived preserves all real inputs and never pretends to have one authored offset; generated names the actual site and optional inline observation. removedInputs retain real deleted inputs, so a zero-output concealed construct is not lost.
+
+`OracleInlineObservation/3.fields` sort uniquely by `D3-CJ/3(path)`; every string leaf references a real ObservedString. OracleFieldValue has no arbitrary Ruby-object `to_s` escape. ContentObservation resultValueIds preserve the original String/Array return structure; ordinary text comes from real content/list/cell/title/reftext returns rather than HTML flattening. BlockEvent roles/options preserve Ruby order while attributes sort uniquely by name; DocumentState attributes also sort uniquely by name. CatalogEvent has no indexterm fallback because fixed 2.0.26 does not retain `:indexterms` in the catalog. Diagnostic exactMessage remains evidence; the cross-implementation CSP compares only the defined common diagnostic projection.
+
+The M37 writer-site set is closed. `M37Site/1 (group,file,method,point)` must match the fixed producer family for its row; point is a stable branch identifier from the reviewed manifest, not a free string:
+
+| group | fixed producer family | capture point |
+|---|---|---|
+| M37-01 | `AbstractNode#initialize`, `AbstractBlock#initialize`, `Inline#initialize` | After original constructor assignment. |
+| M37-02 | `AttributeList#parse_attribute/#parse_into/.rekey` | After real named/positional/options expansion/copy/rekey writes. |
+| M37-03 | `Parser.parse_block_metadata_line/process_attribute_entry/store_attribute/parse_style_attribute/yield_buffered_attribute` | After actual metadata/shorthand/set/unset writes. |
+| M37-04 | `Parser.next_block/build_block` | After style/media/source/quote/admonition/STEM assignment and before return. |
+| M37-05 | `AbstractNode#set_attr/remove_attr/set_option/update_attributes/role=/add_role/remove_role` plus real direct Hash writes | After the original mutation while preserving real caller provenance. |
+| M37-06 | `Parser.initialize_section` | After sectname/special/numbered/update_attributes. |
+| M37-07 | `AbstractBlock#assign_numeral/#assign_caption` and section attach | After numeral/caption/counter writes. |
+| M37-08 | `Table#initialize/#create_columns` | After table width/orientation/columns/colcount exist. |
+| M37-09 | `Table::Column#initialize/#assign_width`, `Table#assign_column_widths` | After each real width write; final group snapshot only after last-column balancing. |
+| M37-10 | `Table::Cell#initialize/#reinitialize`, `Table#partition_header_footer` | After the final Cell object and head/body/foot membership are known. |
+| M37-11 | `Parser.parse_colspecs/parse_cellspec/parse_table`, `Table::ParserContext#initialize/#close_cell/#close_row/#close_table` | After original specs/results and real column/row/Cell relations exist. |
+| M37-12 | `ListItem#initialize/#fold_first`, `Parser.parse_list_item/parse_list/parse_description_list` | After marker/checklist/style/fold and term-description assembly. |
+| M37-13 | `Parser.parse_callout_list`, original `Callouts#register/#callout_ids` return sites | After late coids are really written. |
+| M37-14 | `Document#parse`, original `AbstractBlock#convert`, `Inline#convert`, and collection-consumer entries | model_ready cutoff without extra parse/convert. |
+| M37-15 | Actual inline/converter/alt/title/reftext/media scalar consumer sites | Reuse existing evaluation evidence and bind the contemporaneous model/attribute state. |
+| M37-16 | Actual `Document#register` catalog insertion | Catalog primitive fields and parent→actual receiver. |
+| M37-17 | Fixed-converter temporary model/map writes | After temporary writes and after the real restore or cleanup delete. |
+| M37-18 | Actual root-evaluation return | evaluation_complete cutoff, observing only already-produced state. |
+
+M37-02/M37-03/M37-05 must also cover direct Hash assignment/update/delete/clear in the fixed source, not merely wrapper calls. The concrete manifest plus the fixed source is producer-conformance evidence; the projector cannot infer missing facts from field names, source text, or final HTML.
 
 Per-subject snapshots form an immediate-predecessor chain. Cut heads sort numerically by subjectId and exactly equal the reachable semantic closure. Only references within the model-observation namespace use numeric temporal comparison. operation/inline/value/call references use their own namespace contracts. carrier.entry is a target-array index and is never numerically compared with model observation IDs.
 
@@ -679,12 +943,28 @@ D3-Annotation-Target-Projection/1 =
   | {kind:"resource",resourceRef:ResourceRef}
   | {kind:"resource_region",locator:ResourceRegionLocator}
 
-AnnotationInlineProfile/1 = {
+AnnotationInlineBody/1 = {
+  format:"asciidoc-inline",
+  version:1,
   languageBaseline:"asciidoctor-ruby/2.0.26",
-  doctype:"inline",processorBackend:"html5_semantic_environment/1",
-  safeMode:"secure",maxSourceBytes:65536,maxRenderedBytes:262144,
-  maxInlineSemanticNodes:4096,managedAdapters:"disabled",
-  networkEffects:"denied",fileEffects:"denied",processEffects:"denied"
+  source:text
+}
+
+AsciiDocInlineBody/1 := AnnotationInlineBody/1
+
+AnnotationInlineProfile/1 = {
+  languageBaseline:
+    "asciidoctor-ruby/2.0.26@0b99b39c9df884d4aec13bba45f03cdbab505769",
+  doctype:"inline",
+  processorBackend:"html5-semantic/1",
+  safeMode:"secure",
+  maxSourceBytes:65536,
+  maxRenderedBytes:262144,
+  maxInlineSemanticNodes:4096,
+  managedAdapters:"disabled",
+  networkEffects:"denied",
+  fileEffects:"denied",
+  processEffects:"denied"
 }
 
 AnnotationAppearance/1 = {
@@ -715,6 +995,8 @@ Suggestion/3 = {
   replacementSource:null|text
 }
 ```
+
+`AnnotationInlineBody/1` is the sole current name and preserves the four-member data shape originally named `AsciiDocInlineBody/1`. `AsciiDocInlineBody/1` is a **schema alias only**: its canonical bytes are exactly those of `AnnotationInlineBody/1`; it creates no second wire/version and asserts no historical deployment. The body is portable source data, not a processor profile. Evaluation always uses the single `AnnotationInlineProfile/1` above. The body's `languageBaseline="asciidoctor-ruby/2.0.26"` must correspond to the 2.0.26 version fixed by the profile's commit-qualified baseline. The complete source must form exactly one paragraph, allowing soft wraps and trailing whitespace; a second paragraph, heading, list, delimited block, table, or block macro is `invalid_annotation_body` rather than silently ignored.
 
 Replies are same-owner, acyclic comments with suggestion=null and reviewState=not_applicable. Root reviewState is open|resolved. Pending suggestions use confirmed|needs_reconfirmation; accepted/rejected are terminal with confirmation=not_applicable.
 
