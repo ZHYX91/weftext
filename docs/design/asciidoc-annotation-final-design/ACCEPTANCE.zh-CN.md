@@ -465,7 +465,7 @@ translation_status: source
 | FC34-FMT-02 | SPEC §§5–8 | 把 {kind:"document_format"} 放进 PortableComponentKey/1 必须旧decoder拒绝；不得认为这是 CP3 合法component。 |
 | FC34-FMT-03 | SPEC §§5–8 | legacy/unbound source可按原授权 raw read/repair；不因 profile未绑定删除/隐藏原bytes。 |
 | FC34-FMT-04 | SPEC §§5–8 | legacy/unbound source仅因包含 [weftext-attributes] 就自动切 WeftextManaged，拒绝。 |
-| FC34-FMT-05 | SPEC §§5–8 | 已 managed Node 执行 future weftext_managed/1→/2 profile-only migration，source unchanged；一个 ChangeId、document_format component transition、CP4 sourceChanges=[]；不把 absent/Baseline→managed 当 migration。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| FC34-FMT-05 | SPEC §§5–8 | 已 managed Node 执行 future weftext_managed/1→/2 profile-only migration，source unchanged；同一 Notice3/CP4 component set 中只有 document_format transition，sourceChanges=[]，不产生 SourceRevisionPlan/SourceVersion/H advance；不把 absent/Baseline→managed 当 migration。 |
 | FC34-FMT-06 | SPEC §§5–8 | managed profile-only migration不得增加 SourceVersion 或 H(D,E)。 |
 | FC34-FMT-07 | SPEC §§5–8 | sourceVersion相同但 format stamp变化，旧 InputDescriptor/PAB/EditBinding/ExportPlan继续使用，拒绝。 |
 | FC34-FMT-08 | SPEC §§5–8 | format变化后 dirty Draft bytes仍保存；projection/map/preview失效并重新qualification。 |
@@ -488,9 +488,9 @@ translation_status: source
 | FC34-ST-08 | SPEC §§11–13 | 只有 revision-token profile授权的同一public key验证transform artifact，拒绝。 |
 | FC34-ST-09 | SPEC §§11–13 | raw public key即使后来被两个profile分别明确root-authorize，验证仍要求 exact profile+artifact domain。 |
 | FC34-ST-10 | SPEC §§11–13 | CAS loser产生的staging signature进入portable outbox，拒绝。 |
-| FC34-ST-11 | SPEC §§11–13 | seal后publication失败只重发 exact pinned transform bytes，不重签。 |
+| FC34-ST-11 | SPEC §§11–13 | SourceTransform 待签消息必须恰为 ASCII D6-Source-Transform-Seal/1 || NUL || D3-CJ/3(完整 artifact 只删除 signature)，中英文必须写出同一消息；seal 后 publication 失败只重发 exact canonical pinned artifact bytes，不重签。 |
 | FC34-ST-12 | SPEC §§11–13 | SourceTransform artifact被写进 CP4 components，拒绝；它不是portable component。 |
-| FC34-TR-01 | SPEC §13 | Bootstrap4有一个 root，genesis2恰两 declarations：rev1 revision-token、rev2 transform，predecessor链正确。 |
+| FC34-TR-01 | SPEC §13 | Bootstrap4 的 D3 proposalId 仍为 canonical lowercase UUID，并使用 closed Profile4/creator/Registry/series/period helper types；只有一个 root，Genesis2 恰两 declarations：rev1 revision-token、rev2 transform，predecessor chain 正确。 |
 | FC34-TR-02 | SPEC §13 | genesis2只一 declaration或三 declaration，拒绝。 |
 | FC34-TR-03 | SPEC §13 | 两 declaration profile正确但revision都=1，拒绝。 |
 | FC34-TR-04 | SPEC §13 | 两 declaration同一个 bootstrap DecisionKey/activation ChangeId；history cut只能全进或全不进。 |
@@ -515,8 +515,8 @@ translation_status: source
 | FC34-FMT-20 | SPEC §§5–8 | PortableComponentKey/2必须 document,document_format,resource,...,conflict；把document_format排在conflict之后必须失败。 |
 | FC34-ST-13 | SPEC §§11–13 | current plan/evidence出现 SourceTransformEdit/1 或 SourceTransformPortableEdit/2 必须失败。 |
 | FC34-ST-14 | SPEC §§11–13 | required plan 的 D3-CJ/3(plan.edits) 与 D3-CJ/3(evidence.edits) 不相等时必须拒绝seal。 |
-| FC34-ST-15 | SPEC §§11–13 | original-coordinate mixed fixture必须得到 range=[11,15)、point14 left=15、right=17；逐event先更新s/e再分类的实现失败。 |
-| FC34-ST-16 | SPEC §§11–13 | after source含两个byte-equal replacement片段时，payload只能按机械generatedOutputSpan取得；按内容搜索命中另一个片段失败。 |
+| FC34-ST-15 | SPEC §§11–13 | Event3 必须先验证 UTF-8 boundaries、replace/insert ranges、removedByteLength=end-start 及 removedSha256 对 before bytes；随后 original-coordinate mixed fixture 必须得到 range=[11,15)、point14 left=15、right=17；信任冲突字段或逐 event 先更新 s/e 再分类都失败。 |
+| FC34-ST-16 | SPEC §§11–13 | generatedOutputSpan 必须由规范 before/after replay cursor 推导，且 delta(R)=replacementByteLength-(endByte-startByte)；after source 含两个 byte-equal replacement 片段时只能由该机械 span 选 payload，内容搜索命中另一片段必须失败。 |
 | FC34-ST-17 | SPEC §§11–13 | replace [5,10)->X + insert@10->Y 必须保留两个event及canonical boundary order，保持 X\|Y；合并为导致 XY\| 的单replacement失败。 |
 | FC34-ST-18 | SPEC §§11–13 | required seal必须同时重验profile、expectedTrustRevision、expectedTrustKeyId与usable handle；只验当前存在某transform key失败。 |
 | FC34-ST-19 | SPEC §§11–13 | 跨generated anchors无法保持boundary slot时返回 PortableTransformCompilation.unavailable；ordinary save仍可继续，但不得制造空events CoreSourceEditPlan或transform artifact。 |
@@ -537,11 +537,11 @@ translation_status: source
 | FC34B-TR-03 | SPEC §13 | Declaration2只找到同DecisionKey CP3，没有CP4；FAIL。 |
 | FC34B-TR-04 | SPEC §13 | mixed /1,/2 history分别按CP3/CP4 activation fold；PASS。 |
 | FC34B-TR-05 | SPEC §13 | Carry2字段声称origin cut，但original Declaration2+CP4重派生不同；FAIL。 |
-| FC34B-TR-06 | SPEC §13 | K1签transform后ordinary rotate K2，远端以 producing CP4.frontierBefore 验K1；PASS。 |
+| FC34B-TR-06 | SPEC §13 | current wireVersion3 transform-profile rotate 必须 mode=ordinary，并验证 exact PoP/rotate/root signature domain 与 body、使用真实 root-authorized producer；K1 签 transform 后 ordinary rotate 到 K2，远端仍以 producing CP4.frontierBefore 验 K1。 |
 | FC34B-TR-07 | SPEC §13 | K1 compromise与transform seal causal-concurrent；即使arrival顺序显示seal先到也必须FAIL。 |
 | FC34B-TR-08 | SPEC §13 | 普通transform receiver使用current Bundle而非producing CP4.frontierBefore；FAIL。 |
 | FC34B-CONT-01 | SPEC §13 | Bundle2中revision current K仍由Declaration1授权且Handle1 usable；revision-token new signing PASS，transform signing FAIL。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34B-CONT-02 | SPEC §13 | revision后由Declaration2 rotate到K2；只有Handle2(K2)可new sign。 |
+| FC34B-CONT-02 | SPEC §13 | current unseen add/rotate/revoke 使用 closed wireVersion3 dual-profile prepare family，caller 不携带 key material；Declaration2 ordinary rotate revision profile 到 K2 后只有 Handle2(K2) 可 new sign，而 saved/planned wireVersion2 record 继续原 recovery。 |
 | FC34B-CONT-03 | SPEC §13 | old states (revision=current, transform=none) → revoke revision；authorize B2 revision；authorize B2 transform；同一CP4。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-04 | SPEC §13 | old states (revision=none, transform=current) → revoke transform；authorize两个B2 profiles。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-05 | SPEC §13 | 任何profile conflicted/gapped/unproved，却先让clean profile的B2 handle usable；FAIL。 |
@@ -551,11 +551,11 @@ translation_status: source
 | FC34B-HOLDER-03 | SPEC §§7–8 | D4 strong relation operation source不变而format stamp变；old proof不能继续，必须stale/reprepare。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-HOLDER-04 | SPEC §§7–8 | D5 native table edit同样消费source+format；format变而旧table locator/sourceVersion碰巧相同，仍stale。 |
 | FC34B-HOLDER-05 | SPEC §§7–8 | D4/D5为了配 /3 而机械升级RelationReadContext、table locator、occurrenceKey或numeric sourceRevision；FAIL。 |
-| FC34B-CR-01 | SPEC §6.3 | FC current portable decision同P冻结 ChangeRecord1、Notice3、CP4；三者DecisionKey/ChangeId/frontiers/digests一致。PASS。 |
+| FC34B-CR-01 | SPEC §6.3 | FC current portable decision 同 P 冻结 ChangeRecord1、Notice3、CP4；CP4 component keys 与 Notice3 canonical key 集合/顺序严格相等，每个 after 都是实际 installed/sealed owner-versioned image，且 DecisionKey/ChangeId/frontiers/digests 一致。 |
 | FC34B-CR-02 | SPEC §6.3 | ChangeRecord1指向正确CP4但错误Notice3 digest；FAIL。 |
-| FC34B-CR-03 | SPEC §6.3 | CP4 frontierBefore/After与ChangeRecord不一致；FAIL。 |
+| FC34B-CR-03 | SPEC §6.3 | CP4 frontierBefore/After 与 ChangeRecord 不一致则 FAIL；frontierAfter 必须恰为 frontierBefore 增加本 ChangeId，其他 domain 不回退，scope_dependencies 必须有完整连续 ChangeRecord/completion chain 与 retained unrelatedness proof。 |
 | FC34B-CR-04 | SPEC §6.3 | pre-FC历史bytes没有已证实decoder，却被运行时按ChangeRecord1解释；FAIL。 |
-| FC34B-CR-05 | SPEC §6.3 | schedule/ScopeDependencies遇未知历史ChangeRecord decoder时按gap/proof_unavailable停止strong path，同时ordinary source read/save继续其原资格；PASS。 |
+| FC34B-CR-05 | SPEC §6.3 | receiver admission 必须验证 exact Notice3/CP4 bytes、每个实际 component byte 与 owner version、完整 sourceChanges/production SourceVersions、restored-arm exclusions 与连续 chain；未知历史 decoder 或缺 proof 时 strong path 按 gap/proof_unavailable 停止，ordinary source read/save 继续原资格。 |
 | FC34D-MIX-01 | SPEC §14 | ControlPrepareBinding/1(K1)+ControlPrepareBinding/3(K2)，K1!=K2，同时存在于同一 D10ExecutionClaims/2.prepareBindings 并进入 Inventory2/Record3；/1 与 /3 各按 exact decoder，按 StableControlKey canonical order，原 bytes/pins分别保留。 |
 | FC34D-MIX-02 | SPEC §14 | ControlPrepareBinding/1(K)+ControlPrepareBinding/3(K) 出现在同一 Claims2；即使 canonicalIntentBytes/originalCommitRequest相同也必须作为重复 StableControlKey责任拒绝，不得LWW、优先新版本或静默丢旧版本。 |
 | FC34C-MIX-01 | SPEC §14 | 一个 ControlDependencies3 同时包含 old stop Pin1 与 new automation Pin2；同cut完整匹配各自binding。PASS。 |
