@@ -20,12 +20,13 @@ translation_status: source
 ## 阅读顺序
 
 1. [REVIEW-ENTRY.zh-CN.md](REVIEW-ENTRY.zh-CN.md)
-2. [SPEC.zh-CN.md](SPEC.zh-CN.md)
-3. [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)
-4. [terminology-registry.json](terminology-registry.json)
-5. [replacements.json](replacements.json)
+2. [SPEC.zh-CN.md](SPEC.zh-CN.md) — 行为、算法与 owner replacement
+3. [SCHEMAS.zh-CN.md](SCHEMAS.zh-CN.md) — current closed shapes、排序、历史分派
+4. [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md) — 554 条逐项未运行设计义务
+5. [terminology-registry.json](terminology-registry.json)
+6. [replacements.json](replacements.json)
 
-`replacements.json` 将 fixed-e8aa actual owner/blob/规范关注点精确路由到 SPEC 的 replacement sections。未被点名的 owner 正文保持 fixed-e8aa 语义；被点名的冲突合同由本候选替换，而不是在旧正文末尾追加私有补丁。
+`replacements.json` 将 fixed-e8aa actual owner/blob/规范关注点精确路由到 SPEC/SCHEMAS/ACCEPTANCE/registry 的 replacement surfaces。SPEC 的摘要不能扩张或缩减 SCHEMAS 的 closed shape；ACCEPTANCE 的逐项场景是规范义务而不是测试通过记录。未被点名的 owner 正文保持 fixed-e8aa 语义；被点名的冲突合同由本候选替换，而不是在旧正文末尾追加私有补丁。
 
 本候选采用一个联合 PR，因为 managed document format、PAB4、EffectManifest3、D10 recovery 与 BootstrapPlan4 共用同一 closed successor family，硬拆会要求临时同版本扩臂。
 
