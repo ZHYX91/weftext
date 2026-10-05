@@ -8,15 +8,15 @@ translation_status: synced
 
 # Weftext AsciiDoc / Annotation Final Design Candidate: coordinated owner replacements
 
-Status: **candidate-design-not-implemented**. This specification is bound to parent input `e8aa0b341630a57c786c0891d4bbd1620247441d`. It is only a coordinated design candidate on top of that commit; it does not accept this PR, A2, the global design, implementation, or release.
+Status: **candidate-design-not-implemented**. This specification is bound to parent input e8aa0b341630a57c786c0891d4bbd1620247441d. It is only a coordinated design candidate on top of that commit; it does not accept this PR, A2, the global design, implementation, or release.
 
 ## 0. Precedence, scope, and why this is one joint PR
 
-This file and [SCHEMAS.md](SCHEMAS.md) together form the complete normative replacement for the actual-owner sections named by `replacements.json`: this file freezes behavior, algorithms, and owner boundaries; SCHEMAS freezes closed current shapes, ordering, cross-field rules, and historical dispatch. Summary wording here may neither broaden nor narrow SCHEMAS. Fixed-S input `7e18168dad3e6d120fce0dd607dc10fa7894e252`, all 49 snapshots, and `docs/design/inputs.json` remain unchanged. Any fixed-e8aa owner section not named by the router retains its existing meaning.
+This file and [SCHEMAS.md](SCHEMAS.md) together form the complete normative replacement for the actual-owner sections named by replacements.json: this file freezes behavior, algorithms, and owner boundaries; SCHEMAS freezes closed current shapes, ordering, cross-field rules, and historical dispatch. Summary wording here may neither broaden nor narrow SCHEMAS. Fixed-S input 7e18168dad3e6d120fce0dd607dc10fa7894e252, all 49 snapshots, and docs/design/inputs.json remain unchanged. Any fixed-e8aa owner section not named by the router retains its existing meaning.
 
 The candidate consolidates the independently reviewed cumulative v3.10 core design and FC-3.4 through FC-3.4d actual-owner coordination into a public, reviewable contract. Old candidate labels, private conversation, and author self-review are not protocol dependencies.
 
-A two-PR split was considered. It is not self-consistent: the current `DependencyProof/3 -> PreparedActionBinding/4 -> D10 ApprovalUse/2` chain and the shared `EffectManifest/3 / EffectBytes/3` family simultaneously carry managed-format currentness, D10 author recovery, and `WorkspaceBootstrapPlan/4`. Publishing a temporary closed `/3` union and expanding that same version in a second PR would violate the accepted closed-decoder rules. Therefore this is one joint PR organized by D2-D10 owner.
+A two-PR split was considered. It is not self-consistent: the current DependencyProof/3 -> PreparedActionBinding/4 -> D10 ApprovalUse/2 chain and the shared EffectManifest/3 / EffectBytes/3 family simultaneously carry managed-format currentness, D10 author recovery, and WorkspaceBootstrapPlan/4. Publishing a temporary closed /3 union and expanding that same version in a second PR would violate the accepted closed-decoder rules. Therefore this is one joint PR organized by D2-D10 owner.
 
 There remains one author authority, one D6 planning CAS, and one P seal. No second source truth, portable ledger, decision system, or free-form adapter gate is introduced. Derived Index remains discardable and never reconstructs current authority.
 
@@ -31,22 +31,22 @@ asciidoctor-ruby/2.0.26
 commit 0b99b39c9df884d4aec13bba45f03cdbab505769
 ```
 
-Ruby Asciidoctor is a conformance oracle only, never a production dependency. Production remains Rust-native. A mature implementation is preferred; Asciidork commit `79671b57923841e41fc91d2c1d2fce18cca3131c` is an implementation candidate, not a language ceiling. Implementation difficulty, missing rich-editor controls, or an unavailable renderer provider cannot redefine valid AsciiDoc as a safe subset.
+Ruby Asciidoctor is a conformance oracle only, never a production dependency. Production remains Rust-native. A mature implementation is preferred; Asciidork commit 79671b57923841e41fc91d2c1d2fce18cca3131c is an implementation candidate, not a language ceiling. Implementation difficulty, missing rich-editor controls, or an unavailable renderer provider cannot redefine valid AsciiDoc as a safe subset.
 
-The core contract includes the fixed 2.0.26 semantics for block/inline/list/table/description/callout/checklist forms, attribute lists and document attributes, includes, substitutions and macros, passthroughs, STEM, media, footnotes/indexterms/catalog, doctype/backend behavior, document title/author/revision, block title/reftext, native TOC/section numbering, `leveloffset`, diagnostics, and all processor-environment inputs that alter observable semantics. A valid construct with no structural editing widget must remain parseable, readable, source-editable, savable, and losslessly round-trippable.
+The core contract includes the fixed 2.0.26 semantics for block/inline/list/table/description/callout/checklist forms, attribute lists and document attributes, includes, substitutions and macros, passthroughs, STEM, media, footnotes/indexterms/catalog, doctype/backend behavior, document title/author/revision, block title/reftext, native TOC/section numbering, leveloffset, diagnostics, and all processor-environment inputs that alter observable semantics. A valid construct with no structural editing widget must remain parseable, readable, source-editable, savable, and losslessly round-trippable.
 
-Native title-separator semantics remain unchanged: default `: `, with `[separator=::]` and `:title-separator: ::` supported as Asciidoctor 2.0.26 defines them. **Whether new Weftext templates default to `::` remains an unresolved product choice and is not selected here.**
+Native title-separator semantics remain unchanged: default : , with [separator=::] and :title-separator: :: supported as Asciidoctor 2.0.26 defines them. **Whether new Weftext templates default to :: remains an unresolved product choice and is not selected here.**
 
 ### 1.2 Processor environment
 
-The Core Gate freezes `AsciiDocProcessorEnvironment/3` instead of consulting ambient host state. It closes doctype, semantic backend profile, safe mode, base/input/output directories, ordered hard/soft set/unset attribute operations, user-home, locale/encoding, date/time/epoch inputs, include resolver, file/network permissions, extension registry, provider profile, and every other environment input that can change fixed-2.0.26 observable semantics. Authored attribute events are provenance-distinct from host/builtin/include inputs. Weftext root controls such as `wf-kind` and `wf-facets` consume root-authored provenance only; host injection or included text cannot take over root Node classification.
+The Core Gate freezes AsciiDocProcessorEnvironment/3 instead of consulting ambient host state. It closes doctype, semantic backend profile, safe mode, base/input/output directories, ordered hard/soft set/unset attribute operations, user-home, locale/encoding, date/time/epoch inputs, include resolver, file/network permissions, extension registry, provider profile, and every other environment input that can change fixed-2.0.26 observable semantics. Authored attribute events are provenance-distinct from host/builtin/include inputs. Weftext root controls such as wf-kind and wf-facets consume root-authored provenance only; host injection or included text cannot take over root Node classification.
 
 ### 1.3 Native headings, deep authored headings, and run-in rendering
 
 The native Asciidoctor section state machine is retained, including discrete/floating titles, book part/chapter behavior, skip warnings, fragment relaxation, negative-leveloffset handling, and doctitle conditions. WeftextManaged adds only these semantic extensions:
 
 - authored section levels 6-9;
-- standard `leveloffset` remains standard and the effective level is not clamped merely because authored levels are 6-9; it may exceed 9;
+- standard leveloffset remains standard and the effective level is not clamped merely because authored levels are 6-9; it may exceed 9;
 - stable Node links/backlinks never derive identity from heading text;
 - a run-in heading and its body remain distinct source and semantic nodes even when a renderer presents them on one line.
 
@@ -75,9 +75,9 @@ CoreSemanticGate = D3-CJ/3(R) == D3-CJ/3(T)
 
 The input/environment binding, observer-neutrality gate, and completeness of both projections are additionally required. Final HTML equality, raw trace equality, or equality of a few selected strings are not substitutes.
 
-The Ruby observer is test-side evidence only. It is not a product parser or authority. It cannot replace the selected backend, insert markers/sentinels, mutate evaluator strings or encodings, add extra calls to `content/text/title/reftext/xreftext`, or rerun parsing/regexes to manufacture evidence. Actual converter return values continue into later substitutions unchanged.
+The Ruby observer is test-side evidence only. It is not a product parser or authority. It cannot replace the selected backend, insert markers/sentinels, mutate evaluator strings or encodings, add extra calls to content/text/title/reftext/xreftext, or rerun parsing/regexes to manufacture evidence. Actual converter return values continue into later substitutions unchanged.
 
-### 2.2 `OracleSemanticWitness/7`
+### 2.2 OracleSemanticWitness/7
 
 Witness/7 retains all Witness/6 document, block, collection, catalog, diagnostic, observed-string, call, operation, inline, and content evidence and adds:
 
@@ -85,11 +85,11 @@ Witness/7 retains all Witness/6 document, block, collection, catalog, diagnostic
 modelPropertyObservations:[OracleModelPropertyObservation/1...]
 ```
 
-Model observation only copies fields, attributes, relationships, and actual producer results that already exist. Section state, caption/numeral, final table widths, final Cell object/style/alignment/span, ListItem checklist/coids, authored named/positional/rekey provenance, and temporary converter writes must be captured at the real producer. `projectRuby` never reimplements Ruby parser/model algorithms to fill missing facts.
+Model observation only copies fields, attributes, relationships, and actual producer results that already exist. Section state, caption/numeral, final table widths, final Cell object/style/alignment/span, ListItem checklist/coids, authored named/positional/rekey provenance, and temporary converter writes must be captured at the real producer. projectRuby never reimplements Ruby parser/model algorithms to fill missing facts.
 
 ### 2.3 Snapshot/reference/cut contract
 
-`modelPropertyObservations[].observationId` is unique and strictly append-monotonic in that array. A snapshot's identity is its observationId; there is no second snapshot-ID namespace. Each subject has one immediate-predecessor chain: the first snapshot has null previous; each later snapshot points exactly to that subject's directly preceding snapshot.
+modelPropertyObservations[].observationId is unique and strictly append-monotonic in that array. A snapshot's identity is its observationId; there is no second snapshot-ID namespace. Each subject has one immediate-predecessor chain: the first snapshot has null previous; each later snapshot points exactly to that subject's directly preceding snapshot.
 
 Bind and cut snapshot references must exist, belong to the subject, and select the latest snapshot at that point. Cut heads are numerically sorted by subjectId, exactly one per live semantic subject, and satisfy:
 
@@ -97,15 +97,15 @@ Bind and cut snapshot references must exist, belong to the subject, and select t
 set(cut.heads.subjectId) == reachableSemanticClosure(cut)
 ```
 
-Forward discovery uses actual semantic relations such as header/child/dlist/table-column/final-cell/cell-inner-document. `parent` and `cell_column` are reverse consistency checks and cannot revive stale objects. A treeprocessor-returned Document becomes the root. A Cell replaced by `reinitialize` is not live beside its replacement.
+Forward discovery uses actual semantic relations such as header/child/dlist/table-column/final-cell/cell-inner-document. parent and cell_column are reverse consistency checks and cannot revive stale objects. A treeprocessor-returned Document becomes the root. A Cell replaced by reinitialize is not live beside its replacement.
 
-`model_ready` occurs after the actual top-level `Document#parse` completes, including attribute restoration/treeprocessors and the actual returned Document. A successful selected-backend evaluation produces exactly one `evaluation_complete`; abnormal termination produces none. Real post-ready semantic writes require successor heads; temporary physical writes cannot be hidden by selecting an older head.
+model_ready occurs after the actual top-level Document#parse completes, including attribute restoration/treeprocessors and the actual returned Document. A successful selected-backend evaluation produces exactly one evaluation_complete; abnormal termination produces none. Real post-ready semantic writes require successor heads; temporary physical writes cannot be hidden by selecting an older head.
 
 ### 2.4 Namespace separation and producer-time carrier binding
 
-Numeric ordering applies only to references inside the `modelPropertyObservations.observationId` namespace: previous/bind/cut snapshots and model-slot observation references. `operationId`, `inlineEventId`, `valueId/observedStringId`, and `callId` use their retained namespaces and DAG rules. `ModelCarrierReference.entry` is a zero-based index into its named carrier array. No global event ordinal exists.
+Numeric ordering applies only to references inside the modelPropertyObservations.observationId namespace: previous/bind/cut snapshots and model-slot observation references. operationId, inlineEventId, valueId/observedStringId, and callId use their retained namespaces and DAG rules. ModelCarrierReference.entry is a zero-based index into its named carrier array. No global event ordinal exists.
 
-Cross-stream chronology is a controlled producer invariant, not something the final decoder can infer from numbers. At the actual bind callback, the target carrier entry must already be appended (`entry < targetStream.lengthAtBind`) and the producer must still hold the exact same Ruby object. `document/0` uses the equivalent publication rule for the actual returned Document. The final decoder checks final existence/type/index and object-binding structure only. Appending a carrier later cannot cure an invalid earlier bind.
+Cross-stream chronology is a controlled producer invariant, not something the final decoder can infer from numbers. At the actual bind callback, the target carrier entry must already be appended (entry < targetStream.lengthAtBind) and the producer must still hold the exact same Ruby object. document/0 uses the equivalent publication rule for the actual returned Document. The final decoder checks final existence/type/index and object-binding structure only. Appending a carrier later cannot cure an invalid earlier bind.
 
 ### 2.5 Catalog parent and temporary physical state
 
@@ -117,27 +117,42 @@ parent -> subject of the actual Document#register receiver
 
 An inner AsciiDoc-cell Document owns its own registered catalog facts; they are not reassigned to the top-level Document.
 
-DocBook `root-option` evidence follows the real physical execution (for example authored value -> internal `set_option` temporary value -> `remove_attr` absent/deleted). The observer cannot synthesize a restore write. The latest physical snapshot and the PropertyProfile's authored semantic winner are distinct layers: internal cleanup does not erase earlier authored provenance, nor can it revive an authored value that was genuinely overwritten or deleted later.
+DocBook root-option evidence follows the real physical execution (for example authored value -> internal set_option temporary value -> remove_attr absent/deleted). The observer cannot synthesize a restore write. The latest physical snapshot and the PropertyProfile's authored semantic winner are distinct layers: internal cleanup does not erase earlier authored provenance, nor can it revive an authored value that was genuinely overwritten or deleted later.
 
-## 3. `CoreSemanticProjection/1` and canonical property profile
+## 3. CoreSemanticProjection/1 and canonical property profile
 
-The equality surface contains final document/block structure, flows, catalog facts, index terms, final attribute/counter state, and diagnostics. `CoreFlow/1` uses final runs and marks with Unicode-scalar coordinates. Visible text is owned once; hard breaks, footnote references, and other atoms do not duplicate text already owned by the flow.
+### 3.1 Projection
+
+The equality surface contains final document/block structure, flows, catalog facts, index terms, final attribute/counter state, and diagnostics. CoreFlow/1 uses final runs and marks with Unicode-scalar coordinates. Visible text is owned once; hard breaks, footnote references, and other atoms do not duplicate text already owned by the flow.
 
 Raw Ruby IDs, call counts, temporary converter-return nodes, and intermediate dependency edges are excluded from equality. Their real effect on final target strings, text, catalog, counters, or attributes must remain. Authored passthrough and backend-feedback raw data are not guessed into ordinary formatting marks.
 
-Property provenance is A/P/F/I: authored named, authored positional, fixed-derived semantic, and internal. Positional rekeying leaves one canonical slot. A genuine authored named attribute remains even when the current renderer ignores it. Internal `cloaked-context`, caches, reader objects, and temporary `root-option` state never leak via generic `to_s`.
+### 3.2 Canonical PropertyProfile
 
-Common fields include id, style, ordered roles, set-like options, caption, numeral, explicit substitutions, unconsumed positional fields, and `named/<name>`. The profile also fixes actual 2.0.26 semantic fields for quote/verse attribution+citetitle, source language/linenums, section sectname/special/numbered, tables/columns/cells, lists/checklist/coids, media, and marks/atoms.
+Property provenance is A/P/F/I: authored named, authored positional, fixed-derived semantic, and internal. Positional rekeying leaves one canonical slot. A genuine authored named attribute remains even when the current renderer ignores it. Internal cloaked-context, caches, reader objects, and temporary root-option state never leak via generic to_s.
 
-Explicit `foo-option=bar` preserves both option membership and `named/foo-option="bar"`; an explicit empty value preserves the empty string. `%foo`, `options=foo`, and `opts=foo` create membership only. Actual writer order decides the winner.
+Common fields include id, style, ordered roles, set-like options, caption, numeral, explicit substitutions, unconsumed positional fields, and named/<name>. The profile also fixes actual 2.0.26 semantic fields for quote/verse attribution+citetitle, source language/linenums, section sectname/special/numbered, tables/columns/cells, lists/checklist/coids, media, and marks/atoms.
 
-Language sequences retain order. Sets are sorted/unique. Multisets sort by D3-CJ/3(item) UTF-8 bytes while preserving multiplicity. Unique-key conflicts reject instead of LWW. Diagnostics compare a common canonical code and `null | {logicalFile,line}`; a Rust-only column is not invented on the Ruby side.
+Explicit foo-option=bar preserves both option membership and named/foo-option="bar"; an explicit empty value preserves the empty string. %foo, options=foo, and opts=foo create membership only. Actual writer order decides the winner.
+
+```text
+options += "foo"
+named/foo-option = "bar"
+```
+
+### 3.3 Canonical arrays/diagnostics
+
+Language sequences retain order. Sets are sorted/unique. Multisets sort by D3-CJ/3(item) UTF-8 bytes while preserving multiplicity. Unique-key conflicts reject instead of LWW. Diagnostics compare a common canonical code and null | {logicalFile,line}; a Rust-only column is not invented on the Ruby side.
+
+```text
+null | {logicalFile:text|null,line:UInt|null}
+```
 
 ## 4. Provider profiles: language validity is separate from renderer availability
 
-Mermaid, STEM/TeX/AsciiMath, HTML, and PDF are versioned ecosystem profiles, not AsciiDoc syntax switches. Valid core source stays valid when a provider is unavailable; BackendStatus reports unavailable/denied/incomplete and exact `.adoc` export can still succeed.
+Mermaid, STEM/TeX/AsciiMath, HTML, and PDF are versioned ecosystem profiles, not AsciiDoc syntax switches. Valid core source stays valid when a provider is unavailable; BackendStatus reports unavailable/denied/incomplete and exact .adoc export can still succeed.
 
-### 4.1 `MermaidProviderProfile/1`
+### 4.1 MermaidProviderProfile/1
 
 Pinned upstream inputs are:
 
@@ -170,7 +185,7 @@ MermaidProviderProfile/1 = {
 }
 ```
 
-`node.version` must satisfy >=22.13.0 and the executable digest must also be fixed. Missing an exact browser/font/config field makes the provider unavailable. CLI 12 uses `size` rather than width/height, `pdf-paper-format` rather than pdfFit, and `themeCSS` rather than cssFile. Default embedded fonts do not make arbitrary host fonts equivalent. Online `npx` dependency acquisition and floating-semver replacement dependency trees are forbidden.
+node.version must satisfy >=22.13.0 and the executable digest must also be fixed. Missing an exact browser/font/config field makes the provider unavailable. CLI 12 uses size rather than width/height, pdf-paper-format rather than pdfFit, and themeCSS rather than cssFile. Default embedded fonts do not make arbitrary host fonts equivalent. Online npx dependency acquisition and floating-semver replacement dependency trees are forbidden.
 
 SVG validation rejects script, event handlers, javascript URIs, DTD/entities, and unauthorized network URIs/CSS/fonts. Unsafe output is rejected rather than sanitized and then claimed equivalent.
 
@@ -212,6 +227,8 @@ Native HTML STEM paths may otherwise rely on a CDN; offline read/export must nev
 
 ## 5. Managed document format and current semantic qualification
 
+### 5.1 Unique managed profile
+
 ```text
 ManagedDocumentFormatProfile/1 = {
   languageBaseline:"asciidoctor-ruby/2.0.26@0b99b39c9df884d4aec13bba45f03cdbab505769",
@@ -227,17 +244,71 @@ ManagedDocumentFormatBinding/1 = {
 
 BaselineOnly is an unbound analysis path, not a portable binding variant. A managed current Node with missing format binding is incomplete/proof-unavailable and does not fall back to BaselineOnly or a latest profile.
 
-A fresh managed Node begins at bindingRevision 1. Same-Workspace copy/fork with fresh identity creates a new revision-1 binding while preserving the exact profile generation. Formal same-Workspace restore restores the exact historical binding. Ordinary backup-byte import has no identity continuity: analyze BaselineOnly, produce the managed delta, obtain explicit admission, and create a new revision-1 binding. Only a real managed-profile migration increments bindingRevision. A source-unchanged profile-only migration creates one portable ChangeId but `sourceChanges=[]`; it does not increment SourceVersion or H(D,E).
+A fresh managed Node begins at bindingRevision 1. Same-Workspace copy/fork with fresh identity creates a new revision-1 binding while preserving the exact profile generation. Formal same-Workspace restore restores the exact historical binding. Ordinary backup-byte import has no identity continuity: analyze BaselineOnly, produce the managed delta, obtain explicit admission, and create a new revision-1 binding. Only a real managed-profile migration increments bindingRevision. A source-unchanged profile-only migration creates one portable ChangeId but sourceChanges=[]; it does not increment SourceVersion or H(D,E).
 
-`DocumentFormatCurrentQualification/1` binds a document-format DependencyKey/stamp, present ComponentImage, exact binding, and portable_metadata binding pin; the image version equals bindingRevision and the pin bytes equal D3-CJ/3(binding). `ManagedDocumentSemanticQualification/1` binds the current SourceObservation and this format qualification. Either changing makes old semantic projections and preparations stale.
+### 5.2 Current qualification
+
+DocumentFormatCurrentQualification/1 binds a document-format DependencyKey/stamp, present ComponentImage, exact binding, and portable_metadata binding pin; the image version equals bindingRevision and the pin bytes equal D3-CJ/3(binding). ManagedDocumentSemanticQualification/1 binds the current SourceObservation and this format qualification. Either changing makes old semantic projections and preparations stale.
+
+```text
+DocumentFormatCurrentQualification/1 = {
+  key:DocumentFormatDependencyKey/1,
+  stamp:{epoch:Token,revision:Counter},
+  componentImage:ComponentImage/1,
+  binding:ManagedDocumentFormatBinding/1,
+  bindingPin:PinRef/2
+}
+```
 
 ## 6. D6 dependency, portable component, and completion successors
 
-`DependencyKey/3` has the fixed rank order: source=0, document_format=1, lifecycle=2, placement_range=3, ref_inbound=4, relation_incidence=5, calendar_scope=6, registry=7, temporal_rules=8, authorization=9, foreign_binding=10, query_scan=11, replica_registry=12, conflict_record=13, execution_resource=14. Historical Key/2 stays fourteen-arm under its original ranks. `DependencyProof/3`, `InputDescriptor/3`, and `PreparedIntent/3` retain their prior responsibilities while consuming Key/3.
+### 6.1 DependencyKey/3
 
-`PortableComponentKey/2` ranks document=0, document_format=1, resource=2, annotation=3, node_binding=4, child_list=5, lifecycle=6, trash_membership=7, policy=8, registry=9, period_scope=10, replica_registry=11, conflict=12. The document_format component contains exact `ManagedDocumentFormatBinding/1` bytes and its ComponentImage version is bindingRevision. PinRef/2 and ComponentImage/1 do not change.
+DependencyKey/3 has the fixed rank order: source=0, document_format=1, lifecycle=2, placement_range=3, ref_inbound=4, relation_incidence=5, calendar_scope=6, registry=7, temporal_rules=8, authorization=9, foreign_binding=10, query_scan=11, replica_registry=12, conflict_record=13, execution_resource=14. Historical Key/2 stays fourteen-arm under its original ranks.
 
-`InstallationNotice/3` and `ContentCompletionProof/4` are the new-current component family. Historical Notice2/CP3 are not expanded in place.
+```text
+0 source
+1 document_format
+2 lifecycle
+3 placement_range
+4 ref_inbound
+5 relation_incidence
+6 calendar_scope
+7 registry
+8 temporal_rules
+9 authorization
+10 foreign_binding
+11 query_scan
+12 replica_registry
+13 conflict_record
+14 execution_resource
+```
+
+DependencyProof/3, InputDescriptor/3, and PreparedIntent/3 retain their prior responsibilities while consuming Key/3.
+
+### 6.2 PortableComponentKey/2
+
+PortableComponentKey/2 ranks document=0, document_format=1, resource=2, annotation=3, node_binding=4, child_list=5, lifecycle=6, trash_membership=7, policy=8, registry=9, period_scope=10, replica_registry=11, conflict=12. The document_format component contains exact ManagedDocumentFormatBinding/1 bytes and its ComponentImage version is bindingRevision.
+
+```text
+0 document
+1 document_format
+2 resource
+3 annotation
+4 node_binding
+5 child_list
+6 lifecycle
+7 trash_membership
+8 policy
+9 registry
+10 period_scope
+11 replica_registry
+12 conflict
+``` PinRef/2 and ComponentImage/1 do not change.
+
+InstallationNotice/3 and ContentCompletionProof/4 are the new-current component family. Historical Notice2/CP3 are not expanded in place.
+
+### 6.3 ChangeRecord/1
 
 The first normatively closed ChangeRecord family is:
 
@@ -255,7 +326,7 @@ It is fixed in the same P as the ChangeId and CP4; Notice3 is the pre-install no
 
 ## 7. D3, D4, and D5 current consumers
 
-D3 current native requests use wire13 / `D3IdentityInput/13` with InputDescriptor/3. `D3DecisionCompanion/2` remains unchanged. `D3ResolutionInputUse/2` stores exact InputDescriptor/3; historical `/1` stores Descriptor2 only.
+D3 current native requests use wire13 / D3IdentityInput/13 with InputDescriptor/3. D3DecisionCompanion/2 remains unchanged. D3ResolutionInputUse/2 stores exact InputDescriptor/3; historical /1 stores Descriptor2 only.
 
 D4 current outer qualification consumes Descriptor3/Proof3/15-arm keys; a managed Document semantic operation includes both source(owner) and document_format(owner). Inner RelationReadContext/2, RelationReadBinding/2, occurrence keys, numeric sourceRevision, and Calendar/Registry contracts do not change version merely for this outer dependency.
 
@@ -275,9 +346,9 @@ D9 ExportPlan/3 and PublicationReceipt/3 freeze current proof and semantic quali
 
 ## 9. Independent portable JSON Annotation model
 
-Annotation is a portable current value under D3 `AnnotationRef` identity and is not embedded in Document source. Every root/reply is a separate AnnotationRef; a thread is mechanically the same-owner `reply_closure` and cycles reject. Concurrent fresh replies may coexist; concurrent edits to one Annotation use revision/CAS/ConflictRecord rather than timestamp LWW.
+Annotation is a portable current value under D3 AnnotationRef identity and is not embedded in Document source. Every root/reply is a separate AnnotationRef; a thread is mechanically the same-owner reply_closure and cycles reject. Concurrent fresh replies may coexist; concurrent edits to one Annotation use revision/CAS/ConflictRecord rather than timestamp LWW.
 
-### 9.1 `D3-Annotation-Value/4`
+### 9.1 D3-Annotation-Value/4
 
 ```text
 D3-Annotation-Value/4 = {
@@ -301,7 +372,7 @@ Unknown/missing/duplicate members, illegal nulls, and non-UTF-8 reject. Labels a
 
 Purpose invariants: a root comment requires a nonempty body and no suggestion; a root mark requires appearance and no suggestion; a root suggestion requires Suggestion/3 and may use body as review rationale; all root review states are open|resolved. A reply is same-owner, acyclic, purpose=comment, suggestion=null, and reviewState=not_applicable. Resolve/reopen changes only the thread root. Target resolution and review state are independent.
 
-### 9.2 `D3-Annotation-Target-Projection/1`
+### 9.2 D3-Annotation-Target-Projection/1
 
 The only identity/locator projection is the closed union:
 
@@ -315,7 +386,7 @@ resource_region {kind:"resource_region",locator:ResourceRegionLocator}
 
 Each variant allows only those fields. The owner/locator/resource must match AnnotationRef.owner. AnnotationRef, a bare target NodeRef, AuthorAnchorAddress, and cross-owner locators/refs are invalid. Outer wire and Projection/1 materialize bijectively; path/title/hash/ambient owner cannot fill missing identity.
 
-### 9.3 `AnnotationInlineProfile/1`
+### 9.3 AnnotationInlineProfile/1
 
 ```text
 AnnotationInlineProfile/1 = {
@@ -326,7 +397,7 @@ AnnotationInlineProfile/1 = {
 }
 ```
 
-The complete source must form exactly one paragraph, with soft wraps and trailing whitespace allowed. A second paragraph, heading, list, delimited block, table, or block macro is `invalid_annotation_body` rather than silently ignored. Fixed-2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote and similar inline constructs remain available. n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters are disabled in this body profile.
+The complete source must form exactly one paragraph, with soft wraps and trailing whitespace allowed. A second paragraph, heading, list, delimited block, table, or block macro is invalid_annotation_body rather than silently ignored. Fixed-2.0.26 inline strong/emphasis/mono/mark/roles/URL links/xref/STEM/footnote and similar inline constructs remain available. n1/r1/weftext-cite/carrier/query/view/deep-heading/run-in managed adapters are disabled in this body profile.
 
 ### 9.4 Appearance, actor, and time
 
@@ -350,7 +421,7 @@ AnnotationTimeSnapshot/2 = {
 
 Actor/time fields are attribution and never LWW authority. The caller cannot supply the four attribution fields at creation. Trusted preparation injects creator/authoredAt and sets lastEditor=creator and editedAt=authoredAt, freezes them in the original PreparedIntent, and does not resample on replay. Later mutation preserves creator/authoredAt byte-for-byte and Core rewrites lastEditor/editedAt. Same-Workspace copy preserves review attribution; trusted cross-Workspace transfer preserves originWorkspaceRef; ordinary untrusted import is imported_unverified.
 
-### 9.5 `Suggestion/3`
+### 9.5 Suggestion/3
 
 ```text
 Suggestion/3 = {
@@ -365,54 +436,117 @@ Suggestion/3 = {
 }
 ```
 
-Pending uses confirmed|needs_reconfirmation; accepted/rejected use not_applicable and are terminal. The basis is exactly SHA256(`Weftext-Suggestion-Target-Basis/1` + NUL + D3-CJ/3(complete stored target)); quote/prefix/context/display text are excluded. Replace uses a nonempty range, required expectedText, required replacementSource (which may be empty), and null affinity. Delete uses a nonempty range, required expectedText, null replacementSource and affinity. Insert uses a zero-width range, null expectedText, nonempty replacementSource, and left|right affinity.
+Pending uses confirmed|needs_reconfirmation; accepted/rejected use not_applicable and are terminal. The basis is exactly SHA256(Weftext-Suggestion-Target-Basis/1 + NUL + D3-CJ/3(complete stored target)); quote/prefix/context/display text are excluded. Replace uses a nonempty range, required expectedText, required replacementSource (which may be empty), and null affinity. Delete uses a nonempty range, required expectedText, null replacementSource and affinity. Insert uses a zero-width range, null expectedText, nonempty replacementSource, and left|right affinity.
 
 ## 10. Annotation targets and authorization
 
+### 10.1 Source target
+
 A source target binds its real owner, basis production SourceVersion, byte range or point affinity, expected bytes/context, and source provenance. Root-authored text belongs to the root Node; a managed included span belongs to the included Node. Unmanaged/network/synthetic multi-origin text cannot directly mint a durable exact target.
 
-Resolution states distinguish exact, mapped, candidate, ambiguous, orphaned, and unavailable. Candidate/fuzzy/context search never authorizes a source write; repeated text with multiple candidates is ambiguous rather than “first” or “nearest.”
+Resolution states distinguish exact, mapped, candidate, ambiguous, orphaned, and unavailable.
 
-PDF/image regions bind exact ResourceVersion plus normalized rectangle. Audio/video uses rational timebase/ticks with `[start,end)`. Provider unavailability preserves existing raw annotation data but blocks creation of a new exact region when exact interpretation cannot be proven.
+```text
+exact
+mapped
+candidate
+ambiguous
+orphaned
+unavailable
+``` Candidate/fuzzy/context search never authorizes a source write; repeated text with multiple candidates is ambiguous rather than “first” or “nearest.”
+
+### 10.2 Media target
+
+PDF/image regions bind exact ResourceVersion plus normalized rectangle. Audio/video uses rational timebase/ticks with [start,end). Provider unavailability preserves existing raw annotation data but blocks creation of a new exact region when exact interpretation cannot be proven.
+
+### 10.3 History and authorization
 
 Historical quote/context reads require both Annotation disclosure and the corresponding historical-source disclosure. Bytes already lawfully delivered in a raw backup are not retroactively erased, while current online APIs continue to apply current authorization.
 
 ## 11. SourceTransform compiler and exact mapping
 
-`PortableTransformCompilation/1` is total: representable events + afterSourceSha256 or an unavailable reason from the closed set provenance_gap, unsupported_transaction, invalid_utf8_boundary, generated_cross_anchor_edit, boundary_slot_unrepresentable, provenance_cycle, after_replay_mismatch, payload_digest_mismatch. An unavailable transform does not by itself block ordinary source save.
+### 11.1 Total compilation
 
-`SourceTransformPortableEvent/3` contains only replace and insert, all in original-before UTF-8 byte coordinates. Deletes are zero-length replacements. Generated-edit provenance folds into the originating event where representable; same-point inserts merge in transaction order; actual overlap may form a maximal island; boundary insertions remain separately ordered. Same-point order is left replacement ending at p, insert at p, right replacement starting at p.
+PortableTransformCompilation/1 is total: representable events + afterSourceSha256 or an unavailable reason from the closed set provenance_gap, unsupported_transaction, invalid_utf8_boundary, generated_cross_anchor_edit, boundary_slot_unrepresentable, provenance_cycle, after_replay_mismatch, payload_digest_mismatch.
+
+```text
+PortableTransformCompilation/1 =
+  representable{events:[SourceTransformPortableEvent/3...],afterSourceSha256}
+| unavailable{reason:
+    provenance_gap|unsupported_transaction|invalid_utf8_boundary|
+    generated_cross_anchor_edit|boundary_slot_unrepresentable|
+    provenance_cycle|after_replay_mismatch|payload_digest_mismatch}
+``` An unavailable transform does not by itself block ordinary source save.
+
+SourceTransformPortableEvent/3 contains only replace and insert, all in original-before UTF-8 byte coordinates. Deletes are zero-length replacements. Generated-edit provenance folds into the originating event where representable; same-point inserts merge in transaction order; actual overlap may form a maximal island; boundary insertions remain separately ordered. Same-point order is left replacement ending at p, insert at p, right replacement starting at p.
 
 The receiver computes deterministic generated output spans against the exact after pin, extracts payload bytes by span, verifies length/digest, and replays the events to the exact after bytes. Content search is forbidden.
 
-For a non-zero range `[s,e)`, real replacement overlap or an insertion strictly inside the range stops exact mapping. Otherwise:
+### 11.2 Mapping
+
+For a non-zero range [s,e), real replacement overlap or an insertion strictly inside the range stops exact mapping. Otherwise:
 
 ```text
 s' = s + sum(delta(R), b<=s) + sum(len(I), q<=s)
 e' = e + sum(delta(R), b<=e) + sum(len(I), q<e)
 ```
 
-For point p, a replacement satisfying `a<=p<b` stops mapping; otherwise add deltas ending before/at p, inserts before p, and inserts at p only for right affinity. Each link in a transform chain independently revalidates source version, signature, trust cut, and result.
+For point p, a replacement satisfying a<=p<b stops mapping; otherwise add deltas ending before/at p, inserts before p, and inserts at p only for right affinity.
 
-`CoreSourceEditPlan/2` freezes the `/3` events, exact before observation, exact after pin, and `TransformEmissionPlan/1`. Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
+```text
+p' = p + sum(delta(R), b<=p) + sum(len(I), q<p)
+     + (sum(len(I), q=p) when affinity=right else 0)
+``` Each link in a transform chain independently revalidates source version, signature, trust cut, and result.
+
+### 11.3 Frozen plan
+
+CoreSourceEditPlan/2 freezes the /3 events, exact before observation, exact after pin, and TransformEmissionPlan/1.
+
+```text
+CoreSourceEditPlan/2 = {
+  decisionKey,ownerNodeRef,beforeObservation,
+  coordinateProfile:"utf8-byte-half-open/1",
+  edits:[SourceTransformPortableEvent/3...],
+  afterPin,transformEmission:TransformEmissionPlan/1
+}
+``` Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
 
 ## 12. Signed transform evidence and outbox
 
-`SourceTransformEvidence/2` binds DecisionKey, ChangeId, owner, managed before/after SourceVersions, before/after hashes, the fixed coordinate/affinity profiles, and the exact `/3` event array. A required plan must satisfy byte-equality of D3-CJ/3(plan.edits) and D3-CJ/3(evidence.edits).
+SourceTransformEvidence/2 binds DecisionKey, ChangeId, owner, managed before/after SourceVersions, before/after hashes, the fixed coordinate/affinity profiles, and the exact /3 event array.
 
-`SourceTransformSealArtifact/1` is Ed25519-signed under the `D6-Source-Transform-Seal/1` domain. The outbox key is exactly `{changeId,ownerNodeRef}` and the outbox item pins exact canonical artifact bytes as portable_metadata. A required sealed decision has exactly one item; disabled has zero; two different items for one key are an integrity conflict. Recovery republishes the exact pinned artifact by exact key and never searches by current hash/trust/source or resigns.
+```text
+SourceTransformEvidence/2 = {
+  decisionKey,changeId,ownerNodeRef,before,after,
+  beforeSourceSha256,afterSourceSha256,
+  coordinateProfile:"utf8-byte-half-open/1",
+  affinityProfile:"annotation-range-affinity/1",
+  edits:[SourceTransformPortableEvent/3...]
+}
+``` A required plan must satisfy byte-equality of D3-CJ/3(plan.edits) and D3-CJ/3(evidence.edits).
+
+```text
+D3-CJ/3(plan.edits) == D3-CJ/3(evidence.edits)
+```
+
+SourceTransformSealArtifact/1 is Ed25519-signed under the D6-Source-Transform-Seal/1 domain. The outbox key is exactly {changeId,ownerNodeRef} and the outbox item pins exact canonical artifact bytes as portable_metadata. A required sealed decision has exactly one item; disabled has zero; two different items for one key are an integrity conflict. Recovery republishes the exact pinned artifact by exact key and never searches by current hash/trust/source or resigns.
 
 The transform artifact is not a PortableComponent and is not inserted into Notice/CP components. It shares the source decision's one P seal and ChangeId.
 
 ## 13. Trust profile, activation, and historical verification
 
-A Workspace has one root/anchor. The closed seal profiles are `d6_revision_token_seal/1` and `d6_source_transform_seal/1`. Historical WorkspaceTrustDeclaration/1 remains revision-token-only. WorkspaceTrustDeclaration/2 is the current profile-discriminated successor. WorkspaceAuthorizationBundle/2 may contain a byte-exact `/1` prefix followed by a `/2` suffix; after the first `/2`, the chain never returns to `/1`.
+A Workspace has one root/anchor. The closed seal profiles are d6_revision_token_seal/1 and d6_source_transform_seal/1.
+
+```text
+d6_revision_token_seal/1
+d6_source_transform_seal/1
+``` Historical WorkspaceTrustDeclaration/1 remains revision-token-only. WorkspaceTrustDeclaration/2 is the current profile-discriminated successor. WorkspaceAuthorizationBundle/2 may contain a byte-exact `/1` prefix followed by a `/2` suffix; after the first `/2`, the chain never returns to `/1`.
 
 Declaration1 activation is still derived through its original DecisionKey -> CP3/ChangeRecord evidence. Declaration2 activation is derived through its DecisionKey -> committed CP4 + ChangeRecord/1 + the policy after-image that first appends the exact declaration sequence. Same-DecisionKey declarations share the activation ChangeId and are all-in/all-out in history_at(C).
 
 TrustConflictCarry/2 rederives its origin by loading and validating the original Declaration2 and original CP4/ChangeRecord; its stored originActivationChangeId is not self-authenticating. Carry1 retains the original Declaration1+CP3 rule. A later resolver cut never replaces the origin cut.
 
-A normal SourceTransform receiver validates the producing ChangeRecord/CP4 and sets `C=CP4.frontierBefore` for historical key verification. Later ordinary rotation does not invalidate a historical artifact that was valid at C. Compromise uses causal order between the artifact seal ChangeId and the original compromise activation ChangeId; arrival time, current bundle, or frontierAfter are not substitutes.
+A normal SourceTransform receiver validates the producing ChangeRecord/CP4 and sets C=CP4.frontierBefore for historical key verification. Later ordinary rotation does not invalidate a historical artifact that was valid at C. Compromise uses causal order between the artifact seal ChangeId and the original compromise activation ChangeId; arrival time, current bundle, or frontierAfter are not substitutes.
 
 DomainSealKeyHandle/1 can continue signing revision tokens when the exact domain/profile/key remains current, safe, and usable, even after Bundle2 exists. It never gains transform authority or gets silently reencoded as Handle2. New or rotated Declaration2 keys use Handle2.
 
@@ -420,11 +554,15 @@ Fresh bootstrap uses one root and exactly two profile declarations, revision-tok
 
 ## 14. D10 mixed-version control and execution responsibility
 
+### 14.1 Record images
+
 Current Workspace reads use D10WorkspaceReadDependencies/2 with DependencyProof/3. ControlDependencies/3, D10ControlInput/2, and ControlPrepareBinding/3 connect that evidence to the D6 current descriptor/intent family.
 
-D10ControlRecordImage/2 is only for automation and run records whose nested schema changed. Other record kinds, including external_effect, stop, reservation, planned/external approval, activation, and supplement=none records, may remain exact Image1 current records. Versioned image/pin/range carriers explicitly retain exact V1/V2 values. Pin1 continues to authenticate `D10-Control-Record/1 || NUL || D3-CJ/3(Image1)`; Pin2 uses the `/2` domain. Historical pins are never repinned into a new domain.
+D10ControlRecordImage/2 is only for automation and run records whose nested schema changed. Other record kinds, including external_effect, stop, reservation, planned/external approval, activation, and supplement=none records, may remain exact Image1 current records. Versioned image/pin/range carriers explicitly retain exact V1/V2 values. Pin1 continues to authenticate D10-Control-Record/1 || NUL || D3-CJ/3(Image1); Pin2 uses the /2 domain. Historical pins are never repinned into a new domain.
 
 D10ControlEffectPlan/2 accepts an actual Image1 or Image2 before-image and the exact current after-image, which makes Image1(Automation+Subscription1) -> Image2(Automation+Subscription2) a valid configure path without a preliminary migration transaction.
+
+### 14.2 Prepare binding three generations
 
 The prepare-binding mixed carrier is exactly three arms:
 
@@ -435,13 +573,26 @@ D10VersionedControlPrepareBinding/1 =
 | {schema:"d10_control_prepare_binding/3",value:ControlPrepareBinding/3}
 ```
 
-The historical `/1` value is exactly `{key,canonicalIntentBytes,allocatedControlRefs,originalCommitRequest,immutablePreview,dependencyPins:ControlDependencies/1}`. e8aa explicitly retains the exact decoder/recovery for true saved `/1` records; this does not assert universal deployment. Claims2 sorts all three by inner StableControlKey and rejects the same key across versions. The wrapper only selects a decoder; it does not migrate bytes, grant authority, create a CAS, or alter original dependencies/pins.
+The historical /1 value is exactly the following closed shape:
+
+```text
+ControlPrepareBinding/1 = {
+  key:StableControlKey/1,
+  canonicalIntentBytes:Bytes,
+  allocatedControlRefs:[ControlRef<K>/1],
+  originalCommitRequest:PreparedCommitRequest/1,
+  immutablePreview:ControlPreview/1,
+  dependencyPins:ControlDependencies/1
+}
+``` e8aa explicitly retains the exact decoder/recovery for true saved `/1` records; this does not assert universal deployment. Claims2 sorts all three by inner StableControlKey and rejects the same key across versions. The wrapper only selects a decoder; it does not migrate bytes, grant authority, create a CAS, or alter original dependencies/pins.
+
+### 14.3 Complete execution responsibility
 
 D10MoneyResponsibility/2, D10ExecutionClaims/2, and D10ExecutionInventory/2 use version-dispatched pins/ranges/preparations/author steps/subscriptions/occurrences/ApprovalUses. ExternalResponsibility/1, StopResponsibility/1, and StopCapacity/1 remain unchanged because their closed members do not embed the changed types, but Inventory2 must include them completely.
 
 A legal Inventory2 may simultaneously retain old ApprovalUse1/PAB3/Subscription1/Occurrence1/Pin1/PrepareBinding1-or-2 and new ApprovalUse2/PAB4/Subscription2/Occurrence2/Pin2/PrepareBinding3 when semantic identities differ. The same DecisionKey, StableControlKey, (Automation,generation), OccurrenceKey, or same record cut cannot appear twice across versions; no LWW applies.
 
-The D6 current successor is ExecutionResponsibilityRecord/3 + ExecutionContinuityProof/2, with exact inventory-pin domain `D6-Execution-Inventory/2`. Historical Record2/Proof1/Inventory1 remain on their own domains. A Record2 becomes Record3 only on a real responsibility mutation, checkpoint, or custody handoff, never by background schema migration. Handoff freezes admission/planning/send/schedule writers at one store barrier, captures all old and new liabilities, and proves irreversible old-holder fencing. Missing an old pin/PAB/subscription/stop/external unknown pauses takeover; it does not fabricate a partial inventory or block unrelated ordinary source work.
+The D6 current successor is ExecutionResponsibilityRecord/3 + ExecutionContinuityProof/2, with exact inventory-pin domain D6-Execution-Inventory/2. Historical Record2/Proof1/Inventory1 remain on their own domains. A Record2 becomes Record3 only on a real responsibility mutation, checkpoint, or custody handoff, never by background schema migration. Handoff freezes admission/planning/send/schedule writers at one store barrier, captures all old and new liabilities, and proves irreversible old-holder fencing. Missing an old pin/PAB/subscription/stop/external unknown pauses takeover; it does not fabricate a partial inventory or block unrelated ordinary source work.
 
 ## 15. Suggestion lifecycle
 
@@ -463,7 +614,7 @@ The common order remains: closed decode -> minimum disclosure/capability -> auth
 
 Saved results replay under the original owner/version. Planned work restores the original request, descriptor/proof, preparation, pins, Notice, install state, and version basis and is never upgraded in place. Unknown work retains original Approval/Money/claim/external/stop responsibility. Only unseen current work uses Descriptor3/PAB4/Edit3/ExportPlan3/Notice3/CP4/Declaration2, etc. The existence of a decoder or historical design text does not prove a prototype was deployed.
 
-Missing a transform artifact, index row, provider, or strong proof is not a reason for a permanent generic `owner_update_required` once this coordination is present. Each affected path uses its actual unavailable/conflict error while raw source, Draft, repair, and other independent paths remain available under their existing qualifications.
+Missing a transform artifact, index row, provider, or strong proof is not a reason for a permanent generic owner_update_required once this coordination is present. Each affected path uses its actual unavailable/conflict error while raw source, Draft, repair, and other independent paths remain available under their existing qualifications.
 
 ## 18. Schema-version inventory
 
@@ -471,8 +622,17 @@ Current additions/successors include ManagedDocumentFormatProfile/1, ManagedDocu
 
 Key retained types include PinRef/2, ComponentImage/1, OwnerInputBinding/2, ObservationScope/2, D3DecisionCompanion/2, D4/D5 inner selector/locator types, WorkspaceTrustRootDeclaration/1, WorkspaceTrustAnchor/1, RevisionTokenSealVerificationKey/1, LeaseRunUse/1, D10ExternalResponsibility/1, D10StopResponsibility/1, and StopCapacity/1. Historical decoders are never expanded in place.
 
+The current managed-format type family used by this candidate is:
+
+```text
+ManagedDocumentFormatProfile/1
+ManagedDocumentFormatBinding/1
+DocumentFormatCurrentQualification/1
+ManagedDocumentSemanticQualification/1
+```
+
 ## 19. Acceptance and evidence boundary
 
-The itemized design obligations are in `ACCEPTANCE.zh-CN.md` / `ACCEPTANCE.md` and `acceptance-matrix.json`: 437 core design oracles and 117 actual-owner coordination fixtures, 554 obligations total. They are **unexecuted design obligations**, not implementation test results.
+The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md and acceptance-matrix.json: 437 core design oracles and 117 actual-owner coordination fixtures, 554 obligations total. They are **unexecuted design obligations**, not implementation test results.
 
 This PR did not install or execute the Ruby oracle, Asciidork, Mermaid CLI, browser/Puppeteer, STEM/PDF providers, product SQLite/storage code, replica/crash/crypto paths, real Automation scheduling, or execution-custody handoff. Author checks are limited to document/JSON/router consistency. Independent design review must bind to the exact stopped PR head SHA.
