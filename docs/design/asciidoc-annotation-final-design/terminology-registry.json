@@ -1747,6 +1747,62 @@
       "replaces": null,
       "section": "SCHEMAS §6.3.1; SPEC §9.11",
       "notes": "Read projection separating exact Annotation inline source from R6 semantic text and invalid-source diagnostics."
+    },
+    {
+      "name": "D2DocumentBackendState/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "Fixed-Ruby final backend/basebackend/filetype/outfilesuffix product state with field-level SourceOrigin bindings."
+    },
+    {
+      "name": "D2DocumentAuthor/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "Complete fixed-2.0.26 structured author value preserving name/firstname/middlename/lastname/initials/email and per-field provenance."
+    },
+    {
+      "name": "D2DocumentRevision/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "Document revision number/date/remark with field-level provenance."
+    },
+    {
+      "name": "D2EffectiveDocumentAttribute/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4; SPEC §3.4",
+      "notes": "One final effective Document#attributes entry with true authored/substitution/generated provenance and no fabricated physical range."
+    },
+    {
+      "name": "D8PresentationPolicyHeadEvidence/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4; SPEC §8.2",
+      "notes": "Frozen parent policy address plus exact retained record pin used by the concrete SetRequest prepare producer."
+    },
+    {
+      "name": "D8PresentationPolicyPrepareResult/2",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4; SPEC §8.2",
+      "notes": "Current no-change or changing prepare result binding Input/Proposal/head evidence to one PreparedIntent3, d6_commit_request2 and preview."
+    },
+    {
+      "name": "D8PresentationPolicyOutboxItem/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4; SPEC §8.2",
+      "notes": "Protected original-P publication item selecting the exact P-materialized portable presentation-policy record bytes."
     }
   ]
 }

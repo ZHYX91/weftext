@@ -767,7 +767,8 @@ D2NativeSemanticValue/1 =
 D2NativeAttributeEntry/1 = {
   name:text,
   value:D2NativeSemanticValue/1,
-  provenance:"authored_named"|"authored_positional"|"fixed_derived"
+  provenance:"authored_named"|"authored_positional"|"fixed_derived",
+  sourceOrigins:D2SourceOriginSet/2
 }
 
 D2NativeAttributeSet/1 = {
@@ -779,7 +780,14 @@ D2BlockCommonSemantics/1 = {
   caption:text|null,
   numeral:text|null,
   subs:[text...],
-  positional:[D2NativeSemanticValue/1...]
+  positional:[D2NativeSemanticValue/1...],
+  origins:{
+    style:D2SourceOriginSet/2,
+    caption:D2SourceOriginSet/2,
+    numeral:D2SourceOriginSet/2,
+    subs:[D2SourceOriginSet/2...],
+    positional:[D2SourceOriginSet/2...]
+  }
 }
 
 D2SourceOwner/1 =
@@ -862,14 +870,68 @@ D2TextProjection/2 = {
   sourceOrigins:D2SourceOriginSet/2
 }
 
+D2DocumentBackendState/1 = {
+  backend:text,
+  basebackend:text,
+  filetype:text,
+  outfilesuffix:text,
+  origins:{
+    backend:D2SourceOriginSet/2,
+    basebackend:D2SourceOriginSet/2,
+    filetype:D2SourceOriginSet/2,
+    outfilesuffix:D2SourceOriginSet/2
+  }
+}
+
+D2DocumentAuthor/1 = {
+  name:text,
+  firstname:text|null,
+  middlename:text|null,
+  lastname:text|null,
+  initials:text|null,
+  email:text|null,
+  origins:{
+    name:D2SourceOriginSet/2,
+    firstname:D2SourceOriginSet/2,
+    middlename:D2SourceOriginSet/2,
+    lastname:D2SourceOriginSet/2,
+    initials:D2SourceOriginSet/2,
+    email:D2SourceOriginSet/2
+  }
+}
+
+D2DocumentRevision/1 = {
+  number:text|null,
+  date:text|null,
+  remark:text|null,
+  origins:{
+    number:D2SourceOriginSet/2,
+    date:D2SourceOriginSet/2,
+    remark:D2SourceOriginSet/2
+  }
+}
+
+D2EffectiveDocumentAttribute/1 = {
+  name:text,
+  value:text,
+  sourceOrigins:D2SourceOriginSet/2
+}
+
 D2DocumentMetadata/3 = {
+  backend:D2DocumentBackendState/1,
   doctype:"article"|"book"|"manpage"|"inline",
+  safeMode:"unsafe"|"safe"|"server"|"secure",
+  doctypeOrigins:D2SourceOriginSet/2,
+  safeModeOrigins:D2SourceOriginSet/2,
   title:D2TextProjection/2|null,
+  mainTitle:D2TextProjection/2|null,
   subtitle:D2TextProjection/2|null,
-  authors:[{name:text,email:text|null}...],
-  revision:null|{number:text|null,date:text|null,remark:text|null},
+  authors:[D2DocumentAuthor/1...],
+  revision:D2DocumentRevision/1|null,
+  effectiveAttributes:[D2EffectiveDocumentAttribute/1...],
   headerAttributes:[{name:text,value:text|null,
-                    sourceRange:D2SourceRange/2}...]
+                    sourceRange:D2SourceRange/2,
+                    sourceOrigins:D2SourceOriginSet/2}...]
 }
 
 D2AttributeCarrierBlock/2 = {
@@ -890,52 +952,83 @@ D2InlineMediaSemantics/1 =
     {kind:"image",
      width:text|null,height:text|null,format:text|null,
      scaledwidth:text|null,scale:text|null,link:text|null,window:text|null,
-     float:text|null,align:text|null,fallback:text|null,imagesdir:text|null}
+     float:text|null,align:text|null,fallback:text|null,imagesdir:text|null,
+     origins:{width:D2SourceOriginSet/2,height:D2SourceOriginSet/2,
+              format:D2SourceOriginSet/2,scaledwidth:D2SourceOriginSet/2,
+              scale:D2SourceOriginSet/2,link:D2SourceOriginSet/2,
+              window:D2SourceOriginSet/2,float:D2SourceOriginSet/2,
+              align:D2SourceOriginSet/2,fallback:D2SourceOriginSet/2,
+              imagesdir:D2SourceOriginSet/2}}
   | {kind:"icon",
      size:text|null,flip:text|null,rotate:text|null,title:text|null,
-     width:text|null,height:text|null}
+     width:text|null,height:text|null,
+     origins:{size:D2SourceOriginSet/2,flip:D2SourceOriginSet/2,
+              rotate:D2SourceOriginSet/2,title:D2SourceOriginSet/2,
+              width:D2SourceOriginSet/2,height:D2SourceOriginSet/2}}
 
 D2ProductInline/3 =
     {kind:"text",text:text,sourceOrigins:D2SourceOriginSet/2}
   | {kind:"quoted",style:"strong"|"emphasis"|"monospaced"|"mark"|
                          "superscript"|"subscript"|"double"|"single"|"unquoted",
      id:text|null,roles:[text...],children:[D2ProductInline/3...],
+     slotOrigins:{style:D2SourceOriginSet/2,id:D2SourceOriginSet/2,
+                  roles:[D2SourceOriginSet/2...]},
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"link",nativeTarget:text,label:[D2ProductInline/3...],
+     slotOrigins:{nativeTarget:D2SourceOriginSet/2},
      adapter:D2IdentityAdapter/1|null,nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"xref",nativeTarget:text,refid:text|null,path:text|null,
      label:[D2ProductInline/3...],adapter:D2IdentityAdapter/1|null,
+     slotOrigins:{nativeTarget:D2SourceOriginSet/2,
+                  refid:D2SourceOriginSet/2,path:D2SourceOriginSet/2},
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"anchor",referenceKind:"ref"|"bibref",
      id:text,reftext:text|null,
+     slotOrigins:{referenceKind:D2SourceOriginSet/2,id:D2SourceOriginSet/2,
+                  reftext:D2SourceOriginSet/2},
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"image",nativeTarget:text,alt:text|null,
      semantics:D2InlineMediaSemantics/1,
+     slotOrigins:{nativeTarget:D2SourceOriginSet/2,alt:D2SourceOriginSet/2},
      adapter:D2IdentityAdapter/1|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"footnote",id:text|null,index:CanonicalSignedDecimal|null,
      referenceKind:null|"ref"|"xref",target:text|null,
      children:[D2ProductInline/3...],
+     slotOrigins:{id:D2SourceOriginSet/2,index:D2SourceOriginSet/2,
+                  referenceKind:D2SourceOriginSet/2,target:D2SourceOriginSet/2},
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"indexterm",visibility:"visible"|"concealed",
      text:text|null,terms:[text...],see:text|null,seeAlso:[text...],
+     slotOrigins:{visibility:D2SourceOriginSet/2,text:D2SourceOriginSet/2,
+                  terms:[D2SourceOriginSet/2...],see:D2SourceOriginSet/2,
+                  seeAlso:[D2SourceOriginSet/2...]},
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"stem",notation:"tex"|"asciimath",source:text,
+     slotOrigins:{notation:D2SourceOriginSet/2,source:D2SourceOriginSet/2},
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
-  | {kind:"kbd",keys:[text...],sourceOrigins:D2SourceOriginSet/2}
-  | {kind:"menu",path:[text...],sourceOrigins:D2SourceOriginSet/2}
-  | {kind:"button",label:text,sourceOrigins:D2SourceOriginSet/2}
+  | {kind:"kbd",keys:[text...],
+     slotOrigins:{keys:[D2SourceOriginSet/2...]},
+     sourceOrigins:D2SourceOriginSet/2}
+  | {kind:"menu",path:[text...],
+     slotOrigins:{path:[D2SourceOriginSet/2...]},
+     sourceOrigins:D2SourceOriginSet/2}
+  | {kind:"button",label:text,
+     slotOrigins:{label:D2SourceOriginSet/2},
+     sourceOrigins:D2SourceOriginSet/2}
   | {kind:"callout",label:text,number:CanonicalSignedDecimal|null,
      id:text|null,
      guard:null|text|{before:text,after:text},
+     slotOrigins:{label:D2SourceOriginSet/2,number:D2SourceOriginSet/2,
+                  id:D2SourceOriginSet/2,guard:D2SourceOriginSet/2},
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"line_break",sourceOrigins:D2SourceOriginSet/2}
   | {kind:"passthrough",text:text,sourceOrigins:D2SourceOriginSet/2}
@@ -951,6 +1044,11 @@ D2Heading/3 = {
   anchor:text|null,
   roles:[text...],
   options:[text...],
+  slotOrigins:{authoredLevel:D2SourceOriginSet/2,
+               effectiveLevel:D2SourceOriginSet/2,
+               anchor:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   nativeAttributes:D2NativeAttributeSet/1
 }
 
@@ -959,6 +1057,9 @@ D2ParagraphBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  slotOrigins:{anchor:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   common:D2BlockCommonSemantics/1,
   inlines:[D2ProductInline/3...],
   nativeAttributes:D2NativeAttributeSet/1
@@ -969,7 +1070,10 @@ D2SectionSemantics/1 = {
   special:Boolean,
   numbered:false|true|"chapter",
   numeral:text|null,
-  caption:text|null
+  caption:text|null,
+  origins:{sectname:D2SourceOriginSet/2,special:D2SourceOriginSet/2,
+           numbered:D2SourceOriginSet/2,numeral:D2SourceOriginSet/2,
+           caption:D2SourceOriginSet/2}
 }
 
 D2SectionBlock/3 = {
@@ -984,6 +1088,7 @@ D2SectionBlock/3 = {
 
 D2ListItemSemantics/1 = {
   coids:[text...],
+  coidOrigins:[D2SourceOriginSet/2...],
   nativeAttributes:D2NativeAttributeSet/1
 }
 
@@ -991,6 +1096,7 @@ D2ListItem/3 = {
   kind:"list_item",locator:DocumentElementLocator,
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   marker:text|null,checked:Boolean|null,
+  slotOrigins:{marker:D2SourceOriginSet/2,checked:D2SourceOriginSet/2},
   terms:[[D2ProductInline/3...]...],
   inlines:[D2ProductInline/3...],
   semantics:D2ListItemSemantics/1,
@@ -998,12 +1104,19 @@ D2ListItem/3 = {
 }
 
 D2ListSemantics/1 =
-    {kind:"unordered",style:text|null,checklist:Boolean,interactive:Boolean}
+    {kind:"unordered",style:text|null,checklist:Boolean,interactive:Boolean,
+     origins:{style:D2SourceOriginSet/2,checklist:D2SourceOriginSet/2,
+              interactive:D2SourceOriginSet/2}}
   | {kind:"ordered",style:text|null,start:CanonicalSignedDecimal|null,
-     reversed:Boolean}
+     reversed:Boolean,
+     origins:{style:D2SourceOriginSet/2,start:D2SourceOriginSet/2,
+              reversed:D2SourceOriginSet/2}}
   | {kind:"description",style:text|null,labelwidth:text|null,
-     itemwidth:text|null}
-  | {kind:"callout",style:text|null}
+     itemwidth:text|null,
+     origins:{style:D2SourceOriginSet/2,labelwidth:D2SourceOriginSet/2,
+              itemwidth:D2SourceOriginSet/2}}
+  | {kind:"callout",style:text|null,
+     origins:{style:D2SourceOriginSet/2}}
 
 D2ListBlock/3 = {
   kind:"list",listKind:"unordered"|"ordered"|"description"|"callout",
@@ -1011,6 +1124,9 @@ D2ListBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  slotOrigins:{anchor:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   common:D2BlockCommonSemantics/1,
   semantics:D2ListSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
@@ -1020,6 +1136,8 @@ D2ListBlock/3 = {
 D2TableColumn/3 = {
   ordinal:Counter,width:text|null,halign:text|null,valign:text|null,
   style:text|null,sourceOrigins:D2SourceOriginSet/2,
+  slotOrigins:{width:D2SourceOriginSet/2,halign:D2SourceOriginSet/2,
+               valign:D2SourceOriginSet/2,style:D2SourceOriginSet/2},
   nativeAttributes:D2NativeAttributeSet/1
 }
 
@@ -1028,6 +1146,9 @@ D2TableCell/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   columnStart:Counter,colspan:Counter,rowspan:Counter,style:text|null,
   halign:text|null,valign:text|null,
+  slotOrigins:{columnStart:D2SourceOriginSet/2,colspan:D2SourceOriginSet/2,
+               rowspan:D2SourceOriginSet/2,style:D2SourceOriginSet/2,
+               halign:D2SourceOriginSet/2,valign:D2SourceOriginSet/2},
   nativeAttributes:D2NativeAttributeSet/1,
   content:
       {kind:"inline",inlines:[D2ProductInline/3...]}
@@ -1038,6 +1159,7 @@ D2TableRow/3 = {
   kind:"table_row",locator:DocumentElementLocator,
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   section:"head"|"body"|"foot",
+  sectionOrigins:D2SourceOriginSet/2,
   cells:[D2TableCell/3...]
 }
 
@@ -1045,7 +1167,14 @@ D2TableSemantics/1 = {
   cols:text|null,format:text|null,separator:text|null,width:text|null,
   frame:text|null,grid:text|null,stripes:text|null,float:text|null,
   orientation:text|null,colcount:Counter,rowcount:Counter,
-  tablepcwidth:text|null,tableabswidth:text|null
+  tablepcwidth:text|null,tableabswidth:text|null,
+  origins:{cols:D2SourceOriginSet/2,format:D2SourceOriginSet/2,
+           separator:D2SourceOriginSet/2,width:D2SourceOriginSet/2,
+           frame:D2SourceOriginSet/2,grid:D2SourceOriginSet/2,
+           stripes:D2SourceOriginSet/2,float:D2SourceOriginSet/2,
+           orientation:D2SourceOriginSet/2,colcount:D2SourceOriginSet/2,
+           rowcount:D2SourceOriginSet/2,tablepcwidth:D2SourceOriginSet/2,
+           tableabswidth:D2SourceOriginSet/2}
 }
 
 D2TableBlock/3 = {
@@ -1053,6 +1182,9 @@ D2TableBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  slotOrigins:{anchor:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   common:D2BlockCommonSemantics/1,
   semantics:D2TableSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
@@ -1064,13 +1196,23 @@ D2DelimitedSemantics/1 =
     {kind:"listing"|"source",language:text|null,linenums:Boolean,
      start:CanonicalSignedDecimal|null,indent:CanonicalSignedDecimal|null,
      tabsize:CanonicalSignedDecimal|null,highlight:text|null,
-     lineComment:text|null}
+     lineComment:text|null,
+     origins:{language:D2SourceOriginSet/2,linenums:D2SourceOriginSet/2,
+              start:D2SourceOriginSet/2,indent:D2SourceOriginSet/2,
+              tabsize:D2SourceOriginSet/2,highlight:D2SourceOriginSet/2,
+              lineComment:D2SourceOriginSet/2}}
   | {kind:"literal",indent:CanonicalSignedDecimal|null,
-     tabsize:CanonicalSignedDecimal|null,lineComment:text|null}
-  | {kind:"quote",attribution:text|null,citetitle:text|null}
+     tabsize:CanonicalSignedDecimal|null,lineComment:text|null,
+     origins:{indent:D2SourceOriginSet/2,tabsize:D2SourceOriginSet/2,
+              lineComment:D2SourceOriginSet/2}}
+  | {kind:"quote",attribution:text|null,citetitle:text|null,
+     origins:{attribution:D2SourceOriginSet/2,citetitle:D2SourceOriginSet/2}}
   | {kind:"verse",attribution:text|null,citetitle:text|null,
-     indent:CanonicalSignedDecimal|null,tabsize:CanonicalSignedDecimal|null}
-  | {kind:"stem",notation:text|null}
+     indent:CanonicalSignedDecimal|null,tabsize:CanonicalSignedDecimal|null,
+     origins:{attribution:D2SourceOriginSet/2,citetitle:D2SourceOriginSet/2,
+              indent:D2SourceOriginSet/2,tabsize:D2SourceOriginSet/2}}
+  | {kind:"stem",notation:text|null,
+     origins:{notation:D2SourceOriginSet/2}}
   | {kind:"pass"}
 
 D2DelimitedBlock/3 = {
@@ -1081,17 +1223,24 @@ D2DelimitedBlock/3 = {
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
   style:text|null,
+  slotOrigins:{anchor:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...],
+               style:D2SourceOriginSet/2,
+               contentText:D2SourceOriginSet/2|null},
   common:D2BlockCommonSemantics/1,
   semantics:D2DelimitedSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   content:
-      {kind:"text",text:text}
+      {kind:"text",text:text,sourceOrigins:D2SourceOriginSet/2}
     | {kind:"inline",inlines:[D2ProductInline/3...]}
     | {kind:"blocks",children:[D2ProductBlock/3...]}
 }
 
 D2ContainerSemantics/1 =
-    {kind:"admonition",name:text,textlabel:text|null,icon:text|null}
+    {kind:"admonition",name:text,textlabel:text|null,icon:text|null,
+     origins:{name:D2SourceOriginSet/2,textlabel:D2SourceOriginSet/2,
+              icon:D2SourceOriginSet/2}}
   | {kind:"example"|"sidebar"|"open"|"preamble"|"abstract"|"partintro"}
 
 D2ContainerBlock/3 = {
@@ -1102,6 +1251,9 @@ D2ContainerBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  slotOrigins:{anchor:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   common:D2BlockCommonSemantics/1,
   semantics:D2ContainerSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
@@ -1111,15 +1263,34 @@ D2ContainerBlock/3 = {
 D2MediaSemantics/1 =
     {kind:"image",width:text|null,height:text|null,format:text|null,
      scaledwidth:text|null,scale:text|null,link:text|null,window:text|null,
-     float:text|null,align:text|null,fallback:text|null,imagesdir:text|null}
+     float:text|null,align:text|null,fallback:text|null,imagesdir:text|null,
+     origins:{width:D2SourceOriginSet/2,height:D2SourceOriginSet/2,
+              format:D2SourceOriginSet/2,scaledwidth:D2SourceOriginSet/2,
+              scale:D2SourceOriginSet/2,link:D2SourceOriginSet/2,
+              window:D2SourceOriginSet/2,float:D2SourceOriginSet/2,
+              align:D2SourceOriginSet/2,fallback:D2SourceOriginSet/2,
+              imagesdir:D2SourceOriginSet/2}}
   | {kind:"audio",start:text|null,end:text|null,
-     autoplay:Boolean,controls:Boolean,loop:Boolean}
+     autoplay:Boolean,controls:Boolean,loop:Boolean,
+     origins:{start:D2SourceOriginSet/2,end:D2SourceOriginSet/2,
+              autoplay:D2SourceOriginSet/2,controls:D2SourceOriginSet/2,
+              loop:D2SourceOriginSet/2}}
   | {kind:"video",poster:text|null,width:text|null,height:text|null,
      start:text|null,end:text|null,preload:text|null,float:text|null,
      align:text|null,hash:text|null,theme:text|null,lang:text|null,
      list:text|null,playlist:text|null,autoplay:Boolean,loop:Boolean,
      muted:Boolean,controls:Boolean,fullscreen:Boolean,modest:Boolean,
-     related:Boolean}
+     related:Boolean,
+     origins:{poster:D2SourceOriginSet/2,width:D2SourceOriginSet/2,
+              height:D2SourceOriginSet/2,start:D2SourceOriginSet/2,
+              end:D2SourceOriginSet/2,preload:D2SourceOriginSet/2,
+              float:D2SourceOriginSet/2,align:D2SourceOriginSet/2,
+              hash:D2SourceOriginSet/2,theme:D2SourceOriginSet/2,
+              lang:D2SourceOriginSet/2,list:D2SourceOriginSet/2,
+              playlist:D2SourceOriginSet/2,autoplay:D2SourceOriginSet/2,
+              loop:D2SourceOriginSet/2,muted:D2SourceOriginSet/2,
+              controls:D2SourceOriginSet/2,fullscreen:D2SourceOriginSet/2,
+              modest:D2SourceOriginSet/2,related:D2SourceOriginSet/2}}
 
 D2MediaBlock/3 = {
   kind:"media",mediaKind:"image"|"audio"|"video",
@@ -1127,6 +1298,9 @@ D2MediaBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   nativeTarget:text,alt:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  slotOrigins:{nativeTarget:D2SourceOriginSet/2,alt:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   common:D2BlockCommonSemantics/1,
   semantics:D2MediaSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
@@ -1137,7 +1311,8 @@ D2AtomicSemantics/1 =
     {kind:"floating_title"}
   | {kind:"page_break"}
   | {kind:"thematic_break"}
-  | {kind:"toc",levels:CanonicalSignedDecimal|null}
+  | {kind:"toc",levels:CanonicalSignedDecimal|null,
+     origins:{levels:D2SourceOriginSet/2}}
 
 D2AtomicBlock/3 = {
   kind:"atomic",
@@ -1148,6 +1323,9 @@ D2AtomicBlock/3 = {
   level:D2ProductInteger|null,
   title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  slotOrigins:{anchor:D2SourceOriginSet/2,level:D2SourceOriginSet/2,
+               roles:[D2SourceOriginSet/2...],
+               options:[D2SourceOriginSet/2...]},
   common:D2BlockCommonSemantics/1,
   semantics:D2AtomicSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1
@@ -1159,7 +1337,8 @@ D2SavedDefinitionBlock/3 = {
   sourceRange:D2SourceRange/2,
   sourceOrigins:D2SourceOriginSet/2,
   definitionKind:"query"|"view"|"dynamic_block",
-  payload:text
+  payload:text,
+  slotOrigins:{definitionKind:D2SourceOriginSet/2,payload:D2SourceOriginSet/2}
 }
 
 D2BibliographyPlacementBlock/3 = {
@@ -1214,6 +1393,12 @@ D7HeadingProjection/2 = {
 全部 product union 都 strict：unknown/missing member、unknown arm、duplicate JSON key、非法 null 与跨 arm member 一律拒绝。D2ProductBlock/3 与 D2ProductInline/3 是固定 baseline 加具名 Weftext extension 的 current 完整产品 family；不存在 generic/opaque block、inline、property JSON 或第二 AST escape。
 
 D2NativeAttributeSet/1 是唯一允许可变命名属性的 native attribute carrier；value 只能来自闭合 D2NativeSemanticValue/1，entries 保留固定 parser 最终 named attribute map 的真实 enumeration order，name 唯一。D2BlockCommonSemantics/1 单独承载无法可靠从 named map 恢复的 public AbstractBlock slots：实际 style、caption、numeral、subs 以及原 positional order。这样既允许合法 arbitrary author attribute name，也不会打开自由 JSON。各 kind 的 dedicated semantic member 不是可省略 shortcut：同一个 fixed-Ruby fact 若同时出现在 nativeAttributes/common 与专用字段，经固定语义转换后必须 byte-equal。只有 fixed public model/converter 真正可观察的 internal derived attribute 才能保留。inline image 还必须区分 image/icon；reference anchor 区分 ref/bibref；footnote type 只允许 null|ref|xref；callout guard 精确保留 scalar 或两段 comment guard。
+
+字段级 provenance 是 closed product value 的一部分，而不是第二次 parse。D2NativeAttributeEntry/1 的每个 entry 直接携 sourceOrigins；D2BlockCommonSemantics/1、所有具名 per-kind semantics 与 block/inline slotOrigins 对象逐字段镜像其 semantic member。sequence-valued slot 的 origin array 长度必须与 value array 完全相等并按相同顺序配对；null/derived scalar 仍有自己的 D2SourceOriginSet/2。title/label/children/terms 等递归 D2ProductInline/3 序列由其每个 child 自身的字段级 origin 承载，不允许父 node 的 coarse sourceOrigins 冒充其独立 slot。unknown/missing origin member、长度错位、把一个 slot 的 origin 复用给另一个独立 slot，或仅凭 sourceRange/path/text 重建映射都 strict-fail。
+
+structured write gate 只看正在编辑的那个 slot 的 D2SourceOriginSet/2.writableSource，再叠加该 exact range.source owner 的当前写权限与最终 evaluation/read barrier currentness。kind=unique 且 source owner 可写/current 时必须允许原 owner 已定义的 structured edit 正向路径；generated、multi_origin、ambiguous、non_author_source 或缺写权限时该 slot 仍可读但 structured-readonly。managed include 的 unique authored range 也只授予其自己 source owner 的写权限，绝不从 root Document 权限继承。比如 `[source,ruby]` 的 block style、language 与 body text 分别绑定各自 span；`[#foo.red]` 的 id、每个 role 与 child text 分别绑定各自 span。reference/substitution/environment-derived 值保留真实 graph 输入但不能靠 node-level range 猜 writable target；任一 bound source/environment/dependency 在 final barrier stale 都使旧 slot write 失败并重新准备。
+
+D2DocumentMetadata/3 是固定 Ruby 2.0.26 最终 Document public/converter observable state 的产品 carrier，而不是 header 的近似摘要。backend 四元组与 safeMode/doctype 来自同一次 evaluation；title=完整 doctitle，mainTitle/subtitle 是同一次固定 title partition。authors 按 Document#authors 顺序保存 name/firstname/middlename/lastname/initials/email 六个成员，D9 或 UI 禁止从 full name/source 重新拆分。effectiveAttributes 按固定 Document#attributes 最终实际 enumeration order 保存完整 present map 且 name 唯一，包括 converter 可见的 builtin/generated/environment-derived attribute；这些 entry 通过 sourceOrigins 表示 authored/substitution/generated provenance，绝不为没有 physical author span 的值伪造 sourceRange。headerAttributes 只保留真实 physical header lexical entries及其 range，不承担 effective attribute authority。revision 的 number/date/remark 和全部 document-level独立成员同样保留字段级 origin。D9/D8 consumer只能消费这些 exact product members，不能从 raw source、fullname、默认 backend 或 ambient environment 补猜。
 
 D2SourceOriginGraph/2 只在一个 snapshot 内有效。origin id 必须从0连续无洞；每个 input id 都小于引用它的 node id，因此 graph 无环且不形成第二 identity namespace。authored 恰有一个 physical source range；reference 记录真实 authored reference site 与其 input；substitution/generated 记录固定 transformation family 与全部真实 inputs；multi_origin 至少两个 inputs。sourceOrigins.originIds 排序唯一且都存在。writableSource 从这些 origin 机械导出：只有所有 retained path 最终收敛到同一个 byte-equal authored writable range 才是 unique；generated、non-author、ambiguous 或 multi-source 都只能 structured-read。exact Source read/save 继续由原 authorization 独立提供。
 
@@ -1745,7 +1930,7 @@ D8AnnotationDraftOpenResponse/1 = {
 }
 ```
 
-这两个是真实 Core/D8 entry，不是 response-only shape。`d8_annotation_read` 在最终 authorized read barrier 返回完整 Value/4，因此 creator/authoredAt/lastEditor/editedAt 可显示；Draft 仍只保存/编辑 AnnotationEditableValue/1，绝不是第二 author authority。`d8_annotation_draft_open` 复用同一次 current read：有 annotation_write 时 draft.access=editable，否则为 readonly；readonly 不能进入 D8EditPrepareRequest/3。Draft 的 baseObservation/baseRevisionToken 必须分别等于 read.sourceObservation/read.annotationRevisionToken，serial=0 时 editable projection 必须等于 read.value 的七个 editable fields。local Draft 后续可以变化，但 prepare 与最终 read barrier 必须再次验证原 base token/Observation。
+这两个是真实 Core/D8 entry，不是 response-only shape。`d8_annotation_read` 在最终 authorized read barrier 返回完整 Value/4，因此 creator/authoredAt/lastEditor/editedAt 可显示；Draft 仍只保存/编辑 AnnotationEditableValue/1，绝不是第二 author authority。`d8_annotation_draft_open` 复用同一次 current read：有 annotation_write 时 draft.access=editable，否则为 readonly；readonly 不能进入 D8EditPrepareRequest/3。Draft 的 baseObservation/baseRevisionToken 必须分别等于 read.sourceObservation/read.annotationRevisionToken，serial=0 时 editable projection 必须等于 read.value 的八个 editable fields。local Draft 后续可以变化，但 prepare 与最终 read barrier 必须再次验证原 base token/Observation。
 
 D8EditIntent/3 的操作类别由封闭的 intent 分支与 targetPolicy 机械决定，绝不能由调用方提交可信标志：annotation+preserve 对应 ordinary_edit，annotation+replace_current 对应 manual_reattach，annotation_reconfirm_suggestion 对应 reconfirm_suggestion。调用方的 AnnotationEditableProposal/1 不携带 Suggestion 的生命周期状态或证明；Core 根据当前 before、操作类别与 proposal 构造唯一 proposed Value/4 后才固定字节。reconfirm 分支没有 caller value，其 proposedValue 完全由 Core 重新读取真实目标并重算产生。
 
@@ -1816,6 +2001,31 @@ D8PresentationPolicyInput/1 = {
   defaultPresentation:"separate"|"run_in"
 }
 
+D8PresentationPolicyHeadEvidence/1 = {
+  address:D8PresentationPolicyAddress/1,
+  recordPin:PinRef/2
+}
+
+D8PresentationPolicyPrepareResult/2 =
+    {kind:"d8_presentation_policy_no_change",version:2,
+     workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+     headSet:D8PresentationPolicyHeadSet/1}
+  | {kind:"d8_presentation_policy_prepared",version:2,
+     operationId:UUIDv4,
+     input:D8PresentationPolicyInput/1,
+     proposal:D8PresentationPolicyProposal/1,
+     headEvidence:[D8PresentationPolicyHeadEvidence/1...],
+     prepared:PreparedIntent/3,
+     request:d6_commit_request/2,
+     preview:EffectManifest/3}
+
+D8PresentationPolicyOutboxItem/1 = {
+  kind:"d8_presentation_policy_outbox",version:1,
+  decisionKey:DecisionKey/2,
+  address:D8PresentationPolicyAddress/1,
+  recordPin:PinRef/2
+}
+
 D8PresentationPolicyEffect/1 = {
   kind:"presentation_policy_change",version:1,
   before:D8PresentationPolicyHeadSet/1,
@@ -1859,7 +2069,16 @@ recordSha256 覆盖上述完整 prefixed bytes。PinRef/2 选择完全相同 byt
 
 D8PresentationPolicyHeadSet/1 是 D8 owner 对 Portable Workspace Metadata 中全部 maximal valid policy record 的 current observation。stamp 是这个 exact Workspace configuration 的 protected Core state：完整 head enumeration 首次建立一段 continuous proof epoch 时 revision=1；correctness evidence continuity 丢失/重建时换 epoch，之后每次已证明的 head-set transition 都 checked-increment revision；两个数字都不能选 branch。它不是 caller evidence 或 index scan。heads 排序唯一；[] 表示尚未初始化，一个 head 才是 current，多个 head 是 conflict。gap、unknown parent decoder、缺 retained record 或 metadata continuity 无法证明时都是 unavailable，绝不能解释成 empty/current。current binding 要求 headSet.heads == [address]，record/pin/address byte-equal，policy 等于 record 的机械 /1 view，并且完整 ancestry retained。
 
-D8PresentationPolicySetRequest/2 固定 managed_atomic/strict。读取 head set 前先通过 policy_admin 与 presentation-state disclosure。expectedHeads 必须与 observed D8PresentationPolicyHeadSet/1.heads byte-equal；[] 可初始化符合条件的 existing Workspace，一个 head 是普通更新，多个 heads 是显式 conflict resolution。OwnerInputBinding/2 使用 protocolOwner=D8、ownerKind=intentKind=d8_presentation_policy/1，canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1)，其中 headSet 是包含 stamp 的 exact protected observation。新 record 在一个 D6 planning CAS 和一个 final P commit 中成为全部 expected head 的唯一共同 successor，产生恰一个 presentation_policy_change owner effect，并为该 configuration transition 使用恰一个 ordinary portable ChangeId/ChangeRecord。committed effect 的 record.activationChangeId、DecisionKey receipt/effects association 与 ChangeRecord ChangeId 必须一致。这里精确复用 SeriesScopeConfiguration 的 complex-owner-effect 路径：不扩 Notice/CP PortableComponentKey，owner effect 由原 decision/receipt/ChangeRecord chain 认证，不建立第二 component 或 ledger。它不创建 D3 identity、source version/H、Policy/3 revision、Registry revision，也没有第二 ledger/CAS。saved/planned/unknown recovery 恢复 exact original head set/stamp、proposal、pins 与 P decision，绝不重新采样 current heads 或自动选 branch。
+D8PresentationPolicySetRequest/2 固定 managed_atomic/strict，并有一个实际 current producer。错误顺序是 closed decode → presentation-state disclosure → policy_admin → expectedFrontier/domain qualification → protected head-set read → expectedHeads exact equality → retained head record/pin/ancestry availability → semantic/budget。任何更早阶段失败都不得暴露 hidden head/value。一个 current head 且 defaultPresentation 与请求相同是 d8_presentation_policy_no_change：返回已授权的 exact headSet 后结束，零 PreparedIntent、零 P、零 ChangeId/record/outbox；[] 初始化与 multi-head conflict 即使所有 head value 相同也绝不是 no-op。
+
+改变路径构造 D8PresentationPolicyInput/1 和 Proposal/1：proposal.parents 等于完整 frozen headSet.heads，revision 在 [] 时为1，否则 checked(max(parent.revision)+1)，并固定请求的 defaultPresentation；proposal 本身永远没有 activationChangeId。headEvidence 与 heads 一一同序且 address byte-equal，recordPin 选择 retained parent record 的 exact canonical bytes。Core 随后构造一个现有 PreparedIntent/3：InputDescriptor/3 使用 protocolOwner=D8、ownerKind=intentKind=d8_presentation_policy/1、saveProfile=control_only、guarantee=managed_atomic、frontierPolicy=exact、observationScope=既有 control_only Workspace scope、sourceInputs=[]，canonicalDescriptorBytes=D3-CJ/3(input)，controlInputs/DependencyProof 精确包含实际读取的 authorization 及其它真实 control dependency，pinRefs 精确覆盖 headEvidence 加实际 authorization/dependency evidence。这个 P-only shared configuration producer 不取得 author source、SourceRevisionPlan 或 content ChangeId。preview 恰含一个 presentation_policy_change，其 before=frozen headSet、proposal=frozen proposal、committed=null。D8PresentationPolicyPrepareResult/2 的 prepared/request 分别是这一个 current PreparedIntent/3 与由同一 operationId/planToken 产生的原 d6_commit_request/2；Core 在返回前原子保存这份 outside association。saved/planned/unknown 只恢复这些 original bytes/pins/head stamp/proposal/request，绝不 fresh-resample heads。
+
+winning planning CAS 冻结 exact Input、headSet stamp、headEvidence、Proposal、authorization/dependency/budget、preview 和 D6 plan责任。由于 current record 必须包含尚未分配的 activationChangeId，prepare、planning、staging、InstallationNotice、install 与 verify 阶段一律不得构造/编码 D8WorkspacePresentationPolicy/2，不得计算其 recordSha256，不得创建它的 portable_metadata pin 或 D8PresentationPolicyOutboxItem/1，也不得预留 ChangeId。presentation policy 继续复用 fixed-parent EffectManifest 的真实 rank-6 series_configuration_change 所在的 complex-owner-effect 类：EffectItem/3 使用 typed presentation_policy_change，但不增加 PortableComponentKey；任何该 decision 既有 component install/verify 仍只描述原 D6 component，绝不塞一个虚构 policy component。
+
+final P 是唯一 materialization 点。P 先按原 D6 顺序重验 policy_admin/authorization、domain fence、expectedFrontier、完整 frozen headSet stamp/heads、parent records/ancestry、dependency 与 budget；old-head 预验后若另一个 writer 已改变 head set，当前 plan conflict/reprepare，且尚无新 ChangeId。全部通过后，同一个 P transaction 才 checked-allocate唯一 ChangeId C，然后从 frozen Proposal+C 构造唯一 D8WorkspacePresentationPolicy/2；严格 D3-CJ/3 编码带固定前缀，计算 recordSha256，建立 exact recovery portable_metadata PinRef/2/address，并把 committed presentation_policy_change（before/proposal/committed）、原 decision/receipt/effects、ChangeRecord association 与 D8PresentationPolicyOutboxItem/1 一起落入原 P/outbox，同时把 owner head graph 原子转为这个 successor。record.activationChangeId、ChangeRecord.changeId、receipt/effect decision 与 outbox decisionKey 必须全等；任一步失败都在 P commit 前整体失败，不能留下半个 record/pin/head。
+
+两个 offline writer 可从同一 parent 分别 seal，sync 后形成两个 maximal heads；禁止 arrival/hash/revision-number/LWW 选胜者。显式 resolution 必须以完整当前多 head set 为 parents 走同一 producer，并产生唯一 multi-parent successor。P 已提交而 publication/transport 失败时，重试只从 D8PresentationPolicyOutboxItem/1 解引用并重放 exact retained record bytes；不得重新编码、重新分配 ChangeId、重算 proposal 或改 head。receiver 只有在 strict canonical record/address/pin、activationChangeId、原 EffectManifest/receipt/ChangeRecord decision association、parent ancestry 与 head-set continuity 全部验证后才 admission；相同 hash、trusted sender、布尔“已验证”或 provider latest 都不能替代。final P 前 revocation 使该 plan 按原 authorization 错误停止且零 ChangeId；P 后 revocation 只影响当前可见/后续管理资格，不改历史 decision/outbox。这里没有第二 Policy store、ledger、CAS 或迁移层。
+
 
 sync/admission 必须验证每个 immutable record 的 domain/canonical bytes、activationChangeId、exact retained ChangeRecord/receipt/EffectManifest presentation_policy_change association、ancestry 与 current head-set stamp continuity，再把它放入 portable head graph。record 的 historical decoder 未知、activation decision 无法证明或 head-set observation 不连续时只能 unavailable，绝不能 current。conflicting heads 始终保持 conflict，直到授权的显式 multi-parent successor 解决。只有所有 descendant/recovery last-reference 都不再需要某 non-head record 时才可 compaction。device-local preference 或 host default 永远不能替代这个 Workspace-wide record。
 
@@ -2056,6 +2275,10 @@ PublicationReceipt/3 = {
 exact-source/resource-exact/query-json plan 强制 generationPolicy={kind:"none"}、templateBinding=null、routeBinding=null、documentRenderBinding=null，projection 不得含 renderer-derived value。即使 template/provider/generation registry unavailable，它们仍有唯一可编码正向路径，因为本合同根本不消费这些依赖。rendered HTML/PDF/DOCX/ODT 与有限 table output 使用 generationPolicy.render；某一 policy 类未使用时对应 array 可以为空。
 
 D9TemplateBindingChoice/1 只在真实 ambiguous binding 且 authorized template/profile 允许用户选择时出现；inputIndex 必须选择 exact frozen catalog item，不能借 choice 新增 read。D9MissingPolicyChoice/1 只能命中已存在的 exact template path，且 authorized projection value 确为 none；action=empty 不能掩盖 unknown path、unreadable input、type error 或 unavailable schema。imageSizes 按 ResourceRef key 排序唯一，两个 dimension 均为 positive，resource 必须等于 authorized resource catalog input。layoutChoices 同样按 ResourceRef key 排序唯一，必须存在相同 resource 的 imageSizes，而且只在 fixed Templates rule 真正要求 explicit layout choice 时出现。preserve_aspect_within_box 取不超过两个 chosen dimension 的最大同宽高比尺寸；use_exact_dimensions 使用两个 chosen dimension 并记录 required layout loss。
+
+current ExportPlan/3 的所有 set-like array 由一个 comparator contract 闭合。routeBinding.steps 的 array position i 必须有 step=i，形成0..N-1；每个 step.evidencePins 按 pinToken 排序唯一。styleBundles 按 styleBundleId UTF-8 bytes 排序唯一，同 ID 不同 version/pin 是 conflict。stagedOutputs 与 PublicationReceipt/3.outputs 都按 fixed-parent controlled relative output name 的 canonical bytes 排序唯一；重复 name 一律非法，同名不同 byteLength/sha256/pin 是明确 integrity conflict，绝不 LWW。generationPolicy.render.bindingChoices 与 missingPolicy 分别按 templatePath 的 fixed Templates canonical path comparator 排序唯一，同一 templatePath 不能有两个不同 inputIndex/action，也不能同时既 bindingChoice 又 missingPolicy。nativeTableBindings 按 (setName,columnName) 的受控 ASCII bytes 元组排序唯一，同 key 不同 token/selector 失败。已有 imageSizes/layoutChoices 的 ResourceRef 排序唯一、lossChoices 的 lossKey、plan evidencePins/recoveryPins 的 pinToken 规则继续原样有效，不允许另一个实现自选排序。
+
+D9 prepare 在任何 ExportPlan/3 bytes、plan token、protected pin、staged manifest 或 confirmation basis 冻结前，先 strict-decode 全部 choice，按上述 key 检测 duplicate/conflict，再对合法 input permutation 执行唯一 canonical sort。因而只交换同一合法集合的输入顺序必须得到 byte-for-byte 相同 Plan；duplicate key 即使 body byte-equal 也因 unique 规则拒绝，body 不同则同时是 integrity conflict。冻结后的 ExportPlan/3、PublicationReceipt/3、recovery/receiver record 必须已经 canonical；reader/admission 遇到乱序、duplicate 或 key/body conflict 直接 fail，绝不通过“读时排序”修复历史/受保护 bytes。receipt 重复的 route/style/generation-policy 选择仍与 protected Plan byte-equal，outputs 用上面的独立 canonical output-name comparator。
 
 D9ExportTemplateBinding/1.inputIndex 必须选择 inputCatalog.items[index] 中恰一个 payload.kind=template 项；pin 与该 item.pin byte-equal。profileId/profileVersion 必须选择能成功解码这些 exact bytes 的 accepted decoder；profile mismatch/unavailable 是 template unavailable，不得 fallback。不存在第二 template registry 或 filename lookup。
 
@@ -3158,4 +3381,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +251 coordination，共689，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +278 coordination，共716，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。

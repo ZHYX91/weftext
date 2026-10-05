@@ -213,7 +213,8 @@
         "source Input2/Plan1/Preview1 vs policy Input3/Plan2/Preview2 arm dispatch inside current PreparedIntent3",
         "D8 presentation default reuses the existing complex shared-configuration owner-effect/P-plan pattern rather than adding PortableComponentKey or mutating Policy3/Registry",
         "D8 presentation shared configuration binds stamped head-set OwnerInput and one ordinary ChangeRecord/P owner effect while preserving the /1 logical current value",
-        "AnnotationAggregateObservation/1 and AnnotationAggregateInstall/1 consume exact fixed FileObjectBinding/1 + FileInstallCapability/2 absent/present/strict/observed cross-fields without widening those D6 types"
+        "AnnotationAggregateObservation/1 and AnnotationAggregateInstall/1 consume exact fixed FileObjectBinding/1 + FileInstallCapability/2 absent/present/strict/observed cross-fields without widening those D6 types",
+        "D8 presentation SetRequest concrete PreparedIntent3+d6_commit_request2 producer freezes Proposal/head evidence at planning and materializes ChangeId-dependent record/hash/pin/outbox only inside final P"
       ]
     },
     {
@@ -275,7 +276,8 @@
         "presentation record activation ChangeId plus receipt/EffectManifest/ChangeRecord association is required for sync/admission; head-set stamp continuity prevents revision/LWW guessing",
         "node-local weftext.annotations.json AnnotationAggregate/1 physical envelope, deterministic ordering/duplicate-owner/reply-graph validation and absent empty state",
         "AnnotationAggregateObservation/1 + AnnotationAggregateInstall/1 reuse trusted FileObjectBinding and strict one-file CAS while keeping per-Annotation logical revisions separate",
-        "multi-record same-file prepare/install/one-P coalescing, unchanged-record observation refresh, external JSON/sync/conflict/backup/copy/Trash/restore/purge boundaries"
+        "multi-record same-file prepare/install/one-P coalescing, unchanged-record observation refresh, external JSON/sync/conflict/backup/copy/Trash/restore/purge boundaries",
+        "D8 presentation policy P-owned portable record/outbox publication and receiver admission retain original EffectManifest/receipt/ChangeRecord/ancestry association with exact-byte crash retry"
       ]
     },
     {
@@ -402,7 +404,8 @@
         "D10 preview digest",
         "closed WorkspaceBootstrapPlan/4 encoding",
         "current annotation source images and EffectBytes use complete D3 Annotation Value4 canonical bytes; historical d3_annotation_value3 bytes retain decoder",
-        "EffectItem/3 adds only typed presentation_policy_change for the D8 complex shared-configuration owner effect; historical EffectItem1/2 stay exact"
+        "EffectItem/3 adds only typed presentation_policy_change for the D8 complex shared-configuration owner effect; historical EffectItem1/2 stay exact",
+        "presentation_policy_change preview remains committed=null before P; final P alone installs the committed record plus protected exact-record outbox association"
       ]
     },
     {
@@ -551,7 +554,8 @@
         "D2DocumentSnapshot3/Draft full-product Source fallback and D8 workspace presentation policy",
         "independent JSON Annotation current Source/visual/edit lifecycle uses one R6 inline source, Value4 CAS and Core actor/time without a second rich-body authority",
         "explicit run-in/separate/conflict/no-body presentation remains usable without Workspace policy; implicit default binds one-head D8 shared configuration and real currentness",
-        "workspace_default binds the /1 logical current value plus /2 portable record and stamped head-set; explicit/no-body paths remain policy-free"
+        "workspace_default binds the /1 logical current value plus /2 portable record and stamped head-set; explicit/no-body paths remain policy-free",
+        "field-level product provenance gates structured author edits without changing ordinary exact Source/Draft/whole-source-save availability"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -584,7 +588,8 @@
         "current D8 document/Draft/render consumers validate product evaluation binding and consume Workspace presentation policy only on actual workspace_default decision",
         "presentation policy mutation owner input freezes the exact stamped head-set and saved/planned recovery preserves that observation",
         "actual d8_annotation_read + d8_annotation_draft_open producers return complete Value4 attribution/current basis while Draft remains an editable projection",
-        "manual_reattach and annotation_reconfirm_suggestion operation classes with Core-owned target evidence"
+        "manual_reattach and annotation_reconfirm_suggestion operation classes with Core-owned target evidence",
+        "presentation policy SetRequest error order, no-change arm, exact head evidence, PreparedIntent3/request carrier, final-P materialization, revocation and saved/planned/unknown recovery"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -638,7 +643,8 @@
         "provider profiles",
         "no implicit adoc probe arm",
         "managed AsciiDoc current product projection for semantic/rendered paths while d9_probe input union remains unchanged",
-        "render/export consumes complete product semantic profiles and exact route/target terminal profile without reparsing source or ambient generation defaults"
+        "render/export consumes complete product semantic profiles and exact route/target terminal profile without reparsing source or ambient generation defaults",
+        "render/export consumes complete structured author/final effective document metadata directly from D2 product without fullname/raw-source/ambient-default reconstruction"
       ]
     },
     {
@@ -669,7 +675,8 @@
       ],
       "changedSections": [
         "ExportPlan3/PublicationReceipt3",
-        "format/provider/export cases"
+        "format/provider/export cases",
+        "canonical collection permutation/duplicate/conflict cases and complete product document-state consumption"
       ]
     },
     {
@@ -685,7 +692,8 @@
       ],
       "changedSections": [
         "Descriptor3/Proof3/PAB4 template construction qualification",
-        "native-table Office SET/COLUMN shortest-unique selector over multi-row/merged/repeated/CJK/RTL headers and finite per-plan missing/image/layout choices"
+        "native-table Office SET/COLUMN shortest-unique selector over multi-row/merged/repeated/CJK/RTL headers and finite per-plan missing/image/layout choices",
+        "bindingChoices and missingPolicy canonical templatePath ordering/uniqueness plus nativeTableBindings (setName,columnName) ordering and duplicate-conflict closure"
       ]
     },
     {
@@ -722,7 +730,8 @@
         "provider profiles",
         "fully closed ExportPlan3 route/template/target/destination/loss-confirmation/evidence/staged-output types",
         "D2DocumentSnapshot3 rendered export and frozen D8 presentation-policy binding",
-        "ExportPlan3 current token/version dispatch, inline closed generation policy, exact template/route/pin cross-fields, product include currentness and frozen conditional presentation decision"
+        "ExportPlan3 current token/version dispatch, inline closed generation policy, exact template/route/pin cross-fields, product include currentness and frozen conditional presentation decision",
+        "ExportPlan3 canonical set-like collections: route-step evidencePins, styleBundles, staged/receipt outputs, binding/missing/native-table choices; prepare canonicalizes before freeze and readers reject noncanonical records"
       ]
     },
     {
@@ -757,7 +766,9 @@
         "source-origin ranges and stable Node/Resource/citation identity adapters after native parsing",
         "historical D2 Annotation outer v2 plain_text/replace_plain_text/targetStatus model retained only as historical decoder; current author authority is portable Value4 metadata",
         "current product /3 complete fixed-Ruby per-kind semantics, typed native attributes, SourceOrigin graph, exact environment/include dependency binding and arbitrary-precision effective levels",
-        "current product /3 also retains public block common slots and native inline subtype semantics (icon/ref-bibref/footnote/callout) without free JSON or second parsing"
+        "current product /3 also retains public block common slots and native inline subtype semantics (icon/ref-bibref/footnote/callout) without free JSON or second parsing",
+        "field-level SourceOrigin/write gate for NativeAttributeEntry, common/per-kind semantics, block/inline slots and unique-authored structured-edit positive path",
+        "complete fixed-Ruby Document observable product: backend/safe/doctype/title partition, structured author components, revision and final effective attributes without fabricated source ranges"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -857,7 +868,8 @@
         "historical single-source authority authorization exact-source and invalid-repair safeguards retained",
         "Annotation mutation/value implementation obligations are not replaced by this Stage4A entry",
         "historical plain Annotation implementation obligations superseded for current paths by portable Value4 plus single R6 AnnotationInlineProfile while raw historical recovery remains",
-        "current product implementation consumes one complete typed D2 snapshot/evaluation binding for read/query/render/write gating; no second parser or flat-origin shortcut"
+        "current product implementation consumes one complete typed D2 snapshot/evaluation binding for read/query/render/write gating; no second parser or flat-origin shortcut",
+        "current product implementation carries per-slot provenance and complete fixed-Ruby document metadata/effective attribute state; no second parser or fullname/source reconstruction"
       ]
     },
     {
@@ -906,7 +918,8 @@
       ],
       "changedSections": [
         "obsolete five-heading-level premise replaced by current authored6-9 and uncapped effective-level product projection",
-        "target depth limitations are explicit export loss/degradation or provider unavailability rather than source rejection"
+        "target depth limitations are explicit export loss/degradation or provider unavailability rather than source rejection",
+        "current ExportPlan3 canonical collection ordering/uniqueness and complete fixed-Ruby document-state/product provenance obligations"
       ]
     }
   ],

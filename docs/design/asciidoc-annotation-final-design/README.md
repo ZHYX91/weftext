@@ -23,7 +23,7 @@ This directory turns the independently reviewed complete AsciiDoc design, Weftex
 1. [REVIEW-ENTRY.md](REVIEW-ENTRY.md)
 2. [SPEC.md](SPEC.md) — behavior, algorithms, and owner replacements
 3. [SCHEMAS.md](SCHEMAS.md) — current closed shapes, ordering, and historical dispatch
-4. [ACCEPTANCE.md](ACCEPTANCE.md) — 689 explicit unexecuted design obligations
+4. [ACCEPTANCE.md](ACCEPTANCE.md) — 716 explicit unexecuted design obligations
 5. [terminology-registry.json](terminology-registry.json)
 6. [replacements.json](replacements.json)
 
@@ -34,8 +34,8 @@ This is one joint PR because managed document format, PAB4, EffectManifest3, D10
 ## Acceptance accounting
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 251
-- total: 689
+- actual-owner coordination fixtures: 278
+- total: 716
 - status: **all unexecuted**.
 
 The author runs only document/JSON/router consistency checks. Acceptance requires a non-author review bound to the exact stopped PR head SHA.
