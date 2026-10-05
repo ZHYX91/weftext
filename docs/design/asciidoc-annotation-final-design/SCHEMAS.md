@@ -1182,12 +1182,10 @@ D7RejectSuggestionIntent/2 = {
   expectedAnnotationRevisionToken:AnnotationRevisionToken/1
 }
 
-D7ActionSpec/2 = {
-  format:"weftext.action",version:2,
-  intent:<exact fixed-parent non-suggestion ActionSpec/1 arm> |
-         D7ApplySuggestionIntent/2 |
-         D7RejectSuggestionIntent/2
-}
+D7ActionSpec/2 :=
+  ActionSpec/1 with top-level version=2,
+  with the fixed-parent apply_suggestion arm removed,
+  plus D7ApplySuggestionIntent/2 and D7RejectSuggestionIntent/2
 
 D7ActionPrepareRequest/3 = {
   wireVersion:3,kind:"d7_action_prepare",
