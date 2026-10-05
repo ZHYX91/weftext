@@ -11,8 +11,8 @@ translation_status: synced
 Status: **design obligations only; not executed**.
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 163
-- total: 601
+- actual-owner coordination fixtures: 212
+- total: 650
 
 Each row is a normative obligation of this candidate. Words such as PASS/FAIL describe the future acceptance condition and do not claim execution in this PR.
 
@@ -459,10 +459,59 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M39-10 | SPEC §§2–3 | document/0 positive: the actual returned top-level Document carrier is published first and the later bind callback still holds the exact same Ruby object. |
 | M39-11 | SPEC §§2–3 | document/0 negative: binding before publication, or later re-finding a Document by title/source/text, fails even if final entry0 is correct. |
 
-## Actual-owner coordination — 163
+## Actual-owner coordination — 212
 
 | ID | Spec area | Requirement |
 |---|---|---|
+| FC4R-PROD-01 | SPEC §3.4 | Two fixed-2.0.26 source blocks differing only in declared language, e.g. ruby vs java, produce distinct D2DelimitedSemantics/1 language values and remain distinguishable to D8/D9 without reparsing exact source. |
+| FC4R-PROD-02 | SPEC §3.4 | A source/listing block with linenums/start/indent/tabsize/highlight/line-comment facts round-trips those actual fixed-derived semantics through D2DocumentSnapshot/3; omitting one required present fact or inventing a host default fails the product projection. |
+| FC4R-PROD-03 | SPEC §3.4 | [quote,Alice,Book] and [quote,Carol,Book] with the same body produce different attribution while retaining citetitle; D9 rendering consumes these product facts rather than recovering them from raw source. |
+| FC4R-PROD-04 | SPEC §3.4 | A fixed-Ruby appendix/special/numbered section differs from an ordinary section with equal visible heading text; sectname/special/numbered are preserved and affect outline/TOC/render semantics. |
+| FC4R-PROD-05 | SPEC §3.4 | Visible and concealed indexterms with equal terms remain distinguishable, and see/see-also values are preserved exactly; DocBook-style output need not reparse the source to recover them. |
+| FC4R-PROD-06 | SPEC §3.4 | Quoted inline text carrying #id, .role, or #id.role retains id and ordered roles in the product projection; CSS/anchor/accessibility consumers do not lose those fixed-Ruby facts. |
+| FC4R-PROD-07 | SPEC §3.4 | Audio/video product projection preserves the actual start/end/options and applicable poster/width/height/preload/list/playlist/theme/lang/control facts; equal target URL with different media semantics cannot collapse to one product value. |
+| FC4R-PROD-08 | SPEC §3.4 | A legal arbitrary native attribute name remains representable through D2NativeAttributeSet/1 using only the closed D2NativeSemanticValue/1 union; an unknown property name is not itself syntax-invalid and arbitrary JSON values are rejected. |
+| FC4R-PROD-09 | SPEC §3.4 | Ordered/unordered/description/callout/checklist list semantics preserve style/start/reversed/checklist/interactive/coids where applicable, while item order and duplicate visible text remain unchanged. |
+| FC4R-PROD-10 | SPEC §§3.4,8.3 | Native table format/grid/frame/stripes and physical columnStart/colspan/rowspan plus TOC levels are available to product consumers; a valid complex table or TOC cannot require a second parser merely to render/export correctly. |
+| FC4R-ORIGIN-01 | SPEC §3.4 | For :who: Alice followed by Hello {who}, the resulting Alice value records authored definition/reference/substitution provenance and derives a unique writable authored range only when all retained origin paths actually converge there. |
+| FC4R-ORIGIN-02 | SPEC §3.4 | A generated or multi-origin semantic value with no unique authored writable range remains readable and exact-Source-saveable, while structured write is unavailable rather than guessed to one range. |
+| FC4R-ORIGIN-03 | SPEC §§3.4,8.1–8.3 | Root R containing include::child.adoc[] with child V1=Alpha then V2=Beta invalidates the V1 D2 snapshot for D7/D8/D9 even if R bytes and document_format stay equal; managed include SourceObservation equality is required. |
+| FC4R-ORIGIN-04 | SPEC §3.4 | Changing an artifact/network include pin or network request digest makes the old evaluation binding stale; equal logicalPath or resulting text cannot prove currentness. |
+| FC4R-ORIGIN-05 | SPEC §3.4 | Changing ordered API attributes, locale/provider profile, sourceDateEpoch or another processor-environment input changes the environment digest and invalidates an old product evaluation even when final visible text happens to match. |
+| FC4R-ORIGIN-06 | SPEC §3.4 | An unavailable global fact that is not in the product evaluation's closed actual dependency set does not block current product consumption; scope_dependencies proves only the dependencies actually bound by that evaluation. |
+| FC4R-LEVEL-01 | SPEC §§3.4,8.1 | A legal fixed-Ruby effective level greater than 2^63-1, such as from a huge leveloffset, is encoded as the D7 integer canonical decimal value and is not rejected or truncated as int64/Counter. |
+| FC4R-LEVEL-02 | SPEC §§3.4,8.1 | Ordinary effective levels 1–9 preserve the existing heading/query/outline/render path with no new compatibility branch or display change merely because the current level type is arbitrary precision. |
+| FC4R-LEVEL-03 | SPEC §3.4 | If processing an extremely large legal effective level exhausts bounded work/memory, the operation returns budget_exceeded/unavailable under the resource contract; it must not reclassify the source as syntax-invalid or numeric_overflow. |
+| FC4R-RUN-01 | SPEC §8.2 | Explicit .separate renders Separate even when the Workspace presentation-policy record is missing, corrupt, or conflicted; no policy read/pin is required for that presentation decision. |
+| FC4R-RUN-02 | SPEC §8.2 | Explicit .run-in with an eligible semantic-adjacent body may render RunIn while Workspace policy has multiple heads; the explicit source role does not depend on choosing a policy branch. |
+| FC4R-RUN-03 | SPEC §8.2 | With neither role and a body that actually needs the implicit Workspace default, missing/corrupt/multiple policy heads makes default-dependent presentation unavailable; no ambient host/device default substitutes. |
+| FC4R-RUN-04 | SPEC §8.2 | No eligible body yields the closed no_eligible_body→Separate decision and does not read Workspace policy, regardless of the current policy state. |
+| FC4R-RUN-05 | SPEC §8.2 | Two offline writers from revision1 may produce distinct revision2 policy records; sync retains both record hashes as maximal heads and neither revision equality, arrival order nor LWW chooses current. |
+| FC4R-RUN-06 | SPEC §8.2 | An authorized conflict resolution over multiple presentation heads names the complete expected head set and creates one checked max(parent.revision)+1 multi-parent successor in one D6 planning CAS/P decision; a partial head set is stale/invalid. |
+| FC4R-RUN-07 | SPEC §8.2 | Saved/planned/unknown presentation-policy mutation restores its exact original head set, proposal, pins and P responsibility; it never resamples newer heads or retries as another decision. |
+| FC4R-RUN-08 | SPEC §8.2 | A policy-head change invalidates only render-cache entries whose D8PresentationDecision is workspace_default; explicit/no-body/conflict-fallback entries do not acquire a policy dependency they never consumed. |
+| FC4R-RUN-09 | SPEC §§8.2–8.3 | A D9 plan staged with workspace_default policy head P remains byte-frozen if policy later changes; a plan with an explicit source-role decision contains no policy binding at all, and fresh preparation alone consumes newer policy state. |
+| FC4R-EXP-01 | SPEC §8.3 | asciidoc_source produces a unique Plan3 with generationPolicy=none and null template/route/render bindings even when all renderer/template/provider registries are unavailable. |
+| FC4R-EXP-02 | SPEC §8.3 | resource_exact and query_json likewise have a unique policy-independent positive encoding and cannot be disabled by unavailable Office generation configuration. |
+| FC4R-EXP-03 | SPEC §8.3 | missingPolicy=empty may apply only to an existing exact template path whose authorized projection is none; unknown path, unreadable data, type error or unavailable schema still fails and cannot be converted to empty. |
+| FC4R-EXP-04 | SPEC §8.3 | imageSizes is ResourceRef-key unique with positive micrometre dimensions; required layout choice is bound to that same authorized resource, and missing metadata/layout loss follows fixed Templates rules rather than a filename/digest guess. |
+| FC4R-EXP-05 | SPEC §8.3 | D9ExportTemplateBinding/1.inputIndex selects exactly one catalog template item, its pin is byte-equal to that item pin, and profileId/profileVersion identify the accepted decoder for those exact bytes. |
+| FC4R-EXP-06 | SPEC §8.3 | Every nonnull route has a continuous provider/profile chain whose terminal profile matches the export target; a target/terminal mismatch fails instead of silently selecting another route. |
+| FC4R-EXP-07 | SPEC §8.3 | For the same semantic Plan3, evidencePins is exactly the recursive typed PinRef union plus recoveryPins. Omitting a reachable template/style/route/snapshot/dependency/staged pin or adding an unrelated pin fails, so two conforming encoders produce identical Plan bytes. |
+| FC4R-EXP-08 | SPEC §8.3 | Fresh Plan3/Receipt3 tokens use d9_export_plan/3 and d9_publication/3; inspect/confirmation/recovery dispatch token tag before record version, while genuine Plan/Receipt1-/2 retain original tags/bytes/pins and are never repinned as /3. |
+| FC4R-EXP-09 | SPEC §8.3 | Once Plan3 has frozen source/include/render/presentation/generation inputs and staged bytes, later source/include/policy/template/route change cannot rerender an unknown/saved publication; current reprepare is a new plan under the original authorization/error order. |
+| FC4R-TABLE-01 | SPEC §8.3 | A native table with one uniquely named lowercase-ASCII leaf column amount may expose COLUMN=amount and SET=native_table with no author export metadata. |
+| FC4R-TABLE-02 | SPEC §8.3 | In a multi-row header where two leaf columns are Amount under distinct parents Q1 and Q2, leaf alone is ambiguous and the shortest unique header suffix selects the intended physical column deterministically. |
+| FC4R-TABLE-03 | SPEC §8.3 | Two tables containing the same header suffix are disambiguated next by exact table title; the resolver does not merge their SET namespaces or choose the first table. |
+| FC4R-TABLE-04 | SPEC §8.3 | When table title and full header path are still byte-equal, the closed zero-based table/column occurrence qualifier is required; the ordinal is computed from the frozen product projection, not UI/memory order. |
+| FC4R-TABLE-05 | SPEC §8.3 | CJK, RTL, combining-character and normalization-distinct header text compare by exact Unicode scalar sequence with normalization=none/case-sensitive/whitespace-preserving semantics; non-ASCII qualified names use the fixed ASCII digest token. |
+| FC4R-TABLE-06 | SPEC §8.3 | Empty header cells, repeated labels and merged colspan/rowspan heads construct deterministic headerPath segments from D2 table-grid facts; rowspan does not duplicate one source cell into later path levels. |
+| FC4R-TABLE-07 | SPEC §8.3 | Adding a later colliding table/column can make a previously short fresh selector ambiguous and require a qualified template token; an already prepared plan remains frozen to its original projection/selector/staged bytes. |
+| FC4R-TABLE-08 | SPEC §8.3 | Every data.SET.COLUMN token in one repeat SET must resolve to the same selected table/rowset; a token that resolves another SET/table, an unknown column or irreducible collision is template_invalid/ambiguous rather than an implicit join. |
+| FC4R-WIRE-01 | SPEC §§7–8 | A legal replica_local create_node/move_node/reorder_node/trash current wire13 request omits expectedAuthority, workspaceProposal and preparationBinding and strict-decodes successfully under the inherited mode matrix. |
+| FC4R-WIRE-02 | SPEC §§7–8 | The same replica_local request with expectedAuthority present, workspaceProposal present, preparationBinding present, or any of those encoded as JSON null fails closed decode/mode validation. |
+| FC4R-WIRE-03 | SPEC §§7–8 | managed_atomic create/fork requires expectedAuthority=create plus the inherited required proposal, continue requires continue, and other managed_atomic modes require existing; descriptor/request values match exactly where present. |
+| FC4R-WIRE-04 | SPEC §§7–8 | Current D7/D8/D9 paths that create a wire13 D3 request choose a mode with an actually encodable inherited optional-member shape; routing to wire13 can never force a forbidden member merely because the /13 schema exists. |
 | FC4B-VAL-01 | SPEC §§9.6–9.9 | Current interactive Annotation creation uses D7CreateAnnotationIntent/2 with destinationOwnerRef + AnnotationEditableValue/1 only; after normal owner/create authorization Core injects creator/authoredAt/lastEditor/editedAt, constructs the wire13 create_annotation graph and stores one PortableAnnotationRecord/4. Caller-supplied actor/time/trusted flags or a generic d3_operation impersonating trusted creation fail. |
 | FC4B-VAL-02 | SPEC §§9.6–9.7 | A reviewState-only open→resolved mutation changes complete Value/4, allocates exactly one fresh annotationRevisionToken, advances the managed Annotation SourceVersion through the existing SourceRevisionPlan path, preserves creator/authoredAt, and Core rewrites lastEditor/editedAt. A concurrent edit prepared from the old token loses CAS. |
 | FC4B-VAL-03 | SPEC §§9.6–9.7 | Changing only appearance or labels is a real Value/4 mutation with the same one-token/one-managed-after rule; it cannot reuse the old token merely because target/body/reply are unchanged. |
@@ -629,7 +678,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 
 ## PR4 schema repair coverage (no new acceptance IDs)
 
-The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced. Stage4B adds only FC4B-VAL-01..08, FC4B-D8-01..05, FC4B-SUG-01..06, FC4B-LIFE-01..05, and FC4B-ALIAS-01, bringing the cumulative inventory to 601; every prior row body remains byte-for-byte unchanged.
+The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced. Stage4B adds only FC4B-VAL-01..08, FC4B-D8-01..05, FC4B-SUG-01..06, FC4B-LIFE-01..05, and FC4B-ALIAS-01, bringing the cumulative inventory to 601; every prior row body remains byte-for-byte unchanged. The Stage4A-residual repair adds only FC4R-PROD-01..10, FC4R-ORIGIN-01..06, FC4R-LEVEL-01..03, FC4R-RUN-01..09, FC4R-EXP-01..09, FC4R-TABLE-01..08, and FC4R-WIRE-01..04, bringing the cumulative inventory to 650; it creates no new finding ID and replaces no prior row body.
 
 - retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
 - M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
@@ -641,4 +690,4 @@ The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D row
 
 ## Not executed
 
-This PR did not execute these 601 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
+This PR did not execute these 650 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
