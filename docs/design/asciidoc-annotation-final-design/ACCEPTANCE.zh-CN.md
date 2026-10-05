@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 212
-- total: 650
+- actual-owner coordination fixtures: 217
+- total: 655
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -458,7 +458,7 @@ translation_status: source
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
 | M39-11 | SPEC §§2–3 | document/0 反例：先 bind document/0、之后才发布 actual returned Document，或 bind 时按 title/source/text 重新寻找 D；即使最终 entry0 正确也必须失败。 |
 
-## Actual-owner coordination — 212
+## Actual-owner coordination — 217
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
@@ -472,6 +472,9 @@ translation_status: source
 | FC4R-PROD-08 | SPEC §3.4 | 合法 arbitrary native attribute name 可通过 D2NativeAttributeSet/1 表示，但 value 只能属于 closed D2NativeSemanticValue/1；陌生属性名本身不能使语法 invalid，自由 JSON value 必须拒绝。 |
 | FC4R-PROD-09 | SPEC §3.4 | ordered/unordered/description/callout/checklist list 必须按实际 kind 保留 style/start/reversed/checklist/interactive/coids，同时保持 item order 与重复可见文本。 |
 | FC4R-PROD-10 | SPEC §§3.4,8.3 | native table 的 format/grid/frame/stripes、physical columnStart/colspan/rowspan 及 TOC levels 必须供产品 consumer 直接读取；合法复杂表或 TOC 不能为了 render/export 再建 parser。 |
+| FC4R-PROD-11 | SPEC §3.4 | fixed-Ruby block 的 observable style/caption/numeral/substitution list 或 positional value 只要不同，即使 body/title/named attribute map 其余相同，也必须产生不同 D2BlockCommonSemantics/1；consumer 不得回 parse source 找回这些 slot。 |
+| FC4R-PROD-12 | SPEC §3.4 | native inline icon/image 与 ref/bibref anchor 必须保持不同 product semantics；icon 的 size/flip/rotate/title 与 bibliography-anchor 行为都通过 closed inline projection 保留，不允许第二 parser。 |
+| FC4R-PROD-13 | SPEC §3.4 | footnote type 只能是 null/ref/xref；callout guard 必须精确保留 scalar guard 或 two-part comment guard。unknown free-form subtype/guard structure 必须被 closed product decoder 拒绝。 |
 | FC4R-ORIGIN-01 | SPEC §3.4 | :who: Alice 后 Hello {who} 的最终 Alice 必须记录 authored definition、reference site、substitution provenance；只有全部 origin path 真正收敛同一 authored range 时才可导出 unique writable source。 |
 | FC4R-ORIGIN-02 | SPEC §3.4 | generated/multi-origin semantic value 若没有唯一 authored writable range，仍可 read 与 exact-Source-save，但 structured write 必须 unavailable，不能猜一个 range。 |
 | FC4R-ORIGIN-03 | SPEC §§3.4,8.1–8.3 | Root R 含 include::child.adoc[]，child 从 V1=Alpha 变成 V2=Beta 时，即使 R bytes/document_format 不变，V1 的 D2 snapshot 对 D7/D8/D9 都必须 stale；managed include SourceObservation 必须相等。 |
@@ -490,6 +493,8 @@ translation_status: source
 | FC4R-RUN-07 | SPEC §8.2 | saved/planned/unknown presentation-policy mutation 必须恢复 exact original head set、proposal、pins 与 P responsibility；禁止重新采样新 heads 或作为另一个 decision 重试。 |
 | FC4R-RUN-08 | SPEC §8.2 | policy-head 变化只失效 D8PresentationDecision=workspace_default 的 render cache；explicit/no-body/conflict-fallback 不得获得从未消费的 policy dependency。 |
 | FC4R-RUN-09 | SPEC §§8.2–8.3 | D9 plan 若用 workspace_default policy head P staging，后来 policy 变化也不能改原 plan bytes；explicit source-role plan 根本不含 policy binding，只有 fresh prepare 才消费新 policy。 |
+| FC4R-RUN-10 | SPEC §8.2 | D8 presentation head-set 必须是带 epoch/revision stamp 的 owner-specific protected observation；policy mutation 在 OwnerInputBinding 中冻结这份 exact stamped head-set，任何已证明 head-set transition 都推进 stamp，不能用 numeric policy revision 选 branch。 |
+| FC4R-RUN-11 | SPEC §8.2 | committed presentation-policy record 的 activation ChangeId 必须与原 portable D6 P decision/ChangeRecord 相同，并且只有 exact receipt/EffectManifest presentation_policy_change association 验证后才可 admission。/1 current policy 只是 unique current /2 record 的机械 view，绝不单独持久化。 |
 | FC4R-EXP-01 | SPEC §8.3 | asciidoc_source 在所有 renderer/template/provider registry unavailable 时仍必须有唯一 Plan3：generationPolicy=none，template/route/render bindings 全 null。 |
 | FC4R-EXP-02 | SPEC §8.3 | resource_exact 与 query_json 同样必须有唯一 policy-independent 正向编码，不得因 Office generation configuration unavailable 被禁用。 |
 | FC4R-EXP-03 | SPEC §8.3 | missingPolicy=empty 只能用于 exact existing template path 且 authorized projection 确为 none；unknown path、unreadable data、type error、unavailable schema 都必须失败，不能变成 empty。 |
@@ -677,7 +682,7 @@ translation_status: source
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..10、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..09、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为650条；不创建新 finding ID，也不替换此前任何 row 正文。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -689,4 +694,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 650 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 655 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
