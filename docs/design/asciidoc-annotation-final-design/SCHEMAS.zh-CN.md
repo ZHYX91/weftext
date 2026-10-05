@@ -1932,7 +1932,7 @@ D8AnnotationDraftOpenResponse/1 = {
 
 这两个是真实 Core/D8 entry，不是 response-only shape。`d8_annotation_read` 在最终 authorized read barrier 返回完整 Value/4，因此 creator/authoredAt/lastEditor/editedAt 可显示；Draft 仍只保存/编辑 AnnotationEditableValue/1，绝不是第二 author authority。`d8_annotation_draft_open` 复用同一次 current read：有 annotation_write 时 draft.access=editable，否则为 readonly；readonly 不能进入 D8EditPrepareRequest/3。Draft 的 baseObservation/baseRevisionToken 必须分别等于 read.sourceObservation/read.annotationRevisionToken，serial=0 时 editable projection 必须等于 read.value 的八个 editable fields。local Draft 后续可以变化，但 prepare 与最终 read barrier 必须再次验证原 base token/Observation。
 
-D8EditIntent/3 的操作类别由封闭的 intent 分支与 targetPolicy 机械决定，绝不能由调用方提交可信标志：annotation+preserve 对应 ordinary_edit，annotation+replace_current 对应 manual_reattach，annotation_reconfirm_suggestion 对应 reconfirm_suggestion。调用方的 AnnotationEditableProposal/1 不携带 Suggestion 的生命周期状态或证明；Core 根据当前 before、操作类别与 proposal 构造唯一 proposed Value/4 后才固定字节。reconfirm 分支没有 caller value，其 proposedValue 完全由 Core 重新读取真实目标并重算产生。
+D8EditIntent/3 的操作类别由封闭的 intent 分支与 targetPolicy 机械决定，绝不能由调用方提交可信标志：annotation+preserve 对应 ordinary_edit，annotation+replace_current 对应 manual_reattach，annotation_reconfirm_suggestion 对应 reconfirm_suggestion。调用方的 AnnotationEditableProposal/1 不携带 Suggestion 的生命周期状态或证明；Core 先对 current before + proposal 执行 closed operation-class gate，展开一份保留 before attribution 的完整 candidate Value/4，然后才做 canonical candidate-vs-before no-op 比较。只有 candidate 真正不同才写入 fresh Core lastEditor/editedAt、fresh revision token 与唯一 planned/pinned final Value/4。reconfirm 分支没有 caller value，其 proposedValue 完全由 Core 重新读取真实目标并重算产生；成功 reconfirm 是真实状态转换。
 
 ## 6.4 D8 workspace presentation policy 与 render binding
 
@@ -2447,7 +2447,7 @@ replyTo非null强制same-owner、acyclic、purpose=comment、suggestion=null、r
 
 PortableAnnotationRecord/4 是现有 Node 内 annotations JSON authority 中的当前逻辑 Portable Metadata record；annotationRef.owner 必须等于所属 Node。D3-Annotation-Value/4 的 canonical bytes 恰为 D3-CJ/3(value)；当前 annotation_value payload binding 与 PinRef/2 hash/pin 的是这些字节，不是外层 PortableAnnotationRecord/4。annotationRevisionToken 是不透明 token，不能由 value digest 推导；同一 AnnotationRef 的每个已提交 Value/4 state 都必须唯一。
 
-当前 wire13 D3 mutation 使用 Value/4 基础 decoder，并保留继承的逻辑 slots：annotation_target ordinal0、annotation_reply ordinal1。target 永远是 reference slot；replyTo 非 null 时也是 reference slot；existing Annotation 的 identity-preserving reply change 使用继承的 structural S，禁止重复产生 reply reference result。其它 Value/4 成员都是 nonreference bytes。任何已经改变的当前 Value/4 只有一个新的 final AnnotationRevisionToken/1；target/reply 的 toSource address、annotation_reply_change evidence、SourceRevisionPlan/result pin、source change 与 receipt 都必须使用同一 token。若当前 editable proposal 与原值逐字节相等，则为 no-op，并保留当前 token、SourceVersion 与 attribution。
+当前 wire13 D3 mutation 使用 Value/4 基础 decoder，并保留继承的逻辑 slots：annotation_target ordinal0、annotation_reply ordinal1。target 永远是 reference slot；replyTo 非 null 时也是 reference slot；existing Annotation 的 identity-preserving reply change 使用继承的 structural S，禁止重复产生 reply reference result。其它 Value/4 成员都是 nonreference bytes。任何已经改变的当前 Value/4 只有一个新的 final AnnotationRevisionToken/1；target/reply 的 toSource address、annotation_reply_change evidence、SourceRevisionPlan/result pin、source change 与 receipt 都必须使用同一 token。Caller AnnotationEditableProposal/1 bytes 绝不直接和 AnnotationEditableValue/1 比较；Core 先通过 operation-class gate 展开保留 before attribution 的完整 candidate Value/4。candidate Value/4 与 before Value/4 canonical bytes 相等才是 no-op，并完整保留 Suggestion evidence、token/SourceVersion/H/attribution，且不建立 SourceRevisionPlan；只有 candidate 真正不同才写 fresh lastEditor/editedAt 与 fresh final token。
 
 当前 payloadBindings 的 payloadKind=annotation_value 必须按真实 request family 分派：wire13 当前 mutation 严格解码 Value/4；真正历史 wire9–12 继续使用 Value/3 decoder。D3-Symbolic-Result/9 framing 不变，但 Annotation 基础字节与 slot span 必须由该 request family 选择的 decoder 计算；禁止扩大历史 decoder。
 
@@ -2497,7 +2497,7 @@ AnnotationAggregateInstall/1 = {
 }
 ```
 
-SuggestionAuthorProposal/1 只承载作者可提议的 kind/replacementSource。replace 必须带 replacementSource（允许空串），delete 必须为 null，insert 必须带非空内容。state、confirmation、targetBasisSha256、expectedText、pointAffinity 永远不属于 caller proposal。AnnotationEditableProposal/1 的 purpose、reply、body、appearance、labels 与 review 约束继续与 AnnotationEditableValue/1 相同；Core 通过操作类别 gate 决定 Suggestion/3 受控的 before→after。
+SuggestionAuthorProposal/1 只承载作者可提议的 kind/replacementSource。replace 必须带 replacementSource（允许空串），delete 必须为 null，insert 必须带非空内容。state、confirmation、targetBasisSha256、expectedText、pointAffinity 永远不属于 caller proposal。AnnotationEditableProposal/1 的 purpose、reply、body、appearance、labels 与 review 约束继续与 AnnotationEditableValue/1 相同；Core 通过操作类别 gate 决定 Suggestion/3 受控的 before→after。gate 使用派生 current-state class，而不把 null 当成 fresh absence：fresh create=`absent_annotation`；已有 suggestion=null=`no_suggestion`；pending=`pending_confirmed|pending_needs_reconfirmation`；terminal=`terminal_accepted|terminal_rejected`。interactive_create 接纳合法 no-suggestion comment/mark/reply 与合法 root suggestion；ordinary_edit 接纳 no_suggestion→no_suggestion、真实目标资格后的 no_suggestion→pending+needs_reconfirmation、pending→pending、pending→no_suggestion，以及 terminal→同一 terminal only；manual_reattach 只接纳 no_suggestion→no_suggestion 或 pending→pending+needs_reconfirmation，不能和类别转换合并。target 不变的 no-suggestion 编辑以及 pending→no_suggestion 清除不会凭空获得 target-source-read 权限；真正消费目标内容的转换/操作只在各自具名 qualification/read 阶段读取。完成 gate 后 Core 才展开保留 before attribution 的完整 candidate Value/4 并与 before 比较 canonical bytes；Proposal bytes 永远不是 no-op comparator。
 
 `weftext.annotations.json` 的 current physical bytes 恰为 D3-CJ/3(完整 AnnotationAggregate/1)，无 BOM、无额外换行或第二 envelope。records 必须非空，按完整 AnnotationRef canonical bytes 升序且唯一；每个 annotationRef.owner 必须等于 ownerNodeRef，nonnull replyTo 必须同 owner 且整张 records reply graph 无环。空集合唯一物理表示是 sidecar absent，禁止同时保留空 aggregate。unknown/missing member、duplicate JSON key、unknown version、owner mismatch、duplicate Ref 或 reply cycle 都使整个 aggregate strict-decode 失败；normal current read 不能部分信任其中“看起来合法”的记录。
 
@@ -3381,4 +3381,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +278 coordination，共716，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +293 coordination，共731，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
