@@ -13,17 +13,18 @@
       "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "anchors": [
         "§8",
-        "§13",
-        "§14",
-        "§17"
+        "§8.1",
+        "§8.2",
+        "§16",
+        "§16.1"
       ],
       "changedSections": [
-        "proof3 workspace reads",
-        "EffectManifest3 preview digest",
-        "schedule v2",
-        "mixed Image/Pin/Range/PrepareBinding1-3",
-        "Money/Claims/Inventory2",
-        "ExecutionResponsibilityRecord/3"
+        "proof3 Workspace reads and current D10ControlInput/2 chain",
+        "mixed Image/Pin/Range/PrepareBinding1-3 exact dispatch",
+        "EffectPlan2 exact old-before/new-after and subscription continuation",
+        "Money/Claims/Inventory2 canonical ordering and one-barrier completeness",
+        "ExecutionResponsibilityRecord/3 + Proof2 exact Inventory2/store/StopCapacity cross-check",
+        "historical saved/planned decoders and recovery retained"
       ]
     },
     {
@@ -176,7 +177,10 @@
         "§12",
         "§13",
         "§14",
-        "§17"
+        "§17",
+        "§4.3",
+        "§4.4",
+        "§16"
       ],
       "changedSections": [
         "Dependency/Descriptor/Intent successors",
@@ -187,7 +191,10 @@
         "CP4 exact CP3-invariant inheritance + ChangeRecord admission",
         "dual-profile trust prepare/3 and exact /2 signature bodies",
         "closed BootstrapProfile4/Plan4 member family",
-        "Event3 geometry/replay span + SourceTransform signed body"
+        "Event3 geometry/replay span + SourceTransform signed body",
+        "current D10ControlInput/2 + ControlDependencies/3 + EffectPlan2 producer",
+        "current ApprovalUse2/PAB4 eligibility with historical saved/planned recovery",
+        "Record3/Proof2 exact Inventory2 five-payload/store/StopCapacity cross-check"
       ]
     },
     {
@@ -204,7 +211,8 @@
         "SourceTransform",
         "CP4/ChangeRecord",
         "trust",
-        "D10 mixed inventory"
+        "D10 mixed inventory",
+        "current D10 routing and exact mixed-holder implementation/acceptance obligations"
       ]
     },
     {
@@ -678,6 +686,79 @@
         "§1",
         "§4",
         "§7"
+      ]
+    },
+    {
+      "owner": "D10-Candidate",
+      "sourcePath": "docs/design/d10/CANDIDATE.md",
+      "sourceBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§15",
+        "§15.2"
+      ],
+      "changedSections": [
+        "fresh/current protected images",
+        "fresh author PAB4/Effect3/ApprovalUse2",
+        "planned/saved original-version recovery retained"
+      ]
+    },
+    {
+      "owner": "D10-Impact",
+      "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
+      "sourceBlob": "50031c9db36232ec439aa2c96d312465250dab04",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "§1.1",
+        "§7",
+        "§13",
+        "§14–§16"
+      ],
+      "changedSections": [
+        "current Binding3/PAB4/Effect3/Edit3 implementation obligations",
+        "mixed canonicality and one-barrier responsibility tests",
+        "historical saved/planned exact recovery retained"
+      ]
+    },
+    {
+      "owner": "D10-Terminology",
+      "sourcePath": "docs/design/d10/TERMINOLOGY.md",
+      "sourceBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "§3",
+        "§13.1",
+        "§14.1",
+        "§15"
+      ],
+      "changedSections": [
+        "current D7/D8/D10 successor names",
+        "ControlPrepareBinding1/2/3 historical dispositions",
+        "Schedule/Approval/execution mixed-holder terminology"
+      ]
+    },
+    {
+      "owner": "D10-Upstream",
+      "sourcePath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
+      "sourceBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§2.2",
+        "§3.1",
+        "§4.1",
+        "§4.4",
+        "§5.1"
+      ],
+      "changedSections": [
+        "fresh/current PAB4/EffectManifest3/PreparedEditBinding3 references",
+        "fresh ApprovalUse2 author path",
+        "exact saved/planned old-version recovery retained"
       ]
     }
   ],
