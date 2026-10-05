@@ -774,6 +774,14 @@ D2NativeAttributeSet/1 = {
   entries:[D2NativeAttributeEntry/1...]
 }
 
+D2BlockCommonSemantics/1 = {
+  style:text|null,
+  caption:text|null,
+  numeral:text|null,
+  subs:[text...],
+  positional:[D2NativeSemanticValue/1...]
+}
+
 D2SourceOwner/1 =
     {kind:"root_document",logicalPath:ProcessorPath/1,
      ownerNodeRef:NodeRef,sourceObservation:SourceObservation/1}
@@ -878,11 +886,14 @@ D2IdentityAdapter/1 =
   | {kind:"resource",target:ResourceRef}
   | {kind:"citation",target:NodeRef,citationKey:text|null}
 
-D2InlineImageSemantics/1 = {
-  width:text|null,height:text|null,format:text|null,
-  scaledwidth:text|null,scale:text|null,link:text|null,window:text|null,
-  float:text|null,align:text|null,fallback:text|null,imagesdir:text|null
-}
+D2InlineMediaSemantics/1 =
+    {kind:"image",
+     width:text|null,height:text|null,format:text|null,
+     scaledwidth:text|null,scale:text|null,link:text|null,window:text|null,
+     float:text|null,align:text|null,fallback:text|null,imagesdir:text|null}
+  | {kind:"icon",
+     size:text|null,flip:text|null,rotate:text|null,title:text|null,
+     width:text|null,height:text|null}
 
 D2ProductInline/3 =
     {kind:"text",text:text,sourceOrigins:D2SourceOriginSet/2}
@@ -898,16 +909,17 @@ D2ProductInline/3 =
      label:[D2ProductInline/3...],adapter:D2IdentityAdapter/1|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
-  | {kind:"anchor",id:text,reftext:text|null,
+  | {kind:"anchor",referenceKind:"ref"|"bibref",
+     id:text,reftext:text|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"image",nativeTarget:text,alt:text|null,
-     semantics:D2InlineImageSemantics/1,
+     semantics:D2InlineMediaSemantics/1,
      adapter:D2IdentityAdapter/1|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"footnote",id:text|null,index:CanonicalSignedDecimal|null,
-     referenceKind:text|null,target:text|null,
+     referenceKind:null|"ref"|"xref",target:text|null,
      children:[D2ProductInline/3...],
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
@@ -922,7 +934,9 @@ D2ProductInline/3 =
   | {kind:"menu",path:[text...],sourceOrigins:D2SourceOriginSet/2}
   | {kind:"button",label:text,sourceOrigins:D2SourceOriginSet/2}
   | {kind:"callout",label:text,number:CanonicalSignedDecimal|null,
-     id:text|null,guard:text|null,sourceOrigins:D2SourceOriginSet/2}
+     id:text|null,
+     guard:null|text|{before:text,after:text},
+     sourceOrigins:D2SourceOriginSet/2}
   | {kind:"line_break",sourceOrigins:D2SourceOriginSet/2}
   | {kind:"passthrough",text:text,sourceOrigins:D2SourceOriginSet/2}
 
@@ -945,6 +959,7 @@ D2ParagraphBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   inlines:[D2ProductInline/3...],
   nativeAttributes:D2NativeAttributeSet/1
 }
@@ -961,6 +976,7 @@ D2SectionBlock/3 = {
   kind:"section",locator:DocumentElementLocator,
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   heading:D2Heading/3,
+  common:D2BlockCommonSemantics/1,
   semantics:D2SectionSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   children:[D2ProductBlock/3...]
@@ -995,6 +1011,7 @@ D2ListBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2ListSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   items:[D2ListItem/3...]
@@ -1036,6 +1053,7 @@ D2TableBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2TableSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   columns:[D2TableColumn/3...],
@@ -1063,6 +1081,7 @@ D2DelimitedBlock/3 = {
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
   style:text|null,
+  common:D2BlockCommonSemantics/1,
   semantics:D2DelimitedSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   content:
@@ -1083,6 +1102,7 @@ D2ContainerBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2ContainerSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   children:[D2ProductBlock/3...]
@@ -1107,6 +1127,7 @@ D2MediaBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   nativeTarget:text,alt:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2MediaSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   adapter:D2IdentityAdapter/1|null
@@ -1123,9 +1144,11 @@ D2AtomicBlock/3 = {
   blockKind:"floating_title"|"page_break"|"thematic_break"|"toc",
   locator:DocumentElementLocator,
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
+  anchor:text|null,
   level:D2ProductInteger|null,
   title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2AtomicSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1
 }
@@ -1190,11 +1213,11 @@ D7HeadingProjection/2 = {
 
 全部 product union 都 strict：unknown/missing member、unknown arm、duplicate JSON key、非法 null 与跨 arm member 一律拒绝。D2ProductBlock/3 与 D2ProductInline/3 是固定 baseline 加具名 Weftext extension 的 current 完整产品 family；不存在 generic/opaque block、inline、property JSON 或第二 AST escape。
 
-D2NativeAttributeSet/1 是唯一允许可变属性名的 native attribute carrier。value 只能来自闭合 D2NativeSemanticValue/1；entries 保留固定 parser 最终 attribute map 的真实 enumeration order，name 唯一。因此合法 arbitrary author attribute name 可以表示，但不能借机塞自由 JSON。各 kind 的 dedicated semantic member 不是可省略 shortcut：同一个 fixed-Ruby fact 若同时出现在 nativeAttributes，专用字段与 native entry 经固定语义转换后必须 byte-equal。只有 fixed public model/converter 真正可观察的 internal derived attribute 才能保留。
+D2NativeAttributeSet/1 是唯一允许可变命名属性的 native attribute carrier；value 只能来自闭合 D2NativeSemanticValue/1，entries 保留固定 parser 最终 named attribute map 的真实 enumeration order，name 唯一。D2BlockCommonSemantics/1 单独承载无法可靠从 named map 恢复的 public AbstractBlock slots：实际 style、caption、numeral、subs 以及原 positional order。这样既允许合法 arbitrary author attribute name，也不会打开自由 JSON。各 kind 的 dedicated semantic member 不是可省略 shortcut：同一个 fixed-Ruby fact 若同时出现在 nativeAttributes/common 与专用字段，经固定语义转换后必须 byte-equal。只有 fixed public model/converter 真正可观察的 internal derived attribute 才能保留。inline image 还必须区分 image/icon；reference anchor 区分 ref/bibref；footnote type 只允许 null|ref|xref；callout guard 精确保留 scalar 或两段 comment guard。
 
 D2SourceOriginGraph/2 只在一个 snapshot 内有效。origin id 必须从0连续无洞；每个 input id 都小于引用它的 node id，因此 graph 无环且不形成第二 identity namespace。authored 恰有一个 physical source range；reference 记录真实 authored reference site 与其 input；substitution/generated 记录固定 transformation family 与全部真实 inputs；multi_origin 至少两个 inputs。sourceOrigins.originIds 排序唯一且都存在。writableSource 从这些 origin 机械导出：只有所有 retained path 最终收敛到同一个 byte-equal authored writable range 才是 unique；generated、non-author、ambiguous 或 multi-source 都只能 structured-read。exact Source read/save 继续由原 authorization 独立提供。
 
-D2SourceOwner/1 必须 version-exact。root_document 与 managed_include 携带求值实际使用的 SourceObservation/1；artifact/network source unit 携带 exact immutable pin；全部 variant 都携带 processor environment 中的 logicalPath。不得由 path/title/hash 推导 source unit。D2ProductEvaluationBinding/1.rootSource 在 input.kind=managed_file 时与 processor input byte-equal；includeSources 与 processorEnvironment.includeEnvironment.sourceUnits byte-equal。processorEnvironmentSha256 唯一为：
+D2SourceOwner/1 必须 version-exact。root_document 与 managed_include 携带求值实际使用的 SourceObservation/1；artifact/network source unit 携带 exact immutable pin；全部 variant 都携带 processor environment 中的 logicalPath。不得由 path/title/hash 推导 source unit。current managed D2DocumentSnapshot/3 强制 processorEnvironment.input.kind=managed_file，其 ownerNodeRef 与 snapshot.ownerNodeRef byte-equal；rootSource.kind=managed 且 owner/SourceObservation/logicalPath 全部相等。includeSources 与 processorEnvironment.includeEnvironment.sourceUnits byte-equal。processorEnvironmentSha256 唯一为：
 
 ```text
 "sha256:" + lowercase_hex(
@@ -1673,23 +1696,32 @@ D8PresentationPolicyAddress/1 = {
   recordSha256:"sha256:<64 lowercase hex>"
 }
 
+D8WorkspacePresentationPolicy/1 = {
+  kind:"d8_workspace_presentation_policy",version:1,
+  workspaceRef:WorkspaceRef,
+  revision:Counter,
+  defaultPresentation:"separate"|"run_in"
+}
+
 D8WorkspacePresentationPolicy/2 = {
-  kind:"d8_workspace_presentation_policy",version:2,
+  kind:"d8_workspace_presentation_policy_record",version:2,
   workspaceRef:WorkspaceRef,
   revision:Counter,
   parents:[D8PresentationPolicyAddress/1...],
-  defaultPresentation:"separate"|"run_in"
+  defaultPresentation:"separate"|"run_in",
+  activationChangeId:ChangeId/1
 }
 
 D8PresentationPolicyHeadSet/1 = {
   kind:"d8_presentation_policy_heads",version:1,
   workspaceRef:WorkspaceRef,
-  metadataEpoch:Token,
+  stamp:{epoch:Token,revision:Counter},
   heads:[D8PresentationPolicyAddress/1...]
 }
 
 D8WorkspacePresentationPolicyBinding/2 = {
-  policy:D8WorkspacePresentationPolicy/2,
+  policy:D8WorkspacePresentationPolicy/1,
+  record:D8WorkspacePresentationPolicy/2,
   address:D8PresentationPolicyAddress/1,
   headSet:D8PresentationPolicyHeadSet/1,
   pin:PinRef/2
@@ -1716,7 +1748,7 @@ D8PresentationPolicySetRequest/2 = {
 D8PresentationPolicyInput/1 = {
   kind:"d8_presentation_policy_input",version:1,
   workspaceRef:WorkspaceRef,
-  expectedHeads:[D8PresentationPolicyAddress/1...],
+  headSet:D8PresentationPolicyHeadSet/1,
   defaultPresentation:"separate"|"run_in"
 }
 
@@ -1759,13 +1791,13 @@ UTF8("D8-Workspace-Presentation-Policy/2") || NUL ||
 D3-CJ/3(complete policy)
 ```
 
-recordSha256 覆盖上述完整 prefixed bytes。PinRef/2 选择完全相同 bytes，payloadKind=portable_metadata、retention=recovery；address.workspaceRef/revision 与 record 相等。parents 按 (revision,recordSha256) 排序唯一且均属于同一 Workspace，每个 parent record 都必须 retained/valid。初始 record revision=1、parents=[]、defaultPresentation=separate。后继 parents 必须等于 prepare/seal 时完整 protected current head set，revision=checked(max(parent.revision)+1)。因此两个 offline writer 都可能形成 revision2，但不同 hash 会保留为两个 heads；revision number、arrival order、LWW 都不能选 winner。
+recordSha256 覆盖上述完整 prefixed bytes。PinRef/2 选择完全相同 bytes，payloadKind=portable_metadata、retention=recovery；address.workspaceRef/revision 与 record 相等。D8WorkspacePresentationPolicyBinding/2.policy 是从 record 机械删除 parents 与 activationChangeId 后得到的唯一四字段 logical current view，不单独持久化；这样保留 Stage4A /1 current-value contract 而不制造第二 authority。parents 按 (revision,recordSha256) 排序唯一且均属于同一 Workspace，每个 parent record 都必须 retained/valid。初始 record revision=1、parents=[]、defaultPresentation=separate。后继 parents 必须等于 prepare/seal 时完整 protected current head set，revision=checked(max(parent.revision)+1)，activationChangeId 必须等于该 portable D6 P decision 唯一分配的 ChangeId。因此两个 offline writer 都可能形成 revision2，但不同 hash/ChangeId 会保留为两个 heads；revision number、arrival order、LWW 都不能选 winner。
 
-D8PresentationPolicyHeadSet/1 是同一 metadataEpoch 下，对 Portable Workspace Metadata 中全部 maximal valid policy record 的完整 protected read，不是 caller evidence 或 index scan。heads 排序唯一；[] 表示尚未初始化，一个 head 才是 current，多个 head 是 conflict。gap、unknown parent decoder、缺 retained record 或 metadata continuity 无法证明时都是 unavailable，绝不能解释成 empty/current。current binding 要求 headSet.heads == [address]，policy/pin/address byte-equal，并且完整 ancestry retained。
+D8PresentationPolicyHeadSet/1 是 D8 owner 对 Portable Workspace Metadata 中全部 maximal valid policy record 的 current observation。stamp 是这个 exact Workspace configuration 的 protected Core state：correctness evidence continuity 丢失/重建时换 epoch，每次已证明的 head-set transition 都 checked-increment revision；两个数字都不能选 branch。它不是 caller evidence 或 index scan。heads 排序唯一；[] 表示尚未初始化，一个 head 才是 current，多个 head 是 conflict。gap、unknown parent decoder、缺 retained record 或 metadata continuity 无法证明时都是 unavailable，绝不能解释成 empty/current。current binding 要求 headSet.heads == [address]，record/pin/address byte-equal，policy 等于 record 的机械 /1 view，并且完整 ancestry retained。
 
-D8PresentationPolicySetRequest/2 固定 managed_atomic/strict。读取 head set 前先通过 policy_admin 与 presentation-state disclosure。expectedHeads 必须与 complete current head set byte-equal；[] 可初始化符合条件的 existing Workspace，一个 head 是普通更新，多个 heads 是显式 conflict resolution。新 record 在一个 D6 planning CAS 和一个 final P commit 中成为全部 expected head 的唯一共同 successor，并产生恰一个 presentation_policy_change owner effect。它不创建 D3 identity、source version、author ChangeId、Policy/3 revision、Registry revision，也没有第二 ledger/CAS。OwnerInputBinding/2 使用 protocolOwner=D8、ownerKind=intentKind=d8_presentation_policy/1，canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1)。saved/planned/unknown recovery 恢复 exact original head set/proposal/pins/P decision，绝不重新采样 current heads 或自动选 branch。
+D8PresentationPolicySetRequest/2 固定 managed_atomic/strict。读取 head set 前先通过 policy_admin 与 presentation-state disclosure。expectedHeads 必须与 observed D8PresentationPolicyHeadSet/1.heads byte-equal；[] 可初始化符合条件的 existing Workspace，一个 head 是普通更新，多个 heads 是显式 conflict resolution。OwnerInputBinding/2 使用 protocolOwner=D8、ownerKind=intentKind=d8_presentation_policy/1，canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1)，其中 headSet 是包含 stamp 的 exact protected observation。新 record 在一个 D6 planning CAS 和一个 final P commit 中成为全部 expected head 的唯一共同 successor，产生恰一个 presentation_policy_change owner effect，并为该 configuration transition 使用恰一个 ordinary portable ChangeId/ChangeRecord。committed effect 的 record.activationChangeId、DecisionKey receipt/effects association 与 ChangeRecord ChangeId 必须一致。这里精确复用 SeriesScopeConfiguration 的 complex-owner-effect 路径：不扩 Notice/CP PortableComponentKey，owner effect 由原 decision/receipt/ChangeRecord chain 认证，不建立第二 component 或 ledger。它不创建 D3 identity、source version/H、Policy/3 revision、Registry revision，也没有第二 ledger/CAS。saved/planned/unknown recovery 恢复 exact original head set/stamp、proposal、pins 与 P decision，绝不重新采样 current heads 或自动选 branch。
 
-sync/admission 必须先验证每个 immutable record 的 domain、canonical bytes、ancestry 与 retained P/effect association，再把它放入 portable head graph。conflicting heads 始终保持 conflict，直到授权的显式 multi-parent successor 解决。只有所有 descendant/recovery last-reference 都不再需要某 non-head record 时才可 compaction。device-local preference 或 host default 永远不能替代这个 Workspace-wide record。
+sync/admission 必须验证每个 immutable record 的 domain/canonical bytes、activationChangeId、exact retained ChangeRecord/receipt/EffectManifest presentation_policy_change association、ancestry 与 current head-set stamp continuity，再把它放入 portable head graph。record 的 historical decoder 未知、activation decision 无法证明或 head-set observation 不连续时只能 unavailable，绝不能 current。conflicting heads 始终保持 conflict，直到授权的显式 multi-parent successor 解决。只有所有 descendant/recovery last-reference 都不再需要某 non-head record 时才可 compaction。device-local preference 或 host default 永远不能替代这个 Workspace-wide record。
 
 run-in decision 是条件依赖：role_conflict 使用 explicit+Separate，不读 policy；显式 separate 不读 policy；显式 run-in 也不读 policy，并且只有既有 explicit-role semantic-adjacency body eligible 时才 RunIn，否则 no_eligible_body。两个 role 都没有时，若无 eligible body 同样 no_eligible_body；只有满足 implicit-default physical-adjacency 的 body 才使用 workspace_default，因此才要求 current one-head policy binding。policy missing/conflicted 只使这个 default-dependent presentation unavailable。
 
