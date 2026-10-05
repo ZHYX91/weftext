@@ -38,10 +38,13 @@ AsciiDocProcessorEnvironment/3 = {
   output:ProcessorOutputIdentity/1,
   baseDir:ProcessorPath/1,
   ambientUserHome:ProcessorPath/1,
+  sourceEncoding:"UTF-8",
+  localeProfile:ProcessorLocaleProfile/1,
   attributeOverrides:[ProcessorAttributeOverride/1...],
   timeInputs:ProcessorTimeInputs/1,
   includeEnvironment:IncludeEnvironment/2,
-  extensionProfiles:[AcceptedProcessorExtensionProfile/1...]
+  extensionProfiles:[AcceptedProcessorExtensionProfile/1...],
+  providerProfiles:[AcceptedProcessorProviderProfile/1...]
 }
 
 ProcessorPath/1 = {
@@ -75,6 +78,15 @@ ProcessorAttributeOverride/1 = {
   name:text,
   action:"hard_set"|"soft_set"|"hard_unset"|"soft_unset",
   value:text|null
+}
+
+ProcessorLocaleProfile/1 = {
+  profileId:text,
+  lang:text|null,
+  lcAll:text|null,
+  lcCtype:text|null,
+  lcTime:text|null,
+  descriptorSha256:"sha256:<64 lowercase hex>"
 }
 
 CanonicalSignedDecimal = "0" | "-"?[1-9][0-9]*
@@ -112,9 +124,18 @@ AcceptedProcessorExtensionProfile/1 = {
   semanticVersion:text,
   descriptorSha256:"sha256:<64 lowercase hex>"
 }
+
+AcceptedProcessorProviderProfile/1 = {
+  providerKind:"stem"|"mermaid"|"syntax_highlighter"|"html"|"pdf"|"docx",
+  profileId:text,
+  semanticVersion:text,
+  descriptorSha256:"sha256:<64 lowercase hex>"
+}
 ```
 
-attributeOverrides 按 lowercase name排序唯一；extensionProfiles按profileId排序唯一；sourceUnits按logicalPath.value排序唯一。set action要求value非null；unset要求null。safe<server 且未override时 user-home来自ambientUserHome；server/secure原生default为“.”。SOURCE_DATE_EPOCH存在时local*/doc*统一取其UTC值；否则local*取clockNow，doc*优先inputMtime、再clockNow。
+attributeOverrides 是有序 sequence，不排序、不去重。每个 event 的 name 必须是固定 Ruby key syntax 处理后得到的 non-empty lowercase name；hard_set/soft_set 要求 value 非 null，hard_unset/soft_unset 要求 null。canonical decoder 按数组顺序重建 ordered attr_overrides：某 name 首次出现时把 key 追加到尾部，后续同名 event 只替换状态而不移动 key。D3-CJ/3 因而直接保留 API enumeration order；两个仅交换 notitle/showtitle 首次 key 顺序的环境必须有不同 canonical bytes。embedded 模式按该 ordered key 顺序执行固定 2.0.26 的 notitle/showtitle alias 派生，不允许先排序再派生。
+
+sourceEncoding 恰为 UTF-8；其它 source encoding 不属于本 Gate 的直接输入。localeProfile 必须是受控 oracle harness 的完整已登记描述，profileId+descriptorSha256 与四个显式 locale environment 值共同冻结，不允许读取未记录 host locale。extensionProfiles 按 profileId 排序唯一，providerProfiles 按 (providerKind,profileId) 排序唯一，sourceUnits 按 logicalPath.value 排序唯一。providerProfiles 为空表示本次 evaluation 没有调用 provider，不表示 provider 不存在。safe<server 且未 override 时 user-home 来自 ambientUserHome；server/secure 原生 default 为“.”。SOURCE_DATE_EPOCH 存在时 local*/doc* 统一取其 UTC 值；否则 local* 取 clockNow，doc* 优先 inputMtime、再 clockNow。
 
 # 2. Core Semantic Projection
 
@@ -597,10 +618,23 @@ ModelFieldName/1 =
   sectname|special|numbered|index|marker|colspan|rowspan|
   has_header_option|format|delimiter|type|target|imagesdir
 
+SemanticHeadSubjectKind/1 =
+  "document"|"section"|"block"|"list"|"list_item"|"table"|
+  "column"|"cell"|"inline"|"catalog_record"
+
+SupportingOnlySubjectKind/1 =
+  "attribute_buffer"|"table_parser_context"
+
+ForwardSemanticRole/1 =
+  "header"|"child"|"dlist_term"|"dlist_description"|
+  "table_column"|"table_head_cell"|"table_body_cell"|"table_foot_cell"|
+  "cell_inner_document"
+
+BackedgeSemanticRole/1 =
+  "parent"|"cell_column"
+
 ModelRelation/1 = {
-  role:"parent"|"header"|"child"|"dlist_term"|"dlist_description"|
-       "table_column"|"table_head_cell"|"table_body_cell"|"table_foot_cell"|
-       "cell_column"|"cell_inner_document",
+  role:ForwardSemanticRole/1|BackedgeSemanticRole/1,
   position:[UInt...],
   targetSubjectId:UInt
 }
@@ -678,11 +712,44 @@ M37 writer-site闭集如下；`M37Site/1` 的 `(group,file,method,point)` 必须
 
 M37-02/M37-03/M37-05还必须覆盖固定代码中的直接Hash赋值/update/delete/clear，不能只观察wrapper。具体manifest与固定源码共同构成producer-conformance，不允许projector从字段名、source文本或最终HTML补推。
 
-同subject snapshots形成immediate-predecessor单链；cut heads按subjectId数值升序且恰覆盖reachable semantic closure。只有model observation namespace里的previous/bind/cut/model_slot引用做数值先后检查；operation/inline/value/call各用自身namespace。carrier.entry是目标数组index，不与model observationId比较。
+### 4.3 Witness/7 exact closure verifier
 
-**producer-conformance gate**：真实bind callback发生时，目标carrier已append，entry < targetStream.lengthAtBind，并且producer仍持有exact同一Ruby对象；随后才能append bind。final decoder只检查最终存在/type/index，不能从最终数组假造跨stream时序。document/0同样要求actual returned Document carrier先发布。
+**A. observation / snapshot / bind 静态层。** modelPropertyObservations 按数组顺序要求 observationId 严格递增。对每个 subject，将全部 snapshot 按 observationId 排序：首项 previousSnapshotObservationId 必须 null，后续项必须恰指同 subject 直接前一项。same subjectId 在全部 snapshot 中 kind byte-equal；真实 Ruby object→subjectId 一一关系属于 producer-conformance。定义 latestSnapshotBefore(s,o) 为 subject=s 且 observationId<o 的最大 snapshot。每个 bind 必须引用存在、同 subject 的 latestSnapshotBefore(subjectId,bind.observationId)。
 
-catalog record的ownership只能是 parent -> actual Document#register receiver；inner Document不得归top-level。temporary overlay必须由真实restore或真实cleanup delete闭合；observer不得伪造restore write。
+ModelCarrierReference 的静态分派恰为：
+- document：entry 必须 0，并解析 Witness.document；
+- blockEvents / collectionEvents / catalogEvents / inlineObservations / contentObservations / calls：entry 是对应数组 0-based index，必须在范围内且目标类型与 stream 完全匹配。
+
+这里不比较 carrier.entry 与 model observationId。
+
+**B. root 与 physical semantic closure。** 对 cut C，在 observationId<C.observationId 的合法 bind 中取 carrier=(document,0) 的最新 bind 为 rootBind(C)；必须存在，subject kind=document，且 C.documentSubjectId=rootBind.subjectId。对任何候选 subject s，latest[s]=latestSnapshotBefore(s,C.observationId)。
+
+structural worklist 从 C.documentSubjectId 开始，只沿 latest[s].relations 中 ForwardSemanticRole/1 的九个闭合 role 扩张；target subject 必须存在并属于 SemanticHeadSubjectKind/1。完成 forward traversal 后，Rstruct 内每个 latest snapshot 的 parent/cell_column backedge target 必须已经在 Rstruct；backedge 永不新增 target。old root、old Cell 或其它 stale object 不能靠 backedge 复活。
+
+随后只做两个 supplementary pass：
+1. inline：kind=inline；cut 前至少一个合法 bind 指向 inlineObservations；latest snapshot 恰有一个 parent，且 parent target 已在 Rstruct。满足则加入 R。
+2. catalog_record：cut 前至少一个合法 bind 指向 catalogEvents；latest snapshot 恰有一个 catalog ownership parent；target kind=document 且 target 已在 Rstruct。满足则加入 R。不存在 owner role，也不得把 target 不在 Rstruct 的 Document 加入 R。
+
+SupportingOnlySubjectKind/1 永不加入 R。加入 supplementary 后再次检查 R 中全部 backedge；target 必须已经在 R。令 H=set(C.heads[].subjectId)，要求 heads 按 subjectId 严格升序、subjectId 唯一、H==R，并且每个 head.snapshotObservationId=latest[head.subjectId].observationId。缺 live subject、extra stale subject、duplicate、stale head 或 relation conflict 都使 Witness invalid/incomplete。
+
+**C. supporting evidence closure。** seed 恰为：所有 cut head snapshots、rootBind(C)、以及 observationId<C.observationId 且 subjectId∈R 的全部合法 bind。按以下 typed edge 递归直到不再增加节点：
+- snapshot → previousSnapshotObservationId；每个 field/attribute slot 的 provenance.inputs；ModelObservedValue 的 string/array/map 子值；
+- ModelPropertyInput.model_slot → modelPropertyObservations 中指定 snapshot，并要求该 slot 真实存在；observed_value → observedStrings[valueId]；observed_slice → observedStrings[valueId] + byte range；operation → operations[operationId]；inline_field → inlineObservations[inlineEventId] + fieldPath；
+- OracleStringOperation → calls[callId]、inputs/removedInputs 的每个 slice、observedStrings[outputValueId]；run.exact_copy → slice；run.derived → 全部 slices + referenced operationId；run.generated → 非 null inlineEventId；
+- OracleEvaluationCall → 非 null parentCallId；
+- OracleInlineObservation → callId、非 null parentCallId、非 null producingOperationId、nodeType 与 fields 中递归 OracleFieldValue、非 null returnValueId；
+- OracleFieldValue.observed_string → observedStrings[valueId]；array/entries → 每个 nested value；
+- OracleContentObservation → calls[callId]、全部 resultValueIds、全部 contributingInlineEventIds；
+- OracleObservedSlice → observedStrings[valueId] 并验证 0<=startByte<=endByte<=byteLength；OracleObservedString 为叶子；
+- bind → 其 carrier；carrier 若为 inlineObservations/contentObservations/calls，继续上述递归；其它 carrier 执行各自 retained closed validation，无额外跨数组时间边。
+
+同 namespace 的 model refs 使用 backward/latest；operation/value/inline/call 各只在自身 namespace 验 existence/type/DAG；subject 只按 identity/relation；禁止跨 namespace 数值比较。任何 dangling/wrong-kind、invalid slice/index、operation/call cycle 或缺失 provenance input 都失败。support closure 可含 SupportingOnlySubjectKind/1、旧 snapshot/Cell 与 temporary evidence，但不会因此加入 H。
+
+**D. producer-time 与 cardinality。** static decoder 只能证明最终 stream/index/type 与上述 reference/closure；完整 Witness validity 还要求 producerConformanceValid。每个真实 bind callback 发生时 carrier 已实际 append，entry < targetStream.lengthAtBind，callback 仍持有 exact 同一 Ruby object，并在其后 append bind。document/0 只能在 actual returned top-level Document carrier 发布后绑定。未来补齐 carrier 永不治愈 earlier invalid bind；不得靠 text/title/source/path/hash 事后匹配。
+
+完整 top-level Witness/7 恰一个 model_ready cut。selected-backend evaluation 未发生或异常退出时为零个有效 evaluation_complete；正常返回时恰一个，且其 observationId 大于 model_ready、documentSubjectId byte-equal。inner Document 不创建第二 cut namespace。model_ready/evaluation_complete 的 head 都是对应 cut 的 latest physical snapshot；physical cut membership 与 CoreSemanticPropertyProfile/1 的 semantic survival/winner 分离。
+
+catalog ownership仍只能是 parent -> actual Document#register receiver。temporary overlay 必须由固定源码真实 restore write 或 cleanup delete/closure 在合法 evaluation_complete 前结束；observer不得伪造 restore。
 
 # 5. Managed format 与 D6 current successor
 
@@ -2010,4 +2077,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：437 core +117 coordination，共554，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +117 coordination，共555，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
