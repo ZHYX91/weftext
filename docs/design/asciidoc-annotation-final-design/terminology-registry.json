@@ -433,7 +433,7 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §12",
-      "notes": ""
+      "notes": "Current signed transform evidence; beforeSourceSha256 is the SHA-256 of the exact complete historical before-source bytes selected by evidence.before, independently rechecked by receivers."
     },
     {
       "name": "SourceTransformSealArtifact/1",
@@ -473,7 +473,7 @@
       "status": "current",
       "replaces": "WorkspaceTrustDeclaration/1",
       "section": "SPEC §13",
-      "notes": "Dual-profile current successor; complete root predecessor object, exact PoP/rotate/root signature bodies, ordinary|loss_recovery|compromise rotate, and separate revoke modes."
+      "notes": "Dual-profile current successor; exact PoP/rotate/root signature bodies. resolve_conflict additionally binds conflictId, complete resolvedHeads, selected bundle address, mixed Carry1/2 and complete Outcome2."
     },
     {
       "name": "WorkspaceAuthorizationBundle/2",
@@ -481,7 +481,7 @@
       "status": "current",
       "replaces": "WorkspaceAuthorizationBundle/1",
       "section": "SPEC §13",
-      "notes": "Mixed /1 prefix + /2 suffix."
+      "notes": "Current dual-profile bundle; may retain an exact Declaration1 prefix and is strict-dispatched against Bundle1 in mixed policy-conflict heads."
     },
     {
       "name": "DomainSealKeyHandle/2",
@@ -489,7 +489,7 @@
       "status": "current",
       "replaces": "DomainSealKeyHandle/1",
       "section": "SPEC §13",
-      "notes": "Handle/1 may remain current for an exact safe revision-token key."
+      "notes": "Current profile-tagged handle. Replica registration creates exactly two staged handles in revision-token then source-transform order and activates them together only with the same CP4/P commit."
     },
     {
       "name": "WorkspaceTrustGenesis/2",
@@ -1058,6 +1058,54 @@
       "replaces": null,
       "section": "SPEC §13",
       "notes": "Closed bootstrap period NodeRef/CalendarScope/revision member."
+    },
+    {
+      "name": "TrustConflictCarry/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "TrustConflictCarry/1",
+      "section": "SPEC §13",
+      "notes": "Dual-profile compromise carry. factId uses D6-Trust-Compromise-Fact/2; rotate compromise maps oldTrustKeyId; origin cut is the original Declaration2 CP4/ChangeRecord activation."
+    },
+    {
+      "name": "TrustConflictOutcome/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "TrustConflictOutcome/1",
+      "section": "SPEC §13",
+      "notes": "Dual-profile resolver outcome over SealProfileId/1; authorize_fresh uses the exact Declaration2 PoP/2 body."
+    },
+    {
+      "name": "FreshDomainAuthorizationSpec/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "FreshDomainAuthorizationSpec/1",
+      "section": "SPEC §13",
+      "notes": "Current policy-conflict fresh authorization request with the same two-member JSON shape and full SealProfileId/1 union."
+    },
+    {
+      "name": "PolicyBundleHeadEvidence/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Protected strict dispatch for policy-conflict heads: CP3 implies Bundle1; CP4 uses ChangeRecord1 and exact Bundle1/2 version dispatch."
+    },
+    {
+      "name": "ConflictResolutionPolicyDerivedPlan/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ConflictResolutionDerivedPlan/1 policy_bundle arm",
+      "section": "SPEC §13",
+      "notes": "Current policy_bundle_choice plan freezing mixed head dispatch, Carry1/2 union, Outcome2 and exact result bundle pin/version."
+    },
+    {
+      "name": "ConflictResolutionInput/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ConflictResolutionInput/2 policy_bundle_choice owner descriptor",
+      "section": "SPEC §13",
+      "notes": "Protected current owner descriptor only; public d6_conflict_prepare remains wireVersion3/ConflictResolution2 and source arms remain on the fixed-parent descriptor."
     }
   ]
 }
