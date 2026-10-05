@@ -10,13 +10,13 @@ translation_status: synced
 
 Status: **design obligations only; not executed**.
 
-- core design oracles: 437
+- core design oracles: 438
 - actual-owner coordination fixtures: 117
-- total: 554
+- total: 555
 
 Each row is a normative obligation of this candidate. Words such as PASS/FAIL describe the future acceptance condition and do not claim execution in this PR.
 
-## Core — 437
+## Core — 438
 
 | ID | Spec area | Requirement |
 |---|---|---|
@@ -60,6 +60,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | AD2-38 | SPEC §§1–4 | Diagnostics compare severity, semantic code, and location; the exact message is retained to detect over-normalization. |
 | AD2-39 | SPEC §§1–4 | A real core-language mismatch cannot be registered as a backend, environment, or Weftext-domain exception. |
 | AD2-40 | SPEC §§1–4 | The cost of completing Asciidork support does not change the full 2.0.26 acceptance scope. |
+| AD2-41 | SPEC §§1–4 | In embedded mode, API attributes ordered as notitle="" then showtitle="" and the reverse order remain distinct environments: fixed Ruby 2.0.26 derives the opposite alias from whichever key is last in ordered attr_overrides, so canonical environment bytes and observed title/effective-attribute state must preserve that API order; name-sorting them into one environment fails. |
 | AN2-01 | SPEC §§9–16 | Every root and reply has its own AnnotationRef; there is no separate ThreadMessage identity. |
 | AN2-02 | SPEC §§9–16 | A thread is mechanically the D3 same-owner reply_closure; cycles must be rejected. |
 | AN2-03 | SPEC §§9–16 | Two concurrent fresh replies may coexist; timestamps are not used for LWW. |
@@ -449,7 +450,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M39-01 | SPEC §§2–3 | A large operationId in another namespace is not rejected merely because it is numerically greater than the model observationId; existence/type/original operation DAG decide validity. |
 | M39-02 | SPEC §§2–3 | A smaller inlineEventId does not prove it happened earlier than a model observation; the event must actually exist, have the right type, and satisfy its own reference contract. |
 | M39-03 | SPEC §§2–3 | ModelPropertyInput.model_slot.observationId is still a same-namespace snapshot reference and must be strictly earlier; forward/self/non-snapshot targets reject. |
-| M39-04 | SPEC §§2–3 | A carrier entry is an array index, not an event ID; final existence/type/index are checked and no numeric comparison to model observationId is performed. |
+| M39-04 | SPEC §§2–3 | A carrier entry is an array index, not an event ID, and is never compared numerically with model observationId. PASS simultaneously requires final stream/index/type validity, producer-conformance evidence that entry < targetStream.lengthAtBind at the real bind callback, and that the callback held the exact same Ruby object. Appending the carrier later cannot make an earlier invalid bind valid. |
 | M39-05 | SPEC §§2–3 | A root catalog record stores parent -> the actual top-level Document#register receiver; a nonexistent owner relation rejects. |
 | M39-06 | SPEC §§2–3 | A catalog record created by an inner Document stores parent -> that inner Document, which is live through cell_inner_document; it is not reassigned to the root. |
 | M39-07 | SPEC §§2–3 | Real DocBook cleanup for authored root-option follows authored bar -> temporary empty -> deleted/absent physical state; evaluation_complete selects the delete snapshot while CSP can still retain the authored semantic winner, and no fake restore is logged. |
@@ -582,7 +583,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 
 ## PR4 schema repair coverage (no new acceptance IDs)
 
-This schema repair **adds, removes, and renumbers none** of the 554 design obligations. It turns types already referenced by the existing obligations from dangling names into public closed shapes. Direct coverage is:
+The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is:
 
 - retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
 - M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
@@ -594,4 +595,4 @@ The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D row
 
 ## Not executed
 
-This PR did not execute these 554 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
+This PR did not execute these 555 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
