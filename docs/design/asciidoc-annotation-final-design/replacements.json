@@ -648,5 +648,10 @@
         "portable Annotation semantics"
       ]
     }
-  ]
+  ],
+  "schema_companion": {
+    "zh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+    "en": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+    "semantics": "Normative closed current shapes, canonical ordering, cross-field checks and historical dispatch for all replacement entries."
+  }
 }
