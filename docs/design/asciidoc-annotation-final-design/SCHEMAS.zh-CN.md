@@ -913,7 +913,7 @@ D2DocumentRevision/1 = {
 
 D2EffectiveDocumentAttribute/1 = {
   name:text,
-  value:text,
+  value:D2NativeSemanticValue/1,
   sourceOrigins:D2SourceOriginSet/2
 }
 
@@ -1399,6 +1399,8 @@ D2NativeAttributeSet/1 是唯一允许可变命名属性的 native attribute car
 structured write gate 只看正在编辑的那个 slot 的 D2SourceOriginSet/2.writableSource，再叠加该 exact range.source owner 的当前写权限与最终 evaluation/read barrier currentness。kind=unique 且 source owner 可写/current 时必须允许原 owner 已定义的 structured edit 正向路径；generated、multi_origin、ambiguous、non_author_source 或缺写权限时该 slot 仍可读但 structured-readonly。managed include 的 unique authored range 也只授予其自己 source owner 的写权限，绝不从 root Document 权限继承。比如 `[source,ruby]` 的 block style、language 与 body text 分别绑定各自 span；`[#foo.red]` 的 id、每个 role 与 child text 分别绑定各自 span。reference/substitution/environment-derived 值保留真实 graph 输入但不能靠 node-level range 猜 writable target；任一 bound source/environment/dependency 在 final barrier stale 都使旧 slot write 失败并重新准备。
 
 D2DocumentMetadata/3 是固定 Ruby 2.0.26 最终 Document public/converter observable state 的产品 carrier，而不是 header 的近似摘要。backend 四元组与 safeMode/doctype 来自同一次 evaluation；title=完整 doctitle，mainTitle/subtitle 是同一次固定 title partition。authors 按 Document#authors 顺序保存 name/firstname/middlename/lastname/initials/email 六个成员，D9 或 UI 禁止从 full name/source 重新拆分。effectiveAttributes 按固定 Document#attributes 最终实际 enumeration order 保存完整 present map 且 name 唯一，包括 converter 可见的 builtin/generated/environment-derived attribute；这些 entry 通过 sourceOrigins 表示 authored/substitution/generated provenance，绝不为没有 physical author span 的值伪造 sourceRange。headerAttributes 只保留真实 physical header lexical entries及其 range，不承担 effective attribute authority。revision 的 number/date/remark 和全部 document-level独立成员同样保留字段级 origin。D9/D8 consumer只能消费这些 exact product members，不能从 raw source、fullname、默认 backend 或 ambient environment 补猜。
+
+effectiveAttributes[].value 精确复用已经闭合的 D2NativeSemanticValue/1 域。必须保留 final fixed-Ruby Hash 的 key 是否存在以及真实 Ruby value class：key absent 就没有 effectiveAttributes entry；present nil 编码为 null；TrueClass/FalseClass 编码 Boolean；String 编码 text；Integer 编码 {integer:CanonicalSignedDecimal}，使用无界且无多余前导零的规范十进制；Array 只有在每个元素都是 String 时才编码 {textArray:[text...]}，并完整保留元素顺序、重复项与空串。fixed core 的 safe-mode-level、max-include-depth、authorcount 因此保持 integer，mannames 保持 fixed HTML5/DocBook converter 实际消费的有序 text array。任何 producer 都不得 to_s、JSON-stringify、join、normalize、sort 或重 parse 这些值。ProcessorAttributeOverride/1 本身只允许 text set-value 与 null unset action，不能借 API 注入其它 Ruby class。accepted extension profile 只有在每个 present final Document#attributes value 都落入这个 closed domain 时才与 rich product 兼容；Symbol、Float、Hash、nested/mixed/non-String Array 或其它 opaque object 必须使 rich product projection unavailable，不能成为 free JSON。typed value 与 sourceOrigins 必须来自同一次 fixed evaluation；generated/non-author value 不伪造 physical range，D7/D8/D9 直接消费 typed value。
 
 D2SourceOriginGraph/2 只在一个 snapshot 内有效。origin id 必须从0连续无洞；每个 input id 都小于引用它的 node id，因此 graph 无环且不形成第二 identity namespace。authored 恰有一个 physical source range；reference 记录真实 authored reference site 与其 input；substitution/generated 记录固定 transformation family 与全部真实 inputs；multi_origin 至少两个 inputs。sourceOrigins.originIds 排序唯一且都存在。writableSource 从这些 origin 机械导出：只有所有 retained path 最终收敛到同一个 byte-equal authored writable range 才是 unique；generated、non-author、ambiguous 或 multi-source 都只能 structured-read。exact Source read/save 继续由原 authorization 独立提供。
 
@@ -1983,6 +1985,12 @@ D8PresentationPolicyProposal/1 = {
   defaultPresentation:"separate"|"run_in"
 }
 
+D8PresentationPolicyBootstrapInit/1 = {
+  kind:"d8_presentation_policy_bootstrap_init",version:1,
+  before:D8PresentationPolicyHeadSet/1,
+  proposal:D8PresentationPolicyProposal/1
+}
+
 D8PresentationPolicySetRequest/2 = {
   wireVersion:2,
   kind:"d8_presentation_policy_set",
@@ -2067,7 +2075,9 @@ D3-CJ/3(complete policy)
 
 recordSha256 覆盖上述完整 prefixed bytes。PinRef/2 选择完全相同 bytes，payloadKind=portable_metadata、retention=recovery；address.workspaceRef/revision 与 record 相等。D8WorkspacePresentationPolicyBinding/2.policy 必须机械构造成 {kind:"d8_workspace_presentation_policy",version:1,workspaceRef:record.workspaceRef,revision:record.revision,defaultPresentation:record.defaultPresentation} 这个唯一 logical current view，不单独持久化；这样保留 Stage4A /1 current-value contract 而不制造第二 authority。parents 按 (revision,recordSha256) 排序唯一且均属于同一 Workspace，每个 parent record 都必须 retained/valid。初始 record revision=1、parents=[]、defaultPresentation=separate。后继 parents 必须等于 prepare/seal 时完整 protected current head set，revision=checked(max(parent.revision)+1)，activationChangeId 必须等于该 portable D6 P decision 唯一分配的 ChangeId。因此两个 offline writer 都可能形成 revision2，但不同 hash/ChangeId 会保留为两个 heads；revision number、arrival order、LWW 都不能选 winner。
 
-D8PresentationPolicyHeadSet/1 是 D8 owner 对 Portable Workspace Metadata 中全部 maximal valid policy record 的 current observation。stamp 是这个 exact Workspace configuration 的 protected Core state：完整 head enumeration 首次建立一段 continuous proof epoch 时 revision=1；correctness evidence continuity 丢失/重建时换 epoch，之后每次已证明的 head-set transition 都 checked-increment revision；两个数字都不能选 branch。它不是 caller evidence 或 index scan。heads 排序唯一；[] 表示尚未初始化，一个 head 才是 current，多个 head 是 conflict。gap、unknown parent decoder、缺 retained record 或 metadata continuity 无法证明时都是 unavailable，绝不能解释成 empty/current。current binding 要求 headSet.heads == [address]，record/pin/address byte-equal，policy 等于 record 的机械 /1 view，并且完整 ancestry retained。
+D8PresentationPolicyHeadSet/1 是 D8 owner 对 Portable Workspace Metadata 中全部 maximal valid policy record 的 current observation。stamp 是这个 exact Workspace configuration 的 protected Core state：完整 head enumeration 首次建立一段 continuous proof epoch 时 revision=1；correctness evidence continuity 丢失/重建时换 epoch，之后每次已证明的 head-set transition 都 checked-increment revision；两个数字都不能选 branch。它不是 caller evidence 或 index scan。heads 排序唯一；一个 head 才是 current，多个 head 是 conflict。heads=[] 是**已经证明的 uninitialized owner state**，绝不能从“看不到记录”推断：只有真实 producer 绑定了完整受保护 empty-set observation 时才合法，即仍未 activation 且由原 D3 target-custody 证明为 fresh 的 D8PresentationPolicyBootstrapInit/1.before，或 SetRequest 明确接纳的 current proved-uninitialized state。missing/corrupt metadata、unknown parent decoder、缺 retained record、unproved continuity gap 或仅仅 backing file 不存在都必须 unavailable，绝不能变成 [] 或 ambient default。成功 activation 的 current Plan4 fresh Workspace 不可能以 [] 被观察到，因为 initial record/head 与 activation 原子提交。current binding 要求 headSet.heads == [address]，record/pin/address byte-equal，policy 等于 record 的机械 /1 view，并且完整 ancestry retained。
+
+D8PresentationPolicyBootstrapInit/1 不是 public mutation request。before.workspaceRef 与 proposal.workspaceRef 必须 byte-equal 于 fresh target Workspace；before.heads=[]，before.stamp 是由原 D3 target-custody 对 genuinely empty target history 的证明派生的 fresh protected D8 owner observation，且 before.stamp.revision=1。proposal 恰为 parents=[]、revision=1、defaultPresentation=separate。该 helper 不含 activationChangeId、committed record、address、hash、pin、outbox item 或第二 authorization decision，只能出现在 current unseen WorkspaceBootstrapPlan/4 中。
 
 D8PresentationPolicySetRequest/2 固定 managed_atomic/strict，并有一个实际 current producer。错误顺序是 closed decode → presentation-state disclosure → policy_admin → expectedFrontier/domain qualification → protected head-set read → expectedHeads exact equality → retained head record/pin/ancestry availability → semantic/budget。任何更早阶段失败都不得暴露 hidden head/value。一个 current head 且 defaultPresentation 与请求相同是 d8_presentation_policy_no_change：返回已授权的 exact headSet 后结束，零 PreparedIntent、零 P、零 ChangeId/record/outbox；[] 初始化与 multi-head conflict 即使所有 head value 相同也绝不是 no-op。
 
@@ -2276,7 +2286,7 @@ exact-source/resource-exact/query-json plan 强制 generationPolicy={kind:"none"
 
 D9TemplateBindingChoice/1 只在真实 ambiguous binding 且 authorized template/profile 允许用户选择时出现；inputIndex 必须选择 exact frozen catalog item，不能借 choice 新增 read。D9MissingPolicyChoice/1 只能命中已存在的 exact template path，且 authorized projection value 确为 none；action=empty 不能掩盖 unknown path、unreadable input、type error 或 unavailable schema。imageSizes 按 ResourceRef key 排序唯一，两个 dimension 均为 positive，resource 必须等于 authorized resource catalog input。layoutChoices 同样按 ResourceRef key 排序唯一，必须存在相同 resource 的 imageSizes，而且只在 fixed Templates rule 真正要求 explicit layout choice 时出现。preserve_aspect_within_box 取不超过两个 chosen dimension 的最大同宽高比尺寸；use_exact_dimensions 使用两个 chosen dimension 并记录 required layout loss。
 
-current ExportPlan/3 的所有 set-like array 由一个 comparator contract 闭合。routeBinding.steps 的 array position i 必须有 step=i，形成0..N-1；每个 step.evidencePins 按 pinToken 排序唯一。styleBundles 按 styleBundleId UTF-8 bytes 排序唯一，同 ID 不同 version/pin 是 conflict。stagedOutputs 与 PublicationReceipt/3.outputs 都按 fixed-parent controlled relative output name 的 canonical bytes 排序唯一；重复 name 一律非法，同名不同 byteLength/sha256/pin 是明确 integrity conflict，绝不 LWW。generationPolicy.render.bindingChoices 与 missingPolicy 分别按 templatePath 的 fixed Templates canonical path comparator 排序唯一，同一 templatePath 不能有两个不同 inputIndex/action，也不能同时既 bindingChoice 又 missingPolicy。nativeTableBindings 按 (setName,columnName) 的受控 ASCII bytes 元组排序唯一，同 key 不同 token/selector 失败。已有 imageSizes/layoutChoices 的 ResourceRef 排序唯一、lossChoices 的 lossKey、plan evidencePins/recoveryPins 的 pinToken 规则继续原样有效，不允许另一个实现自选排序。
+current ExportPlan/3 的所有 set-like array 由一个 comparator contract 闭合。routeBinding.steps 的 array position i 必须有 step=i，形成0..N-1；每个 step.evidencePins 按 pinToken 排序唯一。styleBundles 按 styleBundleId UTF-8 bytes 排序唯一，同 ID 不同 version/pin 是 conflict。stagedOutputs 与 PublicationReceipt/3.outputs 先执行 fixed-parent 的 controlled-relative-name safety 以及 alias/conflict 验证，再按精确 protocol name string 的 unsigned UTF-8 octet lexicographic order 排序唯一：不做 Unicode normalization、case folding、locale collation、host/path-library collation 或 separator rewrite，精确 byte prefix 较短者在前。若继承的 alias/conflict validator 判两个 name 冲突，排序绝不能把它们变合法。重复 exact name 一律非法，同名不同 byteLength/sha256/pin 是明确 integrity conflict，绝不 LWW。generationPolicy.render.bindingChoices 与 missingPolicy 共用一个 templatePath Unicode-scalar lexicographic comparator：按 exact decoded Unicode scalar sequence 的 scalar value 逐项比较，normalization=none、case-sensitive，不使用 locale/case folding；精确 scalar prefix 较短者在前。canonical-equivalent 但 scalar sequence 不同的写法保持不同 key，除非既有 Templates 其它规则本来就拒绝它们。两个 array 都按该 comparator 排序唯一；同一 exact templatePath 不能有两个不同 inputIndex/action，也不能同时既 bindingChoice 又 missingPolicy。nativeTableBindings 按 (setName,columnName) 的受控 ASCII bytes 元组排序唯一，同 key 不同 token/selector 失败。已有 imageSizes/layoutChoices 的 ResourceRef 排序唯一、lossChoices 的 lossKey、plan evidencePins/recoveryPins 的 pinToken 规则继续原样有效，不允许另一个实现自选排序。
 
 D9 prepare 在任何 ExportPlan/3 bytes、plan token、protected pin、staged manifest 或 confirmation basis 冻结前，先 strict-decode 全部 choice，按上述 key 检测 duplicate/conflict，再对合法 input permutation 执行唯一 canonical sort。因而只交换同一合法集合的输入顺序必须得到 byte-for-byte 相同 Plan；duplicate key 即使 body byte-equal 也因 unique 规则拒绝，body 不同则同时是 integrity conflict。冻结后的 ExportPlan/3、PublicationReceipt/3、recovery/receiver record 必须已经 canonical；reader/admission 遇到乱序、duplicate 或 key/body conflict 直接 fail，绝不通过“读时排序”修复历史/受保护 bytes。receipt 重复的 route/style/generation-policy 选择仍与 protected Plan byte-equal，outputs 用上面的独立 canonical output-name comparator。
 
@@ -2941,6 +2951,7 @@ WorkspaceBootstrapPlan/4 = {
   targetRegistry:WorkspaceBootstrapTargetRegistry/1,
   initialPolicy:Policy/3,
   trustGenesis:WorkspaceTrustGenesis/2,
+  initialPresentationPolicy:D8PresentationPolicyBootstrapInit/1,
   initialSeriesConfigurations:[WorkspaceBootstrapSeriesConfiguration/1...],
   periodScopeBindings:[WorkspaceBootstrapPeriodScopeBinding/1...]
 }
@@ -2951,6 +2962,12 @@ series configuration 按 canonical SeriesScope 排序且唯一；period binding 
 这些 helper member 保留 fixed-parent Plan3 的字段语义；Profile4 只改变 dual-profile genesis family。
 
 Plan4 只用于 unseen fresh create/fork，并保留原 D3 proposal/custody/CAS/P boundary。普通 copy 不使用 Plan4。saved/planned/unknown recovery 保留实际 recorded decoder/bytes；restore/continue/failover 不合成 Genesis2。本候选不声称 Plan3 已部署，也不虚构 migration。
+
+initialPresentationPolicy 是 mandatory，并在同一 Plan4 内闭合 D8 fresh-target state。before/proposal 的 WorkspaceRef 必须等于 targetWorkspaceRef；before 是 §6.4 的 protected fresh empty-head observation 且 stamp.revision=1；proposal 恰为 parents=[]、revision=1、defaultPresentation=separate。prepare/planning/staging 在原 create/fork OperationId、planning CAS 与 DecisionKey 下冻结该 helper，以及一个 committed=null 的 typed presentation_policy_change preview。这不是 D8 SetRequest，不要求尚未 active target 的 policy_admin，不新增第二 CAS/ledger，也不在 final P 前创建 committed policy record/hash/address/pin/outbox/ChangeId。
+
+只有全部原 bootstrap final checks 成功后，同一个 P 才 checked-allocate 唯一 bootstrap ChangeId C。Core 在该 atomic P transaction 中从 frozen proposal+C 构造 canonical D8WorkspacePresentationPolicy/2，计算 fixed-prefix hash、exact recovery portable_metadata pin/address 与 D8PresentationPolicyOutboxItem/1，提交 presentation_policy_change 及原 receipt/effects/ChangeRecord association，把 D8 head graph 从 frozen empty before 推进到 heads=[address]（epoch 相同且 stamp revision checked 到2），并同时提交 target activation/custody 与其它全部 bootstrap effect。record.activationChangeId 与 ChangeRecord.changeId 都是 C，outbox decisionKey 是原 create/fork DecisionKey。planning loser、abort、final check 失败或 P commit 失败都必须保持 target 未 activation，并且不留下 partial D8 record/pin/head/outbox。成功 active 的 Plan4 target 因而立即有一个 revision=1/defaultPresentation=separate 的 /1 logical current view。P 后 publication retry 只能使用 retained outbox exact bytes，并执行正常 receiver same-decision/ancestry admission。
+
+普通 managed copy 不使用 Plan4，也不能合成这项初始化。真实 saved/planned/unknown Plan4 必须恢复原 initialPresentationPolicy、OperationId/proposal/custody mapping、pins 与 decoder，绝不能重新采样 [] 或 current branch。restore/continue/failover 保留其 recorded/current policy state，不重跑 bootstrap。真正历史 Plan1/Plan3 bytes 保持 actual decoder，不注入该字段。本候选不声称已经 active 的 Workspace 需要 migration 或 dual-write。
 
 legacy Handle1 只在 exact Declaration1-authorized key 仍 current、safe、usable 时继续 revision-token 新签名；永远不能签 transform。continuation 对两个 profile 分别求 current(K)|none|conflicted_or_unproved，任一 unproved 都禁止部分激活新 domain。declaration order 固定为 optional old revision revoke、optional old transform revoke、new revision authorize、new transform authorize，全部在同一 DecisionKey/CP4 且无可观察中间 prefix。
 
@@ -3381,4 +3398,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +293 coordination，共731，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +312 coordination，共750，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
