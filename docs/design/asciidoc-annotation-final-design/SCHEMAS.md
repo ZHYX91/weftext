@@ -1167,9 +1167,15 @@ D3IdentityInput/13 has the exact D3IdentityInput/12 six-member semantic set: onl
 
 ## 6.1 PreparedActionBinding/4
 
-The current D7 action successor is exact inheritance, not a free extension. D7ActionSpec/2 is the fixed-parent ActionSpec/1 top-level object with version=2; its intent decoder is exactly the fixed-parent intent union with only the historical apply_suggestion arm removed, then the two closed arms below added. Every non-suggestion arm keeps its fixed-parent members and semantics byte-for-byte.
+The current D7 action successor is exact inheritance, not a free extension. D7ActionSpec/2 is the fixed-parent ActionSpec/1 top-level object with version=2; its intent decoder is exactly the fixed-parent intent union with only the historical apply_suggestion arm removed, then the three closed Annotation arms below added. Every other fixed-parent arm keeps its members and semantics byte-for-byte.
 
 ```text
+D7CreateAnnotationIntent/2 = {
+  kind:"create_annotation",
+  destinationOwnerRef:NodeRef,
+  value:AnnotationEditableValue/1
+}
+
 D7ApplySuggestionIntent/2 = {
   kind:"apply_suggestion",
   annotation:AnnotationRef,
@@ -1185,7 +1191,8 @@ D7RejectSuggestionIntent/2 = {
 D7ActionSpec/2 :=
   ActionSpec/1 with top-level version=2,
   with the fixed-parent apply_suggestion arm removed,
-  plus D7ApplySuggestionIntent/2 and D7RejectSuggestionIntent/2
+  plus D7CreateAnnotationIntent/2,
+       D7ApplySuggestionIntent/2 and D7RejectSuggestionIntent/2
 
 D7ActionPrepareRequest/3 = {
   wireVersion:3,kind:"d7_action_prepare",
