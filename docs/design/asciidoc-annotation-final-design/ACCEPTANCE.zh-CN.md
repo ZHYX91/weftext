@@ -682,38 +682,38 @@ translation_status: source
 
 | FC4C-SUG-01 | SPEC §9.10 | pending+confirmed suggestion 通过普通 D8 ordinary_edit 直接提交 accepted/not_applicable；必须在 transition gate 拒绝，且不得产生 target write、Value4 revision 或 P。 |
 | FC4C-SUG-02 | SPEC §9.10 | pending suggestion 通过普通 D8 ordinary_edit 直接提交 rejected/not_applicable；FAIL，只有 reject_suggestion 可产生 rejected。 |
-| FC4C-SUG-03 | SPEC §9.10 | accepted 或 rejected terminal Suggestion 经普通 edit 变回 pending/confirmed；FAIL，即使 expected token/current Value4 都正确。 |
+| FC4C-SUG-03 | SPEC §9.10 | 已接受或已拒绝的终态 Suggestion 经普通编辑被改回 pending/confirmed；必须失败，即使 expected token 与 current Value4 都正确，终态也不得重开。 |
 | FC4C-SUG-04 | SPEC §9.10 | interactive create_annotation 的首版 proposal 企图制造 accepted/rejected；FAIL；合法 suggestion 首版只能由 Core 构造 pending。 |
 | FC4C-SUG-05 | SPEC §9.10 | caller proposal 夹带 confirmed、targetBasis、expectedText 或 pointAffinity 不能进入 current wire；合法首版 pending+confirmed 只有在 Core fresh exact target read 后重算全部 target evidence 才成立。 |
 | FC4C-SUG-06 | SPEC §9.10 | manual reattach 选择新的 exact same-owner target 后，after 必须 pending+needs_reconfirmation；即使 caller/UI 声称 confirmed 也不能同次升级。 |
-| FC4C-SUG-07 | SPEC §9.10 | 显式 annotation_reconfirm_suggestion 对 pending+needs_reconfirmation fresh 读取 target 后重算 basis/expected/point 并得到 pending+confirmed；target hidden 时在泄露 target bytes 前 not_visible，零 mutation。 |
+| FC4C-SUG-07 | SPEC §9.10 | 显式 annotation_reconfirm_suggestion 处理 pending+needs_reconfirmation 时，Core 必须重新读取当前目标并重算 basis、expected 与 point 后才可得到 pending+confirmed；若目标不可见，必须在泄露目标字节前返回 not_visible，且零变更。 |
 | FC4C-SUG-08 | SPEC §9.10 | terminal Annotation 可修改 body/appearance/labels/review/reply 等仍合法字段，但 Suggestion/3 必须 byte-equal；改 kind/replacement/evidence 或 reopen terminal 均失败。 |
-| FC4C-SUG-09 | SPEC §§9.9–9.10 | pending+needs_reconfirmation 的 suggestion 在 target hidden/unavailable 时仍可 reject：只核 Annotation disclosure/read/write+token，得到 rejected/not_applicable，不读取 target。 |
+| FC4C-SUG-09 | SPEC §§9.9–9.10 | 处于 pending+needs_reconfirmation 的建议在目标隐藏或不可用时仍可拒绝：只核 Annotation 的披露、读取、写入与 token，得到 rejected/not_applicable；不得读取目标。 |
 | FC4C-SUG-10 | SPEC §§9.7,9.10,9.12 | copy/import/backup 恢复的 terminal Suggestion 可保留历史展示状态与 attribution，但没有当前 Workspace apply receipt/target source change 就不证明目标曾被修改；fresh ordinary import 使用 imported_unverified。 |
-| FC4C-CARRIER-01 | SPEC §9.11 | replace apply 的 concrete Annotation after 在 PAB4/D7ActionInput3 使用 D7ProposedInput/3 + d3_annotation_value4，pin 完整 Value4；用 /2+d3_annotation_value3 装同一 bytes 失败。 |
-| FC4C-CARRIER-02 | SPEC §9.11 | delete apply 的 Annotation accepted after 同样使用 current /3 concrete Value4 carrier，并与 target zero-replacement source change 同一 P。 |
-| FC4C-CARRIER-03 | SPEC §9.11 | insert apply 的 Annotation accepted after 同样使用 current /3 concrete Value4 carrier，保存 pointAffinity 的 target transform 与 Value4 pin 同一 preparation。 |
+| FC4C-CARRIER-01 | SPEC §9.11 | replace apply 的当前 Annotation 后像在 PAB4/D7ActionInput3 中必须使用 D7ProposedInput/3 与 d3_annotation_value4，并固定完整 Value4；若用 /2 与 d3_annotation_value3 承载相同字节必须失败。 |
+| FC4C-CARRIER-02 | SPEC §9.11 | delete apply 的 Annotation accepted 后像同样必须使用当前 /3 的具体 Value4 carrier，并与目标的零字节 replacement source change 进入同一个 P；不得回退到历史 carrier。 |
+| FC4C-CARRIER-03 | SPEC §9.11 | insert apply 的 Annotation accepted 后像同样必须使用当前 /3 的具体 Value4 carrier；保存 pointAffinity 的目标变换与 Value4 pin 必须属于同一次准备，不能分开形成决策。 |
 | FC4C-CARRIER-04 | SPEC §9.11 | 真实 historical PAB3/Input2 的 d3_annotation_value3 按原 decoder/bytes/pins 恢复；把 old record 升成 /3 或把 current Value4 降装 /2 都失败。 |
-| FC4C-CARRIER-05 | SPEC §9.11 | 合法 current D3 symbolic branch 继续使用 d3_symbolic_result9；OwnerInputBinding.pinRefs 精确覆盖 /3 proposed pins 与真实 protected evidence，Concrete Value4 与 symbolic Result9 不能串 tag。 |
+| FC4C-CARRIER-05 | SPEC §9.11 | 合法的当前 D3 symbolic branch 继续使用 d3_symbolic_result9；OwnerInputBinding.pinRefs 必须精确覆盖 /3 的 proposed pins 与真实受保护证据，具体 Value4 与 symbolic Result9 不能互换标签。 |
 | FC4C-READ-01 | SPEC §9.11 | Value4 body exact source 为 `*Alice*` 时，D8 read 返回 exactSource=`*Alice*` 且 semanticText=`Alice`；D7 annotation_body 唯一输出 `Alice`。 |
-| FC4C-READ-02 | SPEC §9.11 | invalid R6 body：D8 read 保留 exact source+diagnostics、semanticText=null；D7 annotation_body 在 authorization/currentness 后 source_unavailable，禁止 plain_text/strip-markup fallback。 |
-| FC4C-READ-03 | SPEC §9.11 | d8_annotation_read 返回完整 Value4、annotationRevisionToken、SourceObservation 与 creator/authoredAt/lastEditor/editedAt；只返回 AnnotationEditableValue/1 不足。 |
+| FC4C-READ-02 | SPEC §9.11 | R6 正文无效时，D8 read 必须保留精确源文与 diagnostics，并令 semanticText=null；D7 annotation_body 在授权与当前性验证后返回 source_unavailable，禁止退回 plain_text 或自行去除标记。 |
+| FC4C-READ-03 | SPEC §9.11 | d8_annotation_read 必须返回完整 Value4、annotationRevisionToken、SourceObservation 以及 creator/authoredAt/lastEditor/editedAt；若只返回 AnnotationEditableValue/1，则缺少当前记录与归因信息，属于不完整读取。 |
 | FC4C-READ-04 | SPEC §9.11 | 只有 annotation_read 的 principal 可获得完整 readonly read + readonly Draft projection，但不能进入 D8EditPrepareRequest/3；render 成功不授予 write。 |
-| FC4C-READ-05 | SPEC §9.11 | 有 annotation_write 时 draft_open 的 base token/Observation 与 read 精确相等；prepare 后若 aggregate/record/token/dependency barrier 任一移动，最终 barrier stale/reprepare，即使 Value hash 相等。 |
+| FC4C-READ-05 | SPEC §9.11 | 具有 annotation_write 时，draft_open 的基础 token/Observation 必须与 read 精确相等；prepare 后若 aggregate、record、token 或 dependency barrier 任一变化，最终屏障必须判为 stale 并重新准备，即使 Value hash 相等。 |
 | FC4C-READ-06 | SPEC §9.11 | Annotation 本体可读而 target hidden/unavailable 时仍可读完整 Annotation attribution/body；targetResolution=unavailable 且不泄露 target source bytes/expectedText。 |
 | FC4C-READ-07 | SPEC §9.11 | body=null 的 annotation_body 唯一语义 text 为 empty string；不得把 absent body 解释成历史 D2 plain_text 或调用另一 parser。 |
 | FC4C-STORE-01 | SPEC §9.12 | 同一 aggregate 有 A/B 两条记录，只改 A 时 after 必须完整保留 B 的 logical record；B token/Value4/managed SourceVersion/H 均不变。 |
 | FC4C-STORE-02 | SPEC §9.12 | 两个并发 plan 分别改同 sidecar 的 A/B：最多一个 strict file CAS 先成功；失败者 fresh re-read 后重建包含胜者 change 的 aggregate，禁止 LWW 覆盖。 |
 | FC4C-STORE-03 | SPEC §9.12 | aggregate records 出现重复 AnnotationRef，即使 bytes 相同也整文件 strict-decode FAIL；不同 bytes 是 integrity conflict，不能 last-one-wins。 |
 | FC4C-STORE-04 | SPEC §9.12 | record owner 与 envelope owner 不同、replyTo 跨 owner 或完整 reply graph 成环，均整 aggregate FAIL，不能只丢坏记录继续。 |
-| FC4C-STORE-05 | SPEC §9.12 | truncated JSON、duplicate key、unknown format/version 或 malformed member 不得 partial trust；normal current read unavailable/conflict，authorized raw repair/backup 只能取得 exact raw bytes。 |
-| FC4C-STORE-06 | SPEC §9.12 | Node/adoc 协调 rename 只更新 FileBinding/physical observation；ownerNodeRef、AnnotationRef、Value4、revision token 保持，fresh aggregate read 后恢复 currentness。 |
-| FC4C-STORE-07 | SPEC §9.12 | 显式 backup 保存 exact aggregate bytes+Frontier，但不携带 current permission/PAB/ActionEvidence；restore 仍需完整 strict decode、owner/reply/history 与原 D6 admission。 |
+| FC4C-STORE-05 | SPEC §9.12 | JSON 被截断、出现重复键、未知格式/版本或成员畸形时，整份 aggregate 都不得部分信任；正常当前读取必须返回 unavailable/conflict，获授权的原始修复或备份只能取得精确原始字节。 |
+| FC4C-STORE-06 | SPEC §9.12 | Node/adoc 的协调重命名只更新 FileBinding 与物理 observation；ownerNodeRef、AnnotationRef、Value4 和 revision token 均保持不变，随后通过重新读取 aggregate 恢复当前观察。 |
+| FC4C-STORE-07 | SPEC §9.12 | 显式备份保存精确 aggregate 字节与 Frontier，但不携带当前权限、PAB 或 ActionEvidence；恢复时仍须完整严格解码，并验证 owner、reply、history 以及原 D6 admission 规则。 |
 | FC4C-STORE-08 | SPEC §9.12 | Node copy/import 用真实 identityMap/candidate-map 生成 fresh AnnotationRefs、改写 target/reply 并生成新 owner aggregate；terminal display 可保留但不能制造 destination apply receipt。 |
-| FC4C-STORE-09 | SPEC §9.12 | pure Trash/restore 对 byte-equal Value4 保留 token 且无 source revision；purge 删除 record，最后一条 purge 后 canonical physical state 是 sidecar absent。 |
+| FC4C-STORE-09 | SPEC §9.12 | 纯 Trash/restore 在 Value4 字节不变时保留 token，且不产生 source revision；purge 删除对应 record，最后一条记录被清除后，规范物理状态必须是 sidecar absent。 |
 | FC4C-STORE-10 | SPEC §9.12 | 同一 DecisionKey 修改一个 Node 的两个 Annotation 时 Notice3/CP4 各有两个 logical annotation components/source changes，但 InstallationPlan 只有一个完整 sidecar after 与一个 physical install。 |
 | FC4C-STORE-11 | SPEC §9.12 | A 改动导致 sidecar FileObjectBinding 更新后，B 的旧 aggregate-backed current observation stale；fresh read 可把未改 B 重新绑定到新物理 observation，不分配新 token/SourceVersion/H。 |
-| FC4C-STORE-12 | SPEC §9.12 | verified ChangeRecord/Notice/CP 连续链可 admission canonical aggregate；直接外部 JSON/mtime/provider latest/equal hash 均不能当 trusted transition，explicit import/admission 仍执行 imported_unverified attribution 与 lifecycle gate。 |
+| FC4C-STORE-12 | SPEC §9.12 | 已验证的 ChangeRecord/Notice/CP 连续链可以接纳规范 aggregate；直接外部 JSON、mtime、provider 的 latest 声明或相同 hash 都不能当作可信转换，显式 import/admission 仍必须执行 imported_unverified 归因与生命周期 gate。 |
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
