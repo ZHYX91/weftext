@@ -462,7 +462,7 @@ translation_status: source
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
-| FC4B-VAL-01 | SPEC §§9.6–9.8 | current Annotation 创建必须只在现有 Node-local Portable Metadata authority 中保存一个 PortableAnnotationRecord/4；creator/authoredAt 由 trusted Core 根据真实执行 principal/time 写入，并初始化 lastEditor/editedAt。caller 提供的 actor/time/trusted flag 必须 closed-decode 失败。 |
+| FC4B-VAL-01 | SPEC §§9.6–9.9 | current interactive Annotation 创建必须使用 D7CreateAnnotationIntent/2，caller 只能提供 destinationOwnerRef + AnnotationEditableValue/1；经过正常 owner/create authorization 后，由 Core 注入 creator/authoredAt/lastEditor/editedAt、构造 wire13 create_annotation graph，并保存一个 PortableAnnotationRecord/4。caller 提供 actor/time/trusted flag 或用 generic d3_operation 冒充 trusted creation 都必须失败。 |
 | FC4B-VAL-02 | SPEC §§9.6–9.7 | 仅把 reviewState 从 open 改为 resolved 也会改变完整 Value/4：必须只分配一个 fresh annotationRevisionToken，经既有 SourceRevisionPlan 路径推进 managed Annotation SourceVersion，byte-preserve creator/authoredAt，并由 Core 重写 lastEditor/editedAt；使用旧 token 并发 prepare 的另一编辑必须输掉 CAS。 |
 | FC4B-VAL-03 | SPEC §§9.6–9.7 | 仅修改 appearance 或 labels 仍是实际 Value/4 mutation，必须使用同一个 one-token/one-managed-after 规则；不能因为 target/body/reply 未变化就复用旧 token。 |
 | FC4B-VAL-04 | SPEC §9.6 | 完整 editable Annotation value 与 current state 相等时必须是真正 no-op：attribution、annotationRevisionToken、SourceVersion、H 都不变，不建立 SourceRevisionPlan，也不伪造 source_change。 |
