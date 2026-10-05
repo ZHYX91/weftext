@@ -181,15 +181,15 @@ CoreSemanticProjection/1 仍然只是测试 oracle 的比较数据，绝不能�
 
 | semantic category | current product shape | actual current consumers |
 |---|---|---|
-| document metadata/title/author/revision 与 header attributes | D2DocumentSnapshot/3 → D2DocumentMetadata/3 | D8 document/Draft read、D7 title read、D9 document render/export |
-| section 与 floating title | D2SectionBlock/3 + D2Heading/3，分别保存 authoredLevel/effectiveLevel | D7 headings scan/Query、D8 outline/folding/visual editor、D9 HTML/PDF/DOCX/ODT |
-| paragraph 与 inline semantics | D2ParagraphBlock/3 + D2ProductInline/3 | D7 body_text、D8 visual/read/Source、D9 rendered/semantic export |
-| unordered/ordered/description/callout/checklist list | D2ListBlock/3 + D2ListItem/3 | D8 structure/Source、D7 body_text、D9 render/export |
-| table/column/row/cell，包括 AsciiDoc cell | D2TableBlock/3 + D2TableCell/3 | D5 native-table boundary、D8 table/read/Source、D9 table/document export |
-| example/sidebar/open/admonition/listing/literal/source/pass/stem/quote/verse | D2DelimitedBlock/3 或 D2ContainerBlock/3 | D8 read/Source 与可选结构 UI、D7 已定义的 body_text、D9 已支持 render route |
-| image/audio/video 等 media | D2MediaBlock/3；Weftext-owned occurrence 另带 D2IdentityAdapter/1 | D8 media surface、D7 readable projection、D9 resource-aware export |
-| native link/xref/anchor/footnote/indexterm/STEM/quoted text/kbd/menu/button/callout/break | D2ProductInline/3 闭合集 | D7 readable/query projection、D8 navigation/visual/Source、D9 render/export |
-| include/substitution 生成或多 source-origin semantics | 每个 semantic node 上的 D2SourceOrigin/2 数组 | D8 navigation/write gate、D7 read/query dependency、D9 evidence/loss mapping |
+| 文档元数据、标题、作者、修订信息与头部属性 | D2DocumentSnapshot/3 → D2DocumentMetadata/3 | D8 文档与 Draft 读取、D7 标题读取、D9 文档渲染与导出 |
+| 章节与浮动标题 | D2SectionBlock/3 + D2Heading/3，分别保存 authoredLevel/effectiveLevel | D7 标题扫描与 Query、D8 大纲/折叠/视觉编辑、D9 HTML/PDF/DOCX/ODT 导出 |
+| 段落与行内语义 | D2ParagraphBlock/3 + D2ProductInline/3 | D7 body_text、D8 视觉读取与 Source、D9 渲染和语义导出 |
+| 无序、有序、描述、callout 与 checklist 列表 | D2ListBlock/3 + D2ListItem/3 | D8 结构与 Source、D7 body_text、D9 渲染与导出 |
+| 表格、列、行、单元格以及 AsciiDoc cell | D2TableBlock/3 + D2TableCell/3 | D5 原生表格边界、D8 表格读取与 Source、D9 表格/文档导出 |
+| example、sidebar、open、admonition、listing、literal、source、pass、stem、quote、verse 等原生块 | D2DelimitedBlock/3 或 D2ContainerBlock/3 | D8 读取与 Source 及可选结构界面、D7 已定义的 body_text、D9 已支持的渲染 route |
+| image、audio、video 等媒体 | D2MediaBlock/3；属于 Weftext 的 occurrence 另带 D2IdentityAdapter/1 | D8 媒体界面、D7 可读投影、D9 感知 Resource 的导出 |
+| 原生 link、xref、anchor、footnote、indexterm、STEM、quoted text、kbd、menu、button、callout、break | D2ProductInline/3 闭合集 | D7 可读与 Query 投影、D8 导航/视觉/Source、D9 渲染与导出 |
+| include/substitution 生成或具有多个来源的语义 | 每个 semantic node 上的 D2SourceOrigin/2 数组 | D8 导航与写入门控、D7 读取/Query 依赖、D9 证据和 loss 映射 |
 
 D2Heading/3 将 authoredLevel 与 effectiveLevel 分开。WeftextManaged 允许 authored level 6–9；standard leveloffset 可以得到大于9的 effective level，不能被 Weftext 上限截断。native section state、document-title/book-part、warning、explicit anchor 与 source range 均保留。TOC、search、outline、stable link、Query、editor、export 因而消费同一 product heading projection，而不是各自重建 heading。
 
@@ -426,15 +426,15 @@ workspace run-in default 的唯一 owner 是 D8，持久化为 SCHEMAS §6.4 的
 
 per-source role 覆盖 Workspace default，但不修改 policy。只存在 run-in 时，在既有 explicit-role trivia 规则下找到第一个 eligible paragraph 即 RunIn；只存在 separate 时为 Separate；两者同时存在产生 role_conflict 并回退 Separate；两者都不存在才读取 current Workspace default。无显式 role 且 defaultPresentation=run_in 时，只沿既有 implicit-default physical-adjacency 规则，因此 intervening blank/comment 仍为 Separate；无 eligible paragraph 也为 Separate。Enable 删除 separate 并确保 run-in；Disable 删除 run-in 并确保 separate；Use Default 删除两者。这三项都是 D8 ordinary source-role edit，绝不能写 D8WorkspacePresentationPolicy/1。
 
-heading 与 first paragraph 在所有情形下都保留独立 source range 与独立 D2 semantic node。RunIn 只是 D8PresentationResult/1；synthetic visual join 不重新 parse，也没有 writable source scalar。D8DocumentRenderBinding/1 的 cache input 冻结 SourceObservation、DocumentFormatCurrentQualification、D2 snapshot pin、exact presentation-policy binding 和 renderer profile digest。presentation-policy revision 改变因此必须使 current D8 render cache 失效；仅改 policy 不改变 source bytes、SourceVersion、heading identity、outline 或 authored roles。
+标题与首段在所有情形下都保留独立 source range 和独立 D2 semantic node。RunIn 只是 D8PresentationResult/1 的呈现结果；视觉层的同行拼接不会重新解析，也没有可写的 source scalar。D8DocumentRenderBinding/1 的缓存输入冻结 SourceObservation、DocumentFormatCurrentQualification、D2 snapshot pin、精确 presentation-policy binding 和 renderer profile digest。presentation-policy revision 改变后 current D8 render cache 必须失效；仅改该策略不会改变 source bytes、SourceVersion、标题身份、大纲或作者 roles。
 
 ### 8.3 D9 semantic/rendered export 与 exact preparation
 
-D9 current export 使用 SCHEMAS §6.5 的 closed ExportPlan/3 family。exact AsciiDoc source export 选择 target asciidoc_source，从 ExportInputCatalog/2 消费授权的 exact source bytes，不需要 product semantic projection、run-in policy 或 renderer/provider route。因此 provider unavailable 不能把合法 AsciiDoc syntax 判 invalid，也不能阻断已授权 exact-source export。
+D9 current export 使用 SCHEMAS §6.5 的闭合 ExportPlan/3 family。精确 AsciiDoc 源文档导出选择 target asciidoc_source，并从 ExportInputCatalog/2 消费已授权的 exact source bytes；它不需要产品语义 projection、run-in policy 或 renderer/provider route。因此 provider unavailable 不能把合法 AsciiDoc syntax 判成 invalid，也不能阻断已经授权的 exact-source export。
 
 document target 为 html、pdf、docx 或 odt 时必须包含 D9DocumentRenderBinding/1：exact current D2DocumentSnapshot/3、ManagedDocumentSemanticQualification/1、D8WorkspacePresentationPolicyBinding/1，以及生成 immutable output 所使用的 route/profile evidence。HTML 消费与 D8 同一 deep-heading/run-in projection。DOCX/ODT 在 selected profile 支持时把 effective heading level 1–9 映射到显式 heading structure；超过该能力的 effective level，以及 target 对 run-in/layout/styles/fonts/accessibility 的限制，必须进入完整 ExportLossReport，不能变成 D2 syntax rejection。PDF 是基于 frozen semantic/render inputs 的 controlled route，同样报告 target-specific loss。provider/route 缺失或未获接受只能是 export unavailable，不能改写 source 或 projection。
 
-ExportPlan/3 必须冻结 input domain/catalog/order、content selection、完整 render projection、source-format qualification、适用时的 run-in presentation-policy binding、exact template binding、route 及每一步 provider/profile/version、style-bundle versions、registered generation-policy binding、target、initial loss report、output budget、protected destination intent、DependencyProof/3/ObservationScope、全部 evidence pins 和 exact staged-output pins/digests。D9ExportConfirmation/1 单独绑定 planToken 与完整 D9ExportLossChoice/1 set；choice 不修改 plan，也不能把 blocking loss 改成 success。PublicationReceipt/3 记录 plan 选择的 exact target/route/template/styles/presentation policy、原 report/choices、destination display 与实际 published output digests。
+ExportPlan/3 必须冻结输入 domain、catalog 和顺序、content selection、完整 render projection、source-format qualification、适用时的 run-in presentation-policy binding、精确 template binding、route 的每一步 provider/profile/version、style-bundle versions、已登记 generation-policy binding、target、initial loss report、output budget、受保护 destination intent、DependencyProof/3/ObservationScope、全部 evidence pins，以及精确 staged-output pins/digests。D9ExportConfirmation/1 只绑定 planToken 与完整 D9ExportLossChoice/1 集合；choice 不能修改 plan，也不能把 blocking loss 改成 success。PublicationReceipt/3 记录该 plan 选择的精确 target、route、template、styles、presentation policy、原 report/choices、destination display 和实际 published output digests。
 
 原 D9 permission/state machine 继续是 load-bearing：敏感读取前先确定 potential scope 与 authorization；inspect、confirmation、publish、delivery 各阶段重新检查 current authorization；unreadable 不能替成 none；不同 Query authorization generation 不能混合；create-only external publication 继续原 durability/unknown-outcome 规则；Save-as-Resource 是独立 D3 create_resource preparation/receipt。source/format/route/template/Query/authorization 改变仍按原 owner 规则使 unpublished plan 失效。后来仅改变 Workspace presentation policy 不会修改已 prepared plan：旧 plan 继续使用自己冻结的 policy binding，新 prepare 才消费新 current revision。
 
