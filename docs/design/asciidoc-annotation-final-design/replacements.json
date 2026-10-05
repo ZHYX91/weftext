@@ -401,7 +401,8 @@
       "changedSections": [
         "format-aware heading/body/ref/saved-definition dependencies",
         "query grammar retained",
-        "format invalidation"
+        "format invalidation",
+        "headings/body_text consume D2DocumentSnapshot3 and complete D2 product body family"
       ]
     },
     {
@@ -418,7 +419,8 @@
       "changedSections": [
         "PAB4",
         "Effect3",
-        "EditBinding3 references"
+        "EditBinding3 references",
+        "current D2 product projection and D8 presentation-policy aware view/render inputs"
       ]
     },
     {
@@ -525,7 +527,8 @@
         "Source-only fallback",
         "run-in/deep-heading rendering",
         "Annotation appearance/review",
-        "Annotation inline body/profile closed schema"
+        "Annotation inline body/profile closed schema",
+        "D2DocumentSnapshot3/Draft full-product Source fallback and D8 workspace presentation policy"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -552,7 +555,8 @@
         "PreparedEditBinding/3",
         "deep heading/run-in editor",
         "Annotation UX",
-        "Annotation inline body/profile closed schema"
+        "Annotation inline body/profile closed schema",
+        "current d8_document/Draft D2DocumentSnapshot3 consumer and run-in policy/render-cache binding"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -604,7 +608,8 @@
         "PAB4",
         "Effect3",
         "provider profiles",
-        "no implicit adoc probe arm"
+        "no implicit adoc probe arm",
+        "managed AsciiDoc current product projection for semantic/rendered paths while d9_probe input union remains unchanged"
       ]
     },
     {
@@ -684,7 +689,9 @@
         "ExportPlan/3 + PublicationReceipt/3",
         "format-aware rendered export",
         "Annotation export",
-        "provider profiles"
+        "provider profiles",
+        "fully closed ExportPlan3 route/template/target/destination/loss-confirmation/evidence/staged-output types",
+        "D2DocumentSnapshot3 rendered export and frozen D8 presentation-policy binding"
       ]
     },
     {
@@ -714,7 +721,9 @@
         "Oracle observer manifest + M37 producer-site closure",
         "ordered AsciiDoc API attribute environment plus explicit UTF-8/locale/provider closure",
         "Witness7 exact root/forward/supplementary/support closure verifier and producer-time carrier conformance",
-        "AnnotationInlineBody/1 alias and single AnnotationInlineProfile/1"
+        "AnnotationInlineBody/1 alias and single AnnotationInlineProfile/1",
+        "current D2DocumentSnapshot3 complete native AsciiDoc product projection and historical wire2 boundary",
+        "source-origin ranges and stable Node/Resource/citation identity adapters after native parsing"
       ],
       "schemaCompanionZh": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "schemaCompanionEn": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
@@ -795,6 +804,73 @@
         "fresh/current PAB4/EffectManifest3/PreparedEditBinding3 references",
         "fresh ApprovalUse2 author path",
         "exact saved/planned old-version recovery retained"
+      ]
+    },
+    {
+      "owner": "D2-Impact",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§2 parser/profile",
+        "§3.5 AsciiDoc retirement",
+        "§4.2 AsciiDoc unsupported handling"
+      ],
+      "changedSections": [
+        "current implementation uses complete fixed-Asciidoctor-2.0.26 D2DocumentSnapshot3 product projection rather than the historical Profile-v2 closed subset",
+        "open/native AsciiDoc include passthrough and fixed-baseline constructs use lossless Source fallback when structural UI is unavailable",
+        "historical single-source authority authorization exact-source and invalid-repair safeguards retained",
+        "Annotation mutation/value implementation obligations are not replaced by this Stage4A entry"
+      ]
+    },
+    {
+      "owner": "D7-DefinitionTransfer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-definition-transfer/source.md",
+      "sourceBlob": "6d92b30604515709fc7c9d1cd54eea03e9f5c4db",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "current carrier statement",
+        "definitionTransfers current submission",
+        "historical recovery"
+      ],
+      "changedSections": [
+        "new current D3 submission uses D3IdentityOperationRequest13",
+        "definitionTransfers and Result9 inner semantics retained",
+        "genuine saved/planned wire12 transfer recovery retained"
+      ]
+    },
+    {
+      "owner": "D9-ImportIR",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.md",
+      "sourceBlob": "d9eb42eef8537b7b7fe5f3d60819c3ed3403c1d8",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "current author submission",
+        "D3 current wire reference",
+        "historical recovery"
+      ],
+      "changedSections": [
+        "new current author submission uses D3IdentityOperationRequest13",
+        "ImportIR Mapping ConversionInput file-safety and loss semantics retained",
+        "genuine saved/planned wire12 import recovery retained"
+      ]
+    },
+    {
+      "owner": "D9-Acceptance",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+      "sourceBlob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "D9-04 heading mapping",
+        "S12 heading depth"
+      ],
+      "changedSections": [
+        "obsolete five-heading-level premise replaced by current authored6-9 and uncapped effective-level product projection",
+        "target depth limitations are explicit export loss/degradation or provider unavailability rather than source rejection"
       ]
     }
   ],
