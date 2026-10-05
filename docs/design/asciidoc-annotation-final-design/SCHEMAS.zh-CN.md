@@ -734,8 +734,8 @@ SupportingOnlySubjectKind/1 永不加入 R。加入 supplementary 后再次检�
 
 **C. supporting evidence closure。** seed 恰为：所有 cut head snapshots、rootBind(C)、以及 observationId<C.observationId 且 subjectId∈R 的全部合法 bind。按以下 typed edge 递归直到不再增加节点：
 - snapshot → previousSnapshotObservationId；每个 field/attribute slot 的 provenance.inputs；ModelObservedValue 的 string/array/map 子值；
-- ModelPropertyInput.model_slot → modelPropertyObservations 中指定 snapshot，并要求该 slot 真实存在；observed_value → observedStrings[valueId]；observed_slice → observedStrings[valueId] + byte range；operation → operations[operationId]；inline_field → inlineObservations[inlineEventId] + fieldPath；
-- OracleStringOperation → calls[callId]、inputs/removedInputs 的每个 slice、observedStrings[outputValueId]；run.exact_copy → slice；run.derived → 全部 slices + referenced operationId；run.generated → 非 null inlineEventId；
+- ModelPropertyInput.model_slot 分支指向 modelPropertyObservations 中指定的 snapshot，并要求目标 slot 真实存在；observed_value 分支指向 observedStrings[valueId]；observed_slice 分支指向 observedStrings[valueId] 并验证对应 byte range；operation 分支指向 operations[operationId]；inline_field 分支指向 inlineObservations[inlineEventId] 并验证 fieldPath；
+- OracleStringOperation 继续指向 calls[callId]、inputs/removedInputs 中的每个 slice 与 observedStrings[outputValueId]；run.exact_copy 继续指向对应 slice；run.derived 继续指向全部 slices 与它引用的 operationId；run.generated 在 inlineEventId 非 null 时继续指向该 Inline observation；
 - OracleEvaluationCall → 非 null parentCallId；
 - OracleInlineObservation → callId、非 null parentCallId、非 null producingOperationId、nodeType 与 fields 中递归 OracleFieldValue、非 null returnValueId；
 - OracleFieldValue.observed_string → observedStrings[valueId]；array/entries → 每个 nested value；
