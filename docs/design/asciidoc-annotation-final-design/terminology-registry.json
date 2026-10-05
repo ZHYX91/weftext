@@ -538,7 +538,7 @@
       "status": "current",
       "replaces": "WorkspaceBootstrapPlan/3",
       "section": "SPEC §13",
-      "notes": "Fresh create/fork only; proposalId remains the D3 canonical UUID and all profile/creator/Registry/series/period members are closed public types."
+      "notes": "Fresh create/fork only; proposalId remains the D3 canonical UUID, initialPresentationPolicy is mandatory, and the original planning CAS/DecisionKey/final P atomically materializes revision1/separate D8 policy with target activation. Historical Plan1/Plan3 and non-bootstrap recovery are not widened."
     },
     {
       "name": "D3IdentityInput/13",
@@ -594,7 +594,7 @@
       "status": "current",
       "replaces": "ExportPlan/2",
       "section": "SPEC §8",
-      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/per-plan generation policy, deterministic native-table bindings, exact typed-pin derivation, target/destination/loss/staged bytes and recovery."
+      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/generation/presentation selection and typed pins; templatePath uses exact Unicode-scalar lexical ordering, output names use post-validation unsigned UTF-8 lexical ordering, and canonicalization precedes freeze."
     },
     {
       "name": "PublicationReceipt/3",
@@ -602,7 +602,7 @@
       "status": "current",
       "replaces": "PublicationReceipt/2",
       "section": "SPEC §8",
-      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact target/template/route/style/generation/presentation selection and actual output digests."
+      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact selection and actual outputs; outputs use the same validated exact-name unsigned UTF-8 comparator as stagedOutputs."
     },
     {
       "name": "D3-Annotation-Value/4",
@@ -1570,7 +1570,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Complete protected maximal-head observation with owner-specific epoch/revision stamp; multiple same-revision heads remain conflict, never LWW."
+      "notes": "Complete protected maximal-head observation with owner-specific epoch/revision stamp; [] is only a proved uninitialized owner state, missing/corrupt/unproved evidence is unavailable, and multiple same-revision heads remain conflict rather than LWW."
     },
     {
       "name": "D8WorkspacePresentationPolicyBinding/2",
@@ -1626,7 +1626,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Finite per-plan generation choices for template binding disambiguation, missing empty, image sizes/layout and native-table token bindings; none arm covers exact policy-independent targets."
+      "notes": "Finite per-plan generation choices; bindingChoices/missingPolicy share the exact Unicode-scalar templatePath comparator, native-table and Resource choices retain their established keys, and none covers exact policy-independent targets."
     },
     {
       "name": "D9NativeTableSelector/1",
@@ -1778,7 +1778,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §4.4; SPEC §3.4",
-      "notes": "One final effective Document#attributes entry with true authored/substitution/generated provenance and no fabricated physical range."
+      "notes": "One final effective Document#attributes entry using the closed D2NativeSemanticValue/1 type domain plus same-evaluation authored/substitution/generated provenance; final Ruby value class is preserved and no physical range is fabricated."
     },
     {
       "name": "D8PresentationPolicyHeadEvidence/1",
@@ -1803,6 +1803,14 @@
       "replaces": null,
       "section": "SCHEMAS §6.4; SPEC §8.2",
       "notes": "Protected original-P publication item selecting the exact P-materialized portable presentation-policy record bytes."
+    },
+    {
+      "name": "D8PresentationPolicyBootstrapInit/1",
+      "owner": "D8/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4, §9; SPEC §§8.2,13.2",
+      "notes": "Fresh unseen WorkspaceBootstrapPlan/4-only helper freezing a custody-proved empty D8 head set plus parents=[]/revision1/separate proposal before the original bootstrap final P; it carries no pre-P activation ChangeId, committed record, pin or outbox."
     }
   ]
 }
