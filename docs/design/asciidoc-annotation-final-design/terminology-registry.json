@@ -281,15 +281,16 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §7",
-      "notes": "Portable four-member AsciiDoc inline source value; distinct from the evaluation profile."
+      "notes": "Sole current canonical portable four-member AsciiDoc inline source value; distinct from the evaluation profile."
     },
     {
       "name": "AsciiDocInlineBody/1",
       "owner": "D2/D8",
-      "status": "current",
-      "replaces": "AnnotationInlineBody/1",
+      "status": "retained-current",
+      "replaces": null,
       "section": "SCHEMAS §7",
-      "notes": "Schema alias only for the earlier candidate name; identical canonical bytes to AnnotationInlineBody/1, no second wire/version, no deployment claim."
+      "notes": "Compatibility schema alias only; canonicalOf AnnotationInlineBody/1, identical canonical bytes, no successor migration, second wire/version, or deployment claim.",
+      "canonicalOf": "AnnotationInlineBody/1"
     },
     {
       "name": "OracleSemanticWitness/7",
@@ -560,8 +561,8 @@
       "owner": "D7",
       "status": "current",
       "replaces": "PreparedActionBinding/3",
-      "section": "SPEC §8",
-      "notes": "Fresh/current D7 successor. Genuine saved/planned PreparedActionBinding/3 retains its exact decoder, bytes, pins and recovery."
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Current D7 successor consuming D7ActionSpec/2, including current apply/reject suggestion arms. Genuine saved/planned PAB3 keeps exact decoder/bytes/pins/recovery."
     },
     {
       "name": "EffectManifest/3",
@@ -584,8 +585,8 @@
       "owner": "D8",
       "status": "current",
       "replaces": "PreparedEditBinding/2",
-      "section": "SPEC §8",
-      "notes": "Fresh/current D8 prepared-edit successor; genuine saved/planned PreparedEditBinding/2 remains historical recovery."
+      "section": "SCHEMAS §6.3; SPEC §9.8",
+      "notes": "Current D8 prepared-edit successor with closed D8EditIntent/3. Annotation proposed pin is complete D3-CJ/3(Value/4); historical /1-/2 records recover under their original decoder."
     },
     {
       "name": "ExportPlan/3",
@@ -608,8 +609,8 @@
       "owner": "D3/D2/D8",
       "status": "current",
       "replaces": null,
-      "section": "SPEC §9",
-      "notes": "Portable current value; one AnnotationRef per root/reply."
+      "section": "SPEC §§9,15-16",
+      "notes": "Canonical current portable Annotation value and current annotation_value mutation payload. Any actual editable-value change uses one fresh AnnotationRevisionToken; historical Value/3 remains historical recovery."
     },
     {
       "name": "D3-Annotation-Target-Projection/1",
@@ -1402,6 +1403,102 @@
       "replaces": null,
       "section": "SCHEMAS §6.5",
       "notes": "Exact published output name, byte length and digest in PublicationReceipt/3."
+    },
+    {
+      "name": "AnnotationRevisionToken/1",
+      "owner": "D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Opaque nonempty per-Annotation value-state CAS token; fresh for every changed committed Value/4 state and preserved for a true no-op."
+    },
+    {
+      "name": "PortableAnnotationRecord/4",
+      "owner": "D3/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7; SPEC §9.6",
+      "notes": "Current logical record in the existing node-local weftext.annotations.json Portable Metadata authority; binds AnnotationRef, AnnotationRevisionToken/1 and Value/4."
+    },
+    {
+      "name": "AnnotationEditableValue/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7",
+      "notes": "Caller-editable Value/4 projection excluding Core-owned attribution fields."
+    },
+    {
+      "name": "D8EditIntent/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "D8 edit intent /2",
+      "section": "SCHEMAS §6.3; SPEC §9.8",
+      "notes": "Current closed D8 edit intent; annotation arm uses expected AnnotationRevisionToken/1 plus AnnotationEditableValue/1 and targetPolicy."
+    },
+    {
+      "name": "D8PinnedEditIntent/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3",
+      "notes": "Protected pinned counterpart of D8EditIntent/3 used by D8EditInput/3; annotation proposedValue pin contains complete Value/4 canonical bytes."
+    },
+    {
+      "name": "D8EditInput/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "D8EditInput/2",
+      "section": "SCHEMAS §6.3",
+      "notes": "Current OwnerInputBinding descriptor for d8_edit/3; no caller actor/time/trust fields."
+    },
+    {
+      "name": "D8EditPrepareRequest/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "d8_edit_prepare wire2",
+      "section": "SCHEMAS §6.3",
+      "notes": "Current D8 prepare envelope carrying D8EditIntent/3; historical wire1/2 saved/planned requests retain their original decoder."
+    },
+    {
+      "name": "D8AnnotationDraftProjection/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3",
+      "notes": "Discardable Value/4 Annotation Draft projection with exact source for valid/invalid inline body, target-resolution state and editable/read-only access."
+    },
+    {
+      "name": "D7ApplySuggestionIntent/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Current accept-suggestion arm; carries only AnnotationRef and exact expected Annotation revision, then fresh-reads the stored Suggestion/3 and target."
+    },
+    {
+      "name": "D7RejectSuggestionIntent/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Current reject-suggestion arm; carries only AnnotationRef and exact expected Annotation revision and requires no target-source read."
+    },
+    {
+      "name": "D7ActionSpec/2",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "ActionSpec/1",
+      "section": "SCHEMAS §6.1; SPEC §9.9",
+      "notes": "Exact successor: all fixed-parent non-suggestion ActionSpec/1 arms unchanged, historical apply_suggestion removed, current apply/reject suggestion arms added."
+    },
+    {
+      "name": "D7ActionPrepareRequest/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "d7_action_prepare wire2",
+      "section": "SCHEMAS §6.1",
+      "notes": "Current action-prepare envelope carrying D7ActionSpec/2; historical wire2 requests remain historical recovery."
     }
   ]
 }
