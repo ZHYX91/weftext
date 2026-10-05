@@ -39,10 +39,13 @@ AsciiDocProcessorEnvironment/3 = {
   output:ProcessorOutputIdentity/1,
   baseDir:ProcessorPath/1,
   ambientUserHome:ProcessorPath/1,
+  sourceEncoding:"UTF-8",
+  localeProfile:ProcessorLocaleProfile/1,
   attributeOverrides:[ProcessorAttributeOverride/1...],
   timeInputs:ProcessorTimeInputs/1,
   includeEnvironment:IncludeEnvironment/2,
-  extensionProfiles:[AcceptedProcessorExtensionProfile/1...]
+  extensionProfiles:[AcceptedProcessorExtensionProfile/1...],
+  providerProfiles:[AcceptedProcessorProviderProfile/1...]
 }
 
 ProcessorPath/1 = {
@@ -76,6 +79,15 @@ ProcessorAttributeOverride/1 = {
   name:text,
   action:"hard_set"|"soft_set"|"hard_unset"|"soft_unset",
   value:text|null
+}
+
+ProcessorLocaleProfile/1 = {
+  profileId:text,
+  lang:text|null,
+  lcAll:text|null,
+  lcCtype:text|null,
+  lcTime:text|null,
+  descriptorSha256:"sha256:<64 lowercase hex>"
 }
 
 CanonicalSignedDecimal = "0" | "-"?[1-9][0-9]*
@@ -113,9 +125,18 @@ AcceptedProcessorExtensionProfile/1 = {
   semanticVersion:text,
   descriptorSha256:"sha256:<64 lowercase hex>"
 }
+
+AcceptedProcessorProviderProfile/1 = {
+  providerKind:"stem"|"mermaid"|"syntax_highlighter"|"html"|"pdf"|"docx",
+  profileId:text,
+  semanticVersion:text,
+  descriptorSha256:"sha256:<64 lowercase hex>"
+}
 ```
 
-attributeOverrides sort uniquely by lowercase name, extension profiles by profileId, and sourceUnits by logicalPath.value. Set actions require non-null values and unset actions require null. With safe mode below server, an unoverridden user-home comes from ambientUserHome; server/secure use the native "." default. SOURCE_DATE_EPOCH, when present, drives local*/doc* UTC values; otherwise local* uses clockNow and doc* uses inputMtime when available, then clockNow.
+attributeOverrides is an ordered sequence, never sorted or deduplicated. Each event name is the non-empty lowercase name after fixed-Ruby key-syntax processing. hard_set/soft_set require non-null value; hard_unset/soft_unset require null. The canonical decoder reconstructs ordered attr_overrides in array order: the first occurrence appends the key and a later same-name event replaces state without moving that key. D3-CJ/3 therefore preserves API enumeration order directly. Environments that differ only by the first-key order of notitle/showtitle have different canonical bytes. Embedded-mode alias derivation uses that ordered key sequence exactly as fixed 2.0.26 does; sorting before derivation is invalid.
+
+sourceEncoding is exactly UTF-8; other source encodings are outside this Gate. localeProfile is a complete registered controlled-oracle descriptor: profileId+descriptorSha256 and the four explicit locale-environment values freeze it with no ambient-host fallback. extensionProfiles sort uniquely by profileId, providerProfiles by (providerKind,profileId), and sourceUnits by logicalPath.value. An empty providerProfiles means no provider was invoked for this evaluation, not that providers do not exist. With safe mode below server, an unoverridden user-home comes from ambientUserHome; server/secure use the native "." default. SOURCE_DATE_EPOCH, when present, drives local*/doc* UTC values; otherwise local* uses clockNow and doc* uses inputMtime when available, then clockNow.
 
 # 2. Core Semantic Projection
 
@@ -561,10 +582,23 @@ ModelFieldName/1 =
   sectname|special|numbered|index|marker|colspan|rowspan|
   has_header_option|format|delimiter|type|target|imagesdir
 
+SemanticHeadSubjectKind/1 =
+  "document"|"section"|"block"|"list"|"list_item"|"table"|
+  "column"|"cell"|"inline"|"catalog_record"
+
+SupportingOnlySubjectKind/1 =
+  "attribute_buffer"|"table_parser_context"
+
+ForwardSemanticRole/1 =
+  "header"|"child"|"dlist_term"|"dlist_description"|
+  "table_column"|"table_head_cell"|"table_body_cell"|"table_foot_cell"|
+  "cell_inner_document"
+
+BackedgeSemanticRole/1 =
+  "parent"|"cell_column"
+
 ModelRelation/1 = {
-  role:"parent"|"header"|"child"|"dlist_term"|"dlist_description"|
-       "table_column"|"table_head_cell"|"table_body_cell"|"table_foot_cell"|
-       "cell_column"|"cell_inner_document",
+  role:ForwardSemanticRole/1|BackedgeSemanticRole/1,
   position:[UInt...],
   targetSubjectId:UInt
 }
@@ -642,11 +676,44 @@ The M37 writer-site set is closed. `M37Site/1`'s `(group,file,method,point)` mus
 
 M37-02/M37-03/M37-05 must also cover direct Hash assignment/update/delete/clear in the fixed source, not merely wrapper calls. The concrete manifest plus the fixed source is producer-conformance evidence; the projector cannot infer missing facts from field names, source text, or final HTML.
 
-Per-subject snapshots form an immediate-predecessor chain. Cut heads sort numerically by subjectId and exactly equal the reachable semantic closure. Only references within the model-observation namespace use numeric temporal comparison. operation/inline/value/call references use their own namespace contracts. carrier.entry is a target-array index and is never numerically compared with model observation IDs.
+### 4.3 Exact Witness/7 closure verifier
 
-Producer conformance additionally requires, at the real bind callback, that the target carrier has already been appended, entry < targetStream.lengthAtBind, and the producer still holds the exact same Ruby object. The wire decoder can only validate final existence/type/index, not infer cross-stream time. document/0 has the same rule.
+**A. Observation/snapshot/bind static layer.** modelPropertyObservations is in actual append order and observationId is strictly increasing. For each subject, sort all snapshots by observationId: the first previousSnapshotObservationId is null and every later one points exactly to the directly preceding snapshot of the same subject. The same subjectId has byte-equal kind in every snapshot; real-Ruby-object to subjectId one-to-one identity is producer conformance. Define latestSnapshotBefore(s,o) as the greatest same-subject snapshot observationId below o. Every bind resolves an existing same-subject latestSnapshotBefore(subjectId,bind.observationId).
 
-Catalog ownership is only parent -> actual Document#register receiver. A temporary overlay must close through a real restore or cleanup delete; the observer never fabricates a restore write.
+Static ModelCarrierReference dispatch is exactly:
+- document: entry is 0 and resolves Witness.document;
+- blockEvents / collectionEvents / catalogEvents / inlineObservations / contentObservations / calls: entry is a zero-based index in that exact array and the target has the stream's exact type.
+
+carrier.entry is never compared numerically with a model observationId.
+
+**B. Root and physical semantic closure.** For cut C, rootBind(C) is the latest valid pre-cut bind with carrier=(document,0); it exists, its subject kind is document, and C.documentSubjectId=rootBind.subjectId. For every candidate subject s, latest[s]=latestSnapshotBefore(s,C.observationId).
+
+The structural worklist starts at C.documentSubjectId and expands only ForwardSemanticRole/1 from latest[s]. Every target exists and has SemanticHeadSubjectKind/1. After forward traversal, every parent/cell_column backedge from a latest snapshot in Rstruct already targets Rstruct; a backedge never adds a subject. Former roots, old Cells, and other stale objects cannot be revived through reverse edges.
+
+Then exactly two supplementary passes run:
+1. inline: kind=inline; at least one valid pre-cut bind targets inlineObservations; latest snapshot has exactly one parent whose target is already in Rstruct. Add it to R.
+2. catalog_record: at least one valid pre-cut bind targets catalogEvents; latest snapshot has exactly one catalog-ownership parent; target kind=document and target is already in Rstruct. Add it to R. There is no owner role and a Document outside Rstruct is never pulled in.
+
+SupportingOnlySubjectKind/1 never enters R. After supplementary addition, every backedge in R again targets a subject already in R. Let H=set(C.heads[].subjectId). heads are strictly sorted by subjectId, subjectId is unique, H==R, and every head.snapshotObservationId equals latest[head.subjectId].observationId. Missing live subjects, extra stale subjects, duplicates, stale heads, or relation conflicts invalidate/incomplete the Witness.
+
+**C. Supporting evidence closure.** Seeds are exactly all cut-head snapshots, rootBind(C), and every valid pre-cut bind whose subjectId is in R. Recurse typed edges until fixed point:
+- snapshot -> previousSnapshotObservationId; every field/attribute provenance.inputs; all nested string/array/map ModelObservedValue members;
+- ModelPropertyInput.model_slot -> named model snapshot plus required slot; observed_value -> observedStrings[valueId]; observed_slice -> observedStrings[valueId] plus byte-range validation; operation -> operations[operationId]; inline_field -> inlineObservations[inlineEventId] plus fieldPath;
+- OracleStringOperation -> calls[callId], every input/removed slice, observedStrings[outputValueId]; run.exact_copy -> slice; run.derived -> all slices plus referenced operationId; run.generated -> non-null inlineEventId;
+- OracleEvaluationCall -> non-null parentCallId;
+- OracleInlineObservation -> callId, non-null parentCallId, non-null producingOperationId, recursively nested OracleFieldValue in nodeType/fields, non-null returnValueId;
+- OracleFieldValue.observed_string -> observedStrings[valueId]; array/entries -> every nested value;
+- OracleContentObservation -> calls[callId], all resultValueIds, all contributingInlineEventIds;
+- OracleObservedSlice -> observedStrings[valueId] and 0<=startByte<=endByte<=byteLength; OracleObservedString is a leaf;
+- bind -> its carrier; Inline/Content/Call carriers continue through the edges above; other carriers apply their retained closed validation with no invented cross-array chronology.
+
+Same-namespace model references use backward/latest checks; operation/value/inline/call stay in their own existence/type/DAG namespaces; subject references use identity/relation only. Cross-namespace numeric comparison is forbidden. A dangling/wrong-kind reference, invalid slice/index, operation/call cycle, or missing provenance input fails. The support closure may contain SupportingOnlySubjectKind/1, old snapshots/Cells, and temporary evidence without adding them to H.
+
+**D. Producer time and cardinality.** The static decoder proves final stream/index/type and the reference/closure rules above; complete Witness validity additionally requires producerConformanceValid. At every real bind callback the carrier has already been appended, entry < targetStream.lengthAtBind, the callback still holds the exact same Ruby object, and the bind is appended afterward. document/0 binds only after the actual returned top-level Document carrier is published. Later filling of the carrier array never cures an earlier invalid bind; text/title/source/path/hash matching is forbidden.
+
+A complete top-level Witness/7 has exactly one model_ready cut. If selected-backend evaluation is absent or exits abnormally there are zero valid evaluation_complete cuts; a normal return produces exactly one, later than model_ready with byte-equal documentSubjectId. Inner Documents do not create another top-level cut namespace. model_ready/evaluation_complete heads are the latest physical snapshots at their cuts; physical membership is separate from CoreSemanticPropertyProfile/1 survival/winner semantics.
+
+Catalog ownership remains only parent -> actual Document#register receiver. A temporary overlay closes before a valid evaluation_complete through the fixed source's real restore write or cleanup delete/closure; the observer never fabricates a restore.
 
 # 5. Managed format and D6 successors
 
@@ -1812,4 +1879,4 @@ Provider closed shapes are in SPEC §4. They qualify ecosystem renderers and nev
 
 # 13. Acceptance reference
 
-Every schema and cross-field rule above has explicit positive/negative design obligations in [ACCEPTANCE.md](ACCEPTANCE.md): 437 core + 117 coordination = 554, all unexecuted. Those row bodies are normative obligations; the count is not a substitute for them.
+Every schema and cross-field rule above has explicit positive/negative design obligations in [ACCEPTANCE.md](ACCEPTANCE.md): 438 core + 117 coordination = 555, all unexecuted. Those row bodies are normative obligations; the count is not a substitute for them.
