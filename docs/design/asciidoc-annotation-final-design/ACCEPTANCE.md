@@ -12,7 +12,7 @@ Status: **design obligations only; not executed**.
 
 - core design oracles: 438
 - actual-owner coordination fixtures: 217
-- total: 655
+- total: 689
 
 Each row is a normative obligation of this candidate. Words such as PASS/FAIL describe the future acceptance condition and do not claim execution in this PR.
 
@@ -681,9 +681,44 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34C-D6-03 | SPEC §14 | Without handoff, checkpoint, or a real responsibility mutation, merely supporting the current FC schemas does not background-migrate Record2/Proof1/Inventory1 or repin their historical bytes into Record3/Proof2/Inventory2. |
 | FC34C-D6-04 | SPEC §14 | If handoff cannot obtain an original decoder/bytes/pins for any old Pin1/PAB3/Binding1/Subscription1/stop/external responsibility or cannot prove the authoritative store/capacity barrier, takeover pauses/unavailable instead of constructing a partial Inventory2; unrelated ordinary source operations remain available. |
 
+| FC4C-SUG-01 | SPEC §9.10 | A pending+confirmed suggestion submitted as accepted/not_applicable through ordinary D8 ordinary_edit is rejected by the transition gate, with no target write, Value4 revision, or P. |
+| FC4C-SUG-02 | SPEC §9.10 | A pending suggestion submitted as rejected/not_applicable through ordinary D8 edit fails; only reject_suggestion can produce rejected. |
+| FC4C-SUG-03 | SPEC §9.10 | An accepted or rejected terminal Suggestion edited back to pending/confirmed fails even with the correct current token and Value4. |
+| FC4C-SUG-04 | SPEC §9.10 | An interactive create_annotation proposal attempting an initial accepted/rejected state fails; a legal initial suggestion is Core-constructed pending only. |
+| FC4C-SUG-05 | SPEC §9.10 | Caller-confirmed/targetBasis/expectedText/pointAffinity never enters the current proposal wire; initial pending+confirmed exists only after Core freshly reads the exact target and recomputes all target evidence. |
+| FC4C-SUG-06 | SPEC §9.10 | Manual reattach to a new exact same-owner target forces pending+needs_reconfirmation; a caller/UI confirmed claim cannot upgrade it in the same operation. |
+| FC4C-SUG-07 | SPEC §9.10 | Explicit annotation_reconfirm_suggestion fresh-reads a pending+needs_reconfirmation target, recomputes basis/expected/point, and yields pending+confirmed; hidden target returns not_visible before target-byte disclosure and performs zero mutation. |
+| FC4C-SUG-08 | SPEC §9.10 | A terminal Annotation may edit body/appearance/labels/review/reply where otherwise legal, but Suggestion/3 stays byte-equal; changing kind/replacement/evidence or reopening terminal fails. |
+| FC4C-SUG-09 | SPEC §§9.9–9.10 | A pending+needs_reconfirmation suggestion remains rejectable when its target is hidden/unavailable: only Annotation disclosure/read/write+token is checked, producing rejected/not_applicable without a target read. |
+| FC4C-SUG-10 | SPEC §§9.7,9.10,9.12 | Copy/import/backup recovery may retain terminal Suggestion display state and attribution, but without a current-Workspace apply receipt/target source change it does not prove the target was modified; fresh ordinary import uses imported_unverified. |
+| FC4C-CARRIER-01 | SPEC §9.11 | Replace apply binds the concrete Annotation after in PAB4/D7ActionInput3 through D7ProposedInput/3+d3_annotation_value4 with the complete Value4 pin; packing those bytes as /2+d3_annotation_value3 fails. |
+| FC4C-CARRIER-02 | SPEC §9.11 | Delete apply uses the same current /3 concrete Value4 carrier for the accepted Annotation after and seals it with the target zero-replacement source change. |
+| FC4C-CARRIER-03 | SPEC §9.11 | Insert apply uses the same current /3 concrete Value4 carrier; its pointAffinity target transform and Value4 pin belong to the same preparation. |
+| FC4C-CARRIER-04 | SPEC §9.11 | A genuine historical PAB3/Input2 d3_annotation_value3 recovers with its original decoder/bytes/pins; upgrading the old record to /3 or downgrading current Value4 into /2 fails. |
+| FC4C-CARRIER-05 | SPEC §9.11 | The legal current D3 symbolic branch retains d3_symbolic_result9; OwnerInputBinding.pinRefs exactly covers /3 proposed pins and real protected evidence, and concrete Value4 cannot be tagged as symbolic Result9 or vice versa. |
+| FC4C-READ-01 | SPEC §9.11 | For Value4 body exact source `*Alice*`, D8 read returns exactSource=`*Alice*` and semanticText=`Alice`, while D7 annotation_body uniquely returns `Alice`. |
+| FC4C-READ-02 | SPEC §9.11 | For invalid R6 body, D8 read preserves exact source+diagnostics with semanticText=null; D7 annotation_body returns source_unavailable after authorization/currentness, never a plain_text/strip-markup fallback. |
+| FC4C-READ-03 | SPEC §9.11 | d8_annotation_read returns complete Value4, annotationRevisionToken, SourceObservation, creator/authoredAt/lastEditor/editedAt; returning only AnnotationEditableValue/1 is insufficient. |
+| FC4C-READ-04 | SPEC §9.11 | A principal with annotation_read only receives complete readonly read plus readonly Draft projection but cannot enter D8EditPrepareRequest/3; render success grants no write. |
+| FC4C-READ-05 | SPEC §9.11 | With annotation_write, draft_open base token/Observation exactly matches read; if aggregate/record/token/dependency barrier moves before final validation, prepare is stale/reprepare even when Value hash is equal. |
+| FC4C-READ-06 | SPEC §9.11 | When the Annotation is readable but its target is hidden/unavailable, complete Annotation attribution/body remains readable; targetResolution=unavailable and no target-source bytes/expectedText are disclosed. |
+| FC4C-READ-07 | SPEC §9.11 | body=null has exactly empty-string annotation_body semantic text; absent body is never interpreted as historical D2 plain_text or reparsed by another parser. |
+| FC4C-STORE-01 | SPEC §9.12 | With records A/B in one aggregate, changing only A preserves B's logical record exactly; B token/Value4/managed SourceVersion/H do not change. |
+| FC4C-STORE-02 | SPEC §9.12 | Two concurrent plans changing A/B in one sidecar allow at most one strict file CAS first; the loser fresh-rereads and rebuilds an aggregate containing the winner rather than LWW-overwriting it. |
+| FC4C-STORE-03 | SPEC §9.12 | Duplicate AnnotationRef records fail the entire aggregate even when byte-equal; differing duplicate bytes are an integrity conflict, never last-one-wins. |
+| FC4C-STORE-04 | SPEC §9.12 | Record owner differing from envelope owner, cross-owner replyTo, or a cycle in the complete reply graph fails the whole aggregate; the bad record cannot simply be dropped. |
+| FC4C-STORE-05 | SPEC §9.12 | Truncated JSON, duplicate key, unknown format/version, or malformed member is never partially trusted; normal current read is unavailable/conflicted and authorized raw repair/backup may expose only exact raw bytes. |
+| FC4C-STORE-06 | SPEC §9.12 | A coordinated Node/adoc rename changes FileBinding/physical observation only; ownerNodeRef, AnnotationRef, Value4 and revision token remain and fresh aggregate read restores currentness. |
+| FC4C-STORE-07 | SPEC §9.12 | Explicit backup retains exact aggregate bytes+Frontier but no current permission/PAB/ActionEvidence; restore still requires complete strict decode, owner/reply/history validation, and normal D6 admission. |
+| FC4C-STORE-08 | SPEC §9.12 | Node copy/import uses the real identityMap/candidate-map to mint fresh AnnotationRefs, rewrite target/reply, and emit the new owner's aggregate; terminal display state may remain but no destination apply receipt is fabricated. |
+| FC4C-STORE-09 | SPEC §9.12 | Pure byte-equal Trash/restore preserves the Value4 token with no source revision; purge removes the record, and purging the last record makes the canonical physical state sidecar absent. |
+| FC4C-STORE-10 | SPEC §9.12 | When one DecisionKey changes two Annotations in one Node, Notice3/CP4 has two logical annotation components/source changes but InstallationPlan has one complete sidecar after and one physical install. |
+| FC4C-STORE-11 | SPEC §9.12 | After A changes the sidecar FileObjectBinding, B's old aggregate-backed current observation is stale; a fresh read may rebind unchanged B to the new physical observation without allocating a new token/SourceVersion/H. |
+| FC4C-STORE-12 | SPEC §9.12 | A verified ChangeRecord/Notice/CP continuous chain may admit a canonical aggregate; direct external JSON/mtime/provider latest/equal hash is never a trusted transition, and explicit import/admission still applies imported_unverified attribution and the lifecycle gate. |
+
 ## PR4 schema repair coverage (no new acceptance IDs)
 
-The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced. Stage4B adds only FC4B-VAL-01..08, FC4B-D8-01..05, FC4B-SUG-01..06, FC4B-LIFE-01..05, and FC4B-ALIAS-01, bringing the cumulative inventory to 601; every prior row body remains byte-for-byte unchanged. The Stage4A-residual repair adds only FC4R-PROD-01..13, FC4R-ORIGIN-01..06, FC4R-LEVEL-01..03, FC4R-RUN-01..11, FC4R-EXP-01..09, FC4R-TABLE-01..08, and FC4R-WIRE-01..04, bringing the cumulative inventory to 655; it creates no new finding ID and replaces no prior row body.
+The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced. Stage4B adds only FC4B-VAL-01..08, FC4B-D8-01..05, FC4B-SUG-01..06, FC4B-LIFE-01..05, and FC4B-ALIAS-01, bringing the cumulative inventory to 601; every prior row body remains byte-for-byte unchanged. The Stage4A-residual repair adds only FC4R-PROD-01..13, FC4R-ORIGIN-01..06, FC4R-LEVEL-01..03, FC4R-RUN-01..11, FC4R-EXP-01..09, FC4R-TABLE-01..08, and FC4R-WIRE-01..04, bringing the cumulative inventory to 655; it creates no new finding ID and replaces no prior row body. This Annotation-residual closure adds only FC4C-SUG-01..10, FC4C-CARRIER-01..05, FC4C-READ-01..07, and FC4C-STORE-01..12, bringing the cumulative inventory to 689 while preserving all previous 655 row bodies byte-for-byte.
 
 - retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
 - M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
@@ -695,4 +730,4 @@ The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D row
 
 ## Not executed
 
-This PR did not execute these 655 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
+This PR did not execute these 689 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
