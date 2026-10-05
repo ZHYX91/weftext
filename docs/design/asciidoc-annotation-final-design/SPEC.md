@@ -168,6 +168,32 @@ Language sequences retain order. Sets are sorted/unique. Multisets sort by D3-CJ
 null | {logicalFile:text|null,line:UInt|null}
 ```
 
+### 3.4 Current D2 product projection
+
+CoreSemanticProjection/1 remains test-oracle comparison data and is never a product read/edit/query wire. Current managed AsciiDoc product reads use D2DocumentSnapshot/3 and the closed D2DocumentPayload/3, D2DocumentBody/3, D2ProductBlock/3, D2ProductInline/3 family in SCHEMAS §4.4. Exact source remains the sole author authority. The product projection, editor maps, indexes, rendering trees, and search/query values are disposable derived state; none may become a second parser, source store, durable block identity, or write authority.
+
+The current projection covers every fixed-Asciidoctor-2.0.26 native block and inline category that can affect observable document semantics, plus the narrowly specified Weftext adapters. A valid construct is never made syntactically unsupported merely because no rich-editor control or provider exists. A surface that cannot structurally edit a legal construct exposes the exact Source path and preserves all untouched bytes on save. Unsupported structural editing returns an editing/unavailable result instead of dropping, flattening, or rewriting the construct.
+
+| semantic category | current product shape | actual current consumers |
+|---|---|---|
+| document metadata/title/author/revision and header attributes | D2DocumentSnapshot/3 → D2DocumentMetadata/3 | D8 document/Draft read, D7 title read, D9 document render/export |
+| sections and floating titles | D2SectionBlock/3 + D2Heading/3 with authoredLevel and effectiveLevel | D7 headings scan/Query, D8 outline/folding/visual editor, D9 HTML/PDF/DOCX/ODT |
+| paragraphs and inline semantics | D2ParagraphBlock/3 + D2ProductInline/3 | D7 body_text, D8 visual/read/Source, D9 rendered/semantic export |
+| unordered/ordered/description/callout/checklist lists | D2ListBlock/3 + D2ListItem/3 | D8 structure/Source, D7 body_text, D9 render/export |
+| tables, columns, rows, cells, including AsciiDoc cells | D2TableBlock/3 + D2TableCell/3 | D5 native-table boundary, D8 table/read/Source, D9 table/document export |
+| example/sidebar/open/admonition/listing/literal/source/pass/stem/quote/verse | D2DelimitedBlock/3 or D2ContainerBlock/3 | D8 read/Source with optional structural UI, D7 body_text where defined, D9 supported render route |
+| image/audio/video and other media | D2MediaBlock/3 plus D2IdentityAdapter/1 when Weftext-owned | D8 media surface, D7 readable projection, D9 resource-aware export |
+| native links/xrefs/anchors/footnotes/indexterms/STEM/quoted text/kbd/menu/buttons/callouts/breaks | D2ProductInline/3 closed arms | D7 readable/query projection, D8 navigation/visual/Source, D9 render/export |
+| include/substitution-generated or multi-origin semantics | D2SourceOrigin/2 arrays on the produced semantic node | D8 navigation and write gating, D7 read/query dependency, D9 evidence/loss mapping |
+
+D2Heading/3 keeps authoredLevel distinct from effectiveLevel. WeftextManaged permits authored levels 6–9; standard leveloffset can produce effective levels above 9 and is not clamped by a Weftext cap. Native section state, document-title/book-part rules, warning behavior, explicit anchors and source ranges are retained. TOC, search, outline, stable links, Query, editor, and export therefore consume one product heading projection rather than independent heading reconstructions.
+
+Native link/xref/image/citation grammar is parsed first by the one AsciiDoc parser. D2IdentityAdapter/1 is applied only after a native occurrence exists and only when the Weftext target syntax has been independently validated. The adapter may attach a stable NodeRef, owner-local ResourceRef, or citation target, but it does not change native label/source grammar and cannot infer identity from path/title/text/hash. Backlinks remain derived. A managed include keeps the included source's own owner in D2SourceOrigin/2; inclusion never changes root Node identity or grant the including Document write authority over that included source.
+
+Legacy Profile-v2 restrictions that rejected otherwise-native constructs are superseded for current managed AsciiDoc. In particular, a foreign delimiter-looking line inside a native delimited block is interpreted by the fixed native parser unless that exact native grammar makes it structural; D2 no longer invents a cross-family delimiter error. The Weftext attribute-carrier extension remains reserved only at its own explicit root-carrier grammar and does not generalize into a second block parser. The previous open-AsciiDoc/include/pass/extension prohibition is retained only as historical implementation input and is replaced for current implementation by this complete fixed-baseline product contract.
+
+Invalid source still preserves the exact authorized source and ordered diagnostics while product projection is unavailable and D2 commit eligibility rejects. Physical decode/source-envelope failures remain D6 errors, not D2 invalid syntax. Repair and Source surfaces therefore remain available under their original authorization even when D7 Query, rich visual projection, or rendered export cannot obtain a valid semantic projection.
+
 ## 4. Provider profiles: language validity is separate from renderer availability
 
 Mermaid, STEM/TeX/AsciiMath, HTML, and PDF are versioned ecosystem profiles, not AsciiDoc syntax switches. Valid core source stays valid when a provider is unavailable; BackendStatus reports unavailable/denied/incomplete and exact .adoc export can still succeed.
@@ -370,13 +396,43 @@ Trash retains the exact format binding; restore retains the historical binding; 
 
 ## 8. D7/D8/D9 current holders
 
-PreparedActionBinding/4 carries current Descriptor3/Proof3/PreparedIntent3. MinimumMapping/3 is not mechanically version-bumped. Query/Action/CEL language syntax is unchanged; qualification/evidence is what versions.
+PreparedActionBinding/4 carries current Descriptor3/Proof3/PreparedIntent3. MinimumMapping/3 is not mechanically version-bumped. Query/Action/CEL author syntax is unchanged; qualification/evidence and the product projection consumed by source adapters are what version. EffectManifest/3 and EffectBytes/3 remain the one shared current transport family; historical Plan1/Plan3 stay on their original decoders.
 
-EffectManifest/3 and EffectBytes/3 are one shared current closed transport family. They add the accepted Plan4/symbolic-json3 encodings while historical Plan1/Plan3 stay on their original decoder. This same family is consumed by D3 conflict preview and D10 author-preview hashing.
+### 8.1 D7 product-projection consumers
 
-D8 PreparedEditBinding/3 uses current descriptor/proof. A Draft base binds SourceObservation plus DocumentFormatCurrentQualification. A format change preserves dirty Draft text/input log but invalidates the old semantic projection, map, preview, and prepared confirmation.
+D7 outer runtime remains its existing wireVersion2 and QuerySpec/ViewSpec author schemas remain version 1. Current headings scan strict-decodes D2DocumentSnapshot/3, requires its available projection, and emits the existing heading object {owner:NodeRef,title:text,level:int64}; level is D2Heading/3.effectiveLevel and the internal position is that heading's exact current DocumentElementLocator. The authored level remains available to owner-aware editor/export consumers but does not create HeadingRef. Invalid/unavailable product projection fails the whole applicable scan under the retained authorization/error order and cannot be skipped.
 
-D9 ExportPlan/3 and PublicationReceipt/3 freeze current proof and semantic qualification. Exact-source-only export does not need an unrelated semantic parse; rendered/semantic export does. The current d9_probe format union does not silently acquire an adoc/asciidoc arm.
+The existing body_text source now recursively consumes D2DocumentBody/3. It uses semantic text from D2ProductInline/3; explicit link/citation labels only, resource captions only, list source order, section heading plus children, table TAB/LF rules, and raw payload for literal/source/pass where the D7 rule calls for readable raw. It remains a read projection, never exact source and never writable. New native block/inline arms are handled by their explicit D2 product type; no unknown arm may be flattened through to_s or omitted. A legal arm for which body_text has no semantic-text mapping makes that adapter unavailable rather than shrinking the D2 language.
+
+D7 definition-transfer keeps the complete definitionTransfers/Result9 inner transformation semantics already owned by D7, but a new current D3 submission is D3IdentityOperationRequest/13. Genuine saved/planned wire12 requests, Result/effect history, Locators, and recovery continue under their recorded decoder and are never relabeled as wire13.
+
+### 8.2 D8 document, Draft, visual presentation, and run-in policy
+
+D8 public outer entries remain wireVersion2. Current d8_document.snapshot is exactly D2DocumentSnapshot/3 at the same qualified SourceObservation; an old saved response containing D2 document_snapshot wire2 remains historical data only and is not accepted as a new current read. Current valid Draft projection derives metadata/body/origins from D2DocumentPayload/3 and D2DocumentBody/3. It may remove locator members only where the existing Draft contract explicitly says so; it may not omit an unfamiliar legal block/inline arm. A visual control may be unavailable, but exact Source read/edit/save remains the lossless fallback. Invalid D2 source retains the existing authorized invalid-Draft/repair behavior and does not leak partial semantic projection.
+
+Workspace run-in default is owned by D8 as the protected D8WorkspacePresentationPolicy/1 record in SCHEMAS §6.4. Every active Workspace has exactly one record, initially revision=1 and defaultPresentation=separate. Changing it requires the existing Workspace policy_admin authorization, expected revision equality, checked increment, and one protected configuration update; it is not a Document source edit, D3 identity decision, or second author source. Ordinary readers do not need policy_admin merely to consume the already-authorized current presentation setting together with an authorized Document. An unavailable/corrupt policy record makes implicit-default presentation unavailable rather than silently choosing a host default.
+
+Per-source roles override the Workspace default without mutating it. Exactly run-in selects RunIn when the first eligible paragraph is semantically adjacent under the existing explicit-role trivia rule; exactly separate selects Separate; both produce role_conflict and Separate fallback; neither uses the current Workspace default. With neither role, defaultPresentation=run_in applies only to the existing implicit-default physical-adjacency rule, so an intervening blank/comment keeps Separate. No eligible paragraph is Separate. Enable removes separate and ensures run-in; Disable removes run-in and ensures separate; Use Default removes both. These are ordinary source-role edits through D8 and never write D8WorkspacePresentationPolicy/1.
+
+Heading and first paragraph remain distinct source ranges and distinct D2 semantic nodes for all four cases. RunIn is a D8PresentationResult/1 only; synthetic visual joining is not reparsed and has no source scalar. The D8DocumentRenderBinding/1 cache input freezes SourceObservation, DocumentFormatCurrentQualification, D2 snapshot pin, the exact presentation-policy binding, and renderer profile digest. A presentation-policy revision therefore invalidates a current D8 render cache. Changing only that policy does not change source bytes, SourceVersion, heading identity, outline, or authored roles.
+
+### 8.3 D9 semantic/rendered export and exact preparation
+
+D9 current export uses the closed ExportPlan/3 family in SCHEMAS §6.5. Exact AsciiDoc source export selects target asciidoc_source, consumes authorized exact source bytes from ExportInputCatalog/2, needs no product semantic projection, no run-in policy, and no renderer/provider route. Provider unavailability therefore cannot make legal AsciiDoc syntax invalid or block an authorized exact-source export.
+
+A document target html, pdf, docx, or odt requires D9DocumentRenderBinding/1: exact current D2DocumentSnapshot/3, ManagedDocumentSemanticQualification/1, D8WorkspacePresentationPolicyBinding/1, and the route/profile evidence used to build the immutable output. HTML consumes the same deep-heading/run-in projection as D8. DOCX/ODT map effective heading levels 1–9 to their explicit heading structure when the selected profile supports it; effective levels beyond that, and any target limitation on run-in/layout/styles/fonts/accessibility, appear in the complete ExportLossReport rather than causing a D2 syntax rejection. PDF is a controlled route over the frozen semantic/render inputs and likewise reports target-specific losses. Missing/unsupported provider or route is export unavailable; it never rewrites the source or projection.
+
+ExportPlan/3 freezes input domain/catalog/order, content selection, complete render projection, source-format qualification, run-in presentation-policy binding where applicable, exact template binding, route and every provider/profile/version step, style-bundle versions, registered generation-policy binding, target, initial loss report, output budget, protected destination intent, DependencyProof/3/ObservationScope, all evidence pins, and exact staged output pins/digests. D9ExportConfirmation/1 separately binds the planToken and complete D9ExportLossChoice/1 set; choices never mutate the plan or convert a blocking loss to success. PublicationReceipt/3 records the exact plan-selected target/route/template/styles/presentation policy, original report/choices, destination display, and actual published output digests.
+
+The same retained D9 permission and state machine remains load-bearing: establish potential scope and authorization before sensitive reads; recheck current authorization at inspect, confirmation, publish, and delivery; never turn unreadable into none; never mix Query authorization generations; create-only external publication retains its durability/unknown-outcome rules; Save-as-Resource is a separate D3 create_resource preparation and receipt. Source/format/route/template/Query/authorization changes invalidate an unpublished plan as their original owner requires. A later Workspace presentation-policy change does not mutate an already prepared plan: that plan continues with the exact frozen policy binding, while a newly prepared export consumes the new current revision.
+
+### 8.4 Fixed-parent direct-holder dispatch and historical boundary
+
+The replacement router explicitly covers the current statements in D2 implementation impact, D7 Definition Transfer, D9 Import IR, and D9 Acceptance Matrix. D2's historical Profile-v2 implementation prohibitions remain immutable snapshot evidence, but current implementation obligations use D2DocumentSnapshot/3 and the complete native-baseline product family above. D9 Import IR retains ImportIR/1, Mapping/1, ConversionInput/2 and all file-safety/mapping/loss rules; only its current outer author submission is D3IdentityOperationRequest/13, while genuine saved/planned wire12 import decisions recover exactly as before. D9 Acceptance S12 is superseded only in its obsolete five-heading-level premise: authored WeftextManaged levels 6–9 are valid and must flow through D2/D7/D8/D9; target-specific unsupported depths require explicit loss/degradation, not source rejection.
+
+No global text replacement upgrades historical wire12, document_snapshot wire2, or ExportPlan/1-/2 records. Saved/planned/unknown recovery runs before current producer gates and retains original bytes, permissions, errors, confirmation and publication responsibilities.
+
+This batch deliberately does not close the Annotation Value/4 mutation/revision/slot path, the D8 Annotation edit-intent successor, D7 replace/delete/insert suggestion-action mapping, or the AsciiDocInlineBody alias-registry issue. Those remain the explicitly separate Annotation-mutation batch.
 
 ## 9. Independent portable JSON Annotation model
 
@@ -761,6 +817,6 @@ ManagedDocumentSemanticQualification/1
 
 ## 19. Acceptance and evidence boundary
 
-The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md and acceptance-matrix.json: 438 core design oracles and 117 actual-owner coordination fixtures, 555 obligations total. They are **unexecuted design obligations**, not implementation test results.
+The itemized design obligations are in ACCEPTANCE.zh-CN.md / ACCEPTANCE.md: 438 core design oracles and 117 actual-owner coordination fixtures, 555 obligations total. They are **unexecuted design obligations**, not implementation test results.
 
 This PR did not install or execute the Ruby oracle, Asciidork, Mermaid CLI, browser/Puppeteer, STEM/PDF providers, product SQLite/storage code, replica/crash/crypto paths, real Automation scheduling, or execution-custody handoff. Author checks are limited to document/JSON/router consistency. Independent design review must bind to the exact stopped PR head SHA.
