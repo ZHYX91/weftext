@@ -5,11 +5,11 @@ translation_status: source
 
 [English](SCHEMAS.md)
 
-# AsciiDoc / Annotation 最终设计：闭合 Schema 与跨 owner 当前合同
+# AsciiDoc / Annotation 最终设计：闭合 Schema 与跨 owner 现行契约
 
 状态：**candidate-design-not-implemented**。本文件是 [SPEC.zh-CN.md](SPEC.zh-CN.md) 的规范性闭合-schema伴随文件。SPEC 描述行为与算法；本文件冻结 current successor 的成员、union、排序与历史分派。两者冲突时，具名 closed shape 以本文件为准，行为约束以 SPEC 为准；任何一方都不得被解释成允许未列成员。
 
-固定 parent：`e8aa0b341630a57c786c0891d4bbd1620247441d`。未在本文重新定义的嵌套类型（如 `WorkspaceRef`、`NodeRef`、`Frontier/2`、`PinRef/2`）使用 replacements 所指 fixed-parent owner 的 exact decoder；这不是“同旧版”省略成员，而是显式 import 一个未变化的具名类型。
+固定 parent：e8aa0b341630a57c786c0891d4bbd1620247441d。未在本文重新定义的嵌套类型（如 WorkspaceRef、NodeRef、Frontier/2、PinRef/2）使用 replacements 所指 fixed-parent owner 的 exact decoder；这不是“同旧版”省略成员，而是显式 import 一个未变化的具名类型。
 
 ## 0. 通用规则
 
@@ -114,7 +114,7 @@ AcceptedProcessorExtensionProfile/1 = {
 }
 ```
 
-`attributeOverrides` 按 lowercase name排序唯一；extensionProfiles按profileId排序唯一；sourceUnits按logicalPath.value排序唯一。set action要求value非null；unset要求null。safe<server 且未override时 user-home来自ambientUserHome；server/secure原生default为“.”。SOURCE_DATE_EPOCH存在时local*/doc*统一取其UTC值；否则local*取clockNow，doc*优先inputMtime、再clockNow。
+attributeOverrides 按 lowercase name排序唯一；extensionProfiles按profileId排序唯一；sourceUnits按logicalPath.value排序唯一。set action要求value非null；unset要求null。safe<server 且未override时 user-home来自ambientUserHome；server/secure原生default为“.”。SOURCE_DATE_EPOCH存在时local*/doc*统一取其UTC值；否则local*取clockNow，doc*优先inputMtime、再clockNow。
 
 # 2. Core Semantic Projection
 
@@ -235,7 +235,7 @@ CoreDiagnostic/1 = {
 
 Property name按UTF-8 byte order唯一。marks按start升序、end降序、kind固定枚举顺序、D3-CJ/3(properties)排序；完全相同formatting mark归一一次。一个Unicode scalar计一个flow位置；break/atom各计1。visible text只能拥有一次；link/xref label由runs覆盖，不另复制文本property。
 
-Catalog：anchors按id；footnotes按数值index；links/images/includes按D3-CJ/3(item)排序且保留multiplicity；callouts按list/item。diagnostics按null-first logicalFile/line、severity rank、semanticCode排序并保留重复。
+Catalog：anchors按id；footnotes按数值index；links/images/includes按D3-CJ/3(item)排序且保留multiplicity；callouts按list/item。diagnostics按null-first logicalFile/line、severity rank、semanticCode排序并保留重复。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 # 3. CoreSemanticPropertyProfile/1
 
@@ -255,7 +255,7 @@ positional
 named/<original-name>
 ```
 
-已被 `CoreBlock.kind/level/title/reftext/body/children` 表达的事实不得重复写property。
+已被 CoreBlock.kind/level/title/reftext/body/children 表达的事实不得重复写property。
 
 逐类必须收录：
 
@@ -271,18 +271,18 @@ named/<original-name>
 | olist | numbering style, actual start, reversed option |
 | dlist | style, labelwidth, itemwidth, real options |
 | list_item | marker, checklist state, actual coids |
-| table | cols, format, separator, width, frame, grid, stripes, float, orientation, colcount, rowcount, tablepcwidth, tableabswidth(if produced), columns |
+| table | cols, format, separator, width, frame, grid, stripes, float, orientation, colcount, rowcount, tablepcwidth, tableabswidth(if produced), columns |；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 | table_cell | colspan,rowspan,halign,valign,cellStyle |
-| image | target,alt,width,height,format,scaledwidth,scale,link,window,float,align,fallback及真实title/imagesdir |
+| image | target,alt,width,height,format,scaledwidth,scale,link,window,float,align,fallback及真实title/imagesdir |；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 | audio | target,start,end及公共options |
-| video | target,poster,width,height,start,end,preload,float,align,hash,theme,lang,list,playlist |
+| video | target,poster,width,height,start,end,preload,float,align,hash,theme,lang,list,playlist |；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 | toc | actual levels；title仍在CoreBlock.title |
 
-合成的 `dlist_entry/table_head/table_body/table_foot/table_row` 若没有真实author对象，其properties为空。
+合成的 dlist_entry/table_head/table_body/table_foot/table_row 若没有真实author对象，其properties为空。
 
-marks/atoms：link必须target；xref必须target/refid/path；image/icon使用对应media字段；stem含notation+evaluated source；footnote_ref含index/referenceKind/target；callout含number/id/guard；kbd含keys有序数组；button含text；menu含menu/submenus/menuitem。
+marks/atoms：link必须target；xref必须target/refid/path；image/icon使用对应media字段；stem含notation+evaluated source；footnote_ref含index/referenceKind/target；callout含number/id/guard；kbd含keys有序数组；button含text；menu含menu/submenus/menuitem。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
-显式author `foo-option=bar` 同时生成 `options=["foo"]` 与 `named/foo-option="bar"`；显式空值保留空字符串。由 `%foo/options=foo/opts=foo` 产生的物理空 `foo-option` 只表达membership，不伪造named author value。temporary/internal writer（例如DocBook root-option）不能按字段名冒充author。
+显式author foo-option=bar 同时生成 options=["foo"] 与 named/foo-option="bar"；显式空值保留空字符串。由 %foo/options=foo/opts=foo 产生的物理空 foo-option 只表达membership，不伪造named author value。temporary/internal writer（例如DocBook root-option）不能按字段名冒充author。
 
 # 4. Witness/7 model evidence
 
@@ -390,9 +390,9 @@ OracleModelPropertyObservation/1 =
 
 同subject snapshots形成immediate-predecessor单链；cut heads按subjectId数值升序且恰覆盖reachable semantic closure。只有model observation namespace里的previous/bind/cut/model_slot引用做数值先后检查；operation/inline/value/call各用自身namespace。carrier.entry是目标数组index，不与model observationId比较。
 
-**producer-conformance gate**：真实bind callback发生时，目标carrier已append，`entry < targetStream.lengthAtBind`，并且producer仍持有exact同一Ruby对象；随后才能append bind。final decoder只检查最终存在/type/index，不能从最终数组假造跨stream时序。document/0同样要求actual returned Document carrier先发布。
+**producer-conformance gate**：真实bind callback发生时，目标carrier已append，entry < targetStream.lengthAtBind，并且producer仍持有exact同一Ruby对象；随后才能append bind。final decoder只检查最终存在/type/index，不能从最终数组假造跨stream时序。document/0同样要求actual returned Document carrier先发布。
 
-catalog record的ownership只能是 `parent -> actual Document#register receiver`；inner Document不得归top-level。temporary overlay必须由真实restore或真实cleanup delete闭合；observer不得伪造restore write。
+catalog record的ownership只能是 parent -> actual Document#register receiver；inner Document不得归top-level。temporary overlay必须由真实restore或真实cleanup delete闭合；observer不得伪造restore write。
 
 # 5. Managed format 与 D6 current successor
 
@@ -434,7 +434,7 @@ ManagedDocumentSemanticQualification/1 = {
 }
 ```
 
-BaselineOnly不是binding arm。fresh/copy/fork fresh identity用revision1；formal same-Workspace restore恢复exact historical binding；普通backup重新admission；真实managed profile migration checked +1。
+BaselineOnly不是binding arm。fresh/copy/fork fresh identity用revision1；formal same-Workspace restore恢复exact historical binding；普通backup重新admission；真实managed profile migration checked +1。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 ## 5.1 Dependency family
 
@@ -449,7 +449,7 @@ DependencyKey/3 =
   execution_resource(14)
 ```
 
-除新增document_format外，其余arm字段与fixed-e8aa `DependencyKey/2` exact对应arm逐成员相同。
+除新增document_format外，其余arm字段与fixed-e8aa DependencyKey/2 exact对应arm逐成员相同。
 
 ```text
 DependencyProof/3 = {
@@ -511,7 +511,7 @@ PreparedIntent/3 = {
 }
 ```
 
-最后六个嵌套名使用fixed-e8aa PreparedIntent/2的exact closed decoder和语义；本successor没有改变它们的成员，只改变Descriptor/Proof family。planToken current tag=`d6_plan/3`。
+最后六个嵌套名使用fixed-e8aa PreparedIntent/2的exact closed decoder和语义；本successor没有改变它们的成员，只改变Descriptor/Proof family。planToken current tag=d6_plan/3。
 
 ## 5.2 Portable component / Notice / CP
 
@@ -563,7 +563,7 @@ ContentCompletionProof/4 =
      components:[{key:PortableComponentKey/2,after:ComponentImage/1}...]}
 ```
 
-`ComponentImage/1`、`PinRef/2`保持fixed-e8aa exact shape。document_format present component bytes必须是D3-CJ/3(binding)，ComponentImage.version=bindingRevision。
+ComponentImage/1、PinRef/2保持fixed-e8aa exact shape。document_format present component bytes必须是D3-CJ/3(binding)，ComponentImage.version=bindingRevision。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 ## 5.3 ChangeRecord
 
@@ -601,7 +601,7 @@ D3ResolutionInputUse/2 = {
 }
 ```
 
-D3 current native wire=13，`D3IdentityInput/13` 的原wire12 complete member set不减少；所有嵌套 `InputDescriptor/2` 位置改为/3，current effects family改为EffectManifest/3。历史wire9..12保持。
+D3 current native wire=13，D3IdentityInput/13 的原wire12 complete member set不减少；所有嵌套 InputDescriptor/2 位置改为/3，current effects family改为EffectManifest/3。历史wire9..12保持。
 
 ## 6.1 PreparedActionBinding/4
 
@@ -636,7 +636,7 @@ PreparedActionBinding/4 = {
 }
 ```
 
-`MinimumMapping/3`、D7DefinitionInput/2、D7ProposedInput/2、D7ResolutionAccess/1保持fixed-e8aa exact shape。
+MinimumMapping/3、D7DefinitionInput/2、D7ProposedInput/2、D7ResolutionAccess/1保持fixed-e8aa exact shape。
 
 ## 6.2 EffectManifest/3 / EffectBytes/3
 
@@ -667,7 +667,7 @@ EffectBytes/3 = {
 ```
 
 EffectItem/3闭集与fixed-e8aa EffectItem/2的十四种语义arm一一对应：
-`source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, canonical_plan`；所有其中的EffectBytes slot使用/3，Annotation source image使用Value/4，workspace_bootstrap current允许Plan4。不得出现generic_json/free payload。
+source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, canonical_plan；所有其中的EffectBytes slot使用/3，Annotation source image使用Value/4，workspace_bootstrap current允许Plan4。不得出现generic_json/free payload。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 ## 6.3 PreparedEditBinding/3
 
@@ -694,11 +694,11 @@ PreparedEditBinding/3 = {
 }
 ```
 
-proposedInputs恰一项且entityRef等于intent.target.ref；OwnerInputBinding/2保持，current ownerKind=`d8_edit/3`。
+proposedInputs恰一项且entityRef等于intent.target.ref；OwnerInputBinding/2保持，current ownerKind=d8_edit/3。
 
 ## 6.4 ExportPlan/3 / PublicationReceipt/3
 
-`ExportPlan/3` 是protected Core record，必须同时冻结下列**全部**语义成员；未列项不得由实现自由省略：
+ExportPlan/3 是protected Core record，必须同时冻结下列**全部**语义成员；未列项不得由实现自由省略：
 
 ```text
 ExportPlan/3 = {
@@ -727,7 +727,7 @@ ExportPlan/3 = {
 }
 ```
 
-`PublicationReceipt/3`：
+PublicationReceipt/3：
 
 ```text
 PublicationReceipt/3 = {
@@ -820,7 +820,7 @@ Suggestion/3 = {
 }
 ```
 
-replyTo非null强制same-owner、acyclic、purpose=comment、suggestion=null、reviewState=not_applicable。root reviewState只能open|resolved。pending confirmation只能confirmed|needs_reconfirmation；accepted/rejected terminal且confirmation=not_applicable。
+replyTo非null强制same-owner、acyclic、purpose=comment、suggestion=null、reviewState=not_applicable。root reviewState只能open|resolved。pending confirmation只能confirmed|needs_reconfirmation；accepted/rejected terminal且confirmation=not_applicable。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 # 8. SourceTransform
 
@@ -903,7 +903,7 @@ SourceTransformSealOutboxItem/1 = {
 }
 ```
 
-plan/evidence edits的D3-CJ/3必须byte-equal；seal不得重编译、重排或merge。required sealed decision恰一个outbox item，disabled零。artifactPin为portable_metadata exact artifact canonical bytes。
+plan/evidence edits的D3-CJ/3必须byte-equal；seal不得重编译、重排或merge。required sealed decision恰一个outbox item，disabled零。artifactPin为portable_metadata exact artifact canonical bytes。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 mapping算法由SPEC §11.2定义并只使用original-before coordinates；after payload必须由机械generatedOutputSpan从afterPin切片，不做内容搜索。
 
@@ -1016,9 +1016,9 @@ WorkspaceTrustGenesis/2 = {
 }
 ```
 
-恰两项：revision1=revision-token authorize，revision2=source-transform authorize；同DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。
+恰两项：revision1=revision-token authorize，revision2=source-transform authorize；同DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
-`WorkspaceBootstrapPlan/4` 的完整成员固定为：
+WorkspaceBootstrapPlan/4 的完整成员固定为：
 ```text
 {
   kind:"d6_workspace_bootstrap_plan",
@@ -1083,7 +1083,7 @@ D10ControlRecordImage/2 = {
 }
 ```
 
-Image2只允许automation/run。其它record kinds（包括planned_approval、external_approval、activation、reservation、external_effect、stop及none）继续exact Image1。
+Image2只允许automation/run。其它record kinds（包括planned_approval、external_approval、activation、reservation、external_effect、stop及none）继续exact Image1。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
 ```text
 D10ControlRecordPin/2 = {
@@ -1148,7 +1148,7 @@ ControlPrepareBinding/3 = {
 }
 ```
 
-`ControlDependencies/3`：
+ControlDependencies/3：
 
 ```text
 {
@@ -1168,7 +1168,7 @@ ControlPrepareBinding/3 = {
 }
 ```
 
-`D10ControlEffectPlan/2`：
+D10ControlEffectPlan/2：
 
 ```text
 {
@@ -1294,7 +1294,7 @@ ExecutionContinuityProof/2 =
 ```
 
 inventoryPin exact payload domain：
-`UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2)`。
+UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2)。
 Record2/Proof1/Inventory1历史domain不变；只有真实responsibility mutation/checkpoint/handoff才形成Record3。
 
 ## 10.1 D10 current schedule / author-step 直接类型
@@ -1441,11 +1441,11 @@ D10AuthorStepResponsibility/2 =
      preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
 ```
 
-`ApprovalUse/2.preparedBindingToken` 必须选择 exact PAB4。其 preview digest 固定为
-`SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))`；
-EffectBytes/3 slot只替换为 `{encoding,byteLength,payloadDigest}`，不按成员名递归猜测。
+ApprovalUse/2.preparedBindingToken 必须选择 exact PAB4。其 preview digest 固定为
+SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))；
+EffectBytes/3 slot只替换为 {encoding,byteLength,payloadDigest}，不按成员名递归猜测。
 
-Schedule current proof中真实解析 managed Document 时必须含 `source + document_format` dependency。source/profile bytes未变但format proof continuity gap得到 `gap`；binding发生真实改变得到 `binding_changed`，即使最终recurrence/range值碰巧相同。旧 Subscription1 只有在 explicit continue 且完整历史证明无format/rule discontinuity时才可同generation形成Subscription2；否则要求replace。
+Schedule current proof中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes未变但format proof continuity gap得到 gap；binding发生真实改变得到 binding_changed，即使最终recurrence/range值碰巧相同。旧 Subscription1 只有在 explicit continue 且完整历史证明无format/rule discontinuity时才可同generation形成Subscription2；否则要求replace。
 
 # 11. 历史分派与单一 authority
 
@@ -1455,7 +1455,7 @@ saved先按原 owner/version重放；planned恢复原descriptor/proof/prepared/p
 
 # 12. Provider profiles
 
-Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变core-language validity。Mermaid fixed source是 CLI 12.0.0 commit `db1ceebbe529d7975474eb0d0e9c23e9dc57cd37`，并固定package.json/blob与package-lock/blob；Node/browser/fonts/config仍必须用实际version+digest登记。没有已登记runtime就只能unavailable，不能用浮动semver、host browser/font或网络下载补齐。
+Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变core-language validity。Mermaid fixed source是 CLI 12.0.0 commit db1ceebbe529d7975474eb0d0e9c23e9dc57cd37，并固定package.json/blob与package-lock/blob；Node/browser/fonts/config仍必须用实际version+digest登记。没有已登记runtime就只能unavailable，不能用浮动semver、host browser/font或网络下载补齐。
 
 # 13. 验收引用
 
