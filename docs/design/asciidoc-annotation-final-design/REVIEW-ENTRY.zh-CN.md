@@ -36,7 +36,7 @@ reviewer 开始时记录实际 Draft PR head SHA，并验证它以 parent e8aa �
 - D3/D4/D5/PAB4/Edit3/ExportPlan3/D10 mixed-holder closure完整；历史bytes不重编码。
 - D10 VersionedControlPrepareBinding恰含Binding1/2/3并按StableControlKey跨版本唯一。
 - provider可用性不混为语言有效性；本PR没有provider runtime通过证据。
-- 双语 ACCEPTANCE 恰含438 core +163 coordination=601条唯一义务，全部未运行。
+- 双语 ACCEPTANCE 恰含438 core +217 coordination=655条唯一义务，全部未运行。
 
 ## 裁决
 给P0/P1/P2、具名finding、逐项disposition、阅读范围、未验证实现范围，以及是否允许进入随后A2/global阶段。文档一致性不能代替语言/provider/replica/crash实现证据。
