@@ -2436,4 +2436,4 @@ Provider closed shapes are in SPEC §4. They qualify ecosystem renderers and nev
 
 # 13. Acceptance reference
 
-Every schema and cross-field rule above has explicit positive/negative design obligations in [ACCEPTANCE.md](ACCEPTANCE.md): 438 core + 138 coordination = 576, all unexecuted. Those row bodies are normative obligations; the count is not a substitute for them.
+Every schema and cross-field rule above has explicit positive/negative design obligations in [ACCEPTANCE.md](ACCEPTANCE.md): 438 core + 163 coordination = 601, all unexecuted. Those row bodies are normative obligations; the count is not a substitute for them.
