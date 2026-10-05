@@ -1121,7 +1121,7 @@
       "status": "current",
       "replaces": "ScheduleContinuityWitness/1",
       "section": "SPEC §14",
-      "notes": "Fresh Subscription2 continuity witness with ScheduleRecurrenceEvidence2, current producerEpoch, and original continuous-producer retention semantics."
+      "notes": "Fresh Subscription2 continuity witness. Exact artifact bytes are UTF8 D6-Schedule-Continuity/2 + NUL + D3-CJ/3(complete Witness2), pinned as artifact/recovery; /1 remains historical Witness1-only."
     },
     {
       "name": "ScheduleContinuityStep/2",
@@ -1129,7 +1129,7 @@
       "status": "current",
       "replaces": "ScheduleContinuityStep/1",
       "section": "SPEC §14",
-      "notes": "Current positive continuity step using DependencyProof3 and current ChangeRecord1/Notice3/CP4 evidence while retained historical transitions keep original decoders."
+      "notes": "Current positive continuity step using DependencyProof3 and current ChangeRecord1/Notice3/CP4 evidence. Exact artifact bytes are UTF8 D6-Schedule-Step/2 + NUL + D3-CJ/3(complete Step2), pinned as artifact/recovery; /1 remains historical Step1-only."
     },
     {
       "name": "ScheduleContinuityInvalidation/2",
@@ -1137,7 +1137,7 @@
       "status": "current",
       "replaces": "ScheduleContinuityInvalidation/1",
       "section": "SPEC §14",
-      "notes": "Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses D6-Schedule-Invalidation/2 artifact domain."
+      "notes": "Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses exact D6-Schedule-Invalidation/2 artifact domain. /1 remains historical Invalidation1-only and no invalid generation resets."
     },
     {
       "name": "TrustConflictCarryValidationHop/1",
