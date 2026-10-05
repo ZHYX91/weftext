@@ -937,7 +937,7 @@
     "acceptance": {
       "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "role": "689 unexecuted design obligations; no additional private acceptance source"
+      "role": "731 unexecuted design obligations; no additional private acceptance source"
     },
     "terminology": {
       "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
