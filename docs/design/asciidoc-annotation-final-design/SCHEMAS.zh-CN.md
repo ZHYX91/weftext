@@ -1627,6 +1627,8 @@ ControlPrepareBinding/3 = {
   dependencyPins:ControlDependencies/3
 }
 
+对 current unseen external-consent preparation，confirmationRequirement 仍是 fixed-parent attended-confirmation protocol 使用的同一个闭合 ExternalConfirmationRequirement/1，并且必须在原 commit request 交付前冻结于 ControlPrepareBinding/3。可变 confirmation fact 仍只属于 ExternalConfirmationRecord/1，不能塞进 Binding3 或 ControlDependencies/3。current confirmation eligibility 因而消费 Binding3 + Dependencies3，同时保留原 trusted event、principal、time window、immutable intent/preview、disclosure、approval_unavailable/preflight、saved-result replay 与 result-redaction 规则。已经证明的历史 ControlPrepareBinding/2 保留其精确 requirement、Dependencies2、canonical intent bytes、confirmation association 与 recovery decoder。
+
 ControlDependencies/3 = {
   kind:"d10_control_dependencies",version:3,
   configBindings:[Binding<K>/1],
@@ -1862,6 +1864,18 @@ ScheduleContinuityStep/2 = {
   retainedInputs:[PinRef/2...]
 }
 
+ScheduleContinuityInvalidation/2 = {
+  kind:"d6_schedule_continuity_invalidation",
+  version:2,
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  expectedWitnessRevision:Counter,
+  producerEpoch:Token,
+  transition:Counter,
+  status:"binding_changed"|"gap",
+  evidencePins:[PinRef/2...]
+}
+
 D10AuthorPreparationLink/2 = {
   kind:"d10_author_preparation_link",
   version:2,
@@ -1904,11 +1918,15 @@ D10AuthorStepResponsibility/2 =
      preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
 ```
 
-ApprovalUse/2.preparedBindingToken 必须选择 exact PAB4。其 preview digest 固定为
+对 fresh current core_field_member step，D10AuthorPreparationLink/2.preparedBindingToken 必须选择精确 PAB4，且该 PAB4 的原 request 必须等于 link.request。Core 必须在返回 prepared step 或允许 submission 前，原子保存 Link2、完整 PAB4 与所需 preview/effect/recovery pins。ApprovalUse/2.preparedBindingToken 选择同一个 PAB4。其 preview digest 固定为
 SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))；
-EffectBytes/3 slot只替换为 {encoding,byteLength,payloadDigest}，不按成员名递归猜测。
+EffectBytes/3 slot 只投影为 {encoding,byteLength,payloadDigest}，不按成员名递归猜测。fresh current automatic author qualification 使用 DependencyProof/3；只要语义解析 managed Document，就必须包含 document_format，并且只有在完整验证 EffectManifest/3、EffectBytes/3 与 MutationFootprint 后才能构造 ApprovalUse/2。历史 Link1/PAB3/ApprovalUse1 的 saved 或 planned association 保留原 decoder、bytes、pins、request 与 OperationId。
 
-Schedule current proof中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes未变但format proof continuity gap得到 gap；binding发生真实改变得到 binding_changed，即使最终recurrence/range值碰巧相同。旧 Subscription1 只有在 explicit continue 且完整历史证明无format/rule discontinuity时才可同generation形成Subscription2；否则要求replace。
+对 fresh ScheduleSubscription/2 registration，current D6 Storage producer 只有在 selected source/Field/Registry/current scheduling gates 通过、有限 retention 已预留、且真实持续维护的 Core source/control transition producer 已在同一 configuration transaction 注册后，才能创建 ScheduleContinuityWitness/2。initial 与 checkpoint 使用 subscription 的精确 ScheduleRecurrenceEvidence/2，revision=1、consumedTransition=0，并生成 fresh producerEpoch。current 正向 transition 使用 ScheduleContinuityStep/2 与 DependencyProof/3；新的 current portable transition 使用真实 ChangeRecord/1、InstallationNotice/3 与 ContentCompletionProof/4 pins。retained history 中的历史 transition 保持其原精确 decoder。相关 P-only control/rule transition 仍从真实 protected before/after state 捕获。
+
+当不存在合法 current after evidence 时，current producer 必须产生 ScheduleContinuityInvalidation/2，不能伪造 ScheduleRecurrenceEvidence/2。binding_changed 需要完整可信的 selected-business discontinuity 证据；after unavailable/unknown、missing history、unknown decoder、observer/producer gap 或无法保留必要 transition 均为 gap。Invalidation 比较同一 current witness/registration，原子推进下一 checked transition/revision，保留最后合法 checkpoint，并对该 generation 永久不可 reset。其 artifact pin 使用 recovery retention，payload 为 UTF8("D6-Schedule-Invalidation/2") || NUL || D3-CJ/3(完整 ScheduleContinuityInvalidation/2)。fixed-parent inbox/capacity/final-counter reservation、authorization、compaction 与无关 source 可用性规则保持不变。
+
+Schedule current proof 中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes 未变但 format proof continuity gap 得到 gap；binding 发生真实改变得到 binding_changed，即使最终 recurrence/range 值碰巧相同。已有 Subscription1 继续作为 historical retention owner，并配套 Witness1/Step1/Invalidation1。它只有通过 explicit continue + complete retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut，才可变成 same-generation Subscription2；否则必须 replace。这个 bridge 保留旧 pins 与 producer evidence，绝不把 version-1 witness/step/invalidation bytes 重编码成 version 2。
 
 # 11. 历史分派与单一 authority
 
