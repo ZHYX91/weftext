@@ -520,9 +520,9 @@ translation_status: source
 | FC34-ST-17 | SPEC §§11–13 | replace [5,10)->X + insert@10->Y 必须保留两个event及canonical boundary order，保持 X\|Y；合并为导致 XY\| 的单replacement失败。 |
 | FC34-ST-18 | SPEC §§11–13 | required seal必须同时重验profile、expectedTrustRevision、expectedTrustKeyId与usable handle；只验当前存在某transform key失败。 |
 | FC34-ST-19 | SPEC §§11–13 | 跨generated anchors无法保持boundary slot时返回 PortableTransformCompilation.unavailable；ordinary save仍可继续，但不得制造空events CoreSourceEditPlan或transform artifact。 |
-| FC34B-D10-01 | SPEC §14 | Workspace control使用 DependencyProof/3，并且解析 managed Document时存在 document_format key；PASS。 |
-| FC34B-D10-02 | SPEC §14 | 同输入仍用 D10WorkspaceReadDependencies/1 + proof2，current unseen prepare必须FAIL current owner gate。 |
-| FC34B-D10-03 | SPEC §14 | ControlInput2 dependencies3与InputDescriptor3/proof3逐项相等；PASS。 |
+| FC34B-D10-01 | SPEC §14 | 当前 unseen Workspace control prepare 使用 D10WorkspaceReadDependencies/2 + DependencyProof/3；解析 managed Document 时包含 document_format。真实 saved/planned 历史记录必须先按其 recorded owner version 恢复。 |
+| FC34B-D10-02 | SPEC §14 | 用 D10WorkspaceReadDependencies/1 + proof2 建立同一个 current unseen prepare 必须在 current owner gate 失败；这不能反向否定真实历史 saved/planned dependency record。 |
+| FC34B-D10-03 | SPEC §14 | 对当前尚未建立决议的 control operation，依赖链固定为 D10WorkspaceReadDependencies/2 → ControlDependencies/3 → D10ControlInput/2 → ControlPrepareBinding/3；它必须与 D6 Descriptor3/Proof3 的 inputs 在同一 cut 逐项一致。 |
 | FC34B-D10-04 | SPEC §14 | ControlDependencies3中workspaceReads被deployment-only body偷偷设some；FAIL。 |
 | FC34B-D10-05 | SPEC §14 | recurrence source V不变、format M1→M2；Step2必须 binding_changed，不能continuous。 |
 | FC34B-D10-06 | SPEC §14 | source/profile bytes相同，但document_format proof continuity gap产生新epoch；Step2必须gap。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
@@ -530,8 +530,8 @@ translation_status: source
 | FC34B-D10-08 | SPEC §14 | Schedule Step2使用Notice2/CP3解析FC current transition；FAIL。 |
 | FC34B-D10-09 | SPEC §14 | old Subscription1通过explicit continue且完整证明期间无format/rule discontinuity → same generation Subscription2；PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-D10-10 | SPEC §14 | old Subscription1历史包含format transition，却continue而不replace；FAIL。 |
-| FC34B-D10-11 | SPEC §14 | automatic author新准备严格绑定PAB4 + D10-Author-Preview/2 EffectManifest3 digest；PASS。 |
-| FC34B-D10-12 | SPEC §14 | new interactive author responsibility声称preparedFormat3但pin实际PAB4，或Format3对应EditBinding2；FAIL。 |
+| FC34B-D10-11 | SPEC §14 | 新的自动 author preparation 必须绑定 PAB4 与 D10-Author-Preview/2 的 EffectManifest3 digest，并构造当前 ApprovalUse2。已保存或已规划的 PAB3、Effect2、ApprovalUse1 responsibility 继续保留原 decoder 与 pins。 |
+| FC34B-D10-12 | SPEC §14 | fresh interactive author responsibility 必须声明 owner contract 选定的 exact current PAB4 或 EditBinding3；current type 不匹配则失败。真实 saved/planned PAB3/EditBinding2 属于历史恢复，不能被升级。 |
 | FC34B-TR-01 | SPEC §13 | Declaration1用原 CP3 activation；PASS。 |
 | FC34B-TR-02 | SPEC §13 | Declaration2用 exact CP4 + Bundle2 policy after-image首次追加；PASS。 |
 | FC34B-TR-03 | SPEC §13 | Declaration2只找到同DecisionKey CP3，没有CP4；FAIL。 |
@@ -561,23 +561,23 @@ translation_status: source
 | FC34C-MIX-01 | SPEC §14 | 一个 ControlDependencies3 同时包含 old stop Pin1 与 new automation Pin2；同cut完整匹配各自binding。PASS。 |
 | FC34C-MIX-02 | SPEC §14 | external_effect current record仍为 Image1/Pin1，并可被 current Dependencies3/Inventory2完整携带。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34C-MIX-03 | SPEC §14 | 尝试用 Image2 表示 stop/external_effect/reservation；FAIL closed decode。 |
-| FC34C-MIX-04 | SPEC §14 | Automation： before Image1+Subscription1 after Image2+Subscription2 同一个 EffectPlan2合法，不重编码before。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
+| FC34C-MIX-04 | SPEC §14 | 同一 EffectPlan2 可表示 Automation before=Image1+Subscription1、after=Image2+Subscription2，且不重编码 before；若 scheduling owner 的 continue 合法，旧 subscription 可以保持同一 generation，不能一律强制 replace。 |
 | FC34C-MIX-05 | SPEC §14 | Image2 automation/run → Image1 downgrade；FAIL。 |
-| FC34C-MIX-06 | SPEC §14 | Pin1 payload实际使用 D10-Control-Record/1，Pin2使用 /2；schema tag与pin domain不匹配必须FAIL。 |
-| FC34C-MIX-07 | SPEC §14 | Range2 occurrence数组同时有旧K1和新K2，按真实OccurrenceKey排序。PASS。 |
+| FC34C-MIX-06 | SPEC §14 | Pin1 认证精确的 D10-Control-Record/1 前缀 Image1 payload，Pin2 认证 /2 前缀 Image2 payload，artifact byteLength/SHA-256 必须匹配；schema tag 与 pin domain 不一致或把 Image1 repin 成 Pin2 都失败。 |
+| FC34C-MIX-07 | SPEC §14 | mixed range 的 rank 固定 records=0、cost_lineage=1、occurrences=2，并按跨版本 logical identity 唯一；Range2 occurrence array 可含不同 key 的旧 K1 与新 K2，内部按 AutomationOccurrenceKey 排序。 |
 | FC34C-MIX-08 | SPEC §14 | Occurrence1(K) + Occurrence2(K) 同key；FAIL。 |
-| FC34C-MIX-09 | SPEC §14 | 同一 record cut出现Pin1与Pin2两份不同image；integrity_conflict。 |
-| FC34C-MIX-10 | SPEC §14 | ControlDependencies3中 range/barrier来自cut B但 recordPin/current binding来自cut A；FAIL same-cut qualification。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34C-EXEC-01 | SPEC §14 | Claims2同时包含 Binding2/3、Step1/2、Subscription1/2、Occurrence1/2和Pin1/2，所有semantic key互异。PASS。 |
-| FC34C-EXEC-02 | SPEC §14 | MoneyResponsibility2同时需要旧reservation Pin1和新Automation budget Pin2，并有Range1/Range2；PASS。 |
-| FC34C-EXEC-03 | SPEC §14 | Inventory2完整携： old ApprovalUse1 new ApprovalUse2 Claims2 Money2 ExternalResponsibility1 StopResponsibility1 PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34C-EXEC-04 | SPEC §14 | ApprovalUse1与Use2拥有同一个DecisionKey；FAIL duplicate responsibility。 |
-| FC34C-EXEC-05 | SPEC §14 | old Subscription1与new Subscription2同Automation但不同generation；PASS。相同generation则FAIL。 |
-| FC34C-EXEC-06 | SPEC §14 | Inventory2遗漏仍处于started/outcome_unknown的ExternalResponsibility1或已stopped latch；FAIL completeness。 |
-| FC34C-D6-01 | SPEC §14 | Record3的Proof2 inventoryPin strict-decode exact D6-Execution-Inventory/2，且五类payload与Inventory2 byte-equal。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34C-D6-02 | SPEC §14 | execution custody由Record2 holder交给新holder；Inventory2保留全部old责任，Record3 revision=old+1，不改executionDomainId。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34C-D6-03 | SPEC §14 | 没有handoff、checkpoint或真实责任变化时，仅因为runtime支持FC，不后台把Record2改Record3。PASS。 |
-| FC34C-D6-04 | SPEC §14 | handoff无法取得某个旧Pin1/PAB3/Subscription1或stop responsibility的原 decoder/bytes；必须暂停/不可用，不能构造“其余部分完整”的Inventory2。普通source操作不受此execution缺口全局阻塞。 |
+| FC34C-MIX-09 | SPEC §14 | record pin 的同一 cut identity 为 binding.ref、binding.revision、usageRevision，跨版本最多一项；byte-equal 重复项也拒绝，bytes 不同则为 integrity_conflict。 |
+| FC34C-MIX-10 | SPEC §14 | ControlDependencies3 若 range/barrier 来自 cut B，而 record pin、binding、usage revision、stop pin 或 Workspace evidence 来自 cut A，则同 cut 校验失败。全部值必须来自同一个真实 Authority Store barrier。 |
+| FC34C-EXEC-01 | SPEC §14 | Claims2 可同时包含 Binding1/2/3、Step1/2、Subscription1/2、Occurrence1/2、Pin1/2，只要 semantic key 不同；prepareBindings 在三代 Binding 间统一按 inner StableControlKey 全局唯一。 |
+| FC34C-EXEC-02 | SPEC §14 | MoneyResponsibility2 可同时需要旧 Pin1、新 Pin2 与 Range1/Range2；reservation 按完整 Binding 唯一，layer 按 CostLayerKey，evidence pin 按 pinToken，mixed pin/range 使用各自跨版本 canonical order。 |
+| FC34C-EXEC-03 | SPEC §14 | Inventory2 必须完整携带 mixed ApprovalUse、Claims2、Money2、ExternalResponsibility1、StopResponsibility1，并按各自跨版本 logical identity 排序；快照来自一个真实 barrier，stopCapacity 是同一 safety store 的实际 StopCapacity1。 |
+| FC34C-EXEC-04 | SPEC §14 | ApprovalUse1 与 ApprovalUse2 若拥有同一 DecisionKey，就是重复责任并失败；schema version 不能拆分 logical identity。 |
+| FC34C-EXEC-05 | SPEC §14 | old Subscription1 与 new Subscription2 可在同一 Automation 的不同 generation 共存；相同 Automation+generation 必须失败。合法 configure continue 可以保留旧 generation。 |
+| FC34C-EXEC-06 | SPEC §14 | Inventory2 若遗漏 started/outcome_unknown external responsibility、已 stopped latch、仍被引用的 completed attempt、旧 recovery pin 或实际 StopCapacity，均不完整。 |
+| FC34C-D6-01 | SPEC §14 | Record3 的 Proof2 inventoryPin 必须严格解码为 D6-Execution-Inventory/2。workspaceRef 以及 approvalUses、claims、moneyLineage、externalUnknowns、stopState 五类 payload 分别与 Inventory2 逐字节相等；Inventory2.storeIncarnation 等于 Proof2.storeIncarnation，stopCapacity 等于同一 barrier 下 safety store 的实际值。 |
+| FC34C-D6-02 | SPEC §14 | execution custody 只有在一个完整 mixed Inventory2/barrier 与真实 old-holder fencing 下才能由 Record2 交给 Record3；保留全部旧责任，revision=old+1，executionDomainId 与 store continuity 不变，shared StopCapacity 不能复制到第二个 active store。 |
+| FC34C-D6-03 | SPEC §14 | 没有 handoff、checkpoint 或真实 responsibility mutation 时，仅因支持 current FC schema 不得后台迁移 Record2/Proof1/Inventory1，也不得把历史 bytes repin 成 Record3/Proof2/Inventory2。 |
+| FC34C-D6-04 | SPEC §14 | handoff 若拿不到任一旧 Pin1/PAB3/Binding1/Subscription1/stop/external responsibility 的原 decoder、bytes、pins，或无法证明 authoritative store/capacity barrier，必须暂停或 unavailable，不能构造部分 Inventory2；无关 ordinary source operation 继续原资格。 |
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
@@ -588,6 +588,8 @@ translation_status: source
 - AnnotationInlineBody/1 / AsciiDocInlineBody/1 alias 与唯一 AnnotationInlineProfile/1：AN2-08，并继续受AD2完整2.0.26语言Gate约束。
 
 这些条目仍是未运行设计要求；schema补全不把它们改写成已通过实现测试。
+
+第二批限定 D10 修复不新增验收 ID；上述既有 FC34B/C/D 行同时覆盖 fresh/current owner routing、Binding1/2/3 历史分派、mixed canonical order、单一 barrier、Record3↔Inventory2 五类 payload equality、Proof2.storeIncarnation 与实际 StopCapacity。
 
 ## 未运行边界
 
