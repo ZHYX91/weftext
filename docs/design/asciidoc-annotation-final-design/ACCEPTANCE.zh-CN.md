@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 163
-- total: 601
+- actual-owner coordination fixtures: 212
+- total: 650
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -458,10 +458,59 @@ translation_status: source
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
 | M39-11 | SPEC §§2–3 | document/0 反例：先 bind document/0、之后才发布 actual returned Document，或 bind 时按 title/source/text 重新寻找 D；即使最终 entry0 正确也必须失败。 |
 
-## Actual-owner coordination — 163
+## Actual-owner coordination — 212
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
+| FC4R-PROD-01 | SPEC §3.4 | 两个固定2.0.26 source block 只在声明 language 上不同，例如 ruby 与 java，必须产生不同 D2DelimitedSemantics/1.language；D8/D9 无需重 parse exact source 即可区分。 |
+| FC4R-PROD-02 | SPEC §3.4 | source/listing 中真实存在的 linenums/start/indent/tabsize/highlight/line-comment 必须完整进入 D2DocumentSnapshot/3；漏掉 present fact 或用 host default 补值都使 product projection 不合格。 |
+| FC4R-PROD-03 | SPEC §3.4 | 正文相同的 [quote,Alice,Book] 与 [quote,Carol,Book] 必须保留不同 attribution 且 citetitle=Book；D9 renderer 只能消费产品 facts，不得回看 raw source 重新推导。 |
+| FC4R-PROD-04 | SPEC §3.4 | fixed-Ruby appendix/special/numbered section 与可见标题相同的普通 section 仍必须不同；sectname/special/numbered 要保留并参与 outline/TOC/render semantics。 |
+| FC4R-PROD-05 | SPEC §3.4 | terms 相同的 visible/concealed indexterm 必须可区分，see/see-also 精确保留；DocBook 类输出无需第二 parser 即可得到正确语义。 |
+| FC4R-PROD-06 | SPEC §3.4 | quoted inline 的 #id、.role 或 #id.role 必须在产品 projection 中保留 id 和有序 roles；CSS/anchor/accessibility consumer 不得丢这些 fixed-Ruby facts。 |
+| FC4R-PROD-07 | SPEC §3.4 | audio/video projection 必须保留真实 start/end/options 及适用 poster/width/height/preload/list/playlist/theme/lang/control facts；相同 target URL 不得把不同媒体语义合并。 |
+| FC4R-PROD-08 | SPEC §3.4 | 合法 arbitrary native attribute name 可通过 D2NativeAttributeSet/1 表示，但 value 只能属于 closed D2NativeSemanticValue/1；陌生属性名本身不能使语法 invalid，自由 JSON value 必须拒绝。 |
+| FC4R-PROD-09 | SPEC §3.4 | ordered/unordered/description/callout/checklist list 必须按实际 kind 保留 style/start/reversed/checklist/interactive/coids，同时保持 item order 与重复可见文本。 |
+| FC4R-PROD-10 | SPEC §§3.4,8.3 | native table 的 format/grid/frame/stripes、physical columnStart/colspan/rowspan 及 TOC levels 必须供产品 consumer 直接读取；合法复杂表或 TOC 不能为了 render/export 再建 parser。 |
+| FC4R-ORIGIN-01 | SPEC §3.4 | :who: Alice 后 Hello {who} 的最终 Alice 必须记录 authored definition、reference site、substitution provenance；只有全部 origin path 真正收敛同一 authored range 时才可导出 unique writable source。 |
+| FC4R-ORIGIN-02 | SPEC §3.4 | generated/multi-origin semantic value 若没有唯一 authored writable range，仍可 read 与 exact-Source-save，但 structured write 必须 unavailable，不能猜一个 range。 |
+| FC4R-ORIGIN-03 | SPEC §§3.4,8.1–8.3 | Root R 含 include::child.adoc[]，child 从 V1=Alpha 变成 V2=Beta 时，即使 R bytes/document_format 不变，V1 的 D2 snapshot 对 D7/D8/D9 都必须 stale；managed include SourceObservation 必须相等。 |
+| FC4R-ORIGIN-04 | SPEC §3.4 | artifact/network include 的 pin 或 network request digest 改变必须使旧 evaluation binding stale；相同 logicalPath 或最终文本不能证明 currentness。 |
+| FC4R-ORIGIN-05 | SPEC §3.4 | ordered API attributes、locale/provider profile、sourceDateEpoch 或其它 processor-environment input 变化必须改变 environment digest 并失效旧 product evaluation，即使可见输出偶然相同。 |
+| FC4R-ORIGIN-06 | SPEC §3.4 | 未进入该 product evaluation closed actual dependency set 的无关 global fact 不可阻塞 current consumption；scope_dependencies 只证明真实绑定的 dependencies。 |
+| FC4R-LEVEL-01 | SPEC §§3.4,8.1 | fixed Ruby 合法 effective level 若大于 2^63-1，例如超大 leveloffset，必须以 D7 integer canonical decimal 表示，不能因 int64/Counter 截断或拒绝。 |
+| FC4R-LEVEL-02 | SPEC §§3.4,8.1 | 普通 effective level 1–9 必须继续既有 heading/query/outline/render 正向路径，不能因为 current level type 改成 arbitrary precision 而出现兼容分支或显示变化。 |
+| FC4R-LEVEL-03 | SPEC §3.4 | 处理极大但合法的 effective level 若耗尽 bounded work/memory，只能按资源合同返回 budget_exceeded/unavailable；不得改判 syntax-invalid 或 numeric_overflow。 |
+| FC4R-RUN-01 | SPEC §8.2 | 显式 .separate 即使 Workspace presentation policy missing/corrupt/conflicted 也必须正常得到 Separate；该 decision 不读取或 pin policy。 |
+| FC4R-RUN-02 | SPEC §8.2 | 显式 .run-in 且存在 eligible semantic-adjacent body 时，即使 Workspace policy 有多个 heads 也可 RunIn；explicit source role 不依赖选择 policy branch。 |
+| FC4R-RUN-03 | SPEC §8.2 | 两个 role 都不存在且 eligible body 真正需要 implicit Workspace default 时，policy missing/corrupt/multiple heads 必须使 default-dependent presentation unavailable，不能用 ambient host/device default。 |
+| FC4R-RUN-04 | SPEC §8.2 | 没有 eligible body 时使用 closed no_eligible_body→Separate decision，不读取 Workspace policy，与 policy state 无关。 |
+| FC4R-RUN-05 | SPEC §8.2 | 两个 offline writer 都从 revision1 出发可形成不同 revision2 record；sync 必须把两个 record hash 都保留为 maximal heads，不能按 revision equality、arrival order 或 LWW 选 current。 |
+| FC4R-RUN-06 | SPEC §8.2 | 对多个 presentation heads 的授权 conflict resolution 必须命名完整 expected head set，并在一个 D6 planning CAS/P decision 中产生 checked max(parent.revision)+1 的 multi-parent successor；partial head set 必须 stale/invalid。 |
+| FC4R-RUN-07 | SPEC §8.2 | saved/planned/unknown presentation-policy mutation 必须恢复 exact original head set、proposal、pins 与 P responsibility；禁止重新采样新 heads 或作为另一个 decision 重试。 |
+| FC4R-RUN-08 | SPEC §8.2 | policy-head 变化只失效 D8PresentationDecision=workspace_default 的 render cache；explicit/no-body/conflict-fallback 不得获得从未消费的 policy dependency。 |
+| FC4R-RUN-09 | SPEC §§8.2–8.3 | D9 plan 若用 workspace_default policy head P staging，后来 policy 变化也不能改原 plan bytes；explicit source-role plan 根本不含 policy binding，只有 fresh prepare 才消费新 policy。 |
+| FC4R-EXP-01 | SPEC §8.3 | asciidoc_source 在所有 renderer/template/provider registry unavailable 时仍必须有唯一 Plan3：generationPolicy=none，template/route/render bindings 全 null。 |
+| FC4R-EXP-02 | SPEC §8.3 | resource_exact 与 query_json 同样必须有唯一 policy-independent 正向编码，不得因 Office generation configuration unavailable 被禁用。 |
+| FC4R-EXP-03 | SPEC §8.3 | missingPolicy=empty 只能用于 exact existing template path 且 authorized projection 确为 none；unknown path、unreadable data、type error、unavailable schema 都必须失败，不能变成 empty。 |
+| FC4R-EXP-04 | SPEC §8.3 | imageSizes 按 ResourceRef key 唯一、micrometre dimensions 为正；需要 layout choice 时必须绑定同一 authorized Resource，missing metadata/layout loss 服从 fixed Templates，不得按 filename/digest 猜。 |
+| FC4R-EXP-05 | SPEC §8.3 | D9ExportTemplateBinding/1.inputIndex 必须选择恰一个 catalog template item，pin 与 item.pin byte-equal，profileId/profileVersion 必须是能解码这些 exact bytes 的 accepted decoder。 |
+| FC4R-EXP-06 | SPEC §8.3 | nonnull route 必须是连续 provider/profile chain 且 terminal profile 与 export target 匹配；target/terminal mismatch 必须失败，不能静默换 route。 |
+| FC4R-EXP-07 | SPEC §8.3 | 同一 semantic Plan3 的 evidencePins 必须恰为 recursive typed PinRef union + recoveryPins；漏 template/style/route/snapshot/dependency/staged pin 或加入 unrelated pin 都失败，两个实现必须产生相同 Plan bytes。 |
+| FC4R-EXP-08 | SPEC §8.3 | fresh Plan3/Receipt3 token 必须使用 d9_export_plan/3 与 d9_publication/3；inspect/confirmation/recovery 先按 token tag 再按 record version 分派；历史 Plan/Receipt1-/2 保留原 tags/bytes/pins，不能 repin 成 /3。 |
+| FC4R-EXP-09 | SPEC §8.3 | Plan3 一旦冻结 source/include/render/presentation/generation inputs 与 staged bytes，later source/include/policy/template/route change 不得让 saved/unknown publication rerender；需要 current reprepare 时必须生成 new plan 并服从原 authorization/error order。 |
+| FC4R-TABLE-01 | SPEC §8.3 | 只有一个 unique lowercase-ASCII leaf amount 的 native table 可直接暴露 COLUMN=amount、SET=native_table，不要求 ordinary Node export metadata。 |
+| FC4R-TABLE-02 | SPEC §8.3 | multi-row header 中两个 leaf 都是 Amount、上层分别 Q1/Q2 时，leaf alone ambiguous，必须用 shortest unique header suffix 确定 physical column。 |
+| FC4R-TABLE-03 | SPEC §8.3 | 两个 table 含相同 header suffix 时，下一层必须用 exact table title 消歧；不能合并 SET namespace，也不能取 first table。 |
+| FC4R-TABLE-04 | SPEC §8.3 | table title 与 full header path 仍 byte-equal 时，必须使用 closed zero-based table/column occurrence qualifier；ordinal 来自 frozen product projection，不能来自 UI/memory order。 |
+| FC4R-TABLE-05 | SPEC §8.3 | CJK、RTL、combining-character 与 normalization-distinct header 按 exact Unicode scalar sequence、normalization=none、case-sensitive、保留 whitespace 比较；non-ASCII qualified name 使用固定 ASCII digest token。 |
+| FC4R-TABLE-06 | SPEC §8.3 | 空 header、重复 label、colspan/rowspan merged head 必须从 D2 table-grid facts 确定性构造 headerPath；rowspan 不得把同一 source cell 在后续 path level 重复计入。 |
+| FC4R-TABLE-07 | SPEC §8.3 | later 新增同名 table/column 可以让原 short fresh selector 变 ambiguous 并要求 qualified template token；already prepared plan 继续冻结原 projection/selector/staged bytes。 |
+| FC4R-TABLE-08 | SPEC §8.3 | 一个 repeat SET 内全部 data.SET.COLUMN token 必须解析到同一 selected table/rowset；落到另一 SET/table、unknown column 或无法消歧时必须 template_invalid/ambiguous，禁止 implicit join。 |
+| FC4R-WIRE-01 | SPEC §§7–8 | 合法 replica_local create_node/move_node/reorder_node/trash current wire13 request 省略 expectedAuthority、workspaceProposal、preparationBinding，并按 inherited mode matrix strict-decode 成功。 |
+| FC4R-WIRE-02 | SPEC §§7–8 | 同一 replica_local request 若出现 expectedAuthority、workspaceProposal、preparationBinding，或把这些 member 编成 JSON null，都必须 closed-decode/mode validation 失败。 |
+| FC4R-WIRE-03 | SPEC §§7–8 | managed_atomic create/fork 要求 expectedAuthority=create 与 inherited required proposal；continue 要求 continue；其它 managed_atomic mode 要求 existing；descriptor/request 中存在的值必须 exact match。 |
+| FC4R-WIRE-04 | SPEC §§7–8 | current D7/D8/D9 路径若生成 wire13 D3 request，必须选择实际可编码的 inherited optional-member shape；不能仅因 /13 schema 存在就强迫加入 mode 禁止的 member。 |
 | FC4B-VAL-01 | SPEC §§9.6–9.9 | 当前交互式 Annotation 创建必须使用 D7CreateAnnotationIntent/2；调用方只能提供 destinationOwnerRef 与 AnnotationEditableValue/1。经过正常 owner/create 授权后，Core 注入 creator/authoredAt/lastEditor/editedAt、构造 wire13 create_annotation graph，并保存一个 PortableAnnotationRecord/4。调用方提供 actor/time/trusted flag 或借 generic d3_operation 冒充可信创建都必须失败。 |
 | FC4B-VAL-02 | SPEC §§9.6–9.7 | 仅把 reviewState 从 open 改为 resolved 也会改变完整 Value/4：必须只分配一个 fresh annotationRevisionToken，经既有 SourceRevisionPlan 路径推进 managed Annotation SourceVersion，byte-preserve creator/authoredAt，并由 Core 重写 lastEditor/editedAt；使用旧 token 并发 prepare 的另一编辑必须输掉 CAS。 |
 | FC4B-VAL-03 | SPEC §§9.6–9.7 | 仅修改 appearance 或 labels 仍是实际 Value/4 mutation，必须使用同一个 one-token/one-managed-after 规则；不能因为 target/body/reply 未变化就复用旧 token。 |
@@ -628,7 +677,7 @@ translation_status: source
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..10、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..09、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为650条；不创建新 finding ID，也不替换此前任何 row 正文。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -640,4 +689,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 601 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 650 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
