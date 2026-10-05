@@ -577,6 +577,15 @@ SourceTransformEvidence/2 = {
 }
 ```
 
+beforeSourceSha256 是整份 source 的交叉字段，不是自由 digest，也不是 Event slice 的摘要。它必须由 evidence.before 所标识的完整精确 source bytes 计算：
+
+```text
+beforeSourceSha256 =
+  "sha256:" + lowercase_hex(SHA-256(exact_before_source_bytes))
+```
+
+exact_before_source_bytes 是 ownerNodeRef 在 evidence.before 这份 managed SourceVersion/2 上的完整字节。receiver 必须从 producing CP/history 与 retained version evidence 取得这份历史字节，而不是使用当前文件。接收验证必须重新计算 digest 并逐字节相等后才能接受 signed evidence。removedSha256、removedByteLength、SourceVersion 字段相等或各 slice replay 成功都不能替代整文件 hash。无法取得 exact-before bytes 时沿用既有 proof/state-unavailable 边界；已经证明 digest 矛盾则属于 integrity failure。SourceTransformEvidence 不因此升 schema/version。
+
 required plan必须：
 
 ```text
@@ -628,6 +637,50 @@ rotate 的 mode 为 ordinary|loss_recovery|compromise；revoke 独立为 adminis
 Declaration1 activation 继续走原 DecisionKey -> CP3/public-history 规则。Declaration2 activation 必须由其 DecisionKey -> committed CP4 + ChangeRecord/1 -> 首次追加该 declaration sequence 的 exact policy after-image 重派生。共享同一 DecisionKey 的 declarations 共用一个 activation ChangeId，在 history_at(C) 中全进或全不进。TrustConflictCarry/2 必须从原 Declaration2 与原 CP4/ChangeRecord 重派生 origin；后来的 resolver cut 不能替代 origin cut。
 
 普通 SourceTransform receiver 验证 producing ChangeRecord/CP4，并用 C=CP4.frontierBefore 做 historical key verification。后续 ordinary rotation 不会让在 C 合法的 artifact 失效。compromise 必须比较 artifact seal ChangeId 与原 compromise activation ChangeId 的 causal order；causal-concurrent 或更晚的 old-key seal 无论 arrival order 都失败。DomainSealKeyHandle/1 只在 exact Declaration1-authorized key 仍 current、safe、usable 时继续 revision-token 新签名；它永远不获得 transform authority，也不改编码成 Handle2。
+
+### 13.1 双 profile policy conflict resolution
+
+公开的 d6_conflict_prepare request 继续使用 fixed-parent wireVersion3；policy_bundle_choice 的 JSON 成员名仍是 selected、policy、freshAuthorizations。当前 unseen policy arm 使用 SCHEMAS §9 的 FreshDomainAuthorizationSpec/2，其 profile 是 SealProfileId/1。source_merge 与 choose_source_head 继续沿用 fixed-parent 合同。这里不新增 submit surface：conflict_resolve、workspace policy_admin、subject disclosure、精确 expectedKey、原 error order、唯一 winning planning CAS、原 d6_commit_request/2 与唯一 final P 都保持不变。任何能证明真实保存或规划于旧 owner descriptor 的 policy resolution，都必须恢复原 request、descriptor、pins、handles 与 recovery state，不能重新按 current successor 解析。本候选不声称存在需要虚构 migration 的部署历史。
+
+每个 expectedKey head 都必须先完成验证，才能信任 branch 内容。retained completion proof 严格解码为 ContentCompletionProof/3 的 head 是历史 CP3 head，其 policy after-image 必须严格解码 WorkspaceAuthorizationBundle/1。retained completion proof 严格解码为 ContentCompletionProof/4 的 head 是 current CP4 head：必须验证精确 ChangeRecord/1、Notice3/CP4 linkage、policy ComponentImage bytes/version 与连续链，然后才按 bundle 自身精确 version 分派为 WorkspaceAuthorizationBundle/1 或 /2。保持不变的 WorkspaceAuthorizationBundleAddress/1 仍必须只选 expectedKey.heads 中恰一个 head，其 authorizationRevision、trustRevision、byteLength 与 SHA-256 必须匹配所选 bundle 的精确 bytes。未知 proof/bundle version、CP3 携 Bundle2、CP4 缺 ChangeRecord、address 不匹配、Workspace/root fingerprint 不同或共同历史不完整，都沿用现有 unavailable/integrity 边界失败；禁止 decoder fallback、current-host 猜测、arrival order 或 LWW。
+
+resolver 对每个已验证 head 都要规范化两个 SealProfileId/1 profile。Bundle1 只贡献 revision-token 历史，source-transform 状态视为 none。Bundle2 按精确 Declaration1 prefix 与 Declaration2 suffix 折叠。effective compromise set 从最长公共 trust prefix 开始，并递归合并 selected 与全部合法 losing branch 的 compromise fact。Carry1 必须完全按 fixed-parent Declaration1/CP3 合同验证。Carry2 必须从原 Declaration2 bytes 与原 CP4 activation cut 验证。直接 Declaration2 revoke 且 mode=compromise 时，compromisedTrustKeyId 映射 action.trustKeyId；直接 Declaration2 rotate 且 mode=compromise 时，映射 action.oldTrustKeyId。originDeclarationDigest 哈希包含 rootSignature 的完整 canonical Declaration2。Carry2 的 factId 固定为：
+
+```text
+body = {
+  workspaceRef,commitDomain,profile,compromisedTrustKeyId,
+  originAction,originDecisionKey,originDeclarationRevision,
+  originDeclarationDigest,originActivationChangeId
+}
+
+factId =
+  "sha256:" + lowercase_hex(
+    SHA-256(
+      ASCII "D6-Trust-Compromise-Fact/2" || NUL || D3-CJ/3(body)
+    )
+  )
+```
+
+originActivationChangeId 永远从原 Declaration2 的 DecisionKey，经 committed CP4 + ChangeRecord/1 与首次追加该 declaration 的精确 Bundle2 after-image 重派生；后来的 resolver ChangeId 不能替代。继承的 Carry1 或 Carry2 只有在重新计算其版本对应 factId、验证具名原 declaration/root signature、直接 compromise action/key 映射、重派生原 activation cut，并验证每一层 carrying resolver 后才能接受。折叠必须递归。effective union 按 ASCII factId 规范排序；byte-equal duplicate 合并，同 factId 但 canonical bytes 不同则 integrity_conflict。未选 branch 的 fact 仍留在 union 中。resolver 不能通过选择另一 branch 或改用 resolver 时间让 compromised key 恢复安全。
+
+affectedDomainProfiles 是所有 head 间 normalized state 不同的 domain/profile pair，加上 effective compromise union 指向的全部 pair。freshAuthorizations 按 canonical bytes 排序唯一，可以指定任一 seal profile，但只能请求 affected pair，且 selected state 必须为 none，或其 selected current key 在 effective union 下不安全。安全且无关的 current key 不能借 conflict resolution 旋转。若无需 trust resolution 且 freshAuthorizations 为空，policy-only 结果保持所选 bundle family 与 trustRevision。否则 current resolver 必须恰产生一条 WorkspaceTrustDeclaration/2 resolve_conflict declaration。若 selected 是 Bundle1，结果以其精确 Declaration1 prefix 为前缀并追加这条 Declaration2，从而成为 Bundle2；若 selected 已是 Bundle2，则直接追加 Declaration2。declaration revision 为 selected.trustRevision+1；conflictId 与 request conflictId byte-equal；selected 与 request 的 WorkspaceAuthorizationBundleAddress/1 byte-equal；predecessor 哈希所选链最后一条 declaration 的精确 bytes；resolvedHeads 等于完整排序后的 expectedKey.heads；inheritedCompromises 等于 canonical effective union 减去 selected chain 已经 effective 的 facts；outcomes 对每个 affected pair 完整。TrustConflictOutcome/2 只有在 selected current key 未被 effective facts 判为不安全时才能 keep_current；否则为 none，或在该 exact affected pair 被显式请求时 authorize_fresh。
+
+每个 authorize_fresh outcome 都使用新生成且受保护的 DomainSealKeyHandle/2，并使用前文冻结的精确 PoP/2 body/message。外层 Declaration2 的 root signature 因此绑定 profile、新 key、PoP、mixed inherited carries、完整 outcomes 与 predecessor。proposed Policy/3 必须完整；若与 selected.policy byte-equal，则 policy revision 保持；否则必须按原 policy_admin 规则成为合法 checked successor。result bundle 的 authorizationRevision 只递增一次；只有实际追加 Declaration2 时 trustRevision 才递增一次。current portable resolution 继续使用原 current Notice3/CP4/ChangeRecord 路径与唯一 final P；staged fresh handle 只能随同一 committed transition 变为 usable。任何 losing branch bytes 都不能改写。
+
+当前受保护 policy descriptor 是 SCHEMAS §9 的 ConflictResolutionInput/3 与 ConflictResolutionPolicyDerivedPlan/2。它冻结严格的逐 head CP3/CP4 与 Bundle1/2 分派、selected exact bundle pin、完整 effective/inherited carry set、Outcome2 array、result bundle family/pin 与 staged fresh-key association。receiver admission 必须重放这些精确 dispatch 与 pins，验证每条 root/declaration signature 与 predecessor，重算 Carry1/Carry2 union 与 factId，验证所有 authorize_fresh PoP/2，要求 result-bundle bytes 逐字节相等，并验证同 DecisionKey 的 CP4/ChangeRecord/conflict-record transition；任何 losing-branch compromise 被遗漏都必须拒绝。不能靠永远阻塞 policy resolution 规避实现：证据与权限完整的合法 current dual-profile conflict 必须有上述正向路径。
+
+必要反例是 transform KT1 并发分叉：ordinary KT1→KT2 与 compromise KT1→KT3。选择 ordinary branch 也不能丢掉 losing branch 中 KT1 在原 cut 的 compromise fact，更不能把该 cut 移到 resolver。只有在完整 fold 下可独立证明安全时 KT2 才可保留。若 selected transform state 为 none，或 selected current key 在完整 fold 下不安全，则显式请求 source-transform FreshDomainAuthorizationSpec/2 必须生成 fresh transform key 与合法 Outcome2，而不是让 Workspace 永久无法 resolution。
+
+### 13.2 Replica registration 当前 producer
+
+d6_replica_register_prepare 保留 fixed-parent wireVersion2 request 与专用 replica_register 权限；不新增 profile 成员，普通 dual-profile trust add/rotate/revoke 不能代替这项 replica 权限。
+对当前尚未建立决议的 registration，winning prepare 生成一个 fresh ReplicaEpoch；joining secure store 为该 replica CommitDomain 恰生成两个 fresh DomainSealKeyHandle/2，两者初始均为 staged，profile 顺序固定为 revision-token 后 source-transform。调用方 JSON 不提供任何一把 key。
+
+同一个 frozen plan 在一个 DecisionKey 下按上述 profile 顺序恰追加两条 WorkspaceTrustDeclaration/2 authorize declaration。第一条 revision 为 selected trustRevision+1，第二条为 +2；第二条 predecessor 哈希第一条完整 Declaration2 bytes。每条 declaration 都有自己的 PoP/2 与 rootSignature。plan 同时冻结 expectedReplicaRegistryRevision、selected current bundle/trustRevision、新 ReplicaRecord、两个 staged handle association、两条 declarations 与精确 Bundle2 after-image。
+
+恰一个 final P seal 在同一个 current CP4/ChangeRecord transition 与同一 ChangeId 中同时发布 replica_registry after-image 和 policy/Bundle2 after-image。只有该 commit 被 admission 后，两把 handle 才能一起 staged→usable；任何单 profile prefix 或仅复制 public bytes 都不能使其中一把 usable。receiver admission 必须由同一 CP4 证明两项 component transition、精确 ReplicaEpoch/CommitDomain、固定双 profile 顺序、Declaration2 predecessor chain、同一 DecisionKey、root/PoP signatures、精确 Bundle2 result，并且不存在 unresolved policy/trust conflict。
+
+planned/recovery 必须从 winning plan 恢复同一对 staged handles 与 declarations，绝不重新生成 key。任何确实可证明的历史 replica-registration decision 继续按其 recorded decoder/bytes 恢复，不能事后补造第二把 key。原 retire transition admission 后，该 replica 的两个 profile 都不得再用于新签名。
 
 WorkspaceBootstrapProfile/4 与 Profile3 使用同一闭合成员集合和 issuer semantics，只把 fresh-target trust genesis family 改为 WorkspaceTrustGenesis/2。
 WorkspaceBootstrapPlan/4 保留 D3 allocation chain 的 canonical lowercase UUID proposalId 以及其它 UUID 成员。
@@ -751,6 +804,12 @@ SourceTransformSealOutboxItem/1
 WorkspaceTrustDeclaration/2
 WorkspaceAuthorizationBundle/2
 DomainSealKeyHandle/2
+TrustConflictCarry/2
+TrustConflictOutcome/2
+FreshDomainAuthorizationSpec/2
+PolicyBundleHeadEvidence/2
+ConflictResolutionPolicyDerivedPlan/2
+ConflictResolutionInput/3
 WorkspaceTrustGenesis/2
 WorkspaceBootstrapPlan/4
 D10WorkspaceReadDependencies/2
