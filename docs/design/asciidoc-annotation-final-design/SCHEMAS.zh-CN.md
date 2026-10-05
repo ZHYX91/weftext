@@ -853,7 +853,7 @@ ContentCompletionProof/4 =
      components:[{key:PortableComponentKey/2,after:ComponentImage/1}...]}
 ```
 
-ComponentImage/1、PinRef/2 保持 fixed-e8aa exact shape。document_format present component bytes 必须是 D3-CJ/3(binding)，ComponentImage.version=bindingRevision。
+ComponentImage/1 与 PinRef/2 保持 fixed-e8aa 的精确结构。document_format 的 present component bytes 必须是 D3-CJ/3(binding)，且 ComponentImage.version=bindingRevision。
 
 Notice3 除 component-key decoder 升为 PortableComponentKey/2 外，逐项继承 Notice2 invariant：components 非空、按 fixed-rank/canonical-key 排序且唯一，notice 在 install 前冻结并保留原 baseFrontier。CP4 除 component-key decoder 与 current ChangeRecord/1 linkage 外，逐项继承 CP3 committed/restored invariant。committed CP4 的 components 与 Notice3 key 集合及顺序严格相同，每个 after 都是实际 installed/sealed image；sourceChanges 是完整、按 EntityRef 排序且唯一的真实 source-state delta；receiptDigest 绑定原 receipt。fresh managed Document 必须在同一 plan/P/CP4 中同时带 document 与 document_format。format-only 且 source 不变时 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion 或 H advance。
 
@@ -1220,13 +1220,19 @@ SourceTransformSealOutboxItem/1 = {
 }
 ```
 
-plan/evidence edits 的 D3-CJ/3 必须 byte-equal；seal 不得重编译、重排或 merge。required sealed decision 恰一个 outbox item，disabled 为零；artifactPin 为 portable_metadata exact artifact canonical bytes。
+plan/evidence edits 的 D3-CJ/3 必须逐字节相等；seal 不得重编译、重排或合并。required 决策密封后恰有一个 outbox item，disabled 则为零；artifactPin 保存 portable_metadata 的精确规范 artifact bytes。
 
-Event3 必须针对 exact beforeBytes/afterBytes 做 closed 校验。replace 要求 0<=startByte<endByte<=before length、两端均为 UTF-8 scalar boundary、removedByteLength=endByte-startByte，且 removedSha256=SHA-256(beforeBytes[startByte:endByte])；insert 要求 0<=atByte<=before length、atByte 为 UTF-8 scalar boundary、replacementByteLength 非零。replacement interval 必须是两两不重叠的 maximal islands；same-point inserts 按 transaction order 合并；严格位于 replacement island 内的 insert 必须折入 island 或 compilation unavailable。canonical boundary order 为 left replacement ending p、insert@p、right replacement starting p。
+Event3 必须针对精确的 beforeBytes/afterBytes 做闭合校验。replace 要求 0<=startByte<endByte<=before length，两端都位于 UTF-8 scalar boundary；removedByteLength=endByte-startByte，且 removedSha256=SHA-256(beforeBytes[startByte:endByte])。
+insert 要求 0<=atByte<=before length、atByte 位于 UTF-8 scalar boundary，且 replacementByteLength 非零。
+replacement interval 必须组成两两不重叠的 maximal island；同一点的 insert 按 transaction order 合并。严格位于 replacement island 内的 insert 必须折入该 island，否则 compilation unavailable。
+规范边界顺序固定为：在 p 结束的左 replacement、insert@p、从 p 开始的右 replacement。
 
-generatedOutputSpan 使用 SPEC §11.1 的 replay-cursor 算法处理 exact before/after pins：对每段 unchanged gap 做 byte-compare；当前 event span 恰为 [afterCursor,afterCursor+replacementByteLength)，该 after slice 验 replacement length/hash；replace 将 beforeCursor 推到 endByte，insert 保持在 q；最后 tails 与 afterSourceSha256 都必须匹配。禁止内容搜索。mapping 定义 delta(replace)=replacementByteLength-(endByte-startByte)，并使用 checked signed arithmetic。
+generatedOutputSpan 使用 SPEC §11.1 的 replay-cursor 算法处理精确的 before/after pins。每段未变化间隙都要逐字节比较，当前 event span 恰为 [afterCursor,afterCursor+replacementByteLength)，并用该 after slice 验证 replacement 的长度与 hash。
+replace 将 beforeCursor 推到 endByte；insert 保持在 q。最后剩余字节与 afterSourceSha256 都必须匹配，禁止内容搜索。
+mapping 定义 delta(replace)=replacementByteLength-(endByte-startByte)，并使用有溢出检查的有符号运算。
 
-SourceTransformSealSignedBody/1 恰为 SourceTransformSealArtifact/1 只删除 signature。signature 必须恰为 86 个 ASCII unpadded-base64url 字符并 decode 为 64-byte Ed25519 signature。待签消息恰为 ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1)。完整 transport/storage artifact bytes 恰为含 signature 的 SourceTransformSealArtifact/1 的 D3-CJ/3；alternate JSON serialization 必须拒绝。
+SourceTransformSealSignedBody/1 恰为 SourceTransformSealArtifact/1 只删除 signature。signature 必须恰为 86 个 ASCII unpadded-base64url 字符，解码后是 64-byte Ed25519 signature。
+待签消息恰为 ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1)。完整传输/存储 artifact bytes 恰为含 signature 的 SourceTransformSealArtifact/1 的 D3-CJ/3；其它 JSON serialization 必须拒绝。
 
 # 9. D6 dual-profile trust
 
@@ -1374,11 +1380,21 @@ DomainSealKeyRevokePrepare/3 = {
 }
 ```
 
-每个 publicKey 必须 decode 为 exact 32-byte Ed25519 key，并 hash 到对应 trustKeyId；每个 signature lexical value 必须 decode 为 exact 64-byte Ed25519 signature。authorize/rotate 的 possessionSignature 签 exact ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2)，rotate 将 newTrustKeyId 映射到 PoP body 的 trustKeyId。authorize_fresh 用 enclosing Declaration2 的 workspaceRef/revision/predecessor/decisionKey 加该 exact outcome 的 commitDomain/profile/key tuple 构造同一 body。ordinary rotate 的 continuitySignature 签 exact ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2)；loss_recovery/compromise 必须是 literal "not_required"。rootSignature 签 exact ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2)。
+每个 publicKey 必须解码为精确的 32-byte Ed25519 key，并哈希到对应 trustKeyId；每个 signature 值必须解码为精确的 64-byte Ed25519 signature。
+authorize/rotate 的 possessionSignature 必须按精确消息签署。
+签名消息为 ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2)。
+rotate 把 newTrustKeyId 映射到 PoP body 的 trustKeyId。
+authorize_fresh 使用外层 Declaration2 的 common fields；再加入该 outcome 的 commitDomain/profile/key tuple，构造同一 PoP body。
+ordinary rotate 的 continuitySignature 必须按精确消息签署。
+签名消息为 ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2)。
+loss_recovery/compromise 必须使用 literal "not_required"。
+rootSignature 签署 exact ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2)。
 
 revision-1 root predecessor 的 fingerprint 是完整 WorkspaceTrustRootFingerprint/1，并与 retained root/anchor fingerprint byte-equal；rootKeyId 不能替代。Declaration/1 永远只授权 revision-token profile。Bundle2 允许 Declaration1 历史 prefix，出现首个 Declaration2 后后继都只能 /2。Declaration1 activation 继续用 CP3；Declaration2 activation 由同 DecisionKey ChangeRecord1 -> exact CP4 -> policy after-image -> Bundle2 重派生。
 
-current unseen 普通 trust management 只使用上述 wireVersion3 prepare successors。它们不携带 caller key material，保留 fixed-parent policy_admin/root-handle/current-state gate 与原 planning/install/single-P 路径，只把 current completion family 接到 CP4。saved/planned wireVersion2 record 保留原 decoder/recovery。
+当前未见过的普通 trust management 只使用上述 wireVersion3 prepare successor，不携带 caller key material。
+它保留 fixed-parent 的 policy_admin、root-handle、current-state gate 与原 planning/install/single-P 路径，只把当前 completion family 接到 CP4。
+已保存或已规划的 wireVersion2 record 继续使用原 decoder/recovery。
 
 ```text
 WorkspaceTrustGenesis/2 = {
@@ -1439,7 +1455,9 @@ WorkspaceBootstrapPlan/4 = {
 }
 ```
 
-全部 UUID 成员使用 D3 canonical lowercase UUID decoder。Genesis 恰两项：revision 1 revision-token authorize，revision 2 source-transform authorize；同 DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。series configurations 按 canonical SeriesScope 排序且唯一；period bindings 按完整 NodeRef 排序且唯一，并且每个 valid prepared period 恰一项。helper members 保留 fixed-parent Plan3 字段语义；Profile4 只改变 dual-profile genesis family。
+全部 UUID 成员使用 D3 的 canonical lowercase UUID decoder。Genesis 恰两项：revision 1 是 revision-token authorize，revision 2 是 source-transform authorize；两者使用同一 DecisionKey/activation ChangeId，且 rev2 predecessor 必须哈希精确的 rev1 canonical bytes。
+series configuration 按 canonical SeriesScope 排序且唯一；period binding 按完整 NodeRef 排序且唯一，每个有效 prepared period 恰有一项。
+这些 helper member 保留 fixed-parent Plan3 的字段语义；Profile4 只改变 dual-profile genesis family。
 
 Plan4 只用于 unseen fresh create/fork，并保留原 D3 proposal/custody/CAS/P boundary。普通 copy 不使用 Plan4。saved/planned/unknown recovery 保留实际 recorded decoder/bytes；restore/continue/failover 不合成 Genesis2。本候选不声称 Plan3 已部署，也不虚构 migration。
 
