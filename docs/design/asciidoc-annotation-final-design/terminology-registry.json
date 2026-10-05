@@ -9,7 +9,23 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §§1-3",
-      "notes": "Frozen Ruby-oracle processor environment; not a product runtime dependency."
+      "notes": "Frozen Ruby-oracle processor environment with ordered API attribute events plus explicit UTF-8, locale and provider-profile closure; not a product runtime dependency."
+    },
+    {
+      "name": "ProcessorLocaleProfile/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §1",
+      "notes": "Registered controlled locale descriptor; no ambient-host fallback."
+    },
+    {
+      "name": "AcceptedProcessorProviderProfile/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §1",
+      "notes": "Exact provider profile admitted for the current evaluation; provider availability remains separate from core-language validity."
     },
     {
       "name": "ManagedDocumentFormatProfile/1",
@@ -281,7 +297,23 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §2",
-      "notes": "Test-only witness; no product authority."
+      "notes": "Test-only witness; exact physical semantic-head closure, typed supporting-evidence recursion, namespace separation, and producer-time carrier conformance; no product authority."
+    },
+    {
+      "name": "ForwardSemanticRole/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed forward-only relation-role set for Witness/7 structural semantic closure."
+    },
+    {
+      "name": "SemanticHeadSubjectKind/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4",
+      "notes": "Closed set of subject kinds eligible for physical cut heads; support-only subjects remain excluded."
     },
     {
       "name": "CoreSemanticProjection/1",
