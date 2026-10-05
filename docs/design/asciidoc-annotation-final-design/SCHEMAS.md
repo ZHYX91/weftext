@@ -738,6 +738,14 @@ D2NativeAttributeSet/1 = {
   entries:[D2NativeAttributeEntry/1...]
 }
 
+D2BlockCommonSemantics/1 = {
+  style:text|null,
+  caption:text|null,
+  numeral:text|null,
+  subs:[text...],
+  positional:[D2NativeSemanticValue/1...]
+}
+
 D2SourceOwner/1 =
     {kind:"root_document",logicalPath:ProcessorPath/1,
      ownerNodeRef:NodeRef,sourceObservation:SourceObservation/1}
@@ -842,11 +850,14 @@ D2IdentityAdapter/1 =
   | {kind:"resource",target:ResourceRef}
   | {kind:"citation",target:NodeRef,citationKey:text|null}
 
-D2InlineImageSemantics/1 = {
-  width:text|null,height:text|null,format:text|null,
-  scaledwidth:text|null,scale:text|null,link:text|null,window:text|null,
-  float:text|null,align:text|null,fallback:text|null,imagesdir:text|null
-}
+D2InlineMediaSemantics/1 =
+    {kind:"image",
+     width:text|null,height:text|null,format:text|null,
+     scaledwidth:text|null,scale:text|null,link:text|null,window:text|null,
+     float:text|null,align:text|null,fallback:text|null,imagesdir:text|null}
+  | {kind:"icon",
+     size:text|null,flip:text|null,rotate:text|null,title:text|null,
+     width:text|null,height:text|null}
 
 D2ProductInline/3 =
     {kind:"text",text:text,sourceOrigins:D2SourceOriginSet/2}
@@ -862,16 +873,17 @@ D2ProductInline/3 =
      label:[D2ProductInline/3...],adapter:D2IdentityAdapter/1|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
-  | {kind:"anchor",id:text,reftext:text|null,
+  | {kind:"anchor",referenceKind:"ref"|"bibref",
+     id:text,reftext:text|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"image",nativeTarget:text,alt:text|null,
-     semantics:D2InlineImageSemantics/1,
+     semantics:D2InlineMediaSemantics/1,
      adapter:D2IdentityAdapter/1|null,
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
   | {kind:"footnote",id:text|null,index:CanonicalSignedDecimal|null,
-     referenceKind:text|null,target:text|null,
+     referenceKind:null|"ref"|"xref",target:text|null,
      children:[D2ProductInline/3...],
      nativeAttributes:D2NativeAttributeSet/1,
      sourceOrigins:D2SourceOriginSet/2}
@@ -886,7 +898,9 @@ D2ProductInline/3 =
   | {kind:"menu",path:[text...],sourceOrigins:D2SourceOriginSet/2}
   | {kind:"button",label:text,sourceOrigins:D2SourceOriginSet/2}
   | {kind:"callout",label:text,number:CanonicalSignedDecimal|null,
-     id:text|null,guard:text|null,sourceOrigins:D2SourceOriginSet/2}
+     id:text|null,
+     guard:null|text|{before:text,after:text},
+     sourceOrigins:D2SourceOriginSet/2}
   | {kind:"line_break",sourceOrigins:D2SourceOriginSet/2}
   | {kind:"passthrough",text:text,sourceOrigins:D2SourceOriginSet/2}
 
@@ -909,6 +923,7 @@ D2ParagraphBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   inlines:[D2ProductInline/3...],
   nativeAttributes:D2NativeAttributeSet/1
 }
@@ -925,6 +940,7 @@ D2SectionBlock/3 = {
   kind:"section",locator:DocumentElementLocator,
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   heading:D2Heading/3,
+  common:D2BlockCommonSemantics/1,
   semantics:D2SectionSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   children:[D2ProductBlock/3...]
@@ -959,6 +975,7 @@ D2ListBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2ListSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   items:[D2ListItem/3...]
@@ -1000,6 +1017,7 @@ D2TableBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2TableSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   columns:[D2TableColumn/3...],
@@ -1027,6 +1045,7 @@ D2DelimitedBlock/3 = {
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
   style:text|null,
+  common:D2BlockCommonSemantics/1,
   semantics:D2DelimitedSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   content:
@@ -1047,6 +1066,7 @@ D2ContainerBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   anchor:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2ContainerSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   children:[D2ProductBlock/3...]
@@ -1071,6 +1091,7 @@ D2MediaBlock/3 = {
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
   nativeTarget:text,alt:text|null,title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2MediaSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1,
   adapter:D2IdentityAdapter/1|null
@@ -1087,9 +1108,11 @@ D2AtomicBlock/3 = {
   blockKind:"floating_title"|"page_break"|"thematic_break"|"toc",
   locator:DocumentElementLocator,
   sourceRange:D2SourceRange/2,sourceOrigins:D2SourceOriginSet/2,
+  anchor:text|null,
   level:D2ProductInteger|null,
   title:[D2ProductInline/3...],
   roles:[text...],options:[text...],
+  common:D2BlockCommonSemantics/1,
   semantics:D2AtomicSemantics/1,
   nativeAttributes:D2NativeAttributeSet/1
 }
@@ -1154,11 +1177,11 @@ D7HeadingProjection/2 = {
 
 All product unions are strict: unknown/missing members, unknown arms, duplicate JSON keys, illegal nulls, and cross-arm members reject. D2ProductBlock/3 and D2ProductInline/3 are the current complete fixed-baseline product families plus the named Weftext extension blocks; there is no generic/opaque block, inline, property JSON, or second AST escape.
 
-D2NativeAttributeSet/1 is the only variable-name native attribute carrier. Its values are the closed D2NativeSemanticValue/1 union; entries preserve the fixed parser's actual final attribute-map enumeration order and have unique names. Arbitrary legal author attribute names therefore remain representable without introducing free JSON. Dedicated per-kind semantic members are not optional shortcuts: when the same fixed-Ruby fact is present in nativeAttributes, the dedicated member and native entry must agree byte-for-byte after the fixed semantic conversion. Internal temporary attributes are excluded unless the fixed public model/converter can observe them.
+D2NativeAttributeSet/1 is the only variable-name native attribute carrier. Its values are the closed D2NativeSemanticValue/1 union; entries preserve the fixed parser's actual final named-attribute-map enumeration order and have unique names. Arbitrary legal author attribute names therefore remain representable without introducing free JSON. D2BlockCommonSemantics/1 separately carries the public AbstractBlock slots that are not reliably recoverable from that named map: actual style, caption, numeral, substitution list and positional values in original positional order. Dedicated per-kind semantic members are not optional shortcuts: when the same fixed-Ruby fact is present in nativeAttributes/common and a dedicated member, they must agree byte-for-byte after the fixed semantic conversion. Internal temporary attributes are excluded unless the fixed public model/converter can observe them. Inline image semantics additionally retain image versus icon type; reference anchors retain ref versus bibref, footnotes retain only the closed null|ref|xref type, and callout guard preserves either its scalar guard or exact two-part comment guard.
 
 D2SourceOriginGraph/2 is local to one snapshot. origin ids are dense 0..N-1; every input id is smaller than the node that cites it, so the graph is acyclic without a second identity namespace. authored has one physical source range. reference identifies the actual authored reference site plus its source input. substitution/generated identify the fixed transformation family and all actual inputs. multi_origin has at least two inputs. sourceOrigins.originIds are sorted/unique and refer to existing graph nodes. Its writableSource is mechanically derived from those nodes: unique only when every retained path converges on one byte-equal authored writable range; generated, non-author, ambiguous, or multi-source values are read-only for structured writes. Exact Source read/save remains independently available under its original authorization.
 
-D2SourceOwner/1 is version-exact. root_document and managed_include carry the actual SourceObservation/1 used by evaluation; artifact/network units carry their exact immutable pin, and every variant carries the logicalPath from the processor environment. No path/title/hash infers a source unit. D2ProductEvaluationBinding/1.rootSource is byte-equal to the processor input when input.kind=managed_file and includeSources is byte-equal to processorEnvironment.includeEnvironment.sourceUnits. processorEnvironmentSha256 is exactly:
+D2SourceOwner/1 is version-exact. root_document and managed_include carry the actual SourceObservation/1 used by evaluation; artifact/network units carry their exact immutable pin, and every variant carries the logicalPath from the processor environment. No path/title/hash infers a source unit. A current managed D2DocumentSnapshot/3 requires processorEnvironment.input.kind=managed_file, its ownerNodeRef byte-equal to snapshot.ownerNodeRef, and rootSource.kind=managed with the same owner/SourceObservation/logicalPath. includeSources is byte-equal to processorEnvironment.includeEnvironment.sourceUnits. processorEnvironmentSha256 is exactly:
 
 ```text
 "sha256:" + lowercase_hex(
@@ -1570,23 +1593,32 @@ D8PresentationPolicyAddress/1 = {
   recordSha256:"sha256:<64 lowercase hex>"
 }
 
+D8WorkspacePresentationPolicy/1 = {
+  kind:"d8_workspace_presentation_policy",version:1,
+  workspaceRef:WorkspaceRef,
+  revision:Counter,
+  defaultPresentation:"separate"|"run_in"
+}
+
 D8WorkspacePresentationPolicy/2 = {
-  kind:"d8_workspace_presentation_policy",version:2,
+  kind:"d8_workspace_presentation_policy_record",version:2,
   workspaceRef:WorkspaceRef,
   revision:Counter,
   parents:[D8PresentationPolicyAddress/1...],
-  defaultPresentation:"separate"|"run_in"
+  defaultPresentation:"separate"|"run_in",
+  activationChangeId:ChangeId/1
 }
 
 D8PresentationPolicyHeadSet/1 = {
   kind:"d8_presentation_policy_heads",version:1,
   workspaceRef:WorkspaceRef,
-  metadataEpoch:Token,
+  stamp:{epoch:Token,revision:Counter},
   heads:[D8PresentationPolicyAddress/1...]
 }
 
 D8WorkspacePresentationPolicyBinding/2 = {
-  policy:D8WorkspacePresentationPolicy/2,
+  policy:D8WorkspacePresentationPolicy/1,
+  record:D8WorkspacePresentationPolicy/2,
   address:D8PresentationPolicyAddress/1,
   headSet:D8PresentationPolicyHeadSet/1,
   pin:PinRef/2
@@ -1613,7 +1645,7 @@ D8PresentationPolicySetRequest/2 = {
 D8PresentationPolicyInput/1 = {
   kind:"d8_presentation_policy_input",version:1,
   workspaceRef:WorkspaceRef,
-  expectedHeads:[D8PresentationPolicyAddress/1...],
+  headSet:D8PresentationPolicyHeadSet/1,
   defaultPresentation:"separate"|"run_in"
 }
 
@@ -1656,13 +1688,13 @@ UTF8("D8-Workspace-Presentation-Policy/2") || NUL ||
 D3-CJ/3(complete policy)
 ```
 
-recordSha256 hashes those complete prefixed bytes. PinRef/2 selects those exact bytes with payloadKind=portable_metadata and recovery retention; address.workspaceRef/revision equal the record. parents are sorted/unique by (revision,recordSha256), all belong to the same Workspace, and every parent record must be retained and valid. The initial record has revision=1, parents=[] and defaultPresentation=separate. Any successor has parents equal the complete protected current head set at preparation/seal and revision=checked(max(parent.revision)+1). Thus two offline writers may both create revision 2, but their different hashes remain two heads; revision alone, arrival order and LWW never choose a winner.
+recordSha256 hashes those complete prefixed bytes. PinRef/2 selects those exact bytes with payloadKind=portable_metadata and recovery retention; address.workspaceRef/revision equal the record. policy in D8WorkspacePresentationPolicyBinding/2 is the unique four-field logical current view mechanically projected from record by dropping parents and activationChangeId; it is not separately stored. This preserves the Stage4A /1 current-value contract without introducing another authority. parents are sorted/unique by (revision,recordSha256), all belong to the same Workspace, and every parent record must be retained and valid. The initial record has revision=1, parents=[] and defaultPresentation=separate. Any successor has parents equal the complete protected current head set at preparation/seal, revision=checked(max(parent.revision)+1), and activationChangeId equal to the one ChangeId allocated by that same portable D6 P decision. Thus two offline writers may both create revision 2, but their different hashes/ChangeIds remain two heads; revision alone, arrival order and LWW never choose a winner.
 
-D8PresentationPolicyHeadSet/1 is a complete protected read of all maximal valid policy records in Portable Workspace Metadata at one metadataEpoch. It is not caller evidence or an index scan. heads are sorted/unique; [] means not initialized, one head is current, and more than one is a conflict. A gap, unknown parent decoder, missing retained record or unproved metadata continuity is unavailable, never an empty/current set. A current binding requires headSet.heads == [address], byte-equal policy/pin/address, and exact retained ancestry.
+D8PresentationPolicyHeadSet/1 is the D8 owner-specific current observation of all maximal valid policy records in Portable Workspace Metadata. Its stamp is protected Core state for this exact Workspace configuration: epoch changes on continuity loss/rebuild of correctness evidence, revision checked-increments for every proved head-set transition, and neither number selects a branch. It is not caller evidence or an index scan. heads are sorted/unique; [] means not initialized, one head is current, and more than one is a conflict. A gap, unknown parent decoder, missing retained record or unproved metadata continuity is unavailable, never an empty/current set. A current binding requires headSet.heads == [address], record/pin/address byte equality, policy equal to the mechanical /1 view of record, and exact retained ancestry.
 
-D8PresentationPolicySetRequest/2 is managed_atomic/strict. policy_admin and presentation-state disclosure precede reading the head set. expectedHeads must byte-equal the complete current head set; [] initializes an eligible existing Workspace, one head is ordinary update, and multiple heads are explicit conflict resolution. The new record becomes the sole successor of every expected head in one D6 planning CAS and one final P commit with exactly one presentation_policy_change owner effect. It creates no D3 identity, source version, author ChangeId, Policy/3 revision, Registry revision, or second ledger/CAS. OwnerInputBinding/2 uses protocolOwner=D8, ownerKind=intentKind=d8_presentation_policy/1 and canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1). Saved/planned/unknown recovery restores the exact original head set, proposal, pins and P decision; it never resamples current heads or silently chooses a branch.
+D8PresentationPolicySetRequest/2 is managed_atomic/strict. policy_admin and presentation-state disclosure precede reading the head set. expectedHeads must byte-equal the observed D8PresentationPolicyHeadSet/1.heads; [] initializes an eligible existing Workspace, one head is ordinary update, and multiple heads are explicit conflict resolution. OwnerInputBinding/2 uses protocolOwner=D8, ownerKind=intentKind=d8_presentation_policy/1 and canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1), where headSet is the exact protected observation including its stamp. The new record becomes the sole successor of every expected head in one D6 planning CAS and one final P commit with exactly one presentation_policy_change owner effect and exactly one ordinary portable ChangeId/ChangeRecord for that configuration transition. The committed effect record.activationChangeId, DecisionKey receipt/effects association and ChangeRecord ChangeId must match. This reuses the fixed complex-owner-effect path used by SeriesScopeConfiguration: Notice/CP PortableComponentKey is not widened, and the effect is authenticated by the original decision/receipt/ChangeRecord chain rather than a second component or ledger. It creates no D3 identity, source version/H, Policy/3 revision, Registry revision, or second ledger/CAS. Saved/planned/unknown recovery restores the exact original head set/stamp, proposal, pins and P decision; it never resamples current heads or silently chooses a branch.
 
-Sync/admission validates each immutable record domain, canonical bytes, ancestry and retained P/effect association before adding it to the portable head graph. Conflicting heads remain visible as a conflict state until an authorized explicit multi-parent successor resolves them. Compaction may release a non-head record only after every descendant/recovery reference that needs it is retained elsewhere under the existing last-reference rules. No device-local preference or hidden host default can replace this Workspace-wide record.
+Sync/admission validates each immutable record domain/canonical bytes, activationChangeId, the exact retained ChangeRecord/receipt/EffectManifest presentation_policy_change association, ancestry and current head-set stamp continuity before adding it to the portable head graph. A record with a missing/unknown historical decoder, unproved activation decision or discontinuous head-set observation is unavailable and never current. Conflicting heads remain visible as a conflict state until an authorized explicit multi-parent successor resolves them. Compaction may release a non-head record only after every descendant/recovery reference that needs it is retained elsewhere under the existing last-reference rules. No device-local preference or hidden host default can replace this Workspace-wide record.
 
 Run-in resolution is conditional. role_conflict is explicit+Separate and consumes no policy. Explicit separate consumes no policy. Explicit run-in consumes no policy and becomes RunIn only when the existing explicit-role semantic-adjacency body is eligible; otherwise no_eligible_body. With neither role, no eligible body is no_eligible_body and consumes no policy. Only a body eligible for the implicit-default physical-adjacency rule uses workspace_default and therefore requires a current one-head policy binding. Missing/conflicted policy makes only that default-dependent presentation unavailable.
 
