@@ -3044,4 +3044,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +163 coordination，共601，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +217 coordination，共655，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
