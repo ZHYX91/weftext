@@ -1,0 +1,727 @@
+{
+  "schema_version": 1,
+  "status": "candidate-design-not-implemented",
+  "fixed_parent_commit": "e8aa0b341630a57c786c0891d4bbd1620247441d",
+  "entries": [
+    {
+      "name": "AsciiDocProcessorEnvironment/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§1-3",
+      "notes": "Frozen Ruby-oracle processor environment; not a product runtime dependency."
+    },
+    {
+      "name": "ManagedDocumentFormatProfile/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "ManagedDocumentFormatBinding/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "DocumentFormatCurrentQualification/1",
+      "owner": "D2/D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "ManagedDocumentSemanticQualification/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §5",
+      "notes": ""
+    },
+    {
+      "name": "OracleSemanticWitness/7",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §2",
+      "notes": "Test-only witness; no product authority."
+    },
+    {
+      "name": "CoreSemanticProjection/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§2-3",
+      "notes": "Implementation-independent oracle comparison surface."
+    },
+    {
+      "name": "CoreSemanticPropertyProfile/1",
+      "owner": "D2 test oracle",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §3",
+      "notes": ""
+    },
+    {
+      "name": "MermaidProviderProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": "Provider remains unavailable until exact runtime/browser/font/config inputs are registered."
+    },
+    {
+      "name": "StemProviderProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": ""
+    },
+    {
+      "name": "HtmlRendererProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": ""
+    },
+    {
+      "name": "PdfRendererProfile/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §4",
+      "notes": ""
+    },
+    {
+      "name": "DependencyKey/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "DependencyKey/2",
+      "section": "SPEC §6",
+      "notes": "15-arm current union; document_format rank 1."
+    },
+    {
+      "name": "DependencyProof/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "DependencyProof/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "InputDescriptor/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "InputDescriptor/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "PreparedIntent/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "PreparedIntent/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "PortableComponentKey/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "PortableComponentKey/1",
+      "section": "SPEC §6",
+      "notes": "document_format rank 1."
+    },
+    {
+      "name": "InstallationNotice/3",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "InstallationNotice/2",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "ContentCompletionProof/4",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ContentCompletionProof/3",
+      "section": "SPEC §6",
+      "notes": ""
+    },
+    {
+      "name": "ChangeRecord/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §6",
+      "notes": "First normatively closed design family; unknown pre-FC bytes are never relabelled."
+    },
+    {
+      "name": "PortableTransformCompilation/1",
+      "owner": "D6/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §11",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformPortableEvent/3",
+      "owner": "D6/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §11",
+      "notes": ""
+    },
+    {
+      "name": "CoreSourceEditPlan/2",
+      "owner": "D6/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§11-12",
+      "notes": ""
+    },
+    {
+      "name": "TransformEmissionPlan/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformEvidence/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformSealArtifact/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §§12-13",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformSealKey/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformSealOutboxItem/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §12",
+      "notes": ""
+    },
+    {
+      "name": "SourceTransformSealVerificationKey/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": ""
+    },
+    {
+      "name": "WorkspaceTrustDeclaration/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceTrustDeclaration/1",
+      "section": "SPEC §13",
+      "notes": "/1 remains historical revision-token-only."
+    },
+    {
+      "name": "WorkspaceAuthorizationBundle/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceAuthorizationBundle/1",
+      "section": "SPEC §13",
+      "notes": "Mixed /1 prefix + /2 suffix."
+    },
+    {
+      "name": "DomainSealKeyHandle/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "DomainSealKeyHandle/1",
+      "section": "SPEC §13",
+      "notes": "Handle/1 may remain current for an exact safe revision-token key."
+    },
+    {
+      "name": "WorkspaceTrustGenesis/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceTrustGenesis/1",
+      "section": "SPEC §13",
+      "notes": ""
+    },
+    {
+      "name": "WorkspaceBootstrapPlan/4",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "WorkspaceBootstrapPlan/3",
+      "section": "SPEC §13",
+      "notes": ""
+    },
+    {
+      "name": "D3IdentityInput/13",
+      "owner": "D3",
+      "status": "current",
+      "replaces": "D3IdentityInput/12",
+      "section": "SPEC §7",
+      "notes": ""
+    },
+    {
+      "name": "D3ResolutionInputUse/2",
+      "owner": "D3",
+      "status": "current",
+      "replaces": "D3ResolutionInputUse/1",
+      "section": "SPEC §7",
+      "notes": ""
+    },
+    {
+      "name": "PreparedActionBinding/4",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "PreparedActionBinding/3",
+      "section": "SPEC §8",
+      "notes": ""
+    },
+    {
+      "name": "EffectManifest/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "EffectManifest/2",
+      "section": "SPEC §§8,14",
+      "notes": ""
+    },
+    {
+      "name": "EffectBytes/3",
+      "owner": "D7",
+      "status": "current",
+      "replaces": "EffectBytes/2",
+      "section": "SPEC §§8,14",
+      "notes": ""
+    },
+    {
+      "name": "PreparedEditBinding/3",
+      "owner": "D8",
+      "status": "current",
+      "replaces": "PreparedEditBinding/2",
+      "section": "SPEC §8",
+      "notes": ""
+    },
+    {
+      "name": "ExportPlan/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportPlan/2",
+      "section": "SPEC §8",
+      "notes": ""
+    },
+    {
+      "name": "PublicationReceipt/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "PublicationReceipt/2",
+      "section": "SPEC §8",
+      "notes": ""
+    },
+    {
+      "name": "D3-Annotation-Value/4",
+      "owner": "D3/D2/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §9",
+      "notes": "Portable current value; one AnnotationRef per root/reply."
+    },
+    {
+      "name": "D3-Annotation-Target-Projection/1",
+      "owner": "D3",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§9-10",
+      "notes": "Closed same-owner target union."
+    },
+    {
+      "name": "AnnotationInlineProfile/1",
+      "owner": "D2/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §9",
+      "notes": ""
+    },
+    {
+      "name": "AnnotationAppearance/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §9",
+      "notes": ""
+    },
+    {
+      "name": "AnnotationActorSnapshot/1",
+      "owner": "D8/Core",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §9",
+      "notes": "Attribution only; not identity or LWW authority."
+    },
+    {
+      "name": "AnnotationTimeSnapshot/2",
+      "owner": "D8/Core",
+      "status": "current",
+      "replaces": "AnnotationTimeSnapshot/1",
+      "section": "SPEC §9",
+      "notes": "Preparation-time provenance, not global ordering."
+    },
+    {
+      "name": "Suggestion/3",
+      "owner": "D3/D8",
+      "status": "current",
+      "replaces": "Suggestion/2",
+      "section": "SPEC §§9,15",
+      "notes": "Single suggestion lifecycle authority."
+    },
+    {
+      "name": "D10WorkspaceReadDependencies/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10WorkspaceReadDependencies/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ControlDependencies/3",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ControlDependencies/2",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10ControlInput/2",
+      "owner": "D10/D6",
+      "status": "current",
+      "replaces": "D10ControlInput/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ControlPrepareBinding/3",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ControlPrepareBinding/2",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10ControlRecordImage/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlRecordImage/1",
+      "section": "SPEC §14",
+      "notes": "Only automation/run move to /2; unchanged record kinds remain valid Image/1."
+    },
+    {
+      "name": "D10ControlRecordPin/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlRecordPin/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10ControlRange/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlRange/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10ControlEffectPlan/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ControlEffectPlan/1",
+      "section": "SPEC §14",
+      "notes": "Supports exact Image1 before -> Image2 after."
+    },
+    {
+      "name": "ApprovalUse/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ApprovalUse/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10AuthorStepResponsibility/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10AuthorStepResponsibility/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ScheduleRecurrenceEvidence/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ScheduleRecurrenceEvidence/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ScheduleSubscription/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ScheduleSubscription/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ScheduleOccurrenceProof/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "ScheduleOccurrenceProof/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "AutomationOccurrenceRecord/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "AutomationOccurrenceRecord/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10MoneyResponsibility/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10MoneyResponsibility/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10ExecutionClaims/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ExecutionClaims/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10ExecutionInventory/2",
+      "owner": "D10",
+      "status": "current",
+      "replaces": "D10ExecutionInventory/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ExecutionResponsibilityRecord/3",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ExecutionResponsibilityRecord/2",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "ExecutionContinuityProof/2",
+      "owner": "D6/D10",
+      "status": "current",
+      "replaces": "ExecutionContinuityProof/1",
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedControlRecordImage/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Mixed-holder discriminator only; preserves exact inner bytes."
+    },
+    {
+      "name": "D10VersionedControlRecordPin/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Mixed-holder discriminator only."
+    },
+    {
+      "name": "D10VersionedControlRange/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Mixed-holder discriminator only."
+    },
+    {
+      "name": "D10VersionedControlPrepareBinding/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": "Exactly Binding/1, /2, /3 arms; unique by StableControlKey across versions."
+    },
+    {
+      "name": "D10VersionedAuthorStepResponsibility/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedScheduleSubscription/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedAutomationOccurrenceRecord/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "D10VersionedApprovalUse/1",
+      "owner": "D10",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §14",
+      "notes": ""
+    },
+    {
+      "name": "PinRef/2",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "ComponentImage/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "OwnerInputBinding/2",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "ObservationScope/2",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "D3DecisionCompanion/2",
+      "owner": "D3",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "RelationReadContext/2",
+      "owner": "D4",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "RelationReadBinding/2",
+      "owner": "D4",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "WorkspaceTrustRootDeclaration/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "WorkspaceTrustAnchor/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "RevisionTokenSealVerificationKey/1",
+      "owner": "D6",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "LeaseRunUse/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "D10ExternalResponsibility/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "D10StopResponsibility/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    },
+    {
+      "name": "StopCapacity/1",
+      "owner": "D10",
+      "status": "retained-current",
+      "replaces": null,
+      "section": "SPEC §§6-14",
+      "notes": "Not mechanically version-bumped."
+    }
+  ]
+}
