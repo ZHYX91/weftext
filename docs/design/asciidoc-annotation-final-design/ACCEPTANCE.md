@@ -11,8 +11,8 @@ translation_status: synced
 Status: **design obligations only; not executed**.
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 138
-- total: 576
+- actual-owner coordination fixtures: 163
+- total: 601
 
 Each row is a normative obligation of this candidate. Words such as PASS/FAIL describe the future acceptance condition and do not claim execution in this PR.
 
@@ -459,10 +459,35 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M39-10 | SPEC §§2–3 | document/0 positive: the actual returned top-level Document carrier is published first and the later bind callback still holds the exact same Ruby object. |
 | M39-11 | SPEC §§2–3 | document/0 negative: binding before publication, or later re-finding a Document by title/source/text, fails even if final entry0 is correct. |
 
-## Actual-owner coordination — 138
+## Actual-owner coordination — 163
 
 | ID | Spec area | Requirement |
 |---|---|---|
+| FC4B-VAL-01 | SPEC §§9.6–9.8 | Current Annotation creation stores one PortableAnnotationRecord/4 in the existing node-local Portable Metadata authority; trusted Core, not the caller, supplies creator/authoredAt and initializes lastEditor/editedAt from the actual executing principal/time. Caller-supplied actor/time/trusted flags fail closed decode. |
+| FC4B-VAL-02 | SPEC §§9.6–9.7 | A reviewState-only open→resolved mutation changes complete Value/4, allocates exactly one fresh annotationRevisionToken, advances the managed Annotation SourceVersion through the existing SourceRevisionPlan path, preserves creator/authoredAt, and Core rewrites lastEditor/editedAt. A concurrent edit prepared from the old token loses CAS. |
+| FC4B-VAL-03 | SPEC §§9.6–9.7 | Changing only appearance or labels is a real Value/4 mutation with the same one-token/one-managed-after rule; it cannot reuse the old token merely because target/body/reply are unchanged. |
+| FC4B-VAL-04 | SPEC §9.6 | A proposal whose complete editable Annotation value equals current state is a true no-op: attribution, annotationRevisionToken, SourceVersion and H are unchanged, with no SourceRevisionPlan or fabricated source_change. |
+| FC4B-VAL-05 | SPEC §§9.6–9.7 | Current annotation_value payloadBindings, proposed pins, effects and result materialization all bind the exact D3-CJ/3 bytes of complete Value/4 and its SHA-256; PortableAnnotationRecord envelope/ref/token are not part of that value hash, and equal digest cannot substitute for identity/currentness/CAS. |
+| FC4B-VAL-06 | SPEC §9.7 | For one existing Annotation changing both target@0 and reply@1, target keeps its full reference evidence while the identity-preserving reply change has exactly one S/annotation_reply_change and no duplicate reply reference result; target/reply toSource addresses, receipt source version and toAnnotationRevisionToken all use the same one final Annotation revision. |
+| FC4B-VAL-07 | SPEC §9.7 | Restoring trashed Annotation A while changing reply P→Q uses non_live_source prestate for target@0 and nonnull reply@1; if old reply was null only reply uses absent. Typed target/reply evidence cannot be replaced with lifecycle-only, and there is no separate per-slot revision increment. |
+| FC4B-VAL-08 | SPEC §§9.6,16–17 | Corrupt/unknown current Portable Annotation JSON never yields a partially trusted Value/4 projection. Authorized repair/backup may expose exact raw portable bytes; genuine historical D2 Annotation-v2/Value3 records recover only through their recorded decoder rather than being guessed/migrated into Value/4. |
+| FC4B-D8-01 | SPEC §9.8 | Current d8_edit_prepare annotation intent is D8EditIntent/3 with exact expectedAnnotationRevisionToken, AnnotationEditableValue/1 and targetPolicy; PreparedEditBinding/3.intent is that closed type, and proposedInputs pins the complete Core-constructed D3-CJ/3(Value/4), not the editable subset. |
+| FC4B-D8-02 | SPEC §§9.6,9.8 | D8 Annotation prepare rejects caller actor/time/authentication/trusted-origin fields. Core constructs attribution after current authorization/CAS and freezes it in the same immutable plan; replay does not resample it. |
+| FC4B-D8-03 | SPEC §§9.3,9.8 | An Annotation inline Draft that is invalid under the single R6 AnnotationInlineProfile retains exact source plus diagnostics; visual rendering and prepare are unavailable, and the product neither falls back to plain_text nor invokes a second parser. |
+| FC4B-D8-04 | SPEC §9.8 | A principal with annotation_read but without annotation_write may receive the authorized current Value/4 as a read-only Annotation Draft/projection but cannot prepare a write merely because rendering or target resolution succeeded. |
+| FC4B-D8-05 | SPEC §§9.8,10 | Pure synchronization or newly successful stable-locator requalification that leaves Value/4 bytes unchanged does not advance annotationRevisionToken, SourceVersion or lastEditor/editedAt and cannot revive an old PreparedEditBinding/PAB/ActionEvidence. |
+| FC4B-SUG-01 | SPEC §§9.9,15 | Current apply_suggestion on kind=replace fresh-reads the pending+confirmed Suggestion/3 and exact target, verifies expectedText, maps to the one SourceTransform replace using stored replacementSource, and commits target after-image plus Annotation accepted/not_applicable state atomically in one DecisionKey/planning CAS/P seal. |
+| FC4B-SUG-02 | SPEC §§9.9,15 | Current apply_suggestion on kind=delete fresh-verifies expectedText and maps to one SourceTransform replacement with zero replacement bytes; accepted state cannot commit without that target deletion, nor vice versa. |
+| FC4B-SUG-03 | SPEC §§9.9,15 | Current apply_suggestion on kind=insert freshly validates the stored zero-width point/basis and pointAffinity and maps to one SourceTransform insert using stored replacementSource; caller targetLocator/patch bytes cannot override the stored suggestion. |
+| FC4B-SUG-04 | SPEC §§9.9,15 | reject_suggestion succeeds with Annotation state disclosure plus annotation_read/write and exact current Annotation token even when the target source is hidden/unreadable; it performs no target read/write and changes only Value/4 to rejected/not_applicable with normal revision/actor-time rules. |
+| FC4B-SUG-05 | SPEC §§9.6,9.9,15 | Accept versus reject, body edit, reviewState edit, labels/appearance edit, reply edit or another suggestion edit all contend on the same Annotation revision token; only one old-token preparation can win and losers must fresh-read/reprepare. |
+| FC4B-SUG-06 | SPEC §§9.8–10,15 | mapped/candidate geometry alone never authorizes suggestion acceptance or editing. Manual reattach selects one exact same-owner target through a fresh Value/4 mutation, moves pending to needs_reconfirmation, then reconfirmation/fresh prepare recomputes basis/expected bytes; an old PAB/PreparedIntent is never revived. |
+| FC4B-LIFE-01 | SPEC §§9.7,16 | A fresh/mapped fresh Annotation's initial nonnull reply is represented by the inherited reference plan/result slot, never structural S. Only an admitted destination-owner existing Annotation may use the inherited existing-reply S path, with target@0 evidence retained and no reply double-recording. |
+| FC4B-LIFE-02 | SPEC §§9.7,16 | Node/copy_annotation copy allocates fresh AnnotationRefs, rewrites target and complete same-owner reply graph through the real identityMap/candidate map, materializes one final Value/4/revision per result, and never copies old locators or guesses positions from text/equal hashes. |
+| FC4B-LIFE-03 | SPEC §§9.6–9.7,16 | Ordinary import creates only fresh Annotation identity under the inherited owner rules; imported attribution is explicitly imported_unverified, and a fresh imported Annotation cannot be used as an extra existing-Annotation same-owner structural reply mutation when the D3 mode matrix forbids it. |
+| FC4B-LIFE-04 | SPEC §§9.6–9.7,16 | Independent Annotation Trash/restore with byte-identical Value/4 changes lifecycle only and does not mint an Annotation revision. Restore plus a real Value/reply change follows the typed preimage/S/non_live_source rules and uses one final revision. |
+| FC4B-LIFE-05 | SPEC §§10,16 | Portable backup/export preserves Annotation identity/value and exact resource-region/source-origin facts only under their disclosure rules; it grants no current permission, SourceObservation, ActionEvidence or execution authority, and target SourceOrigin/Annotation identity/reply structure remain distinct. |
+| FC4B-ALIAS-01 | SPEC §9.3; SCHEMAS §7 | AnnotationInlineBody/1 is the sole current canonical type. AsciiDocInlineBody/1 is an alias with canonicalOf=AnnotationInlineBody/1 and replaces=null; a registry consumer must not infer a successor migration or second wire/version. |
 | FC4A-PROD-01 | SPEC §§3.4,8 | A current managed Document containing an authored level-6 section strict-decodes as D2DocumentSnapshot/3 with D2Heading/3 authoredLevel=6 and the native effectiveLevel; D8 read, D7 headings scan, and D9 document rendering consume that same occurrence rather than rejecting it through historical document_snapshot wire2. |
 | FC4A-PROD-02 | SPEC §§3.4,8 | A legal fixed-2.0.26 open/example/sidebar/admonition/list/table/pass/STEM/native-inline combination remains parseable/readable and exact-Source savable even when the rich editor lacks a structural control; no product consumer may drop an unhandled legal D2ProductBlock/3 or D2ProductInline/3 arm. |
 | FC4A-PROD-03 | SPEC §3.4 | Authorized invalid AsciiDoc returns exact source plus ordered D2 diagnostics with product projection unavailable and commit eligibility reject; it never returns a partial semantic tree, and a physical source-envelope failure remains the original source_unavailable class. |
@@ -604,7 +629,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 
 ## PR4 schema repair coverage (no new acceptance IDs)
 
-The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced.
+The earlier dangling-schema repair added, removed, and renumbered none of the then-554 obligations. This environment repair adds only AD2-41, bringing the cumulative inventory to 555; M39-04 is the accepted v3.10 correction of that existing ID rather than a new scenario. All other existing row obligations remain cumulative. Direct coverage is: Stage4A adds only FC4A-PROD-01..06, FC4A-D8-01, FC4A-RUN-01..04, FC4A-EXP-01..06, FC4A-ROUTE-01..03, and FC4A-IMPACT-01, bringing the cumulative inventory to 576; no prior ID body is replaced. Stage4B adds only FC4B-VAL-01..08, FC4B-D8-01..05, FC4B-SUG-01..06, FC4B-LIFE-01..05, and FC4B-ALIAS-01, bringing the cumulative inventory to 601; every prior row body remains byte-for-byte unchanged.
 
 - retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
 - M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
@@ -616,4 +641,4 @@ The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D row
 
 ## Not executed
 
-This PR did not execute these 576 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
+This PR did not execute these 601 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
