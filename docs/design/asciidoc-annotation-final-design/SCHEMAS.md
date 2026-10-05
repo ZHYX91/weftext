@@ -1080,6 +1080,8 @@ Plan/evidence edit canonical bytes must match exactly. Seal never recompiles/reo
 
 Event3 validation is closed against exact beforeBytes/afterBytes. replace requires 0<=startByte<endByte<=before length, UTF-8 scalar boundaries, removedByteLength=endByte-startByte, and removedSha256=SHA-256(beforeBytes[startByte:endByte]); insert requires 0<=atByte<=before length, a UTF-8 scalar boundary, and non-zero replacementByteLength. Replacement intervals are non-overlapping maximal islands; same-point inserts are merged in transaction order; an insert strictly inside a replacement island is folded into that island or compilation is unavailable. Canonical boundary order is left replacement ending at p, insert@p, right replacement starting at p.
 
+SourceTransformEvidence/2.beforeSourceSha256 is exactly "sha256:" + lowercase_hex(SHA-256(exact complete before-source bytes corresponding to evidence.before and ownerNodeRef)). Receiver validation obtains those historical bytes from the producing CP/history and retained version evidence, recomputes the whole-source digest, and requires equality before accepting the artifact. Event removedSha256/length, successful slice replay, equal SourceVersion fields, or current-file bytes cannot substitute. Missing exact-before bytes follows the existing proof/state-unavailable boundary; a proved digest contradiction is integrity failure. This cross-field adds no member and does not version SourceTransformEvidence/2.
+
 generatedOutputSpan uses the SPEC §11.1 replay-cursor algorithm over exact before/after pins. It byte-compares every unchanged gap, assigns the event span [afterCursor,afterCursor+replacementByteLength), validates that exact after slice against replacement length/hash, advances replace beforeCursor to endByte while insert leaves it at q, and requires the final tails and afterSourceSha256 to match. Content search is forbidden. Mapping defines delta(replace)=replacementByteLength-(endByte-startByte) with checked signed arithmetic.
 
 SourceTransformSealSignedBody/1 is exactly SourceTransformSealArtifact/1 with only signature removed. signature is exactly 86 ASCII unpadded-base64url characters decoding to 64 Ed25519 bytes. The authenticated message is exactly ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1). Complete transported/stored artifact bytes are exactly D3-CJ/3(SourceTransformSealArtifact/1 including signature); alternate JSON serialization is rejected.
@@ -1116,6 +1118,9 @@ WorkspaceTrustDeclaration/2 = {
        profile:SealProfileId/1,trustKeyId:"sha256:<64 lowercase hex>",
        mode:"administrative"|"loss"|"compromise"}
     | {kind:"resolve_conflict",
+       conflictId:ConflictId,
+       resolvedHeads:[ChangeId/1...],
+       selected:WorkspaceAuthorizationBundleAddress/1,
        outcomes:[TrustConflictOutcome/2...],
        inheritedCompromises:[TrustConflictCarry/1|TrustConflictCarry/2...]},
   rootSignature:"<86 ASCII unpadded base64url>"
@@ -1210,6 +1215,71 @@ DomainSealKeyRevokePrepare/3 = {
   budget:BudgetBinding/1
 }
 ```
+
+The public conflict request remains fixed-parent d6_conflict_prepare wireVersion3 with ConflictResolution/2. For a current unseen policy_bundle_choice, the same selected/policy/freshAuthorizations JSON arm is strict-decoded with the following current inner and protected descriptor types. Source-merge and choose-source-head keep the fixed-parent ConflictResolutionInput/2 / ConflictResolutionDerivedPlan/1 path.
+
+```text
+FreshDomainAuthorizationSpec/2 = {
+  commitDomain:CommitDomain/2,
+  profile:SealProfileId/1
+}
+
+PolicyBundleHeadEvidence/2 =
+    {head:ChangeId/1,completionProofVersion:3,bundleVersion:1}
+  | {head:ChangeId/1,completionProofVersion:4,bundleVersion:1|2}
+
+ConflictResolutionPolicyDerivedPlan/2 = {
+  kind:"policy_bundle",
+  selected:WorkspaceAuthorizationBundleAddress/1,
+  headEvidence:[PolicyBundleHeadEvidence/2...],
+  selectedBundleVersion:1|2,
+  selectedBundlePin:PinRef/2,
+  effectiveCompromises:[
+    TrustConflictCarry/1|TrustConflictCarry/2...
+  ],
+  inheritedCompromises:[
+    TrustConflictCarry/1|TrustConflictCarry/2...
+  ],
+  outcomes:[TrustConflictOutcome/2...],
+  resultBundleVersion:1|2,
+  resultBundlePin:PinRef/2
+}
+
+ConflictResolutionInput/3 = {
+  kind:"d6_conflict_resolution_input",version:3,
+  conflictId:ConflictId,expectedKey:ConflictKey/1,
+  resolution:{
+    kind:"policy_bundle_choice",
+    selected:WorkspaceAuthorizationBundleAddress/1,
+    policy:Policy/3,
+    freshAuthorizations:[FreshDomainAuthorizationSpec/2...]
+  },
+  branchEvidence:[ConflictResolutionBranchEvidence/1...],
+  derivedPlan:ConflictResolutionPolicyDerivedPlan/2
+}
+```
+
+FreshDomainAuthorizationSpec/2 has exactly the same two JSON members as historical /1 but profile is the full SealProfileId/1 union. The array is canonical D3-CJ/3 sorted/unique and contains no key material. Current ConflictResolutionInput/3 is a protected owner-descriptor successor only for policy_bundle_choice; it does not version the public request, add a submit path, or change conflict_resolve/policy_admin/disclosure/error order. A genuinely proven saved/planned old owner descriptor retains its recorded decoder and pins.
+
+PolicyBundleHeadEvidence/2 is complete, ChangeId-sorted/unique and byte-equal in head set to expectedKey.heads. version=3 means branchEvidence.completionProofPin strict-decodes ContentCompletionProof/3 and the exact policy after-image strict-decodes WorkspaceAuthorizationBundle/1. version=4 means completionProofPin strict-decodes ContentCompletionProof/4, branchEvidence.changeRecordPin strict-decodes the matching ChangeRecord/1 and exact Notice3/CP4 chain, and the policy after-image strict-decodes the declared Bundle1 or Bundle2 version. In both arms policyBundlePin is present, pins the exact canonical bundle bytes, and WorkspaceAuthorizationBundleAddress/1 authorizationRevision/trustRevision/byteLength/sha256 matches them. CP3+Bundle2, unknown versions, a missing CP4 ChangeRecord, tag/byte mismatch, or decoder fallback is rejected.
+
+For Carry2, originDeclarationDigest is exactly "sha256:" + lowercase_hex(SHA-256(D3-CJ/3(complete original WorkspaceTrustDeclaration/2 including rootSignature))). Direct Declaration2 compromise mapping is revoke -> action.trustKeyId and rotate -> action.oldTrustKeyId. Define the exact Carry2 fact body as the nine fields workspaceRef, commitDomain, profile, compromisedTrustKeyId, originAction, originDecisionKey, originDeclarationRevision, originDeclarationDigest, originActivationChangeId in that closed object order under D3-CJ/3. Then:
+
+```text
+factId =
+  "sha256:" + lowercase_hex(
+    SHA-256(
+      ASCII "D6-Trust-Compromise-Fact/2" || NUL ||
+      D3-CJ/3(Carry2 fact body)
+    )
+  )
+```
+
+originActivationChangeId is rederived only from the original Declaration2 DecisionKey through committed CP4 + ChangeRecord/1 and the exact Bundle2 after-image that first appended it. Carry1 keeps its fixed-parent /1 fact domain and Declaration1/CP3 origin rules. A Declaration2 resolve_conflict may inherit Carry1 and Carry2; each member is recursively revalidated back to its direct original compromise declaration. effectiveCompromises and inheritedCompromises are ASCII factId sorted, unique, and contain byte-equal values for duplicate factIds; same factId with non-byte-equal canonical bytes is integrity_conflict. The effective union includes selected and losing branches, so branch choice never discards a compromise fact.
+
+Bundle1 normalizes source-transform state to none. affectedDomainProfiles is the union of all differing normalized domain/profile states plus all pairs named by the effective compromise union. TrustConflictOutcome/2 is canonical sorted/unique by D3-CJ/3(commitDomain,profile) and complete for every affected pair when a trust-resolution declaration is needed. keep_current is legal only for a selected current key that remains safe under the complete effective union. A requested affected pair may authorize_fresh; its new key uses DomainSealKeyHandle/2 and PoP/2. A policy-only result with no trust resolution and no fresh authorization preserves selectedBundleVersion/trustRevision. Otherwise exactly one WorkspaceTrustDeclaration/2 resolve_conflict is appended and resultBundleVersion=2; a selected Bundle1 is preserved byte-exact as its Declaration1 prefix before the new Declaration2.
+
+ConflictResolutionPolicyDerivedPlan/2 freezes the exact per-head proof/bundle dispatch, selected bundle pin, complete carry union, inherited subset, Outcome2 values, and exact result bundle pin/version. resultBundlePin must strict-decode the derived result and reproduce its canonical bytes. The original one planning CAS and final P publish the current policy component through Notice3/CP4/ChangeRecord1; staged authorize_fresh handles become usable only in that same commit. Receiver validation recomputes all head dispatch, Carry1/Carry2 facts, mixed recursive union, PoP/2 and root signatures, exact result bundle, and same-decision conflict-record transition.
 
 Every publicKey decodes to exactly 32 Ed25519 bytes and hashes to the corresponding trustKeyId. Every signature lexical value decodes to exactly 64 Ed25519 bytes. For authorize/rotate, possessionSignature signs exactly ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2). Rotate maps newTrustKeyId to the PoP body's trustKeyId. authorize_fresh constructs the same body from the enclosing Declaration2 workspaceRef/revision/predecessor/decisionKey plus that exact outcome's commitDomain/profile/key tuple. Ordinary rotate continuitySignature signs exactly ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2); loss_recovery/compromise require the literal "not_required". rootSignature signs exactly ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2).
 
