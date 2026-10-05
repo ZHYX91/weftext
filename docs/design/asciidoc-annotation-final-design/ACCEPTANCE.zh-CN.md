@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 117
-- total: 555
+- actual-owner coordination fixtures: 137
+- total: 575
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -458,10 +458,31 @@ translation_status: source
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
 | M39-11 | SPEC §§2–3 | document/0 反例：先 bind document/0、之后才发布 actual returned Document，或 bind 时按 title/source/text 重新寻找 D；即使最终 entry0 正确也必须失败。 |
 
-## Actual-owner coordination — 117
+## Actual-owner coordination — 137
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
+| FC4A-PROD-01 | SPEC §§3.4,8 | current managed Document 含 authored level-6 section 时，必须 strict-decode 为 D2DocumentSnapshot/3，且 D2Heading/3 的 authoredLevel=6、effectiveLevel 来自 native 状态机；D8 read、D7 headings scan、D9 document rendering 必须消费同一个 occurrence，不能再由 historical document_snapshot wire2 拒绝。 |
+| FC4A-PROD-02 | SPEC §§3.4,8 | 固定2.0.26合法的 open/example/sidebar/admonition/list/table/pass/STEM/native-inline 组合，即使 rich editor 没有结构控件，也必须可 parse/read 并经 exact Source 无损保存；任何 product consumer 都不得删除未知 UI 的合法 D2ProductBlock/3 或 D2ProductInline/3 arm。 |
+| FC4A-PROD-03 | SPEC §3.4 | 已授权但 invalid 的 AsciiDoc 必须返回 exact source 与有序 D2 diagnostics，同时 product projection unavailable、commit eligibility reject；不得返回 partial semantic tree。physical source-envelope failure 继续使用原 source_unavailable error class。 |
+| FC4A-PROD-04 | SPEC §8.1 | D7 headings scan 消费 D2DocumentSnapshot/3，输出既有 owner/title/level object，其中 level 来自 D2Heading/3.effectiveLevel，并在内部保留 exact current locator；projection invalid 时必须让相关 complete scan 失败，不能静默跳过 heading。 |
+| FC4A-PROD-05 | SPEC §8.1 | D7 body_text 必须递归消费完整 D2DocumentBody/3，包括 list/table、literal/source payload 与显式 inline label；它不是 exact source、不可写。若某个合法 arm 尚无定义好的 text mapping，该 adapter 必须 unavailable，不能因此缩小 D2 syntax。 |
+| FC4A-PROD-06 | SPEC §§1.4,3.4 | native link/xref/image/citation 必须先经原生 grammar parse，再由 D2IdentityAdapter/1 附加 stable identity；managed include 保留自己的 source owner/range，因此 path/title/hash 不能推断 identity，include 也不能授予 root Document 对 included source 的 write authority。 |
+| FC4A-D8-01 | SPEC §8.2 | current outer D8 wireVersion2 的 d8_document 必须在同一 SourceObservation 下返回 D2DocumentSnapshot/3；current valid Draft projection 保留每个合法 /3 body arm。真实 saved 的旧 D2 wire2 snapshot 只走 historical recovery。 |
+| FC4A-RUN-01 | SPEC §8.2 | 每个 active Workspace 恰有一个 D8WorkspacePresentationPolicy/1，初始 revision1/separate；修改必须同时满足 policy_admin 与 expected revision，并 checked-increment protected policy，且不能改变 Document source 或 SourceVersion。 |
+| FC4A-RUN-02 | SPEC §8.2 | 显式 run-in/separate role 必须覆盖 Workspace policy；Enable/Disable/Use Default 只修改 source roles。Use Default 删除两者并恢复当前 policy；三种命令都不得写 D8WorkspacePresentationPolicy/1。 |
+| FC4A-RUN-03 | SPEC §8.2 | 只改变 presentation-policy revision 必须失效 D8 render-cache binding，但 heading/body identity、source bytes、SourceVersion 与 authored roles 均保持；policy unavailable 时不得偷偷回退 ambient host default。 |
+| FC4A-RUN-04 | SPEC §8.3 | D9 plan 若在 presentation-policy revision P 下 prepare，则 Workspace 后续变成 P+1 时，旧 plan 仍使用 exact P binding 与相同 staged bytes；fresh plan 才消费 P+1。 |
+| FC4A-EXP-01 | SPEC §8.3 | 已授权 target asciidoc_source 必须直接导出选中的 exact Document bytes，并要求 routeBinding/templateBinding/documentRenderBinding 都为 null；HTML/PDF/DOCX provider unavailable 不得使 source invalid，也不得阻断该 exact-source path。 |
+| FC4A-EXP-02 | SPEC §8.3 | HTML document export 必须绑定 exact D2DocumentSnapshot/3、format qualification、presentation-policy binding、accepted route/profile 与 staged bytes；deep heading/run-in presentation 必须来自 frozen product projection，不能另建第二 parser。 |
+| FC4A-EXP-03 | SPEC §8.3 | selected accepted profile 支持时，DOCX/ODT export 必须保留 explicit effective Heading1–Heading9；更深或 target 不支持的结构只能产生显式 ExportLossReport item 或 target unavailable，不能成为 D2 source rejection。 |
+| FC4A-EXP-04 | SPEC §8.3 | PDF route/provider unavailable 时必须返回 export unavailable，同时同一 current D2 snapshot 仍保持 valid 且 exact-source export 可用；accepted route 必须冻结自己的 layout/font/accessibility losses。 |
+| FC4A-EXP-05 | SPEC §8.3 | 两个实现编码同一 ExportPlan/3 时，inputDomain/catalog/selection/projection、document render binding、template、route steps 与 profile versions、styles、generation policy、target、destination、proof/evidence pins、loss report、staged outputs 必须逐字节一致；任何自由结构或省略具名成员都 strict-decode 失败。 |
+| FC4A-EXP-06 | SPEC §8.3 | D9ExportConfirmation/1 必须精确覆盖 retained requires_choice/blocking loss set，且不能重写 route/target/destination/staged bytes；inspect/confirm/publish/delivery 都按原规则重检 authorization，external publish/unknown recovery 保持原 create-only 与 saved-intent 责任。 |
+| FC4A-ROUTE-01 | SPEC §8.4 | 新的 D7 Definition Transfer current submission 必须使用 D3IdentityOperationRequest/13，同时 definitionTransfers/Result9 完整 inner semantics 不变；真实 saved/planned wire12 transfer 继续使用原 decoder、fingerprint、effects 与 recovery。 |
+| FC4A-ROUTE-02 | SPEC §8.4 | current D9 Import IR preparation 的新 author submission 必须绑定 D3IdentityOperationRequest/13，同时 ImportIR/Mapping/ConversionInput/file-safety/loss 规则不变；historical wire12 import job 不得原地迁移。 |
+| FC4A-ROUTE-03 | SPEC §8.4 | 旧 D9 S12 的 “D2 has only five levels” 不再是 current premise：WeftextManaged authored H6–H9 必须贯穿 D2/D7/D8/D9；target-specific depth limit 必须报告 loss/degradation 或 provider unavailable，不能强制 source loss/rejection。 |
+| FC4A-IMPACT-01 | SPEC §§3.4,8.4 | 已路由的 D2 implementation-impact companion 不再把 open/native AsciiDoc、include、passthrough 或 fixed-baseline extension 一概判 unsupported；current implementation 必须 parse/read/Source-save 每个合法 fixed-baseline construct，同时继续原 single-authority、exact-source、authorization 与 invalid-repair safeguards。 |
 | FC34-FMT-01 | SPEC §§5–8 | fresh managed Document同一P安装 source + ManagedDocumentFormatBinding/1；bindingRevision=1，profile固定 exact Ruby SHA + weftext_managed/1。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34-FMT-02 | SPEC §§5–8 | 把 {kind:"document_format"} 放进 PortableComponentKey/1 必须旧decoder拒绝；不得认为这是 CP3 合法component。 |
 | FC34-FMT-03 | SPEC §§5–8 | legacy/unbound source可按原授权 raw read/repair；不因 profile未绑定删除/隐藏原bytes。 |
@@ -582,7 +603,7 @@ translation_status: source
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为：
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为575条；没有替换任何既有 ID 正文。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -594,4 +615,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 555 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 575 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
