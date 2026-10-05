@@ -1402,7 +1402,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §7",
-      "notes": "Caller-editable Value/4 projection excluding Core-owned attribution fields."
+      "notes": "Current/Draft Value/4 editable projection excluding Core-owned attribution fields; not a direct current caller mutation wire."
     },
     {
       "name": "D8EditIntent/3",
@@ -1410,7 +1410,7 @@
       "status": "current",
       "replaces": "D8 edit intent /2",
       "section": "SCHEMAS §6.3; SPEC §9.8",
-      "notes": "Current closed D8 edit intent; annotation arm uses expected AnnotationRevisionToken/1 plus AnnotationEditableValue/1 and targetPolicy."
+      "notes": "Current closed D8 edit intent; annotation arm uses expected AnnotationRevisionToken/1 plus AnnotationEditableProposal/1 and targetPolicy, while reconfirm carries no caller value."
     },
     {
       "name": "D8PinnedEditIntent/3",
@@ -1482,7 +1482,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.1; SPEC §9.9",
-      "notes": "Trusted current interactive Annotation creation input. Caller supplies owner plus AnnotationEditableValue/1; Core injects attribution and constructs the complete wire13 create_annotation request/Value4 payload."
+      "notes": "Trusted current interactive Annotation creation input. Caller supplies owner plus AnnotationEditableProposal/1; Core applies the operation-class gate, injects attribution and constructs the complete wire13 create_annotation request/Value4 payload."
     },
     {
       "name": "D7ActionInput/3",
@@ -1674,7 +1674,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §7.1; SPEC §9.10",
-      "notes": "Caller proposal containing editable author fields but no Suggestion lifecycle/evidence; Core applies the operation-class transition gate to construct Value4."
+      "notes": "Current D7/D8 caller proposal containing editable author fields but no Suggestion lifecycle/evidence or attribution; Core applies the operation-class gate, expands a complete candidate Value4, then performs candidate-vs-before no-op comparison."
     },
     {
       "name": "D8AnnotationReadRequest/1",
