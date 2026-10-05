@@ -561,7 +561,7 @@ EffectBytes/3 = {
 }
 ```
 
-EffectItem/3 has the same thirteen semantic arms as the fixed-parent EffectItem/2: source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, and canonical_plan; every byte slot uses EffectBytes/3, Annotation source images use Value/4, and current workspace bootstrap admits Plan4. No generic/free payload arm exists.
+EffectItem/3 has the same fourteen semantic arms as the fixed-parent EffectItem/2: source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, and canonical_plan; every byte slot uses EffectBytes/3, Annotation source images use Value/4, and current workspace bootstrap admits Plan4. No generic/free payload arm exists.
 
 ```text
 PreparedEditBinding/3 = {
@@ -1060,6 +1060,156 @@ ExecutionContinuityProof/2 =
 ```
 
 The Inventory2 pin domain is `UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2)`. Record2/Proof1/Inventory1 keep their historical domain. prepareBindings sort uniquely by inner StableControlKey across all 1/2/3 versions; other mixed arrays use their semantic identity across versions and never LWW.
+
+## 10.1 D10 current schedule / author-step direct types
+
+These are the exact current inner values referenced by the §10 mixed wrappers; they are not free objects invented by the wrappers.
+
+```text
+D10ControlInput/2 = {
+  kind:"d10_control",
+  version:2,
+  key:StableControlKey/1,
+  operationId:Uuid,
+  canonicalIntentBytes:Bytes,
+  allocatedControlRefs:[ControlRef<K>/1],
+  preview:ControlPreview/1,
+  dependencies:ControlDependencies/3,
+  effectPlan:D10ControlEffectPlan/2,
+  confirmationRequirement:ExternalConfirmationRequirement/1
+}
+
+ScheduleRecurrenceEvidence/2 = {
+  kind:"d10_schedule_recurrence_evidence",
+  version:2,
+  observation:SourceObservation/1,
+  sourcePin:PinRef/2,
+  metadataPin:PinRef/2,
+  dependencyProof:DependencyProof/3,
+  registrySnapshot:RegistrySnapshot/1,
+  registryEvolution:Option<RegistryEvolutionProof/1>,
+  recurrenceContext:RecurrenceReadContext/1
+}
+
+ScheduleSourceBinding/2 =
+    {kind:"once",atUtcSeconds:CanonicalDecimal}
+  | {kind:"recurrence",
+     ownerNodeRef:NodeRef,
+     recurrenceOccurrenceKey:occurrenceKey,
+     rangeOccurrenceKey:occurrenceKey,
+     initial:ScheduleRecurrenceEvidence/2,
+     checkpoint:ScheduleRecurrenceEvidence/2,
+     continuityPins:[PinRef/2...]}
+
+ScheduleSubscription/2 = {
+  kind:"d10_schedule_subscription",
+  version:2,
+  automation:ControlRef<automation>/1,
+  generation:Counter,
+  lowerOriginalStartUtcSeconds:CanonicalDecimal,
+  activeDefinition:Binding<automation>/1,
+  definitionRevision:Counter,
+  source:ScheduleSourceBinding/2
+}
+
+ScheduleOccurrenceProof/2 =
+    {version:2,kind:"once",at:zoned_instant}
+  | {version:2,kind:"recurrence",
+     evidence:ScheduleRecurrenceEvidence/2,
+     projection:<complete accepted D4 recurrence projection outcome>,
+     originalStart:<the selected outcome row's D4 originalStart>}
+
+AutomationOccurrenceRecord/2 = {
+  kind:"d10_automation_occurrence_record",
+  version:2,
+  key:AutomationOccurrenceKey/1,
+  definition:Binding<automation>/1,
+  definitionRevision:Counter,
+  dueUtcSeconds:CanonicalDecimal,
+  proof:ScheduleOccurrenceProof/2,
+  disposition:AutomationOccurrenceDisposition/1
+}
+
+ScheduleContinuityWitness/2 = {
+  kind:"d6_schedule_continuity",
+  version:2,
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  revision:Counter,
+  initial:ScheduleRecurrenceEvidence/2,
+  checkpoint:ScheduleRecurrenceEvidence/2,
+  status:"continuous"|"binding_changed"|"gap",
+  producerEpoch:Token,
+  consumedTransition:Counter
+}
+
+ScheduleContinuityStep/2 = {
+  kind:"d6_schedule_continuity_step",
+  version:2,
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  expectedWitnessRevision:Counter,
+  producerEpoch:Token,
+  transition:Counter,
+  before:ScheduleRecurrenceEvidence/2,
+  after:ScheduleRecurrenceEvidence/2,
+  portableChanges:[{
+    changeRecordPin:PinRef/2,
+    installationNoticePin:PinRef/2,
+    completionProofPin:PinRef/2
+  }...],
+  dependencyBefore:DependencyProof/3,
+  dependencyAfter:DependencyProof/3,
+  retainedInputs:[PinRef/2...]
+}
+
+D10AuthorPreparationLink/2 = {
+  kind:"d10_author_preparation_link",
+  version:2,
+  run:ControlRef<run>/1,
+  stepId:Counter,
+  automation:Binding<automation>/1,
+  definitionRevision:Counter,
+  taskDigest:Sha256,
+  preparedBindingToken:Token,
+  request:d6_commit_request/2
+}
+
+ApprovalUse/2 = {
+  version:2,
+  approval:Binding<approval>/1,
+  run:ControlRef<run>/1,
+  stepId:Counter,
+  request:d6_commit_request/2,
+  decisionKey:DecisionKey/2,
+  preparedBindingToken:Token,
+  previewSemanticDigest:Sha256,
+  delegationBinding:Binding<lease>/1,
+  activationBinding:ActivationBinding/1,
+  count:ApprovalCountReservation/1,
+  budgetReservations:[ControlRef<reservation>/1...]
+}
+
+D10AuthorStepResponsibility/2 =
+    {version:2,kind:"core_field_member",
+     link:D10AuthorPreparationLink/2,
+     decisionKey:DecisionKey/2,protocolOwner:"D6",
+     preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
+  | {version:2,kind:"interactive",
+     run:ControlRef<run>/1,stepId:Counter,decisionKey:DecisionKey/2,
+     authorRequest:
+         {protocolOwner:"D3",request:<complete identity_operation_request wire13>}
+       | {protocolOwner:"D6",request:d6_commit_request/2},
+     preparedFormat:
+       "d7_prepared_action_binding4"|"d8_prepared_edit_binding3",
+     preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
+```
+
+`ApprovalUse/2.preparedBindingToken` must select the exact PAB4. Its preview digest is
+`SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))`;
+each EffectBytes/3 slot is projected only as `{encoding,byteLength,payloadDigest}`, never discovered by recursively guessing member names.
+
+A current schedule proof that semantically parses a managed Document must include both `source` and `document_format` dependencies. If source/profile bytes are unchanged but format-proof continuity has a gap, the result is `gap`; a real binding transition is `binding_changed` even when the final recurrence/range value happens to compare equal. A Subscription1 may become a same-generation Subscription2 only through explicit continue plus complete history proving no format/rule discontinuity; otherwise replace is required.
 
 # 11. Historical dispatch and one authority set
 
