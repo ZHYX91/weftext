@@ -29,12 +29,12 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | AD2-07 | SPEC §§1–4 | A body attribute assignment affects only subsequent generic AsciiDoc processing and cannot retroactively take over root Node classification. |
 | AD2-08 | SPEC §§1–4 | wf-kind/wf-facets inside included source may participate in the include environment as ordinary AsciiDoc attributes but cannot change the including root Node control state. |
 | AD2-09 | SPEC §§1–4 | A root control may reference another root-authored attribute; if its final value depends on host/include/builtin provenance, generic AsciiDoc may remain valid but Weftext Node control must be unavailable/invalid rather than taking authority. |
-| AD2-10 | SPEC §§1–4 | `link:n1.W.N[label]` is parsed by the native link grammar first and only then projected by the Weftext adapter into a NodeLink; no second link parser is allowed. |
-| AD2-11 | SPEC §§1–4 | A valid n1 target does not require an invented `++` passthrough canonical syntax. |
-| AD2-12 | SPEC §§1–4 | The link/citation label corpus covers `Doe, 2025`, `a=b`, legal `]` escaping, single/double quotes, commas, role attributes, and multiline attribute-list cases allowed by 2.0.26; all are handled by the baseline attribute-list parser. |
+| AD2-10 | SPEC §§1–4 | link:n1.W.N[label] is parsed by the native link grammar first and only then projected by the Weftext adapter into a NodeLink; no second link parser is allowed. |
+| AD2-11 | SPEC §§1–4 | A valid n1 target does not require an invented ++ passthrough canonical syntax. |
+| AD2-12 | SPEC §§1–4 | The link/citation label corpus covers Doe, 2025, a=b, legal ] escaping, single/double quotes, commas, role attributes, and multiline attribute-list cases allowed by 2.0.26; all are handled by the baseline attribute-list parser. |
 | AD2-13 | SPEC §§1–4 | Native bibliography anchors/xrefs and Weftext citation roles may coexist in one document without automatically merging provenance or identity. |
 | AD2-14 | SPEC §§1–4 | Deleting a derived Weftext bibliography placement deletes only the placement, not the cited Node or reference fact. |
-| AD2-15 | SPEC §§1–4 | `r1.UUID` resolves to an owner-local Resource under the containing Node; the same UUID leaf under another owner is not the same ResourceRef. |
+| AD2-15 | SPEC §§1–4 | r1.UUID resolves to an owner-local Resource under the containing Node; the same UUID leaf under another owner is not the same ResourceRef. |
 | AD2-16 | SPEC §§1–4 | Image alt/width/height and related fields use native image semantics; copy rewrite changes only Resource identity and preserves occurrence presentation. |
 | AD2-17 | SPEC §§1–4 | Audio uses its actual native title/start/end/options attributes and does not inherit invented fields from the image model. |
 | AD2-18 | SPEC §§1–4 | Video poster/width/height/start/end/options follow fixed 2.0.26 semantics. |
@@ -48,14 +48,14 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | AD2-26 | SPEC §§1–4 | When attribute/include/substitution output has multiple source origins, preserve the full origin graph; Write/Annotation may not automatically choose the nearest origin. |
 | AD2-27 | SPEC §§1–4 | Unordered, ordered, description, callout, checklist, hybrid, and mixed lists, including list continuation and attached blocks, remain complete. |
 | AD2-28 | SPEC §§1–4 | Historical parser edge cases such as checklist/list continuation plus attached tables must not panic or silently flatten; semantic inequality fails the Core Gate. |
-| AD2-29 | SPEC §§1–4 | PSV/CSV/DSV/TSV tables, cols, header/footer, spans, duplication, alignment, style, and `a` AsciiDoc cells all participate in the semantic corpus. |
+| AD2-29 | SPEC §§1–4 | PSV/CSV/DSV/TSV tables, cols, header/footer, spans, duplication, alignment, style, and a AsciiDoc cells all participate in the semantic corpus. |
 | AD2-30 | SPEC §§1–4 | The complex Source↔Write corpus includes deep authored levels 6-9, run-in headings, tables/lists/STEM; after editing one ordinary paragraph, every untouched byte including markers, roles, and trivia remains byte-identical, and HTML/PDF/DOCX each still satisfy deep/run-in backend rules. |
 | AD2-31 | SPEC §§1–4 | If the rich editor lacks a control for a legal construct, the construct must still parse, read, source-edit, and save; missing UI is not unsupported syntax. |
 | AD2-32 | SPEC §§1–4 | A missing STEM provider affects BackendStatus only, not core-language validity. |
 | AD2-33 | SPEC §§1–4 | SVG emitted by the fixed Mermaid provider must pass SvgOutputProfile validation. |
 | AD2-34 | SPEC §§1–4 | SVG containing script, event handlers, external-network URIs, DTD/entities, or unauthorized CSS/fonts is rejected even if the provider succeeded. |
 | AD2-35 | SPEC §§1–4 | Changing provider/config/font/runtime profile invalidates the corresponding render cache. |
-| AD2-36 | SPEC §§1–4 | Exact `.adoc` export can still succeed when PDF rendering is unavailable. |
+| AD2-36 | SPEC §§1–4 | Exact .adoc export can still succeed when PDF rendering is unavailable. |
 | AD2-37 | SPEC §§1–4 | The Oracle semantic witness and Weftext provenance witness are each deterministic; thread or map iteration order cannot change canonical output. |
 | AD2-38 | SPEC §§1–4 | Diagnostics compare severity, semantic code, and location; the exact message is retained to detect over-normalization. |
 | AD2-39 | SPEC §§1–4 | A real core-language mismatch cannot be registered as a backend, environment, or Weftext-domain exception. |
@@ -96,7 +96,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | AN2-34 | SPEC §§9–16 | Unmanaged/network included bytes cannot directly establish a durable exact target; annotate the directive or adopt the source first. |
 | AN2-35 | SPEC §§9–16 | Synthetic multi-origin text cannot automatically choose one owner. |
 | AN2-36 | SPEC §§9–16 | A PDF/image normalized rectangle binds an exact ResourceVersion; zoom or shell changes do not alter it. |
-| AN2-37 | SPEC §§9–16 | Audio/video rational timebase/ticks and `[start,end)` round-trip exactly. |
+| AN2-37 | SPEC §§9–16 | Audio/video rational timebase/ticks and [start,end) round-trip exactly. |
 | AN2-38 | SPEC §§9–16 | If a media decoder/profile is unavailable, existing raw records are preserved and creation of a new exact region is unavailable. |
 | AN2-39 | SPEC §§9–16 | Node copy creates fresh AnnotationRefs, rewrites the full reply graph, preserves creator/authoredAt/lastEditor/editedAt attribution, and reissues targets through the real source/resource identityMap; it never copies an old locator or guesses by text. |
 | AN2-40 | SPEC §§9–16 | Corruption of one Annotation value cannot be interpreted as “this owner has no annotations.” |
@@ -144,11 +144,11 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | WFX-H19 | SPEC §1.3 | Deep levels must not all be flattened to one semantic level. |
 | WFX-H20 | SPEC §1.3 | The DOCX provider preserves at least Heading1-Heading9 structure for effective levels 1-9. |
 | WFX-H21 | SPEC §1.3 | If PDF/another backend cannot express a level, degradation is explicit and does not mutate source or AST. |
-| WFX-H22 | SPEC §1.3 | Exact `.adoc` export does not rewrite heading markers or leveloffset. |
+| WFX-H22 | SPEC §1.3 | Exact .adoc export does not rewrite heading markers or leveloffset. |
 | WFX-R01 | SPEC §1.3 | With no explicit role and workspace default=separate, presentation remains Separate. |
-| WFX-R02 | SPEC §1.3 | `.run-in` plus an eligible first paragraph produces RunIn presentation. |
-| WFX-R03 | SPEC §1.3 | `.separate` forces Separate even when workspace default is run_in. |
-| WFX-R04 | SPEC §1.3 | `.run-in.separate` remains legal AsciiDoc source and yields a typed role_conflict plus Separate fallback. |
+| WFX-R02 | SPEC §1.3 | .run-in plus an eligible first paragraph produces RunIn presentation. |
+| WFX-R03 | SPEC §1.3 | .separate forces Separate even when workspace default is run_in. |
+| WFX-R04 | SPEC §1.3 | .run-in.separate remains legal AsciiDoc source and yields a typed role_conflict plus Separate fallback. |
 | WFX-R05 | SPEC §1.3 | Explicit run-in permits blank source trivia between heading and body. |
 | WFX-R06 | SPEC §1.3 | Explicit run-in permits comment trivia between heading and body. |
 | WFX-R07 | SPEC §1.3 | Legal ID/role attributes on the first paragraph do not break semantic adjacency. |
@@ -162,20 +162,20 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | WFX-R15 | SPEC §1.3 | RTL/CJK/emoji presentation does not insert hard-coded LTR punctuation. |
 | WFX-R16 | SPEC §1.3 | A synthetic visual join has no writable source scalar. |
 | WFX-R17 | SPEC §1.3 | Copy Text yields rendered heading text + U+0020 + rendered first-paragraph text; Copy Source Fragment preserves heading source, all real blank/comment/attribute trivia between them, and paragraph source, and never writes the synthetic join back to source. |
-| WFX-R18 | SPEC §1.3 | Enable retains only `.run-in`; Disable retains only `.separate`; Use Default removes both. |
+| WFX-R18 | SPEC §1.3 | Enable retains only .run-in; Disable retains only .separate; Use Default removes both. |
 | WFX-R19 | SPEC §1.3 | After Enter creates a second body paragraph, only the first paragraph remains run-in. |
 | WFX-R20 | SPEC §1.3 | Backspace at body start must not silently destroy heading structure. |
 | WFX-R21 | SPEC §1.3 | Authored deep headings 6-9 support run-in under the same rules. |
 | WFX-R22 | SPEC §1.3 | If a backend cannot present run-in, only presentation may degrade; heading/body semantics remain intact. |
-| T3-ENV-01 | SPEC §§1.2,4 | For the same source under html5 vs docbook processor backends, `ifdef::backend-html5[]` results and context digests differ as expected. |
+| T3-ENV-01 | SPEC §§1.2,4 | For the same source under html5 vs docbook processor backends, ifdef::backend-html5[] results and context digests differ as expected. |
 | T3-ENV-02 | SPEC §§1.2,4 | SERVER/SECURE safe-mode docdir/docfile masking and SAFE results match 2.0.26. |
-| T3-ENV-03 | SPEC §§1.2,4 | Changing logical docfile/baseDir correctly changes `{docfile}`/relative includes and the context digest. |
+| T3-ENV-03 | SPEC §§1.2,4 | Changing logical docfile/baseDir correctly changes {docfile}/relative includes and the context digest. |
 | T3-ENV-04 | SPEC §§1.2,4 | Changing SOURCE_DATE_EPOCH correctly changes local/doc intrinsic time attributes. |
 | T3-ENV-05 | SPEC §§1.2,4 | The four hard_set, soft_set, hard_unset, and soft_unset states reproduce Ruby value/value@/nil/false precedence exactly. |
 | T3-ENV-06 | SPEC §§1.2,4 | A changed managed-include SourceObservation makes the old evaluation dependency stale. |
 | T3-ENV-07 | SPEC §§1.2,4 | An external immutable pin can be exactly replayed when bytes match; a different pin cannot reuse the old evaluation. |
-| T3-ENV-08 | SPEC §§1.2,4 | Below SERVER safe mode, two ambientUserHome values produce different `{user-home}` results/context. |
-| T3-ENV-09 | SPEC §§1.2,4 | At SERVER/SECURE, changing ambientUserHome does not change the processor default `.`. |
+| T3-ENV-08 | SPEC §§1.2,4 | Below SERVER safe mode, two ambientUserHome values produce different {user-home} results/context. |
+| T3-ENV-09 | SPEC §§1.2,4 | At SERVER/SECURE, changing ambientUserHome does not change the processor default .. |
 | T3-ENV-10 | SPEC §§1.2,4 | SOURCE_DATE_EPOCH overrides inputMtime; without it, inputMtime overrides clockNow for doc* attributes. |
 | T3-ENV-11 | SPEC §§1.2,4 | When outfile/outdir are processor-visible, changing them must change the frozen context. |
 | T3-ENV-12 | SPEC §§1.2,4 | Managed evaluation may not read cwd/home/clock/file metadata that is absent from the frozen context. |
@@ -191,14 +191,14 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-ORACLE-10 | SPEC §§2–3 | A run-in synthetic join can reference only real heading/body origins and is not writable. |
 | T3-ORACLE-11 | SPEC §§2–3 | A concealed indexterm produces a concealed semantic event even though HTML output is empty. |
 | T3-ORACLE-12 | SPEC §§2–3 | Visible and concealed indexterms distinguish text/terms/see/see-also. |
-| T3-ORACLE-13 | SPEC §§2–3 | `toc::[]` produces a block event with context=toc and content_model=empty. |
+| T3-ORACLE-13 | SPEC §§2–3 | toc::[] produces a block event with context=toc and content_model=empty. |
 | T3-ORACLE-14 | SPEC §§2–3 | An unregistered fixed-2.0.26 built-in converter transform yields oracle_contract_incomplete and cannot be ignored. |
 | T3-ORACLE-15 | SPEC §§2–3 | ListItem/Table::Cell facts are mechanically enumerated by the parent callback when no standalone callback exists; they cannot disappear. |
-| T3-ORACLE-16 | SPEC §§2–3 | `Alpha.` and `Beta.` produce different text fragments even when all other metadata/catalog/diagnostics match. |
+| T3-ORACLE-16 | SPEC §§2–3 | Alpha. and Beta. produce different text fragments even when all other metadata/catalog/diagnostics match. |
 | T3-ORACLE-17 | SPEC §§2–3 | Literal blocks differing only in ordinary text must produce different witnesses. |
 | T3-ORACLE-18 | SPEC §§2–3 | The result of legitimate substitutions in pass/raw blocks enters the text fragment; comparing node.source alone is insufficient. |
-| T3-ORACLE-19 | SPEC §§2–3 | `Alpha *{name}* Beta` preserves ordered text -> strong start -> resolved text -> strong end -> text semantics. |
-| T3-ORACLE-20 | SPEC §§2–3 | One `{counter:x}` increments exactly once; semantic observation must not double-increment via extra content access. |
+| T3-ORACLE-19 | SPEC §§2–3 | Alpha *{name}* Beta preserves ordered text -> strong start -> resolved text -> strong end -> text semantics. |
+| T3-ORACLE-20 | SPEC §§2–3 | One {counter:x} increments exactly once; semantic observation must not double-increment via extra content access. |
 | T3-ORACLE-21 | SPEC §§2–3 | Consecutive counters yield the actual stateful document order 1,2,3,... |
 | T3-ORACLE-22 | SPEC §§2–3 | Footnote registration/numbering occurs once; fragment evidence agrees with the final catalog. |
 | T3-ORACLE-23 | SPEC §§2–3 | Later attribute/macro substitutions still run inside quoted nodes; probe machinery cannot make quote payload opaque. |
@@ -206,13 +206,13 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-ORACLE-25 | SPEC §§2–3 | Backend Gate uses a fresh Ruby Document, not a Document already mutated by counter/footnote activity in the semantic pass. |
 | T3-PROFILE-01 | SPEC §§5–8 | A managed Node cannot be switched to BaselineOnly by a caller. |
 | T3-PROFILE-02 | SPEC §§5–8 | An ordinary import containing a deep marker lists deep_section in its DeltaReport. |
-| T3-PROFILE-03 | SPEC §§5–8 | Ordinary source containing `.run-in` lists explicit_run_in in its DeltaReport. |
+| T3-PROFILE-03 | SPEC §§5–8 | Ordinary source containing .run-in lists explicit_run_in in its DeltaReport. |
 | T3-PROFILE-04 | SPEC §§5–8 | Root wf-kind/facets produce an explicit managed delta. |
 | T3-PROFILE-05 | SPEC §§5–8 | n1/r1/citation/carrier/query/view all appear in the complete delta inventory. |
-| T3-PROFILE-06 | SPEC §§5–8 | When there is no semantic delta, a `/1` managed binding may be established directly, but the binding component must still be genuinely installed. |
+| T3-PROFILE-06 | SPEC §§5–8 | When there is no semantic delta, a /1 managed binding may be established directly, but the binding component must still be genuinely installed. |
 | T3-PROFILE-07 | SPEC §§5–8 | If the user rejects managed activation, no managed Node is allocated. |
 | T3-PROFILE-08 | SPEC §§5–8 | A trusted Weftext transfer preserves the exact profile generation. |
-| T3-PROFILE-09 | SPEC §§5–8 | If a future `/2` exists, an old `/1` Node is still interpreted under `/1`. |
+| T3-PROFILE-09 | SPEC §§5–8 | If a future /2 exists, an old /1 Node is still interpreted under /1. |
 | T3-PROFILE-10 | SPEC §§5–8 | After source changes, an old DeltaReport digest cannot confirm a new activation. |
 | T3-PROFILE-11 | SPEC §§5–8 | DeltaReport ordering/digest is deterministic across implementations. |
 | T3-PROFILE-12 | SPEC §§5–8 | Profile migration requires explicit analysis/confirmation and never auto-upgrades on open. |
@@ -226,7 +226,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-PROFILE-20 | SPEC §§5–8 | Formal restore restores the exact historical binding; ordinary fresh-identity import follows the import gate. |
 | T3-PROFILE-21 | SPEC §§5–8 | Every managed semantic read obtains both the exact SourceObservation and DocumentFormatCurrentQualification. |
 | T3-PROFILE-22 | SPEC §§5–8 | A strong DependencyProof includes both source(owner) and document_format(owner). |
-| T3-PROFILE-23 | SPEC §§5–8 | For a source-unchanged `/1 -> /2` profile-only migration, the source dependency stays the same but the format stamp changes and the old D7 prepare becomes stale. |
+| T3-PROFILE-23 | SPEC §§5–8 | For a source-unchanged /1 -> /2 profile-only migration, the source dependency stays the same but the format stamp changes and the old D7 prepare becomes stale. |
 | T3-PROFILE-24 | SPEC §§5–8 | scope_dependencies cannot classify a consumed document_format stamp change as unrelated. |
 | T3-PROFILE-25 | SPEC §§5–8 | The D2 AST cache keys on format stamp/profile; metadata-only migration makes the old AST stale. |
 | T3-PROFILE-26 | SPEC §§5–8 | D4 typed projections are invalidated and recomputed when the format stamp changes. |
@@ -246,26 +246,26 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-H05 | SPEC §1.3 | A nested skip inside a fragment still emits the real expected-level warning. |
 | T3-H06 | SPEC §1.3 | After a book document title, level 0 can become a part. |
 | T3-H07 | SPEC §1.3 | An illegal article level 0 retains Ruby's original error/recovery semantics. |
-| T3-H08 | SPEC §1.3 | Deep `[discrete]` / `[float]` headings do not enter section hierarchy. |
+| T3-H08 | SPEC §1.3 | Deep [discrete] / [float] headings do not enter section hierarchy. |
 | T3-H09 | SPEC §1.3 | A deep discrete heading auto-ID enters the refs catalog normally. |
 | T3-H10 | SPEC §1.3 | Positive leveloffset applies to ordinary and discrete headings. |
 | T3-H11 | SPEC §1.3 | Doctitle recognition uses rawLevel+offset==0. |
 | T3-H12 | SPEC §1.3 | Formal section parsing clamps a negative effective level to 0 as 2.0.26 does. |
 | T3-H13 | SPEC §1.3 | An effective level 10+ produced by leveloffset is not invalid merely because Weftext authored levels stop at 9. |
 | T3-H14 | SPEC §1.3 | Special appendix/bibliography/glossary semantics are not broken by the deep extension. |
-| T3-H15 | SPEC §1.3 | `:toclevels: 4` follows Ruby numeric comparison. |
-| T3-H16 | SPEC §1.3 | `:toclevels: 9` naturally includes the corresponding depth in the deep AST. |
-| T3-H17 | SPEC §1.3 | `:sectnumlevels: 2` numbers only through level 2. |
-| T3-H18 | SPEC §1.3 | `:sectnumlevels: 9` permits deep numbering through level 9. |
+| T3-H15 | SPEC §1.3 | :toclevels: 4 follows Ruby numeric comparison. |
+| T3-H16 | SPEC §1.3 | :toclevels: 9 naturally includes the corresponding depth in the deep AST. |
+| T3-H17 | SPEC §1.3 | :sectnumlevels: 2 numbers only through level 2. |
+| T3-H18 | SPEC §1.3 | :sectnumlevels: 9 permits deep numbering through level 9. |
 | T3-H19 | SPEC §1.3 | 11+ equals signs are not a Weftext deep-heading error; they continue through the baseline non-heading path. |
 | T3-H20 | SPEC §1.3 | A standard level-5 marker plus leveloffset+10 can yield effective level 15 while preserving structure. |
 | T3-H21 | SPEC §1.3 | HTML for effective levels above 9 preserves the exact aria/data level and reports only backend/AT degradation. |
 | T3-H22 | SPEC §1.3 | DOCX/PDF uses explicit degradation for levels beyond backend capability and never rewrites source. |
-| T3-TITLE-01 | SPEC §1.1 | `= Main: Subtitle` parses main=`Main` and subtitle=`Subtitle`. |
-| T3-TITLE-02 | SPEC §1.1 | `= A: B: C` splits on the last `:`, yielding main=`A: B` and subtitle=`C`. |
-| T3-TITLE-03 | SPEC §1.1 | `[separator=::]` uses `::` correctly. |
-| T3-TITLE-04 | SPEC §1.1 | `:title-separator: ::` takes effect correctly. |
-| T3-TITLE-05 | SPEC §1.1 | WeftextManaged does not implicitly change the default separator to `::`. |
+| T3-TITLE-01 | SPEC §1.1 | = Main: Subtitle parses main=Main and subtitle=Subtitle. |
+| T3-TITLE-02 | SPEC §1.1 | = A: B: C splits on the last :, yielding main=A: B and subtitle=C. |
+| T3-TITLE-03 | SPEC §1.1 | [separator=::] uses :: correctly. |
+| T3-TITLE-04 | SPEC §1.1 | :title-separator: :: takes effect correctly. |
+| T3-TITLE-05 | SPEC §1.1 | WeftextManaged does not implicitly change the default separator to ::. |
 | T3-TITLE-06 | SPEC §1.1 | D2, D8, and D9 read the exact same title/subtitle projection. |
 | T3-FACET-01 | SPEC §§5,7 | Thirty-two lexically valid FacetIds succeed. |
 | T3-FACET-02 | SPEC §§5,7 | The 33rd Facet is rejected for managed-domain commit. |
@@ -278,16 +278,16 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-RUN-01 | SPEC §1.3 | With workspace policy=run_in and physical adjacency, implicit RunIn is allowed. |
 | T3-RUN-02 | SPEC §1.3 | An implicit-default blank line forces Separate. |
 | T3-RUN-03 | SPEC §1.3 | An implicit-default comment forces Separate. |
-| T3-RUN-04 | SPEC §1.3 | Explicit `.run-in` allows blank/comment/paragraph metadata trivia and uses semantic adjacency for RunIn. |
-| T3-RUN-05 | SPEC §1.3 | `.separate` overrides a workspace run_in default. |
-| T3-RUN-06 | SPEC §1.3 | `.run-in.separate` yields a warning plus Separate without making source invalid. |
+| T3-RUN-04 | SPEC §1.3 | Explicit .run-in allows blank/comment/paragraph metadata trivia and uses semantic adjacency for RunIn. |
+| T3-RUN-05 | SPEC §1.3 | .separate overrides a workspace run_in default. |
+| T3-RUN-06 | SPEC §1.3 | .run-in.separate yields a warning plus Separate without making source invalid. |
 | T3-RUN-07 | SPEC §1.3 | A role conflict is a presentation result, not SyntaxStatus invalid. |
 | T3-RUN-08 | SPEC §1.3 | Changing presentation-policy revision invalidates the D8 render cache. |
 | T3-RUN-09 | SPEC §1.3 | A frozen D9 export continues using its frozen policy even if the workspace setting changes later. |
-| T3-RUN-10 | SPEC §1.3 | Enable removes `separate` and leaves exactly `run-in`. |
-| T3-RUN-11 | SPEC §1.3 | Disable removes `run-in` and ensures `separate`, so a run_in default cannot reapply. |
+| T3-RUN-10 | SPEC §1.3 | Enable removes separate and leaves exactly run-in. |
+| T3-RUN-11 | SPEC §1.3 | Disable removes run-in and ensures separate, so a run_in default cannot reapply. |
 | T3-RUN-12 | SPEC §1.3 | Use Default removes both roles and resumes the current workspace policy. |
-| T3-XF-01 | SPEC §§11–13 | Replacing `[20,30)` with 3 bytes shifts a later target left by 7. |
+| T3-XF-01 | SPEC §§11–13 | Replacing [20,30) with 3 bytes shifts a later target left by 7. |
 | T3-XF-02 | SPEC §§11–13 | A deletion strictly before a target applies the correct delta shift. |
 | T3-XF-03 | SPEC §§11–13 | An edit strictly after a target leaves it unchanged. |
 | T3-XF-04 | SPEC §§11–13 | An insertion at the start of a nonzero range moves the whole range right to preserve the original selected text. |
@@ -312,12 +312,12 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-XF-23 | SPEC §§11–13 | A boundary insertion is not forcibly merged merely because it touches a replacement. |
 | T3-XF-24 | SPEC §§11–13 | Truly overlapping nonzero replacements can be mechanically islanded. |
 | T3-XF-25 | SPEC §§11–13 | Event replay must produce the exact admitted afterPin and afterSourceSha256. |
-| T3-XF-26 | SPEC §§11–13 | `[5,10)->X` plus `insert@10->Y` with left point 10 must yield `X\|Y`. |
-| T3-XF-27 | SPEC §§11–13 | For `insert@5` plus `replace[5,10)`, after-order is unique and point5 mapping stops conservatively because the replacement starts at the point. |
-| T3-XF-28 | SPEC §§11–13 | A required sealed decision has exactly one outbox item keyed by `{changeId,ownerNodeRef}`. |
+| T3-XF-26 | SPEC §§11–13 | [5,10)->X plus insert@10->Y with left point 10 must yield X\|Y. |
+| T3-XF-27 | SPEC §§11–13 | For insert@5 plus replace[5,10), after-order is unique and point5 mapping stops conservatively because the replacement starts at the point. |
+| T3-XF-28 | SPEC §§11–13 | A required sealed decision has exactly one outbox item keyed by {changeId,ownerNodeRef}. |
 | T3-XF-29 | SPEC §§11–13 | Different artifacts/pins under the same outbox key are an integrity conflict, not LWW. |
 | T3-XF-30 | SPEC §§11–13 | Publication recovery constructs the exact outbox key only from the saved decision. |
-| T3-XF-31 | SPEC §§11–13 | After `[5,10)->"XY"`, typing `!` between generated X/Y must remain representable as one `[5,10)->"X!Y"` event. |
+| T3-XF-31 | SPEC §§11–13 | After [5,10)->"XY", typing ! between generated X/Y must remain representable as one [5,10)->"X!Y" event. |
 | T3-XF-32 | SPEC §§11–13 | Continued typing/backspace inside an initial insertion folds into that insertion event rather than becoming arbitrarily disabled. |
 | T3-XF-33 | SPEC §§11–13 | An edit wholly inside one generated replacement payload folds mechanically into that event. |
 | T3-XF-34 | SPEC §§11–13 | A cross-anchor edit that cannot uniquely preserve original anchor/boundary slots returns PortableTransformCompilation.unavailable. |
@@ -362,15 +362,15 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | T3-INLINE-07 | SPEC §§1–4,9 | Source/body/render limits fail closed at the N/N+1 boundary. |
 | O34-01 | SPEC §§2–3 | For the same source/environment, uninstrumented and observed selected-backend runs have identical final bytes, diagnostics, catalog, counters, and attributes. |
 | O34-02 | SPEC §§2–3 | The observer does not replace converter return objects, mutate bytes/encoding, or insert markers; each actual return continues unchanged into subsequent processing. |
-| O34-03 | SPEC §§2–3 | For `https://pre**mid**post.example`, the post-quote string and actual URL match/captures/target equal uninstrumented Ruby; the observer does not repair or clean an expected URL. |
-| O34-04 | SPEC §§2–3 | For `link:pre**mid**post[label]`, target scalar comes from the actual capture and preserves converter-feedback characters, traceable to the strong return but not mis-modeled as visual nesting in the label. |
-| O34-05 | SPEC §§2–3 | In `Alpha *{name}* Beta`, later attribute rewriting remains visible; the old quote argument, later string versions, and final text relationship are all evidenced. |
+| O34-03 | SPEC §§2–3 | For https://pre**mid**post.example, the post-quote string and actual URL match/captures/target equal uninstrumented Ruby; the observer does not repair or clean an expected URL. |
+| O34-04 | SPEC §§2–3 | For link:pre**mid**post[label], target scalar comes from the actual capture and preserves converter-feedback characters, traceable to the strong return but not mis-modeled as visual nesting in the label. |
+| O34-05 | SPEC §§2–3 | In Alpha *{name}* Beta, later attribute rewriting remains visible; the old quote argument, later string versions, and final text relationship are all evidenced. |
 | O34-06 | SPEC §§2–3 | Three repeated identical texts or labels in one scope are distinguished by actual spans, never by content search. |
-| O34-07 | SPEC §§2–3 | `Alpha.` vs `Beta.`, differing literal bodies, and differing pass bodies produce different semantic observations even when metadata matches. |
+| O34-07 | SPEC §§2–3 | Alpha. vs Beta., differing literal bodies, and differing pass bodies produce different semantic observations even when metadata matches. |
 | O34-08 | SPEC §§2–3 | A concealed indexterm has a real Inline event, match position, terms/see/see-also even though it returns an empty string; no catalog/HTML reconstruction is used. |
-| O34-09 | SPEC §§2–3 | Both explicit `+` and hardbreaks-option paths preserve complete pre-break text and real ranges without loss or duplication in projection. |
+| O34-09 | SPEC §§2–3 | Both explicit + and hardbreaks-option paths preserve complete pre-break text and real ranges without loss or duplication in projection. |
 | O34-10 | SPEC §§2–3 | Counter/counter2/set/footnote numbering-registration counts and order are unchanged by observation; log serialization cannot trigger a second content evaluation. |
-| O34-11 | SPEC §§2–3 | Native call sequences for list items, description terms/bodies, ordinary cells, `a` cells, and title/cache hits are preserved; the observer neither adds calls nor deduplicates them. |
+| O34-11 | SPEC §§2–3 | Native call sequences for list items, description terms/bodies, ordinary cells, a cells, and title/cache hits are preserved; the observer neither adds calls nor deduplicates them. |
 | O34-12 | SPEC §§2–3 | Native passthrough extraction/restoration, nested apply_subs, drop-line, and post-escape interval relationships remain correct with no observer sentinel. |
 | O34-13 | SPEC §§2–3 | Target/refid/path and AttributeList named/positional slice/decode/normalize origins are traceable through actual operations without extra getters or scanners. |
 | O34-14 | SPEC §§2–3 | Missing observation, an unknown required transform, or capacity exhaustion cannot emit a “complete passing witness”; the original evaluation result is never changed to fill the gap. |
@@ -378,53 +378,53 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | O34-16 | SPEC §§2–3 | The five retained closed-type positive/negative decoder vectors still pass; Witness/6 has no dangling types and the old marker/InlineDescriptor/Witness5 are not current emitters. |
 | X34-01 | SPEC §§2,11–13 | A replacement spanning two generated anchors after insert@5->AA and insert@10->BB still validates boundary invariants; if they cannot be preserved it is unavailable rather than forced representable. |
 | X34-02 | SPEC §§2,11–13 | Continued editing inside one insertion/replacement and ordinary disjoint edits remain representable when invariants hold; the compiler cannot disable them wholesale. |
-| X34-03 | SPEC §§2,11–13 | The mixed-event fixture maps `[10,14)` to `[11,15)` and point14 left/right to 15/17 using original-coordinate classification only. |
-| X34-04 | SPEC §§2,11–13 | `[5,10)->X` plus `insert@10->Y` preserves left point as `X\|Y`; a replacement starting at the point stops mapping. Multi-transition chains validate each segment. |
-| X34-05 | SPEC §§2,11–13 | CoreSourceEditPlan/2.edits and SourceTransformEvidence/2.edits are the same canonical `/3` events; byte inequality rejects seal, and seal/recovery never recompiles them. |
-| X34-06 | SPEC §§2,11–13 | The current decoder rejects mixing retired PortableEdit/2 with current `/3`; genuinely historical saved/planned data keeps its original rules. Compilation unavailable does not block ordinary source save and recovery cannot upgrade emission. |
+| X34-03 | SPEC §§2,11–13 | The mixed-event fixture maps [10,14) to [11,15) and point14 left/right to 15/17 using original-coordinate classification only. |
+| X34-04 | SPEC §§2,11–13 | [5,10)->X plus insert@10->Y preserves left point as X\|Y; a replacement starting at the point stops mapping. Multi-transition chains validate each segment. |
+| X34-05 | SPEC §§2,11–13 | CoreSourceEditPlan/2.edits and SourceTransformEvidence/2.edits are the same canonical /3 events; byte inequality rejects seal, and seal/recovery never recompiles them. |
+| X34-06 | SPEC §§2,11–13 | The current decoder rejects mixing retired PortableEdit/2 with current /3; genuinely historical saved/planned data keeps its original rules. Compilation unavailable does not block ordinary source save and recovery cannot upgrade emission. |
 | C34-01 | SPEC §§2,11–13 | Fresh coordination has one authoritative FC-3.4 closed list; missing D4 typed/control/carrier, D9, or Index/cache means coordination is incomplete, and summaries may only reference this closed list. |
 | C34-02 | SPEC §§2,11–13 | All 340 v3.3 IDs and obligations remain; this round adds exactly O34×16, X34×6, C34×2 =24. They remain design oracles and are not reported as executed tests. |
-| P35-01 | SPEC §§2–3 | Case 1 yields final `Alice` with strong range [6,11); Rust internal storage as raw+final or final-only projects identically. |
-| P35-02 | SPEC §§2–3 | Case 2 preserves a target containing `<strong>mid</strong>` exactly; the projection contains no intermediate strong mark or dependency edge. |
-| P35-03 | SPEC §§2–3 | Case 3 preserves strong formatting in the label while target=`dest`; it is not confused with Case 2 scalar consumption. |
-| P35-04 | SPEC §§2–3 | Case 4 contains `Alpha` exactly once and one hard_break, with neither lost prefix nor extra soft_break. |
+| P35-01 | SPEC §§2–3 | Case 1 yields final Alice with strong range [6,11); Rust internal storage as raw+final or final-only projects identically. |
+| P35-02 | SPEC §§2–3 | Case 2 preserves a target containing <strong>mid</strong> exactly; the projection contains no intermediate strong mark or dependency edge. |
+| P35-03 | SPEC §§2–3 | Case 3 preserves strong formatting in the label while target=dest; it is not confused with Case 2 scalar consumption. |
+| P35-04 | SPEC §§2–3 | Case 4 contains Alpha exactly once and one hard_break, with neither lost prefix nor extra soft_break. |
 | P35-05 | SPEC §§2–3 | Case 5 gives the hidden term a deterministic zero-width semantic site and no visible hidden text. |
 | P35-06 | SPEC §§2–3 | Case 6 has one footnote definition, a ref atom, and correct final counter with no duplicate body; a later same-id reference does not create a second definition. |
 | P35-07 | SPEC §§2–3 | Case 7 locates two strong ranges over identical text distinctly without substring search. |
 | P35-08 | SPEC §§2–3 | Case 8 counter2 has no visible output but still affects later text/final state; comparing visible text alone is insufficient. |
 | P35-09 | SPEC §§2–3 | When custom substitutions run macro before attribute, later real target/label rewrites appear in final scalar/flow; projection cannot freeze the earliest callback field. |
-| P35-10 | SPEC §§2–3 | Authored passthrough `<strong>x</strong>` does not become a normal strong mark; transport specialchars, real replacements, and raw backend feedback remain distinct. |
+| P35-10 | SPEC §§2–3 | Authored passthrough <strong>x</strong> does not become a normal strong mark; transport specialchars, real replacements, and raw backend feedback remain distinct. |
 | P35-11 | SPEC §§2–3 | Pure formatting later consumed/deleted may disappear, but real index/anchor/footnote/counter/catalog effects cannot disappear with it. |
 | P35-12 | SPEC §§2–3 | Different raw IDs, cache counts, or inline-tree implementations project to the same canonical CSP when final runs/marks/scalars/facts/state match. |
 | P35-13 | SPEC §§2–3 | CJK/emoji, soft breaks, literal newlines, and mark ranges use Unicode-scalar coordinates, never raw Ruby byte offsets. |
 | P35-14 | SPEC §§2–3 | Missing required observation or Core final state cannot be filled by a second parser or HTML inference; the compatibility case remains unpassed rather than being removed from scope. |
 | N36-01 | SPEC §§2–3 | Quote/verse attribution and citetitle are canonical properties; changing Alice to Bob or changing the cited title changes CSP even if body text is unchanged. |
-| N36-02 | SPEC §§2–3 | `[source,ruby]` and `[source,python]` differ by language; listing context/style/source-language inheritance and fenced-source paths project into the same canonical slot. |
+| N36-02 | SPEC §§2–3 | [source,ruby] and [source,python] differ by language; listing context/style/source-language inheritance and fenced-source paths project into the same canonical slot. |
 | N36-03 | SPEC §§2–3 | Numeric positional keys, named rekey results, and style/id/role/option physical aliases produce one canonical slot; native precedence uses the real result and is not re-decided by the projector. |
-| N36-04 | SPEC §§2–3 | Real authored named attributes such as ticket=OPS-7 and custom=007 remain; `007` remains text and a native role cannot collide with an authored custom `roles` attribute. |
+| N36-04 | SPEC §§2–3 | Real authored named attributes such as ticket=OPS-7 and custom=007 remain; 007 remains text and a native role cannot collide with an authored custom roles attribute. |
 | N36-05 | SPEC §§2–3 | Internal cloaked-context, caches, reader/column objects, and temporary root-option do not enter CSP; a real authored same-name property is not deleted by name alone and unknown objects cannot be stringified generically. |
 | N36-06 | SPEC §§2–3 | Every CoreBlockKind and mark/atom maps to exactly one profile row; table column/span/alignment, section numbering, image parameters, and callout associations all have positive/negative changes and cannot be omitted as “unlisted public fields.” |
 | N36-07 | SPEC §§2–3 | All eight v3.5 expected projections remain exact; ordinary paragraphs gain no default subs/style/empty options, and footnote/link body text is not duplicated. |
 | N36-08 | SPEC §§2–3 | Ruby without column and Rust with an extra column produce equal diagnostics when logicalFile/line/code match; code uses the same canonical namespace. |
-| N36-09 | SPEC §§2–3 | No location has exactly one representation `null`; file-only and line-only locations remain expressible; no guessed location/second parser is allowed and duplicate diagnostics are not deduplicated. |
+| N36-09 | SPEC §§2–3 | No location has exactly one representation null; file-only and line-only locations remain expressible; no guessed location/second parser is allowed and duplicate diagnostics are not deduplicated. |
 | N36-10 | SPEC §§2–3 | links/images/includes canonicalize as equal multisets regardless of input order while preserving multiplicity; removing one duplicate changes CSP. |
 | N36-11 | SPEC §§2–3 | Property, attributeChanges, and counters sort uniquely by name and reject conflicting duplicate keys; ordered arrays such as roles/menu/columns/cells/children are not globally sorted. |
 | N36-12 | SPEC §§2–3 | Footnote index 2 sorts before 10; CoreSite numeric paths and index-occurrence multiplicity are correct, and inner properties are canonicalized before an outer CJ sorting key is computed. |
 | M37-01 | SPEC §§2–3 | Witness/7 is the only current witness; missing modelPropertyObservations or pretending Witness6 has an empty one fails the full-property Gate, while all retained nested types remain. |
-| M37-02 | SPEC §§2–3 | nil/absent/false/Integer/Symbol/Float/String remain distinct; `:chapter` cannot stringify to true and Float preserves its actual numeric encoding. |
-| M37-03 | SPEC §§2–3 | An ordinary book chapter and a book special section record actual `true` vs `:chapter` numbered states; the projector never reruns initialization logic. |
+| M37-02 | SPEC §§2–3 | nil/absent/false/Integer/Symbol/Float/String remain distinct; :chapter cannot stringify to true and Float preserves its actual numeric encoding. |
+| M37-03 | SPEC §§2–3 | An ordinary book chapter and a book special section record actual true vs :chapter numbered states; the projector never reruns initialization logic. |
 | M37-04 | SPEC §§2–3 | Section numeral/caption uses the result after assign_numeral/assign_caption; constructor/initialize_section intermediate values cannot impersonate final state. |
 | M37-05 | SPEC §§2–3 | For cols=1,2, final widths use the actual post-balance result; the first 66.6666 snapshot for C2 cannot be selected instead of final 66.6667. |
 | M37-06 | SPEC §§2–3 | Auto-created columns, absolute width, autowidth, and final-column correction all have real typed evidence and are not recomputed from source. |
-| M37-07 | SPEC §§2–3 | A header Cell's `@style` is distinct from inherited attributes style; final halign/valign/span are correct. |
+| M37-07 | SPEC §§2–3 | A header Cell's @style is distinct from inherited attributes style; final halign/valign/span are correct. |
 | M37-08 | SPEC §§2–3 | When reinitialize returns a new Cell, the final row binds the new subject and the old temporary Cell does not also enter CSP. |
 | M37-09 | SPEC §§2–3 | ListItem marker/checklist/id/roles/options are complete; after fold_first, the folded paragraph does not become a second body node. |
 | M37-10 | SPEC §§2–3 | coids are observed after the actual parse_callout_list assignment and cannot stop at the earlier parse_list_item return. |
 | M37-11 | SPEC §§2–3 | Description-list multiple terms, nil description, and block-only description follow the real tuple relationships rather than text-based object guessing. |
 | M37-12 | SPEC §§2–3 | Named/positional/rekey/copy/inherit provenance is fully traceable; a real overwrite with the same value still updates provenance and cannot be collapsed by value equality. |
-| M37-13 | SPEC §§2–3 | Explicit `foo-option=bar` projects both option membership and the named value; bar→baz changes CSP. |
-| M37-14 | SPEC §§2–3 | Explicit empty `foo-option=` keeps a named empty value; `%foo`/`options=foo`/`opts=foo` produce membership only. |
-| M37-15 | SPEC §§2–3 | When named assignment and option expansion overwrite each other, the actual final writer wins; an overwritten `bar` is not resurrected. |
+| M37-13 | SPEC §§2–3 | Explicit foo-option=bar projects both option membership and the named value; bar→baz changes CSP. |
+| M37-14 | SPEC §§2–3 | Explicit empty foo-option= keeps a named empty value; %foo/options=foo/opts=foo produce membership only. |
+| M37-15 | SPEC §§2–3 | When named assignment and option expansion overwrite each other, the actual final writer wins; an overwritten bar is not resurrected. |
 | M37-16 | SPEC §§2–3 | Authored root-option and converter temporary root-option are distinguished by provenance; temporary writes/deletes neither create nor erase authored property facts. |
 | M37-17 | SPEC §§2–3 | Model snapshots do not add calls to content/text/title/reftext/alt/parse/reinitialize/width/counter; output and side-effect counts satisfy the existing neutrality Gate. |
 | M37-18 | SPEC §§2–3 | Repeated observation/cache consumption of one object forms one subject chain; distinct objects with identical content are not merged and bind cannot be reconstructed by string or location search. |
@@ -432,13 +432,13 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M37-20 | SPEC §§2–3 | Missing/duplicate/conflicting evidence, invalid provenance chains, and non-finalized intermediate values are gated; complete evidence still yields the original eight projections without unrelated default properties. |
 | M38-01 | SPEC §§2–3 | Observation IDs in modelPropertyObservations are strictly increasing and unique; duplicates or reversal reject. |
 | M38-02 | SPEC §§2–3 | The same real Ruby object keeps one subjectId across snapshots; distinct objects cannot reuse it, and old/new reinitialized Cells have different IDs. |
-| M38-03 | SPEC §§2–3 | `snapshotObservationId=x` means exactly snapshot.observationId=x; there is no implicit ordinal namespace. |
+| M38-03 | SPEC §§2–3 | snapshotObservationId=x means exactly snapshot.observationId=x; there is no implicit ordinal namespace. |
 | M38-04 | SPEC §§2–3 | The first snapshot per subject has previous=null and every later snapshot points exactly to the direct predecessor; skip/branch/cross-subject/forward links reject. |
 | M38-05 | SPEC §§2–3 | A bind references an existing same-subject strictly earlier snapshot that is exactly latest at bind time; stale snapshot binds reject. |
 | M38-06 | SPEC §§2–3 | Cut heads sort numerically by subjectId and contain exactly one head per subject; duplicates reject. |
 | M38-07 | SPEC §§2–3 | If a treeprocessor returns a new Document, model_ready.documentSubjectId comes from the latest document/0 bind and the old root is not automatically live. |
 | M38-08 | SPEC §§2–3 | All live header/child/List/ListItem/Column/final Cell/inner Document subjects reachable by forward roles are in the closure; omitting one rejects. |
-| M38-09 | SPEC §§2–3 | `parent`/`cell_column` backedges cannot expand closure; attribute_buffer/table_parser_context do not become heads merely because snapshots exist. |
+| M38-09 | SPEC §§2–3 | parent/cell_column backedges cannot expand closure; attribute_buffer/table_parser_context do not become heads merely because snapshots exist. |
 | M38-10 | SPEC §§2–3 | When first-width and post-balance Column snapshots both exist, cut selects only the latter. |
 | M38-11 | SPEC §§2–3 | If Cell#reinitialize returns a new object and the final row points to it, the new Cell has the head and the old Cell is not an extra head. |
 | M38-12 | SPEC §§2–3 | Snapshots after late coids and assign_numeral/caption become the subject heads; earlier snapshots reject. |
@@ -450,9 +450,9 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | M39-02 | SPEC §§2–3 | A smaller inlineEventId does not prove it happened earlier than a model observation; the event must actually exist, have the right type, and satisfy its own reference contract. |
 | M39-03 | SPEC §§2–3 | ModelPropertyInput.model_slot.observationId is still a same-namespace snapshot reference and must be strictly earlier; forward/self/non-snapshot targets reject. |
 | M39-04 | SPEC §§2–3 | A carrier entry is an array index, not an event ID; final existence/type/index are checked and no numeric comparison to model observationId is performed. |
-| M39-05 | SPEC §§2–3 | A root catalog record stores `parent ->` the actual top-level Document#register receiver; a nonexistent owner relation rejects. |
-| M39-06 | SPEC §§2–3 | A catalog record created by an inner Document stores `parent ->` that inner Document, which is live through cell_inner_document; it is not reassigned to the root. |
-| M39-07 | SPEC §§2–3 | Real DocBook cleanup for authored root-option follows authored `bar` -> temporary empty -> deleted/absent physical state; evaluation_complete selects the delete snapshot while CSP can still retain the authored semantic winner, and no fake restore is logged. |
+| M39-05 | SPEC §§2–3 | A root catalog record stores parent -> the actual top-level Document#register receiver; a nonexistent owner relation rejects. |
+| M39-06 | SPEC §§2–3 | A catalog record created by an inner Document stores parent -> that inner Document, which is live through cell_inner_document; it is not reassigned to the root. |
+| M39-07 | SPEC §§2–3 | Real DocBook cleanup for authored root-option follows authored bar -> temporary empty -> deleted/absent physical state; evaluation_complete selects the delete snapshot while CSP can still retain the authored semantic winner, and no fake restore is logged. |
 | M39-08 | SPEC §§2–3 | Temporary cleanup cannot revive an older authored value: A -> authored B -> temporary empty -> cleanup delete yields physical absent and semantic authored winner B; a later authored delete makes the semantic winner absent. |
 | M39-09 | SPEC §§2–3 | Future carrier reject: snapshot at T1, bind inlineObservations[7] at T2, actual append at T3 is producer-conformance failure even if final entry 7 exists; later completion cannot cure the invalid run. |
 | M39-10 | SPEC §§2–3 | document/0 positive: the actual returned top-level Document carrier is published first and the later bind callback still holds the exact same Ruby object. |
@@ -463,10 +463,10 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | ID | Spec area | Requirement |
 |---|---|---|
 | FC34-FMT-01 | SPEC §§5–8 | A fresh managed Document installs source plus ManagedDocumentFormatBinding/1 in the same P, with bindingRevision=1 and the exact pinned Ruby baseline + weftext_managed/1 profile. |
-| FC34-FMT-02 | SPEC §§5–8 | The old PortableComponentKey/1 decoder rejects `{kind:"document_format"}`; CP3 cannot treat it as a legal component. |
+| FC34-FMT-02 | SPEC §§5–8 | The old PortableComponentKey/1 decoder rejects {kind:"document_format"}; CP3 cannot treat it as a legal component. |
 | FC34-FMT-03 | SPEC §§5–8 | Legacy/unbound source remains available for authorized raw read/repair; missing format binding does not delete or hide the original bytes. |
-| FC34-FMT-04 | SPEC §§5–8 | Legacy/unbound source containing `[weftext-attributes]` does not automatically become WeftextManaged. |
-| FC34-FMT-05 | SPEC §§5–8 | A future managed `weftext_managed/1 -> /2` profile-only migration with unchanged source uses one ChangeId, one document_format transition, and CP4 `sourceChanges=[]`; absent/Baseline-to-managed is not mislabeled as profile migration. |
+| FC34-FMT-04 | SPEC §§5–8 | Legacy/unbound source containing [weftext-attributes] does not automatically become WeftextManaged. |
+| FC34-FMT-05 | SPEC §§5–8 | A future managed weftext_managed/1 -> /2 profile-only migration with unchanged source uses one ChangeId, one document_format transition, and CP4 sourceChanges=[]; absent/Baseline-to-managed is not mislabeled as profile migration. |
 | FC34-FMT-06 | SPEC §§5–8 | A managed profile-only migration does not create a SourceVersion or advance H(D,E). |
 | FC34-FMT-07 | SPEC §§5–8 | If SourceVersion is unchanged but the format stamp changes, an old InputDescriptor/PAB/EditBinding/ExportPlan cannot continue. |
 | FC34-FMT-08 | SPEC §§5–8 | After a format change, dirty Draft bytes remain while projection/map/preview are invalidated and requalified. |
@@ -475,7 +475,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34-FMT-11 | SPEC §§5–8 | Rendered export lists the document_format key; a format change resets an unpublished ExportPlan3. |
 | FC34-FMT-12 | SPEC §§5–8 | D7 narrow-field qualification may not add full source_read merely to consume the profile. |
 | FC34-FMT-13 | SPEC §§5–8 | A narrow field uses its original source_envelope/Field qualification plus the internal format dependency. |
-| FC34-FMT-14 | SPEC §§5–8 | Query `query_scan` cannot substitute for document_format proof. |
+| FC34-FMT-14 | SPEC §§5–8 | Query query_scan cannot substitute for document_format proof. |
 | FC34-FMT-15 | SPEC §§5–8 | Trash->restore preserves the exact profile; purge physically removes the format component in the same P. |
 | FC34-FMT-16 | SPEC §§5–8 | A missing format row in Derived Index cannot prove that the component is absent. |
 | FC34-FMT-17 | SPEC §§5–8 | The current D9 wire1 probe union cannot silently gain an adoc arm without a D9 owner-version change. |
@@ -518,19 +518,19 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34-ST-14 | SPEC §§11–13 | A required plan with unequal D3-CJ/3(plan.edits) and D3-CJ/3(evidence.edits) cannot seal. |
 | FC34-ST-15 | SPEC §§11–13 | The original-coordinate mixed fixture yields range [11,15), point14 left=15 and right=17; an implementation that updates s/e before classifying later events fails. |
 | FC34-ST-16 | SPEC §§11–13 | When after source contains two byte-equal replacement fragments, payload is selected only by mechanical generatedOutputSpan; content-searching the other fragment fails. |
-| FC34-ST-17 | SPEC §§11–13 | `replace [5,10)->X + insert@10->Y` retains two events and canonical boundary order to yield `X\|Y`; merging into one replacement that yields `XY\|` fails. |
+| FC34-ST-17 | SPEC §§11–13 | replace [5,10)->X + insert@10->Y retains two events and canonical boundary order to yield X\|Y; merging into one replacement that yields XY\| fails. |
 | FC34-ST-18 | SPEC §§11–13 | A required seal rechecks profile, expectedTrustRevision, expectedTrustKeyId, and a usable handle; checking only that “some transform key exists” fails. |
 | FC34-ST-19 | SPEC §§11–13 | If a cross-generated-anchor edit cannot preserve boundary slots, compilation returns unavailable; ordinary save may continue but no empty-event CoreSourceEditPlan or artifact is fabricated. |
 | FC34B-D10-01 | SPEC §14 | Workspace control uses DependencyProof/3 and includes a document_format key when parsing a managed Document. |
 | FC34B-D10-02 | SPEC §14 | Using D10WorkspaceReadDependencies/1 + proof2 for the same current unseen prepare fails the current owner gate. |
 | FC34B-D10-03 | SPEC §14 | D10ControlInput/2 dependencies3 matches InputDescriptor3/proof3 member-for-member. |
-| FC34B-D10-04 | SPEC §14 | A deployment-only body cannot smuggle `workspaceReads=some` into ControlDependencies3. |
+| FC34B-D10-04 | SPEC §14 | A deployment-only body cannot smuggle workspaceReads=some into ControlDependencies3. |
 | FC34B-D10-05 | SPEC §14 | For recurrence source V unchanged but format M1->M2, ScheduleContinuityStep2 yields binding_changed, never continuous. |
 | FC34B-D10-06 | SPEC §14 | If source/profile bytes are equal but document_format proof continuity gaps and creates a new epoch, ScheduleContinuityStep2 yields gap. |
 | FC34B-D10-07 | SPEC §14 | With no format change and a complete CP4 chain proving a genuinely unrelated body edit, ScheduleContinuityStep2 may advance. |
 | FC34B-D10-08 | SPEC §14 | A current ScheduleContinuityStep2 attempting to decode the current transition as Notice2/CP3 fails. |
 | FC34B-D10-09 | SPEC §14 | An old Subscription1 can explicitly continue to a same-generation Subscription2 only with a complete proof of no intervening format/rule discontinuity. |
-| FC34B-D10-10 | SPEC §14 | An old Subscription1 whose history contains a format transition cannot `continue` without an explicit replace. |
+| FC34B-D10-10 | SPEC §14 | An old Subscription1 whose history contains a format transition cannot continue without an explicit replace. |
 | FC34B-D10-11 | SPEC §14 | A new automatic author preparation binds PAB4 and the D10-Author-Preview/2 digest of EffectManifest3. |
 | FC34B-D10-12 | SPEC §14 | A new interactive author responsibility whose declared prepared format does not match the pinned PAB4/EditBinding3 exact type fails. |
 | FC34B-TR-01 | SPEC §13 | Declaration1 keeps its original CP3 activation rule. |
@@ -551,7 +551,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34B-HOLDER-02 | SPEC §§7–8 | Wire13 retaining an InputDescriptor2 guard fails. |
 | FC34B-HOLDER-03 | SPEC §§7–8 | For a D4 strong relation operation, unchanged source with changed format stamp invalidates the old proof and requires stale/reprepare. |
 | FC34B-HOLDER-04 | SPEC §§7–8 | D5 native table edit also consumes source+format; a format change stales the old preparation even when table locator/SourceVersion happen to match. |
-| FC34B-HOLDER-05 | SPEC §§7–8 | Mechanical version bumps of D4/D5 inner RelationReadContext, table locator, occurrenceKey, or numeric sourceRevision merely to match `/3` are rejected. |
+| FC34B-HOLDER-05 | SPEC §§7–8 | Mechanical version bumps of D4/D5 inner RelationReadContext, table locator, occurrenceKey, or numeric sourceRevision merely to match /3 are rejected. |
 | FC34B-CR-01 | SPEC §6.3 | A current portable decision freezes ChangeRecord1, Notice3, and CP4 in the same P with matching DecisionKey/ChangeId/frontiers/digests. |
 | FC34B-CR-02 | SPEC §6.3 | ChangeRecord1 pointing to the correct CP4 but the wrong Notice3 digest fails. |
 | FC34B-CR-03 | SPEC §6.3 | A mismatch between CP4 frontierBefore/After and ChangeRecord fails. |
@@ -564,7 +564,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34C-MIX-03 | SPEC §14 | Encoding stop/external_effect/reservation as Image2 fails closed decode. |
 | FC34C-MIX-04 | SPEC §14 | One EffectPlan2 can express Automation before=Image1+Subscription1 and after=Image2+Subscription2 without reencoding the before image. |
 | FC34C-MIX-05 | SPEC §14 | Downgrading an Image2 automation/run back to Image1 fails. |
-| FC34C-MIX-06 | SPEC §14 | Pin1 uses the `D10-Control-Record/1` payload domain and Pin2 uses `/2`; a schema tag/pin-domain mismatch fails. |
+| FC34C-MIX-06 | SPEC §14 | Pin1 uses the D10-Control-Record/1 payload domain and Pin2 uses /2; a schema tag/pin-domain mismatch fails. |
 | FC34C-MIX-07 | SPEC §14 | A Range2 occurrence array may contain old K1 and new K2 and sorts by the real OccurrenceKey. |
 | FC34C-MIX-08 | SPEC §14 | Occurrence1(K) plus Occurrence2(K) with the same key fails. |
 | FC34C-MIX-09 | SPEC §14 | Two different Image1/Image2 values for the same record cut are an integrity conflict. |
@@ -575,7 +575,7 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34C-EXEC-04 | SPEC §14 | ApprovalUse1 and ApprovalUse2 with the same DecisionKey are duplicate responsibility and fail. |
 | FC34C-EXEC-05 | SPEC §14 | Old Subscription1 and new Subscription2 for the same Automation may coexist when generations differ; the same generation fails. |
 | FC34C-EXEC-06 | SPEC §14 | Inventory2 that omits an ExternalResponsibility1 still started/outcome_unknown or an already stopped latch fails completeness. |
-| FC34C-D6-01 | SPEC §14 | Record3's Proof2 inventoryPin strict-decodes exact `D6-Execution-Inventory/2` and its responsibility payloads are byte-equal to Inventory2. |
+| FC34C-D6-01 | SPEC §14 | Record3's Proof2 inventoryPin strict-decodes exact D6-Execution-Inventory/2 and its responsibility payloads are byte-equal to Inventory2. |
 | FC34C-D6-02 | SPEC §14 | Execution custody may hand off from a Record2 holder to a new holder using Inventory2 that retains all old responsibility, with Record3 revision=old+1 and unchanged executionDomainId. |
 | FC34C-D6-03 | SPEC §14 | Without handoff, checkpoint, or a real responsibility change, merely supporting FC does not background-migrate Record2 to Record3. |
 | FC34C-D6-04 | SPEC §14 | If handoff cannot obtain the original decoder/bytes for an old Pin1/PAB3/Subscription1/stop responsibility, takeover pauses/unavailable rather than constructing a partial Inventory2; unrelated ordinary source operations remain available. |
