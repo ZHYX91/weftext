@@ -8,9 +8,9 @@ translation_status: synced
 
 # AsciiDoc / Annotation Final Design: Closed Schemas and Current Cross-Owner Contracts
 
-Status: **candidate-design-not-implemented**. This is the normative closed-schema companion to [SPEC.md](SPEC.md). SPEC owns behavioral algorithms; this file freezes current successor members, unions, ordering, and historical dispatch. A named closed shape here does not permit unlisted members. Unchanged nested named types such as `WorkspaceRef`, `NodeRef`, `Frontier/2`, and `PinRef/2` import the exact decoder from the fixed-parent owner named by `replacements.json`; that is an explicit unchanged type import, not an omitted successor member list.
+Status: **candidate-design-not-implemented**. This is the normative closed-schema companion to [SPEC.md](SPEC.md). SPEC owns behavioral algorithms; this file freezes current successor members, unions, ordering, and historical dispatch. A named closed shape here does not permit unlisted members. Unchanged nested named types such as WorkspaceRef, NodeRef, Frontier/2, and PinRef/2 import the exact decoder from the fixed-parent owner named by replacements.json; that is an explicit unchanged type import, not an omitted successor member list.
 
-Fixed parent: `e8aa0b341630a57c786c0891d4bbd1620247441d`.
+Fixed parent: e8aa0b341630a57c786c0891d4bbd1620247441d.
 
 ## 0. Common rules
 
@@ -115,7 +115,7 @@ AcceptedProcessorExtensionProfile/1 = {
 }
 ```
 
-`attributeOverrides` sort uniquely by lowercase name, extension profiles by profileId, and sourceUnits by logicalPath.value. Set actions require non-null values and unset actions require null. With safe mode below server, an unoverridden user-home comes from ambientUserHome; server/secure use the native "." default. SOURCE_DATE_EPOCH, when present, drives local*/doc* UTC values; otherwise local* uses clockNow and doc* uses inputMtime when available, then clockNow.
+attributeOverrides sort uniquely by lowercase name, extension profiles by profileId, and sourceUnits by logicalPath.value. Set actions require non-null values and unset actions require null. With safe mode below server, an unoverridden user-home comes from ambientUserHome; server/secure use the native "." default. SOURCE_DATE_EPOCH, when present, drives local*/doc* UTC values; otherwise local* uses clockNow and doc* uses inputMtime when available, then clockNow.
 
 # 2. Core Semantic Projection
 
@@ -235,7 +235,19 @@ Catalog anchors sort by id, footnotes by numeric index, links/images/includes by
 
 Only four provenance classes exist: A=authored_named, P=authored_positional, F=fixed_derived, I=internal. The projector consumes observed final model/consumer facts and never reruns parser/model logic.
 
-Common block slots are exactly `id, style, roles, options, caption, numeral, subs, positional, named/<original-name>`. Facts already carried by `CoreBlock.kind/level/title/reftext/body/children` are not duplicated.
+Common block slots are exactly id, style, roles, options, caption, numeral, subs, positional, named/<original-name>. Facts already carried by CoreBlock.kind/level/title/reftext/body/children are not duplicated.
+
+```text
+id
+style
+roles
+options
+caption
+numeral
+subs
+positional
+named/<original-name>
+```
 
 Required per-kind semantic fields are:
 
@@ -262,7 +274,7 @@ Synthetic dlist/table grouping nodes carry empty properties when they have no re
 
 Marks/atoms: link requires target; xref target/refid/path; image/icon their media fields; stem notation plus evaluated source; footnote_ref index/referenceKind/target; callout number/id/guard; kbd ordered keys; button text; menu menu/submenus/menuitem.
 
-Authored `foo-option=bar` yields both option membership and `named/foo-option="bar"`; an authored empty value preserves the empty string. Physical empty `foo-option` created by `%foo/options=foo/opts=foo` expresses membership only. Temporary/internal writers such as DocBook root-option never become authored merely by key name.
+Authored foo-option=bar yields both option membership and named/foo-option="bar"; an authored empty value preserves the empty string. Physical empty foo-option created by %foo/options=foo/opts=foo expresses membership only. Temporary/internal writers such as DocBook root-option never become authored merely by key name.
 
 # 4. Witness/7 model evidence
 
@@ -368,9 +380,9 @@ OracleModelPropertyObservation/1 =
 
 Per-subject snapshots form an immediate-predecessor chain. Cut heads sort numerically by subjectId and exactly equal the reachable semantic closure. Only references within the model-observation namespace use numeric temporal comparison. operation/inline/value/call references use their own namespace contracts. carrier.entry is a target-array index and is never numerically compared with model observation IDs.
 
-Producer conformance additionally requires, at the real bind callback, that the target carrier has already been appended, `entry < targetStream.lengthAtBind`, and the producer still holds the exact same Ruby object. The wire decoder can only validate final existence/type/index, not infer cross-stream time. document/0 has the same rule.
+Producer conformance additionally requires, at the real bind callback, that the target carrier has already been appended, entry < targetStream.lengthAtBind, and the producer still holds the exact same Ruby object. The wire decoder can only validate final existence/type/index, not infer cross-stream time. document/0 has the same rule.
 
-Catalog ownership is only `parent -> actual Document#register receiver`. A temporary overlay must close through a real restore or cleanup delete; the observer never fabricates a restore write.
+Catalog ownership is only parent -> actual Document#register receiver. A temporary overlay must close through a real restore or cleanup delete; the observer never fabricates a restore write.
 
 # 5. Managed format and D6 successors
 
@@ -409,13 +421,17 @@ ManagedDocumentSemanticQualification/1 = {
 
 BaselineOnly is not a portable binding arm. Fresh/copy/fork fresh identity starts at binding revision 1; formal same-Workspace restore restores the exact historical binding; ordinary backup bytes require fresh admission; a real managed-profile migration checked-increments the revision.
 
+## 5.1 Dependency family
+
 ```text
 DependencyKey/3 =
   source(0)|document_format(1)|lifecycle(2)|placement_range(3)|
   ref_inbound(4)|relation_incidence(5)|calendar_scope(6)|registry(7)|
   temporal_rules(8)|authorization(9)|foreign_binding(10)|query_scan(11)|
   replica_registry(12)|conflict_record(13)|execution_resource(14)
+```
 
+```text
 DependencyProof/3 = {
   kind:"d6_dependency_proof",version:3,
   workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
@@ -455,7 +471,9 @@ PreparedIntent/3 = {
 }
 ```
 
-The final unchanged nested names above use the exact fixed-parent PreparedIntent/2 decoder. Current planToken tag is `d6_plan/3`.
+The final unchanged nested names above use the exact fixed-parent PreparedIntent/2 decoder. Current planToken tag is d6_plan/3.
+
+## 5.2 Portable component / Notice / CP
 
 ```text
 PortableComponentKey/2 =
@@ -490,7 +508,9 @@ ContentCompletionProof/4 =
      components:[{key:PortableComponentKey/2,after:ComponentImage/1}...]}
 ```
 
-`PinRef/2` and `ComponentImage/1` are unchanged fixed-parent types.
+PinRef/2 and ComponentImage/1 are unchanged fixed-parent types.
+
+## 5.3 ChangeRecord
 
 ```text
 ChangeRecord/1 = {
@@ -515,6 +535,11 @@ D3ResolutionInputUse/2 = {
   bindingToken:Token,inputDescriptor:InputDescriptor/3
 }
 
+```
+
+## 6.1 PreparedActionBinding/4
+
+```text
 PreparedActionBinding/4 = {
   kind:"d7_prepared_action_binding",version:4,
   bindingToken:Token,protocolOwner:"D3"|"D6",
@@ -537,7 +562,9 @@ PreparedActionBinding/4 = {
 }
 ```
 
-`MinimumMapping/3`, D7DefinitionInput/2, D7ProposedInput/2, and D7ResolutionAccess/1 remain unchanged exact fixed-parent types.
+MinimumMapping/3, D7DefinitionInput/2, D7ProposedInput/2, and D7ResolutionAccess/1 remain unchanged exact fixed-parent types.
+
+## 6.2 EffectManifest/3 / EffectBytes/3
 
 ```text
 EffectManifest/3 = {
@@ -563,6 +590,8 @@ EffectBytes/3 = {
 
 EffectItem/3 has the same fourteen semantic arms as the fixed-parent EffectItem/2: source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, and canonical_plan; every byte slot uses EffectBytes/3, Annotation source images use Value/4, and current workspace bootstrap admits Plan4. No generic/free payload arm exists.
 
+## 6.3 PreparedEditBinding/3
+
 ```text
 PreparedEditBinding/3 = {
   kind:"d8_prepared_edit_binding",version:3,
@@ -581,7 +610,9 @@ PreparedEditBinding/3 = {
 }
 ```
 
-proposedInputs contains exactly one item and its entityRef equals intent.target.ref. OwnerInputBinding/2 remains unchanged; current ownerKind is `d8_edit/3`.
+proposedInputs contains exactly one item and its entityRef equals intent.target.ref. OwnerInputBinding/2 remains unchanged; current ownerKind is d8_edit/3.
+
+## 6.4 ExportPlan/3 / PublicationReceipt/3
 
 ```text
 ExportPlan/3 = {
@@ -604,7 +635,9 @@ ExportPlan/3 = {
   stagedOutputs:[{name:text,byteLength:Counter,
                   sha256:"sha256:<64 lowercase hex>",pin:PinRef/2}...]
 }
+```
 
+```text
 PublicationReceipt/3 = {
   kind:"d9_publication_receipt",version:3,
   publicationToken:Token,planToken:Token,
@@ -822,7 +855,9 @@ TrustConflictOutcome/2 =
   | {commitDomain:CommitDomain/2,profile:SealProfileId/1,
      state:"authorize_fresh",trustKeyId:"sha256:<64 lowercase hex>",
      algorithm:"ed25519",publicKey:text,possessionSignature:text}
+```
 
+```text
 WorkspaceTrustGenesis/2 = {
   kind:"d6_workspace_trust_genesis",version:2,
   rootDeclaration:WorkspaceTrustRootDeclaration/1,
@@ -837,7 +872,7 @@ Declaration/1 remains revision-token-only. Bundle2 permits a Declaration1 histor
 
 Genesis has exactly two declarations: revision 1 revision-token authorize and revision 2 source-transform authorize, same DecisionKey/activation ChangeId, with rev2 predecessor hashing exact rev1 canonical bytes.
 
-`WorkspaceBootstrapPlan/4` exact members are:
+WorkspaceBootstrapPlan/4 exact members are:
 
 ```text
 {
@@ -948,6 +983,9 @@ ControlPrepareBinding/3 = {
   dependencyPins:ControlDependencies/3
 }
 
+```
+
+```text
 ControlDependencies/3 = {
   kind:"d10_control_dependencies",version:3,
   configBindings:[Binding<K>/1],
@@ -960,6 +998,9 @@ ControlDependencies/3 = {
   controlRanges:[D10VersionedControlRange/1...]
 }
 
+```
+
+```text
 D10ControlEffectPlan/2 = {
   kind:"d10_control_effect_plan",version:2,
   changes:[{before:Option<D10VersionedControlRecordImage/1>,
@@ -998,6 +1039,9 @@ D10VersionedApprovalUse/1 =
     {schema:"d10_approval_use/1",value:ApprovalUse/1}
   | {schema:"d10_approval_use/2",value:ApprovalUse/2}
 
+```
+
+```text
 D10ExecutionClaims/2 = {
   kind:"d10_execution_claims",version:2,
   recordPins:[D10VersionedControlRecordPin/1...],
@@ -1033,6 +1077,9 @@ D10ExecutionInventory/2 = {
   stopCapacity:StopCapacity/1
 }
 
+```
+
+```text
 ExecutionResponsibilityRecord/3 = {
   kind:"d6_execution_responsibility",version:3,
   workspaceRef:WorkspaceRef,executionDomainId:Uuid,
@@ -1059,7 +1106,7 @@ ExecutionContinuityProof/2 =
      barrierToken:Token,oldHolderFenceToken:Token}
 ```
 
-The Inventory2 pin domain is `UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2)`. Record2/Proof1/Inventory1 keep their historical domain. prepareBindings sort uniquely by inner StableControlKey across all 1/2/3 versions; other mixed arrays use their semantic identity across versions and never LWW.
+The Inventory2 pin domain is UTF8("D6-Execution-Inventory/2") || NUL || D3-CJ/3(D10ExecutionInventory/2). Record2/Proof1/Inventory1 keep their historical domain. prepareBindings sort uniquely by inner StableControlKey across all 1/2/3 versions; other mixed arrays use their semantic identity across versions and never LWW.
 
 ## 10.1 D10 current schedule / author-step direct types
 
@@ -1205,11 +1252,11 @@ D10AuthorStepResponsibility/2 =
      preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
 ```
 
-`ApprovalUse/2.preparedBindingToken` must select the exact PAB4. Its preview digest is
-`SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))`;
-each EffectBytes/3 slot is projected only as `{encoding,byteLength,payloadDigest}`, never discovered by recursively guessing member names.
+ApprovalUse/2.preparedBindingToken must select the exact PAB4. Its preview digest is
+SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3));
+each EffectBytes/3 slot is projected only as {encoding,byteLength,payloadDigest}, never discovered by recursively guessing member names.
 
-A current schedule proof that semantically parses a managed Document must include both `source` and `document_format` dependencies. If source/profile bytes are unchanged but format-proof continuity has a gap, the result is `gap`; a real binding transition is `binding_changed` even when the final recurrence/range value happens to compare equal. A Subscription1 may become a same-generation Subscription2 only through explicit continue plus complete history proving no format/rule discontinuity; otherwise replace is required.
+A current schedule proof that semantically parses a managed Document must include both source and document_format dependencies. If source/profile bytes are unchanged but format-proof continuity has a gap, the result is gap; a real binding transition is binding_changed even when the final recurrence/range value happens to compare equal. A Subscription1 may become a same-generation Subscription2 only through explicit continue plus complete history proving no format/rule discontinuity; otherwise replace is required.
 
 # 11. Historical dispatch and one authority set
 
@@ -1219,7 +1266,7 @@ All successors continue through the original single DecisionKey, planning CAS, i
 
 # 12. Provider profiles
 
-Provider closed shapes are in SPEC §4. They qualify ecosystem renderers and never alter core-language validity. Mermaid's fixed source is CLI 12.0.0 commit `db1ceebbe529d7975474eb0d0e9c23e9dc57cd37` with fixed package.json and package-lock Git blobs. Node/browser/fonts/config still require exact runtime version/digest registration. Without a registered runtime the provider is unavailable; floating semver, host browser/font defaults, or network installation cannot fill the gap.
+Provider closed shapes are in SPEC §4. They qualify ecosystem renderers and never alter core-language validity. Mermaid's fixed source is CLI 12.0.0 commit db1ceebbe529d7975474eb0d0e9c23e9dc57cd37 with fixed package.json and package-lock Git blobs. Node/browser/fonts/config still require exact runtime version/digest registration. Without a registered runtime the provider is unavailable; floating semver, host browser/font defaults, or network installation cannot fill the gap.
 
 # 13. Acceptance reference
 
