@@ -774,6 +774,8 @@ ContentCompletionProof/4 =
 
 PinRef/2 and ComponentImage/1 are unchanged fixed-parent types.
 
+Notice3 inherits every Notice2 invariant except the versioned component-key decoder: components is non-empty, PortableComponentKey/2 fixed-rank/canonical-key sorted and unique, and the notice is frozen before installation with the original baseFrontier. CP4 inherits every CP3 committed/restored invariant except the component-key decoder and current ChangeRecord/1 linkage. For committed CP4, components is exactly the Notice3 key set in identical order, every after is the actual installed/sealed image, sourceChanges is the complete EntityRef-sorted unique real source-state delta, and receiptDigest binds the original receipt. A fresh managed Document carries both document and document_format in the same plan/P/CP4. A format-only change with unchanged source has sourceChanges=[] and creates no SourceRevisionPlan, managed SourceVersion, or H advance.
+
 ## 5.3 ChangeRecord
 
 ```text
@@ -788,7 +790,13 @@ ChangeRecord/1 = {
 }
 ```
 
-CP4 must be committed and match DecisionKey, ChangeId, and frontiers. Notice/CP lengths and digests bind their exact canonical bytes. One P seal fixes ChangeId, CP4, and ChangeRecord; publication only retransmits original pins.
+CP4 must be committed and match DecisionKey, ChangeId, and frontiers. Notice/CP lengths and digests bind their exact D3-CJ/3 canonical bytes. One P seal fixes ChangeId, CP4, and ChangeRecord; publication only retransmits original pins.
+
+frontierBefore is the actual verified pre-seal Frontier and frontierAfter is exactly frontierBefore plus this ChangeId with no other-domain regression. With frontierPolicy=exact, frontierBefore is byte-equal to the original expected/base/notice Frontier. With scope_dependencies, admission requires the complete continuous verified ChangeRecord/completion chain from Notice3.baseFrontier through frontierBefore and frontierAfter plus the original retained unrelatedness proof; vector numbers, provider sync state, or current files never substitute.
+
+Restored CP4 contains only decisionKey, baseFrontier, and component after images that each equal the corresponding Notice3 before image. It forbids changeId, guarantee, writeProtection, semanticState, frontierBefore, frontierAfter, sourceChanges, receiptDigest, and all success semantics.
+
+Receiver admission strict-decodes the exact Notice3/CP4 versions and canonical bytes, validates equal component key sets/order, obtains and validates every actual component byte and owner version, validates complete production SourceVersion changes, and verifies the continuous chain. A present document_format component additionally strict-decodes exact ManagedDocumentFormatBinding/1 bytes. Missing/unknown bytes or decoder, a component-version mismatch, or a Notice/CP/ChangeRecord mismatch is incomplete/proof_unavailable, never successful admission.
 
 # 6. D3/D7/D8/D9 direct holders
 
@@ -1047,6 +1055,12 @@ SourceTransformEvidence/2 = {
   edits:[SourceTransformPortableEvent/3...]
 }
 
+SourceTransformSealSignedBody/1 = {
+  format:"weftext.source-transform-seal",version:1,
+  trustKeyId:"sha256:<64 lowercase hex>",
+  evidence:SourceTransformEvidence/2
+}
+
 SourceTransformSealArtifact/1 = {
   format:"weftext.source-transform-seal",version:1,
   trustKeyId:"sha256:<64 lowercase hex>",
@@ -1062,7 +1076,13 @@ SourceTransformSealOutboxItem/1 = {
 }
 ```
 
-Plan/evidence edit canonical bytes must match exactly. Seal never recompiles/reorders/merges. A required sealed decision has exactly one outbox item; disabled has none. Mapping uses only original-before coordinates and replacement payload is sliced from the mechanical generatedOutputSpan in afterPin, never content-searched.
+Plan/evidence edit canonical bytes must match exactly. Seal never recompiles/reorders/merges. A required sealed decision has exactly one outbox item; disabled has none.
+
+Event3 validation is closed against exact beforeBytes/afterBytes. replace requires 0<=startByte<endByte<=before length, UTF-8 scalar boundaries, removedByteLength=endByte-startByte, and removedSha256=SHA-256(beforeBytes[startByte:endByte]); insert requires 0<=atByte<=before length, a UTF-8 scalar boundary, and non-zero replacementByteLength. Replacement intervals are non-overlapping maximal islands; same-point inserts are merged in transaction order; an insert strictly inside a replacement island is folded into that island or compilation is unavailable. Canonical boundary order is left replacement ending at p, insert@p, right replacement starting at p.
+
+generatedOutputSpan uses the SPEC §11.1 replay-cursor algorithm over exact before/after pins. It byte-compares every unchanged gap, assigns the event span [afterCursor,afterCursor+replacementByteLength), validates that exact after slice against replacement length/hash, advances replace beforeCursor to endByte while insert leaves it at q, and requires the final tails and afterSourceSha256 to match. Content search is forbidden. Mapping defines delta(replace)=replacementByteLength-(endByte-startByte) with checked signed arithmetic.
+
+SourceTransformSealSignedBody/1 is exactly SourceTransformSealArtifact/1 with only signature removed. signature is exactly 86 ASCII unpadded-base64url characters decoding to 64 Ed25519 bytes. The authenticated message is exactly ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1). Complete transported/stored artifact bytes are exactly D3-CJ/3(SourceTransformSealArtifact/1 including signature); alternate JSON serialization is rejected.
 
 # 9. D6 dual-profile trust
 
@@ -1070,31 +1090,57 @@ Plan/evidence edit canonical bytes must match exactly. Seal never recompiles/reo
 SealProfileId/1 =
   "d6_revision_token_seal/1"|"d6_source_transform_seal/1"
 
+WorkspaceTrustPredecessor/2 =
+    {kind:"root",fingerprint:WorkspaceTrustRootFingerprint/1}
+  | {kind:"declaration",revision:Counter,
+     sha256:"sha256:<64 lowercase hex>"}
+
 WorkspaceTrustDeclaration/2 = {
   kind:"d6_workspace_trust_declaration",version:2,
   workspaceRef:WorkspaceRef,revision:Counter,
-  predecessor:
-      {kind:"root",fingerprint:"sha256:<64 lowercase hex>"}
-    | {kind:"declaration",revision:Counter,
-       sha256:"sha256:<64 lowercase hex>"},
+  predecessor:WorkspaceTrustPredecessor/2,
   decisionKey:DecisionKey/2,
   action:
       {kind:"authorize",commitDomain:CommitDomain/2,
        profile:SealProfileId/1,trustKeyId:"sha256:<64 lowercase hex>",
-       algorithm:"ed25519",publicKey:text,possessionSignature:text}
+       algorithm:"ed25519",publicKey:"<43 ASCII unpadded base64url>",
+       possessionSignature:"<86 ASCII unpadded base64url>"}
     | {kind:"rotate",commitDomain:CommitDomain/2,
        profile:SealProfileId/1,oldTrustKeyId:"sha256:<64 lowercase hex>",
        newTrustKeyId:"sha256:<64 lowercase hex>",algorithm:"ed25519",
-       publicKey:text,possessionSignature:text,continuitySignature:text,
-       mode:"administrative"|"loss"|"compromise"}
+       publicKey:"<43 ASCII unpadded base64url>",
+       possessionSignature:"<86 ASCII unpadded base64url>",
+       continuitySignature:"<86 ASCII unpadded base64url>"|"not_required",
+       mode:"ordinary"|"loss_recovery"|"compromise"}
     | {kind:"revoke",commitDomain:CommitDomain/2,
        profile:SealProfileId/1,trustKeyId:"sha256:<64 lowercase hex>",
        mode:"administrative"|"loss"|"compromise"}
     | {kind:"resolve_conflict",
        outcomes:[TrustConflictOutcome/2...],
        inheritedCompromises:[TrustConflictCarry/1|TrustConflictCarry/2...]},
-  rootSignature:text
+  rootSignature:"<86 ASCII unpadded base64url>"
 }
+
+DomainSealKeyPoPBody/2 = {
+  workspaceRef:WorkspaceRef,revision:Counter,
+  predecessor:WorkspaceTrustPredecessor/2,decisionKey:DecisionKey/2,
+  commitDomain:CommitDomain/2,profile:SealProfileId/1,
+  trustKeyId:"sha256:<64 lowercase hex>",algorithm:"ed25519",
+  publicKey:"<43 ASCII unpadded base64url>"
+}
+
+DomainSealKeyRotateContinuityBody/2 = {
+  workspaceRef:WorkspaceRef,revision:Counter,
+  predecessor:WorkspaceTrustPredecessor/2,decisionKey:DecisionKey/2,
+  commitDomain:CommitDomain/2,profile:SealProfileId/1,
+  oldTrustKeyId:"sha256:<64 lowercase hex>",
+  newTrustKeyId:"sha256:<64 lowercase hex>",algorithm:"ed25519",
+  publicKey:"<43 ASCII unpadded base64url>",
+  possessionSignature:"<86 ASCII unpadded base64url>",mode:"ordinary"
+}
+
+WorkspaceTrustDeclarationSignedBody/2 :=
+  WorkspaceTrustDeclaration/2 with only rootSignature removed
 
 WorkspaceAuthorizationBundle/2 = {
   kind:"d6_workspace_authorization_bundle",version:2,
@@ -1116,7 +1162,7 @@ SourceTransformSealVerificationKey/1 = {
   workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   profile:"d6_source_transform_seal/1",
   trustKeyId:"sha256:<64 lowercase hex>",
-  algorithm:"ed25519",publicKey:text
+  algorithm:"ed25519",publicKey:"<43 ASCII unpadded base64url>"
 }
 
 TrustConflictCarry/2 = {
@@ -1136,8 +1182,40 @@ TrustConflictOutcome/2 =
   | {commitDomain:CommitDomain/2,profile:SealProfileId/1,state:"none"}
   | {commitDomain:CommitDomain/2,profile:SealProfileId/1,
      state:"authorize_fresh",trustKeyId:"sha256:<64 lowercase hex>",
-     algorithm:"ed25519",publicKey:text,possessionSignature:text}
+     algorithm:"ed25519",publicKey:"<43 ASCII unpadded base64url>",
+     possessionSignature:"<86 ASCII unpadded base64url>"}
+
+DomainSealKeyAddPrepare/3 = {
+  wireVersion:3,kind:"d6_domain_seal_key_add_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  profile:SealProfileId/1,expectedTrustRevision:Counter,
+  budget:BudgetBinding/1
+}
+
+DomainSealKeyRotatePrepare/3 = {
+  wireVersion:3,kind:"d6_domain_seal_key_rotate_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  profile:SealProfileId/1,expectedTrustRevision:Counter,
+  expectedTrustKeyId:"sha256:<64 lowercase hex>",
+  mode:"ordinary"|"loss_recovery"|"compromise",
+  budget:BudgetBinding/1
+}
+
+DomainSealKeyRevokePrepare/3 = {
+  wireVersion:3,kind:"d6_domain_seal_key_revoke_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  profile:SealProfileId/1,expectedTrustRevision:Counter,
+  expectedTrustKeyId:"sha256:<64 lowercase hex>",
+  mode:"administrative"|"loss"|"compromise",
+  budget:BudgetBinding/1
+}
 ```
+
+Every publicKey decodes to exactly 32 Ed25519 bytes and hashes to the corresponding trustKeyId. Every signature lexical value decodes to exactly 64 Ed25519 bytes. For authorize/rotate, possessionSignature signs exactly ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2). Rotate maps newTrustKeyId to the PoP body's trustKeyId. authorize_fresh constructs the same body from the enclosing Declaration2 workspaceRef/revision/predecessor/decisionKey plus that exact outcome's commitDomain/profile/key tuple. Ordinary rotate continuitySignature signs exactly ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2); loss_recovery/compromise require the literal "not_required". rootSignature signs exactly ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2).
+
+Revision-1 root predecessor fingerprint is the complete WorkspaceTrustRootFingerprint/1 and is byte-equal to the retained root/anchor fingerprint; rootKeyId never substitutes. Declaration/1 remains revision-token-only. Bundle2 permits a Declaration1 historical prefix; after the first Declaration2 every successor is Declaration2. Declaration1 activation remains CP3. Declaration2 activation is rederived through same-DecisionKey ChangeRecord1 -> exact CP4 -> policy after-image -> Bundle2.
+
+Current unseen ordinary trust management uses only the wireVersion3 prepare successors above. They carry no caller key material and preserve the fixed-parent policy_admin/root-handle/current-state gates plus the original planning/install/single-P path, now with CP4. Saved/planned wireVersion2 records keep their original decoder and recovery.
 
 ```text
 WorkspaceTrustGenesis/2 = {
@@ -1148,28 +1226,47 @@ WorkspaceTrustGenesis/2 = {
     WorkspaceTrustDeclaration/2
   ]
 }
-```
 
-Declaration/1 remains revision-token-only. Bundle2 permits a Declaration1 historical prefix; after the first Declaration2, every successor is Declaration2. Declaration1 activation remains CP3. Declaration2 activation is rederived through same-DecisionKey ChangeRecord1 -> exact CP4 -> policy after-image -> Bundle2.
+WorkspaceBootstrapProfile/4 = {
+  kind:"d6_bootstrap_profile",wireVersion:4,
+  profileRevision:Counter,registrySeedBinding:RegistryBinding/1,
+  newSeriesMultiplicity:"unique"|"many",
+  initialPeriodScope:"workspace"
+}
 
-Genesis has exactly two declarations: revision 1 revision-token authorize and revision 2 source-transform authorize, same DecisionKey/activation ChangeId, with rev2 predecessor hashing exact rev1 canonical bytes.
+WorkspaceBootstrapCreatorBinding/1 = {
+  issuerPrincipal:Token,targetPrincipal:Token,
+  principalAudienceToken:Token
+}
 
-WorkspaceBootstrapPlan/4 exact members are:
+WorkspaceBootstrapTargetRegistry/1 = {
+  snapshot:RegistrySnapshot/1,binding:RegistryBinding/1
+}
 
-```text
-{
+WorkspaceBootstrapSeriesConfiguration/1 = {
+  seriesScope:SeriesScope,multiplicity:"unique"|"many",revision:1
+}
+
+WorkspaceBootstrapPeriodScopeBinding/1 = {
+  nodeRef:NodeRef,scope:CalendarScope,revision:1
+}
+
+WorkspaceBootstrapPlan/4 = {
   kind:"d6_workspace_bootstrap_plan",wireVersion:4,
-  operationId:Uuid,proposalId:Token,
+  operationId:Uuid,proposalId:Uuid,
   issuerAuthorityInstanceId:Uuid,targetWorkspaceRef:WorkspaceRef,
-  targetAuthorityInstanceId:Uuid,profile:<d6_bootstrap_profile wire4>,
-  creatorBinding:<fixed creator binding>,targetRegistry:<complete target Registry>,
+  targetAuthorityInstanceId:Uuid,profile:WorkspaceBootstrapProfile/4,
+  creatorBinding:WorkspaceBootstrapCreatorBinding/1,
+  targetRegistry:WorkspaceBootstrapTargetRegistry/1,
   initialPolicy:Policy/3,trustGenesis:WorkspaceTrustGenesis/2,
-  initialSeriesConfigurations:[<D6 current series config>...],
-  periodScopeBindings:[<D6 current period binding>...]
+  initialSeriesConfigurations:[WorkspaceBootstrapSeriesConfiguration/1...],
+  periodScopeBindings:[WorkspaceBootstrapPeriodScopeBinding/1...]
 }
 ```
 
-Profile4 preserves profile3 principal mapping, Registry, Calendar, base capabilities, and explicit additional capabilities. It only fixes fresh-target genesis to two seal profiles.
+All UUID members use the canonical lowercase D3 UUID decoder. Genesis has exactly two declarations: revision 1 revision-token authorize and revision 2 source-transform authorize, same DecisionKey/activation ChangeId, with rev2 predecessor hashing exact rev1 canonical bytes. Series configurations are unique and sorted by canonical SeriesScope; period bindings are unique and sorted by full NodeRef with exactly one per valid prepared period. The helper members retain the fixed-parent Plan3 field semantics; Profile4 changes only the dual-profile genesis family.
+
+Plan4 is only for unseen fresh create/fork and preserves the original D3 proposal/custody/CAS/P boundary. Ordinary copy is not Plan4. Saved/planned/unknown recovery keeps the actual recorded decoder and bytes; restore/continue/failover do not synthesize Genesis2. No deployment or migration from Plan3 is asserted.
 
 Legacy Handle1 may continue new revision-token signing only while its exact Declaration1-authorized key remains current, safe, and usable; it never signs transforms. Continuation evaluates revision and transform profiles independently as current(K)|none|conflicted_or_unproved; any unproved state prevents partial new-domain activation. The declaration order is optional old revision revoke, optional old transform revoke, new revision authorize, new transform authorize, all under one DecisionKey/CP4 with no observable intermediate prefix.
 
