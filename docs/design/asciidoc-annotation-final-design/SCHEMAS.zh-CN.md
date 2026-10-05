@@ -1399,12 +1399,36 @@ PolicyBundleHeadEvidence/2 =
     {head:ChangeId/1,completionProofVersion:3,bundleVersion:1}
   | {head:ChangeId/1,completionProofVersion:4,bundleVersion:1|2}
 
+TrustConflictCarryValidationHop/1 =
+    {declarationVersion:1,declarationRevision:Counter,
+     declarationDigest:"sha256:<64 lowercase hex>",
+     activationChangeId:ChangeId/1,
+     completionProofVersion:3,bundleVersion:1,
+     changeRecordPin:PinRef/2,
+     completionProofPin:PinRef/2,
+     policyBundlePin:PinRef/2}
+  | {declarationVersion:2,declarationRevision:Counter,
+     declarationDigest:"sha256:<64 lowercase hex>",
+     activationChangeId:ChangeId/1,
+     completionProofVersion:4,bundleVersion:2,
+     changeRecordPin:PinRef/2,
+     completionProofPin:PinRef/2,
+     policyBundlePin:PinRef/2}
+
+TrustConflictCarryValidationEvidence/1 = {
+  head:ChangeId/1,
+  factId:"sha256:<64 lowercase hex>",
+  origin:TrustConflictCarryValidationHop/1,
+  carriers:[TrustConflictCarryValidationHop/1...]
+}
+
 ConflictResolutionPolicyDerivedPlan/2 = {
   kind:"policy_bundle",
   selected:WorkspaceAuthorizationBundleAddress/1,
   headEvidence:[PolicyBundleHeadEvidence/2...],
   selectedBundleVersion:1|2,
   selectedBundlePin:PinRef/2,
+  carryEvidence:[TrustConflictCarryValidationEvidence/1...],
   effectiveCompromises:[
     TrustConflictCarry/1|TrustConflictCarry/2...
   ],
@@ -1428,11 +1452,33 @@ ConflictResolutionInput/3 = {
   branchEvidence:[ConflictResolutionBranchEvidence/1...],
   derivedPlan:ConflictResolutionPolicyDerivedPlan/2
 }
+
+ConflictResolutionPreview/2 = {
+  kind:"d6_conflict_resolution_preview",version:2,
+  conflictId:ConflictId,expectedKey:ConflictKey/1,
+  resolution:{
+    kind:"policy_bundle_choice",
+    selected:WorkspaceAuthorizationBundleAddress/1,
+    policy:Policy/3,
+    freshAuthorizations:[FreshDomainAuthorizationSpec/2...]
+  },
+  branchEvidenceDigest:"sha256:<64 lowercase hex>",
+  derivedPlan:ConflictResolutionPolicyDerivedPlan/2
+}
 ```
 
-FreshDomainAuthorizationSpec/2 的 JSON 成员仍只有原来的两个，但 profile 扩为完整 SealProfileId/1 union。数组按 D3-CJ/3 规范排序且唯一，不含任何 key material。current ConflictResolutionInput/3 只作为 policy_bundle_choice 的 protected owner-descriptor successor；它不提升公开 request 版本、不新增 submit path，也不改变 conflict_resolve、policy_admin、disclosure 或 error order。任何可证明真实 saved/planned 的旧 owner descriptor 都保留 recorded decoder 与 pins。
+FreshDomainAuthorizationSpec/2 的 JSON 成员仍只有原来的两个，但 profile 扩为完整 SealProfileId/1 union。数组按 D3-CJ/3 规范排序且唯一，不含任何 key material。current ConflictResolutionInput/3 只作为 policy_bundle_choice 的 protected owner-descriptor successor；它不提升公开 request 版本、不新增 submit path，也不改变 conflict_resolve、policy_admin、disclosure 或 error order。任何可证明真实 saved/planned 的旧 owner descriptor 都保留 recorded decoder、preview 与 pins。
 
-PolicyBundleHeadEvidence/2 必须完整、按 ChangeId 排序唯一，并与 expectedKey.heads 的集合逐项相等。version=3 表示 branchEvidence.completionProofPin 必须严格解码 ContentCompletionProof/3，且精确 policy after-image 必须严格解码 WorkspaceAuthorizationBundle/1。version=4 表示 completionProofPin 严格解码 ContentCompletionProof/4，branchEvidence.changeRecordPin 严格解码匹配的 ChangeRecord/1 与精确 Notice3/CP4 chain，policy after-image 再严格解码为声明的 Bundle1 或 Bundle2。两种 arm 都要求 policyBundlePin 存在并 pin 精确 canonical bundle bytes；WorkspaceAuthorizationBundleAddress/1 的 authorizationRevision、trustRevision、byteLength、sha256 必须匹配。CP3+Bundle2、未知版本、CP4 缺 ChangeRecord、tag/bytes 不一致或 decoder fallback 一律拒绝。
+PolicyBundleHeadEvidence/2 必须完整、按 ChangeId 排序唯一，并与 expectedKey.heads 的集合逐项相等。version=3 表示 branchEvidence.completionProofPin 必须严格解码 ContentCompletionProof/3，且精确 policy after-image 必须严格解码 WorkspaceAuthorizationBundle/1。version=4 表示 completionProofPin 严格解码 ContentCompletionProof/4，branchEvidence.changeRecordPin 严格解码匹配的 ChangeRecord/1 与精确 Notice3/CP4 chain，policy after-image 再严格解码为声明的 Bundle1 或 Bundle2。两种 arm 都要求 policyBundlePin 存在并 pin 精确 canonical bundle bytes；WorkspaceAuthorizationBundleAddress/1 的 authorizationRevision、trustRevision、byteLength、sha256 必须匹配。policy_bundle_choice 的每个 branchEvidence.sourcePins 必须为空。CP3+Bundle2、未知版本、CP4 缺 ChangeRecord、tag/bytes 不一致或 decoder fallback 一律拒绝。
+
+TrustConflictCarryValidationEvidence/1 是某个 effective fact 在某个 expectedKey head 上实际消费的完整 retained validation path。数组先按 head ChangeId，再按 ASCII factId 排序唯一；resolver 的逐 head effective compromise fold 使用的每个 (head,factId) 恰有一项。origin 是 Carry 所命名的直接 compromise declaration；carriers 按 declaration revision 递增，逐项列出该 head 上从 origin 之后真实经过的所有 resolve_conflict declaration。version-1 hop 严格解码其真实历史 ChangeRecord/CP3/Bundle1 activation evidence；version-2 hop 严格解码 ChangeRecord/1 + CP4 + Bundle2。declarationDigest 与 activationChangeId 必须逐字节等于这些精确 pins 所证明的 declaration 和 activation cut。origin hop 必须匹配 Carry 的 originDeclarationRevision、originDeclarationDigest 与 originActivationChangeId，并重新验证 action/key 映射。每个 carrier hop 都必须是实际携带该 fact 的合法 resolver。缺少任何实际 traversed carrier、把 origin cut 换成 resolver 时间，或用相同 current bytes 替换历史 evidence 都失败。
+
+对 current policy arm，OwnerInputBinding/2.protocolOwner 固定为 D6，ownerKind 精确为 d6_conflict_resolution/3；InputDescriptor/3.intentKind 必须与该 ownerKind byte-equal。canonicalDescriptorBytes 精确等于 D3-CJ/3(ConflictResolutionInput/3)。OwnerInputBinding/2.pinRefs 是按 canonical PinRef 排序且去重后的精确并集，只包含：每个 branchEvidence.changeRecordPin；每个 branchEvidence.completionProofPin；每个存在的 branchEvidence.policyBundlePin；selectedBundlePin；resultBundlePin；以及 carryEvidence 中每个 origin/carrier 的 changeRecordPin、completionProofPin、policyBundlePin。hash-only declaration reference、current bundle、Derived Index row 或未列出的 pin 都不能替代这些条目。若 selected bundle pin 与对应 branch policyBundlePin 相同，set 去重后只出现一次。
+
+ConflictResolutionPreview/2 是 current policy 的 immutable owner preview。branchEvidenceDigest 精确为 "sha256:" + lowercase_hex(SHA-256(D3-CJ/3(完整 ConflictResolutionInput/3.branchEvidence array)))。preview 的 conflictId、expectedKey、resolution 必须与 Input3 byte-equal；derivedPlan 必须与完整 Plan2 byte-equal，包括 headEvidence、carryEvidence、mixed Carry1/2、Outcome2 以及 resultBundleVersion/pin。PreparedIntent/3.previewBinding 必须绑定这份精确 Preview2 与其 canonical preview pin。对这个 control_only policy arm，PreparedIntent/3.pinDirectory 必须是以下集合的 canonical duplicate-free union：OwnerInputBinding.pinRefs、DependencyProof/3 的全部 evidencePin、previewBinding 所选精确 preview pin、以及 fixed installationPlan 实际命名的全部 proposal/before/after/recovery PinRef。sourceInputs 为空，因此这里没有 SourceObservation evidence pin。相同 pin 不能重新绑定到另一份 protected record。
+
+两个 current source arm 不使用这些 policy successor。source_merge 与 choose_source_head 继续保留 ConflictResolutionInput/2、ConflictResolutionDerivedPlan/1、ConflictResolutionPreview/1。OwnerInputBinding.ownerKind 与 InputDescriptor/3.intentKind 都固定为 d6_conflict_resolution/2；canonicalDescriptorBytes 必须精确等于 D3-CJ/3(Input2)。
+原有完整 pin union、source semantic evidence、saveProfile=complete、scope selection 与 Preview1 规则继续有效。只有外层尚未建立决议的 D6 carrier 改用 current InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3 family；planToken 为 d6_plan/3。
 
 Carry2 的 originDeclarationDigest 恰为 "sha256:" + lowercase_hex(SHA-256(D3-CJ/3(包含 rootSignature 的完整原 WorkspaceTrustDeclaration/2)))。直接 Declaration2 compromise 映射固定为 revoke -> action.trustKeyId，rotate -> action.oldTrustKeyId。Carry2 fact body 是按 D3-CJ/3 闭合编码的九个字段：workspaceRef、commitDomain、profile、compromisedTrustKeyId、originAction、originDecisionKey、originDeclarationRevision、originDeclarationDigest、originActivationChangeId。factId 固定为：
 
@@ -1450,9 +1496,9 @@ originActivationChangeId 只能从原 Declaration2 DecisionKey，经 committed C
 
 Bundle1 的 source-transform normalized state 是 none。affectedDomainProfiles 是所有 head 间 normalized domain/profile state 不同的 pair，与 effective compromise union 指向的所有 pair 的并集。需要 trust-resolution declaration 时，TrustConflictOutcome/2 按 D3-CJ/3(commitDomain,profile) 排序唯一，并完整覆盖每个 affected pair。keep_current 只允许 selected current key 在完整 effective union 下仍安全。显式请求的 affected pair 可以 authorize_fresh，其新 key 使用 DomainSealKeyHandle/2 与 PoP/2。若无需 trust resolution 且没有 fresh authorization，policy-only 结果保留 selectedBundleVersion/trustRevision；否则恰追加一条 WorkspaceTrustDeclaration/2 resolve_conflict，resultBundleVersion=2。selected Bundle1 的精确 Declaration1 prefix 必须原样保留，再追加新的 Declaration2。
 
-ConflictResolutionPolicyDerivedPlan/2 冻结每个 head 的 proof/bundle 分派与 selected bundle pin，并完整保存 carry union、inherited subset、Outcome2 以及精确的 result bundle pin/version。
-resultBundlePin 必须严格解码 derived result，并复现其 canonical bytes。原唯一 planning CAS 与 final P 通过 Notice3/CP4/ChangeRecord1 发布当前 policy component；staged authorize_fresh handle 只能在同一 commit 变 usable。
-receiver 必须重算全部 head 分派、Carry1/Carry2 facts、mixed recursive union、PoP/2 与 root signatures，还要验证精确 result bundle 以及同一 DecisionKey 的 conflict-record transition。
+ConflictResolutionPolicyDerivedPlan/2 冻结每个 head 的 proof/bundle 分派与 selected bundle pin，还要完整冻结逐 head carry validation evidence、完整 carry union、inherited subset、Outcome2 以及精确 result bundle pin/version。resultBundlePin 必须严格解码 derived result 并复现 canonical bytes。
+原唯一 planning CAS 会同时冻结 InputDescriptor/3、OwnerInputBinding/2、Preview2、pinDirectory、staged fresh-handle association 与 installationPlan。final submit 仍只有 d6_commit_request/2。唯一 final P 通过 Notice3/CP4/ChangeRecord1 发布当前 policy component 与同一 conflict-record transition；staged authorize_fresh handle 只能在该 commit 中变 usable。
+planned recovery 恢复精确的 Input3/Plan2/Preview2 bytes 与 pins，绝不从当前 history 重建。receiver 必须重算每个 head 的分派、Carry1/Carry2 facts、全部 retained carry-validation hop、mixed recursive union、PoP/2 与 root signatures；还必须验证精确 result bundle、preview/descriptor 交叉字段，以及同一 DecisionKey 的 conflict-record transition。
 
 每个 publicKey 必须解码为精确的 32-byte Ed25519 key，并哈希到对应 trustKeyId；每个 signature 值必须解码为精确的 64-byte Ed25519 signature。
 authorize/rotate 的 possessionSignature 必须按精确消息签署。
