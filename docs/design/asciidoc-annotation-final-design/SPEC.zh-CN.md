@@ -642,44 +642,55 @@ replica registration 继续使用 specialized same-record producer；current FC 
 
 ## 14. D10 current/historical mixed holders
 
-D10 current Workspace read使用 D10WorkspaceReadDependencies/2（DependencyProof/3）；ControlDependencies/3、D10ControlInput/2、ControlPrepareBinding/3接到D6 Descriptor3/Intent3。
+### 14.1 current owner 路由与历史分派
 
-### 14.1 record images
+对于当前尚未建立决议的 D10 Workspace control 操作，协调后的链固定为 D10WorkspaceReadDependencies/2 与 DependencyProof/3 → ControlDependencies/3 → D10ControlInput/2 → ControlPrepareBinding/3。新的自动 author step 使用 PreparedActionBinding/4 与 EffectManifest/3、EffectBytes/3 构造 ApprovalUse/2。新的交互 author step 使用其 owner 合同选定的 PreparedActionBinding/4 或 PreparedEditBinding/3。新的调度记录使用 ScheduleSubscription/2 与 AutomationOccurrenceRecord/2。
 
-D10ControlRecordImage/2 **只**表示真实嵌套变化的automation/run：automation含ScheduleSubscription/2；run含versioned AuthorStep responsibilities。planned_approval/external_approval/activation/reservation/external_effect/stop及supplement=none种类继续可用exact Image1，不为了数字整齐升级。
+这只接管 replacements.json 所列 fixed-parent D10 CANDIDATE、CONTROL-CONTRACT、IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE、TERMINOLOGY 与 UPSTREAM-AMENDMENTS 中的 fresh/current 语句，不对版本名做全局替换。真实已保存、已规划或状态未知的记录，继续按实际写入时的精确 decoder 与恢复合同处理。若 recorded format 是历史 PreparedActionBinding/3、EffectManifest/2、EffectBytes/2、PreparedEditBinding/2、ApprovalUse/1、ScheduleSubscription/1、AutomationOccurrenceRecord/1、ControlPrepareBinding/1 或 /2，则其原 bytes、pins、canonical request、OperationId 与恢复证据都保持不变。current mixed holder 只能通过显式 versioned carrier 引用这些旧责任，不能迁移或重新 pin。
 
-D10VersionedControlRecordImage/1、D10VersionedControlRecordPin/1、D10VersionedControlRange/1显式以schema tag承载V1/V2 exact value。Pin1 payload仍 D10-Control-Record/1 || NUL || D3-CJ/3(Image1)；Pin2用 /2 domain，历史pin不重编码。Range2三臂records/cost_lineage/occurrences；occurrences可装versioned Occurrence1/2，同semantic key跨版本最多一项。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+fixed-parent D6 direct consumer 采用同一分流。当前 unseen D10 control 使用 D10ControlInput/2、ControlDependencies/3 与 D10ControlEffectPlan/2，不再走 fixed-parent 的 /1-/2 current producer 语句；当前 unseen 自动 author use 消费 ApprovalUse/2 与 PAB4/Effect3。saved/planned 历史关联必须先按原版本恢复，不能仅因存在 current successor 就改写。
 
-D10ControlEffectPlan/2 的before可以是actual Image1或Image2，after是exact current successor；因此 Image1(Automation+Subscription1) → Image2(Automation+Subscription2) 是合法current configure正路径，不强迫先做后台migration。recordPins允许old/new exact pin。
+### 14.2 image、pin、range 与 effect plan
 
-### 14.2 prepare binding三代
+D10ControlRecordImage/2 只用于 automation 和 run，因为只有这两类的嵌套 current schema 发生了变化。planned_approval、external_approval、activation、reservation、external_effect、stop 以及 supplement=none 的记录继续使用精确 Image1。Image2 不得降级为 Image1；旧 Image1 也不能为了进入 mixed holder 而重新编码。
 
-```text
-D10VersionedControlPrepareBinding/1 =
-  {schema:"d10_control_prepare_binding/1",value:ControlPrepareBinding/1}
-| {schema:"d10_control_prepare_binding/2",value:ControlPrepareBinding/2}
-| {schema:"d10_control_prepare_binding/3",value:ControlPrepareBinding/3}
-```
+Pin1 继续认证 fixed-parent D10-Control-Record/1 payload。Pin2 认证 D10-Control-Record/2 前缀、一个 NUL 与 D3-CJ/3(Image2) 的精确组合；payload kind 为 artifact，retention 保持原 recovery 或 approval_money，byteLength 与 SHA-256 必须对应完整前缀 payload。Pin2 永远不能重新 pin Image1。
 
-historical /1 exact decoder来自真实历史设计：
+mixed record-pin 数组先取 carrier.value.image，再依次按 binding.ref 的 canonical bytes、binding.revision 数值、usageRevision 的 none 先于 some、some 时的 usageRevision 数值、最后按完整 canonical image bytes 排序。同一个 cut 的逻辑身份是 binding.ref、binding.revision 与 usageRevision。若该身份出现两项且 image bytes 相同，属于重复责任并拒绝；若 bytes 不同，则是 integrity_conflict。schema 版本不能成为同一 cut 保留两项的理由。
 
-```text
-{key:StableControlKey/1,canonicalIntentBytes:Bytes,
- allocatedControlRefs:[ControlRef<K>/1],
- originalCommitRequest:PreparedCommitRequest/1,
- immutablePreview:ControlPreview/1,
- dependencyPins:ControlDependencies/1}
-```
+range kind rank 固定为 records=0、cost_lineage=1、occurrences=2。逻辑 range identity 分别是 scope 加完整已排序 kinds、CostLayerKey、Automation Ref。mixed range 数组先按 kind rank，再按逻辑 identity 的 canonical bytes 排序；同一 logical identity 跨 Range1/Range2 最多一项。occurrences range 的内部记录按 AutomationOccurrenceKey 排序，同一个 occurrence key 不能同时保留 V1 与 V2。
 
-e8aa明确承诺true saved /1记录按原decoder恢复；这不声称所有环境都曾部署它。Claims2 prepareBindings统一按inner StableControlKey canonical bytes排序唯一，跨版本同key拒绝；wrapper只标decoder，不赋authority、不后台迁移、不改原pins/dependencies/saved-planned-unknown责任。
+D10ControlEffectPlan/2 的 changes 按 after.value.binding.ref 的完整 canonical Ref 排序且唯一。before 非 none 时，before 与 after 的 binding.ref 必须相等，并且必须有一份与真实存储 before schema 完全匹配的 versioned record pin。Image1 before 配 Pin2 非法。当前 Automation configure 可以合法地从 Image1+Subscription1 变成 Image2+Subscription2。若 D10 scheduling owner 判定为 continue，则普通 configure 可以保留同一 subscription generation；只有 owner 规则要求 replace 时才换 generation。mixed-holder uniqueness 是 snapshot 规则，不要求把所有旧 subscription 一律 replace。
 
-### 14.3 complete execution responsibility
+### 14.3 ControlDependencies/3 与单一 cut
 
-D10MoneyResponsibility/2、D10ExecutionClaims/2、D10ExecutionInventory/2 都使用version-dispatched record pins/ranges/preparations/author steps/subscriptions/occurrences/ApprovalUses。ExternalResponsibility/1、StopResponsibility/1、StopCapacity/1本身没有嵌改变类型，保持 /1，但Inventory2必须完整携带。
+ControlDependencies/3 完整保留实际读到的 configBindings、usageBindings、authority proof、authorization generations、stopRefs、可选 Workspace reads、versioned record pins 与 versioned ranges。config binding 按完整 Ref 规范排序；usage binding 按完整 Ref；authorization-generation token 按 canonical token bytes；stop ref 按完整 Ref；record pin 与 range 使用上一节的 mixed 排序。
 
-一个合法Inventory2可以同时包含 old ApprovalUse1/PAB3/Subscription1/Occurrence1/Pin1/PrepareBinding1或2，与 new ApprovalUse2/PAB4/Subscription2/Occurrence2/Pin2/PrepareBinding3，只要各semantic identity不同。跨版本同DecisionKey、same StableControlKey、same (Automation,generation)、same OccurrenceKey或same record cut均拒绝，不LWW。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+每个 configBinding 都必须有精确匹配的 record image/pin。每个 usageBinding 都必须有同一 usageRevision 的匹配 image。每个 stopRef 都必须有精确 stop Image1/Pin1，因为 stop 不机械升版。一次 preparation 所使用的 current range fence、binding、usage revision、record image 与受保护 Workspace evidence 必须来自同一个真实 Authority Store barrier。不能把 barrier A 的 V1 value 与 barrier B 的 V2 value 拼成“完整”快照。
 
-D6 current successor为 ExecutionResponsibilityRecord/3 + ExecutionContinuityProof/2，inventory pin exact domain D6-Execution-Inventory/2。Record2/Proof1/Inventory1历史domain保持。只有真实responsibility mutation/checkpoint/handoff才从Record2形成Record3；不因runtime升级后台迁移。handoff必须在同一store barrier停止old holder admission/planning/send/schedule writers，完整捕获old+new liabilities并不可逆fence old holder；缺任一old pin/PAB/subscription/stop/external unknown就pause/unavailable，不能构造部分inventory。普通source读写不因此全局阻塞。
+被 current responsibility 引用的 historical image 仍是 immutable evidence，不会因为进入 holder 就变成 current configuration。缺少所需旧 bytes、pin 或 decoder 时，在原 disclosure gate 之后返回 state_unavailable；同 cut 的矛盾证据是 integrity_conflict。要求旧 Pin1 时不能用当前 Image2 代替。
+
+### 14.4 Claims、Money 与 Inventory canonicality
+
+D10ExecutionClaims/2 必须完整保存全部 mixed responsibility。recordPins 使用 mixed pin 顺序。prepareBindings 按 inner StableControlKey 的 canonical bytes 排序，而且该 key 在 Binding1、Binding2、Binding3 之间全局唯一。leaseRuns 按完整 Run ControlRef 排序唯一。authorSteps 以 run Ref 加 stepId 为 identity，Step1/Step2 跨版本唯一。subscriptions 以 Automation Ref 加 generation 为 identity，Subscription1/2 跨版本唯一。occurrenceRecords 以 AutomationOccurrenceKey 为 identity。ranges 使用 mixed range 顺序。continuityPins 按 pinToken 排序唯一。wrapper 只选择精确 decoder；不能给 Binding1 增加 kind、version 或 confirmation 字段，不能 LWW，也不能改变原 pins 或 dependencies。
+
+D10MoneyResponsibility/2 的 reservations 按完整 Binding<reservation>/1 canonical key 排序唯一；layers 按 CostLayerKey canonical bytes 排序唯一；recordPins 与 ranges 使用 mixed 规则；evidencePins 按 pinToken 排序唯一。同一个 reservation identity 的矛盾值不能伪装成两份 liability。CostLayerTotal 仍是完整 reservation/attribution 集合的验证投影，不能从当前配置余额反推。
+
+D10ExecutionInventory/2 的 ApprovalUse carrier 按 DecisionKey canonical bytes 跨版本唯一；externalUnknowns 按 binding.ref canonical bytes 排序唯一；stopState 同样按 binding.ref canonical bytes 排序唯一。所有仍被 pending work、recovery、deduplication 或不可逆 stop 引用的责任都必须保留，其中包括已完成但仍被引用的 external attempt。
+
+Inventory2 只有在旧 holder 的 admission、planning、send 与 schedule writer 都在一个真实 store barrier 停止后才能捕获。来自不同 barrier 的 old/new value 不能拼成一个 complete inventory。
+
+### 14.5 Inventory pin、Record3 equality、store incarnation 与 StopCapacity
+
+Inventory2 artifact 的精确 payload 是 UTF8 D6-Execution-Inventory/2、一个 NUL byte，再接 D3-CJ/3(D10ExecutionInventory/2)。对应 PinRef/2 的 payloadKind=artifact、retentionClass=recovery，byteLength 与 SHA-256 都覆盖完整前缀 payload。Inventory1 保留历史 D6-Execution-Inventory/1 domain，绝不重新 pin 或重编码成 Inventory2。
+
+ExecutionResponsibilityRecord/3 与其 pinned Inventory2 必须逐项一致。workspaceRef 相等；五类 responsibility payload——approvalUses、claims、moneyLineage、externalUnknowns、stopState——必须是 byte-equal canonical values。ExecutionContinuityProof/2.inventoryPin 必须选择这份精确 Inventory2。
+
+Inventory2.storeIncarnation 必须与 ExecutionContinuityProof/2.storeIncarnation byte-equal；受保护的 birth、barrier 或 fence token 映射还必须证明这一个实际 store 与同一 capture barrier。本批不引入另一个 caller-provided store-incarnation proof object。
+
+Inventory2.stopCapacity 必须是在同一 barrier 从 authoritative safety store 取得的精确 StopCapacity/1。StopCapacity/1 继续是 fixed-parent 的 issued、reserved 两个 Counter，不作为 Record3 的重复成员。Workspace-only custody move 不能把这组 shared counter 复制到第二个 active store。要么原 authoritative safety store 继续作为可达的 serialized owner，要么完整 store handoff 必须 fence 所有受影响 writer，并保留全部 target/latch reservation 与 capacity。store continuity 或 safety capacity 无法证明时 takeover unavailable；不能接受零值、可见子集或 rebuild 值。
+
+Record2、Proof1、Inventory1 保留其历史 decoder 与 payload domain。Record3 只在真实 responsibility mutation、checkpoint 或 custody handoff 时形成。该 transition 必须 strict-decode 每项 retained historical responsibility，在一个 barrier 捕获完整 mixed Inventory2，只 pin 一次，建立 Proof2，在适用时 checked-increment record revision，并保持 executionDomainId。不得 mint 替代 ControlRef、request、approval、reservation、claim，也不得创建第二 execution ledger。
 
 ## 15. Annotation suggestion生命周期
 
