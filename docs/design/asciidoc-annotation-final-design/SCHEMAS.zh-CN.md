@@ -1922,6 +1922,26 @@ ScheduleContinuityInvalidation/2 = {
   evidencePins:[PinRef/2...]
 }
 
+当前 continuity artifact 的编码按版本精确分域：
+
+```text
+Witness2ArtifactBytes =
+  UTF8("D6-Schedule-Continuity/2") || NUL ||
+  D3-CJ/3(完整 ScheduleContinuityWitness/2)
+
+Step2ArtifactBytes =
+  UTF8("D6-Schedule-Step/2") || NUL ||
+  D3-CJ/3(完整 ScheduleContinuityStep/2)
+
+Invalidation2ArtifactBytes =
+  UTF8("D6-Schedule-Invalidation/2") || NUL ||
+  D3-CJ/3(完整 ScheduleContinuityInvalidation/2)
+```
+
+三者对应的 PinRef/2 都使用 payloadKind=artifact、retentionClass=recovery。byteLength 与 SHA-256 必须覆盖完整 domain prefix、唯一的 NUL byte 和完整 canonical object bytes。digest 本身不认证 continuity；仍必须验证受保护 producer/subscription provenance、producerEpoch、精确 generation、retained transition chain，以及原 authorization/disclosure gate。
+
+decoder 必须先按 authenticated artifact domain 闭合分派，再解 inner object。D6-Schedule-Continuity/1 只能解 historical ScheduleContinuityWitness/1；D6-Schedule-Step/1 只能解 historical ScheduleContinuityStep/1；D6-Schedule-Invalidation/1 只能解 historical ScheduleContinuityInvalidation/1。D6-Schedule-Continuity/2 只能解 ScheduleContinuityWitness/2；D6-Schedule-Step/2 只能解 ScheduleContinuityStep/2；D6-Schedule-Invalidation/2 只能解 ScheduleContinuityInvalidation/2。unknown domain、已知 domain 搭配错误 kind/version、其它 prefix、缺失 NUL 或非 canonical object bytes 都必须按原 disclosure/error boundary fail closed。禁止 fallback decoder、扩展 /1 decoder、repin 或重新编码历史 bytes。
+
 D10AuthorPreparationLink/2 = {
   kind:"d10_author_preparation_link",
   version:2,
@@ -1968,11 +1988,13 @@ D10AuthorStepResponsibility/2 =
 SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3))；
 EffectBytes/3 slot 只投影为 {encoding,byteLength,payloadDigest}，不按成员名递归猜测。fresh current automatic author qualification 使用 DependencyProof/3；只要语义解析 managed Document，就必须包含 document_format，并且只有在完整验证 EffectManifest/3、EffectBytes/3 与 MutationFootprint 后才能构造 ApprovalUse/2。历史 Link1/PAB3/ApprovalUse1 的 saved 或 planned association 保留原 decoder、bytes、pins、request 与 OperationId。
 
-对 fresh ScheduleSubscription/2 registration，current D6 Storage producer 只有在 selected source/Field/Registry/current scheduling gates 通过、有限 retention 已预留、且真实持续维护的 Core source/control transition producer 已在同一 configuration transaction 注册后，才能创建 ScheduleContinuityWitness/2。initial 与 checkpoint 使用 subscription 的精确 ScheduleRecurrenceEvidence/2，revision=1、consumedTransition=0，并生成 fresh producerEpoch。current 正向 transition 使用 ScheduleContinuityStep/2 与 DependencyProof/3；新的 current portable transition 使用真实 ChangeRecord/1、InstallationNotice/3 与 ContentCompletionProof/4 pins。retained history 中的历史 transition 保持其原精确 decoder。相关 P-only control/rule transition 仍从真实 protected before/after state 捕获。
+对 fresh ScheduleSubscription/2 registration，current D6 Storage producer 只有在 selected source/Field/Registry/current scheduling gates 通过、有限 retention 已预留、且真实持续维护的 Core source/control transition producer 已在同一 configuration transaction 注册后，才能创建 ScheduleContinuityWitness/2。initial 与 checkpoint 使用 subscription 的精确 ScheduleRecurrenceEvidence/2，revision=1、consumedTransition=0，并生成 fresh producerEpoch。retained witness pin 必须精确使用上面的 Witness2ArtifactBytes。current 正向 transition 使用 ScheduleContinuityStep/2 与 DependencyProof/3；新的 current portable transition 使用真实 ChangeRecord/1、InstallationNotice/3 与 ContentCompletionProof/4 pins，每个 retained current step pin 都必须精确使用上面的 Step2ArtifactBytes。retained history 中的历史 transition 保持原 /1 artifact domain 与精确 decoder。相关 P-only control/rule transition 仍从真实 protected before/after state 捕获。
 
-当不存在合法 current after evidence 时，current producer 必须产生 ScheduleContinuityInvalidation/2，不能伪造 ScheduleRecurrenceEvidence/2。binding_changed 需要完整可信的 selected-business discontinuity 证据；after unavailable/unknown、missing history、unknown decoder、observer/producer gap 或无法保留必要 transition 均为 gap。Invalidation 比较同一 current witness/registration，原子推进下一 checked transition/revision，保留最后合法 checkpoint，并对该 generation 永久不可 reset。其 artifact pin 使用 recovery retention，payload 为 UTF8("D6-Schedule-Invalidation/2") || NUL || D3-CJ/3(完整 ScheduleContinuityInvalidation/2)。fixed-parent inbox/capacity/final-counter reservation、authorization、compaction 与无关 source 可用性规则保持不变。
+fold、compaction、receiver admission、D10 continuityPins consumption 与 recovery 都必须先按每个 protected schedule-continuity artifact 的精确 domain 分派，再解 inner object。current Witness2/Step2 不能放在 /1 domain 下接受，historical Witness1/Step1 也不能放在 /2 domain 下接受。continuityPins 是按 pinToken 排序且唯一的精确 PinRef/2；真实历史若跨过显式 same-generation bridge，可以保留 version-mixed original typed chain，但每个元素都保留自己的精确 bytes/domain/decoder。另一条合法 full retained-chain 路径同样保留每个 original typed artifact 与 source/control evidence，不能把整条 chain 归一化成一个版本。typed evidence 缺失或 unknown 时，在原 authorization/disclosure check 后沿用原 gap/unavailable 行为；已证明 domain/object mismatch 时不得用相同 digest/current state 修复。
 
-Schedule current proof 中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes 未变但 format proof continuity gap 得到 gap；binding 发生真实改变得到 binding_changed，即使最终 recurrence/range 值碰巧相同。已有 Subscription1 继续作为 historical retention owner，并配套 Witness1/Step1/Invalidation1。它只有通过 explicit continue + complete retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut，才可变成 same-generation Subscription2；否则必须 replace。这个 bridge 保留旧 pins 与 producer evidence，绝不把 version-1 witness/step/invalidation bytes 重编码成 version 2。
+当不存在合法 current after evidence 时，current producer 必须产生 ScheduleContinuityInvalidation/2，不能伪造 ScheduleRecurrenceEvidence/2。binding_changed 需要完整可信的 selected-business discontinuity 证据；after unavailable/unknown、missing history、unknown decoder、observer/producer gap 或无法保留必要 transition 均为 gap。Invalidation 比较同一 current witness/registration，原子推进下一 checked transition/revision，保留最后合法 checkpoint，并对该 generation 永久不可 reset。其 artifact pin 必须精确使用上面的 Invalidation2ArtifactBytes。fixed-parent inbox/capacity/final-counter reservation、authorization、compaction 与无关 source 可用性规则保持不变。
+
+Schedule current proof 中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes 未变但 format proof continuity gap 得到 gap；binding 发生真实改变得到 binding_changed，即使最终 recurrence/range 值碰巧相同。已有 Subscription1 继续作为 historical retention owner，并配套 Witness1/Step1/Invalidation1 及其精确 /1 artifact domain。它只有通过 explicit continue + complete retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut，才可变成 same-generation Subscription2；否则必须 replace。这个 bridge 保留每个旧 pin 与 producer association；只有 bridge 之后新产生的 Witness2/Step2/Invalidation2 才使用 /2 domain。绝不把 version-1 witness/step/invalidation repin 或重新编码成 version 2，也绝不 reset invalid generation。
 
 # 11. 历史分派与单一 authority
 
