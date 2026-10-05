@@ -617,7 +617,7 @@ The complete actual-evaluation observer producer families are:
 
 `OracleInlineObservation/3.fields` sort uniquely by `D3-CJ/3(path)`; every string leaf references a real ObservedString. OracleFieldValue has no arbitrary Ruby-object `to_s` escape. ContentObservation resultValueIds preserve the original String/Array return structure; ordinary text comes from real content/list/cell/title/reftext returns rather than HTML flattening. BlockEvent roles/options preserve Ruby order while attributes sort uniquely by name; DocumentState attributes also sort uniquely by name. CatalogEvent has no indexterm fallback because fixed 2.0.26 does not retain `:indexterms` in the catalog. Diagnostic exactMessage remains evidence; the cross-implementation CSP compares only the defined common diagnostic projection.
 
-The M37 writer-site set is closed. `M37Site/1 (group,file,method,point)` must match the fixed producer family for its row; point is a stable branch identifier from the reviewed manifest, not a free string:
+The M37 writer-site set is closed. `M37Site/1`'s `(group,file,method,point)` must match the fixed producer family for its row; point is a stable branch identifier from the reviewed manifest, not a free string:
 
 | group | fixed producer family | capture point |
 |---|---|---|
