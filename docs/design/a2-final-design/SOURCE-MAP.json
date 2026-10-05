@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "a2-candidate-batch-d1-d2",
+  "status": "A2 D1/D2 integrated; D3 author batch in progress. D1/D2 source-map completeness repair recorded; no independent acceptance implied.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -1837,6 +1837,258 @@
       "disposition": "supersede_historical_record_option_for_current_generation",
       "basis": "Current D5 rejects a persistent Record/RecordCollection domain for this generation and reserves no RecordRef. D4 facts/value occurrences, native Document row/cell occurrences, derived NodeCollection rows, and external/IR rows remain distinct without new durable identity; no NodeRef coercion or ad-hoc discriminator is introduced.",
       "oracles": []
+    },
+    {
+      "id": "D1-main-nongoals",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§1-3,13"
+      },
+      "disposition": "retain_boundary",
+      "basis": "D1 current authority/global invariants keep the five-surface/Core-authority exclusions; batch/history section keeps implementation/release non-claims. No D2-D10 semantics are re-owned."
+    },
+    {
+      "id": "D1-main-alternatives",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§14",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§2-6,10,13"
+      },
+      "disposition": "retain_rationales",
+      "basis": "Rejected second-authority, browser-local-Workspace, server-only-authority, sync-as-collaboration, direct worker/Agent write and overclaim alternatives remain prohibited; later afterimages only refine concurrency/evidence."
+    },
+    {
+      "id": "D1-main-downstream-constraints",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§16",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§2-7,10,12.2"
+      },
+      "disposition": "retain_and_integrate",
+      "basis": "D2-D10 constraints remain the D1 boundary; current per-replica/server-holder and execution-responsibility afterimages are the named current refinement, not a new owner."
+    },
+    {
+      "id": "D1-main-implementation-graph",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§17",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12"
+      },
+      "disposition": "retain_unimplemented",
+      "basis": "Implementation graph remains a future implementation obligation; A2 design author changes no product code and grants no implementation evidence."
+    },
+    {
+      "id": "D1-main-test-outline",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§18",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§11-12"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "Static/call-boundary/parity/mode/capability/security/release/copy/retirement obligations remain; scenario IDs are source-qualified separately and none is claimed run."
+    },
+    {
+      "id": "D1-main-freeze-status",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§19",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§13-14"
+      },
+      "disposition": "retain_as_provenance_supersede_old_next_topic",
+      "basis": "Historical freeze/review evidence is provenance. Its then-next-topic D2 sequencing is historical; A2 batch progression is controlled by the current A2 author/coordinator and is not product activation."
+    },
+    {
+      "id": "D2-main-diagnostics-repair-commit",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10-13"
+      },
+      "disposition": "retain_with_named_current_language_supersession",
+      "basis": "Exact span/primary selection, no-auto-repair and D2∧downstream commit composition remain load-bearing. Profile-v2-only diagnostic families/Annotation assumptions are historical where fixed97 current native/Product/Value4 contracts explicitly supersede them."
+    },
+    {
+      "id": "D2-main-implementation-retirement",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede_unimplemented",
+      "basis": "Retirement/deletion proof remains an implementation obligation. Open-AsciiDoc/plain-Annotation/D5-Record-option rows are source-qualified historical where current native AsciiDoc, Value4 and current D5 no-Record selection supersede them; no product retirement is claimed executed."
+    },
+    {
+      "id": "D2-main-freeze-activation",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§14-15"
+      },
+      "disposition": "retain_as_historical_activation_provenance",
+      "basis": "Old D2-v2 atomic D2/D3 generation gate and no-implementation claim remain provenance. Current A2 integrates later actual owner generations; no fictional migration, implementation or activation is inferred."
+    },
+    {
+      "id": "D1-impact-sec1",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12"
+      },
+      "disposition": "retain_unimplemented",
+      "basis": "Implementation graph is retained as future implementation scope; no code evidence claimed."
+    },
+    {
+      "id": "D1-impact-sec2",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12"
+      },
+      "disposition": "retain_unimplemented",
+      "basis": "Component/second-authority prohibitions remain and are reflected by current A2 surface/Core ownership."
+    },
+    {
+      "id": "D1-impact-sec3",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§8"
+      },
+      "disposition": "retain_release_slice",
+      "basis": "G1/G1.1/G2 and D9/D10 dependency slicing remains source-qualified release provenance; current support still needs real evidence."
+    },
+    {
+      "id": "D1-impact-sec4",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§12-13"
+      },
+      "disposition": "retain_unimplemented_retirement",
+      "basis": "Deletion/replacement targets remain implementation retirement obligations; no compatibility bridge is authorized."
+    },
+    {
+      "id": "D1-impact-sec5",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "All thirteen original test items are mapped individually and remain unexecuted."
+    },
+    {
+      "id": "D1-impact-sec6",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§12-14"
+      },
+      "disposition": "retain_acceptance_boundary",
+      "basis": "Freeze proves design implementability only, not repository conformance or Supported claims."
+    },
+    {
+      "id": "D2-impact-sec1",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,7-10,13"
+      },
+      "disposition": "retain_with_named_supersession",
+      "basis": "Domain/implementation graph remains source history; current native AsciiDoc, Value4 and current D5 no-Record selection supersede its Profile-v2/plain-Annotation/optional-Record current assumptions."
+    },
+    {
+      "id": "D2-impact-sec2",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,7-10,13"
+      },
+      "disposition": "retain_with_named_supersession",
+      "basis": "Component second-authority prohibitions remain; historical parser/Annotation/D5-option details dispatch by source generation."
+    },
+    {
+      "id": "D2-impact-sec3",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede_unimplemented",
+      "basis": "All twelve retirement targets are mapped individually; current language/Annotation/D5 decisions are named supersessions, and no product deletion is claimed."
+    },
+    {
+      "id": "D2-impact-sec4",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "All twelve test groups remain source-qualified design obligations; incompatible Profile-v2/plain-Annotation expectations are historical only."
+    },
+    {
+      "id": "D2-impact-sec5",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,14"
+      },
+      "disposition": "retain_as_historical_generation_boundary",
+      "basis": "D2-v2/D3-wire9 atomic-switch text is historical generation provenance; exact-source/non-durable carrier negatives remain principles, while current generations dispatch by actual recorded/current types."
+    },
+    {
+      "id": "D2-impact-sec6",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§15"
+      },
+      "disposition": "retain_acceptance_boundary",
+      "basis": "D2 impact freeze never proves repo implementation; later implementation still needs Core/surface/fixture/test/public-doc evidence."
     }
   ],
   "next_batch": "D3",

@@ -70,3 +70,25 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 本批虽已知道 49-file inventory、route graph 与 blob，但其它固定 S 输入仍是 semantic full-read TODO。D3–D10 current owner 尚未 global integrate；本批只读取上面具名的 D1/D2 直接相交段。
 
 source map 不把任何 D3/D4/D5/D6/D7/D8/D9/D10 模块写成 done。下一次授权作者批次是 D3。
+
+## 8. D1/D2 source-map 完整性窄修
+
+fixed-5c 非作者复核指出的是**映射遗漏，不是新的语义缺陷**：若干已经实际读过的 fixed-S D1/D2 section 没有各自的 sourcePath/blob/section → A2 section/disposition/basis 行。本窄修只补这些行，不重写已经完成的 D1/D2 current semantic 正文。
+
+| Source-qualified section | A2 落点 | Disposition |
+| --- | --- | --- |
+| fixed-S D1 main §13 非目标 | D1 §§1–3,13 | 保留 Core/五表面/不实施边界 |
+| fixed-S D1 main §14 替代方案 | D1 §§2–6,10,13 | 保留拒绝第二权威、浏览器本地 Workspace、同步即协作、worker 直写等裁决 |
+| fixed-S D1 main §16 下游约束 | D1 §§2–7,10,12.2 | retain；current per-replica/server-holder 与 execution-custody 是具名 afterimage |
+| fixed-S D1 main §§17–18 | D1 §§11–12 | 作为未实施/未运行 implementation 与 test obligation 保留 |
+| fixed-S D1 main §19 | D1 §§13–14 | 保留 review/freeze provenance；当时“下一主题”顺序只属历史 |
+| fixed-S D2 main §6 | D2 §§10–13 | 保留 exact diagnostic span、repair 与 AND commit gate；Profile-v2/plain-Annotation 细节在 current native/Value4 明确替代处只作历史 |
+| fixed-S D2 main §11 | D2 §§10,13 | retirement proof 保留为未实施；current native AsciiDoc、Value4 与 D5 no-Record 是具名 supersession |
+| fixed-S D2 main §13 | D2 §§14–15 | 旧 activation/review evidence 只作 generation provenance；不虚构 migration |
+| fixed-S D1 Impact §§1–6 | D1 §§8,12–14 | 每节补独立 machine mapping；原 13 条 test row 继续逐条映射 |
+| fixed-S D2 Impact §§1–6 | D2 §§1,7–10,13–15 | 每节补独立 machine mapping；原 12 条 tests 与 12 条 retirement item 继续逐条映射 |
+
+D2 Impact source blob 精确为 `956b3b768b97704c2e95dd8242b69507698ad3a7`；不采用早先私人报告中的 typo。current D5 的“本代无 persistent Record/RecordCollection、无 RecordRef”仍是 A2 current 边界，本次 source-map 修复不会复活 fixed-S 的 optional Record-domain 说法。
+
+fixed-5c 的非作者 finding 本作者不自行关闭。当前 head 已包含 Record-boundary 作者修复，仍待非作者复核；本次 source-map 窄修同样等待非作者复核。
+

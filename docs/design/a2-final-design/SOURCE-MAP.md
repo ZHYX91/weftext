@@ -67,3 +67,25 @@ SOURCE-MAP.json records machine-readable obligation groups, dispositions, source
 The other fixed-S inputs remain TODO for semantic full reading in this batch, even though the 49-file inventory, route graph and blobs are known. D3–D10 current owners have not been globally integrated. Only the exact D1/D2 intersecting sections listed above were read.
 
 No D3/D4/D5/D6/D7/D8/D9/D10 module is marked done by this source map. The next authorized author batch is D3.
+
+## 8. D1/D2 source-map completeness repair
+
+A fixed-5c non-author review found a **mapping omission, not a new semantic defect**: several already-read fixed-S D1/D2 sections were not represented by their own sourcePath/blob/section → A2 section/disposition/basis rows. This repair adds those rows without rewriting the accepted D1/D2 current semantic text.
+
+| Source-qualified section | A2 placement | Disposition |
+| --- | --- | --- |
+| fixed-S D1 main §13 Non-goals | D1 §§1–3,13 | retain the Core/five-surface/non-implementation boundary |
+| fixed-S D1 main §14 alternatives | D1 §§2–6,10,13 | retain rejected second-authority/browser-local/sync-as-collaboration/direct-worker-write alternatives |
+| fixed-S D1 main §16 downstream constraints | D1 §§2–7,10,12.2 | retain; current per-replica/server-holder and execution-custody wording is the named afterimage |
+| fixed-S D1 main §§17–18 | D1 §§11–12 | retain as unimplemented/unexecuted implementation and test obligations |
+| fixed-S D1 main §19 | D1 §§13–14 | retain review/freeze provenance; its old “next topic” sequencing is historical |
+| fixed-S D2 main §6 | D2 §§10–13 | retain exact diagnostic-span/repair/AND-gate principles; Profile-v2/plain-Annotation specifics are historical where current native/Value4 explicitly supersedes them |
+| fixed-S D2 main §11 | D2 §§10,13 | retain retirement proof as unimplemented; current native AsciiDoc, Value4 and D5 no-Record selection are named supersessions |
+| fixed-S D2 main §13 | D2 §§14–15 | retain old activation/review evidence as generation provenance; do not invent migration |
+| fixed-S D1 Impact §§1–6 | D1 §§8,12–14 | every section now has its own machine mapping; thirteen test rows remain separately mapped |
+| fixed-S D2 Impact §§1–6 | D2 §§1,7–10,13–15 | every section now has its own machine mapping; twelve tests and twelve retirement items remain separately mapped |
+
+The D2 Impact source blob is exactly `956b3b768b97704c2e95dd8242b69507698ad3a7`. The earlier private-report typo is not used. Current D5's no-persistent-Record/RecordCollection and no-RecordRef decision remains the current A2 boundary; this mapping repair does not revive the fixed-S optional Record-domain wording.
+
+The fixed-5c review findings are not self-closed by this author. The Record-boundary author fix is present at the current A2 head and still requires non-author review; this source-map repair likewise awaits non-author review.
+
