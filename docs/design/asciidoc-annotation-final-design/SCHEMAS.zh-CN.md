@@ -853,7 +853,9 @@ ContentCompletionProof/4 =
      components:[{key:PortableComponentKey/2,after:ComponentImage/1}...]}
 ```
 
-ComponentImage/1、PinRef/2保持fixed-e8aa exact shape。document_format present component bytes必须是D3-CJ/3(binding)，ComponentImage.version=bindingRevision。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+ComponentImage/1、PinRef/2 保持 fixed-e8aa exact shape。document_format present component bytes 必须是 D3-CJ/3(binding)，ComponentImage.version=bindingRevision。
+
+Notice3 除 component-key decoder 升为 PortableComponentKey/2 外，逐项继承 Notice2 invariant：components 非空、按 fixed-rank/canonical-key 排序且唯一，notice 在 install 前冻结并保留原 baseFrontier。CP4 除 component-key decoder 与 current ChangeRecord/1 linkage 外，逐项继承 CP3 committed/restored invariant。committed CP4 的 components 与 Notice3 key 集合及顺序严格相同，每个 after 都是实际 installed/sealed image；sourceChanges 是完整、按 EntityRef 排序且唯一的真实 source-state delta；receiptDigest 绑定原 receipt。fresh managed Document 必须在同一 plan/P/CP4 中同时带 document 与 document_format。format-only 且 source 不变时 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion 或 H advance。
 
 ## 5.3 ChangeRecord
 
@@ -876,7 +878,13 @@ ChangeRecord/1 = {
 }
 ```
 
-CP4必须committed且DecisionKey/ChangeId/frontiers与ChangeRecord逐项相等；Notice3/CP4 byteLength/digest必须匹配 exact canonical bytes。同一P seal固定ChangeId、CP4与ChangeRecord；publication只重发原pin。
+CP4 必须 committed 且 DecisionKey/ChangeId/frontiers 与 ChangeRecord 逐项相等；Notice3/CP4 byteLength/digest 必须匹配 exact D3-CJ/3 canonical bytes。同一 P seal 固定 ChangeId、CP4 与 ChangeRecord；publication 只重发原 pin。
+
+frontierBefore 是实际 verified pre-seal Frontier；frontierAfter 必须恰好由 frontierBefore 增加本 ChangeId，其他 domain 不回退。frontierPolicy=exact 时，frontierBefore 与原 expected/base/notice Frontier byte-equal。scope_dependencies 时，还必须从 Notice3.baseFrontier 到 frontierBefore 再到 frontierAfter 证明完整连续、已验证的 ChangeRecord/completion chain，并保留原 unrelatedness proof；vector number、provider sync 状态或当前文件均不能替代。
+
+restored CP4 只允许 decisionKey、baseFrontier，以及每项都等于对应 Notice3 before image 的 component after images；禁止 changeId、guarantee、writeProtection、semanticState、frontierBefore、frontierAfter、sourceChanges、receiptDigest 和全部成功语义。
+
+receiver admission 必须 strict-decode exact Notice3/CP4 version 与 canonical bytes，验证 component key 集合/顺序严格一致，取得并验证每个实际 component byte 与 owner version，验证完整 production SourceVersion changes，并证明连续 chain。present document_format component 还必须 strict-decode exact ManagedDocumentFormatBinding/1 bytes。缺失/未知 bytes 或 decoder、component-version mismatch、Notice/CP/ChangeRecord mismatch 都只能是 incomplete/proof_unavailable，不能成功 admission。
 
 # 6. D3/D7/D8/D9 current direct holders
 
@@ -1184,6 +1192,13 @@ SourceTransformEvidence/2 = {
   edits:[SourceTransformPortableEvent/3...]
 }
 
+SourceTransformSealSignedBody/1 = {
+  format:"weftext.source-transform-seal",
+  version:1,
+  trustKeyId:"sha256:<64 lowercase hex>",
+  evidence:SourceTransformEvidence/2
+}
+
 SourceTransformSealArtifact/1 = {
   format:"weftext.source-transform-seal",
   version:1,
@@ -1205,9 +1220,13 @@ SourceTransformSealOutboxItem/1 = {
 }
 ```
 
-plan/evidence edits的D3-CJ/3必须byte-equal；seal不得重编译、重排或merge。required sealed decision恰一个outbox item，disabled零。artifactPin为portable_metadata exact artifact canonical bytes。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+plan/evidence edits 的 D3-CJ/3 必须 byte-equal；seal 不得重编译、重排或 merge。required sealed decision 恰一个 outbox item，disabled 为零；artifactPin 为 portable_metadata exact artifact canonical bytes。
 
-mapping算法由SPEC §11.2定义并只使用original-before coordinates；after payload必须由机械generatedOutputSpan从afterPin切片，不做内容搜索。
+Event3 必须针对 exact beforeBytes/afterBytes 做 closed 校验。replace 要求 0<=startByte<endByte<=before length、两端均为 UTF-8 scalar boundary、removedByteLength=endByte-startByte，且 removedSha256=SHA-256(beforeBytes[startByte:endByte])；insert 要求 0<=atByte<=before length、atByte 为 UTF-8 scalar boundary、replacementByteLength 非零。replacement interval 必须是两两不重叠的 maximal islands；same-point inserts 按 transaction order 合并；严格位于 replacement island 内的 insert 必须折入 island 或 compilation unavailable。canonical boundary order 为 left replacement ending p、insert@p、right replacement starting p。
+
+generatedOutputSpan 使用 SPEC §11.1 的 replay-cursor 算法处理 exact before/after pins：对每段 unchanged gap 做 byte-compare；当前 event span 恰为 [afterCursor,afterCursor+replacementByteLength)，该 after slice 验 replacement length/hash；replace 将 beforeCursor 推到 endByte，insert 保持在 q；最后 tails 与 afterSourceSha256 都必须匹配。禁止内容搜索。mapping 定义 delta(replace)=replacementByteLength-(endByte-startByte)，并使用 checked signed arithmetic。
+
+SourceTransformSealSignedBody/1 恰为 SourceTransformSealArtifact/1 只删除 signature。signature 必须恰为 86 个 ASCII unpadded-base64url 字符并 decode 为 64-byte Ed25519 signature。待签消息恰为 ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1)。完整 transport/storage artifact bytes 恰为含 signature 的 SourceTransformSealArtifact/1 的 D3-CJ/3；alternate JSON serialization 必须拒绝。
 
 # 9. D6 dual-profile trust
 
@@ -1216,27 +1235,31 @@ SealProfileId/1 =
   "d6_revision_token_seal/1" |
   "d6_source_transform_seal/1"
 
+WorkspaceTrustPredecessor/2 =
+    {kind:"root",fingerprint:WorkspaceTrustRootFingerprint/1}
+  | {kind:"declaration",revision:Counter,
+     sha256:"sha256:<64 lowercase hex>"}
+
 WorkspaceTrustDeclaration/2 = {
   kind:"d6_workspace_trust_declaration",
   version:2,
   workspaceRef:WorkspaceRef,
   revision:Counter,
-  predecessor:
-      {kind:"root",fingerprint:"sha256:<64 lowercase hex>"}
-    | {kind:"declaration",revision:Counter,
-       sha256:"sha256:<64 lowercase hex>"},
+  predecessor:WorkspaceTrustPredecessor/2,
   decisionKey:DecisionKey/2,
   action:
       {kind:"authorize",commitDomain:CommitDomain/2,
        profile:SealProfileId/1,trustKeyId:"sha256:<64 lowercase hex>",
-       algorithm:"ed25519",publicKey:text,possessionSignature:text}
+       algorithm:"ed25519",publicKey:"<43 ASCII unpadded base64url>",
+       possessionSignature:"<86 ASCII unpadded base64url>"}
     | {kind:"rotate",commitDomain:CommitDomain/2,
        profile:SealProfileId/1,
        oldTrustKeyId:"sha256:<64 lowercase hex>",
        newTrustKeyId:"sha256:<64 lowercase hex>",
-       algorithm:"ed25519",publicKey:text,
-       possessionSignature:text,continuitySignature:text,
-       mode:"administrative"|"loss"|"compromise"}
+       algorithm:"ed25519",publicKey:"<43 ASCII unpadded base64url>",
+       possessionSignature:"<86 ASCII unpadded base64url>",
+       continuitySignature:"<86 ASCII unpadded base64url>"|"not_required",
+       mode:"ordinary"|"loss_recovery"|"compromise"}
     | {kind:"revoke",commitDomain:CommitDomain/2,
        profile:SealProfileId/1,
        trustKeyId:"sha256:<64 lowercase hex>",
@@ -1244,8 +1267,29 @@ WorkspaceTrustDeclaration/2 = {
     | {kind:"resolve_conflict",
        outcomes:[TrustConflictOutcome/2...],
        inheritedCompromises:[TrustConflictCarry/1|TrustConflictCarry/2...]},
-  rootSignature:text
+  rootSignature:"<86 ASCII unpadded base64url>"
 }
+
+DomainSealKeyPoPBody/2 = {
+  workspaceRef:WorkspaceRef,revision:Counter,
+  predecessor:WorkspaceTrustPredecessor/2,decisionKey:DecisionKey/2,
+  commitDomain:CommitDomain/2,profile:SealProfileId/1,
+  trustKeyId:"sha256:<64 lowercase hex>",algorithm:"ed25519",
+  publicKey:"<43 ASCII unpadded base64url>"
+}
+
+DomainSealKeyRotateContinuityBody/2 = {
+  workspaceRef:WorkspaceRef,revision:Counter,
+  predecessor:WorkspaceTrustPredecessor/2,decisionKey:DecisionKey/2,
+  commitDomain:CommitDomain/2,profile:SealProfileId/1,
+  oldTrustKeyId:"sha256:<64 lowercase hex>",
+  newTrustKeyId:"sha256:<64 lowercase hex>",algorithm:"ed25519",
+  publicKey:"<43 ASCII unpadded base64url>",
+  possessionSignature:"<86 ASCII unpadded base64url>",mode:"ordinary"
+}
+
+WorkspaceTrustDeclarationSignedBody/2 :=
+  WorkspaceTrustDeclaration/2 只删除 rootSignature
 
 WorkspaceAuthorizationBundle/2 = {
   kind:"d6_workspace_authorization_bundle",
@@ -1277,7 +1321,7 @@ SourceTransformSealVerificationKey/1 = {
   profile:"d6_source_transform_seal/1",
   trustKeyId:"sha256:<64 lowercase hex>",
   algorithm:"ed25519",
-  publicKey:text
+  publicKey:"<43 ASCII unpadded base64url>"
 }
 
 TrustConflictCarry/2 = {
@@ -1301,48 +1345,105 @@ TrustConflictOutcome/2 =
   | {commitDomain:CommitDomain/2,profile:SealProfileId/1,state:"none"}
   | {commitDomain:CommitDomain/2,profile:SealProfileId/1,
      state:"authorize_fresh",trustKeyId:"sha256:<64 lowercase hex>",
-     algorithm:"ed25519",publicKey:text,possessionSignature:text}
+     algorithm:"ed25519",publicKey:"<43 ASCII unpadded base64url>",
+     possessionSignature:"<86 ASCII unpadded base64url>"}
+
+DomainSealKeyAddPrepare/3 = {
+  wireVersion:3,kind:"d6_domain_seal_key_add_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  profile:SealProfileId/1,expectedTrustRevision:Counter,
+  budget:BudgetBinding/1
+}
+
+DomainSealKeyRotatePrepare/3 = {
+  wireVersion:3,kind:"d6_domain_seal_key_rotate_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  profile:SealProfileId/1,expectedTrustRevision:Counter,
+  expectedTrustKeyId:"sha256:<64 lowercase hex>",
+  mode:"ordinary"|"loss_recovery"|"compromise",
+  budget:BudgetBinding/1
+}
+
+DomainSealKeyRevokePrepare/3 = {
+  wireVersion:3,kind:"d6_domain_seal_key_revoke_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  profile:SealProfileId/1,expectedTrustRevision:Counter,
+  expectedTrustKeyId:"sha256:<64 lowercase hex>",
+  mode:"administrative"|"loss"|"compromise",
+  budget:BudgetBinding/1
+}
 ```
 
-Declaration/1永远只授权revision-token profile。Bundle2允许/1历史prefix，出现首个/2后后继只能/2。Declaration1 activation按原CP3；Declaration2 activation必须由同DecisionKey的ChangeRecord1→exact CP4→policy after-image→Bundle2重派生，不能看arrival/current bundle猜cut。
+每个 publicKey 必须 decode 为 exact 32-byte Ed25519 key，并 hash 到对应 trustKeyId；每个 signature lexical value 必须 decode 为 exact 64-byte Ed25519 signature。authorize/rotate 的 possessionSignature 签 exact ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2)，rotate 将 newTrustKeyId 映射到 PoP body 的 trustKeyId。authorize_fresh 用 enclosing Declaration2 的 workspaceRef/revision/predecessor/decisionKey 加该 exact outcome 的 commitDomain/profile/key tuple 构造同一 body。ordinary rotate 的 continuitySignature 签 exact ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2)；loss_recovery/compromise 必须是 literal "not_required"。rootSignature 签 exact ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2)。
+
+revision-1 root predecessor 的 fingerprint 是完整 WorkspaceTrustRootFingerprint/1，并与 retained root/anchor fingerprint byte-equal；rootKeyId 不能替代。Declaration/1 永远只授权 revision-token profile。Bundle2 允许 Declaration1 历史 prefix，出现首个 Declaration2 后后继都只能 /2。Declaration1 activation 继续用 CP3；Declaration2 activation 由同 DecisionKey ChangeRecord1 -> exact CP4 -> policy after-image -> Bundle2 重派生。
+
+current unseen 普通 trust management 只使用上述 wireVersion3 prepare successors。它们不携带 caller key material，保留 fixed-parent policy_admin/root-handle/current-state gate 与原 planning/install/single-P 路径，只把 current completion family 接到 CP4。saved/planned wireVersion2 record 保留原 decoder/recovery。
 
 ```text
 WorkspaceTrustGenesis/2 = {
-  kind:"d6_workspace_trust_genesis",
-  version:2,
+  kind:"d6_workspace_trust_genesis",version:2,
   rootDeclaration:WorkspaceTrustRootDeclaration/1,
   initialDomainDeclarations:[
     WorkspaceTrustDeclaration/2,
     WorkspaceTrustDeclaration/2
   ]
 }
-```
 
-恰两项：revision1=revision-token authorize，revision2=source-transform authorize；同DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+WorkspaceBootstrapProfile/4 = {
+  kind:"d6_bootstrap_profile",wireVersion:4,
+  profileRevision:Counter,
+  registrySeedBinding:RegistryBinding/1,
+  newSeriesMultiplicity:"unique"|"many",
+  initialPeriodScope:"workspace"
+}
 
-WorkspaceBootstrapPlan/4 的完整成员固定为：
-```text
-{
+WorkspaceBootstrapCreatorBinding/1 = {
+  issuerPrincipal:Token,
+  targetPrincipal:Token,
+  principalAudienceToken:Token
+}
+
+WorkspaceBootstrapTargetRegistry/1 = {
+  snapshot:RegistrySnapshot/1,
+  binding:RegistryBinding/1
+}
+
+WorkspaceBootstrapSeriesConfiguration/1 = {
+  seriesScope:SeriesScope,
+  multiplicity:"unique"|"many",
+  revision:1
+}
+
+WorkspaceBootstrapPeriodScopeBinding/1 = {
+  nodeRef:NodeRef,
+  scope:CalendarScope,
+  revision:1
+}
+
+WorkspaceBootstrapPlan/4 = {
   kind:"d6_workspace_bootstrap_plan",
   wireVersion:4,
   operationId:Uuid,
-  proposalId:Token,
+  proposalId:Uuid,
   issuerAuthorityInstanceId:Uuid,
   targetWorkspaceRef:WorkspaceRef,
   targetAuthorityInstanceId:Uuid,
-  profile:<d6_bootstrap_profile wire4>,
-  creatorBinding:<fixed creator binding>,
-  targetRegistry:<complete target Registry>,
+  profile:WorkspaceBootstrapProfile/4,
+  creatorBinding:WorkspaceBootstrapCreatorBinding/1,
+  targetRegistry:WorkspaceBootstrapTargetRegistry/1,
   initialPolicy:Policy/3,
   trustGenesis:WorkspaceTrustGenesis/2,
-  initialSeriesConfigurations:[<D6 current series config>...],
-  periodScopeBindings:[<D6 current period binding>...]
+  initialSeriesConfigurations:[WorkspaceBootstrapSeriesConfiguration/1...],
+  periodScopeBindings:[WorkspaceBootstrapPeriodScopeBinding/1...]
 }
 ```
 
-profile4沿用原profile3的principal mapping、Registry、Calendar、基础能力及其它显式能力；只把fresh target domain genesis固定为两个seal profiles，不扩大授权。
+全部 UUID 成员使用 D3 canonical lowercase UUID decoder。Genesis 恰两项：revision 1 revision-token authorize，revision 2 source-transform authorize；同 DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。series configurations 按 canonical SeriesScope 排序且唯一；period bindings 按完整 NodeRef 排序且唯一，并且每个 valid prepared period 恰一项。helper members 保留 fixed-parent Plan3 字段语义；Profile4 只改变 dual-profile genesis family。
 
-legacy Handle1可继续为仍由Declaration1 current-safe interval授权的revision-token key新签名；永远不能签transform。continuation对两个profile分别计算current(K)|none|conflicted_or_unproved，任一unproved不允许新domain部分激活；完整声明序列固定为 optional old revision revoke → optional old transform revoke → new revision authorize → new transform authorize，同一DecisionKey/CP4且无可观察中间prefix。
+Plan4 只用于 unseen fresh create/fork，并保留原 D3 proposal/custody/CAS/P boundary。普通 copy 不使用 Plan4。saved/planned/unknown recovery 保留实际 recorded decoder/bytes；restore/continue/failover 不合成 Genesis2。本候选不声称 Plan3 已部署，也不虚构 migration。
+
+legacy Handle1 只在 exact Declaration1-authorized key 仍 current、safe、usable 时继续 revision-token 新签名；永远不能签 transform。continuation 对两个 profile 分别求 current(K)|none|conflicted_or_unproved，任一 unproved 都禁止部分激活新 domain。declaration order 固定为 optional old revision revoke、optional old transform revoke、new revision authorize、new transform authorize，全部在同一 DecisionKey/CP4 且无可观察中间 prefix。
 
 # 10. D10 mixed-version current outer schemas
 
