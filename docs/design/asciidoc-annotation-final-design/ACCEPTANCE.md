@@ -521,9 +521,9 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34-ST-17 | SPEC §§11–13 | replace [5,10)->X + insert@10->Y retains two events and canonical boundary order to yield X\|Y; merging into one replacement that yields XY\| fails. |
 | FC34-ST-18 | SPEC §§11–13 | A required seal rechecks profile, expectedTrustRevision, expectedTrustKeyId, and a usable handle; checking only that “some transform key exists” fails. |
 | FC34-ST-19 | SPEC §§11–13 | If a cross-generated-anchor edit cannot preserve boundary slots, compilation returns unavailable; ordinary save may continue but no empty-event CoreSourceEditPlan or artifact is fabricated. |
-| FC34B-D10-01 | SPEC §14 | Workspace control uses DependencyProof/3 and includes a document_format key when parsing a managed Document. |
-| FC34B-D10-02 | SPEC §14 | Using D10WorkspaceReadDependencies/1 + proof2 for the same current unseen prepare fails the current owner gate. |
-| FC34B-D10-03 | SPEC §14 | D10ControlInput/2 dependencies3 matches InputDescriptor3/proof3 member-for-member. |
+| FC34B-D10-01 | SPEC §14 | A current unseen Workspace-control prepare uses D10WorkspaceReadDependencies/2 + DependencyProof/3 and includes document_format when parsing a managed Document; genuine saved/planned historical records recover through their recorded owner versions first. |
+| FC34B-D10-02 | SPEC §14 | Using D10WorkspaceReadDependencies/1 + proof2 to establish the same current unseen prepare fails the current owner gate; this does not reinterpret a genuine historical saved/planned dependency record. |
+| FC34B-D10-03 | SPEC §14 | For a current unseen control operation, D10WorkspaceReadDependencies/2 -> ControlDependencies/3 -> D10ControlInput/2 -> ControlPrepareBinding/3 matches the D6 Descriptor3/Proof3 inputs member-for-member at one cut. |
 | FC34B-D10-04 | SPEC §14 | A deployment-only body cannot smuggle workspaceReads=some into ControlDependencies3. |
 | FC34B-D10-05 | SPEC §14 | For recurrence source V unchanged but format M1->M2, ScheduleContinuityStep2 yields binding_changed, never continuous. |
 | FC34B-D10-06 | SPEC §14 | If source/profile bytes are equal but document_format proof continuity gaps and creates a new epoch, ScheduleContinuityStep2 yields gap. |
@@ -531,8 +531,8 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34B-D10-08 | SPEC §14 | A current ScheduleContinuityStep2 attempting to decode the current transition as Notice2/CP3 fails. |
 | FC34B-D10-09 | SPEC §14 | An old Subscription1 can explicitly continue to a same-generation Subscription2 only with a complete proof of no intervening format/rule discontinuity. |
 | FC34B-D10-10 | SPEC §14 | An old Subscription1 whose history contains a format transition cannot continue without an explicit replace. |
-| FC34B-D10-11 | SPEC §14 | A new automatic author preparation binds PAB4 and the D10-Author-Preview/2 digest of EffectManifest3. |
-| FC34B-D10-12 | SPEC §14 | A new interactive author responsibility whose declared prepared format does not match the pinned PAB4/EditBinding3 exact type fails. |
+| FC34B-D10-11 | SPEC §14 | A fresh automatic author preparation binds PAB4 plus the D10-Author-Preview/2 digest of EffectManifest3 and constructs current ApprovalUse2; a saved/planned PAB3/Effect2/ApprovalUse1 responsibility retains its original decoder and pins. |
+| FC34B-D10-12 | SPEC §14 | A fresh interactive author responsibility must declare the exact current PAB4 or EditBinding3 selected by its owner contract; a mismatched current type fails, while a genuine saved/planned PAB3/EditBinding2 remains historical recovery rather than being upgraded. |
 | FC34B-TR-01 | SPEC §13 | Declaration1 keeps its original CP3 activation rule. |
 | FC34B-TR-02 | SPEC §13 | Declaration2 activates through exact CP4 and the Bundle2 policy after-image that first appends the sequence. |
 | FC34B-TR-03 | SPEC §13 | A Declaration2 with only same-DecisionKey CP3 and no CP4 is invalid. |
@@ -562,23 +562,23 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34C-MIX-01 | SPEC §14 | One ControlDependencies3 may contain an old stop Pin1 and a new automation Pin2 when each binding is complete at the same cut. |
 | FC34C-MIX-02 | SPEC §14 | An external_effect current record may remain Image1/Pin1 and remain fully reachable from current Dependencies3/Inventory2. |
 | FC34C-MIX-03 | SPEC §14 | Encoding stop/external_effect/reservation as Image2 fails closed decode. |
-| FC34C-MIX-04 | SPEC §14 | One EffectPlan2 can express Automation before=Image1+Subscription1 and after=Image2+Subscription2 without reencoding the before image. |
+| FC34C-MIX-04 | SPEC §14 | One EffectPlan2 can express Automation before=Image1+Subscription1 and after=Image2+Subscription2 without reencoding the before image; when the scheduling owner qualifies continue, the old subscription may retain the same generation rather than being forced to replace. |
 | FC34C-MIX-05 | SPEC §14 | Downgrading an Image2 automation/run back to Image1 fails. |
-| FC34C-MIX-06 | SPEC §14 | Pin1 uses the D10-Control-Record/1 payload domain and Pin2 uses /2; a schema tag/pin-domain mismatch fails. |
-| FC34C-MIX-07 | SPEC §14 | A Range2 occurrence array may contain old K1 and new K2 and sorts by the real OccurrenceKey. |
+| FC34C-MIX-06 | SPEC §14 | Pin1 authenticates the exact D10-Control-Record/1 prefixed Image1 payload and Pin2 the exact /2 prefixed Image2 payload with matching artifact byteLength/SHA-256; a schema tag/pin-domain mismatch or repinning Image1 as Pin2 fails. |
+| FC34C-MIX-07 | SPEC §14 | Mixed ranges use rank records=0,cost_lineage=1,occurrences=2 and one cross-version logical range identity; a Range2 occurrence array may contain distinct old K1/new K2 records ordered by AutomationOccurrenceKey. |
 | FC34C-MIX-08 | SPEC §14 | Occurrence1(K) plus Occurrence2(K) with the same key fails. |
-| FC34C-MIX-09 | SPEC §14 | Two different Image1/Image2 values for the same record cut are an integrity conflict. |
-| FC34C-MIX-10 | SPEC §14 | A ControlDependencies3 whose range/barrier comes from cut B while recordPin/current binding comes from cut A fails same-cut qualification. |
-| FC34C-EXEC-01 | SPEC §14 | Claims2 may simultaneously contain Binding2/3, Step1/2, Subscription1/2, Occurrence1/2, and Pin1/2 when all semantic keys differ. |
-| FC34C-EXEC-02 | SPEC §14 | MoneyResponsibility2 may require an old reservation Pin1 and a new Automation budget Pin2 together with Range1/Range2. |
-| FC34C-EXEC-03 | SPEC §14 | Inventory2 can completely carry old ApprovalUse1, new ApprovalUse2, Claims2, Money2, ExternalResponsibility1, and StopResponsibility1. |
-| FC34C-EXEC-04 | SPEC §14 | ApprovalUse1 and ApprovalUse2 with the same DecisionKey are duplicate responsibility and fail. |
-| FC34C-EXEC-05 | SPEC §14 | Old Subscription1 and new Subscription2 for the same Automation may coexist when generations differ; the same generation fails. |
-| FC34C-EXEC-06 | SPEC §14 | Inventory2 that omits an ExternalResponsibility1 still started/outcome_unknown or an already stopped latch fails completeness. |
-| FC34C-D6-01 | SPEC §14 | Record3's Proof2 inventoryPin strict-decodes exact D6-Execution-Inventory/2 and its responsibility payloads are byte-equal to Inventory2. |
-| FC34C-D6-02 | SPEC §14 | Execution custody may hand off from a Record2 holder to a new holder using Inventory2 that retains all old responsibility, with Record3 revision=old+1 and unchanged executionDomainId. |
-| FC34C-D6-03 | SPEC §14 | Without handoff, checkpoint, or a real responsibility change, merely supporting FC does not background-migrate Record2 to Record3. |
-| FC34C-D6-04 | SPEC §14 | If handoff cannot obtain the original decoder/bytes for an old Pin1/PAB3/Subscription1/stop responsibility, takeover pauses/unavailable rather than constructing a partial Inventory2; unrelated ordinary source operations remain available. |
+| FC34C-MIX-09 | SPEC §14 | For record pins, one same-cut identity (binding.ref,binding.revision,usageRevision) may occur once across versions: a byte-equal duplicate is rejected and different image bytes are integrity_conflict. |
+| FC34C-MIX-10 | SPEC §14 | ControlDependencies3 whose range/barrier comes from cut B while record pin, binding, usage revision, stop pin, or Workspace evidence comes from cut A fails same-cut qualification; all are captured at one real Authority Store barrier. |
+| FC34C-EXEC-01 | SPEC §14 | Claims2 may simultaneously contain Binding1/2/3, Step1/2, Subscription1/2, Occurrence1/2, and Pin1/2 when their semantic keys differ; prepareBindings are globally unique by inner StableControlKey across all three binding versions. |
+| FC34C-EXEC-02 | SPEC §14 | MoneyResponsibility2 may require old Pin1/new Pin2 and Range1/Range2 together; reservations are unique by complete reservation Binding, layers by CostLayerKey, evidence pins by pinToken, and mixed pins/ranges use their canonical cross-version orders. |
+| FC34C-EXEC-03 | SPEC §14 | Inventory2 completely carries mixed ApprovalUse, Claims2, Money2, ExternalResponsibility1 and StopResponsibility1, orders each by its cross-version logical identity, is captured at one real barrier, and carries the actual authoritative StopCapacity1 from that same safety store. |
+| FC34C-EXEC-04 | SPEC §14 | ApprovalUse1 and ApprovalUse2 with the same DecisionKey are duplicate responsibility and fail; schema version does not split the logical identity. |
+| FC34C-EXEC-05 | SPEC §14 | Old Subscription1 and new Subscription2 for the same Automation may coexist when generations differ; the same Automation+generation fails, while a legal configure continue may keep the old generation. |
+| FC34C-EXEC-06 | SPEC §14 | Inventory2 that omits a started/outcome_unknown external responsibility, an already stopped latch, a still-referenced completed attempt, an old recovery pin, or the actual StopCapacity fails completeness. |
+| FC34C-D6-01 | SPEC §14 | Record3 Proof2 inventoryPin strict-decodes exact D6-Execution-Inventory/2; workspaceRef and the five payloads approvalUses/claims/moneyLineage/externalUnknowns/stopState are byte-equal to Inventory2, Inventory2.storeIncarnation equals Proof2.storeIncarnation, and Inventory2.stopCapacity equals the actual same-barrier safety-store value. |
+| FC34C-D6-02 | SPEC §14 | Execution custody may hand off Record2 to Record3 only from one complete mixed Inventory2/barrier with actual old-holder fencing; all old responsibility is retained, revision is old+1, executionDomainId and store continuity are preserved, and shared StopCapacity is not copied into a second active store. |
+| FC34C-D6-03 | SPEC §14 | Without handoff, checkpoint, or a real responsibility mutation, merely supporting the current FC schemas does not background-migrate Record2/Proof1/Inventory1 or repin their historical bytes into Record3/Proof2/Inventory2. |
+| FC34C-D6-04 | SPEC §14 | If handoff cannot obtain an original decoder/bytes/pins for any old Pin1/PAB3/Binding1/Subscription1/stop/external responsibility or cannot prove the authoritative store/capacity barrier, takeover pauses/unavailable instead of constructing a partial Inventory2; unrelated ordinary source operations remain available. |
 
 ## PR4 schema repair coverage (no new acceptance IDs)
 
@@ -589,6 +589,8 @@ This schema repair **adds, removes, and renumbers none** of the 554 design oblig
 - AnnotationInlineBody/1 / AsciiDocInlineBody/1 schema alias and the single AnnotationInlineProfile/1: AN2-08, still under the AD2 complete-2.0.26 language gate.
 
 These remain unexecuted design requirements. Closing the schema references does not turn them into passed implementation tests.
+
+The second bounded D10 repair adds no acceptance IDs; the existing FC34B/C/D rows above now also cover fresh/current owner routing, Binding1/2/3 historical dispatch, mixed canonical ordering, the one-barrier rule, Record3↔Inventory2 five-payload equality, Proof2.storeIncarnation, and actual StopCapacity.
 
 ## Not executed
 
