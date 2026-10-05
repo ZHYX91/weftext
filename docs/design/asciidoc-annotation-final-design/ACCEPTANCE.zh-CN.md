@@ -465,7 +465,7 @@ translation_status: source
 | FC34-FMT-02 | SPEC §§5–8 | 把 {kind:"document_format"} 放进 PortableComponentKey/1 必须旧decoder拒绝；不得认为这是 CP3 合法component。 |
 | FC34-FMT-03 | SPEC §§5–8 | legacy/unbound source可按原授权 raw read/repair；不因 profile未绑定删除/隐藏原bytes。 |
 | FC34-FMT-04 | SPEC §§5–8 | legacy/unbound source仅因包含 [weftext-attributes] 就自动切 WeftextManaged，拒绝。 |
-| FC34-FMT-05 | SPEC §§5–8 | 已 managed Node 执行 future weftext_managed/1→/2 profile-only migration，source unchanged；同一 Notice3/CP4 component set 中只有 document_format transition，sourceChanges=[]，不产生 SourceRevisionPlan/SourceVersion/H advance；不把 absent/Baseline→managed 当 migration。 |
+| FC34-FMT-05 | SPEC §§5–8 | 已管理节点执行未来的 weftext_managed/1→/2 配置档迁移时，源内容保持不变；同一 Notice3/CP4 组件集合只含 document_format 迁移，sourceChanges=[]；不得生成 SourceRevisionPlan、SourceVersion 或 H(D,E)，也不得把 absent/Baseline→managed 误作迁移。 |
 | FC34-FMT-06 | SPEC §§5–8 | managed profile-only migration不得增加 SourceVersion 或 H(D,E)。 |
 | FC34-FMT-07 | SPEC §§5–8 | sourceVersion相同但 format stamp变化，旧 InputDescriptor/PAB/EditBinding/ExportPlan继续使用，拒绝。 |
 | FC34-FMT-08 | SPEC §§5–8 | format变化后 dirty Draft bytes仍保存；projection/map/preview失效并重新qualification。 |
@@ -490,7 +490,7 @@ translation_status: source
 | FC34-ST-10 | SPEC §§11–13 | CAS loser产生的staging signature进入portable outbox，拒绝。 |
 | FC34-ST-11 | SPEC §§11–13 | SourceTransform 待签消息必须恰为 ASCII D6-Source-Transform-Seal/1 || NUL || D3-CJ/3(完整 artifact 只删除 signature)，中英文必须写出同一消息；seal 后 publication 失败只重发 exact canonical pinned artifact bytes，不重签。 |
 | FC34-ST-12 | SPEC §§11–13 | SourceTransform artifact被写进 CP4 components，拒绝；它不是portable component。 |
-| FC34-TR-01 | SPEC §13 | Bootstrap4 的 D3 proposalId 仍为 canonical lowercase UUID，并使用 closed Profile4/creator/Registry/series/period helper types；只有一个 root，Genesis2 恰两 declarations：rev1 revision-token、rev2 transform，predecessor chain 正确。 |
+| FC34-TR-01 | SPEC §13 | Bootstrap4 保留 D3 proposalId 的规范小写 UUID，并使用已闭合的 Profile4、creator、Registry、series、period 辅助类型；只有一个根，Genesis2 恰有两条声明：rev1 为 revision-token，rev2 为 transform，predecessor 链必须正确。 |
 | FC34-TR-02 | SPEC §13 | genesis2只一 declaration或三 declaration，拒绝。 |
 | FC34-TR-03 | SPEC §13 | 两 declaration profile正确但revision都=1，拒绝。 |
 | FC34-TR-04 | SPEC §13 | 两 declaration同一个 bootstrap DecisionKey/activation ChangeId；history cut只能全进或全不进。 |
@@ -537,11 +537,11 @@ translation_status: source
 | FC34B-TR-03 | SPEC §13 | Declaration2只找到同DecisionKey CP3，没有CP4；FAIL。 |
 | FC34B-TR-04 | SPEC §13 | mixed /1,/2 history分别按CP3/CP4 activation fold；PASS。 |
 | FC34B-TR-05 | SPEC §13 | Carry2字段声称origin cut，但original Declaration2+CP4重派生不同；FAIL。 |
-| FC34B-TR-06 | SPEC §13 | current wireVersion3 transform-profile rotate 必须 mode=ordinary，并验证 exact PoP/rotate/root signature domain 与 body、使用真实 root-authorized producer；K1 签 transform 后 ordinary rotate 到 K2，远端仍以 producing CP4.frontierBefore 验 K1。 |
+| FC34B-TR-06 | SPEC §13 | 当前 wireVersion3 的 transform profile 轮换必须使用 mode=ordinary，并验证 PoP、rotate、root 的精确签名域和签名体以及真实根授权 producer；K1 签署 transform 后普通轮换到 K2，远端仍以 producing CP4.frontierBefore 验证 K1。 |
 | FC34B-TR-07 | SPEC §13 | K1 compromise与transform seal causal-concurrent；即使arrival顺序显示seal先到也必须FAIL。 |
 | FC34B-TR-08 | SPEC §13 | 普通transform receiver使用current Bundle而非producing CP4.frontierBefore；FAIL。 |
 | FC34B-CONT-01 | SPEC §13 | Bundle2中revision current K仍由Declaration1授权且Handle1 usable；revision-token new signing PASS，transform signing FAIL。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
-| FC34B-CONT-02 | SPEC §13 | current unseen add/rotate/revoke 使用 closed wireVersion3 dual-profile prepare family，caller 不携带 key material；Declaration2 ordinary rotate revision profile 到 K2 后只有 Handle2(K2) 可 new sign，而 saved/planned wireVersion2 record 继续原 recovery。 |
+| FC34B-CONT-02 | SPEC §13 | 当前未见过的 add/rotate/revoke 使用已闭合的 wireVersion3 双 profile prepare family，caller 不携带 key material；Declaration2 将 revision profile 普通轮换到 K2 后，只有 Handle2(K2) 可新签名，而已保存/已规划的 wireVersion2 record 继续原 recovery。 |
 | FC34B-CONT-03 | SPEC §13 | old states (revision=current, transform=none) → revoke revision；authorize B2 revision；authorize B2 transform；同一CP4。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-04 | SPEC §13 | old states (revision=none, transform=current) → revoke transform；authorize两个B2 profiles。PASS。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |
 | FC34B-CONT-05 | SPEC §13 | 任何profile conflicted/gapped/unproved，却先让clean profile的B2 handle usable；FAIL。 |
