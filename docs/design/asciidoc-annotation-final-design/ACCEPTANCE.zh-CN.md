@@ -579,6 +579,16 @@ translation_status: source
 | FC34C-D6-03 | SPEC §14 | 没有handoff、checkpoint或真实责任变化时，仅因为runtime支持FC，不后台把Record2改Record3。PASS。 |
 | FC34C-D6-04 | SPEC §14 | handoff无法取得某个旧Pin1/PAB3/Subscription1或stop responsibility的原 decoder/bytes；必须暂停/不可用，不能构造“其余部分完整”的Inventory2。普通source操作不受此execution缺口全局阻塞。 |
 
+## PR4 schema repair coverage（不新增验收 ID）
+
+本次 schema 补全**不新增、不删除、不重编号**554条设计义务；它把已有验收引用的类型从悬空名称变成公开 closed shape。直接覆盖关系为：
+
+- retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
+- M37 producer-site、snapshot/cut、namespace与producer-time carrier规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
+- AnnotationInlineBody/1 / AsciiDocInlineBody/1 alias 与唯一 AnnotationInlineProfile/1：AN2-08，并继续受AD2完整2.0.26语言Gate约束。
+
+这些条目仍是未运行设计要求；schema补全不把它们改写成已通过实现测试。
+
 ## 未运行边界
 
 本 PR 未执行上述 554 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
