@@ -316,7 +316,13 @@ rank固定：
 
 document_format={kind:"document_format",ownerNodeRef}；component bytes strict-decode ManagedDocumentFormatBinding/1，ComponentImage/1.version=bindingRevision。PinRef/2、ComponentImage/1保持原shape。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
 
-InstallationNotice/3 与 ContentCompletionProof/4 只因 component-key union和current production family升级；CP4 committed/restored责任、frontier、sourceChanges及strict install沿e8aa CP3算法。旧Notice2/CP3原bytes/decoder不扩臂。
+InstallationNotice/3 与 ContentCompletionProof/4 构成新的 current component family；旧 Notice2/CP3 的原 bytes/decoder 不原地扩臂。
+
+Notice3 相比 Notice2 只把 portable component-key decoder 升为 PortableComponentKey/2。其余合同逐项继承：components 非空、按 fixed rank 与 canonical key 排序且唯一；notice 在第一次 portable-current install 前由原计划冻结并持久化；baseFrontier 仍是原计划基线；notice 不含尚未 seal 的 ChangeId、receipt、credential、approval、Money 或 execution authority。
+
+CP4 相比 CP3 只把 component-key decoder 升为 PortableComponentKey/2，并增加下述 current ChangeRecord/1 关联。CP3 的其余 committed/restored 校验全部继续为规范要求：Notice↔CP key 集合与顺序严格相等、after 必须是实际 installed/sealed image、sourceChanges 完整且按 EntityRef 排序、原 receiptDigest、Frontier 单次前进、scope_dependencies 连续 chain、restored arm 禁止成功字段，以及 receiver 对真实 component bytes 与 owner version 的校验。
+
+fresh managed Document 的 source-document component 与 document_format component 必须由同一原始 plan 产生、由同一 portable decision 安装，并且只在同一个 P seal/CP4 中一起成为 current；不得出现半激活 managed source。format-only transition 若 source 不变，只改变 document_format，sourceChanges=[]，不产生 SourceRevisionPlan/managed SourceVersion，也不推进 H(D,E)。
 
 ### 6.3 ChangeRecord/1
 
@@ -334,7 +340,15 @@ ChangeRecord/1 = {
 }
 ```
 
-同一P seal固定ChangeId、CP4和ChangeRecord bytes；Notice3已在install前由原plan持久化。ChangeRecord只索引exact Notice/CP和frontiers，不复制components/sourceChanges，不是第二author truth。publication失败只重发原pinned bytes。pre-FC记录没有真实decoder时，strong causal consumer得到proof gap，不能套 /1；ordinary source读写不因此全局禁用。
+同一 P seal 固定 ChangeId、CP4 和 ChangeRecord bytes；Notice3 已在 install 前由原 plan 持久化。ChangeRecord 只索引 exact Notice/CP 与 frontiers，不复制 components/sourceChanges，不是第二 author truth。publication 失败只重发原 pinned bytes。pre-FC 记录没有真实 decoder 时，strong causal consumer 得到 proof gap，不能套 /1；ordinary source 读写不因此全局禁用。
+
+对 committed CP4：decisionKey.workspaceRef 必须与全部 component/sourceChanges Workspace 一致，changeId.commitDomain 必须等于 decisionKey.commitDomain。CP4.components 与对应 Notice3 的 key 集合严格相等且 canonical 顺序完全一致，每个 after 都是该 key 实际 installed 且 sealed 的 after image。CP4.sourceChanges 要么为空，要么是该 decision 全部真实 source-state change 的完整、按 EntityRef canonical 排序且唯一的集合；source 不变的 portable effect 不制造假 entry。非 absent after 必须来自 winning source plan 与同一个 ChangeId 形成的 managed SourceVersion/2。receiptDigest 只认证该 decision 原始 receipt bytes，不扩大 disclosure 或 execution authority。
+
+frontierBefore 是 seal 前实际验证的 Frontier；frontierAfter 必须恰好在 decisionKey.commitDomain 上由 frontierBefore 增加本 ChangeId，其他 domain 不回退、不被无关改写。exact policy 下 frontierBefore 与原 expected/base/notice Frontier byte-equal。scope_dependencies 下，从 Notice3.baseFrontier 到 frontierBefore 的每个新增 head，以及本 ChangeId 到 frontierAfter 的链，都必须有完整连续、已验证的 ChangeRecord/completion chain；原 frozen dependency proof 还必须证明新增 sealed effects 与全部绑定依赖无关。只比较 vector number、provider sync 状态或当前文件都不够。
+
+restored CP4 只有在未 seal 且 Notice3 的每个 component 都已安全恢复到原 before image 时才合法。其 closed restored arm 只含 decisionKey、baseFrontier 与这些 component images；changeId、成功态 guarantee/writeProtection/semanticState、frontierBefore/frontierAfter、sourceChanges、receiptDigest 与任何成功语义均禁止出现。
+
+receiver 只有在 strict-decode ChangeRecord 所指 exact canonical Notice3/CP4 bytes、核对版本与 cross-fields、取得全部 listed component bytes/metadata、按实际 owner decoder/version 验证每个 ComponentImage、验证完整 production SourceVersion before/after，并证明连续 causal chain 后才可 admission ChangeRecord1。document_format component 还必须 strict-decode exact ManagedDocumentFormatBinding/1。缺 bytes、未知 decoder/version、chain 不完整或 Notice/CP 不一致都只能是 incomplete/proof_unavailable，不能判 success。原 authorization、recovery、error ordering 保持不变，也不新增 ledger、CAS 或 commit point。
 
 ## 7. D3/D4/D5 current consumers
 
@@ -503,13 +517,17 @@ PortableTransformCompilation/1 =
 
 普通save遇unavailable仍可继续，只是不能产生transform evidence。
 
-SourceTransformPortableEvent/3 只有 replace与insert。坐标全部是original-before UTF-8 byte half-open；delete是replacementLength=0的replace。generated replacement/insertion内部后续edit折回同provenance event；same-point inserts按真实transaction order合并；真实overlap可形成maximal island；boundary insert不能被错误吞进neighbor replacement。same-point canonical order：left replacement ending p → unique insert@p → right replacement starting p。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+SourceTransformPortableEvent/3 只有 replace 与 insert，坐标全部使用 original-before UTF-8 byte。delete 是 replacementByteLength=0 的 replace。每个 replace 必须满足 0 <= startByte < endByte <= beforeByteLength，且 startByte/endByte 都是 UTF-8 scalar boundary；removedByteLength 必须等于 endByte-startByte，removedSha256 必须等于 beforeBytes[startByte:endByte] 的 SHA-256。每个 insert 必须满足 0 <= atByte <= beforeByteLength 且 atByte 是 UTF-8 scalar boundary；零长度 insert 不是 canonical event，必须省略。generated edit 在可表达时折回原 provenance event；source replacement overlap 必须形成一个 maximal replacement island，严格落在 island 内部的 insert 必须折入该 island，否则 compilation unavailable。same-point inserts 按真实 transaction order 合并，所以一个 point 最多保留一个 insert。
 
-receiver从before/after pins机械计算每个event在after中的generatedOutputSpan并切片replacement payload，再验证length/hash；禁止内容搜索。replay必须精确得到afterPin与afterSourceSha256。
+canonical event array 按 original coordinate 排序。interval 在 p 结束的 replacement 位于 p 处 event 之前；同一个起点 p 上，唯一 insert@p 位于从 p 开始的 replacement 之前。因此 boundary order 固定为：left replacement ending p → unique insert at p → right replacement starting p。maximal-island 形成后，各 replacement source interval 两两不重叠。
+
+`generatedOutputSpan(E)` 禁止内容搜索，必须用 exact before/after pin 做一次 replay cursor 计算。初始化 beforeCursor=0、afterCursor=0。依 canonical 顺序处理 E：replace 时 q=E.startByte，insert 时 q=E.atByte；要求 q>=beforeCursor，并要求 beforeBytes[beforeCursor:q] 与 afterBytes[afterCursor:afterCursor+(q-beforeCursor)] byte-equal，然后两个 cursor 都推进这段 unchanged 长度。E 的 generatedOutputSpan 恰为 [afterCursor, afterCursor+E.replacementByteLength)，必须落在 afterBytes 范围内，其 exact slice 同时满足 replacementByteLength 与 replacementSha256，随后 afterCursor 到 span end；replace 再令 beforeCursor=endByte，insert 则保持 beforeCursor=q。最后 beforeBytes[beforeCursor:] 与 afterBytes[afterCursor:] 必须 byte-equal，完整 after bytes 还必须匹配 afterSourceSha256。任何 boundary、length、digest、ordering、unchanged segment 或 final replay 失败都令 compilation/evidence 无效；receiver 不得用冗余字段替代真实 bytes。
 
 ### 11.2 mapping
 
-非零target [s,e)：任何replace与target真实overlap或insert严格落在内部都停止exact mapping。否则一次性使用original-before坐标累计：
+对 replacement R=[a,b)，设 replacement length 为 Lr，定义 delta(R)=Lr-(b-a)，它是可为负数的 signed integer；对 q 处 insertion I，len(I)=replacementByteLength。以下求和必须用 checked signed arithmetic，最终 mapped coordinate 必须仍在 replay 后 after-source byte range 内。
+
+非零 target [s,e)：任何 replace 与 target 真实 overlap 或 insert 严格落在内部都停止 exact mapping。否则一次性使用 original-before 坐标累计：
 
 ```text
 s' = s + Σδ(R where b<=s) + ΣL(I where q<=s)
@@ -565,30 +583,41 @@ required plan必须：
 D3-CJ/3(plan.edits) == D3-CJ/3(evidence.edits)
 ```
 
-SourceTransformSealArtifact/1 以 D6-Source-Transform-Seal/1 || NUL || D3-CJ/3(body_without_signature) 做Ed25519签名。outbox key唯一为 {changeId,ownerNodeRef}；SourceTransformSealOutboxItem/1 的artifactPin=portable_metadata exact canonical artifact bytes。required sealed decision恰一item；disabled零item；同key不同bytes为integrity conflict。publication crash只按exact key重发原pin，不按current trust/source/hash搜索或重签。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+SourceTransformSealSignedBody/1 恰好是完整 SourceTransformSealArtifact/1 删除唯一 signature 成员后的 closed object，因此仍含 format、version、trustKeyId 与完整 SourceTransformEvidence/2，不能增删其它字段。signature 的 lexical form 恰为 86 个 ASCII unpadded-base64url 字符，decode 后必须是 64-byte Ed25519 signature。选中的 verification public key 恰为 43 个 ASCII unpadded-base64url 字符，decode 后必须是 32 bytes；trustKeyId 必须恰为 `"sha256:" + lowercase_hex(SHA-256(raw public-key bytes))`。
+
+待签消息两语完全相同，固定为 `ASCII "D6-Source-Transform-Seal/1" || NUL || D3-CJ/3(SourceTransformSealSignedBody/1)`。transport/store 的 artifact bytes 必须恰为含 signature 的完整 SourceTransformSealArtifact/1 的 D3-CJ/3；即使其它 JSON serialization 解出相同值，也必须拒绝。signature 不覆盖自身、outbox address 或后来的 trust cut。
+
+outbox key 固定 {changeId,ownerNodeRef}，artifactPin=portable_metadata 且 pin 的是 exact canonical artifact bytes。required sealed decision 恰一个 item，disabled 为零；同 key 两份不同 artifact 是 integrity conflict。required seal 在原 P seal 中重验 frozen exact profile/trustRevision/trustKeyId 与 usable handle。publication/recovery 只重发原 pin bytes，永不重编译 events、按 current source/hash/trust 搜索或重签。
 
 SourceTransform artifact不是PortableComponent，不进入Notice/CP component set；它与source decision共用同一P seal/ChangeId。
 
 ## 13. D6 trust profile / activation / history
 
-一个Workspace只有一个 WorkspaceTrustRootDeclaration/1/anchor。closed seal profile只有：
+一个 Workspace 恰有一个保留的 WorkspaceTrustRootDeclaration/1 和一个受保护的 WorkspaceTrustAnchor/1。closed seal profile 只有 d6_revision_token_seal/1 与 d6_source_transform_seal/1。历史 WorkspaceTrustDeclaration/1 继续保持 byte-exact revision-token-only。WorkspaceTrustDeclaration/2 是 current profile-discriminated successor；WorkspaceAuthorizationBundle/2 可以包含 byte-exact /1 prefix 再接 /2 suffix，出现第一个 /2 后不得回到 /1。
 
-```text
-d6_revision_token_seal/1
-d6_source_transform_seal/1
-```
+Declaration2 的 revision 1 predecessor 必须是 `{kind:"root",fingerprint:WorkspaceTrustRootFingerprint/1}`，其中 fingerprint 是完整 retained object，不能降成裸 digest。该 fingerprint 必须与 retained root declaration 重算值以及唯一 protected WorkspaceTrustAnchor/1 中保存的值 byte-equal。后续 predecessor 使用前一 declaration 的 exact revision 与其 D3-CJ/3 bytes 的 SHA-256。rootKeyId 永远不能代替 predecessor fingerprint。
 
-historical WorkspaceTrustDeclaration/1 永远只授权revision-token。current WorkspaceTrustDeclaration/2 使用profile-discriminated签名域并允许两profile；WorkspaceAuthorizationBundle/2 可含exact /1 historical prefix + /2 suffix，首个 /2 之后不得回到 /1。predecessor hash总是前一条真实版本canonical bytes。
+Declaration2 的 publicKey 恰为 43 个 ASCII unpadded-base64url 字符，decode 后必须是 32-byte Ed25519 key。所有 Ed25519 signature 成员恰为 86 个 ASCII unpadded-base64url 字符，decode 后必须是 64 bytes。每个 trustKeyId/newTrustKeyId 必须等于 `"sha256:" + lowercase_hex(SHA-256(raw_32_byte_public_key))`；uppercase hex、padded base64、alternate serialization 或 closed prepare protocol 之外的 caller key bytes 一律拒绝。
 
-Declaration1 activation仍从其原 DecisionKey→CP3/ChangeRecord证据派生；Declaration2 activation必须从同DecisionKey committed CP4 + ChangeRecord/1 + policy after-image第一次追加exact declaration sequence派生。同DecisionKey连续declarations共享一个activation ChangeId，在history_at(C) all-in/all-out。
+authorize 与 rotate 的 possessionSignature 必须认证 `ASCII "D6-Domain-Seal-Key-PoP/2" || NUL || D3-CJ/3(DomainSealKeyPoPBody/2)`。PoP body 是 containing declaration 的 workspaceRef、revision、predecessor、decisionKey，加上 exact action commitDomain/profile 与新 key tuple 的 closed projection；rotate 将 newTrustKeyId 规范化放入 body 的 trustKeyId 成员。TrustConflictOutcome/2 的 authorize_fresh 使用同一 PoP domain/body，由 enclosing Declaration2 common fields 与该 outcome 的 exact commitDomain/profile/key tuple 重建。PoP 不能搬到另一 declaration revision、DecisionKey、domain、profile 或 key。
 
-TrustConflictCarry/2.originActivationChangeId 不能自证：receiver重载原 Declaration2、验证root/predecessor/profile/mode、重新找到original DecisionKey→CP4/ChangeRecord，再比较派生ChangeId。Carry1保持原Declaration1+CP3算法。later resolver cut绝不替代origin cut。
+ordinary rotate 的 mode 必须是 `ordinary`，continuitySignature 是被替换旧 key 对 `ASCII "D6-Domain-Seal-Key-Rotate/2" || NUL || D3-CJ/3(DomainSealKeyRotateContinuityBody/2)` 的 Ed25519 signature。该 closed body 包含 declaration common fields 与除 continuitySignature/rootSignature 外的完整 rotate action，包括 old/new key IDs、publicKey、possessionSignature 与 mode="ordinary"。mode 为 loss_recovery 或 compromise 时，continuitySignature 必须是 literal `"not_required"`，不要求也不接受旧 key signature。revoke 使用独立 closed mode 集 administrative|loss|compromise。
 
-SourceTransform普通receiver先验证producing ChangeRecord/CP4，然后固定 C=CP4.frontierBefore，调用historical validation(profile, trustKeyId, producing CommitDomain,C)再验signature。之后ordinary rotate不使旧合法artifact失效；compromise用artifact seal ChangeId与**原 compromise activation ChangeId**做因果判定，不能用arrival/current state/CP4.frontierAfter替代。
+rootSignature 必须认证 `ASCII "D6-Workspace-Trust-Declaration/2" || NUL || D3-CJ/3(WorkspaceTrustDeclarationSignedBody/2)`；WorkspaceTrustDeclarationSignedBody/2 就是完整 Declaration2 只删除 rootSignature。因此 root 会绑定完整 action、PoP/continuity、conflict outcomes/carries、predecessor 与 DecisionKey。
 
-DomainSealKeyHandle/1 若exact revision profile/domain/trustKey仍在current safe interval且usable，可以继续签新的revision-token，即使bundle已经是v2；永远不能签transform或被静默包装成Handle2。由Declaration2新建/rotate的key使用Handle2。
+current unseen 普通 trust administration 只通过 SCHEMAS §9 的 closed wireVersion3 add/rotate/revoke prepare successor。profile 使用 SealProfileId/1，因此 revision-token 与 source-transform 两个 profile 都有真实 public producer。request 不携带 public/private key material；add/rotate 的 key 与 PoP 由 Core 在 admitted secure store 内生成。gate 保持 current workspace policy_admin、exact expected trust revision、current disclosure、anchored root 与 usable root handle。rotate 的 mode 为 ordinary|loss_recovery|compromise；revoke 独立为 administrative|loss|compromise。操作只通过原 planning/install/single-P/CP4 路径更新现有 policy/WorkspaceAuthorizationBundle component，不新增 trust ledger、Boolean validator、CAS 或 commit point。真实 saved/planned wireVersion2 trust request 保留 exact decoder/recovery，绝不改写为 /3。
 
-fresh bootstrap有一个root和恰两个profile declarations：rev1 revision-token，rev2 source-transform，固定profile rank顺序，共一DecisionKey/activation ChangeId，无合法中间prefix；两个staged handles仅同P commit后usable。replica registration同理固定为双profile。continuation对old domain的两个profile分别计算current(K)|none|conflicted/unproved；任一unproved整体不能激活新domain。全部可证后按 revision revoke? → transform revoke? → new revision authorize → new transform authorize 的固定顺序在一个DecisionKey/CP4中完成。
+Declaration1 activation 继续走原 DecisionKey -> CP3/public-history 规则。Declaration2 activation 必须由其 DecisionKey -> committed CP4 + ChangeRecord/1 -> 首次追加该 declaration sequence 的 exact policy after-image 重派生。共享同一 DecisionKey 的 declarations 共用一个 activation ChangeId，在 history_at(C) 中全进或全不进。TrustConflictCarry/2 必须从原 Declaration2 与原 CP4/ChangeRecord 重派生 origin；后来的 resolver cut 不能替代 origin cut。
+
+普通 SourceTransform receiver 验证 producing ChangeRecord/CP4，并用 C=CP4.frontierBefore 做 historical key verification。后续 ordinary rotation 不会让在 C 合法的 artifact 失效。compromise 必须比较 artifact seal ChangeId 与原 compromise activation ChangeId 的 causal order；causal-concurrent 或更晚的 old-key seal 无论 arrival order 都失败。DomainSealKeyHandle/1 只在 exact Declaration1-authorized key 仍 current、safe、usable 时继续 revision-token 新签名；它永远不获得 transform authority，也不改编码成 Handle2。
+
+WorkspaceBootstrapProfile/4 与 Profile3 使用同一 closed member set 和 issuer semantics，只把 fresh-target trust genesis family 改为 WorkspaceTrustGenesis/2。WorkspaceBootstrapPlan/4 保留 D3 allocation chain 的 canonical lowercase UUID proposalId 以及其它 UUID 成员。creator binding、target Registry binding、series configuration 与 period-scope binding 都使用 SCHEMAS §9 的 closed helper types，不留描述性 placeholder。
+
+Plan4 只用于 current unseen fresh create_workspace/fork_workspace bootstrap。原 D3 proposal authenticity、issuer/target-custody ordering、一个 planning CAS、一个 DecisionKey、一个 P seal 全部保持。create 从 frozen eligible seed 派生 target Registry；fork 在 fixed source cut 携带并映射完整 source Registry/configuration history。fresh bootstrap 只有一个 root，并严格按顺序生成两个 Declaration2 authorize：revision 1 revision-token，revision 2 source-transform；两者同 DecisionKey/activation ChangeId，rev2 predecessor hash exact rev1 canonical bytes。两个 staged handle 只有在这一个 seal commit 后才变 usable，不存在可观察的一-profile prefix。
+
+普通 managed copy 不是 bootstrap，继续走既有 scope/configuration mapping 规则。restore/recovery 按实际 saved decoder/plan 分派，不注入 Genesis2，也不升级 old bytes。continue_workspace/failover 保留 current policy、principal mappings、Registry/configuration 与 profile trust state，不能重新跑 bootstrap。本设计候选尚未部署，因此不声称从 Plan3 有 migration 或 dual-write；任何确实存在的历史 record 只按其 recorded contract 继续。
+
+replica registration 继续使用 specialized same-record producer；current FC operation 为 dual-profile，generic trust prepare 不能冒充 replica_register authority。continuation 对 revision 与 transform profile 分别计算 current(K)|none|conflicted_or_unproved；任一 profile unproved 都禁止新 signing domain 部分激活。其余情况下完整顺序固定为 optional old revision revoke、optional old transform revoke、new revision authorize、new transform authorize，全部在一个 DecisionKey/CP4 中且无可观察中间 prefix。
 
 ## 14. D10 current/historical mixed holders
 
