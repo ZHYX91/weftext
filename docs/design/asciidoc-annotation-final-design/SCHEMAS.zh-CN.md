@@ -389,7 +389,7 @@ OracleCollectionEvent/1 =
      tableOrdinal:UInt,
      section:"head"|"body"|"foot",
      rowOrdinal:UInt,columnOrdinal:UInt,
-     colspan:UInt,rowspan:UInt,
+     colspan:UInt|null,rowspan:UInt|null,
      style:text|null,text:text|null}
 
 OracleCatalogEvent/1 =
