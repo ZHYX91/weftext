@@ -21,8 +21,8 @@ reviewer 开始时记录实际 Draft PR head SHA，并验证它以 parent e8aa �
 
 ## 必读
 1. 根 `AGENTS.md`、`docs/design/AGENTS.md`、`docs/design/README.md`、`docs/design/inputs.json`。
-2. 本目录 README、SPEC、ACCEPTANCE、terminology registry、replacements。
-3. replacements列出的 fixed-e8aa actual-owner规范。
+2. 本目录 README、SPEC、SCHEMAS、ACCEPTANCE、terminology registry、replacements。SPEC管行为/算法，SCHEMAS管closed shapes与历史分派，二者均为规范正文。
+3. replacements列出的 fixed-e8aa actual-owner规范，包括主owner以及具名 lexicon/impact/acceptance/machine-registry direct holders；不得只读主正文后忽略旧current-version引用。
 4. D10 historical prepare binding需核 `d99f053b9386c9c9e1664251fdec9f00e33fac2c` 的真实 `ControlPrepareBinding/1` decoder；该事实只证明decoder来源，不证明部署。
 
 ## 必核 Gate
