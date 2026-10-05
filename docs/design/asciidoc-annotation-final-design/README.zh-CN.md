@@ -22,7 +22,7 @@ translation_status: source
 1. [REVIEW-ENTRY.zh-CN.md](REVIEW-ENTRY.zh-CN.md)
 2. [SPEC.zh-CN.md](SPEC.zh-CN.md) — 行为、算法与 owner replacement
 3. [SCHEMAS.zh-CN.md](SCHEMAS.zh-CN.md) — current closed shapes、排序、历史分派
-4. [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md) — 716 条逐项未运行设计义务
+4. [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md) — 731 条逐项未运行设计义务
 5. [terminology-registry.json](terminology-registry.json)
 6. [replacements.json](replacements.json)
 
@@ -33,8 +33,8 @@ translation_status: source
 ## 验收记账
 
 - 核心设计 oracle：438
-- actual-owner coordination fixture：278
-- 合计：716
+- actual-owner coordination fixture：293
+- 合计：731
 - 状态：**全部未运行**。这些是设计验收义务，不是产品测试结果。
 
 作者只执行文档/JSON/router一致性检查；最终设计接受必须由非作者对停止写入后的 exact PR head SHA 完成。
