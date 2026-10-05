@@ -2226,15 +2226,17 @@ D9ExportConfirmation/1 = {
   lossChoices:[D9ExportLossChoice/1...]
 }
 
+D9ControlledRelativeOutputName/1 := text satisfying the §6.5 closed output-name domain
+
 D9ExportStagedOutput/1 = {
-  name:text,
+  name:D9ControlledRelativeOutputName/1,
   byteLength:Counter,
   sha256:"sha256:<64 lowercase hex>",
   pin:PinRef/2
 }
 
 D9PublishedOutput/1 = {
-  name:text,
+  name:D9ControlledRelativeOutputName/1,
   byteLength:Counter,
   sha256:"sha256:<64 lowercase hex>"
 }
@@ -2283,13 +2285,23 @@ PublicationReceipt/3 = {
 }
 ```
 
+D9ControlledRelativeOutputName/1 是非空 Unicode scalar 字符串，其原始 UTF-8 编码就是协议名称。唯一分隔符是 U+002F SOLIDUS（“/”）。名称必须由一个或多个非空 component 组成，不能以“/”开头或结尾，也不能出现空 component。component 不能是“.”或“..”；不能含 U+0000..U+001F、U+007F、U+005C（反斜杠）以及 ASCII 字符 : * ? " < > |；末尾不能是 U+0020 SPACE 或 U+002E FULL STOP。因此 Unix rooted name、重复分隔符、Windows drive/root 形式与 UNC/backslash 形式都直接非法，不交给 host 决定 alias。除这些排除项外允许 Unicode scalar，本协议不是 ASCII-only。
+
+设备名检查只取每个 component 在第一个 U+002E 前的 stem，把 ASCII A-Z 折成 a-z，然后拒绝 con、prn、aux、nul、clock$、conin$、conout$、com1..com9 与 lpt1..lpt9。若 ASCII 字母部分相同而末位分别是 U+00B9、U+00B2、U+00B3，也拒绝 COM¹/COM²/COM³ 与 LPT¹/LPT²/LPT³。host device table 或 locale 不能扩张或削弱这个协议检查；destination capability 只能额外拒绝。
+
+PortableAlias(name) 只用于冲突拒绝。先按“/”拆分已经合法的名称；每个 component 依次执行 Unicode 15.1.0 NFC、Unicode 15.1.0 CaseFolding.txt 的 full default case fold（使用 C/F mapping，不使用 locale-specific T mapping），再执行一次 NFC，最后用“/”连接。normalization 算法固定为 Unicode 15.1.0 的 Unicode Standard Annex #15。实现必须得到与这些固定版本 Unicode data 相同的 scalar 结果；ambient locale 或未固定版本的 host Unicode library 不能作为 authority。PortableAlias 永远不替换 stored name，也不参加原始 UTF-8 排序。
+
+同一 fresh-current bundle 中，exact duplicate name 非法；不同名称若 PortableAlias 相等也非法。把 PortableAlias 看成 component vector：一个成员的 vector 若是另一个成员的 proper prefix，就形成 file/directory conflict，必须拒绝。根级 loss-report.json 与 manifest.json 是系统保留成员，由 Core 精确生成；所有 dataFile 都必须与二者做 exact name、alias 与 prefix 检查。因此 Report.txt/report.txt 冲突，canonical-equivalent 的 NFC/NFD 拼写冲突；dir/file 是合法嵌套形式，而包含 dir\\file 的名称直接非法。真实文件系统若发现更多 collision，可以拒绝 destination，但不能改变这套 portable relation。
+
+fresh ExportPlan/3.stagedOutputs 是完整 canonical staged member set：全部已验证 dataFiles 加 exact loss-report.json 与 manifest.json，并各自绑定真实 bytes/pin。PublicationReceipt/3.outputs 对实际发布 bytes 重复同一完整 name/digest 集合。external manifest 的 reportFile 必须精确命名 loss-report.json，其 length/digest 与 staged/published member 相等；manifest.json 继续继承不自哈希规则。server-download 与 Resource-handoff 只能按这个 exact controlled name 选择原 staged dataFile bytes，不能合成替代名称。安全、alias、prefix 或 reserved 失败属于 invalid preparation，绝不能变成 ExportLossChoice。
+
 exact-source/resource-exact/query-json plan 强制 generationPolicy={kind:"none"}、templateBinding=null、routeBinding=null、documentRenderBinding=null，projection 不得含 renderer-derived value。即使 template/provider/generation registry unavailable，它们仍有唯一可编码正向路径，因为本合同根本不消费这些依赖。rendered HTML/PDF/DOCX/ODT 与有限 table output 使用 generationPolicy.render；某一 policy 类未使用时对应 array 可以为空。
 
 D9TemplateBindingChoice/1 只在真实 ambiguous binding 且 authorized template/profile 允许用户选择时出现；inputIndex 必须选择 exact frozen catalog item，不能借 choice 新增 read。D9MissingPolicyChoice/1 只能命中已存在的 exact template path，且 authorized projection value 确为 none；action=empty 不能掩盖 unknown path、unreadable input、type error 或 unavailable schema。imageSizes 按 ResourceRef key 排序唯一，两个 dimension 均为 positive，resource 必须等于 authorized resource catalog input。layoutChoices 同样按 ResourceRef key 排序唯一，必须存在相同 resource 的 imageSizes，而且只在 fixed Templates rule 真正要求 explicit layout choice 时出现。preserve_aspect_within_box 取不超过两个 chosen dimension 的最大同宽高比尺寸；use_exact_dimensions 使用两个 chosen dimension 并记录 required layout loss。
 
-current ExportPlan/3 的所有 set-like array 由一个 comparator contract 闭合。routeBinding.steps 的 array position i 必须有 step=i，形成0..N-1；每个 step.evidencePins 按 pinToken 排序唯一。styleBundles 按 styleBundleId UTF-8 bytes 排序唯一，同 ID 不同 version/pin 是 conflict。stagedOutputs 与 PublicationReceipt/3.outputs 先执行 fixed-parent 的 controlled-relative-name safety 以及 alias/conflict 验证，再按精确 protocol name string 的 unsigned UTF-8 octet lexicographic order 排序唯一：不做 Unicode normalization、case folding、locale collation、host/path-library collation 或 separator rewrite，精确 byte prefix 较短者在前。若继承的 alias/conflict validator 判两个 name 冲突，排序绝不能把它们变合法。重复 exact name 一律非法，同名不同 byteLength/sha256/pin 是明确 integrity conflict，绝不 LWW。generationPolicy.render.bindingChoices 与 missingPolicy 共用一个 templatePath Unicode-scalar lexicographic comparator：按 exact decoded Unicode scalar sequence 的 scalar value 逐项比较，normalization=none、case-sensitive，不使用 locale/case folding；精确 scalar prefix 较短者在前。canonical-equivalent 但 scalar sequence 不同的写法保持不同 key，除非既有 Templates 其它规则本来就拒绝它们。两个 array 都按该 comparator 排序唯一；同一 exact templatePath 不能有两个不同 inputIndex/action，也不能同时既 bindingChoice 又 missingPolicy。nativeTableBindings 按 (setName,columnName) 的受控 ASCII bytes 元组排序唯一，同 key 不同 token/selector 失败。已有 imageSizes/layoutChoices 的 ResourceRef 排序唯一、lossChoices 的 lossKey、plan evidencePins/recoveryPins 的 pinToken 规则继续原样有效，不允许另一个实现自选排序。
+current ExportPlan/3 的每个 set-like array 都有唯一 comparator contract。routeBinding.steps 的 array position i 必须对应 step=i，也就是完整 0..N-1；每个 step.evidencePins 按 pinToken 排序且唯一。styleBundles 按 styleBundleId 的 UTF-8 bytes 排序且唯一，同一 ID 若 version/pin 不同就是 conflict。stagedOutputs 与 PublicationReceipt/3.outputs 必须先满足 D9ControlledRelativeOutputName/1 以及上述完整 exact-name、PortableAlias、file/directory-prefix、reserved-system-name 冲突规则，然后才按 stored protocol name 的原始无符号 UTF-8 bytes 字典序排序并保持唯一；排序本身不执行 Unicode normalization、case folding、locale collation、host/path-library collation 或 separator rewriting，完全相同 byte prefix 的较短者在前。exact duplicate 非法，portable alias/prefix/reserved conflict 非法，同一 exact name 若 byteLength/sha256/pin 不同则是 integrity conflict，绝不 LWW。generationPolicy.render.bindingChoices 与 missingPolicy 继续共用 templatePath Unicode-scalar comparator：按 exact decoded scalar value 字典序比较，normalization=none、case-sensitive、禁止 locale/case folding，完全相同 scalar prefix 的较短者在前。canonical-equivalent 但 scalar sequence 不同的 template path 仍可保持不同 key，除非既有 Templates 规则另行拒绝；这个 template comparator 与 output-name alias relation 明确分离。各 array 分别按自己的 comparator 排序且唯一；同一 exact templatePath 不能有两个 inputIndex/action body，也不能同时出现在 bindingChoice 与 missingPolicy。nativeTableBindings 按 controlled ASCII (setName,columnName) tuple 排序且唯一；同 key 不同 token/selector 必须失败。imageSizes/layoutChoices 的 ResourceRef、lossChoices 的 lossKey、plan evidencePins/recoveryPins 的 pinToken 继续原 comparator，implementation 不得自选替代顺序。
 
-D9 prepare 在任何 ExportPlan/3 bytes、plan token、protected pin、staged manifest 或 confirmation basis 冻结前，先 strict-decode 全部 choice，按上述 key 检测 duplicate/conflict，再对合法 input permutation 执行唯一 canonical sort。因而只交换同一合法集合的输入顺序必须得到 byte-for-byte 相同 Plan；duplicate key 即使 body byte-equal 也因 unique 规则拒绝，body 不同则同时是 integrity conflict。冻结后的 ExportPlan/3、PublicationReceipt/3、recovery/receiver record 必须已经 canonical；reader/admission 遇到乱序、duplicate 或 key/body conflict 直接 fail，绝不通过“读时排序”修复历史/受保护 bytes。receipt 重复的 route/style/generation-policy 选择仍与 protected Plan byte-equal，outputs 用上面的独立 canonical output-name comparator。
+D9 prepare 必须 strict-decode 全部 choices，并验证完整 current output-name 域与 bundle conflict set，再检测 duplicate/conflicting keys，最后在冻结任何 ExportPlan/3 bytes、plan token、protected pin、staged manifest 或 confirmation basis 之前执行唯一 canonical sort。因此同一合法 set 的任意 permutation 必须得到 byte-for-byte 相同 Plan。duplicate key 即使 body byte-equal 也因集合要求唯一而拒绝；body 不同还构成 integrity conflict。冻结的 current ExportPlan/3、PublicationReceipt/3、recovery record 或 received record 必须已经 canonical，而且其中全部 current output name 必须已经满足 D9ControlledRelativeOutputName/1；admission 对 disorder、duplicate/alias/prefix/reserved conflict 或 key/body conflict 必须拒绝，绝不能通过排序、normalization、rename、repin 或 re-encode 修复 protected bytes。真正 historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 继续按原 decoder、bytes 与 name rule 恢复，不追溯套用这个 current predicate。receipt 的 route/style/generation-policy selection 与 protected Plan byte-equal，outputs 继续使用上面的独立 raw-name comparator。
 
 D9ExportTemplateBinding/1.inputIndex 必须选择 inputCatalog.items[index] 中恰一个 payload.kind=template 项；pin 与该 item.pin byte-equal。profileId/profileVersion 必须选择能成功解码这些 exact bytes 的 accepted decoder；profile mismatch/unavailable 是 template unavailable，不得 fallback。不存在第二 template registry 或 filename lookup。
 
@@ -3401,4 +3413,4 @@ Provider closed shapes见 SPEC §4。它们是生态renderer资格，不改变co
 
 # 13. 验收引用
 
-所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +312 coordination，共750，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。
+所有上述schema与cross-field规则的正负设计义务逐项列在 [ACCEPTANCE.zh-CN.md](ACCEPTANCE.zh-CN.md)：438 core +322 coordination，共760，全部未运行。该文件的ID正文是规范的一部分，不允许用计数替代。

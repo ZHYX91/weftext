@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 312
-- total: 750
+- actual-owner coordination fixtures: 322
+- total: 760
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -458,7 +458,7 @@ translation_status: source
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
 | M39-11 | SPEC §§2–3 | document/0 反例：先 bind document/0、之后才发布 actual returned Document，或 bind 时按 title/source/text 重新寻找 D；即使最终 entry0 正确也必须失败。 |
 
-## Actual-owner coordination — 312
+## Actual-owner coordination — 322
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
@@ -773,13 +773,23 @@ translation_status: source
 | FC4F-POL-09 | SPEC §8.2 | bootstrap 完成后，既有 SetRequest、offline successor、多 head 显式冲突解决、outbox 与 retention 规则保持不变：相同 revision/value 绝不能产生 LWW winner，后续 policy change 也不能改写已经冻结的 D9 Plan/staged bytes。 |
 | FC4F-EXP-01 | SPEC §8.3 | bindingChoices 与 missingPolicy 的 templatePath 按 exact Unicode scalar sequence lexicographic 比较，normalization=none、case-sensitive，精确 scalar prefix 较短者在前；合法输入置换因此冻结成唯一 byte-identical 顺序，不使用 locale/case-folding。 |
 | FC4F-EXP-02 | SPEC §8.3 | 大小写变体或 precomposed/decomposed Unicode 等 scalar sequence 不同的 path 保持不同 comparator key，按 scalar order 而不是 normalization 排序；某 path 是另一路径的 exact scalar prefix 时必须排在较长项之前。 |
-| FC4F-EXP-03 | SPEC §8.3 | 继承的 safe-relative、alias 与 conflict 验证通过后，stagedOutputs 和 PublicationReceipt/3.outputs 必须按协议名称的原始无符号 UTF-8 字节做字典序比较；若一项是另一项完全相同的字节前缀，则较短者在前。禁止 normalization、case folding、host path-library collation 或 separator rewriting。 |
-| FC4F-EXP-04 | SPEC §8.3 | output alias/conflict validation 与排序彼此独立：即使 raw UTF-8 comparator 能给两个 protocol string 排序，只要继承的 target validator 判它们 alias/conflicting 就必须拒绝；排序不能修复 path-safety conflict。 |
+| FC4F-EXP-03 | SPEC §8.3 | D9ControlledRelativeOutputName/1 validity 以及完整 exact-name、portable-alias、file/directory-prefix、reserved-system-name conflict 验证通过后，stagedOutputs 与 PublicationReceipt/3.outputs 仍按 exact stored protocol name 的原始无符号 UTF-8 bytes 字典序比较，完全相同 byte prefix 的较短者在前；排序不执行 normalization、case folding、host collation 或 separator rewriting。 |
+| FC4F-EXP-04 | SPEC §8.3 | output alias/conflict validation 与排序和 host 行为彼此独立：两个合法 protocol name 若 Unicode-15.1 PortableAlias 相同，或 alias component 形成 file/directory prefix conflict，就必须拒绝；即使 raw UTF-8 comparator 能排序也不能借排序修复 name-safety conflict。 |
 | FC4F-EXP-05 | SPEC §8.3 | 合法 template/output set 的任意输入置换必须在 freeze 前按两个 exact comparator canonicalize 成相同 Plan/Receipt 顺序；已经 frozen/received/recovery 的 record 若乱序、duplicate 或跨集合 conflict 必须失败，禁止 read-time sorting 修复。 |
+| FC4G-NAME-01 | SPEC §8.3; SCHEMAS §6.5 | fresh current output name 使用 D9ControlledRelativeOutputName/1：非空 Unicode scalar text，原始 UTF-8 bytes 保持不变，由“/”分隔一个或多个非空 component；只要 component 通过闭合检查，assets/图/附件.png 这类普通 Unicode 嵌套名称必须合法。 |
+| FC4G-NAME-02 | SPEC §8.3; SCHEMAS §6.5 | 空 name/component、首尾或重复“/”、'.'/'..' component、反斜杠、C0/DEL、:*?\"<>|、末尾空格/点、rooted/drive/UNC 形式以及固定 device-name stem 都必须在 staging 前判协议非法；dir\\file 直接非法，不能由 host 决定是否与 dir/file alias。 |
+| FC4G-NAME-03 | SPEC §8.3; SCHEMAS §6.5 | PortableAlias 的计算固定为 Unicode 15.1.0：每个 component 先做 NFC，再按 CaseFolding.txt 的 C/F 完整默认折叠（不用 T），最后再做 NFC；它只用于拒绝冲突。Report.txt 与 report.txt、以及 canonical-equivalent 的 NFC/NFD 名称均冲突；stored name 必须保持原字节，不得归一化、折叠大小写或改写。 |
+| FC4G-NAME-04 | SPEC §8.3; SCHEMAS §6.5 | 完整 bundle 必须拒绝 exact duplicate、PortableAlias 相同的两个名称，以及 alias component 的 file/directory prefix conflict；不得用先到/后到、LWW、host 文件系统顺序或 raw UTF-8 排序选择 winner。 |
+| FC4G-NAME-05 | SPEC §8.3; SCHEMAS §6.5 | loss-report.json 与 manifest.json 是 Core 精确生成的根级系统成员，必须与全部 dataFile 做 exact、alias、prefix 保留名检查；dataFile 不能替换/alias 二者，也不能在其下创建 descendant；manifest.reportFile 继续精确指 loss-report.json，且不新增自引用。 |
+| FC4G-NAME-06 | SPEC §8.3; SCHEMAS §6.5 | validity/conflict 检查通过后，stagedOutputs 与 receipt.outputs 继续使用已经闭合的原始 unsigned UTF-8 comparator；合法输入置换必须冻结成 byte-identical output order，alias key 不参加 canonical ordering，也不改变 stored name。 |
+| FC4G-NAME-07 | SPEC §8.3; SCHEMAS §6.5 | fresh dataFiles、包含 report/manifest 的完整 stagedOutputs、manifest.reportFile、PublicationReceipt/3.outputs 与 server-download 都使用同一命名规则；worker 不选择 final path。Resource handoff 只消费所选原 staged dataFile 的 bytes/name，resourceName 仍是独立 D3 intent。 |
+| FC4G-NAME-08 | SPEC §8.3; SCHEMAS §6.5 | name validity/alias/prefix/reserved 失败属于结构性 invalid preparation，不能由 accept_loss 接受。destination capability 可以额外拒绝无法无损表示或额外 collision 的名称，但不能 rename/normalize Plan、overwrite、partial-copy，也不能反向判合法 Source/Resource/query_json input invalid；generationPolicy=none 继续不依赖 renderer。 |
+| FC4G-NAME-09 | SPEC §8.3; SCHEMAS §6.5 | fresh current frozen/received/recovery Plan3 与 Receipt3 必须已经具有合法 name 与 canonical order；乱序、非法 name、alias/prefix/reserved conflict 或 name/body metadata 不一致都必须 admission fail，禁止读时 sort、normalization、rename、repin 或 re-encode。historical Plan/Receipt1-/2 即使旧名称不符合新 current predicate，也继续原 decoder/name/bytes/pins。 |
+| FC4G-NAME-10 | SPEC §8.3 | 保存、已规划或结果 unknown 的 current publication 必须恢复原 names、bytes、pins、OperationId/token、destination/rename evidence 与 publication responsibility，unknown 不得换名重试。inspect/confirmation/publish/delivery 继续执行 current permission fence，不能改用另一个 output name 重新生成 equal bytes。 |
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。 本次三项A残余集中修复当时只新增 FC4D-PROD-01..11、FC4D-POL-01..10 与 FC4D-EXP-01..06，使停止 head 的累计清单变为716条。本次 B226 operation-gate 修复对旧 row 只做两条具名 current-contract 更正：FC4B-VAL-01 与 FC4B-D8-01 将 stale caller 类型 AnnotationEditableValue/1 改为 AnnotationEditableProposal/1，同时完整继承原 owner/create 授权、Core attribution、完整 Value4 pinning 与防伪造义务；除此以外既有 row 正文不变。随后只新增 FC4E-GATE-01..08 与 FC4E-NOOP-01..07，使累计清单变为731条；不新增 finding ledger/version store。 本次 fixed438 residual 修复当时只做一条具名 current-contract 更正：FC4A-RUN-01 将 stale active-Workspace/expected-revision 表述改成 fresh Plan4 原子 revision1/separate 初始化与 exact expectedHeads/head-set currentness，同时完整保留 policy_admin、checked successor/conflict 行为以及不改 Document source/SourceVersion 的义务。随后只新增 FC4F-PROD-01..05、FC4F-POL-01..09 与 FC4F-EXP-01..05，使累计清单变为750条。本次最后窄修另对既有 FC4E-NOOP-03 做一条具名 current-contract 更正：把过宽的 no-plan 表述收窄为不建立 SourceRevisionPlan 或 source_change，同时保持 needs/evidence/token/SourceVersion/H/attribution 以及“只有显式 reconfirm 加 fresh target read 才能转 confirmed”的原义务不变。本次还只把既有 FC4F-PROD-04、FC4F-POL-02、FC4F-POL-03、FC4F-POL-09、FC4F-EXP-03 五条中文验收正文和 SCHEMAS.zh-CN.md 的三段中文说明改写为自然中文；ID、义务、schema shape 与英文语义都不改变。累计仍为750条未运行设计义务，不新增 acceptance ID、ledger、CAS、migration mechanism 或 test ID。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。 本次三项A残余集中修复当时只新增 FC4D-PROD-01..11、FC4D-POL-01..10 与 FC4D-EXP-01..06，使停止 head 的累计清单变为716条。本次 B226 operation-gate 修复对旧 row 只做两条具名 current-contract 更正：FC4B-VAL-01 与 FC4B-D8-01 将 stale caller 类型 AnnotationEditableValue/1 改为 AnnotationEditableProposal/1，同时完整继承原 owner/create 授权、Core attribution、完整 Value4 pinning 与防伪造义务；除此以外既有 row 正文不变。随后只新增 FC4E-GATE-01..08 与 FC4E-NOOP-01..07，使累计清单变为731条；不新增 finding ledger/version store。 本次 fixed438 residual 修复当时只做一条具名 current-contract 更正：FC4A-RUN-01 将 stale active-Workspace/expected-revision 表述改成 fresh Plan4 原子 revision1/separate 初始化与 exact expectedHeads/head-set currentness，同时完整保留 policy_admin、checked successor/conflict 行为以及不改 Document source/SourceVersion 的义务。随后只新增 FC4F-PROD-01..05、FC4F-POL-01..09 与 FC4F-EXP-01..05，使累计清单变为750条。本次最后窄修另对既有 FC4E-NOOP-03 做一条具名 current-contract 更正：把过宽的 no-plan 表述收窄为不建立 SourceRevisionPlan 或 source_change，同时保持 needs/evidence/token/SourceVersion/H/attribution 以及“只有显式 reconfirm 加 fresh target read 才能转 confirmed”的原义务不变。本次还只把既有 FC4F-PROD-04、FC4F-POL-02、FC4F-POL-03、FC4F-POL-09、FC4F-EXP-03 五条中文验收正文和 SCHEMAS.zh-CN.md 的三段中文说明改写为自然中文；ID、义务、schema shape 与英文语义都不改变。当时累计仍为750条未运行设计义务。本次 FC:P1-07 output-name closure 再做两条具名旧 row current-contract 更正：FC4F-EXP-03 用 D9ControlledRelativeOutputName/1 及完整 exact/portable-alias/prefix/reserved 检查替代抽象 inherited validator，同时保留已经闭合的 raw unsigned-UTF-8 comparator；FC4F-EXP-04 用固定 Unicode-15.1 PortableAlias 与 component-prefix 关系替代依赖 host/target 的 alias 表述，同时保留“排序不能修复安全冲突”的原义务。随后只新增 FC4G-NAME-01..10，使清单变为438 core +322 coordination=760条未运行设计义务。没有删除或重编号旧 ID，也不新增 ledger、CAS、migration mechanism 或 runtime-test claim。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -791,4 +801,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 750 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 760 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。

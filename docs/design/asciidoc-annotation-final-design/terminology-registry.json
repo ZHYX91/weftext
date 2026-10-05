@@ -594,7 +594,7 @@
       "status": "current",
       "replaces": "ExportPlan/2",
       "section": "SPEC §8",
-      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/generation/presentation selection and typed pins; templatePath uses exact Unicode-scalar lexical ordering, output names use post-validation unsigned UTF-8 lexical ordering, and canonicalization precedes freeze."
+      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/generation/presentation selection and typed pins; fresh output names use D9ControlledRelativeOutputName/1, output ordering remains exact unsigned UTF-8 after deterministic portable validity/alias/prefix/reserved checks, and canonicalization precedes freeze."
     },
     {
       "name": "PublicationReceipt/3",
@@ -602,7 +602,15 @@
       "status": "current",
       "replaces": "PublicationReceipt/2",
       "section": "SPEC §8",
-      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact selection and actual outputs; outputs use the same validated exact-name unsigned UTF-8 comparator as stagedOutputs."
+      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact selection and the complete actual outputs; names use D9ControlledRelativeOutputName/1 and the same validated raw-name unsigned UTF-8 comparator as stagedOutputs."
+    },
+    {
+      "name": "D9ControlledRelativeOutputName/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5; SPEC §8.3",
+      "notes": "Fresh-current byte-preserving portable relative output-name predicate. '/' is the only separator; unsafe/rooted/device forms are closed-rejected. PortableAlias is Unicode 15.1.0 NFC + full default C/F case fold + NFC per component, locale-free and rejection-only; exact stored names still sort by raw unsigned UTF-8. Host destination capability may only reject additional names, never rename or redefine protocol aliasing."
     },
     {
       "name": "D3-Annotation-Value/4",
@@ -1370,7 +1378,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Exact controlled output name, byte length, digest and retained pin."
+      "notes": "Exact D9ControlledRelativeOutputName/1, byte length, digest and retained pin for one complete fresh-current staged member; the full set includes Core-generated loss-report.json and manifest.json."
     },
     {
       "name": "D9PublishedOutput/1",
@@ -1378,7 +1386,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Exact published output name, byte length and digest in PublicationReceipt/3."
+      "notes": "Exact D9ControlledRelativeOutputName/1, byte length and digest for one actual PublicationReceipt/3 member; current receipts preserve the Plan's exact names and portable conflict domain."
     },
     {
       "name": "AnnotationRevisionToken/1",

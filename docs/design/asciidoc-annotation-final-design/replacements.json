@@ -681,7 +681,8 @@
       "changedSections": [
         "ExportPlan3/PublicationReceipt3",
         "format/provider/export cases",
-        "canonical collection permutation/duplicate/conflict cases and complete product document-state consumption"
+        "canonical collection permutation/duplicate/conflict cases and complete product document-state consumption",
+        "portable output-name positive/negative, alias/prefix/reserved, host-capability separation, strict current admission and historical/unknown-publication recovery obligations"
       ]
     },
     {
@@ -714,7 +715,8 @@
       "changedSections": [
         "PAB4",
         "ExportPlan3",
-        "PublicationReceipt3"
+        "PublicationReceipt3",
+        "D9ControlledRelativeOutputName1"
       ]
     },
     {
@@ -738,7 +740,8 @@
         "D2DocumentSnapshot3 rendered export and frozen D8 presentation-policy binding",
         "ExportPlan3 current token/version dispatch, inline closed generation policy, exact template/route/pin cross-fields, product include currentness and frozen conditional presentation decision",
         "ExportPlan3 canonical set-like collections: route-step evidencePins, styleBundles, staged/receipt outputs, binding/missing/native-table choices; prepare canonicalizes before freeze and readers reject noncanonical records",
-        "staged/receipt output names use unsigned UTF-8 lexical ordering only after inherited safe-relative/alias/conflict validation; template choices use the exact scalar comparator and recovery still rejects noncanonical bytes"
+        "staged/receipt output names use unsigned UTF-8 lexical ordering only after inherited safe-relative/alias/conflict validation; template choices use the exact scalar comparator and recovery still rejects noncanonical bytes",
+        "fresh-current D9ControlledRelativeOutputName1 closes controlled-relative-name lexical validity, Unicode-15.1 portable aliasing, reserved bundle members and file/directory prefix conflicts while preserving raw UTF-8 output ordering and historical recovery"
       ]
     },
     {
@@ -946,7 +949,7 @@
     "acceptance": {
       "zh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "en": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "role": "750 unexecuted design obligations; no additional private acceptance source"
+      "role": "760 unexecuted design obligations; no additional private acceptance source"
     },
     "terminology": {
       "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
