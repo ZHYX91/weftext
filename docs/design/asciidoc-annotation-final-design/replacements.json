@@ -212,7 +212,8 @@
         "current policy conflict OwnerInputBinding2 exact descriptor/pin union and ConflictResolutionPreview2",
         "source Input2/Plan1/Preview1 vs policy Input3/Plan2/Preview2 arm dispatch inside current PreparedIntent3",
         "D8 presentation default reuses the existing complex shared-configuration owner-effect/P-plan pattern rather than adding PortableComponentKey or mutating Policy3/Registry",
-        "D8 presentation shared configuration binds stamped head-set OwnerInput and one ordinary ChangeRecord/P owner effect while preserving the /1 logical current value"
+        "D8 presentation shared configuration binds stamped head-set OwnerInput and one ordinary ChangeRecord/P owner effect while preserving the /1 logical current value",
+        "AnnotationAggregateObservation/1 and AnnotationAggregateInstall/1 consume exact fixed FileObjectBinding/1 + FileInstallCapability/2 absent/present/strict/observed cross-fields without widening those D6 types"
       ]
     },
     {
