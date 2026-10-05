@@ -545,7 +545,7 @@
       "status": "current",
       "replaces": "D3IdentityInput/12",
       "section": "SPEC §7",
-      "notes": ""
+      "notes": "Current D3 native input successor: exact wire12 semantic member set with current InputDescriptor/3 at the outer request boundary; historical wire9-12 remain exact."
     },
     {
       "name": "D3ResolutionInputUse/2",
@@ -593,7 +593,7 @@
       "status": "current",
       "replaces": "ExportPlan/2",
       "section": "SPEC §8",
-      "notes": ""
+      "notes": "Current fully closed export preparation: exact input/projection, D2 product render binding when applicable, D8 presentation policy, template/route/profile/style/policy/target/destination, proofs/evidence pins, loss report and staged outputs."
     },
     {
       "name": "PublicationReceipt/3",
@@ -601,7 +601,7 @@
       "status": "current",
       "replaces": "PublicationReceipt/2",
       "section": "SPEC §8",
-      "notes": ""
+      "notes": "Current external-publication receipt bound byte-for-byte to ExportPlan/3, confirmation choices, exact output digests and selected target/route/template/style/presentation-policy evidence."
     },
     {
       "name": "D3-Annotation-Value/4",
@@ -1194,6 +1194,214 @@
       "replaces": "ConflictResolutionPreview/1 policy_bundle arm",
       "section": "SPEC §13",
       "notes": "Immutable current policy preview binding exact Input3 resolution, branchEvidence digest, and complete Plan2; source arms retain Preview1."
+    },
+    {
+      "name": "D2SourceRange/2",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Exact source-owner byte/line range used by current product projection; never grants write authority."
+    },
+    {
+      "name": "D2IdentityAdapter/1",
+      "owner": "D2/D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Typed stable Node/Resource/citation identity attached only after native AsciiDoc occurrence parsing."
+    },
+    {
+      "name": "D2ProductInline/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed current complete product inline family for fixed-2.0.26 observable inline semantics plus narrow identity adapters."
+    },
+    {
+      "name": "D2Heading/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current product heading with distinct authoredLevel/effectiveLevel, exact locator and source origins."
+    },
+    {
+      "name": "D2ProductBlock/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed current product block family covering the fixed baseline and named Weftext extension blocks; no opaque arm."
+    },
+    {
+      "name": "D2DocumentBody/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current product document body containing ordered D2ProductBlock/3 children."
+    },
+    {
+      "name": "D2DocumentPayload/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current valid/invalid exact-source product payload with available/unavailable semantic projection."
+    },
+    {
+      "name": "D2DocumentSnapshot/3",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Current product Document snapshot successor; historical wireVersion2 document_snapshot remains historical-only."
+    },
+    {
+      "name": "D3IdentityOperationRequest/13",
+      "owner": "D3",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6",
+      "notes": "Current native D3 identity request: exact wire12 top-level semantic set with InputDescriptor/3 and wireVersion13."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicy/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Protected per-Workspace run-in default with checked revision; source roles override but do not mutate it."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicyBinding/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Exact protected binding/pin for one D8 workspace presentation policy revision."
+    },
+    {
+      "name": "D8PresentationPolicySetRequest/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Policy-admin guarded checked-revision mutation request for the Workspace run-in default."
+    },
+    {
+      "name": "D8PresentationResult/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Derived Separate/RunIn result retaining distinct heading/body locators and policy revision."
+    },
+    {
+      "name": "D8DocumentRenderBinding/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Current D8 render/cache binding over source observation, format qualification, D2 snapshot, presentation policy and renderer profile."
+    },
+    {
+      "name": "D9ExportTarget/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Closed current export target union including exact source/resource, HTML/PDF/Office/tabular and query JSON."
+    },
+    {
+      "name": "D9ExportTemplateBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact template input/profile/version/pin binding for ExportPlan/3."
+    },
+    {
+      "name": "D9ExportRouteStepBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "One exact accepted route step with provider/version/profiles/options/budget/evidence."
+    },
+    {
+      "name": "D9ExportRouteBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact finite accepted export route/revision/profile and ordered step bindings."
+    },
+    {
+      "name": "D9ExportStyleBundleBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact style-bundle version/pin frozen by ExportPlan/3."
+    },
+    {
+      "name": "D9ExportGenerationPolicyBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Registered binding/missing/image/layout generation policy descriptor frozen by the plan."
+    },
+    {
+      "name": "D9DocumentRenderBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact current D2 product snapshot, semantic qualification and D8 presentation policy frozen for document rendering."
+    },
+    {
+      "name": "D9ExportDestinationIntent/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Protected external-bundle/server-download/resource-handoff destination intent; not permission."
+    },
+    {
+      "name": "D9ExportLossChoice/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact one-loss accept/reject choice used only through D9ExportConfirmation/1."
+    },
+    {
+      "name": "D9ExportConfirmation/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Immutable planToken plus complete sorted loss choices; cannot rewrite plan/staged bytes."
+    },
+    {
+      "name": "D9ExportStagedOutput/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact controlled output name, byte length, digest and retained pin."
+    },
+    {
+      "name": "D9PublishedOutput/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.5",
+      "notes": "Exact published output name, byte length and digest in PublicationReceipt/3."
     }
   ]
 }
