@@ -173,6 +173,32 @@ null | {logicalFile:text|null,line:UInt|null}
 
 没有Ruby producer的column不进入cross-implementation equality；semanticCode使用共同canonical namespace，exactMessage留作Ruby evidence审计。
 
+### 3.4 当前 D2 产品 projection
+
+CoreSemanticProjection/1 仍然只是测试 oracle 的比较数据，绝不能当成产品 read/edit/query wire。当前 managed AsciiDoc 产品读取必须使用 SCHEMAS §4.4 的 D2DocumentSnapshot/3 及闭合的 D2DocumentPayload/3、D2DocumentBody/3、D2ProductBlock/3、D2ProductInline/3 family。exact source 始终是唯一作者权威；产品 projection、editor map、index、render tree、search/query value 都只是可丢弃派生状态，不能形成第二 parser、第二 source store、durable block identity 或 write authority。
+
+当前 projection 覆盖固定 Asciidoctor 2.0.26 中会影响可观察文档语义的全部 native block/inline 类别，再叠加本文明确列出的窄 Weftext adapter。合法 construct 不能仅因 rich editor 没有控件或 provider 不可用就被改判为 unsupported syntax。某个 surface 若不能结构化编辑合法 construct，必须提供 exact Source 路径，并在保存时保留所有未触及 bytes；结构编辑能力不足返回 editing/unavailable，不得删除、flatten 或重写该 construct。
+
+| semantic category | current product shape | actual current consumers |
+|---|---|---|
+| document metadata/title/author/revision 与 header attributes | D2DocumentSnapshot/3 → D2DocumentMetadata/3 | D8 document/Draft read、D7 title read、D9 document render/export |
+| section 与 floating title | D2SectionBlock/3 + D2Heading/3，分别保存 authoredLevel/effectiveLevel | D7 headings scan/Query、D8 outline/folding/visual editor、D9 HTML/PDF/DOCX/ODT |
+| paragraph 与 inline semantics | D2ParagraphBlock/3 + D2ProductInline/3 | D7 body_text、D8 visual/read/Source、D9 rendered/semantic export |
+| unordered/ordered/description/callout/checklist list | D2ListBlock/3 + D2ListItem/3 | D8 structure/Source、D7 body_text、D9 render/export |
+| table/column/row/cell，包括 AsciiDoc cell | D2TableBlock/3 + D2TableCell/3 | D5 native-table boundary、D8 table/read/Source、D9 table/document export |
+| example/sidebar/open/admonition/listing/literal/source/pass/stem/quote/verse | D2DelimitedBlock/3 或 D2ContainerBlock/3 | D8 read/Source 与可选结构 UI、D7 已定义的 body_text、D9 已支持 render route |
+| image/audio/video 等 media | D2MediaBlock/3；Weftext-owned occurrence 另带 D2IdentityAdapter/1 | D8 media surface、D7 readable projection、D9 resource-aware export |
+| native link/xref/anchor/footnote/indexterm/STEM/quoted text/kbd/menu/button/callout/break | D2ProductInline/3 闭合集 | D7 readable/query projection、D8 navigation/visual/Source、D9 render/export |
+| include/substitution 生成或多 source-origin semantics | 每个 semantic node 上的 D2SourceOrigin/2 数组 | D8 navigation/write gate、D7 read/query dependency、D9 evidence/loss mapping |
+
+D2Heading/3 将 authoredLevel 与 effectiveLevel 分开。WeftextManaged 允许 authored level 6–9；standard leveloffset 可以得到大于9的 effective level，不能被 Weftext 上限截断。native section state、document-title/book-part、warning、explicit anchor 与 source range 均保留。TOC、search、outline、stable link、Query、editor、export 因而消费同一 product heading projection，而不是各自重建 heading。
+
+native link/xref/image/citation grammar 必须先由唯一 AsciiDoc parser 解析；只有已经存在 native occurrence，且 Weftext target syntax 独立验证通过后，才应用 D2IdentityAdapter/1。adapter 可以附加 stable NodeRef、owner-local ResourceRef 或 citation target，但不能改变 native label/source grammar，也不能从 path/title/text/hash 推断身份。backlink 仍是 derived。managed include 保留 included source 自己的 owner 到 D2SourceOrigin/2；include 不改变 root Node identity，也不会授予 including Document 对被 include source 的 write authority。
+
+旧 Profile v2 中会拒绝 native 合法构造的限制不再是 current managed AsciiDoc 规则。尤其某个 native delimited block 内看起来像另一类 delimiter 的行，必须由固定 native parser 决定是否具有结构意义；D2 不再自行制造跨 delimiter family 的 invalid-document 错误。Weftext attribute-carrier extension 只在自己的显式 root-carrier grammar 中保留 reserved 语义，不能泛化为第二 block parser。旧 implementation input 中对 open AsciiDoc/include/pass/extension 的禁止只保留历史证据；current implementation obligation 由本完整 fixed-baseline 产品合同替代。
+
+invalid source 仍保留经过授权的 exact source 与有序 diagnostics，但 product projection unavailable，D2 commit eligibility reject。physical decode/source-envelope failure 继续是 D6 error，不得伪装成 D2 invalid syntax。因此即使 D7 Query、rich visual projection 或 rendered export 无法取得合法 semantic projection，repair/Source surface 仍按原授权可用。
+
 ## 4. Provider profiles：语言有效性与renderer可用性分离
 
 Mermaid、STEM/TeX/AsciiMath、HTML/PDF是版本化生态profile，不是AsciiDoc语法开关。合法core source在provider不可用时仍合法；BackendStatus表达unavailable/denied/incomplete，exact .adoc export仍可成功。
@@ -382,13 +408,43 @@ Trash保留exact managed format binding；restore保留exact historical binding�
 
 ## 8. D7/D8/D9 current holders
 
-PreparedActionBinding/4 继承PAB3业务成员并直接持 current Descriptor3/Proof3/PreparedIntent3；MinimumMapping/3不因整齐升版。Query/Action/CEL语言本身不因新dependency arm改语法；只有qualification/evidence carrier升级。
+PreparedActionBinding/4 直接持 current Descriptor3/Proof3/PreparedIntent3；MinimumMapping/3 不为整齐而升版。Query/Action/CEL 的 author syntax 保持不变，升级的是 qualification/evidence 以及 source adapter 所消费的产品 projection。EffectManifest/3 与 EffectBytes/3 继续是唯一 current transport family；historical Plan1/Plan3 均保持原 decoder。
 
-EffectManifest/3 / EffectBytes/3 是同一closed current transport，包含既有EffectBytes2 encodings及 d6_workspace_bootstrap_plan4 / d7_symbolic_json3；historical Plan1/Plan3继续旧decoder。D10 preview digest和D3 conflict preview均消费这一current family。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+### 8.1 D7 product-projection consumers
 
-D8 PreparedEditBinding/3 持 current descriptor/proof。Draft base绑定 SourceObservation+DocumentFormatCurrentQualification；format变化保留dirty Draft bytes/input log，但失效旧projection/map/preview/prepared confirmation，必须reproject/reprepare。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+D7 outer runtime 仍使用既有 wireVersion2，QuerySpec/ViewSpec author schema 仍为 version1。current headings scan 必须 strict-decode D2DocumentSnapshot/3 并要求 projection available；它继续输出既有 heading object {owner:NodeRef,title:text,level:int64}，其中 level 取 D2Heading/3.effectiveLevel，内部 position 使用该 heading 的 exact current DocumentElementLocator。authored level 仍可供 owner-aware editor/export 使用，但不产生 HeadingRef。invalid/unavailable product projection 按原 authorization/error order 使整个相关 scan 失败，不能静默跳过。
 
-D9 ExportPlan/3 / PublicationReceipt/3 冻结proof3与current semantic qualification；exact-source-only export不需要无关semantic parse，而rendered/semantic export必须列format dependency。e8aa d9_probe closed format union没有adoc/asciidoc；本设计不偷偷给旧wire加arm。新managed AsciiDoc adoption由D2/D3/D6 admission/profile流程负责。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+既有 body_text source 现在递归消费 D2DocumentBody/3。它从 D2ProductInline/3 取得 semantic text；link/citation 只用 explicit label，resource 只用 caption，list 保持 source order，section 使用 heading+children，table 保持 TAB/LF 规则，literal/source/pass 在 D7 规则要求 readable raw 时使用 raw payload。它仍只是 read projection，既非 exact source 也不可写。新 native block/inline arm 必须由自己的显式 D2 product type 处理；不得通过 to_s flatten 或直接遗漏。若某个合法 arm 没有 body_text semantic mapping，该 adapter unavailable，而不是缩小 D2 language。
+
+D7 definition-transfer 保留由 D7 已拥有的完整 definitionTransfers/Result9 inner transformation 语义，但新的 current D3 submission 必须使用 D3IdentityOperationRequest/13。真实 saved/planned wire12 request、Result/effect history、Locator 与 recovery 全部按 recorded decoder 继续，绝不重标为 wire13。
+
+### 8.2 D8 document、Draft、visual presentation 与 run-in policy
+
+D8 public outer entry 继续使用 wireVersion2。current d8_document.snapshot 必须是同一 qualified SourceObservation 下的 D2DocumentSnapshot/3；包含旧 D2 document_snapshot wire2 的真实 saved response 只属于历史数据，不能作为新 current read。current valid Draft projection 从 D2DocumentPayload/3 与 D2DocumentBody/3 派生 metadata/body/origins。只有既有 Draft contract 明确允许的位置可以去除 locator member；不能因为 UI 不认识某个合法 block/inline arm 就把它省略。visual control 可以 unavailable，但 exact Source read/edit/save 必须继续作为 lossless fallback。D2-invalid source 保留既有 authorized invalid-Draft/repair 行为，不暴露 partial semantic projection。
+
+workspace run-in default 的唯一 owner 是 D8，持久化为 SCHEMAS §6.4 的 protected D8WorkspacePresentationPolicy/1。每个 active Workspace 恰有一条 record，新建时 revision=1、defaultPresentation=separate。修改必须通过既有 Workspace policy_admin 授权、expected revision equality、checked increment 和一次 protected configuration update；它不是 Document source edit、D3 identity decision 或第二作者源。普通读取已经授权的 Document 时，不因消费 current presentation setting 就额外要求 policy_admin。policy record unavailable/corrupt 时，implicit-default presentation 必须 unavailable，不能偷偷采用 host default。
+
+per-source role 覆盖 Workspace default，但不修改 policy。只存在 run-in 时，在既有 explicit-role trivia 规则下找到第一个 eligible paragraph 即 RunIn；只存在 separate 时为 Separate；两者同时存在产生 role_conflict 并回退 Separate；两者都不存在才读取 current Workspace default。无显式 role 且 defaultPresentation=run_in 时，只沿既有 implicit-default physical-adjacency 规则，因此 intervening blank/comment 仍为 Separate；无 eligible paragraph 也为 Separate。Enable 删除 separate 并确保 run-in；Disable 删除 run-in 并确保 separate；Use Default 删除两者。这三项都是 D8 ordinary source-role edit，绝不能写 D8WorkspacePresentationPolicy/1。
+
+heading 与 first paragraph 在所有情形下都保留独立 source range 与独立 D2 semantic node。RunIn 只是 D8PresentationResult/1；synthetic visual join 不重新 parse，也没有 writable source scalar。D8DocumentRenderBinding/1 的 cache input 冻结 SourceObservation、DocumentFormatCurrentQualification、D2 snapshot pin、exact presentation-policy binding 和 renderer profile digest。presentation-policy revision 改变因此必须使 current D8 render cache 失效；仅改 policy 不改变 source bytes、SourceVersion、heading identity、outline 或 authored roles。
+
+### 8.3 D9 semantic/rendered export 与 exact preparation
+
+D9 current export 使用 SCHEMAS §6.5 的 closed ExportPlan/3 family。exact AsciiDoc source export 选择 target asciidoc_source，从 ExportInputCatalog/2 消费授权的 exact source bytes，不需要 product semantic projection、run-in policy 或 renderer/provider route。因此 provider unavailable 不能把合法 AsciiDoc syntax 判 invalid，也不能阻断已授权 exact-source export。
+
+document target 为 html、pdf、docx 或 odt 时必须包含 D9DocumentRenderBinding/1：exact current D2DocumentSnapshot/3、ManagedDocumentSemanticQualification/1、D8WorkspacePresentationPolicyBinding/1，以及生成 immutable output 所使用的 route/profile evidence。HTML 消费与 D8 同一 deep-heading/run-in projection。DOCX/ODT 在 selected profile 支持时把 effective heading level 1–9 映射到显式 heading structure；超过该能力的 effective level，以及 target 对 run-in/layout/styles/fonts/accessibility 的限制，必须进入完整 ExportLossReport，不能变成 D2 syntax rejection。PDF 是基于 frozen semantic/render inputs 的 controlled route，同样报告 target-specific loss。provider/route 缺失或未获接受只能是 export unavailable，不能改写 source 或 projection。
+
+ExportPlan/3 必须冻结 input domain/catalog/order、content selection、完整 render projection、source-format qualification、适用时的 run-in presentation-policy binding、exact template binding、route 及每一步 provider/profile/version、style-bundle versions、registered generation-policy binding、target、initial loss report、output budget、protected destination intent、DependencyProof/3/ObservationScope、全部 evidence pins 和 exact staged-output pins/digests。D9ExportConfirmation/1 单独绑定 planToken 与完整 D9ExportLossChoice/1 set；choice 不修改 plan，也不能把 blocking loss 改成 success。PublicationReceipt/3 记录 plan 选择的 exact target/route/template/styles/presentation policy、原 report/choices、destination display 与实际 published output digests。
+
+原 D9 permission/state machine 继续是 load-bearing：敏感读取前先确定 potential scope 与 authorization；inspect、confirmation、publish、delivery 各阶段重新检查 current authorization；unreadable 不能替成 none；不同 Query authorization generation 不能混合；create-only external publication 继续原 durability/unknown-outcome 规则；Save-as-Resource 是独立 D3 create_resource preparation/receipt。source/format/route/template/Query/authorization 改变仍按原 owner 规则使 unpublished plan 失效。后来仅改变 Workspace presentation policy 不会修改已 prepared plan：旧 plan 继续使用自己冻结的 policy binding，新 prepare 才消费新 current revision。
+
+### 8.4 fixed-parent direct-holder dispatch 与历史边界
+
+replacement router 必须显式接管 D2 implementation impact、D7 Definition Transfer、D9 Import IR、D9 Acceptance Matrix 的 current statements。D2 历史 Profile-v2 implementation prohibition 保持 immutable snapshot evidence，但 current implementation obligation 使用 D2DocumentSnapshot/3 与上述完整 native-baseline product family。D9 Import IR 保留 ImportIR/1、Mapping/1、ConversionInput/2 及所有 file safety/mapping/loss 规则；只有 current outer author submission 改为 D3IdentityOperationRequest/13，真实 saved/planned wire12 import decision 仍精确恢复。D9 Acceptance S12 只在旧“五级 heading”前提上被 supersede：WeftextManaged authored 6–9 为合法，必须贯穿 D2/D7/D8/D9；target 不支持某深度时走显式 loss/degradation，不能拒绝 source。
+
+禁止全局字符串替换去升级 historical wire12、document_snapshot wire2 或 ExportPlan/1-/2 record。saved/planned/unknown recovery 必须先于 current producer gate，并保持原 bytes、permissions、errors、confirmation 与 publication responsibility。
+
+本批明确不关闭 Annotation Value/4 mutation/revision/slot path、D8 Annotation edit-intent successor、D7 replace/delete/insert suggestion-action mapping，也不修 AsciiDocInlineBody alias-registry 项；这些属于随后明确分开的 Annotation mutation 批。
 
 ## 9. 独立 portable JSON Annotation
 
