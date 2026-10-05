@@ -1443,7 +1443,7 @@ D3IdentityInput/13 = {
   kind:"d3_identity_input",version:13,
   mode:D3Mode,
   writeProtection:"strict",
-  expectedAuthority:ExpectedAuthority,
+  expectedAuthority?:ExpectedAuthority,
   workspaceProposal?:WorkspaceAllocationProposal,
   intent:D3Intent
 }
@@ -1458,14 +1458,14 @@ D3IdentityOperationRequest/13 = {
   expectedFrontier:Frontier/2,
   inputDescriptor:InputDescriptor/3,
   mode:D3Mode,
-  expectedAuthority:ExpectedAuthority,
+  expectedAuthority?:ExpectedAuthority,
   workspaceProposal?:WorkspaceAllocationProposal,
   preparationBinding?:PreparationBinding,
   intent:D3Intent
 }
 ```
 
-D3IdentityInput/13 精确保留 D3IdentityInput/12 原有六个语义成员；只在当前外层请求中把嵌套的 D6 descriptor family 更新为 InputDescriptor/3。mode、authority、proposal、intent 和固定的 writeProtection=strict 继续使用 fixed-parent decoder 与原 mode matrix。带 ? 的成员仅在该矩阵允许时出现，JSON null 不能代替真正缺省。D3IdentityOperationRequest/13 保留 wire12 顶层成员集合，只把 wireVersion 更新为13并把 inputDescriptor 更新为 InputDescriptor/3。原有跨字段相等关系、guarantee/frontier policy、ownerInput 的 D3 ownerKind、requestFingerprint、DecisionKey/OperationId 单一账本顺序、saved/planned/unseen 分支和 error/disclosure 顺序全部保持；historical wire9–12 不扩 decoder、不重编码。
+D3IdentityInput/13 精确保留 D3IdentityInput/12 的语义成员集合；只有 outer request boundary 的嵌套 D6 descriptor family 更新为 current InputDescriptor/3。expectedAuthority、workspaceProposal、preparationBinding 都是真正 optional member，绝不是 nullable placeholder。replica_local 只允许 create_node/move_node/reorder_node/trash，并要求这三个 member 全部 absent。managed_atomic 严格继承 fixed-parent matrix：create/fork 要求 expectedAuthority=create 及 required proposal；continue 要求 expectedAuthority=continue；其它 managed_atomic mode 要求 expectedAuthority=existing；preparationBinding 只在继承的 D7-mediated mode 允许时出现。禁止的 member 即使 value 本身可解码也必须 invalid_request，JSON null 一律非法。D3IdentityOperationRequest/13 仅把 wire12 top-level 的 wireVersion 改为13并改用 InputDescriptor/3。descriptor/request 的 mode、authority、proposal 在存在时逐字节相等；guarantee/frontier policy、ownerInput、requestFingerprint、DecisionKey/OperationId 单一 ledger 顺序、saved/planned/unseen 分支和 error/disclosure order 都保持。historical wire9–12 不扩 decoder、不重编码。
 
 ## 6.1 PreparedActionBinding/4
 
@@ -1578,8 +1578,7 @@ EffectBytes/3 = {
 }
 ```
 
-EffectItem/3 闭集与 fixed-e8aa EffectItem/2 的十四种语义分支一一对应：
-source_change, conditional_source_change, entity_state_change, d3_plan, d3_receipt, semantic_extension, period_scope_change, series_configuration_change, workspace_bootstrap, authority_change, field_change, conflict_branch_source, conflict_resolution_change, canonical_plan；其中全部 EffectBytes 字段使用 /3，Annotation source image 使用 Value/4，workspace_bootstrap 现行路径允许 Plan4，不得出现 generic_json/free payload。以上英文名称均为协议标识、字段名或固定字面量，必须严格按本设计的闭合集逐项解释，不改变本句中文语义。
+EffectItem/3 保留 fixed-parent 的十四个 arm，并只新增一个 current owner-specific arm：presentation_policy_change:D8PresentationPolicyEffect/1。它与 series_configuration_change 属于同一类 typed shared-configuration owner effect，不是新的 PortableComponentKey、Policy/3 mutation、Registry value、author source 或 generic JSON。全部 byte slot 使用 EffectBytes/3，Annotation source image 使用 Value/4，current workspace bootstrap 允许 Plan4。historical EffectItem/1-/2 decoder 绝不扩张。
 
 ## 6.3 PreparedEditBinding/3
 
@@ -1665,55 +1664,122 @@ OwnerInputBinding/2 的 current ownerKind/intentKind=d8_edit/3，canonicalDescri
 
 ## 6.4 D8 workspace presentation policy 与 render binding
 
+presentation preference 是 existing Portable Workspace Metadata 中的 shared Workspace configuration，但它是 D8-owned complex configuration，和 SeriesScopeConfiguration 同类。本设计明确不新增 PortableComponentKey arm，也不复用 Policy/3 或 Registry。currentness 由完整 D8 head set 与写入 owner effect 的同一个 D6 planning CAS/P decision 证明。
+
 ```text
-D8WorkspacePresentationPolicy/1 = {
-  kind:"d8_workspace_presentation_policy",version:1,
+D8PresentationPolicyAddress/1 = {
   workspaceRef:WorkspaceRef,
+  revision:Counter,
+  recordSha256:"sha256:<64 lowercase hex>"
+}
+
+D8WorkspacePresentationPolicy/2 = {
+  kind:"d8_workspace_presentation_policy",version:2,
+  workspaceRef:WorkspaceRef,
+  revision:Counter,
+  parents:[D8PresentationPolicyAddress/1...],
+  defaultPresentation:"separate"|"run_in"
+}
+
+D8PresentationPolicyHeadSet/1 = {
+  kind:"d8_presentation_policy_heads",version:1,
+  workspaceRef:WorkspaceRef,
+  metadataEpoch:Token,
+  heads:[D8PresentationPolicyAddress/1...]
+}
+
+D8WorkspacePresentationPolicyBinding/2 = {
+  policy:D8WorkspacePresentationPolicy/2,
+  address:D8PresentationPolicyAddress/1,
+  headSet:D8PresentationPolicyHeadSet/1,
+  pin:PinRef/2
+}
+
+D8PresentationPolicyProposal/1 = {
+  workspaceRef:WorkspaceRef,
+  parents:[D8PresentationPolicyAddress/1...],
   revision:Counter,
   defaultPresentation:"separate"|"run_in"
 }
 
-D8WorkspacePresentationPolicyBinding/1 = {
-  policy:D8WorkspacePresentationPolicy/1,
-  pin:PinRef/2
-}
-
-D8PresentationPolicySetRequest/1 = {
-  wireVersion:1,
+D8PresentationPolicySetRequest/2 = {
+  wireVersion:2,
   kind:"d8_presentation_policy_set",
   workspaceRef:WorkspaceRef,
-  expectedRevision:Counter,
+  commitDomain:CommitDomain/2,
+  expectedFrontier:Frontier/2,
+  expectedHeads:[D8PresentationPolicyAddress/1...],
   defaultPresentation:"separate"|"run_in",
   budget:BudgetBinding/1
 }
 
+D8PresentationPolicyInput/1 = {
+  kind:"d8_presentation_policy_input",version:1,
+  workspaceRef:WorkspaceRef,
+  expectedHeads:[D8PresentationPolicyAddress/1...],
+  defaultPresentation:"separate"|"run_in"
+}
+
+D8PresentationPolicyEffect/1 = {
+  kind:"presentation_policy_change",version:1,
+  before:D8PresentationPolicyHeadSet/1,
+  proposal:D8PresentationPolicyProposal/1,
+  committed:null|D8WorkspacePresentationPolicy/2
+}
+
+D8PresentationDecision/1 =
+    {kind:"explicit",
+     sourceOverride:"run_in"|"separate"|"conflict",
+     effective:"run_in"|"separate",
+     diagnostic:null|"role_conflict"}
+  | {kind:"no_eligible_body",effective:"separate"}
+  | {kind:"workspace_default",
+     policy:D8WorkspacePresentationPolicyBinding/2,
+     effective:"run_in"|"separate"}
+
 D8PresentationResult/1 = {
   heading:DocumentElementLocator,
   body:DocumentElementLocator|null,
-  sourceOverride:"run_in"|"separate"|"default"|"conflict",
-  effective:"run_in"|"separate",
-  policyRevision:Counter,
-  diagnostic:null|"role_conflict"
+  decision:D8PresentationDecision/1
 }
 
 D8DocumentRenderBinding/1 = {
   sourceObservation:SourceObservation/1,
   documentFormat:DocumentFormatCurrentQualification/1,
   documentSnapshotPin:PinRef/2,
-  presentationPolicy:D8WorkspacePresentationPolicyBinding/1,
+  presentation:D8PresentationDecision/1,
   rendererProfileSha256:"sha256:<64 lowercase hex>"
 }
 ```
 
-每个 active Workspace 恰有一条 presentation-policy record，初始值为 revision=1/defaultPresentation=separate。修改要求 policy_admin、expectedRevision 相等、计数安全递增，并只执行一次受保护配置写入。policy pin 使用 artifact/recovery；完整字节是 UTF8("D8-Workspace-Presentation-Policy/1")、一个 NUL，再接 D3-CJ/3(complete policy)。它不是作者源文本，也不授予 source write。当前视觉渲染使用 D8DocumentRenderBinding/1；documentSnapshotPin 必须选择 sourceObservation.entityRef 对应的精确 D2-Document-Snapshot/3 字节，documentFormat 也必须属于同一 owner 和同一次 current read。缓存身份包含完整 binding。
+D8WorkspacePresentationPolicy/2 record bytes 唯一为：
 
-run-in resolution 闭合为：conflict => Separate+role_conflict；显式 separate => Separate；显式 run-in 仅按既有 eligible first-paragraph rule 得到 RunIn；default 只在两个 role 都不存在时读取 policy，并继续较严格的 implicit physical-adjacency rule；无 eligible body => Separate。Source role command 只改 source roles，绝不能写该 policy。
+```text
+UTF8("D8-Workspace-Presentation-Policy/2") || NUL ||
+D3-CJ/3(complete policy)
+```
+
+recordSha256 覆盖上述完整 prefixed bytes。PinRef/2 选择完全相同 bytes，payloadKind=portable_metadata、retention=recovery；address.workspaceRef/revision 与 record 相等。parents 按 (revision,recordSha256) 排序唯一且均属于同一 Workspace，每个 parent record 都必须 retained/valid。初始 record revision=1、parents=[]、defaultPresentation=separate。后继 parents 必须等于 prepare/seal 时完整 protected current head set，revision=checked(max(parent.revision)+1)。因此两个 offline writer 都可能形成 revision2，但不同 hash 会保留为两个 heads；revision number、arrival order、LWW 都不能选 winner。
+
+D8PresentationPolicyHeadSet/1 是同一 metadataEpoch 下，对 Portable Workspace Metadata 中全部 maximal valid policy record 的完整 protected read，不是 caller evidence 或 index scan。heads 排序唯一；[] 表示尚未初始化，一个 head 才是 current，多个 head 是 conflict。gap、unknown parent decoder、缺 retained record 或 metadata continuity 无法证明时都是 unavailable，绝不能解释成 empty/current。current binding 要求 headSet.heads == [address]，policy/pin/address byte-equal，并且完整 ancestry retained。
+
+D8PresentationPolicySetRequest/2 固定 managed_atomic/strict。读取 head set 前先通过 policy_admin 与 presentation-state disclosure。expectedHeads 必须与 complete current head set byte-equal；[] 可初始化符合条件的 existing Workspace，一个 head 是普通更新，多个 heads 是显式 conflict resolution。新 record 在一个 D6 planning CAS 和一个 final P commit 中成为全部 expected head 的唯一共同 successor，并产生恰一个 presentation_policy_change owner effect。它不创建 D3 identity、source version、author ChangeId、Policy/3 revision、Registry revision，也没有第二 ledger/CAS。OwnerInputBinding/2 使用 protocolOwner=D8、ownerKind=intentKind=d8_presentation_policy/1，canonicalDescriptorBytes=D3-CJ/3(D8PresentationPolicyInput/1)。saved/planned/unknown recovery 恢复 exact original head set/proposal/pins/P decision，绝不重新采样 current heads 或自动选 branch。
+
+sync/admission 必须先验证每个 immutable record 的 domain、canonical bytes、ancestry 与 retained P/effect association，再把它放入 portable head graph。conflicting heads 始终保持 conflict，直到授权的显式 multi-parent successor 解决。只有所有 descendant/recovery last-reference 都不再需要某 non-head record 时才可 compaction。device-local preference 或 host default 永远不能替代这个 Workspace-wide record。
+
+run-in decision 是条件依赖：role_conflict 使用 explicit+Separate，不读 policy；显式 separate 不读 policy；显式 run-in 也不读 policy，并且只有既有 explicit-role semantic-adjacency body eligible 时才 RunIn，否则 no_eligible_body。两个 role 都没有时，若无 eligible body 同样 no_eligible_body；只有满足 implicit-default physical-adjacency 的 body 才使用 workspace_default，因此才要求 current one-head policy binding。policy missing/conflicted 只使这个 default-dependent presentation unavailable。
+
+D8 cache identity 包含完整 D8DocumentRenderBinding/1。policy 改变只失效 presentation.kind=workspace_default 且原 policy binding 已不 current 的 cache；显式 role、no-body、conflict fallback 在其 source/product dependency 不变时不因无关 policy 修改而失效。
+
 
 ## 6.5 ExportPlan/3 / PublicationReceipt/3
 
-以下 current export 类型把 fixed-parent ExportPlan/2 中仅用 prose 表达的成员闭合成唯一编码。
+current /3 继续使用 fixed-parent ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1。per-plan generation choices 本来就是有限的 immutable Plan 参数，因此直接进入闭合 Plan；不建立独立 generation-policy registry，也不存在 hash-only descriptor authority。
 
 ```text
+D9ExportPlanToken/3 := D6 Token tagged "d9_export_plan/3"
+D9PublicationToken/3 := D6 Token tagged "d9_publication/3"
+
 D9ExportInputDomain/1 =
   "document"|"native_table"|"node_collection"|"query_rows"|"query_json"|"resource"
 
@@ -1762,19 +1828,61 @@ D9ExportStyleBundleBinding/1 = {
   pin:PinRef/2
 }
 
-D9ExportGenerationPolicyBinding/1 = {
-  profileId:text,
-  version:Counter,
-  descriptorSha256:"sha256:<64 lowercase hex>",
-  pin:PinRef/2
+D9TemplateBindingChoice/1 = {
+  templatePath:text,
+  inputIndex:Counter
 }
+
+D9MissingPolicyChoice/1 = {
+  templatePath:text,
+  action:"empty"
+}
+
+D9ImageSizeChoice/1 = {
+  resource:ResourceRef,
+  widthMicrometres:Counter,
+  heightMicrometres:Counter
+}
+
+D9LayoutChoice/1 = {
+  resource:ResourceRef,
+  choice:"preserve_aspect_within_box"|"use_exact_dimensions"
+}
+
+D9NativeTableSelector/1 = {
+  inputIndex:Counter,
+  tableLocator:DocumentElementLocator,
+  tableQualifier:
+      {kind:"unqualified"}
+    | {kind:"title",text:text}
+    | {kind:"occurrence",title:text|null,ordinal:Counter},
+  columnQualifier:
+      {kind:"leaf",text:text}
+    | {kind:"header_suffix",segments:[text...]}
+    | {kind:"occurrence",segments:[text...],ordinal:Counter}
+}
+
+D9NativeTableTokenBinding/1 = {
+  setName:text,
+  columnName:text,
+  selector:D9NativeTableSelector/1
+}
+
+D9ExportGenerationPolicy/1 =
+    {kind:"none"}
+  | {kind:"render",
+     bindingChoices:[D9TemplateBindingChoice/1...],
+     missingPolicy:[D9MissingPolicyChoice/1...],
+     imageSizes:[D9ImageSizeChoice/1...],
+     layoutChoices:[D9LayoutChoice/1...],
+     nativeTableBindings:[D9NativeTableTokenBinding/1...]}
 
 D9DocumentRenderBinding/1 = {
   ownerNodeRef:NodeRef,
   sourceObservation:SourceObservation/1,
   documentSnapshotPin:PinRef/2,
   semanticQualification:ManagedDocumentSemanticQualification/1,
-  presentationPolicy:D8WorkspacePresentationPolicyBinding/1
+  presentation:D8PresentationDecision/1
 }
 
 D9ExportDestinationIntent/1 =
@@ -1788,7 +1896,7 @@ D9ExportLossChoice/1 = {
 }
 
 D9ExportConfirmation/1 = {
-  planToken:Token,
+  planToken:D9ExportPlanToken/3,
   lossChoices:[D9ExportLossChoice/1...]
 }
 
@@ -1807,7 +1915,8 @@ D9PublishedOutput/1 = {
 
 ExportPlan/3 = {
   kind:"d9_export_plan",version:3,
-  planToken:Token,workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  planToken:D9ExportPlanToken/3,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   principalAudienceToken:Token,authorizationGeneration:Token,
   inputDomain:D9ExportInputDomain/1,
   inputCatalog:ExportInputCatalog/2,
@@ -1817,7 +1926,7 @@ ExportPlan/3 = {
   templateBinding:D9ExportTemplateBinding/1|null,
   routeBinding:D9ExportRouteBinding/1|null,
   styleBundles:[D9ExportStyleBundleBinding/1...],
-  generationPolicy:D9ExportGenerationPolicyBinding/1,
+  generationPolicy:D9ExportGenerationPolicy/1,
   target:D9ExportTarget/1,
   initialLossReport:ExportLossReport/1,
   outputBudget:BudgetBinding/1,
@@ -1825,13 +1934,15 @@ ExportPlan/3 = {
   observationScope:ObservationScope/2,
   dependencyProof:DependencyProof/3,
   observationProof:ObservationProof,
+  recoveryPins:[PinRef/2...],
   evidencePins:[PinRef/2...],
   stagedOutputs:[D9ExportStagedOutput/1...]
 }
 
 PublicationReceipt/3 = {
   kind:"d9_publication_receipt",version:3,
-  publicationToken:Token,planToken:Token,
+  publicationToken:D9PublicationToken/3,
+  planToken:D9ExportPlanToken/3,
   workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   outputs:[D9PublishedOutput/1...],
   lossReport:ExportLossReport/1,
@@ -1840,20 +1951,74 @@ PublicationReceipt/3 = {
   templateBinding:D9ExportTemplateBinding/1|null,
   routeBinding:D9ExportRouteBinding/1|null,
   styleBundles:[D9ExportStyleBundleBinding/1...],
-  presentationPolicy:D8WorkspacePresentationPolicyBinding/1|null,
+  generationPolicy:D9ExportGenerationPolicy/1,
+  presentation:D8PresentationDecision/1|null,
   destinationDisplay:text
 }
 ```
 
-ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保留 fixed-parent D9 的完整 closed shape 与语义。D9ExportRouteBinding/1.steps 从0连续编号且必须是 exact accepted finite acyclic route；每个 step 的 evidencePins 按 pinToken 排序唯一。styleBundles 按 styleBundleId 排序唯一；plan evidencePins 按 pinToken 排序唯一；stagedOutputs 与 receipt outputs 按 controlled relative name 排序唯一。lossChoices 按 lossKey 排序唯一，并依原 severity matrix 恰覆盖 requires_choice/blocking；reject 会取消确认，blocking 永远不能 accept。
+exact-source/resource-exact/query-json plan 强制 generationPolicy={kind:"none"}、templateBinding=null、routeBinding=null、documentRenderBinding=null，projection 不得含 renderer-derived value。即使 template/provider/generation registry unavailable，它们仍有唯一可编码正向路径，因为本合同根本不消费这些依赖。rendered HTML/PDF/DOCX/ODT 与有限 table output 使用 generationPolicy.render；某一 policy 类未使用时对应 array 可以为空。
 
-asciidoc_source 与 resource_exact 强制 routeBinding=null、templateBinding=null、documentRenderBinding=null，projection 不能含渲染器派生值。query_json 只按保留的静态配置序列化精确 D7 result，不使用 template binding。html、pdf、docx、odt 强制 inputDomain=document，且 documentRenderBinding 与已接受 route 都必须存在；docx/odt 是否还需要 templateBinding 由选定 route profile 唯一决定。csv、tsv、xlsx、ods 使用既有有限 RenderSnapshot projection 与匹配的 route/profile。文件名不能反推 target arm。
+D9TemplateBindingChoice/1 只在真实 ambiguous binding 且 authorized template/profile 允许用户选择时出现；inputIndex 必须选择 exact frozen catalog item，不能借 choice 新增 read。D9MissingPolicyChoice/1 只能命中已存在的 exact template path，且 authorized projection value 确为 none；action=empty 不能掩盖 unknown path、unreadable input、type error 或 unavailable schema。imageSizes 按 ResourceRef key 排序唯一，两个 dimension 均为 positive，resource 必须等于 authorized resource catalog input。layoutChoices 同样按 ResourceRef key 排序唯一，必须存在相同 resource 的 imageSizes，而且只在 fixed Templates rule 真正要求 explicit layout choice 时出现。preserve_aspect_within_box 取不超过两个 chosen dimension 的最大同宽高比尺寸；use_exact_dimensions 使用两个 chosen dimension 并记录 required layout loss。
 
-document render 时，documentSnapshotPin 必须选择 exact D2-Document-Snapshot/3 canonical bytes，owner 等于 ownerNodeRef 且 sourceObservation.entityRef；semanticQualification.sourceObservation 与 sourceObservation byte-equal；presentationPolicy 是计算 run-in 时使用的 exact policy revision。后来 policy 改变不会使既有 immutable prepared plan 失效或被改写，但 fresh prepare 必须使用当时 current binding。source observation、document-format qualification、route/template/profile/style/Query/authorization 改变继续按 retained D9 invalidation/reset 规则处理。
+D9ExportTemplateBinding/1.inputIndex 必须选择 inputCatalog.items[index] 中恰一个 payload.kind=template 项；pin 与该 item.pin byte-equal。profileId/profileVersion 必须选择能成功解码这些 exact bytes 的 accepted decoder；profile mismatch/unavailable 是 template unavailable，不得 fallback。不存在第二 template registry 或 filename lookup。
 
-D9ExportDestinationIntent/1 是受保护的目标意图，不是权限。external_bundle 只能 create-only，并继续原有同卷 staging、atomic rename、durability 与 unknown 状态机；server_download 的每个 chunk 都重新检查 current authorization；resource_handoff 本身不能创建 Resource，export confirmation 后的精确 staged bytes 必须进入一条独立的 current D3 create_resource prepare/confirmation/receipt。
+nonnull route 的 steps 非空并从0连续。每一步 input/output profile 都由该 exact provider/version 接受。terminal output profile 必须与 target 相等：html/pdf/docx/odt/xlsx/ods 使用 target.profileId；csv_utf8 固定 "text/csv-utf8/1"；tsv_utf8 固定 "text/tsv-utf8/1"。routeBinding.profileId/profileVersion 指向包含这条 exact terminal chain 的 accepted route profile。target/terminal mismatch 直接拒绝 prepare，不可自动换 route。
 
-D9ExportConfirmation/1 不得改变 catalog、projection、route、target、destination、policies、report、budget 或 staged bytes。PublicationReceipt/3 只证明外部发布；其中所有重复成员都必须与受保护的原 plan/confirmation 逐字节一致。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 继续保留原 decoder、原权限、原 confirmation、原 staged bytes、unknown 责任和原 recovery ordering。
+document render 时，documentSnapshotPin 选择 ownerNodeRef/sourceObservation 对应的 exact D2-Document-Snapshot/3 bytes。snapshot evaluation 的 root SourceObservation 与 ManagedDocumentSemanticQualification.sourceObservation 都必须 byte-equal sourceObservation，document_format 必须 current，而且 §4.4 的全部 include/environment/dependency 必须在 final export read barrier 验证。presentation 恰是生成 staged output 使用的 D8PresentationDecision/1。explicit/no-body/conflict-fallback decision 不含 Workspace policy pin；workspace_default 才包含实际消费的 exact current D8 policy binding。后来 source/include/policy 改变都不能修改或 rerender 已 prepared plan；fresh prepare 才读取 fresh current bindings。
+
+Pins(X) 表示只沿 closed typed value X 中 schema 真正声明为 PinRef/2 的 member（或含这些 member 的 closed type）递归取得 PinRef/2；text/digest/handle 都不算。推导 ExportPlan/3.evidencePins 时不得递归自身 evidencePins。于是 evidencePins 恰为以下并集按 pinToken 排序去重：
+
+```text
+Pins(inputCatalog) +
+Pins(documentRenderBinding) +
+Pins(templateBinding) +
+Pins(routeBinding) +
+Pins(styleBundles) +
+Pins(dependencyProof) +
+Pins(observationProof) +
+Pins(stagedOutputs) +
+recoveryPins
+```
+
+recoveryPins 自身按 pinToken 排序唯一，只允许 fixed-parent recovery contract 实际要求、且上列 typed path 尚未覆盖的 original route/rule/destination/unknown-publication pins；它不是 extension point。漏掉任何 reachable typed pin、加入 unrelated pin，或用不同 pin 重复同一 semantic evidence，Plan 都 invalid。这样 FC4A-EXP-05 的 byte equality 有唯一可执行 derivation，而 evidencePins 不成为第二 authority。
+
+### 6.5.1 Native table → Office SET/COLUMN naming
+
+native table dataset name 只从 authorized D2TableBlock/3 product projection 与 Office template 推导；ordinary Node 不增加任何 export configuration。text comparison 使用 exact Unicode scalar sequence，normalization=none、case-sensitive、保留 whitespace。CJK、RTL、combining-character 因而都有 host-independent 单一规则。
+
+对每个 physical table column，按 head-row source order 构造 headerPath。一个 head cell 的 [columnStart,columnStart+colspan) 覆盖该 column 时，其 semantic inline text 贡献一次；rowspan 在后续 logical row 不重复同一 cell。空 header cell 贡献 empty string。column leaf 是最后一个 segment，没有 head segment 时是 empty。table title 是完整 semantic title text 或 null。
+
+selector 只允许按以下固定次序选择最短唯一 qualifier：
+
+1. candidate tables 中 leaf text alone；
+2. 以 leaf 结尾的最短 headerPath suffix；
+3. 同一 header suffix 加 exact table title；
+4. 同样 facts 再加 zero-based table occurrence（在 byte-equal title/path candidate 中）以及必要时 zero-based column occurrence（同一 table 内 byte-equal full header path）。
+
+每一级：0 match 为 mapping_required；1 个即选中；>1 才进入下一层。最终 occurrence 层仍不是1个时 ambiguous_binding。禁止 first/last winner、猜 suffix、current UI order、filename、rowHandle、path guess 或强迫修改 author source。同一 repeat SET 的全部 binding 必须解析到同一 table/rowset。
+
+SET/COLUMN external name 继续使用现有 ASCII [a-z][a-z0-9_]{0,63}。unqualified native-table SET 固定 "native_table"。leaf-only COLUMN 若本身满足 ASCII grammar 且 unique，直接用 exact leaf。所有 qualified 或 non-ASCII selector 使用唯一 deterministic ASCII token：
+
+```text
+SET    = "nt_" + base32hex_lower(SHA-256(
+           UTF8("D9-Native-Table-Set/1") || NUL ||
+           D3-CJ/3(tableQualifier)))
+COLUMN = "nc_" + base32hex_lower(SHA-256(
+           UTF8("D9-Native-Table-Column/1") || NUL ||
+           D3-CJ/3({tableQualifier,columnQualifier})))
+```
+
+base32hex_lower 是完整256-bit digest 的52字符 lowercase RFC4648 base32hex，无 padding，因此两个名字都满足63-byte grammar。Plan 保存 D9NativeTableTokenBinding/1，所以 token 不作为 identity，也不能靠反推猜 selector；Core 从 current product projection 重新计算全部 candidate token，并要求 stored selector 是唯一 match。两个 non-byte-equal selector 若 digest collision，返回 ambiguous_binding/integrity failure，不能视为相等。
+
+后来新增 same-name column/table 可以让旧 short selector 变成不唯一；fresh prepare 必须 ambiguous_binding，直到 template 使用新 required qualified token。old prepared ExportPlan 已冻结 table projection/selector/staged bytes，因此保持 immutable。
+
+ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保持 fixed-parent closed shape/semantics。D9NativeTableTokenBinding/1 只记录 existing dataset SET/COLUMN name 的 derivation，不新增第二 dataset schema。每个 native-table dataset column/cell 的 projection origins 必须指向 binding 选择的同一个 inputIndex/tableLocator，table grid facts 只取 D2TableCell/3。
+
+D9ExportConfirmation/1 不能改变 catalog、projection、route、target、destination、generation policy、report、budget、presentation 或 staged bytes。lossChoices 按 lossKey 排序唯一并恰覆盖 requires_choice/blocking；reject 取消，blocking 不可 accept。PublicationReceipt/3 对每个重复 member 必须与 protected Plan/confirmation byte-match，并记录实际 published output digests。
+
+current plan token 只能使用 d9_export_plan/3，current publication token 只能使用 d9_publication/3。lookup/inspect/confirmation/unknown recovery 必须先按 token tag 分派，再 strict-decode record.version。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 保持原 token tags、exact bytes、pins、permissions、confirmation、unknown-publication state 和 recovery；旧 token 永不 repin/reencode 成 /3。
+
 
 # 7. Annotation closed values
 
