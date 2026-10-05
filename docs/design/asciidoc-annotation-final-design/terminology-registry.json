@@ -1506,7 +1506,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §4.4",
-      "notes": "Closed-value carrier for arbitrary legal fixed-native attribute names; not free JSON and not a second parser."
+      "notes": "Closed-value carrier for arbitrary legal fixed-native named attributes; paired with D2BlockCommonSemantics/1 for positional/common block slots, not free JSON and not a second parser."
     },
     {
       "name": "D2SourceOrigin/2",
@@ -1554,7 +1554,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Immutable Workspace presentation-default record in Portable Workspace Metadata with complete parent-head ancestry; owner-specific shared configuration, not Policy/3 or PortableComponentKey."
+      "notes": "Immutable portable Workspace presentation history record with parent-head ancestry and activation ChangeId; not a replacement storage authority for the /1 logical current value."
     },
     {
       "name": "D8PresentationPolicyAddress/1",
@@ -1570,7 +1570,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Complete protected maximal-head observation for Workspace presentation configuration; multiple same-revision heads remain conflict, never LWW."
+      "notes": "Complete protected maximal-head observation with owner-specific epoch/revision stamp; multiple same-revision heads remain conflict, never LWW."
     },
     {
       "name": "D8WorkspacePresentationPolicyBinding/2",
@@ -1578,7 +1578,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Exact one-head current binding over policy/address/head-set/pin, used only by workspace_default presentation."
+      "notes": "Exact one-head current binding over /1 logical value, /2 record, address, stamped head-set and pin; used only by workspace_default presentation."
     },
     {
       "name": "D8PresentationPolicySetRequest/2",
@@ -1594,7 +1594,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.4",
-      "notes": "Typed owner effect for one presentation-policy shared-configuration transition; no generic JSON/second ledger."
+      "notes": "Typed complex shared-configuration owner effect committed under the original D6 DecisionKey/P/ChangeRecord chain; no PortableComponentKey expansion, generic JSON, or second ledger."
     },
     {
       "name": "D8PresentationDecision/1",
@@ -1643,6 +1643,22 @@
       "replaces": null,
       "section": "SCHEMAS §6.5.1",
       "notes": "Frozen SET/COLUMN external token plus exact native-table selector; token is not identity."
+    },
+    {
+      "name": "D2BlockCommonSemantics/1",
+      "owner": "D2",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §4.4",
+      "notes": "Closed public AbstractBlock slots style/caption/numeral/subs/positional values that are not recoverable solely from the named native attribute map."
+    },
+    {
+      "name": "D8WorkspacePresentationPolicy/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.4",
+      "notes": "Logical current Workspace presentation value projected from the unique current /2 history record; not separately persisted and unavailable while multiple heads conflict."
     }
   ]
 }
