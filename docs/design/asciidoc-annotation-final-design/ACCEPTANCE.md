@@ -580,6 +580,16 @@ Each row is a normative obligation of this candidate. Words such as PASS/FAIL de
 | FC34C-D6-03 | SPEC §14 | Without handoff, checkpoint, or a real responsibility change, merely supporting FC does not background-migrate Record2 to Record3. |
 | FC34C-D6-04 | SPEC §14 | If handoff cannot obtain the original decoder/bytes for an old Pin1/PAB3/Subscription1/stop responsibility, takeover pauses/unavailable rather than constructing a partial Inventory2; unrelated ordinary source operations remain available. |
 
+## PR4 schema repair coverage (no new acceptance IDs)
+
+This schema repair **adds, removes, and renumbers none** of the 554 design obligations. It turns types already referenced by the existing obligations from dangling names into public closed shapes. Direct coverage is:
+
+- retained Witness/observer/document/block/collection/catalog/diagnostic/string/call/operation/inline/content evidence: AD2-37, AD2-38, O34-01–O34-16, P35-01–P35-14, N36-04–N36-09, M37-01–M37-20, M38-01–M38-16, M39-01–M39-11;
+- M37 producer sites, snapshot/cut, namespace, and producer-time carrier rules: M37-01, M37-17–M37-20, M38-01–M38-16, M39-01–M39-11;
+- AnnotationInlineBody/1 / AsciiDocInlineBody/1 schema alias and the single AnnotationInlineProfile/1: AN2-08, still under the AD2 complete-2.0.26 language gate.
+
+These remain unexecuted design requirements. Closing the schema references does not turn them into passed implementation tests.
+
 ## Not executed
 
 This PR did not execute these 554 scenarios or product Ruby/Rust parsers, providers, SQLite/storage code, replica/crypto/crash paths, Automation scheduling, or execution-custody handoff. Author-side checks are limited to ID/count/JSON/router/reference consistency.
