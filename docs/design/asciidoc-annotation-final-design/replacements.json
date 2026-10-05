@@ -1,0 +1,310 @@
+{
+  "schema_version": 1,
+  "status": "candidate-design-not-implemented",
+  "fixed_parent_commit": "e8aa0b341630a57c786c0891d4bbd1620247441d",
+  "fixed_input_commit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "replacement_semantics": "Each entry replaces only the named normative concerns/sections at the exact source blob. The listed SPEC sections are the current replacement body; unlisted fixed-parent owner semantics remain. This is section replacement, not an additive private-chat patch.",
+  "replacements": [
+    {
+      "owner": "D2",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§2",
+        "§3",
+        "§4",
+        "§5",
+        "§9",
+        "§10",
+        "§15",
+        "§16"
+      ],
+      "changedSections": [
+        "complete AsciiDoc language/processor contract",
+        "Witness7/CSP/PropertyProfile",
+        "managed format semantic ownership",
+        "provider profiles",
+        "portable Annotation semantics"
+      ]
+    },
+    {
+      "owner": "D3",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§7",
+        "§9",
+        "§13",
+        "§16"
+      ],
+      "changedSections": [
+        "wire13 outer input",
+        "D3ResolutionInputUse/2",
+        "Annotation identity/reply/copy",
+        "dual-profile continuation"
+      ]
+    },
+    {
+      "owner": "D4",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.md",
+      "sourceBlob": "42f3e6015ad7986eb285f4c2c8dd67b842608ab3",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§7"
+      ],
+      "changedSections": [
+        "InputDescriptor/3 + DependencyProof/3 outer consumption",
+        "document_format dependency",
+        "inner D4 types retained"
+      ]
+    },
+    {
+      "owner": "D5",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md",
+      "sourceBlob": "5ebd6aa535bfed698f5a1031060ec729864829e6",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§5",
+        "§7"
+      ],
+      "changedSections": [
+        "full AsciiDoc table baseline",
+        "proof3/descriptor3 outer consumption",
+        "format-stamp invalidation"
+      ]
+    },
+    {
+      "owner": "D6-Control",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md",
+      "sourceBlob": "e69c34e74aa8fbca00f77c89ac52778186630032",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§6",
+        "§11",
+        "§12",
+        "§13",
+        "§14",
+        "§17"
+      ],
+      "changedSections": [
+        "Dependency/Descriptor/Intent successors",
+        "document_format component + CP4/ChangeRecord",
+        "SourceTransform",
+        "dual-profile trust",
+        "D10 mixed holders"
+      ]
+    },
+    {
+      "owner": "D6-Storage",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "sourceBlob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§6",
+        "§12",
+        "§13",
+        "§14",
+        "§17"
+      ],
+      "changedSections": [
+        "portable document_format",
+        "ChangeRecord/1",
+        "transform outbox retention",
+        "trust public history",
+        "D10 mixed inventory"
+      ]
+    },
+    {
+      "owner": "D7-PAB",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.md",
+      "sourceBlob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§14",
+        "§15"
+      ],
+      "changedSections": [
+        "PreparedActionBinding/4",
+        "Annotation accept preparation",
+        "D10 current author responsibility"
+      ]
+    },
+    {
+      "owner": "D7-Effects",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.md",
+      "sourceBlob": "32e9a5f889a6627e05a397d9738ff171982f0838",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§13",
+        "§14"
+      ],
+      "changedSections": [
+        "EffectManifest/3 + EffectBytes/3",
+        "WorkspaceBootstrapPlan/4 encoding",
+        "D10 preview digest"
+      ]
+    },
+    {
+      "owner": "D7-Query",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-query-algebra/source.md",
+      "sourceBlob": "11e0137865a08b5cb6cfb898be3c299748174286",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§5",
+        "§8"
+      ],
+      "changedSections": [
+        "format-aware heading/body/ref/saved-definition dependencies",
+        "query grammar retained",
+        "format invalidation"
+      ]
+    },
+    {
+      "owner": "D7-Narrow",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-narrow-field-qualification/source.md",
+      "sourceBlob": "4f0cfeded1c0471988e2d5d712ab997ac4d90adb",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§7",
+        "§8"
+      ],
+      "changedSections": [
+        "document_format dependency without widening source disclosure",
+        "proof3 outer holder"
+      ]
+    },
+    {
+      "owner": "D7-Execution",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-execution-and-action-interfaces/source.md",
+      "sourceBlob": "b919463604407022d3f76fff328f2cfe53be62df",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§15"
+      ],
+      "changedSections": [
+        "PAB4 current action qualification",
+        "Annotation suggestion accept/reject"
+      ]
+    },
+    {
+      "owner": "D8-Interfaces",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "sourceBlob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§5",
+        "§8",
+        "§9",
+        "§10",
+        "§15"
+      ],
+      "changedSections": [
+        "Draft source+format base",
+        "PreparedEditBinding/3",
+        "deep heading/run-in editor",
+        "Annotation UX"
+      ]
+    },
+    {
+      "owner": "D8-CrossSurface",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.md",
+      "sourceBlob": "3fdf8a8279752818af2c0adc21d2d070eea1ea39",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§4",
+        "§9",
+        "§10",
+        "§15"
+      ],
+      "changedSections": [
+        "Source-only fallback",
+        "run-in/deep-heading rendering",
+        "Annotation appearance/review"
+      ]
+    },
+    {
+      "owner": "D9-Export",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-workers-and-export/source.md",
+      "sourceBlob": "24f561ba98f78d0a54290f3e338987fbfae66228",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§4",
+        "§8",
+        "§16"
+      ],
+      "changedSections": [
+        "ExportPlan/3 + PublicationReceipt/3",
+        "format-aware rendered export",
+        "Annotation export",
+        "provider profiles"
+      ]
+    },
+    {
+      "owner": "D9-Binding",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "sourceBlob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§7",
+        "§8",
+        "§16"
+      ],
+      "changedSections": [
+        "wire13/PAB4 coordination",
+        "fresh managed format",
+        "Annotation identity-map transfer"
+      ]
+    },
+    {
+      "owner": "D10",
+      "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
+      "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§13",
+        "§14",
+        "§17"
+      ],
+      "changedSections": [
+        "proof3 workspace reads",
+        "EffectManifest3 preview digest",
+        "schedule v2",
+        "mixed Image/Pin/Range/PrepareBinding1-3",
+        "Money/Claims/Inventory2",
+        "ExecutionResponsibilityRecord/3"
+      ]
+    }
+  ]
+}
