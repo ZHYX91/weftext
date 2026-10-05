@@ -2260,15 +2260,16 @@ AnnotationAggregateObservation/1 = {
   workspaceRef:WorkspaceRef,
   ownerNodeRef:NodeRef,
   observerDomain:CommitDomain/2,
-  fileObjectBinding:<D6 Storage §2.2 trusted FileObjectBinding>,
-  aggregateBytesPin:PinRef/2
+  fileObjectBinding:FileObjectBinding/1,
+  aggregateBytesPin:PinRef/2|null
 }
 
 AnnotationAggregateInstall/1 = {
   kind:"d6_annotation_aggregate_install",version:1,
   ownerNodeRef:NodeRef,
-  before:"absent"|AnnotationAggregateObservation/1,
+  before:AnnotationAggregateObservation/1,
   after:"absent"|PinRef/2,
+  installCapability:FileInstallCapability/2,
   changedAnnotationRefs:[AnnotationRef...]
 }
 ```
@@ -2277,7 +2278,7 @@ SuggestionAuthorProposal/1 只承载作者可提议的 kind/replacementSource；
 
 `weftext.annotations.json` 的 current physical bytes 恰为 D3-CJ/3(完整 AnnotationAggregate/1)，无 BOM、无额外换行或第二 envelope。records 必须非空，按完整 AnnotationRef canonical bytes 升序且唯一；每个 annotationRef.owner 必须等于 ownerNodeRef，nonnull replyTo 必须同 owner 且整张 records reply graph 无环。空集合唯一物理表示是 sidecar absent，禁止同时保留空 aggregate。unknown/missing member、duplicate JSON key、unknown version、owner mismatch、duplicate Ref 或 reply cycle 都使整个 aggregate strict-decode 失败；normal current read 不能部分信任其中“看起来合法”的记录。
 
-AnnotationAggregateObservation/1 是物理文件观察，不是 Annotation 的 SourceVersion/SourceObservation、revision token 或 identity。aggregateBytesPin 的 payloadKind=portable_metadata，bytes 必须等于上述完整 physical JSON；fileObjectBinding 使用 D6 Storage §2.2 的真实 backend identity/path/object-generation/observer-epoch/length/digest binding，digest 单独永远不是 CAS。AnnotationAggregateInstall/1 只是现有 D6 InstallationPlan 的一个具名 file-write coordination binding，不创建新 ledger/CAS/author store。after=present 时 PinRef 指向完整 after aggregate；changedAnnotationRefs 按 Ref canonical bytes 排序唯一，并恰等于 before/after logical record 差集。一个 Node 在一个 DecisionKey 下最多一个 AnnotationAggregateInstall/1。
+AnnotationAggregateObservation/1 是物理文件观察，不是 Annotation 的 SourceVersion/SourceObservation、revision token 或 identity。这里的 `FileObjectBinding/1` 与 `FileInstallCapability/2` **逐字复用 fixed D6 Control Interfaces §2**，不是本候选新版本：absent binding=`{kind:"absent",backendToken,relativePath,observationEpoch,parentGenerationToken}`；present binding=`{kind:"present",backendToken,relativePath,observationEpoch,objectGenerationToken,byteLength,sha256}`；capability 仍只有 create_only(parentGenerationToken)、conditional_replace(expectedObjectGenerationToken)、exclusive_write_window(windowToken,expectedObjectGenerationToken)、observed_replace(observedObjectGenerationToken)。PortableRelativePath、Token/Counter、64-lowercase-hex 及全部 containment/continuity 规则保持该 owner 原义。fileObjectBinding.kind=absent 时 aggregateBytesPin 必须 null；kind=present 时 aggregateBytesPin 必须是 payloadKind=portable_metadata 且 bytes 等于上述完整 physical JSON 的 PinRef/2。digest 单独永远不是 CAS。AnnotationAggregateInstall/1 只是现有 D6 安装计划的一个具名 file-write coordination binding，不创建新 ledger/CAS/author store；before 必须是 fresh Observation，而不是裸 `"absent"`。after 为 PinRef 时指向完整 after aggregate，为 `"absent"` 时表示删除最后一个 record。installCapability 必须与 before FileObjectBinding 精确交叉：absent→create_only 且 parentGenerationToken 相等；present→原 D6 允许的 replace capability 且 generation/window token 精确匹配。managed_atomic strong path 仍只接受该 owner 的 strict capability；observed_replace 仅在 D6 §4.1 原本 observed_only eligibility 已成立时有效，绝不升级成 CAS。changedAnnotationRefs 按 Ref canonical bytes 排序唯一，并恰等于 before/after logical record 差集。一个 Node 在一个 DecisionKey 下最多一个 AnnotationAggregateInstall/1。
 
 # 8. SourceTransform
 
