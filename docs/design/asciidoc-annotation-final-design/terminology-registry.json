@@ -1065,7 +1065,7 @@
       "status": "current",
       "replaces": "TrustConflictCarry/1",
       "section": "SPEC §13",
-      "notes": "Dual-profile compromise carry. factId uses D6-Trust-Compromise-Fact/2; rotate compromise maps oldTrustKeyId; origin cut is the original Declaration2 CP4/ChangeRecord activation."
+      "notes": "Dual-profile compromise carry. factId uses D6-Trust-Compromise-Fact/2; rotate compromise maps oldTrustKeyId; origin cut is the original Declaration2 CP4/ChangeRecord activation and is retained through per-head validation evidence."
     },
     {
       "name": "TrustConflictOutcome/2",
@@ -1097,7 +1097,7 @@
       "status": "current",
       "replaces": "ConflictResolutionDerivedPlan/1 policy_bundle arm",
       "section": "SPEC §13",
-      "notes": "Current policy_bundle_choice plan freezing mixed head dispatch, Carry1/2 union, Outcome2 and exact result bundle pin/version."
+      "notes": "Current policy_bundle_choice plan freezing mixed head dispatch, per-head Carry validation evidence, Carry1/2 union, Outcome2, exact selected/result bundle pins and recovery representation."
     },
     {
       "name": "ConflictResolutionInput/3",
@@ -1105,7 +1105,7 @@
       "status": "current",
       "replaces": "ConflictResolutionInput/2 policy_bundle_choice owner descriptor",
       "section": "SPEC §13",
-      "notes": "Protected current owner descriptor only; public d6_conflict_prepare remains wireVersion3/ConflictResolution2 and source arms remain on the fixed-parent descriptor."
+      "notes": "Protected current policy owner descriptor; ownerKind/intentKind=d6_conflict_resolution/3 and canonicalDescriptorBytes are exact. Public d6_conflict_prepare remains wireVersion3/ConflictResolution2; source arms retain Input2/Plan1/Preview1."
     },
     {
       "name": "D10AuthorPreparationLink/2",
@@ -1138,6 +1138,30 @@
       "replaces": "ScheduleContinuityInvalidation/1",
       "section": "SPEC §14",
       "notes": "Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses D6-Schedule-Invalidation/2 artifact domain."
+    },
+    {
+      "name": "TrustConflictCarryValidationHop/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Version-dispatched retained activation evidence for one direct compromise or resolver carrier hop; pins exact ChangeRecord/completion proof/policy bundle."
+    },
+    {
+      "name": "TrustConflictCarryValidationEvidence/1",
+      "owner": "D6",
+      "status": "current",
+      "replaces": null,
+      "section": "SPEC §13",
+      "notes": "Per expected-head/fact exact origin plus every traversed carrier hop used by the current mixed Carry1/2 fold."
+    },
+    {
+      "name": "ConflictResolutionPreview/2",
+      "owner": "D6",
+      "status": "current",
+      "replaces": "ConflictResolutionPreview/1 policy_bundle arm",
+      "section": "SPEC §13",
+      "notes": "Immutable current policy preview binding exact Input3 resolution, branchEvidence digest, and complete Plan2; source arms retain Preview1."
     }
   ]
 }
