@@ -699,9 +699,17 @@ replica registration 继续使用 specialized same-record producer；current FC 
 
 对于当前尚未建立决议的 D10 Workspace control 操作，协调后的链固定为 D10WorkspaceReadDependencies/2 与 DependencyProof/3 → ControlDependencies/3 → D10ControlInput/2 → ControlPrepareBinding/3。新的自动 author step 使用 PreparedActionBinding/4 与 EffectManifest/3、EffectBytes/3 构造 ApprovalUse/2。新的交互 author step 使用其 owner 合同选定的 PreparedActionBinding/4 或 PreparedEditBinding/3。新的调度记录使用 ScheduleSubscription/2 与 AutomationOccurrenceRecord/2。
 
-这只接管 replacements.json 所列 fixed-parent D10 CANDIDATE、CONTROL-CONTRACT、IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE、TERMINOLOGY 与 UPSTREAM-AMENDMENTS 中的 fresh/current 语句，不对版本名做全局替换。真实已保存、已规划或状态未知的记录，继续按实际写入时的精确 decoder 与恢复合同处理。若 recorded format 是历史 PreparedActionBinding/3、EffectManifest/2、EffectBytes/2、PreparedEditBinding/2、ApprovalUse/1、ScheduleSubscription/1、AutomationOccurrenceRecord/1、ControlPrepareBinding/1 或 /2，则其原 bytes、pins、canonical request、OperationId 与恢复证据都保持不变。current mixed holder 只能通过显式 versioned carrier 引用这些旧责任，不能迁移或重新 pin。
+这一 current 路由除了已经纳入 replacement 的 D10 sections 外，还明确接管 fixed-parent D10 CONTROL-CONTRACT §4、§7 与 D6 Storage §7.2.1 中的 fresh producer 语句。这里不是全局替换版本名。真实 saved/planned/unknown 记录继续按实际写入时的精确 decoder 与恢复合同处理；若 recorded format 是历史 D10AuthorPreparationLink/1、PreparedActionBinding/3、EffectManifest/2、EffectBytes/2、PreparedEditBinding/2、ApprovalUse/1、ScheduleSubscription/1、ScheduleContinuityWitness/1、ScheduleContinuityStep/1、ScheduleContinuityInvalidation/1、AutomationOccurrenceRecord/1、ControlPrepareBinding/1 或 /2，则其原 pins、canonical request、OperationId、confirmation fact 与 recovery evidence 都保持逐字节不变。current mixed holder 只能通过显式 versioned carrier 引用这些旧责任，不能迁移、重新 pin 或重新生成。
 
-fixed-parent D6 direct consumer 采用同一分流。当前 unseen D10 control 使用 D10ControlInput/2、ControlDependencies/3 与 D10ControlEffectPlan/2，不再走 fixed-parent 的 /1-/2 current producer 语句；当前 unseen 自动 author use 消费 ApprovalUse/2 与 PAB4/Effect3。saved/planned 历史关联必须先按原版本恢复，不能仅因存在 current successor 就改写。
+对 fresh core_field_member author preparation，D10 CONTROL §4 的 recovery link 使用 D10AuthorPreparationLink/2。其 preparedBindingToken 选择精确 current PreparedActionBinding/4，request 是该 preparation 产生的原 D6 d6_commit_request/2。Core 必须在返回 prepared author step 或允许 submission 之前，原子保存 Link2、完整 PAB4、EffectManifest/3 与所需 EffectBytes/3 semantic evidence，以及必要 recovery pins。当前 §7 mapping 继续执行既有 fresh Field/Entry selection，但使用 DependencyProof/3；只要语义解析 managed Document，就必须包含 document_format。随后调用 current D7 prepare owner、保留 PAB4、验证完整 EffectManifest3/EffectBytes3 与实际 MutationFootprint，再构造 ApprovalUse/2。Standing Approval 仍不能选择 target、Entry、member path 或 requested value；planning、final seal、saved replay 与原 request 仍归 D6。只要历史 Link1/PAB3/ApprovalUse1 association 已被证明，就必须精确恢复，不能重新准备为 current。
+
+对 fresh 或其它尚未决议的 current external-consent control preparation，ControlPrepareBinding/3 保存 fixed-parent 语义要求的同一个 ExternalConfirmationRequirement/1；独立的 protected ExternalConfirmationRecord/1 继续拥有当前 confirmed fact。trusted attended confirmation event、完整 immutable preview/intent binding、current principal、trusted time、consent interval、dependency revalidation、non-disclosure 与 approval_unavailable/preflight 顺序全部保持。confirmation 不得修改 Binding3。已经保存或已准备的 ControlPrepareBinding/2 保留其原 requirement、canonical intent bytes、Dependencies2、confirmation association、result lookup 与 recovery；不能因为 current unseen prepare 使用 Binding3 就改写。
+
+fixed-parent D6 direct consumer 使用同一分流。current unseen D10 control 使用 D10ControlInput/2、ControlDependencies/3 与 D10ControlEffectPlan/2，不再走 fixed-parent /1-/2 current producer 语句；current unseen automatic author use 消费 ApprovalUse/2 与 Link2/PAB4/Effect3。saved/planned 历史关联必须先按原版本恢复，不能仅因存在 current successor 就改写。
+
+D6 Storage §7.2.1 的 current producer 同样只为 fresh ScheduleSubscription/2 建立新 scheduling registration。当前 D10 scheduling gates 与有限 retention reservation 成功后，同一个 configuration transaction 必须向真实 Core source/control producer 注册，并创建 ScheduleContinuityWitness/2；其 initial/checkpoint 使用 ScheduleRecurrenceEvidence/2，revision=1、consumedTransition=0，并生成 fresh producerEpoch。当前正向 transition 使用 ScheduleContinuityStep/2、DependencyProof/3，以及真实 current ChangeRecord/1 + Notice3 + CP4 pins。current source 若 vanished、conflicted、invalid、unavailable 或历史出现 gap，则使用 ScheduleContinuityInvalidation/2；binding_changed 仍必须有已证明的 selected-business discontinuity，gap 仍表示 unavailable/unknown history。producer 继续保留 fixed-parent 的 atomic inbox、retention、counter、capacity、authorization、compaction、error 与 no-reset 规则；这个 successor 只改变 current typed evidence/dependency/component family。
+
+已有或 retired ScheduleSubscription/1 仍是合法 historical recovery-retention owner，并继续配套 Witness1/Step1/Invalidation1 与其原 pins/producer obligations；绝不后台迁移。已经定义的 same-generation Subscription1 → Subscription2 显式 continue，只有在完整 retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut 后才合法；否则必须 replace 并创建新 generation。合法 continue 保持 semantic generation 与旧历史 references，不能伪称旧 producer 曾产生 version-2 bytes。
 
 ### 14.2 image、pin、range 与 effect plan
 
@@ -821,9 +829,13 @@ D10ControlRecordPin/2
 D10ControlRange/2
 D10ControlEffectPlan/2
 ApprovalUse/2
+D10AuthorPreparationLink/2
 D10AuthorStepResponsibility/2
 ScheduleRecurrenceEvidence/2
 ScheduleSubscription/2
+ScheduleContinuityWitness/2
+ScheduleContinuityStep/2
+ScheduleContinuityInvalidation/2
 ScheduleOccurrenceProof/2
 AutomationOccurrenceRecord/2
 D10MoneyResponsibility/2
