@@ -1,0 +1,1332 @@
+{
+  "schema_version": 1,
+  "status": "A2 D3 current terminology projection; author candidate, not independent acceptance",
+  "fixed_s": {
+    "sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+    "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
+    "blob": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344"
+  },
+  "concept_count": 42,
+  "concepts": [
+    {
+      "conceptId": "weftext.term.workspace",
+      "ownedNames": {
+        "wireApiNames": [
+          "WorkspaceRef",
+          "workspaceId",
+          "workspace_ref"
+        ],
+        "codeConventions": [
+          "WorkspaceId",
+          "WorkspaceRef",
+          "workspace_id",
+          "workspace_ref"
+        ],
+        "localeKeys": [
+          "term.workspace"
+        ],
+        "cliUiLabels": [
+          "workspace",
+          "工作区"
+        ]
+      },
+      "semanticNonaliases": [
+        "project",
+        "vault",
+        "folder",
+        "tenant"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "可移植聚合、授权、事务与 D3 identity namespace；不是作者内容 entity 或开放 owner。",
+      "currentOwnerLayer": "D2 domain boundary；D1 Core 是语义 authority。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.node",
+      "ownedNames": {
+        "wireApiNames": [
+          "NodeRef",
+          "nodeId",
+          "node_ref"
+        ],
+        "codeConventions": [
+          "Node",
+          "NodeId",
+          "NodeRef",
+          "node",
+          "node_id",
+          "node_ref"
+        ],
+        "localeKeys": [
+          "term.node"
+        ],
+        "cliUiLabels": [
+          "node",
+          "节点"
+        ]
+      },
+      "semanticNonaliases": [
+        "note",
+        "page",
+        "item",
+        "document",
+        "folder",
+        "data node"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "D2 content graph 中唯一长期受管、可独立引用并恰有一份 Document 的作者内容 entity；Node exact-source classification可包含lexically valid Facet memberships，ordinary与template Node均可携带非tasks/task Facet；Task只由ordinary + exact built-in tasks/task predicate成立。",
+      "currentOwnerLayer": "D2 content graph；D3 定义 NodeRef/lifecycle。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.document",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "Document",
+          "DocumentProjection",
+          "document",
+          "document_owner"
+        ],
+        "localeKeys": [
+          "term.document"
+        ],
+        "cliUiLabels": [
+          "document",
+          "文档"
+        ]
+      },
+      "semanticNonaliases": [
+        "file",
+        "node",
+        "page",
+        "blob",
+        "DocumentId",
+        "DocumentRef"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "owning Node 恰好拥有的一份 exact source 及其语义解释；以 owning NodeRef 寻址，没有第二 durable identity。",
+      "currentOwnerLayer": "D2 document content；D3只定义地址与 locator。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.occurrence",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "OccurrenceContext"
+        ],
+        "localeKeys": [
+          "term.occurrence"
+        ],
+        "cliUiLabels": [
+          "occurrence",
+          "出现项"
+        ]
+      },
+      "semanticNonaliases": [
+        "item",
+        "instance",
+        "entity"
+      ],
+      "firstFreeze": "`frozen:D2` 的 Document occurrence 基线 + `candidate:D3` 的总称收窄",
+      "currentDefinition": "在一个明确 owner/execution/rule scope 内出现、可定位或可重建但默认没有 durable identity 的 manifestation 总称；只作元术语，不是 wire kind。",
+      "currentOwnerLayer": "D2/D3 shared meta-term。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.document-occurrence",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "DocumentElement",
+          "document_occurrence"
+        ],
+        "localeKeys": [
+          "term.documentOccurrence"
+        ],
+        "cliUiLabels": [
+          "document occurrence",
+          "文档出现项"
+        ]
+      },
+      "semanticNonaliases": [
+        "block entity",
+        "item entity",
+        "row record",
+        "note"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "Document exact source 中的 heading、paragraph、",
+      "currentOwnerLayer": "D2 Document content。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.task",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "TaskNode",
+          "task_node"
+        ],
+        "localeKeys": [
+          "term.task"
+        ],
+        "cliUiLabels": [
+          "task",
+          "任务",
+          "任务节点"
+        ]
+      },
+      "semanticNonaliases": [
+        "checklist item",
+        "todo row",
+        "VTODO identity",
+        "TaskRef",
+        "Task wire kind"
+      ],
+      "firstFreeze": "`frozen:D2-v2`",
+      "currentDefinition": "available Facet set包含exact built-in tasks/task的ordinary Node；复用该Node的identity、Document、owner与lifecycle，不形成第二kind或identity。",
+      "currentOwnerLayer": "D2 v2 built-in Facet predicate；D3只冻结NodeRef/lifecycle effect。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.facet",
+      "ownedNames": {
+        "wireApiNames": [
+          "facetMemberships"
+        ],
+        "codeConventions": [
+          "Facet",
+          "FacetMembership",
+          "facet",
+          "facet_memberships"
+        ],
+        "localeKeys": [
+          "term.facet"
+        ],
+        "cliUiLabels": [
+          "facet",
+          "分面"
+        ]
+      },
+      "semanticNonaliases": [
+        "core kind",
+        "tag",
+        "relation",
+        "plugin",
+        "node subtype"
+      ],
+      "firstFreeze": "`frozen:D2-v2`",
+      "currentDefinition": "Node exact-source classification中的可组合capability membership；membership可出现在ordinary或template Node上且不创建新的entity、owner、identity、Document或lifecycle。exact tasks/task禁止出现在template上，并且只使ordinary Node满足Task predicate。",
+      "currentOwnerLayer": "D2 v2 lexical membership与built-in tasks/task marker；",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.facet-id",
+      "ownedNames": {
+        "wireApiNames": [
+          "facetId"
+        ],
+        "codeConventions": [
+          "FacetId",
+          "facet_id"
+        ],
+        "localeKeys": [
+          "term.facetId"
+        ],
+        "cliUiLabels": [
+          "FacetId",
+          "分面标识符"
+        ]
+      },
+      "semanticNonaliases": [
+        "NodeId",
+        "FieldId",
+        "namespaceToken",
+        "provider id"
+      ],
+      "firstFreeze": "`frozen:D2-v2 lexical contract`",
+      "currentDefinition": "D2 v2 classification中按exact ASCII code point比较的namespace/name lexical token；它标识Facet contract但不是EntityRef或可解析content identity。",
+      "currentOwnerLayer": "D2 v2 lexical shape；D4/D10以后拥有registry、namespace reservation与validation。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.attribute-carrier-block",
+      "ownedNames": {
+        "wireApiNames": [
+          "attributeCarrierBlocks",
+          "namespaceToken"
+        ],
+        "codeConventions": [
+          "AttributeCarrierBlock",
+          "attribute_carrier_block",
+          "namespace_token"
+        ],
+        "localeKeys": [
+          "term.attributeCarrierBlock"
+        ],
+        "cliUiLabels": [
+          "attribute carrier block",
+          "属性载体块"
+        ]
+      },
+      "semanticNonaliases": [
+        "field container",
+        "record",
+        "sidecar",
+        "locator",
+        "payload authority"
+      ],
+      "firstFreeze": "`frozen:D2-v2`",
+      "currentDefinition": "D2 v2 exact source中的namespace-scoped protected lexical block occurrence；",
+      "currentOwnerLayer": "D2 v2 Document lexical projection；D3只冻结non-durable identity与artifact-binding边界。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.lexical-attribute-entry",
+      "ownedNames": {
+        "wireApiNames": [
+          "rawEntrySource"
+        ],
+        "codeConventions": [
+          "LexicalAttributeEntry",
+          "lexical_attribute_entry",
+          "raw_entry_source"
+        ],
+        "localeKeys": [
+          "term.lexicalAttributeEntry"
+        ],
+        "cliUiLabels": [
+          "lexical attribute entry",
+          "词法属性条目"
+        ]
+      },
+      "semanticNonaliases": [
+        "Field",
+        "Record",
+        "entry id",
+        "reference slot",
+        "Annotation target"
+      ],
+      "firstFreeze": "`frozen:D2-v2`",
+      "currentDefinition": "Attribute Carrier Block中的opaque raw lexical entry occurrence；",
+      "currentOwnerLayer": "D2 v2 Document lexical projection；D4以后拥有inner payload semantics。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.resource",
+      "ownedNames": {
+        "wireApiNames": [
+          "ResourceRef",
+          "resourceId",
+          "resource_ref"
+        ],
+        "codeConventions": [
+          "Resource",
+          "ResourceId",
+          "ResourceRef",
+          "resource",
+          "resource_ref"
+        ],
+        "localeKeys": [
+          "term.resource",
+          "term.resource.attachmentRole"
+        ],
+        "cliUiLabels": [
+          "resource",
+          "资源",
+          "附件"
+        ]
+      },
+      "semanticNonaliases": [
+        "file",
+        "blob",
+        "asset",
+        "attachment"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "由一个 Node 严格拥有、具有 durable owner-local identity 与单一作者 byte source、但不拥有 Document/Node capability 的非节点对象。",
+      "currentOwnerLayer": "D2 content object；D3 owner-local ResourceRef/lifecycle。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.annotation",
+      "ownedNames": {
+        "wireApiNames": [
+          "AnnotationRef",
+          "annotationId",
+          "annotation_ref"
+        ],
+        "codeConventions": [
+          "Annotation",
+          "AnnotationId",
+          "AnnotationRef",
+          "annotation",
+          "annotation_ref"
+        ],
+        "localeKeys": [
+          "term.annotation"
+        ],
+        "cliUiLabels": [
+          "annotation",
+          "批注"
+        ]
+      },
+      "semanticNonaliases": [
+        "comment object",
+        "note",
+        "thread",
+        "message"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "由一个 Node 严格拥有、具有 owner-local identity 与 frozen same-owner target union 的非节点对象；fresh current portable state 是完整 `D3-Annotation-Value/4`，body 存在时使用唯一 R6 `AnnotationInlineBody/1` + `AnnotationInlineProfile/1`。historical Value/3/plain-text 只按原 decoder/recovery 保留。",
+      "currentOwnerLayer": "D2 content object；D3 owner/ref/reply lifecycle。",
+      "disposition": "retain_identity_names_firstFreeze__supersede_plain_text_definition_with_value4_r6"
+    },
+    {
+      "conceptId": "weftext.term.node-link",
+      "ownedNames": {
+        "wireApiNames": [
+          "node_link"
+        ],
+        "codeConventions": [
+          "NodeLinkOccurrence",
+          "node_link"
+        ],
+        "localeKeys": [
+          "term.nodeLink"
+        ],
+        "cliUiLabels": [
+          "node link",
+          "节点链接",
+          "链接"
+        ]
+      },
+      "semanticNonaliases": [
+        "relation",
+        "citation",
+        "shortcut",
+        "symlink"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "Document 中 authored inline occurrence，",
+      "currentOwnerLayer": "D2 authored occurrence；D3 target NodeRef/resolution。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.citation",
+      "ownedNames": {
+        "wireApiNames": [
+          "citation"
+        ],
+        "codeConventions": [
+          "CitationOccurrence",
+          "citation_occurrence"
+        ],
+        "localeKeys": [
+          "term.citation"
+        ],
+        "cliUiLabels": [
+          "citation",
+          "引文"
+        ]
+      },
+      "semanticNonaliases": [
+        "reference",
+        "bibliography entry",
+        "library item"
+      ],
+      "firstFreeze": "`frozen:D2`",
+      "currentDefinition": "Document 中 authored citation occurrence，target intent 是 same-Workspace Node；",
+      "currentOwnerLayer": "D2 authored occurrence；D3只冻结 target ref/locator identity；",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.entity",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "EntityRef",
+          "entity_ref"
+        ],
+        "localeKeys": [
+          "term.entity"
+        ],
+        "cliUiLabels": [
+          "entity",
+          "实体"
+        ]
+      },
+      "semanticNonaliases": [
+        "item",
+        "object",
+        "thing",
+        "record",
+        "node"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "D3 中拥有 durable content identity 的 closed meta-union：Node、Resource、Annotation；仅作上位术语，不是第四种 kind。",
+      "currentOwnerLayer": "D3 identity algebra。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.authoritative-identity",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "AuthoritativeRef"
+        ],
+        "localeKeys": [
+          "identity.authoritative"
+        ],
+        "cliUiLabels": [
+          "authoritative identity",
+          "权威身份"
+        ]
+      },
+      "semanticNonaliases": [
+        "ID",
+        "key",
+        "handle",
+        "address"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "Core 用于判等、解析与生命周期连续性的 durable typed identity；只由完整 Workspace/owner/domain-scoped ref 给出。",
+      "currentOwnerLayer": "D3 identity algebra。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.typed-reference",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "Ref",
+          "_ref"
+        ],
+        "localeKeys": [
+          "term.typedReference"
+        ],
+        "cliUiLabels": [
+          "typed reference",
+          "类型化引用"
+        ]
+      },
+      "semanticNonaliases": [
+        "pointer",
+        "link",
+        "ID",
+        "key",
+        "handle"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "closed kind 与全部 namespace/owner fields 组成的 authoritative identity value；Ref 是受控 code suffix，不是自然语言泛称。",
+      "currentOwnerLayer": "D3 wire/API。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.reference",
+      "ownedNames": {
+        "wireApiNames": [
+          "ReferenceSlotAddress",
+          "referenceDispositionPlan",
+          "rewrittenReferences"
+        ],
+        "codeConventions": [
+          "ReferencePlan",
+          "ReferenceState",
+          "reference_*"
+        ],
+        "localeKeys": [
+          "term.reference"
+        ],
+        "cliUiLabels": [
+          "reference",
+          "引用"
+        ]
+      },
+      "semanticNonaliases": [
+        "relation",
+        "link",
+        "citation",
+        "edge"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "一个受控 slot/source 对一个 typed target 的可解析语义事实，带resolution/lifecycle；不是独立 durable relation entity。",
+      "currentOwnerLayer": "D3 reference semantics。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.relation",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "Relation*"
+        ],
+        "localeKeys": [
+          "term.relation"
+        ],
+        "cliUiLabels": []
+      },
+      "semanticNonaliases": [
+        "edge",
+        "link",
+        "reference"
+      ],
+      "firstFreeze": "`candidate:D3-boundary`, owner D4",
+      "currentDefinition": "未来 D4 可定义的typed domain relation；D3只规定任何ref-valued endpoint必须服从typed identity/resolution，不冻结 relation ontology。",
+      "currentOwnerLayer": "owner D4; D3 negative gate only。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.locator",
+      "ownedNames": {
+        "wireApiNames": [
+          "DocumentElementLocator",
+          "DocumentRangeLocator",
+          "ResourceRegionLocator",
+          "l1"
+        ],
+        "codeConventions": [
+          "Locator",
+          "_locator"
+        ],
+        "localeKeys": [
+          "term.locator"
+        ],
+        "cliUiLabels": [
+          "locator",
+          "位置",
+          "定位器"
+        ]
+      },
+      "semanticNonaliases": [
+        "ref",
+        "ID",
+        "path",
+        "anchor token"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "绑定owner与准确revision/coordinate、用于定位非entity occurrence/region的非权威值；可失效，不承诺identity continuity。",
+      "currentOwnerLayer": "D3 location semantics。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.owner",
+      "ownedNames": {
+        "wireApiNames": [
+          "destinationOwnerRef",
+          "owner"
+        ],
+        "codeConventions": [
+          "owner_ref",
+          "validate_owner_binding"
+        ],
+        "localeKeys": [
+          "term.owner"
+        ],
+        "cliUiLabels": [
+          "owner",
+          "所有者节点"
+        ]
+      },
+      "semanticNonaliases": [
+        "parent",
+        "authority",
+        "source",
+        "account"
+      ],
+      "firstFreeze": "`frozen:D2` + `candidate:D3 encoding`",
+      "currentDefinition": "决定对象合法包含、owner-local namespace与不可变归属的领域对象；D3中Resource/Annotation owner恰为一个NodeRef。",
+      "currentOwnerLayer": "D2 ownership + D3 ref algebra。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.authority",
+      "ownedNames": {
+        "wireApiNames": [
+          "AuthorityInstanceId",
+          "expectedAuthority"
+        ],
+        "codeConventions": [
+          "Authority*",
+          "authority",
+          "authority_instance_id"
+        ],
+        "localeKeys": [
+          "term.authority"
+        ],
+        "cliUiLabels": [
+          "authority",
+          "权威实例",
+          "权威方"
+        ]
+      },
+      "semanticNonaliases": [
+        "owner",
+        "master",
+        "source-of-truth"
+      ],
+      "firstFreeze": "`frozen:D1 role` + `candidate:D3 instance semantics`",
+      "currentDefinition": "对某语义状态作最终判定与提交的主体/instance角色；content authority 与 control authority 必须带限定词。",
+      "currentOwnerLayer": "D1 Core authority + D3 Workspace/source authority。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.source",
+      "ownedNames": {
+        "wireApiNames": [
+          "sourceArtifact",
+          "sourceSpan",
+          "sourceWorkspaceRef"
+        ],
+        "codeConventions": [
+          "exact_source",
+          "foreign_source",
+          "source_artifact"
+        ],
+        "localeKeys": [
+          "term.source"
+        ],
+        "cliUiLabels": [
+          "source",
+          "来源"
+        ]
+      },
+      "semanticNonaliases": [
+        "origin",
+        "authority",
+        "provider",
+        "owner"
+      ],
+      "firstFreeze": "`frozen:D2 exact-source` + `candidate:D3 boundary`",
+      "currentDefinition": "产生或承载某内容/证据的原始输入或系统；必须以exact source、foreign source、source artifact等限定词出现。",
+      "currentOwnerLayer": "D2 exact source；D3 provenance/import boundary。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.source-binding",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "SourceBinding",
+          "SourceBindingId",
+          "source_binding",
+          "source_binding_id"
+        ],
+        "localeKeys": [
+          "term.sourceBinding"
+        ],
+        "cliUiLabels": [
+          "source binding",
+          "来源绑定"
+        ]
+      },
+      "semanticNonaliases": [
+        "connection",
+        "account",
+        "calendar ID",
+        "provider token",
+        "origin"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "把一个具体外部来源实例、授权scope/collection与mapping namespace绑定为foreign-key比较域的control-plane事实。",
+      "currentOwnerLayer": "D3 identity/provenance gate；persistence由D6/D9。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.provenance",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "Provenance",
+          "provenance"
+        ],
+        "localeKeys": [
+          "term.provenance"
+        ],
+        "cliUiLabels": [
+          "provenance",
+          "来源证据"
+        ]
+      },
+      "semanticNonaliases": [
+        "origin",
+        "authority",
+        "permission",
+        "identity"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "解释对象/结果从何处、经何操作产生的非授权证据集合；不产生identity equality或write permission。",
+      "currentOwnerLayer": "D3 evidence boundary；D7/D9可定义payload。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.origin-binding",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "OriginBinding",
+          "origin_binding"
+        ],
+        "localeKeys": [
+          "term.originBinding"
+        ],
+        "cliUiLabels": [
+          "origin binding",
+          "原始对象绑定"
+        ]
+      },
+      "semanticNonaliases": [
+        "source binding",
+        "foreign ID",
+        "identity map",
+        "sync link"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "从一个精确ForeignIdentityKey到一个Weftext authoritative ref的持久、可审计、source-scoped映射，用于deterministic re-import/adoption dedup；它证明关联，不证明identity相等。",
+      "currentOwnerLayer": "D3 identity/provenance invariant；persistence/retention由D6/D9/A2。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.derived-occurrence",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "DerivedOccurrence",
+          "derived_occurrence"
+        ],
+        "localeKeys": [
+          "term.derivedOccurrence"
+        ],
+        "cliUiLabels": [
+          "derived occurrence",
+          "派生出现项",
+          "派生时次"
+        ]
+      },
+      "semanticNonaliases": [
+        "event instance",
+        "occurrence Node",
+        "calendar item"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "由外部series rule、occurrence key与准确version/rule cut可重建的非durable occurrence；默认没有Node identity。",
+      "currentOwnerLayer": "D3 foreign identity boundary。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.foreign-identity-key",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "ForeignIdentityKey",
+          "foreign_identity_key"
+        ],
+        "localeKeys": [
+          "term.foreignIdentityKey"
+        ],
+        "cliUiLabels": [
+          "foreign identity key",
+          "外部身份键"
+        ]
+      },
+      "semanticNonaliases": [
+        "NodeRef",
+        "external ID",
+        "origin",
+        "dedup key"
+      ],
+      "firstFreeze": "`candidate:D3`",
+      "currentDefinition": "SourceBinding + foreign component kind + foreign persistent",
+      "currentOwnerLayer": "D3 foreign identity boundary。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.external-uri",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "ExternalUri",
+          "external_uri"
+        ],
+        "localeKeys": [
+          "term.externalUri"
+        ],
+        "cliUiLabels": [
+          "external URI",
+          "外部链接"
+        ]
+      },
+      "semanticNonaliases": [
+        "ResourceRef",
+        "file",
+        "attachment",
+        "source binding"
+      ],
+      "firstFreeze": "`candidate:D3 boundary`; D4/D9决定typed URI/import，R0删除URI-as-resource-id。",
+      "currentDefinition": "指向Weftext authority之外资源的非身份值/occurrence target；解析/fetch能力由下游决定。",
+      "currentOwnerLayer": "D2 link boundary + D3 non-identity gate。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.copy",
+      "ownedNames": {
+        "wireApiNames": [
+          "copy_annotation",
+          "copy_node_subtree",
+          "copy_resource"
+        ],
+        "codeConventions": [
+          "copy_*",
+          "copy_plan",
+          "copy_receipt",
+          "managed_copy"
+        ],
+        "localeKeys": [
+          "action.copy"
+        ],
+        "cliUiLabels": [
+          "copy",
+          "复制"
+        ]
+      },
+      "semanticNonaliases": [
+        "clone",
+        "duplicate",
+        "move-copy"
+      ],
+      "firstFreeze": "`candidate:D3`; R0删除clone/duplicate commands或迁移到copy。",
+      "currentDefinition": "保留source，创建fresh target identity与显式mapping；同Workspace与跨Workspace都不保留Node/owner-local identity。",
+      "currentOwnerLayer": "D3 identity operation。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.fork",
+      "ownedNames": {
+        "wireApiNames": [
+          "fork_workspace"
+        ],
+        "codeConventions": [
+          "fork_plan",
+          "fork_receipt",
+          "fork_workspace"
+        ],
+        "localeKeys": [
+          "action.workspaceFork"
+        ],
+        "cliUiLabels": [
+          "workspace fork",
+          "分叉工作区"
+        ]
+      },
+      "semanticNonaliases": [
+        "clone workspace",
+        "copy workspace",
+        "restore"
+      ],
+      "firstFreeze": "`candidate:D3`; R0删除workspace clone alias。",
+      "currentDefinition": "从snapshot cut创建fresh Workspace/Node/owner-local identities并返回完整mapping；source继续存在。",
+      "currentOwnerLayer": "D3 Workspace activation/identity。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.continue",
+      "ownedNames": {
+        "wireApiNames": [
+          "continue_workspace"
+        ],
+        "codeConventions": [
+          "continuation_cut",
+          "continue_workspace"
+        ],
+        "localeKeys": [
+          "action.workspaceContinue"
+        ],
+        "cliUiLabels": [
+          "workspace continue",
+          "接续工作区"
+        ]
+      },
+      "semanticNonaliases": [
+        "restore-as-same",
+        "resume folder",
+        "clone"
+      ],
+      "firstFreeze": "`candidate:D3`; R0删除path/digest auto-continue。",
+      "currentDefinition": "经权威连续性证明后继续同一Workspace identity与ledger；只用于formal continuation/restore path。",
+      "currentOwnerLayer": "D3 authority continuity。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.move",
+      "ownedNames": {
+        "wireApiNames": [
+          "move_node"
+        ],
+        "codeConventions": [
+          "move_node",
+          "move_plan"
+        ],
+        "localeKeys": [
+          "action.move"
+        ],
+        "cliUiLabels": [
+          "move",
+          "移动"
+        ]
+      },
+      "semanticNonaliases": [
+        "transfer-as-same-id",
+        "rename",
+        "reparent Resource"
+      ],
+      "firstFreeze": "`candidate:D3`; R0删除cross-workspace move-preserve code。",
+      "currentDefinition": "在同一Workspace内改变Node parent/order而保持NodeRef；跨Workspace用户意图必须实现为fresh target transfer加source disposition，不称identity-preserving move。",
+      "currentOwnerLayer": "D3 structure/lifecycle operation。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.import",
+      "ownedNames": {
+        "wireApiNames": [
+          "import_new"
+        ],
+        "codeConventions": [
+          "import_*",
+          "import_plan",
+          "import_receipt",
+          "initial_import"
+        ],
+        "localeKeys": [
+          "action.import"
+        ],
+        "cliUiLabels": [
+          "import",
+          "导入"
+        ]
+      },
+      "semanticNonaliases": [
+        "open",
+        "attach",
+        "ingest-as-same-id",
+        "sync"
+      ],
+      "firstFreeze": "`candidate:D3`; D9定义contract，R0删除provider/path-derived IDs。",
+      "currentDefinition": "从artifact/source material创建由Weftext authority管理的fresh identity，除非显式formal continue/fork/restore class；RFC 5545 foreign初次导入的identity intent精确称initial_import，只在never_bound、有界preview后创建fresh Node，并在同一作者决议中写入sole active OriginBinding；retired binding必须显式Adopt。",
+      "currentOwnerLayer": "D3 identity effect；mapping/preview由D9。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.adopt",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "adopt_*",
+          "adoption_binding"
+        ],
+        "localeKeys": [
+          "action.adopt"
+        ],
+        "cliUiLabels": [
+          "adopt",
+          "采纳为节点"
+        ]
+      },
+      "semanticNonaliases": [
+        "promote",
+        "import",
+        "materialize-as-same-id"
+      ],
+      "firstFreeze": "`candidate:D3`; D9/A2定义workflow，R0删除foreign-id coercion。",
+      "currentDefinition": "用户显式选择一个foreign object/occurrence成为独立Weftext object；若创建Node则fresh NodeRef且必须在同一作者决议中写同一ForeignIdentityKey的sole active OriginBinding；它是retired binding后唯一可显式重建sole active binding的verb。",
+      "currentOwnerLayer": "D3 identity/provenance effect；workflow由D9/A2。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.promote",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "promote_*",
+          "promotion_plan"
+        ],
+        "localeKeys": [
+          "action.promote"
+        ],
+        "cliUiLabels": [
+          "promote",
+          "提升为节点/任务"
+        ]
+      },
+      "semanticNonaliases": [
+        "adopt",
+        "convert in place",
+        "detach",
+        "extract"
+      ],
+      "firstFreeze": "`frozen:D2` + `candidate:D3 identity effect`; D7定义payload，R0删除in-place occurrence ID升级。",
+      "currentDefinition": "把受管内容中的无durable identity occurrence显式转为fresh ordinary Node，并原子更新原occurrence；checklist→Task promotion同时声明exact built-in tasks/task Facet，fresh NodeRef且无mirror。",
+      "currentOwnerLayer": "frozen:D2-v2 checklist→ordinary Node + tasks/task semantics；",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.subscribe",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "subscribe_*"
+        ],
+        "localeKeys": [
+          "action.subscribe"
+        ],
+        "cliUiLabels": [
+          "subscribe",
+          "订阅"
+        ]
+      },
+      "semanticNonaliases": [
+        "import",
+        "sync",
+        "connect"
+      ],
+      "firstFreeze": "`candidate:D3-boundary`; D9/A2定义workflow，R0删除subscribe-as-import。",
+      "currentDefinition": "建立external-authority持续观察的下游workflow；D3只规定它默认不把foreign identity变成Node identity。",
+      "currentOwnerLayer": "workflow owner D9/A2；D3 negative identity gate。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.sync",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "sync_*"
+        ],
+        "localeKeys": [
+          "action.sync"
+        ],
+        "cliUiLabels": [
+          "sync",
+          "同步"
+        ]
+      },
+      "semanticNonaliases": [
+        "import",
+        "backup",
+        "connect",
+        "reconcile"
+      ],
+      "firstFreeze": "`candidate:D3-boundary`; D6/D9/A2定义protocol，R0删除identity-changing sync side effects。",
+      "currentDefinition": "在已定义authority/binding/conflict policy下交换或收敛状态的下游workflow；该动词本身不选择identity或authority。",
+      "currentOwnerLayer": "D6/D9/A2 workflow；D3 negative identity gate。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.connect",
+      "ownedNames": {
+        "wireApiNames": [],
+        "codeConventions": [
+          "connect_provider"
+        ],
+        "localeKeys": [
+          "action.connect"
+        ],
+        "cliUiLabels": [
+          "connect",
+          "连接"
+        ]
+      },
+      "semanticNonaliases": [
+        "bind source",
+        "subscribe",
+        "sync",
+        "mount workspace"
+      ],
+      "firstFreeze": "`candidate:D3-boundary`; D9/A2定义workflow，R0删除connect-implies-import行为。",
+      "currentDefinition": "建立provider/account/network capability的下游setup动作；没有独立content identity effect。",
+      "currentOwnerLayer": "D1 capability surface + D9/A2 connector workflow；D3 negative gate。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.preparation-binding",
+      "ownedNames": {
+        "wireApiNames": [
+          "PreparationBinding",
+          "D3.identity_operation_request.preparationBinding"
+        ],
+        "codeConventions": [],
+        "localeKeys": [
+          "term.preparation_binding"
+        ],
+        "cliUiLabels": [
+          "准备绑定",
+          "Preparation Binding"
+        ]
+      },
+      "semanticNonaliases": [],
+      "firstFreeze": "D7联合revision03候选",
+      "currentDefinition": "wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；适用wire12路径继续保留。",
+      "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.definition-transfer",
+      "ownedNames": {
+        "wireApiNames": [
+          "DefinitionTransfer",
+          "D3.intent.plan.definitionTransfers"
+        ],
+        "codeConventions": [],
+        "localeKeys": [
+          "term.definition_transfer"
+        ],
+        "cliUiLabels": [
+          "定义转移计划",
+          "Definition Transfer"
+        ]
+      },
+      "semanticNonaliases": [],
+      "firstFreeze": "D7联合revision03候选",
+      "currentDefinition": "wire11第十数组精确绑定保存payload的源/结果occurrence和全部typed slots；wire12继续保留。",
+      "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
+      "disposition": "retain"
+    },
+    {
+      "conceptId": "weftext.term.definition-result-segment",
+      "ownedNames": {
+        "wireApiNames": [
+          "D3-Symbolic-Result/9.Q"
+        ],
+        "codeConventions": [],
+        "localeKeys": [
+          "term.definition_result_segment"
+        ],
+        "cliUiLabels": [
+          "定义结果分段",
+          "Definition Result Segment"
+        ]
+      },
+      "semanticNonaliases": [],
+      "firstFreeze": "D7联合revision03候选",
+      "currentDefinition": "Result9 Q段保存完整原payload和transfer并由原candidate map唯一物化。",
+      "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
+      "disposition": "retain"
+    }
+  ],
+  "retiredControlledIdentifiers": [
+    {
+      "name": "AnnotationThreadId",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "AttachmentId",
+      "replacement": "ResourceId"
+    },
+    {
+      "name": "BlobId",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "CitationRef",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "DocumentId",
+      "replacement": "NodeId"
+    },
+    {
+      "name": "DocumentOccurrenceRef",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "DocumentRef",
+      "replacement": "NodeRef"
+    },
+    {
+      "name": "FileRef",
+      "replacement": "ResourceRef"
+    },
+    {
+      "name": "FileResourceId",
+      "replacement": "ResourceId"
+    },
+    {
+      "name": "ItemId",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "ItemRef",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "LinkId",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "NoteId",
+      "replacement": "NodeId"
+    },
+    {
+      "name": "NoteRef",
+      "replacement": "NodeRef"
+    },
+    {
+      "name": "NodeSpecialization::Task",
+      "replacement": "tasks/task Facet membership"
+    },
+    {
+      "name": "ObjectRef",
+      "replacement": "EntityRef"
+    },
+    {
+      "name": "OccurrenceId",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "TaskId",
+      "replacement": "NodeId"
+    },
+    {
+      "name": "TaskRef",
+      "replacement": "NodeRef"
+    },
+    {
+      "name": "attachment_ref",
+      "replacement": "resource_ref"
+    },
+    {
+      "name": "origin_id",
+      "replacement": "delete-without-replacement"
+    },
+    {
+      "name": "source_of_truth",
+      "replacement": "delete-without-replacement"
+    }
+  ],
+  "currentTechnicalProjection": {
+    "nativeRequest": "D3IdentityOperationRequest/13",
+    "ownerKind": "d3_identity_operation/13",
+    "dependency": "DependencyKey/3 + DependencyProof/3",
+    "descriptor": "InputDescriptor/3 + PreparedIntent/3",
+    "portable": "InstallationNotice/3 + ContentCompletionProof/4 + ChangeRecord/1",
+    "resolutionGuard": "D3ResolutionInputUse/2",
+    "preparedAction": "PreparedActionBinding/4 + EffectManifest/3 + EffectBytes/3",
+    "annotation": "D3-Annotation-Value/4 + PortableAnnotationRecord/4",
+    "bootstrap": "WorkspaceBootstrapPlan/4 + WorkspaceTrustGenesis/2",
+    "retainedNoMechanicalBump": [
+      "D3ResolverInput/12",
+      "D3DecisionCompanion/2",
+      "RevisionTokenBinding/2",
+      "SourceRevisionPlan/2"
+    ],
+    "historicalDispatch": "wire9-12, dependency/input/notice /1-/2, CP1-3, PAB1-3, Value/3, Plan1/3 keep recorded decoder/bytes/pins/recovery"
+  },
+  "deferred": [
+    {
+      "source": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md §6",
+      "subject": "Adopt adoption_binding naming correction",
+      "disposition": "explicit_defer",
+      "basis": "would alter a fixed-S ownedNames exact set; no fixed97 current overlay adopts it, and this batch explicitly preserves all four ownedNames sets."
+    }
+  ]
+}
