@@ -1227,6 +1227,8 @@ insert 要求 0<=atByte<=before length、atByte 位于 UTF-8 scalar boundary，�
 replacement interval 必须组成两两不重叠的 maximal island；同一点的 insert 按 transaction order 合并。严格位于 replacement island 内的 insert 必须折入该 island，否则 compilation unavailable。
 规范边界顺序固定为：在 p 结束的左 replacement、insert@p、从 p 开始的右 replacement。
 
+SourceTransformEvidence/2.beforeSourceSha256 必须恰为 "sha256:" + lowercase_hex(SHA-256(evidence.before 与 ownerNodeRef 对应的完整精确 before-source bytes))。receiver 必须从 producing CP/history 与 retained version evidence 取得这份历史 bytes，重新计算 whole-source digest，并在接受 artifact 前要求相等。Event removedSha256/length、slice replay 成功、SourceVersion 字段相等或 current-file bytes 都不能替代。缺 exact-before bytes 时沿用既有 proof/state-unavailable 边界；已证明 digest 矛盾则属于 integrity failure。该交叉字段不新增成员，也不提升 SourceTransformEvidence/2 版本。
+
 generatedOutputSpan 使用 SPEC §11.1 的 replay-cursor 算法处理精确的 before/after pins。每段未变化间隙都要逐字节比较，当前 event span 恰为 [afterCursor,afterCursor+replacementByteLength)，并用该 after slice 验证 replacement 的长度与 hash。
 replace 将 beforeCursor 推到 endByte；insert 保持在 q。最后剩余字节与 afterSourceSha256 都必须匹配，禁止内容搜索。
 mapping 定义 delta(replace)=replacementByteLength-(endByte-startByte)，并使用有溢出检查的有符号运算。
@@ -1271,6 +1273,9 @@ WorkspaceTrustDeclaration/2 = {
        trustKeyId:"sha256:<64 lowercase hex>",
        mode:"administrative"|"loss"|"compromise"}
     | {kind:"resolve_conflict",
+       conflictId:ConflictId,
+       resolvedHeads:[ChangeId/1...],
+       selected:WorkspaceAuthorizationBundleAddress/1,
        outcomes:[TrustConflictOutcome/2...],
        inheritedCompromises:[TrustConflictCarry/1|TrustConflictCarry/2...]},
   rootSignature:"<86 ASCII unpadded base64url>"
@@ -1379,6 +1384,75 @@ DomainSealKeyRevokePrepare/3 = {
   budget:BudgetBinding/1
 }
 ```
+
+公开 conflict request 继续使用 fixed-parent d6_conflict_prepare wireVersion3 与 ConflictResolution/2。
+对当前尚未建立决议的 policy_bundle_choice，同一 selected/policy/freshAuthorizations JSON arm 使用下面的 current inner type 与受保护 descriptor。
+source_merge 与 choose_source_head 继续使用 fixed-parent ConflictResolutionInput/2 与 ConflictResolutionDerivedPlan/1。
+
+```text
+FreshDomainAuthorizationSpec/2 = {
+  commitDomain:CommitDomain/2,
+  profile:SealProfileId/1
+}
+
+PolicyBundleHeadEvidence/2 =
+    {head:ChangeId/1,completionProofVersion:3,bundleVersion:1}
+  | {head:ChangeId/1,completionProofVersion:4,bundleVersion:1|2}
+
+ConflictResolutionPolicyDerivedPlan/2 = {
+  kind:"policy_bundle",
+  selected:WorkspaceAuthorizationBundleAddress/1,
+  headEvidence:[PolicyBundleHeadEvidence/2...],
+  selectedBundleVersion:1|2,
+  selectedBundlePin:PinRef/2,
+  effectiveCompromises:[
+    TrustConflictCarry/1|TrustConflictCarry/2...
+  ],
+  inheritedCompromises:[
+    TrustConflictCarry/1|TrustConflictCarry/2...
+  ],
+  outcomes:[TrustConflictOutcome/2...],
+  resultBundleVersion:1|2,
+  resultBundlePin:PinRef/2
+}
+
+ConflictResolutionInput/3 = {
+  kind:"d6_conflict_resolution_input",version:3,
+  conflictId:ConflictId,expectedKey:ConflictKey/1,
+  resolution:{
+    kind:"policy_bundle_choice",
+    selected:WorkspaceAuthorizationBundleAddress/1,
+    policy:Policy/3,
+    freshAuthorizations:[FreshDomainAuthorizationSpec/2...]
+  },
+  branchEvidence:[ConflictResolutionBranchEvidence/1...],
+  derivedPlan:ConflictResolutionPolicyDerivedPlan/2
+}
+```
+
+FreshDomainAuthorizationSpec/2 的 JSON 成员仍只有原来的两个，但 profile 扩为完整 SealProfileId/1 union。数组按 D3-CJ/3 规范排序且唯一，不含任何 key material。current ConflictResolutionInput/3 只作为 policy_bundle_choice 的 protected owner-descriptor successor；它不提升公开 request 版本、不新增 submit path，也不改变 conflict_resolve、policy_admin、disclosure 或 error order。任何可证明真实 saved/planned 的旧 owner descriptor 都保留 recorded decoder 与 pins。
+
+PolicyBundleHeadEvidence/2 必须完整、按 ChangeId 排序唯一，并与 expectedKey.heads 的集合逐项相等。version=3 表示 branchEvidence.completionProofPin 必须严格解码 ContentCompletionProof/3，且精确 policy after-image 必须严格解码 WorkspaceAuthorizationBundle/1。version=4 表示 completionProofPin 严格解码 ContentCompletionProof/4，branchEvidence.changeRecordPin 严格解码匹配的 ChangeRecord/1 与精确 Notice3/CP4 chain，policy after-image 再严格解码为声明的 Bundle1 或 Bundle2。两种 arm 都要求 policyBundlePin 存在并 pin 精确 canonical bundle bytes；WorkspaceAuthorizationBundleAddress/1 的 authorizationRevision、trustRevision、byteLength、sha256 必须匹配。CP3+Bundle2、未知版本、CP4 缺 ChangeRecord、tag/bytes 不一致或 decoder fallback 一律拒绝。
+
+Carry2 的 originDeclarationDigest 恰为 "sha256:" + lowercase_hex(SHA-256(D3-CJ/3(包含 rootSignature 的完整原 WorkspaceTrustDeclaration/2)))。直接 Declaration2 compromise 映射固定为 revoke -> action.trustKeyId，rotate -> action.oldTrustKeyId。Carry2 fact body 是按 D3-CJ/3 闭合编码的九个字段：workspaceRef、commitDomain、profile、compromisedTrustKeyId、originAction、originDecisionKey、originDeclarationRevision、originDeclarationDigest、originActivationChangeId。factId 固定为：
+
+```text
+factId =
+  "sha256:" + lowercase_hex(
+    SHA-256(
+      ASCII "D6-Trust-Compromise-Fact/2" || NUL ||
+      D3-CJ/3(Carry2 fact body)
+    )
+  )
+```
+
+originActivationChangeId 只能从原 Declaration2 DecisionKey，经 committed CP4 + ChangeRecord/1 与首次追加它的精确 Bundle2 after-image 重派生。Carry1 保持 fixed-parent /1 fact domain 与 Declaration1/CP3 origin 规则。Declaration2 resolve_conflict 可以继承 Carry1/Carry2；每项都必须递归回溯并重验其 direct original compromise declaration。effectiveCompromises 与 inheritedCompromises 都按 ASCII factId 排序唯一；重复 factId 必须 canonical bytes 相等，否则 integrity_conflict。effective union 同时包含 selected 与 losing branches，因此 branch choice 不能丢 compromise fact。
+
+Bundle1 的 source-transform normalized state 是 none。affectedDomainProfiles 是所有 head 间 normalized domain/profile state 不同的 pair，与 effective compromise union 指向的所有 pair 的并集。需要 trust-resolution declaration 时，TrustConflictOutcome/2 按 D3-CJ/3(commitDomain,profile) 排序唯一，并完整覆盖每个 affected pair。keep_current 只允许 selected current key 在完整 effective union 下仍安全。显式请求的 affected pair 可以 authorize_fresh，其新 key 使用 DomainSealKeyHandle/2 与 PoP/2。若无需 trust resolution 且没有 fresh authorization，policy-only 结果保留 selectedBundleVersion/trustRevision；否则恰追加一条 WorkspaceTrustDeclaration/2 resolve_conflict，resultBundleVersion=2。selected Bundle1 的精确 Declaration1 prefix 必须原样保留，再追加新的 Declaration2。
+
+ConflictResolutionPolicyDerivedPlan/2 冻结每个 head 的 proof/bundle 分派与 selected bundle pin，并完整保存 carry union、inherited subset、Outcome2 以及精确的 result bundle pin/version。
+resultBundlePin 必须严格解码 derived result，并复现其 canonical bytes。原唯一 planning CAS 与 final P 通过 Notice3/CP4/ChangeRecord1 发布当前 policy component；staged authorize_fresh handle 只能在同一 commit 变 usable。
+receiver 必须重算全部 head 分派、Carry1/Carry2 facts、mixed recursive union、PoP/2 与 root signatures，还要验证精确 result bundle 以及同一 DecisionKey 的 conflict-record transition。
 
 每个 publicKey 必须解码为精确的 32-byte Ed25519 key，并哈希到对应 trustKeyId；每个 signature 值必须解码为精确的 64-byte Ed25519 signature。
 authorize/rotate 的 possessionSignature 必须按精确消息签署。
