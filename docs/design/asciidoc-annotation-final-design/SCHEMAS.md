@@ -1167,12 +1167,43 @@ D3IdentityInput/13 has the exact D3IdentityInput/12 six-member semantic set: onl
 
 ## 6.1 PreparedActionBinding/4
 
+The current D7 action successor is exact inheritance, not a free extension. D7ActionSpec/2 is the fixed-parent ActionSpec/1 top-level object with version=2; its intent decoder is exactly the fixed-parent intent union with only the historical apply_suggestion arm removed, then the two closed arms below added. Every non-suggestion arm keeps its fixed-parent members and semantics byte-for-byte.
+
 ```text
+D7ApplySuggestionIntent/2 = {
+  kind:"apply_suggestion",
+  annotation:AnnotationRef,
+  expectedAnnotationRevisionToken:AnnotationRevisionToken/1
+}
+
+D7RejectSuggestionIntent/2 = {
+  kind:"reject_suggestion",
+  annotation:AnnotationRef,
+  expectedAnnotationRevisionToken:AnnotationRevisionToken/1
+}
+
+D7ActionSpec/2 = {
+  format:"weftext.action",version:2,
+  intent:<exact fixed-parent non-suggestion ActionSpec/1 arm> |
+         D7ApplySuggestionIntent/2 |
+         D7RejectSuggestionIntent/2
+}
+
+D7ActionPrepareRequest/3 = {
+  wireVersion:3,kind:"d7_action_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  expectedFrontier:Frontier/2,
+  action:D7ActionSpec/2,
+  selectedSources:[SourceVersionRef/1...],
+  budget:BudgetBinding/1,
+  evidenceToken?:Token
+}
+
 PreparedActionBinding/4 = {
   kind:"d7_prepared_action_binding",version:4,
   bindingToken:Token,protocolOwner:"D3"|"D6",
   operationId:UUIDv4,workspaceRef:WorkspaceRef,
-  principalAudienceToken:Token,action:ActionSpec,
+  principalAudienceToken:Token,action:D7ActionSpec/2,
   canonicalCallInputs:[QueryCall...],
   definitionInputs:[D7DefinitionInput/2...],
   registryInputs:[ValidatedCatalogContext...],
@@ -1221,24 +1252,84 @@ EffectItem/3 has the same fourteen semantic arms as the fixed-parent EffectItem/
 ## 6.3 PreparedEditBinding/3
 
 ```text
+D8EditIntent/3 =
+    {kind:"document",
+     target:D8SourceTarget/2,
+     source:text}
+  | {kind:"annotation",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
+     value:AnnotationEditableValue/1,
+     targetPolicy:"preserve"|"replace_current"}
+
+D8PinnedEditIntent/3 =
+    {kind:"document",
+     target:D8SourceTarget/2,
+     proposedSource:PinRef/2}
+  | {kind:"annotation",
+     target:D8SourceTarget/2,
+     expectedAnnotationRevisionToken:AnnotationRevisionToken/1,
+     proposedValue:PinRef/2,
+     targetPolicy:"preserve"|"replace_current"}
+
+D8EditInput/3 = {
+  kind:"d8_edit_input",version:3,
+  invocationClass:"interactive_source_save"|"noninteractive",
+  writeProtection:"strict"|"observed_only",
+  intent:D8PinnedEditIntent/3,
+  origin:{kind:"direct"}|{kind:"undo",originalRequest:OriginalD6Request}
+}
+
+D8EditPrepareRequest/3 = {
+  wireVersion:3,kind:"d8_edit_prepare",
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  saveProfile:"ordinary"|"complete",
+  guarantee:"replica_local"|"managed_atomic",
+  writeProtection:"strict"|"observed_only",
+  intent:D8EditIntent/3,
+  budget:BudgetBinding/1
+}
+
+D8AnnotationDraftProjection/1 =
+    {kind:"d8_annotation_draft",version:1,
+     annotationRef:AnnotationRef,
+     baseObservation:SourceObservation/1,
+     baseRevisionToken:AnnotationRevisionToken/1,
+     draftSerial:Counter,
+     access:"editable"|"readonly",
+     value:AnnotationEditableValue/1,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     body:{state:"valid",source:text}}
+  | {kind:"d8_annotation_draft",version:1,
+     annotationRef:AnnotationRef,
+     baseObservation:SourceObservation/1,
+     baseRevisionToken:AnnotationRevisionToken/1,
+     draftSerial:Counter,
+     access:"editable"|"readonly",
+     value:AnnotationEditableValue/1,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     body:{state:"invalid",source:text,diagnostics:[CoreDiagnostic/1...]}}
+
 PreparedEditBinding/3 = {
   kind:"d8_prepared_edit_binding",version:3,
   workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
   operationId:UUIDv4,principalAudienceToken:Token,
   inputDescriptor:InputDescriptor/3,
-  intent:<D8 current closed edit intent>,
-  origin:{kind:"direct"}|{kind:"undo",originalRequest:<OriginalD6Request>},
-  sourceInputs:<InputDescriptor/3.sourceInputs>,
+  intent:D8EditIntent/3,
+  origin:{kind:"direct"}|{kind:"undo",originalRequest:OriginalD6Request},
+  sourceInputs:InputDescriptor/3.sourceInputs,
   proposedInputs:[{entityRef:EntityRef,pin:PinRef/2}],
   registryInputs:[ValidatedCatalogContext...],
   dependencyProof:DependencyProof/3,
-  observationProof:<PreparedIntent/3.observationProof>,
-  budgetBinding:BudgetBinding/1,expiresAt:<D6 protected deadline>,
-  request:d6_commit_request/2,preview:<complete EffectManifest/3>
+  observationProof:PreparedIntent/3.observationProof,
+  budgetBinding:BudgetBinding/1,expiresAt:PreparedDeadline,
+  request:d6_commit_request/2,preview:EffectManifest/3
 }
 ```
 
-proposedInputs contains exactly one item and its entityRef equals intent.target.ref. OwnerInputBinding/2 remains unchanged; current ownerKind is d8_edit/3.
+For document intent, proposedInputs.pin selects exact UTF-8 source. For annotation intent, proposedInputs has exactly one item whose entityRef equals target.ref and whose PinRef/2 payloadKind is annotation_value; the pinned bytes are exactly D3-CJ/3(the complete Core-constructed D3-Annotation-Value/4), never AnnotationEditableValue/1 alone. target.ref is AnnotationRef and expectedAnnotationRevisionToken equals the current PortableAnnotationRecord/4 token at prepare. Annotation requires saveProfile=complete and writeProtection=strict. observed_only remains restricted to the retained qualified interactive Document path.
+
+OwnerInputBinding/2 current ownerKind/intentKind is d8_edit/3 and canonicalDescriptorBytes is D3-CJ/3(D8EditInput/3). Its pinRefs are exactly the sorted/unique pins named by D8PinnedEditIntent/3 plus the retained origin evidence. D8EditInput/3.intent is mechanically derived from PreparedEditBinding/3.intent by replacing only source/value bytes with the corresponding proposed pin; no actor/time or trust flag exists in either request shape. Historical d8_edit_prepare wire1/2 and PreparedEditBinding/1/2 keep their original intent/value decoders and recovery.
 
 ## 6.4 D8 workspace presentation policy and render binding
 
@@ -1435,6 +1526,26 @@ D9ExportConfirmation/1 never changes catalog, projection, route, target, destina
 # 7. Annotation closed values
 
 ```text
+AnnotationRevisionToken/1 := nonempty opaque JSON string
+
+PortableAnnotationRecord/4 = {
+  kind:"portable_annotation",version:4,
+  annotationRef:AnnotationRef,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  value:D3-Annotation-Value/4
+}
+
+AnnotationEditableValue/1 = {
+  purpose:"comment"|"mark"|"suggestion",
+  target:D3-Annotation-Target-Projection/1,
+  replyTo:AnnotationRef|null,
+  body:AnnotationInlineBody/1|null,
+  appearance:AnnotationAppearance/1|null,
+  labels:[text...],
+  reviewState:"open"|"resolved"|"not_applicable",
+  suggestion:Suggestion/3|null
+}
+
 D3-Annotation-Value/4 = {
   kind:"d3_annotation_value",version:4,
   purpose:"comment"|"mark"|"suggestion",
@@ -1514,6 +1625,14 @@ Suggestion/3 = {
 `AnnotationInlineBody/1` is the sole current name and preserves the four-member data shape originally named `AsciiDocInlineBody/1`. `AsciiDocInlineBody/1` is a **schema alias only**: its canonical bytes are exactly those of `AnnotationInlineBody/1`; it creates no second wire/version and asserts no historical deployment. The body is portable source data, not a processor profile. Evaluation always uses the single `AnnotationInlineProfile/1` above. The body's `languageBaseline="asciidoctor-ruby/2.0.26"` must correspond to the 2.0.26 version fixed by the profile's commit-qualified baseline. The complete source must form exactly one paragraph, allowing soft wraps and trailing whitespace; a second paragraph, heading, list, delimited block, table, or block macro is `invalid_annotation_body` rather than silently ignored.
 
 Replies are same-owner, acyclic comments with suggestion=null and reviewState=not_applicable. Root reviewState is open|resolved. Pending suggestions use confirmed|needs_reconfirmation; accepted/rejected are terminal with confirmation=not_applicable.
+
+PortableAnnotationRecord/4 is the current logical Portable Metadata record in the existing node-local annotations JSON authority. Its annotationRef owner matches the containing Node. D3-Annotation-Value/4 canonical bytes are exactly D3-CJ/3(value); current annotation_value payload bindings and PinRef/2 values hash/pin those bytes, not the outer PortableAnnotationRecord/4. annotationRevisionToken is opaque, never derived from the value digest, and is unique per committed Value/4 state for one AnnotationRef.
+
+For current wire13 D3 mutation, the Value/4 base decoder keeps the inherited logical slots annotation_target ordinal0 and annotation_reply ordinal1. target is always a reference slot. replyTo is a reference slot when nonnull; an identity-preserving existing-Annotation reply change uses the inherited structural S form and cannot also produce a reply reference result. All other Value/4 members are nonreference bytes. Every changed current Value/4 gets one new final AnnotationRevisionToken/1, and all target/reply toSource addresses, annotation_reply_change evidence, SourceRevisionPlan/result pin, source change and receipt use that same token. A byte-equivalent current editable proposal is a no-op and keeps the current token/SourceVersion/attribution.
+
+Current payloadBindings with payloadKind=annotation_value dispatch by actual request family: wire13 current mutation strict-decodes Value/4, while genuine historical wire9-12 plans keep their Value/3 decoder. D3-Symbolic-Result/9 framing is unchanged; its annotation base bytes and slot spans are computed from the decoder selected by that request family. This does not widen the historical decoder.
+
+The current Portable Metadata path does not materialize D2 Annotation-v2 outer wire as author state. Historical D2 v2 annotation snapshots, Value/3, plain_text body, replace_plain_text suggestion and targetStatus resolved/stale retain their real historical decoder/recovery only. Current body bytes are AnnotationInlineBody/1 and use exactly the single AnnotationInlineProfile/1; no plain-text compatibility fallback or second parser exists.
 
 # 8. SourceTransform
 
