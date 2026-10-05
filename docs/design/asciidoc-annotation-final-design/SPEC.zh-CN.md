@@ -667,7 +667,16 @@ affectedDomainProfiles 是所有 head 间 normalized state 不同的 domain/prof
 
 每个 authorize_fresh outcome 都使用新生成且受保护的 DomainSealKeyHandle/2，并使用前文冻结的精确 PoP/2 body/message。外层 Declaration2 的 root signature 因此绑定 profile、新 key、PoP、mixed inherited carries、完整 outcomes 与 predecessor。proposed Policy/3 必须完整；若与 selected.policy byte-equal，则 policy revision 保持；否则必须按原 policy_admin 规则成为合法 checked successor。result bundle 的 authorizationRevision 只递增一次；只有实际追加 Declaration2 时 trustRevision 才递增一次。current portable resolution 继续使用原 current Notice3/CP4/ChangeRecord 路径与唯一 final P；staged fresh handle 只能随同一 committed transition 变为 usable。任何 losing branch bytes 都不能改写。
 
-当前受保护 policy descriptor 是 SCHEMAS §9 的 ConflictResolutionInput/3 与 ConflictResolutionPolicyDerivedPlan/2。它冻结严格的逐 head CP3/CP4 与 Bundle1/2 分派、selected exact bundle pin、完整 effective/inherited carry set、Outcome2 array、result bundle family/pin 与 staged fresh-key association。receiver admission 必须重放这些精确 dispatch 与 pins，验证每条 root/declaration signature 与 predecessor，重算 Carry1/Carry2 union 与 factId，验证所有 authorize_fresh PoP/2，要求 result-bundle bytes 逐字节相等，并验证同 DecisionKey 的 CP4/ChangeRecord/conflict-record transition；任何 losing-branch compromise 被遗漏都必须拒绝。不能靠永远阻塞 policy resolution 规避实现：证据与权限完整的合法 current dual-profile conflict 必须有上述正向路径。
+current unseen policy arm 必须形成完整的 owner-input、preview 与 recovery 链，不能只定义 Plan2。OwnerInputBinding/2.protocolOwner 固定为 D6，ownerKind 固定为 d6_conflict_resolution/3；current InputDescriptor/3.intentKind 与其相同，guarantee=managed_atomic、frontierPolicy=exact、saveProfile=control_only，且 sourceInputs 为空。canonicalDescriptorBytes 精确等于 D3-CJ/3(ConflictResolutionInput/3)。source_merge 与 choose_source_head 不使用该 owner version：两者的 ownerKind/intentKind 继续是 d6_conflict_resolution/2，精确 owner descriptor、derived plan 与 preview 继续分别使用 ConflictResolutionInput/2、ConflictResolutionDerivedPlan/1、ConflictResolutionPreview/1；只有 outer unseen D6 carrier 使用 current InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3 family。
+
+ConflictResolutionInput/3 包含完整 branchEvidence 与 ConflictResolutionPolicyDerivedPlan/2。Plan2 包含逐 head CP3/CP4 与 Bundle1/2 分派、selected bundle version/pin、完整逐 head TrustConflictCarryValidationEvidence/1、effective/inherited Carry1|Carry2 集、完整 Outcome2 array，以及 result bundle version/pin。对每个 expected head 和该 head effective fold 使用的每个 fact，carryEvidence 都要保留 direct original compromise activation 以及之后实际经过的每个 resolver carrier。每个 hop 都 pin 验证该 declaration 实际使用的精确 ChangeRecord、completion proof 与 policy bundle；version-1 hop 保留其历史 CP3/Bundle1 activation evidence，version-2 hop 使用 ChangeRecord1/CP4/Bundle2。因此原 Carry activation cut 或中间 carrier 不能从 later current bundle、裸 digest、Derived Index 或 resolver 时间重建。
+
+current policy arm 的 OwnerInputBinding/2.pinRefs 必须是 canonical sorted/unique union，精确包含：每个 branchEvidence.changeRecordPin、completionProofPin 与存在的 policyBundlePin；selectedBundlePin；resultBundlePin；以及 carryEvidence 中每个 origin/carrier hop 的 changeRecordPin、completionProofPin、policyBundlePin。相同 PinRef 去重后只出现一次。policy arm 不允许 branch sourcePins。DependencyProof/3 evidence 仍由其真实 owner 保存，不能因为未重复写进 OwnerInputBinding.pinRefs 就从 PreparedIntent retention 中省略。
+
+immutable owner preview 使用闭合 ConflictResolutionPreview/2。其 conflictId、expectedKey、resolution 必须与 Input3 逐字节相等；branchEvidenceDigest 是完整 branchEvidence array 的 D3-CJ/3 bytes 的 SHA-256。derivedPlan 必须与完整 Plan2 逐字节相等，并完整包含 headEvidence、carryEvidence、mixed carries、Outcome2 与 result bundle version/pin。
+PreparedIntent/3.previewBinding 必须绑定该 Preview2 与其受保护的 canonical preview pin。对这个 control_only policy arm，pinDirectory 必须由 OwnerInputBinding.pinRefs、DependencyProof/3 的全部 evidence pin、previewBinding 选择的精确 preview pin，以及 installationPlan 实际命名的 proposal/before/after/recovery PinRef 组成，并按 canonical 规则去重。sourceInputs 为空，因此不产生 SourceObservation evidence pin；同一个 pin 不能重新绑定到另一份 protected record。
+
+唯一 planning CAS 必须同时冻结 InputDescriptor3、OwnerInputBinding2、Preview2、pinDirectory、installationPlan、staged fresh-key association 与 result bytes；final submit 仍只有 d6_commit_request/2，唯一 final P 仍是唯一 commit point。receiver admission 重放冻结的 Input3/Plan2/Preview2/pin set，验证每个 head proof/bundle 分派、每个 retained Carry origin/carrier hop、全部 root/declaration signature 与 predecessor，重算 Carry1/Carry2 union 与 factId，验证 authorize_fresh PoP/2，要求 result-bundle bytes 相等，并验证同一 DecisionKey 的 CP4/ChangeRecord/conflict-record transition。planned recovery 精确恢复这些 descriptor、preview、pins 与 handles，绝不从 current state 派生替代值。能够证明属于旧 owner/outer carrier 的 saved/planned/unknown record，必须在 unseen-current dispatch 前恢复原 request、Input2/Plan1/Preview1、pins、handles 与 OperationId。本候选不因存在 current successor 就推定部署 migration。证据与权限完整的合法 current dual-profile conflict 因而具有正向路径，同时不新增第二 ledger、CAS 或 submit。
 
 必要反例是 transform KT1 并发分叉：ordinary KT1→KT2 与 compromise KT1→KT3。选择 ordinary branch 也不能丢掉 losing branch 中 KT1 在原 cut 的 compromise fact，更不能把该 cut 移到 resolver。只有在完整 fold 下可独立证明安全时 KT2 才可保留。若 selected transform state 为 none，或 selected current key 在完整 fold 下不安全，则显式请求 source-transform FreshDomainAuthorizationSpec/2 必须生成 fresh transform key 与合法 Outcome2，而不是让 Workspace 永久无法 resolution。
 
@@ -692,6 +701,13 @@ Plan4 只用于 current unseen fresh create_workspace/fork_workspace bootstrap�
 普通 managed copy 不是 bootstrap，继续走既有 scope/configuration mapping 规则。restore/recovery 按实际 saved decoder/plan 分派，不注入 Genesis2，也不升级 old bytes。continue_workspace/failover 保留 current policy、principal mappings、Registry/configuration 与 profile trust state，不能重新跑 bootstrap。本设计候选尚未部署，因此不声称从 Plan3 有 migration 或 dual-write；任何确实存在的历史 record 只按其 recorded contract 继续。
 
 replica registration 继续使用 specialized same-record producer；current FC operation 为 dual-profile，generic trust prepare 不能冒充 replica_register authority。continuation 对 revision 与 transform profile 分别计算 current(K)|none|conflicted_or_unproved；任一 profile unproved 都禁止新 signing domain 部分激活。其余情况下完整顺序固定为 optional old revision revoke、optional old transform revoke、new revision authorize、new transform authorize，全部在一个 DecisionKey/CP4 中且无可观察中间 prefix。
+
+### 13.3 D6 Storage §9.1 / §9.3 current consumer
+
+fixed-parent D6 Storage §9.1 的单 profile registration/admission 文字只在 current unseen replica registration 上被本候选接管。Storage consumer 必须接收 §13.2 的精确 transition：一个 fresh ReplicaEpoch；按 revision-token 后 source-transform 固定顺序恰两个 fresh staged DomainSealKeyHandle/2；同一 DecisionKey 下恰两条 Declaration2 authorize；replica_registry 与 policy/Bundle2 after-image 位于同一个 Notice3/CP4/ChangeRecord1 与同一 final P/ChangeId；只有完整 transition admission 后，两把 handle 才能同时 staged→usable。receiver 必须交叉验证 active ReplicaRecord、两条 Declaration2 的 predecessor/signature/PoP chain、固定 profile 顺序、同一 DecisionKey 与精确 Bundle2 bytes。retention/planned recovery 保留精确 staged pair、declarations、component pins 与原 request，绝不重新生成 key。可证明存在的历史 registration 保留 recorded single-profile decoder/bytes。replica_register 仍是 specialized authority，generic trust administration 不能替代。replica_retire 的原 transition 被 admission 后阻止两个 current profile 的未来 signing，但不删除历史 authorization，也不接管 ApprovalUse、claim、Money、external unknown、Automation lease 或 execution custody。普通 replica content 与 execution-responsibility takeover 继续是两个独立合同。
+
+fixed-parent Storage §9.3 的 conflict direct consumer 同样按 arm 分派。尚未建立决议的 source_merge 与 choose_source_head 使用 current outer InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3，但仍保留精确 ConflictResolutionInput/2、Plan1、Preview1、source pins 与原 source semantics。尚未建立决议的 policy_bundle_choice 使用 ConflictResolutionInput/3、Plan2、Preview2、mixed Carry1/2、精确 OwnerInputBinding pin union，以及上述 PreparedIntent3 的 preview/pinDirectory 闭环。
+Storage 必须保留每个未选 branch 的原 bytes、精确 bundle/activation evidence、result bundle pin 与受保护 preview pin，直到原 last-reference 规则允许释放。final write 仍使用原 D6 typed request 与唯一 P seal。saved/planned/unknown 必须先恢复 recorded outer carrier、request、owner descriptor、preview、pins、fresh-handle association 与 OperationId；current outer type 不得重新解释或迁移这些 bytes。这里仅接管 Storage 的 current direct-consumer 语句，不改变无关的历史 conflict、transport 与 recovery 语义。
 
 ## 14. D10 current/historical mixed holders
 
@@ -816,8 +832,11 @@ TrustConflictCarry/2
 TrustConflictOutcome/2
 FreshDomainAuthorizationSpec/2
 PolicyBundleHeadEvidence/2
+TrustConflictCarryValidationHop/1
+TrustConflictCarryValidationEvidence/1
 ConflictResolutionPolicyDerivedPlan/2
 ConflictResolutionInput/3
+ConflictResolutionPreview/2
 WorkspaceTrustGenesis/2
 WorkspaceBootstrapPlan/4
 D10WorkspaceReadDependencies/2
