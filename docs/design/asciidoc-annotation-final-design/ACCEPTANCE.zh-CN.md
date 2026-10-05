@@ -10,8 +10,8 @@ translation_status: source
 状态：**design obligations only; not executed**。
 
 - core design oracles: 438
-- actual-owner coordination fixtures: 293
-- total: 731
+- actual-owner coordination fixtures: 312
+- total: 750
 
 每项都是本候选的规范义务；PASS/FAIL文字描述的是未来验收条件，不表示本轮已经运行。逐项与 SPEC.zh-CN.md 的对应关系由 ID 前缀和下表“规范域”给出。
 
@@ -458,7 +458,7 @@ translation_status: source
 | M39-10 | SPEC §§2–3 | document/0 正例：top-level Document#parse 实际返回 Document D；document carrier 先发布 document/0=D；随后 bind callback 在仍持有 exact 同一 Ruby object D 时建立绑定。 |
 | M39-11 | SPEC §§2–3 | document/0 反例：先 bind document/0、之后才发布 actual returned Document，或 bind 时按 title/source/text 重新寻找 D；即使最终 entry0 正确也必须失败。 |
 
-## Actual-owner coordination — 278
+## Actual-owner coordination — 312
 
 | ID | 规范域 | 未来验收条件 |
 |---|---|---|
@@ -548,7 +548,7 @@ translation_status: source
 | FC4A-PROD-05 | SPEC §8.1 | D7 body_text 必须递归消费完整 D2DocumentBody/3，包括 list/table、literal/source payload 与显式 inline label；它不是 exact source、不可写。若某个合法 arm 尚无定义好的 text mapping，该 adapter 必须 unavailable，不能因此缩小 D2 syntax。 |
 | FC4A-PROD-06 | SPEC §§1.4,3.4 | native link/xref/image/citation 必须先经原生 grammar parse，再由 D2IdentityAdapter/1 附加 stable identity；managed include 保留自己的 source owner/range，因此 path/title/hash 不能推断 identity，include 也不能授予 root Document 对 included source 的 write authority。 |
 | FC4A-D8-01 | SPEC §8.2 | current outer D8 wireVersion2 的 d8_document 必须在同一 SourceObservation 下返回 D2DocumentSnapshot/3；current valid Draft projection 保留每个合法 /3 body arm。真实 saved 的旧 D2 wire2 snapshot 只走 historical recovery。 |
-| FC4A-RUN-01 | SPEC §8.2 | 每个 active Workspace 恰有一个 D8WorkspacePresentationPolicy/1，初始 revision1/separate；修改必须同时满足 policy_admin 与 expected revision，并 checked-increment protected policy，且不能改变 Document source 或 SourceVersion。 |
+| FC4A-RUN-01 | SPEC §§8.2,13.2 | 每个通过 current unseen fresh create_workspace/fork_workspace Plan4 成功 activation 的 Workspace，都必须在同一原子 bootstrap 中立即拥有恰一个 current D8WorkspacePresentationPolicy/1；它投影自 parents=[]、revision=1、defaultPresentation=separate 的 /2 record，并使用原 bootstrap ChangeId。activation 后 SetRequest 变更必须要求 policy_admin、exact expectedHeads/head-set stamp 以及 checked successor revision/conflict 规则；任何 presentation-policy transition 都不修改 Document source 或 SourceVersion。 |
 | FC4A-RUN-02 | SPEC §8.2 | 显式 run-in/separate role 必须覆盖 Workspace policy；Enable/Disable/Use Default 只修改 source roles。Use Default 删除两者并恢复当前 policy；三种命令都不得写 D8WorkspacePresentationPolicy/1。 |
 | FC4A-RUN-03 | SPEC §8.2 | 只改变 presentation-policy revision 时，使用该策略的 D8 渲染缓存绑定必须失效，但标题与正文的身份、源文件字节、SourceVersion 和作者写入的 roles 均保持不变；策略记录不可用时不得偷偷采用宿主环境的默认值。 |
 | FC4A-RUN-04 | SPEC §8.3 | D9 plan 若在 presentation-policy revision P 下 prepare，则 Workspace 后续变成 P+1 时，旧 plan 仍使用 exact P binding 与相同 staged bytes；fresh plan 才消费 P+1。 |
@@ -757,10 +757,29 @@ translation_status: source
 | FC4E-NOOP-05 | SPEC §9.6 | expanded candidate 真正不同时，Core 才写 fresh lastEditor/editedAt、分配从未使用的 final AnnotationRevisionToken 并冻结唯一 SourceRevisionPlan/value pin；即使 Value bytes 回到旧值也必须 fresh token，ABA 不能复用旧 revision identity。 |
 | FC4E-NOOP-06 | SPEC §§9.6,9.10 | permission revocation、并发 token/Observation 变化、stale base Observation/Draft 或 final read barrier 失败时，必须保持继承的 failure/reprepare 顺序并零变更，即使原本 expanded candidate 会等于 current content；no-op 不授予额外 authority。 |
 | FC4E-NOOP-07 | SPEC §§9.8–9.10 | 旧 selector、PAB/EditBinding/ActionEvidence、saved Draft 或 historical recovery record 继续绑定原 token/Observation/decoder，不能借 equal candidate bytes、no-op prepare、类别转换或新目标资格复活。 |
+| FC4F-PROD-01 | SPEC §3.4 | D2EffectiveDocumentAttribute/1 的 value 必须使用 closed D2NativeSemanticValue/1。fixed core 的 safe-mode-level、max-include-depth、authorcount 必须编码为 canonical unbounded integer，不能变 text，也不能靠 to_s 或 attribute name 猜回类型。 |
+| FC4F-PROD-02 | SPEC §3.4 | fixed manpage 的 mannames 必须保持 ordered textArray，元素边界与顺序精确保留给 HTML5 join 与 DocBook map consumer；Product state 绝不能先 join/stringify。 |
+| FC4F-PROD-03 | SPEC §3.4 | effectiveAttributes 必须等于 final present Hash map：key absent 就没有 entry，present nil 为 null；Boolean/String/Integer/textArray 类型互不混淆；integer lexeme 必须 canonical，text-array 顺序、重复项和空串都保留。 |
+| FC4F-PROD-04 | SPEC §§1.2,3.4 | ProcessorAttributeOverride 继续只允许 text-set/null-unset；accepted extension/API path 不能把 arbitrary Ruby object 漏进 Product。final Symbol、Float、Hash、nested/mixed/non-String Array 或其它 opaque value 必须使 rich projection unavailable，不能 to_s/free-JSON coercion。 |
+| FC4F-PROD-05 | SPEC §§3.4,8 | 每个 typed effective value 与 sourceOrigins 必须来自同一次 fixed evaluation；generated value 不伪造 physical range，current D7/D8/D9 consumer 保留 typed value/evaluation barrier，禁止重 parse source 或猜类型。 |
+| FC4F-POL-01 | SPEC §§8.2,13.2 | current unseen fresh create/fork 的 WorkspaceBootstrapPlan/4 必须包含 mandatory D8PresentationPolicyBootstrapInit/1；before 是受保护且由 custody 证明为空的 head set，proposal 精确指 target Workspace，parents=[]、revision=1、defaultPresentation=separate，且没有 activationChangeId。 |
+| FC4F-POL-02 | SPEC §§8.2,13.2 | bootstrap prepare/planning/staging 只在原 create/fork OperationId/DecisionKey/planning CAS/P 下冻结 initial helper 与 committed=null presentation_policy_change；不得另调 SetRequest/policy_admin，也不得提前创建 record/hash/address/pin/outbox/ChangeId。 |
+| FC4F-POL-03 | SPEC §13.2 | 原 bootstrap 唯一 final P 分配 ChangeId C，并在同一个 atomic transition 中构造 canonical /2 record、hash、exact portable pin/address、committed owner effect、原 receipt/effects/ChangeRecord association、outbox 与 one-head D8 transition，同时提交 target activation/custody 和其它 bootstrap state；全部 decision/activation ID 必须一致。 |
+| FC4F-POL-04 | SPEC §13.2 | planning loser、abort、authorization/custody/final-check 失败或 P commit 失败都必须保持 target 未 activation，且不留下 partial D8 record/pin/head/outbox；绝不存在 active Workspace 等待后来 SetRequest 初始化的窗口。 |
+| FC4F-POL-05 | SPEC §§8.2,13.2 | fresh create 或 fork 成功 activation 后，真正依赖 default 的 eligible document 必须立即通过唯一 current revision1/separate policy 得到结果；显式 run-in/separate、role-conflict 与 no-eligible-body 继续完全不消费 policy。 |
+| FC4F-POL-06 | SPEC §§8.2,13.2 | bootstrap P 已提交但 publication/transport unknown 时，retry 只能重发 retained D8PresentationPolicyOutboxItem/1 的 exact record bytes；receiver admission 必须证明原 bootstrap ChangeRecord/receipt/effect/activation association 与 ancestry，不能新分配 ChangeId 或重编码。 |
+| FC4F-POL-07 | SPEC §13.2 | current Plan4 的 saved/planned/unknown recovery 必须恢复原 initialPresentationPolicy、OperationId/proposal/custody mapping、pins 与 decoder；真正历史 Plan1/Plan3、restore、continue、failover、普通 managed copy 都不能合成该字段或静默迁移 active Workspace。 |
+| FC4F-POL-08 | SPEC §§8.2,13.2 | heads=[] 只有在完整 protected proved-uninitialized state 时才合法，包括仍未 activation 的 bootstrap before 或 SetRequest 明确证明的 initialization state；missing/corrupt/unproved metadata、unknown decoder、absent file 或 continuity gap 都必须 unavailable，绝不能当 default/separate 或伪造初始化。 |
+| FC4F-POL-09 | SPEC §8.2 | bootstrap 之后，既有 SetRequest/offline-successor/multi-head explicit-resolution/outbox/retention 规则保持不变：equal revision/value 不产生 LWW winner，later policy change 也不能改写已冻结 D9 Plan/staged bytes。 |
+| FC4F-EXP-01 | SPEC §8.3 | bindingChoices 与 missingPolicy 的 templatePath 按 exact Unicode scalar sequence lexicographic 比较，normalization=none、case-sensitive，精确 scalar prefix 较短者在前；合法输入置换因此冻结成唯一 byte-identical 顺序，不使用 locale/case-folding。 |
+| FC4F-EXP-02 | SPEC §8.3 | 大小写变体或 precomposed/decomposed Unicode 等 scalar sequence 不同的 path 保持不同 comparator key，按 scalar order 而不是 normalization 排序；某 path 是另一路径的 exact scalar prefix 时必须排在较长项之前。 |
+| FC4F-EXP-03 | SPEC §8.3 | 继承的 safe-relative/alias/conflict 验证通过后，stagedOutputs 与 PublicationReceipt/3.outputs 按 exact protocol name 的 unsigned UTF-8 bytes lexicographic 比较，精确 byte prefix 较短者在前；禁止 normalization、case folding、host path-library collation 或 separator rewrite。 |
+| FC4F-EXP-04 | SPEC §8.3 | output alias/conflict validation 与排序彼此独立：即使 raw UTF-8 comparator 能给两个 protocol string 排序，只要继承的 target validator 判它们 alias/conflicting 就必须拒绝；排序不能修复 path-safety conflict。 |
+| FC4F-EXP-05 | SPEC §8.3 | 合法 template/output set 的任意输入置换必须在 freeze 前按两个 exact comparator canonicalize 成相同 Plan/Receipt 顺序；已经 frozen/received/recovery 的 record 若乱序、duplicate 或跨集合 conflict 必须失败，禁止 read-time sorting 修复。 |
 
 ## PR4 schema repair coverage（不新增验收 ID）
 
-此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。 本次三项A残余集中修复当时只新增 FC4D-PROD-01..11、FC4D-POL-01..10 与 FC4D-EXP-01..06，使停止 head 的累计清单变为716条。本次 B226 operation-gate 修复对旧 row 只做两条具名 current-contract 更正：FC4B-VAL-01 与 FC4B-D8-01 将 stale caller 类型 AnnotationEditableValue/1 改为 AnnotationEditableProposal/1，同时完整继承原 owner/create 授权、Core attribution、完整 Value4 pinning 与防伪造义务；除此以外既有 row 正文不变。随后只新增 FC4E-GATE-01..08 与 FC4E-NOOP-01..07，使累计清单变为731条；不新增 finding ledger/version store。
+此前 dangling-schema 补全本身没有新增、删除或重编号当时的554条义务。本次环境修订只新增 AD2-41，使累计清单变为555条；M39-04 是已接受 v3.10 对原 ID 的正确修订，不是新增场景。其它既有 row 义务全部累积保留。直接覆盖关系为： 第四批A只新增 FC4A-PROD-01..06、FC4A-D8-01、FC4A-RUN-01..04、FC4A-EXP-01..06、FC4A-ROUTE-01..03 与 FC4A-IMPACT-01，使累计清单变为576条；没有替换任何既有 ID 正文。 第四批B只新增 FC4B-VAL-01..08、FC4B-D8-01..05、FC4B-SUG-01..06、FC4B-LIFE-01..05 与 FC4B-ALIAS-01，使累计清单变为601条；此前全部 row 正文逐字节保留。 本次第四批A残余修复只新增 FC4R-PROD-01..13、FC4R-ORIGIN-01..06、FC4R-LEVEL-01..03、FC4R-RUN-01..11、FC4R-EXP-01..09、FC4R-TABLE-01..08 与 FC4R-WIRE-01..04，使累计清单变为655条；不创建新 finding ID，也不替换此前任何 row 正文。 本次批注残余集中修复只新增 FC4C-SUG-01..10、FC4C-CARRIER-01..05、FC4C-READ-01..07 与 FC4C-STORE-01..12，使累计清单变为689条；此前655条 row 正文逐字节保留。 本次三项A残余集中修复当时只新增 FC4D-PROD-01..11、FC4D-POL-01..10 与 FC4D-EXP-01..06，使停止 head 的累计清单变为716条。本次 B226 operation-gate 修复对旧 row 只做两条具名 current-contract 更正：FC4B-VAL-01 与 FC4B-D8-01 将 stale caller 类型 AnnotationEditableValue/1 改为 AnnotationEditableProposal/1，同时完整继承原 owner/create 授权、Core attribution、完整 Value4 pinning 与防伪造义务；除此以外既有 row 正文不变。随后只新增 FC4E-GATE-01..08 与 FC4E-NOOP-01..07，使累计清单变为731条；不新增 finding ledger/version store。 本次 fixed438 residual 修复再做且只做一条具名 current-contract 更正：FC4A-RUN-01 将 stale active-Workspace/expected-revision 表述改成 fresh Plan4 原子 revision1/separate 初始化与 exact expectedHeads/head-set currentness，同时完整保留 policy_admin、checked successor/conflict 行为以及不改 Document source/SourceVersion 的义务；除此以外 pre-731 row 正文不变。随后只新增 FC4F-PROD-01..05、FC4F-POL-01..09 与 FC4F-EXP-01..05，使累计清单变为750条；这些仍是未运行设计义务，不新增第二 ledger/migration mechanism。
 
 - 保留的见证与观察证据类型，包括文档、块、集合、目录、诊断、字符串、调用、操作、行内及正文证据：AD2-37、AD2-38、O34-01–O34-16、P35-01–P35-14、N36-04–N36-09、M37-01–M37-20、M38-01–M38-16、M39-01–M39-11；
 - M37生产点、快照与cut、命名空间以及绑定时生产者时序规则：M37-01、M37-17–M37-20、M38-01–M38-16、M39-01–M39-11；
@@ -772,4 +791,4 @@ translation_status: source
 
 ## 未运行边界
 
-本 PR 未执行上述 731 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
+本 PR 未执行上述 750 个设计场景，也未运行 Ruby/Rust parser、provider、SQLite、replica、crypto、crash/fault-injection、Automation scheduling 或 execution-custody handoff。作者只允许检查 ID 唯一性、计数、JSON schema、replacement source blob与文档引用一致性。
