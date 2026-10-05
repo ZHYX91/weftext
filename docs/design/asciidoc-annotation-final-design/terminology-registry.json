@@ -529,7 +529,7 @@
       "status": "current",
       "replaces": "PreparedActionBinding/3",
       "section": "SPEC §8",
-      "notes": ""
+      "notes": "Fresh/current D7 successor. Genuine saved/planned PreparedActionBinding/3 retains its exact decoder, bytes, pins and recovery."
     },
     {
       "name": "EffectManifest/3",
@@ -537,7 +537,7 @@
       "status": "current",
       "replaces": "EffectManifest/2",
       "section": "SPEC §§8,14",
-      "notes": ""
+      "notes": "Fresh/current D7 effect successor used by current D10 author preparation; genuine saved/planned EffectManifest/2/EffectBytes/2 remain historical."
     },
     {
       "name": "EffectBytes/3",
@@ -553,7 +553,7 @@
       "status": "current",
       "replaces": "PreparedEditBinding/2",
       "section": "SPEC §8",
-      "notes": ""
+      "notes": "Fresh/current D8 prepared-edit successor; genuine saved/planned PreparedEditBinding/2 remains historical recovery."
     },
     {
       "name": "ExportPlan/3",
@@ -641,7 +641,7 @@
       "status": "current",
       "replaces": "ControlDependencies/2",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current D10 dependency successor with mixed Pin1/2 and Range1/2 carriers captured at one actual Authority Store barrier."
     },
     {
       "name": "D10ControlInput/2",
@@ -649,7 +649,7 @@
       "status": "current",
       "replaces": "D10ControlInput/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current unseen D10 Workspace-control input; preserves historical D10ControlInput/1 records under their actual recovery contract."
     },
     {
       "name": "ControlPrepareBinding/3",
@@ -657,7 +657,7 @@
       "status": "current",
       "replaces": "ControlPrepareBinding/2",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current unseen prepare binding. Historical ControlPrepareBinding/1 is the exact six-member shape and /2 keeps its exact confirmation+Dependencies2 shape; neither is migrated."
     },
     {
       "name": "D10ControlRecordImage/2",
@@ -673,7 +673,7 @@
       "status": "current",
       "replaces": "D10ControlRecordPin/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Authenticates only Image2 under D10-Control-Record/2; Pin1 retains the /1 domain and Image1 is never repinned."
     },
     {
       "name": "D10ControlRange/2",
@@ -681,7 +681,7 @@
       "status": "current",
       "replaces": "D10ControlRange/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current range successor; mixed holders retain Range1 and Range2 with cross-version logical range identity and canonical rank."
     },
     {
       "name": "D10ControlEffectPlan/2",
@@ -689,7 +689,7 @@
       "status": "current",
       "replaces": "D10ControlEffectPlan/1",
       "section": "SPEC §14",
-      "notes": "Supports exact Image1 before -> Image2 after."
+      "notes": "Current mixed effect plan; actual stored Image1 before may transition to current Image2 after without reencoding or forced subscription-generation replacement."
     },
     {
       "name": "ApprovalUse/2",
@@ -697,7 +697,7 @@
       "status": "current",
       "replaces": "ApprovalUse/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Fresh/current D10 author-approval responsibility. Genuine saved/planned ApprovalUse/1 remains exact historical responsibility."
     },
     {
       "name": "D10AuthorStepResponsibility/2",
@@ -721,7 +721,7 @@
       "status": "current",
       "replaces": "ScheduleSubscription/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current scheduling successor; historical Subscription1 remains exact and legal continue may retain the same generation."
     },
     {
       "name": "ScheduleOccurrenceProof/2",
@@ -745,7 +745,7 @@
       "status": "current",
       "replaces": "D10MoneyResponsibility/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current mixed Money holder with canonical reservation/layer/pin/range/evidence ordering and no new balance authority."
     },
     {
       "name": "D10ExecutionClaims/2",
@@ -753,7 +753,7 @@
       "status": "current",
       "replaces": "D10ExecutionClaims/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current mixed claims holder; Binding1/2/3 are all explicit carriers and inner StableControlKey is globally unique across versions."
     },
     {
       "name": "D10ExecutionInventory/2",
@@ -761,7 +761,7 @@
       "status": "current",
       "replaces": "D10ExecutionInventory/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current complete mixed execution snapshot captured at one real store barrier; carries actual StopCapacity/1 and exact storeIncarnation."
     },
     {
       "name": "ExecutionResponsibilityRecord/3",
@@ -769,7 +769,7 @@
       "status": "current",
       "replaces": "ExecutionResponsibilityRecord/2",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current D6/D10 responsibility successor. Its five payload members must be byte-equal to pinned Inventory2; no background migration from Record2."
     },
     {
       "name": "ExecutionContinuityProof/2",
@@ -777,7 +777,7 @@
       "status": "current",
       "replaces": "ExecutionContinuityProof/1",
       "section": "SPEC §14",
-      "notes": ""
+      "notes": "Current proof whose inventoryPin selects exact D6-Execution-Inventory/2 and whose storeIncarnation equals Inventory2; protected tokens prove the same store/barrier."
     },
     {
       "name": "D10VersionedControlRecordImage/1",
@@ -793,7 +793,7 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §14",
-      "notes": "Mixed-holder discriminator only."
+      "notes": "Mixed-holder discriminator only; exact cross-version record-cut identity/order is normative and inner pins retain their original payload domains."
     },
     {
       "name": "D10VersionedControlRange/1",
@@ -801,7 +801,7 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §14",
-      "notes": "Mixed-holder discriminator only."
+      "notes": "Mixed-holder discriminator only; one logical range identity across Range1/2 with records/cost_lineage/occurrences rank 0/1/2."
     },
     {
       "name": "D10VersionedControlPrepareBinding/1",
@@ -809,7 +809,7 @@
       "status": "current",
       "replaces": null,
       "section": "SPEC §14",
-      "notes": "Exactly Binding/1, /2, /3 arms; unique by StableControlKey across versions."
+      "notes": "Exactly Binding/1, /2, /3 arms. Binding1 has no kind/version/confirmation; all arms retain exact bytes and are globally unique by inner StableControlKey."
     },
     {
       "name": "D10VersionedAuthorStepResponsibility/1",
@@ -953,7 +953,7 @@
       "status": "retained-current",
       "replaces": null,
       "section": "SPEC §§6-14",
-      "notes": "Not mechanically version-bumped."
+      "notes": "Retained fixed-parent {issued,reserved} safety-store counters. Inventory2 carries the actual same-barrier value; Record3 does not duplicate it and handoff cannot reset/copy a subset."
     },
     {
       "name": "SourceTransformSealSignedBody/1",
