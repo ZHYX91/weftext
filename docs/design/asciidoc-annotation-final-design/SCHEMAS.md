@@ -354,7 +354,7 @@ OracleCollectionEvent/1 =
      marker:text|null,style:text|null,text:text|null,
      checklist:"none"|"checked"|"unchecked"}
   | {kind:"table_cell",tableOrdinal:UInt,section:"head"|"body"|"foot",
-     rowOrdinal:UInt,columnOrdinal:UInt,colspan:UInt,rowspan:UInt,
+     rowOrdinal:UInt,columnOrdinal:UInt,colspan:UInt|null,rowspan:UInt|null,
      style:text|null,text:text|null}
 
 OracleCatalogEvent/1 =
