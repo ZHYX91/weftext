@@ -3,31 +3,27 @@
   "status": "candidate-design-not-implemented",
   "fixed_parent_commit": "e8aa0b341630a57c786c0891d4bbd1620247441d",
   "fixed_input_commit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
-  "replacement_semantics": "Each entry replaces only the named normative concerns/sections at the exact source blob. The listed SPEC sections are the current replacement body; unlisted fixed-parent owner semantics remain. This is section replacement, not an additive private-chat patch.",
+  "replacement_semantics": "Each entry replaces only the named normative concerns/sections at the exact fixed-parent source blob. SPEC defines behavior, SCHEMAS defines closed current wire/types, ACCEPTANCE defines design obligations, and terminology-registry defines names/version disposition. Unlisted fixed-parent owner semantics remain. Listed stale current-version statements are superseded, not simultaneously current. Snapshots and docs/design/inputs.json remain byte-for-byte inputs.",
   "replacements": [
     {
-      "owner": "D2",
-      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
-      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "owner": "D10",
+      "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
+      "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
       "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
       "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "anchors": [
-        "§1",
-        "§2",
-        "§3",
-        "§4",
-        "§5",
-        "§9",
-        "§10",
-        "§15",
-        "§16"
+        "§8",
+        "§13",
+        "§14",
+        "§17"
       ],
       "changedSections": [
-        "complete AsciiDoc language/processor contract",
-        "Witness7/CSP/PropertyProfile",
-        "managed format semantic ownership",
-        "provider profiles",
-        "portable Annotation semantics"
+        "proof3 workspace reads",
+        "EffectManifest3 preview digest",
+        "schedule v2",
+        "mixed Image/Pin/Range/PrepareBinding1-3",
+        "Money/Claims/Inventory2",
+        "ExecutionResponsibilityRecord/3"
       ]
     },
     {
@@ -50,6 +46,38 @@
       ]
     },
     {
+      "owner": "D3-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version implementation obligations"
+      ],
+      "changedSections": [
+        "wire13",
+        "Descriptor3/Proof3",
+        "CP4",
+        "format/annotation obligations"
+      ]
+    },
+    {
+      "owner": "D3-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "schema/version references"
+      ],
+      "changedSections": [
+        "DependencyProof/3",
+        "InputDescriptor/3",
+        "PAB4",
+        "CP4 terminology"
+      ]
+    },
+    {
       "owner": "D4",
       "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.md",
       "sourceBlob": "42f3e6015ad7986eb285f4c2c8dd67b842608ab3",
@@ -63,6 +91,45 @@
         "InputDescriptor/3 + DependencyProof/3 outer consumption",
         "document_format dependency",
         "inner D4 types retained"
+      ]
+    },
+    {
+      "owner": "D4-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "534fd5c65ffaf6da37a59b66d4ff385a43be7285",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current outer qualification obligations"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3/document_format invalidation"
+      ]
+    },
+    {
+      "owner": "D4-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "b7bb81f5f191774bc0f694cfc16944c7b2b414df",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "schema/version references"
+      ],
+      "changedSections": [
+        "Proof3 current outer terminology"
+      ]
+    },
+    {
+      "owner": "D5-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "2f45513d35e444c7c852c4238a091227e8e40e42",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current outer qualification obligations"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3/document_format stale cases"
       ]
     },
     {
@@ -80,6 +147,19 @@
         "full AsciiDoc table baseline",
         "proof3/descriptor3 outer consumption",
         "format-stamp invalidation"
+      ]
+    },
+    {
+      "owner": "D5-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "6187958f97d8791b7d58df4cc0f48bf1ced70b18",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "schema/version references"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3 terminology"
       ]
     },
     {
@@ -106,6 +186,23 @@
       ]
     },
     {
+      "owner": "D6-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "7b57cd4c3d8b31a0eac5eeb85bcb5f62c6f2934f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version implementation obligations"
+      ],
+      "changedSections": [
+        "format",
+        "SourceTransform",
+        "CP4/ChangeRecord",
+        "trust",
+        "D10 mixed inventory"
+      ]
+    },
+    {
       "owner": "D6-Storage",
       "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
       "sourceBlob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
@@ -125,6 +222,83 @@
         "transform outbox retention",
         "trust public history",
         "D10 mixed inventory"
+      ]
+    },
+    {
+      "owner": "D6-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "205f43f938653722df81dca074ffdc190c30ea6d",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "Dependency3",
+        "Notice3/CP4",
+        "Bootstrap4",
+        "ExecutionRecord3",
+        "SourceTransform"
+      ]
+    },
+    {
+      "owner": "D6-Registry",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
+      "sourceBlob": "80debdd50d91154aa0e1acb43b2a543daca9495a",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current terminology registry"
+      ],
+      "changedSections": [
+        "all FC-3.4d current successor names and historical dispositions"
+      ]
+    },
+    {
+      "owner": "D7-Execution",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-execution-and-action-interfaces/source.md",
+      "sourceBlob": "b919463604407022d3f76fff328f2cfe53be62df",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§15"
+      ],
+      "changedSections": [
+        "PAB4 current action qualification",
+        "Annotation suggestion accept/reject"
+      ]
+    },
+    {
+      "owner": "D7-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "30c12de85daf294452f541a5b0929f39d7bac483",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version implementation obligations"
+      ],
+      "changedSections": [
+        "PAB4",
+        "Effect3",
+        "Edit3",
+        "Bootstrap4"
+      ]
+    },
+    {
+      "owner": "D7-Narrow",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-narrow-field-qualification/source.md",
+      "sourceBlob": "4f0cfeded1c0471988e2d5d712ab997ac4d90adb",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§5",
+        "§7",
+        "§8"
+      ],
+      "changedSections": [
+        "document_format dependency without widening source disclosure",
+        "proof3 outer holder"
       ]
     },
     {
@@ -179,34 +353,126 @@
       ]
     },
     {
-      "owner": "D7-Narrow",
-      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-narrow-field-qualification/source.md",
-      "sourceBlob": "4f0cfeded1c0471988e2d5d712ab997ac4d90adb",
-      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-      "anchors": [
-        "§5",
-        "§7",
-        "§8"
-      ],
-      "changedSections": [
-        "document_format dependency without widening source disclosure",
-        "proof3 outer holder"
-      ]
-    },
-    {
-      "owner": "D7-Execution",
-      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-execution-and-action-interfaces/source.md",
-      "sourceBlob": "b919463604407022d3f76fff328f2cfe53be62df",
+      "owner": "D7-QueryViewAction",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-query-view-action/source.md",
+      "sourceBlob": "6d75b79fa3173772d5cb996c264c41c06c6a4315",
       "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
       "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "anchors": [
         "§8",
+        "§15",
+        "SCHEMAS D7"
+      ],
+      "changedSections": [
+        "PAB4",
+        "Effect3",
+        "EditBinding3 references"
+      ]
+    },
+    {
+      "owner": "D7-Scenario",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-scenario-dispositions/source.md",
+      "sourceBlob": "e24f74601b3ad68d0212e58d7b7e63080946d7ce",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current-version scenario dispositions"
+      ],
+      "changedSections": [
+        "Effect3/EditBinding3 scenario references"
+      ]
+    },
+    {
+      "owner": "D7-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "470cd345ee5c766f493b7d0e1c39003c2e285f59",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "Proof3",
+        "PAB4",
+        "Effect3",
+        "Edit3",
+        "Bootstrap4"
+      ]
+    },
+    {
+      "owner": "D7-Registry",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-terminology-registry/source.json",
+      "sourceBlob": "3cab5124f46822729093d5d955908b05eb65bb87",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current terminology registry"
+      ],
+      "changedSections": [
+        "PAB4/Effect3/Edit3/Bootstrap4 current versions"
+      ]
+    },
+    {
+      "owner": "D7-ValueCEL",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d7-value-and-cel-profile/source.md",
+      "sourceBlob": "eeb402e78a51191c5f653c4d9fe80ae87bb9d941",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "SCHEMAS D7"
+      ],
+      "changedSections": [
+        "proof3 qualification only; CEL/value language remains unchanged"
+      ]
+    },
+    {
+      "owner": "D8-Acceptance-JSON",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-acceptance-matrix/source.json",
+      "sourceBlob": "52d34409e15b7a378042a6e78ef32419c3829943",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D8 obligations"
+      ],
+      "changedSections": [
+        "PreparedEditBinding3",
+        "format-aware Draft",
+        "Annotation v4"
+      ]
+    },
+    {
+      "owner": "D8-Acceptance",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-acceptance-matrix/source.md",
+      "sourceBlob": "f4f8ffe1bc5dcd9cd466a9a9cbf2ce7445653210",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D8 obligations"
+      ],
+      "changedSections": [
+        "PreparedEditBinding3",
+        "format-aware Draft",
+        "Annotation v4"
+      ]
+    },
+    {
+      "owner": "D8-CrossSurface",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.md",
+      "sourceBlob": "3fdf8a8279752818af2c0adc21d2d070eea1ea39",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§1",
+        "§4",
+        "§9",
+        "§10",
         "§15"
       ],
       "changedSections": [
-        "PAB4 current action qualification",
-        "Annotation suggestion accept/reject"
+        "Source-only fallback",
+        "run-in/deep-heading rendering",
+        "Annotation appearance/review"
       ]
     },
     {
@@ -231,22 +497,111 @@
       ]
     },
     {
-      "owner": "D8-CrossSurface",
-      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.md",
-      "sourceBlob": "3fdf8a8279752818af2c0adc21d2d070eea1ea39",
+      "owner": "D8-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6ddeffd5e656881ed5f0e37682917266e6bbf141",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D8 obligations"
+      ],
+      "changedSections": [
+        "EditBinding3",
+        "Draft invalidation",
+        "Annotation current qualification"
+      ]
+    },
+    {
+      "owner": "D8-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "b6c4e2045ea07d1b154c34eed541481fcb8685aa",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "Proof3/Descriptor3/Effect3/EditBinding3/Annotation4"
+      ]
+    },
+    {
+      "owner": "D9-Conversion",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.md",
+      "sourceBlob": "b9ff7da0ab0bcce23fe3f4b6510a8743b6138f8f",
       "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
       "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "anchors": [
-        "§1",
         "§4",
-        "§9",
-        "§10",
-        "§15"
+        "§8",
+        "§16",
+        "SCHEMAS D7/D9"
       ],
       "changedSections": [
-        "Source-only fallback",
-        "run-in/deep-heading rendering",
-        "Annotation appearance/review"
+        "PAB4",
+        "Effect3",
+        "provider profiles",
+        "no implicit adoc probe arm"
+      ]
+    },
+    {
+      "owner": "D9-Binding",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "sourceBlob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§7",
+        "§8",
+        "§16"
+      ],
+      "changedSections": [
+        "wire13/PAB4 coordination",
+        "fresh managed format",
+        "Annotation identity-map transfer"
+      ]
+    },
+    {
+      "owner": "D9-Impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "5c1cf0f02114df93d6e4a69e9c715f0d48559551",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "anchors": [
+        "current D9 obligations"
+      ],
+      "changedSections": [
+        "ExportPlan3/PublicationReceipt3",
+        "format/provider/export cases"
+      ]
+    },
+    {
+      "owner": "D9-Templates",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.md",
+      "sourceBlob": "bc79681ffdb05b59869f558c958a9a606cb98a5f",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "anchors": [
+        "§8",
+        "§16",
+        "SCHEMAS D7/D9"
+      ],
+      "changedSections": [
+        "Descriptor3/Proof3/PAB4 template construction qualification"
+      ]
+    },
+    {
+      "owner": "D9-Lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "077d3d9c7d6b3203318d2b31edec5d5e7983a8ff",
+      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "anchors": [
+        "current schema/version names"
+      ],
+      "changedSections": [
+        "PAB4",
+        "ExportPlan3",
+        "PublicationReceipt3"
       ]
     },
     {
@@ -269,41 +624,28 @@
       ]
     },
     {
-      "owner": "D9-Binding",
-      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
-      "sourceBlob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "owner": "D2",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
       "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
       "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "anchors": [
-        "§7",
-        "§8",
+        "§1",
+        "§2",
+        "§3",
+        "§4",
+        "§5",
+        "§9",
+        "§10",
+        "§15",
         "§16"
       ],
       "changedSections": [
-        "wire13/PAB4 coordination",
-        "fresh managed format",
-        "Annotation identity-map transfer"
-      ]
-    },
-    {
-      "owner": "D10",
-      "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
-      "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
-      "replacementPathZh": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-      "replacementPathEn": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-      "anchors": [
-        "§8",
-        "§13",
-        "§14",
-        "§17"
-      ],
-      "changedSections": [
-        "proof3 workspace reads",
-        "EffectManifest3 preview digest",
-        "schedule v2",
-        "mixed Image/Pin/Range/PrepareBinding1-3",
-        "Money/Claims/Inventory2",
-        "ExecutionResponsibilityRecord/3"
+        "complete AsciiDoc language/processor contract",
+        "Witness7/CSP/PropertyProfile",
+        "managed format semantic ownership",
+        "provider profiles",
+        "portable Annotation semantics"
       ]
     }
   ]
