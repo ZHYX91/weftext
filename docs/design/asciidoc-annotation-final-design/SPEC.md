@@ -12,7 +12,7 @@ Status: **candidate-design-not-implemented**. This specification is bound to par
 
 ## 0. Precedence, scope, and why this is one joint PR
 
-This file is the complete replacement body for the actual-owner sections named by `replacements.json`. Fixed-S input `7e18168dad3e6d120fce0dd607dc10fa7894e252`, all 49 snapshots, and `docs/design/inputs.json` remain unchanged. Any fixed-e8aa owner section not named by the router retains its existing meaning.
+This file and [SCHEMAS.md](SCHEMAS.md) together form the complete normative replacement for the actual-owner sections named by `replacements.json`: this file freezes behavior, algorithms, and owner boundaries; SCHEMAS freezes closed current shapes, ordering, cross-field rules, and historical dispatch. Summary wording here may neither broaden nor narrow SCHEMAS. Fixed-S input `7e18168dad3e6d120fce0dd607dc10fa7894e252`, all 49 snapshots, and `docs/design/inputs.json` remain unchanged. Any fixed-e8aa owner section not named by the router retains its existing meaning.
 
 The candidate consolidates the independently reviewed cumulative v3.10 core design and FC-3.4 through FC-3.4d actual-owner coordination into a public, reviewable contract. Old candidate labels, private conversation, and author self-review are not protocol dependencies.
 
