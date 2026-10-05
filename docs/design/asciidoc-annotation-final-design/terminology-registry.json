@@ -1731,6 +1731,22 @@
       "replaces": null,
       "section": "SCHEMAS §7.1; SPEC §9.12",
       "notes": "Named existing-InstallationPlan file-write coordination binding that coalesces all same-Node Annotation record changes into one strict physical install."
+    },
+    {
+      "name": "SuggestionAuthorProposal/1",
+      "owner": "D7/D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §7.1; SPEC §9.10",
+      "notes": "Caller author-content subset for a pending suggestion; contains kind/replacementSource only and never lifecycle or target evidence."
+    },
+    {
+      "name": "D8AnnotationBodyRead/1",
+      "owner": "D8",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.3.1; SPEC §9.11",
+      "notes": "Read projection separating exact Annotation inline source from R6 semantic text and invalid-source diagnostics."
     }
   ]
 }
