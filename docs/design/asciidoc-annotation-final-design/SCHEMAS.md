@@ -1430,6 +1430,8 @@ ControlPrepareBinding/3 = {
   dependencyPins:ControlDependencies/3
 }
 
+For a current unseen external-consent preparation, confirmationRequirement is the same closed ExternalConfirmationRequirement/1 used by the fixed-parent attended-confirmation protocol and is frozen inside ControlPrepareBinding/3 before the original commit request is delivered. The mutable confirmation fact remains exclusively in ExternalConfirmationRecord/1 and is not inserted into Binding3 or ControlDependencies/3. Current confirmation eligibility therefore consumes Binding3 + Dependencies3 while preserving the original trusted-event, principal, time-window, immutable-intent/preview, disclosure, approval_unavailable/preflight, saved-result replay, and result-redaction rules. A proven historical ControlPrepareBinding/2 retains its exact requirement, Dependencies2, canonical intent bytes, confirmation association, and recovery decoder.
+
 ControlDependencies/3 = {
   kind:"d10_control_dependencies",version:3,
   configBindings:[Binding<K>/1],
@@ -1665,6 +1667,18 @@ ScheduleContinuityStep/2 = {
   retainedInputs:[PinRef/2...]
 }
 
+ScheduleContinuityInvalidation/2 = {
+  kind:"d6_schedule_continuity_invalidation",
+  version:2,
+  automation:ControlRef<automation>/1,
+  subscriptionGeneration:Counter,
+  expectedWitnessRevision:Counter,
+  producerEpoch:Token,
+  transition:Counter,
+  status:"binding_changed"|"gap",
+  evidencePins:[PinRef/2...]
+}
+
 D10AuthorPreparationLink/2 = {
   kind:"d10_author_preparation_link",
   version:2,
@@ -1707,11 +1721,15 @@ D10AuthorStepResponsibility/2 =
      preparedRecordPin:PinRef/2,recoveryPins:[PinRef/2...]}
 ```
 
-ApprovalUse/2.preparedBindingToken must select the exact PAB4. Its preview digest is
+For a fresh current core_field_member step, D10AuthorPreparationLink/2.preparedBindingToken must select the exact PAB4 whose original request equals link.request. Core saves Link2, that complete PAB4, and the required preview/effect/recovery pins atomically before returning the prepared step or permitting submission. ApprovalUse/2.preparedBindingToken selects that same PAB4. Its preview digest is
 SHA-256(UTF8("D10-Author-Preview/2") || NUL || D3-CJ/3(normalized complete EffectManifest/3));
-each EffectBytes/3 slot is projected only as {encoding,byteLength,payloadDigest}, never discovered by recursively guessing member names.
+each EffectBytes/3 slot is projected only as {encoding,byteLength,payloadDigest}, never discovered by recursively guessing member names. Fresh current automatic author qualification uses DependencyProof/3, including document_format whenever the managed Document is semantically parsed, and constructs ApprovalUse/2 only after complete EffectManifest/3 / EffectBytes/3 / MutationFootprint validation. Historical Link1/PAB3/ApprovalUse1 saved or planned associations keep their original decoder, bytes, pins, request and OperationId.
 
-A current schedule proof that semantically parses a managed Document must include both source and document_format dependencies. If source/profile bytes are unchanged but format-proof continuity has a gap, the result is gap; a real binding transition is binding_changed even when the final recurrence/range value happens to compare equal. A Subscription1 may become a same-generation Subscription2 only through explicit continue plus complete history proving no format/rule discontinuity; otherwise replace is required.
+For a fresh ScheduleSubscription/2 registration, the current D6 Storage producer creates ScheduleContinuityWitness/2 only in the same configuration transaction that passes the selected source/Field/Registry/current scheduling gates, reserves finite retention, and attaches the actual continuously maintained Core source/control transition producer. initial and checkpoint are the subscription's exact ScheduleRecurrenceEvidence/2, revision=1, consumedTransition=0, and producerEpoch is fresh. Positive current transitions use ScheduleContinuityStep/2 with DependencyProof/3 and the actual ChangeRecord/1, InstallationNotice/3, and ContentCompletionProof/4 pins for new current portable transitions; historical transitions inside retained history keep their original exact decoders. P-only relevant control/rule transitions remain captured from their actual protected before/after state.
+
+When no valid current after evidence can exist, the current producer emits ScheduleContinuityInvalidation/2 instead of fabricating ScheduleRecurrenceEvidence/2. binding_changed requires complete trusted evidence of a selected-business discontinuity; unavailable/unknown after, missing history, unknown decoder, observer/producer gap, or inability to retain a required transition is gap. Invalidation compares the same current witness/registration, atomically advances the next checked transition/revision, keeps the last valid checkpoint, and is permanently non-resetting for that generation. Its artifact pin uses recovery retention and UTF8("D6-Schedule-Invalidation/2") || NUL || D3-CJ/3(complete ScheduleContinuityInvalidation/2). The fixed-parent inbox/capacity/final-counter reservation, authorization, compaction and unrelated-source-availability rules remain unchanged.
+
+A current schedule proof that semantically parses a managed Document must include both source and document_format dependencies. If source/profile bytes are unchanged but format-proof continuity has a gap, the result is gap; a real binding transition is binding_changed even when the final recurrence/range value happens to compare equal. An existing Subscription1 remains a historical retention owner with Witness1/Step1/Invalidation1. It may become a same-generation Subscription2 only through explicit continue plus complete retained history proving no intervening format/rule/business discontinuity and establishing the current Evidence2/Proof3 cut; otherwise replace is required. The bridge preserves old pins and producer evidence and never re-encodes version-1 witness/step/invalidation bytes as version 2.
 
 # 11. Historical dispatch and one authority set
 
