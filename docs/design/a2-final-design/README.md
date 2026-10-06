@@ -24,7 +24,7 @@ The current author candidate integrates D1 through D6. It is authored work, not 
 | D1 | integrated current candidate; fixed-446 D1/D2 findings independently closed in that bounded scope |
 | D2 | integrated current candidate; fixed-446 D1/D2 findings independently closed in that bounded scope |
 | D3 | integrated current author candidate; a separate fixed-a62 non-author narrow review CLOSED the two bounded D3 P1 findings; this is not global A2 acceptance |
-| D4 | integrated current author candidate; fixed-S text/catalog intake complete; fixed-829 semantic LIMITED PASS; audit P2-01/P2-02 repaired by the author and pending independent re-review |
+| D4 | integrated current author candidate; fixed-S text/catalog intake complete; fixed-a62 semantic LIMITED PASS; audit P2-01/P2-02 repaired by the author and pending independent re-review |
 | D5 | integrated current author candidate; fixed-S intake complete; fixed-829 semantic LIMITED PASS; audit P2-01/P2-02 repaired by the author and pending independent re-review |
 | D6 | integrated stopped author candidate through 829; fixed-829 non-author read-only review does not establish D6 acceptance |
 | D7 | TODO as a full module; D2 intersections plus D3-direct Chinese owner inputs read |
@@ -56,4 +56,4 @@ For D7 through D10 there is no complete A2 current definition yet. Direct produc
 
 ## 5. Acceptance boundary
 
-The D1-D6 integration preserves source-qualified historical obligations and bounded review evidence. Fixed-446 independently closed the bounded D1/D2 findings, and fixed-a62 independently CLOSED the two bounded D3 P1 findings. Fixed-829 gave D4/D5 semantic LIMITED PASS but left two audit P2s OPEN; the current mapping repair is author-resolved-pending-independent only and does not independently accept D4/D5. D6 remains a stopped author candidate, not accepted. D7-D10 full modules, Mandatory 925-1141, and fresh global review remain pending. Runtime/OS/GUI/real-replica/migration/activation evidence is UNRUN.
+The D1-D6 integration preserves source-qualified historical obligations and bounded review evidence. Fixed-446 independently closed the bounded D1/D2 findings, and fixed-a62 independently CLOSED the two bounded D3 P1 findings. Fixed-a62 gave D4/D5 semantic LIMITED PASS but left two audit P2s OPEN; the current mapping repair is author-resolved-pending-independent only and does not independently accept D4/D5. D6 remains a stopped author candidate, not accepted. D7-D10 full modules, Mandatory 925-1141, and fresh global review remain pending. Runtime/OS/GUI/real-replica/migration/activation evidence is UNRUN.
