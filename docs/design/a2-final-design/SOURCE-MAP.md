@@ -97,7 +97,7 @@ D3-SOURCE-MAP.json is the case-level audit record. It preserves fixed-S main sec
 
 The three fixed-S D3 inputs and current parent D3 main/Impact/Lexicon in both languages were fully read. Selected Chinese D7-D10 direct-owner files were fully read only to close D3 interfaces; their full A2 owner modules remain pending. Fixed97 SPEC/SCHEMAS are only D3-relevant partial reads outside the earlier D2-complete regions.
 
-Fixed-446 independent review closed the D1/D2 P1-01/P2-01 findings. It left D3:P1-01 and D3:P1-02 OPEN and did not review edaf or later author deltas. Product/runtime scenarios remain unexecuted.
+Fixed-446 independently closed the bounded D1/D2 findings. A later fixed-a62 non-author narrow review independently CLOSED D3:P1-01 and D3:P1-02; the older fixed-446 OPEN state is retained only as historical review provenance.
 
 ## 10. D4 integration
 
@@ -111,8 +111,19 @@ The D5 fixed-S main, Impact and Lexicon are mapped line by line. The current can
 
 The historical Inline-only, one-logical-line, no-span/no-block-cell native-table restriction is explicitly superseded by the full legal Asciidoctor 2.0.26 table surface admitted by current D2. Structured controls may be unavailable for a legal shape without making Source invalid. Qualified titleless native create/save remains legal; filename/path/placeholder never fabricate title.
 
-D6-D9 producer/consumer intersections are recorded as direct partial reads by exact path/blob. There is no standalone D10 owner file in the parent owner tree, so D10 remains fixed97 SPEC/SCHEMAS direct-partial only.
+D6-D9 producer/consumer intersections remain direct partial reads. D10 is now also qualified directly through the actual CONTROL-CONTRACT, CANDIDATE, and UPSTREAM-AMENDMENTS bilingual files by exact blob; those reads are direct_partial_not_full_D10 and do not complete the D10 module.
 
 ## D6 integration update
 
 D6 is now an author candidate. Detailed section/case/registry-pointer provenance is in [D6-SOURCE-MAP](D6-SOURCE-MAP.md); D7-D10 remain future full-module batches.
+
+
+## 12. Fixed-829 D4/D5 audit-map repair
+
+The fixed-829 non-author report left two audit P2s after a D4/D5 semantic LIMITED PASS. The current author repair marks both only author-resolved-pending-independent.
+
+D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.json all 170 fixed-S D5 nonblank lines into source-qualified continuous obligation groups with exact current target, disposition, owner, basis and oracle. Mandatory lines 1-924 are 716/716 with actual-owner/defer routing. The fixed97 selected rows retain both actual EN and ZH source rows (D4 72/72; D5 130/130). D4-CATALOG-MAP.json covers 2,854/2,854 pointers in seven non-overlapping subtrees while leaving the immutable fixed catalog as the sole normative value authority.
+
+The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
+
+D3's two bounded findings are independently CLOSED at fixed-a62. D6 remains the stopped 829 author candidate and is not accepted by the fixed-829 read-only work. D7-D10 full modules, Mandatory 925-1141 and fresh global review remain pending; runtime evidence remains UNRUN.
