@@ -1044,7 +1044,9 @@ Non-disclosure ordering remains: closed decode, then conflict_read capability pl
 The current /2 read path also validates the continuous sealed relationship between key heads and createdAtFrontier. A portable-history hole, fabricated head, or corrupt record is integrity/state unavailability and never causes Core to delete missing heads and return a smaller conflict. /1 stays under its original historical decoder/gate; new /2 Frontier conditions never retrospectively reinterpret its saved bytes.
 ### 9.4 conflict resolution prepare
 
-The current new-FA prepare remains the closed wireVersion=3 request:
+The current source_merge and choose_source_head arms retain the closed wireVersion=3 request below and their ConflictResolutionInput/2 / Plan1 / Preview1 source contracts. Fresh current policy_bundle_choice is normatively closed at the later current trust-conflict anchor with Input3/Plan2/Preview2, FreshDomainAuthorizationSpec/2, mixed Bundle1/2 and Carry1/2, Declaration2/Outcome2, dual seal profiles, and Notice3/CP4/ChangeRecord1. A genuine saved/planned/unknown policy predecessor continues only under its recorded Input2/Plan1/Preview1, FreshDomainAuthorizationSpec/1, Bundle1/Carry1/Declaration1 bytes, pins, authorization and recovery.
+
+The two current source arms use the closed wireVersion=3 request:
 ~~~json
 {"wireVersion":3,"kind":"d6_conflict_prepare","workspaceRef":<WorkspaceRef>,"commitDomain":<CommitDomain/2>,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"budget":<BudgetBinding>}
 ~~~
@@ -1063,7 +1065,11 @@ The address selects exactly one member of `expectedKey.heads`. Core loads that h
 
 `FreshDomainAuthorizationSpec/1` remains exactly `{"commitDomain":<CommitDomain/2>,"profile":"d6_revision_token_seal/1"}`. The array may be empty and is sorted/unique by D3-CJ/3 bytes. It carries no caller public/private key.
 
-For `policy_concurrent`, current `conflict_resolve` plus workspace `policy_admin`, complete subject disclosure, exact `expectedKey`, every head's CP3/component bytes, and continuous portable-history proof are required before branch contents are read. Every head bundle must have the same Workspace and byte-equal anchored `WorkspaceTrustRootFingerprint/1`; a missing/corrupt head, different root, unproved common history, or changed key is unavailable/integrity conflict. `selected` must identify exactly one head/bundle; current host state, arrival order and LWW never choose it.
+#### Historical policy_bundle_choice predecessor evidence
+
+The following Bundle1/Carry1/Declaration1 policy text applies only to a genuine predecessor record that actually used that schema. Its complete authorization, non-disclosure, root/PoP/signature, positive path, error order, pin retention and saved/planned/unknown recovery remain binding for that record; fresh current policy conflict uses the later Input3/Plan2/Preview2 successor.
+
+For a historical `policy_concurrent` predecessor, `conflict_resolve` plus workspace `policy_admin`, complete subject disclosure, exact `expectedKey`, every head's CP3/component bytes, and continuous portable-history proof are required before branch contents are read. Every head bundle must have the same Workspace and byte-equal anchored `WorkspaceTrustRootFingerprint/1`; a missing/corrupt head, different root, unproved common history, or changed key is unavailable/integrity conflict. `selected` must identify exactly one head/bundle; current host state, arrival order and LWW never choose it.
 
 #### Compromise fact extraction and carry
 
@@ -1109,9 +1115,9 @@ The signature is exactly `ASCII "D6-Domain-Seal-Key-PoP/1" || NUL || D3-CJ/3(bod
 
 The proposed policy is complete. If byte-equal to selected.policy, its Policy revision is preserved; otherwise it must be the legal checked successor of selected.policy and pass current policy_admin rules. The resulting bundle is based on the exact selected bundle, checked-increments `authorizationRevision` once, installs that policy, and either preserves trustRevision for a true policy-only resolution or checked-increments it once for the single resolve_conflict declaration. Its policy ComponentImage.version equals the resulting authorizationRevision.
 
-#### PreparedIntent/3, preview and unique submit path
+#### Current source-arm preparation and historical policy predecessor
 
-All three D6-owned wire3 arms use the existing D6 v2 preparation carrier and final submit; wireVersion=3 changes only this prepare request/owner descriptor, not the ledger or commit protocol. OwnerInputBinding/2 has `protocolOwner="D6"`; `ownerKind` and `InputDescriptor.intentKind` are both `d6_conflict_resolution/2`. The complete canonical owner descriptor is closed `ConflictResolutionInput/2`:
+The two current source arms use InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3 and the existing final submit; their owner descriptor remains ConflictResolutionInput/2. The policy material retained in this subsection is historical-only. Fresh current policy_bundle_choice uses the later Input3/Plan2/Preview2 owner contract and the same one-ledger/one-submit boundary. OwnerInputBinding/2 has `protocolOwner="D6"`; `ownerKind` and `InputDescriptor.intentKind` are both `d6_conflict_resolution/2`. The complete canonical owner descriptor is closed `ConflictResolutionInput/2`:
 ~~~json
 {"kind":"d6_conflict_resolution_input","version":2,"conflictId":<ConflictId>,"expectedKey":<ConflictKey/1>,"resolution":<ConflictResolution/2>,"branchEvidence":[<ConflictResolutionBranchEvidence/1>...],"derivedPlan":<ConflictResolutionDerivedPlan/1>}
 ~~~
@@ -1210,29 +1216,26 @@ The first local issuer is created only in an explicitly established genuinely em
 Issuer management requires current administer_issuer, the complete old revision and proposed policy/profile, trusted authentication/delegation and current fence in one control CAS. A real change checked-increments revision; MAX rejects. The issuer's original management operation key binds complete immutable input/result: same-key replay is exact, changed input conflicts. This is neither a Workspace OperationId ledger nor a global identity registry. The existing issuer-management transport still requires its own closed host/CLI/RPC contract before implementation; D6 Workspace commit and D10 Workspace control do not impersonate it or authorize a free callback. Explicit revocation of the last administrator or allocation grant is valid; reopening or authenticating again never restores grants.
 
     WorkspaceBootstrapProfile/4 = {
-      kind:"d6_bootstrap_profile", wireVersion:3,
+      kind:"d6_bootstrap_profile", wireVersion:4,
       profileRevision:Counter,
       registrySeedBinding:D4.RegistryBinding/1,
       newSeriesMultiplicity:"unique"|"many",
       initialPeriodScope:"workspace"
     }
 
-IssuerControlPolicy's nested bootstrapProfile dispatches by its explicit wireVersion. This new /3 combination requires the corresponding D1 version qualification; the issuer's top-level member set is unchanged. The seed is the protected complete immutable D4 trust-root-validated bootstrap-eligible seed. No field defaults from a request or conflict. Only the authenticated creator receives a fresh target-authority-local principal mapping; source principal Tokens, credentials, delegation and ACL are not copied. Initial Policy.version=3, revision=1, auth generation=1. Its explicit creator workspace grant contains all 21 fixed base capabilities in §10.1 plus replica_register,replica_retire,conflict_read,conflict_resolve,execution_custody_admin,structure_state,portable_frontier_state,d10_control_self, and field_read/field_write for exactly all FieldIds in the complete target Registry. If the Field set is empty no empty Field capability is emitted. There are no deny grants. Later Fields/capabilities are never auto-granted, and normal policy changes may revoke every creator right.
-
-Historical profile/1 and /2 retain their exact original member/capability semantics and Policy/1 or /2, respectively. The former gains neither metadata capability; the latter's base list stays exactly the 21 entries above and gains none of Policy/3's extensions. Updating the issuer profile explicitly affects only future families. The mere presence of an old decoder does not assert deployment; actual saved family/plan/decision recovery remains mandatory.
-
-D3 allocation A2 checks current allocate_workspace before family lookup for issue/replace/create/fork. Original A3/A4 availability/integrity and A5–A11 ordering remain. Successful issue freezes in the same original family/proposal/custody transaction the complete profile, actual issuer principal/audience, target-authority principal mapping and complete seed input. It does not change D3 request/proposal framing. Replacement inherits that same family profile and authenticated person's identity, but maps an independent new target principal and retires the old mapping under original rules. A target token never crosses authority; replacement cannot create a family without successful issue. Current issuer authorization still governs later family operations.
-
-D3 stage3 checks issuer allocate_workspace and, for fork, current complete source observation plus source/export authority. Original stage4→P1→P2→TL→stage5 remains; prepared_workspace is only the temporary scope derived from public mode/outer roles, not a claim that stage12 has already produced a plan. Before target activation there is no target-policy/source_write/policy_admin lookup. The original proposal and final plan gates authorize only this proposal's finite all-fresh closure. Stage14/15 still fully validate source/body/Facet/relation and range semantics; initialization is no invalid-source exception.
+IssuerControlPolicy's nested bootstrapProfile dispatches by explicit wireVersion. Profile4 requires the corresponding D1 version qualification; the issuer top-level member set is unchanged. Historical profile/1-/3 and any genuinely recorded plan family retain exact bytes, capabilities, pins and recovery; decoder presence alone is not deployment evidence.
 
     WorkspaceTrustGenesis/2 = {
-      kind:"d6_workspace_trust_genesis", version:1,
+      kind:"d6_workspace_trust_genesis", version:2,
       rootDeclaration:WorkspaceTrustRootDeclaration/1,
-      initialDomainDeclaration:WorkspaceTrustDeclaration/1
+      initialDomainDeclarations:[
+        WorkspaceTrustDeclaration/2,
+        WorkspaceTrustDeclaration/2
+      ]
     }
 
     WorkspaceBootstrapPlan/4 = {
-      kind:"d6_workspace_bootstrap_plan", wireVersion:3,
+      kind:"d6_workspace_bootstrap_plan", wireVersion:4,
       operationId:Uuid, proposalId:Uuid,
       issuerAuthorityInstanceId:Uuid,
       targetWorkspaceRef:D3.WorkspaceRef,
@@ -1243,6 +1246,7 @@ D3 stage3 checks issuer allocate_workspace and, for fork, current complete sourc
       targetRegistry:{snapshot:D4.RegistrySnapshot/1,binding:D4.RegistryBinding/1},
       initialPolicy:Policy/3,
       trustGenesis:WorkspaceTrustGenesis/2,
+      initialPresentationPolicy:D8PresentationPolicyBootstrapInit/1,
       initialSeriesConfigurations:[{seriesScope:SeriesScope,
                                    multiplicity:"unique"|"many",revision:1}],
       periodScopeBindings:[{nodeRef:D3.NodeRef,scope:CalendarScope,revision:1}]
@@ -1250,9 +1254,9 @@ D3 stage3 checks issuer allocate_workspace and, for fork, current complete sourc
 
 All UUID members keep the original D3 canonical lowercase UUID decoder. This remains the D6-owned protected control portion of the one original D3 plan, not another request or decision. The admitted host secure store generates a fresh Workspace root keypair and a fresh target-server domain keypair; only public declarations plus protected handle associations enter the plan. `rootDeclaration.establishmentDecisionKey` and `initialDomainDeclaration.decisionKey` both equal the original create/fork DecisionKey. The initial declaration is revision=1/action=authorize for exact target server CommitDomain W/B and profile d6_revision_token_seal/1. Root self-signature, root signature and domain-key PoP must pass before the plan wins.
 
-The existing policy component after-image is WorkspaceAuthorizationBundle/1 with authorizationRevision=1, trustRevision=1 and exactly that root/declaration. The one bootstrap P seal atomically commits the original decision/ChangeId, that bundle, target activation/custody handoff and all original bootstrap components. For managed afters of this same bootstrap decision only, authorize_new_sign may consume the already-verified same-P trustGenesis before its activation ChangeId can appear in frontierBefore; this is the sole genesis exception. Retry, registration, rotation, later author seals or another DecisionKey cannot use it. Receiver admission first requires the exact anchored root, then validates root/declaration/PoP, the bootstrap CP3 policy after-image and each source artifact; fresh W therefore needs no prior history about itself.
+The current policy after-image is WorkspaceAuthorizationBundle/2 with authorizationRevision=1 and trustRevision=2. Genesis2 contains exactly two Declaration2 authorizations in fixed profile order, revision-token then source-transform, under the same DecisionKey and eventual activation ChangeId; declaration 2 hashes exact declaration 1 as predecessor. The one bootstrap P atomically commits Bundle2, mandatory initialPresentationPolicy, target activation/custody and all bootstrap components through Notice3/CP4/ChangeRecord1. Both trust profiles and the D8 revision1/separate parents=[] state become current only in that same P; no half-bootstrap, second admin request or second CAS exists.
 
-Current profile/3 produces Plan/3. Plan/2 was an unactivated candidate predecessor and receives no invented migration/dual-write path. Genuine already-issued profile/1 or /2 families, if proven to exist, keep their actual Plan/1 contract and saved/planned/unknown recovery. Current D7 transport decodes genuine Plan/1 history plus Plan/3 for this profile; it never relabels Plan/1 or Plan/2 as /3 or injects trust genesis into old bytes.
+Current Profile4 produces Plan4 only for unseen fresh create/fork. Genuine historical Plan1/Plan3 records, if proven, retain exact decoder, bytes, pins, trust family and saved/planned/unknown recovery; no migration, relabel, dual write or injected Genesis2 is asserted. Plan4 always carries mandatory initialPresentationPolicy frozen by the original proposal/custody cut.
 
 Create builds target Registry by D4's one-time registry_bootstrap from the frozen seed, with real target Workspace/user-owner authentication. Seed creation/update requires a complete bootstrap-eligible seed without retirement/migration history. Fork instead retains the complete source Registry cumulative history, retirements/migrations and required RegistryEvolutionProof, reauthenticates target owners and binds a separate target Registry; it is not a history-free bootstrap seed. Both source and target bindings/inputs remain retained. Unportable/unverifiable definitions, ownership, rules or history reject before planning; no network install, FieldId rewrite or history deletion repairs them.
 
@@ -1299,7 +1303,7 @@ Prepare:
 {"wireVersion":2,"kind":"d6_replica_register_prepare","workspaceRef":<WorkspaceRef>,"expectedReplicaRegistryRevision":<Counter>,"displayLabel":<text>,"budget":<BudgetBinding>}
 ~~~
 
-displayLabel is authorized display text only, non-empty and at most 256 UTF-8 bytes. Requires workspace-scope replica_register and a verifiable current WorkspaceAuthorizationBundle/Registry; it never takes over authority. PreparedIntent/3 mints a never-used ReplicaEpoch. Through a trusted registration pairing channel, Core on the joining host generates a fresh host-protected Ed25519 DomainSealKeyHandle for exact {kind:"replica",workspaceRef,replicaEpoch}+d6_revision_token_seal/1 and exposes only a protected enrollment/PoP to the registering authority; ordinary caller JSON never supplies an authority key. The winning plan freezes expectedReplicaRegistryRevision and expected trustRevision together. The single original P seal writes the active ReplicaRecord in the existing replica_registry component and appends the root-signed authorize declaration in the existing policy/WorkspaceAuthorizationBundle component under the same DecisionKey/ChangeId. Only admission of that committed transition changes the joining handle staged→usable. A receiver accepts the new CommitDomain only when the same CP3 proves both component transitions, declaration.decisionKey matches, anchored root/root signature and new-key PoP validate, and no policy/trust conflict exists. Copying the files or public declaration without the protected handle grants no signing right. A host-private bootstrap domain may perform registration but is not exposed as a reusable CommitDomain before successful seal.
+displayLabel is authorized display text only, non-empty and at most 256 UTF-8 bytes. Requires workspace-scope replica_register and a verifiable current WorkspaceAuthorizationBundle/Registry; it never takes over authority. PreparedIntent/3 mints one never-used ReplicaEpoch. Through the trusted pairing channel Core generates exactly two fresh host-protected DomainSealKeyHandle/2 values for that replica CommitDomain, in fixed profile order revision-token then source-transform. The winning plan freezes both staged handles, the predecessor trust state and exactly two Declaration2 authorizations under one DecisionKey. The one final P writes active ReplicaRecord and Bundle2/policy after-images through one Notice3/CP4/ChangeRecord1 transition and ChangeId. Both handles become usable together only after complete receiver admission; no observable one-profile prefix or generic trust-admin substitute is legal. A proven historical single-profile registration retains its Handle1/Declaration1/CP3 decoder, bytes, pins and recovery.
 
 Retire prepare:
 
@@ -1348,9 +1352,13 @@ No hidden author fact is read first to decide that “this run happened to be sa
 
 Policy/ACL changes do not grandfather old sessions/prepares. Revocation before seal prevents seal. Revocation after committed may hide receipt/effects delivery but never rewrites history.
 
-## 16. Global execution responsibility and control inspection
+## 16. Execution responsibility historical recovery and current control inspection
 
-D6 v2 ExecutionResponsibilityRecord is protected P control, never portable metadata. Exact semantic members are:
+Fresh/current execution custody uses ExecutionResponsibilityRecord/3 + D10ExecutionInventory/2 + ExecutionContinuityProof/2 as closed in SCHEMAS §10 and the later current mixed-holder clauses. Record3 and its pinned Inventory2 are captured at one real Authority Store barrier, agree byte-for-byte on the five responsibility payloads, and bind the same StoreIncarnation and StopCapacity. Money, ApprovalUse, external-unknown, claims and stop responsibilities remain with their real owners; backup/sync never creates execution authority. A handoff fences the old holder before enabling the new holder and creates no second ledger.
+
+### 16.1 Genuine historical Record2 / Inventory1 recovery
+
+For a genuine historical record only, ExecutionResponsibilityRecord/2 remains protected P control, never portable metadata. Its exact semantic members were:
 
 kind, version, workspaceRef, executionDomainId, holder, revision, status, approvalUses, claims, moneyLineage, externalUnknowns, stopState, lastContinuityProof.
 
@@ -1375,6 +1383,8 @@ The three tokens are protected Core handles, not caller assertions, interchangea
 Checkpoint verifies complete positive/negative record/range membership under that barrier. Handoff requires current execution_custody_admin, full original inventory/pins, preserved storeIncarnation and ControlRefs, exact old revision/holder, durable transfer, and actual old-holder fencing before enabling the new holder. New record revision is checked old+1; transfer never resets quotas, identities, occurrences, clock evidence or unknowns. During transfer status remains transferring/paused and neither holder may start new work before its exact qualification is proven. A failed handoff retains the old responsibilities and cannot create an empty replacement domain. Initial/checkpoint/handoff pins obey last-reference retention. Historical responsibility records continue through their actual original decoder and cannot gain missing continuity from this new schema.
 
 Execution takeover requires execution_custody_admin, the full old responsibility record, protected backup/remote handoff proof, and proof that the old holder is fenced. Failure is domain_unavailable/semantic_rejected and never creates a blank responsibility record. Takeover never copies or resets quota. sourceOccurrenceKey continuity requires complete D10 occurrence evidence; same path/hash/Field key is insufficient.
+
+### 16.2 Current control inspection
 
 Control inspection v2 adds targets decision_state (complete original request required), current_source (complete EntityRef), conflict (ConflictId), replica (ReplicaEpoch), existing execution_resource, and execution_responsibility (executionDomainId, restricted to custody admin/audit). There is no generic “list every OperationId/unknown in Workspace” API.
 
