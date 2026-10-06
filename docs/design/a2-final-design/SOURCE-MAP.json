@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "First bind a new non-author review to the exact final D6 repair stop SHA and review only the five fixed829 D6 findings plus direct bilingual/owner regressions. D4/D5 P2-01's two audit-map residuals are a separate later repair. D7-D10 full modules, Mandatory 925-1141 and the true fresh Pro/global review remain later work.",
+  "next_batch": "First bind a new non-author review to the exact final D6 residual-repair stop SHA and review only A2-D6-829-P1-02, A2-D6-829-P2-01, A2-D6-829-P2-02, and A2-D6-01CC-P2-01 plus their direct regressions. A2-D6-829-P1-01 and P2-03 remain independently CLOSED at fixed01cc. D4/D5 P2-01 R1/R2 remains a separate immutable fixed32cf non-author review object and is not decided here. D7 must not start while the D6 P1 remains independently open; complete D7-D10, Mandatory 925-1141, fresh Pro/global review, explicit accepted-design SHA, and same-SHA freeze/implementation-start material remain later gates.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "fixed4282 P2-02 bounded independent CLOSED; P2-01 R1/R2 author-resolved-pending-independent under separate immutable fixed32cf non-author review; not part of D6 residual finding count",
