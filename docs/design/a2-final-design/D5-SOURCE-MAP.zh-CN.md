@@ -37,6 +37,6 @@ D10 原文的 Proof2/Key2/wire12/PAB3 只做来源限定的历史/原 owner 证�
 
 ## 5. 评审状态
 
-D1/D2 fixed-446 findings 继续 CLOSED；D3 P1-01/P1-02 已在 fixed-a62 被独立 CLOSED。fixed-829 对 D4/D5 给出 semantic LIMITED PASS，但 audit package 因这两个 P2 为 REVISE。本次作者修复仍把两项 P2 保持为 author-resolved-pending-independent。
+D1/D2 fixed-446 findings 继续 CLOSED；D3 P1-01/P1-02 已在 fixed-a62 被独立 CLOSED。已完成的 fixed-a62 D4/D5 非作者复核（`a62aa7d4eaf56113cd1e9e32336ae8814f83589b`，request `7b6e1f16-fa41-499c-b078-647f1942e94e`）给出 semantic LIMITED PASS，但 audit package 因这两个 P2 为 REVISE。本次作者修复仍把两项 P2 保持为 author-resolved-pending-independent。
 
 D6 仍是已停止写入的作者候选，并未被接受。D7–D10 完整模块、Mandatory 925–1141 与全新的全局复核仍待完成。运行时、OS、GUI、真实副本、迁移与激活证据全部未运行。
