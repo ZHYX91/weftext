@@ -373,13 +373,13 @@ current A2 D3 wire13 已具备有界 current-consumer afterimage，真实 fixed-
 
 ## 11. Fresh review gate
 
-完整联合候选仍必须由新的独立评审从零读取：最终新 proposal/routing、全部实际 replacement owners、machine Registry、所有 D10 十八份以及固定 S49 输入，并按最终组装字节重新做跨 owner 正例、负例、unknown、恢复与历史 decoder 检查。Storage/Control/Lexicon/Registry/本 Impact 的作者产物、形式检查、design_inputs、docs、tests、diffcheck 或 CI 即使通过，也只证明实际执行的检查，不构成独立语义接受、产品实现或激活。
+本次 fixed829 五 finding 修复首先需要一轮**绑定真实 final D6 repair SHA 的新非作者复核**。该窄复核必须把 current D6 Main/Control/Schemas/Impact/Lexicon/Registry/SourceMap 合并阅读，并读取本 package 实际引用的 load-bearing fixed-S、parent/current owner 段和 direct holder，对五项 finding 的正例、负例、unknown、恢复与 historical decoder 路径重新攻击；不能因为本批读取了 direct intersection 就声称 D7–D10 完整模块已全文复核。更晚的完整 A2/global review 仍需完整适用 input/owner corpus、完成后的 D7–D10 模块、Mandatory 925–1141 与真正 fresh Pro/global pass。作者产物、形式检查、design_inputs、docs、tests、diffcheck 或 CI 即使通过，也只证明实际执行的检查，不构成独立语义接受、产品实现或激活。
 
 本作者当前阅读 provenance 只能如实记录每个作者任务真正读取的文件/范围；不能把旧独立审查的 49/49、过去某次双语覆盖、D10 all18 或其它对话的阅读升级成本候选已经完成的 fresh 独立全量阅读。本 Impact artifact 的 reading 只证明本次实际读取的两份原 C Impact 与附件中的最终私人 Storage/Control/Lexicon/Registry producer。
 
 旧 B13 的历史 REVISE 与当时术语/双语 FAIL 仅作历史状态记录；不能因为当前术语/机器检查后续改善就由作者自行宣布旧发现关闭。原 P0=0、P1=3、P2=8 共十一项 OPEN、U6/U7 均继续保持，直到其各自证据由后续 fresh 独立联合审查处置。本批不关闭、不重分类、不接受它们。
 
-P1 在本 Impact 作者后像之后仍有 PROPOSAL/replacements routing；P2 D3/D4、P3 D5、D7–D10 全部实际消费者与 fresh joint acceptance 仍未完成。之后还需 A2 自包含重建，以及 A2 后另一轮独立 fresh Pro 全局终审。候选在这些门完成前仍未接受、未激活、未实现、未合并或发布。
+两个有界 D3 finding 已独立 CLOSED，本批不重开。D4/D5 audit finding 属于另一固定对象工作流，不计入这五项 D6 finding。对 D6 而言，fixed829 五项 finding 在真实 final repair SHA 接受新的非作者复核之前都只保持 author-resolved-pending-independent。D7–D10 完整 A2 模块、Mandatory 925–1141、A2 完成以及随后真正 fresh Pro/global 终审仍待完成。在这些门完成前，候选仍未接受、未激活、未实现、未合并或发布。
 
 ## 12. D3 canonical-resolution 安装资格
 
