@@ -23,7 +23,7 @@ translation_status: source
 | D1 | 已整合为 current candidate；fixed-446 在其有界范围内独立关闭 D1/D2 findings |
 | D2 | 已整合为 current candidate；fixed-446 在其有界范围内独立关闭 D1/D2 findings |
 | D3 | 已整合为 current 作者候选；另一个 fixed-a62 非作者窄复核已 CLOSED 两个有界 D3 P1 finding；这不是 global A2 acceptance |
-| D4 | 已整合为 current 作者候选；fixed-S 文本/catalog intake 完成；fixed-829 语义 LIMITED PASS；audit P2-01/P2-02 已由作者修复，待独立复核 |
+| D4 | 已整合为 current 作者候选；fixed-S 文本/catalog intake 完成；fixed-a62 语义 LIMITED PASS；audit P2-01/P2-02 已由作者修复，待独立复核 |
 | D5 | 已整合为 current 作者候选；fixed-S intake 完成；fixed-829 语义 LIMITED PASS；audit P2-01/P2-02 已由作者修复，待独立复核 |
 | D6 | 已形成截至 829 的 stopped 作者候选；fixed-829 非作者只读复核不构成 D6 acceptance |
 | D7 | 完整模块仍 TODO；已读 D2 交集与 D3-direct 中文 owner 输入 |
@@ -55,4 +55,4 @@ D7–D10 目前还没有完整 A2 current definition；为闭合 D3–D5 而消�
 
 ## 5. 接受边界
 
-D1–D6 整合保留 source-qualified 历史义务和 fixed-SHA 有界审查证据。fixed-446 已独立关闭有界 D1/D2 findings，fixed-a62 已独立 CLOSED 两个有界 D3 P1。fixed-829 对 D4/D5 给出 semantic LIMITED PASS，但留下两个 audit P2 OPEN；当前映射修复仅为 author-resolved-pending-independent，不独立接受 D4/D5。D6 仍是 stopped 作者候选，不是 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。runtime/OS/GUI/真实 replica/migration/activation 全部 UNRUN。
+D1–D6 整合保留 source-qualified 历史义务和 fixed-SHA 有界审查证据。fixed-446 已独立关闭有界 D1/D2 findings，fixed-a62 已独立 CLOSED 两个有界 D3 P1。fixed-a62 对 D4/D5 给出 semantic LIMITED PASS，但留下两个 audit P2 OPEN；当前映射修复仅为 author-resolved-pending-independent，不独立接受 D4/D5。D6 仍是 stopped 作者候选，不是 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。runtime/OS/GUI/真实 replica/migration/activation 全部 UNRUN。
