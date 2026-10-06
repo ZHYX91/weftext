@@ -1430,11 +1430,44 @@ Control inspection v2 target新增：
 
 ## 17. Current fixed97 direct-owner contract
 
-以下正文直接整合为 current D6 owner contract，不是后置补丁层。
+以下 retained contract 除非被下方具名 successor 只替换其 versioned carrier，否则继续是 current D6 义务。每项都标明 immutable source、exact section 与 current constructor/validator，不建立第二权威。
 
-## 11. SourceTransform compiler / exact mapping
+### 17.1 ResultPage / cursor transport
 
-### 11.1 total compilation
+Normative import：`docs/design/snapshots/d6-control-interfaces/source.md`，blob `32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4`，§5 lines 98–107。保留 exact page request `wireVersion,kind,resultToken,cursorToken,pageSize`，version1、pageSize 1..200；exact reply `wireVersion,kind,resultToken,rows,terminal,nextCursorToken?`；完整结果先于分页存在；terminal=true 禁止 next cursor，terminal=false 即使 rows=[] 也必须有 cursor；current authorization 先于 expiry/reset/cursor/state/read。empty nonterminal 合法，transport failure 绝不能冒充 EOF。constructor/validator 为 D6 result-spool publisher 与 strict result page/error decoder；D7 继续拥有 row/result semantics。
+
+### 17.2 BudgetBinding/1
+
+Import 同一 source/blob §6 lines 108–117。BudgetBinding/1 exact 为 `version,maxInputBytes,maxSourceBytes,maxWriteBytes,maxDecodedBytes,maxWorkUnits,maxDependencies,maxNewEntities,maxTemporaryBytes,maxElapsedMillis,maxResultBytes,maxOutputBytes`；version1，所有 limit 为 Counter，0 表示拒绝而不是 unlimited。request/Workspace/host 逐项最小值、checked cumulative charge、burned work、finite attempt allowance 与禁止 truncating success 的规则完整保留。constructor/validator 为 D6 budget binder 与 execution-resource CAS；PreparedIntent/3 只引用这一未改 inner type。
+
+### 17.3 ImportJob / batch recovery
+
+Import 同一 source/blob §7 lines 118–127。保留 authenticated owner、完整 input descriptor/pins、mapping version、有限 DAG/SCC 与 atomic groups、显式 batch order、每 batch 稳定 OperationId、exact protocolOwner/canonical request/full plan、committed receipts、binding/version/watermark prefix、state 与 budget。只有 predecessors 完整且已 committed 的 batch 才推进 prefix；retry 不能重复推进；mapping/input/groups 改变产生新 job。D9 拥有 format/mapping/comparator input，D3 或 D6 拥有被接纳的 author request/plan，D6 原子保存 receipt/binding/watermark。
+
+### 17.4 Managed configuration / control read
+
+Import 同一 source/blob §§8–10 lines 128–173。四个 closed management intent、policy_admin/ObservationScope gates、唯一 D6 prepare/commit ledger、CAS/replay/error order，以及 closed d6_control_read target/state/error shape 全部保留。current outer carrier 是 InputDescriptor/3、DependencyProof/3、PreparedIntent/3；inner management contract 不机械升版。
+
+### 17.5 Resource ByteHandle / ByteRead
+
+Import 同一 source/blob §11 lines 174–189。d6_byte_read_request 保持 version1，成员为 handleToken、offset、maxBytes 1..1048576。成功结果绑定 immutable Resource cut，并返回 exact resourceRef、resourceRevisionToken、offset、totalBytes、无 padding base64url data 与 Boolean terminal；decoded length 精确为 min(maxBytes,totalBytes-offset)。offset==totalBytes 可返回 empty terminal success；offset>totalBytes 是 range_invalid；short read/corruption/I/O 绝不能伪造 EOF。gate order 保持 decode -> audience/current resource authorization -> expiry -> reset -> range -> pin/backend/budget -> complete chunk verification -> final delivery gate。一个 handle 的全部 read 共用其 persistent budget。D2 Resource snapshot 签发 handle；D6 只运输该 committed snapshot。
+
+### 17.6 Cross-stage inherited interfaces / ObservationScope
+
+Import 同一 source/blob §§12–13 lines 190–247。SourceVersion 与 typed revision token、D3 cut token、D4 relation/recurrence binding、D7 row ownership、closed ObservationScope profile 以及 authorization-before-secret-read 保持原 owner boundary。InputDescriptor/3 保存 Core-derived scope；不接受 caller scope 或 free JSON。
+
+### 17.7 SourceBinding / OriginBinding physical boundary
+
+Normative identity/lifecycle import：`docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md`，blob `bc23922ae2de4c80dadc7b91e945c87ce154b55a`，SourceBinding/ForeignIdentityKey/OriginBinding clauses 与 lifecycle matrix。SourceBinding 标识一个具体 source instance/collection scope；account token、cursor、etag、watermark、credentials 是 control-plane facts。OriginBinding 至多允许一个 active ForeignIdentityKey association，保留 retired audit，active_non_live 不自动 restore，retirement 后只有 explicit adopt 可重新建立 fresh binding。source_deleted、Node Trash、detached binding 与 provider cancellation 是独立状态轴。D6 拥有 physical persistence/retention/same-key linearization 与 durable base-current-remote evidence；D9/D10 或 provider 拥有 external version/comparator 与 connector/credential execution。
+
+### 17.8 Current successor dispatch
+
+fresh unseen D6 精确使用 Key3/Proof3/Input3/Prepared3 与 d6_plan/3。portable current publication 使用 PortableComponentKey/2 + Notice3 + 唯一 final P + CP4/ChangeRecord1。实际消费 managed-Document 语义时必须包含 document_format；format-only transition 的 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion 或 H advance。真实 saved/planned/unknown Key2/Proof2/Descriptor2/Prepared2、Notice1/2 与 CP1/2/3 保留原 decoder、bytes、pins、OperationId、authorization、install/seal/receipt/retention/error order 与 recovery。
+
+
+## 18. SourceTransform compiler / exact mapping
+
+### 18.1 total compilation
 
 ```text
 PortableTransformCompilation/1 =
@@ -1453,7 +1486,7 @@ canonical event array 按 original coordinate 排序。interval 在 p 结束的 
 
 `generatedOutputSpan(E)` 禁止内容搜索，必须用 exact before/after pin 做一次 replay cursor 计算。初始化 beforeCursor=0、afterCursor=0。依 canonical 顺序处理 E：replace 时 q=E.startByte，insert 时 q=E.atByte；要求 q>=beforeCursor，并要求 beforeBytes[beforeCursor:q] 与 afterBytes[afterCursor:afterCursor+(q-beforeCursor)] byte-equal，然后两个 cursor 都推进这段 unchanged 长度。E 的 generatedOutputSpan 恰为 [afterCursor, afterCursor+E.replacementByteLength)，必须落在 afterBytes 范围内，其 exact slice 同时满足 replacementByteLength 与 replacementSha256，随后 afterCursor 到 span end；replace 再令 beforeCursor=endByte，insert 则保持 beforeCursor=q。最后 beforeBytes[beforeCursor:] 与 afterBytes[afterCursor:] 必须 byte-equal，完整 after bytes 还必须匹配 afterSourceSha256。任何 boundary、length、digest、ordering、unchanged segment 或 final replay 失败都令 compilation/evidence 无效；receiver 不得用冗余字段替代真实 bytes。
 
-### 11.2 mapping
+### 18.2 mapping
 
 对 replacement R=[a,b)，设 replacement length 为 Lr，定义 delta(R)=Lr-(b-a)，它是可为负数的 signed integer；对 q 处 insertion I，len(I)=replacementByteLength。以下求和必须用 checked signed arithmetic，最终 mapped coordinate 必须仍在 replay 后 after-source byte range 内。
 
@@ -1473,7 +1506,7 @@ p' = p + Σδ(R where b<=p) + ΣL(I where q<p)
 
 因此 replacement end==p保持连续、start==p停止；insert@p left保持插入前、right到插入后。multi-transform chain逐段重新验证SourceVersion、signature、history cut与mapping，不跳中间transition。
 
-### 11.3 frozen plan
+### 18.3 frozen plan
 
 ```text
 CoreSourceEditPlan/2 = {
@@ -1492,7 +1525,7 @@ TransformEmissionPlan/1 =
 
 arm由Core在planning前机械决定，caller不可选。winning plan冻结后required不能降级、disabled不能升级；required seal时必须重验exact profile/revision/key和usable handle。seal不得重新compile/reorder/merge events。
 
-## 12. SourceTransform signed evidence/outbox
+## 19. SourceTransform signed evidence/outbox
 
 ```text
 SourceTransformEvidence/2 = {
@@ -1532,7 +1565,7 @@ publication/recovery 只重发原 pin bytes，永不重编译 event，也不按�
 
 SourceTransform artifact不是PortableComponent，不进入Notice/CP component set；它与source decision共用同一P seal/ChangeId。
 
-## 13. D6 trust profile / activation / history
+## 20. D6 trust profile / activation / history
 
 一个 Workspace 恰有一个保留的 WorkspaceTrustRootDeclaration/1 和一个受保护的 WorkspaceTrustAnchor/1。closed seal profile 只有 d6_revision_token_seal/1 与 d6_source_transform_seal/1。历史 WorkspaceTrustDeclaration/1 继续保持 byte-exact revision-token-only。WorkspaceTrustDeclaration/2 是 current profile-discriminated successor；WorkspaceAuthorizationBundle/2 可以包含 byte-exact /1 prefix 再接 /2 suffix，出现第一个 /2 后不得回到 /1。
 
@@ -1568,7 +1601,7 @@ Declaration1 activation 继续走原 DecisionKey -> CP3/public-history 规则。
 
 普通 SourceTransform receiver 验证 producing ChangeRecord/CP4，并用 C=CP4.frontierBefore 做 historical key verification。后续 ordinary rotation 不会让在 C 合法的 artifact 失效。compromise 必须比较 artifact seal ChangeId 与原 compromise activation ChangeId 的 causal order；causal-concurrent 或更晚的 old-key seal 无论 arrival order 都失败。DomainSealKeyHandle/1 只在 exact Declaration1-authorized key 仍 current、safe、usable 时继续 revision-token 新签名；它永远不获得 transform authority，也不改编码成 Handle2。
 
-### 13.1 双 profile policy conflict resolution
+### 20.1 双 profile policy conflict resolution
 
 公开的 d6_conflict_prepare request 继续使用 fixed-parent wireVersion3；policy_bundle_choice 的 JSON 成员名仍是 selected、policy、freshAuthorizations。当前 unseen policy arm 使用 SCHEMAS §9 的 FreshDomainAuthorizationSpec/2，其 profile 是 SealProfileId/1。source_merge 与 choose_source_head 继续沿用 fixed-parent 合同。这里不新增 submit surface：conflict_resolve、workspace policy_admin、subject disclosure、精确 expectedKey、原 error order、唯一 winning planning CAS、原 d6_commit_request/2 与唯一 final P 都保持不变。任何能证明真实保存或规划于旧 owner descriptor 的 policy resolution，都必须恢复原 request、descriptor、pins、handles 与 recovery state，不能重新按 current successor 解析。本候选不声称存在需要虚构 migration 的部署历史。
 
@@ -1610,7 +1643,7 @@ PreparedIntent/3.previewBinding 必须绑定该 Preview2 与其受保护的 cano
 
 必要反例是 transform KT1 并发分叉：ordinary KT1→KT2 与 compromise KT1→KT3。选择 ordinary branch 也不能丢掉 losing branch 中 KT1 在原 cut 的 compromise fact，更不能把该 cut 移到 resolver。只有在完整 fold 下可独立证明安全时 KT2 才可保留。若 selected transform state 为 none，或 selected current key 在完整 fold 下不安全，则显式请求 source-transform FreshDomainAuthorizationSpec/2 必须生成 fresh transform key 与合法 Outcome2，而不是让 Workspace 永久无法 resolution。
 
-### 13.2 Replica registration 当前 producer
+### 20.2 Replica registration 当前 producer
 
 d6_replica_register_prepare 保留 fixed-parent wireVersion2 request 与专用 replica_register 权限；不新增 profile 成员，普通 dual-profile trust add/rotate/revoke 不能代替这项 replica 权限。
 对当前尚未建立决议的 registration，winning prepare 生成一个 fresh ReplicaEpoch；joining secure store 为该 replica CommitDomain 恰生成两个 fresh DomainSealKeyHandle/2，两者初始均为 staged，profile 顺序固定为 revision-token 后 source-transform。调用方 JSON 不提供任何一把 key。
@@ -1634,16 +1667,16 @@ Plan4 只用于 current unseen fresh create_workspace/fork_workspace bootstrap�
 
 replica registration 继续使用 specialized same-record producer；current FC operation 为 dual-profile，generic trust prepare 不能冒充 replica_register authority。continuation 对 revision 与 transform profile 分别计算 current(K)|none|conflicted_or_unproved；任一 profile unproved 都禁止新 signing domain 部分激活。其余情况下完整顺序固定为 optional old revision revoke、optional old transform revoke、new revision authorize、new transform authorize，全部在一个 DecisionKey/CP4 中且无可观察中间 prefix。
 
-### 13.3 D6 Storage §9.1 / §9.3 current consumer
+### 20.3 D6 Storage §9.1 / §9.3 current consumer
 
 fixed-parent D6 Storage §9.1 的单 profile registration/admission 文字只在 current unseen replica registration 上被本候选接管。Storage consumer 必须接收 §13.2 的精确 transition：一个 fresh ReplicaEpoch；按 revision-token 后 source-transform 固定顺序恰两个 fresh staged DomainSealKeyHandle/2；同一 DecisionKey 下恰两条 Declaration2 authorize；replica_registry 与 policy/Bundle2 after-image 位于同一个 Notice3/CP4/ChangeRecord1 与同一 final P/ChangeId；只有完整 transition admission 后，两把 handle 才能同时 staged→usable。receiver 必须交叉验证 active ReplicaRecord、两条 Declaration2 的 predecessor/signature/PoP chain、固定 profile 顺序、同一 DecisionKey 与精确 Bundle2 bytes。retention/planned recovery 保留精确 staged pair、declarations、component pins 与原 request，绝不重新生成 key。可证明存在的历史 registration 保留 recorded single-profile decoder/bytes。replica_register 仍是 specialized authority，generic trust administration 不能替代。replica_retire 的原 transition 被 admission 后阻止两个 current profile 的未来 signing，但不删除历史 authorization，也不接管 ApprovalUse、claim、Money、external unknown、Automation lease 或 execution custody。普通 replica content 与 execution-responsibility takeover 继续是两个独立合同。
 
 fixed-parent Storage §9.3 的 conflict direct consumer 同样按 arm 分派。尚未建立决议的 source_merge 与 choose_source_head 使用 current outer InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3，但仍保留精确 ConflictResolutionInput/2、Plan1、Preview1、source pins 与原 source semantics。尚未建立决议的 policy_bundle_choice 使用 ConflictResolutionInput/3、Plan2、Preview2、mixed Carry1/2、精确 OwnerInputBinding pin union，以及上述 PreparedIntent3 的 preview/pinDirectory 闭环。
 Storage 必须保留每个未选 branch 的原 bytes、精确 bundle/activation evidence、result bundle pin 与受保护 preview pin，直到原 last-reference 规则允许释放。final write 仍使用原 D6 typed request 与唯一 P seal。saved/planned/unknown 必须先恢复 recorded outer carrier、request、owner descriptor、preview、pins、fresh-handle association 与 OperationId；current outer type 不得重新解释或迁移这些 bytes。这里仅接管 Storage 的 current direct-consumer 语句，不改变无关的历史 conflict、transport 与 recovery 语义。
 
-## 14. D10 current/historical mixed holders
+## 21. D10 current/historical mixed holders
 
-### 14.1 current owner 路由与历史分派
+### 21.1 current owner 路由与历史分派
 
 对于当前尚未建立决议的 D10 Workspace control 操作，协调后的链固定为 D10WorkspaceReadDependencies/2 与 DependencyProof/3 → ControlDependencies/3 → D10ControlInput/2 → ControlPrepareBinding/3。新的自动 author step 使用 PreparedActionBinding/4 与 EffectManifest/3、EffectBytes/3 构造 ApprovalUse/2。新的交互 author step 使用其 owner 合同选定的 PreparedActionBinding/4 或 PreparedEditBinding/3。新的调度记录使用 ScheduleSubscription/2 与 AutomationOccurrenceRecord/2。
 
@@ -1661,7 +1694,7 @@ D6 producer、fold、compaction、receiver、recovery 与 D10 §16 continuityPin
 
 已有或 retired ScheduleSubscription/1 仍是合法 historical recovery-retention owner，并继续配套 Witness1/Step1/Invalidation1 与原 /1 pins/producer obligations；绝不后台迁移。已经定义的 same-generation Subscription1 → Subscription2 显式 continue，只有在完整 retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut 后才合法；否则必须 replace 并创建新 generation。合法 continue 保持 semantic generation 与每个旧 typed artifact pin；只有 bridge 之后新产生的 Witness2/Step2/Invalidation2 才使用 /2 domain。旧 /1 bytes 绝不 repin 或重新编码，也不能 reset invalid generation。
 
-### 14.2 image、pin、range 与 effect plan
+### 21.2 image、pin、range 与 effect plan
 
 D10ControlRecordImage/2 只用于 automation 和 run，因为只有这两类的嵌套 current schema 发生了变化。planned_approval、external_approval、activation、reservation、external_effect、stop 以及 supplement=none 的记录继续使用精确 Image1。Image2 不得降级为 Image1；旧 Image1 也不能为了进入 mixed holder 而重新编码。
 
@@ -1673,7 +1706,7 @@ range kind rank 固定为 records=0、cost_lineage=1、occurrences=2。逻辑 ra
 
 D10ControlEffectPlan/2 的 changes 按 after.value.binding.ref 的完整 canonical Ref 排序且唯一。before 非 none 时，before 与 after 的 binding.ref 必须相等，并且必须有一份与真实存储 before schema 完全匹配的 versioned record pin。Image1 before 配 Pin2 非法。当前 Automation configure 可以合法地从 Image1+Subscription1 变成 Image2+Subscription2。若 D10 scheduling owner 判定为 continue，则普通 configure 可以保留同一 subscription generation；只有 owner 规则要求 replace 时才换 generation。mixed-holder uniqueness 是 snapshot 规则，不要求把所有旧 subscription 一律 replace。
 
-### 14.3 ControlDependencies/3 与单一 cut
+### 21.3 ControlDependencies/3 与单一 cut
 
 ControlDependencies/3 完整保留实际读到的 configBindings、usageBindings、authority proof、authorization generations、stopRefs、可选 Workspace reads、versioned record pins 与 versioned ranges。config binding 按完整 Ref 规范排序；usage binding 按完整 Ref；authorization-generation token 按 canonical token bytes；stop ref 按完整 Ref；record pin 与 range 使用上一节的 mixed 排序。
 
@@ -1681,7 +1714,7 @@ ControlDependencies/3 完整保留实际读到的 configBindings、usageBindings
 
 被 current responsibility 引用的 historical image 仍是 immutable evidence，不会因为进入 holder 就变成 current configuration。缺少所需旧 bytes、pin 或 decoder 时，在原 disclosure gate 之后返回 state_unavailable；同 cut 的矛盾证据是 integrity_conflict。要求旧 Pin1 时不能用当前 Image2 代替。
 
-### 14.4 Claims、Money 与 Inventory canonicality
+### 21.4 Claims、Money 与 Inventory canonicality
 
 D10ExecutionClaims/2 必须完整保存全部 mixed responsibility。recordPins 使用 mixed pin 顺序。prepareBindings 按 inner StableControlKey 的 canonical bytes 排序，而且该 key 在 Binding1、Binding2、Binding3 之间全局唯一。leaseRuns 按完整 Run ControlRef 排序唯一。authorSteps 以 run Ref 加 stepId 为 identity，Step1/Step2 跨版本唯一。subscriptions 以 Automation Ref 加 generation 为 identity，Subscription1/2 跨版本唯一。occurrenceRecords 以 AutomationOccurrenceKey 为 identity。ranges 使用 mixed range 顺序。continuityPins 按 pinToken 排序唯一。每个 continuity pin 都是精确 typed D6 schedule artifact，必须先按 retained D6-Schedule-Continuity/{1|2}、D6-Schedule-Step/{1|2} 或 D6-Schedule-Invalidation/{1|2} domain 分派，再解 inner record；禁止 free proof-map、schema 猜测、扩展 /1 decoder 或跨版本 repin。wrapper 只选择精确 decoder；不能给 Binding1 增加 kind、version 或 confirmation 字段，不能 LWW，也不能改变原 pins 或 dependencies。
 
@@ -1691,7 +1724,7 @@ D10ExecutionInventory/2 的 ApprovalUse carrier 按 DecisionKey canonical bytes 
 
 Inventory2 只有在旧 holder 的 admission、planning、send 与 schedule writer 都在一个真实 store barrier 停止后才能捕获。来自不同 barrier 的 old/new value 不能拼成一个 complete inventory。
 
-### 14.5 Inventory pin、Record3 equality、store incarnation 与 StopCapacity
+### 21.5 Inventory pin、Record3 equality、store incarnation 与 StopCapacity
 
 Inventory2 artifact 的精确 payload 是 UTF8 D6-Execution-Inventory/2、一个 NUL byte，再接 D3-CJ/3(D10ExecutionInventory/2)。对应 PinRef/2 的 payloadKind=artifact、retentionClass=recovery，byteLength 与 SHA-256 都覆盖完整前缀 payload。Inventory1 保留历史 D6-Execution-Inventory/1 domain，绝不重新 pin 或重编码成 Inventory2。
 
