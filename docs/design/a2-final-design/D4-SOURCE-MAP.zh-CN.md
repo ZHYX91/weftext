@@ -6,7 +6,7 @@ translation_status: source
 [English](D4-SOURCE-MAP.md)
 # A2 D4 来源、catalog、intake 与 current-consumer 审计映射
 
-状态：**A2-D4D5:P2-01** 与 **P2-02** 仅为 `author-resolved-pending-independent`。本文只记录作者侧审计闭合，不独立接受 D4、D6、D10 或全局 A2。
+状态：**A2-D4D5:P2-01** 与 **P2-02** 仅为 author-resolved-pending-independent。本文只记录作者侧审计闭合，不独立接受 D4、D6、D10 或全局 A2。
 
 ## 1. fixed-S D4 来源覆盖
 
