@@ -5,62 +5,56 @@ translation_status: synced
 ---
 
 [简体中文](REVIEW-ENTRY.zh-CN.md)
-# A2 D1-D6 author-candidate review entry
+# A2 D1-D6 author-candidate review entry — D4/D5 audit-map handoff
 
-Status: D6 author candidate; not independently accepted, implemented, merged, released, deployed, or globally frozen.
+Status: author candidate only; not independently accepted, implemented, merged, released, deployed, or globally frozen.
 
-## 1. Fixed base and review binding
+## 1. Fixed object and binding
 
 Base branch: docs/asciidoc-annotation-final-design.
 Fixed base SHA: 97f4734f82a760cb6716c8122b84494da2b61164.
 Fixed historical input S: 7e18168dad3e6d120fce0dd607dc10fa7894e252.
 Protected inputs blob: 787d03c31a55496f81ed03fd54a6fdfff50a2ad4.
 Candidate branch: docs/a2-final-design-integration.
+This narrow repair started from stopped head 829efce6aacbe944714e093c98065b01d50b2593.
 
-A reviewer must bind to the exact PR5 head produced by this batch. Do not follow the moving branch and do not extend any older fixed-SHA conclusion beyond its stated scope.
+The next reviewer must bind the exact final PR5 stop head. Do not follow the moving branch and do not extend any older fixed-SHA conclusion beyond its recorded scope.
 
-## 2. Prior independent review state
+## 2. Prior independent state
 
-The non-author fixed-44617a4 report independently CLOSED the bounded D1/D2 P1-01 and P2-01 findings.
+- fixed-446 independently CLOSED the bounded D1/D2 findings; those closures are retained.
+- fixed-a62 independently CLOSED D3:P1-01 and D3:P1-02. The older fixed-446 OPEN state is historical only.
+- The fixed-829 non-author report returned P0=0/P1=0/P2=2 for D4/D5: normative semantics LIMITED PASS, audit package REVISE.
+- The two current findings are **A2-D4D5:P2-01** (source/current-clause audit mapping) and **A2-D4D5:P2-02** (real D10 direct-source qualification). This author repair marks both only **author-resolved-pending-independent**.
 
-That same report left D3:P1-01 OPEN for current-successor/predecessor dispatch and fourteen-key mixing, and D3:P1-02 OPEN for current canonical Annotation retaining the Value3 enum. The report reviews fixed 44617a4ddf3bbe538c7a9e2bab9fe8a4013fe706 only. Starting from the stopped D4/D5 head 9952f3ec19b88251fa43e7de8dec44d7e8954f24, this narrow author repair reconciles those two actual gaps. Their status is resolved-pending-independent-review only; this author does not mark either CLOSED/PASS.
+D6 remains the stopped author candidate saved through 829. A read-only fixed-829 review does not make D6 accepted.
 
-## 3. D4/D5 completed author artifacts
+## 3. P2-01 review target
 
-D4.md, D4-IMPACT.md and D4-LEXICON.md form the D4 current author candidate. D4-SOURCE-MAP.json preserves fixed inputs, mandatory intake, acceptance rows and direct producer/consumer provenance. D4-CATALOG-MAP.json maps all catalog JSON Pointers while the immutable fixed catalog remains the sole static catalog authority.
+Review the machine maps, not counts alone:
+- D4 fixed-S text: 906/906 nonblank lines, exact source path/blob/line/text, one source-qualified obligation group per line.
+- D5 fixed-S text: 170/170 nonblank lines under the same rule.
+- Mandatory lines 1–924: 716/716 nonblank lines mapped to actual owners/targets; metadata/review rows are not mislabeled as business semantics.
+- D4 catalog: 2,854/2,854 JSON Pointers in seven non-overlapping subtree groups; 95 named records plus 7 global limits; the fixed catalog remains the sole normative value authority.
+- fixed97 selected rows: 72 D4 and 130 D5 rows, each preserving actual English and Chinese source row plus current A2 target/disposition/owner/basis/oracle.
 
-D5.md, D5-IMPACT.md and D5-LEXICON.md form the D5 current author candidate. D5-SOURCE-MAP.json preserves the fixed D5 inputs, mandatory intake, acceptance rows, direct producer/consumer provenance and the explicit full-native-table/titleless/six-row-domain supersessions.
+Minimum negative/positive traces: fixed-S D5 lines 81–92 must be named-superseded by D5 §0/§3/§19.1; Organizations inverse must resolve D4 §8/§16.4 without a second authored inverse; phone occurrences must resolve D4 §10.1/§16.2 and D5 §4/§14 without durable row identity; Calendar recurrence must resolve D4 §9/§10.3/§16.6/§17.5 and the current dependency proof.
 
-No separate D4/D5 schema authority is introduced. D4 closed schemas remain self-contained in the D4 main exact-contract sections; D5 table/collection/intents remain self-contained in the D5 main exact-contract restoration. Historical inner versions and SourceRevisionPlan branches remain source-qualified instead of being mechanically renumbered.
+## 4. P2-02 review target
 
-## 4. Read and mapping scope
+The maps directly qualify six actual D10 files by their real blobs:
+- CONTROL-CONTRACT.md / .zh-CN.md
+- CANDIDATE.md / .zh-CN.md
+- UPSTREAM-AMENDMENTS.md / .zh-CN.md
 
-Full fixed-S intake for this batch:
-- D4 main, Impact, Lexicon, and the complete reference catalog;
-- D5 main, Impact, and Lexicon.
+Each is marked `direct_partial_not_full_D10` and maps its relevant Package/Contribution, namespace/anti-spoof, provider availability, schedule/temporal, connector/credential, external-effect and execution-custody clauses to the existing D4/D5 current clauses.
 
-Current parent D4/D5 main, Impact and Lexicon were consumed as complete bilingual files and carried forward with current overlays.
+Raw D10 predecessor/original-owner references to Proof2/Key2/wire12/PAB3 remain verbatim and source-qualified. They are not rewritten. Fresh/current authority remains the real A2 successor family in D3-SCHEMAS §2/§6.1 plus D4/D5 §0; historical records keep their recorded decoder/bytes/pins/recovery.
 
-Mandatory scenario input §§1-14, lines 1-924, was read and mapped for D4/D5, including unnumbered prose and the Office-table binding section. Lines 925-1141 remain for later D6-D10 work.
+## 5. Scope guard
 
-The fixed97 acceptance table was parsed as a whole. D4-SOURCE-MAP preserves 72 selected D4-relevant rows; D5-SOURCE-MAP preserves 130 selected D5-relevant rows. D4 catalog mapping contains 2,854 JSON Pointers, 95 named records and 7 global limits.
+This repair changes audit/source maps and review/progress entrypoints only. It does not change D1-D6 normative business semantics, product implementation, dependencies, checker, CI, source snapshots, or protected inputs. It creates no second catalog/Registry/current authority.
 
-D6-D9 owner files were read only at D4/D5 direct producer/consumer intersections; these are partial reads, not full module integration. There is no standalone D10 owner file in the parent owner tree, so D10 is fixed97 SPEC/SCHEMAS direct-partial only.
+D7-D10 full A2 owner integration remains pending. Mandatory source 925–1141 remains pending. Fresh Pro/global review remains pending. Runtime, OS, GUI, real-replica, migration, activation, deployment, provider, crash-recovery and performance evidence are UNRUN.
 
-## 5. fixed446 D3 repair review targets
-
-Review the exact repair head for three oracles: (1) fresh-current conflict preparation has exactly one Input13/Request13 path and historical Input12 remains record-recovery only; (2) unchanged managed source bytes with changed consumed document_format invalidates old Proof3 and requires the fifteenth Key3 arm; (3) current canonical concrete Annotation uses Value4 through plan/preview/PAB4/Effect3 and rejects current Value3, while genuine historical Value3 bytes remain untouched.
-
-The current dispatch is named once by D3-SCHEMAS: Request/Input13; Key3/Proof3/Descriptor3/Prepared3; Notice3/CP4/ChangeRecord1; PAB4/EffectManifest3/EffectBytes3; Value4. D3ResolverInput12, D3DecisionCompanion2, RevisionTokenBinding2 and the SourceRevisionPlan1/2/3 role split are retained without mechanical bumps.
-
-## 6. D6 review target
-
-Review D6 as a complete module on this batch's exact final head: Storage, Control, Schemas, Impact, Lexicon, Registry and Source Map together. Confirm the F/M/P/I/D authority split, current Key3/CP4/ChangeRecord dispatch, role-specific SourceRevisionPlan /1-/3, dual-profile trust and replica registration, mixed policy-conflict arm dispatch, SourceTransform, schedule /1-/2 boundaries, D10 direct-holder coordination, and exact historical recovery. Source-map mechanics do not independently certify semantics.
-
-## 7. Pending and unrun scope
-
-D7-D10 full A2 owner integration remains pending. D6 is an author candidate pending non-author review. Mandatory input lines 925-1141 remain pending. D3:P1-01 and D3:P1-02 are resolved-pending-independent-review, not author-closed; the next non-author review must bind this exact repair head.
-
-Runtime, OS, GUI, real replica, product implementation, deployment, migration, and activation scenarios are UNRUN. Documentation/source/schema mapping checks are not product evidence.
-
-Final A2 still requires completion of D6-D10, a fixed final SHA, fresh non-author global review, and same-accepted-design-SHA freeze/startup work.
+Global A2 design is not accepted.
