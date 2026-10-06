@@ -25,7 +25,7 @@ The current author candidate integrates D1 through D6. It is authored work, not 
 | D2 | integrated current candidate; fixed-446 D1/D2 findings independently closed in that bounded scope |
 | D3 | integrated current author candidate; a separate fixed-a62 non-author narrow review CLOSED the two bounded D3 P1 findings; this is not global A2 acceptance |
 | D4 | integrated current author candidate; fixed-S text/catalog intake complete; fixed-a62 semantic LIMITED PASS; audit P2-01/P2-02 repaired by the author and pending independent re-review |
-| D5 | integrated current author candidate; fixed-S intake complete; fixed-829 semantic LIMITED PASS; audit P2-01/P2-02 repaired by the author and pending independent re-review |
+| D5 | integrated current author candidate; fixed-S intake complete; fixed-a62 semantic LIMITED PASS; audit P2-01/P2-02 repaired by the author and pending independent re-review |
 | D6 | integrated stopped author candidate through 829; fixed-829 non-author read-only review does not establish D6 acceptance |
 | D7 | TODO as a full module; D2 intersections plus D3-direct Chinese owner inputs read |
 | D8 | TODO as a full module; D1/D2 intersections plus D3-direct Chinese owner inputs read |
