@@ -89,4 +89,4 @@ translation_status: source
 
 ## A2 最终设计整合候选
 
-fixed PR4 design head 之上的 A2 candidate 现包含自包含 D1–D6 作者候选、source/disposition tracking 与[复核入口](a2-final-design/REVIEW-ENTRY.zh-CN.md)。fixed-a62 已独立 CLOSED 两个有界 D3 P1。fixed-a62 对 D4/D5 给出 semantic LIMITED PASS，但留下两个 audit P2；其 source-map/D10-direct qualification 修复现仅为 author-resolved-pending-independent。D6 仍是 stopped 作者候选，不是 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。该候选未独立接受、未实现、未合并、未发布。
+fixed PR4 design head 之上的 A2 candidate 包含自包含 D1–D6 作者候选、source/disposition tracking 与[复核入口](a2-final-design/REVIEW-ENTRY.zh-CN.md)。fixed-a62 已独立 CLOSED 有界 D3 P1；fixed4282 仅独立 CLOSED D4/D5 P2-02 的“六份 D10 真实来源资格”有界范围，P2-01 以 R1/R2 继续 OPEN，现已由作者修为 author-resolved-pending-independent，等待 fresh fixed-stop 复核。D6 作者写入停在 `01cc40b819df78fbe724f1c64c27284ad60fc6c8`，五项 finding 待独立复核，未 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review仍 pending。该候选未独立接受、未实现、未合并、未发布。

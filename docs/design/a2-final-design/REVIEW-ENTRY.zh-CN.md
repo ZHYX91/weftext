@@ -4,7 +4,7 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D6 作者候选复核入口——D4/D5 审计映射交回
+# A2 D1–D6 作者候选复核入口——P2-01 R1/R2 交回
 
 状态：仅作者候选；未独立接受、未实现、未合并、未发布、未部署、未全局冻结。
 
@@ -15,7 +15,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 固定历史输入 S：7e18168dad3e6d120fce0dd607dc10fa7894e252。
 受保护 inputs blob：787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 候选 branch：docs/a2-final-design-integration。
-本次窄修从 stopped head 829efce6aacbe944714e093c98065b01d50b2593 开始。
+本次 R1/R2 窄修从精确 stopped D6 交接 head `01cc40b819df78fbe724f1c64c27284ad60fc6c8` 开始。
 
 下一位复核者必须绑定 PR5 本批真实 final stop head；不得跟随 moving branch，也不得把任何旧 fixed-SHA 结论外推到其原范围之外。
 
@@ -24,9 +24,10 @@ Base branch：docs/asciidoc-annotation-final-design。
 - fixed-446 已独立 CLOSED 有界 D1/D2 findings；继续保留该结论。
 - fixed-a62 已独立 CLOSED D3:P1-01 与 D3:P1-02；更早 fixed-446 的 OPEN 只作为历史状态。
 - 已完成的非作者报告绑定 fixed-a62 `a62aa7d4eaf56113cd1e9e32336ae8814f83589b`（复核请求 `7b6e1f16-fa41-499c-b078-647f1942e94e`），对 D4/D5 给出 P0=0/P1=0/P2=2：规范语义 LIMITED PASS，audit package REVISE。
-- 当前两项 finding 为 **A2-D4D5:P2-01**（source→current clause 审计映射）与 **A2-D4D5:P2-02**（真实 D10 direct-source qualification）。本作者修复只标 **author-resolved-pending-independent**。
+- 后续绑定 fixed4282 `4282d416e6a1ea4a344a2647d9a2feb82e3ba15a` 的独立报告对本审计包给出 P0=0/P1=0/P2=2，并且仅在“六份真实 D10 来源资格”有界范围内独立 **CLOSED A2-D4D5:P2-02**。P2-01 继续 OPEN，残余明确为 **R1**（72/130 fixed97 source→actual-owner 全量映射）与 **R2**（Mandatory 303–306 分域）。
+- 本次作者修复只处理 P2-01 R1/R2，并标为 **author-resolved-pending-independent**；不重开 P2-02，也不能自行关闭 P2-01。
 
-D6 继续是保存至 829 的 stopped 作者候选；fixed-829 只读复核不使 D6 自动 accepted。
+D6 作者写入已停在 `01cc40b819df78fbe724f1c64c27284ad60fc6c8`，五项 D6 finding 仅为 author-resolved-pending-independent；其独立 fixed-SHA 复核与本次分离，不构成 D6 accepted。
 
 ## 3. P2-01 复核目标
 
@@ -37,9 +38,13 @@ D6 继续是保存至 829 的 stopped 作者候选；fixed-829 只读复核不�
 - D4 catalog：按 RFC 6901 覆盖 2,854/2,854 个 JSON Pointer，并无重叠分入 7 个子树组；文档根指针是空字符串 `""`，而 `"/"` 表示空键成员；95 个具名记录与 7 个全局限制继续只由固定 catalog 提供规范值。
 - fixed97：72 条 D4 与 130 条 D5 selected row，逐条保存真实英文 row、真实中文 row及 current A2 target/disposition/owner/basis/oracle。
 
-最小反例/正例：fixed-S D5 81–92 行必须被 D5 §0/§3/§19.1 具名 supersede；Organizations inverse 必须回到 D4 §8/§16.4，不能生成第二 authored inverse；phone occurrence 必须回到 D4 §10.1/§16.2 与 D5 §4/§14，不能变成 durable row identity；Calendar recurrence 必须回到 D4 §9/§10.3/§16.6/§17.5 与 current dependency proof。
+R1 复核要求：必须逐审 72 条 D4 与 130 条 D5 fixed97 row，不能只看例子或计数。D2 media/provenance 回 D2；Annotation 回 D3/D8；presentation policy 回 D8 current holder；import/export 回 D9；format/ChangeRecord/SourceTransform/trust 回 D6；mixed execution responsibility 回 D6-CONTROL §21 + D10；真正 D4/D5 direct row 才留在 D4/D5，并注明真实 upstream proof producer。
 
-## 4. P2-02 复核目标
+R2 复核要求：Mandatory 303–304 必须把 recurrence/derived-occurrence/identity 与 source-binding/import/current-proof owner 分开；305 只是分组 heading，不是 recurrence 业务条款；306 保持外部 Calendar authority，同时 provider token/etag/cursor/credentials/fetch state 继续属于 D10 control plane。精确 source path/blob/line/text 与 716/716 总并集不得变化。
+
+## 4. P2-02 有界 CLOSED 状态与回归目标
+
+P2-02 已在 fixed4282 被独立 CLOSED，**仅限**下列 direct-source qualification 有界范围；本 R1/R2 任务只做回归保护，不能据此宣称 whole-D10/D6/global accepted。
 
 机器映射按真实 blob 直接限定以下 6 份 D10 文件：
 - CONTROL-CONTRACT.md / .zh-CN.md
@@ -66,6 +71,6 @@ Mandatory §10 列出的产品义务仍是各真实 owner 的有效义务，本�
 
 ### 5.3 Supersession 与交接资格
 
-Mandatory §11–§11.3 继续作为 supersession 与产品意图的来源证据；其中旧 D3 时期的 controller/session 调度只属于历史工作流 provenance，不是当前执行命令。当前交接以 GitHub branch/PR 状态和上文记录的精确固定复核对象为准。fixed-a62 的 D4/D5 结论不得扩大到 D6；D6 仍单独绑定 stopped author candidate 829 及其尚未完成的只读复核。任何旧 council/session 指令都不会恢复此前中断的批次。
+Mandatory §11–§11.3 继续作为 supersession 与产品意图的来源证据；其中旧 D3 时期的 controller/session 调度只属于历史工作流 provenance，不是当前执行命令。当前交接以 GitHub branch/PR 状态和上文记录的精确固定复核对象为准。fixed-a62/fixed4282 的 D4/D5 结论不得扩大到 D6；D6 仍单独绑定 stopped author head `01cc40b819df78fbe724f1c64c27284ad60fc6c8` 及其五项 finding 的 exact-SHA 复核。任何旧 council/session 指令都不会恢复此前中断的批次。
 
 全局 A2 设计仍未接受。

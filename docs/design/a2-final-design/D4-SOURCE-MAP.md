@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D4-SOURCE-MAP.zh-CN.md)
 # A2 D4 source, catalog, intake, and current-consumer audit map
 
-Status: **A2-D4D5:P2-01** and **P2-02** are author-resolved-pending-independent only. This file records audit closure; it does not independently accept D4, D6, D10, or global A2.
+Status: **A2-D4D5:P2-02 is independently CLOSED only in its fixed4282 bounded six-D10-source scope. A2-D4D5:P2-01 R1/R2 is author-resolved-pending-independent only.** This file does not independently accept D4, D6, D7–D10, or global A2.
 
 ## 1. Fixed-S D4 source coverage
 
@@ -19,7 +19,7 @@ The immutable reference catalog remains the sole static value authority. `D4-CAT
 
 Mandatory source lines 1–924 contain **716/716 nonblank lines** in 29 source-qualified groups. Cross-module items name their real owner and target: D6 persistence is deferred to D6, D9 template/conversion to D9, D10 package/provider/connector control to D10, while D4 retains semantic Namespace/Field/Relation/Calendar ownership. Lines 925–1141 remain pending for later D7–D10/global work.
 
-The **72 D4-relevant fixed97 acceptance rows** now preserve both the actual English row and actual Chinese row, including source path/blob/line, plus current A2 target, disposition, owner, basis, and oracle. Row counts are inventory, not a substitute for row conditions.
+The **72 D4-relevant fixed97 acceptance rows** preserve both actual English and Chinese rows plus source path/blob/line. R1 re-audits **72/72** rows to the actual current owner/consumer; every row now carries an actual file+section target, source-qualified disposition, owner, basis, and the exact source-row oracle. Row counts are inventory, never a substitute for row conditions.
 
 ## 3. Direct D10 source qualification
 
@@ -31,10 +31,11 @@ Raw D10 references to historical/original `DependencyProof/2`, `DependencyKey/2`
 
 - Organizations relation/inverse pressure input includes Mandatory line 183 and line 210. The current trace is D4 §8/§16.4 (D5 §14 only projects/edits it): inverse UI resolves the one canonical authored side and may not persist a second membership fact.
 - People phone input includes Mandatory line 111 (`phones[]`). The current trace is D4 §10.1/§16.2 with D5 §4/§14 as editor/consumer: equal phone values can remain distinct current-revision occurrences with separate notes; the selector is not durable identity across revisions.
-- Calendar recurrence pressure includes Mandatory lines 251, 276, and 303–306. The current trace is D4 §9/§10.3/§16.6/§17.5 plus the actual current dependency producer: recurrence/series projection is derived, and a strong managed-Document consumer also binds `document_format` when that Document is semantically parsed.
+- Mandatory 303–304 now map recurrence set/override and derived-occurrence identity to D4 §9/§10.3/§16.6/§17.5, while D3/D9 retain source-binding/import and D3 owns fresh Node identity on explicit promote/adopt. Line 305 is only the import-intent grouping heading. Line 306 keeps external Calendar authority but routes provider token/etag/cursor/credential/fetch state to D10 connector/subscription control.
+- fixed97 `FC34-TR-01` now points to D6-CONTROL §10.2/§20/§20.2; `FC34B-TR-05` to §9.4/§20.1; neither is Calendar. D2 media/provenance and D3/D8 Annotation rows likewise point to their actual current holders.
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain independently CLOSED. The two bounded D3 P1 findings were independently CLOSED at fixed-a62. The completed fixed-a62 D4/D5 non-author review (`a62aa7d4eaf56113cd1e9e32336ae8814f83589b`, request `7b6e1f16-fa41-499c-b078-647f1942e94e`) returned P0=0/P1=0/P2=2: D4/D5 semantics LIMITED PASS, audit package REVISE. This author repair does not close either P2; both await a new independent review on the final stop SHA.
+D1/D2 fixed-446 findings remain independently CLOSED. The two bounded D3 P1 findings were independently CLOSED at fixed-a62. The later independent fixed4282 review returned P0=0/P1=0/P2=2 for this audit package. It independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope** and left P2-01 OPEN with R1/R2 residuals. This repair addresses only those R1/R2 residuals and marks P2-01 author-resolved-pending-independent; a new fixed-stop non-author review must decide closure.
 
-D6 is the stopped 829 author candidate; the fixed-829 read-only work does not establish D6 acceptance. D7–D10 full modules, Mandatory 925–1141, and fresh Pro/global review remain pending. Runtime, OS, GUI, real-replica, migration, activation, and deployment evidence are UNRUN.
+D6 author work stopped at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` with its five D6 findings author-resolved-pending-independent. That separate exact-SHA review is not D6 acceptance and is not closed by this D4/D5 audit repair. D7–D10 full modules, Mandatory 925–1141, and fresh Pro/global review remain pending. Runtime, OS, GUI, real-replica, migration, activation, and deployment evidence are UNRUN.

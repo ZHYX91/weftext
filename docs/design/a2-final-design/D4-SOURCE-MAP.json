@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "status": "A2 D4 author source/case audit map; P2-01 and P2-02 author-resolved-pending-independent; no independent/global acceptance",
+  "status": "A2 D4 author source/case audit map; P2-02 independently CLOSED bounded at fixed4282; P2-01 R1/R2 author-resolved-pending-independent; no D6/D7-D10/global acceptance",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "protected_inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -23139,7 +23139,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 279,
       "sourceText": "## 7. 导入、模板、连接器与自动化场景",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23163,7 +23163,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 281,
       "sourceText": "### 7.1 owner-local Resource 作为导入输入",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23187,7 +23187,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 283,
       "sourceText": "- 产品动作可称“从附件创建节点…”。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23211,7 +23211,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 284,
       "sourceText": "- 默认读取源 Resource，不移动、不复制、不改变 owner；创建新的 Node、Document 和新输出 Resources。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23235,7 +23235,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 285,
       "sourceText": "- 只有显式选项才把原附件复制到新节点；该复制必须创建目标 owner 的 fresh Resource。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23259,7 +23259,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 286,
       "sourceText": "- 禁止导入结果自动再次触发导入；不得形成隐式递归。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23283,7 +23283,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 287,
       "sourceText": "- 相同 operation 的精确 retry 幂等；显式新的 operation 可以再次创建。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23307,7 +23307,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 288,
       "sourceText": "- D9 必须冻结 UI、source revision binding、probe/plan/worker/IR/preview/commit/receipt wire、错误、取消/崩溃清理、重复检测、实现影响和测试。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23331,7 +23331,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 290,
       "sourceText": "### 7.2 外部联系人导入与同步",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23355,7 +23355,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 292,
       "sourceText": "- 使用最小语义交集加 provider adapter 和 loss report。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23379,7 +23379,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 293,
       "sourceText": "- provider ID、etag、changeKey、credentials、sync cursor 属 connector/control state，不是 Person identity 或作者内容。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23403,7 +23403,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 294,
       "sourceText": "- connector 只可提出或 patch 明确映射字段，经过 Core 校验与提交，并保留未映射的远端字段或在 loss report 中显式说明；不得覆盖本地未映射作者字段。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23427,7 +23427,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 295,
       "sourceText": "- 必须覆盖首次导入、重复导入、远端删除、本地删除、双向冲突、权限撤销、离线、provider 字段扩展、未知 service、插件关闭和凭据清理。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23451,7 +23451,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 297,
       "sourceText": "### 7.3 iCalendar / ICS 逻辑事件、recurrence 与导入意图",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23475,7 +23475,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 299,
       "sourceText": "本节是一个基于 RFC 5545 领域模型的自包含压力案例，不把任何推荐映射预写成冻结结论。当前 D3 只需读取本节及与 D3 foreign identity/provenance 直接相关的验收要求；不得因此读取或处理本文其他 People、Organizations、Profile 或后续产品场景。D4/D5/D6/D7/D9/A2 必须把本节完整纳入各自 owner/cross-check：",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23499,7 +23499,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 301,
       "sourceText": "1. **逻辑组件与身份候选**",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23523,7 +23523,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 302,
       "sourceText": "   - `VEVENT` 是逻辑事件组件；`UID` 是外部持久标识/来源键候选，不是 Weftext `NodeRef`，不得占用或替换 Node identity。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-context",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23547,103 +23547,105 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 303,
       "sourceText": "   - recurring master 的 `DTSTART + RRULE/RDATE/EXDATE` 定义 occurrence set；同 `UID + RECURRENCE-ID` 的组件表达特定 occurrence override。`SEQUENCE`、时间戳及 source binding 参与同步/冲突判断，但都不是 NodeRef。",
-      "mandatoryGroupId": "m-import-connector",
-      "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
+      "mandatoryGroupId": "m-calendar-recurrence-derived",
+      "target": "D4.md §9, §10.3, §16.6, §17.5 | also: D3.md §6/§8.5; D6.md §7.1/§7.2.1; docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6; docs/design/d10/CONTROL-CONTRACT.md §16",
       "currentTarget": {
         "file": "D4.md",
         "sections": [
-          "§1",
-          "§2.2"
+          "§9",
+          "§10.3",
+          "§16.6",
+          "§17.5"
         ],
         "also": [
-          "D3 SourceBinding/OriginBinding",
-          "D9 import/export",
-          "D10 CANDIDATE §16–§17"
+          "D3.md §6/§8.5",
+          "D6.md §7.1/§7.2.1",
+          "docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6",
+          "docs/design/d10/CONTROL-CONTRACT.md §16"
         ]
       },
-      "disposition": "explicit-defer",
-      "owner": "split: D3 binding / D9 conversion / D10 connector; D5 domain constraints",
-      "basis": "binding, conversion and external connector/credential execution keep actual owners",
-      "oracle": "m-import-connector: retain exact source and actual-owner split; no generic intake placeholder may substitute for the mapped clause"
+      "disposition": "retain",
+      "owner": "split: D4 recurrence owner / D3 source+identity binding / D9 import mapping / D6 current proof / D10 scheduling consumer",
+      "basis": "The recurrence set and override are D4 Calendar semantics; source binding/import/currentness stay with D3/D9/D6 and scheduling execution with D10.",
+      "oracle": "Mandatory exact source line 303:    - recurring master 的 `DTSTART + RRULE/RDATE/EXDATE` 定义 occurrence set；同 `UID + RECURRENCE-ID` 的组件表达特定 occurrence override。`SEQUENCE`、时间戳及 source binding 参与同步/冲突判断，但都不是 NodeRef。"
     },
     {
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 304,
       "sourceText": "   - 无限或长期 recurrence series 绝不能展开成无限 Node。occurrence 默认是可重建派生 occurrence，不具 Node identity；exception 候选为 series-owned override record/structured value，只有显式 promote/adopt 且满足 Node 生命周期需求时才创建 fresh NodeRef。",
-      "mandatoryGroupId": "m-import-connector",
-      "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
+      "mandatoryGroupId": "m-calendar-recurrence-derived",
+      "target": "D4.md §9, §10.3, §16.6, §17.5 | also: D5.md §14/§19.2/§19.5; D3.md §5/§8.5",
       "currentTarget": {
         "file": "D4.md",
         "sections": [
-          "§1",
-          "§2.2"
+          "§9",
+          "§10.3",
+          "§16.6",
+          "§17.5"
         ],
         "also": [
-          "D3 SourceBinding/OriginBinding",
-          "D9 import/export",
-          "D10 CANDIDATE §16–§17"
+          "D5.md §14/§19.2/§19.5",
+          "D3.md §5/§8.5"
         ]
       },
-      "disposition": "explicit-defer",
-      "owner": "split: D3 binding / D9 conversion / D10 connector; D5 domain constraints",
-      "basis": "binding, conversion and external connector/credential execution keep actual owners",
-      "oracle": "m-import-connector: retain exact source and actual-owner split; no generic intake placeholder may substitute for the mapped clause"
+      "disposition": "retain",
+      "owner": "split: D4 recurrence/derived-occurrence owner / D5 row-domain consumer / D3 fresh Node identity+lifecycle owner",
+      "basis": "Occurrence is derived and non-Node by default; explicit promote/adopt creates a fresh Node only through D3 lifecycle.",
+      "oracle": "Mandatory exact source line 304:    - 无限或长期 recurrence series 绝不能展开成无限 Node。occurrence 默认是可重建派生 occurrence，不具 Node identity；exception 候选为 series-owned override record/structured value，只有显式 promote/adopt 且满足 Node 生命周期需求时才创建 fresh NodeRef。"
     },
     {
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 305,
       "sourceText": "2. **必须显式区分的导入意图**",
-      "mandatoryGroupId": "m-import-connector",
-      "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
+      "mandatoryGroupId": "m-import-intent-heading",
+      "target": "REVIEW-ENTRY.md §5.1",
       "currentTarget": {
-        "file": "D4.md",
+        "file": "REVIEW-ENTRY.md",
         "sections": [
-          "§1",
-          "§2.2"
+          "§5.1"
         ],
-        "also": [
-          "D3 SourceBinding/OriginBinding",
-          "D9 import/export",
-          "D10 CANDIDATE §16–§17"
-        ]
+        "also": []
       },
-      "disposition": "explicit-defer",
-      "owner": "split: D3 binding / D9 conversion / D10 connector; D5 domain constraints",
-      "basis": "binding, conversion and external connector/credential execution keep actual owners",
-      "oracle": "m-import-connector: retain exact source and actual-owner split; no generic intake placeholder may substitute for the mapped clause"
+      "disposition": "retain",
+      "owner": "Mandatory scenario-intake grouping qualifier",
+      "basis": "This heading classifies the following import-intent rows; it carries no standalone Calendar recurrence obligation.",
+      "oracle": "Mandatory exact source line 305: 2. **必须显式区分的导入意图**"
     },
     {
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 306,
       "sourceText": "   - `subscribe/sync`：外部 calendar 保持 authority；候选使用 `CalendarSource + event/series records` 或受管集合。provider sync token、etag、cursor、credentials 和抓取状态在控制面，不进入作者内容或 Person/Event identity。",
-      "mandatoryGroupId": "m-import-connector",
-      "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
+      "mandatoryGroupId": "m-calendar-subscribe-control",
+      "target": "D4.md §9, §10.3, §16.6 | also: D5.md §14/§19.5; D3.md §6/§8.5; docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6; docs/design/d10/CANDIDATE.md §16/§17; docs/design/d10/CONTROL-CONTRACT.md §16",
       "currentTarget": {
         "file": "D4.md",
         "sections": [
-          "§1",
-          "§2.2"
+          "§9",
+          "§10.3",
+          "§16.6"
         ],
         "also": [
-          "D3 SourceBinding/OriginBinding",
-          "D9 import/export",
-          "D10 CANDIDATE §16–§17"
+          "D5.md §14/§19.5",
+          "D3.md §6/§8.5",
+          "docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6",
+          "docs/design/d10/CANDIDATE.md §16/§17",
+          "docs/design/d10/CONTROL-CONTRACT.md §16"
         ]
       },
-      "disposition": "explicit-defer",
-      "owner": "split: D3 binding / D9 conversion / D10 connector; D5 domain constraints",
-      "basis": "binding, conversion and external connector/credential execution keep actual owners",
-      "oracle": "m-import-connector: retain exact source and actual-owner split; no generic intake placeholder may substitute for the mapped clause"
+      "disposition": "retain",
+      "owner": "split: D4 Calendar domain semantics / D3+D9 external-origin/import binding / D10 connector-secret-subscription control",
+      "basis": "External calendar remains authority for subscribe/sync; provider token/etag/cursor/credentials/fetch state remain D10 control-plane state, never author content or identity.",
+      "oracle": "Mandatory exact source line 306:    - `subscribe/sync`：外部 calendar 保持 authority；候选使用 `CalendarSource + event/series records` 或受管集合。provider sync token、etag、cursor、credentials 和抓取状态在控制面，不进入作者内容或 Person/Event identity。"
     },
     {
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 307,
       "sourceText": "   - `copy/import`：Weftext 成为 authority；可以按一个非重复 logical event 或一个 recurring series 创建 Calendar Event Node，但必须 preview 映射、loss、附件、未知 property 和 recurrence 边界。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23667,7 +23669,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 308,
       "sourceText": "   - `promote/adopt selected event or occurrence`：用户显式把选中的外部 logical event/occurrence 提升为 Node，保留 provenance/origin binding，但分配独立 fresh NodeRef；不得让源 UID 成为 NodeRef 或按标题/路径猜已有节点。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23691,7 +23693,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 309,
       "sourceText": "3. **默认物化候选与替代**",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23715,7 +23717,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 310,
       "sourceText": "   - 一个非重复 logical `VEVENT` 可先成为 Event record；只有需要正文、附件、Annotation、独立关系/引用/权限/生命周期时才创建或提升为 Node。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23739,7 +23741,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 311,
       "sourceText": "   - recurring `UID` 在选择 Node materialization 时最多对应一个 series Node；occurrences 派生，`RECURRENCE-ID` exception 默认不成为 Node。D5 必须从零比较 record、structured value、Document occurrence、Node 和无独立对象替代，不得预设本候选必胜。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23763,7 +23765,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 312,
       "sourceText": "   - 批量“每个 `VEVENT` 建 Node”只能是有界、可预览、显式选择且带数量/资源上限的 import 策略，不能成为 subscribe/sync 默认；“每个展开 occurrence 建 Node”不得作为无界策略。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23787,7 +23789,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 313,
       "sourceText": "4. **确定 upsert、冲突与完整 wire**",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23811,7 +23813,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 314,
       "sourceText": "   - 同源重导入必须以 source binding、`UID`、`RECURRENCE-ID`、`SEQUENCE` 及明确版本/修改事实作确定 upsert/conflict；Node title/path 改变不得造成重复创建，跨源 UID 相同不得未经 source scope 合并。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23835,7 +23837,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 315,
       "sourceText": "   - 必须覆盖取消、删除、源解绑、单向/双向编辑、authority 转换、离线冲突、timezone/DST、floating time、all-day end-exclusive、recurrence override、附件 URI/binary、安全获取、未知 `X-` property、恶意或超限 recurrence、解析资源限制及可重放 receipt。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23859,7 +23861,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 316,
       "sourceText": "   - recurring expansion 必须有 horizon/limit/cancellation 与确定 error priority；未知/恶意规则不得造成无限 CPU、内存、网络、Node 或 Resource 物化。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23883,7 +23885,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 317,
       "sourceText": "5. **非 VEVENT 组件不得一律映射 Event Node**",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23907,7 +23909,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 318,
       "sourceText": "   - `VCALENDAR` 可含 `VTODO`、`VJOURNAL`、`VFREEBUSY`、`VTIMEZONE`。`VTODO → Task`、`VJOURNAL → journal/time note` 都只能是显式 mapping preview，并保持冻结的 Task/checklist/Node identity 与 author-source 边界；`VFREEBUSY`/`VTIMEZONE` 默认是 availability/timezone 语义输入，不是 Event Node。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23931,7 +23933,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 319,
       "sourceText": "6. **能力所有者候选**",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23955,7 +23957,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 320,
       "sourceText": "   - Calendar/Event plugin 负责 ICS 领域映射、recurrence 与 event semantics；通用 Import worker 只负责 `probe/plan/preview/commit/receipt`、资源限制和原子提交；Time plugin 只提供 temporal extent 与派生 calendar views。三者不得各自建立不同写入权威或让 Import worker 硬编码插件领域。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -23979,7 +23981,7 @@
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLine": 322,
       "sourceText": "正式替代至少包括：外部受管 records、全部复制成 Nodes、series-only Node、按需 promote、纯只读 View、不保留 sync binding，以及满足 D1–D6 合同的混合方案。结论必须同时与 D3 foreign identity/provenance、D4 typed wire/Profile、D5 Record domain、D6 authority/sync、D7 Query/View/Action 和 D9 import contract 闭合。",
-      "mandatoryGroupId": "m-import-connector",
+      "mandatoryGroupId": "m-import-connector-continuation",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
       "currentTarget": {
         "file": "D4.md",
@@ -39635,21 +39637,21 @@
         "line": 24,
         "row": "| AD2-03 | SPEC §§1–4 | hard-set API attr可以改变 generic effective attributes；它不能成为 wf-kind/wf-facets authored control authority。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §2, §3, §5, §11 transcript §1.2",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
           "§2",
-          "§4",
+          "§3",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§11 transcript §1.2"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-03"
+      "disposition": "explicit-defer",
+      "owner": "D2 fixed-2.0.26 processor-environment and root-authored provenance owner",
+      "basis": "This is a D2 parse/provenance obligation; D4 may consume the projected fact but cannot author or reinterpret root-control provenance.",
+      "oracle": "fixed97 exact EN row: | AD2-03 | SPEC §§1–4 | A hard-set API attribute may affect generic effective attributes, but it cannot become authored authority for wf-kind/wf-facets controls. |"
     },
     {
       "id": "AD2-06",
@@ -39665,20 +39667,21 @@
         "line": 27,
         "row": "| AD2-06 | SPEC §§1–4 | 完整重放2.0.26 authored attribute events及其顺序/set/unset/substitution；RootAuthoredControlProjection必须消费同一 parser产生的 authored provenance，不能另写一个简化 assignment parser。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D2.md §2, §3, §5, §11 transcript §1.2",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
-        ]
+          "§2",
+          "§3",
+          "§5",
+          "§11 transcript §1.2"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-06"
+      "disposition": "explicit-defer",
+      "owner": "D2 fixed-2.0.26 processor-environment and root-authored provenance owner",
+      "basis": "This is a D2 parse/provenance obligation; D4 may consume the projected fact but cannot author or reinterpret root-control provenance.",
+      "oracle": "fixed97 exact EN row: | AD2-06 | SPEC §§1–4 | Replay the complete ordered 2.0.26 authored attribute event stream, including set/unset/substitution; RootAuthoredControlProjection must consume provenance from the same parser and may not implement a simplified assignment parser. |"
     },
     {
       "id": "AD2-08",
@@ -39694,21 +39697,21 @@
         "line": 29,
         "row": "| AD2-08 | SPEC §§1–4 | included source内 wf-kind/wf-facets可按普通 AsciiDoc参与 include环境，但不能改变 including root Node control。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §2, §3, §5, §11 transcript §1.2",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
           "§2",
-          "§4",
+          "§3",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§11 transcript §1.2"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-08"
+      "disposition": "explicit-defer",
+      "owner": "D2 fixed-2.0.26 processor-environment and root-authored provenance owner",
+      "basis": "This is a D2 parse/provenance obligation; D4 may consume the projected fact but cannot author or reinterpret root-control provenance.",
+      "oracle": "fixed97 exact EN row: | AD2-08 | SPEC §§1–4 | wf-kind/wf-facets inside included source may participate in the include environment as ordinary AsciiDoc attributes but cannot change the including root Node control state. |"
     },
     {
       "id": "AD2-09",
@@ -39724,19 +39727,21 @@
         "line": 30,
         "row": "| AD2-09 | SPEC §§1–4 | root control引用另一个 root-authored attribute时可生效；如果 control最终值依赖 host/include/builtin provenance，则 generic AsciiDoc仍可有效，但 Weftext Node-control必须 unavailable/invalid而非接管。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §2, §3, §5, §11 transcript §1.2",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
+          "§2",
           "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§11 transcript §1.2"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "AD2-09"
+      "disposition": "explicit-defer",
+      "owner": "D2 fixed-2.0.26 processor-environment and root-authored provenance owner",
+      "basis": "This is a D2 parse/provenance obligation; D4 may consume the projected fact but cannot author or reinterpret root-control provenance.",
+      "oracle": "fixed97 exact EN row: | AD2-09 | SPEC §§1–4 | A root control may reference another root-authored attribute; if its final value depends on host/include/builtin provenance, generic AsciiDoc may remain valid but Weftext Node control must be unavailable/invalid rather than taking authority. |"
     },
     {
       "id": "AD2-13",
@@ -39752,19 +39757,23 @@
         "line": 34,
         "row": "| AD2-13 | SPEC §§1–4 | native bibliography anchor/xref与 Weftext citation role可同文档并存，不自动合并 provenance/identity。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §2, §5, §7, §11 transcript §1.1/§1.4/§3.4 | also: D3.md §5.3/§6 when identity or Resource ownership is involved",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
+          "§2",
+          "§5",
+          "§7",
+          "§11 transcript §1.1/§1.4/§3.4"
+        ],
+        "also": [
+          "D3.md §5.3/§6 when identity or Resource ownership is involved"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "AD2-13"
+      "disposition": "explicit-defer",
+      "owner": "D2 native language/product-projection owner; D3 owns durable identity where applicable",
+      "basis": "Native links/media and occurrence presentation are produced by D2; D4 consumes only source-qualified projected facts.",
+      "oracle": "fixed97 exact EN row: | AD2-13 | SPEC §§1–4 | Native bibliography anchors/xrefs and Weftext citation roles may coexist in one document without automatically merging provenance or identity. |"
     },
     {
       "id": "AD2-16",
@@ -39780,21 +39789,23 @@
         "line": 37,
         "row": "| AD2-16 | SPEC §§1–4 | image alt/width/height等使用 native image semantics；copy rewrite只重写 Resource identity，不损失 occurrence presentation。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §2, §5, §7, §11 transcript §1.1/§1.4/§3.4 | also: D3.md §5.3/§6 when identity or Resource ownership is involved",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
           "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
+          "§7",
+          "§11 transcript §1.1/§1.4/§3.4"
+        ],
+        "also": [
+          "D3.md §5.3/§6 when identity or Resource ownership is involved"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-16"
+      "disposition": "explicit-defer",
+      "owner": "D2 native language/product-projection owner; D3 owns durable identity where applicable",
+      "basis": "Native links/media and occurrence presentation are produced by D2; D4 consumes only source-qualified projected facts.",
+      "oracle": "fixed97 exact EN row: | AD2-16 | SPEC §§1–4 | Image alt/width/height and related fields use native image semantics; copy rewrite changes only Resource identity and preserves occurrence presentation. |"
     },
     {
       "id": "AD2-17",
@@ -39810,21 +39821,23 @@
         "line": 38,
         "row": "| AD2-17 | SPEC §§1–4 | audio使用其实际 title/start/end/options等 native attrs，不凭 image模型添加字段。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §2, §5, §7, §11 transcript §1.1/§1.4/§3.4 | also: D3.md §5.3/§6 when identity or Resource ownership is involved",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
           "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
+          "§7",
+          "§11 transcript §1.1/§1.4/§3.4"
+        ],
+        "also": [
+          "D3.md §5.3/§6 when identity or Resource ownership is involved"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-17"
+      "disposition": "explicit-defer",
+      "owner": "D2 native language/product-projection owner; D3 owns durable identity where applicable",
+      "basis": "Native links/media and occurrence presentation are produced by D2; D4 consumes only source-qualified projected facts.",
+      "oracle": "fixed97 exact EN row: | AD2-17 | SPEC §§1–4 | Audio uses its actual native title/start/end/options attributes and does not inherit invented fields from the image model. |"
     },
     {
       "id": "AD2-19",
@@ -39840,21 +39853,21 @@
         "line": 40,
         "row": "| AD2-19 | SPEC §§1–4 | D4 carrier inner payload取 exact authored literal range；renderer escaping不得成为 typed input。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-19"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | AD2-19 | SPEC §§1–4 | A D4 carrier inner payload uses the exact authored literal range; renderer escaping cannot become typed input. |"
     },
     {
       "id": "AD2-37",
@@ -39870,21 +39883,21 @@
         "line": 58,
         "row": "| AD2-37 | SPEC §§1–4 | Oracle semantic witness与 Weftext provenance witness分别 deterministic；线程/map迭代顺序不能改变 canonical output。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "AD2-37"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | AD2-37 | SPEC §§1–4 | The Oracle semantic witness and Weftext provenance witness are each deterministic; thread or map iteration order cannot change canonical output. |"
     },
     {
       "id": "AN2-13",
@@ -39900,19 +39913,22 @@
         "line": 75,
         "row": "| AN2-13 | SPEC §§9–16 | observed_only或只有 whole before/after、没有 Core edit provenance的 save不得产生 SourceTransform。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D6-CONTROL.md §18, §19 | also: D6.md §15/§16; D6-SCHEMAS.md §8",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
+          "§18",
+          "§19"
+        ],
+        "also": [
+          "D6.md §15/§16",
+          "D6-SCHEMAS.md §8"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "AN2-13"
+      "disposition": "explicit-defer",
+      "owner": "D6 SourceTransform compiler/evidence owner",
+      "basis": "Compilation/mapping/signing evidence is D6-owned; D4 has no Calendar or Registry ownership of this row.",
+      "oracle": "fixed97 exact EN row: | AN2-13 | SPEC §§9–16 | An observed_only save, or a save with only whole before/after images and no Core edit provenance, cannot produce SourceTransform evidence. |"
     },
     {
       "id": "AN2-18",
@@ -39928,19 +39944,23 @@
         "line": 80,
         "row": "| AN2-18 | SPEC §§9–16 | 错误 signature/profile/trust cut/cross-field的 transform必须拒绝。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D6-CONTROL.md §18, §19, §20 | also: D6.md §15/§16/§17; D6-SCHEMAS.md §8/§9",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§8",
-          "§10.2",
-          "§16.4"
+          "§18",
+          "§19",
+          "§20"
+        ],
+        "also": [
+          "D6.md §15/§16/§17",
+          "D6-SCHEMAS.md §8/§9"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "AN2-18"
+      "disposition": "explicit-defer",
+      "owner": "D6 SourceTransform plus trust-validation owner",
+      "basis": "Signature/profile/trust-cut rejection belongs to the D6 transform/trust chain, not D4 relation or Calendar.",
+      "oracle": "fixed97 exact EN row: | AN2-18 | SPEC §§9–16 | A transform with an invalid signature/profile/trust cut/cross-field relation is rejected. |"
     },
     {
       "id": "T3-ORACLE-04",
@@ -39956,21 +39976,21 @@
         "line": 185,
         "row": "| T3-ORACLE-04 | SPEC §§2–3 | Weftext provenance range错1 byte时 provenance Gate失败，即使 semantic witness相同。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-ORACLE-04"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | T3-ORACLE-04 | SPEC §§2–3 | A Weftext provenance range off by one byte fails the provenance Gate even when semantic witnesses match. |"
     },
     {
       "id": "T3-ORACLE-06",
@@ -39986,21 +40006,21 @@
         "line": 187,
         "row": "| T3-ORACLE-06 | SPEC §§2–3 | observer不得删除 target/type/role/terms/see等导致真实不同语义归一化。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-ORACLE-06"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | T3-ORACLE-06 | SPEC §§2–3 | The observer may not normalize away target/type/role/terms/see fields such that genuinely different semantics collapse. |"
     },
     {
       "id": "T3-ORACLE-08",
@@ -40016,19 +40036,21 @@
         "line": 189,
         "row": "| T3-ORACLE-08 | SPEC §§2–3 | authored/included/substituted/synthetic provenance arms全部 decoder round-trip。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "T3-ORACLE-08"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | T3-ORACLE-08 | SPEC §§2–3 | Authored/included/substituted/synthetic provenance arms all round-trip through the decoder. |"
     },
     {
       "id": "T3-ORACLE-09",
@@ -40044,19 +40066,21 @@
         "line": 190,
         "row": "| T3-ORACLE-09 | SPEC §§2–3 | provenance graph cycle/forward/unknown reference拒绝。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "T3-ORACLE-09"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | T3-ORACLE-09 | SPEC §§2–3 | A provenance graph cycle, forward reference, or unknown reference is rejected. |"
     },
     {
       "id": "T3-PROFILE-04",
@@ -40072,21 +40096,23 @@
         "line": 210,
         "row": "| T3-PROFILE-04 | SPEC §§5–8 | root wf-kind/facets产生明确 managed delta。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §2, §9, §11 transcript §5 | also: D6-CONTROL.md §6.2/§6.3; D6-SCHEMAS.md §5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
           "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§9",
+          "§11 transcript §5"
+        ],
+        "also": [
+          "D6-CONTROL.md §6.2/§6.3",
+          "D6-SCHEMAS.md §5.2/§5.3"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-PROFILE-04"
+      "disposition": "explicit-defer",
+      "owner": "Split D2 managed-profile semantics / D6 Notice+completion transport",
+      "basis": "D2 decides the managed semantic delta; D6 carries the qualified portable transition.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-04 | SPEC §§5–8 | Root wf-kind/facets produce an explicit managed delta. |"
     },
     {
       "id": "T3-PROFILE-13",
@@ -40102,22 +40128,23 @@
         "line": 219,
         "row": "| T3-PROFILE-13 | SPEC §§5–8 | fresh import Notice必须同时含 document 与 document_format component。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "T3-PROFILE-13"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-13 | SPEC §§5–8 | A fresh import Notice includes both document and document_format components. |"
     },
     {
       "id": "T3-PROFILE-15",
@@ -40133,22 +40160,23 @@
         "line": 221,
         "row": "| T3-PROFILE-15 | SPEC §§5–8 | completion proof component set缺 document_format时 receiver不得加入 Frontier。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "T3-PROFILE-15"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-15 | SPEC §§5–8 | A completion proof missing document_format from its component set cannot be admitted into Frontier by a receiver. |"
     },
     {
       "id": "T3-PROFILE-22",
@@ -40164,22 +40192,23 @@
         "line": 228,
         "row": "| T3-PROFILE-22 | SPEC §§5–8 | strong DependencyProof同时含 source(owner) 与 document_format(owner)。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "T3-PROFILE-22"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-22 | SPEC §§5–8 | A strong DependencyProof includes both source(owner) and document_format(owner). |"
     },
     {
       "id": "T3-PROFILE-24",
@@ -40195,22 +40224,23 @@
         "line": 230,
         "row": "| T3-PROFILE-24 | SPEC §§5–8 | scope_dependencies不得把已消费 document_format的 stamp变化判 unrelated。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "T3-PROFILE-24"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-24 | SPEC §§5–8 | scope_dependencies cannot classify a consumed document_format stamp change as unrelated. |"
     },
     {
       "id": "T3-PROFILE-26",
@@ -40226,20 +40256,23 @@
         "line": 232,
         "row": "| T3-PROFILE-26 | SPEC §§5–8 | D4 typed projection随 format stamp失效并重算。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D4.md §6, §7, §16.7 | also: D6-CONTROL.md §3.4; D6-SCHEMAS.md §5.1",
       "currentA2Target": {
         "file": "D4.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§6",
+          "§7",
+          "§16.7"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4",
+          "D6-SCHEMAS.md §5.1"
         ]
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "T3-PROFILE-26"
+      "owner": "D4 typed-projection consumer with D6 as the format-proof producer",
+      "basis": "The row directly constrains D4 invalidation, while currentness of the consumed document_format dependency is proved by D6.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-26 | SPEC §§5–8 | D4 typed projections are invalidated and recomputed when the format stamp changes. |"
     },
     {
       "id": "T3-PROFILE-32",
@@ -40255,22 +40288,23 @@
         "line": 238,
         "row": "| T3-PROFILE-32 | SPEC §§5–8 | purge Notice/CP必须把 current document_format component从 present变 absent。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "T3-PROFILE-32"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-32 | SPEC §§5–8 | Purge Notice/CP changes the current document_format component from present to absent. |"
     },
     {
       "id": "T3-PROFILE-35",
@@ -40286,22 +40320,23 @@
         "line": 241,
         "row": "| T3-PROFILE-35 | SPEC §§5–8 | document_format stamp continuity gap创建新 epoch；equal bytes不能恢复旧 stamp。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "T3-PROFILE-35"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | T3-PROFILE-35 | SPEC §§5–8 | A document_format continuity gap creates a new stamp epoch; equal bytes cannot restore the old stamp. |"
     },
     {
       "id": "T3-FACET-01",
@@ -40326,12 +40361,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-01"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-01 | SPEC §§5,7 | Thirty-two lexically valid FacetIds succeed. |"
     },
     {
       "id": "T3-FACET-02",
@@ -40356,12 +40392,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-02"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-02 | SPEC §§5,7 | The 33rd Facet is rejected for managed-domain commit. |"
     },
     {
       "id": "T3-FACET-03",
@@ -40386,12 +40423,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-03"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-03 | SPEC §§5,7 | An exact duplicate FacetId is rejected. |"
     },
     {
       "id": "T3-FACET-04",
@@ -40416,12 +40454,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-04"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-04 | SPEC §§5,7 | FacetId maximum-length boundaries follow the frozen decoder. |"
     },
     {
       "id": "T3-FACET-05",
@@ -40446,12 +40485,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-05"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-05 | SPEC §§5,7 | Uppercase and illegal dot/hyphen/segment structures are rejected. |"
     },
     {
       "id": "T3-FACET-06",
@@ -40476,12 +40516,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-06"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-06 | SPEC §§5,7 | A lexically valid but Registry-unknown Facet keeps the source valid while the typed provider layer reports unavailable. |"
     },
     {
       "id": "T3-FACET-07",
@@ -40506,12 +40547,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-07"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-07 | SPEC §§5,7 | Host/API wf-facets cannot change root Node membership. |"
     },
     {
       "id": "T3-FACET-08",
@@ -40536,12 +40578,13 @@
           "§5",
           "§16.2",
           "§16.3"
-        ]
+        ],
+        "also": []
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "T3-FACET-08"
+      "owner": "D4 Registry/typed-value/FacetSchema owner",
+      "basis": "Facet lexical/cardinality/Registry availability and authored-control rules are direct D4 semantics.",
+      "oracle": "fixed97 exact EN row: | T3-FACET-08 | SPEC §§5,7 | wf-facets in included source cannot take over the including root Node. |"
     },
     {
       "id": "T3-XF-11",
@@ -40557,19 +40600,22 @@
         "line": 300,
         "row": "| T3-XF-11 | SPEC §§11–13 | whole-source save只有 before/after且无 provenance → compilation unavailable / no artifact。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D6-CONTROL.md §18, §19 | also: D6.md §15/§16; D6-SCHEMAS.md §8",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
+          "§18",
+          "§19"
+        ],
+        "also": [
+          "D6.md §15/§16",
+          "D6-SCHEMAS.md §8"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "T3-XF-11"
+      "disposition": "explicit-defer",
+      "owner": "D6 SourceTransform compiler/evidence owner",
+      "basis": "Compilation/mapping/signing evidence is D6-owned; D4 has no Calendar or Registry ownership of this row.",
+      "oracle": "fixed97 exact EN row: | T3-XF-11 | SPEC §§11–13 | A whole-source save with only before/after and no provenance yields compilation unavailable and no artifact. |"
     },
     {
       "id": "O34-05",
@@ -40585,19 +40631,21 @@
         "line": 367,
         "row": "| O34-05 | SPEC §§2–3 | Alpha *{name}* Beta 中 attribute 后续改写不被观察器遮蔽；旧 quote 参数、后续字符串版本、最终 text 的关联都存在。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§8",
-          "§10.2",
-          "§16.4"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "O34-05"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | O34-05 | SPEC §§2–3 | In Alpha *{name}* Beta, later attribute rewriting remains visible; the old quote argument, later string versions, and final text relationship are all evidenced. |"
     },
     {
       "id": "O34-12",
@@ -40613,19 +40661,21 @@
         "line": 374,
         "row": "| O34-12 | SPEC §§2–3 | 原生 passthrough 提取/恢复、nested apply_subs、drop-line、特殊字符转义后的区间关联正确；observer 不增加自己的 sentinel。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§8",
-          "§10.2",
-          "§16.4"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "O34-12"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | O34-12 | SPEC §§2–3 | Native passthrough extraction/restoration, nested apply_subs, drop-line, and post-escape interval relationships remain correct with no observer sentinel. |"
     },
     {
       "id": "C34-01",
@@ -40641,21 +40691,21 @@
         "line": 385,
         "row": "| C34-01 | SPEC | fresh coordination 只有 FC-3.4 一份权威闭集。缺 D4 typed/control/carrier、D9 或 Index/cache 任一项，不能宣布协调完成；文末摘要只能引用该闭集。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §0, §19 | also: REVIEW-ENTRY.md §5",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§0",
+          "§19"
+        ],
+        "also": [
+          "REVIEW-ENTRY.md §5"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "C34-01"
+      "disposition": "explicit-defer",
+      "owner": "fixed97 coordinated-design/acceptance boundary",
+      "basis": "The closed coordination list is a source-qualified acceptance prerequisite; it is not D4 business semantics and cannot be replaced by one D4 bucket.",
+      "oracle": "fixed97 exact EN row: | C34-01 | SPEC §§2,11–13 | Fresh coordination has one authoritative FC-3.4 closed list; missing D4 typed/control/carrier, D9, or Index/cache means coordination is incomplete, and summaries may only reference this closed list. |"
     },
     {
       "id": "P35-09",
@@ -40671,21 +40721,21 @@
         "line": 395,
         "row": "| P35-09 | SPEC §§2–3 | 自定义 substitutions 使 macro 先于 attribute 时，后续对 target/label 的实际改写反映在最终 scalar/flow；不能固定取最早 callback字段。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "P35-09"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | P35-09 | SPEC §§2–3 | When custom substitutions run macro before attribute, later real target/label rewrites appear in final scalar/flow; projection cannot freeze the earliest callback field. |"
     },
     {
       "id": "N36-06",
@@ -40701,21 +40751,21 @@
         "line": 406,
         "row": "| N36-06 | SPEC §§2–3 | 每个CoreBlockKind及mark/atom必须命中本profile唯一行；table列/跨度/对齐、section编号、image参数和callout关联各有正反向字段变更，不能以“未列公开字段”漏收。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "N36-06"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | N36-06 | SPEC §§2–3 | Every CoreBlockKind and mark/atom maps to exactly one profile row; table column/span/alignment, section numbering, image parameters, and callout associations all have positive/negative changes and cannot be omitted as “unlisted public fields.” |"
     },
     {
       "id": "M37-11",
@@ -40731,19 +40781,21 @@
         "line": 423,
         "row": "| M37-11 | SPEC §§2–3 | dlist多term、nil description、仅附属block的description都按实际tuple关系绑定，不按text猜对象。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§8",
-          "§10.2",
-          "§16.4"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "M37-11"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | M37-11 | SPEC §§2–3 | Description-list multiple terms, nil description, and block-only description follow the real tuple relationships rather than text-based object guessing. |"
     },
     {
       "id": "M37-12",
@@ -40759,20 +40811,21 @@
         "line": 424,
         "row": "| M37-12 | SPEC §§2–3 | named/positional/rekey/copy/inherit完整来源可追溯；同值真实覆盖也更新来源，不能凭值相等合并。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "M37-12"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | M37-12 | SPEC §§2–3 | Named/positional/rekey/copy/inherit provenance is fully traceable; a real overwrite with the same value still updates provenance and cannot be collapsed by value equality. |"
     },
     {
       "id": "M37-16",
@@ -40788,19 +40841,21 @@
         "line": 428,
         "row": "| M37-16 | SPEC §§2–3 | 作者root-option与converter temporary root-option按来源区分；临时写／删除不制造或抹除作者属性事实。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "M37-16"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | M37-16 | SPEC §§2–3 | Authored root-option and converter temporary root-option are distinguished by provenance; temporary writes/deletes neither create nor erase authored property facts. |"
     },
     {
       "id": "M37-20",
@@ -40816,19 +40871,21 @@
         "line": 432,
         "row": "| M37-20 | SPEC §§2–3 | missing/duplicate/conflict/非法来源链/未finalize中间值均受明确gate；完整合法证据仍产生原八个expected projections且不增加无关默认属性。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "M37-20"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | M37-20 | SPEC §§2–3 | Missing/duplicate/conflicting evidence, invalid provenance chains, and non-finalized intermediate values are gated; complete evidence still yields the original eight projections without unrelated default properties. |"
     },
     {
       "id": "M38-16",
@@ -40844,19 +40901,21 @@
         "line": 448,
         "row": "| M38-16 | SPEC §§2–3 | Supporting evidence closure head引用的previous/provenance/operation/string/inline evidence必须全部存在且类型正确；internal supporting evidence允许存在而不成为head。完整合法proof不调用parser或getter补证据。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "M38-16"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | M38-16 | SPEC §§2–3 | All previous/provenance/operation/string/inline evidence reachable from a head exists with the right type; internal supporting evidence may exist without becoming a head, and no parser/getter is called to fill evidence. |"
     },
     {
       "id": "M39-05",
@@ -40872,19 +40931,21 @@
         "line": 453,
         "row": "| M39-05 | SPEC §§2–3 | Root catalog parent top-level root： Document D1 实际执行： D1.register(:refs/footnotes/...) M37-16必须记录 catalog record： parent → D1 且在D1 live时允许该record进入 supplementary closure。 出现不存在的： owner → D1 必须 decoder FAIL。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§8",
-          "§10.2",
-          "§16.4"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "M39-05"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | M39-05 | SPEC §§2–3 | A root catalog record stores parent -> the actual top-level Document#register receiver; a nonexistent owner relation rejects. |"
     },
     {
       "id": "FC4R-ORIGIN-01",
@@ -40900,19 +40961,21 @@
         "line": 478,
         "row": "| FC4R-ORIGIN-01 | SPEC §3.4 | :who: Alice 后 Hello {who} 的最终 Alice 必须记录 authored definition、reference site、substitution provenance；只有全部 origin path 真正收敛同一 authored range 时才可导出 unique writable source。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "FC4R-ORIGIN-01"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | FC4R-ORIGIN-01 | SPEC §3.4 | For :who: Alice followed by Hello {who}, the resulting Alice value records authored definition/reference/substitution provenance and derives a unique writable authored range only when all retained origin paths actually converge there. |"
     },
     {
       "id": "FC4R-ORIGIN-03",
@@ -40928,20 +40991,23 @@
         "line": 480,
         "row": "| FC4R-ORIGIN-03 | SPEC §§3.4,8.1–8.3 | Root R 含 include::child.adoc[]，child 从 V1=Alpha 变成 V2=Beta 时，即使 R bytes/document_format 不变，V1 的 D2 snapshot 对 D7/D8/D9 都必须 stale；managed include SourceObservation 必须相等。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D2.md §5, §9, §11 transcript §3.4 | also: D6-CONTROL.md §3.4/§4.1/§5; D6.md §5/§7.1",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
+          "§5",
           "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§11 transcript §3.4"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4/§4.1/§5",
+          "D6.md §5/§7.1"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "FC4R-ORIGIN-03"
+      "disposition": "explicit-defer",
+      "owner": "Split D2 exact-source/product snapshot / D6 dependency-currentness owner",
+      "basis": "Origin, include observation and external exact-source positive paths are established upstream; D4 consumes them only through qualified current evidence.",
+      "oracle": "fixed97 exact EN row: | FC4R-ORIGIN-03 | SPEC §§3.4,8.1–8.3 | Root R containing include::child.adoc[] with child V1=Alpha then V2=Beta invalidates the V1 D2 snapshot for D7/D8/D9 even if R bytes and document_format stay equal; managed include SourceObservation equality is required. |"
     },
     {
       "id": "FC4R-TABLE-04",
@@ -40957,20 +41023,23 @@
         "line": 510,
         "row": "| FC4R-TABLE-04 | SPEC §8.3 | table title 与 full header path 仍 byte-equal 时，必须使用 closed zero-based table/column occurrence qualifier；ordinal 来自 frozen product projection，不能来自 UI/memory order。 |；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。"
       },
-      "target": "D4.md §14 | also: fixed97 ACCEPTANCE source-qualified prerequisite",
+      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D5.md",
         "sections": [
-          "§14"
+          "§3",
+          "§19.1",
+          "§19.2"
         ],
         "also": [
-          "fixed97 ACCEPTANCE source-qualified prerequisite"
+          "D2.md §7 / §12 schema transcript §4.4",
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "selected fixed97 row remains explicit D4-relevant acceptance prerequisite",
-      "oracle": "FC4R-TABLE-04"
+      "disposition": "explicit-defer",
+      "owner": "D5 native-table/physical-column owner with D2 as parser/product producer",
+      "basis": "The qualifier is a D5 table-column occurrence rule; its presence in the D4 audit set is source qualification, not D4 ownership.",
+      "oracle": "fixed97 exact EN row: | FC4R-TABLE-04 | SPEC §8.3 | When table title and full header path are still byte-equal, the closed zero-based table/column occurrence qualifier is required; the ordinal is computed from the frozen product projection, not UI/memory order. |"
     },
     {
       "id": "FC4B-D8-02",
@@ -40986,20 +41055,22 @@
         "line": 528,
         "row": "| FC4B-D8-02 | SPEC §§9.6,9.8 | D8 Annotation prepare 必须拒绝 caller 提供的 actor/time/authentication/trusted-origin 字段。Core 在 current authorization/CAS 后构造 attribution 并冻结在同一 immutable plan；replay 不重新采样。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D3-SCHEMAS.md §7, §7.1 | also: docs/design/asciidoc-annotation-final-design/SPEC.md §9.8–§9.10; docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md §4/§10",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D3-SCHEMAS.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§7",
+          "§7.1"
+        ],
+        "also": [
+          "docs/design/asciidoc-annotation-final-design/SPEC.md §9.8–§9.10",
+          "docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md §4/§10"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "FC4B-D8-02"
+      "disposition": "explicit-defer",
+      "owner": "D3 Annotation value/aggregate owner with D8 current edit-surface consumer",
+      "basis": "Annotation proposal/attribution/operation-class validation is D3/D8-owned; D4 does not acquire it through a generic semantic bucket.",
+      "oracle": "fixed97 exact EN row: | FC4B-D8-02 | SPEC §§9.6,9.8 | D8 Annotation prepare rejects caller actor/time/authentication/trusted-origin fields. Core constructs attribution after current authorization/CAS and freezes it in the same immutable plan; replay does not resample it. |"
     },
     {
       "id": "FC4B-ALIAS-01",
@@ -41015,21 +41086,20 @@
         "line": 543,
         "row": "| FC4B-ALIAS-01 | SPEC §9.3; SCHEMAS §7 | AnnotationInlineBody/1 是唯一 current canonical type；AsciiDocInlineBody/1 只能作为 canonicalOf=AnnotationInlineBody/1、replaces=null 的 alias。registry consumer 不得把它解释成 successor migration，也不得生成第二 wire/version。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D3-SCHEMAS.md §7 | also: D2.md §11 transcript §1/§3.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D3-SCHEMAS.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§7"
+        ],
+        "also": [
+          "D2.md §11 transcript §1/§3.4"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC4B-ALIAS-01"
+      "disposition": "explicit-defer",
+      "owner": "D3 current AnnotationInlineBody schema owner",
+      "basis": "The canonical alias is an Annotation schema/version fact; D4 has no second wire or migration authority.",
+      "oracle": "fixed97 exact EN row: | FC4B-ALIAS-01 | SPEC §9.3; SCHEMAS §7 | AnnotationInlineBody/1 is the sole current canonical type. AsciiDocInlineBody/1 is an alias with canonicalOf=AnnotationInlineBody/1 and replaces=null; a registry consumer must not infer a successor migration or second wire/version. |"
     },
     {
       "id": "FC34-FMT-02",
@@ -41045,22 +41115,23 @@
         "line": 566,
         "row": "| FC34-FMT-02 | SPEC §§5–8 | 把 {kind:\"document_format\"} 放进 PortableComponentKey/1 必须旧decoder拒绝；不得认为这是 CP3 合法component。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-FMT-02"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-02 | SPEC §§5–8 | The old PortableComponentKey/1 decoder rejects {kind:\"document_format\"}; CP3 cannot treat it as a legal component. |"
     },
     {
       "id": "FC34-FMT-05",
@@ -41076,22 +41147,23 @@
         "line": 569,
         "row": "| FC34-FMT-05 | SPEC §§5–8 | 已管理节点执行未来的 weftext_managed/1→/2 配置档迁移时，源内容保持不变；同一 Notice3/CP4 组件集合只含 document_format 迁移，sourceChanges=[]；不得生成 SourceRevisionPlan、SourceVersion 或 H(D,E)，也不得把 absent/Baseline→managed 误作迁移。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-FMT-05"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-05 | SPEC §§5–8 | A future managed weftext_managed/1 -> /2 profile-only migration keeps source unchanged; the same Notice3/CP4 component set carries exactly the document_format transition with sourceChanges=[], creates no SourceRevisionPlan/SourceVersion/H advance, and absent/Baseline-to-managed is not mislabeled as profile migration. |"
     },
     {
       "id": "FC34-FMT-11",
@@ -41107,22 +41179,22 @@
         "line": 575,
         "row": "| FC34-FMT-11 | SPEC §§5–8 | rendered export列 document_format key；format变化使未发布 ExportPlan3 reset。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5; docs/design/snapshots/d9-workers-and-export/source.md §3/§4; D6-CONTROL.md §3.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§8.3"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+          "docs/design/snapshots/d9-workers-and-export/source.md §3/§4",
+          "D6-CONTROL.md §3.4"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-FMT-11"
+      "disposition": "explicit-defer",
+      "owner": "D9 export-plan current holder consuming a D6 document_format dependency",
+      "basis": "Export-plan invalidation is D9-owned; D6 supplies the format proof and D4 is not the export owner.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-11 | SPEC §§5–8 | Rendered export lists the document_format key; a format change resets an unpublished ExportPlan3. |"
     },
     {
       "id": "FC34-FMT-12",
@@ -41138,21 +41210,21 @@
         "line": 576,
         "row": "| FC34-FMT-12 | SPEC §§5–8 | D7 narrow field为了读取 profile自动增加 full source_read，拒绝。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.1 | also: D6-CONTROL.md §3.4; D6-SCHEMAS.md §5.1",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§8.1"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4",
+          "D6-SCHEMAS.md §5.1"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC34-FMT-12"
+      "disposition": "explicit-defer",
+      "owner": "D7 narrow-field/query consumer with D6 as dependency-proof owner",
+      "basis": "D7 keeps its source-envelope/query qualification; document_format is an internal D6 dependency and cannot be replaced by broader source_read/query_scan.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-12 | SPEC §§5–8 | D7 narrow-field qualification may not add full source_read merely to consume the profile. |"
     },
     {
       "id": "FC34-FMT-13",
@@ -41168,21 +41240,21 @@
         "line": 577,
         "row": "| FC34-FMT-13 | SPEC §§5–8 | narrow field用原 source_envelope/Field资格 + internal format dependency完成。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.1 | also: D6-CONTROL.md §3.4; D6-SCHEMAS.md §5.1",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§8.1"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4",
+          "D6-SCHEMAS.md §5.1"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC34-FMT-13"
+      "disposition": "explicit-defer",
+      "owner": "D7 narrow-field/query consumer with D6 as dependency-proof owner",
+      "basis": "D7 keeps its source-envelope/query qualification; document_format is an internal D6 dependency and cannot be replaced by broader source_read/query_scan.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-13 | SPEC §§5–8 | A narrow field uses its original source_envelope/Field qualification plus the internal format dependency. |"
     },
     {
       "id": "FC34-FMT-14",
@@ -41198,22 +41270,21 @@
         "line": 578,
         "row": "| FC34-FMT-14 | SPEC §§5–8 | Query的 query_scan 被当成 document_format证明，拒绝。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.1 | also: D6-CONTROL.md §3.4; D6-SCHEMAS.md §5.1",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§8.1"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-CONTROL.md §3.4",
+          "D6-SCHEMAS.md §5.1"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-FMT-14"
+      "disposition": "explicit-defer",
+      "owner": "D7 narrow-field/query consumer with D6 as dependency-proof owner",
+      "basis": "D7 keeps its source-envelope/query qualification; document_format is an internal D6 dependency and cannot be replaced by broader source_read/query_scan.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-14 | SPEC §§5–8 | Query query_scan cannot substitute for document_format proof. |"
     },
     {
       "id": "FC34-TR-01",
@@ -41229,20 +41300,23 @@
         "line": 594,
         "row": "| FC34-TR-01 | SPEC §13 | Bootstrap4 保留 D3 proposalId 的规范小写 UUID，并使用已闭合的 Profile4、creator、Registry、series、period 辅助类型；只有一个根，Genesis2 恰有两条声明：rev1 为 revision-token，rev2 为 transform，predecessor 链必须正确。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D6-CONTROL.md §10.2, §20, §20.2 | also: D6-SCHEMAS.md §9; D3-SCHEMAS.md §9",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§10.2",
+          "§20",
+          "§20.2"
+        ],
+        "also": [
+          "D6-SCHEMAS.md §9",
+          "D3-SCHEMAS.md §9"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "FC34-TR-01"
+      "disposition": "explicit-defer",
+      "owner": "D6 Workspace-bootstrap and dual-profile trust/replica-registration owner",
+      "basis": "Bootstrap4/Profile4/Genesis2 and the paired revision/transform declarations are D6 trust/bootstrap state, not Calendar.",
+      "oracle": "fixed97 exact EN row: | FC34-TR-01 | SPEC §13 | Bootstrap4 keeps D3 proposalId as the canonical lowercase UUID and uses closed Profile4/creator/Registry/series/period helper types; it has one root and Genesis2 has exactly two declarations, rev1 revision-token then rev2 transform, with the correct predecessor chain. |"
     },
     {
       "id": "FC34-H-03",
@@ -41258,22 +41332,23 @@
         "line": 609,
         "row": "| FC34-H-03 | SPEC §17 | CP3带 document_format key，旧decoder必须拒绝。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-H-03"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | FC34-H-03 | SPEC §17 | An old CP3 carrying a document_format component must be rejected by its historical decoder. |"
     },
     {
       "id": "FC34-FMT-19",
@@ -41289,22 +41364,23 @@
         "line": 615,
         "row": "| FC34-FMT-19 | SPEC §§5–8 | DependencyKey/3 canonical rank必须 source,document_format,lifecycle,...,execution_resource；把document_format append至末尾必须失败。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-FMT-19"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-19 | SPEC §§5–8 | DependencyKey/3 rank is source, document_format, lifecycle, ..., execution_resource; appending document_format at the end fails. |"
     },
     {
       "id": "FC34-FMT-20",
@@ -41320,22 +41396,23 @@
         "line": 616,
         "row": "| FC34-FMT-20 | SPEC §§5–8 | PortableComponentKey/2必须 document,document_format,resource,...,conflict；把document_format排在conflict之后必须失败。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §0.1, §3.4, §6, §8 | also: D6-SCHEMAS.md §5.1/§5.2/§5.3",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§0.1",
+          "§3.4",
+          "§6",
+          "§8"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §5.1/§5.2/§5.3"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34-FMT-20"
+      "disposition": "explicit-defer",
+      "owner": "D6 current dependency, portable-component, completion and historical-dispatch owner",
+      "basis": "document_format proof/component/history is D6-owned; D4 only consumes a proved current stamp when its own semantics require it.",
+      "oracle": "fixed97 exact EN row: | FC34-FMT-20 | SPEC §§5–8 | PortableComponentKey/2 rank is document, document_format, resource, ..., conflict; placing document_format after conflict fails. |"
     },
     {
       "id": "FC34-ST-16",
@@ -41351,21 +41428,22 @@
         "line": 620,
         "row": "| FC34-ST-16 | SPEC §§11–13 | generatedOutputSpan 只能由 normative before/after replay cursor 与 delta(R)=replacementByteLength-(endByte-startByte) 派生；receiver 必须重新取得历史 exact-before bytes，不能用 current-file bytes、slice hash 或 SourceVersion 字段相等替代。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D6-CONTROL.md §18, §19 | also: D6.md §15/§16; D6-SCHEMAS.md §8",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§18",
+          "§19"
+        ],
+        "also": [
+          "D6.md §15/§16",
+          "D6-SCHEMAS.md §8"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC34-ST-16"
+      "disposition": "explicit-defer",
+      "owner": "D6 SourceTransform compiler/evidence owner",
+      "basis": "Compilation/mapping/signing evidence is D6-owned; D4 has no Calendar or Registry ownership of this row.",
+      "oracle": "fixed97 exact EN row: | FC34-ST-16 | SPEC §§11–13 | generatedOutputSpan is derived only by the normative before/after replay cursor and delta(R)=replacementByteLength-(endByte-startByte); receiver validation reacquires the historical exact-before bytes rather than substituting current-file bytes, slice hashes, or equal SourceVersion fields. |"
     },
     {
       "id": "FC34B-D10-01",
@@ -41381,22 +41459,22 @@
         "line": 624,
         "row": "| FC34B-D10-01 | SPEC §14 | 当前 unseen Workspace control prepare 使用 D10WorkspaceReadDependencies/2 + DependencyProof/3；解析 managed Document 时包含 document_format。真实 saved/planned 历史记录必须先按其 recorded owner version 恢复。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6-CONTROL.md §21.1, §21.3 | also: D6-SCHEMAS.md §10; docs/design/d10/CONTROL-CONTRACT.md §4/§7",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§21.1",
+          "§21.3"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-SCHEMAS.md §10",
+          "docs/design/d10/CONTROL-CONTRACT.md §4/§7"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34B-D10-01"
+      "disposition": "explicit-defer",
+      "owner": "D10 Workspace-control owner with D6 current dependency/prepare routing",
+      "basis": "Current D10 control preparation consumes DependencyProof/3 through the D6 successor chain; D4 is not the control owner.",
+      "oracle": "fixed97 exact EN row: | FC34B-D10-01 | SPEC §14 | A current unseen Workspace-control prepare uses D10WorkspaceReadDependencies/2 + DependencyProof/3 and includes document_format when parsing a managed Document; genuine saved/planned historical records recover through their recorded owner versions first. |"
     },
     {
       "id": "FC34B-D10-05",
@@ -41412,20 +41490,22 @@
         "line": 628,
         "row": "| FC34B-D10-05 | SPEC §14 | recurrence source V 不变但 document_format M1→M2 时，current Storage producer 必须记录 ScheduleContinuityInvalidation/2 的 binding_changed；即使 recurrence output 恰好相等，也不能把 Witness2 连续推进。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D6.md §7.2.1 | also: D6-CONTROL.md §21.1; D6-SCHEMAS.md §10.1; docs/design/d10/CONTROL-CONTRACT.md §16",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§7.2.1"
+        ],
+        "also": [
+          "D6-CONTROL.md §21.1",
+          "D6-SCHEMAS.md §10.1",
+          "docs/design/d10/CONTROL-CONTRACT.md §16"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "FC34B-D10-05"
+      "disposition": "explicit-defer",
+      "owner": "D6 schedule-continuity producer / D10 scheduling consumer",
+      "basis": "binding_changed/gap continuity evidence is produced by D6 and consumed by D10 scheduling; equal recurrence output does not move ownership to D4 Calendar.",
+      "oracle": "fixed97 exact EN row: | FC34B-D10-05 | SPEC §14 | For recurrence source V unchanged but document_format M1->M2, the current Storage producer records ScheduleContinuityInvalidation/2 with binding_changed; it cannot advance Witness2 as continuous merely because recurrence output compares equal. |"
     },
     {
       "id": "FC34B-D10-06",
@@ -41441,22 +41521,22 @@
         "line": 629,
         "row": "| FC34B-D10-06 | SPEC §14 | source/profile bytes 相等但 document_format proof continuity 出现 gap 时，current producer 必须记录 ScheduleContinuityInvalidation/2 的 gap 并保留最后合法 checkpoint；不能伪造 Evidence2 或 continuous Step2。 |"
       },
-      "target": "D4.md §0, §7, §17.3 | also: D3-SCHEMAS.md §2",
+      "target": "D6.md §7.2.1 | also: D6-CONTROL.md §21.1; D6-SCHEMAS.md §10.1; docs/design/d10/CONTROL-CONTRACT.md §16",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6.md",
         "sections": [
-          "§0",
-          "§7",
-          "§17.3"
+          "§7.2.1"
         ],
         "also": [
-          "D3-SCHEMAS.md §2"
+          "D6-CONTROL.md §21.1",
+          "D6-SCHEMAS.md §10.1",
+          "docs/design/d10/CONTROL-CONTRACT.md §16"
         ]
       },
-      "disposition": "named-supersede",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "predecessor/current coordination remains source-qualified; fresh D4 uses current Descriptor3/Proof3/Key3",
-      "oracle": "FC34B-D10-06"
+      "disposition": "explicit-defer",
+      "owner": "D6 schedule-continuity producer / D10 scheduling consumer",
+      "basis": "binding_changed/gap continuity evidence is produced by D6 and consumed by D10 scheduling; equal recurrence output does not move ownership to D4 Calendar.",
+      "oracle": "fixed97 exact EN row: | FC34B-D10-06 | SPEC §14 | If source/profile bytes are equal but document_format proof continuity has a gap, the current producer records ScheduleContinuityInvalidation/2 with gap and retains the last valid checkpoint; it never fabricates Evidence2 or a continuous Step2. |"
     },
     {
       "id": "FC34B-TR-05",
@@ -41472,20 +41552,23 @@
         "line": 640,
         "row": "| FC34B-TR-05 | SPEC §13 | Carry2 factId 使用 D6-Trust-Compromise-Fact/2 与精确九字段 body；direct revoke compromise 映射 trustKeyId，direct rotate compromise 映射 oldTrustKeyId，originDeclarationDigest 哈希完整 Declaration2，originActivationChangeId 经原 CP4/ChangeRecord 重派生，不能使用 resolver 时间。TrustConflictCarryValidationEvidence 还必须 pin 原 Declaration2 activation 的 ChangeRecord1/CP4/Bundle2 以及每个实际经过的 resolver carrier；resolver 时间不能替代 origin cut。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D6-CONTROL.md §9.4, §20, §20.1 | also: D6-SCHEMAS.md §9; D3-SCHEMAS.md §9",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D6-CONTROL.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§9.4",
+          "§20",
+          "§20.1"
+        ],
+        "also": [
+          "D6-SCHEMAS.md §9",
+          "D3-SCHEMAS.md §9"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "FC34B-TR-05"
+      "disposition": "explicit-defer",
+      "owner": "D6 policy-conflict compromise-carry and trust-validation owner",
+      "basis": "Carry2 compromise facts, origin cut and ChangeRecord/CP/Bundle carrier pins are owned by the D6 trust-conflict path.",
+      "oracle": "fixed97 exact EN row: | FC34B-TR-05 | SPEC §13 | Carry2 factId uses D6-Trust-Compromise-Fact/2 over the exact nine-field body; direct revoke compromise maps trustKeyId, direct rotate compromise maps oldTrustKeyId, originDeclarationDigest hashes the complete Declaration2, and originActivationChangeId rederives through the original CP4/ChangeRecord rather than resolver time. TrustConflictCarryValidationEvidence additionally pins the original Declaration2 activation ChangeRecord1/CP4/Bundle2 plus every traversed resolver carrier; resolver time cannot replace the origin cut. |"
     },
     {
       "id": "FC34B-HOLDER-03",
@@ -41501,19 +41584,23 @@
         "line": 652,
         "row": "| FC34B-HOLDER-03 | SPEC §§7–8 | D4 strong relation operation source不变而format stamp变；old proof不能继续，必须stale/reprepare。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D4.md §8, §16.4, §16.7 | also: D6-CONTROL.md §3.4; D5.md §19.1/§19.2",
       "currentA2Target": {
         "file": "D4.md",
         "sections": [
           "§8",
-          "§10.2",
-          "§16.4"
+          "§16.4",
+          "§16.7"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4",
+          "D5.md §19.1/§19.2"
         ]
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "FC34B-HOLDER-03"
+      "owner": "D4 relation consumer with D6 outer dependency proof; D5 keeps its own table locator where named",
+      "basis": "The inner D4/D5 holder types stay at their actual owners; only the outer current proof/version family is D6-owned.",
+      "oracle": "fixed97 exact EN row: | FC34B-HOLDER-03 | SPEC §§7–8 | For a D4 strong relation operation, unchanged source with changed format stamp invalidates the old proof and requires stale/reprepare. |"
     },
     {
       "id": "FC34B-HOLDER-05",
@@ -41529,19 +41616,23 @@
         "line": 654,
         "row": "| FC34B-HOLDER-05 | SPEC §§7–8 | D4/D5为了配 /3 而机械升级RelationReadContext、table locator、occurrenceKey或numeric sourceRevision；FAIL。 |"
       },
-      "target": "D4.md §8, §10.2, §16.4",
+      "target": "D4.md §8, §16.4, §16.7 | also: D6-CONTROL.md §3.4; D5.md §19.1/§19.2",
       "currentA2Target": {
         "file": "D4.md",
         "sections": [
           "§8",
-          "§10.2",
-          "§16.4"
+          "§16.4",
+          "§16.7"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4",
+          "D5.md §19.1/§19.2"
         ]
       },
       "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 relation/canonical-owner clauses consume this exact fixed97 oracle",
-      "oracle": "FC34B-HOLDER-05"
+      "owner": "D4 relation consumer with D6 outer dependency proof; D5 keeps its own table locator where named",
+      "basis": "The inner D4/D5 holder types stay at their actual owners; only the outer current proof/version family is D6-owned.",
+      "oracle": "fixed97 exact EN row: | FC34B-HOLDER-05 | SPEC §§7–8 | Mechanical version bumps of D4/D5 inner RelationReadContext, table locator, occurrenceKey, or numeric sourceRevision merely to match /3 are rejected. |"
     },
     {
       "id": "FC4D-PROD-06",
@@ -41557,19 +41648,21 @@
         "line": 723,
         "row": "| FC4D-PROD-06 | SPEC §3.4 | generated、multi_origin、ambiguous、non_author_source 或其它不可写 provenance 仍可读但 structured-readonly；实现既不能猜 physical edit，也不能为省事把全部 unique authored 值一律 readonly。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
-        ]
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "FC4D-PROD-06"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | FC4D-PROD-06 | SPEC §3.4 | generated, multi_origin, ambiguous, non_author_source, or otherwise non-writable slot provenance remains readable but structured-readonly; an implementation may not turn these into guessed physical edits or turn all unique authored values readonly. |"
     },
     {
       "id": "FC4D-PROD-07",
@@ -41585,21 +41678,23 @@
         "line": 724,
         "row": "| FC4D-PROD-07 | SPEC §3.4 | prepare 后 exact root/include SourceObservation、environment digest 或任一已消费 dependency 改变时，field-level write 在 final barrier 必须 stale，即使 slot text 与 root hash 未变。因此旧写入必须拒绝，不能沿用过期证据。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §9, §11 transcript §3.4 | also: D6-CONTROL.md §3.4/§4.1/§5; D6.md §5/§7.1",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
+          "§9",
+          "§11 transcript §3.4"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4/§4.1/§5",
+          "D6.md §5/§7.1"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC4D-PROD-07"
+      "disposition": "explicit-defer",
+      "owner": "Split D2 exact-source/product snapshot / D6 dependency-currentness owner",
+      "basis": "Origin, include observation and external exact-source positive paths are established upstream; D4 consumes them only through qualified current evidence.",
+      "oracle": "fixed97 exact EN row: | FC4D-PROD-07 | SPEC §3.4 | After prepare, changing the exact root/include SourceObservation, environment digest, or any consumed dependency makes the old field-level write stale at the final barrier even when the slot text and root hash are unchanged. |"
     },
     {
       "id": "FC4D-PROD-10",
@@ -41615,21 +41710,21 @@
         "line": 727,
         "row": "| FC4D-PROD-10 | SPEC §3.4 | backend/basebackend/filetype/outfilesuffix、safeMode、doctype、完整 title/mainTitle/subtitle 与 revision 来自同一次 fixed evaluation 并有字段 provenance；D8/D9 不得用 ambient default、fullname 或 raw Source 补猜。不得补造缺失状态，也不能改用宿主默认值。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§2",
-          "§4",
           "§5",
-          "§16.2",
-          "§16.3"
-        ]
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
+        ],
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC4D-PROD-10"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "The source row constrains D2 evidence/projection; similarly named relationships are not D4 Relation authority.",
+      "oracle": "fixed97 exact EN row: | FC4D-PROD-10 | SPEC §3.4 | backend/basebackend/filetype/outfilesuffix, safeMode, doctype, complete title/mainTitle/subtitle and revision are carried from the same fixed evaluation with field provenance; D8/D9 may not fill them from ambient defaults, fullname, or raw Source. |"
     },
     {
       "id": "FC4D-PROD-11",
@@ -41645,19 +41740,23 @@
         "line": 728,
         "row": "| FC4D-PROD-11 | SPEC §§3.4,17 | richer managed Product carrier 不得破坏 fixed-parent 对合法 external ordinary exact Source read、Draft 与 authorized whole-source save 的正向路径；该路径不能伪造 managed revision 或 Product slot provenance。外部文件的普通正向路径继续有效。 |"
       },
-      "target": "D4.md §3, §11, §14",
+      "target": "D2.md §5, §9, §11 transcript §3.4 | also: D6-CONTROL.md §3.4/§4.1/§5; D6.md §5/§7.1",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§11",
-          "§14"
+          "§5",
+          "§9",
+          "§11 transcript §3.4"
+        ],
+        "also": [
+          "D6-CONTROL.md §3.4/§4.1/§5",
+          "D6.md §5/§7.1"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 exact source/provenance/diagnostic clauses consume this oracle",
-      "oracle": "FC4D-PROD-11"
+      "disposition": "explicit-defer",
+      "owner": "Split D2 exact-source/product snapshot / D6 dependency-currentness owner",
+      "basis": "Origin, include observation and external exact-source positive paths are established upstream; D4 consumes them only through qualified current evidence.",
+      "oracle": "fixed97 exact EN row: | FC4D-PROD-11 | SPEC §§3.4,17 | The richer managed Product carrier does not remove the fixed-parent positive path for a valid external ordinary exact Source read, Draft, or authorized whole-source save; no managed revision or Product slot provenance is fabricated for that path. |"
     },
     {
       "id": "FC4E-GATE-01",
@@ -41673,20 +41772,22 @@
         "line": 745,
         "row": "| FC4E-GATE-01 | SPEC §§9.8–9.10 | D7CreateAnnotationIntent/2 与 current D8 Annotation arm 只接收 AnnotationEditableProposal/1，绝不接收 AnnotationEditableValue/1；caller 提交 state/confirmation/basis/expectedText/point/actor/time/trusted 字段必须拒绝，完整 Value/4 只能由 Core 构造。 |"
       },
-      "target": "D4.md §9, §10.3, §16.6, §17.5",
+      "target": "D3-SCHEMAS.md §7, §7.1 | also: docs/design/asciidoc-annotation-final-design/SPEC.md §9.8–§9.10; docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md §4/§10",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D3-SCHEMAS.md",
         "sections": [
-          "§9",
-          "§10.3",
-          "§16.6",
-          "§17.5"
+          "§7",
+          "§7.1"
+        ],
+        "also": [
+          "docs/design/asciidoc-annotation-final-design/SPEC.md §9.8–§9.10",
+          "docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md §4/§10"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Calendar/temporal clauses consume this exact fixed97 oracle",
-      "oracle": "FC4E-GATE-01"
+      "disposition": "explicit-defer",
+      "owner": "D3 Annotation value/aggregate owner with D8 current edit-surface consumer",
+      "basis": "Annotation proposal/attribution/operation-class validation is D3/D8-owned; D4 does not acquire it through a generic semantic bucket.",
+      "oracle": "fixed97 exact EN row: | FC4E-GATE-01 | SPEC §§9.8–9.10 | D7CreateAnnotationIntent/2 and the current D8 Annotation arm accept AnnotationEditableProposal/1, never AnnotationEditableValue/1; caller state/confirmation/basis/expectedText/point/actor/time/trusted fields are rejected and Core alone constructs complete Value/4. |"
     },
     {
       "id": "FC4E-GATE-03",
@@ -41702,21 +41803,22 @@
         "line": 747,
         "row": "| FC4E-GATE-03 | SPEC §9.10 | ordinary_edit 必须正向支持 no_suggestion→no_suggestion，包括普通字段编辑和满足既有 Value/4 cross-field 的合法 purpose/root↔reply 变化；stored target content 不变时不得新增 target-source-read 权限要求，reply 改动继续使用继承的 structural S 规则。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "D3-SCHEMAS.md §7, §7.1 | also: docs/design/asciidoc-annotation-final-design/SPEC.md §9.8–§9.10; docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md §4/§10",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "D3-SCHEMAS.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§7",
+          "§7.1"
+        ],
+        "also": [
+          "docs/design/asciidoc-annotation-final-design/SPEC.md §9.8–§9.10",
+          "docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md §4/§10"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC4E-GATE-03"
+      "disposition": "explicit-defer",
+      "owner": "D3 Annotation value/aggregate owner with D8 current edit-surface consumer",
+      "basis": "Annotation proposal/attribution/operation-class validation is D3/D8-owned; D4 does not acquire it through a generic semantic bucket.",
+      "oracle": "fixed97 exact EN row: | FC4E-GATE-03 | SPEC §9.10 | ordinary_edit positively supports no_suggestion→no_suggestion for ordinary field edits and legal purpose/root↔reply changes under the existing Value/4 cross-fields; with stored target content unchanged it does not acquire a new target-source-read requirement, and reply changes still use the inherited structural S rules. |"
     },
     {
       "id": "FC4F-POL-07",
@@ -41732,21 +41834,22 @@
         "line": 771,
         "row": "| FC4F-POL-07 | SPEC §13.2 | current Plan4 的 saved/planned/unknown recovery 必须恢复原 initialPresentationPolicy、OperationId/proposal/custody mapping、pins 与 decoder；真正历史 Plan1/Plan3、restore、continue、failover、普通 managed copy 都不能合成该字段或静默迁移 active Workspace。 |"
       },
-      "target": "D4.md §2, §4, §5, §16.2, §16.3",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.2, §13.2 | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.4; D6-CONTROL.md §10.2",
       "currentA2Target": {
-        "file": "D4.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§2",
-          "§4",
-          "§5",
-          "§16.2",
-          "§16.3"
+          "§8.2",
+          "§13.2"
+        ],
+        "also": [
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.4",
+          "D6-CONTROL.md §10.2"
         ]
       },
-      "disposition": "retain",
-      "owner": "D4 current candidate consuming fixed97 source-qualified prerequisite",
-      "basis": "D4 Registry/typed-schema clauses consume this exact fixed97 oracle",
-      "oracle": "FC4F-POL-07"
+      "disposition": "explicit-defer",
+      "owner": "D8 Workspace presentation-policy holder with D6 bootstrap recovery transport",
+      "basis": "Plan4 recovery and presentation-policy mapping are D8-owned current-holder semantics, not D4 Registry/Calendar semantics.",
+      "oracle": "fixed97 exact EN row: | FC4F-POL-07 | SPEC §13.2 | saved/planned/unknown current Plan4 recovery restores the original initialPresentationPolicy, OperationId/proposal/custody mappings, pins and decoder; genuine historical Plan1/Plan3, restore, continue, failover and ordinary managed copy never synthesize this field or silently migrate an active Workspace. |"
     }
   ],
   "direct_producer_consumer_evidence": [
@@ -43454,10 +43557,111 @@
       "coveredNonblankLines": 46
     },
     {
-      "id": "m-import-connector",
+      "id": "m-import-connector-context",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
       "sourceLineStart": 279,
+      "sourceLineEnd": 302,
+      "disposition": "explicit-defer",
+      "owner": "split: D3 binding / D9 conversion / D10 connector; D5 domain constraints",
+      "currentTarget": {
+        "file": "D4.md",
+        "sections": [
+          "§1",
+          "§2.2"
+        ],
+        "also": [
+          "D3 SourceBinding/OriginBinding",
+          "D9 import/export",
+          "D10 CANDIDATE §16–§17"
+        ]
+      },
+      "basis": "binding, conversion and external connector/credential execution keep actual owners",
+      "oracle": "m-import-connector: retain exact source and actual-owner split; no generic intake placeholder may substitute for the mapped clause",
+      "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
+      "coveredNonblankLines": 17
+    },
+    {
+      "id": "m-calendar-recurrence-derived",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceLineStart": 303,
+      "sourceLineEnd": 304,
+      "disposition": "retain",
+      "owner": "split: D4 recurrence owner / D3 source+identity binding / D9 import mapping / D6 current proof / D10 scheduling consumer",
+      "currentTarget": {
+        "file": "D4.md",
+        "sections": [
+          "§9",
+          "§10.3",
+          "§16.6",
+          "§17.5"
+        ],
+        "also": [
+          "D3.md §6/§8.5",
+          "D6.md §7.1/§7.2.1",
+          "docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6",
+          "docs/design/d10/CONTROL-CONTRACT.md §16"
+        ]
+      },
+      "basis": "The recurrence set and override are D4 Calendar semantics; source binding/import/currentness stay with D3/D9/D6 and scheduling execution with D10.",
+      "oracle": "303 recurrence set/override/source binding; 304 derived occurrence, no default Node identity, explicit promote/adopt only.",
+      "target": "D4.md §9, §10.3, §16.6, §17.5 | also: D3.md §6/§8.5; D6.md §7.1/§7.2.1; docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6; docs/design/d10/CONTROL-CONTRACT.md §16",
+      "coveredNonblankLines": 2
+    },
+    {
+      "id": "m-import-intent-heading",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceLineStart": 305,
+      "sourceLineEnd": 305,
+      "disposition": "retain",
+      "owner": "Mandatory scenario-intake grouping qualifier",
+      "currentTarget": {
+        "file": "REVIEW-ENTRY.md",
+        "sections": [
+          "§5.1"
+        ],
+        "also": []
+      },
+      "basis": "This heading classifies the following import-intent rows; it carries no standalone Calendar recurrence obligation.",
+      "oracle": "Line 305 is a grouping heading only; child rows carry the domain-specific obligations.",
+      "target": "REVIEW-ENTRY.md §5.1",
+      "coveredNonblankLines": 1
+    },
+    {
+      "id": "m-calendar-subscribe-control",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceLineStart": 306,
+      "sourceLineEnd": 306,
+      "disposition": "retain",
+      "owner": "split: D4 Calendar domain semantics / D3+D9 external-origin/import binding / D10 connector-secret-subscription control",
+      "currentTarget": {
+        "file": "D4.md",
+        "sections": [
+          "§9",
+          "§10.3",
+          "§16.6"
+        ],
+        "also": [
+          "D5.md §14/§19.5",
+          "D3.md §6/§8.5",
+          "docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6",
+          "docs/design/d10/CANDIDATE.md §16/§17",
+          "docs/design/d10/CONTROL-CONTRACT.md §16"
+        ]
+      },
+      "basis": "External calendar remains authority for subscribe/sync; provider token/etag/cursor/credentials/fetch state remain D10 control-plane state, never author content or identity.",
+      "oracle": "306 external Calendar authority; provider sync/control state remains in the D10 control plane.",
+      "target": "D4.md §9, §10.3, §16.6 | also: D5.md §14/§19.5; D3.md §6/§8.5; docs/design/snapshots/d9-import-ir-and-mapping/source.md §1/§2/§6; docs/design/d10/CANDIDATE.md §16/§17; docs/design/d10/CONTROL-CONTRACT.md §16",
+      "coveredNonblankLines": 1
+    },
+    {
+      "id": "m-import-connector-continuation",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceLineStart": 307,
       "sourceLineEnd": 323,
       "disposition": "explicit-defer",
       "owner": "split: D3 binding / D9 conversion / D10 connector; D5 domain constraints",
@@ -43476,7 +43680,7 @@
       "basis": "binding, conversion and external connector/credential execution keep actual owners",
       "oracle": "m-import-connector: retain exact source and actual-owner split; no generic intake placeholder may substitute for the mapped clause",
       "target": "D4.md §1, §2.2 | also: D3 SourceBinding/OriginBinding; D9 import/export; D10 CANDIDATE §16–§17",
-      "coveredNonblankLines": 36
+      "coveredNonblankLines": 15
     },
     {
       "id": "m-d5-routing",
@@ -43944,14 +44148,15 @@
     "coveredNonblankLines": 716,
     "unmapped": 0,
     "overlap": 0,
-    "groupRule": "each nonblank line belongs to exactly one source-qualified group; metadata/control is not mislabeled as D4/D5 semantics"
+    "groupRule": "each nonblank line belongs to exactly one source-qualified group; Mandatory 303-306 are explicitly split by recurrence/identity, grouping metadata, and connector/control ownership"
   },
   "fixed97_relevant_rows_coverage": {
     "selectedRows": 72,
     "englishRowsMatched": 72,
     "chineseRowsMatched": 72,
     "missing": 0,
-    "rowCountsAreInventoryOnly": true
+    "rowCountsAreInventoryOnly": true,
+    "actualOwnerRemap": "R1 complete for all 72 selected rows; row counts remain inventory only"
   },
   "d10_direct_source_qualification": [
     {
@@ -44971,14 +45176,20 @@
   ],
   "p2_repair_state": {
     "A2-D4D5:P2-01": {
-      "status": "author-resolved-pending-independent",
+      "status": "R1/R2-author-resolved-pending-independent",
       "independentClose": false,
-      "basis": "fixed-S/Mandatory/fixed97 mappings now carry exact source qualification, current target, disposition, owner, basis and oracle; catalog closure is in D4-CATALOG-MAP.json"
+      "startHead": "01cc40b819df78fbe724f1c64c27284ad60fc6c8",
+      "basis": "R1 re-audits all 72 fixed97 selected rows to actual current owners/consumers with exact EN+ZH source rows retained; R2 splits Mandatory 303-306 without changing source bytes.",
+      "residuals": {
+        "R1": "author-resolved-pending-independent: 72/72 actual owner/current-clause mappings",
+        "R2": "author-resolved-pending-independent: 303-304 recurrence/identity, 305 grouping, 306 connector/subscription control"
+      }
     },
     "A2-D4D5:P2-02": {
-      "status": "author-resolved-pending-independent",
-      "independentClose": false,
-      "basis": "six real bilingual D10 direct sources are direct_partial_not_full_D10; predecessor references remain source-qualified and unmodified"
+      "status": "independent-CLOSED-bounded-at-fixed4282",
+      "independentClose": true,
+      "fixedReviewSha": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a",
+      "basis": "Independent review CLOSED only the six real bilingual D10 direct-source qualification and historical-reference qualification at fixed4282. This does not accept D6, whole D10, D7-D10, or global A2."
     }
   }
 }

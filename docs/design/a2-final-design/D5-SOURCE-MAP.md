@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D5-SOURCE-MAP.zh-CN.md)
 # A2 D5 source, intake, supersession, and current-consumer audit map
 
-Status: **A2-D4D5:P2-01** and **P2-02** are author-resolved-pending-independent only. D5 normative semantics are not rewritten by this audit repair.
+Status: **A2-D4D5:P2-02 is independently CLOSED only in its fixed4282 bounded six-D10-source scope. A2-D4D5:P2-01 R1/R2 is author-resolved-pending-independent only.** D5 normative semantics are not rewritten by this audit repair.
 
 ## 1. Fixed-S D5 source coverage
 
@@ -21,7 +21,7 @@ The current D5 candidate still has six distinct row domains and no persistent Re
 
 Mandatory source lines 1–924 are covered **716/716** through 29 actual-owner groups; generic “D4/D5 intake” is no longer used as the current target. D6 persistence, D9 Office/template/conversion, D10 package/provider/connector/credential/execution custody, D3 binding, and D4 typed facts retain their actual owners.
 
-The **130 D5-relevant fixed97 rows** now preserve actual EN and ZH rows, each with source path/blob/line plus current A2 target/disposition/owner/basis/oracle. Counts do not replace the source conditions.
+The **130 D5-relevant fixed97 rows** preserve actual EN and ZH rows with source path/blob/line. R1 re-audits **130/130** rows to actual current holders/consumers and records actual file+section target, disposition, owner, basis and exact source-row oracle. Counts do not replace the source conditions.
 
 ## 3. Direct D10 qualification
 
@@ -34,10 +34,11 @@ Raw references to Proof2/Key2/wire12/PAB3 remain source-qualified historical/ori
 - fixed-S D5 lines 81–92 → D5 §0/§3/§19.1, `named-supersede`: old Inline-only/no-span/no-block/no-header restriction is not current native-table grammar.
 - Mandatory line 111 `phones[]` → D5 §4/§14/§19.2 + D4 §10.1/§16.2: equal phone values can remain distinct occurrence/note targets in one revision; no durable row identity is created.
 - Mandatory lines 183/210 → D5 §14 + D4 §8/§16.4: Organizations inverse display/edit resolves the real authored relation side and does not persist an inverse membership row.
-- Mandatory lines 251/276/303–306 → D5 §14/§19.10 + D4 Calendar/current proof clauses: recurrence occurrence stays derived unless explicitly promoted; provider/connector state never becomes row identity.
+- Mandatory 303–304 → D5 §14/§19.2/§19.5 plus D4 Calendar; derived occurrence stays non-Node unless explicit D3 promote/adopt. Line 305 is grouping metadata only. Line 306 keeps D5 as domain/import consumer while provider token/etag/cursor/credentials/fetch state stays with D10 connector/subscription control.
+- fixed97 `AD2-18` now maps to D2 native video semantics; `FC34C-D6-01` maps to D6-CONTROL §21.4/§21.5 + D10 execution responsibility; D8 presentation-policy rows map to SPEC §8.2/SCHEMAS §6.4; D9 export rows map to SPEC §8.3/SCHEMAS §6.5. None uses D5 §17 as a semantic catch-all.
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. The completed fixed-a62 D4/D5 non-author review (`a62aa7d4eaf56113cd1e9e32336ae8814f83589b`, request `7b6e1f16-fa41-499c-b078-647f1942e94e`) returned semantic LIMITED PASS but audit REVISE with these two P2s. This author repair leaves both P2s at author-resolved-pending-independent.
+D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. The later fixed4282 independent review independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope** and left P2-01 OPEN with R1/R2 residuals. This author repair addresses only R1/R2 and leaves P2-01 author-resolved-pending-independent pending a new fixed-stop non-author review.
 
-D6 remains a stopped author candidate, not accepted. D7–D10 full modules, Mandatory 925–1141, and fresh global review remain pending. Runtime/OS/GUI/replica/migration/activation evidence is UNRUN.
+D6 author work stopped at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` with five D6 findings author-resolved-pending-independent; it is not accepted and is not closed by this D5 audit repair. D7–D10 full modules, Mandatory 925–1141, and fresh global review remain pending. Runtime/OS/GUI/replica/migration/activation evidence is UNRUN.
