@@ -2374,7 +2374,8 @@
     "review": {
       "d1d2": "fixed-446 independent CLOSED retained",
       "d3": "fixed-a62 independent narrow CLOSED D3:P1-01 and D3:P1-02",
-      "fixed829": "P0=0/P1=0/P2=2; D4/D5 semantic LIMITED PASS, audit package REVISE",
+      "fixed_a62": "a62aa7d4eaf56113cd1e9e32336ae8814f83589b: P0=0/P1=0/P2=2; D4/D5 semantic LIMITED PASS, audit package REVISE",
+      "review_request": "7b6e1f16-fa41-499c-b078-647f1942e94e",
       "p2_01": "author-resolved-pending-independent",
       "p2_02": "author-resolved-pending-independent",
       "independentClose": false
@@ -2389,7 +2390,8 @@
       "catalogGlobalLimits": 7,
       "fixed97D4BilingualRows": "72/72",
       "fixed97D5BilingualRows": "130/130",
-      "d10DirectBilingualFiles": "6 exact blobs"
+      "d10DirectBilingualFiles": "6 exact blobs",
+      "catalogJsonPointerRoot": "RFC 6901 root is \"\"; \"/\" is not used as the document-root pointer"
     }
   },
   "d6_integration": {
