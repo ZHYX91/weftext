@@ -24,7 +24,7 @@ translation_status: source
 | D2 | 已整合为 current candidate；fixed-446 在其有界范围内独立关闭 D1/D2 findings |
 | D3 | 已整合为 current 作者候选；另一个 fixed-a62 非作者窄复核已 CLOSED 两个有界 D3 P1 finding；这不是 global A2 acceptance |
 | D4 | 已整合为 current 作者候选；fixed-S 文本/catalog intake 完成；fixed-a62 语义 LIMITED PASS；audit P2-01/P2-02 已由作者修复，待独立复核 |
-| D5 | 已整合为 current 作者候选；fixed-S intake 完成；fixed-829 语义 LIMITED PASS；audit P2-01/P2-02 已由作者修复，待独立复核 |
+| D5 | 已整合为 current 作者候选；fixed-S intake 完成；fixed-a62 语义 LIMITED PASS；audit P2-01/P2-02 已由作者修复，待独立复核 |
 | D6 | 已形成截至 829 的 stopped 作者候选；fixed-829 非作者只读复核不构成 D6 acceptance |
 | D7 | 完整模块仍 TODO；已读 D2 交集与 D3-direct 中文 owner 输入 |
 | D8 | 完整模块仍 TODO；已读 D1/D2 交集与 D3-direct 中文 owner 输入 |
