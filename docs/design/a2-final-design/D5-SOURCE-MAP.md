@@ -38,6 +38,6 @@ Raw references to Proof2/Key2/wire12/PAB3 remain source-qualified historical/ori
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. fixed-829 returned D4/D5 semantic LIMITED PASS but audit REVISE with these two P2s. This author repair leaves both P2s at author-resolved-pending-independent.
+D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. The completed fixed-a62 D4/D5 non-author review (`a62aa7d4eaf56113cd1e9e32336ae8814f83589b`, request `7b6e1f16-fa41-499c-b078-647f1942e94e`) returned semantic LIMITED PASS but audit REVISE with these two P2s. This author repair leaves both P2s at author-resolved-pending-independent.
 
 D6 remains a stopped author candidate, not accepted. D7–D10 full modules, Mandatory 925–1141, and fresh global review remain pending. Runtime/OS/GUI/replica/migration/activation evidence is UNRUN.
