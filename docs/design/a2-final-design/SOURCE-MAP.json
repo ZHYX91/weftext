@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D1-D6 author candidates integrated. D6 full author module is present and pending non-author review; D7-D10 remain future full-module batches. No global acceptance implied.",
+  "status": "A2 D1-D6 author candidates integrated. D3 bounded findings independently CLOSED at fixed-a62. D4/D5 semantics preserved; audit P2-01/P2-02 are author-resolved-pending-independent. D6 stopped author candidate is not independently accepted. D7-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,10 +2341,10 @@
       ]
     }
   ],
-  "next_batch": "D7 only after D6 handoff and explicit authorization; queued D4/D5 bounded follow-up is outside this D6 author scope.",
+  "next_batch": "A new non-author narrow review must bind the exact final PR5 stop head and review only D4/D5 P2-01/P2-02 mapping/source qualification plus bilingual/D3 direct regression. D7-D10 full modules, Mandatory 925-1141 and fresh global review remain later work.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
-    "status": "author_candidate_complete_for_this_batch_pending_non_author_review",
+    "status": "semantic_candidate_preserved; P2-01/P2-02 author-resolved-pending-independent",
     "d4": {
       "main": "D4.md",
       "impact": "D4-IMPACT.md",
@@ -2372,21 +2372,24 @@
       "nonblankMapped": 716
     },
     "review": {
-      "fixed446D1D2": [
-        "P1-01 CLOSED",
-        "P2-01 CLOSED"
-      ],
-      "fixed446D3": [
-        "D3:P1-01 OPEN",
-        "D3:P1-02 OPEN"
-      ],
-      "coversEdafOrLater": false
+      "d1d2": "fixed-446 independent CLOSED retained",
+      "d3": "fixed-a62 independent narrow CLOSED D3:P1-01 and D3:P1-02",
+      "fixed829": "P0=0/P1=0/P2=2; D4/D5 semantic LIMITED PASS, audit package REVISE",
+      "p2_01": "author-resolved-pending-independent",
+      "p2_02": "author-resolved-pending-independent",
+      "independentClose": false
     },
-    "runtime": {
-      "runtime": "UNRUN",
-      "os": "UNRUN",
-      "gui": "UNRUN",
-      "replica": "UNRUN"
+    "runtime": "UNRUN",
+    "auditCoverage": {
+      "d4FixedSNonblank": "906/906",
+      "d5FixedSNonblank": "170/170",
+      "mandatoryNonblankLines1_924": "716/716",
+      "catalogPointers": "2854/2854",
+      "catalogNamedRecords": 95,
+      "catalogGlobalLimits": 7,
+      "fixed97D4BilingualRows": "72/72",
+      "fixed97D5BilingualRows": "130/130",
+      "d10DirectBilingualFiles": "6 exact blobs"
     }
   },
   "d6_integration": {
@@ -2406,6 +2409,12 @@
       "D6-SOURCE-MAP.md",
       "D6-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "author_candidate_pending_independent_review"
-  }
+    "status": "author_candidate_stopped_at_829; fixed-829 non-author read-only review does not establish D6 acceptance"
+  },
+  "pending_scope": [
+    "D7-D10 full A2 owner modules",
+    "Mandatory source lines 925-1141",
+    "fresh Pro/global review",
+    "runtime/OS/GUI/real-replica/migration/activation evidence"
+  ]
 }
