@@ -144,7 +144,7 @@
       "en": "Prepared Intent",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Core-managed immutable D6 intent containing the complete owner descriptor, source plan, dependencies, authorization scope, budget, installation plan and protected pins; d6_commit_request/2 selects it with planToken.",
+      "definition": "Fresh current generic Prepared Intent is PreparedIntent/3, selected only by the opaque d6_plan/3 planToken and carrying InputDescriptor/3 + DependencyProof/3 under the one existing D6 DecisionKey/planning/P path. Genuine PreparedIntent/1-/2 records, tokens, pins, authorization, installation state, error order and saved/planned/unknown recovery remain exact historical dispatch and are never re-encoded.",
       "exclusions": "Not a D3 native private plan, content reservation, free callback or requirement added to identity_operation_request wire12. Native D3 enters its own typed planning stages and shares the same DecisionKey/P decision, without a D6 prepare or second D6 identity submit.",
       "ownedNames": [
         "PreparedIntent",
@@ -572,7 +572,7 @@
       "en": "Dependency Completeness Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "DependencyProof/2 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fourteen closed DependencyKey/2 kinds—source, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource—with owner-defined complete ranges, evidence pins, and per-key continuity stamp {epoch,revision}. Completeness comes from a currently authorized consistent snapshot/range barrier or a gap-free continuous change chain plus final revalidation; D6 carries the closed keys/stamps while D3/D4/D7 retain their actual enumeration algorithms. The guarded D3 resolution context may bind its conflicted source entry only to complete typed ConflictInstallInput/1 plus conflict/current-range evidence; the separate guarded D6 source_merge/choose_source_head context may bind its conflicted source entry only to complete SourceConflictBefore/1 + SourceConflictVersionBasis/1 plus exact conflict/source/control continuity. Neither exception creates canonical-current Observation or Query qualification, and unrelated source reads remain ordinary SourceObservation inputs.",
+      "definition": "Fresh current DependencyProof/3 binds Workspace/CommitDomain/base Frontier to complete positive/negative evidence over exactly fifteen DependencyKey/3 kinds in fixed rank order: source, document_format, lifecycle, placement_range, ref_inbound, relation_incidence, calendar_scope, registry, temporal_rules, authorization, foreign_binding, query_scan, replica_registry, conflict_record, execution_resource. document_format is required exactly when managed-Document semantics are consumed. Per-key stamps remain {epoch,revision}; evidence comes only from current authorization plus a consistent barrier or gap-free continuous chain and final revalidation. Genuine Proof2/Key2 is the fourteen-kind predecessor family with its original ranks/bytes/recovery and is never rewritten.",
       "exclusions": "Not caller readSet/free JSON, Derived Index readiness, row count, final hash, provider-synced status, Frontier-vector comparison, partial/building index, unknown range, or no-hit evidence. Unknown/placeholder/I/O/missing-shard/hidden-unreadable state never proves empty. Deleting I alone does not reset proof while protected P/M continuity facts remain complete; actual proof/continuity loss or a gap requires a new epoch.",
       "ownedNames": [
         "DependencyProof",
@@ -799,7 +799,7 @@
       "en": "Workspace Bootstrap Plan",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Control §10.2 owns WorkspaceBootstrapPlan/3 with wireVersion=3, profile/3, Policy/3 and WorkspaceTrustGenesis/1 in the original D3 fresh decision. The same bootstrap P seal establishes the anchored root, exact target-server CommitDomain key authorization, initial WorkspaceAuthorizationBundle/1 and target activation. Plan/2 was an unactivated candidate predecessor; genuine Plan/1 history retains only its proven original decoder.",
+      "definition": "Fresh current generic Workspace Bootstrap Plan is WorkspaceBootstrapPlan/4 with wireVersion4, WorkspaceBootstrapProfile/4, Policy/3, WorkspaceTrustGenesis/2 containing exactly two Declaration2 profiles, mandatory initialPresentationPolicy and complete Registry/Calendar initialization inside the original D3 wire13 fresh create/fork DecisionKey, one planning CAS and one final P/Notice3/CP4/ChangeRecord1 activation. Genuine historical Plan1/Plan3 remains exact recorded-family recovery; the preserved ownedNames entry WorkspaceBootstrapPlan/3 is version-qualified historical provenance, not parallel generic current.",
       "exclusions": "不是第二decision、可编辑请求或永久管理员",
       "ownedNames": [
         "WorkspaceBootstrapPlan",
@@ -828,7 +828,7 @@
       "en": "Workspace Bootstrap Profile",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Explicit nested profile wireVersion=3 retains the original six members, fixed base21+seven FA capabilities+d10_control_self and complete target Registry Field grants; immutable old families/profile1/2 never auto-expand.",
+      "definition": "Fresh current generic bootstrap profile is WorkspaceBootstrapProfile/4 with wireVersion4, Registry seed binding and explicit initial scope/multiplicity; it is family-immutable and feeds only Plan4. Genuine historical Profile1-/3 keeps its exact decoder/bytes/capability family. The preserved ownedNames entry WorkspaceBootstrapProfile/3 is historical version-qualified provenance, not generic current.",
       "exclusions": "不是D2 Profile或Facet，不是每次重试最新配置",
       "ownedNames": [
         "WorkspaceBootstrapProfile",
@@ -1182,7 +1182,7 @@
       "en": "Installation Notice",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "InstallationNotice/2 is the immutable DecisionKey/base-Frontier/before-after component record durably written before portable current mutation; it contains no ChangeId for this not-yet-sealed decision, whose ChangeId is allocated only at P seal; baseFrontier may contain historical sealed ChangeIds.",
+      "definition": "Fresh current generic Installation Notice is InstallationNotice/3: the immutable DecisionKey/baseFrontier/WriteProtection/before-after PortableComponentKey/2 record written before the portable current mutation, including document_format where applicable and no new ChangeId before seal. Genuine InstallationNotice/1-/2 keeps exact recorded decoder/bytes/pins/install/recovery and is never parallel current.",
       "exclusions": "不是commit proof、receipt、approval或execution authority",
       "ownedNames": [
         "InstallationNotice",
@@ -1209,7 +1209,7 @@
       "en": "Content Completion Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "ContentCompletionProof/3 is the new-FA post-seal portable proof binding DecisionKey, the real sealed ChangeId, ContentGuarantee, WriteProtection, SemanticState, actual frontierBefore/frontierAfter, actual component after-images, receipt digest, and sourceChanges expressed with production SourceVersion/2|absent. A receiver validates the notice/proof/components and complete continuous sealed chain before advancing Frontier and then creates its own current SourceObservation. Historical ContentCompletionProof/1 and /2 retain their original bytes, decoders, authorization, pins, and recovery/unknown obligations; /2 sourceChanges remain SourceVersionRef/1|absent.",
+      "definition": "Fresh current generic Content Completion Proof is ContentCompletionProof/4 bound to the same DecisionKey and real sealed ChangeId, exact Notice3 component set/order, actual frontierBefore/frontierAfter, production SourceVersion/2 sourceChanges or absent, and ChangeRecord/1. Receiver admission validates the complete continuous sealed chain before creating its own current SourceObservation. Genuine CP1/2/3 keeps exact recorded decoder/bytes/pins/authorization/recovery and is never re-encoded as /4.",
       "exclusions": "Does not grant receipt read, Query/Action completeness, Money/Approval consumption, execution takeover, or permission. It never copies a sender SourceObservation token as receiver currentness, never derives unrelated scope from Frontier numbers/provider status/final hash alone, and never re-encodes /1 or /2 as /3.",
       "ownedNames": [
         "ContentCompletionProof",
@@ -1292,7 +1292,7 @@
       "en": "Execution Responsibility",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Control §16 closes the exact D10 owner payloads for original approval counts, Run/Lease admission, all schedule/occurrence states, Money lineage, original send/unknown and stop/capacity at one complete protected cut; custody uses actual fencing and preserves identities and liabilities.",
+      "definition": "Fresh current generic execution-responsibility carrier is ExecutionResponsibilityRecord/3 bound to byte-equal D10ExecutionInventory/2 and ExecutionContinuityProof/2 at one Authority Store barrier, with exact storeIncarnation/StopCapacity and old-holder irreversible fencing while preserving Approval/Money/external-unknown identities and liabilities. Genuine Record2/Inventory1/Proof1 remains version-qualified recovery and is never background-migrated. The preserved ownedNames Record2 entry is historical provenance, not generic current.",
       "exclusions": "不是ReplicaEpoch、Workspace content identity或文件同步资格",
       "ownedNames": [
         "ExecutionResponsibility",
@@ -1350,7 +1350,7 @@
       "en": "D10 Control Input",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "D6 Control §4.3 owns the closed immutable D10 Workspace adapter input; consumes actual complete D10 owner types, excludes generated M and later confirmation, produces original PreparedIntent2/request2 with protocolOwner D6.",
+      "definition": "Fresh current generic D10 Workspace control input is D10ControlInput/2 with ControlDependencies/3 + ControlPrepareBinding/3 derived from current Proof3 and exact protected D10 images/effects; it produces PreparedIntent/3 and the original final request under protocolOwner D6 without a second submit/ledger. Genuine D10ControlInput/1 and earlier bindings retain exact historical bytes/recovery; preserved /1 ownedNames remain version-qualified provenance.",
       "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
       "ownedNames": [
         "D10ControlInput/1",
@@ -1403,7 +1403,7 @@
       "en": "Schedule Continuity Witness",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "D6 Storage §7.2.1 continuously consumes actual complete registered source/control transitions into a protected checkpoint; unrelated changes may advance, proved business ABA marks binding_changed, gaps mark gap; no I reconstruction or hash-only proof.",
+      "definition": "Fresh current generic schedule continuity uses ScheduleSubscription/2 with ScheduleContinuityWitness/2, Step/2 and Invalidation/2 under exact /2 artifact domains, current Proof3 and Notice3/CP4/ChangeRecord1 transitions. Capacity is per producer update: at most 4,096 retained pins and at most 16 MiB canonical evidence metadata, while source/component bytes have a separate reserved PinBudget. Capacity exhaustion atomically records the existing gap/invalidation before ordinary source/consumer progress. Genuine /1 artifacts keep exact domains/bytes/recovery and are never repinned or re-encoded.",
       "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
       "ownedNames": [
         "ScheduleContinuityWitness/1",
@@ -1434,7 +1434,7 @@
       "en": "Execution Continuity Proof",
       "owner": "D6",
       "layer": "storage/control",
-      "definition": "Closed initial/checkpoint/handoff association of actual complete D10 inventory, protected store barrier and irreversible old-holder fencing, preserving original control identities and liabilities.",
+      "definition": "Fresh current generic Execution Continuity Proof is ExecutionContinuityProof/2 over complete D10ExecutionInventory/2, exact storeIncarnation/StopCapacity and protected same-barrier old-holder fencing, binding ExecutionResponsibilityRecord/3 without creating a second account or author ledger. Genuine Proof1/Inventory1/Record2 remains exact historical recovery.",
       "exclusions": "No second author/account/claim ledger, new author identity, caller proof or independent permission; historical records retain original decoders and retention.",
       "ownedNames": [
         "ExecutionContinuityProof/1"
@@ -1499,7 +1499,7 @@
         "RecurrenceReadBinding"
       ],
       "conceptId": "weftext.term.dependency-proof",
-      "contract": "D4 RelationReadContext/2 and RelationReadBinding/2 remain the closed D4 source/entity-state/incidence wire, and RecurrenceReadContext/RecurrenceReadBinding remain /1. D6 Control §3.4 consumes those owner shapes through the closed relation_incidence/calendar_scope/temporal_rules DependencyKey/2 evidence, stamps and pins without changing the D4 inner selectors or admitting arbitrary context JSON; affected strong consumption remains gated on the actual P2 D4 consumer and fresh joint acceptance.",
+      "contract": "D4 RelationReadContext/2 and RelationReadBinding/2 remain closed D4 source/entity-state/incidence wire, and RecurrenceReadContext/RecurrenceReadBinding remain /1. Fresh current D6 Control §3.4 carries those owner shapes through relation_incidence/calendar_scope/temporal_rules Key3 evidence inside the fifteen-arm DependencyProof/3; genuine Key2/Proof2 keeps its original fourteen-kind historical dispatch. D6 never changes the D4 inner selectors or admits free context JSON.",
       "revision04Note": "RelationReadContext/2 and RelationReadBinding/2 distinguish source/entity-state/incidence; Recurrence remains /1. stateToken is an inherited D4 member backed by D6 DependencyProof, not a new public capability token."
     },
     {
@@ -1516,7 +1516,7 @@
         "CommitDomain"
       ],
       "conceptId": "weftext.term.commit-domain",
-      "contract": "D6 Control/2 defines the closed CommitDomain shape; D3 may not create new scoped identity decisions until its coordinated wire12 afterimage activates."
+      "contract": "Current A2 D3 fresh identity is wire13 with d3_identity_operation/13 and InputDescriptor/3; D6 owns the closed CommitDomain/DecisionKey carriers. Genuine wire9-12 remains historical exact dispatch. D6 never creates a second D3 identity decision or widens D3 WriteScope."
     },
     {
       "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
@@ -1524,7 +1524,7 @@
         "ReplicaEpoch"
       ],
       "conceptId": "weftext.term.replica-epoch",
-      "contract": "D6 Control defines ReplicaEpoch registration. replica_register can mint exactly one fresh epoch and append exactly one same-decision fixed-profile authorize declaration for that exact replica CommitDomain; it grants no general trust administration. replica_retire changes only the ReplicaRecord to inactive, so authorize_new_sign later fails active-domain/fence; trust revoke for loss/compromise is a separate root-authorized decision."
+      "contract": "Current replica_register mints exactly one fresh ReplicaEpoch and, in one frozen plan, exactly two staged DomainSealKeyHandle/2 values plus two Declaration2 authorize records in fixed revision-token then source-transform order, same DecisionKey and one Notice3/CP4/ChangeRecord1/final P. Both become usable only after complete admission. Genuine historical single-profile registration stays recorded-family recovery; retire prevents new signing without deleting history or taking execution custody."
     },
     {
       "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
@@ -1532,7 +1532,7 @@
         "ChangeId"
       ],
       "conceptId": "weftext.term.change-id",
-      "contract": "D6 Control/2 owns replica-local portable change identity; D3 wire12 must bind it only through the coordinated commit domain."
+      "contract": "Current D3 wire13 consumes D6 ChangeId only through the one current Notice3/CP4/ChangeRecord1 publication and original DecisionKey; genuine historical D3 wires retain recorded semantics. ChangeId is never minted before final P or inferred from transport."
     },
     {
       "owner": "D6 FA-r01 producer / D3 P2 candidate consumer",
@@ -1573,7 +1573,7 @@
         "executionDomainId"
       ],
       "conceptId": "weftext.term.execution-responsibility",
-      "contract": "D6 owns the durable continuity container; D10/Money owns approval/claim/external/Money sub-schemas and sourceOccurrenceKey semantics."
+      "contract": "Fresh current D6 continuity uses ExecutionResponsibilityRecord/3 + ExecutionContinuityProof/2 whose payloads are byte-equal to D10ExecutionInventory/2 at one Authority Store barrier with exact StoreIncarnation/StopCapacity and old-holder fence. D10/Money still owns approval/claim/external/Money/sourceOccurrenceKey schemas. Record2/Inventory1/Proof1 remain historical exact recovery; sync/backup never grants execution authority."
     },
     {
       "owner": "D6 installation producer / guarded D3 and D6 conflict resolution / D7 protected record",
@@ -1587,7 +1587,7 @@
         "D3ResolutionInputUse/1"
       ],
       "conceptId": "weftext.term.source-version",
-      "contract": "Control §3.1.1 + §6.2.1 keep ConflictInstallInput/1 + SourceRevisionPlan/2 exclusively on guarded D3 canonical resolution. Control §3.1.2 + §6.2.2 separately bind D6 source_merge/choose_source_head to actual physical SourceConflictBefore/1, complete sealed SourceConflictVersionBasis/1 and SourceRevisionPlan/3. Neither conflicted subject enters sourceInputs or gains ordinary current qualification. /3 preserves actual physical CP3 before, current-domain H, one planning CAS/P seal and original recovery; same bytes with a different chosen production SourceVersion is admission, while a truly source-unchanged resolution emits no /3/H. No wrapper crosses key/audience/owner/arm or replaces the other owner guard."
+      "contract": "Control §3.1.1 + §6.2.1 keep ConflictInstallInput/1 + SourceRevisionPlan/2 exclusively on guarded D3 canonical resolution; Control §3.1.2 + §6.2.2 separately bind D6 source_merge/choose_source_head to SourceConflictBefore/1 + SourceConflictVersionBasis/1 + SourceRevisionPlan/3. Fresh current outer publication uses Notice3/CP4/ChangeRecord1, so the current physical before is the actual CP4 before. Genuine historical CP3 retains its recorded physical-before semantics. Neither conflicted subject enters sourceInputs or gains ordinary current qualification."
     },
     {
       "owner": "D6 Control §4.3 / D10 Control §8.1–8.2",
@@ -1602,7 +1602,7 @@
         "LeaseRunUse/1"
       ],
       "conceptId": "weftext.term.d10-control-input",
-      "contract": "D6 owns its descriptor and original submit; D10 owns complete input images/effects and live eligibility. No fifteenth DependencyKey, no self-cycle, same planning/seal/stop serialization and historical recovery."
+      "contract": "Fresh current D10 Workspace control uses D10ControlInput/2 + ControlDependencies/3 + ControlPrepareBinding/3 with current Proof3 and ApprovalUse/2/PAB4 where applicable; D6 owns its descriptor/original submit and one planning/P serialization, while D10 owns complete images/effects/live eligibility. Genuine Input1/Dependencies2/Binding1-/2/ApprovalUse1 records remain exact historical saved/planned/unknown recovery; no sixteenth DependencyKey or self-cycle is introduced."
     },
     {
       "owner": "D6 Control §10.2 / D7 symbolic producer",
@@ -1614,7 +1614,7 @@
         "d10_control_self"
       ],
       "conceptId": "weftext.term.workspace-bootstrap-plan",
-      "contract": "Actual fresh bootstrap uses wireVersion3/profile3/Policy3 plus WorkspaceTrustGenesis/1. Issuer/target custody establishes WorkspaceTrustAnchor/1 with the exact WorkspaceTrustRootFingerprint/1 over complete canonical root declaration bytes; the same original P seal establishes exact target-server domain authorization and target activation. Current D7 symbolic producer decodes Plan3; Plan2 remains unactivated and genuine Plan1 history remains original."
+      "contract": "Fresh current bootstrap uses WorkspaceBootstrapPlan/4 + Profile4 + WorkspaceTrustGenesis/2/Bundle2 with exactly two Declaration2 profiles and mandatory initialPresentationPolicy in the original D3 wire13 all-fresh DecisionKey, one planning CAS and one Notice3/CP4/ChangeRecord1/final P. Genuine historical Plan1/Plan3/Profile1-/3/Genesis1/Bundle1 remain exact recorded-family recovery; no migration, second admin decision or later repair commit is invented."
     },
     {
       "owner": "D6 Storage §7.2.1 / D10 Control §16",
@@ -1625,7 +1625,7 @@
         "ScheduleContinuityInvalidation/1"
       ],
       "conceptId": "weftext.term.schedule-continuity-witness",
-      "contract": "Registered finite exact-history producer plus protected continuous folding; explicit gap/binding change, atomic checkpoint/config/claim fence, full original occurrence/unknown retention and reference-safe GC."
+      "contract": "Fresh current ScheduleSubscription/2 uses Witness2/Step2/Invalidation2 exact /2 artifact domains with Proof3 and current Notice3/CP4/ChangeRecord1. Each producer update is bounded by at most 4,096 retained pins and 16 MiB canonical evidence metadata, with source/component bytes charged to a separate reserved PinBudget; overflow atomically records gap/invalidation before normal progress. Genuine /1 artifacts remain exact historical domains, and compaction/GC is reference-safe."
     }
   ],
   "candidateStatus": "A2 D6 current author candidate; 52 public concepts and 17 cross-stage bindings retained exactly from latest owner afterimage; fixed97 technical successors appended without creating public concept IDs; not independent acceptance or implementation",
@@ -1645,7 +1645,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "DependencyKey/2",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §3.4; D6-SCHEMAS §5.1",
       "notes": "15-arm current union; document_format rank 1."
     },
     {
@@ -1653,7 +1653,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "DependencyProof/2",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §3.4; D6-SCHEMAS §5.1",
       "notes": ""
     },
     {
@@ -1661,7 +1661,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "InputDescriptor/2",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §3.5; D6-SCHEMAS §5.1",
       "notes": ""
     },
     {
@@ -1669,7 +1669,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "PreparedIntent/2",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §3.6; D6-SCHEMAS §5.1",
       "notes": ""
     },
     {
@@ -1677,7 +1677,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "PortableComponentKey/1",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §6; D6-SCHEMAS §5.2",
       "notes": "document_format rank 1."
     },
     {
@@ -1685,7 +1685,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "InstallationNotice/2",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §6; D6-SCHEMAS §5.2",
       "notes": ""
     },
     {
@@ -1693,7 +1693,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "ContentCompletionProof/3",
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §6; D6-SCHEMAS §5.2",
       "notes": "Current component family; inherits CP3 committed/restored admission, sourceChanges, frontier, receipt and receiver invariants while using PortableComponentKey/2 and ChangeRecord/1."
     },
     {
@@ -1701,7 +1701,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": null,
-      "section": "SPEC §6",
+      "section": "D6-CONTROL §0.1.3/§6; D6-SCHEMAS §5.3",
       "notes": "First normatively closed design family; unknown pre-FC bytes are never relabelled."
     },
     {
@@ -1781,7 +1781,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "WorkspaceTrustDeclaration/1",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §20; D6-SCHEMAS §9",
       "notes": "Dual-profile current successor; exact PoP/rotate/root signature bodies. resolve_conflict additionally binds conflictId, complete resolvedHeads, selected bundle address, mixed Carry1/2 and complete Outcome2."
     },
     {
@@ -1789,7 +1789,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "WorkspaceAuthorizationBundle/1",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §20; D6-SCHEMAS §9",
       "notes": "Current dual-profile bundle; may retain an exact Declaration1 prefix and is strict-dispatched against Bundle1 in mixed policy-conflict heads."
     },
     {
@@ -1797,7 +1797,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "DomainSealKeyHandle/1",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §20; D6-SCHEMAS §9",
       "notes": "Current profile-tagged handle. Replica registration creates exactly two staged handles in revision-token then source-transform order and activates them together only with the same CP4/P commit."
     },
     {
@@ -1805,7 +1805,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "WorkspaceTrustGenesis/1",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §10.2/§20; D6-SCHEMAS §9",
       "notes": ""
     },
     {
@@ -1813,7 +1813,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "WorkspaceBootstrapPlan/3",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §10.2; D6-SCHEMAS §9",
       "notes": "Fresh create/fork only; proposalId remains the D3 canonical UUID, initialPresentationPolicy is mandatory, and the original planning CAS/DecisionKey/final P atomically materializes revision1/separate D8 policy with target activation. Historical Plan1/Plan3 and non-bootstrap recovery are not widened."
     },
     {
@@ -1821,7 +1821,7 @@
       "owner": "D10/D6",
       "status": "current",
       "replaces": "D10ControlInput/1",
-      "section": "SPEC §14",
+      "section": "D6-CONTROL §21; D6-SCHEMAS §10",
       "notes": "Current unseen D10 Workspace-control input; preserves historical D10ControlInput/1 records under their actual recovery contract."
     },
     {
@@ -1829,7 +1829,7 @@
       "owner": "D6/D10",
       "status": "current",
       "replaces": "ExecutionResponsibilityRecord/2",
-      "section": "SPEC §14",
+      "section": "D6-CONTROL §21; D6-SCHEMAS §10",
       "notes": "Current D6/D10 responsibility successor. Its five payload members must be byte-equal to pinned Inventory2; no background migration from Record2."
     },
     {
@@ -1837,7 +1837,7 @@
       "owner": "D6/D10",
       "status": "current",
       "replaces": "ExecutionContinuityProof/1",
-      "section": "SPEC §14",
+      "section": "D6-CONTROL §21; D6-SCHEMAS §10",
       "notes": "Current proof whose inventoryPin selects exact D6-Execution-Inventory/2 and whose storeIncarnation equals Inventory2; protected tokens prove the same store/barrier."
     },
     {
@@ -1965,7 +1965,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "WorkspaceBootstrapProfile/3",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §10.2; D6-SCHEMAS §9",
       "notes": "Same closed member set and issuer semantics as Profile3; selects dual-profile fresh genesis."
     },
     {
@@ -2037,7 +2037,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "ConflictResolutionDerivedPlan/1 policy_bundle arm",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §9.4/§20.1; D6-SCHEMAS §9",
       "notes": "Current policy_bundle_choice plan freezing mixed head dispatch, per-head Carry validation evidence, Carry1/2 union, Outcome2, exact selected/result bundle pins and recovery representation."
     },
     {
@@ -2045,7 +2045,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "ConflictResolutionInput/2 policy_bundle_choice owner descriptor",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §9.4/§20.1; D6-SCHEMAS §9",
       "notes": "Protected current policy owner descriptor; ownerKind/intentKind=d6_conflict_resolution/3 and canonicalDescriptorBytes are exact. Public d6_conflict_prepare remains wireVersion3/ConflictResolution2; source arms retain Input2/Plan1/Preview1."
     },
     {
@@ -2053,7 +2053,7 @@
       "owner": "D6/D10",
       "status": "current",
       "replaces": "ScheduleContinuityWitness/1",
-      "section": "SPEC §14",
+      "section": "D6 Main §7.2.1; D6-SCHEMAS §10.1",
       "notes": "Fresh Subscription2 continuity witness. Exact artifact bytes are UTF8 D6-Schedule-Continuity/2 + NUL + D3-CJ/3(complete Witness2), pinned as artifact/recovery; /1 remains historical Witness1-only."
     },
     {
@@ -2061,7 +2061,7 @@
       "owner": "D6/D10",
       "status": "current",
       "replaces": "ScheduleContinuityStep/1",
-      "section": "SPEC §14",
+      "section": "D6 Main §7.2.1; D6-SCHEMAS §10.1",
       "notes": "Current positive continuity step using DependencyProof3 and current ChangeRecord1/Notice3/CP4 evidence. Exact artifact bytes are UTF8 D6-Schedule-Step/2 + NUL + D3-CJ/3(complete Step2), pinned as artifact/recovery; /1 remains historical Step1-only."
     },
     {
@@ -2069,7 +2069,7 @@
       "owner": "D6/D10",
       "status": "current",
       "replaces": "ScheduleContinuityInvalidation/1",
-      "section": "SPEC §14",
+      "section": "D6 Main §7.2.1; D6-SCHEMAS §10.1",
       "notes": "Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses exact D6-Schedule-Invalidation/2 artifact domain. /1 remains historical Invalidation1-only and no invalid generation resets."
     },
     {
@@ -2093,7 +2093,7 @@
       "owner": "D6",
       "status": "current",
       "replaces": "ConflictResolutionPreview/1 policy_bundle arm",
-      "section": "SPEC §13",
+      "section": "D6-CONTROL §9.4/§20.1; D6-SCHEMAS §9",
       "notes": "Immutable current policy preview binding exact Input3 resolution, branchEvidence digest, and complete Plan2; source arms retain Preview1."
     },
     {
@@ -2154,10 +2154,10 @@
     }
   ],
   "historicalDispatch": {
-    "dependency": "DependencyKey/2 + DependencyProof/2 + InputDescriptor/2 + PreparedIntent/2 remain predecessor/historical only when actually recorded; fresh current uses /3",
-    "publication": "InstallationNotice/2 + ContentCompletionProof/3 retain exact recorded decoder; fresh current uses Notice3/CP4/ChangeRecord1",
+    "dependency": "DependencyKey/2 + DependencyProof/2 + InputDescriptor/2 + PreparedIntent/2 remain genuine predecessor/historical only when actually recorded, with their original fourteen-key ranks, tokens, pins, authorization/error order and recovery; fresh current uses /3 and d6_plan/3",
+    "publication": "InstallationNotice/1-/2 and ContentCompletionProof/1-/3 retain exact recorded decoder/bytes/pins/install/seal/receipt/receiver/recovery obligations; fresh current uses Notice3/CP4/ChangeRecord1 and never widens CP3 in place",
     "sourcePlans": "SourceRevisionPlan/1 ordinary/fresh; /2 D3 canonical-conflict only; /3 D6 source-conflict only",
-    "trust": "Declaration1/Bundle1/Handle1 exact historical dispatch; current dual profile uses Declaration2/Bundle2/Handle2, preserving a byte-exact /1 prefix where legal",
-    "schedule": "Witness1/Step1/Invalidation1 exact /1 domains; current Subscription2 uses /2 artifact domains"
+    "trust": "Declaration1/Bundle1/Handle1/Carry1/Outcome1 remain exact version-qualified historical evidence/recovery; generic current dual profile uses Declaration2/Bundle2/Handle2/Carry2/Outcome2, with strict mixed-head dispatch where the current resolver explicitly admits historical prefixes",
+    "schedule": "Witness1/Step1/Invalidation1 retain exact /1 artifact domains/bytes/recovery; fresh Subscription2 uses /2 domains with per-update 4,096 retained-pin and 16-MiB canonical-evidence limits plus separate source/component PinBudget"
   }
 }
