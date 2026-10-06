@@ -15,7 +15,7 @@ translation_status: source
 
 ## 2. 详细映射
 
-D6-SOURCE-MAP.json 把每个来源 heading range 映射到实际 A2 D6 target/disposition/oracle；逐 leaf 映射 767 个 fixed-S registry JSON pointer 与 1246 个 latest-parent registry pointer；保留 89 个 parent FA/PL case occurrence；并逐条映射 760 个 parsed fixed97 acceptance row。同号但来源不同的 case 始终保持独立。
+机器映射文件逐个记录每个来源标题范围对应的 A2 D6 目标、处置与设计判据；同时逐叶记录 767 个 fixed-S 注册表指针和 1246 个最新父级注册表指针，保留 89 个父级 FA/PL 案例出现项，并逐条记录 760 个 fixed97 验收行。同号但来源不同的案例始终保持独立。
 
 ## 3. Current successor disposition
 

@@ -391,17 +391,17 @@ P1 在本 Impact 作者后像之后仍有 PROPOSAL/replacements routing；P2 D3/
 
 ## 13. A2 current successor 实施义务
 
-除非另有精确外部运行记录，本文全部 case 仍只是未执行设计义务。current 实施还必须：
-- 实现 Key3/Proof3/Descriptor3/Prepared3 与 `document_format` invalidation，不扩大 historical Key2；
-- 以一条精确 current portable chain 产生 Notice3/CP4/ChangeRecord1；format-only 的 `sourceChanges=[]`，不得造假 H；
-- 保持 SourceRevisionPlan /1 ordinary、/2 D3 canonical-conflict、/3 D6 source-conflict 的角色分派；
-- 实现 SourceTransform Event3 replay geometry、exact whole-before hash、signed canonical artifact/outbox、历史 key 验证与 no-resign recovery；
-- 实现 Declaration2/Bundle2/Handle2/PoP2 双 profile、mixed Carry1/2 policy-conflict 递归 fold、exact head evidence/pinDirectory/Preview2，以及 source-arm Input2 与 policy-arm Input3 分派；
-- 将 specialized replica_register 实现为一个 ReplicaEpoch + 两个 staged Handle2 + 两条 Declaration2，profile 顺序固定，并共享唯一 Notice3/CP4/ChangeRecord1/P；
-- 实现 current D10 mixed-holder routing、ExecutionResponsibilityRecord3/Proof2 inventory equality，以及 schedule /1-/2 exact artifact dispatch；
-- 完整保留 Result/Cursor/ByteHandle/ByteRead、ImportJob/source binding/sync limits、Server Draft/prepare/fencing、budget/attempt/clock 语义及全部既有正/负/unknown/recovery case。
+除非另有精确外部运行记录，本文全部案例仍只是未执行的设计义务。当前实现还必须：
+- 实现第 3 版依赖键、依赖证明、输入描述和准备记录，以及 `document_format` 的失效规则；不得扩大历史第 2 版依赖键；
+- 以一条精确的当前可移植链产生第 3 版安装通知、第 4 版完成证明和第 1 版变更记录；仅格式变化时 `sourceChanges=[]`，不得虚构 H；
+- 保持来源修订计划的角色分派：/1 用于普通或新鲜写入，/2 仅用于 D3 规范冲突，/3 仅用于 D6 来源冲突；
+- 实现来源变换第 3 版事件的精确回放几何、完整前像哈希、已签名规范制品与发件箱、历史密钥验证，以及恢复时禁止重新签名；
+- 实现第 2 版声明、授权包、密钥句柄和持有证明的双配置档；策略冲突必须递归折叠混合的第 1/2 版携带事实，并保留精确冲突头证据、固定证据目录和第 2 版预览；来源分支使用第 2 版输入，策略分支使用第 3 版输入；
+- 专用副本注册必须产生一个 ReplicaEpoch、两个暂存的第 2 版密钥句柄和两条第 2 版声明，配置档顺序固定，并共享唯一的安装通知、完成证明、变更记录和 P 提交；
+- 实现当前 D10 的混合版本持有者路由、执行责任记录与连续性证明的清单逐字节一致性，以及调度 /1 与 /2 制品域的严格分派；
+- 完整保留结果、游标、字节句柄与字节读取合同，以及导入任务、来源绑定、同步上限、服务器草稿/准备/栅栏、预算/尝试/时钟语义和全部既有正向、负向、未知与恢复案例。
 
-这些都不是 runtime、crypto、provider、crash、performance、OS、GUI 或真实 replica 执行声明。
+这些条目都只是设计义务，不表示已经运行运行时、密码学、提供方、崩溃恢复、性能、操作系统、图形界面或真实副本测试。
 
 ## 14. Review boundary
 

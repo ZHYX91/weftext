@@ -195,77 +195,77 @@ ConflictInstallInput/1 继续是 D6 Control §3.1.1 仅供 D3 §10.1 使用的�
 
 新增概念的代码约定在既有 Weftext.Core.Storage 命名空间使用上表准确 PascalCase 类型名和 camelCase 成员名，不设替代别名、manifest 贡献或新 CLI 命令。候选区域键依次为 storage.d10_control_input、storage.d10_control_self、storage.schedule_continuity_witness 和 storage.execution_continuity_proof；界面使用上表准确中英文概念名，不缩写。新实施禁止未列别名，但不为删别名改写历史记录或用户正文。D10 继续拥有完整记录图像、控制效果、批准使用和计次、租约准入、费用、订阅及发送记录的技术定义；D6 只消费这些准确闭合类型，不复制第二份 schema。
 
-## 9. Current technical successor registry
+## 9. 当前技术后继登记表
 
-既有 public concept ID 与 owned-name surface 继续由 D6-REGISTRY 持有；本表只是 technical version dispatch，不新增 public concept。
+既有公开概念标识与受控名称集合继续由 D6-REGISTRY 持有；本表只登记技术版本分派，不新增公开概念。
 
-| Name | Owner | Status | Replaces | Current meaning |
+| 名称 | 所有者 | 状态 | 替代 | 当前含义 |
 | --- | --- | --- | --- | --- |
-| `DocumentFormatCurrentQualification/1` | D2/D6 | current | — | SPEC §5 |
-| `DependencyKey/3` | D6 | current | `DependencyKey/2` | 15-arm current union; document_format rank 1. |
-| `DependencyProof/3` | D6 | current | `DependencyProof/2` | SPEC §6 |
-| `InputDescriptor/3` | D6 | current | `InputDescriptor/2` | SPEC §6 |
-| `PreparedIntent/3` | D6 | current | `PreparedIntent/2` | SPEC §6 |
-| `PortableComponentKey/2` | D6 | current | `PortableComponentKey/1` | document_format rank 1. |
-| `InstallationNotice/3` | D6 | current | `InstallationNotice/2` | SPEC §6 |
-| `ContentCompletionProof/4` | D6 | current | `ContentCompletionProof/3` | Current component family; inherits CP3 committed/restored admission, sourceChanges, frontier, receipt and receiver invariants while using PortableComponentKey/2 and ChangeRecord/1. |
-| `ChangeRecord/1` | D6 | current | — | First normatively closed design family; unknown pre-FC bytes are never relabelled. |
-| `PortableTransformCompilation/1` | D6/Core | current | — | SPEC §11 |
-| `SourceTransformPortableEvent/3` | D6/Core | current | — | SPEC §11 |
-| `CoreSourceEditPlan/2` | D6/Core | current | — | SPEC §§11-12 |
-| `TransformEmissionPlan/1` | D6 | current | — | SPEC §12 |
-| `SourceTransformEvidence/2` | D6 | current | — | Current signed transform evidence; beforeSourceSha256 is the SHA-256 of the exact complete historical before-source bytes selected by evidence.before, independently rechecked by receivers. |
-| `SourceTransformSealArtifact/1` | D6 | current | — | Exact signed body is SourceTransformSealSignedBody/1; message domain is D6-Source-Transform-Seal/1 and complete artifact transport is canonical D3-CJ/3. |
-| `SourceTransformSealKey/1` | D6 | current | — | SPEC §12 |
-| `SourceTransformSealOutboxItem/1` | D6 | current | — | SPEC §12 |
-| `SourceTransformSealVerificationKey/1` | D6 | current | — | SPEC §13 |
-| `WorkspaceTrustDeclaration/2` | D6 | current | `WorkspaceTrustDeclaration/1` | Dual-profile current successor; exact PoP/rotate/root signature bodies. resolve_conflict additionally binds conflictId, complete resolvedHeads, selected bundle address, mixed Carry1/2 and complete Outcome2. |
-| `WorkspaceAuthorizationBundle/2` | D6 | current | `WorkspaceAuthorizationBundle/1` | Current dual-profile bundle; may retain an exact Declaration1 prefix and is strict-dispatched against Bundle1 in mixed policy-conflict heads. |
-| `DomainSealKeyHandle/2` | D6 | current | `DomainSealKeyHandle/1` | Current profile-tagged handle. Replica registration creates exactly two staged handles in revision-token then source-transform order and activates them together only with the same CP4/P commit. |
-| `WorkspaceTrustGenesis/2` | D6 | current | `WorkspaceTrustGenesis/1` | SPEC §13 |
-| `WorkspaceBootstrapPlan/4` | D6 | current | `WorkspaceBootstrapPlan/3` | Fresh create/fork only; proposalId remains the D3 canonical UUID, initialPresentationPolicy is mandatory, and the original planning CAS/DecisionKey/final P atomically materializes revision1/separate D8 policy with target activation. Historical Plan1/Plan3 and non-bootstrap recovery are not widened. |
-| `D10ControlInput/2` | D10/D6 | current | `D10ControlInput/1` | Current unseen D10 Workspace-control input; preserves historical D10ControlInput/1 records under their actual recovery contract. |
-| `ExecutionResponsibilityRecord/3` | D6/D10 | current | `ExecutionResponsibilityRecord/2` | Current D6/D10 responsibility successor. Its five payload members must be byte-equal to pinned Inventory2; no background migration from Record2. |
-| `ExecutionContinuityProof/2` | D6/D10 | current | `ExecutionContinuityProof/1` | Current proof whose inventoryPin selects exact D6-Execution-Inventory/2 and whose storeIncarnation equals Inventory2; protected tokens prove the same store/barrier. |
-| `PinRef/2` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `ComponentImage/1` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `OwnerInputBinding/2` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `ObservationScope/2` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `WorkspaceTrustRootDeclaration/1` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `WorkspaceTrustAnchor/1` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `RevisionTokenSealVerificationKey/1` | D6 | retained-current | — | Not mechanically version-bumped. |
-| `SourceTransformSealSignedBody/1` | D6 | current | — | Complete SourceTransformSealArtifact/1 with only signature removed. |
-| `WorkspaceTrustPredecessor/2` | D6 | current | — | Root arm carries complete WorkspaceTrustRootFingerprint/1; declaration arm carries previous revision and canonical declaration digest. |
-| `DomainSealKeyPoPBody/2` | D6 | current | — | Exact /2 domain-seal key possession signed body. |
-| `DomainSealKeyRotateContinuityBody/2` | D6 | current | — | Exact ordinary-rotation continuity signed body. |
-| `WorkspaceTrustDeclarationSignedBody/2` | D6 | current | — | Complete WorkspaceTrustDeclaration/2 with only rootSignature removed. |
-| `DomainSealKeyAddPrepare/3` | D6 | current | — | Current unseen dual-profile trust add prepare; no caller key material. |
-| `DomainSealKeyRotatePrepare/3` | D6 | current | — | Current unseen dual-profile trust rotate prepare with ordinary\|loss_recovery\|compromise. |
-| `DomainSealKeyRevokePrepare/3` | D6 | current | — | Current unseen dual-profile trust revoke prepare with administrative\|loss\|compromise. |
-| `WorkspaceBootstrapProfile/4` | D6 | current | `WorkspaceBootstrapProfile/3` | Same closed member set and issuer semantics as Profile3; selects dual-profile fresh genesis. |
-| `WorkspaceBootstrapCreatorBinding/1` | D6 | current | — | Closed creator principal/audience binding used by WorkspaceBootstrapPlan/4. |
-| `WorkspaceBootstrapTargetRegistry/1` | D6/D4 | current | — | Closed Registry snapshot/binding pair used by WorkspaceBootstrapPlan/4. |
-| `WorkspaceBootstrapSeriesConfiguration/1` | D6 | current | — | Closed bootstrap series scope/multiplicity/revision member. |
-| `WorkspaceBootstrapPeriodScopeBinding/1` | D6 | current | — | Closed bootstrap period NodeRef/CalendarScope/revision member. |
-| `TrustConflictCarry/2` | D6 | current | `TrustConflictCarry/1` | Dual-profile compromise carry. factId uses D6-Trust-Compromise-Fact/2; rotate compromise maps oldTrustKeyId; origin cut is the original Declaration2 CP4/ChangeRecord activation and is retained through per-head validation evidence. |
-| `TrustConflictOutcome/2` | D6 | current | `TrustConflictOutcome/1` | Dual-profile resolver outcome over SealProfileId/1; authorize_fresh uses the exact Declaration2 PoP/2 body. |
-| `FreshDomainAuthorizationSpec/2` | D6 | current | `FreshDomainAuthorizationSpec/1` | Current policy-conflict fresh authorization request with the same two-member JSON shape and full SealProfileId/1 union. |
-| `PolicyBundleHeadEvidence/2` | D6 | current | — | Protected strict dispatch for policy-conflict heads: CP3 implies Bundle1; CP4 uses ChangeRecord1 and exact Bundle1/2 version dispatch. |
-| `ConflictResolutionPolicyDerivedPlan/2` | D6 | current | `ConflictResolutionDerivedPlan/1 policy_bundle arm` | Current policy_bundle_choice plan freezing mixed head dispatch, per-head Carry validation evidence, Carry1/2 union, Outcome2, exact selected/result bundle pins and recovery representation. |
-| `ConflictResolutionInput/3` | D6 | current | `ConflictResolutionInput/2 policy_bundle_choice owner descriptor` | Protected current policy owner descriptor; ownerKind/intentKind=d6_conflict_resolution/3 and canonicalDescriptorBytes are exact. Public d6_conflict_prepare remains wireVersion3/ConflictResolution2; source arms retain Input2/Plan1/Preview1. |
-| `ScheduleContinuityWitness/2` | D6/D10 | current | `ScheduleContinuityWitness/1` | Fresh Subscription2 continuity witness. Exact artifact bytes are UTF8 D6-Schedule-Continuity/2 + NUL + D3-CJ/3(complete Witness2), pinned as artifact/recovery; /1 remains historical Witness1-only. |
-| `ScheduleContinuityStep/2` | D6/D10 | current | `ScheduleContinuityStep/1` | Current positive continuity step using DependencyProof3 and current ChangeRecord1/Notice3/CP4 evidence. Exact artifact bytes are UTF8 D6-Schedule-Step/2 + NUL + D3-CJ/3(complete Step2), pinned as artifact/recovery; /1 remains historical Step1-only. |
-| `ScheduleContinuityInvalidation/2` | D6/D10 | current | `ScheduleContinuityInvalidation/1` | Current binding_changed/gap invalidation for Subscription2; preserves last valid checkpoint and uses exact D6-Schedule-Invalidation/2 artifact domain. /1 remains historical Invalidation1-only and no invalid generation resets. |
-| `TrustConflictCarryValidationHop/1` | D6 | current | — | Version-dispatched retained activation evidence for one direct compromise or resolver carrier hop; pins exact ChangeRecord/completion proof/policy bundle. |
-| `TrustConflictCarryValidationEvidence/1` | D6 | current | — | Per expected-head/fact exact origin plus every traversed carrier hop used by the current mixed Carry1/2 fold. |
-| `ConflictResolutionPreview/2` | D6 | current | `ConflictResolutionPreview/1 policy_bundle arm` | Immutable current policy preview binding exact Input3 resolution, branchEvidence digest, and complete Plan2; source arms retain Preview1. |
-| `PortableAnnotationRecord/4` | D3/D6 | current | — | Current logical record in the existing node-local weftext.annotations.json Portable Metadata authority; binds AnnotationRef, AnnotationRevisionToken/1 and Value/4. |
-| `D2ProductEvaluationBinding/1` | D2/D6 | current | — | Exact processor environment, root/include SourceUnitBinding values, final read barrier, scope and DependencyProof/3 binding that proves product-snapshot currentness. |
-| `D8PresentationPolicyHeadSet/1` | D8/D6 | current | — | Complete protected maximal-head observation with owner-specific epoch/revision stamp; [] is only a proved uninitialized owner state, missing/corrupt/unproved evidence is unavailable, and multiple same-revision heads remain conflict rather than LWW. |
-| `AnnotationAggregate/1` | D6 Storage | current | — | Sole current physical JSON envelope for one Node's weftext.annotations.json, with deterministic unique PortableAnnotationRecord/4 ordering. |
-| `AnnotationAggregateObservation/1` | D6 Storage | current | — | Physical sidecar observation binding owner Node, trusted FileObjectBinding and exact aggregate bytes pin; distinct from logical Annotation SourceObservation. |
-| `AnnotationAggregateInstall/1` | D6 Storage | current | — | Named existing-InstallationPlan file-write coordination binding that coalesces all same-Node Annotation record changes into one strict physical install. |
-| `D8PresentationPolicyBootstrapInit/1` | D8/D6 | current | — | Fresh unseen WorkspaceBootstrapPlan/4-only helper freezing a custody-proved empty D8 head set plus parents=[]/revision1/separate proposal before the original bootstrap final P; it carries no pre-P activation ChangeId, committed record, pin or outbox. |
+| `DocumentFormatCurrentQualification/1` | D2/D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DependencyKey/3` | D6 | current | `DependencyKey/2` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DependencyProof/3` | D6 | current | `DependencyProof/2` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `InputDescriptor/3` | D6 | current | `InputDescriptor/2` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `PreparedIntent/3` | D6 | current | `PreparedIntent/2` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `PortableComponentKey/2` | D6 | current | `PortableComponentKey/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `InstallationNotice/3` | D6 | current | `InstallationNotice/2` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ContentCompletionProof/4` | D6 | current | `ContentCompletionProof/3` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ChangeRecord/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `PortableTransformCompilation/1` | D6/Core | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `SourceTransformPortableEvent/3` | D6/Core | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `CoreSourceEditPlan/2` | D6/Core | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `TransformEmissionPlan/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `SourceTransformEvidence/2` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `SourceTransformSealArtifact/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `SourceTransformSealKey/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `SourceTransformSealOutboxItem/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `SourceTransformSealVerificationKey/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceTrustDeclaration/2` | D6 | current | `WorkspaceTrustDeclaration/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceAuthorizationBundle/2` | D6 | current | `WorkspaceAuthorizationBundle/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DomainSealKeyHandle/2` | D6 | current | `DomainSealKeyHandle/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceTrustGenesis/2` | D6 | current | `WorkspaceTrustGenesis/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceBootstrapPlan/4` | D6 | current | `WorkspaceBootstrapPlan/3` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `D10ControlInput/2` | D10/D6 | current | `D10ControlInput/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ExecutionResponsibilityRecord/3` | D6/D10 | current | `ExecutionResponsibilityRecord/2` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ExecutionContinuityProof/2` | D6/D10 | current | `ExecutionContinuityProof/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `PinRef/2` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `ComponentImage/1` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `OwnerInputBinding/2` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `ObservationScope/2` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `WorkspaceTrustRootDeclaration/1` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `WorkspaceTrustAnchor/1` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `RevisionTokenSealVerificationKey/1` | D6 | retained-current | — | 保持当前版本，不机械升版；精确字段、权限与恢复语义继续由原所有者合同约束。 |
+| `SourceTransformSealSignedBody/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceTrustPredecessor/2` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DomainSealKeyPoPBody/2` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DomainSealKeyRotateContinuityBody/2` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceTrustDeclarationSignedBody/2` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DomainSealKeyAddPrepare/3` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `DomainSealKeyRotatePrepare/3` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |loss_recovery\|compromise. |
+| `DomainSealKeyRevokePrepare/3` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |loss\|compromise. |
+| `WorkspaceBootstrapProfile/4` | D6 | current | `WorkspaceBootstrapProfile/3` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceBootstrapCreatorBinding/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceBootstrapTargetRegistry/1` | D6/D4 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceBootstrapSeriesConfiguration/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `WorkspaceBootstrapPeriodScopeBinding/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `TrustConflictCarry/2` | D6 | current | `TrustConflictCarry/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `TrustConflictOutcome/2` | D6 | current | `TrustConflictOutcome/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `FreshDomainAuthorizationSpec/2` | D6 | current | `FreshDomainAuthorizationSpec/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `PolicyBundleHeadEvidence/2` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ConflictResolutionPolicyDerivedPlan/2` | D6 | current | `ConflictResolutionDerivedPlan/1 policy_bundle arm` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ConflictResolutionInput/3` | D6 | current | `ConflictResolutionInput/2 policy_bundle_choice owner descriptor` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ScheduleContinuityWitness/2` | D6/D10 | current | `ScheduleContinuityWitness/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ScheduleContinuityStep/2` | D6/D10 | current | `ScheduleContinuityStep/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ScheduleContinuityInvalidation/2` | D6/D10 | current | `ScheduleContinuityInvalidation/1` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `TrustConflictCarryValidationHop/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `TrustConflictCarryValidationEvidence/1` | D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `ConflictResolutionPreview/2` | D6 | current | `ConflictResolutionPreview/1 policy_bundle arm` | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `PortableAnnotationRecord/4` | D3/D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `D2ProductEvaluationBinding/1` | D2/D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `D8PresentationPolicyHeadSet/1` | D8/D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `AnnotationAggregate/1` | D6 Storage | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `AnnotationAggregateObservation/1` | D6 Storage | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `AnnotationAggregateInstall/1` | D6 Storage | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
+| `D8PresentationPolicyBootstrapInit/1` | D8/D6 | current | — | 当前具名技术类型；精确字段、交叉校验、权限与恢复语义见配套闭合规范与控制正文，前身版本只按真实历史记录分派。 |
 
 ## 10. 接受边界
 
