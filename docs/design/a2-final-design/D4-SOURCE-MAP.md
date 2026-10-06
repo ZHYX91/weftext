@@ -13,7 +13,7 @@ Status: **A2-D4D5:P2-01** and **P2-02** are author-resolved-pending-independent 
 
 The three fixed-S D4 text sources retain exact source path/blob/line/text for all **906/906 nonblank lines**. Each line belongs to exactly one continuous source-qualified obligation group with a current file/section target, one of `retain | named-supersede | explicit-defer | historical-only`, an actual owner, basis, and oracle. Front matter, revision history, and review sequencing are historical provenance rather than business semantics.
 
-The immutable reference catalog remains the sole static value authority. `D4-CATALOG-MAP.json` covers **2,854/2,854 JSON Pointers**, **95 named records**, and **7 global limits** through seven non-overlapping subtree groups. The map carries pointer/record identity and actual current consumer/validator/constructor placement only; it does not copy a second normative catalog.
+The immutable reference catalog remains the sole static value authority. `D4-CATALOG-MAP.json` covers **2,854/2,854 JSON Pointers**, **95 named records**, and **7 global limits** through seven non-overlapping subtree groups. Under RFC 6901 the document-root pointer is `""`; `"/"` would address an empty-key member. The map carries pointer/record identity and actual current consumer/validator/constructor placement only; it does not copy a second normative catalog.
 
 ## 2. Mandatory and fixed97 qualification
 
@@ -35,6 +35,6 @@ Raw D10 references to historical/original `DependencyProof/2`, `DependencyKey/2`
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain independently CLOSED. The two bounded D3 P1 findings were independently CLOSED at fixed-a62. The fixed-829 D4/D5 review returned P0=0/P1=0/P2=2: D4/D5 semantics LIMITED PASS, audit package REVISE. This author repair does not close either P2; both await a new independent review on the final stop SHA.
+D1/D2 fixed-446 findings remain independently CLOSED. The two bounded D3 P1 findings were independently CLOSED at fixed-a62. The completed fixed-a62 D4/D5 non-author review (`a62aa7d4eaf56113cd1e9e32336ae8814f83589b`, request `7b6e1f16-fa41-499c-b078-647f1942e94e`) returned P0=0/P1=0/P2=2: D4/D5 semantics LIMITED PASS, audit package REVISE. This author repair does not close either P2; both await a new independent review on the final stop SHA.
 
 D6 is the stopped 829 author candidate; the fixed-829 read-only work does not establish D6 acceptance. D7–D10 full modules, Mandatory 925–1141, and fresh Pro/global review remain pending. Runtime, OS, GUI, real-replica, migration, activation, and deployment evidence are UNRUN.
