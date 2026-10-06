@@ -19,7 +19,7 @@ The current D5 candidate still has six distinct row domains and no persistent Re
 
 ## 2. Mandatory and fixed97 qualification
 
-Mandatory source lines 1–924 are covered **716/716** through 29 actual-owner groups; generic “D4/D5 intake” is no longer used as the current target. D6 persistence, D9 Office/template/conversion, D10 package/provider/connector/credential/execution custody, D3 binding, and D4 typed facts retain their actual owners.
+Mandatory source lines 1–924 are covered **716/716** through 33 actual-owner groups; generic “D4/D5 intake” is no longer used as the current target. D6 persistence, D9 Office/template/conversion, D10 package/provider/connector/credential/execution custody, D3 binding, and D4 typed facts retain their actual owners.
 
 The **130 D5-relevant fixed97 rows** preserve actual EN and ZH rows with source path/blob/line. R1 re-audits **130/130** rows to actual current holders/consumers and records actual file+section target, disposition, owner, basis and exact source-row oracle. Counts do not replace the source conditions.
 

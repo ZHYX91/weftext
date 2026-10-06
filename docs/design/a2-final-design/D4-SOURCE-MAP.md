@@ -17,7 +17,7 @@ The immutable reference catalog remains the sole static value authority. `D4-CAT
 
 ## 2. Mandatory and fixed97 qualification
 
-Mandatory source lines 1–924 contain **716/716 nonblank lines** in 29 source-qualified groups. Cross-module items name their real owner and target: D6 persistence is deferred to D6, D9 template/conversion to D9, D10 package/provider/connector control to D10, while D4 retains semantic Namespace/Field/Relation/Calendar ownership. Lines 925–1141 remain pending for later D7–D10/global work.
+Mandatory source lines 1–924 contain **716/716 nonblank lines** in 33 source-qualified groups. Cross-module items name their real owner and target: D6 persistence is deferred to D6, D9 template/conversion to D9, D10 package/provider/connector control to D10, while D4 retains semantic Namespace/Field/Relation/Calendar ownership. Lines 925–1141 remain pending for later D7–D10/global work.
 
 The **72 D4-relevant fixed97 acceptance rows** preserve both actual English and Chinese rows plus source path/blob/line. R1 re-audits **72/72** rows to the actual current owner/consumer; every row now carries an actual file+section target, source-qualified disposition, owner, basis, and the exact source-row oracle. Row counts are inventory, never a substitute for row conditions.
 

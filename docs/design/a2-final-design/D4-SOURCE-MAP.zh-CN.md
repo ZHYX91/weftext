@@ -16,7 +16,7 @@ translation_status: source
 
 ## 2. Mandatory 与 fixed97 来源限定
 
-Mandatory source 1–924 行中的 **716/716 个非空行**已分入 29 个来源限定 group。跨模块事项明确写真实 owner 与目标：D6 persistence defer 给 D6，D9 template/conversion defer 给 D9，D10 package/provider/connector control 归 D10；D4 继续拥有 Semantic Namespace、Field、Relation 与 Calendar 语义。925–1141 行仍留给后续 D7–D10/global。
+Mandatory source 1–924 行中的 **716/716 个非空行**已分入 33 个来源限定 group。跨模块事项明确写真实 owner 与目标：D6 persistence defer 给 D6，D9 template/conversion defer 给 D9，D10 package/provider/connector control 归 D10；D4 继续拥有 Semantic Namespace、Field、Relation 与 Calendar 语义。925–1141 行仍留给后续 D7–D10/global。
 
 **72 条 D4 相关 fixed97 acceptance row**继续逐条保存真实英文/中文 row 与 source path/blob/line。R1 已对 **72/72** 逐 case 重核真实 current owner/consumer；每行都写 actual file+section target、来源限定 disposition、owner、basis 与精确 source-row oracle。数量只证明库存，不能替代原 row 条件。
 

@@ -18,7 +18,7 @@ current D5 仍保持六种互不混同的 row domain，也没有 persistent Reco
 
 ## 2. Mandatory 与 fixed97 来源限定
 
-Mandatory source 1–924 行按 **716/716** 个非空行闭合为 29 个 actual-owner group；不再用泛化的 “D4/D5 intake” 当 current target。D6 persistence、D9 Office/template/conversion、D10 package/provider/connector/credential/execution custody、D3 binding 与 D4 typed fact 均保留各自真实 owner。
+Mandatory source 1–924 行按 **716/716** 个非空行闭合为 33 个 actual-owner group；不再用泛化的 “D4/D5 intake” 当 current target。D6 persistence、D9 Office/template/conversion、D10 package/provider/connector/credential/execution custody、D3 binding 与 D4 typed fact 均保留各自真实 owner。
 
 **130 条 D5 相关 fixed97 row**继续逐条保存真实 EN/ZH row 与 source path/blob/line。R1 已对 **130/130** 逐 case 重核真实 current holder/consumer，并记录 actual file+section target、disposition、owner、basis 与精确 source-row oracle；计数不能替代原 row 条件。
 
