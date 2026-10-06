@@ -699,7 +699,7 @@ Exactly:
 
 No source, patch, budget, preview, or cost override is carried. expectedDomainFenceToken tag=d6_domain_fence/2 binds current domain qualification: active ReplicaEpoch/portable registry/policy/backend epoch for replica and additionally current D3 authority/custody/fence generation for server. It is not permission.
 
-The v2 ledger key is exactly (workspaceId, D3-CJ/3(commitDomain), operationId), with protocolOwner=D6 in the record. Same key/different canonical request is operation_id_conflict. The independently closed bounded D3 current candidate uses wire13 and defines native Descriptor3/companion consumption while sharing the same DecisionKey owner collision; genuine wire9–12 records remain historical exact dispatch. Candidate presence does not grant D6 Main §18 acceptance/activation; an affected unseen protocolOwner=D3 request still missing required coordinated consumers returns owner_update_required with zero new D3 decision. Existing saved/planned/unknown decisions retain the original-record split below.
+The v2 ledger key is exactly (workspaceId, D3-CJ/3(commitDomain), operationId), with protocolOwner=D6 in the record. Same key/different canonical request is operation_id_conflict. The independently closed bounded D3 current candidate uses wire13 with `d3_identity_operation/13` and defines native Descriptor3/companion consumption while sharing the same DecisionKey owner collision; genuine wire9–12 records remain historical exact dispatch. Candidate presence does not grant D6 Main §18 acceptance/activation; an affected unseen protocolOwner=D3 request still missing required coordinated consumers returns owner_update_required with zero new D3 decision. Existing saved/planned/unknown decisions retain the original-record split below.
 
 ### 4.3 D10 Workspace control predecessor and current successor dispatch
 
@@ -1048,7 +1048,7 @@ Non-disclosure ordering remains: closed decode, then conflict_read capability pl
 The current /2 read path also validates the continuous sealed relationship between key heads and createdAtFrontier. A portable-history hole, fabricated head, or corrupt record is integrity/state unavailability and never causes Core to delete missing heads and return a smaller conflict. /1 stays under its original historical decoder/gate; new /2 Frontier conditions never retrospectively reinterpret its saved bytes.
 ### 9.4 conflict resolution prepare
 
-The current source_merge and choose_source_head arms retain the closed wireVersion=3 request below and their ConflictResolutionInput/2 / Plan1 / Preview1 source contracts. Fresh current policy_bundle_choice is normatively closed at the later current trust-conflict anchor with Input3/Plan2/Preview2, FreshDomainAuthorizationSpec/2, mixed Bundle1/2 and Carry1/2, Declaration2/Outcome2, dual seal profiles, and Notice3/CP4/ChangeRecord1. A genuine saved/planned/unknown policy predecessor continues only under its recorded Input2/Plan1/Preview1, FreshDomainAuthorizationSpec/1, Bundle1/Carry1/Declaration1 bytes, pins, authorization and recovery.
+The current `source_merge` and `choose_source_head` arms retain the closed wireVersion=3 request below and their ConflictResolutionInput/2 / Plan1 / Preview1 source contracts. Fresh current `policy_bundle_choice` is normatively closed at the later current trust-conflict anchor with Input3/Plan2/Preview2, FreshDomainAuthorizationSpec/2, mixed Bundle1/2 and Carry1/2, Declaration2/Outcome2, dual seal profiles, and Notice3/CP4/ChangeRecord1. A genuine saved/planned/unknown policy predecessor continues only under its recorded Input2/Plan1/Preview1, FreshDomainAuthorizationSpec/1, Bundle1/Carry1/Declaration1 bytes, pins, authorization and recovery.
 
 The two current source arms use the closed wireVersion=3 request:
 ~~~json
@@ -1219,42 +1219,55 @@ The first local issuer is created only in an explicitly established genuinely em
 
 Issuer management requires current administer_issuer, the complete old revision and proposed policy/profile, trusted authentication/delegation and current fence in one control CAS. A real change checked-increments revision; MAX rejects. The issuer's original management operation key binds complete immutable input/result: same-key replay is exact, changed input conflicts. This is neither a Workspace OperationId ledger nor a global identity registry. The existing issuer-management transport still requires its own closed host/CLI/RPC contract before implementation; D6 Workspace commit and D10 Workspace control do not impersonate it or authorize a free callback. Explicit revocation of the last administrator or allocation grant is valid; reopening or authenticating again never restores grants.
 
-    WorkspaceBootstrapProfile/4 = {
-      kind:"d6_bootstrap_profile", wireVersion:4,
-      profileRevision:Counter,
-      registrySeedBinding:D4.RegistryBinding/1,
-      newSeriesMultiplicity:"unique"|"many",
-      initialPeriodScope:"workspace"
-    }
-
 IssuerControlPolicy's nested bootstrapProfile dispatches by explicit wireVersion. Profile4 requires the corresponding D1 version qualification; the issuer top-level member set is unchanged. Historical profile/1-/3 and any genuinely recorded plan family retain exact bytes, capabilities, pins and recovery; decoder presence alone is not deployment evidence.
 
-    WorkspaceTrustGenesis/2 = {
-      kind:"d6_workspace_trust_genesis", version:2,
-      rootDeclaration:WorkspaceTrustRootDeclaration/1,
-      initialDomainDeclarations:[
-        WorkspaceTrustDeclaration/2,
-        WorkspaceTrustDeclaration/2
-      ]
-    }
+~~~text
+WorkspaceTrustGenesis/2 = {
+  kind:"d6_workspace_trust_genesis",version:2,
+  rootDeclaration:WorkspaceTrustRootDeclaration/1,
+  initialDomainDeclarations:[
+    WorkspaceTrustDeclaration/2,
+    WorkspaceTrustDeclaration/2
+  ]
+}
 
-    WorkspaceBootstrapPlan/4 = {
-      kind:"d6_workspace_bootstrap_plan", wireVersion:4,
-      operationId:Uuid, proposalId:Uuid,
-      issuerAuthorityInstanceId:Uuid,
-      targetWorkspaceRef:D3.WorkspaceRef,
-      targetAuthorityInstanceId:Uuid,
-      profile:WorkspaceBootstrapProfile/4,
-      creatorBinding:{issuerPrincipal:Token,targetPrincipal:Token,
-                      principalAudienceToken:Token},
-      targetRegistry:{snapshot:D4.RegistrySnapshot/1,binding:D4.RegistryBinding/1},
-      initialPolicy:Policy/3,
-      trustGenesis:WorkspaceTrustGenesis/2,
-      initialPresentationPolicy:D8PresentationPolicyBootstrapInit/1,
-      initialSeriesConfigurations:[{seriesScope:SeriesScope,
-                                   multiplicity:"unique"|"many",revision:1}],
-      periodScopeBindings:[{nodeRef:D3.NodeRef,scope:CalendarScope,revision:1}]
-    }
+WorkspaceBootstrapProfile/4 = {
+  kind:"d6_bootstrap_profile",wireVersion:4,
+  profileRevision:Counter,registrySeedBinding:RegistryBinding/1,
+  newSeriesMultiplicity:"unique"|"many",
+  initialPeriodScope:"workspace"
+}
+
+WorkspaceBootstrapCreatorBinding/1 = {
+  issuerPrincipal:Token,targetPrincipal:Token,
+  principalAudienceToken:Token
+}
+
+WorkspaceBootstrapTargetRegistry/1 = {
+  snapshot:RegistrySnapshot/1,binding:RegistryBinding/1
+}
+
+WorkspaceBootstrapSeriesConfiguration/1 = {
+  seriesScope:SeriesScope,multiplicity:"unique"|"many",revision:1
+}
+
+WorkspaceBootstrapPeriodScopeBinding/1 = {
+  nodeRef:NodeRef,scope:CalendarScope,revision:1
+}
+
+WorkspaceBootstrapPlan/4 = {
+  kind:"d6_workspace_bootstrap_plan",wireVersion:4,
+  operationId:Uuid,proposalId:Uuid,
+  issuerAuthorityInstanceId:Uuid,targetWorkspaceRef:WorkspaceRef,
+  targetAuthorityInstanceId:Uuid,profile:WorkspaceBootstrapProfile/4,
+  creatorBinding:WorkspaceBootstrapCreatorBinding/1,
+  targetRegistry:WorkspaceBootstrapTargetRegistry/1,
+  initialPolicy:Policy/3,trustGenesis:WorkspaceTrustGenesis/2,
+  initialPresentationPolicy:D8PresentationPolicyBootstrapInit/1,
+  initialSeriesConfigurations:[WorkspaceBootstrapSeriesConfiguration/1...],
+  periodScopeBindings:[WorkspaceBootstrapPeriodScopeBinding/1...]
+}
+~~~
 
 All UUID members keep the original D3 canonical lowercase UUID decoder. This remains the D6-owned protected control portion of the one original D3 plan, not another request or decision. The admitted host secure store generates a fresh Workspace root keypair and a fresh target-server domain keypair; only public declarations plus protected handle associations enter the plan. `rootDeclaration.establishmentDecisionKey` and `initialDomainDeclaration.decisionKey` both equal the original create/fork DecisionKey. The initial declaration is revision=1/action=authorize for exact target server CommitDomain W/B and profile d6_revision_token_seal/1. Root self-signature, root signature and domain-key PoP must pass before the plan wins.
 
@@ -1483,7 +1496,13 @@ CoreSourceEditPlan/2 = {
   afterPin:PinRef/2,
   transformEmission:TransformEmissionPlan/1
 }
-``` Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
+
+TransformEmissionPlan/1 =
+  disabled{reason:"no_exact_core_edit_plan"|"transform_profile_unavailable"}
+| required{profile:"d6_source_transform_seal/1",expectedTrustRevision,expectedTrustKeyId}
+```
+
+Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
 
 ## 19. Signed transform evidence and outbox
 
