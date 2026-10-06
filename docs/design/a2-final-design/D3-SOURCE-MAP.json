@@ -10,64 +10,76 @@
       "blob": "bc23922ae2de4c80dadc7b91e945c87ce154b55a",
       "readStatus": "full",
       "target": "D3.md",
-      "disposition": "integrated_with_named_current_successors"
+      "disposition": "integrated_with_named_current_successors",
+      "sourceSection": "entire source"
     },
     "fixed_s_impact": {
       "path": "docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md",
       "blob": "357fa155b7ab97f4220055148ba8de1b8f4c14ca",
       "readStatus": "full",
       "target": "D3-IMPACT.md",
-      "disposition": "integrated_unexecuted"
+      "disposition": "integrated_unexecuted",
+      "sourceSection": "entire source"
     },
     "fixed_s_lexicon": {
       "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
       "blob": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344",
       "readStatus": "full",
       "target": "D3-LEXICON.md + D3-TERMS.json",
-      "disposition": "integrated_controlled_names_with_named_definition_successors"
+      "disposition": "integrated_controlled_names_with_named_definition_successors",
+      "sourceSection": "entire source"
     },
     "current_parent_main_en": {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
       "blob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
       "readStatus": "full",
-      "target": "D3.md"
+      "target": "D3.md",
+      "sourceSection": "entire source"
     },
     "current_parent_main_zh": {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.zh-CN.md",
       "blob": "100a15785e55f7b9c229a4a9110bfae763ad6c67",
       "readStatus": "full",
-      "target": "D3.zh-CN.md"
+      "target": "D3.zh-CN.md",
+      "sourceSection": "entire source"
     },
     "current_parent_impact_en": {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
       "blob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
       "readStatus": "full",
-      "target": "D3-IMPACT.md"
+      "target": "D3-IMPACT.md",
+      "sourceSection": "entire source"
     },
     "current_parent_impact_zh": {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.zh-CN.md",
       "blob": "5652ccdba806ebd891e4c6708f5621c915b408ae",
       "readStatus": "full",
-      "target": "D3-IMPACT.zh-CN.md"
+      "target": "D3-IMPACT.zh-CN.md",
+      "sourceSection": "entire source"
     },
     "current_parent_lexicon_en": {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
       "blob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
       "readStatus": "full",
-      "target": "D3-LEXICON.md"
+      "target": "D3-LEXICON.md",
+      "sourceSection": "entire source"
     },
     "current_parent_lexicon_zh": {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.zh-CN.md",
       "blob": "b0103ec01f5d1f393c88f727820922d22ad2b309",
       "readStatus": "full",
-      "target": "D3-LEXICON.zh-CN.md"
+      "target": "D3-LEXICON.zh-CN.md",
+      "sourceSection": "entire source"
     },
     "fixed97_acceptance": {
       "enBlob": "f5f5b9b212b281838aabc281171217623285820e",
       "zhBlob": "466f3b2d7ee4e735cddc3ee4a466dcb45e065571",
       "totalRows": 760,
       "d3DirectRows": 73,
-      "readStatus": "all IDs/order parsed; 73 D3-direct rows preserved below"
+      "readStatus": "all IDs/order parsed; 73 D3-direct rows preserved below",
+      "pathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "pathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "sourceSection": "73 D3-direct rows selected from complete 760-row bilingual inventory"
     }
   },
   "case_sets": {
@@ -5166,7 +5178,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D6 Storage CN",
@@ -5175,7 +5188,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D7 Prepared Action Binding CN",
@@ -5184,7 +5198,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D7 Preview/Effects CN",
@@ -5193,7 +5208,8 @@
       "readStatus": "full_with_supplemented_truncated_ranges",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D7 Definition Transfer CN",
@@ -5202,7 +5218,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D8 Editor Interfaces CN",
@@ -5211,7 +5228,8 @@
       "readStatus": "full_with_supplemented_truncated_ranges",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D8 Cross Surface CN",
@@ -5220,7 +5238,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D9 D3-D7 Binding CN",
@@ -5229,7 +5248,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D9 Import IR CN",
@@ -5238,7 +5258,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D10 Candidate CN",
@@ -5247,7 +5268,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D10 Upstream Amendments CN",
@@ -5256,7 +5278,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     },
     {
       "name": "D10 Control Contract CN",
@@ -5265,7 +5288,8 @@
       "readStatus": "full",
       "target": "D3 direct producer/consumer boundary",
       "disposition": "consume_D3_direct_contract_only",
-      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated."
+      "basis": "Read to close D3 interfaces; does not mark the owning D4-D10 A2 module integrated.",
+      "sourceSection": "entire file"
     }
   ],
   "partial_or_unread": [

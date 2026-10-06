@@ -5,9 +5,9 @@ translation_status: synced
 ---
 
 [简体中文](SOURCE-MAP.zh-CN.md)
-# A2 D1/D2 Source and Disposition Map
+# A2 D1/D2/D3 Source and Disposition Map
 
-Status: first-batch author map. It is evidence of what was read and how D1/D2 source obligations were placed; it is not independent acceptance.
+Status: author source/disposition map for D1/D2/D3 candidates. It records reading and mapping evidence, not independent acceptance.
 
 ## 1. Fixed inputs fully read in this batch
 
@@ -66,7 +66,7 @@ SOURCE-MAP.json records machine-readable obligation groups, dispositions, source
 
 The other fixed-S inputs remain TODO for semantic full reading in this batch, even though the 49-file inventory, route graph and blobs are known. D3–D10 current owners have not been globally integrated. Only the exact D1/D2 intersecting sections listed above were read.
 
-No D3/D4/D5/D6/D7/D8/D9/D10 module is marked done by this source map. The next authorized author batch is D3.
+D3 is now present as an author candidate with a separate case-level source map. D4-D10 full-module integration remains TODO; D3-direct consumer reads do not mark those owner modules complete.
 
 ## 8. D1/D2 source-map completeness repair
 
@@ -89,3 +89,12 @@ The D2 Impact source blob is exactly `956b3b768b97704c2e95dd8242b69507698ad3a7`.
 
 The fixed-5c review findings are not self-closed by this author. The Record-boundary author fix is present at the current A2 head and still requires non-author review; this source-map repair likewise awaits non-author review.
 
+
+
+## 9. D3 source/case integration
+
+D3-SOURCE-MAP.json is the case-level audit record. It preserves fixed-S main section 14 cases 1-51, fixed-S section 18 outlines 1-138, current-parent main section 19 cases 1-79, the real Impact section 20 structure covering 56-79, all 42 fixed-S Lexicon concepts/ordinary sections, and 73 current PR4 D3-direct bilingual acceptance rows.
+
+The three fixed-S D3 inputs and current parent D3 main/Impact/Lexicon in both languages were fully read. Selected Chinese D6-D10 direct-owner files were fully read only to close D3 interfaces; their full A2 owner modules remain pending. Fixed97 SPEC/SCHEMAS are only D3-relevant partial reads outside the earlier D2-complete regions.
+
+D1/D2 fixed-5c Record/source-map repairs and this D3 candidate remain pending non-author review. Product/runtime scenarios remain unexecuted.

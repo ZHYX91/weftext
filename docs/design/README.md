@@ -90,4 +90,4 @@ The candidate contains the complete AsciiDoc/extensions design, independent port
 
 ## A2 final-design integration candidate
 
-A new A2 candidate is being integrated on top of the fixed PR4 design head. Its [entry](a2-final-design/README.md) currently contains a self-contained D1 and D2 first batch plus exact source/disposition tracking. D3–D10 remain explicit TODOs and the candidate is not independently accepted, implemented, merged, or released.
+A new A2 candidate is being integrated on top of the fixed PR4 design head. Its [entry](a2-final-design/README.md) now contains self-contained D1, D2, and D3 author candidates plus source/disposition tracking and a [review entry](a2-final-design/REVIEW-ENTRY.md). D4–D10 full modules remain explicit TODOs. The candidate is not independently accepted, implemented, merged, or released.

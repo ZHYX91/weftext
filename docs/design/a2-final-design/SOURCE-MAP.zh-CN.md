@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](SOURCE-MAP.md)
-# A2 D1/D2 来源与 disposition 图
+# A2 D1/D2/D3 来源与 disposition 图
 
-状态：第一批作者映射。它只证明本批实际读取了什么、D1/D2 来源义务落在何处；不是独立接受。
+状态：D1/D2/D3 作者候选的来源/disposition 图；只记录阅读与映射证据，不是独立接受。
 
 ## 1. 本批完整读取的固定输入
 
@@ -69,7 +69,7 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 本批虽已知道 49-file inventory、route graph 与 blob，但其它固定 S 输入仍是 semantic full-read TODO。D3–D10 current owner 尚未 global integrate；本批只读取上面具名的 D1/D2 直接相交段。
 
-source map 不把任何 D3/D4/D5/D6/D7/D8/D9/D10 模块写成 done。下一次授权作者批次是 D3。
+D3 现已作为作者候选，并有独立案例级 source map。D4-D10 完整模块仍是 TODO；D3-direct consumer 阅读不等于这些 owner 模块已完成 A2。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -92,3 +92,12 @@ D2 Impact source blob 精确为 `956b3b768b97704c2e95dd8242b69507698ad3a7`；不
 
 fixed-5c 的非作者 finding 本作者不自行关闭。当前 head 已包含 Record-boundary 作者修复，仍待非作者复核；本次 source-map 窄修同样等待非作者复核。
 
+
+
+## 9. D3 source/case 整合
+
+D3-SOURCE-MAP.json 是案例级审计记录，保存 fixed-S main §14 cases 1-51、fixed-S §18 outlines 1-138、current-parent main §19 cases 1-79、Impact §20 的真实 56-79 结构、fixed-S Lexicon 全部 42 concept/普通 section，以及 current PR4 的 73 条 D3-direct 双语 acceptance row。
+
+三个 fixed-S D3 输入与 current parent D3 main/Impact/Lexicon 中英双语都已全文读取。具名 D6-D10 中文 direct-owner 文件只为闭合 D3 interface 而全文读取；对应完整 A2 owner 模块仍待后续。fixed97 SPEC/SCHEMAS 除此前 D2 完整区域外，只声称 D3 相关 partial read。
+
+D1/D2 fixed-5c Record/source-map 修复与本 D3 候选都仍待非作者复核；全部产品/runtime scenario 未运行。

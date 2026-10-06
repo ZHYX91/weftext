@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D1/D2 integrated; D3 author batch in progress. D1/D2 source-map completeness repair recorded; no independent acceptance implied.",
+  "status": "A2 D1/D2/D3 author candidates integrated; D3 source/case map and review entry added. D1/D2 delta repairs and D3 remain pending non-author review; no global acceptance implied.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -51,8 +51,8 @@
       "bytes": 351167,
       "lines": 2037,
       "blobAtFixedS": "bc23922ae2de4c80dadc7b91e945c87ce154b55a",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D3_batch",
+      "a2Disposition": "integrated_D3_candidate"
     },
     {
       "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
@@ -63,8 +63,8 @@
       "bytes": 74040,
       "lines": 702,
       "blobAtFixedS": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D3_batch",
+      "a2Disposition": "integrated_D3_lexicon_candidate"
     },
     {
       "path": "docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md",
@@ -495,8 +495,8 @@
       "bytes": 19979,
       "lines": 171,
       "blobAtFixedS": "357fa155b7ab97f4220055148ba8de1b8f4c14ca",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D3_batch",
+      "a2Disposition": "integrated_D3_impact_candidate"
     },
     {
       "path": "docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md",
@@ -619,37 +619,37 @@
     {
       "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
-      "read": "D2 §§1-5 plus D2-intersecting §§8-10"
+      "read": "D2 complete regions plus D3-relevant current sections; not full-file D4-D10 read"
     },
     {
       "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
       "blob": "20907167b6e4e968e431be2489f8e61d70722fa1",
-      "read": "D2 §§1-5 plus D2-intersecting §§8-10"
+      "read": "D2 complete regions plus D3-relevant current sections; not full-file D4-D10 read"
     },
     {
       "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
       "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
-      "read": "D2 §§1-4.4 complete"
+      "read": "D2 complete region plus D3-relevant current schema sections copied to D3-SCHEMAS; not full-file D4-D10 read"
     },
     {
       "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
       "blob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
-      "read": "D2 §§1-4.4 complete"
+      "read": "D2 complete region plus D3-relevant current schema sections copied to D3-SCHEMAS; not full-file D4-D10 read"
     },
     {
       "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
       "blob": "f5f5b9b212b281838aabc281171217623285820e",
-      "read": "D2-related row groups"
+      "read": "all 760 IDs/order parsed; 73 D3-direct rows mapped in D3-SOURCE-MAP.json"
     },
     {
       "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "blob": "466f3b2d7ee4e735cddc3ee4a466dcb45e065571",
-      "read": "D2-related row groups"
+      "read": "all 760 IDs/order parsed; 73 D3-direct rows mapped in D3-SOURCE-MAP.json"
     },
     {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
       "blob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
-      "read": "§8 create/copy/fork/import neighborhood and title-admission intersection"
+      "read": "full D3 batch"
     },
     {
       "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
@@ -665,6 +665,91 @@
       "path": "docs/design/d10/TASK.md",
       "blob": "52b51f14cbca8107fdf13ddf29fab6d9cd04bb5b",
       "read": "task/navigation; D10 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.zh-CN.md",
+      "blob": "100a15785e55f7b9c229a4a9110bfae763ad6c67",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
+      "blob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "5652ccdba806ebd891e4c6708f5621c915b408ae",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
+      "blob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.zh-CN.md",
+      "blob": "b0103ec01f5d1f393c88f727820922d22ad2b309",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.zh-CN.md",
+      "blob": "971801ef00dcd6b49e4ace73baf507068574b0b5",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.zh-CN.md",
+      "blob": "aab7f7cbc53f9b4cad8699d8c3cc7939a4ff1007",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.zh-CN.md",
+      "blob": "35f2dcb22c321552984bf996e5d8a6e6d6b85275",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.zh-CN.md",
+      "blob": "04f395984ed5ca1da9838fe277376ef4da8c8dfd",
+      "read": "full_with_supplemented_truncated_ranges; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-definition-transfer/source.zh-CN.md",
+      "blob": "f38d6788cb11c154a4ae1c68f6bd40e0695dda53",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.zh-CN.md",
+      "blob": "2a5d6927b38259bd6db7252bf87e29c889520ab0",
+      "read": "full_with_supplemented_truncated_ranges; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.zh-CN.md",
+      "blob": "6a193cd7f2b950d51ce4471359975504e126ec0a",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.zh-CN.md",
+      "blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.zh-CN.md",
+      "blob": "cba3b0acf3817c115b4486082fd1c91800b1f9fd",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d10/CANDIDATE.zh-CN.md",
+      "blob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
+      "blob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
+      "blob": "6806d31107036e75147cd6213129c59e3f8819b6",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
     }
   ],
   "obligation_groups": [
@@ -2089,8 +2174,138 @@
       },
       "disposition": "retain_acceptance_boundary",
       "basis": "D2 impact freeze never proves repo implementation; later implementation still needs Core/surface/fixture/test/public-doc evidence."
+    },
+    {
+      "id": "D3-fixed-S-main",
+      "sourcePath": "docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "bc23922ae2de4c80dadc7b91e945c87ce154b55a",
+      "sourceSection": "entire source; §14 cases 1-51; §18 outlines 1-138",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3.md",
+        "section": "entire current D3 body; case map in D3-SOURCE-MAP.json"
+      },
+      "disposition": "retain_with_named_current_successors",
+      "basis": "Identity/stage/error/auth/lifecycle/Trash/copy/fork/import/continue/Result9/DefinitionTransfer obligations retained; only exact current producer versions are named successors.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed_s_main_14"
+        },
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed_s_main_18"
+        }
+      ]
+    },
+    {
+      "id": "D3-fixed-S-impact",
+      "sourcePath": "docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "357fa155b7ab97f4220055148ba8de1b8f4c14ca",
+      "sourceSection": "entire source",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-IMPACT.md",
+        "section": "entire companion"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "Implementation/test obligations retained; no runtime execution claimed.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed_s_main_18"
+        }
+      ]
+    },
+    {
+      "id": "D3-fixed-S-lexicon",
+      "sourcePath": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344",
+      "sourceSection": "all ordinary sections; all 42 concepts; global retired registry; gates/examples",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-LEXICON.md",
+        "section": "entire companion; controlled projection in D3-TERMS.json"
+      },
+      "disposition": "retain_names_and_gates_with_named_definition_successors",
+      "basis": "All concept IDs, owned names, semantic non-aliases and fixed-S firstFreeze are retained. Annotation plain-text definition is the named Value4/R6 supersession.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "lexicon"
+        }
+      ]
+    },
+    {
+      "id": "D3-current-parent-main",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "sourceSection": "entire bilingual current parent; §19 cases 1-79",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3.md",
+        "section": "entire file"
+      },
+      "disposition": "integrate_parent_with_fixed97_current_successors",
+      "basis": "Parent semantic detail retained; fresh-current versions updated only where fixed97 defines exact successors, historical records remain historical.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "current_parent_main_19"
+        }
+      ]
+    },
+    {
+      "id": "D3-current-parent-impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
+      "sourceSection": "entire bilingual current parent; §20 cases 56-79",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-IMPACT.md",
+        "section": "entire file"
+      },
+      "disposition": "integrate_unexecuted",
+      "basis": "All implementation/test conditions remain design obligations; current carriers updated without product-run claim.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "current_parent_impact_20"
+        }
+      ]
+    },
+    {
+      "id": "D3-current-parent-lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
+      "sourceSection": "entire bilingual current parent",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-LEXICON.md",
+        "section": "entire file"
+      },
+      "disposition": "integrate_current_definitions_preserve_controlled_sets",
+      "basis": "Current producer wording and Annotation definition coordinated while fixed-S controlled naming sets remain authoritative.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "lexicon"
+        }
+      ]
+    },
+    {
+      "id": "D3-fixed97-direct-acceptance",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "sourceBlob": "f5f5b9b212b281838aabc281171217623285820e",
+      "sourceSection": "73 D3-direct rows selected from complete 760-row bilingual inventory",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+        "section": "fixed97_d3_direct_acceptance"
+      },
+      "disposition": "retain_unexecuted_current_coordination",
+      "basis": "D3-direct rows preserved verbatim in both languages; no count substitutes for row conditions.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed97_d3_direct_acceptance"
+        }
+      ]
     }
   ],
-  "next_batch": "D3",
+  "next_batch": "D4/D5",
   "global_acceptance": "not_performed"
 }

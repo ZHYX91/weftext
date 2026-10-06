@@ -89,4 +89,4 @@ translation_status: source
 
 ## A2 最终设计整合候选
 
-新的 A2 candidate 正在 fixed PR4 design head 之上分批整合。[入口](a2-final-design/README.zh-CN.md) 当前只完成自包含 D1、D2 第一批与精确 source/disposition tracking；D3–D10 仍是明确 TODO。该候选未独立接受、未实现、未合并、未发布。
+新的 A2 candidate 正在 fixed PR4 design head 之上分批整合。[入口](a2-final-design/README.zh-CN.md) 现包含自包含 D1、D2、D3 作者候选与 source/disposition tracking，并新增[复核入口](a2-final-design/REVIEW-ENTRY.zh-CN.md)。D4–D10 完整模块仍是明确 TODO。该候选未独立接受、未实现、未合并、未发布。
