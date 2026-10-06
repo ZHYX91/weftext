@@ -5,9 +5,9 @@ translation_status: synced
 ---
 
 [简体中文](REVIEW-ENTRY.zh-CN.md)
-# A2 D1-D5 + fixed446 D3 repair author-candidate review entry
+# A2 D1-D6 author-candidate review entry
 
-Status: stopped author candidate after the D4/D5 integration batch; not independently accepted, implemented, merged, released, deployed, or globally frozen.
+Status: D6 author candidate; not independently accepted, implemented, merged, released, deployed, or globally frozen.
 
 ## 1. Fixed base and review binding
 
@@ -53,9 +53,13 @@ Review the exact repair head for three oracles: (1) fresh-current conflict prepa
 
 The current dispatch is named once by D3-SCHEMAS: Request/Input13; Key3/Proof3/Descriptor3/Prepared3; Notice3/CP4/ChangeRecord1; PAB4/EffectManifest3/EffectBytes3; Value4. D3ResolverInput12, D3DecisionCompanion2, RevisionTokenBinding2 and the SourceRevisionPlan1/2/3 role split are retained without mechanical bumps.
 
-## 6. Pending and unrun scope
+## 6. D6 review target
 
-D6-D10 full A2 owner integration remains pending. Mandatory input lines 925-1141 remain pending. D3:P1-01 and D3:P1-02 are resolved-pending-independent-review, not author-closed; the next non-author review must bind this exact repair head.
+Review D6 as a complete module on this batch's exact final head: Storage, Control, Schemas, Impact, Lexicon, Registry and Source Map together. Confirm the F/M/P/I/D authority split, current Key3/CP4/ChangeRecord dispatch, role-specific SourceRevisionPlan /1-/3, dual-profile trust and replica registration, mixed policy-conflict arm dispatch, SourceTransform, schedule /1-/2 boundaries, D10 direct-holder coordination, and exact historical recovery. Source-map mechanics do not independently certify semantics.
+
+## 7. Pending and unrun scope
+
+D7-D10 full A2 owner integration remains pending. D6 is an author candidate pending non-author review. Mandatory input lines 925-1141 remain pending. D3:P1-01 and D3:P1-02 are resolved-pending-independent-review, not author-closed; the next non-author review must bind this exact repair head.
 
 Runtime, OS, GUI, real replica, product implementation, deployment, migration, and activation scenarios are UNRUN. Documentation/source/schema mapping checks are not product evidence.
 

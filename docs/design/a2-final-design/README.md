@@ -15,7 +15,7 @@ This A2 integration is based on parent commit 97f4734f82a760cb6716c8122b84494da2
 
 This directory is the only A2 candidate authority for modules integrated here. Earlier snapshots, D6 file-authority owner afterimages, and the AsciiDoc/Annotation final-design candidate remain source provenance and historical decoder evidence; they do not form a second current A2 definition.
 
-The current author candidate integrates D1 through D5. It is authored work, not independent acceptance. D6-D10 remain future full-module batches.
+The current author candidate integrates D1 through D6. It is authored work, not independent acceptance. D7-D10 remain future full-module batches.
 
 ## 2. Batch progress
 
@@ -23,10 +23,10 @@ The current author candidate integrates D1 through D5. It is authored work, not 
 | --- | --- |
 | D1 | integrated current candidate; fixed-446 D1/D2 findings independently closed in that bounded scope |
 | D2 | integrated current candidate; fixed-446 D1/D2 findings independently closed in that bounded scope |
-| D3 | integrated current author candidate; fixed-446 left D3:P1-01 and D3:P1-02 OPEN; later heads unreviewed |
-| D4 | integrated current author candidate; fixed-S four-source intake complete; pending non-author review |
-| D5 | integrated current author candidate; fixed-S three-source intake complete; pending non-author review |
-| D6 | TODO as a full module; D1/D2 intersections plus D3-direct Chinese owner inputs read |
+| D3 | integrated current author candidate; a separate fixed-a62 non-author narrow review CLOSED the two bounded D3 P1 findings; this is not global A2 acceptance |
+| D4 | integrated current author candidate; fixed-S four-source intake complete; separate bounded source-map/direct-coverage follow-up remains outside this D6 scope |
+| D5 | integrated current author candidate; fixed-S three-source intake complete; separate bounded source-map/direct-coverage follow-up remains outside this D6 scope |
+| D6 | integrated current author candidate in this batch; complete fixed-S/current-owner intake and detailed source/case/pointer map; pending non-author review |
 | D7 | TODO as a full module; D2 intersections plus D3-direct Chinese owner inputs read |
 | D8 | TODO as a full module; D1/D2 intersections plus D3-direct Chinese owner inputs read |
 | D9 | TODO as a full module; D2 intersections plus D3-direct Chinese owner inputs read |
@@ -43,16 +43,17 @@ No TODO module is treated as accepted, complete, or semantically read merely bec
 - D3-SOURCE-MAP.json records D3 source-qualified cases and direct current coordination rows.
 - D4.md, D4-IMPACT.md, and D4-LEXICON.md form the D4 author candidate; D4-SOURCE-MAP.json and D4-CATALOG-MAP.json retain provenance.
 - D5.md, D5-IMPACT.md, and D5-LEXICON.md form the D5 author candidate; D5-SOURCE-MAP.json retains provenance.
-- REVIEW-ENTRY.md is the review entry for the D1-D5 author candidate.
+- D6.md, D6-CONTROL.md, D6-SCHEMAS.md, D6-IMPACT.md, D6-LEXICON.md and D6-REGISTRY.json form the current D6 author candidate; D6-SOURCE-MAP.json preserves detailed provenance.
+- REVIEW-ENTRY.md is the review entry for the D1-D6 author candidate.
 - SOURCE-MAP.md gives the human-readable source/disposition map.
 - SOURCE-MAP.json records all 49 fixed-S inputs, exact S blobs, read status, current sources, and source-qualified obligation groups.
 
 ## 4. Precedence inside this candidate
 
-For D1 through D5, the A2 files in this directory are the current candidate text. A named historical decoder or historical scenario remains normative only for historical recovery or source-qualified evidence when D1.md, D2.md, or SOURCE-MAP explicitly says so.
+For D1 through D6, the A2 files in this directory are the current candidate text. A named historical decoder or historical scenario remains normative only for historical recovery or source-qualified evidence when D1.md, D2.md, or SOURCE-MAP explicitly says so.
 
-For D6 through D10 there is no complete A2 current definition yet. Direct producer/consumer material consumed for D3-D5 does not silently integrate those full owner modules.
+For D7 through D10 there is no complete A2 current definition yet. Direct producer/consumer material consumed for D3-D5 does not silently integrate those full owner modules.
 
 ## 5. Acceptance boundary
 
-The D1-D5 integration preserves source-qualified historical obligations and bounded review evidence. Fixed-446 closed the D1/D2 finding pair independently, but this author does not close the two OPEN D3 findings or independently accept D4/D5. All design/runtime acceptance cases remain unexecuted unless an exact external run is explicitly recorded. Final A2 acceptance still requires a fresh non-author global review of one fixed completed A2 commit.
+The D1-D6 integration preserves source-qualified historical obligations and bounded review evidence. Fixed-446 closed the D1/D2 finding pair independently, but this author does not close the two OPEN D3 findings or independently accept D4/D5. All design/runtime acceptance cases remain unexecuted unless an exact external run is explicitly recorded. Final A2 acceptance still requires a fresh non-author global review of one fixed completed A2 commit.

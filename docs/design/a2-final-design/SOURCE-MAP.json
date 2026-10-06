@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D1-D5 author candidates integrated. Fixed-446 independently closed the D1/D2 finding pair; D3:P1-01 and D3:P1-02 remain OPEN on fixed-446. D4/D5 are new author candidates pending non-author review; no global acceptance implied.",
+  "status": "A2 D1-D6 author candidates integrated. D6 full author module is present and pending non-author review; D7-D10 remain future full-module batches. No global acceptance implied.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -123,8 +123,8 @@
       "bytes": 83610,
       "lines": 324,
       "blobAtFixedS": "32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
     },
     {
       "path": "docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md",
@@ -135,8 +135,8 @@
       "bytes": 49757,
       "lines": 231,
       "blobAtFixedS": "c2673e1e72b8a2cb96f0e6cae5f4f2035cf12c6b",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
     },
     {
       "path": "docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md",
@@ -147,8 +147,8 @@
       "bytes": 25128,
       "lines": 81,
       "blobAtFixedS": "6a9038fd6e70b2be3760811d73d2e5077c0ab5a2",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
     },
     {
       "path": "docs/design/snapshots/d6-terminology-registry/source.json",
@@ -159,8 +159,8 @@
       "bytes": 57101,
       "lines": 991,
       "blobAtFixedS": "5f4b28d9cf8a237cfa7e7ed8e41143571e5731a6",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
     },
     {
       "path": "docs/design/snapshots/d7-definition-transfer/source.md",
@@ -531,8 +531,8 @@
       "bytes": 10713,
       "lines": 74,
       "blobAtFixedS": "35cf68fd6986d812d7f812180d7bb396d2a4f4e1",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
     },
     {
       "path": "docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "D4/D5",
+  "next_batch": "D7 only after D6 handoff and explicit authorization; queued D4/D5 bounded follow-up is outside this D6 author scope.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "author_candidate_complete_for_this_batch_pending_non_author_review",
@@ -2388,5 +2388,24 @@
       "gui": "UNRUN",
       "replica": "UNRUN"
     }
+  },
+  "d6_integration": {
+    "files": [
+      "D6.md",
+      "D6.zh-CN.md",
+      "D6-CONTROL.md",
+      "D6-CONTROL.zh-CN.md",
+      "D6-SCHEMAS.md",
+      "D6-SCHEMAS.zh-CN.md",
+      "D6-IMPACT.md",
+      "D6-IMPACT.zh-CN.md",
+      "D6-LEXICON.md",
+      "D6-LEXICON.zh-CN.md",
+      "D6-REGISTRY.json",
+      "D6-SOURCE-MAP.json",
+      "D6-SOURCE-MAP.md",
+      "D6-SOURCE-MAP.zh-CN.md"
+    ],
+    "status": "author_candidate_pending_independent_review"
   }
 }

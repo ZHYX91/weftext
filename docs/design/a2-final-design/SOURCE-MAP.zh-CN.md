@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](SOURCE-MAP.md)
-# A2 D1–D5 来源与 disposition 图
+# A2 D1–D6 来源与 disposition 图
 
-状态：D1–D5 作者候选的来源/disposition 图；只记录阅读与映射证据，不是独立接受。
+状态：D1–D6 作者候选的来源/disposition 图；只记录阅读与映射证据，不是独立接受。
 
 ## 1. 本批完整读取的固定输入
 
@@ -67,9 +67,9 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 ## 7. 明确未读或未完成
 
-本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D6–D10。
+本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D7–D10。
 
-D3、D4、D5 都是作者候选，并有模块级 source map。D6–D10 完整模块仍 TODO；D4/D5 direct producer/consumer 阅读明确只是 partial，不能据此把这些 owner 模块标成完成。
+D3、D4、D5 都是作者候选，并有模块级 source map。D7–D10 完整模块仍 TODO；D4/D5 direct producer/consumer 阅读明确只是 partial，不能据此把这些 owner 模块标成完成。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -115,3 +115,7 @@ D5 fixed-S 主文、Impact、Lexicon 已逐非空行映射。当前候选没有�
 历史 Inline-only、单逻辑行、禁止 span/块 cell 的 native-table 限制被显式 supersede；当前 D2 接纳完整合法 Asciidoctor 2.0.26 table surface。合法 shape 可以没有 structured control，但 Source 不能因此 invalid。合格的 titleless native create/save 继续合法；filename/path/placeholder 不能伪造 title。
 
 D6–D9 producer/consumer 交叉按精确 path/blob 记录为 direct partial。parent owner 树没有独立 D10 owner 文件，所以 D10 只保留 fixed97 SPEC/SCHEMAS direct-partial。
+
+## D6 整合更新
+
+D6 现已形成作者候选。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)；D7–D10 仍留待后续完整模块批次。

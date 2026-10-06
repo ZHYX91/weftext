@@ -5,9 +5,9 @@ translation_status: synced
 ---
 
 [简体中文](SOURCE-MAP.zh-CN.md)
-# A2 D1-D5 Source and Disposition Map
+# A2 D1-D6 Source and Disposition Map
 
-Status: author source/disposition map for D1-D5 candidates. It records reading and mapping evidence, not independent acceptance.
+Status: author source/disposition map for D1-D6 candidates. It records reading and mapping evidence, not independent acceptance.
 
 ## 1. Fixed inputs fully read in this batch
 
@@ -64,9 +64,9 @@ SOURCE-MAP.json records machine-readable obligation groups, dispositions, source
 
 ## 7. Explicitly unread or unfinished
 
-Fixed-S D4 and D5 sources required by this batch are now fully read and mapped: D4 main/Impact/Lexicon plus the immutable catalog, and D5 main/Impact/Lexicon. Mandatory scenario input §§1-14 (lines 1-924) is read for D4/D5; lines 925-1141 remain for later D6-D10 work.
+Fixed-S D4 and D5 sources required by this batch are now fully read and mapped: D4 main/Impact/Lexicon plus the immutable catalog, and D5 main/Impact/Lexicon. Mandatory scenario input §§1-14 (lines 1-924) is read for D4/D5; lines 925-1141 remain for later D7-D10 work.
 
-D3, D4 and D5 are author candidates with module-level source maps. D6-D10 full-module integration remains TODO; D4/D5 direct producer/consumer reads are explicitly partial and do not mark those owner modules complete.
+D3, D4 and D5 are author candidates with module-level source maps. D7-D10 full-module integration remains TODO; D4/D5 direct producer/consumer reads are explicitly partial and do not mark those owner modules complete.
 
 ## 8. D1/D2 source-map completeness repair
 
@@ -95,7 +95,7 @@ The fixed-5c review findings are not self-closed by this author. The Record-boun
 
 D3-SOURCE-MAP.json is the case-level audit record. It preserves fixed-S main section 14 cases 1-51, fixed-S section 18 outlines 1-138, current-parent main section 19 cases 1-79, the real Impact section 20 structure covering 56-79, all 42 fixed-S Lexicon concepts/ordinary sections, and 73 current PR4 D3-direct bilingual acceptance rows.
 
-The three fixed-S D3 inputs and current parent D3 main/Impact/Lexicon in both languages were fully read. Selected Chinese D6-D10 direct-owner files were fully read only to close D3 interfaces; their full A2 owner modules remain pending. Fixed97 SPEC/SCHEMAS are only D3-relevant partial reads outside the earlier D2-complete regions.
+The three fixed-S D3 inputs and current parent D3 main/Impact/Lexicon in both languages were fully read. Selected Chinese D7-D10 direct-owner files were fully read only to close D3 interfaces; their full A2 owner modules remain pending. Fixed97 SPEC/SCHEMAS are only D3-relevant partial reads outside the earlier D2-complete regions.
 
 Fixed-446 independent review closed the D1/D2 P1-01/P2-01 findings. It left D3:P1-01 and D3:P1-02 OPEN and did not review edaf or later author deltas. Product/runtime scenarios remain unexecuted.
 
@@ -112,3 +112,7 @@ The D5 fixed-S main, Impact and Lexicon are mapped line by line. The current can
 The historical Inline-only, one-logical-line, no-span/no-block-cell native-table restriction is explicitly superseded by the full legal Asciidoctor 2.0.26 table surface admitted by current D2. Structured controls may be unavailable for a legal shape without making Source invalid. Qualified titleless native create/save remains legal; filename/path/placeholder never fabricate title.
 
 D6-D9 producer/consumer intersections are recorded as direct partial reads by exact path/blob. There is no standalone D10 owner file in the parent owner tree, so D10 remains fixed97 SPEC/SCHEMAS direct-partial only.
+
+## D6 integration update
+
+D6 is now an author candidate. Detailed section/case/registry-pointer provenance is in [D6-SOURCE-MAP](D6-SOURCE-MAP.md); D7-D10 remain future full-module batches.

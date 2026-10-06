@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1-D5 + fixed446 D3 修复作者候选复核入口
+# A2 D1-D6 作者候选复核入口
 
-状态：D4/D5 整合批次后停止写入的作者候选；未独立接受、未实现、未合并、未发布、未部署、未全局冻结。
+状态：D6 作者候选；未独立接受、未实现、未合并、未发布、未部署、未全局冻结。
 
 ## 1. 固定 base 与复核绑定
 
@@ -58,9 +58,13 @@ D6–D9 owner 文件只读取 D4/D5 direct producer/consumer 交叉；属于 par
 - 安装通知采用第 3 版，完成证明采用第 4 版，变更记录采用第 1 版；准备动作绑定采用第 4 版，效果清单与效果字节采用第 3 版；注释值采用第 4 版。
 - D3ResolverInput 保持第 12 版；D3DecisionCompanion 与 RevisionTokenBinding 保持第 2 版。SourceRevisionPlan 的 /1、/2、/3 继续分别对应普通/新鲜、D3 规范冲突和 D6 来源冲突，不机械升版。
 
-## 6. 待完成与未运行范围
+## 6. D6 复核目标
 
-D6–D10 完整 A2 owner 整合仍待完成。Mandatory input 925–1141 行仍待完成。D3:P1-01 与 D3:P1-02 仅 resolved-pending-independent-review，不是作者关闭；下一轮非作者复核必须绑定本 repair exact head。
+请在本批 exact final head 上把 D6 作为完整模块审查：Storage、Control、Schemas、Impact、Lexicon、Registry 与 Source Map 必须合并阅读。逐项核 F/M/P/I/D authority 分层、current Key3/CP4/ChangeRecord 路由、SourceRevisionPlan /1-/3 角色分派、双 profile trust 与 replica registration、mixed policy-conflict arm 分派、SourceTransform、schedule /1-/2 边界、D10 direct-holder 协调及 exact historical recovery。Source-map 机械检查本身不独立认证语义。
+
+## 7. 待完成与未运行范围
+
+D7–D10 完整 A2 owner 整合仍待完成；D6 是待非作者复核的作者候选。Mandatory input 925–1141 行仍待完成。D3:P1-01 与 D3:P1-02 仅 resolved-pending-independent-review，不是作者关闭；下一轮非作者复核必须绑定本 repair exact head。
 
 Runtime、OS、GUI、真实 replica、产品实现、部署、migration、activation 场景全部 UNRUN。文档/source/schema 映射检查不是产品证据。
 
