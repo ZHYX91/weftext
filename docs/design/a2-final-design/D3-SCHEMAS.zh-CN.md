@@ -21,7 +21,7 @@ current dispatch 精确为：
 - bootstrap/trust：WorkspaceBootstrapPlan/4、WorkspaceTrustGenesis/2；
 - D10 current mixed author holder：下文 versioned /2-/3 current carrier。
 
-D3ResolverInput/12、D3DecisionCompanion/2、RevisionTokenBinding/2、canonical-conflict-only SourceRevisionPlan/2 **不机械升版**。genuine historical wire9–12、Descriptor/Proof/Prepared family、Notice/CP1–3、PAB1–3、Value3、Plan1/3 及其 pins/OperationId/TTL/recovery 必须按 recorded decoder 原字节恢复。
+D3ResolverInput/12、D3DecisionCompanion/2、RevisionTokenBinding/2 与只用于规范冲突的 SourceRevisionPlan/2 **均不机械升版**。真实历史 wire9–12、Descriptor/Proof/Prepared 系列、Notice/CP1–3、PAB1–3、Value3、Plan1/3 及其 pins、OperationId、TTL 与 recovery，必须按已记录的 decoder 和原始字节恢复。
 
 ## Part A — current D6/D3/D7/D8 direct holder
 

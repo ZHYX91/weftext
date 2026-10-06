@@ -1646,7 +1646,7 @@ historical R08 的 3 P1 + 8 P2 继续作为 review provenance；后续具名 rep
 
 以下是既有受控概念的技术投影，不是新内容身份或替代firstFreeze。D3ResolverInput/12是受保护不可变Ref/Locator读上下文，绑定显式Workspace/domain/精确Frontier与闭合outcomes（主文§11）。wire12 transfer观察绑定完整target/source DecisionKeys，保留两个独立Copy/Trash决议（主文§8.4.1），不创建跨Workspace Move身份。
 
-D3ConflictResolutionPrepare/1 仍准备既有 Move/lifecycle/Copy 语义。fresh current resolution 使用 `PreparedActionBinding/4`、`D3ResolutionInputUse/2` 与 `InputDescriptor/3` 保留完整 ConflictKey/head/selection/branch evidence；最终 native request 为 wire13。historical PAB3/Use1/wire12 preparation 保持 exact recovery。完整 preview 仍是真实 D7 manifest/page/byte transport，不是 PinRef access promise。
+D3ConflictResolutionPrepare/1 继续准备既有的移动、生命周期和复制语义。新的当前冲突处理使用 `PreparedActionBinding/4`、`D3ResolutionInputUse/2` 与 `InputDescriptor/3` 保留完整的 ConflictKey、冲突头、选择和分支证据；最终原生请求仍为 wire13。历史 PAB3/Use1/wire12 准备流程保持精确恢复。完整预览仍通过 D7 的清单、分页和字节传输交付，不是 PinRef 读取承诺。
 
 ### 9.1 Canonical 物化与生命周期选择
 
