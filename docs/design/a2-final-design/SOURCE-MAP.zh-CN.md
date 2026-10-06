@@ -121,11 +121,11 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 D6 现已形成作者候选。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)；D7–D10 仍留待后续完整模块批次。
 
 
-## 12. fixed-829 D4/D5 审计映射修复
+## 12. fixed-a62 D4/D5 审计映射修复
 
-fixed-829 非作者报告在 D4/D5 semantic LIMITED PASS 后留下两个 audit P2。当前作者修复仅把两项标为 author-resolved-pending-independent。
+已完成的非作者复核绑定 fixed-a62 a62aa7d4eaf56113cd1e9e32336ae8814f83589b（request 7b6e1f16-fa41-499c-b078-647f1942e94e），在 D4/D5 semantic LIMITED PASS 后留下两个 audit P2。当前作者修复仅把两项标为 author-resolved-pending-independent。
 
-D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 170 个 fixed-S D5 非空行全部放入来源限定的连续义务组，并逐项写 current target、disposition、owner、basis 和 oracle。Mandatory 1–924 行为 716/716，按真实 owner/defer 路由。fixed97 selected rows 同时保存真实 EN/ZH 原 row（D4 72/72；D5 130/130）。D4-CATALOG-MAP.json 用 7 个无重叠 subtree 覆盖 2,854/2,854 pointer，同时保持不可变 fixed catalog 为唯一规范值权威。
+D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 170 个 fixed-S D5 非空行全部放入来源限定的连续义务组，并逐项写 current target、disposition、owner、basis 和 oracle。Mandatory 1–924 行为 716/716，按真实 owner/defer 路由。fixed97 selected rows 同时保存真实 EN/ZH 原 row（D4 72/72；D5 130/130）。D4-CATALOG-MAP.json 按 RFC 6901 用 7 个无重叠 subtree 覆盖 2,854/2,854 pointer，文档根使用空字符串而不是 slash，同时保持不可变 fixed catalog 为唯一规范值权威。Mandatory 的跨文件 target 已改为逐文件 target array；current workflow/freeze/handoff 三组分别落到 REVIEW-ENTRY §5.1–§5.3，不再指向不存在的 §7。
 
 旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
 
