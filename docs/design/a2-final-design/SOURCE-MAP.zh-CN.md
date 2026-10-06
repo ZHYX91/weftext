@@ -114,8 +114,19 @@ D5 fixed-S 主文、Impact、Lexicon 已逐非空行映射。当前候选没有�
 
 历史 Inline-only、单逻辑行、禁止 span/块 cell 的 native-table 限制被显式 supersede；当前 D2 接纳完整合法 Asciidoctor 2.0.26 table surface。合法 shape 可以没有 structured control，但 Source 不能因此 invalid。合格的 titleless native create/save 继续合法；filename/path/placeholder 不能伪造 title。
 
-D6–D9 producer/consumer 交叉按精确 path/blob 记录为 direct partial。parent owner 树没有独立 D10 owner 文件，所以 D10 只保留 fixed97 SPEC/SCHEMAS direct-partial。
+D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通过真实 CONTROL-CONTRACT、CANDIDATE、UPSTREAM-AMENDMENTS 中英文文件按精确 blob 做 direct qualification；这些读取均为 direct_partial_not_full_D10，不等于 D10 完整模块完成。
 
 ## D6 整合更新
 
 D6 现已形成作者候选。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)；D7–D10 仍留待后续完整模块批次。
+
+
+## 12. fixed-829 D4/D5 审计映射修复
+
+fixed-829 非作者报告在 D4/D5 semantic LIMITED PASS 后留下两个 audit P2。当前作者修复仅把两项标为 author-resolved-pending-independent。
+
+D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 170 个 fixed-S D5 非空行全部放入来源限定的连续义务组，并逐项写 current target、disposition、owner、basis 和 oracle。Mandatory 1–924 行为 716/716，按真实 owner/defer 路由。fixed97 selected rows 同时保存真实 EN/ZH 原 row（D4 72/72；D5 130/130）。D4-CATALOG-MAP.json 用 7 个无重叠 subtree 覆盖 2,854/2,854 pointer，同时保持不可变 fixed catalog 为唯一规范值权威。
+
+旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
+
+两个有界 D3 finding 已在 fixed-a62 独立 CLOSED。D6 仍是 stopped 829 作者候选，fixed-829 只读工作不构成接受。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending；runtime 证据仍 UNRUN。
