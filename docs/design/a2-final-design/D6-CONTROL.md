@@ -1390,11 +1390,44 @@ Control inspection v2 adds targets decision_state (complete original request req
 
 ## 17. Current fixed97 direct-owner contract
 
-The following text is the current D6 owner contract integrated here, not a later patch layer.
+The following retained contracts remain current unless a named successor below replaces only their versioned carrier. Each import names source/blob, exact section and current constructor/validator; it is not a second authority.
 
-## 11. SourceTransform compiler and exact mapping
+### 17.1 ResultPage / cursor transport
 
-### 11.1 Total compilation
+Import fixed-S D6 Control `docs/design/snapshots/d6-control-interfaces/source.md`, blob `32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4`, §5 lines 98–107. Retain exact page request `wireVersion,kind,resultToken,cursorToken,pageSize` with version1/pageSize 1..200; exact reply `wireVersion,kind,resultToken,rows,terminal,nextCursorToken?`; complete result before paging; terminal=true forbids a next cursor and terminal=false requires one even for rows=[]; current authorization precedes expiry/reset/cursor/state/read. Empty nonterminal is legal and transport failure is never EOF. Constructor/validator: D6 result-spool publisher and strict result page/error decoders; D7 owns row/result semantics.
+
+### 17.2 BudgetBinding/1
+
+Import the same source/blob §6 lines 108–117. BudgetBinding/1 is exactly `version,maxInputBytes,maxSourceBytes,maxWriteBytes,maxDecodedBytes,maxWorkUnits,maxDependencies,maxNewEntities,maxTemporaryBytes,maxElapsedMillis,maxResultBytes,maxOutputBytes`; version1, all limits Counter, zero denies rather than means unlimited. Pointwise request/Workspace/host minimum, checked cumulative charging, burned work, finite attempt allowance and no truncating success remain complete. Constructor/validator: D6 budget binder and execution-resource CAS; PreparedIntent/3 references this unchanged inner type.
+
+### 17.3 ImportJob / batch recovery
+
+Import the same source/blob §7 lines 118–127. Retain authenticated owner, complete input descriptor/pins, mapping version, finite DAG/SCC and atomic groups, explicit batch order, stable per-batch OperationId, exact protocolOwner/canonical request/full plan, committed receipts, binding/version/watermark prefix, state and budget. Only committed complete-predecessor batches advance the prefix; retry cannot double-advance; changed mapping/input/groups create a new job. D9 owns format/mapping/comparator input, D3 or D6 owns the admitted author request/plan, and D6 atomically persists receipt/binding/watermark.
+
+### 17.4 Managed configuration / control read
+
+Import the same source/blob §§8–10 lines 128–173. Retain all four closed management intents, policy_admin/ObservationScope gates, one D6 prepare/commit ledger, CAS/replay/error order and closed d6_control_read target/state/error shapes. Current outer carriers are InputDescriptor/3, DependencyProof/3 and PreparedIntent/3; inner management contracts are not mechanically bumped.
+
+### 17.5 Resource ByteHandle / ByteRead
+
+Import the same source/blob §11 lines 174–189. d6_byte_read_request stays version1 with handleToken, offset and maxBytes 1..1048576. Success binds the immutable Resource cut and returns exact resourceRef, resourceRevisionToken, offset, totalBytes, unpadded base64url data and Boolean terminal; decoded length is min(maxBytes,totalBytes-offset). offset==totalBytes permits empty terminal success; offset>totalBytes is range_invalid; short read/corruption/I/O is never fake EOF. Gate order remains decode -> audience/current resource authorization -> expiry -> reset -> range -> pin/backend/budget -> complete chunk verification -> final delivery gate. All reads share the handle's persistent budget. D2 Resource snapshot issues the handle; D6 only transports that committed snapshot.
+
+### 17.6 Cross-stage inherited interfaces / ObservationScope
+
+Import the same source/blob §§12–13 lines 190–247. SourceVersion and typed revision tokens, D3 cut tokens, D4 relation/recurrence bindings, D7 row ownership, closed ObservationScope profiles and authorization-before-secret-read retain their owner boundaries. InputDescriptor/3 stores the Core-derived scope; no caller scope or free JSON is introduced.
+
+### 17.7 SourceBinding / OriginBinding physical boundary
+
+Import fixed-S D3 identity source `docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md`, blob `bc23922ae2de4c80dadc7b91e945c87ce154b55a`, SourceBinding/ForeignIdentityKey/OriginBinding clauses and lifecycle matrix. SourceBinding identifies one concrete source instance/collection scope; account token, cursor, etag, watermark and credentials are control-plane facts. OriginBinding permits at most one active ForeignIdentityKey association, preserves retired audit, never auto-restores active_non_live, and requires explicit adopt after retirement. source_deleted, Node Trash, detached binding and provider cancellation are separate axes. D6 owns physical persistence/retention/same-key linearization and durable base-current-remote evidence; D9/D10 or the provider owns external version/comparator and connector/credential execution.
+
+### 17.8 Current successor dispatch
+
+Fresh unseen D6 uses Key3/Proof3/Input3/Prepared3 with d6_plan/3. Portable current publication is PortableComponentKey/2 + Notice3 + one final P + CP4/ChangeRecord1. A managed-Document semantic consumer includes document_format; a format-only transition has sourceChanges=[] and no SourceRevisionPlan, managed SourceVersion or H advance. Genuine saved/planned/unknown Key2/Proof2/Descriptor2/Prepared2, Notice1/2 and CP1/2/3 retain original decoder, bytes, pins, OperationId, authorization, install/seal/receipt/retention/error order and recovery.
+
+
+## 18. SourceTransform compiler and exact mapping
+
+### 18.1 Total compilation
 
 PortableTransformCompilation/1 is total: representable events + afterSourceSha256 or an unavailable reason from the closed set provenance_gap, unsupported_transaction, invalid_utf8_boundary, generated_cross_anchor_edit, boundary_slot_unrepresentable, provenance_cycle, after_replay_mismatch, payload_digest_mismatch.
 
@@ -1413,7 +1446,7 @@ The canonical event array is ordered by original coordinate. A replacement whose
 
 `generatedOutputSpan(E)` is computed without content search by one replay cursor over the exact before and after pins. Initialize beforeCursor=0 and afterCursor=0. For each canonical event E let q be E.startByte for replace or E.atByte for insert; require q>=beforeCursor, require the unchanged bytes beforeBytes[beforeCursor:q] to equal afterBytes[afterCursor:afterCursor+(q-beforeCursor)], then advance both cursors by that unchanged length. E's generatedOutputSpan is [afterCursor, afterCursor+E.replacementByteLength); it must be within afterBytes, its exact slice must match replacementByteLength and replacementSha256, and afterCursor advances to the span end. For replace, beforeCursor then becomes endByte; for insert it remains q. After the last event, the remaining beforeBytes[beforeCursor:] must be byte-equal to the remaining afterBytes[afterCursor:]. The resulting complete after bytes must match afterSourceSha256. Any failed boundary, length, digest, ordering, unchanged-segment, or final replay check makes the compilation/evidence invalid; a receiver never trusts a redundant field instead of the bytes.
 
-### 11.2 Mapping
+### 18.2 Mapping
 
 For replacement R=[a,b) with replacement length Lr, define delta(R)=Lr-(b-a) as a signed integer. For insertion I at q, len(I)=replacementByteLength. All sums below use checked signed arithmetic and the final mapped coordinate must remain within the replayed after-source byte range.
 
@@ -1431,7 +1464,7 @@ p' = p + sum(delta(R), b<=p) + sum(len(I), q<p)
      + (sum(len(I), q=p) when affinity=right else 0)
 ``` Each link in a transform chain independently revalidates source version, signature, trust cut, and result.
 
-### 11.3 Frozen plan
+### 18.3 Frozen plan
 
 CoreSourceEditPlan/2 freezes the /3 events, exact before observation, exact after pin, and TransformEmissionPlan/1.
 
@@ -1446,7 +1479,7 @@ CoreSourceEditPlan/2 = {
 }
 ``` Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
 
-## 12. Signed transform evidence and outbox
+## 19. Signed transform evidence and outbox
 
 SourceTransformEvidence/2 binds DecisionKey, ChangeId, owner, managed before/after SourceVersions, before/after hashes, the fixed coordinate/affinity profiles, and the exact /3 event array.
 
@@ -1486,7 +1519,7 @@ The outbox key is exactly {changeId,ownerNodeRef} and the outbox item pins exact
 
 The transform artifact is not a PortableComponent and is not inserted into Notice/CP components. It shares the source decision's one P seal and ChangeId.
 
-## 13. Trust profile, activation, and historical verification
+## 20. Trust profile, activation, and historical verification
 
 A Workspace has exactly one retained WorkspaceTrustRootDeclaration/1 and one protected WorkspaceTrustAnchor/1. The closed seal profiles are d6_revision_token_seal/1 and d6_source_transform_seal/1. Historical WorkspaceTrustDeclaration/1 remains byte-exact revision-token-only. WorkspaceTrustDeclaration/2 is the current profile-discriminated successor; WorkspaceAuthorizationBundle/2 may contain a byte-exact /1 prefix followed by a /2 suffix, and the chain never returns to /1 after the first /2.
 
@@ -1506,7 +1539,7 @@ Declaration1 activation remains under its original DecisionKey -> CP3/public-his
 
 A normal SourceTransform receiver validates the producing ChangeRecord/CP4 and uses C=CP4.frontierBefore for historical key verification. Later ordinary rotation does not invalidate an artifact valid at C. Compromise compares causal order between the artifact seal ChangeId and the original compromise activation ChangeId; causal-concurrent or later old-key seals fail regardless of arrival order. DomainSealKeyHandle/1 may continue new revision-token signing only while its exact Declaration1-authorized key remains current, safe, and usable; it never gains transform authority or is reencoded as Handle2.
 
-### 13.1 Dual-profile policy-conflict resolution
+### 20.1 Dual-profile policy-conflict resolution
 
 The public d6_conflict_prepare request remains the fixed-parent wireVersion3 request and the policy_bundle_choice JSON member names remain selected, policy, and freshAuthorizations. The current unseen policy arm uses FreshDomainAuthorizationSpec/2 from SCHEMAS §9, whose profile is SealProfileId/1. Source-merge and choose-source-head arms remain on their fixed-parent contract. This is not a new submit surface: conflict_resolve, workspace policy_admin, subject disclosure, exact expectedKey, the original error order, the one winning planning CAS, the original d6_commit_request/2, and the one final P remain unchanged. A genuinely saved/planned policy resolution that can be proved to have been stored under an earlier owner descriptor restores that exact request, descriptor, pins, handles and recovery state and is never reparsed as the current successor. This candidate asserts no deployment that would justify a synthetic migration.
 
@@ -1547,7 +1580,7 @@ Receiver admission replays the frozen Input3/Plan2/Preview2/pin set, validates e
 
 A required branch example is transform KT1 split concurrently into ordinary KT1→KT2 and compromise KT1→KT3. Selecting the ordinary branch does not erase the losing branch's original KT1 compromise fact or move its cut to the resolver. KT2 may be retained only if it is independently safe under the complete fold. Where the selected transform state is none or its selected current key is unsafe, a requested source-transform FreshDomainAuthorizationSpec/2 produces a fresh transform key and a valid Outcome2 instead of forcing the Workspace to remain permanently unresolved.
 
-### 13.2 Replica registration current producer
+### 20.2 Replica registration current producer
 
 d6_replica_register_prepare retains its fixed-parent wireVersion2 request and specialized replica_register authority; it gains no profile member and ordinary dual-profile trust add/rotate/revoke is not an authority substitute. For a current unseen registration, the winning prepare mints one fresh ReplicaEpoch and the joining secure store generates exactly two fresh DomainSealKeyHandle/2 values for that replica CommitDomain, both staged, in fixed profile order revision-token then source-transform. Caller JSON never supplies either key.
 
@@ -1567,15 +1600,15 @@ Ordinary managed copy is not bootstrap and keeps its existing scope/configuratio
 
 Replica registration remains its specialized same-record producer and is dual-profile for current FC operation; generic trust prepare is not a substitute for replica_register authority. Continuation evaluates revision and transform profiles independently as current(K)|none|conflicted_or_unproved. Any unproved profile prevents partial activation of a new signing domain; otherwise the complete sequence is optional old revision revoke, optional old transform revoke, new revision authorize, new transform authorize in fixed profile order under one DecisionKey/CP4 with no observable intermediate prefix.
 
-### 13.3 D6 Storage §9.1 / §9.3 current consumers
+### 20.3 D6 Storage §9.1 / §9.3 current consumers
 
-The fixed-parent D6 Storage §9.1 single-profile registration/admission prose is superseded only for a current unseen replica registration. The Storage consumer now admits the exact §13.2 transition: one fresh ReplicaEpoch; exactly two fresh staged DomainSealKeyHandle/2 values in revision-token then source-transform order; exactly two Declaration2 authorizations in that order under one DecisionKey; replica_registry and policy/Bundle2 after-images in the same Notice3/CP4/ChangeRecord1 and one final P/ChangeId; and simultaneous staged->usable for both handles only after that complete transition is admitted. Receiver admission cross-validates the active ReplicaRecord, both Declaration2 predecessor/signature/PoP chains, exact fixed profile order, one DecisionKey and exact Bundle2 bytes. Retention/planned recovery preserves the exact staged pair, declarations, component pins and original request and never regenerates a key. A proven historical registration retains its recorded single-profile decoder and bytes. replica_register remains the specialized authority and cannot be replaced by generic trust administration. replica_retire blocks future signing for both current profiles once its original transition is admitted but does not erase historical authorization or take over ApprovalUse, claims, Money, external unknowns, Automation leases, or execution custody. Ordinary replica content and execution-responsibility takeover remain separate contracts.
+The fixed-parent D6 Storage §9.1 single-profile registration/admission prose is superseded only for a current unseen replica registration. The Storage consumer now admits the exact §20.2 transition: one fresh ReplicaEpoch; exactly two fresh staged DomainSealKeyHandle/2 values in revision-token then source-transform order; exactly two Declaration2 authorizations in that order under one DecisionKey; replica_registry and policy/Bundle2 after-images in the same Notice3/CP4/ChangeRecord1 and one final P/ChangeId; and simultaneous staged->usable for both handles only after that complete transition is admitted. Receiver admission cross-validates the active ReplicaRecord, both Declaration2 predecessor/signature/PoP chains, exact fixed profile order, one DecisionKey and exact Bundle2 bytes. Retention/planned recovery preserves the exact staged pair, declarations, component pins and original request and never regenerates a key. A proven historical registration retains its recorded single-profile decoder and bytes. replica_register remains the specialized authority and cannot be replaced by generic trust administration. replica_retire blocks future signing for both current profiles once its original transition is admitted but does not erase historical authorization or take over ApprovalUse, claims, Money, external unknowns, Automation leases, or execution custody. Ordinary replica content and execution-responsibility takeover remain separate contracts.
 
 The fixed-parent Storage §9.3 conflict direct consumer is likewise arm-dispatched. Current unseen source_merge and choose_source_head use current outer InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3 but retain exact ConflictResolutionInput/2, Plan1, Preview1, source pins and source semantics. Current unseen policy_bundle_choice uses ConflictResolutionInput/3, Plan2, Preview2, mixed Carry1/2, the exact OwnerInputBinding pin union and PreparedIntent3 preview/pinDirectory closure above. Storage retains every losing branch byte, exact bundle/activation evidence, result bundle pin and protected preview pin until the original last-reference rules permit release. Final write remains the original D6 typed request and one P seal. Saved/planned/unknown work always restores its recorded outer carrier, request, owner descriptor, preview, pins, fresh-handle association and OperationId first; current outer types never reinterpret or migrate those bytes. These replacements cover Storage's current direct-consumer statements only and leave unrelated historical conflict, transport and recovery semantics intact.
 
-## 14. D10 mixed-version control and execution responsibility
+## 21. D10 mixed-version control and execution responsibility
 
-### 14.1 Current-owner routing and historical dispatch
+### 21.1 Current-owner routing and historical dispatch
 
 For a current unseen/fresh D10 Workspace-control operation, the coordinated chain is D10WorkspaceReadDependencies/2 with DependencyProof/3 -> ControlDependencies/3 -> D10ControlInput/2 -> ControlPrepareBinding/3. A fresh unattended D10 author step uses PreparedActionBinding/4 and EffectManifest/3 / EffectBytes/3 to construct ApprovalUse/2. A fresh current interactive author step uses the exact current PreparedActionBinding/4 or PreparedEditBinding/3 selected by its owner contract. New scheduling uses the current ScheduleSubscription/2 and AutomationOccurrenceRecord/2 families.
 
@@ -1593,7 +1626,7 @@ D6 producer/fold/compaction/receiver/recovery and the D10 §16 continuityPins co
 
 An existing or retired ScheduleSubscription/1 remains a valid historical recovery-retention owner with Witness1/Step1/Invalidation1 and its original /1 pins/producer obligations. It is never background-migrated. The already-defined explicit same-generation Subscription1 -> Subscription2 continue is legal only after complete retained history proves no intervening format/rule/business discontinuity and establishes the current Evidence2/Proof3 cut; otherwise replace creates the new generation. Such continue preserves the semantic generation and every old typed artifact pin; only newly produced Witness2/Step2/Invalidation2 artifacts use /2 domains. It never repins or re-encodes old /1 bytes or resets an invalid generation.
 
-### 14.2 Images, pins, ranges, and effect plans
+### 21.2 Images, pins, ranges, and effect plans
 
 D10ControlRecordImage/2 exists only for automation and run records whose nested current schema changed. Other record kinds, including planned_approval, external_approval, activation, reservation, external_effect, stop, and supplement=none records, continue to use exact Image1. Image2 cannot be downgraded to Image1, and an old Image1 is never re-encoded merely to enter a mixed holder.
 
@@ -1605,13 +1638,13 @@ Range kind rank is records=0, cost_lineage=1, occurrences=2. The logical range i
 
 D10ControlEffectPlan/2 changes are sorted uniquely by the complete canonical after.value.binding.ref. A non-none before must have the same binding.ref as after and exactly one matching versioned record pin for the actual stored before schema. Image1 before with Pin2 is invalid. Current Automation configure may legitimately move Image1+Subscription1 to Image2+Subscription2. A true continuation may retain the same subscription generation when the D10 scheduling owner says continue; generation replacement occurs only when that owner rule requires replace. Mixed-holder uniqueness is a snapshot rule, not a requirement to replace every old subscription.
 
-### 14.3 ControlDependencies/3 and the one-cut rule
+### 21.3 ControlDependencies/3 and the one-cut rule
 
 ControlDependencies/3 retains the complete actual configBindings, usageBindings, authority proof, authorization generations, stopRefs, optional Workspace reads, versioned record pins, and versioned ranges. Config bindings remain canonical by full Ref; usage bindings by full Ref; authorization-generation tokens by canonical token bytes; stop refs by full Ref; record pins and ranges use the mixed rules above.
 
 Every configBinding has the exact matching record image/pin. Every usageBinding has a matching image at the same usageRevision. Every stopRef has its exact stop Image1/Pin1 because stop is not mechanically upgraded. Current range fences, bindings, usage revisions, record images and the protected Workspace evidence used for one preparation come from one real Authority Store barrier. A V1 value captured at barrier A cannot be combined with a V2 value captured at barrier B and called complete. A historical image referenced by current responsibility remains immutable evidence and does not become current configuration merely by appearing in the holder. Missing required old bytes/pins/decoder is state_unavailable after the ordinary disclosure gates; contradictory same-cut evidence is integrity_conflict. No current Image2 may substitute for a required old Pin1.
 
-### 14.4 Claims, Money, and Inventory canonicality
+### 21.4 Claims, Money, and Inventory canonicality
 
 D10ExecutionClaims/2 keeps all mixed responsibilities complete. recordPins use the mixed pin order. prepareBindings are ordered by inner StableControlKey canonical bytes and that key is globally unique across Binding1, Binding2 and Binding3. leaseRuns are ordered uniquely by full Run ControlRef. authorSteps are unique by run Ref plus stepId across Step1/Step2. subscriptions are unique by Automation Ref plus generation across Subscription1/Subscription2. occurrenceRecords are unique by AutomationOccurrenceKey. ranges use the mixed range order. continuityPins are ordered uniquely by pinToken. Each continuity pin is an exact typed D6 schedule artifact and dispatches by its retained D6-Schedule-Continuity/{1|2}, D6-Schedule-Step/{1|2}, or D6-Schedule-Invalidation/{1|2} domain before inner decode; no free proof-map, schema guessing, /1 decoder widening, or cross-version repin is allowed. Wrappers select an exact decoder only; they do not add kind/version/confirmation fields to Binding1, do not LWW, and do not alter original pins or dependencies.
 
@@ -1619,7 +1652,7 @@ D10MoneyResponsibility/2 orders reservations uniquely by the complete Binding<re
 
 D10ExecutionInventory/2 orders ApprovalUse carriers uniquely by DecisionKey canonical bytes across versions, externalUnknowns uniquely by binding.ref canonical bytes, and stopState uniquely by binding.ref canonical bytes. It includes every responsibility still needed for pending work, recovery, deduplication or irreversible stop, including completed external attempts that remain referenced. Inventory2 is captured only after admission, planning, send, and schedule writers for the old holder are stopped at one real store barrier; mixing old and new values from different barriers is forbidden.
 
-### 14.5 Inventory pin, Record3 equality, store incarnation, and StopCapacity
+### 21.5 Inventory pin, Record3 equality, store incarnation, and StopCapacity
 
 The Inventory2 artifact is exactly UTF8 D6-Execution-Inventory/2, one NUL byte, then D3-CJ/3(D10ExecutionInventory/2). Its PinRef/2 has payloadKind=artifact, retentionClass=recovery, and byteLength/SHA-256 for those complete prefixed bytes. Inventory1 keeps its historical D6-Execution-Inventory/1 domain and is never repinned or re-encoded as Inventory2.
 
@@ -1629,6 +1662,6 @@ Inventory2.stopCapacity is the exact StopCapacity/1 value from the authoritative
 
 Record2/Proof1/Inventory1 retain their historical decoder and payload domain. Record3 is formed only for a real responsibility mutation, checkpoint, or custody handoff. Such a transition strict-decodes every retained historical responsibility, captures one complete mixed Inventory2, pins it once, creates Proof2, checked-increments the record revision when applicable, and preserves executionDomainId. It never mints replacement ControlRefs, requests, approvals, reservations, claims, or a second execution ledger.
 
-## 18. Historical replay and candidate boundary
+## 22. Historical replay and candidate boundary
 
 Every genuine saved/planned/unknown record first dispatches by its recorded outer carrier, owner descriptor, preview, pins, token/handle association, OperationId, authorization/custody/TTL and original error order. Current successors never re-encode historical bytes. An undeployed predecessor candidate creates no migration duty merely because its name appeared in design prose.
