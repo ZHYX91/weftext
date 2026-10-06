@@ -54,6 +54,6 @@ D10 原文 Proof2/Key2/wire12/PAB3 等 predecessor/original-owner 引用逐字�
 
 本次只改 audit/source map 与 review/progress 入口，不改 D1–D6 正确规范业务语义，不改产品实现、依赖、checker、CI、source snapshots 或 protected inputs，也不建立第二套 catalog/Registry/current authority。
 
-D7–D10 完整 A2 owner integration 仍 pending；Mandatory 925–1141 仍 pending；fresh Pro/global review 仍 pending。runtime、OS、GUI、真实 replica、migration、activation、deployment、provider、crash-recovery 与 performance 证据全部 UNRUN。
+D7–D10 完整 A2 所有者模块整合仍待完成；Mandatory 925–1141 仍待完成；全新的 Pro 级全局复核仍待完成。运行时、操作系统、GUI、真实副本、迁移、激活、部署、提供方、崩溃恢复与性能证据全部未运行。
 
 全局 A2 设计仍未接受。
