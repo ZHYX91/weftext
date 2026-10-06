@@ -22,8 +22,12 @@ translation_status: source
 
 ## 3. Current successor disposition
 
-current dependency 为 Key3/Proof3/Descriptor3/Prepared3，并包含 document_format；publication 为 Notice3/CP4/ChangeRecord1。SourceRevisionPlan /1、/2、/3 保留真实角色分派。双 profile trust、mixed policy conflict、specialized replica registration、SourceTransform、schedule 与 D10 direct consumer 均具名闭合。真实 historical record 继续 recorded decoder/bytes/pins/recovery。
+当前依赖族使用 Key3/Proof3/Descriptor3/Prepared3，并包含 document_format；发布族使用 Notice3/CP4/ChangeRecord1。
+SourceRevisionPlan /1、/2、/3 继续按真实角色分派。
+双配置档信任、混合策略冲突、专用副本注册、来源变换、调度以及 D10 直接消费者都已具名闭合。
+真实历史记录继续使用其已记录的解码器、原始字节、固定证据与恢复责任。
 
 ## 4. 阅读边界
 
-所列 D7/D8/D9/D10 direct-owner 文件只为 D6 交叉而按完整文件读取；这不表示 D7-D10 A2 模块完成。产品/runtime/platform/crypto/provider/crash/performance evidence 全部未运行。
+所列 D7/D8/D9/D10 直接所有者文件只为 D6 交叉而按完整文件读取；这不表示 D7-D10 A2 模块已经完成。
+产品运行时、平台、密码学、提供方、崩溃恢复与性能证据全部未运行。
