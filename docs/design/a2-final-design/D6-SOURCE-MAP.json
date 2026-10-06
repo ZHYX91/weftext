@@ -19829,7 +19829,7 @@
         "currentLine": 261
       }
     ],
-    "currentCandidateBlob": "abc4dddb0b9736cc58973c397961cfb3576f04e9",
+    "currentCandidateBlob": "99913373eecfbbd0754ffeea6eab676404840521",
     "mappedSourceRecords": 89,
     "uniqueCaseIds": 85,
     "duplicateIdSourceRecords": [
@@ -28282,14 +28282,15 @@
     "scope": "D6 fixed829 independent review only; D4/D5 findings remain separate"
   },
   "current_candidate_blobs": {
-    "control_en": "47fad305713084aeed1c26d8d5be4921f2a189da",
-    "control_zh": "afe210e91752871977d2a464f2b89dcce74b06b3",
+    "control_en": "1d8792ec9ab046266fa9741b910b98458dfcd1ae",
+    "control_zh": "2e95fb35c9e5ef3250c593de64cf3485eec3cbba",
     "main_en": "50632ba4a86745f0e8222316819d57f51fb39e33",
     "main_zh": "3a4bce77271486ed27c95d50139877f75d9aa6df",
-    "impact_en": "abc4dddb0b9736cc58973c397961cfb3576f04e9",
-    "impact_zh": "5ba6118faed2c400d137fc46bd55eb7dbf1c9648",
+    "impact_en": "99913373eecfbbd0754ffeea6eab676404840521",
+    "impact_zh": "cc370d008f6358a35b7ad053bbbc76cf4b5bcf1d",
     "lexicon_en": "4b63173f660b55bc220659320cf0834abae07b2b",
-    "lexicon_zh": "815e0563154fb27f7886f5526ebef26b1af9bb42",
+    "lexicon_zh": "d1434f8d3d244c07c1a6034cff2a8e5fe4afb14e",
     "registry": "e8bae75ea297c47d353578407b7f343c9dd48b48"
-  }
+  },
+  "bilingual_sync": "Control/Impact/Lexicon/SourceMap EN-ZH documentation synchronized after ee09; five findings remain author-resolved-pending-independent; this is documentation consistency only, not independent semantic acceptance"
 }
