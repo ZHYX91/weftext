@@ -3,7 +3,7 @@
   "status": "A2 D6 author source/case/registry-pointer map; not independent acceptance or implementation",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
-  "start_head": "a62aa7d4eaf56113cd1e9e32336ae8814f83589b",
+  "start_head": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a",
   "protected_inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
   "sources": [
     {
@@ -19830,7 +19830,66 @@
       }
     ],
     "currentCandidateBlob": "571b36c9c8124eeeced993f97b772327ee396932",
-    "mappedCurrentRows": 85
+    "mappedSourceRecords": 89,
+    "uniqueCaseIds": 85,
+    "duplicateIdSourceRecords": [
+      {
+        "id": "FA01",
+        "sourceRecords": [
+          {
+            "line": 166,
+            "text": "FA01–FA30 identities remain unchanged. Every row below is a future implementation evidence obligation, not a test run or pass in this author candidate. Every case also obeys current disclosure, CommitDomain/P continuity, real owner boundaries, and historical recovery obligations."
+          },
+          {
+            "line": 170,
+            "text": "| FA01 | I deleted; 100k unrelated docs unparsed; edit one D2-valid note | Rebuild only the current SourceObservation, local DependencyProof, and installation qualification actually needed by the ordinary save. With a qualified strict primitive, T_first_reliable_save can complete without unrelated index/OCR or whole-Workspace Query proof; complete Action still waits for its own complete proof |"
+          }
+        ],
+        "currentOracleLine": 168
+      },
+      {
+        "id": "FA30",
+        "sourceRecords": [
+          {
+            "line": 166,
+            "text": "FA01–FA30 identities remain unchanged. Every row below is a future implementation evidence obligation, not a test run or pass in this author candidate. Every case also obeys current disclosure, CommitDomain/P continuity, real owner boundaries, and historical recovery obligations."
+          },
+          {
+            "line": 199,
+            "text": "| FA30 | legacy wire1 saved decision | byte-equivalent original decoder/replay and original pin/authorization/continuity promises survive. SourceVersion/2, d6_source_revision/2, ContentCompletionProof/3, ConflictRecord/2, or a current stronger proof never re-encodes/upgrades the old record |"
+          }
+        ],
+        "currentOracleLine": 197
+      },
+      {
+        "id": "PL01",
+        "sourceRecords": [
+          {
+            "line": 203,
+            "text": "PL01–PL55 are design/conformance obligations for this repair candidate only. They have **not** been executed as product tests and do not independently close P1, accept the combined design, or prove implementation. In this revision they additionally exercise PR3-PLIR-P1-01's authenticated-carrier chain; a signature/canonicalization oracle is still a design requirement, not cryptographic product-test evidence."
+          },
+          {
+            "line": 207,
+            "text": "| PL01 | A seals managed V with locator token t; complete transport synchronizes V/source to registered replica B without changing source | B validates the historical portable-trust declaration, exact canonical RevisionTokenSealArtifact/1 bytes and Ed25519 signature, cross-checks association DecisionKey/ChangeId/V/SourceStamp against CP3, then creates its own current Observation O_B with O_B.sourceVersion=V. A new authorized read resolves the unchanged locator/token; a forwarder need only relay original artifact bytes and B never trusts a new sender assertion |"
+          }
+        ],
+        "currentOracleLine": 205
+      },
+      {
+        "id": "PL55",
+        "sourceRecords": [
+          {
+            "line": 203,
+            "text": "PL01–PL55 are design/conformance obligations for this repair candidate only. They have **not** been executed as product tests and do not independently close P1, accept the combined design, or prove implementation. In this revision they additionally exercise PR3-PLIR-P1-01's authenticated-carrier chain; a signature/canonicalization oracle is still a design requirement, not cryptographic product-test evidence."
+          },
+          {
+            "line": 263,
+            "text": "| PL55 | policy_bundle_choice builds its InputDescriptor | controlInputs contain actual conflict_record and authorization keys plus only other genuinely read members of the existing fourteen-key union. Frontier is represented by expectedFrontier + DependencyProof.baseFrontier + frontierPolicy; policy/trust history is preserved in OwnerInputBinding/branchEvidence/bundle/declaration pins/derivedPlan. portable_frontier_state and policy-history never appear as DependencyKey kinds |"
+          }
+        ],
+        "currentOracleLine": 261
+      }
+    ]
   },
   "fixed_s_impact_sections": [
     {
@@ -28213,5 +28272,13 @@
       ],
       "oracle": "Capacity is per producer update: <=4096 retained pins and <=16 MiB canonical evidence metadata; source/component bytes use separately reserved PinBudget. Overflow/gap is atomically invalidating before ordinary progress, no transition-count reinterpretation, truncation or reference-unsafe compaction."
     }
+  },
+  "review_fixed_sha": "829efce6aacbe944714e093c98065b01d50b2593",
+  "review_result": {
+    "status": "REVISE",
+    "P0": 0,
+    "P1": 2,
+    "P2": 3,
+    "scope": "D6 fixed829 independent review only; D4/D5 findings remain separate"
   }
 }
