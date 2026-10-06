@@ -48,7 +48,10 @@ D6–D9 owner 文件只读取 D4/D5 direct producer/consumer 交叉；属于 par
 
 ## 5. fixed446 D3 repair 复核目标
 
-请在本次精确修复提交上核对三项判据：（1）新鲜当前冲突准备只有唯一的 Input13/Request13 路径，历史 Input12 只用于记录恢复；（2）受管来源字节不变但已消费的文档格式绑定变化时，旧 Proof3 必须失效，并要求第十五个 Key3 分支；（3）当前规范 Annotation 从计划、预览、PAB4、Effect3 全程使用 Value4 并拒绝当前 Value3；真实历史 Value3 字节保持原样。
+请在本次精确修复提交上逐项核对以下三条设计判据：
+1. 新鲜当前冲突准备只有一条第 13 版输入到第 13 版请求的路径；第 12 版输入只用于已证明的历史记录恢复。
+2. 受管来源字节不变但已消费的文档格式绑定发生变化时，旧的第 3 版依赖证明必须失效；替代证明必须包含第十五个依赖键分支。
+3. 当前规范注释从计划、预览、准备绑定到效果传输全程使用第 4 版值并拒绝当前第 3 版值；真实历史第 3 版值字节保持原样。
 
 current dispatch 只由 D3-SCHEMAS 具名一次：Request/Input13；Key3/Proof3/Descriptor3/Prepared3；Notice3/CP4/ChangeRecord1；PAB4/EffectManifest3/EffectBytes3；Value4。D3ResolverInput12、D3DecisionCompanion2、RevisionTokenBinding2 与 SourceRevisionPlan1/2/3 角色分流不机械升版。
 
