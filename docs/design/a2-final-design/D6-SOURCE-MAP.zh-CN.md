@@ -27,11 +27,11 @@ UNREAD/pending 包括未列出的 D7-D10 完整模块来源、Mandatory 925-1141
 
 ### A2-D6-829-P1-01
 
-来源：fixed-S D6 Control/Storage、current-parent D6 owner afterimage、fixed97 current successor 材料，以及机器 map 具名的 D3/D10 direct holder。
+来源：fixed-S 的 D6 Control/Storage、当前 parent 的 D6 owner 后像、fixed97 当前后继材料，以及机器映射具名的 D3/D10 直接 holder。
 
 current anchors：D6-CONTROL §0.1、§4.3-§5、§6、§9.4、§10.2、§20-§22；D6 Main §7-§9、§14、§17；D6-SCHEMAS §5、§9-§10；D6-IMPACT §5、§7-§11。
 
-设计判据：fresh current 只有一条 outer chain：`DependencyProof/3`/Input3/Prepared3 使用 `d6_plan/3`，随后 Notice3、原唯一 final P、再到 CP4/ChangeRecord1。current trust/bootstrap/replica/execution family 各只有一个具名 current producer。真实 predecessor Notice/CP/trust/bootstrap/responsibility/saved-planned-unknown record 保留 recorded decoder、bytes、pins、authorization、error order、installation/seal/receipt 与 recovery。不新增 migration、第二 ledger、第二 CAS、第二 submit 或 version-name fallback。
+设计判据：当前新鲜路径只有一条外层链：`DependencyProof/3`/Input3/Prepared3 使用 `d6_plan/3`，随后进入 Notice3、原唯一 final P，再到 CP4/ChangeRecord1。当前 trust/bootstrap/replica/execution family 各只有一个具名 current producer。真实前身 Notice/CP/trust/bootstrap/responsibility 以及已保存、已计划或结果未知的记录，保留其已记录 decoder、bytes、pins、授权、错误顺序、installation/seal/receipt 与 recovery。不得新增 migration、第二 ledger、第二 CAS、第二 submit 或按版本名 fallback。
 
 ### A2-D6-829-P1-02
 
@@ -43,9 +43,9 @@ current anchors：D6-CONTROL §0.1、§4.3-§5、§6、§9.4、§10.2、§20-§2
 
 来源：fixed-S D6 Control §5-§13，特别是 98-247 行，以及其中具名的真实 D3/D9/D10 owner boundary。
 
-current anchors：D6-CONTROL §17.1 ResultPage、§17.2 BudgetBinding、§17.3 ImportJob、§17.4 management/control read、§17.5 ByteRead、§17.6 inherited interfaces/ObservationScope、§17.7 SourceBinding/OriginBinding。
+当前落点：D6-CONTROL §17.1 的 ResultPage 分页合同、§17.2 的 BudgetBinding、§17.3 的 ImportJob、§17.4 的受管配置/control read、§17.5 的 ByteRead、§17.6 的继承接口与 ObservationScope、§17.7 的 SourceBinding/OriginBinding。
 
-设计判据：仍 active 的原合同继续完整保留正向路径、数值域、授权和恢复。Result paging 保留 pageSize 1..200、完整结果先于分页、合法 empty nonterminal page、terminal cursor、TTL/reset 与 error order。Budget 保留原 12 member/domain。ImportJob 保留 pins、mapping DAG/SCC、atomic groups、per-batch OperationId、canonical requests/plans/receipts、binding/version/watermark/budget 与 committed-prefix recovery。ByteRead 保留 resource_bytes/1、offset/maxBytes、decoded base64 长度、short-read-not-EOF、snapshot/current authorization、TTL/reset/shared charging。SourceBinding/OriginBinding 保留真实 comparator 与 owner boundary。旧 numeric SourceVersion、wire11/12 与 Scope1 只作 version-qualified predecessor evidence，不是 fresh current carrier。
+设计判据：仍然有效的原合同继续完整保留正向路径、数值域、授权与恢复。Result paging 保留 pageSize 1..200、完整结果先于分页、合法的空 nonterminal page、terminal cursor、TTL/reset 与错误顺序。Budget 保留原 12 个 member 与 numeric domain。ImportJob 保留 pins、mapping DAG/SCC、atomic groups、每 batch 的 OperationId、canonical requests/plans/receipts、binding/version/watermark/budget 与 committed-prefix recovery。ByteRead 保留 resource_bytes/1、offset/maxBytes、解码后的 base64 长度、short-read-not-EOF、snapshot/current authorization、TTL/reset/shared charging。SourceBinding/OriginBinding 保留真实 comparator 与 owner boundary。旧 numeric SourceVersion、wire11/12 与 Scope1 只作为版本限定的前身证据，不是当前新鲜 carrier。
 
 ### A2-D6-829-P2-02
 
@@ -53,7 +53,7 @@ current anchors：D6-CONTROL §17.1 ResultPage、§17.2 BudgetBinding、§17.3 I
 
 current anchors：D6-LEXICON §3 与 §7-§9；D6-REGISTRY generic definitions、currentTechnicalSuccessors、historicalDispatch。
 
-设计判据：原 concept ID、全部 fields、owned names、aliases、locale mapping 与 firstFreeze provenance 全部保留。generic current 只定义真实 Notice3/CP4、Proof3/15-key、Input2、Witness2、Inventory2/Record3/Proof2、Profile4/Plan4、Bundle2/Declaration2/Handle2 family。predecessor 只保留为显式 version-qualified historical fact；不建立 compatibility layer，也不随机机械升 inner type。
+设计判据：原 concept ID、全部 fields、owned names、aliases、locale mapping 与 firstFreeze provenance 全部保留。通用当前定义只指向真实 Notice3/CP4、Proof3/15-key、Input2、Witness2、Inventory2/Record3/Proof2、Profile4/Plan4、Bundle2/Declaration2/Handle2 family。前身只保留为显式的版本限定历史事实；不建立 compatibility layer，也不随机机械升 inner type。
 
 ### A2-D6-829-P2-03
 
