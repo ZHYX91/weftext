@@ -14,7 +14,7 @@ translation_status: source
 原五项 finding 来源于 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`；该 SHA 继续只作为 finding-origin provenance。后续非作者复核对象是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。
 
 fixed01cc 已独立关闭：
-- `A2-D6-829-P1-01`：唯一的当前新路径为 `Key3→Proof3→Descriptor3→Prepared3/Notice3/final-P/CP4+ChangeRecord1`，并覆盖当前信任、引导、副本与执行后继。
+- `A2-D6-829-P1-01`：唯一的当前新路径为 Key3→Proof3→Descriptor3→Prepared3/Notice3/final-P/CP4+ChangeRecord1，并覆盖当前信任、引导、副本与执行后继。
 - `A2-D6-829-P2-03`：每 producer update 最多 4096 retained pins 加 16 MiB canonical evidence metadata；source/component bytes 使用独立 reserved PinBudget，容量失败先写 gap 再允许普通进度。
 
 fixed01cc 继续 OPEN/PARTIAL：
@@ -35,7 +35,7 @@ fresh current D6 恰为 **15 个** `DependencyKey/3` arm，rank 为 `source=0`�
 
 机器 map 保留全部 **299** 个 section mapping，但不再把 whole file 当作语义 target：
 - fixed-S Control 的 23 个 section 保留已经精确的 anchors；
-- 其余 276 个映射涵盖 `fixed-S` 的 `Storage/Impact/Lexicon`、`current-parent` 的 `Storage/Control/Impact/Lexicon`，以及 `fixed97` 的 `SPEC/SCHEMAS` 各节；每项都写明真实当前文件与锚点、处置、所有者/依据和来源限定的判定条件；
+- 其余 276 个映射涵盖 fixed-S 的 Storage/Impact/Lexicon、current-parent 的 Storage/Control/Impact/Lexicon，以及 fixed97 的 SPEC/SCHEMAS 各节；每项都写明真实当前文件与锚点、处置、所有者/依据和来源限定的判定条件；
 - parent 与 fixed97 双语证据登记真实 EN/ZH path+blob pair。fixed-S snapshot 仍只是实际存在的单份受保护 source；不编造不存在的双语 snapshot 或 JSON twin。
 
 fixed97 ACCEPTANCE 的 **760** 条原 row 与原 source text 全部保留；其中 **115** 条 D6 intersection 保留完整 EN/ZH source row。原来已经精确的 5 条 target 保持不动；其余 110 条改成真实 current owner/consumer 和具体 anchor，不再使用“D6-IMPACT intersection”泛 placeholder。跨 owner 义务明确写真实 owner 与 D6 实际 producer/consumer 角色，不建立第二套 D6 权威。
@@ -46,7 +46,7 @@ fixed97 ACCEPTANCE 的 **760** 条原 row 与原 source text 全部保留；其�
 
 D6-REGISTRY 继续保持 **52 concepts / 17 cross-stage bindings**，并保留 conceptId、ownedNames、aliases、locale、firstFreeze 与其它无关 exact value。只修复复核点名的四个通用字段：
 - commit-protocol definition：current D3 是 wire13 + InputDescriptor/3 + `d3_identity_operation/13`；真实 wire9–12 是精确历史；`d6_commit_request/2` 仍是实际 D6 submit。
-- `conflict-record` 定义：当前外层使用 `InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3`；`source_merge`/`choose_source_head` 保留内层 `Input2/Plan1/Preview1 + ownerKind/2`；`policy_bundle_choice` 使用内层 `Input3/Plan2/Preview2 + ownerKind/3`。
+- conflict-record 定义：当前外层使用 InputDescriptor/3、DependencyProof/3、PreparedIntent/3；来源合并和选择来源头分支保留第二版内层输入、第一版计划/预览以及 ownerKind/2；策略包选择分支使用第三版内层输入、第二版计划/预览以及 ownerKind/3。
 - prepared-intent exclusions：current D3 wire13/InputDescriptor3/`d3_identity_operation/13` 不是 D6 plan 成员；真实 wire9–12 继续历史恢复。
 - plan-token exclusions：同一 current/historical 分派；D3 request 不会因此获得未声明 D6 plan token。
 

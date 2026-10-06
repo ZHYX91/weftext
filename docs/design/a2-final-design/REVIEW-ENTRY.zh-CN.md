@@ -35,7 +35,7 @@ D6 原五项 finding 的复核对象是 fixed829 `829efce6aacbe944714e093c98065b
 后续独立 D6 复核对象是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`，结论 REVISE。
 
 fixed01cc 已独立 CLOSED：
-- **A2-D6-829-P1-01**——唯一的当前新路径为 `Key3→Proof3→Descriptor3→Prepared3 / Notice3 / 原 final P / CP4+ChangeRecord1`，并覆盖已复核的信任、引导、副本与执行回归。
+- **A2-D6-829-P1-01**——唯一的当前新路径为 Key3→Proof3→Descriptor3→Prepared3 / Notice3 / 原 final P / CP4+ChangeRecord1，并覆盖已复核的信任、引导、副本与执行回归。
 - **A2-D6-829-P2-03**——schedule capacity 单位与 gap 顺序。
 
 fixed01cc 仍 OPEN/PARTIAL，本次修订：
@@ -64,7 +64,7 @@ fixed01cc 仍 OPEN/PARTIAL，本次修订：
 - parent/fixed97/current-A2 记录真实中英文 path+blob pair；fixed-S snapshot 保持实际存在的单份受保护 source，不编造双语 snapshot/JSON twin；
 - current D6 main 真实 blob 是 `50632ba345aeab1e28970e219ec53a7fceea5a3e` / `3a4bceae305d30f72b42866f468d4a911dae7f0a`。
 
-fixed97 的 D6 直接所有者完整合同继续保留在 Control §17.1–§17.7：`ResultPage`、12 成员的 `BudgetBinding`、`ImportJob`、受管配置/控制读取、`ByteHandle/ByteRead`、读取前授权/`ObservationScope`、`SourceBinding/OriginBinding`。
+fixed97 的 D6 直接所有者完整合同继续保留在 Control §17.1–§17.7：ResultPage、12 成员的 BudgetBinding、ImportJob、受管配置/控制读取、ByteHandle/ByteRead、读取前授权/ObservationScope、SourceBinding/OriginBinding。
 
 ### P2-02
 
@@ -74,9 +74,9 @@ fixed97 的 D6 直接所有者完整合同继续保留在 Control §17.1–§17.
 - `/concepts/15/definition`
 - `/concepts/44/definition`
 
-当前 D3 使用 `wire13 + InputDescriptor/3 + d3_identity_operation/13`；真实 `wire9–12` 继续按既有历史记录解释，`d6_commit_request/2` 仍是 D6 提交入口。冲突解析的当前外层使用 `Descriptor3/Proof3/Prepared3`，来源分支保留内层 `Input2/Plan1/Preview1 + ownerKind/2`，`policy_bundle_choice` 使用内层 `Input3/Plan2/Preview2 + ownerKind/3`。
+当前 D3 使用 wire13 + InputDescriptor/3 + `d3_identity_operation/13`；真实 wire9–12 继续按既有历史记录解释，`d6_commit_request/2` 仍是 D6 提交入口。冲突解析的当前外层使用 Descriptor3/Proof3/Prepared3；来源合并和选择来源头分支保留内层 Input2/Plan1/Preview1 + ownerKind/2；策略包选择分支使用内层 Input3/Plan2/Preview2 + ownerKind/3。
 
-`D6-REGISTRY` 必须继续保持 52 个概念和 17 个跨阶段绑定，`conceptId`、拥有名称、别名、`locale`、`firstFreeze` 不变。Registry 指针清单继续为 767 个 `fixed-S` 项与 1246 个 `current-parent` 项；只新增这四个 `parent-current` 的 `named-current-successor`。
+D6-REGISTRY 必须继续保持 52 个概念和 17 个跨阶段绑定，concept ID、owned names、aliases、locale、firstFreeze 不变。Registry 指针清单继续为 767 个 fixed-S 项与 1246 个 current-parent 项；只新增这四个 parent-current named-current-successor。
 
 ### 导航 P2
 
