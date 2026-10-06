@@ -19,9 +19,9 @@ translation_status: source
 
 | 切片 | 新版职责 | 保留边界 |
 |---|---|---|
-| wire12 与账本分流 | 消费 `DecisionKey/2`、`CommitDomain/2`、`Frontier/2`、`InputDescriptor/2`，并实现共同门后的 saved/planned/unseen 唯一分流 | `D3-CJ/3`、`D3Integer`、Ref/Locator 词法和 24 个 D3 错误家族的原 stage/priority 不变；同 P 只有一个主决议 |
+| wire13 current 与版本化账本分流 | 消费 `DecisionKey/2`、`CommitDomain/2`、`Frontier/2`、`InputDescriptor/3`，并实现共同门后的 saved/planned/unseen 唯一分流；真实 historical wire9-12 record 必须先按 recorded decoder 恢复 | `D3-CJ/3`、`D3Integer`、Ref/Locator 词法和 24 个 D3 错误家族的原 stage/priority 不变；同 P 只有一个主决议 |
 | source currentness 与 revision | 区分 production `SourceVersion/2`、本地 current `SourceObservation/1`/`SourceVersionRef/1`，消费 `SourceStamp/1`、`SourceRevisionPlan/1`、`RevisionTokenSource/2`、`RevisionTokenBinding/2` 与 `d6_source_revision/2` | 旧 opaque revision token/Locator decoder 不升级；foreign production revision/epoch/`externalSequence` 不向新的受管修订号捐值 |
-| dependency/range | 消费十四类闭合 `DependencyKey/3` 与 D3 九类 `StructureRange`，实现授权先于隐藏读取、完整正负/空证明与 P/M 连续性 | partial I、无命中、相同 hash/count、provider 状态或 Frontier 前缀都不等于全集 |
+| dependency/range | 消费十五类闭合 `DependencyKey/3`（含 `document_format`） 与 D3 九类 `StructureRange`，实现授权先于隐藏读取、完整正负/空证明与 P/M 连续性 | partial I、无命中、相同 hash/count、provider 状态或 Frontier 前缀都不等于全集 |
 | `replica_local` | `create_node`、`move_node`、`reorder_node`、`trash` 的真实 local_structure + `scope_dependencies` | 安装仍为 `WriteProtection=strict`；只能在完整连续已封存无关扩展证明成立时继续同一计划 |
 | `managed_atomic` | restore/purge/copy/fork/continue/import 与全部强闭包 | 一律 `frontierPolicy=exact` + `WriteProtection=strict`，不得自动降级为 local |
 | copy/fork/import/Definition Transfer | 单一私有 candidate map、owner/membership 矩阵、真实前像/结果 pins、全部 typed slots、Q 双射及两遍同源位置闭环 | 不扫描普通 CEL/text/unknown JSON，不发明 D7 schema、Definition identity 或第二 wire |
@@ -99,7 +99,7 @@ I 可全部删除。恢复必须证明：
 - 不新 mint birth/receipt/tombstone，不重置 `ChangeId/1`/`Frontier/2`；
 - I 不拥有 proof epoch/revision、完整枚举边界、empty proof 或连续消费位置。
 
-十四类 `DependencyKey/2` 的 stamp 必须在 I 缺失、部分构建、parser/OCR 版本变化、watcher gap、百万小文件下测试。I 重建本身不重签 proof；只有真实 correctness facts/continuity 丢失才需要新 proof epoch。
+十五类 current `DependencyKey/3`（含 `document_format`）的 stamp 必须在 I 缺失、部分构建、parser/OCR 版本变化、watcher gap、百万小文件下测试。I 重建本身不重签 proof；只有真实 correctness facts/continuity 丢失才需要新 proof epoch。
 
 ### 4.3 丢 P
 
@@ -142,12 +142,12 @@ P 丢失/损坏后：
 
 ## 6. `replica_local` 与 `managed_atomic` operation matrix
 
-`replica_local` 只缩小语义依赖范围，不改变安装保护。只有四个 D3 local_structure mode 使用 `scope_dependencies`：`create_node`、`move_node`、`reorder_node`、`trash`。它们必须保留原 subject/parent/ordinal/closure/proposed after/pins/version basis/`InstallationNotice/2.baseFrontier`，不能因为 current Frontier 变大而重选计划。
+`replica_local` 只缩小语义依赖范围，不改变安装保护。只有四个 D3 local_structure mode 使用 `scope_dependencies`：`create_node`、`move_node`、`reorder_node`、`trash`。它们必须保留原 subject/parent/ordinal/closure/proposed after/pins/version basis/`InstallationNotice/3.baseFrontier`，不能因为 current Frontier 变大而重选计划。
 
 继续同一计划必须同时证明：
 - original base -> actual current cut 是完整、连续、verified-sealed、无回退链；
 - 每个新增/前进 head 有真实 portable ChangeRecord/completion history；
-- 原十四类依赖中的所有实际 source/control/auth/Registry/rules/membership/positive-negative range/owner-version 仍成立；
+- 原十五类依赖中的所有实际 source/control/auth/Registry/rules/membership/positive-negative range/owner-version 仍成立；
 - 新 sealed effects 与这些 complete dependencies 确实无关；
 - unrelated evidence 与 actual cut 耐久保存在 P，而不是丢 P 后从两个 vector 猜。
 
@@ -242,11 +242,12 @@ source-unchanged purge lifecycle effect 可以没有 source change，但仍有�
 
 ## 9. dependency completeness、large workspace 与 partial index
 
-`DependencyProof/3` 恰有十四类闭合 `DependencyKey/3`：
-`source`、`lifecycle`、`placement_range`、`ref_inbound`、`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`foreign_binding`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource`。
+`DependencyProof/3` 恰有十五类闭合 `DependencyKey/3`：
+`source`、`document_format`、`lifecycle`、`placement_range`、`ref_inbound`、`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`foreign_binding`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource`。
 
 测试必须用真实 owner 证明每一类的正/负/empty/currentness，而不是一个 generic owner JSON。重点：
 - `source`：完整 current Observation、bytes/value pin、`FileObjectBinding`；
+- `document_format`：真实语义解析 managed Document 时的精确 current format binding/qualification；source bytes 不变绝不能让旧 format proof 继续 current；
 - D3 `lifecycle`、`placement_range`、`ref_inbound`：真实 portable identity/structure/reference dirs；
 - D4 relation/calendar/registry/temporal：真实 D4/Registry owner；
 - `authorization`：当前 principal/audience/policy generation；
@@ -295,7 +296,7 @@ resolver 继续覆盖：
 7. installed verification；
 8. P seal 前；
 9. seal 后 `ContentCompletionProof/4` 生成/持久化前；
-10. CP3 write/flush/transport 中；
+10. current CP4 + ChangeRecord/1 generation/write/flush/transport 中；
 11. response delivery 丢失。
 
 每格只能落入真实 exact-before、exact-after-with-provenance、third-state、unavailable/recovery_unknown 与 D3 decision 组合。相同 hash 但不同 `FileObjectBinding`/provenance 不能证明原 plan 写入。
@@ -317,7 +318,7 @@ P seal 是唯一 author-decision commit point。portable effect 在同一 transa
 - exact 分支的 base 与原 expected/dependency/Notice base byte-equal；
 - `scope_dependencies` 分支必须带完整 continuous sealed chain、原 dependencies 无关重验和耐久 P evidence，不改 Notice base；
 - receiver 验证 production history 后，以自己的 observer `CommitDomain/2`、`FileObjectBinding`、current epoch/pins 创建自己的 `SourceObservation/1`/`SourceVersionRef/1`，不复制 sender token；
-- CP3 不授 complete Query/Action/negative-range/execution-responsibility；
+- CP4 + ChangeRecord/1 不授 complete Query/Action/negative-range/execution-responsibility；
 - pre-seal restored outcome 只有在每一 component 已完整证明恢复 before 时可产生，且无 success/ChangeId；
 - post-seal publication failure 保持 committed + pending，恢复只发布同一个 proof/outbox，不重装、不重采 revision、不再增 H/ChangeId/domainCommitSequence 或收费。
 
@@ -334,7 +335,7 @@ golden r5/r6 sequence继续保留并扩展：
 
 saved replay 不要求 old before 仍 current、不要求 old Frontier=current、不重新检查 preview/preparation TTL，也不重新通过新 D4/D5/D7 consumer。revocation 只遮蔽交付，不改变历史 decision；重获权仍交原 bytes。不得重装 source/metadata、重分配 H/revision/ChangeId、重增 domainCommitSequence、重复 ApprovalUse/Money charge 或 external effect。
 
-planned 恢复只恢复原规范请求/指纹、`InputDescriptor/2`、候选映射、`SourceRevisionPlan/1`/H 依据、固定证据、预留/写集、`InstallationNotice/2`、`WriteProtection`、所有者版本、尝试次数/预算、准备期限/时钟和安装状态。当前授权、依赖连续性与安装来源证明只决定继续原计划还是保持 paused/conflict/recovery_unknown，不允许重新 prepare、重新查询、重选目标或重新采样。
+planned 恢复只恢复原规范请求/指纹、该 record 原始 InputDescriptor（fresh current 为 `/3`，真实 historical record 使用其 recorded version）、候选映射、`SourceRevisionPlan/1`/H 依据、固定证据、预留/写集、该 record 原始 InstallationNotice（fresh current 为 `/3`，historical 使用其 recorded version）、`WriteProtection`、所有者版本、尝试次数/预算、准备期限/时钟和安装状态。当前授权、依赖连续性与安装来源证明只决定继续原计划还是保持 paused/conflict/recovery_unknown，不允许重新 prepare、重新查询、重选目标或重新采样。
 
 P/install outcome unknown 不是第四条重执行分支。必须保留原 record、pins、Approval/Money/claim/outbox、stop/recovery/no-duplicate-effect 责任；current files/equal hash/I/empty new control DB 都不能猜 success/failure、换 `OperationId` 重试、退款或重置 quota。
 
@@ -384,7 +385,7 @@ Server parallel prepare 不放宽 strong policy：所有 `managed_atomic` 仍 `f
 
 普通 source presentation、Draft、局部编辑和明确 branch read 可显示 pending，但必须暴露未证明 obligations，不得显示“全部有效”。
 
-世代说明必须准确：固定 C 已完成原 G0-A/G0-B baseline 对应的较早 D4/D5 候选消费者工作；它们是真实候选历史，但未接受/未激活。本 P1 新增的 production revision token、十四 key/range、CP3/ConflictRecord2、M5 replay/recovery 等规则仍需适用的 D3/D4 P2、D5 P3 与 D7 consumer afterimage。缺 strong consumer 只门控依赖它的强路径，不永久取消合格 ordinary `.adoc`/Resource read、Draft、human whole-source save 或 local offline operation。
+世代说明必须准确：固定 C 已完成原 G0-A/G0-B baseline 对应的较早 D4/D5 候选消费者工作；它们是真实候选历史，但未接受/未激活。本 P1 新增的 production revision token、十五 key/range（含 document_format）、CP4+ChangeRecord1/ConflictRecord2、M5 replay/recovery 等规则仍需适用的 D3/D4 P2、D5 P3 与 D7 consumer afterimage。缺 strong consumer 只门控依赖它的强路径，不永久取消合格 ordinary `.adoc`/Resource read、Draft、human whole-source save 或 local offline operation。
 
 对应验收场景 37、45。
 
@@ -396,7 +397,7 @@ Server parallel prepare 不放宽 strong policy：所有 `managed_atomic` 仍 `f
 - planned/unknown/conflict 状态、Approval/Money 责任以及原发布/外发队列仍作为最后引用持有的固定证据，不得因预览有效期届满、重建 I、当前文件可读或出现新的所有者版本而删除；
 - 合同明确允许过期的 historical effect pin 真正失效后，只返回其原 `effects_unavailable`，不得用 current file 冒充 historical after；
 - P/install unknown 时不得退款、重复收费、重置 quota/approval、重新发送 external effect，或从 empty control DB 重建责任；
-- budget overflow 在 Definition Transfer 两遍 materialization、完整 range enumeration、CP3 publication 和 recovery 中都必须可判定地暂停/失败，不允许部分成功后偷偷扩大预算。
+- budget overflow 在 Definition Transfer 两遍 materialization、完整 range enumeration、current CP4+ChangeRecord1 publication 和 recovery 中都必须可判定地暂停/失败，不允许部分成功后偷偷扩大预算。
 
 ## 16. wire13 current、historical corpus 与 terminology gate
 
@@ -412,12 +413,12 @@ Server parallel prepare 不放宽 strong policy：所有 `managed_atomic` 仍 `f
 - `replica_local|managed_atomic` mode matrix；
 - production `SourceVersion/2` vs local Observation domain；
 - `SourceStamp/1`、`SourceRevisionPlan/1`、`RevisionTokenSource/2`、`RevisionTokenBinding/2` 与 `d6_source_revision/2`；
-- 十四类 `DependencyKey/3` 和九类 `StructureRange`；
-- `ContentCompletionProof/3` 与 historical `/2` 分流；
+- 十五类 `DependencyKey/3`（含 `document_format`）和九类 `StructureRange`；
+- current `ContentCompletionProof/4` + `ChangeRecord/1` 与真实 historical CP1-3 recorded decoder 分流；
 - `ConflictRecord/2 + Frontier/2` 与 historical `/1 + Frontier/1`；
 - unchanged `ConflictKey/1`/`ConflictId`/`D6-ConflictKey/1` hash domain；
 - effectClass portable/control_only/no_op + same-P `D3DecisionCompanion/2`；
-- unchanged `D3-CJ/3`、Result/9、Annotation Value/3、Locator l1 版本。
+- unchanged `D3-CJ/3`、Result/9 与 Locator l1；fresh current Annotation 使用 Value/4，historical Value/3 只按 recorded decoder 保留。
 
 历史 corpus 只对实际存在 records 承担兼容；decoder/fixture/draft/prose 不自动证明原型 active。不得把 legacy 版本号改成12后声称新语义通过，也不得因“未发现部署记录”删除已证明存在记录的恢复合同。
 
@@ -441,14 +442,14 @@ Terminology gate继续验证：
 - InputDescriptor/pin/Observation/DependencyProof exact comparator；
 - production/source-observer currentness verifier；
 - H/SourceRevisionPlan/revision-token allocator-verifier；
-- 14-key/9-range enumeration and completeness verifier；
+- 15-key/9-range enumeration and completeness verifier（含 document-format currentness）；
 - local/exact Frontier policy verifier；
 - Trash restore/purge membership evaluator；
 - copy/fork/import candidate-map and owner matrix materializer；
 - Definition Transfer typed-slot/Q parser/materializer/two-pass span verifier；
 - ConflictRecord version router and typed D3 owner-resolution adapter；
 - strict installation/crash recovery state machine；
-- CP3 producer/receiver verifier；
+- current CP4 + ChangeRecord/1 producer/receiver verifier，并保留 historical completion-version router；
 - historical replay/no-duplicate-effect router；
 - ordinary D6 observed-only qualification checker；
 - Server Draft/base/currentness integration；
@@ -463,7 +464,7 @@ Terminology gate继续验证：
 固定 S 的全部 snapshots、design inputs、catalog 与其历史 bytes 只读；P2 不以“同步”名义修改它们。P2 只同步真实 owner afterimage 和三份 routing 元数据。
 
 固定 C 已完成原 G0-A/G0-B baseline 对应的上一代 D4/D5 候选；当前 P1 新生产者规则还要求：
-- D3/D4 P2：revision/currentness、14-key/range、CP3/ConflictRecord2、M5 分流与真实 D4 relation/calendar/registry/semantic_pending 消费；
+- D3/D4 P2：revision/currentness、15-key/range（含 document_format）、CP4+ChangeRecord1/ConflictRecord2、M5 分流与真实 D4 relation/calendar/registry/semantic_pending 消费；
 - D5 P3：structured operations、revision-bound locator、complete range 与 strict ordinary/structured 边界；
 - D7：查询、值表达式、视图、窄字段、定义转移、预览与效果、执行动作、准备和场景等全部消费者；
 - D8：complete current `SourceObservation/1`、Draft/IME/Undo/selection/editor、Server checkpoint；
@@ -522,12 +523,22 @@ open-record相同bytes解决仍为portable；有证明的已resolved placement/l
 
 ### 20.2 生命周期准入与双向 canonical 物化
 
-case 70–73 补齐 IR-06/07 的设计覆盖：四类 selected lifecycle→requested-result 与真实 installed live/Trash 交叉，连同原 location/owner/reply closure 和独立 restore membership；placement 使用当前完整 sibling range；Node/Resource/Annotation 均比较 canonical A/copy B 与 canonical B/copy A。Resource installed a 但保留 B=b 时，断言同一 native decision 得到旧 R=b、fresh R′=a，物理 before/所选 source 分开绑定，canonical /2 version plan 与 fresh /1 plan 并存，完整 preview/receipt/CP3 精确相等，不假造 Resource source RPC。同 bytes 改 canonical claim/version 仅增 H 一次，metadata-only source 不变不增，exact already-resolved no-op 无 ChangeId。raw mode matrix 与普通 current Observation 对 conflict 的拒绝保持。private wrapper/guard/DependencyProof source 资格只属 resolution，不能移植到普通 Query/D8/write。验证 omission/净 structural receipt、单实体唯一 final source、head/file 读前授权、stale head/CAS、install unknown、restart 与 saved replay。新增内容只指定执行 oracle，不声称产品运行或独立 PASS。
+case 70–73 补齐 IR-06/07 的设计覆盖：四类 selected lifecycle→requested-result 与真实 installed live/Trash 交叉，连同原 location/owner/reply closure 和独立 restore membership；placement 使用当前完整 sibling range；Node/Resource/Annotation 均比较 canonical A/copy B 与 canonical B/copy A。Resource installed a 但保留 B=b 时，断言同一 native decision 得到旧 R=b、fresh R′=a，物理 before/所选 source 分开绑定，canonical /2 version plan 与 fresh /1 plan 并存，完整 preview/receipt/CP4+ChangeRecord1 精确相等，不假造 Resource source RPC。同 bytes 改 canonical claim/version 仅增 H 一次，metadata-only source 不变不增，exact already-resolved no-op 无 ChangeId。raw mode matrix 与普通 current Observation 对 conflict 的拒绝保持。private wrapper/guard/DependencyProof source 资格只属 resolution，不能移植到普通 Query/D8/write。验证 omission/净 structural receipt、单实体唯一 final source、head/file 读前授权、stale head/CAS、install unknown、restart 与 saved replay。新增内容只指定执行 oracle，不声称产品运行或独立 PASS。
 
 ### 20.3 Canonical evidence and public completeness
 
-主文 74–79 必须独立验证 owner N 的 Annotation reply 与 M 下 fresh copy、Node X→Y 且同一 actual fromSource 分属两个分量、原 E/delete/result-only/S/lifecycle-only grammar、完整 D4/D7 typed gates、overlap 精确相等、mandatory 公共 canonical plan/bytes/extension 和单 seal 恢复的正反例。分别独立重建两个分量证据集、执行原 comparator 唯一性，再对 CP3 独立重建唯一去重的物理 source/control 集。原十二 receipt 数组仅表达 native；D3CanonicalEffects/1 是 canonical 必需完整公共证据，包含 resolved no-op 的空扩展。seal 后缺扩展为交付不可用，不是 saved commit 不存在。验证实际 BudgetBinding/1 exact fields 与 zero 语义。这些是设计验证义务，不是已运行产品测试或独立接受。
+主文 74–79 必须独立验证 owner N 的 Annotation reply 与 M 下 fresh copy、Node X→Y 且同一 actual fromSource 分属两个分量、原 E/delete/result-only/S/lifecycle-only grammar、完整 D4/D7 typed gates、overlap 精确相等、mandatory 公共 canonical plan/bytes/extension 和单 seal 恢复的正反例。分别独立重建两个分量证据集、执行原 comparator 唯一性，再对 CP4 + ChangeRecord/1 独立重建唯一去重的物理 source/control 集。原十二 receipt 数组仅表达 native；D3CanonicalEffects/1 是 canonical 必需完整公共证据，包含 resolved no-op 的空扩展。seal 后缺扩展为交付不可用，不是 saved commit 不存在。验证实际 BudgetBinding/1 exact fields 与 zero 语义。这些是设计验证义务，不是已运行产品测试或独立接受。
 
+
+### 20.4 fixed-446 D3 P1 修复 oracle
+
+`A2-D3:P1-01` 与 `A2-D3:P1-02` 的作者状态仅为 **resolved-pending-independent-review**；作者不自称关闭任一 finding。
+
+- `D3-P1-01-A`：fresh current conflict prepare 只接受 `D3IdentityInput/13`，唯一 native request 路径是 `D3IdentityOperationRequest/13`；已证明真实存在的 historical Input12/wire12/PAB3 record 只按 recorded decoder 恢复，绝不成为第二条 fresh-current path。
+- `D3-P1-01-B`：保持 exact managed source bytes/version 不变，只改变实际消费的 `document_format` binding/stamp。旧 Proof3 必须 stale；replacement proof 必含第十五个 Key3 arm 与 current Notice3/CP4/ChangeRecord1 chain。source bytes 相等不是逃逸口。
+- `D3-P1-02`：current canonical Annotation concrete output 使用 `d3_annotation_value4`，D7 PAB4/EffectManifest3/EffectBytes3 transport 必须 strict-decode 同一完整 Value4。current plan 携带 `d3_annotation_value3` 必须拒绝；`d3_symbolic_result9` 只限真实 symbolic branch。historical Value3 record 保留原 bytes/recovery。
+
+这些只是设计/一致性 oracle；本作者批次未运行 runtime/product fixture。
 
 ## 21. A2 implementation/test 状态
 

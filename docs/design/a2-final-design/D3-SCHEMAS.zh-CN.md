@@ -7,7 +7,7 @@ translation_status: source
 
 # A2 D3 current closed schema
 
-状态：A2 D3 作者候选；不是独立接受、实现、激活或 migration 证据。
+状态：A2 D3 作者候选；不是独立接受、实现、激活或 migration 证据。本 repair head 对 fixed-446 D3 P1-01/P1-02 仅标 resolved-pending-independent-review；作者不自称关闭。
 
 本 companion 对 **D3 直接消费且本代发生变化的 current carrier** 自包含。以下直接复制 fixed97 的 exact closed schema 正文，不用“版本号已升级”概述替代。稳定的 D3 Ref/Locator/D3-CJ/Result9/receipt element schema 仍完整写在 A2 D3 主文中，不机械升版。
 
@@ -198,6 +198,8 @@ ComponentImage/1 与 PinRef/2 保持 fixed-e8aa 的精确结构。document_forma
 
 Notice3 除 component-key decoder 升为 PortableComponentKey/2 外，逐项继承 Notice2 invariant：components 非空、按 fixed-rank/canonical-key 排序且唯一，notice 在 install 前冻结并保留原 baseFrontier。CP4 除 component-key decoder 与 current ChangeRecord/1 linkage 外，逐项继承 CP3 committed/restored invariant。committed CP4 的 components 与 Notice3 key 集合及顺序严格相同，每个 after 都是实际 installed/sealed image；sourceChanges 是完整、按 EntityRef 排序且唯一的真实 source-state delta；receiptDigest 绑定原 receipt。fresh managed Document 必须在同一 plan/P/CP4 中同时带 document 与 document_format。format-only 且 source 不变时 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion 或 H advance。
 
+currentness oracle：fresh managed operation 若真实消费 managed Document，source bytes/version 不变也不能在真实 `document_format` binding/stamp 改变后沿用旧 proof。旧 `DependencyProof/3` 必须 stale，replacement 必须含第十五个 `DependencyKey/3.document_format` arm；省略或十四键 predecessor proof 均非法。
+
 ## 5.3 ChangeRecord
 
 ```text
@@ -266,6 +268,8 @@ D3IdentityOperationRequest/13 = {
 ```
 
 D3IdentityInput/13 精确保留 D3IdentityInput/12 的语义成员集合；只有 outer request boundary 的嵌套 D6 descriptor family 更新为 current InputDescriptor/3。expectedAuthority、workspaceProposal、preparationBinding 都是真正 optional member，绝不是 nullable placeholder。replica_local 只允许 create_node/move_node/reorder_node/trash，并要求这三个 member 全部 absent。managed_atomic 严格继承 fixed-parent matrix：create/fork 要求 expectedAuthority=create 及 required proposal；continue 要求 expectedAuthority=continue；其它 managed_atomic mode 要求 expectedAuthority=existing；preparationBinding 只在继承的 D7-mediated mode 允许时出现。禁止的 member 即使 value 本身可解码也必须 invalid_request，JSON null 一律非法。D3IdentityOperationRequest/13 仅把 wire12 top-level 的 wireVersion 改为13并改用 InputDescriptor/3。descriptor/request 的 mode、authority、proposal 在存在时逐字节相等；guarantee/frontier policy、ownerInput、requestFingerprint、DecisionKey/OperationId 单一 ledger 顺序、saved/planned/unseen 分支和 error/disclosure order 都保持。historical wire9–12 不扩 decoder、不重编码。
+
+fresh-current `D3ConflictResolutionPrepare/1.operation` 必须精确为 `D3IdentityInput/13`，最终 native request 为 `D3IdentityOperationRequest/13`。`D3IdentityInput/12` 只在已证明真实存在的 historical wire12/PAB3 record 中按原 decoder 接受。本文件顶部 current dispatch 是 D3 模块唯一具名版本分派依据：Request/Input13；Key3/Proof3/Descriptor3/Prepared3；Notice3/CP4/ChangeRecord1；PAB4/EffectManifest3/EffectBytes3；Value4。`D3ResolverInput/12`、`D3DecisionCompanion/2`、`RevisionTokenBinding/2` 保持 no-bump；source-plan 分派仍为 ordinary/fresh `SourceRevisionPlan/1`、D3 canonical-conflict `SourceRevisionPlan/2`、D6 source-conflict `SourceRevisionPlan/3`。其它 D3 prose 只引用这些角色，不建立平行 version ledger。
 
 ## 6.1 PreparedActionBinding/4
 
@@ -361,6 +365,8 @@ D7ProposedInput/3 = {
 ```
 
 current `/3` cross-field 唯一合法组合是 exact_source_document↔exact_source_utf8、resource_bytes↔resource_bytes，以及 annotation_value↔d3_annotation_value4|d3_symbolic_result9。protocolOwner=D6 的 current Annotation concrete after 必须使用 d3_annotation_value4，并且 pin bytes 恰为 D3-CJ/3(完整 D3-Annotation-Value/4)；d3_symbolic_result9 只允许继承的 current D3 symbolic-result 分支，并按 Result/9 的真实 subject/pin 规则绑定。`d3_annotation_value3` 在 `/3` 中非法。OwnerInputBinding/2.pinRefs 必须精确覆盖 `/3` 中全部 proposed pins 与实际受保护 evidence；historical PAB3/Input2 继续逐字节使用 D7ProposedInput/2 与 d3_annotation_value3，不能 repin/reencode。
+
+同一 current cross-field rule 也闭合 D3 canonical conflict output：concrete Annotation container 使用 `d3_annotation_value4` 与完整 `D3-Annotation-Value/4`；current `d3_annotation_value3` 必须拒绝。`d3_symbolic_result9` 只在既有 symbolic Result/9 分支合法。任何已证明 historical Value3 record 都不因该 successor 被迁移或重编码。
 
 protocolOwner=D6 的 current D7 action 使用 InputDescriptor/3.ownerInput：protocolOwner=D7，ownerKind=intentKind=d7_action/3；canonicalDescriptorBytes 恰为 D3-CJ/3(D7ActionInput/3)。D7ActionInput/3 的六个成员与 PreparedActionBinding/4 对应成员逐项相等，ownerInput.pinRefs 继续恰覆盖 proposed pins 与实际受保护 source/definition/rule evidence，并按 D6 规则排序唯一。protocolOwner=D3 的 create_annotation 等 identity action 仍使用 D3 自己的 d3_identity_operation/13 owner descriptor；PAB4 只绑定 cross-owner preparation，不创建第二 D3 request authority。historical d7_action/2/PAB3 保留原 decoder、bytes 与 recovery。
 

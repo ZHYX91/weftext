@@ -1446,10 +1446,10 @@ translation_status: source
 ### weftext.term.preparation-binding
 
 - 正式名：准备绑定 / Preparation Binding。
-- 定义：wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；适用wire12路径继续保留。
+- 定义：wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；适用 fresh-current wire13 路径继续保留；真实 historical wire11/12 record 保持 recorded recovery。
 - owner/layer：D3 operation/wire；D7仅拥有payload schema。
 - firstFreeze：D7联合revision03候选。
-- migration/deletion：新wire11显式采用，旧v9/v10只按原decoder重放；实施时同步所有decoder/encoder/schema/caller/fixtures，不能静默补成员。当前wire12边界下，真实wire11记录也保留其原恢复合同
+- migration/deletion：新wire11显式采用，旧v9/v10只按原decoder重放；实施时同步所有decoder/encoder/schema/caller/fixtures，不能静默补成员。fresh-current dispatch 已是 wire13；真实 wire11/12 record 仍保留其原恢复合同
 - 受控集合：
 
 ~~~json
@@ -1475,10 +1475,10 @@ translation_status: source
 ### weftext.term.definition-transfer
 
 - 正式名：定义转移计划 / Definition Transfer。
-- 定义：wire11第十数组精确绑定保存payload的源/结果occurrence和全部typed slots；wire12继续保留。
+- 定义：wire11 引入的第十数组精确绑定保存 payload 的源/结果 occurrence 与全部 typed slots；fresh-current wire13 继续保留，真实 historical wire11/12 record 保持原 decoder。
 - owner/layer：D3 operation/wire；D7仅拥有payload schema。
 - firstFreeze：D7联合revision03候选。
-- migration/deletion：新wire11显式采用，旧v9/v10只按原decoder重放；实施时同步所有decoder/encoder/schema/caller/fixtures，不能静默补成员。当前wire12边界下，真实wire11记录也保留其原恢复合同
+- migration/deletion：新wire11显式采用，旧v9/v10只按原decoder重放；实施时同步所有decoder/encoder/schema/caller/fixtures，不能静默补成员。fresh-current dispatch 已是 wire13；真实 wire11/12 record 仍保留其原恢复合同
 - 受控集合：
 
 ~~~json
@@ -1507,7 +1507,7 @@ translation_status: source
 - 定义：Result9 Q段保存完整原payload和transfer并由原candidate map唯一物化。
 - owner/layer：D3 operation/wire；D7仅拥有payload schema。
 - firstFreeze：D7联合revision03候选。
-- migration/deletion：新wire11显式采用，旧v9/v10只按原decoder重放；实施时同步所有decoder/encoder/schema/caller/fixtures，不能静默补成员。当前wire12边界下，真实wire11记录也保留其原恢复合同
+- migration/deletion：新wire11显式采用，旧v9/v10只按原decoder重放；实施时同步所有decoder/encoder/schema/caller/fixtures，不能静默补成员。fresh-current dispatch 已是 wire13；真实 wire11/12 record 仍保留其原恢复合同
 - 受控集合：
 
 ~~~json
@@ -1538,15 +1538,15 @@ copy/fork/continue/move/import/adopt/promote、subscribe/sync/connect 的语义�
 
 ## 4. D6-FA-r01 导入名称与真实 owner
 
-D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者，仍是下列 D6 导入概念与技术版本的唯一 owner。D3 wire12 只消费这些精确的生产者合同；本 Lexicon 不复制其闭合 JSON 形状，也不提供“由 owner 自定义 JSON”的逃逸接口。
+D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者，仍是下列 D6 导入概念与技术版本的唯一 owner。fresh-current D3 wire13 只消费这些精确的 current producer 合同；本 Lexicon 不复制其闭合 JSON 形状，也不提供“由 owner 自定义 JSON”的逃逸接口。
 
 | D6 生产者名称/版本 | D3 消费边界 | 禁止解释 |
 |---|---|---|
-| `DecisionKey/2` | wire12 账本、重放、已保存/已计划/未见分流，以及同 P 伴随记录 | 新 D3 身份、第二账本或第二决议 |
+| `DecisionKey/2` | wire13 current 账本，加版本路由的重放/已保存/已计划/未见分流，以及同 P 伴随记录 | 新 D3 身份、第二账本或第二决议 |
 | `CommitDomain/2` | 请求、`DecisionKey/2`、回执，以及生产域/观察域资格 | Workspace 身份、执行责任域或全局序号 |
 | `ReplicaEpoch` | 副本 `CommitDomain/2` 的写入世代 | `AuthorityInstanceId`、设备身份、`continue_workspace` 或执行租约 |
 | `ChangeId/1` | P 封存时的真实可移植效果、`Frontier/2` 与冲突头 | `OperationId`、EntityRef、封存前预留或全局时间 |
-| `Frontier/2` | 预期/基线切点、精确策略、已证明的 `scope_dependencies`、CP3 与清除因果 | 负载已物化、完整查询、Registry 完整性或提供方“已同步” |
+| `Frontier/2` | 预期/基线切点、精确策略、已证明的 `scope_dependencies`、current CP4+ChangeRecord1 与清除因果 | 负载已物化、完整查询、Registry 完整性或提供方“已同步” |
 | `SourceVersion/2` | 完整的受管/外部生产版本 | 当前观察方身份、裸修订号、摘要或当前性证明 |
 | `SourceObservation/1` | 定位器、证据和输入使用的完整本地当前观察 | 第二生产版本、可转移的发送端令牌或文件身份 |
 | `SourceVersionRef/1` | 选择一份受保护当前观察的窄本地投影 | 可移植生产版本运输、权限票据或裸修订号 |
@@ -1556,17 +1556,17 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 | `RevisionTokenBinding/2` | 一个不透明 token 到闭合 `RevisionTokenSource/2` 的受保护稳定生产地址绑定；managed canonicality 只来自 winning plan/seal 与 original sealed-outbox 关联 | 当前 observer 资格、权限、公开来源版本、调用方自选 token 或历史不透明 decoder 的替代 |
 | `d6_source_revision/2` | 仅作为新受保护修订令牌配置的标记 | `d6d`、`d6r`、`d6a` 的替代标记，或新的 D3 定位器词法 |
 | `ObservationScope/2` | 受权的潜在观察上界 | 写集、单独权限或完整性证明 |
-| `DependencyProof/2` | 受保护的完整正/负依赖证据 | 调用方读取集合、部分 I、自由 JSON、“没有命中”或较大前沿捷径 |
-| `DependencyKey/2` | 由 D6 拥有并版本化的十四类闭合依赖键载体 | 任意所有者键或通用完整性接口 |
+| `DependencyProof/3` | fresh-current 受保护的完整正/负依赖证据 | 调用方读取集合、部分 I、自由 JSON、“没有命中”或较大前沿捷径 |
+| `DependencyKey/3` | 由 D6 拥有并版本化的十五类闭合依赖键载体，含 `document_format` | 任意所有者键或通用完整性接口 |
 | `OwnerInputBinding/2` | 由 `protocolOwner=D3` 与 owner 版本选择的精确 D3 owner input | 第二请求、回调或 D3 重复封装 |
-| `InputDescriptor/2` | 精确受保护输入及 pin 绑定 | D3 私有重复 schema 或仅凭 hash 相等 |
-| `PreparedIntent/2` | 适用当前路径上的 D6 准备控制记录 | D3 已计划决议、内容身份或自动成功 |
+| `InputDescriptor/3` | fresh-current 精确受保护输入及 pin 绑定 | D3 私有重复 schema 或仅凭 hash 相等 |
+| `PreparedIntent/3` | 适用 current 路径的 D6 fresh-current 准备控制记录 | D3 已计划决议、内容身份或自动成功 |
 | `D3DecisionCompanion/2` | 一个 D3 主决议的同 P D6 关联记录 | 第二成功回执、第二账本、新写入范围或来源版本表 |
 | `WriteProtection` | `strict|observed_only` 安装保护轴 | 语义保证、权限或 `replica_local` 的同义词 |
 | `SemanticState` | D2 有效作者语义后的 `complete_semantics|semantic_pending` | 权限、外部无效状态，或仍有义务待证明时的全集证明 |
 | `ContentGuarantee` | `replica_local|managed_atomic` 语义/受管屏障轴 | `WriteProtection`、协作模式或授权 |
-| `InstallationNotice/2` | 使用原基线前沿的不可变安装前组件记录 | 提交证明，或这个尚未封存决议的新 `ChangeId/1` |
-| `ContentCompletionProof/3` | 封存后以生产版本 `sourceChanges` 表达的可移植证明 | 回执读取权限、私有 `DependencyProof/2`、完整查询/动作、批准/资金或执行接管 |
+| `InstallationNotice/3` | fresh-current 使用原基线前沿的不可变安装前组件记录 | 提交证明，或这个尚未封存决议的新 `ChangeId/1` |
+| `ContentCompletionProof/4` + `ChangeRecord/1` | fresh-current 封存后以生产版本 `sourceChanges` 表达的可移植证明/因果索引 | 回执读取权限、私有 `DependencyProof/3`、完整查询/动作、批准/资金或执行接管 |
 | `ConflictRecord/2` | 以 `Frontier/2` 表示创建切点的当前新 FA 可移植冲突记录 | 自动合并、LWW、绕过 D3，或伪造外部/未知冲突头 |
 | `ConflictKey/1` | `ConflictId` 背后的不变完整冲突 key | 记录版本判别器或可独立修改的身份 |
 | `ReliableSaveState` | D6 保存状态轴，包括严格可靠保存与合格 `durable_observed_only` | 草稿持久化、同步上传或可移植发布完成 |
@@ -1576,9 +1576,9 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 
 凡计划确实会产生 managed after，都在 C/Q 或其它绑定 revision 的物化之前，为该实体冻结一份 `SourceRevisionPlan/1` 和恰好一条拟议 `RevisionTokenBinding/2`。binding 的 `source` 使用闭合 `RevisionTokenSource/2`，不携 current observerDomain/current observationEpoch。winning planning CAS 将 token、版本依据与 pins 一起冻结；唯一 P seal 通过 original sealed-outbox 关联把该 exact binding 认证为所得 managed SourceVersion 的唯一 canonical 稳定地址，即使当时还没有 Locator。loser/aborted/seal 不可证明的 binding 不能借另一 seal。后来的 observer 先解析稳定地址，再独立证明完整 current `SourceObservation/1` 的 `sourceVersion` 与之相等；这只可给一次新读取资格，绝不复活旧 selector、PAB/Draft/map、ActionEvidence 或 PreparedIntent。planning 仍不分配 `ChangeId/1`；delete/no-op/source-unchanged 保持既有不产生 after version 的规则。D3 Locator 词法形状与历史 decoder 不改。
 
-`DependencyProof/2` 恰好包含十四类 `DependencyKey/2`：`source`、`lifecycle`、`placement_range`、`ref_inbound`、`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`foreign_binding`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource`。D6 拥有这些闭合载体种类、排序、stamp/pin 持久化及提交/恢复验证；具体枚举语义仍归真实 owner。对于 D3 的 `placement_range`，`StructureRange` 恰有九类：`live_children`、`trash_children`、`trash_roots`、`ancestor_chain`、`subtree`、`owner_resources`、`owner_annotations`、`reply_closure`、`restore_membership`。空范围和非空范围使用完全相同的完整枚举标准。placeholder、未知解码器、缺失分片、I/O 失败、隐藏且未授权的成员、构建中/部分 I、提供方状态、相同计数/哈希或“没有命中”都不能证明完整空集。D4 继续拥有关系/Calendar/Registry 语义，D7 继续拥有完整查询语义；D3 不能用一个粗粒度的 Frontier 前缀替代这些证明。
+`DependencyProof/3` 恰好包含十五类 `DependencyKey/3`：`source`、`document_format`、`lifecycle`、`placement_range`、`ref_inbound`、`relation_incidence`、`calendar_scope`、`registry`、`temporal_rules`、`authorization`、`foreign_binding`、`query_scan`、`replica_registry`、`conflict_record`、`execution_resource`。D6 拥有这些闭合载体种类、排序、stamp/pin 持久化及提交/恢复验证；具体枚举语义仍归真实 owner。对于 D3 的 `placement_range`，`StructureRange` 恰有九类：`live_children`、`trash_children`、`trash_roots`、`ancestor_chain`、`subtree`、`owner_resources`、`owner_annotations`、`reply_closure`、`restore_membership`。空范围和非空范围使用完全相同的完整枚举标准。placeholder、未知解码器、缺失分片、I/O 失败、隐藏且未授权的成员、构建中/部分 I、提供方状态、相同计数/哈希或“没有命中”都不能证明完整空集。D4 继续拥有关系/Calendar/Registry 语义，D7 继续拥有完整查询语义；D3 不能用一个粗粒度的 Frontier 前缀替代这些证明。
 
-新的可移植发布使用 `ContentCompletionProof/3`。其中 `sourceChanges` 对真实来源状态变更运输完整 production `SourceVersion/2|absent` 前像/后像，而同一决议的当前 D6 效果元数据只可暴露本地 `SourceVersionRef/1` 投影；两层证据不得互相冒充。`frontierBefore` 与 `frontierAfter` 是实际封存切点；精确路径要求原基线保持逐字相等，`scope_dependencies` 则要求完整连续的已封存扩展、全部原依赖重验，以及 P 中耐久保存的“扩展确实无关”证据。`InstallationNotice/2.baseFrontier` 永不改写。接收端验证 Notice、proof、components 与生产历史后，必须建立自己的 `SourceObservation/1`/`SourceVersionRef/1`；不得复制发送端 `sourceToken`，也不能仅凭 CP3 获得完整查询/动作资格。
+fresh-current 可移植发布使用 `InstallationNotice/3` + `ContentCompletionProof/4` + `ChangeRecord/1`。其中 `sourceChanges` 对真实来源状态变更运输完整 production `SourceVersion/2|absent` 前像/后像，而同一决议的当前 D6 效果元数据只可暴露本地 `SourceVersionRef/1` 投影；两层证据不得互相冒充。`frontierBefore` 与 `frontierAfter` 是实际封存切点；精确路径要求原基线保持逐字相等，`scope_dependencies` 则要求完整连续的已封存扩展、全部原依赖重验，以及 P 中耐久保存的“扩展确实无关”证据。`InstallationNotice/3.baseFrontier` 永不改写。接收端验证 Notice、proof、components 与生产历史后，必须建立自己的 `SourceObservation/1`/`SourceVersionRef/1`；不得复制发送端 `sourceToken`，也不能仅凭 current CP4/ChangeRecord chain 获得完整查询/动作资格。
 
 当前冲突使用 `ConflictRecord/2` 与 `Frontier/2`，而 `ConflictKey/1`、`ConflictId`、排序及 `D6-ConflictKey/1` hash domain 保持不变。每个冲突头都必须是真实、连续验证并已封存、且与该 key 相关的 `ChangeId/1`。历史 `ConflictRecord/1` 继续使用 `Frontier/1` 和原解码器/字节；记录不得原地静默升级，/1 与 /2 也不能成为同一未改变 key 的两个当前记录。
 
@@ -1594,7 +1594,7 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 
 历史兼容以真实存在的记录为准，而不是以原型名称为准。wire9/v10/v11，以及任何真实存在的旧 `PreparedActionBinding/1,/2`、SourceObservation/ref/token、已保存/已计划/未知记录、回执、pin、计费、批准/claim 或外部效果责任，只按实际生成它们的解码器、原字节/指纹、原 profile、授权、保管连续性、时钟/TTL、pin 生命周期和不得重复效果的责任继续履约。仅存在解码器、fixture、草稿或候选文字，并不能证明所有历史原型已经部署或处于活动状态，也不能把旧字节批量升级到当前生产者合同。
 
-对于已保存/已提交的原决议，在原请求/指纹/连续性查账成功后，只按该决议原来的实际效果/模式或结果披露范围检查当前交付授权，然后返回原回执/错误/效果字节，或恢复原版本发布/outbox。后来的 r6 `SourceObservation/1`、Frontier、业务证明、准备/预览 TTL 或新的消费者门，都不能倒追拒绝或重新执行这个已保存决议；撤权只能遮蔽当前交付，不能重写历史、重装旧后像、重新分配 H/修订号/ChangeId，也不能再次收费。已计划记录只恢复原冻结请求、`InputDescriptor/2`、适用时的候选映射、`SourceRevisionPlan/1`/版本依据、pins、预留/写集、`InstallationNotice/2`、`WriteProtection`、尝试/预算、准备期限和安装状态；不得重新查询、重选目标、重采样身份/H/修订号，也不得准备第二个决议。安装或结果未知时，原 pins 与 Approval/Money/claim/外部效果/停止责任继续保留；当前文件、I、相同哈希、重新授权或新的空控制库，都不能猜测成功/失败，也不能授权盲目重试、退款或重置。
+对于已保存/已提交的原决议，在原请求/指纹/连续性查账成功后，只按该决议原来的实际效果/模式或结果披露范围检查当前交付授权，然后返回原回执/错误/效果字节，或恢复原版本发布/outbox。后来的 r6 `SourceObservation/1`、Frontier、业务证明、准备/预览 TTL 或新的消费者门，都不能倒追拒绝或重新执行这个已保存决议；撤权只能遮蔽当前交付，不能重写历史、重装旧后像、重新分配 H/修订号/ChangeId，也不能再次收费。已计划记录只恢复原冻结请求、其 recorded InputDescriptor（fresh current 为 `/3`，historical 使用其 recorded version）、适用时的候选映射、`SourceRevisionPlan/1`/版本依据、pins、预留/写集、其 recorded InstallationNotice（fresh current 为 `/3`，historical 使用其 recorded version）、`WriteProtection`、尝试/预算、准备期限和安装状态；不得重新查询、重选目标、重采样身份/H/修订号，也不得准备第二个决议。安装或结果未知时，原 pins 与 Approval/Money/claim/外部效果/停止责任继续保留；当前文件、I、相同哈希、重新授权或新的空控制库，都不能猜测成功/失败，也不能授权盲目重试、退款或重置。
 
 ## 6. 受控命名门
 
@@ -1607,7 +1607,7 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 5. 同一个公共标识符不能由两个概念共同拥有，退役标识符也不能进入受控集合；
 6. 普通说明文字、用户内容、第三方格式和历史证据，不作为平面拒绝词表输入；
 7. 新技术成员如果不能证明存在真实生产者/owner 映射，就必须拒绝或停用依赖该成员的路径，不能由 D3 临时造名；
-8. D6 闭合类型必须按真实生产者版本消费；“由 owner 自定义 JSON”不得代替 `DependencyKey/2`、`StructureRange`、修订绑定、CP3、冲突或其它闭合接口；
+8. D6 闭合类型必须按真实生产者版本消费；“由 owner 自定义 JSON”不得代替 current `DependencyKey/3`、`StructureRange`、修订绑定、CP4+ChangeRecord1、冲突或其它闭合接口；
 9. 双语正文对同一语义必须使用相同的协议标识符；文档排版不能重命名 wire 成员、拆开一个点号成员，或制造兼容别名。
 
 ## 7. D6-FA-r01 术语压力案例
@@ -1621,14 +1621,14 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 - 普通 `.adoc` 来源与普通 Resource 字节仍是当前作者权威。可移植元数据继续拥有身份、父级/顺序、生命周期、共享策略/信任、Registry 相关可移植控制，以及可移植变更/冲突事实。P 保留不可从文件重建的决议/恢复/责任和必要 pins；I 可删除并重建，绝不能单独证明完整性。
 - `SourceVersion/2` 的生产域/世代与当前 `SourceObservation/1` 的观察域/世代分离。两个副本从同一生产前像/来源切点出发时，各自在自己的操作 `CommitDomain/2` 下构造完整的本地当前观察；不得复制另一副本的 `sourceToken`。
 - `d6_source_revision/2` 只能通过 `RevisionTokenBinding/2` 及其闭合 `RevisionTokenSource/2` 解析；它不替换历史不透明的 D3 修订令牌词法，也不改变 D4/D5 内层选择器/修订号线格式。
-- `DependencyProof/2` 的完整空集必须来自真实证明，而不是 I 未命中。删除/重建 I 不会在受保护证明连续性仍完整时重置该连续性；真实缺口或正确性证据丢失则必须进入新的证明世代，相同最终哈希不能复活旧证明。
+- current `DependencyProof/3` 的完整空集必须来自真实证明，而不是 I 未命中。删除/重建 I 不会在受保护证明连续性仍完整时重置该连续性；真实缺口或正确性证据丢失则必须进入新的证明世代，相同最终哈希不能复活旧证明。
 - 恢复与清除的成员资格不同。恢复只使用原 Node 闭包的 `restore_membership`，因此更早独立进入 Trash 的所有者局部 Resource/Annotation 继续保持在 Trash；清除则必须覆盖全部当前仍由该所有者拥有且处于 Trash 的成员，包括这些更早独立进入 Trash 的对象，并同时取得真实副本、入站引用、控制和其它所有者的强证明。
 - 复制/分叉/导入/定义转移继续使用一份候选映射、精确前像/结果证据、所有者局部规则、完整类型化槽，以及 `Q` 的出现项/跨度双射。`copy_annotation` 不把新映射主 Annotation 变成 S 载体。普通文本或未知 JSON 中看似 UUID 的字符串，不会因为扫描而变成类型化 Ref。
-- `Frontier/2` 只表示已验证的连续封存因果前缀。managed-atomic 的强 D3 路径继续使用 exact。四个 replica-local 局部结构模式只有在完整的基线到当前封存链，以及全部原来源/控制/授权/正负依赖都证明无关时，才可使用 `scope_dependencies`；`InstallationNotice/2.baseFrontier` 永不前移。
-- `ContentCompletionProof/3` 在封存后运输生产版本历史；接收端建立自己的当前观察，仅凭可移植证明并不能取得完整 Query/Action/执行资格。
+- `Frontier/2` 只表示已验证的连续封存因果前缀。managed-atomic 的强 D3 路径继续使用 exact。四个 replica-local 局部结构模式只有在完整的基线到当前封存链，以及全部原来源/控制/授权/正负依赖都证明无关时，才可使用 `scope_dependencies`；`InstallationNotice/3.baseFrontier` 永不前移。
+- current `ContentCompletionProof/4` + `ChangeRecord/1` 在封存后运输/索引生产版本历史；接收端建立自己的当前观察，仅凭可移植证明并不能取得完整 Query/Action/执行资格。
 - “冲突”仍属于 D6 可移植控制。当前记录使用 `ConflictRecord/2`；`ConflictKey/1`、`ConflictId` 与 `D6-ConflictKey/1` 保持稳定，未封存的外部/未知条件不得伪造冲突头。
 - 历史已保存决议按原 profile 和原效果/结果范围的当前交付授权重放；已计划决议只恢复冻结计划；未知结果保留原连续性与不得重复效果的责任。三者都不批量升级，也不由当前 r6 状态重新裁决。
-- 固定 C 已经包含较早一代的 D3 wire12 与 D4/D5 A/B/C 消费者候选，它们消费了原 G0-A/G0-B 的 SourceObservation/Frontier/WriteProtection 基线。这些是真实候选历史，不是“尚不存在”，但仍未接受、未激活，也尚未消费本词表所列全部 P1 新生产者规则：适用处仍需真实所有者/消费者后像承接生产域 H/修订规划与令牌绑定、十四类依赖键/范围证明、CP3、当前 ConflictRecord/2 边界和 M5 重放/恢复分流。缺少这种强消费者只门控真正依赖它的路径，绝不能永久取消不依赖该强证明且已合格的普通 `.adoc`/Resource 读取、草稿、人工完整来源保存或本地离线操作。
+- 固定 C 已经包含较早一代的 D3 wire12 与 D4/D5 A/B/C 消费者候选，它们消费了原 G0-A/G0-B 的 SourceObservation/Frontier/WriteProtection 基线。这些是真实候选历史，不是“尚不存在”，但仍未接受、未激活，也尚未消费本词表所列全部 P1 新生产者规则：适用处仍需真实所有者/消费者后像承接生产域 H/修订规划与令牌绑定、十五类依赖键/范围证明（含 document_format）、CP4+ChangeRecord1、当前 ConflictRecord/2 边界和 M5 重放/恢复分流。缺少这种强消费者只门控真正依赖它的路径，绝不能永久取消不依赖该强证明且已合格的普通 `.adoc`/Resource 读取、草稿、人工完整来源保存或本地离线操作。
 - “执行责任”继续属于 D6/D10 控制，不是 D3 权威方、`CommitDomain/2` 或副本注册。`sourceOccurrenceKey`、批准使用/资金、运行/租约/自动化/部署以及外部未知连续性仍归 D10/各真实所有者。
 - 中文“来源”仍只对应本词表的来源概念，“来源证据”仍只对应来源证据概念；所有者仍不等于权威方，路径仍不等于内容身份或 Node 父级。
 
@@ -1640,7 +1640,7 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 
 已协调的 D6 Control/Registry 候选现已承认真实存在的 native D3 descriptor/companion，并精确表述 InstallationNotice 边界：baseFrontier 可含历史 sealed ChangeIds，但不含本尚未封存决议的新 ChangeId。这些生产者修订仍是等待全新联合接受的候选文字；本词典不编辑其生产者，也不激活消费者。
 
-historical R08 的 3 P1 + 8 P2 继续作为 review provenance；后续具名 repair 与 fixed-SHA bounded/limited review 只在 exact scope 内有效。PL-IR-01 在 PR3 fixed e8aa 的 accumulated review scope 内已有 prior bounded/limited closure，但这不是 fresh A2/global acceptance。完整 A2 最终仍需全新非作者对一个 fixed final SHA 做 global review。本作者不自行关闭 A2 finding，也不声称产品测试、实现、激活、发布或部署通过。
+historical R08 的 3 P1 + 8 P2 继续作为 review provenance；后续具名 repair 与 fixed-SHA bounded/limited review 只在 exact scope 内有效。PL-IR-01 在 PR3 fixed e8aa 的 accumulated review scope 内已有 prior bounded/limited closure，但这不是 fresh A2/global acceptance。完整 A2 最终仍需全新非作者对一个 fixed final SHA 做 global review。本作者不自行关闭 A2 finding，也不声称产品测试、实现、激活、发布或部署通过。本 head 对 fixed-446 D3 P1-01/P1-02 的 repair disposition 仅为 resolved-pending-independent-review；不重新打开该报告已经有界独立关闭的 D1/D2 项。
 
 ## 9. 闭合 D3 适配器投影
 

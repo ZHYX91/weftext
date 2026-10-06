@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D3 Current Closed Schemas
 
-Status: A2 D3 author candidate; not independent acceptance, implementation, activation, or migration.
+Status: A2 D3 author candidate; not independent acceptance, implementation, activation, or migration. Fixed-446 D3 P1-01/P1-02 are resolved-pending-independent-review in this repair head only; the author does not self-close them.
 
 This companion is self-contained for the **changed current carriers** that D3 consumes. It copies the exact fixed97 closed schema text instead of restating it by version number. Stable D3 Ref/Locator/D3-CJ/Result9/receipt element schemas remain written in the A2 D3 main body and are not mechanically version-bumped.
 
@@ -154,6 +154,8 @@ PinRef/2 and ComponentImage/1 are unchanged fixed-parent types.
 
 Notice3 inherits every Notice2 invariant except the versioned component-key decoder: components is non-empty, PortableComponentKey/2 fixed-rank/canonical-key sorted and unique, and the notice is frozen before installation with the original baseFrontier. CP4 inherits every CP3 committed/restored invariant except the component-key decoder and current ChangeRecord/1 linkage. For committed CP4, components is exactly the Notice3 key set in identical order, every after is the actual installed/sealed image, sourceChanges is the complete EntityRef-sorted unique real source-state delta, and receiptDigest binds the original receipt. A fresh managed Document carries both document and document_format in the same plan/P/CP4. A format-only change with unchanged source has sourceChanges=[] and creates no SourceRevisionPlan, managed SourceVersion, or H advance.
 
+Currentness oracle: when a fresh managed operation actually consumes a managed Document, unchanged source bytes/version do not preserve a proof if the real `document_format` binding/stamp changes. The old `DependencyProof/3` is stale and the replacement must contain the fifteenth `DependencyKey/3.document_format` arm; omission or a fourteen-key predecessor proof is invalid.
+
 ## 5.3 ChangeRecord
 
 ```text
@@ -212,6 +214,8 @@ D3IdentityOperationRequest/13 = {
 ```
 
 D3IdentityInput/13 has the exact D3IdentityInput/12 semantic member set: only the nested D6 descriptor family changes to current InputDescriptor/3 at the outer request boundary. expectedAuthority, workspaceProposal and preparationBinding are genuinely optional members, never nullable placeholders. replica_local permits only create_node/move_node/reorder_node/trash and requires all three members absent. managed_atomic follows the fixed-parent matrix exactly: create/fork require expectedAuthority=create and the required proposal; continue requires expectedAuthority=continue; other managed_atomic modes require expectedAuthority=existing; preparationBinding appears only where the inherited D7-mediated mode admits it. A forbidden member is invalid_request even when its value would otherwise decode, and JSON null is always invalid. D3IdentityOperationRequest/13 is the exact wire12 top-level member set with wireVersion=13 and InputDescriptor/3. Descriptor/request mode, authority and proposal are byte-equal wherever present; guarantee/frontier policy, ownerInput protocolOwner=D3/ownerKind=d3_identity_operation/13, requestFingerprint rule, DecisionKey/OperationId ledger ordering, saved/planned/unseen branching, and error/disclosure order are inherited unchanged. Historical wire9–12 are not widened or re-encoded.
+
+Fresh-current `D3ConflictResolutionPrepare/1.operation` is exactly `D3IdentityInput/13`, and its final native request is `D3IdentityOperationRequest/13`. `D3IdentityInput/12` is accepted only for a proved genuine historical wire12/PAB3 record under its original decoder. The current dispatch at the top of this file is the D3 module's single named version-routing authority: Request/Input13; Key3/Proof3/Descriptor3/Prepared3; Notice3/CP4/ChangeRecord1; PAB4/EffectManifest3/EffectBytes3; Value4. `D3ResolverInput/12`, `D3DecisionCompanion/2`, and `RevisionTokenBinding/2` remain no-bump roles; source-plan dispatch remains ordinary/fresh `SourceRevisionPlan/1`, D3 canonical-conflict `SourceRevisionPlan/2`, and D6 source-conflict `SourceRevisionPlan/3`. Other D3 prose refers to these roles instead of maintaining a parallel version ledger.
 
 ## 6.1 PreparedActionBinding/4
 
@@ -299,6 +303,8 @@ D7ProposedInput/3 = {
 ```
 
 The only legal current `/3` cross-fields are exact_source_document↔exact_source_utf8, resource_bytes↔resource_bytes, and annotation_value↔d3_annotation_value4|d3_symbolic_result9. A protocolOwner=D6 current concrete Annotation after uses d3_annotation_value4 and pins exactly D3-CJ/3(the complete D3-Annotation-Value/4). d3_symbolic_result9 remains legal only for the inherited current D3 symbolic-result branch under its real Result/9 subject/pin rules. `d3_annotation_value3` is invalid in `/3`. OwnerInputBinding/2.pinRefs exactly covers every `/3` proposed pin plus actually protected evidence. Historical PAB3/Input2 continues byte-for-byte with D7ProposedInput/2 and d3_annotation_value3 and is never repinned or re-encoded.
+
+The same current cross-field rule closes D3 canonical conflict output: a concrete Annotation container uses `d3_annotation_value4` and complete `D3-Annotation-Value/4`; current `d3_annotation_value3` rejects. `d3_symbolic_result9` remains legal only for the existing symbolic Result/9 branch. No proved historical Value3 record is migrated or re-encoded by this successor.
 
 For protocolOwner=D6 current D7 actions, InputDescriptor/3.ownerInput has protocolOwner=D7 and ownerKind=intentKind=d7_action/3; canonicalDescriptorBytes is exactly D3-CJ/3(D7ActionInput/3). The six D7ActionInput/3 members equal their PreparedActionBinding/4 counterparts individually, and ownerInput.pinRefs continues to cover exactly proposed pins plus actually protected source/definition/rule evidence under D6 sorted/unique pin rules. protocolOwner=D3 identity actions such as create_annotation keep D3's own d3_identity_operation/13 owner descriptor; PAB4 binds cross-owner preparation and creates no second D3 request authority. Historical d7_action/2/PAB3 keeps its original decoder, bytes and recovery.
 

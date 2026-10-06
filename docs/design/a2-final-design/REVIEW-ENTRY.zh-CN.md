@@ -4,7 +4,7 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1-D5 作者候选复核入口
+# A2 D1-D5 + fixed446 D3 修复作者候选复核入口
 
 状态：D4/D5 整合批次后停止写入的作者候选；未独立接受、未实现、未合并、未发布、未部署、未全局冻结。
 
@@ -22,7 +22,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 
 非作者 fixed-44617a4 报告在其有界范围内独立 CLOSED D1/D2 的 P1-01 与 P2-01。
 
-同一报告把 D3:P1-01 保持 OPEN，问题是 current successor 与 predecessor dispatch / fourteen-key 混用；把 D3:P1-02 保持 OPEN，问题是 current canonical Annotation 仍保留 Value3 enum。该报告只评 44617a4ddf3bbe538c7a9e2bab9fe8a4013fe706，不评 edaf446、D3 文档机械 delta 或本次 D4/D5 作者 delta。本作者在本批不关闭这两个 D3 finding。
+同一报告把 D3:P1-01 保持 OPEN，问题是 current successor 与 predecessor dispatch / fourteen-key 混用；把 D3:P1-02 保持 OPEN，问题是 current canonical Annotation 仍保留 Value3 enum。该报告只评 44617a4ddf3bbe538c7a9e2bab9fe8a4013fe706。从已停止的 D4/D5 head 9952f3ec19b88251fa43e7de8dec44d7e8954f24 起，本次窄作者修复只对账并修复这两个真实缺口；状态仅为 resolved-pending-independent-review，本作者不把任一项标 CLOSED/PASS。
 
 ## 3. D4/D5 已完成作者工件
 
@@ -46,9 +46,15 @@ fixed97 acceptance 表整体已解析。D4-SOURCE-MAP 保留 72 条 D4 相关 ro
 
 D6–D9 owner 文件只读取 D4/D5 direct producer/consumer 交叉；属于 partial，不是完整模块整合。parent owner 树没有独立 D10 owner 文件，因此 D10 只做 fixed97 SPEC/SCHEMAS direct-partial。
 
-## 5. 待完成与未运行范围
+## 5. fixed446 D3 repair 复核目标
 
-D6–D10 完整 A2 owner 整合仍待完成。Mandatory input 925–1141 行仍待完成。D3:P1-01 与 D3:P1-02 继续 OPEN，留待之后绑定 exact head 的窄复核/修复周期。
+请在 exact repair head 上核三项 oracle：（1）fresh-current conflict prepare 只有唯一 Input13/Request13 路径，historical Input12 只用于 record recovery；（2）managed source bytes 不变但已消费 document_format 改变时旧 Proof3 必须失效，并要求第十五个 Key3 arm；（3）current canonical concrete Annotation 从 plan/preview/PAB4/Effect3 全程使用 Value4 并拒绝 current Value3，而真实 historical Value3 bytes 原样保留。
+
+current dispatch 只由 D3-SCHEMAS 具名一次：Request/Input13；Key3/Proof3/Descriptor3/Prepared3；Notice3/CP4/ChangeRecord1；PAB4/EffectManifest3/EffectBytes3；Value4。D3ResolverInput12、D3DecisionCompanion2、RevisionTokenBinding2 与 SourceRevisionPlan1/2/3 角色分流不机械升版。
+
+## 6. 待完成与未运行范围
+
+D6–D10 完整 A2 owner 整合仍待完成。Mandatory input 925–1141 行仍待完成。D3:P1-01 与 D3:P1-02 仅 resolved-pending-independent-review，不是作者关闭；下一轮非作者复核必须绑定本 repair exact head。
 
 Runtime、OS、GUI、真实 replica、产品实现、部署、migration、activation 场景全部 UNRUN。文档/source/schema 映射检查不是产品证据。
 

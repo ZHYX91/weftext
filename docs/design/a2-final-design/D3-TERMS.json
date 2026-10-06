@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D3 current terminology projection; author candidate, not independent acceptance",
+  "status": "A2 D3 author terminology projection; fixed-446 D3 P1-01/P1-02 resolved-pending-independent-review only; not independent acceptance",
   "fixed_s": {
     "sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
     "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
@@ -1165,7 +1165,7 @@
       },
       "semanticNonaliases": [],
       "firstFreeze": "D7联合revision03候选",
-      "currentDefinition": "wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；适用wire12路径继续保留。",
+      "currentDefinition": "wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；fresh-current wire13路径继续保留，真实historical wire11/12 records按recorded decoder/recovery保持。",
       "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
       "disposition": "retain"
     },
@@ -1187,7 +1187,7 @@
       },
       "semanticNonaliases": [],
       "firstFreeze": "D7联合revision03候选",
-      "currentDefinition": "wire11第十数组精确绑定保存payload的源/结果occurrence和全部typed slots；wire12继续保留。",
+      "currentDefinition": "wire11引入的第十数组精确绑定保存payload的源/结果occurrence和全部typed slots；fresh-current wire13继续保留，真实historical wire11/12 records按原decoder保持。",
       "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
       "disposition": "retain"
     },
@@ -1316,10 +1316,16 @@
     "retainedNoMechanicalBump": [
       "D3ResolverInput/12",
       "D3DecisionCompanion/2",
-      "RevisionTokenBinding/2",
-      "SourceRevisionPlan/2"
+      "RevisionTokenBinding/2"
     ],
-    "historicalDispatch": "wire9-12, dependency/input/notice /1-/2, CP1-3, PAB1-3, Value/3, Plan1/3 keep recorded decoder/bytes/pins/recovery"
+    "historicalDispatch": "wire9-12, dependency/input/notice /1-/2, CP1-3, PAB1-3, Value/3, Plan1/3 keep recorded decoder/bytes/pins/recovery",
+    "sourceRevisionPlanDispatch": {
+      "ordinaryFresh": "SourceRevisionPlan/1",
+      "d3CanonicalConflict": "SourceRevisionPlan/2",
+      "d6SourceConflict": "SourceRevisionPlan/3"
+    },
+    "conflictPrepareCurrent": "D3ConflictResolutionPrepare/1.operation=D3IdentityInput/13 -> D3IdentityOperationRequest/13; D3IdentityInput/12 is genuine historical recovery only",
+    "canonicalAnnotationEncoding": "current concrete Annotation=d3_annotation_value4 + D3-Annotation-Value/4; d3_annotation_value3 historical only; d3_symbolic_result9 only the real symbolic Result/9 branch"
   },
   "deferred": [
     {

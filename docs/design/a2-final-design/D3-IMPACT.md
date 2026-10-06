@@ -20,9 +20,9 @@ This file defines only future implementation, regression, crash-recovery, privac
 
 | Slice | New responsibility | Preserved boundary |
 |---|---|---|
-| wire12 and ledger branching | consume `DecisionKey/2`, `CommitDomain/2`, `Frontier/2`, `InputDescriptor/2`, and implement the unique saved/planned/unseen split after the common gate | `D3-CJ/3`, `D3Integer`, Ref/Locator lexemes, and the original stage/priority of all 24 D3 error families remain unchanged; one P has one primary decision |
+| wire13 current and versioned ledger branching | consume `DecisionKey/2`, `CommitDomain/2`, `Frontier/2`, `InputDescriptor/3`, and implement the unique saved/planned/unseen split after the common gate; genuine historical wire9-12 records recover first by their recorded decoder | `D3-CJ/3`, `D3Integer`, Ref/Locator lexemes, and the original stage/priority of all 24 D3 error families remain unchanged; one P has one primary decision |
 | source currentness and revision | separate production `SourceVersion/2` from local current `SourceObservation/1`/`SourceVersionRef/1`, consuming `SourceStamp/1`, `SourceRevisionPlan/1`, `RevisionTokenSource/2`, `RevisionTokenBinding/2`, and `d6_source_revision/2` | historical opaque revision-token/Locator decoders are not upgraded; foreign production revision/epoch/`externalSequence` never donate to a new managed revision |
-| dependency/range | consume the fifteen closed `DependencyKey/3` kinds and the nine D3 `StructureRange` variants, enforcing authorization-before-hidden-read, complete positive/negative/empty proof, and P/M continuity | partial I, no-hit, equal hash/count, provider state, and Frontier prefix are never complete-set proof |
+| dependency/range | consume the fifteen closed `DependencyKey/3` kinds, including `document_format`, and the nine D3 `StructureRange` variants, enforcing authorization-before-hidden-read, complete positive/negative/empty proof, and P/M continuity | partial I, no-hit, equal hash/count, provider state, and Frontier prefix are never complete-set proof |
 | `replica_local` | real local_structure + `scope_dependencies` for `create_node`, `move_node`, `reorder_node`, and `trash` | installation remains `WriteProtection=strict`; the same plan continues only with a complete continuous proved-unrelated sealed extension |
 | `managed_atomic` | restore/purge/copy/fork/continue/import and every strong closure | always `frontierPolicy=exact` + `WriteProtection=strict`, never silently downgraded to local |
 | copy/fork/import/Definition Transfer | one private candidate map, owner/membership matrix, real preimage/result pins, all typed slots, Q bijection, and two-pass same-source position closure | ordinary CEL/text/unknown JSON is not scanned, and no D7 schema, Definition identity, or second wire is invented |
@@ -100,7 +100,7 @@ I is fully discardable. Recovery proves:
 - no new birth/receipt/tombstone is minted and `ChangeId/1`/`Frontier/2` never resets;
 - I does not own proof epoch/revision, complete-enumeration boundary, empty proof, or continuous-consumption position.
 
-All fourteen `DependencyKey/2` stamps are tested with I absent, partially built, parser/OCR version changes, watcher gaps, and one million small files. Rebuilding I alone never re-signs proof; only real loss of correctness facts/continuity requires a new proof epoch.
+All fifteen current `DependencyKey/3` stamps, including `document_format`, are tested with I absent, partially built, parser/OCR version changes, watcher gaps, and one million small files. Rebuilding I alone never re-signs proof; only real loss of correctness facts/continuity requires a new proof epoch.
 
 ### 4.3 Lost P
 
@@ -143,12 +143,12 @@ These correspond to acceptance scenarios 33–36 and 55. No per-attempt approval
 
 ## 6. `replica_local` and `managed_atomic` operation matrix
 
-`replica_local` narrows semantic dependency scope only and never changes installation protection. Exactly four D3 local_structure modes use `scope_dependencies`: `create_node`, `move_node`, `reorder_node`, and `trash`. They preserve original subject/parent/ordinal/closure/proposed after/pins/version basis/`InstallationNotice/2.baseFrontier` and never reselect a plan merely because current Frontier advanced.
+`replica_local` narrows semantic dependency scope only and never changes installation protection. Exactly four D3 local_structure modes use `scope_dependencies`: `create_node`, `move_node`, `reorder_node`, and `trash`. They preserve original subject/parent/ordinal/closure/proposed after/pins/version basis/`InstallationNotice/3.baseFrontier` and never reselect a plan merely because current Frontier advanced.
 
 Continuing the same plan proves all of:
 - original base -> actual current cut is one complete continuous verified-sealed non-regressing chain;
 - every added/advanced head has real portable ChangeRecord/completion history;
-- every actually bound source/control/auth/Registry/rules/membership/positive-negative range/owner-version dependency among the fourteen kinds still holds;
+- every actually bound source/control/auth/Registry/rules/membership/positive-negative range/owner-version dependency among the fifteen kinds still holds;
 - new sealed effects are genuinely unrelated to those complete dependencies;
 - unrelatedness evidence and actual cut are retained durably in P rather than inferred from two vectors after P loss.
 
@@ -244,10 +244,11 @@ These correspond to acceptance scenarios 10–12 and 26. Missing any active-repl
 ## 9. Dependency completeness, large workspace, and partial index
 
 `DependencyProof/3` has exactly fifteen closed `DependencyKey/3` kinds:
-`source`, `lifecycle`, `placement_range`, `ref_inbound`, `relation_incidence`, `calendar_scope`, `registry`, `temporal_rules`, `authorization`, `foreign_binding`, `query_scan`, `replica_registry`, `conflict_record`, and `execution_resource`.
+`source`, `document_format`, `lifecycle`, `placement_range`, `ref_inbound`, `relation_incidence`, `calendar_scope`, `registry`, `temporal_rules`, `authorization`, `foreign_binding`, `query_scan`, `replica_registry`, `conflict_record`, and `execution_resource`.
 
 Tests use the actual owner for positive/negative/empty/currentness proof rather than generic owner JSON. Key focus:
 - `source`: complete current Observation, bytes/value pin, and `FileObjectBinding`;
+- `document_format`: exact current managed-format binding/qualification when semantic parsing actually consumes a managed Document; unchanged source bytes never keep an old format proof current;
 - D3 `lifecycle`, `placement_range`, and `ref_inbound`: real portable identity/structure/reference directories;
 - D4 relation/calendar/registry/temporal: real D4/Registry owner;
 - `authorization`: current principal/audience/policy generation;
@@ -296,7 +297,7 @@ Every D3 identity/structure/lifecycle mode remains `WriteProtection=strict`. Fau
 7. installed verification;
 8. before P seal;
 9. after seal before `ContentCompletionProof/4` generation/persistence;
-10. during CP3 write/flush/transport;
+10. during current CP4 + ChangeRecord/1 generation/write/flush/transport;
 11. lost response delivery.
 
 Each cell lands only in real exact-before, exact-after-with-provenance, third-state, unavailable/recovery_unknown plus D3 decision state. Equal hash with different `FileObjectBinding`/provenance never proves original-plan installation.
@@ -318,7 +319,7 @@ P seal is the sole author-decision commit point. In one transaction, a portable 
 - exact branch base is byte-equal to original expected/dependency/Notice base;
 - `scope_dependencies` branch carries complete continuous sealed history, original-dependency unrelatedness revalidation, and durable P evidence without changing Notice base;
 - receiver validates production history and constructs its own `SourceObservation/1`/`SourceVersionRef/1` under its observer `CommitDomain/2`, `FileObjectBinding`, current epoch/pins, never copying sender token;
-- CP3 grants no complete Query/Action/negative-range/execution-responsibility qualification;
+- CP4 + ChangeRecord/1 grants no complete Query/Action/negative-range/execution-responsibility qualification;
 - pre-seal restored outcome exists only when every component is completely proved restored to before and carries no success/ChangeId;
 - post-seal publication failure remains committed + pending and recovery publishes only the same proof/outbox without reinstall, revision resampling, another H/ChangeId/domainCommitSequence advance, or charge.
 
@@ -335,7 +336,7 @@ The golden r5/r6 sequence remains and expands:
 
 Saved replay does not require old before to remain current, old Frontier to equal current, old preview/preparation TTL to be current, or a new D4/D5/D7 consumer to approve the old result. Revocation hides delivery only and never changes historical decision; restored authorization delivers the same old bytes. There is no reinstall, H/revision/ChangeId reallocation, second domainCommitSequence increment, repeated ApprovalUse/Money charge, or duplicate external effect.
 
-Planned recovery restores only original canonical request/fingerprint, `InputDescriptor/2`, candidate map, `SourceRevisionPlan/1`/H basis, pins, reservations/write set, `InstallationNotice/2`, `WriteProtection`, owner version, attempt/budget, preparation TTL/clock, and installation state. Current authorization/dependency continuity/install provenance determines only continuation of that same plan versus paused/conflict/recovery_unknown; there is no new prepare, requery/reselection, or resampling.
+Planned recovery restores only the original canonical request/fingerprint, the record's original InputDescriptor (fresh current `/3`; genuine historical records use their recorded version), candidate map, `SourceRevisionPlan/1`/H basis, pins, reservations/write set, the record's original InstallationNotice (fresh current `/3`; historical records use their recorded version), `WriteProtection`, owner version, attempt/budget, preparation TTL/clock, and installation state. Current authorization/dependency continuity/install provenance determines only continuation of that same plan versus paused/conflict/recovery_unknown; there is no new prepare, requery/reselection, or resampling.
 
 P/install outcome unknown is not a fourth re-execution branch. Original record, pins, Approval/Money/claim/outbox, stop/recovery/no-duplicate-effect obligations remain. Current files/equal hash/I/empty new control DB never guess success/failure, retry with a new `OperationId`, refund, or reset quota.
 
@@ -385,7 +386,7 @@ These correspond to acceptance scenarios 38, 39, 46, and 47. Realtime collaborat
 
 Ordinary source presentation, Draft, local edit, and explicit branch read may display pending only while exposing unproved obligations rather than saying “all valid.”
 
-Generation wording is exact: fixed C already contains the prior D4/D5 candidate consumer work for the original G0-A/G0-B baseline. That is real candidate history, although unaccepted/unactivated. The new P1 production revision token, fourteen-key/range, CP3/ConflictRecord2, and M5 replay/recovery rules still require applicable D3/D4 P2, D5 P3, and D7 consumer afterimages. A missing strong consumer gates only the strong path that depends on it and never permanently disables qualified ordinary `.adoc`/Resource read, Draft, human whole-source save, or local offline operation.
+Generation wording is exact: fixed C already contains the prior D4/D5 candidate consumer work for the original G0-A/G0-B baseline. That is real candidate history, although unaccepted/unactivated. The new P1 production revision token, fifteen-key/range including document_format, CP4+ChangeRecord1/ConflictRecord2, and M5 replay/recovery rules still require applicable D3/D4 P2, D5 P3, and D7 consumer afterimages. A missing strong consumer gates only the strong path that depends on it and never permanently disables qualified ordinary `.adoc`/Resource read, Draft, human whole-source save, or local offline operation.
 
 These correspond to acceptance scenarios 37 and 45.
 
@@ -397,7 +398,7 @@ The old Impact pin-retention, budget, and resource obligations remain and synchr
 - last-reference pins for planned/unknown/conflict/Approval/Money/original publication/outbox never disappear because of preview TTL, I rebuild, readable current file, or new owner version;
 - when a historical effect pin legitimately expires under an explicit contract, delivery returns that original `effects_unavailable` and never substitutes current file for historical after;
 - while P/install is unknown there is no refund, duplicate charge, quota/approval reset, duplicate external effect, or reconstruction from an empty control DB;
-- budget overflow during Definition Transfer two-pass materialization, complete range enumeration, CP3 publication, or recovery deterministically pauses/fails rather than silently expanding budget after partial success.
+- budget overflow during Definition Transfer two-pass materialization, complete range enumeration, current CP4+ChangeRecord1 publication, or recovery deterministically pauses/fails rather than silently expanding budget after partial success.
 
 ## 16. wire13 current, historical corpus, and terminology gate
 
@@ -413,8 +414,8 @@ The new corpus independently covers:
 - `replica_local|managed_atomic` mode matrix;
 - production `SourceVersion/2` versus local Observation domain;
 - `SourceStamp/1`, `SourceRevisionPlan/1`, `RevisionTokenSource/2`, `RevisionTokenBinding/2`, and `d6_source_revision/2`;
-- fourteen `DependencyKey/3` kinds and nine `StructureRange` variants;
-- `ContentCompletionProof/3` versus historical `/2`;
+- fifteen `DependencyKey/3` kinds including `document_format` and nine `StructureRange` variants;
+- current `ContentCompletionProof/4` + `ChangeRecord/1` versus genuine historical CP1-3 under recorded decoders;
 - `ConflictRecord/2 + Frontier/2` versus historical `/1 + Frontier/1`;
 - unchanged `ConflictKey/1`/`ConflictId`/`D6-ConflictKey/1` hash domain;
 - effectClass portable/control_only/no_op + same-P `D3DecisionCompanion/2`;
@@ -442,14 +443,14 @@ Future implementation provides at least these independently fault-injectable/ass
 - InputDescriptor/pin/Observation/DependencyProof exact comparator;
 - production/source-observer currentness verifier;
 - H/SourceRevisionPlan/revision-token allocator-verifier;
-- fourteen-key/nine-range enumeration and completeness verifier;
+- fifteen-key/nine-range enumeration and completeness verifier, including document-format currentness;
 - local/exact Frontier-policy verifier;
 - Trash restore/purge membership evaluator;
 - copy/fork/import candidate-map and owner-matrix materializer;
 - Definition Transfer typed-slot/Q parser/materializer/two-pass span verifier;
 - ConflictRecord version router plus typed D3 owner-resolution adapter;
 - strict installation/crash-recovery state machine;
-- CP3 producer/receiver verifier;
+- current CP4 + ChangeRecord/1 producer/receiver verifier plus historical completion-version router;
 - historical replay/no-duplicate-effect router;
 - ordinary D6 observed-only qualification checker;
 - Server Draft/base/currentness integration;
@@ -464,7 +465,7 @@ This section specifies implementation slices and test entry points only and does
 Every fixed-S snapshot, design input, catalog byte is read-only; P2 never modifies it under “synchronization.” P2 synchronizes only real owner afterimages plus the three routing metadata files.
 
 Fixed C already contains the prior-generation D4/D5 candidate work for the original G0-A/G0-B baseline. Current P1 producer additions still require:
-- D3/D4 P2: revision/currentness, fourteen-key/range, CP3/ConflictRecord2, M5 branching, and real D4 relation/calendar/registry/semantic_pending consumption;
+- D3/D4 P2: revision/currentness, fifteen-key/range including document_format, CP4+ChangeRecord1/ConflictRecord2, M5 branching, and real D4 relation/calendar/registry/semantic_pending consumption;
 - D5 P3: structured operations, revision-bound locator, complete range, and strict ordinary/structured boundary;
 - D7: complete Query/Value-CEL/View/Narrow Field/Definition Transfer/Preview-Effects/Execution-Action/Prepared/Scenarios consumers;
 - D8: complete current `SourceObservation/1`, Draft/IME/Undo/selection/editor, Server checkpoint;
@@ -523,12 +524,22 @@ Test open-record equal-bytes resolution as portable, proved already-resolved pla
 
 ### 20.2 Lifecycle admission and two-direction canonical materialization
 
-Cases 70–73 close the design coverage for IR-06/07: the four selected lifecycle→requested-result rows crossed with actual installed live/Trash, native location/owner/reply closure and independent restore membership; placement across current complete sibling ranges; and canonical A/copy B versus canonical B/copy A for Node/Resource/Annotation. For Resource installed a but retaining B=b, assert old R=b plus fresh R′=a under one native decision, with separately bound physical before and selected source, a /2 canonical version plan and /1 fresh plan, exact full preview/receipt/CP3, and no invented Resource source RPC. Equal bytes with changed canonical claim/version increments H once; metadata-only unchanged source does not; exact already-resolved no-op has no ChangeId. Check raw mode matrix and ordinary current Observation rejection unchanged. Private wrapper/guard/DependencyProof source qualification is resolution-only, never transferable to ordinary Query/D8/write. Verify omission/net structural receipt rules, one final source per entity, authorization before head/file reads, stale head/CAS, install unknown, restart and saved replay. These additions specify execution oracles and claim no product run or independent PASS.
+Cases 70–73 close the design coverage for IR-06/07: the four selected lifecycle→requested-result rows crossed with actual installed live/Trash, native location/owner/reply closure and independent restore membership; placement across current complete sibling ranges; and canonical A/copy B versus canonical B/copy A for Node/Resource/Annotation. For Resource installed a but retaining B=b, assert old R=b plus fresh R′=a under one native decision, with separately bound physical before and selected source, a /2 canonical version plan and /1 fresh plan, exact full preview/receipt/CP4+ChangeRecord1, and no invented Resource source RPC. Equal bytes with changed canonical claim/version increments H once; metadata-only unchanged source does not; exact already-resolved no-op has no ChangeId. Check raw mode matrix and ordinary current Observation rejection unchanged. Private wrapper/guard/DependencyProof source qualification is resolution-only, never transferable to ordinary Query/D8/write. Verify omission/net structural receipt rules, one final source per entity, authorization before head/file reads, stale head/CAS, install unknown, restart and saved replay. These additions specify execution oracles and claim no product run or independent PASS.
 
 ### 20.3 Canonical evidence and public completeness
 
-Main cases 74–79 require independent positive/negative oracles for the owner-N Annotation reply with fresh copy under M, Node X→Y with shared actual fromSource across distinct components, original E/delete/result-only/S/lifecycle-only grammar, full D4/D7 typed gates, exact overlap equality, mandatory public canonical plan/bytes/extension and single-seal recovery. Reconstruct both component evidence sets independently, enforce original comparator uniqueness separately, and reconstruct one deduplicated physical source/control set against CP3. The original twelve receipt arrays cover only native effects; D3CanonicalEffects/1 is mandatory complete public evidence for canonical effects, including the empty resolved-no-op extension. Missing extension after seal is delivery unavailability, never absence of the saved commit. Test current BudgetBinding/1 exact fields and zero semantics. These are design verification obligations, not executed product tests or independent acceptance.
+Main cases 74–79 require independent positive/negative oracles for the owner-N Annotation reply with fresh copy under M, Node X→Y with shared actual fromSource across distinct components, original E/delete/result-only/S/lifecycle-only grammar, full D4/D7 typed gates, exact overlap equality, mandatory public canonical plan/bytes/extension and single-seal recovery. Reconstruct both component evidence sets independently, enforce original comparator uniqueness separately, and reconstruct one deduplicated physical source/control set against CP4 + ChangeRecord/1. The original twelve receipt arrays cover only native effects; D3CanonicalEffects/1 is mandatory complete public evidence for canonical effects, including the empty resolved-no-op extension. Missing extension after seal is delivery unavailability, never absence of the saved commit. Test current BudgetBinding/1 exact fields and zero semantics. These are design verification obligations, not executed product tests or independent acceptance.
 
+
+### 20.4 fixed-446 D3 P1 repair oracles
+
+Status for `A2-D3:P1-01` and `A2-D3:P1-02`: **resolved-pending-independent-review** only; the author does not self-close either finding.
+
+- `D3-P1-01-A`: fresh current conflict prepare accepts `D3IdentityInput/13` and the sole native request path is `D3IdentityOperationRequest/13`; a proved historical Input12/wire12/PAB3 record recovers only under its recorded decoder and never becomes a second fresh-current path.
+- `D3-P1-01-B`: hold exact managed source bytes/version constant and change the actually consumed `document_format` binding/stamp. The old Proof3 must become stale; the replacement proof contains the fifteenth Key3 arm and the current Notice3/CP4/ChangeRecord1 chain. Equal source bytes are not an escape hatch.
+- `D3-P1-02`: current canonical Annotation concrete output uses `d3_annotation_value4`, and D7 PAB4/EffectManifest3/EffectBytes3 transport must strict-decode the same complete Value4. A current plan carrying `d3_annotation_value3` rejects; `d3_symbolic_result9` remains restricted to the real symbolic branch. Historical Value3 records retain their original bytes and recovery.
+
+These are design/conformance oracles only. No runtime/product fixture was executed by this author batch.
 
 ## 21. A2 implementation/test status
 

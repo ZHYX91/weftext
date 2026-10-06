@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D3 author source/case map; reviewable candidate, not independent acceptance",
+  "status": "A2 D3 author source/case map; fixed-446 D3 P1-01/P1-02 resolved-pending-independent-review; not independent acceptance",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "protected_inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -80,6 +80,22 @@
       "pathEn": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
       "pathZh": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
       "sourceSection": "73 D3-direct rows selected from complete 760-row bilingual inventory"
+    },
+    "fixed97_current_dispatch_spec": {
+      "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
+      "readStatus": "D3-relevant current dispatch sections direct-partial",
+      "target": "D3 current producer/consumer coordination",
+      "disposition": "current_successor_evidence_not_full_module_acceptance",
+      "sourceSection": "D3/D6/D7 current successor intersections only"
+    },
+    "fixed97_current_dispatch_schemas": {
+      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
+      "readStatus": "D3-relevant current closed-schema sections direct-partial",
+      "target": "D3-SCHEMAS.md and current dispatch coordination",
+      "disposition": "single_named_current_dispatch_basis",
+      "sourceSection": "current Key3/Proof3/Descriptor3/Prepared3, Notice3/CP4/ChangeRecord1, Request13/Input13, PAB4/Effect3, Value4"
     }
   },
   "case_sets": {
@@ -5306,8 +5322,8 @@
       "status": "remain TODO unless already completed by D1/D2"
     },
     {
-      "source": "D4-D10 full A2 module integration and mandatory A2 source",
-      "status": "pending future batches"
+      "source": "D6-D10 full A2 module integration and remaining mandatory A2 source",
+      "status": "D4/D5 are integrated in the current PR author candidate; D6-D10 full modules and mandatory input lines 925-1141 remain pending future batches"
     },
     {
       "source": "product/runtime implementation and acceptance fixtures",
@@ -5319,6 +5335,64 @@
     "not P1/P2 self-closure",
     "not complete A2",
     "not implementation",
-    "not merge/release/deploy"
+    "not merge/release/deploy",
+    "fixed-446 D3 findings are not author-closed; independent exact-head review required"
+  ],
+  "fixed446_repair_dispositions": {
+    "reviewObject": "44617a4ddf3bbe538c7a9e2bab9fe8a4013fe706",
+    "priorBoundedState": {
+      "d1d2_p1_01": "independently_closed_at_fixed446_within_report_scope",
+      "d1d2_p2_01": "independently_closed_at_fixed446_within_report_scope"
+    },
+    "A2-D3:P1-01": {
+      "status": "resolved-pending-independent-review",
+      "before": "fresh/current prose mixed Input12, fourteen-key predecessor wording and current successor roles",
+      "after": "D3-SCHEMAS is the single named current dispatch: Request/Input13; 15-arm Key3 including document_format; Proof3/Descriptor3/Prepared3; Notice3/CP4/ChangeRecord1; PAB4/EffectManifest3/EffectBytes3. D3ResolverInput12, D3DecisionCompanion2, RevisionTokenBinding2 and SourceRevisionPlan1/2/3 role dispatch are retained without mechanical bump; historical wire9-12 families recover only by recorded version.",
+      "oracle": "unchanged managed source bytes/version plus changed consumed document_format invalidates old Proof3; fresh conflict prepare has one Input13/Request13 path and Input12 is historical recovery only"
+    },
+    "A2-D3:P1-02": {
+      "status": "resolved-pending-independent-review",
+      "before": "current D3CanonicalEffectPlan/1 enum still admitted d3_annotation_value3 while adjacent current text required Value4",
+      "after": "current concrete Annotation canonical resultEncoding is d3_annotation_value4 and strict-decodes complete Value4; current Value3 rejects; d3_symbolic_result9 remains only the real symbolic Result9 branch; proved historical Value3 records retain original bytes/decoder",
+      "oracle": "current source->preview->plan->seal->effects stays Value4 across PAB4/EffectManifest3/EffectBytes3 and CP4/ChangeRecord1; no historical in-place re-encoding"
+    }
+  },
+  "current_repair_direct_reads": [
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md",
+      "blob": "e69c34e74aa8fbca00f77c89ac52778186630032",
+      "readStatus": "direct-intersection partial",
+      "disposition": "predecessor/current-owner context only; not rewritten in this batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.md",
+      "blob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "readStatus": "direct-intersection partial",
+      "disposition": "predecessor PAB3 context; fixed97 PAB4 is fresh-current successor"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.md",
+      "blob": "32e9a5f889a6627e05a397d9738ff171982f0838",
+      "readStatus": "direct-intersection partial",
+      "disposition": "predecessor Effect2 context; fixed97 Effect3 is fresh-current successor"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "blob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "readStatus": "direct-intersection partial",
+      "disposition": "consumer predecessor context only"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "blob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "readStatus": "direct-intersection partial",
+      "disposition": "consumer predecessor context only"
+    },
+    {
+      "path": "docs/design/d10/CANDIDATE.md",
+      "blob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+      "readStatus": "direct-intersection partial",
+      "disposition": "consumer predecessor context only; D10 full module remains future batch"
+    }
   ]
 }
