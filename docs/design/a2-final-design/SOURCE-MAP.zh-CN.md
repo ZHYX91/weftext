@@ -100,7 +100,7 @@ D3-SOURCE-MAP.json 是案例级审计记录，保存 fixed-S main §14 cases 1-5
 
 三个 fixed-S D3 输入与 current parent D3 main/Impact/Lexicon 中英双语都已全文读取。具名 D6-D10 中文 direct-owner 文件只为闭合 D3 interface 而全文读取；对应完整 A2 owner 模块仍待后续。fixed97 SPEC/SCHEMAS 除此前 D2 完整区域外，只声称 D3 相关 partial read。
 
-fixed-446 独立评审已经关闭 D1/D2 P1-01/P2-01 finding；D3:P1-01 与 D3:P1-02 仍 OPEN，且没有评 edaf 或更晚作者 delta。全部产品/runtime scenario 仍未运行。
+fixed-446 已独立关闭有界 D1/D2 findings。后续 fixed-a62 非作者窄复核已独立 CLOSED D3:P1-01 与 D3:P1-02；更早 fixed-446 的 OPEN 只作为历史评审 provenance。全部产品/runtime scenario 仍未运行。
 
 ## 10. D4 整合
 
