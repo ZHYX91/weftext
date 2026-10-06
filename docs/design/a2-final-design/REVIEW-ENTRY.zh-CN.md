@@ -53,7 +53,10 @@ D6–D9 owner 文件只读取 D4/D5 direct producer/consumer 交叉；属于 par
 2. 受管来源字节不变但已消费的文档格式绑定发生变化时，旧的第 3 版依赖证明必须失效；替代证明必须包含第十五个依赖键分支。
 3. 当前规范注释从计划、预览、准备绑定到效果传输全程使用第 4 版值并拒绝当前第 3 版值；真实历史第 3 版值字节保持原样。
 
-current dispatch 只由 D3-SCHEMAS 具名一次：Request/Input13；Key3/Proof3/Descriptor3/Prepared3；Notice3/CP4/ChangeRecord1；PAB4/EffectManifest3/EffectBytes3；Value4。D3ResolverInput12、D3DecisionCompanion2、RevisionTokenBinding2 与 SourceRevisionPlan1/2/3 角色分流不机械升版。
+当前分派只在 D3-SCHEMAS 中具名一次；其它文件不再维护第二份版本表。
+- 请求与输入采用第 13 版；依赖键、依赖证明、输入描述和准备记录采用第 3 版。
+- 安装通知采用第 3 版，完成证明采用第 4 版，变更记录采用第 1 版；准备动作绑定采用第 4 版，效果清单与效果字节采用第 3 版；注释值采用第 4 版。
+- D3ResolverInput 保持第 12 版；D3DecisionCompanion 与 RevisionTokenBinding 保持第 2 版。SourceRevisionPlan 的 /1、/2、/3 继续分别对应普通/新鲜、D3 规范冲突和 D6 来源冲突，不机械升版。
 
 ## 6. 待完成与未运行范围
 
