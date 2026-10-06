@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D6 author source/case/registry-pointer map; not independent acceptance or implementation",
+  "status": "A2 D6 fixed829 five-finding author repair; all five author-resolved-pending-independent; not independent acceptance or implementation",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "start_head": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a",
@@ -19829,7 +19829,7 @@
         "currentLine": 261
       }
     ],
-    "currentCandidateBlob": "571b36c9c8124eeeced993f97b772327ee396932",
+    "currentCandidateBlob": "abc4dddb0b9736cc58973c397961cfb3576f04e9",
     "mappedSourceRecords": 89,
     "uniqueCaseIds": 85,
     "duplicateIdSourceRecords": [
@@ -28280,5 +28280,16 @@
     "P1": 2,
     "P2": 3,
     "scope": "D6 fixed829 independent review only; D4/D5 findings remain separate"
+  },
+  "current_candidate_blobs": {
+    "control_en": "47fad305713084aeed1c26d8d5be4921f2a189da",
+    "control_zh": "afe210e91752871977d2a464f2b89dcce74b06b3",
+    "main_en": "50632ba4a86745f0e8222316819d57f51fb39e33",
+    "main_zh": "3a4bce77271486ed27c95d50139877f75d9aa6df",
+    "impact_en": "abc4dddb0b9736cc58973c397961cfb3576f04e9",
+    "impact_zh": "5ba6118faed2c400d137fc46bd55eb7dbf1c9648",
+    "lexicon_en": "4b63173f660b55bc220659320cf0834abae07b2b",
+    "lexicon_zh": "815e0563154fb27f7886f5526ebef26b1af9bb42",
+    "registry": "e8bae75ea297c47d353578407b7f343c9dd48b48"
   }
 }
