@@ -18,7 +18,7 @@
   "pointer_count": 2854,
   "pointers": [
     {
-      "pointer": "/",
+      "pointer": "",
       "subtreeGroupId": "catalog-root",
       "recordIdentity": null,
       "target": "D4.md §2.3",
@@ -30,7 +30,7 @@
       },
       "disposition": "retain",
       "owner": "D4",
-      "basis": "root identity/version/catalogId are validated from the sole fixed catalog",
+      "basis": "RFC 6901 uses the empty string for the document root; root identity/version/catalogId are validated from the sole fixed catalog",
       "consumerValidatorConstructor": [
         "catalog root strict decoder",
         "ValidatedCatalogContext construction"
@@ -50,7 +50,7 @@
       },
       "disposition": "retain",
       "owner": "D4",
-      "basis": "root identity/version/catalogId are validated from the sole fixed catalog",
+      "basis": "RFC 6901 uses the empty string for the document root; root identity/version/catalogId are validated from the sole fixed catalog",
       "consumerValidatorConstructor": [
         "catalog root strict decoder",
         "ValidatedCatalogContext construction"
@@ -70,7 +70,7 @@
       },
       "disposition": "retain",
       "owner": "D4",
-      "basis": "root identity/version/catalogId are validated from the sole fixed catalog",
+      "basis": "RFC 6901 uses the empty string for the document root; root identity/version/catalogId are validated from the sole fixed catalog",
       "consumerValidatorConstructor": [
         "catalog root strict decoder",
         "ValidatedCatalogContext construction"
@@ -90,7 +90,7 @@
       },
       "disposition": "retain",
       "owner": "D4",
-      "basis": "root identity/version/catalogId are validated from the sole fixed catalog",
+      "basis": "RFC 6901 uses the empty string for the document root; root identity/version/catalogId are validated from the sole fixed catalog",
       "consumerValidatorConstructor": [
         "catalog root strict decoder",
         "ValidatedCatalogContext construction"
@@ -66121,7 +66121,7 @@
   "subtree_groups": [
     {
       "id": "catalog-root",
-      "subtree": "/ + root identity members",
+      "subtree": "RFC 6901 root \"\" plus /wireVersion, /kind, /catalogId",
       "pointerCount": 4,
       "currentTarget": {
         "file": "D4.md",
@@ -66132,7 +66132,7 @@
       "target": "D4.md §2.3",
       "disposition": "retain",
       "owner": "D4",
-      "basis": "root identity/version/catalogId are validated from the sole fixed catalog",
+      "basis": "RFC 6901 uses the empty string for the document root; root identity/version/catalogId are validated from the sole fixed catalog",
       "consumerValidatorConstructor": [
         "catalog root strict decoder",
         "ValidatedCatalogContext construction"
@@ -66294,5 +66294,6 @@
       "status": "author-resolved-pending-independent",
       "independentClose": false
     }
-  }
+  },
+  "jsonPointerStandard": "RFC 6901 §§3–5; the empty string is the document root and '/' would address an empty-key member"
 }
