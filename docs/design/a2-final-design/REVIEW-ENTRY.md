@@ -24,7 +24,7 @@ The next reviewer must bind the exact final PR5 stop head. Do not follow the mov
 
 - fixed-446 independently CLOSED the bounded D1/D2 findings; those closures are retained.
 - fixed-a62 independently CLOSED D3:P1-01 and D3:P1-02. The older fixed-446 OPEN state is historical only.
-- The fixed-829 non-author report returned P0=0/P1=0/P2=2 for D4/D5: normative semantics LIMITED PASS, audit package REVISE.
+- The completed non-author report bound to fixed-a62 `a62aa7d4eaf56113cd1e9e32336ae8814f83589b` (review request `7b6e1f16-fa41-499c-b078-647f1942e94e`) returned P0=0/P1=0/P2=2 for D4/D5: normative semantics LIMITED PASS, audit package REVISE.
 - The two current findings are **A2-D4D5:P2-01** (source/current-clause audit mapping) and **A2-D4D5:P2-02** (real D10 direct-source qualification). This author repair marks both only **author-resolved-pending-independent**.
 
 D6 remains the stopped author candidate saved through 829. A read-only fixed-829 review does not make D6 accepted.
@@ -35,7 +35,7 @@ Review the machine maps, not counts alone:
 - D4 fixed-S text: 906/906 nonblank lines, exact source path/blob/line/text, one source-qualified obligation group per line.
 - D5 fixed-S text: 170/170 nonblank lines under the same rule.
 - Mandatory lines 1–924: 716/716 nonblank lines mapped to actual owners/targets; metadata/review rows are not mislabeled as business semantics.
-- D4 catalog: 2,854/2,854 JSON Pointers in seven non-overlapping subtree groups; 95 named records plus 7 global limits; the fixed catalog remains the sole normative value authority.
+- D4 catalog: 2,854/2,854 RFC 6901 JSON Pointers in seven non-overlapping subtree groups; the document root is the empty pointer `""`, while `"/"` denotes an empty-key member; 95 named records plus 7 global limits remain under the sole fixed-catalog normative value authority.
 - fixed97 selected rows: 72 D4 and 130 D5 rows, each preserving actual English and Chinese source row plus current A2 target/disposition/owner/basis/oracle.
 
 Minimum negative/positive traces: fixed-S D5 lines 81–92 must be named-superseded by D5 §0/§3/§19.1; Organizations inverse must resolve D4 §8/§16.4 without a second authored inverse; phone occurrences must resolve D4 §10.1/§16.2 and D5 §4/§14 without durable row identity; Calendar recurrence must resolve D4 §9/§10.3/§16.6/§17.5 and the current dependency proof.
@@ -56,5 +56,17 @@ Raw D10 predecessor/original-owner references to Proof2/Key2/wire12/PAB3 remain 
 This repair changes audit/source maps and review/progress entrypoints only. It does not change D1-D6 normative business semantics, product implementation, dependencies, checker, CI, source snapshots, or protected inputs. It creates no second catalog/Registry/current authority.
 
 D7-D10 full A2 owner integration remains pending. Mandatory source 925–1141 remains pending. Fresh Pro/global review remains pending. Runtime, OS, GUI, real-replica, migration, activation, deployment, provider, crash-recovery and performance evidence are UNRUN.
+
+### 5.1 Mandatory intake and current workflow qualification
+
+Mandatory source §§1–14 remain scenario/pressure input, not self-activating authority. Historical `$council`, OpenCode-panel, controller/task and chat-routing instructions are retained as source-qualified workflow provenance; the current repository workflow is the single author branch, explicit source-to-current-clause dispositions, then a new non-author review bound to one exact stop SHA. A source conflict with an already-current owner still requires an explicit owner/reopen disposition; it is never silently rewritten here.
+
+### 5.2 Freeze and final-acceptance qualification
+
+The product obligations listed by Mandatory §10 remain real obligations at their actual owners; this audit repair does not convert them to historical exemptions. A bounded mapping repair may be independently accepted only after its exact-source/current-target audit closes with no open P0/P1 and no remaining finding in that bounded scope. Global A2 freeze still additionally requires D7–D10 full owner integration, Mandatory 925–1141, the complete applicable product/test obligations, and a fresh Pro/global non-author review. Documentation checks are evidence of repository consistency, not semantic acceptance.
+
+### 5.3 Supersession and handoff qualification
+
+Mandatory §§11–11.3 remain source evidence for supersession and product intent, while their old D3-era controller/session scheduling is historical workflow provenance rather than a current command. Current handoff uses the GitHub branch/PR state and the exact fixed review object recorded above. Fixed-a62 D4/D5 conclusions are not expanded to D6; D6 remains separately bound to stopped author candidate 829 and its still-incomplete read-only review. No old council/session instruction resumes a prior interrupted batch.
 
 Global A2 design is not accepted.
