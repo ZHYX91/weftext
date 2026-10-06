@@ -25,7 +25,7 @@ The **130 D5-relevant fixed97 rows** now preserve actual EN and ZH rows, each wi
 
 ## 3. Direct D10 qualification
 
-CONTROL-CONTRACT, CANDIDATE, and UPSTREAM-AMENDMENTS in both languages are recorded by exact blob with `readStatus=direct_partial_not_full_D10`. Package/Contribution identity, provider availability, connector credentials, schedule/execution control, and external-effect custody do not become D5 author source or row identity.
+CONTROL-CONTRACT, CANDIDATE, and UPSTREAM-AMENDMENTS in both languages are recorded by exact blob with readStatus `direct_partial_not_full_D10`. Package/Contribution identity, provider availability, connector credentials, schedule/execution control, and external-effect custody do not become D5 author source or row identity.
 
 Raw references to Proof2/Key2/wire12/PAB3 remain source-qualified historical/original-owner evidence. Fresh/current D5 uses the real current `D3-SCHEMAS.md §2/§6.1` successor family and D5 §0. No historical bytes are rewritten.
 
