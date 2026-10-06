@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D1/D2/D3 author candidates integrated; D3 source/case map and review entry added. D1/D2 delta repairs and D3 remain pending non-author review; no global acceptance implied.",
+  "status": "A2 D1-D5 author candidates integrated. Fixed-446 independently closed the D1/D2 finding pair; D3:P1-01 and D3:P1-02 remain OPEN on fixed-446. D4/D5 are new author candidates pending non-author review; no global acceptance implied.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -15,8 +15,8 @@
       "bytes": 102856,
       "lines": 3685,
       "blobAtFixedS": "ca6ed9232864ba1bbc49e9aaa81f9290a78fe6cb",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_recursive_pointer_inventory_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
     },
     {
       "path": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
@@ -75,8 +75,8 @@
       "bytes": 173344,
       "lines": 888,
       "blobAtFixedS": "2c03f2050dc523ccd8ffd3696f89f91a3b9c3c07",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
     },
     {
       "path": "docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md",
@@ -87,8 +87,8 @@
       "bytes": 31552,
       "lines": 160,
       "blobAtFixedS": "f3a2bfc10a62c62e5138598b6f96591a95963001",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
     },
     {
       "path": "docs/design/snapshots/d5-tables-and-node-collections/source.md",
@@ -99,8 +99,8 @@
       "bytes": 28034,
       "lines": 150,
       "blobAtFixedS": "166b1aebd43c00bb9c1152c567efbd46c7b5ffb8",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D5_candidate"
     },
     {
       "path": "docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md",
@@ -111,8 +111,8 @@
       "bytes": 8169,
       "lines": 51,
       "blobAtFixedS": "5fb74df2d79350ae98fe0a267f994983b609de19",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D5_candidate"
     },
     {
       "path": "docs/design/snapshots/d6-control-interfaces/source.md",
@@ -507,8 +507,8 @@
       "bytes": 44559,
       "lines": 310,
       "blobAtFixedS": "3933f08f915bcb14f630ca8459dc7c7c4043eb69",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
     },
     {
       "path": "docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md",
@@ -519,8 +519,8 @@
       "bytes": 8048,
       "lines": 57,
       "blobAtFixedS": "c44a98baf72cd8a42f1f7e5d2819cbca9d9c7e96",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D5_candidate"
     },
     {
       "path": "docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md",
@@ -579,8 +579,8 @@
       "bytes": 179938,
       "lines": 1141,
       "blobAtFixedS": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "readStatus": "todo_unread_this_batch",
-      "a2Disposition": "defer_to_later_A2_batch"
+      "readStatus": "full_read_D4D5_applicable_sections_1_14_lines_1_924; lines_925_1141_not_read_this_batch",
+      "a2Disposition": "integrated_D4_D5_applicable_pressure_inputs; later_D6_D10_only_scope_pending"
     },
     {
       "path": "docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md",
@@ -617,49 +617,9 @@
       "read": "full"
     },
     {
-      "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-      "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
-      "read": "D2 complete regions plus D3-relevant current sections; not full-file D4-D10 read"
-    },
-    {
-      "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-      "blob": "20907167b6e4e968e431be2489f8e61d70722fa1",
-      "read": "D2 complete regions plus D3-relevant current sections; not full-file D4-D10 read"
-    },
-    {
-      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-      "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
-      "read": "D2 complete region plus D3-relevant current schema sections copied to D3-SCHEMAS; not full-file D4-D10 read"
-    },
-    {
-      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-      "blob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
-      "read": "D2 complete region plus D3-relevant current schema sections copied to D3-SCHEMAS; not full-file D4-D10 read"
-    },
-    {
-      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "blob": "f5f5b9b212b281838aabc281171217623285820e",
-      "read": "all 760 IDs/order parsed; 73 D3-direct rows mapped in D3-SOURCE-MAP.json"
-    },
-    {
-      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
-      "blob": "466f3b2d7ee4e735cddc3ee4a466dcb45e065571",
-      "read": "all 760 IDs/order parsed; 73 D3-direct rows mapped in D3-SOURCE-MAP.json"
-    },
-    {
       "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
       "blob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
       "read": "full D3 batch"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
-      "blob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
-      "read": "partial relevant §§5-8; not full module"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
-      "blob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
-      "read": "partial relevant §§2-5,9; not full module"
     },
     {
       "path": "docs/design/d10/TASK.md",
@@ -692,51 +652,6 @@
       "read": "full D3 batch"
     },
     {
-      "path": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.zh-CN.md",
-      "blob": "971801ef00dcd6b49e4ace73baf507068574b0b5",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.zh-CN.md",
-      "blob": "aab7f7cbc53f9b4cad8699d8c3cc7939a4ff1007",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.zh-CN.md",
-      "blob": "35f2dcb22c321552984bf996e5d8a6e6d6b85275",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.zh-CN.md",
-      "blob": "04f395984ed5ca1da9838fe277376ef4da8c8dfd",
-      "read": "full_with_supplemented_truncated_ranges; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d7-definition-transfer/source.zh-CN.md",
-      "blob": "f38d6788cb11c154a4ae1c68f6bd40e0695dda53",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.zh-CN.md",
-      "blob": "2a5d6927b38259bd6db7252bf87e29c889520ab0",
-      "read": "full_with_supplemented_truncated_ranges; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.zh-CN.md",
-      "blob": "6a193cd7f2b950d51ce4471359975504e126ec0a",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.zh-CN.md",
-      "blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
-      "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.zh-CN.md",
-      "blob": "cba3b0acf3817c115b4486082fd1c91800b1f9fd",
-      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
-    },
-    {
       "path": "docs/design/d10/CANDIDATE.zh-CN.md",
       "blob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
       "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
@@ -750,6 +665,126 @@
       "path": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
       "blob": "6806d31107036e75147cd6213129c59e3f8819b6",
       "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.md",
+      "blob": "42f3e6015ad7986eb285f4c2c8dd67b842608ab3",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.zh-CN.md",
+      "blob": "a35a732786a27424366c83dfa1e6eac799282cd3",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.md",
+      "blob": "534fd5c65ffaf6da37a59b66d4ff385a43be7285",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "506ca343883a22c86c93bd980a7f119c065f8fcb",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.md",
+      "blob": "b7bb81f5f191774bc0f694cfc16944c7b2b414df",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.zh-CN.md",
+      "blob": "db70c4c6d92105b84275a9c373f5a2301a6ee17a",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md",
+      "blob": "5ebd6aa535bfed698f5a1031060ec729864829e6",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.zh-CN.md",
+      "blob": "b691987c4537da74645cd8ceee774637544d29a4",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.md",
+      "blob": "2f45513d35e444c7c852c4238a091227e8e40e42",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "a21df9e25ee084de5cf5f684afa59a153fc1a8fd",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.md",
+      "blob": "6187958f97d8791b7d58df4cc0f48bf1ced70b18",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.zh-CN.md",
+      "blob": "b83d772758ba6b75b2236b782168eca65ddee888",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md",
+      "blob": "e69c34e74aa8fbca00f77c89ac52778186630032",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "blob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-query-view-action/source.md",
+      "blob": "6d75b79fa3173772d5cb996c264c41c06c6a4315",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.md",
+      "blob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.md",
+      "blob": "32e9a5f889a6627e05a397d9738ff171982f0838",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.md",
+      "blob": "3fdf8a8279752818af2c0adc21d2d070eea1ea39",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "blob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.md",
+      "blob": "b9ff7da0ab0bcce23fe3f4b6510a8743b6138f8f",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.md",
+      "blob": "d9eb42eef8537b7b7fe5f3d60819c3ed3403c1d8",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.md",
+      "blob": "bc79681ffdb05b59869f558c958a9a606cb98a5f",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
     }
   ],
   "obligation_groups": [
@@ -2307,5 +2342,51 @@
     }
   ],
   "next_batch": "D4/D5",
-  "global_acceptance": "not_performed"
+  "global_acceptance": "not_performed",
+  "d4d5_integration": {
+    "status": "author_candidate_complete_for_this_batch_pending_non_author_review",
+    "d4": {
+      "main": "D4.md",
+      "impact": "D4-IMPACT.md",
+      "lexicon": "D4-LEXICON.md",
+      "sourceMap": "D4-SOURCE-MAP.json",
+      "catalogMap": "D4-CATALOG-MAP.json",
+      "fixedSourceCount": 4,
+      "catalogNamedRecords": 95,
+      "catalogGlobalLimits": 7,
+      "catalogJsonPointers": 2854
+    },
+    "d5": {
+      "main": "D5.md",
+      "impact": "D5-IMPACT.md",
+      "lexicon": "D5-LEXICON.md",
+      "sourceMap": "D5-SOURCE-MAP.json",
+      "fixedSourceCount": 3,
+      "rowDomains": 6,
+      "persistentRecordDomain": false
+    },
+    "mandatory": {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "readLines": "1-924",
+      "unreadLines": "925-1141",
+      "nonblankMapped": 716
+    },
+    "review": {
+      "fixed446D1D2": [
+        "P1-01 CLOSED",
+        "P2-01 CLOSED"
+      ],
+      "fixed446D3": [
+        "D3:P1-01 OPEN",
+        "D3:P1-02 OPEN"
+      ],
+      "coversEdafOrLater": false
+    },
+    "runtime": {
+      "runtime": "UNRUN",
+      "os": "UNRUN",
+      "gui": "UNRUN",
+      "replica": "UNRUN"
+    }
+  }
 }

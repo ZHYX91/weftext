@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](SOURCE-MAP.md)
-# A2 D1/D2/D3 来源与 disposition 图
+# A2 D1–D5 来源与 disposition 图
 
-状态：D1/D2/D3 作者候选的来源/disposition 图；只记录阅读与映射证据，不是独立接受。
+状态：D1–D5 作者候选的来源/disposition 图；只记录阅读与映射证据，不是独立接受。
 
 ## 1. 本批完整读取的固定输入
 
@@ -67,9 +67,9 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 ## 7. 明确未读或未完成
 
-本批虽已知道 49-file inventory、route graph 与 blob，但其它固定 S 输入仍是 semantic full-read TODO。D3–D10 current owner 尚未 global integrate；本批只读取上面具名的 D1/D2 直接相交段。
+本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D6–D10。
 
-D3 现已作为作者候选，并有独立案例级 source map。D4-D10 完整模块仍是 TODO；D3-direct consumer 阅读不等于这些 owner 模块已完成 A2。
+D3、D4、D5 都是作者候选，并有模块级 source map。D6–D10 完整模块仍 TODO；D4/D5 direct producer/consumer 阅读明确只是 partial，不能据此把这些 owner 模块标成完成。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -100,4 +100,18 @@ D3-SOURCE-MAP.json 是案例级审计记录，保存 fixed-S main §14 cases 1-5
 
 三个 fixed-S D3 输入与 current parent D3 main/Impact/Lexicon 中英双语都已全文读取。具名 D6-D10 中文 direct-owner 文件只为闭合 D3 interface 而全文读取；对应完整 A2 owner 模块仍待后续。fixed97 SPEC/SCHEMAS 除此前 D2 完整区域外，只声称 D3 相关 partial read。
 
-D1/D2 fixed-5c Record/source-map 修复与本 D3 候选都仍待非作者复核；全部产品/runtime scenario 未运行。
+fixed-446 独立评审已经关闭 D1/D2 P1-01/P2-01 finding；D3:P1-01 与 D3:P1-02 仍 OPEN，且没有评 edaf 或更晚作者 delta。全部产品/runtime scenario 仍未运行。
+
+## 10. D4 整合
+
+D4 fixed-S 主文、Impact、Lexicon 已逐非空行映射。不可变 catalog 继续是唯一静态数据权威：7 个 global limits、4 个 qualifier sets、22 个 aliases、61 个 Fields、7 个 Facets、1 个 Calendar series-scope policy，共 95 个具名记录。D4-CATALOG-MAP.json 映射全部 2,854 个 JSON Pointer，不建立第二份 registry 或 activation ledger。
+
+当前 unseen/fresh 外层分派使用 wire13 / InputDescriptor/3 / DependencyProof/3 / 十五分支 DependencyKey/3，并包含 document_format。Entry/1、RelationReadContext/2、RelationReadBinding/2、recurrence 内层类型和 D4 effect extensions 都不机械升版。SourceRevisionPlan/1、/2、/3 继续是不同 owner 分支。
+
+## 11. D5 整合
+
+D5 fixed-S 主文、Impact、Lexicon 已逐非空行映射。当前候选没有持久 Record/RecordCollection/RecordRef 域，并保持六种不同 row domain。
+
+历史 Inline-only、单逻辑行、禁止 span/块 cell 的 native-table 限制被显式 supersede；当前 D2 接纳完整合法 Asciidoctor 2.0.26 table surface。合法 shape 可以没有 structured control，但 Source 不能因此 invalid。合格的 titleless native create/save 继续合法；filename/path/placeholder 不能伪造 title。
+
+D6–D9 producer/consumer 交叉按精确 path/blob 记录为 direct partial。parent owner 树没有独立 D10 owner 文件，所以 D10 只保留 fixed97 SPEC/SCHEMAS direct-partial。
