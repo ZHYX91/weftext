@@ -165,7 +165,7 @@ frontierPolicy 闭集仍为 exact|scope_dependencies。`exact` 要求当前用�
 
 选择 scope_dependencies 后，原 canonical request、InputDescriptor.expectedFrontier、DependencyProof.baseFrontier、targets、Query/selector、pins、proposed bytes、MutationFootprint、WriteProtection、owner request 和版本依据都保持冻结，commit 不重新采样或改写。Core 必须逐项重验原完整 source/control/authorization、全部正负范围 DependencyProof、FileObjectBinding/evidence pins、Registry/rules、安装资格、owner version及其它真实依赖，并证明新增 sealed effects 与这些绑定依赖无关。真实 SourceObservation、source token 所选观察、FileObjectBinding、pin、DependencyKey stamp、授权、Registry、relation/calendar/collection membership 或 negative range 等发生变化时，仍按其 owner 规则 stale/conflict/reprepare；scope_dependencies 不能把这些变化洗成“无关”。
 
-证明无关扩展不会重新签发 SourceObservation/1、SourceVersionRef/1.sourceToken、revision token、PinRef 或 DependencyProof stamp，也不会把旧 token 搬到新的 observationEpoch；这些对象只有其各自真实 owner 规则允许时才保持。它同样不要求一个只依赖完整真实局部范围的 ordinary 操作额外等待无关的全 Workspace Query/索引证明。D3 replica_local 的 create/move/reorder/trash 仍按其原 local_structure + scope_dependencies 消费真实局部结构依赖；完整 P2 D3 候选现已定义新版 DependencyKey/恢复细化的消费，独立接受与激活仍受 §17 约束。仍缺实际必要 coordinated consumer 的新分支只在 §5 的 unseen 门保持 owner_update_required/proof_unavailable；本段不替代 D3 owner。
+证明无关扩展不会重新签发 SourceObservation/1、SourceVersionRef/1.sourceToken、revision token、PinRef 或 DependencyProof stamp，也不会把旧 token 搬到新的 observationEpoch；这些对象只有其各自真实 owner 规则允许时才保持。它同样不要求一个只依赖完整真实局部范围的 ordinary 操作额外等待无关的全 Workspace Query/索引证明。D3 replica_local 的 create/move/reorder/trash 仍按其原 local_structure + scope_dependencies 消费真实局部结构依赖；current A2 D3 wire13 candidate 已定义 current Key3/恢复细化的消费，其两个有界 D3 finding 已独立 CLOSED；这不独立接受或激活本 D6 repair，本 D6 接受边界仍见 Main §18。仍缺实际必要 coordinated consumer 的新分支只在 §5 的 unseen 门保持 owner_update_required/proof_unavailable；本段不替代 D3 owner。
 
 portable decision 的实际 seal 前 Frontier 可以在 scope_dependencies 下包含上述已证明无关扩展；原 expectedFrontier 和 notice.baseFrontier 不随之改写。新 FA ContentCompletionProof/4 记录真实 frontierBefore/frontierAfter，并按 §6.3 与原 notice、连续 change records、P 中保存的无关扩展证据交叉验证。
 
@@ -423,7 +423,7 @@ source_merge 的 baseSourceVersion 是 baseSourcePin 绑定的 exact common/base
 ~~~json
 {"kind":"d6_owner_input_binding","version":2,"protocolOwner":"D3|D6|D7|D8|D9","ownerKind":<controlled-text>,"canonicalDescriptorBytes":<immutable-bytes>,"pinRefs":[<PinRef/2>...]}
 ~~~
-protocolOwner是input descriptor owner，不等于最终decision owner；DecisionKey仍只D3或D6 decision。ownerKind由对应owner version冻结，禁止free callback/JSON；descriptor完整保存，小心大bytes仅typed PinRef slot。完整 P2 D3 候选现已定义 d3_identity_operation/12 及其 native descriptor/companion 消费，仍受 D6 Main §18 接受/激活门约束；尚缺的 D7/D8/D9 consumer 配套只在 §5 对受影响的 unseen 请求设门，不对 saved/planned 恢复重新设门。
+protocolOwner是input descriptor owner，不等于最终decision owner；DecisionKey仍只D3或D6 decision。ownerKind由对应owner version冻结，禁止free callback/JSON；descriptor完整保存，小心大bytes仅typed PinRef slot。current A2 D3 candidate 的 fresh path 使用 wire13 + `d3_identity_operation/13`，并已定义 native Descriptor3/companion 消费；真实 wire9–12 record 继续 exact historical dispatch。该有界 D3 closure 不代表本 D6 repair 已通过 Main §18 接受门；尚缺的 D7/D8/D9 consumer 配套只在 §5 对受影响的 unseen 请求设门，不对 saved/planned 恢复重新设门。
 
 ### 3.3 ObservationScope/2
 
@@ -532,7 +532,7 @@ StructureRange 是 placement_range 内部的 closed union，只有以下九个 v
 
 所有 NodeRef/AnnotationRef 必须属于外层 Workspace 并通过 D3 原 Ref decoder；Resource/Annotation owner-local 范围沿用 D3 的 owner 规则。`live_children` 与 `trash_children` 证明对应父项的完整有序 child list；其证明结果保留 D3 sibling 顺序，不按 Ref 排序。`trash_roots` 证明完整 Trash root list。`ancestor_chain` 证明给定 forest 内从主体到根的完整链及无环条件。`subtree` 包含 root 本身并覆盖对应 forest 的完整子树。`owner_resources`、`owner_annotations` 是完整 owner-local 目录，不按当前 UI 筛选。`reply_closure` 与 `restore_membership` 分别按 D3 原 Annotation reply closure 与 Trash restore membership 语义计算。一个操作需要多个范围时必须列多个 placement_range key；不得用自由字符串 `closure` 合并不同语义。
 
-D3 是 lifecycle/placement/ref-inbound 范围算法 owner。本文件冻结 key carrier、证明完整性与 D6 commit/recovery消费边界，不把这些范围算法改写成 D6 identity owner；完整 P2 D3 候选现已提供这些范围的枚举与消费。独立接受/激活仍受 §17 约束，仍缺实际必要 coordinated consumer 的新 strong path 只在 §5 的 unseen 门保持 `owner_update_required`/`proof_unavailable`，但不依赖该范围的合格 ordinary 本地操作不因此永久不可用。
+D3 是 lifecycle/placement/ref-inbound 范围算法 owner。本文件冻结 key carrier、证明完整性与 D6 commit/recovery消费边界，不把这些范围算法改写成 D6 identity owner；current A2 D3 wire13 candidate 已提供这些范围的枚举与消费，其两个有界 finding 已独立 CLOSED；本 D6 repair 仍须按 Main §18 接受边界做独立复核，仍缺实际必要 coordinated consumer 的新 strong path 只在 §5 的 unseen 门保持 `owner_update_required`/`proof_unavailable`，但不依赖该范围的合格 ordinary 本地操作不因此永久不可用。
 
 #### CalendarRange、SeriesScope 与 RegistryBinding
 
@@ -935,7 +935,7 @@ writeProtection 只在 portable receipt 中出现；control_only/no_op 必须省
 ~~~
 D3DecisionCompanion/2 的 closed shape、version=2 与既有字段集合保持不变，不增加 ChangeId、SourceVersion、WriteScope、SourceRevisionPlan 或其它成员，也不是第二份 receipt。对于使用当前生产者合同的新 protocolOwner=D3 decision，D3 primary receipt 与这个 companion 必须在同一个 P seal transaction 中原子写入；两者引用同一 DecisionKey、同一 seal 后 domainCommitSequence 和同一 effectsToken。companion 只保存 D6 侧既定关联，不建立另一条 ledger、另一份决议真相或额外写权限。
 
-完整 P2 D3 main/Lexicon/Impact 候选现已定义这些 P1 生产规则的 native descriptor/companion 消费，但候选存在不等于独立接受、其余跨 owner 配套完成或 §17 激活授权。新执行 consumer 检查只适用于 §5 的 unseen decision；saved/planned/unknown decision 仍按原恢复分流。fresh-current D3 消费 `d3_identity_operation/13` OwnerInputBinding；真实 historical wire12 decision 保留其 recorded owner descriptor。D3 必须真实消费完整普通 SourceObservation/1 或仅限 §3.1.1 resolution 用途的 guarded ConflictInstallInput/1，以及 DependencyProof/3；会产生 managed after 时消费同一原 plan 显式准入的 SourceRevisionPlan/1 或 conflict-only /2 与 d6_source_revision/2 绑定；seal 后的生产 SourceVersion/2、SourceVersionRef/1、ContentCompletionProof/4 及恢复分流也必须与本 Control 的唯一生产者定义一致。D6 不得在 companion 中复制这些对象来绕过 D3 owner，也不得重写真实 historical D3 wire9–12 bytes、Locator revision-token 词法、D4 inner selector wire 或 D3 实际 write scope。
+current A2 D3 wire13 main/Lexicon/Impact candidate 已定义这里需要的 native Descriptor3/companion 消费，且其有界 D3 findings 已独立 CLOSED；该结论不等于本 D6 repair 独立接受、其余跨 owner 配套完成或 D6 Main §18 激活授权。新执行 consumer 检查只适用于 §5 的 unseen decision；saved/planned/unknown decision 仍按原恢复分流。fresh-current D3 消费 `d3_identity_operation/13` OwnerInputBinding；真实 historical wire12 decision 保留其 recorded owner descriptor。D3 必须真实消费完整普通 SourceObservation/1 或仅限 §3.1.1 resolution 用途的 guarded ConflictInstallInput/1，以及 DependencyProof/3；会产生 managed after 时消费同一原 plan 显式准入的 SourceRevisionPlan/1 或 conflict-only /2 与 d6_source_revision/2 绑定；seal 后的生产 SourceVersion/2、SourceVersionRef/1、ContentCompletionProof/4 及恢复分流也必须与本 Control 的唯一生产者定义一致。D6 不得在 companion 中复制这些对象来绕过 D3 owner，也不得重写真实 historical D3 wire9–12 bytes、Locator revision-token 词法、D4 inner selector wire 或 D3 实际 write scope。
 
 旧 D3 primary receipt、旧 companion、旧 saved/planned/unknown decision 继续按其原版本、原 bytes、原 decoder、原 pin/授权/continuity 与恢复责任履约，不因新 P1 类型出现而升级、重编码或取得新的 strong qualification。其余 P2 配套、后续 D7/D10 consumer 以及完整 fresh 联合接受完成前，不得半包激活依赖这些新 producer 的 managed success；同时，已经批准且不依赖缺失 strong consumer 的 ordinary/local 操作继续按其原 owner 资格工作，不能仅因本 companion 配套尚未完成而永久取消。
 ### 7.3 d6_decision_state_read
@@ -1388,7 +1388,7 @@ Policy/ACL change后 old session/prepared不是 grandfather ticket。撤权对�
 
 fresh/current execution custody 使用 SCHEMAS §10 与后部 current mixed-holder 条款闭合的 ExecutionResponsibilityRecord/3 + D10ExecutionInventory/2 + ExecutionContinuityProof/2。Record3 与 pinned Inventory2 在一个真实 Authority Store barrier 上捕获，五类责任 payload 逐字相等，并绑定同一 StoreIncarnation 与 StopCapacity。Money、ApprovalUse、external-unknown、claims 与 stop responsibility 仍归真实 owner；backup/sync 不产生执行权。handoff 必须先不可逆 fence 旧 holder，再启用新 holder，不建立第二 ledger。
 
-### 16.1 Genuine historical Record2 / Inventory1 recovery
+### 16.1 Genuine historical Record2 / Inventory1 / Proof1 recovery
 
 只有 genuine historical record 才使用 ExecutionResponsibilityRecord/2；它继续是 P 内受保护 control，不进入 portable metadata。其 exact semantic fields 为：
 
@@ -1401,7 +1401,7 @@ kind=d6_execution_responsibility，version=2。executionDomainId是Core mint UUI
 
 载荷现由实际 D10 Control Contract §8.2、§16.1 闭合：approvalUses 为 ApprovalUse/1 数组，claims 为 D10ExecutionClaims/1，moneyLineage 为 D10MoneyResponsibility/1，externalUnknowns 为 D10ExternalResponsibility/1 数组，stopState 为 D10StopResponsibility/1 数组。status 只有 active、paused、transferring 三态，不保留自由 JSON 或未来待定 schema。载荷是同一执行控制切面上原 owner 记录的完整保护视图，不是独立可写的第二账户、认领或批准账本。每次原责任变化都在同一真实事务使旧视图失效，并检查推进本记录修订；新增认领、发送或债务被遗漏时，旧快照不能仍为当前。完整视图不可用只暂停执行，不阻止普通源访问。
 
-    ExecutionContinuityProof/2 =
+    ExecutionContinuityProof/1 =
         {kind:"initial", storeIncarnation:Uuid,
          inventoryPin:PinRef/2, birthProofToken:Token}
       | {kind:"checkpoint", storeIncarnation:Uuid,
@@ -1411,7 +1411,7 @@ kind=d6_execution_responsibility，version=2。executionDomainId是Core mint UUI
          toHolder:ExecutionHolder, oldRevision:Counter,
          barrierToken:Token, oldHolderFenceToken:Token}
 
-ExecutionHolder 恰为上文 holder 联合，lastContinuityProof 使用这个闭合类型。inventoryPin 使用 artifact/recovery，严格解码 D10ExecutionInventory/1，其字节为 UTF-8 的 D6-Execution-Inventory/1、一个 NUL，再接 D3-CJ/3 规范字节。完整工作区及五项载荷成员等于本记录，stopCapacity 保留真实安全容量分配。清单包括准确原请求、准备及历史图像、有意义的空范围证明、运行准入、全部订阅和发生状态、计次使用、所有费用层投影，以及原外部发送与未知责任。共享部署账户仍在真实 owner 并保留连续引用，不能作为虚构零余额转交。
+ExecutionHolder 恰为上文 holder 联合；对这个 genuine Record2 family，lastContinuityProof 使用 historical `ExecutionContinuityProof/1` carrier。inventoryPin 使用 artifact/recovery，严格解码 D10ExecutionInventory/1，其字节为 UTF-8 的 D6-Execution-Inventory/1、一个 NUL，再接 D3-CJ/3 规范字节。完整工作区及五项载荷成员等于本记录，stopCapacity 保留真实安全容量分配。清单包括准确原请求、准备及历史图像、有意义的空范围证明、运行准入、全部订阅和发生状态、计次使用、所有费用层投影，以及原外部发送与未知责任。共享部署账户仍在真实 owner 并保留连续引用，不能作为虚构零余额转交。
 
 三个 token 都是 Core 保护句柄，不是调用方断言、可互换能力票据或未解释证据块。birthProofToken 在实际存储最初创建屏障处绑定本从未使用过的执行域、工作区、存储身份、首持有者及完整已证空清单。既有或损坏存储、备份不能重新签发出生证明。barrierToken 绑定准确执行域、持有者、记录修订及完整清单引用；真实耐久存储屏障先冻结新准入、planning、发送和认领，并保留进行中安装责任。oldHolderFenceToken 另把同一屏障与清单、准确前后持有者绑定到后端已证明的旧执行不可逆排除。Core 必须按已接纳后端合同验证真实受信备份或转交及隔离机制，才能签发句柄；不支持或不能证明排除时只能不可用，不能签名猜测。保护映射及必要原证据跨恢复保留，不能从索引或可移植文件重建。摘要、提供者自称同步或文件复制都不能产生它们。
 
