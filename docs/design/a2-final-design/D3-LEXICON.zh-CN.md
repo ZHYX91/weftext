@@ -3,7 +3,7 @@ source_language: zh-CN
 translation_status: source
 ---
 
-[English](source.md)
+[English](D3-LEXICON.md)
 
 源文档 ID：b2595435-72ce-423a-805a-09993b04d1d5。
 
@@ -1642,7 +1642,7 @@ D6 术语注册表 `D6-Terminology/2`、机器注册表和控制接口生产者�
 
 historical R08 的 3 P1 + 8 P2 继续作为 review provenance；后续具名 repair 与 fixed-SHA bounded/limited review 只在 exact scope 内有效。PL-IR-01 在 PR3 fixed e8aa 的 accumulated review scope 内已有 prior bounded/limited closure，但这不是 fresh A2/global acceptance。完整 A2 最终仍需全新非作者对一个 fixed final SHA 做 global review。本作者不自行关闭 A2 finding，也不声称产品测试、实现、激活、发布或部署通过。
 
-## 9. 闭合 D3 adapter 投影
+## 9. 闭合 D3 适配器投影
 
 以下是既有受控概念的技术投影，不是新内容身份或替代firstFreeze。D3ResolverInput/12是受保护不可变Ref/Locator读上下文，绑定显式Workspace/domain/精确Frontier与闭合outcomes（主文§11）。wire12 transfer观察绑定完整target/source DecisionKeys，保留两个独立Copy/Trash决议（主文§8.4.1），不创建跨Workspace Move身份。
 

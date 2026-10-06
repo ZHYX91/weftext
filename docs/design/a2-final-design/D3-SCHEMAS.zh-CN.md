@@ -17,7 +17,7 @@ current dispatch 精确为：
 - portable current：InstallationNotice/3、ContentCompletionProof/4、ChangeRecord/1；
 - resolution guard：D3ResolutionInputUse/2；
 - D7 current：PreparedActionBinding/4、EffectManifest/3、EffectBytes/3；
-- Annotation：D3-Annotation-Value/4、PortableAnnotationRecord/4；
+- Annotation：`D3-Annotation-Value/4`、`PortableAnnotationRecord/4`；
 - bootstrap/trust：WorkspaceBootstrapPlan/4、WorkspaceTrustGenesis/2；
 - D10 current mixed author holder：下文 versioned /2-/3 current carrier。
 
@@ -1567,4 +1567,3 @@ fold、compaction、receiver admission、D10 continuityPins consumption 与 reco
 当不存在合法 current after evidence 时，current producer 必须产生 ScheduleContinuityInvalidation/2，不能伪造 ScheduleRecurrenceEvidence/2。binding_changed 需要完整可信的 selected-business discontinuity 证据；after unavailable/unknown、missing history、unknown decoder、observer/producer gap 或无法保留必要 transition 均为 gap。Invalidation 比较同一 current witness/registration，原子推进下一 checked transition/revision，保留最后合法 checkpoint，并对该 generation 永久不可 reset。其 artifact pin 必须精确使用上面的 Invalidation2ArtifactBytes。fixed-parent inbox/capacity/final-counter reservation、authorization、compaction 与无关 source 可用性规则保持不变。
 
 Schedule current proof 中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes 未变但 format proof continuity gap 得到 gap；binding 发生真实改变得到 binding_changed，即使最终 recurrence/range 值碰巧相同。已有 Subscription1 继续作为 historical retention owner，并配套 Witness1/Step1/Invalidation1 及其精确 /1 artifact domain。它只有通过 explicit continue + complete retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut，才可变成 same-generation Subscription2；否则必须 replace。这个 bridge 保留每个旧 pin 与 producer association；只有 bridge 之后新产生的 Witness2/Step2/Invalidation2 才使用 /2 domain。绝不把 version-1 witness/step/invalidation repin 或重新编码成 version 2，也绝不 reset invalid generation。
-

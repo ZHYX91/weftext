@@ -418,7 +418,7 @@ The new corpus independently covers:
 - `ConflictRecord/2 + Frontier/2` versus historical `/1 + Frontier/1`;
 - unchanged `ConflictKey/1`/`ConflictId`/`D6-ConflictKey/1` hash domain;
 - effectClass portable/control_only/no_op + same-P `D3DecisionCompanion/2`;
-- unchanged D3-CJ/3, Result/9 and Locator l1; fresh current Annotation uses Value/4 while historical Value/3 is retained only by its recorded decoder.
+- unchanged `D3-CJ/3`, Result/9 and Locator l1; fresh current Annotation uses Value/4 while historical Value/3 is retained only by its recorded decoder.
 
 Historical corpus carries compatibility only for records proven to exist; decoder/fixture/draft/prose does not automatically make a prototype active. Legacy version numbers are never changed to 12 to claim new semantics passed, and a proven historical recovery contract is never deleted because no deployment record was found for some other prototype.
 

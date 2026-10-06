@@ -1,10 +1,10 @@
 ---
 source_language: zh-CN
-translation_of: source.zh-CN.md
+translation_of: D3-LEXICON.zh-CN.md
 translation_status: synced
 ---
 
-[简体中文](source.zh-CN.md)
+[简体中文](D3-LEXICON.zh-CN.md)
 
 Source document ID: b2595435-72ce-423a-805a-09993b04d1d5.
 
@@ -14,7 +14,7 @@ Candidate status: A2 D3 current author candidate; not independently accepted, im
 
 ## 1. Authority and control rules
 
-This Lexicon owns only the D3 terminology boundary. D6 public and technical producer names remain D6-owned. Fresh current D3 consumes DependencyKey/3, DependencyProof/3, InputDescriptor/3, PreparedIntent/3, InstallationNotice/3, ContentCompletionProof/4 and ChangeRecord/1; DecisionKey/2, CommitDomain/2, SourceVersion/2, SourceObservation/1, SourceVersionRef/1, ObservationScope/2, OwnerInputBinding/2, D3DecisionCompanion/2, RevisionTokenBinding/2 and specialized SourceRevisionPlan/1|2|3 retain their real owner/version. Historical dependency/input/notice /1-/2, CP3 and wire9-12 dispatch only through recorded decoders/bytes/pins/recovery and are never re-encoded into current types.
+This Lexicon owns only the D3 terminology boundary. D6 public and technical producer names remain D6-owned. Fresh current D3 consumes `DependencyKey/3`, `DependencyProof/3`, `InputDescriptor/3`, `PreparedIntent/3`, `InstallationNotice/3`, `ContentCompletionProof/4` and `ChangeRecord/1`; `DecisionKey/2`, `CommitDomain/2`, `SourceVersion/2`, `SourceObservation/1`, `SourceVersionRef/1`, `ObservationScope/2`, `OwnerInputBinding/2`, `D3DecisionCompanion/2`, `RevisionTokenBinding/2` and specialized `SourceRevisionPlan/1|2|3` retain their real owner/version. Historical dependency/input/notice `/1-/2`, CP3 and wire9-12 dispatch only through recorded decoders/bytes/pins/recovery and are never re-encoded into current types.
 
 Each concept has one stable concept ID, one canonical Chinese/English term pair, and one exact ownedNames set. semanticNonaliases participates only when an expected concept/type is known and is not a flat denylist. The fixed-S global-retired boundary remains and never scans user Document/Annotation prose.
 
@@ -442,7 +442,7 @@ Each concept has one stable concept ID, one canonical Chinese/English term pair,
 ### weftext.term.annotation
 
 - Canonical names: 批注 / Annotation.
-- Definition: A non-Node object strictly owned by one Node with owner-local identity and the frozen same-owner target union. Fresh current portable state is complete D3-Annotation-Value/4; when body is present it uses the single R6 AnnotationInlineBody/1 + AnnotationInlineProfile/1. Historical Value/3/plain text remains historical decoder/recovery only.
+- Definition: A non-Node object strictly owned by one Node with owner-local identity and the frozen same-owner target union. Fresh current portable state is complete `D3-Annotation-Value/4`; when body is present it uses the single R6 `AnnotationInlineBody/1` + `AnnotationInlineProfile/1`. Historical Value/3/plain text remains historical decoder/recovery only.
 - Owner/layer: D2 content object; D3 owner/ref/reply lifecycle.
 - firstFreeze: frozen:D2.
 - Migration/deletion: R0 deletes global/cross-owner Annotation IDs.
@@ -1572,9 +1572,9 @@ Current conflicts use `ConflictRecord/2` with `Frontier/2`, while `ConflictKey/1
 
 ## 5. wire13 current D3 operation names and historical records
 
-Existing D3 technical names such as `identity_operation_request`, `identity_change_receipt`, and `identity_operation_error` retain their D3 concept ownership. Fresh current native request is wire13, owner-kind `d3_identity_operation/13`, using InputDescriptor/3; historical wire9-12 retain original decoders. `d3_identity_operation/13` is the D3-owned owner-kind/canonical-descriptor name and does not re-own `OwnerInputBinding/2`. The D3 primary receipt keeps its existing twelve effect arrays and remains distinct from same-P `D3DecisionCompanion/2`.
+Existing D3 technical names such as `identity_operation_request`, `identity_change_receipt`, and `identity_operation_error` retain their D3 concept ownership. Fresh current native request is wire13, owner-kind `d3_identity_operation/13`, using `InputDescriptor/3`; historical wire9-12 retain original decoders. `d3_identity_operation/13` is the D3-owned owner-kind/canonical-descriptor name and does not re-own `OwnerInputBinding/2`. The D3 primary receipt keeps its existing twelve effect arrays and remains distinct from same-P `D3DecisionCompanion/2`.
 
-Preparation Binding, Definition Transfer, and Definition Result Segment preserve their fixed-S concept identity, `ownedNames`, and `firstFreeze`. The outer `preparationBinding` remains a D3 request token wrapper selecting a D7-owned record; fresh current selects PreparedActionBinding/4, historical PAB1-3 retain exact recovery, and D3 creates no second D7 schema. `definitionTransfers`, the Result/9 `Q` segment, and the existing B/M/N/E/S/C/Q identity-mutation partition remain D3-owned, while the SavedQuery/View/DynamicBlock payload schema and D7 effects remain D7-owned.
+Preparation Binding, Definition Transfer, and Definition Result Segment preserve their fixed-S concept identity, `ownedNames`, and `firstFreeze`. The outer `preparationBinding` remains a D3 request token wrapper selecting a D7-owned record; fresh current selects `PreparedActionBinding/4`, historical PAB1-3 retain exact recovery, and D3 creates no second D7 schema. `definitionTransfers`, the Result/9 `Q` segment, and the existing B/M/N/E/S/C/Q identity-mutation partition remain D3-owned, while the SavedQuery/View/DynamicBlock payload schema and D7 effects remain D7-owned.
 
 For copy/fork/identity-bearing import, typed Definition Transfer traverses only the actual D7 typed roots: `DefinitionAddress.owner` plus the complete recognized Locator root, TypeSpec-declared typed Ref values recursively through their typed containers, `CollectionCreationPolicy.parent`, saved View/Query calls, Query selector literals, `QueryRef` arguments, defaults, fixed View-domain `TypedLiteral`, and DynamicBlock literal/context bindings. Ordinary CEL text, ordinary prose, and unknown JSON are not scanned. A complete Locator root already contains its owner and therefore does not emit an overlapping owner slot. Every recognized typed Ref/Locator has exactly one slot; an identified payload with none still has `slots=[]`. Source/result payloads and occurrences are independently pinned and verified, and `Q` remains one-to-one with the exact saved-definition payload span. Materialization uses one private candidate map and the same `SourceRevisionPlan/1`/revision binding through both position passes; it does not create a new wire or a second definition identity.
 
@@ -1634,7 +1634,7 @@ The historical R08 three-P1/eight-P2 result remains review provenance; later nam
 
 The following are technical projections of existing controlled concepts, not new content identities or replacement firstFreeze values. D3ResolverInput/12 is a protected, immutable Ref/Locator read context with explicit Workspace/domain/exact Frontier and closed outcomes (main §11). The wire12 transfer observation uses complete target/source DecisionKeys and preserves the two independent Copy/Trash decisions (main §8.4.1); it never creates cross-Workspace Move identity.
 
-D3ConflictResolutionPrepare/1 continues to prepare the existing Move/lifecycle/Copy semantics. Fresh current resolution uses PreparedActionBinding/4, D3ResolutionInputUse/2 and InputDescriptor/3 to retain complete ConflictKey/head/selection/branch evidence; final native request is wire13. Historical PAB3/Use1/wire12 preparation retains exact recovery. Full preview remains real D7 manifest/page/byte transport, not a PinRef access promise.
+D3ConflictResolutionPrepare/1 continues to prepare the existing Move/lifecycle/Copy semantics. Fresh current resolution uses `PreparedActionBinding/4`, `D3ResolutionInputUse/2` and `InputDescriptor/3` to retain complete ConflictKey/head/selection/branch evidence; final native request is wire13. Historical PAB3/Use1/wire12 preparation retains exact recovery. Full preview remains real D7 manifest/page/byte transport, not a PinRef access promise.
 
 ### 9.1 Canonical materialization and lifecycle selection
 
