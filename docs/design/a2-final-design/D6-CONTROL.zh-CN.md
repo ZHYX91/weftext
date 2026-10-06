@@ -998,11 +998,11 @@ pending|staged_durable|installed_after|restored_before|third_state|unavailable�
 
 committed decision 与planned不同。seal已经成功后，原ChangeId、实际managed SourceVersions/H结果、domainCommitSequence、receipt、effects、charge和decision bytes均已确定：
 - response丢失时，在当前**原saved实际效果范围**的披露/交付授权通过后返回原receipt bytes。无需旧before SourceObservation仍current、旧Frontier等于r6 current、旧业务dependency重验成功或preview仍有效。当前撤权可使交付not_visible，但不能撤销或改写saved decision。
-- 新FA portablePublicationState=pending时，只从原sealed decision、原notice/components及原保存的scope_dependencies扩展证据补发同一ContentCompletionProof/3/outbox；不得重装N、换OperationId、再次分配ChangeId、推进H、重算source version或重复收费。历史/1、/2 decision继续生成/恢复其**原版本**proof并使用原decoder/bytes，不能自动升级/3。
+- fresh-current portablePublicationState=pending 时，只补发原 sealed decision 已保留的 Notice3/ContentCompletionProof/4/ChangeRecord1 与匹配 outbox/component bytes，并复用原 scope_dependencies 扩展证据；不得重装 N、换 OperationId、再次分配 ChangeId、推进 H、重算 source version 或重复收费。真实 predecessor decision 只恢复其 **recorded** Notice/CP/outbox family、原 decoder/bytes/pins，绝不自动升级成 Notice3/CP4。
 - publication/outbox/Derived Index更新失败只补相应owner的派生/运输工作，不回滚author decision，也不能从I重建P的approval/Money/unknown责任。
 - 当前r6的新SourceObservation、DependencyProof或complete proof只证明r6；不得回溯升级、否定或重编码历史r5 receipt/saved bytes。Undo/restore仍是新的明确plan，而不是receipt replay倒退current。
 
-saved、planned、unseen的业务分流以§5为唯一顺序；§8只恢复已经存在的记录，不提供绕过§5的第二提交入口。旧 D6/D3/D7/D8 planned/saved/unknown records继续按各自原版本、原pins、原authorization/continuity与原decoder责任恢复；新 SourceRevisionPlan、ContentCompletionProof/3 或其它P1类型只适用于明确的新版本路径，不机械迁移历史记录。
+saved、planned、unseen的业务分流以§5为唯一顺序；§8只恢复已经存在的记录，不提供绕过§5的第二提交入口。旧 D6/D3/D7/D8 planned/saved/unknown records继续按各自原版本、原pins、原authorization/continuity与原decoder责任恢复；fresh-current SourceRevisionPlan 与 Notice3/ContentCompletionProof/4/ChangeRecord1 只适用于明确的 current family，绝不机械迁移 historical record；真实 CP1/2/3 与 Notice1/2 继续 version-qualified recovery。
 
 ### 8.2 observed_only 恢复限定
 
