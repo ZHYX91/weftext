@@ -12,7 +12,7 @@ translation_status: source
 
 三份 fixed-S D4 文本来源的 **906/906 个非空行**全部保留精确 source path/blob/line/text。每个非空行恰好属于一个连续、来源限定的义务组，并写明 current file/section 落点、`retain | named-supersede | explicit-defer | historical-only` disposition、真实 owner、basis 与 oracle。front matter、revision history 与旧 review sequencing 只作为历史 provenance，不冒充业务语义。
 
-不可变 reference catalog 继续是唯一静态值权威。`D4-CATALOG-MAP.json` 通过 7 个无重叠 subtree group 覆盖 **2,854/2,854 个 JSON Pointer**、**95 个具名记录**和 **7 个 global limit**。映射只保存 pointer/record identity 与真实 current consumer/validator/constructor 落点，不复制第二份规范值。
+不可变 reference catalog 继续是唯一静态值权威。`D4-CATALOG-MAP.json` 通过 7 个无重叠 subtree group 覆盖 **2,854/2,854 个 JSON Pointer**、**95 个具名记录**和 **7 个 global limit**。按 RFC 6901，文档根指针是 `""`；`"/"` 表示空键成员。映射只保存 pointer/record identity 与真实 current consumer/validator/constructor 落点，不复制第二份规范值。
 
 ## 2. Mandatory 与 fixed97 来源限定
 
@@ -34,6 +34,6 @@ D10 原文中的历史/原 owner `DependencyProof/2`、`DependencyKey/2`、`wire
 
 ## 5. 评审状态
 
-D1/D2 fixed-446 findings 继续 independent CLOSED；两个有界 D3 P1 已在 fixed-a62 被独立 CLOSED。fixed-829 D4/D5 非作者报告为 P0=0/P1=0/P2=2：D4/D5 语义 LIMITED PASS，audit package REVISE。本作者修复不自行关闭两个 P2，均等待新的 fixed-stop 独立复核。
+D1/D2 fixed-446 findings 继续 independent CLOSED；两个有界 D3 P1 已在 fixed-a62 被独立 CLOSED。已完成的 fixed-a62 D4/D5 非作者报告（`a62aa7d4eaf56113cd1e9e32336ae8814f83589b`，request `7b6e1f16-fa41-499c-b078-647f1942e94e`）为 P0=0/P1=0/P2=2：D4/D5 语义 LIMITED PASS，audit package REVISE。本作者修复不自行关闭两个 P2，均等待新的 fixed-stop 独立复核。
 
 D6 仍是停在 829 的作者候选；fixed-829 只读工作不构成 D6 acceptance。D7–D10 完整模块、Mandatory 925–1141 与 fresh Pro/global 仍 pending。runtime、OS、GUI、真实 replica、migration、activation、deployment 全部 UNRUN。
