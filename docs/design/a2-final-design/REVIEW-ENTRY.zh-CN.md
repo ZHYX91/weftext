@@ -28,7 +28,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 
 D4.zh-CN.md、D4-IMPACT.zh-CN.md、D4-LEXICON.zh-CN.md 构成 D4 current 作者候选。D4-SOURCE-MAP.json 保存 fixed input、mandatory intake、acceptance row 与 direct producer/consumer provenance。D4-CATALOG-MAP.json 映射全部 catalog JSON Pointer，而固定不可变 catalog 继续是唯一静态 catalog authority。
 
-D5.zh-CN.md、D5-IMPACT.zh-CN.md、D5-LEXICON.zh-CN.md 构成 D5 current 作者候选。D5-SOURCE-MAP.json 保存 fixed D5 输入、mandatory intake、acceptance row、direct producer/consumer provenance，以及 full-native-table/titleless/six-row-domain 的显式 supersession。
+D5.zh-CN.md、D5-IMPACT.zh-CN.md、D5-LEXICON.zh-CN.md 构成 D5 当前作者候选。D5-SOURCE-MAP.json 保存固定 D5 输入、强制场景输入、验收行、直接生产者/消费者来源，以及原生完整表格、无标题路径和六种行域的显式替代关系。
 
 不新增单独的 D4/D5 schema authority。D4 闭合 schema 继续自包含在 D4 主文 exact-contract 段；D5 table/collection/intent 合同继续自包含在 D5 主文 exact-contract restoration。历史 inner version 与 SourceRevisionPlan 分支保持来源限定，不机械改数字。
 
@@ -52,4 +52,4 @@ D6–D10 完整 A2 owner 整合仍待完成。Mandatory input 925–1141 行仍�
 
 Runtime、OS、GUI、真实 replica、产品实现、部署、migration、activation 场景全部 UNRUN。文档/source/schema 映射检查不是产品证据。
 
-最终 A2 仍需完成 D6–D10，固定 final SHA，fresh non-author global review，以及 same-accepted-design-SHA freeze/startup 工作。
+最终 A2 仍需完成 D6–D10，固定最终 SHA，由全新的非作者完成全局复核，并在同一个已接受设计 SHA 上执行冻结与启动包工作。
