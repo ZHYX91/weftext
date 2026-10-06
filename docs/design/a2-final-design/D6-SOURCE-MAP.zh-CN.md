@@ -5,70 +5,59 @@ translation_status: source
 
 [English](D6-SOURCE-MAP.md)
 
-# A2 D6 fixed829 来源、案例、Registry 与修复映射
+# A2 D6 fixed01cc 残余修订来源映射
 
-状态：fixed829 五项 finding 仅为 `author-resolved-pending-independent`；这不是独立接受、实现、激活或全局 A2 接受。
+状态：绑定 `01cc40b819df78fbe724f1c64c27284ad60fc6c8` 的独立复核结论为 **REVISE**。`A2-D6-829-P1-01` 与 `A2-D6-829-P2-03` 已在该固定对象独立 CLOSED；`A2-D6-829-P1-02`、`A2-D6-829-P2-01`、`A2-D6-829-P2-02` 与导航 finding `A2-D6-01CC-P2-01` 是从作者起点 `32cfb9c387deddb12fb021a44147df0d7ffab322` 修订的四项残余，在新的 exact-stop 非作者复核前只标 **author-resolved-pending-independent**。这不是 D6/global 接受、实现、激活或发布。
 
-## 1. 固定复核与修复对象
+## 1. 复核对象与状态分离
 
-D6 独立裁决绑定 `829efce6aacbe944714e093c98065b01d50b2593`，结论为 REVISE，P0=0、P1=2、P2=3。本次作者修复从 `4282d416e6a1ea4a344a2647d9a2feb82e3ba15a` 起步；下一位复核者必须绑定本修复实际产生的 final stop SHA，不能跟随 moving branch。
+原五项 finding 来源于 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`；该 SHA 继续只作为 finding-origin provenance。后续非作者复核对象是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。
 
-D1/D2 与两个有界 D3 finding 保留此前 independent CLOSED 状态。D4/D5 audit finding 属另一 fixed-object 工作流，不计入这五项 D6 finding。
+fixed01cc 已独立关闭：
+- `A2-D6-829-P1-01`：唯一 fresh current Key3→Proof3→Descriptor3→Prepared3/Notice3/final-P/CP4+ChangeRecord1 链及其 current trust/bootstrap/replica/execution 后继。
+- `A2-D6-829-P2-03`：每 producer update 最多 4096 retained pins 加 16 MiB canonical evidence metadata；source/component bytes 使用独立 reserved PinBudget，容量失败先写 gap 再允许普通进度。
 
-## 2. FULL / PARTIAL / UNREAD 证据边界
+fixed01cc 继续 OPEN/PARTIAL：
+- `A2-D6-829-P1-02`：中文 closed-union 基数。
+- `A2-D6-829-P2-01`：完整 source→current-owner/anchor 与双语来源证据。
+- `A2-D6-829-P2-02`：四个通用 Registry 字段及精确 pointer disposition。
+- `A2-D6-01CC-P2-01`：当前固定对象导航。
 
-本 D6 修复中的 FULL 仅表示：机器 map 所代表的五份 fixed-S D6 输入；本批实际使用的 current-parent D6 Storage/Control/Impact/Lexicon 中英 owner pair 与 52-concept/17-binding registry；D6 交叉实际需要的 current A2 D3-D5 文件；全部 89 个 parent D6 Impact source record，其中是 85 个唯一 case ID 加 4 个范围/元数据 record；fixed-S/current D6 两套 Registry pointer inventory；以及机器 map 实际登记为 D6 intersection 的 fixed97 row。
+下一位复核者必须绑定 PR metadata/交接中记录的实际 final stop SHA；本文不会把未知未来 commit hash 自指进文件。
 
-PARTIAL 指 D7-D10：这里只消费机器 map 明确列出的 direct-holder 文件与 load-bearing intersection，不声称它们的完整 A2 module 已全文读取或整合。
+## 2. P1-02——十五-arm current dependency family
 
-UNREAD/pending 包括未列出的 D7-D10 完整模块来源、Mandatory 925-1141，以及产品/runtime/OS/GUI/crypto/真实 replica/provider/performance/migration/activation 证据。
+fresh current D6 恰为 **15 个** `DependencyKey/3` arm，rank 为 `source=0`、`document_format=1`、…、`execution_resource=14`；匹配的 current family 是 `DependencyProof/3`、`InputDescriptor/3`、`PreparedIntent/3` 与 `d6_plan/3`。Control 中英文必须陈述同一基数，D6-IMPACT 中的 `D6-DK-CARD-01` 是显式设计 oracle。
 
-## 3. fixed829 五项 finding
+实际消费 managed-Document 语义的路径必须绑定 `document_format`；即使 Source bytes/SourceVersion 相同，M1→M2 也使旧 Proof3 stale。不消费 managed-Document 语义的路径不伪造 dependency。format-only transition 的 `sourceChanges=[]`，不创建 SourceRevisionPlan、managed SourceVersion 或 H advance。真实 Key2/Proof2 继续是精确的十四-arm historical family。
 
-### A2-D6-829-P1-01
+## 3. P2-01——完整来源/current 落点
 
-来源：fixed-S 的 D6 Control/Storage、当前 parent 的 D6 owner 后像、fixed97 当前后继材料，以及机器映射具名的 D3/D10 直接 holder。
+机器 map 保留全部 **299** 个 section mapping，但不再把 whole file 当作语义 target：
+- fixed-S Control 的 23 个 section 保留已经精确的 anchors；
+- 其余 276 个 fixed-S Storage/Impact/Lexicon、current-parent Storage/Control/Impact/Lexicon 与 fixed97 SPEC/SCHEMAS section 都写明真实 current file+anchor、disposition、owner/basis 与来源限定 oracle；
+- parent 与 fixed97 双语证据登记真实 EN/ZH path+blob pair。fixed-S snapshot 仍只是实际存在的单份受保护 source；不编造不存在的双语 snapshot 或 JSON twin。
 
-current anchors：D6-CONTROL §0.1、§4.3-§5、§6、§9.4、§10.2、§20-§22；D6 Main §7-§9、§14、§17；D6-SCHEMAS §5、§9-§10；D6-IMPACT §5、§7-§11。
+fixed97 ACCEPTANCE 的 **760** 条原 row 与原 source text 全部保留；其中 **115** 条 D6 intersection 保留完整 EN/ZH source row。原来已经精确的 5 条 target 保持不动；其余 110 条改成真实 current owner/consumer 和具体 anchor，不再使用“D6-IMPACT intersection”泛 placeholder。跨 owner 义务明确写真实 owner 与 D6 实际 producer/consumer 角色，不建立第二套 D6 权威。
 
-设计判据：当前新鲜路径只有一条外层链：`DependencyProof/3`/Input3/Prepared3 使用 `d6_plan/3`，随后进入 Notice3、原唯一 final P，再到 CP4/ChangeRecord1。当前 trust/bootstrap/replica/execution family 各只有一个具名 current producer。真实前身 Notice/CP/trust/bootstrap/responsibility 以及已保存、已计划或结果未知的记录，保留其已记录 decoder、bytes、pins、授权、错误顺序、installation/seal/receipt 与 recovery。不得新增 migration、第二 ledger、第二 CAS、第二 submit 或按版本名 fallback。
+当前 fixed97 direct-owner 合同继续有效：ResultPage §17.1、12-member BudgetBinding §17.2、ImportJob §17.3、受管配置/control read §17.4、immutable ByteHandle/ByteRead §17.5、authorization-before-read/ObservationScope §17.6、SourceBinding/OriginBinding §17.7。历史 numeric SourceVersion、Scope1、wire11/12 只在各自 recorded version 下保留业务不变量。
 
-### A2-D6-829-P1-02
+## 4. P2-02——只修四个 Registry successor
 
-来源：D6-CONTROL §3.4-§3.6、D6-SCHEMAS §5.1、D6 Main §14、D6-IMPACT §5/§10，以及 fixed97 双语 row T3-PROFILE-22、FC34-FMT-19、FC34-FMT-05、FC34B-D10-05、FC34B-D10-06。
+D6-REGISTRY 继续保持 **52 concepts / 17 cross-stage bindings**，并保留 conceptId、ownedNames、aliases、locale、firstFreeze 与其它无关 exact value。只修复复核点名的四个通用字段：
+- commit-protocol definition：current D3 是 wire13 + InputDescriptor/3 + `d3_identity_operation/13`；真实 wire9–12 是精确历史；`d6_commit_request/2` 仍是实际 D6 submit。
+- conflict-record definition：current outer 使用 InputDescriptor3/Proof3/Prepared3；source_merge/choose_source_head 保留 inner Input2/Plan1/Preview1 + ownerKind/2；policy_bundle_choice 使用 inner Input3/Plan2/Preview2 + ownerKind/3。
+- prepared-intent exclusions：current D3 wire13/InputDescriptor3/`d3_identity_operation/13` 不是 D6 plan 成员；真实 wire9–12 继续历史恢复。
+- plan-token exclusions：同一 current/historical 分派；D3 request 不会因此获得未声明 D6 plan token。
 
-设计判据：current Proof3/Input3/Prepared3 的 literal version 都是 3，plan token tag 是 `d6_plan/3`；Key3 恰好 15 个 rank 0..14，且 `document_format` 为 rank 1。实际消费 managed-Document 语义的路径必须冻结 format binding；即使 source bytes/version 不变，M1→M2 也使旧 Proof3 失效。不消费 managed-Document 语义的路径不伪造该 dependency。format-only portable change 的 sourceChanges=[]，不创建 SourceRevisionPlan、managed SourceVersion 或 H advance。真实 Key2/Proof2 继续是原十四臂 historical family。
+对应四个 current-parent Registry pointer 改为 named-current-successor，并记录精确 predecessor value/current family oracle；其它真正 exact pointer 映射保持 exact。
 
-### A2-D6-829-P2-01
+## 5. 证据边界
 
-来源：fixed-S D6 Control §5-§13，特别是 98-247 行，以及其中具名的真实 D3/D9/D10 owner boundary。
+本残余修订的 FULL：本 map 实际使用的 D6 fixed/current owner 输入；全部 299 个 D6 section record 及来源限定 target；全部 760 条 fixed97 ACCEPTANCE row，其中 115 条 D6 intersection 完整精确落点；两套 Registry pointer inventory；parent Impact 89 records（85 unique ID + 4 个 range/metadata record）；以及机器 map 明确登记的真实双语 pair。
 
-当前落点：D6-CONTROL §17.1 的 ResultPage 分页合同、§17.2 的 BudgetBinding、§17.3 的 ImportJob、§17.4 的受管配置/control read、§17.5 的 ByteRead、§17.6 的继承接口与 ObservationScope、§17.7 的 SourceBinding/OriginBinding。
+PARTIAL：只包括 D6 所需的具名 D7-D10 direct-holder/load-bearing intersection；不声称 D7-D10 完整 A2 module 已接受或全文读取。
 
-设计判据：仍然有效的原合同继续完整保留正向路径、数值域、授权与恢复。Result paging 保留 pageSize 1..200、完整结果先于分页、合法的空 nonterminal page、terminal cursor、TTL/reset 与错误顺序。Budget 保留原 12 个 member 与 numeric domain。ImportJob 保留 pins、mapping DAG/SCC、atomic groups、每 batch 的 OperationId、canonical requests/plans/receipts、binding/version/watermark/budget 与 committed-prefix recovery。ByteRead 保留 resource_bytes/1、offset/maxBytes、解码后的 base64 长度、short-read-not-EOF、snapshot/current authorization、TTL/reset/shared charging。SourceBinding/OriginBinding 保留真实 comparator 与 owner boundary。旧 numeric SourceVersion、wire11/12 与 Scope1 只作为版本限定的前身证据，不是当前新鲜 carrier。
+UNREAD/pending：未列出的完整 D7-D10 owner source、Mandatory 925–1141，以及产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 证据。
 
-### A2-D6-829-P2-02
-
-来源：fixed-S D6 Lexicon/Registry、current-parent 52-concept/17-binding Registry，以及 current D6 Lexicon/Registry。
-
-current anchors：D6-LEXICON §3 与 §7-§9；D6-REGISTRY generic definitions、currentTechnicalSuccessors、historicalDispatch。
-
-设计判据：原 concept ID、全部 fields、owned names、aliases、locale mapping 与 firstFreeze provenance 全部保留。通用当前定义只指向真实 Notice3/CP4、Proof3/15-key、Input2、Witness2、Inventory2/Record3/Proof2、Profile4/Plan4、Bundle2/Declaration2/Handle2 family。前身只保留为显式的版本限定历史事实；不建立 compatibility layer，也不随机机械升 inner type。
-
-### A2-D6-829-P2-03
-
-来源：current-parent D6 Storage §7.2.1 capacity 段及其完整 inherited scheduling obligations。
-
-current anchors：D6 Main §7.2.1；D6-IMPACT §10.1 的 `D6-SCHED-CAP-02` 等案例；D6-REGISTRY schedule-continuity-witness。
-
-设计判据：单位是每 producer update 最多 4096 retained pins、最多 16 MiB canonical evidence metadata；source/component bytes 使用独立 reserved PinBudget。capacity failure 必须先在同一 producer transaction 原子记录 gap/invalidation，compaction 保持 reference-safe。1000 transitions × 5 pins = 5000 pins，因此即使 1000 小于 4096 也必须失败；4096 不是 transition-count ceiling。
-
-## 4. 机器审计包
-
-D6-SOURCE-MAP.json 将 fixed-S Control 23 个 section 全部来源限定到具体 current anchor，不再只写 whole-file target。它保留 89 个 parent Impact source record，并明确区分 85 个唯一 case ID 与 4 个范围/元数据 record。760 条 fixed97 row 全部保留，其中 115 条 D6 intersection 附带真实双语 source row。Registry pointer map 保留 767 个 fixed-S 与 1246 个 current-parent pointer，并区分 exact-retain value 与 named current successor。
-
-机器库存与导航不能替代语义接受。
-
-## 5. 剩余边界
-
-D7-D10 完整 A2 module、Mandatory 925-1141、A2 完成与真正 fresh Pro/global review 仍 pending。runtime 与产品行为全部 UNRUN。后续仍须有 accepted-design SHA 才能进入 freeze/implementation startup。
+P1-01 与 P2-03 继续保持 fixed01cc 独立 CLOSED，只做回归保护，不重开。上面四项残余在新的 fixed-stop 非作者复核前仅为 author-resolved-pending-independent。

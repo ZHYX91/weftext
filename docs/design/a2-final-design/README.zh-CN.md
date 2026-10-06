@@ -23,9 +23,9 @@ translation_status: source
 | D1 | 已整合为 current candidate；fixed-446 在其有界范围内独立关闭 D1/D2 findings |
 | D2 | 已整合为 current candidate；fixed-446 在其有界范围内独立关闭 D1/D2 findings |
 | D3 | 已整合为 current 作者候选；另一个 fixed-a62 非作者窄复核已 CLOSED 两个有界 D3 P1 finding；这不是 global A2 acceptance |
-| D4 | 已整合为 current 作者候选；P2-02 仅在 fixed4282 的 D10-direct 有界范围独立 CLOSED；P2-01 R1/R2 为 author-resolved-pending-independent |
-| D5 | 已整合为 current 作者候选；P2-02 仅在 fixed4282 的 D10-direct 有界范围独立 CLOSED；P2-01 R1/R2 为 author-resolved-pending-independent |
-| D6 | 作者候选已停在 `01cc40b819df78fbe724f1c64c27284ad60fc6c8`；五项 D6 finding 仅 author-resolved-pending-independent，未 accepted |
+| D4 | 已整合为 current 作者候选；P2-02 仅在 fixed4282 的 D10-direct 有界范围独立 CLOSED；P2-01 R1/R2 为 author-resolved-pending-independent，并由非作者固定32cf另审；未自宣 CLOSED |
+| D5 | 已整合为 current 作者候选；P2-02 仅在 fixed4282 的 D10-direct 有界范围独立 CLOSED；P2-01 R1/R2 为 author-resolved-pending-independent，并由非作者固定32cf另审；未自宣 CLOSED |
+| D6 | fixed01cc 独立复核已 CLOSED A2-D6-829-P1-01 与 P2-03，并留下 P1-02/P2-01/P2-02 与新增导航 P2 OPEN/PARTIAL；四项残余从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 修订，目前仅 author-resolved-pending-independent |
 | D7 | 完整模块仍 TODO；已读 D2 交集与 D3-direct 中文 owner 输入 |
 | D8 | 完整模块仍 TODO；已读 D1/D2 交集与 D3-direct 中文 owner 输入 |
 | D9 | 完整模块仍 TODO；已读 D2 交集与 D3-direct 中文 owner 输入 |
@@ -55,4 +55,4 @@ D7–D10 目前还没有完整 A2 current definition；为闭合 D3–D5 而消�
 
 ## 5. 接受边界
 
-D1–D6 整合保留 source-qualified 历史义务和 fixed-SHA 有界审查证据。fixed-446 已独立关闭有界 D1/D2 findings，fixed-a62 已独立 CLOSED 两个有界 D3 P1。fixed4282 仅独立 CLOSED P2-02 的“六份 D10 真实来源资格”有界范围，P2-01 仍以 R1/R2 OPEN；当前 R1/R2 修复仅为 author-resolved-pending-independent，不独立接受 D4/D5。D6 已停在 `01cc40b819df78fbe724f1c64c27284ad60fc6c8`，五项 finding 仍待独立复核，未 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。runtime/OS/GUI/真实 replica/migration/activation 全部 UNRUN。
+D1–D6 整合保留 source-qualified 历史义务和 fixed-SHA 有界审查证据。fixed-446 已独立关闭有界 D1/D2 findings，fixed-a62 已独立 CLOSED 两个有界 D3 P1。fixed4282 仅独立 CLOSED D4/D5 P2-02 的“六份 D10 真实来源资格”有界范围。D4/D5 P2-01 R1/R2 已由作者修为 author-resolved-pending-independent，并由非作者在 immutable32cf 另行复核；本 D6 修订不裁决它。D6 非作者在 fixed01cc 独立 CLOSED P1-01 与 P2-03，但 REVISE 保留 P1-02/P2-01/P2-02 和导航 P2 OPEN/PARTIAL。当前 D6 四残余修订从 fixed32cf 开始，仅为 author-resolved-pending-independent；D6 未 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。runtime/OS/GUI/真实 replica/migration/activation 全部 UNRUN。

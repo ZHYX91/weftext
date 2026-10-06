@@ -404,6 +404,7 @@ This batch changes documentation only. The following are required future tests, 
 ## 13. A2 current successor implementation obligations
 
 All cases in this file remain unexecuted design obligations unless an exact external run is named. Current implementation additionally must:
+- **D6-DK-CARD-01:** strict-decode the fresh-current dependency family as exactly fifteen `DependencyKey/3` arms with ranks `source=0`, `document_format=1`, …, `execution_resource=14`; the English and Chinese Control prose, the fifteen listed shapes, `DependencyProof/3`, `InputDescriptor/3`, `PreparedIntent/3`, and `d6_plan/3` must agree on that cardinality/version family. Genuine `DependencyKey/2`/`DependencyProof/2` remains the fourteen-arm historical family and is never widened.
 - implement Key3/Proof3/Descriptor3/Prepared3 and `document_format` invalidation without widening historical Key2;
 - produce Notice3/CP4/ChangeRecord1 as one exact current portable chain, with format-only `sourceChanges=[]` and no fake H;
 - preserve SourceRevisionPlan /1 ordinary, /2 D3 canonical-conflict and /3 D6 source-conflict role dispatch;

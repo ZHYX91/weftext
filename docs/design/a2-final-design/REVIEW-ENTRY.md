@@ -5,73 +5,96 @@ translation_status: synced
 ---
 
 [简体中文](REVIEW-ENTRY.zh-CN.md)
-# A2 D1-D6 author-candidate review entry — P2-01 R1/R2 handoff
+# A2 D1-D6 author-candidate review entry — D6 fixed01cc residual repair
 
 Status: author candidate only; not independently accepted, implemented, merged, released, deployed, or globally frozen.
 
-## 1. Fixed object and binding
+## 1. Fixed object and author scope
 
 Base branch: docs/asciidoc-annotation-final-design.
 Fixed base SHA: 97f4734f82a760cb6716c8122b84494da2b61164.
 Fixed historical input S: 7e18168dad3e6d120fce0dd607dc10fa7894e252.
 Protected inputs blob: 787d03c31a55496f81ed03fd54a6fdfff50a2ad4.
 Candidate branch: docs/a2-final-design-integration.
-This narrow R1/R2 repair starts from the exact stopped D6 handoff head `01cc40b819df78fbe724f1c64c27284ad60fc6c8`.
+This D6 residual repair starts from exact author head `32cfb9c387deddb12fb021a44147df0d7ffab322`.
 
-The next reviewer must bind the exact final PR5 stop head. Do not follow the moving branch and do not extend any older fixed-SHA conclusion beyond its recorded scope.
+The next non-author reviewer must bind the exact final stop SHA recorded in PR metadata/handoff. Do not follow a moving branch.
 
-## 2. Prior independent state
+## 2. Retained independent state outside this repair
 
-- fixed-446 independently CLOSED the bounded D1/D2 findings; those closures are retained.
-- fixed-a62 independently CLOSED D3:P1-01 and D3:P1-02. The older fixed-446 OPEN state is historical only.
-- The completed non-author report bound to fixed-a62 `a62aa7d4eaf56113cd1e9e32336ae8814f83589b` (review request `7b6e1f16-fa41-499c-b078-647f1942e94e`) returned P0=0/P1=0/P2=2 for D4/D5: normative semantics LIMITED PASS, audit package REVISE.
-- The later independent report bound to fixed4282 `4282d416e6a1ea4a344a2647d9a2feb82e3ba15a` returned P0=0/P1=0/P2=2 for this audit package. It independently **CLOSED A2-D4D5:P2-02 only in the bounded six-real-D10-source qualification scope**. P2-01 remained OPEN with the two residuals now named **R1** (all 72/130 fixed97 source→actual-owner mappings) and **R2** (Mandatory 303–306 ownership split).
-- This author repair addresses only P2-01 R1/R2 and marks them **author-resolved-pending-independent**. It does not reopen P2-02 and cannot self-close P2-01.
+- bounded D1/D2 findings remain independently CLOSED.
+- bounded D3 P1-01/P1-02 remain independently CLOSED at fixed-a62.
+- D4/D5 P2-02 remains independently CLOSED only in the fixed4282 bounded six-real-D10-source qualification scope.
+- D4/D5 P2-01 R1/R2 is a separate author-resolved-pending-independent object under immutable fixed32cf non-author review. This D6 repair does not close or reopen it.
 
-D6 author work stopped at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` with five D6 findings author-resolved-pending-independent. Its separate fixed-SHA non-author review does not make D6 accepted and is not decided here.
+Global A2 is not accepted.
 
-## 3. P2-01 review target
+## 3. D6 fixed review objects
 
-Review the machine maps, not counts alone:
-- D4 fixed-S text: 906/906 nonblank lines, exact source path/blob/line/text, one source-qualified obligation group per line.
-- D5 fixed-S text: 170/170 nonblank lines under the same rule.
-- Mandatory lines 1–924: 716/716 nonblank lines mapped to actual owners/targets; metadata/review rows are not mislabeled as business semantics.
-- D4 catalog: 2,854/2,854 RFC 6901 JSON Pointers in seven non-overlapping subtree groups; the document root is the empty pointer `""`, while `"/"` denotes an empty-key member; 95 named records plus 7 global limits remain under the sole fixed-catalog normative value authority.
-- fixed97 selected rows: 72 D4 and 130 D5 rows, each preserving actual English and Chinese source row plus current A2 target/disposition/owner/basis/oracle.
+The original D6 five-finding review object is fixed829 `829efce6aacbe944714e093c98065b01d50b2593`; it remains finding-origin provenance.
 
-R1 reviewer requirement: inspect all 72 D4 and 130 D5 fixed97 rows, not examples or counts. D2 media/provenance must point to D2; Annotation to D3/D8; presentation policy to the D8 current holder; import/export to D9; format/ChangeRecord/SourceTransform/trust to D6; mixed execution responsibility to D6-CONTROL §21 + D10; direct D4/D5 rows remain at D4/D5 with the actual upstream proof producer named.
+The later independent D6 review object is fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`. Its verdict is REVISE.
 
-R2 reviewer requirement: Mandatory 303–304 must split recurrence/derived-occurrence/identity from source-binding/import/current-proof owners; 305 is the grouping heading, not a recurrence rule; 306 must keep external Calendar authority while provider token/etag/cursor/credentials/fetch state remains D10 control-plane state. The exact source path/blob/line/text and total 716/716 union must remain unchanged.
+Independently CLOSED at fixed01cc:
+- **A2-D6-829-P1-01** — one fresh current Key3→Proof3→Descriptor3→Prepared3 / Notice3 / original final P / CP4+ChangeRecord1 chain and the reviewed trust/bootstrap/replica/execution regressions.
+- **A2-D6-829-P2-03** — schedule-capacity unit and gap ordering.
 
-## 4. P2-02 bounded CLOSED state and regression target
+Still OPEN/PARTIAL at fixed01cc and repaired here:
+- **A2-D6-829-P1-02** — Chinese fifteen-arm closed-union cardinality.
+- **A2-D6-829-P2-01** — complete source→current-owner/anchor plus real bilingual source evidence.
+- **A2-D6-829-P2-02** — four generic Registry fields and exact pointer dispositions.
+- **A2-D6-01CC-P2-01** — current fixed-object navigation.
 
-P2-02 is already independently CLOSED at fixed4282 **only** for the bounded direct-source qualification below; this R1/R2 task must preserve it without claiming whole-D10/D6/global acceptance.
+These four repairs are only **author-resolved-pending-independent**. They are not self-CLOSED.
 
-The maps directly qualify six actual D10 files by their real blobs:
-- CONTROL-CONTRACT.md / .zh-CN.md
-- CANDIDATE.md / .zh-CN.md
-- UPSTREAM-AMENDMENTS.md / .zh-CN.md
+## 4. Residual review targets
 
-Each is marked `direct_partial_not_full_D10` and maps its relevant Package/Contribution, namespace/anti-spoof, provider availability, schedule/temporal, connector/credential, external-effect and execution-custody clauses to the existing D4/D5 current clauses.
+### P1-02
 
-Raw D10 predecessor/original-owner references to Proof2/Key2/wire12/PAB3 remain verbatim and source-qualified. They are not rewritten. Fresh/current authority remains the real A2 successor family in D3-SCHEMAS §2/§6.1 plus D4/D5 §0; historical records keep their recorded decoder/bytes/pins/recovery.
+Verify that English and Chinese D6-CONTROL both say exactly fifteen current `DependencyKey/3` arms; ranks are 0..14 with `document_format=1`; all fifteen listed shapes match. `DependencyProof/3`, `InputDescriptor/3`, `PreparedIntent/3`, and `d6_plan/3` are the same fresh-current family. `D6-DK-CARD-01` in bilingual D6-IMPACT is the numbered cardinality oracle. Genuine Key2/Proof2 remains fourteen-arm historical.
 
-## 5. Scope guard
+Direct regressions must retain: managed semantic consumer M1→M2 stales Proof3 even when source bytes/SourceVersion compare equal; a non-consumer does not invent the dependency; format-only transition has `sourceChanges=[]` and no SourceRevisionPlan/managed SourceVersion/H advance.
 
-This repair changes audit/source maps and review/progress entrypoints only. It does not change D1-D6 normative business semantics, product implementation, dependencies, checker, CI, source snapshots, or protected inputs. It creates no second catalog/Registry/current authority.
+### P2-01
 
-D7-D10 full A2 owner integration remains pending. Mandatory source 925–1141 remains pending. Fresh Pro/global review remains pending. Runtime, OS, GUI, real-replica, migration, activation, deployment, provider, crash-recovery and performance evidence are UNRUN.
+Review the machine map itself:
+- all **299/299** section mappings have source-qualified concrete current targets; the original 23 fixed-S Control precise mappings remain unchanged;
+- the other **276** section mappings name real owner/consumer file+anchor(s) rather than whole-file placeholders;
+- all **760/760** fixed97 ACCEPTANCE rows and source text remain present; all **115** D6 intersections retain complete EN/ZH rows;
+- the five pre-existing precise fixed97 targets are unchanged; the other **110** no longer use the generic D6-IMPACT placeholder;
+- real parent/fixed97/current-A2 bilingual path+blob pairs are recorded. Fixed-S snapshots remain their actual single preserved source objects; no nonexistent bilingual snapshot/JSON twin is invented;
+- current D6 main blobs are the actual `50632ba345aeab1e28970e219ec53a7fceea5a3e` / `3a4bceae305d30f72b42866f468d4a911dae7f0a`.
 
-### 5.1 Mandatory intake and current workflow qualification
+Retain the complete fixed97 D6 direct-owner contracts in Control §17.1–§17.7: ResultPage, twelve-member BudgetBinding, ImportJob, management/control read, ByteHandle/ByteRead, authorization-before-read/ObservationScope, and SourceBinding/OriginBinding.
 
-Mandatory source §§1–14 remain scenario/pressure input, not self-activating authority. Historical `$council`, OpenCode-panel, controller/task and chat-routing instructions are retained as source-qualified workflow provenance; the current repository workflow is the single author branch, explicit source-to-current-clause dispositions, then a new non-author review bound to one exact stop SHA. A source conflict with an already-current owner still requires an explicit owner/reopen disposition; it is never silently rewritten here.
+### P2-02
 
-### 5.2 Freeze and final-acceptance qualification
+Review exactly four generic Registry fields:
+- `/concepts/5/exclusions`
+- `/concepts/6/exclusions`
+- `/concepts/15/definition`
+- `/concepts/44/definition`
 
-The product obligations listed by Mandatory §10 remain real obligations at their actual owners; this audit repair does not convert them to historical exemptions. A bounded mapping repair may be independently accepted only after its exact-source/current-target audit closes with no open P0/P1 and no remaining finding in that bounded scope. Global A2 freeze still additionally requires D7–D10 full owner integration, Mandatory 925–1141, the complete applicable product/test obligations, and a fresh Pro/global non-author review. Documentation checks are evidence of repository consistency, not semantic acceptance.
+Current D3 is wire13 + InputDescriptor/3 + `d3_identity_operation/13`; genuine wire9–12 remains recorded history and `d6_commit_request/2` remains D6 submit. Conflict resolution uses current outer Descriptor3/Proof3/Prepared3, source arms keep inner Input2/Plan1/Preview1 + ownerKind/2, and policy_bundle_choice uses inner Input3/Plan2/Preview2 + ownerKind/3.
 
-### 5.3 Supersession and handoff qualification
+D6-REGISTRY must remain 52 concepts / 17 cross-stage bindings with unchanged concept IDs, owned names, aliases, locale and firstFreeze. Registry pointer inventories remain 767 fixed-S / 1246 current-parent; only these four parent-current pointers are newly named-current-successor.
 
-Mandatory §§11–11.3 remain source evidence for supersession and product intent, while their old D3-era controller/session scheduling is historical workflow provenance rather than a current command. Current handoff uses the GitHub branch/PR state and the exact fixed review object recorded above. Fixed-a62/fixed4282 D4/D5 conclusions are not expanded to D6; D6 remains separately bound to stopped author head `01cc40b819df78fbe724f1c64c27284ad60fc6c8` and its five-finding exact-SHA review. No old council/session instruction resumes a prior interrupted batch.
+### Navigation P2
 
-Global A2 design is not accepted.
+A2 README/REVIEW-ENTRY/SOURCE-MAP, D6-SOURCE-MAP and PR metadata must distinguish:
+- fixed829 = finding origin,
+- fixed01cc = independent D6 review object,
+- fixed32cf = current author repair start,
+- P1-01/P2-03 = independent CLOSED at fixed01cc,
+- four residuals = author-resolved-pending-independent,
+- no D6/global acceptance.
+
+## 5. Evidence boundary and unexecuted scope
+
+FULL for this repair is limited to the D6 fixed/current-owner inputs, all 299 section mappings, all 760 fixed97 rows with 115 D6 intersections, the two Registry pointer inventories, parent Impact 89 records (85 unique IDs + 4 intentional repeats/range-metadata records), and the bilingual pairs explicitly recorded by D6-SOURCE-MAP.
+
+D7-D10 are PARTIAL only at named D6 load-bearing intersections. Complete D7-D10 A2 modules and Mandatory 925-1141 remain pending.
+
+Product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment behavioral evidence is UNRUN. Documentation/machine checks prove repository consistency only, not semantic acceptance.
+
+D7 must not start while a D6 P1 remains independently open. Final A2 still requires complete D7-D10/Mandatory integration, a fresh Pro/global non-author review, one explicit accepted-design SHA, and freeze/implementation-start material on that same accepted SHA.

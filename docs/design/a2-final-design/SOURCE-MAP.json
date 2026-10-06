@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D1-D6 author candidates integrated. D1/D2 and bounded D3 findings retain independent CLOSED state. D4/D5 fixed4282 follow-up independently CLOSED bounded P2-02 while P2-01 has two audit-map residuals pending separate repair. D6 fixed829 review returned REVISE P0=0/P1=2/P2=3; all five D6 findings are author-resolved-pending-independent. D7-D10/global remain pending.",
+  "status": "A2 D1-D6 author candidates integrated. D1/D2 and bounded D3 findings retain independent CLOSED state. D4/D5 fixed4282 P2-02 bounded CLOSED; P2-01 R1/R2 is author-resolved-pending-independent under separate immutable fixed32cf non-author review. D6 fixed01cc independent review CLOSED P1-01/P2-03 and left P1-02/P2-01/P2-02/navigation P2 for the current fixed32cf author residual repair; D7-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2344,7 +2344,7 @@
   "next_batch": "First bind a new non-author review to the exact final D6 repair stop SHA and review only the five fixed829 D6 findings plus direct bilingual/owner regressions. D4/D5 P2-01's two audit-map residuals are a separate later repair. D7-D10 full modules, Mandatory 925-1141 and the true fresh Pro/global review remain later work.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
-    "status": "fixed4282 follow-up: P2-02 bounded independent CLOSED; P2-01 has two audit-map residuals pending separate repair; not part of D6 five-finding count",
+    "status": "fixed4282 P2-02 bounded independent CLOSED; P2-01 R1/R2 author-resolved-pending-independent under separate immutable fixed32cf non-author review; not part of D6 residual finding count",
     "d4": {
       "main": "D4.md",
       "impact": "D4-IMPACT.md",
@@ -2376,10 +2376,11 @@
       "d3": "fixed-a62 independent narrow CLOSED D3:P1-01 and D3:P1-02",
       "fixed_a62": "a62aa7d4eaf56113cd1e9e32336ae8814f83589b: P0=0/P1=0/P2=2; D4/D5 semantic LIMITED PASS, audit package REVISE",
       "review_request": "7b6e1f16-fa41-499c-b078-647f1942e94e",
-      "p2_01": "two audit-map residuals pending separate repair",
-      "p2_02": "bounded independent CLOSED",
+      "p2_01": "R1/R2 author-resolved-pending-independent; separate non-author review bound to immutable 32cfb9c387deddb12fb021a44147df0d7ffab322; not CLOSED by this D6 task",
+      "p2_02": "bounded independent CLOSED at fixed4282",
       "independentClose": false,
-      "fixed_4282": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a follow-up independent review completed"
+      "fixed_4282": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a follow-up independent review completed",
+      "fixed_32cf": "32cfb9c387deddb12fb021a44147df0d7ffab322 is the separate D4/D5 R1/R2 review object; this D6 author task does not decide that review"
     },
     "runtime": "UNRUN",
     "auditCoverage": {
@@ -2412,17 +2413,54 @@
       "D6-SOURCE-MAP.md",
       "D6-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "fixed829 independent review REVISE P0=0/P1=2/P2=3; five findings repaired by author from 4282 and remain author-resolved-pending-independent",
-    "reviewFixedSha": "829efce6aacbe944714e093c98065b01d50b2593",
-    "repairStartSha": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a",
+    "status": "fixed01cc independent review REVISE: A2-D6-829-P1-01 and P2-03 independently CLOSED; P1-02/P2-01/P2-02 plus A2-D6-01CC-P2-01 repaired by author from fixed32cf and remain author-resolved-pending-independent",
+    "reviewFixedSha": "01cc40b819df78fbe724f1c64c27284ad60fc6c8",
+    "repairStartSha": "32cfb9c387deddb12fb021a44147df0d7ffab322",
     "findings": {
-      "A2-D6-829-P1-01": "author-resolved-pending-independent",
-      "A2-D6-829-P1-02": "author-resolved-pending-independent",
-      "A2-D6-829-P2-01": "author-resolved-pending-independent",
-      "A2-D6-829-P2-02": "author-resolved-pending-independent",
-      "A2-D6-829-P2-03": "author-resolved-pending-independent"
+      "A2-D6-829-P1-01": "independent-CLOSED-at-fixed01cc",
+      "A2-D6-829-P1-02": "author-resolved-pending-independent-after-fixed01cc",
+      "A2-D6-829-P2-01": "author-resolved-pending-independent-after-fixed01cc",
+      "A2-D6-829-P2-02": "author-resolved-pending-independent-after-fixed01cc",
+      "A2-D6-829-P2-03": "independent-CLOSED-at-fixed01cc",
+      "A2-D6-01CC-P2-01": "author-resolved-pending-independent-after-fixed01cc"
     },
-    "runtime": "UNRUN"
+    "runtime": "UNRUN: product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment",
+    "findingOriginReviewSha": "829efce6aacbe944714e093c98065b01d50b2593",
+    "review": {
+      "verdict": "REVISE",
+      "residuals": {
+        "P1": 1,
+        "P2": 3
+      },
+      "newFindings": {
+        "P0": 0,
+        "P1": 0
+      },
+      "independentlyClosed": [
+        "A2-D6-829-P1-01",
+        "A2-D6-829-P2-03"
+      ],
+      "pendingNewExactStopReview": [
+        "A2-D6-829-P1-02",
+        "A2-D6-829-P2-01",
+        "A2-D6-829-P2-02",
+        "A2-D6-01CC-P2-01"
+      ],
+      "d4d5DirectTargetRegression": "PASS at fixed01cc only; no closure of separate D4/D5 R1/R2 object"
+    },
+    "auditCoverage": {
+      "sectionMappings": "299/299 concrete current targets; original 23 fixed-S Control precise placements retained",
+      "fixed97Rows": "760/760 source rows retained",
+      "fixed97D6Intersections": "115/115 complete bilingual rows; five existing precise targets retained; other 110 generic anchors repaired",
+      "registryPointers": "767 fixed-S / 1246 parent-current; exactly four new parent-current named successors, parent named-successor total 24",
+      "registryShape": "52 concepts / 17 cross-stage bindings",
+      "parentImpact": "89 records / 85 unique case IDs / 4 intentional repeats or range-metadata records",
+      "currentMainBlobs": [
+        "50632ba345aeab1e28970e219ec53a7fceea5a3e",
+        "3a4bceae305d30f72b42866f468d4a911dae7f0a"
+      ]
+    },
+    "nextGate": "D7 must not start while the D6 P1 remains independently open; a new non-author review must bind the exact final stop SHA first."
   },
   "pending_scope": [
     "D7-D10 full A2 owner modules",

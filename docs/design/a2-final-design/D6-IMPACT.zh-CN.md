@@ -403,6 +403,7 @@ current A2 D3 wire13 已具备有界 current-consumer afterimage，真实 fixed-
 ## 13. A2 current successor 实施义务
 
 除非另有精确外部运行记录，本文全部案例仍只是未执行的设计义务。当前实现还必须：
+- **D6-DK-CARD-01：** fresh-current 依赖族必须 strict-decode 为恰好十五个 `DependencyKey/3` arm，rank 为 `source=0`、`document_format=1`、…、`execution_resource=14`；Control 中英文说明、十五个列举 shape、`DependencyProof/3`、`InputDescriptor/3`、`PreparedIntent/3` 与 `d6_plan/3` 必须在该基数/版本族上完全一致。真实 `DependencyKey/2`/`DependencyProof/2` 继续是十四-arm 历史族，绝不扩宽。
 - 实现第 3 版依赖键、依赖证明、输入描述和准备记录，以及 `document_format` 的失效规则；不得扩大历史第 2 版依赖键；
 - 以一条精确的当前可移植链产生第 3 版安装通知、第 4 版完成证明和第 1 版变更记录；仅格式变化时 `sourceChanges=[]`，不得虚构 H；
 - 保持来源修订计划的角色分派：/1 用于普通或新鲜写入，/2 仅用于 D3 规范冲突，/3 仅用于 D6 来源冲突；

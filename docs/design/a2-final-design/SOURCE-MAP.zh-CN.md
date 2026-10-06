@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-D6 现已形成作者候选。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)；D7–D10 仍留待后续完整模块批次。
+D6 已形成作者候选，并已有 fixed01cc 非作者裁决。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)。fixed01cc 已独立 CLOSED D6 P1-01 与 P2-03；P1-02/P2-01/P2-02 和导航 P2 从 fixed32cf 修订，目前仅 author-resolved-pending-independent。D7–D10 仍留待后续完整模块批次。
 
 
 ## 12. fixed-a62 D4/D5 审计映射修复
@@ -129,4 +129,4 @@ D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 
 
 旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
 
-两个有界 D3 finding 已在 fixed-a62 独立 CLOSED。D6 仍是 stopped 829 作者候选，fixed-829 只读工作不构成接受。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending；runtime 证据仍 UNRUN。
+两个有界 D3 finding 已在 fixed-a62 独立 CLOSED。fixed829 现在只表示 D6 五项 finding 的 origin；后续独立复核对象是 fixed01cc。fixed01cc 已独立 CLOSED D6 P1-01 与 P2-03，P1-02/P2-01/P2-02 加 A2-D6-01CC-P2-01 则在 fixed32cf 作者修订后仍待新的 exact-stop 复核。D4/D5 R1/R2 是另一个 fixed32cf 非作者复核对象，本次不宣告其 CLOSED。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending；runtime 证据仍 UNRUN。

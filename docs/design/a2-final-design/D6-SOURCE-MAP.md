@@ -6,70 +6,59 @@ translation_status: synced
 
 [简体中文](D6-SOURCE-MAP.zh-CN.md)
 
-# A2 D6 fixed829 source, case, registry, and repair map
+# A2 D6 fixed01cc residual-repair source map
 
-Status: five fixed829 findings are `author-resolved-pending-independent` only; this is not independent acceptance, implementation, activation, or global A2 acceptance.
+Status: independent review at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` returned **REVISE**. `A2-D6-829-P1-01` and `A2-D6-829-P2-03` are independently CLOSED at that fixed object. `A2-D6-829-P1-02`, `A2-D6-829-P2-01`, `A2-D6-829-P2-02`, and navigation finding `A2-D6-01CC-P2-01` are the four residuals repaired from author start `32cfb9c387deddb12fb021a44147df0d7ffab322` and remain **author-resolved-pending-independent** until a new exact-stop review. This is not D6/global acceptance, implementation, activation, or release.
 
-## 1. Fixed review and repair objects
+## 1. Review objects and status separation
 
-The independent D6 ruling is bound to `829efce6aacbe944714e093c98065b01d50b2593` and returned REVISE with P0=0, P1=2, P2=3. This author repair starts from `4282d416e6a1ea4a344a2647d9a2feb82e3ba15a`; the next reviewer must bind the exact final stop SHA produced by this repair rather than following the moving branch.
+The original five findings came from fixed829 `829efce6aacbe944714e093c98065b01d50b2593`; that SHA remains finding-origin provenance. The subsequent non-author review object is fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`.
 
-D1/D2 and the two bounded D3 findings keep their prior independent CLOSED state. D4/D5 audit findings are a separate fixed-object workflow and are not counted among these five D6 findings.
+Fixed01cc independently closed:
+- `A2-D6-829-P1-01`: the one fresh current Key3→Proof3→Descriptor3→Prepared3/Notice3/final-P/CP4+ChangeRecord1 chain and its current trust/bootstrap/replica/execution successors.
+- `A2-D6-829-P2-03`: per-producer-update schedule capacity of at most 4096 retained pins plus 16 MiB canonical evidence metadata, with source/component bytes under separate reserved PinBudget and gap-before-progress behavior.
 
-## 2. FULL / PARTIAL / UNREAD evidence boundary
+Fixed01cc left OPEN/PARTIAL:
+- `A2-D6-829-P1-02`: Chinese closed-union cardinality.
+- `A2-D6-829-P2-01`: complete source→current-owner/anchor and bilingual source evidence.
+- `A2-D6-829-P2-02`: four generic Registry fields and their exact pointer dispositions.
+- `A2-D6-01CC-P2-01`: current fixed-object navigation.
 
-FULL for this D6 repair means: all five fixed-S D6 inputs represented by the machine map; the current-parent D6 Storage/Control/Impact/Lexicon bilingual owner pairs and 52-concept/17-binding registry used here; current A2 D3-D5 files needed by the D6 intersections; all 89 parent D6 Impact source records, which contain 85 unique case IDs plus four range/metadata records; both fixed-S/current D6 registry pointer inventories; and the fixed97 rows actually recorded as D6 intersections.
+The next reviewer must bind the exact final stop SHA recorded in PR metadata/handoff; this file intentionally does not self-reference an unknown future commit hash.
 
-PARTIAL means D7-D10: only the explicit direct-holder files and load-bearing intersections recorded in the machine map were consumed for D6. Their complete A2 modules are not claimed read or integrated here.
+## 2. P1-02 — fifteen-arm current dependency family
 
-UNREAD/pending for this repair includes unlisted D7-D10 complete-module sources, Mandatory 925-1141, and product/runtime/OS/GUI/crypto/real-replica/provider/performance/migration/activation evidence.
+Current fresh D6 is exactly `DependencyKey/3` with **15 arms**, ranks `source=0`, `document_format=1`, …, `execution_resource=14`; `DependencyProof/3`, `InputDescriptor/3`, `PreparedIntent/3` and `d6_plan/3` are the matching current family. English and Chinese Control must state the same count, and `D6-DK-CARD-01` in D6-IMPACT is the explicit design oracle.
 
-## 3. Five fixed829 findings
+A managed-Document semantic consumer binds `document_format`; M1→M2 makes the old Proof3 stale even if Source bytes/SourceVersion compare equal. A path that does not consume managed-Document semantics does not invent that dependency. Format-only transition has `sourceChanges=[]` and creates no SourceRevisionPlan, managed SourceVersion, or H advance. Genuine Key2/Proof2 remains the exact fourteen-arm historical family.
 
-### A2-D6-829-P1-01
+## 3. P2-01 — complete source/current placement
 
-Sources: fixed-S D6 Control/Storage, current-parent D6 owner afterimages, fixed97 current successor material, and the direct D3/D10 holders named in the machine map.
+The machine map preserves all **299** section mappings but no longer treats whole files as semantic targets:
+- all 23 fixed-S Control sections retain their already-precise anchors;
+- the other 276 fixed-S Storage/Impact/Lexicon, current-parent Storage/Control/Impact/Lexicon, and fixed97 SPEC/SCHEMAS sections now identify actual current file+anchor(s), disposition, owner/basis, and source-qualified oracle;
+- parent and fixed97 bilingual evidence records real EN/ZH path+blob pairs. Fixed-S snapshots remain their actual single preserved source; no nonexistent bilingual snapshot or JSON twin is invented.
 
-Current anchors: D6-CONTROL §0.1, §4.3-§5, §6, §9.4, §10.2, §20-§22; D6 Main §7-§9, §14, §17; D6-SCHEMAS §5, §9-§10; D6-IMPACT §5, §7-§11.
+For fixed97 ACCEPTANCE, all **760** original rows and original source text stay present. The **115** D6 intersections keep their full EN/ZH source rows. The five already precise targets remain unchanged; the other 110 now identify the actual current owner/consumer and concrete anchor(s) rather than the generic “D6-IMPACT intersection” placeholder. Cross-owner obligations name that owner and D6’s actual producer/consumer role instead of creating a second D6 authority.
 
-Oracle: fresh current has exactly one outer chain: `DependencyProof/3`/Input3/Prepared3 with `d6_plan/3`, then Notice3, the original final P, then CP4/ChangeRecord1. Current trust/bootstrap/replica/execution families have one named current producer. Genuine predecessor Notice/CP/trust/bootstrap/responsibility/saved-planned-unknown records retain their recorded decoder, bytes, pins, authorization, error order, installation/seal/receipt and recovery. No migration, second ledger, second CAS, second submit, or version-name fallback is introduced.
+The current fixed97 direct-owner contracts remain load-bearing: ResultPage §17.1, twelve-member BudgetBinding §17.2, ImportJob §17.3, managed configuration/control read §17.4, immutable ByteHandle/ByteRead §17.5, authorization-before-read/ObservationScope §17.6, and SourceBinding/OriginBinding §17.7. Historical numeric SourceVersion, Scope1, wire11/12 keep their business invariants only under their recorded versions.
 
-### A2-D6-829-P1-02
+## 4. P2-02 — four Registry successors only
 
-Sources: D6-CONTROL §3.4-§3.6, D6-SCHEMAS §5.1, D6 Main §14, D6-IMPACT §5/§10, and bilingual fixed97 rows T3-PROFILE-22, FC34-FMT-19, FC34-FMT-05, FC34B-D10-05 and FC34B-D10-06.
+D6-REGISTRY still has **52 concepts / 17 cross-stage bindings** and preserves conceptId, ownedNames, aliases, locale, firstFreeze and unrelated exact values. Only the four reviewed generic fields are repaired:
+- commit-protocol definition: current D3 is wire13 + InputDescriptor/3 + `d3_identity_operation/13`; genuine wire9–12 is exact history; `d6_commit_request/2` remains the actual D6 submit.
+- conflict-record definition: current outer is InputDescriptor3/Proof3/Prepared3; source_merge/choose_source_head retain inner Input2/Plan1/Preview1 + ownerKind/2; policy_bundle_choice uses inner Input3/Plan2/Preview2 + ownerKind/3.
+- prepared-intent exclusions: current D3 wire13/InputDescriptor3/`d3_identity_operation/13` is not a D6-plan member; genuine wire9–12 stays historical.
+- plan-token exclusions: same current/historical split; no D3 request gains an undeclared D6 plan token.
 
-Oracle: current Proof3/Input3/Prepared3 are literal version 3, plan token tag is `d6_plan/3`, and Key3 has exactly fifteen ranks 0..14 with `document_format` at rank 1. A managed-Document semantic consumer freezes the format binding; M1→M2 invalidates the old Proof3 even when source bytes/version are unchanged. A path that does not consume managed-Document semantics does not fabricate the dependency. A format-only portable change has sourceChanges=[] and creates no SourceRevisionPlan, managed SourceVersion, or H advance. Genuine Key2/Proof2 remains the original fourteen-arm historical family.
+The corresponding four current-parent Registry pointers are named-current-successor mappings with their exact predecessor value/current family oracle. All other genuinely exact pointer mappings remain exact.
 
-### A2-D6-829-P2-01
+## 5. Evidence boundary
 
-Source: fixed-S D6 Control §§5-13, especially lines 98-247, plus the real D3/D9/D10 owner boundaries named there.
+FULL for this residual repair: the D6 fixed/current owner inputs actually mapped here; all 299 D6 section records and their source-qualified targets; all 760 fixed97 ACCEPTANCE rows with the 115 D6 intersections fully targeted; both Registry pointer inventories; parent Impact 89 records (85 unique IDs + four range/metadata records); and the bilingual pairs explicitly recorded in the machine map.
 
-Current anchors: D6-CONTROL §17.1 ResultPage, §17.2 BudgetBinding, §17.3 ImportJob, §17.4 management/control read, §17.5 ByteRead, §17.6 inherited interfaces/ObservationScope, and §17.7 SourceBinding/OriginBinding.
+PARTIAL: only the explicit D7-D10 direct-holder/load-bearing intersections needed by D6. Full D7-D10 A2 modules are not accepted or claimed fully read.
 
-Oracle: the still-active original contracts remain complete, positive, numeric, authorization-aware and recoverable. Result paging keeps pageSize 1..200, complete-result-before-page, legal empty nonterminal pages, terminal cursor rules, TTL/reset and error order. Budget keeps its original twelve members/domains. ImportJob keeps pins, mapping DAG/SCC, atomic groups, per-batch OperationId, canonical requests/plans/receipts, binding/version/watermark/budget and committed-prefix recovery. ByteRead keeps resource_bytes/1, offset/maxBytes, decoded base64 length, short-read-not-EOF, snapshot/current authorization, TTL/reset/shared charging. SourceBinding/OriginBinding keep their actual comparator and owner boundaries. Old numeric SourceVersion, wire11/12 and Scope1 are version-qualified predecessor evidence, not fresh current carriers.
+UNREAD/pending: unlisted full D7-D10 owner sources, Mandatory 925–1141, and product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment evidence.
 
-### A2-D6-829-P2-02
-
-Sources: fixed-S D6 Lexicon/Registry, current-parent 52-concept/17-binding Registry, and current D6 Lexicon/Registry.
-
-Current anchors: D6-LEXICON §3 and §7-§9; D6-REGISTRY generic definitions, currentTechnicalSuccessors and historicalDispatch.
-
-Oracle: original concept IDs, complete fields, owned names, aliases, locale mappings and firstFreeze provenance are preserved. Generic current terms name the actual Notice3/CP4, Proof3/15-key, Input2, Witness2, Inventory2/Record3/Proof2, Profile4/Plan4 and Bundle2/Declaration2/Handle2 families once. Predecessors remain explicit version-qualified historical facts; no compatibility layer or random inner-type bump is invented.
-
-### A2-D6-829-P2-03
-
-Source: current-parent D6 Storage §7.2.1 capacity paragraph and its exact inherited scheduling obligations.
-
-Current anchors: D6 Main §7.2.1; D6-IMPACT §10.1 cases `D6-SCHED-CAP-02` and companions; D6-REGISTRY schedule-continuity-witness.
-
-Oracle: the limit is per producer update: at most 4096 retained pins and at most 16 MiB canonical evidence metadata. Source/component bytes use a separately reserved PinBudget. Capacity failure atomically records gap/invalidation before ordinary progress; compaction remains reference-safe. One thousand transitions needing five pins each is 5000 pins and therefore fails even though 1000 is below 4096. This is not a transition-count ceiling.
-
-## 4. Machine audit package
-
-D6-SOURCE-MAP.json source-qualifies all 23 fixed-S Control sections to concrete current anchors instead of whole-file targets. It preserves 89 parent Impact source records and distinguishes the 85 unique case IDs from four range/metadata records. It preserves all 760 fixed97 rows and attaches actual bilingual source rows to the 115 D6 intersections. Registry pointer maps preserve 767 fixed-S and 1246 current-parent pointers while distinguishing exact-retain values from named current successors.
-
-Machine inventory and navigation do not certify semantic acceptance.
-
-## 5. Remaining boundaries
-
-D7-D10 full A2 modules, Mandatory 925-1141, A2 completion, and the true fresh Pro/global review remain pending. Runtime and product behavior are UNRUN. A later accepted-design SHA is still required before freeze/implementation startup.
+P1-01 and P2-03 stay independently CLOSED at fixed01cc and are regression-protected, not reopened. The four residuals above are only author-resolved-pending-independent until the new fixed-stop non-author review.

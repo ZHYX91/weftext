@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-D6 is now an author candidate. Detailed section/case/registry-pointer provenance is in [D6-SOURCE-MAP](D6-SOURCE-MAP.md); D7-D10 remain future full-module batches.
+D6 is an author candidate with a fixed01cc non-author verdict. Detailed section/case/registry-pointer provenance is in [D6-SOURCE-MAP](D6-SOURCE-MAP.md). Fixed01cc independently CLOSED D6 P1-01 and P2-03; P1-02/P2-01/P2-02 and navigation P2 are repaired from fixed32cf and remain author-resolved-pending-independent. D7-D10 remain future full-module batches.
 
 
 ## 12. Fixed-a62 D4/D5 audit-map repair
@@ -126,4 +126,4 @@ D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.
 
 The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
 
-D3's two bounded findings are independently CLOSED at fixed-a62. D6 remains the stopped 829 author candidate and is not accepted by the fixed-829 read-only work. D7-D10 full modules, Mandatory 925-1141 and fresh global review remain pending; runtime evidence remains UNRUN.
+D3's two bounded findings are independently CLOSED at fixed-a62. Fixed829 remains only the origin of the five D6 findings; the later independent review object is fixed01cc. At fixed01cc, D6 P1-01 and P2-03 are independently CLOSED, while P1-02/P2-01/P2-02 plus A2-D6-01CC-P2-01 remain pending a new exact-stop review after the fixed32cf author repair. D4/D5 R1/R2 is a separate fixed32cf non-author review object and is not closed here. D7-D10 full modules, Mandatory 925-1141 and fresh global review remain pending; runtime evidence remains UNRUN.

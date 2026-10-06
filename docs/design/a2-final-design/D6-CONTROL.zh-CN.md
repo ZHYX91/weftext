@@ -442,7 +442,7 @@ DependencyProof/3 的既有 closed 外壳保持：
 ~~~
 实际 `entries` 可以为空或包含多项；每项 `evidencePins` 可以为空或包含多项。数组长度、唯一性与排序由本节定义，不以 JSON 省略成员表达“未知”。
 
-DependencyKey/3 是以下十四个 kind 的 closed union。每个 key 都必须恰含 `kind`、`workspaceRef` 和该 variant 明列的附加成员；unknown/missing/duplicate member、非法 null、错 union、错 Ref 域或额外 alias 一律 `invalid_request`。`workspaceRef` 必须等于 DependencyProof.workspaceRef 及 commitDomain.workspaceRef。Ref 集使用既有 D3 RefKey canonical 顺序、无重复；FieldId 集使用 D4 规范顺序。作者 sibling order、Entry order、relation fact order 等本来有语义的顺序不是集合，不得为了 DependencyKey 排序而改写。
+DependencyKey/3 是以下十五个 kind 的 closed union。每个 key 都必须恰含 `kind`、`workspaceRef` 和该 variant 明列的附加成员；unknown/missing/duplicate member、非法 null、错 union、错 Ref 域或额外 alias 一律 `invalid_request`。`workspaceRef` 必须等于 DependencyProof.workspaceRef 及 commitDomain.workspaceRef。Ref 集使用既有 D3 RefKey canonical 顺序、无重复；FieldId 集使用 D4 规范顺序。作者 sibling order、Entry order、relation fact order 等本来有语义的顺序不是集合，不得为了 DependencyKey 排序而改写。
 
 十五个 kind 的固定 rank 为：source=0、document_format=1、lifecycle=2、placement_range=3、ref_inbound=4、relation_incidence=5、calendar_scope=6、registry=7、temporal_rules=8、authorization=9、foreign_binding=10、query_scan=11、replica_registry=12、conflict_record=13、execution_resource=14。DependencyProof.entries 先按 kind rank，再按整个 key 的 D3-CJ/3 canonical UTF-8 bytes 作无符号 byte-lexicographic 升序，且完整 key 唯一；同样的 key 不允许以两个 stamp 重复出现。`evidencePins` 按 PinRef.pinToken 规范 bytes 排序唯一。外层 Workspace 内的 Ref 和嵌套 scope 原则上必须属于该 Workspace；原 D3/D4 作者值允许携带 foreign Ref 时，只能逐字保留该作者值，不能据此在本 key 下取得另一个 Workspace 的枚举或披露资格。
 
