@@ -74,12 +74,10 @@ fresh managed Document 的 source-document component 与 document_format compone
 ```text
 ChangeRecord/1 = {
   format:"weftext.change-record",version:1,
-  decisionKey:DecisionKey/2,
-  changeId:ChangeId/1,
+  decisionKey:DecisionKey/2,changeId:ChangeId/1,
   installationNotice:{format:"weftext.installation-notice",version:3,byteLength:Counter,sha256:"64-lowercase-hex"},
   completionProof:{format:"weftext.content-completion",version:4,byteLength:Counter,sha256:"64-lowercase-hex"},
-  frontierBefore:Frontier/2,
-  frontierAfter:Frontier/2
+  frontierBefore:Frontier/2,frontierAfter:Frontier/2
 }
 ```
 
@@ -1060,7 +1058,7 @@ request shape保持：
 当前/2读路径还必须验证key中的heads与createdAtFrontier之间上述连续sealed关系；portable history缺段、伪造head或record bytes损坏属于完整性/状态不可用，不把缺失head删掉后返回一个较小conflict。/1按其原历史decoder/gate，不用/2的新Frontier条件回溯改判其已保存bytes。
 ### 9.4 conflict resolution prepare
 
-current `source_merge` 与 `choose_source_head` 两个 source arm 继续使用下列闭合 wireVersion=3 request，并保留 ConflictResolutionInput/2 / Plan1 / Preview1 source contract。fresh current `policy_bundle_choice` 只在后部 current trust-conflict anchor 中由 Input3/Plan2/Preview2、FreshDomainAuthorizationSpec/2、mixed Bundle1/2 与 Carry1/2、Declaration2/Outcome2、双 seal profile 和 Notice3/CP4/ChangeRecord1 闭合。真实 saved/planned/unknown policy predecessor 只按其 recorded Input2/Plan1/Preview1、FreshDomainAuthorizationSpec/1、Bundle1/Carry1/Declaration1 bytes、pins、authorization 与 recovery 继续。
+当前 `source_merge` 与 `choose_source_head` 两个来源分支继续使用下列闭合的第 3 版请求，并保留 ConflictResolutionInput/2、Plan1、Preview1 的来源合同。当前新鲜的 `policy_bundle_choice` 只在后部信任冲突锚点中，由 Input3/Plan2/Preview2、FreshDomainAuthorizationSpec/2、Bundle1/2 混合分派、Carry1/2、Declaration2/Outcome2、两种封存配置档以及 Notice3/CP4/ChangeRecord1 闭合。真实已保存、已计划或结果未知的策略前身，只按其已记录的 Input2/Plan1/Preview1、FreshDomainAuthorizationSpec/1、Bundle1/Carry1/Declaration1 字节、pins、授权与恢复继续。
 
 两个 current source arm 使用闭合 wireVersion=3 request：
 ~~~json
@@ -1083,7 +1081,7 @@ address 必须选择 `expectedKey.heads` 中恰一个成员。Core 加载该 hea
 
 #### Historical policy_bundle_choice predecessor evidence
 
-以下 Bundle1/Carry1/Declaration1 policy 文本只适用于真实使用该 schema 的 predecessor record，不是 fresh-current policy arm。其完整 authorization、non-disclosure、root/PoP/signature、positive path、error order、pin retention 及 saved/planned/unknown recovery 对该历史记录继续有效；fresh current policy conflict 使用后部 Input3/Plan2/Preview2 successor。
+以下 Bundle1/Carry1/Declaration1 策略文字只适用于真实使用该 schema 的前身记录，并不是当前新鲜策略分支。该历史记录原有的完整授权、非披露顺序、root/PoP/signature、正向路径、错误顺序、pin 保留以及已保存/已计划/结果未知恢复全部继续有效；当前新鲜策略冲突使用后部 Input3/Plan2/Preview2 后继合同。
 
 处理 historical `policy_concurrent` predecessor 时，读取 branch contents 前必须具备 `conflict_resolve`、workspace `policy_admin`、完整 subject disclosure、exact `expectedKey`、每个 head 的 CP3/component bytes 与连续 portable-history proof。每个 head bundle 必须同 Workspace，并具有逐字相同的已锚定 `WorkspaceTrustRootFingerprint/1`；head 缺失/损坏、root 不同、共同历史不可证明或 key 已变化都属于 unavailable/integrity conflict。`selected` 必须精确定位一个 head/bundle；current host state、arrival order 与 LWW 都不能替用户选择。
 
@@ -1170,7 +1168,7 @@ immutable owner preview 为闭合 `ConflictResolutionPreview/1`：
 
 closed-decode 与 error 顺序继续使用既有 D6 surface：malformed wire3/Resolution2 在任何 state read 前为 invalid_request；披露/授权失败仍为 not_visible；branch/CP3/history evidence 不可用使用既有 state/proof/domain-unavailable 边界；expectedKey 改变为 conflict_changed。不新增 error union。§5 继续是唯一顺序：saved 在新业务检查前返回/恢复原 saved result；planned 恢复同一 PreparedIntent/descriptor/pins/preview/installation state，绝不重新解释不同 Resolution2；只有 unseen 才运行本 wire3 preparation。exact replay 只恢复同一个 retained plan association。改变 resolution/choice/source/expectedKey 不能复用原 planToken，必须重新走 unseen prepare；若已按分配的 OperationId 存在原 decision，则先执行 §5 saved/planned/unknown recovery，§8 继续保留该原始责任。
 
-fresh current policy receiver 按 §20.1 mixed dispatch：historical head 验证 recorded CP3/Bundle1，current head 验证 Notice3/CP4/ChangeRecord1 + Bundle2；selected/losing compromise fold、PoP、root signature、result bytes 与 same-decision conflict transition 都必须完整验证。current source resolution receiver/publication 使用 Notice3/CP4/ChangeRecord1 与同一 frozen source pins/semantic proof；genuine historical source record 保留 recorded CP decoder。任一 mismatch 都是 unavailable/integrity conflict，不能 arrival-order repair。
+当前策略接收端按 §20.1 执行混合分派：历史 head 验证其已记录的 CP3/Bundle1，当前 head 验证 Notice3/CP4/ChangeRecord1 与 Bundle2；selected/losing compromise fold、PoP、root signature、result bytes 和同一 decision 的 conflict transition 都必须完整验证。当前来源解析的接收与发布使用 Notice3/CP4/ChangeRecord1 以及同一份冻结的来源 pins/semantic proof；真实历史来源记录保留其已记录的 CP decoder。任一不匹配都进入 unavailable/integrity conflict，禁止按到达顺序修复。
 
 旧 wireVersion=2/ConflictResolution/1 候选中的 `policy_choice:{policy}` 不再是当前 new-FA surface，且未激活；不虚构 migration shim。任何确能证明存在的真实历史 prepared/saved/planned/unknown record 继续只按原 decoder、request fingerprint、pins 与义务恢复。placement/lifecycle/identity conflict 继续导航到 D3 §10.1 typed resolver，并保持原单一 D3 submit/P decision。
 
@@ -1242,14 +1240,8 @@ write不蕴含read。D6正常提交/重放回执还要求其sourceVersions的ent
 
 issuer policy变更是这个issuer控制域自己的显式管理操作：仅当前administer_issuer可准备/执行/重放，绑定完整旧revision及新policy/profile，当前认证/delegation和fence在同一控制事务CAS；实际改变checked-add revision，MAX拒绝。以issuer内的管理operation key保存不可变请求/结果，same-key重放不重复改变，different input conflict；这个控制账本不是D3 Workspace-local OperationId或跨Workspace全局注册表。issuer管理的host/CLI/RPC运输须在该实施入口冻结前提供closed schema，当前D6 Workspace提交API不能冒充此入口；本节已经冻结主体/权限、幂等、CAS和效果的完整语义，不授权自由代码管理回调。撤销最后一个issuer管理员或其allocate能力可以是显式效果，不能靠重新open恢复初始超级管理员；host上重新认证只恢复同一身份，不新增grant。
 
-current bootstrapProfile 的唯一 fresh family 是 WorkspaceBootstrapProfile/4：
+当前 bootstrapProfile 的唯一新鲜路径族是 WorkspaceBootstrapProfile/4；其协议字面量、helper 类型、字段形状与顺序和 D6-SCHEMAS 当前定义一致：
 ~~~text
-WorkspaceBootstrapProfile/4 = {
-  kind:"d6_bootstrap_profile",wireVersion:4,
-  profileRevision:Counter,registrySeedBinding:RegistryBinding/1,
-  newSeriesMultiplicity:"unique"|"many",
-  initialPeriodScope:"workspace"
-}
 WorkspaceTrustGenesis/2 = {
   kind:"d6_workspace_trust_genesis",version:2,
   rootDeclaration:WorkspaceTrustRootDeclaration/1,
@@ -1258,6 +1250,31 @@ WorkspaceTrustGenesis/2 = {
     WorkspaceTrustDeclaration/2
   ]
 }
+
+WorkspaceBootstrapProfile/4 = {
+  kind:"d6_bootstrap_profile",wireVersion:4,
+  profileRevision:Counter,registrySeedBinding:RegistryBinding/1,
+  newSeriesMultiplicity:"unique"|"many",
+  initialPeriodScope:"workspace"
+}
+
+WorkspaceBootstrapCreatorBinding/1 = {
+  issuerPrincipal:Token,targetPrincipal:Token,
+  principalAudienceToken:Token
+}
+
+WorkspaceBootstrapTargetRegistry/1 = {
+  snapshot:RegistrySnapshot/1,binding:RegistryBinding/1
+}
+
+WorkspaceBootstrapSeriesConfiguration/1 = {
+  seriesScope:SeriesScope,multiplicity:"unique"|"many",revision:1
+}
+
+WorkspaceBootstrapPeriodScopeBinding/1 = {
+  nodeRef:NodeRef,scope:CalendarScope,revision:1
+}
+
 WorkspaceBootstrapPlan/4 = {
   kind:"d6_workspace_bootstrap_plan",wireVersion:4,
   operationId:Uuid,proposalId:Uuid,
@@ -1271,11 +1288,11 @@ WorkspaceBootstrapPlan/4 = {
   periodScopeBindings:[WorkspaceBootstrapPeriodScopeBinding/1...]
 }
 ~~~
-Profile4 仍由原 issuer policy/family 固定并服从原 allocate_workspace、A3–A11、proposal/custody、stage3–stage15、单 planning CAS 与单 final P。Genesis2 恰含两条 Declaration2 authorize，固定顺序为 revision-token 后 source-transform；两条共享同一原 DecisionKey 与最终 activation ChangeId，第二条 predecessor 绑定第一条完整 canonical bytes。Plan4 的 initialPresentationPolicy 是 mandatory，冻结 fresh empty-head before 与 parents=[]、revision=1、defaultPresentation=separate；不另走已激活 target 的 policy_admin，也不新增 request/CAS/ledger。
+Profile4 仍由原 issuer policy/family 固定，并继续服从原 allocate_workspace、A3–A11、proposal/custody、stage3–stage15、唯一 planning CAS 与唯一 final P。Genesis2 恰好包含两条 Declaration2 authorize，固定顺序为 revision-token 后 source-transform；`rootDeclaration.establishmentDecisionKey` 与 `initialDomainDeclaration.decisionKey` 都逐字等于原 create/fork DecisionKey，两条声明共享最终 activation ChangeId，第二条 predecessor 绑定第一条完整 canonical bytes。Plan4 的 initialPresentationPolicy 是必填项，冻结 fresh empty-head before 与 parents=[]、revision=1、defaultPresentation=separate；不另走已激活 target 的 policy_admin，也不新增 request、CAS 或 ledger。
 
 唯一 final P 通过 Notice3/CP4/ChangeRecord1 原子提交 Bundle2（authorizationRevision=1、trustRevision=2）、两条 Declaration2、mandatory presentation revision1、target Registry、series/scope control、target activation/custody 与全部原 author effects。失败或 CAS loser 不留下半 trust、半 presentation 或半 active Workspace。receiver admission 必须验证完整 root/双 Declaration2/PoP、Bundle2、CP4/ChangeRecord1、presentation same-decision association 与所有源分量。
 
-current Profile4 只为 unseen fresh create/fork 产生 Plan4。真实 historical Plan1/Plan3 若确有记录，继续原 decoder、bytes、pins、profile/trust family、authorization 与 saved/planned/unknown recovery；不做 migration、relabel、dual-write，也不向旧 bytes 注入 Genesis2 或 presentation field。普通 managed copy、restore、continue、failover 都不重新运行 bootstrap。
+当前 Profile4 只为尚未见过的新鲜 create/fork 产生 Plan4。若真实 historical Plan1/Plan3 确有记录，则继续使用原 decoder、bytes、pins、profile/trust family、授权以及已保存/已计划/结果未知恢复；不做 migration、relabel 或 dual-write，也不向旧字节注入 Genesis2 或 presentation field。普通 managed copy、restore、continue、failover 都不重新运行 bootstrap。
 
 IssuerControlPolicy 顶层成员和 wireVersion=1 不变，只按嵌套 bootstrapProfile 的显式 wireVersion 分派；新 /3 组合先过 D1 版本资格。真实已保存 BootstrapPlan/1 继续原 profile、policy、字节与恢复，不能改标为 /2。存在旧解码器不等于证明原型曾部署。
 
@@ -1434,11 +1451,11 @@ Control inspection v2 target新增：
 
 ## 17. Current fixed97 direct-owner contract
 
-以下 retained contract 除非被下方具名 successor 只替换其 versioned carrier，否则继续是 current D6 义务。每项都标明 immutable source、exact section 与 current constructor/validator，不建立第二权威。
+以下保留合同除非被下方具名后继只替换其版本化 carrier，否则继续承担当前 D6 义务。每项都标明不可变来源、准确 section 与当前 constructor/validator；这些引用只是规范性导入，不建立第二套权威。
 
 ### 17.1 ResultPage / cursor transport
 
-Normative import：`docs/design/snapshots/d6-control-interfaces/source.md`，blob `32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4`，§5 lines 98–107。保留 exact page request `wireVersion,kind,resultToken,cursorToken,pageSize`，version1、pageSize 1..200；exact reply `wireVersion,kind,resultToken,rows,terminal,nextCursorToken?`；完整结果先于分页存在；terminal=true 禁止 next cursor，terminal=false 即使 rows=[] 也必须有 cursor；current authorization 先于 expiry/reset/cursor/state/read。empty nonterminal 合法，transport failure 绝不能冒充 EOF。constructor/validator 为 D6 result-spool publisher 与 strict result page/error decoder；D7 继续拥有 row/result semantics。
+规范性导入：`docs/design/snapshots/d6-control-interfaces/source.md`，blob `32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4`，§5 第 98–107 行。完整保留精确分页请求 `wireVersion,kind,resultToken,cursorToken,pageSize`、第 1 版、pageSize 1..200；精确响应 `wireVersion,kind,resultToken,rows,terminal,nextCursorToken?`；完整结果必须先于分页存在；terminal=true 时禁止 next cursor，terminal=false 时即使 rows=[] 也必须有 cursor；当前授权检查先于 expiry/reset/cursor/state/read。空的非终止页合法，运输失败绝不能冒充 EOF。constructor/validator 是 D6 result-spool publisher 与严格的 result page/error decoder；D7 继续拥有 row/result 语义。
 
 ### 17.2 BudgetBinding/1
 
@@ -1446,29 +1463,29 @@ Import 同一 source/blob §6 lines 108–117。BudgetBinding/1 exact 为 `versi
 
 ### 17.3 ImportJob / batch recovery
 
-Import 同一 source/blob §7 lines 118–127。保留 authenticated owner、完整 input descriptor/pins、mapping version、有限 DAG/SCC 与 atomic groups、显式 batch order、每 batch 稳定 OperationId、exact protocolOwner/canonical request/full plan、committed receipts、binding/version/watermark prefix、state 与 budget。只有 predecessors 完整且已 committed 的 batch 才推进 prefix；retry 不能重复推进；mapping/input/groups 改变产生新 job。D9 拥有 format/mapping/comparator input，D3 或 D6 拥有被接纳的 author request/plan，D6 原子保存 receipt/binding/watermark。
+导入同一 source/blob 的 §7 第 118–127 行。保留已认证 owner、完整 input descriptor 与 pins、mapping version、有限 DAG/SCC 与 atomic groups、显式 batch 顺序、每个 batch 稳定的 OperationId、准确 protocolOwner/canonical request/full plan、已提交 receipts、binding/version/watermark 前缀、state 与 budget。只有 predecessors 完整且已 committed 的 batch 才能推进前缀；retry 不得重复推进；mapping、input 或 groups 改变时必须产生新 job。D9 拥有 format/mapping/comparator input，D3 或 D6 拥有被接纳的 author request/plan，D6 原子保存 receipt/binding/watermark。
 
 ### 17.4 Managed configuration / control read
 
-Import 同一 source/blob §§8–10 lines 128–173。四个 closed management intent、policy_admin/ObservationScope gates、唯一 D6 prepare/commit ledger、CAS/replay/error order，以及 closed d6_control_read target/state/error shape 全部保留。current outer carrier 是 InputDescriptor/3、DependencyProof/3、PreparedIntent/3；inner management contract 不机械升版。
+导入同一 source/blob 的 §§8–10 第 128–173 行。四个闭合 management intent、policy_admin/ObservationScope 门、唯一 D6 prepare/commit ledger、CAS/replay/error order，以及闭合的 d6_control_read target/state/error shape 全部保留。当前外层 carrier 使用 InputDescriptor/3、DependencyProof/3、PreparedIntent/3；内部 management contract 不机械升版。
 
 ### 17.5 Resource ByteHandle / ByteRead
 
-Import 同一 source/blob §11 lines 174–189。d6_byte_read_request 保持 version1，成员为 handleToken、offset、maxBytes 1..1048576。成功结果绑定 immutable Resource cut，并返回 exact resourceRef、resourceRevisionToken、offset、totalBytes、无 padding base64url data 与 Boolean terminal；decoded length 精确为 min(maxBytes,totalBytes-offset)。offset==totalBytes 可返回 empty terminal success；offset>totalBytes 是 range_invalid；short read/corruption/I/O 绝不能伪造 EOF。gate order 保持 decode -> audience/current resource authorization -> expiry -> reset -> range -> pin/backend/budget -> complete chunk verification -> final delivery gate。一个 handle 的全部 read 共用其 persistent budget。D2 Resource snapshot 签发 handle；D6 只运输该 committed snapshot。
+导入同一 source/blob 的 §11 第 174–189 行。d6_byte_read_request 保持第 1 版，成员为 handleToken、offset、maxBytes 1..1048576。成功结果绑定不可变 Resource cut，并返回准确的 resourceRef、resourceRevisionToken、offset、totalBytes、无 padding 的 base64url data 与 Boolean terminal；解码后的长度必须精确等于 min(maxBytes,totalBytes-offset)。offset==totalBytes 可返回空的 terminal success；offset>totalBytes 为 range_invalid；short read、corruption 或 I/O 绝不能伪造 EOF。门禁顺序继续是 decode → audience/current resource authorization → expiry → reset → range → pin/backend/budget → complete chunk verification → final delivery gate。一个 handle 的全部 read 共用其持久 budget。D2 Resource snapshot 签发 handle；D6 只运输该 committed snapshot。
 
 ### 17.6 跨阶段继承接口 / ObservationScope
 
 同一 source/blob 的 §12–§13（190–247 行）只按仍有效的**业务不变量**导入，不把前身版本号当 current。source 第192行的 numeric SourceVersion/revision 投影属于 predecessor evidence：fresh current 的生产版本/当前性使用 §1.5 SourceVersion/2 + SourceObservation/1，以及 §1.5.1 的 RevisionTokenBinding/2 signed stable-address association；继续保留的业务规则是 bare numeric revision 不得跨 Ref/生产域比较，也不得静默扩展旧 D3 opaque revision-token decoder。真实 historical record 保留 recorded token/version 语义。
 
-source 194–200 行继续精确保留 owner boundary：D3 拥有 cut/custody token；D4 拥有 RelationReadContext/2、RelationReadBinding/2 与 RecurrenceReadBinding/1 inner shape；D7 拥有 row/result 语义；D6 只提供版本限定的 protected evidence 与 transport。source 202–247 行继续保留授权先于秘密读取、禁止 hidden-range probing、saved/planned delivery qualification，以及 complete proof 与 disclosure 分轴。其 predecessor ObservationScope/1 四 profile carrier **不是 current**。fresh current 使用 §3.3 ObservationScope/2，且恰有 `local_source|owner_fields|local_structure|workspace_constraints|control_only|prepared_workspace`；Core 必须在 author/range read 前派生并写入 InputDescriptor/3。真实 historical Scope1/wire11 或 wire12 decision 保留 recorded bytes；fresh D3 使用 wire13/Descriptor3。caller scope、free JSON、index miss、当前空范围或单独 policy_admin 都不能生成更宽 observation authority。
+source 第 194–200 行继续精确保留 owner 边界：D3 拥有 cut/custody token；D4 拥有 RelationReadContext/2、RelationReadBinding/2 与 RecurrenceReadBinding/1 的内部 shape；D7 拥有 row/result 语义；D6 只提供版本限定的受保护 evidence 与 transport。source 第 202–247 行继续保留授权先于秘密读取、禁止 hidden-range probing、saved/planned delivery qualification，以及 complete proof 与 disclosure 分轴。其前身 ObservationScope/1 的四种 profile carrier 不是当前合同。当前新鲜路径使用 §3.3 ObservationScope/2，且恰有 `local_source|owner_fields|local_structure|workspace_constraints|control_only|prepared_workspace`；Core 必须在 author/range read 前派生并写入 InputDescriptor/3。真实历史 Scope1/wire11 或 wire12 decision 保留已记录字节；当前新鲜 D3 使用 wire13/Descriptor3。caller scope、free JSON、index miss、当前空范围或单独 policy_admin 都不能生成更宽 observation authority。
 
 ### 17.7 SourceBinding / OriginBinding physical boundary
 
-Normative identity/lifecycle import：`docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md`，blob `bc23922ae2de4c80dadc7b91e945c87ce154b55a`，SourceBinding/ForeignIdentityKey/OriginBinding clauses 与 lifecycle matrix。SourceBinding 标识一个具体 source instance/collection scope；account token、cursor、etag、watermark、credentials 是 control-plane facts。OriginBinding 至多允许一个 active ForeignIdentityKey association，保留 retired audit，active_non_live 不自动 restore，retirement 后只有 explicit adopt 可重新建立 fresh binding。source_deleted、Node Trash、detached binding 与 provider cancellation 是独立状态轴。D6 拥有 physical persistence/retention/same-key linearization 与 durable base-current-remote evidence；D9/D10 或 provider 拥有 external version/comparator 与 connector/credential execution。
+规范性身份/生命周期导入：`docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md`，blob `bc23922ae2de4c80dadc7b91e945c87ce154b55a`，对应 SourceBinding、ForeignIdentityKey、OriginBinding 条款与生命周期矩阵。SourceBinding 标识具体来源实例或集合范围；account token、cursor、etag、watermark、credentials 都是控制面事实。OriginBinding 至多允许一个有效 ForeignIdentityKey 关联，并保留退役审计；active_non_live 不自动恢复，退役后只有显式 adopt 才能重新建立新鲜绑定。source_deleted、Node Trash、detached binding 与 provider cancellation 是彼此独立的状态轴。D6 负责物理持久化、保留、同键线性化与耐久的 base-current-remote evidence；D9/D10 或 provider 负责外部版本/比较器以及 connector/credential 执行。
 
 ### 17.8 Current successor dispatch
 
-fresh unseen D6 精确使用 Key3/Proof3/Input3/Prepared3 与 d6_plan/3。portable current publication 使用 PortableComponentKey/2 + Notice3 + 唯一 final P + CP4/ChangeRecord1。实际消费 managed-Document 语义时必须包含 document_format；format-only transition 的 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion 或 H advance。真实 saved/planned/unknown Key2/Proof2/Descriptor2/Prepared2、Notice1/2 与 CP1/2/3 保留原 decoder、bytes、pins、OperationId、authorization、install/seal/receipt/retention/error order 与 recovery。
+当前尚未见过的 D6 精确使用 Key3/Proof3/Input3/Prepared3 与 d6_plan/3。可移植当前发布使用 PortableComponentKey/2、Notice3、唯一 final P，再产生 CP4/ChangeRecord1。实际消费受管 Document 语义时必须包含 document_format；仅格式变化时 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion，也不推进 H。真实已保存、已计划或结果未知的 Key2/Proof2/Descriptor2/Prepared2、Notice1/2 与 CP1/2/3 保留原 decoder、bytes、pins、OperationId、授权、installation/seal/receipt/retention、错误顺序与恢复。
 
 
 ## 18. SourceTransform compiler / exact mapping
@@ -1499,15 +1516,15 @@ canonical event array 按 original coordinate 排序。interval 在 p 结束的 
 非零 target [s,e)：任何 replace 与 target 真实 overlap 或 insert 严格落在内部都停止 exact mapping。否则一次性使用 original-before 坐标累计：
 
 ```text
-s' = s + Σδ(R where b<=s) + ΣL(I where q<=s)
-e' = e + Σδ(R where b<=e) + ΣL(I where q<e)
+s' = s + sum(delta(R), b<=s) + sum(len(I), q<=s)
+e' = e + sum(delta(R), b<=e) + sum(len(I), q<e)
 ```
 
 point p被replacement a<=p<b覆盖则停止；否则：
 
 ```text
-p' = p + Σδ(R where b<=p) + ΣL(I where q<p)
-     + (ΣL(I where q=p) when affinity=right else 0)
+p' = p + sum(delta(R), b<=p) + sum(len(I), q<p)
+     + (sum(len(I), q=p) when affinity=right else 0)
 ```
 
 因此 replacement end==p保持连续、start==p停止；insert@p left保持插入前、right到插入后。multi-transform chain逐段重新验证SourceVersion、signature、history cut与mapping，不跳中间transition。
@@ -1529,7 +1546,7 @@ TransformEmissionPlan/1 =
 | required{profile:"d6_source_transform_seal/1",expectedTrustRevision,expectedTrustKeyId}
 ```
 
-arm由Core在planning前机械决定，caller不可选。winning plan冻结后required不能降级、disabled不能升级；required seal时必须重验exact profile/revision/key和usable handle。seal不得重新compile/reorder/merge events。
+发出变换证据的分支由 Core 在规划前机械决定，调用方不能选择。disabled 的 reason 只允许固定字面量 `no_exact_core_edit_plan|transform_profile_unavailable` 中的一项；winning plan 冻结后，required 不得降级、disabled 不得升级。required 在 seal 时必须重新验证准确的 profile、revision、key 与可用 handle；seal 不得重新编译、重排或合并 events。
 
 ## 19. SourceTransform signed evidence/outbox
 
