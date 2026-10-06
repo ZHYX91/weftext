@@ -118,11 +118,11 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 D6 is now an author candidate. Detailed section/case/registry-pointer provenance is in [D6-SOURCE-MAP](D6-SOURCE-MAP.md); D7-D10 remain future full-module batches.
 
 
-## 12. Fixed-829 D4/D5 audit-map repair
+## 12. Fixed-a62 D4/D5 audit-map repair
 
-The fixed-829 non-author report left two audit P2s after a D4/D5 semantic LIMITED PASS. The current author repair marks both only author-resolved-pending-independent.
+The completed non-author review of fixed-a62 a62aa7d4eaf56113cd1e9e32336ae8814f83589b (request 7b6e1f16-fa41-499c-b078-647f1942e94e) left two audit P2s after a D4/D5 semantic LIMITED PASS. The current author repair marks both only author-resolved-pending-independent.
 
-D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.json all 170 fixed-S D5 nonblank lines into source-qualified continuous obligation groups with exact current target, disposition, owner, basis and oracle. Mandatory lines 1-924 are 716/716 with actual-owner/defer routing. The fixed97 selected rows retain both actual EN and ZH source rows (D4 72/72; D5 130/130). D4-CATALOG-MAP.json covers 2,854/2,854 pointers in seven non-overlapping subtrees while leaving the immutable fixed catalog as the sole normative value authority.
+D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.json all 170 fixed-S D5 nonblank lines into source-qualified continuous obligation groups with exact current target, disposition, owner, basis and oracle. Mandatory lines 1-924 are 716/716 with actual-owner/defer routing. The fixed97 selected rows retain both actual EN and ZH source rows (D4 72/72; D5 130/130). D4-CATALOG-MAP.json covers 2,854/2,854 RFC 6901 pointers in seven non-overlapping subtrees, with the document root represented by the empty string rather than slash, while leaving the immutable fixed catalog as the sole normative value authority. Mandatory multi-file targets use explicit per-file target arrays; the current workflow/freeze/handoff groups resolve to REVIEW-ENTRY §5.1–§5.3 rather than a nonexistent §7.
 
 The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
 
