@@ -464,7 +464,7 @@ Terminology gate继续验证：
 固定 S 的全部 snapshots、design inputs、catalog 与其历史 bytes 只读；P2 不以“同步”名义修改它们。P2 只同步真实 owner afterimage 和三份 routing 元数据。
 
 固定 C 已完成原 G0-A/G0-B baseline 对应的上一代 D4/D5 候选；当前 P1 新生产者规则还要求：
-- D3/D4 P2：revision/currentness、15-key/range（含 document_format）、CP4+ChangeRecord1/ConflictRecord2、M5 分流与真实 D4 relation/calendar/registry/semantic_pending 消费；
+- D3/D4 P2：修订与当前性、十五类依赖键/范围（含 document_format）、当前完成证明/变更记录与冲突记录、M5 分流，以及 D4 关系、日历、注册表与语义待定状态的真实消费；
 - D5 P3：structured operations、revision-bound locator、complete range 与 strict ordinary/structured 边界；
 - D7：查询、值表达式、视图、窄字段、定义转移、预览与效果、执行动作、准备和场景等全部消费者；
 - D8：complete current `SourceObservation/1`、Draft/IME/Undo/selection/editor、Server checkpoint；
