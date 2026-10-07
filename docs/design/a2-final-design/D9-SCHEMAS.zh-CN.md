@@ -46,7 +46,7 @@ Page/flow/workbook union 保持现任 D9 owner 的精确 shape。Workbook `CellV
 
 现任 author preparation 绑定 immutable `ConversionInput/2` ZIP。包内只允许 manifest.json、按序排列的 source/N.bin 与 resource/N.bin；必须使用 stored compression，不允许 encryption、link、duplicate 或 external reference。manifest 不包含自身 hash。
 
-part0 保存完整的 mapping/construction projection、route/profile、initial loss/choice、groups/batches 与 complete proposed-object manifest。raw part 保留精确原始字节。partOrdinal 不是 PinRef/authority；object ordinal 由 source-location/role tuple 决定，不是 identity。
+part0 保存完整的 mapping/construction 投影、route/profile、初始 loss/choice、groups/batches 与完整 proposed-object manifest。raw part 保留精确原始字节。partOrdinal 不是 PinRef/authority；object ordinal 由 source-location/role tuple 决定，而不是 identity。
 
 ## 6. TemplateRecipe/2 与 TemplateConstructionInput/2
 
@@ -131,7 +131,7 @@ ExportPlan/3 = {
 
 任何同名简化 object 都不是合法 Plan。除明示可 null 的 document/template/route binding 外，上述 member 全部必填。`planToken` 只使用 current `d9_export_plan/3` tag。`inputCatalog` 精确复用 `ExportInputCatalog/2`，不另改名为 D9 wrapper。
 
-`D9ExportInputDomain/1` 精确为 `document|native_table|node_collection|query_rows|query_json|resource`。`D9ExportTarget/1` 使用 final FC 的封闭 target union：asciidoc_source、resource_exact、带 profileId 的 html/pdf/docx/odt、csv_utf8、tsv_utf8、带 profileId 的 xlsx/ods，以及 query_json。exact-source/resource/query-json plan 强制使用 `generationPolicy={kind:"none"}`，且 document/template/route binding 全部为 null。
+`D9ExportInputDomain/1` 精确为 `document|native_table|node_collection|query_rows|query_json|resource`。`D9ExportTarget/1` 使用 final FC 的封闭 target union：asciidoc_source、resource_exact、带 profileId 的 html/pdf/docx/odt、csv_utf8、tsv_utf8、带 profileId 的 xlsx/ods，以及 query_json。对 exact-source/resource/query-json 的 plan 强制使用 `generationPolicy={kind:"none"}`，且文档、模板和路由 binding 全部为 null。
 
 `generationPolicy.render` 冻结封闭的 bindingChoices、missingPolicy、imageSizes、layoutChoices 与 nativeTableBindings。native-table binding record 按精确编译出的 (setName,columnName) 排序并去重，同时逐项冻结精确的 `D9NativeTableSelector/1`。本 A2 D9 候选只改变 fresh qualified Office authoring spelling；Plan3 selector/binding record 继续使用 final FC type。
 
@@ -145,7 +145,7 @@ template path 按精确 Unicode scalar sequence、normalization none、case-sens
 
 `D9ControlledRelativeOutputName/1` 保持精确 UTF-8，只由“/”分隔的非空 component 组成。empty/dot/dotdot component、backslash、control、forbidden punctuation、trailing space/dot、rooted/drive/UNC 以及 reserved device-name stem 都必须拒绝。
 
-PortableAlias 固定执行 Unicode 15.1 NFC → full default CaseFolding C/F → NFC，且只用于 rejection。完整 bundle 必须拒绝 exact duplicate、equal alias 与 alias-prefix conflict。loss-report.json 与 manifest.json 是 reserved root member。
+PortableAlias 固定执行 Unicode 15.1 NFC → full default CaseFolding C/F → NFC，而且只用于拒绝判定。完整 bundle 必须拒绝精确重复、alias 相等与 alias-prefix 冲突。loss-report.json 与 manifest.json 是保留的根成员。
 
 staged output metadata 与 `PublicationReceipt/3.outputs` 按 exact stored output name sorted unique。
 
@@ -155,7 +155,7 @@ staged output metadata 与 `PublicationReceipt/3.outputs` 按 exact stored outpu
 ```text
 {format:"weftext.export-loss",version:1,planToken,inputs,items}
 ```
-location 使用封闭的 ExportInputLocation，并可扩展到 binding/dataset_cell/block projection location。source_range 使用 UTF-8 byte；template_range 使用 Unicode scalar offset。
+location 使用封闭的 ExportInputLocation，并扩展到 binding、dataset_cell 与 block projection location。source_range 使用 UTF-8 字节偏移；template_range 使用 Unicode 标量偏移。
 
 `D9ExportConfirmation/1` 精确为 `{planToken,lossChoices}`。choice 必须排序且唯一，并覆盖 report matrix 定义的全部 requires_choice/blocking。confirmation 不得修改 Plan 或 staged bytes。
 
@@ -191,7 +191,7 @@ CSV 使用 RFC4180/CRLF 与 exact selected scalar projection。TSV 无 quote esc
 
 ## 15. WorkerInvocation/1
 
-`WorkerInvocation/1` 精确为 `{version:1,jobToken,step,routeId,routeRevision,profileId,inputs,options,budget}`。input slot 由 host 分配。terminal worker result 是封闭的 ok/failed union；failed code 只能是 unsupported/encrypted/unsafe/malformed/budget/cancelled/internal。Worker output 不能包含 author permission、receipt、identity 或 destination。
+`WorkerInvocation/1` 精确为 `{version:1,jobToken,step,routeId,routeRevision,profileId,inputs,options,budget}`。input slot 由 host 分配。终态 worker result 是封闭的 ok/failed union；failed code 只能是 unsupported/encrypted/unsafe/malformed/budget/cancelled/internal。Worker 输出不能包含作者权限、receipt、identity 或 destination。
 
 ## 16. Region
 
