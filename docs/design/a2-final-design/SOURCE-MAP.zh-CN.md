@@ -161,18 +161,18 @@ D8 已保全候选首次真实推送在 7e3f；本五项修订精确从 c98b（`
 
 本修订把 `D8-ACCEPTANCE.json` 设为六字段唯一结构源，恢复 ANNOT-01 与 WRITE-08 的完整正反极性，把 current View overlay 改到 `VIEW-CUR-*`，增加十个 `VIEW-BLD-01..10` Mandatory §15.7 oracle，得到 213/213 唯一 current obligation。本继任 delta 为 JSON/中英文投影加入确定性结构 guard，并把静态定义保存门与保持不变的 D7 §7 完整结果运行期 View 门明确分离，不建立第二 View/Query schema/store。54/54 fixed prose row 继续使用 section-level target；760/760 FC 逐行 applicability/current-owner 作者库存更新为 direct 167、upstream 146、保留 non-D8 owner 447，共 114 行 applicability 改动。
 
-fixed5eca 非作者复审已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02。D8-C98B-P1-03、D8-C98B-P2-01 与 D8-5ECA-P2-01 由本继任 delta 作者修订，但仍待独立复核；作者不自行 CLOSED。数量、结构检查和 docs CI 只提供机械证据，不代表语义接受。current D8 继续消费完整 Asciidoctor 2.0.26/D2 product、exact Source/Draft/edit/currentness、Annotation Value4/R6、presentation-policy owner 与已接受 D7 Search/View 语义。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D9 只是完整作者候选；D10 与 global A2 留后续。
+fixed5eca 非作者复审已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02。后续 ff10 非作者复审又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01。现在只剩 D8-C98B-P1-03 OPEN，并已收窄到 VIEW-BLD-04/05/06 与 Main §11.2 中“延期或不支持的现任布局是否可合法保存”的措辞冲突。本 D9 修复批不修改、也不自行关闭这个 D8 残余。数量、结构检查和 docs CI 只提供机械证据，不代表语义接受。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D10 与 global A2 留后续。
 
 ## 17. D9 完整作者整合
 
-D9 从 exact `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，现已是完整作者候选，不再是 TODO module。八份 fixed-S D9 source 为 FULL；八组 current D9 owner 中英为 FULL；Mandatory §14 的 884–924 行 FULL；current D7 D9-binding/PAB owner 中英 FULL；D9 适用 final AsciiDoc/Annotation successor FULL。D9 必要 read gap 为 0。D10 仍仅在具名 D9 direct intersection 上 PARTIAL，不构成完整 D10 整合。
+D9 从 exact `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，继续是完整作者候选，不再是 TODO module。八份 fixed-S D9 source 为 FULL；八组 current D9 owner 中英为 FULL；Mandatory §14 的 884–924 行与 D9 适用 Mandatory §15.5–15.8 的 1042–1141 行均为 FULL；current D7 D9-binding/PAB/View owner 已读取；D9 适用 final AsciiDoc/Annotation successor FULL。D9 必要 read gap 为 0。D10 仍只在具名 D9 direct intersection 上 PARTIAL，不构成完整 D10 整合。
 
-fresh current 的作者工作使用 D3 wire13、D7 PAB4、DependencyProof3 与 Effect3。fresh export/publication 使用 ExportPlan3/PublicationReceipt3，以及现任 D2Snapshot3/D8 presentation binding。historical wire11/12、PAB1/2/3、Recipe/ConversionInput1、Plan/Receipt1/2 只按原 decoder 与原始 bytes 恢复，不做现任化猜测。
+fresh current 的作者工作使用 D3 wire13、D7 PAB4、DependencyProof3 与 Effect3。fresh export 使用封闭的 Plan4 successor：Catalog3/Selection2/Projection2/Loss2/Confirmation2，并按交付类型生成 PublicationReceipt4 或 PrintReceipt1；适用时继续绑定现任 D2Snapshot3/D8 presentation。Plan/Receipt1–3 与其它前身封闭 family 只按原 decoder、bytes、pins 以及原 saved/planned/unknown 责任恢复，不虚构迁移。
 
 Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：唯一 lowercase-ASCII native-table leaf 继续使用 `data.native_table.COLUMN`；qualified/non-ASCII fresh Office template bytes 使用可见 `native.table[...]::column[...]`，按 shortest suffix/title/occurrence 逐级限定。final-FC `nt_/nc_` 只作 internal compiled Plan key，不是 hidden authoring authority。ordinary Node 不增加 export-mapping schema。
 
-current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正 export/copy/import current Annotation content 的 profile 必须通过唯一 R6 AnnotationInlineProfile 消费完整 PortableAnnotationRecord/4 / Value4，并在 current disclosure 下保持 target/reply/attribution 边界。
+current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正的内容导出使用一次精确现任 read 形成的唯一封闭 annotation_content carrier；portable backup 保留 canonical PortableAnnotationRecord/4，Review Bundle 分别校验 body/attribution 与 target/source context。current View export 也只有一个基于完整 D7 result/ViewSpec 的有限 binding：tree/treemap/sunburst、Gantt、boxplot/quantile 等延期布局在封闭解码阶段返回 unsupported_layout；合法现任布局若缺少有限 D9 chart profile/backend，才返回 renderer_unavailable。
 
-`D9-ACCEPTANCE.json` 是 80 条结构权威；`D9-SOURCE-MAP.json` 保存 fixed/current/successor provenance。historical finite evidence 57/63/59/82/90/130/12 分开记账、不可相加。I01–I12 与全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN。D9 仍为 `author-resolved-pending-independent-review`；docs/JSON 绿色检查不能接受它。
+`D9-ACCEPTANCE.json` 现是 97 条结构权威，D9 Registry/Terms 为 41 个 concept；`D9-SOURCE-MAP.json` 保存 fixed/current/successor provenance 以及修正后的 predecessor/current range。D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 仍都只是 `author-resolved-pending-independent-review`。historical finite evidence 57/63/59/82/90/130/12 分开记账、不可相加。I01–I12 与全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN；docs/JSON 绿色检查不能接受 D9。
 
-后续 D9 中文质量修订已移除十份受影响公开中文文件中的重复填充说明，保留必要的协议/type/member 字面量与中英文结构一致性，并且没有修改 D9 英文规范语义。ROOT-D9-ZH-P2-01 因而仍是 author-resolved-pending-independent-review，随单独的 D9 完整独立复核处理。
+较早的 ROOT-D9-ZH-P2-01 修复已在 ff10 独立 CLOSED，本批不重开该 closure。本三修批新修改的中文仍随当前精确最终 SHA 一起做 D9 增量复核，并与三个仍待复核的 D9-BAF finding 一并核验。

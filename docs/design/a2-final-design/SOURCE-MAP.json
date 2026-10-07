@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. D8 fixed5eca independently closed P1-01/P1-02/P2-02; residual P1-03/P2-01 plus D8-5ECA-P2-01 are successor-author-resolved-pending-independent-review. D9 complete integration and ROOT-D9-ZH-P2-01 Chinese-quality repair are author-resolved-pending-independent-review. D10/global remain pending.",
+  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. D8 fixed5eca closures remain; ff10 independently CLOSED D8-C98B-P2-01 and D8-5ECA-P2-01, leaving only narrowed D8-C98B-P1-03 OPEN. ROOT-D9-ZH-P2-01 is independently CLOSED at ff10. The three D9 fixed-baf findings are author-resolved-pending-independent-review. D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Bind the exact final SHA for a non-author D8 incremental review of D8-C98B-P1-03/D8-C98B-P2-01/D8-5ECA-P2-01 only. Separately perform the complete non-author D9 module review including ROOT-D9-ZH-P2-01. Neither scope accepts the other. Then complete D10 full owner integration followed by a fresh Pro/global A2 review.",
+  "next_batch": "First bind the exact final SHA for independent review of D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02, including the new Chinese delta. Separately repair and review the narrowed D8-C98B-P1-03 deferred-layout save conflict; prior D8 closures are not reopened. Then complete D10 full owner integration followed by a fresh Pro/global A2 review.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2573,7 +2573,7 @@
       "D8-SOURCE-MAP.md",
       "D8-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "fixed5eca independently closed D8-C98B-P1-01/D8-C98B-P1-02/D8-C98B-P2-02; successor author resolved residual D8-C98B-P1-03/D8-C98B-P2-01/D8-5ECA-P2-01; those three remain pending independent review",
+    "status": "fixed5eca independently CLOSED D8-C98B-P1-01/D8-C98B-P1-02/D8-C98B-P2-02; ff10 independently CLOSED D8-C98B-P2-01 and D8-5ECA-P2-01; only D8-C98B-P1-03 remains OPEN, narrowed to VIEW-BLD-04/05/06 plus Main §11.2 deferred-layout legal-save wording",
     "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "c98b five-finding repair synchronized affected EN/ZH contracts; pending independent verification",
@@ -2590,7 +2590,7 @@
     "view": "D7 Query/Definition/ViewSpec/1 owner retained; D8 owns lossless builder + renderer/interaction/AT; current overlay IDs use VIEW-CUR-* and Mandatory §15.7 uses VIEW-BLD-01..10",
     "sourceMap": "D8-SOURCE-MAP.json",
     "runtime": "UNRUN",
-    "review": "next review is exact-final-SHA non-author incremental review of only D8-C98B-P1-03, D8-C98B-P2-01 and D8-5ECA-P2-01; fixed5eca closures and unchanged accepted scopes are not reopened; green CI is consistency evidence only",
+    "review": "next D8 work is a separate narrow author repair plus independent review of D8-C98B-P1-03 only; no current D9 commit claims to fix it; all prior fixed5eca/ff10 closures and unchanged accepted scopes remain closed",
     "semanticAudit": {
       "fixedProseSections": 54,
       "broadWholeFileTargets": 0,
@@ -2618,7 +2618,7 @@
         "D8-C98B-P2-02"
       ],
       "sourceMapBlob": "d9c4d54cb6577fde934ce8df0c7a403d47d2cb14",
-      "status": "fixed5eca independently CLOSED P1-01/P1-02/P2-02; P1-03/P2-01 plus new D8-5ECA-P2-01 successor-author-resolved-pending-independent-review",
+      "status": "fixed5eca independently CLOSED P1-01/P1-02/P2-02; ff10 independently CLOSED P2-01 and D8-5ECA-P2-01; only P1-03 remains OPEN at the narrowed deferred-layout save conflict",
       "productRuntime": "UNRUN",
       "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged",
       "fixed5ecaReview": {
@@ -2635,6 +2635,17 @@
         "addedOpen": [
           "D8-5ECA-P2-01"
         ]
+      },
+      "ff10Review": {
+        "reviewSha": "ff10b800165a3fed610ccab3d30c25c1a1624a89",
+        "independentlyClosed": [
+          "D8-C98B-P2-01",
+          "D8-5ECA-P2-01"
+        ],
+        "remainingOpen": [
+          "D8-C98B-P1-03"
+        ],
+        "remainingScope": "VIEW-BLD-04/05/06 and D8 Main §11.2 wording that could treat deferred/unsupported current layout as legally savable"
       }
     }
   },
@@ -2659,25 +2670,25 @@
       "D9-SOURCE-MAP.md",
       "D9-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "complete D9 author integration preserved; ROOT-D9-ZH-P2-01 natural-Chinese quality repair authored without D9 English semantic changes; both remain author-resolved-pending-independent-review",
+    "status": "complete D9 author integration preserved; D9-BAF-P1-01/D9-BAF-P1-02/D9-BAF-P2-02 are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10 and is not reopened by the new D9 repair",
     "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "FULL",
     "mandatory14": "FULL lines 884-924",
-    "d7CurrentConsumers": "FULL D9-binding + PAB owner EN/ZH",
-    "finalFCSuccessors": "FULL for D9-relevant current SPEC/SCHEMAS/ACCEPTANCE including Value4/R6 direct consumer",
+    "d7CurrentConsumers": "FULL D9-binding + PAB + current View owner EN/ZH; deferred-layout versus renderer-unavailable boundary preserved",
+    "finalFCSuccessors": "FULL for D9-relevant current SPEC/SCHEMAS/ACCEPTANCE including §6.6 Plan4 export successor, §16a behavior closure and Value4/R6 direct consumer",
     "d10Direct": "PARTIAL-direct-D9-only; complete D10 UNREAD/later",
     "currentVersions": {
       "author": "D3IdentityOperationRequest/13 + PreparedActionBinding/4 + DependencyProof/3 + EffectManifest/3/EffectBytes/3",
       "conversion": "D9/1 artifact wire + D9/2 Workspace orchestration + ConversionInput/2 + TemplateRecipe/2 + TemplateConstructionInput/2",
-      "export": "ExportPlan/3 + PublicationReceipt/3",
+      "export": "ExportPlan/4 + ExportInputCatalog/3 + ExportContentSelection/2 + ExportProjection/2 + ExportLossReport/2 + D9ExportConfirmation/2 + PublicationReceipt/4 + D9PrintReceipt/1; Plan/Receipt1-3 and predecessor closed families remain exact recovery",
       "document": "D2DocumentSnapshot/3",
       "annotation": "PortableAnnotationRecord/4 + D3-Annotation-Value/4 + sole R6 AnnotationInlineProfile/1"
     },
     "acceptance": {
       "structuralAuthority": "D9-ACCEPTANCE.json",
-      "uniqueRows": 80,
-      "status": "author design oracles; independent review pending"
+      "uniqueRows": 97,
+      "status": "97 author design oracles; D9-BAF findings pending exact-final-SHA independent review"
     },
     "sourceMap": {
       "structuralAuthority": "D9-SOURCE-MAP.json",
@@ -2696,11 +2707,19 @@
     "evidenceBoundary": "design/source consistency only; I01-I12 and product/runtime/GUI/Office/OS/performance/deployment UNRUN",
     "chineseQualityRepair": {
       "finding": "ROOT-D9-ZH-P2-01",
-      "status": "author-resolved-pending-independent-review",
+      "status": "independently CLOSED at ff10",
       "affectedPublicChineseFiles": 10,
       "fillerOccurrencesRemoved": 108,
       "semanticEnglishChanges": 0,
-      "scope": "natural Chinese prose, punctuation, protocol-literal preservation and EN/ZH structural parity; full D9 semantic acceptance remains separate"
+      "scope": "original ROOT-D9-ZH-P2-01 ten-file repair is independently CLOSED at ff10; Chinese text newly changed by D9-BAF repairs remains in the current D9 incremental review scope without reopening the ROOT finding"
+    },
+    "mandatory15": "FULL D9-applicable §15.5–15.8 lines 1042-1141, including all ten chart/View fixtures",
+    "registryConcepts": 41,
+    "reviewFindings": {
+      "D9-BAF-P1-01": "author-resolved-pending-independent-review: closed Annotation content carrier / backup / Review Bundle route added",
+      "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite current View export route, Mandatory15 consumers and correct unsupported_layout versus renderer_unavailable layering added",
+      "D9-BAF-P2-02": "author-resolved-pending-independent-review: predecessor/current final-FC source ranges corrected and split",
+      "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened"
     }
   }
 }
