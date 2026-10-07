@@ -2417,7 +2417,7 @@
       "D6-SOURCE-MAP.zh-CN.md"
     ],
     "status": "fixed2f89 independently closed A2-D6-01CC-P2-01 and A2-NAV-454E-P2-01 in bounded navigation scope; prior D6 semantic closures remain limited to recorded scopes.",
-    "reviewFixedSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
+    "reviewFixedSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
     "repairStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
     "findings": {
       "A2-D6-829-P1-01": "independent-CLOSED-at-fixed01cc",
@@ -2425,7 +2425,7 @@
       "A2-D6-829-P2-01": "independent-CLOSED-at-fixed5e21",
       "A2-D6-829-P2-02": "independent-CLOSED-at-fixed1fc4",
       "A2-D6-829-P2-03": "independent-CLOSED-at-fixed01cc",
-      "A2-D6-01CC-P2-01": "pending-independent-review; detail=D7-SOURCE-MAP.json#/navigation_findings/A2-D6-01CC-P2-01"
+      "A2-D6-01CC-P2-01": "independent-CLOSED-at-fixed2f89"
     },
     "runtime": "UNRUN: product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment",
     "findingOriginReviewSha": "829efce6aacbe944714e093c98065b01d50b2593",
@@ -2454,7 +2454,7 @@
       ]
     },
     "nextGate": "No D6 navigation repair is pending from fixed454e; D7 fixed2f89 findings proceed separately.",
-    "currentReviewRef": {
+    "closureReviewRef": {
       "path": "D7-SOURCE-MAP.json",
       "pointer": "/navigation_findings/A2-D6-01CC-P2-01"
     }
@@ -2480,16 +2480,24 @@
       "D7-SOURCE-MAP.md",
       "D7-SOURCE-MAP.zh-CN.md",
       "d7/owners/**",
-      "d7/coordination/d9-binding/**"
+      "d7/coordination/d9-binding/**",
+      "D7-QUERY-V2.md",
+      "D7-QUERY-V2.zh-CN.md",
+      "D7-REGISTRY-QUALIFICATION.md",
+      "D7-REGISTRY-QUALIFICATION.zh-CN.md",
+      "D7-SEARCH-FIXTURES.json"
     ],
     "status": "fixed2f89 full review REVISE; four D7 findings author-repaired and OPEN pending independent fixed-SHA review",
     "authorStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
     "fixedS13": "FULL",
     "currentOwnerBilingual": "FULL",
     "registry": {
-      "concepts": 34,
-      "crossStageBindings": 8,
-      "blob": "3cab5124f46822729093d5d955908b05eb65bb87"
+      "fixedSConcepts": 34,
+      "fixedSBindings": 8,
+      "parentCurrentConcepts": 34,
+      "parentCurrentBindings": 13,
+      "blob": "3cab5124f46822729093d5d955908b05eb65bb87",
+      "qualification": "D7-REGISTRY-QUALIFICATION.md"
     },
     "search": "SEARCH-01-08 integrated in D7-SEARCH; pending independent review and later D8 platform evidence",
     "sourceMap": "D7-SOURCE-MAP.json",
@@ -2520,6 +2528,7 @@
       "D7-SEARCH.md",
       "D7-SEARCH-FIXTURES.json",
       "D7-SOURCE-MAP.json"
-    ]
+    ],
+    "repairStartSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed"
   }
 }

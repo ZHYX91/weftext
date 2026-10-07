@@ -44,7 +44,7 @@ No TODO module is treated as accepted, complete, or semantically read merely bec
 - D4.md, D4-IMPACT.md, and D4-LEXICON.md form the D4 author candidate; D4-SOURCE-MAP.json and D4-CATALOG-MAP.json retain provenance.
 - D5.md, D5-IMPACT.md, and D5-LEXICON.md form the D5 author candidate; D5-SOURCE-MAP.json retains provenance.
 - D6.md, D6-CONTROL.md, D6-SCHEMAS.md, D6-IMPACT.md, D6-LEXICON.md and D6-REGISTRY.json form the current D6 author candidate; D6-SOURCE-MAP.json preserves detailed provenance.
-- D7.md, D7-SCHEMAS.md, D7-SEARCH.md, D7-IMPACT.md and D7-REGISTRY.json plus the byte-retained d7/owners subtree form the current complete D7 author candidate; D7-SOURCE-MAP.json is its machine trace.
+- D7.md, D7-SCHEMAS.md, D7-QUERY-V2.md, D7-SEARCH.md, D7-IMPACT.md, D7-REGISTRY.json and D7-REGISTRY-QUALIFICATION.md plus the byte-retained d7/owners subtree form the current D7 author candidate; D7-SEARCH-FIXTURES.json is the shortcut/parser oracle and D7-SOURCE-MAP.json is the machine trace.
 - REVIEW-ENTRY.md is the review entry for the D1-D7 author candidate.
 - SOURCE-MAP.md gives the human-readable source/disposition map.
 - SOURCE-MAP.json records all 49 fixed-S inputs, exact S blobs, read status, current sources, and source-qualified obligation groups.
