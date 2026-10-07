@@ -34,7 +34,7 @@ D7-SEARCH 现在完整规定快捷模式的 lexer、递归优先级 grammar、�
 
 ## 5. Immutable source trace
 
-D7-SOURCE-MAP.json schema version 2 不再把 current mirror 摘要称为 original condition。20 项 D7 integration obligation 均记录 immutable fixed-S sourceId/path/blob/section/range、precise current target、disposition、owner 与 positive/negative oracle。
+D7-SOURCE-MAP.json 现使用第二版机器结构，不再把 current mirror 摘要称为 original condition。20 项 D7 整合义务逐项保存不可变 fixed-S 的来源标识、路径、blob、章节和行范围，同时给出准确的 current target、处置状态、owner 以及正负验收 oracle。
 
 原 151 个 case row 中，148 个继续作为 source-qualified case，并直接记录 immutable fixed-S 或 Mandatory source slice。旧三个 Chart mirror row CHART-L194/L196/L198 只保留为 navigation summary。Mandatory Chart §15 另拆为 17 个连续 obligation group，覆盖 §15.1 至 §15.8.9，包括 §15.7 全部 10 个 fixtures 与 §15.8.9 两个 hard questions。
 
