@@ -729,19 +729,21 @@
         "§1",
         "§4",
         "§8",
-        "§16"
+        "§16",
+        "§16a"
       ],
       "changedSections": [
-        "ExportPlan/3 + PublicationReceipt/3",
-        "format-aware rendered export",
-        "Annotation export",
-        "provider profiles",
-        "fully closed ExportPlan3 route/template/target/destination/loss-confirmation/evidence/staged-output types",
+        "ExportPlan/4 + PublicationReceipt/4 fresh-current successor; exact Plan/Receipt1-3 historical recovery retained",
+        "ExportInputCatalog/3 + ExportContentSelection/2 + ExportProjection/2 + ExportLossReport/2 + D9ExportConfirmation/2",
+        "single annotation_content carrier from exact D8AnnotationReadResponse/1 with PortableAnnotationRecord/4 canonical pin, independent body/context disclosure and annotation_index omission-only",
+        "finite D9ViewRenderBinding/1 over complete D7ResultPin + ViewSpec/1 + SemanticStateKey/SnapshotResultKey hashes + exact renderer/profile/assets",
+        "current View chart export for metric/bar/line/scatter/pie/heatmap to named DOCX/XLSX/PDF/SVG/PNG/print profiles; unsupported combinations stable renderer_unavailable",
+        "D9PrintReceipt/1 print-only delivery outcome; Resource handoff remains original D7/D3 author path and external publication remains create-only",
+        "format-aware rendered export and provider profiles with complete evidence-pin recursion",
         "D2DocumentSnapshot3 rendered export and frozen D8 presentation-policy binding",
-        "ExportPlan3 current token/version dispatch, inline closed generation policy, exact template/route/pin cross-fields, product include currentness and frozen conditional presentation decision",
-        "ExportPlan3 canonical set-like collections: route-step evidencePins, styleBundles, staged/receipt outputs, binding/missing/native-table choices; prepare canonicalizes before freeze and readers reject noncanonical records",
-        "staged/receipt output names use unsigned UTF-8 lexical ordering only after inherited safe-relative/alias/conflict validation; template choices use the exact scalar comparator and recovery still rejects noncanonical bytes",
-        "fresh-current D9ControlledRelativeOutputName1 closes controlled-relative-name lexical validity, Unicode-15.1 portable aliasing, reserved bundle members and file/directory prefix conflicts while preserving raw UTF-8 output ordering and historical recovery"
+        "visible native-table Office authoring under §6.5.1 remains authoritative when View/DOCX/XLSX uses Office templates",
+        "controlled output-name and canonical collection rules retained unchanged for /4",
+        "saved/planned/unknown dispatch preserves original token/version/bytes/pins/confirmation/recovery without migration"
       ]
     },
     {

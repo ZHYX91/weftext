@@ -947,6 +947,23 @@ Portable backup carries the current PortableAnnotationRecord/4 JSON values and i
 
 Export/Review Bundle includes Annotation body, source/history excerpts and media-region context only when each existing disclosure permission succeeds. Resource-region annotations retain the exact resource identity/version/profile/geometry required by their target contract. Renderer convenience never upgrades candidate/ambiguous/orphaned/unavailable resolution or converts a hidden source into exported context.
 
+### 16a. Fresh Annotation-content and current View export closure
+
+Fresh unseen D9 export now uses ExportPlan/4. This successor exists because Annotation content and semantic View rendering cannot be encoded by the closed Plan/3 catalog/domain/projection family without widening historical decoders in place.
+
+For Annotation content, Core first performs the ordinary current Annotation read and freezes one annotation_content catalog item from that exact D8AnnotationReadResponse/1. The private Plan therefore retains the current Observation, Annotation revision token, complete Value/4, exact PortableAnnotationRecord/4 canonical bytes/pin, body read and targetResolution. The same-cut Plan proof covers that read. A changed Observation, revision token, record pin, or qualification invalidates the unpublished Plan even when the visible body is byte-equal.
+
+Portable backup serializes the exact selected PortableAnnotationRecord/4 values and no current permission/capability state. Review Bundle consumes only the single R6 body result already produced by the owner read. It carries purpose/review metadata, reply and attribution from the same Value/4. Source/history excerpts and target context are separate optional disclosure projections: failure to disclose either does not suppress an otherwise-readable Annotation body/attribution, and an unavailable target never becomes a guessed label/source excerpt. annotation_index remains omission-only and never substitutes for this content path.
+
+For View export, Core freezes one complete D7ResultPin and one exact current ViewSpec/1, runs the existing D7 View runtime validation order to completion, then freezes the ViewSpec hash, D7 SemanticStateKey/SnapshotResultKey hashes, result epoch/auth generation, one renderer/profile/version, exact D8 presentation decision, and every consumed renderer/font/color/page/accessibility asset pin. The first D9 chart-export profile is intentionally finite: metric, bar, line, scatter, pie and heatmap only. Deferred or otherwise unsupported layouts/backends are renderer_unavailable for chart export rather than silently exporting data rows as if they were the chart.
+
+The current positive target set for this dedicated View route is DOCX, XLSX, PDF, SVG, PNG and print when a named accepted profile for that exact layout/target is installed. Every profile must preserve the D7 same-data accessible table, plain-text title/description or equivalent alt-text semantics, logical Query/panel order, CJK/RTL, high-contrast/non-color-only meaning, finite page/font/color assets and complete loss reporting. DOCX/XLSX profiles that consume an Office template remain subject to the visible-template authority and repeat/style rules of Mandatory §14. A renderer library name or generic ECharts/Vega-style configuration is never author input.
+
+Plan/4 preparation freezes all Annotation/View content, loss, renderer assets and exact staged bytes before confirmation. Confirmation cannot rerun Query, re-read a different Annotation revision, switch renderer/profile or repair a stale result. Query authorization-generation/reset, expired/incomplete results, changed Annotation revision, contradictory pins, missing assets or unavailable profiles follow their original typed failure order and never revive an older Plan. External publish remains create-only; Resource handoff remains a separate original D7/D3 author operation. Print uses the same frozen bytes and explicit confirmation but produces only the dedicated D9 print delivery receipt, not an author receipt or an external-publication claim.
+
+ExportPlan/3, PublicationReceipt/3 and every earlier plan/catalog/projection/loss/confirmation/bundle family remain exact historical recovery inputs. Saved/planned/unknown records always dispatch by their recorded token/version and original bytes before any /4 current qualification.
+
+
 ## 17. Error order, recovery, and version boundary
 
 The common order remains: closed decode -> minimum disclosure/capability -> authority/domain/backend/trust -> stable key and saved/planned/unseen -> current target/source/control -> dependency/semantic/budget -> one planning CAS -> install -> one P seal -> output authorization.

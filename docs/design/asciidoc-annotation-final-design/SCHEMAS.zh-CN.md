@@ -2362,6 +2362,274 @@ D9ExportConfirmation/1 不能改变 catalog、projection、route、target、dest
 current plan token 只能使用 d9_export_plan/3，current publication token 只能使用 d9_publication/3。lookup/inspect/confirmation/unknown recovery 必须先按 token tag 分派，再 strict-decode record.version。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 保持原 token tags、exact bytes、pins、permissions、confirmation、unknown-publication state 和 recovery；旧 token 永不 repin/reencode 成 /3。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 
+## 6.6 fresh-current D9 export /4 继任族
+
+引入本继任族后，上述 /3 export family 冻结为历史/现有恢复输入，绝不原地扩宽。fresh unseen export 使用下面的 /4 family。没有改变 closed member/union 的嵌套类型继续沿用原 decoder；只有闭合集合真实变化的类型才升版。
+
+~~~text
+D9ExportPlanToken/4 := D6 Token tagged "d9_export_plan/4"
+D9PublicationToken/4 := D6 Token tagged "d9_publication/4"
+D9PrintToken/1 := D6 Token tagged "d9_print/1"
+
+D9ExportInputDomain/2 =
+  "document"|"native_table"|"node_collection"|"query_rows"|"query_json"|"resource"
+  | "annotation"|"view"
+
+D9AnnotationContentInput/1 = {
+  kind:"annotation_content",
+  annotationRef:AnnotationRef,
+  sourceObservation:SourceObservation/1,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  record:PortableAnnotationRecord/4,
+  recordPin:PinRef/2,
+  body:D8AnnotationBodyRead/1,
+  targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable"
+}
+
+ExportInputCatalog/3 = {
+  version:3,
+  items:[{index:Counter,label:text,payload:D9ExportCatalogPayload/3}...]
+}
+
+D9ExportCatalogPayload/3 =
+    {kind:"document",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
+  | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
+  | {kind:"field",ownerVersion:SourceVersion/2,ownerObservation:SourceObservation/1,
+     fieldId:FieldId,entries:[D4Entry...]}
+  | {kind:"annotation_index",ownerVersion:SourceVersion/2,
+     targets:[D9EntityVersionAddress/2...]}
+  | D9AnnotationContentInput/1
+  | {kind:"template",origin:D9ExportTemplateOrigin/1,pin:PinRef/2}
+  | {kind:"query_result",result:D7ResultPin}
+
+D9AnnotationSelection/1 = {
+  inputIndex:Counter,
+  mode:"portable_backup"|"review_bundle_r6",
+  includeSourceHistory:Boolean,
+  includeTargetContext:Boolean
+}
+
+ExportContentSelection/2 = {
+  version:2,
+  bodyInput:Counter|null,
+  bibliographyInput:Counter|null,
+  annotationInputs:[D9AnnotationSelection/1...],
+  viewInput:Counter|null
+}
+
+D9AnnotationDisclosureProjection/1 =
+    {state:"not_requested"}
+  | {state:"unavailable"}
+  | {state:"disclosed",
+     fragments:[{value:RenderSnapshot,origins:[ExportInputLocation/2...]}...]}
+
+D9AnnotationExportProjection/1 =
+    {kind:"portable_backup",inputIndex:Counter,recordPin:PinRef/2}
+  | {kind:"review_bundle_r6",inputIndex:Counter,
+     purpose:"comment"|"mark"|"suggestion",
+     semanticBody:text|null,
+     appearance:AnnotationAppearance/1|null,
+     labels:[text...],
+     reviewState:"open"|"resolved"|"not_applicable",
+     suggestion:Suggestion/3|null,
+     replyTo:AnnotationRef|null,
+     creator:AnnotationActorSnapshot/1,
+     authoredAt:AnnotationTimeSnapshot/2,
+     lastEditor:AnnotationActorSnapshot/1,
+     editedAt:AnnotationTimeSnapshot/2,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     sourceHistory:D9AnnotationDisclosureProjection/1,
+     targetContext:D9AnnotationDisclosureProjection/1}
+
+D9ViewAssetBinding/1 = {
+  role:"font"|"color_profile"|"page_profile"|"accessibility_profile",
+  assetId:text,
+  assetVersion:text,
+  pin:PinRef/2
+}
+
+D9ViewRendererBinding/1 = {
+  rendererId:text,
+  rendererVersion:text,
+  profileId:text,
+  profileVersion:text,
+  layout:"metric"|"bar"|"line"|"scatter"|"pie"|"heatmap",
+  targetKind:"docx"|"xlsx"|"pdf"|"svg"|"png"|"print",
+  accessibilityProfile:"same-data-table-alt-text/1",
+  assets:[D9ViewAssetBinding/1...],
+  evidencePins:[PinRef/2...]
+}
+
+D9ViewRenderBinding/1 = {
+  resultInput:Counter,
+  querySemanticSha256:"sha256:<64 lowercase hex>",
+  snapshotResultSha256:"sha256:<64 lowercase hex>",
+  resultEpoch:Token,
+  authorizationGeneration:Token,
+  viewSpec:ViewSpec/1,
+  viewSpecSha256:"sha256:<64 lowercase hex>",
+  renderer:D9ViewRendererBinding/1,
+  presentation:D8PresentationDecision/1
+}
+
+D9ViewExportProjection/1 = {
+  resultInput:Counter,
+  viewSpecSha256:"sha256:<64 lowercase hex>",
+  accessibility:"same_data_table_required"
+}
+
+ExportProjection/2 = {
+  version:2,
+  bindings:[D9ExportBindingProjection/1...],
+  datasets:[D9ExportDatasetProjection/1...],
+  annotations:[D9AnnotationExportProjection/1...],
+  view:D9ViewExportProjection/1|null
+}
+
+ExportInputLocation/2 =
+    {kind:"input",inputIndex:Counter}
+  | {kind:"source_range",inputIndex:Counter,start:Counter,end:Counter}
+  | {kind:"annotation",inputIndex:Counter,targetIndex:Counter}
+  | {kind:"annotation_record",inputIndex:Counter}
+  | {kind:"annotation_body",inputIndex:Counter}
+  | {kind:"annotation_disclosure",inputIndex:Counter,
+     scope:"source_history"|"target_context",fragment:Counter}
+  | {kind:"query_cell",inputIndex:Counter,table:"rows"|"nodes"|"edges",
+     row:Counter,column:Counter}
+  | {kind:"query_scalar",inputIndex:Counter}
+  | {kind:"template_range",inputIndex:Counter,part:text,
+     elementPath:[Counter...],start:Counter,end:Counter}
+  | {kind:"view",inputIndex:Counter,
+     aspect:"chart"|"accessible_table"|"font"|"color"|"page"|"alt_text"}
+
+ExportLossLocation/2 =
+    ExportInputLocation/2
+  | {kind:"binding",path:text}
+  | {kind:"dataset_cell",set:text,row:Counter,column:Counter}
+  | {kind:"block",path:text,blockIndex:Counter}
+
+ExportLossReport/2 = {
+  format:"weftext.export-loss",version:2,
+  planToken:D9ExportPlanToken/4,
+  inputs:[{index:Counter,label:text,kind:text}...],
+  items:[{lossKey:Counter,feature:text,locations:[ExportLossLocation/2...],
+          effect:text,severity:"notice"|"requires_choice"|"blocking",
+          allowedChoices:["accept_loss"|"reject"...]}...]
+}
+
+D9ExportConfirmation/2 = {
+  version:2,
+  planToken:D9ExportPlanToken/4,
+  lossChoices:[D9ExportLossChoice/1...]
+}
+
+D9ExportTarget/2 =
+    {kind:"asciidoc_source"}
+  | {kind:"resource_exact"}
+  | {kind:"annotation_backup"}
+  | {kind:"html",profileId:text}
+  | {kind:"pdf",profileId:text}
+  | {kind:"docx",profileId:text}
+  | {kind:"odt",profileId:text}
+  | {kind:"csv_utf8"}
+  | {kind:"tsv_utf8"}
+  | {kind:"xlsx",profileId:text}
+  | {kind:"ods",profileId:text}
+  | {kind:"query_json"}
+  | {kind:"svg",profileId:text}
+  | {kind:"png",profileId:text}
+  | {kind:"print",profileId:text}
+
+D9ExportDestinationIntent/2 =
+    {kind:"external_bundle",destinationHandle:Token,basename:text,createOnly:true}
+  | {kind:"server_download",downloadToken:Token,basename:text}
+  | {kind:"resource_handoff",ownerNodeRef:NodeRef,resourceName:text}
+  | {kind:"print",printIntentToken:Token}
+
+D9ExportBundleManifest/2 = {
+  format:"weftext.export-bundle",version:2,
+  planToken:D9ExportPlanToken/4,
+  dataFiles:[D9PublishedOutput/1...],
+  reportFile:D9PublishedOutput/1
+}
+
+ExportPlan/4 = {
+  kind:"d9_export_plan",version:4,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  principalAudienceToken:Token,authorizationGeneration:Token,
+  inputDomain:D9ExportInputDomain/2,
+  inputCatalog:ExportInputCatalog/3,
+  contentSelection:ExportContentSelection/2,
+  projection:ExportProjection/2,
+  documentRenderBinding:D9DocumentRenderBinding/1|null,
+  viewRenderBinding:D9ViewRenderBinding/1|null,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicy/1,
+  target:D9ExportTarget/2,
+  initialLossReport:ExportLossReport/2,
+  outputBudget:BudgetBinding/1,
+  destination:D9ExportDestinationIntent/2,
+  observationScope:ObservationScope/2,
+  dependencyProof:DependencyProof/3,
+  observationProof:ObservationProof,
+  recoveryPins:[PinRef/2...],
+  evidencePins:[PinRef/2...],
+  stagedOutputs:[D9ExportStagedOutput/1...]
+}
+
+PublicationReceipt/4 = {
+  kind:"d9_publication_receipt",version:4,
+  publicationToken:D9PublicationToken/4,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  outputs:[D9PublishedOutput/1...],
+  lossReport:ExportLossReport/2,
+  lossChoices:[D9ExportLossChoice/1...],
+  target:D9ExportTarget/2,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicy/1,
+  viewRenderBinding:D9ViewRenderBinding/1|null,
+  presentation:D8PresentationDecision/1|null,
+  destinationDisplay:text
+}
+
+D9PrintReceipt/1 = {
+  kind:"d9_print_receipt",version:1,
+  printToken:D9PrintToken/1,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  output:D9PublishedOutput/1,
+  lossReport:ExportLossReport/2,
+  lossChoices:[D9ExportLossChoice/1...],
+  viewRenderBinding:D9ViewRenderBinding/1,
+  destinationDisplay:text
+}
+~~~
+
+ExportInputCatalog/3 逐字保留 /2 的全部 arm，只新增 annotation_content。该 arm 必须从一次真实现任 D8AnnotationReadResponse/1 构造：annotationRef、sourceObservation、annotationRevisionToken、value、body 与 targetResolution 都与该 read 逐字相等。record 精确为对应 PortableAnnotationRecord/4；recordPin 在既有 PinRef/2 完整性规则下选择 D3-CJ/3(record) 的精确字节。Plan 的 dependencyProof 与 observationProof 覆盖同一 cut 的 Annotation read，以及任何独立获权的 context read。最终 export barrier 同时复验 sourceObservation 与 annotationRevisionToken；正文文本相同不能替代已经变化的 revision。
+
+annotation_index 继续只作为 omission-directory evidence，绝不能填充 annotation_content、annotationInputs 或 Annotation 正文/context projection。portable backup 要求 inputDomain=annotation、target.kind=annotation_backup、一个或多个 mode=portable_backup selection、generationPolicy=none，并从每个已选 recordPin 导出精确 record bytes。它不序列化当前 permission、SourceObservation capability、revision-signing capability、PAB 或 ActionEvidence。Review Bundle 要求 mode=review_bundle_r6，且只消费已经由 D8AnnotationBodyRead/1 产生的结果：valid 使用其 R6 semantic text，absent 使用 null，invalid 则 renderer unavailable，绝不再选第二 parser。purpose、appearance、labels、reviewState、suggestion、reply 与 attribution 都来自同一完整 Value/4。
+
+Annotation 正文/署名与 target/source context 独立做资格校验。includeSourceHistory 与 includeTargetContext 只是选择是否尝试，不代表 permission。target hidden/unavailable 时写成 targetContext.state=unavailable，不能压掉原本合法的 Review Bundle 正文、署名或 reply。任何 disclosed fragment 都必须来自同一 cut 中另行获权的 catalog input，并带非空 ExportInputLocation/2 origins。缺少 context 只能由相应 projection state 与完整 loss item 表示，不得用 display label、annotation_index 或猜测 target bytes 替代。
+
+View export 要求 inputDomain=view、恰一个 viewInput 指向 query_result catalog item、没有 Annotation selection，并且 viewRenderBinding 非 null。Plan/4 冻结前，Core 必须针对这一个完整 D7ResultPin 按原顺序执行既有 D7 View §7 runtime gate。首个闭合 D9 chart profile 只接收现任 metric|bar|line|scatter|pie|heatmap；其它 layout 对这条 route 都稳定返回 renderer_unavailable，不得把 data rows 偷换成 chart。renderer 不能重新执行 Query、补充隐式数据、排序、聚合、分箱、采样或改变 ViewSpec 语义。
+
+querySemanticSha256 是 D3-CJ/3(该 D7ResultPin 保留的精确 D7 SemanticStateKey) 的 SHA-256；snapshotResultSha256 是 D3-CJ/3(该 pin 保留的精确 D7 SnapshotResultKey) 的 SHA-256。resultEpoch 与 authorizationGeneration 必须与同一 result evidence 逐字相等；viewSpecSha256 是 D3-CJ/3(精确 ViewSpec/1) 的 SHA-256。这些 hash 只做冻结交叉校验，不是 identity，也不形成第二 cache authority；完整 result/cut/dependency authority 仍是所选 D7ResultPin。
+
+View renderer binding 只能绑定一个具名已安装 renderer/profile/version 与一个精确 target kind。asset binding 必须列出实际消费的全部 font、color、page 与 accessibility profile pin；evidencePins 只能放该 route 所需的 renderer/profile installation evidence。固定 accessibility profile 要求同一完整数据表、title/description alt-text 语义、Query/panel 顺序、CJK/RTL 保全与非纯颜色编码。PDF、SVG、PNG 与 print profile 可以直接渲染这六个 layout；DOCX/XLSX 只有在其具名 profile 能证明同一 View 语义时才可用。若 Office route 使用 template，§6.5.1 的可见模板 authority 与全部 §14 规则仍然适用。backend/profile/layout 组合不支持时稳定 unavailable，绝不能静默替换为 data table。
+
+Plan/4 的 evidencePins 精确等于 Pins(inputCatalog)、Pins(projection)、Pins(documentRenderBinding)、Pins(viewRenderBinding)、Pins(templateBinding)、Pins(routeBinding)、Pins(styleBundles)、Pins(dependencyProof)、Pins(observationProof)、Pins(stagedOutputs) 与 recoveryPins 的 pinToken 排序唯一递归并集，且不递归自身 evidencePins 成员。因此实际消费的 Annotation record/context pin、View renderer/asset/result dependency 都继续进入既有唯一 pin union。
+
+D9ExportConfirmation/2 不能改变 catalog、Annotation/View selection、projection、ViewSpec、renderer/profile/assets、route/template、target、destination、loss report 或 staged bytes。external publication 继续 create-only，并生成 PublicationReceipt/4；Resource handoff 继续走原 D7/D3 对精确 staged bytes 的独立 author 路径。print destination 使用同一个 frozen/staged/confirmed Plan，只生成 D9PrintReceipt/1；它不授予 author capability，也不能声称 external publication。现任 Plan/4 bundle 使用 D9ExportBundleManifest/2。
+
+真实 ExportPlan/1-/2-/3、PublicationReceipt/1-/2-/3、其 plan/publication token tag、ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1、D9ExportConfirmation/1、bundle manifest/1、pins、confirmation bytes 与 saved/planned/unknown recovery 全部保留精确历史 decoder。不得把 /3 record repin、re-encode、排序、改名或升级成 /4。
+
+
 # 7. Annotation closed values
 
 ```text

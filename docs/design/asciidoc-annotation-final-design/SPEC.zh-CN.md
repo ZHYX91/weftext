@@ -1009,6 +1009,23 @@ portable backup 携带当前 PortableAnnotationRecord/4 JSON value/identity 与�
 
 export/Review Bundle 只有在每项对应的披露权限成功时，才能包含 Annotation 正文、source/history 摘录与 media-region 上下文。resource-region Annotation 必须保留 target 合同要求的精确 resource identity/version/profile/geometry。渲染方便性不能把 candidate/ambiguous/orphaned/unavailable 状态升级，也不能把隐藏 source 变成导出上下文。
 
+### 16a. fresh Annotation 内容与现任 View export 闭合
+
+fresh unseen D9 export 现在使用 ExportPlan/4。之所以增加这个继任族，是因为 Annotation 内容与 semantic View 渲染无法装入 Plan/3 已封闭的 catalog/domain/projection family；旧 decoder 不能被原地扩宽。
+
+Annotation 内容路径先执行普通现任 Annotation read，并从这一次精确的 D8AnnotationReadResponse/1 冻结一个 annotation_content catalog item。private Plan 因而同时保存现任 Observation、Annotation revision token、完整 Value/4、精确 PortableAnnotationRecord/4 canonical bytes/pin、body read 与 targetResolution；同一 cut 的 Plan proof 覆盖这次读取。只要 Observation、revision token、record pin 或资格发生变化，尚未发布的 Plan 就失效，即使可见正文仍逐字相同。
+
+portable backup 只序列化精确选中的 PortableAnnotationRecord/4 value，不携带任何当前 permission/capability state。Review Bundle 只消费 owner read 已经产生的唯一 R6 body 结果，并从同一个 Value/4 取得 purpose/review metadata、reply 与 attribution。source/history excerpt 与 target context 是两个独立的可选 disclosure projection：任一披露失败都不能压掉原本可读的 Annotation body/attribution；target unavailable 也不能被猜成 label/source excerpt。annotation_index 继续只承担 omission 目录，绝不能替代这条内容路径。
+
+View export 先冻结一个完整 D7ResultPin 与一个精确现任 ViewSpec/1，按既有 D7 View runtime validation 顺序完整通过后，才冻结 ViewSpec hash、D7 SemanticStateKey/SnapshotResultKey hash、result epoch/auth generation、唯一 renderer/profile/version、精确 D8 presentation decision，以及全部实际消费的 renderer/font/color/page/accessibility asset pin。第一代 D9 chart-export profile 刻意保持有限，只包括 metric、bar、line、scatter、pie、heatmap。原本 deferred 或其它不支持的 layout/backend 对 chart export 稳定返回 renderer_unavailable，不能把 data rows 静默冒充 chart。
+
+这条专用 View route 的现任正向 target 只包括具名已接受 profile 支持的 DOCX、XLSX、PDF、SVG、PNG 与 print。每个 profile 都必须保留 D7 的同数据 accessible table、plain-text title/description 或等价 alt-text 语义、逻辑 Query/panel 顺序、CJK/RTL、高对比/非纯颜色编码、有限 page/font/color asset 与完整 loss 报告。DOCX/XLSX profile 若消费 Office template，仍受 Mandatory §14 的可见模板 authority 与 repeat/style 规则约束。renderer library 名称或通用 ECharts/Vega 类配置绝不是 author input。
+
+Plan/4 prepare 在 confirmation 前冻结全部 Annotation/View content、loss、renderer asset 与精确 staged bytes。confirmation 不能重跑 Query、改读另一个 Annotation revision、切换 renderer/profile，也不能修补 stale result。Query authorization-generation/reset、expired/incomplete result、Annotation revision 改变、pin 矛盾、asset 缺失或 profile unavailable，都按原 owner 的 typed failure order 处理，不能复活旧 Plan。external publish 继续 create-only；Resource handoff 继续是原 D7/D3 author operation。print 使用同一 frozen bytes 与显式 confirmation，但只生成专用 D9 print delivery receipt，不是 author receipt，也不声称 external publication。
+
+ExportPlan/3、PublicationReceipt/3 与所有更早的 plan/catalog/projection/loss/confirmation/bundle family 都保留精确历史恢复语义。saved/planned/unknown record 必须先按记录的 token/version 与原始 bytes 分派，之后才可能进入 /4 current qualification。
+
+
 ## 17. Error、recovery与版本边界
 
 共同顺序保持：closed decode → minimum disclosure/capability → authority/domain/backend/trust → stable key与saved/planned/unseen → current target/source/control → dependency/semantic/budget → one planning CAS → install → one P seal → output authorization。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。

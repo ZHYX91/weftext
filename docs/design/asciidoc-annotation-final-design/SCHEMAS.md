@@ -2258,6 +2258,274 @@ D9ExportConfirmation/1 never changes catalog, projection, route, target, destina
 Current plan tokens are only d9_export_plan/3 and current publication tokens only d9_publication/3. Lookup/inspect/confirmation/unknown recovery dispatches token tag before strict record.version decoding. Historical ExportPlan/1-/2 and PublicationReceipt/1-/2 keep their original token tags, exact bytes, pins, permissions, confirmation, unknown-publication state and recovery; no old token is repinned/reencoded as /3.
 
 
+## 6.6 Fresh-current D9 export successor /4
+
+The /3 export family above is frozen historical/current-recovery input after this successor is introduced; it is never widened in place. Fresh unseen export uses the following /4 family. All unchanged nested types keep their existing decoder; the new versions exist only where the closed member/union set changes.
+
+~~~text
+D9ExportPlanToken/4 := D6 Token tagged "d9_export_plan/4"
+D9PublicationToken/4 := D6 Token tagged "d9_publication/4"
+D9PrintToken/1 := D6 Token tagged "d9_print/1"
+
+D9ExportInputDomain/2 =
+  "document"|"native_table"|"node_collection"|"query_rows"|"query_json"|"resource"
+  | "annotation"|"view"
+
+D9AnnotationContentInput/1 = {
+  kind:"annotation_content",
+  annotationRef:AnnotationRef,
+  sourceObservation:SourceObservation/1,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  record:PortableAnnotationRecord/4,
+  recordPin:PinRef/2,
+  body:D8AnnotationBodyRead/1,
+  targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable"
+}
+
+ExportInputCatalog/3 = {
+  version:3,
+  items:[{index:Counter,label:text,payload:D9ExportCatalogPayload/3}...]
+}
+
+D9ExportCatalogPayload/3 =
+    {kind:"document",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
+  | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
+  | {kind:"field",ownerVersion:SourceVersion/2,ownerObservation:SourceObservation/1,
+     fieldId:FieldId,entries:[D4Entry...]}
+  | {kind:"annotation_index",ownerVersion:SourceVersion/2,
+     targets:[D9EntityVersionAddress/2...]}
+  | D9AnnotationContentInput/1
+  | {kind:"template",origin:D9ExportTemplateOrigin/1,pin:PinRef/2}
+  | {kind:"query_result",result:D7ResultPin}
+
+D9AnnotationSelection/1 = {
+  inputIndex:Counter,
+  mode:"portable_backup"|"review_bundle_r6",
+  includeSourceHistory:Boolean,
+  includeTargetContext:Boolean
+}
+
+ExportContentSelection/2 = {
+  version:2,
+  bodyInput:Counter|null,
+  bibliographyInput:Counter|null,
+  annotationInputs:[D9AnnotationSelection/1...],
+  viewInput:Counter|null
+}
+
+D9AnnotationDisclosureProjection/1 =
+    {state:"not_requested"}
+  | {state:"unavailable"}
+  | {state:"disclosed",
+     fragments:[{value:RenderSnapshot,origins:[ExportInputLocation/2...]}...]}
+
+D9AnnotationExportProjection/1 =
+    {kind:"portable_backup",inputIndex:Counter,recordPin:PinRef/2}
+  | {kind:"review_bundle_r6",inputIndex:Counter,
+     purpose:"comment"|"mark"|"suggestion",
+     semanticBody:text|null,
+     appearance:AnnotationAppearance/1|null,
+     labels:[text...],
+     reviewState:"open"|"resolved"|"not_applicable",
+     suggestion:Suggestion/3|null,
+     replyTo:AnnotationRef|null,
+     creator:AnnotationActorSnapshot/1,
+     authoredAt:AnnotationTimeSnapshot/2,
+     lastEditor:AnnotationActorSnapshot/1,
+     editedAt:AnnotationTimeSnapshot/2,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     sourceHistory:D9AnnotationDisclosureProjection/1,
+     targetContext:D9AnnotationDisclosureProjection/1}
+
+D9ViewAssetBinding/1 = {
+  role:"font"|"color_profile"|"page_profile"|"accessibility_profile",
+  assetId:text,
+  assetVersion:text,
+  pin:PinRef/2
+}
+
+D9ViewRendererBinding/1 = {
+  rendererId:text,
+  rendererVersion:text,
+  profileId:text,
+  profileVersion:text,
+  layout:"metric"|"bar"|"line"|"scatter"|"pie"|"heatmap",
+  targetKind:"docx"|"xlsx"|"pdf"|"svg"|"png"|"print",
+  accessibilityProfile:"same-data-table-alt-text/1",
+  assets:[D9ViewAssetBinding/1...],
+  evidencePins:[PinRef/2...]
+}
+
+D9ViewRenderBinding/1 = {
+  resultInput:Counter,
+  querySemanticSha256:"sha256:<64 lowercase hex>",
+  snapshotResultSha256:"sha256:<64 lowercase hex>",
+  resultEpoch:Token,
+  authorizationGeneration:Token,
+  viewSpec:ViewSpec/1,
+  viewSpecSha256:"sha256:<64 lowercase hex>",
+  renderer:D9ViewRendererBinding/1,
+  presentation:D8PresentationDecision/1
+}
+
+D9ViewExportProjection/1 = {
+  resultInput:Counter,
+  viewSpecSha256:"sha256:<64 lowercase hex>",
+  accessibility:"same_data_table_required"
+}
+
+ExportProjection/2 = {
+  version:2,
+  bindings:[D9ExportBindingProjection/1...],
+  datasets:[D9ExportDatasetProjection/1...],
+  annotations:[D9AnnotationExportProjection/1...],
+  view:D9ViewExportProjection/1|null
+}
+
+ExportInputLocation/2 =
+    {kind:"input",inputIndex:Counter}
+  | {kind:"source_range",inputIndex:Counter,start:Counter,end:Counter}
+  | {kind:"annotation",inputIndex:Counter,targetIndex:Counter}
+  | {kind:"annotation_record",inputIndex:Counter}
+  | {kind:"annotation_body",inputIndex:Counter}
+  | {kind:"annotation_disclosure",inputIndex:Counter,
+     scope:"source_history"|"target_context",fragment:Counter}
+  | {kind:"query_cell",inputIndex:Counter,table:"rows"|"nodes"|"edges",
+     row:Counter,column:Counter}
+  | {kind:"query_scalar",inputIndex:Counter}
+  | {kind:"template_range",inputIndex:Counter,part:text,
+     elementPath:[Counter...],start:Counter,end:Counter}
+  | {kind:"view",inputIndex:Counter,
+     aspect:"chart"|"accessible_table"|"font"|"color"|"page"|"alt_text"}
+
+ExportLossLocation/2 =
+    ExportInputLocation/2
+  | {kind:"binding",path:text}
+  | {kind:"dataset_cell",set:text,row:Counter,column:Counter}
+  | {kind:"block",path:text,blockIndex:Counter}
+
+ExportLossReport/2 = {
+  format:"weftext.export-loss",version:2,
+  planToken:D9ExportPlanToken/4,
+  inputs:[{index:Counter,label:text,kind:text}...],
+  items:[{lossKey:Counter,feature:text,locations:[ExportLossLocation/2...],
+          effect:text,severity:"notice"|"requires_choice"|"blocking",
+          allowedChoices:["accept_loss"|"reject"...]}...]
+}
+
+D9ExportConfirmation/2 = {
+  version:2,
+  planToken:D9ExportPlanToken/4,
+  lossChoices:[D9ExportLossChoice/1...]
+}
+
+D9ExportTarget/2 =
+    {kind:"asciidoc_source"}
+  | {kind:"resource_exact"}
+  | {kind:"annotation_backup"}
+  | {kind:"html",profileId:text}
+  | {kind:"pdf",profileId:text}
+  | {kind:"docx",profileId:text}
+  | {kind:"odt",profileId:text}
+  | {kind:"csv_utf8"}
+  | {kind:"tsv_utf8"}
+  | {kind:"xlsx",profileId:text}
+  | {kind:"ods",profileId:text}
+  | {kind:"query_json"}
+  | {kind:"svg",profileId:text}
+  | {kind:"png",profileId:text}
+  | {kind:"print",profileId:text}
+
+D9ExportDestinationIntent/2 =
+    {kind:"external_bundle",destinationHandle:Token,basename:text,createOnly:true}
+  | {kind:"server_download",downloadToken:Token,basename:text}
+  | {kind:"resource_handoff",ownerNodeRef:NodeRef,resourceName:text}
+  | {kind:"print",printIntentToken:Token}
+
+D9ExportBundleManifest/2 = {
+  format:"weftext.export-bundle",version:2,
+  planToken:D9ExportPlanToken/4,
+  dataFiles:[D9PublishedOutput/1...],
+  reportFile:D9PublishedOutput/1
+}
+
+ExportPlan/4 = {
+  kind:"d9_export_plan",version:4,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  principalAudienceToken:Token,authorizationGeneration:Token,
+  inputDomain:D9ExportInputDomain/2,
+  inputCatalog:ExportInputCatalog/3,
+  contentSelection:ExportContentSelection/2,
+  projection:ExportProjection/2,
+  documentRenderBinding:D9DocumentRenderBinding/1|null,
+  viewRenderBinding:D9ViewRenderBinding/1|null,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicy/1,
+  target:D9ExportTarget/2,
+  initialLossReport:ExportLossReport/2,
+  outputBudget:BudgetBinding/1,
+  destination:D9ExportDestinationIntent/2,
+  observationScope:ObservationScope/2,
+  dependencyProof:DependencyProof/3,
+  observationProof:ObservationProof,
+  recoveryPins:[PinRef/2...],
+  evidencePins:[PinRef/2...],
+  stagedOutputs:[D9ExportStagedOutput/1...]
+}
+
+PublicationReceipt/4 = {
+  kind:"d9_publication_receipt",version:4,
+  publicationToken:D9PublicationToken/4,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  outputs:[D9PublishedOutput/1...],
+  lossReport:ExportLossReport/2,
+  lossChoices:[D9ExportLossChoice/1...],
+  target:D9ExportTarget/2,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicy/1,
+  viewRenderBinding:D9ViewRenderBinding/1|null,
+  presentation:D8PresentationDecision/1|null,
+  destinationDisplay:text
+}
+
+D9PrintReceipt/1 = {
+  kind:"d9_print_receipt",version:1,
+  printToken:D9PrintToken/1,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  output:D9PublishedOutput/1,
+  lossReport:ExportLossReport/2,
+  lossChoices:[D9ExportLossChoice/1...],
+  viewRenderBinding:D9ViewRenderBinding/1,
+  destinationDisplay:text
+}
+~~~
+
+ExportInputCatalog/3 keeps every /2 arm byte-for-byte and adds only annotation_content. That arm is formed from one actual current D8AnnotationReadResponse/1: annotationRef, sourceObservation, annotationRevisionToken, value, body, and targetResolution are byte-equal to that read. record is exactly the PortableAnnotationRecord/4 formed from those fields and recordPin selects exactly D3-CJ/3(record) bytes under the existing PinRef/2 integrity rules. The Plan dependencyProof and observationProof cover the same-cut Annotation read and any separately authorized context reads. The final export barrier rechecks both sourceObservation and annotationRevisionToken; equal body text cannot substitute for a changed revision.
+
+annotation_index remains omission-directory evidence only and can never populate annotation_content, annotationInputs, or an Annotation body/context projection. Portable backup requires inputDomain=annotation, target.kind=annotation_backup, one or more mode=portable_backup selections, generationPolicy=none, and exact record bytes derived from each selected recordPin. It serializes no current permission, SourceObservation capability, revision-signing capability, PAB, or ActionEvidence. Review Bundle requires mode=review_bundle_r6 and uses only the already-produced D8AnnotationBodyRead/1: valid uses its R6 semantic text, absent uses null, and invalid is renderer unavailable rather than a second parse. Purpose, appearance, labels, reviewState, suggestion, reply and attribution come from the same complete Value/4.
+
+Annotation body/attribution and target/source context are independently qualified. includeSourceHistory and includeTargetContext select an attempt, not permission. A hidden/unavailable target yields targetContext.state=unavailable without suppressing an otherwise legal Review Bundle body, attribution or reply. A disclosed fragment must derive from separately authorized catalog inputs in the same cut and carry nonempty ExportInputLocation/2 origins. Missing context is represented by the corresponding projection state and complete loss item; it is never replaced by display labels, annotation_index, or guessed target bytes.
+
+A View export has inputDomain=view, exactly one viewInput selecting a query_result catalog item, no Annotation selections, and one nonnull viewRenderBinding. Before Plan/4 freeze Core runs the existing D7 View §7 runtime gate in its original order over that exact complete D7ResultPin. Only current metric|bar|line|scatter|pie|heatmap are admitted by this first closed D9 chart profile; all other layouts are renderer_unavailable for this route, without converting the rows into a chart substitute. The renderer never re-queries, enriches, sorts, aggregates, bins, samples or changes ViewSpec semantics.
+
+querySemanticSha256 is SHA-256 of D3-CJ/3(the exact D7 SemanticStateKey) and snapshotResultSha256 is SHA-256 of D3-CJ/3(the exact D7 SnapshotResultKey) retained by the selected D7ResultPin. resultEpoch and authorizationGeneration are byte-equal to that same result evidence; viewSpecSha256 is SHA-256 of D3-CJ/3(the exact ViewSpec/1). These hashes are frozen cross-checks, not identities or new cache authorities. The selected D7ResultPin remains the complete result/cut/dependency authority.
+
+A View renderer binding is valid only for one named installed renderer/profile/version and one exact target kind. Its asset bindings contain every actually consumed font, color, page and accessibility profile pin; its evidencePins contain only the renderer/profile installation evidence required by that route. The fixed accessibility profile requires the same complete data table plus title/description alt-text semantics, query/panel order, CJK/RTL preservation and non-color-only meaning. PDF, SVG, PNG and print profiles may render the six layouts directly. DOCX/XLSX profiles may do so only when their named profile proves the same View semantics; if an Office template is used, §6.5.1 visible-template authority and all §14 rules still apply. Unsupported backend/profile/layout combinations are stable unavailable results, never silent data-table substitution.
+
+For Plan/4, evidencePins is exactly the pinToken-sorted/unique recursive union of Pins(inputCatalog), Pins(projection), Pins(documentRenderBinding), Pins(viewRenderBinding), Pins(templateBinding), Pins(routeBinding), Pins(styleBundles), Pins(dependencyProof), Pins(observationProof), Pins(stagedOutputs), and recoveryPins, excluding the Plan's own evidencePins member. Thus Annotation record/context pins and every View renderer/asset/result dependency actually consumed are covered by the existing one-union rule.
+
+D9ExportConfirmation/2 cannot alter the catalog, Annotation/View selection, projection, ViewSpec, renderer/profile/assets, route/template, target, destination, loss report or staged bytes. External publication remains create-only and produces PublicationReceipt/4; Resource handoff remains the separate original D7/D3 author path over exact staged bytes. A print destination uses the same frozen/staged/confirmed Plan and produces only D9PrintReceipt/1; it grants no author capability and cannot claim external publication. Current Plan/4 bundles use D9ExportBundleManifest/2.
+
+Real ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3, their plan/publication token tags, ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1, ExportLossReport/1, D9ExportConfirmation/1, bundle manifest/1, pins, confirmation bytes and saved/planned/unknown recovery remain exact historical decoders. No /3 record is repinned, re-encoded, sorted, renamed or upgraded into /4.
+
+
 # 7. Annotation closed values
 
 ```text
