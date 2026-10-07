@@ -43,9 +43,9 @@ D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第�
 
 ### Navigation P2
 
-最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+fixed454e 非作者导航复核通过此前四项残余措辞，并留下两项只涉及导航的 P2：`A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01`。本作者候选已经修订两项。前者现在只有一个角色中性的待复核状态，详细 provenance 统一放在 D7-SOURCE-MAP.json，历史 sourceEvidence 不变。后者把 fixed-5c 的旧现实时态改成历史叙述，并记录后续 fixed446 的有界独立关闭，但不会把它升级成全局接受。
 
-历史时间线：fixed829 来源 → fixed01cc 较早复核 → fixed32cf/d1ab 修订 → fixed1fc4 复核 → fixed5e21 语义复核 → fixed9c3b 导航复核。较早裁决只描述各自固定对象。
+两项 finding 都继续等待实际 final stop SHA 的独立复核。历史时间线为 fixed829 来源 → fixed01cc 较早复核 → fixed32cf/d1ab 修订 → fixed1fc4 复核 → fixed5e21 语义复核 → fixed9c3b 导航复核 → fixed454e 导航复核。较早裁决只描述各自 fixed object。
 
 ## 4. 证据与非声明边界
 
