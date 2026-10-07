@@ -36,7 +36,7 @@ QuerySpec/2 还只增加一个通用 relation 算子：
 {id,op:"union_all",inputs:[relationId...]}
 ~~~
 
-inputs 含 2..16 个 relation ID。每个输入的公共 schema 必须在 column 顺序、名称与 TypeSpec 上逐字节相等。union_all 保留全部 row 与重复项，不做 coercion 或 dedup，所有语义可达输入都必须执行，输出为无序 bag。任一输入错误都按普通 canonical error order 使整个 Query 失败。内部 occurrence identity 在 parent K 前加入 canonical input ordinal，因此不同分支的相同公共 row 仍是不同 occurrence。union_all 不跨分支授予 Action lineage；后续 Action 仍必须明确选择 Ref 并重新授权。
+`inputs` 含 2..16 个 relation ID。每个输入的公共 schema 必须在 column 顺序、名称与 TypeSpec 上逐字节相等。union_all 保留全部 row 与重复项，不做 coercion 或 dedup，所有语义可达输入都必须执行，输出为无序 bag。任一输入错误都按普通 canonical error order 使整个 Query 失败。内部 occurrence identity 在 parent K 前加入 canonical input ordinal，因此不同分支的相同公共 row 仍是不同 occurrence。union_all 不跨分支授予 Action lineage；后续 Action 仍必须明确选择 Ref 并重新授权。
 
 这个新增通用算子的稳定推导 feature ID 是 query.union_all.v1。它属于 QuerySpec/2，不是领域专用或 Search 专用算子。generic join、window 与 quantile 继续不支持。
 
@@ -67,7 +67,7 @@ absent、placeholder、conflict、gap 或其它无法证明 current binding 的�
 
 ## 5. D6 Resource 文件名 producer
 
-`resource_file_name` 只适用于 ResourceRef，并使用同一个 D6-owned metadata producer 的 projection=basename。Ref/owner disclosure 与准确的 `entity_state + locator_state` gate 必须先于 FileBinding metadata 读取。仅为披露获权 locator label 时不要求 `resource_read`；另行读取 Resource bytes/descriptor 仍使用其原 gate。
+`resource_file_name` 只适用于 ResourceRef，并使用同一个 D6-owned metadata producer 的 projection=basename。Ref/owner disclosure 与准确的 `entity_state` + `locator_state` gate 必须先于 FileBinding metadata 读取。仅为披露获权 locator label 时不要求 `resource_read`；另行读取 Resource bytes/descriptor 仍使用其原 gate。
 
 投影出的 basename 不授 Resource identity、owner change、copy right、ByteHandle 或写权限。binding 缺失、未 materialize 或存在 gap 时返回 unavailable，而不是空名称。
 

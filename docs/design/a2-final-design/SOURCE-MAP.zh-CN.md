@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed1068244（`1068244d982a22140d8753b0483c63135b092999`）独立增量复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已独立 CLOSED `A2-D7-2F89-P2-02`（immutable source trace）；剩余 finding 为 `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`，以及新增的 `A2-D7-1068244-P2-01`（Impact 中英同步）。本作者批修复这四项残余，但不自行关闭。此前有界关闭的 `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01` 继续保持 CLOSED。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 
 ## 12. D4/D5 审计映射复核谱系
