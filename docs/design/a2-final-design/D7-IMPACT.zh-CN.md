@@ -6,11 +6,11 @@ translation_status: source
 [English](D7-IMPACT.md)
 # A2 D7 实现影响与验收 Overlay
 
-状态：D7 作者候选的 design impact；不声称实现或产品行为。
+状态：D7 作者候选的 design impact；不声称实现或产品行为。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 1. 保留 implementation surface
 
-完整 retained implementation/test outline 已逐字节保存在 d7/owners/implementation-impact。后续代码仍必须实现同一套 one-Core Query DAG、CEL evaluator、result paging/subscription、View projection、Action prepare/preview/submit、EffectBytes delivery、Definition Transfer、Narrow Field qualification 与 historical dispatch。
+完整 retained implementation/test outline 已逐字节保存在 d7/owners/implementation-impact。后续代码仍必须实现同一套 one-Core Query DAG、CEL evaluator、result paging/subscription、View projection、Action prepare/preview/submit、EffectBytes delivery、Definition Transfer、Narrow Field qualification 与 historical dispatch。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 2. Current successor delta
 
@@ -20,11 +20,11 @@ fresh work 还必须消费 fixed97 current PAB4/Descriptor3/Proof3/PreparedInten
 
 Search UI 必须把 ordinary text、visual filter 与 explicit shortcut mode 编译到同一 Query planner。index provider 只能给 candidate 与 coverage evidence；Core 在 match/rank 前回读 authorized current value，complete result 还必须取得真实 query_scan。Search parser error 不能 fallback 到另一条 Query。
 
-D8 后续拥有具体 input widget、focus model、IME adapter、mobile sheet 与 assistive-technology evidence；本批只冻结 semantics。
+D8 后续拥有具体 input widget、focus model、IME adapter、mobile sheet 与 assistive-technology evidence；本批只冻结 semantics。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 4. Mechanical 与 semantic checks
 
-repo check 必须覆盖 paired documentation、protected design input、JSON validity、D7 machine-map reference、Registry byte reuse 与 S input 完全不变。design contract check 另行覆盖 DAG canonicalization、全部 operator、late error、arbitrary number、D2 full product traversal、SearchContribution activation/currentness、Narrow Field hidden-scope negative、PAB4 freeze、Definition Transfer two-pass mapping、result reset/subscription atomicity、View pure presentation、EffectBytes authorization 与 historical replay。
+repo check 必须覆盖 paired documentation、protected design input、JSON validity、D7 machine-map reference、Registry byte reuse 与 S input 完全不变。design contract check 另行覆盖 DAG canonicalization、全部 operator、late error、arbitrary number、D2 full product traversal、SearchContribution activation/currentness、Narrow Field hidden-scope negative、PAB4 freeze、Definition Transfer two-pass mapping、result reset/subscription atomicity、View pure presentation、EffectBytes authorization 与 historical replay。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 5. Product evidence boundary
 

@@ -161,17 +161,17 @@ portable current D6:
   ChangeRecord/1
 ```
 
-即使 contained production version 相同，SourceVersion 与 SourceObservation 仍是不同 domain。fresh read 可以为同一 authenticated production version 建立新的 current Observation，但不能改写 saved Locator、DefinitionAddress、prepared selector、Query result 或 ActionEvidence。
+即使 contained production version 相同，SourceVersion 与 SourceObservation 仍是不同 domain。fresh read 可以为同一 authenticated production version 建立新的 current Observation，但不能改写 saved Locator、DefinitionAddress、prepared selector、Query result 或 ActionEvidence。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
-## 8. Strict JSON 与 numeric decode
+## 8. Strict JSON 与 numeric decode；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 全部 closed object 拒绝 duplicate key、unknown member、missing required member、非法 null 与 cross-arm member。除非 exact schema 明确另有定义，Optional 表示 member absence。JSON Boolean 不能当 integer。
 
-D7 integer/decimal 保持 retained Value/CEL profile 的 exact canonical textual decoder；D3/D6 Counter 与其它 bounded meta-wire integer 保持自己的 range/overflow rule。outer current version 不能 silent 接受 inner decoder 原本拒绝的 exponent、host floating value、negative zero 或 nested numeric representation。反过来，current heading effectiveLevel 等 arbitrary-precision D7 integer 也不能因 host 或 historical schema 使用 int64 就被拒绝。
+D7 integer/decimal 保持 retained Value/CEL profile 的 exact canonical textual decoder；D3/D6 Counter 与其它 bounded meta-wire integer 保持自己的 range/overflow rule。outer current version 不能 silent 接受 inner decoder 原本拒绝的 exponent、host floating value、negative zero 或 nested numeric representation。反过来，current heading effectiveLevel 等 arbitrary-precision D7 integer 也不能因 host 或 historical schema 使用 int64 就被拒绝。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 9. Query execution closure
 
-Query outer 仍为 wireVersion2，完整 QuerySpec/1 author grammar 位于 d7/owners/query-algebra。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 共同形成一条 closed path。unknown feature 或 unavailable dependency 不能被转换为空 bag。
+Query outer 仍为 wireVersion2，完整 QuerySpec/1 author grammar 位于 d7/owners/query-algebra。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 共同形成一条 closed path。unknown feature 或 unavailable dependency 不能被转换为空 bag。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 ## 10. Search schema boundary
 

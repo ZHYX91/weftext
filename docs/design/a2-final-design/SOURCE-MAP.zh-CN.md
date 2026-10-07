@@ -133,11 +133,11 @@ D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 
 
 ## 13. D7 整合
 
-D7 现已整合为完整作者候选。fixed-S 十三份 D7 source 与额外 D9 coordinated D3-D7 binding source 均已 FULL。current 双语 D7 owner afterimage 已按 byte-identical 复制到 d7/owners；D7-REGISTRY.json 复用 exact current Registry blob，保持 34 concepts / 8 cross-stage bindings。D7.md 与 D7-SCHEMAS.md 只对具名 fixed97/current-D2 successor 应用 overlay；其它保留条款继续直接存在于复制 owner 正文。
+D7 现已整合为完整作者候选。fixed-S 十三份 D7 source 与额外 D9 coordinated D3-D7 binding source 均已 FULL。current 双语 D7 owner afterimage 已按 byte-identical 复制到 d7/owners；D7-REGISTRY.json 复用 exact current Registry blob，保持 34 concepts / 8 cross-stage bindings。D7.md 与 D7-SCHEMAS.md 只对具名 fixed97/current-D2 successor 应用 overlay；其它保留条款继续直接存在于复制 owner 正文。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 D7-SEARCH.md 整合 SEARCH-01 到 SEARCH-08，但不建立第二 search executor 或 persistent authority。plain text 与 visual filter 是默认路径；optional shortcut mode 必须 explicit，并采用带前缀 operator，因此 ordinary colon text、URL、drive-letter path 不会被 silent parse。保存只保存 canonical Query semantics，不保存 UI parser state。current matching 保持 deterministic NFC exact-substring，且不声称 automatic fuzzy、Pinyin 或 tokenizer。
 
-D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN evidence、20 项 integration obligation、全部 8 项 SEARCH obligation、scenario/non-fallback ordinal、A2-01–57、Facet/People/ICS group、Chart §15、terminology Registry coverage 与两项 navigation finding。D8–D10 继续只在真实 D7 producer/consumer intersection 上 PARTIAL；完整 module 留待后续。
+D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN evidence、20 项 integration obligation、全部 8 项 SEARCH obligation、scenario/non-fallback ordinal、A2-01–57、Facet/People/ICS group、Chart §15、terminology Registry coverage 与两项 navigation finding。D8–D10 继续只在真实 D7 producer/consumer intersection 上 PARTIAL；完整 module 留待后续。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
 fixed454e 非作者导航复核通过四项旧 residual，并新开 A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01。本作者候选已修订两项 navigation，但不自行关闭。A2-D6-01CC-P2-01 现在只有一个 role-neutral pending status，并统一引用 D7-SOURCE-MAP.json 的 detail；historical sourceEvidence 不变。A2-NAV-454E-P2-01 则由上面 §8 的 fixed-5c/fixed446 历史措辞修订解决。两项都等待 actual final stop SHA 的独立复核。
 
