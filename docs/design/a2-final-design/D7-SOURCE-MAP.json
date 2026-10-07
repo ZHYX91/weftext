@@ -511,1345 +511,2010 @@
   ],
   "source_qualified_cases": [
     {
-      "caseKey": "D7-SCENARIO-01",
+      "caseKey": "EXT",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 1; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 21,
+      "originalCondition": {
+        "scenario": "New business domain",
+        "normativeLocation": "Main §2/Algebra §1–2",
+        "positiveRequiredResult": "Legal equipment/device and course/course Facets/Fields typecheck with original scan/read",
+        "counterexampleRequiredRejection": "Reject scan_equipment and runtime Field names; absent definitions are not empty Fields"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Legal equipment/device and course/course Facets/Fields typecheck with original scan/read Counterexample: Reject scan_equipment and runtime Field names; absent definitions are not empty Fields"
     },
     {
-      "caseKey": "D7-SCENARIO-02",
+      "caseKey": "BAG",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 2; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 22,
+      "originalCondition": {
+        "scenario": "Selectors and bags",
+        "normativeLocation": "Algebra §1/3",
+        "positiveRequiredResult": "Deduplicate exact Refs; unnest [x,x] produces two rows and count_rows=2",
+        "counterexampleRequiredRejection": "Premature Ref deduplication incorrectly yields one"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Deduplicate exact Refs; unnest [x,x] produces two rows and count_rows=2 Counterexample: Premature Ref deduplication incorrectly yields one"
     },
     {
-      "caseKey": "D7-SCENARIO-03",
+      "caseKey": "DAG",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 3; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 23,
+      "originalCondition": {
+        "scenario": "Shared scalars/canonical graph",
+        "normativeLocation": "Main §4–5/Algebra §5",
+        "positiveRequiredResult": "Two derives share global aggregate; renaming IDs/legal topological permutations preserve description",
+        "counterexampleRequiredRejection": "Joint cycles, unreachable nodes and scalar row capture reject"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Two derives share global aggregate; renaming IDs/legal topological permutations preserve description Counterexample: Joint cycles, unreachable nodes and scalar row capture reject"
     },
     {
-      "caseKey": "D7-SCENARIO-04",
+      "caseKey": "SCHEMA",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 4; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 24,
+      "originalCondition": {
+        "scenario": "Flat schema",
+        "normativeLocation": "Algebra §3",
+        "positiveRequiredResult": "Aggregate has only keys/measures; one project batch reads its input",
+        "counterexampleRequiredRejection": "Old-row references after grouping and derive overwriting columns reject"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Aggregate has only keys/measures; one project batch reads its input Counterexample: Old-row references after grouping and derive overwriting columns reject"
     },
     {
-      "caseKey": "D7-SCENARIO-05",
+      "caseKey": "OPTIONAL",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 5; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 25,
+      "originalCondition": {
+        "scenario": "Missing/None/error",
+        "normativeLocation": "Value §1/4",
+        "positiveRequiredResult": "Optional default none differs from explicit some empty text",
+        "counterexampleRequiredRejection": "null, unbound required and value(none) cannot become false"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Optional default none differs from explicit some empty text Counterexample: null, unbound required and value(none) cannot become false"
     },
     {
-      "caseKey": "D7-SCENARIO-06",
+      "caseKey": "RELATED",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 6; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 26,
+      "originalCondition": {
+        "scenario": "Existence/nonexistence",
+        "normativeLocation": "Algebra §4",
+        "positiveRequiredResult": "none retains only when no visible relation matches a total predicate",
+        "counterexampleRequiredRejection": "Left traverse then filter cannot replace none; may_error predicate rejects statically"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: none retains only when no visible relation matches a total predicate Counterexample: Left traverse then filter cannot replace none; may_error predicate rejects statically"
     },
     {
-      "caseKey": "D7-SCENARIO-07",
+      "caseKey": "REFS",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 7; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 27,
+      "originalCondition": {
+        "scenario": "Exact entities/lifecycle",
+        "normativeLocation": "Main §3/Algebra §1",
+        "positiveRequiredResult": "Same complete NodeRef source remains; hidden and missing exact seeds both have zero members",
+        "counterexampleRequiredRejection": "Bare UUID/TaskRef/Field key cannot decode as EntityRef"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Same complete NodeRef source remains; hidden and missing exact seeds both have zero members Counterexample: Bare UUID/TaskRef/Field key cannot decode as EntityRef"
     },
     {
-      "caseKey": "D7-SCENARIO-08",
+      "caseKey": "LINEAGE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 8; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 28,
+      "originalCondition": {
+        "scenario": "Projection and actions",
+        "normativeLocation": "Algebra §3/Execution §6",
+        "positiveRequiredResult": "One-to-one project can reissue narrow evidence for its original unique occurrence",
+        "counterexampleRequiredRejection": "No implicit evidence after unnest/aggregate/queryRef; never pick a first target"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: One-to-one project can reissue narrow evidence for its original unique occurrence Counterexample: No implicit evidence after unnest/aggregate/queryRef; never pick a first target"
     },
     {
-      "caseKey": "D7-SCENARIO-09",
+      "caseKey": "QUERYREF",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 9; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 29,
+      "originalCondition": {
+        "scenario": "Call boundary",
+        "normativeLocation": "Algebra §5",
+        "positiveRequiredResult": "Equal-valued callee bag occurrences retain stable sort/take with caller namespace",
+        "counterexampleRequiredRejection": "No inherited callee rights/order/evidence or address-alias cycle bypass"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Equal-valued callee bag occurrences retain stable sort/take with caller namespace Counterexample: No inherited callee rights/order/evidence or address-alias cycle bypass"
     },
     {
-      "caseKey": "D7-SCENARIO-10",
+      "caseKey": "BARRIER",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 10; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 30,
+      "originalCondition": {
+        "scenario": "Edge/target permissions",
+        "normativeLocation": "Algebra §2/4/Execution §3",
+        "positiveRequiredResult": "Relation/qualifiers appear only when both edge and target reads qualify",
+        "counterexampleRequiredRejection": "Cannot erase an unreadable target Ref while retaining edge count/name"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Relation/qualifiers appear only when both edge and target reads qualify Counterexample: Cannot erase an unreadable target Ref while retaining edge count/name"
     },
     {
-      "caseKey": "D7-SCENARIO-11",
+      "caseKey": "COMPLETE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 11; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 31,
+      "originalCondition": {
+        "scenario": "Complete result/paging",
+        "normativeLocation": "Execution §1/3",
+        "positiveRequiredResult": "Page only after all 201 rows succeed; continue after empty nonterminal",
+        "counterexampleRequiredRejection": "Row201 error/cancellation/resource failure forbids early chart or successful EOF"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Page only after all 201 rows succeed; continue after empty nonterminal Counterexample: Row201 error/cancellation/resource failure forbids early chart or successful EOF"
     },
     {
-      "caseKey": "D7-SCENARIO-12",
+      "caseKey": "AUTH",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 12; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 32,
+      "originalCondition": {
+        "scenario": "Revocation/tokens",
+        "normativeLocation": "Execution §3/6/8",
+        "positiveRequiredResult": "Any auth-generation change immediately resets old results",
+        "counterexampleRequiredRejection": "Cross-use of ResultRowHandle/ByteHandle/preview/effects/cursor or old-epoch revival rejects"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Any auth-generation change immediately resets old results Counterexample: Cross-use of ResultRowHandle/ByteHandle/preview/effects/cursor or old-epoch revival rejects"
     },
     {
-      "caseKey": "D7-SCENARIO-13",
+      "caseKey": "NUMERIC",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 13; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 33,
+      "originalCondition": {
+        "scenario": "Exact aggregation",
+        "normativeLocation": "Value §2–3",
+        "positiveRequiredResult": "[INT64_MAX,1,-1] sums to MAX across all partitions; avg rounds once",
+        "counterexampleRequiredRejection": "Intermediate int64 overflow, float rounding and average-of-partition-averages violate contract"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: [INT64_MAX,1,-1] sums to MAX across all partitions; avg rounds once Counterexample: Intermediate int64 overflow, float rounding and average-of-partition-averages violate contract"
     },
     {
-      "caseKey": "D7-SCENARIO-14",
+      "caseKey": "VALUE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 14; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 34,
+      "originalCondition": {
+        "scenario": "Complete D4 value bridge",
+        "normativeLocation": "Value §1–2",
+        "positiveRequiredResult": "Preserve arbitrary integer/decimal, CamelCase objects, date scopes and arbitrary instant fractions",
+        "counterexampleRequiredRejection": "Reject 34/18 truncation, nine-digit time limits and calendar/unit guesses"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Preserve arbitrary integer/decimal, CamelCase objects, date scopes and arbitrary instant fractions Counterexample: Reject 34/18 truncation, nine-digit time limits and calendar/unit guesses"
     },
     {
-      "caseKey": "D7-SCENARIO-15",
+      "caseKey": "CACHE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 15; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 35,
+      "originalCondition": {
+        "scenario": "Negative dependencies/incremental",
+        "normativeLocation": "Execution §3",
+        "positiveRequiredResult": "Empty related ranges have incidence/query-scan versions; delta switches after complete batch",
+        "counterexampleRequiredRejection": "No index-as-empty, guessed gap repair or mixed old/new rows"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Empty related ranges have incidence/query-scan versions; delta switches after complete batch Counterexample: No index-as-empty, guessed gap repair or mixed old/new rows"
     },
     {
-      "caseKey": "D7-SCENARIO-16",
+      "caseKey": "FEATURE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 16; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 36,
+      "originalCondition": {
+        "scenario": "Semantic versions/capabilities",
+        "normativeLocation": "Main §2",
+        "positiveRequiredResult": "New Fields need no feature; generic new operators have stable IDs inferred by Core",
+        "counterexampleRequiredRejection": "Author requires and unknown-feature fallback reject"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: New Fields need no feature; generic new operators have stable IDs inferred by Core Counterexample: Author requires and unknown-feature fallback reject"
     },
     {
-      "caseKey": "D7-SCENARIO-17",
+      "caseKey": "DYNAMIC",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 17; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 37,
+      "originalCondition": {
+        "scenario": "Portable dynamic blocks",
+        "normativeLocation": "Execution §9",
+        "positiveRequiredResult": "Exactly one Query and View with explicit arguments/now/this",
+        "counterexampleRequiredRejection": "No results/cursor/UI state/resolved this/actionQuery or wrong-payload address"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Exactly one Query and View with explicit arguments/now/this Counterexample: No results/cursor/UI state/resolved this/actionQuery or wrong-payload address"
     },
     {
-      "caseKey": "D7-SCENARIO-18",
+      "caseKey": "DOMAIN",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 18; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 38,
+      "originalCondition": {
+        "scenario": "Native table/Node",
+        "normativeLocation": "Main §3/Execution §5–7",
+        "positiveRequiredResult": "Explicit row promotion creates Node and replaces row with link in one D3 decision",
+        "counterexampleRequiredRejection": "Table appearance cannot create Record identity or checkbox mirror"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Explicit row promotion creates Node and replaces row with link in one D3 decision Counterexample: Table appearance cannot create Record identity or checkbox mirror"
     },
     {
-      "caseKey": "D7-SCENARIO-19",
+      "caseKey": "POST",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 19; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 39,
+      "originalCondition": {
+        "scenario": "Complete post-query",
+        "normativeLocation": "Execution §7",
+        "positiveRequiredResult": "requireMembership succeeds only when new Node is actually first under top1",
+        "counterexampleRequiredRejection": "Passing where but ranking second rejects the entire create"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: requireMembership succeeds only when new Node is actually first under top1 Counterexample: Passing where but ranking second rejects the entire create"
     },
     {
-      "caseKey": "D7-SCENARIO-20",
+      "caseKey": "BULK",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 20; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 40,
+      "originalCondition": {
+        "scenario": "Freeze all targets",
+        "normativeLocation": "Execution §5–7",
+        "positiveRequiredResult": "all_result freezes all350 targets even with a200-item preview",
+        "counterexampleRequiredRejection": "Reject1001, commit-time Query target expansion and repeated writes to one Ref"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: all_result freezes all350 targets even with a200-item preview Counterexample: Reject1001, commit-time Query target expansion and repeated writes to one Ref"
     },
     {
-      "caseKey": "D7-SCENARIO-21",
+      "caseKey": "FIELD",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 21; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 41,
+      "originalCondition": {
+        "scenario": "Exact Field edit",
+        "normativeLocation": "Execution §5–6",
+        "positiveRequiredResult": "Of equal phones with different keys/notes, edit only the selected one",
+        "counterexampleRequiredRejection": "Old revision/ABA, constraints=[] as full narrow proof or growth beyond D2 capacity reject"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Of equal phones with different keys/notes, edit only the selected one Counterexample: Old revision/ABA, constraints=[] as full narrow proof or growth beyond D2 capacity reject"
     },
     {
-      "caseKey": "D7-SCENARIO-22",
+      "caseKey": "PROMOTE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 22; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 42,
+      "originalCondition": {
+        "scenario": "Compound creation/suggestion",
+        "normativeLocation": "Execution §5–6",
+        "positiveRequiredResult": "Checklist/native row fresh Node+old source in a legal D3 mode; suggestion exact range",
+        "counterexampleRequiredRejection": "Reject old-source-first commit, S-reply evidence replacing target evidence or stale range"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Checklist/native row fresh Node+old source in a legal D3 mode; suggestion exact range Counterexample: Reject old-source-first commit, S-reply evidence replacing target evidence or stale range"
     },
     {
-      "caseKey": "D7-SCENARIO-23",
+      "caseKey": "SEARCH",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 23; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 43,
+      "originalCondition": {
+        "scenario": "Search contribution",
+        "normativeLocation": "Algebra §6",
+        "positiveRequiredResult": "Name/alias/content descriptors generate generic Query with fixed ranking/deduplication",
+        "counterexampleRequiredRejection": "Hidden names cannot affect score; missing providers cannot omit items or names auto-copy into aliases"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Name/alias/content descriptors generate generic Query with fixed ranking/deduplication Counterexample: Hidden names cannot affect score; missing providers cannot omit items or names auto-copy into aliases"
     },
     {
-      "caseKey": "D7-SCENARIO-24",
+      "caseKey": "COLLEAGUE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 24; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 44,
+      "originalCondition": {
+        "scenario": "On-demand employment overlap",
+        "normativeLocation": "Algebra §6",
+        "positiveRequiredResult": "Double traversal for a selected person proves full validity intersection, derived/rebuildable results",
+        "counterexampleRequiredRejection": "No50million persisted links for10k employments, unknown-as-current or literal-as-Node target"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Double traversal for a selected person proves full validity intersection, derived/rebuildable results Counterexample: No50million persisted links for10k employments, unknown-as-current or literal-as-Node target"
     },
     {
-      "caseKey": "D7-SCENARIO-25",
+      "caseKey": "CALENDAR",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 25; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 45,
+      "originalCondition": {
+        "scenario": "Time/recurrence",
+        "normativeLocation": "Algebra §6/§9/§11, Value §5",
+        "positiveRequiredResult": "All five periods reach Calendar/Timeline through full typing; ISO cross-year/leap-day/explicit unavailable; range/event/recurrence retain meanings",
+        "counterexampleRequiredRejection": "Reject labels without point projection, dropped out-of-domain periods, infinite Nodes, exhaustion-as-truncation, device tzdb defaults and invented holidays"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: All five periods reach Calendar/Timeline through full typing; ISO cross-year/leap-day/explicit unavailable; range/event/recurrence retain meanings Counterexample: Reject labels without point projection, dropped out-of-domain periods, infinite Nodes, exhaustion-as-truncation, device tzdb defaults and invented holidays"
     },
     {
-      "caseKey": "D7-SCENARIO-26",
+      "caseKey": "LIBRARY",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 26; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 46,
+      "originalCondition": {
+        "scenario": "Work lifecycle",
+        "normativeLocation": "Algebra §6",
+        "positiveRequiredResult": "Draft→published keeps Node; MyWorks explicitly filters creator/currentPerson",
+        "counterexampleRequiredRejection": "No title/PDF/DOI identity merging or Work-as-Task"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Draft→published keeps Node; MyWorks explicitly filters creator/currentPerson Counterexample: No title/PDF/DOI identity merging or Work-as-Task"
     },
     {
-      "caseKey": "D7-SCENARIO-27",
+      "caseKey": "VIEW",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 27; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 47,
+      "originalCondition": {
+        "scenario": "Closed View binding",
+        "normativeLocation": "View §1–3",
+        "positiveRequiredResult": "columnId and full type match; rendering needs no source reads",
+        "counterexampleRequiredRejection": "Reject label/position rebinding, scripts/hidden fetch/renderer aggregation"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: columnId and full type match; rendering needs no source reads Counterexample: Reject label/position rebinding, scripts/hidden fetch/renderer aggregation"
     },
     {
-      "caseKey": "D7-SCENARIO-28",
+      "caseKey": "WIDE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 28; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 48,
+      "originalCondition": {
+        "scenario": "Wide-to-long",
+        "normativeLocation": "View §4",
+        "positiveRequiredResult": "Explicit two-item list→unnest→project→sort in Query",
+        "counterexampleRequiredRejection": "Renderer cannot melt revenue/cost or combine units by label"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Explicit two-item list→unnest→project→sort in Query Counterexample: Renderer cannot melt revenue/cost or combine units by label"
     },
     {
-      "caseKey": "D7-SCENARIO-29",
+      "caseKey": "ORDER",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 29; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 49,
+      "originalCondition": {
+        "scenario": "Lines/unique keys",
+        "normativeLocation": "View §2–3",
+        "positiveRequiredResult": "Strictly increasing unique x per series; first-appearance legend",
+        "counterexampleRequiredRejection": "Unsorted x, duplicate bar key/heatmap pair cannot auto-sort/aggregate"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Strictly increasing unique x per series; first-appearance legend Counterexample: Unsorted x, duplicate bar key/heatmap pair cannot auto-sort/aggregate"
     },
     {
-      "caseKey": "D7-SCENARIO-30",
+      "caseKey": "EMPTY",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 30; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 50,
+      "originalCondition": {
+        "scenario": "Empty/zero/missing",
+        "normativeLocation": "View §3",
+        "positiveRequiredResult": "scalar0/none/zero rows differ; none breaks line; pie zero-total is explicit",
+        "counterexampleRequiredRejection": "No sparse-zero fill, successful all-missing curve or hidden-count explanation"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: scalar0/none/zero rows differ; none breaks line; pie zero-total is explicit Counterexample: No sparse-zero fill, successful all-missing curve or hidden-count explanation"
     },
     {
-      "caseKey": "D7-SCENARIO-31",
+      "caseKey": "PANEL",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 31; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 51,
+      "originalCondition": {
+        "scenario": "Panels/colors",
+        "normativeLocation": "View §2/4",
+        "positiveRequiredResult": "Each complete Query row belongs to one panel; stable key colors/input order",
+        "counterexampleRequiredRejection": "No Facet naming, hidden empty panels or device sorting/recoloring"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Each complete Query row belongs to one panel; stable key colors/input order Counterexample: No Facet naming, hidden empty panels or device sorting/recoloring"
     },
     {
-      "caseKey": "D7-SCENARIO-32",
+      "caseKey": "GRAPH",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 32; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 52,
+      "originalCondition": {
+        "scenario": "Complete graph",
+        "normativeLocation": "Execution §2/View §5",
+        "positiveRequiredResult": "Explicit isolated/parallel/self/cycle; layered-rank DAG may have multiple parents",
+        "counterexampleRequiredRejection": "No anonymous hidden/missing endpoint, rank cycle or erased edge kind"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Explicit isolated/parallel/self/cycle; layered-rank DAG may have multiple parents Counterexample: No anonymous hidden/missing endpoint, rank cycle or erased edge kind"
     },
     {
-      "caseKey": "D7-SCENARIO-33",
+      "caseKey": "ACCESSIBLE",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 33; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 53,
+      "originalCondition": {
+        "scenario": "Six callers/accessibility",
+        "normativeLocation": "View §4/Impact §3",
+        "positiveRequiredResult": "Exact cells/accessible table, semantic-preserving CJK/RTL and honest Mobile fallback",
+        "counterexampleRequiredRejection": "Reject chart-only display, color-only meaning, CLI rounding or claimed unavailable renderer"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Exact cells/accessible table, semantic-preserving CJK/RTL and honest Mobile fallback Counterexample: Reject chart-only display, color-only meaning, CLI rounding or claimed unavailable renderer"
     },
     {
-      "caseKey": "D7-SCENARIO-34",
+      "caseKey": "EFFECTS",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 34; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 54,
+      "originalCondition": {
+        "scenario": "Preview/effects/replay",
+        "normativeLocation": "Execution §6/8",
+        "positiveRequiredResult": "Revalidate complete source/receipt qualification before paging; replay original lost-receipt request",
+        "counterexampleRequiredRejection": "No token-domain swaps, redacted-raw-as-exact or unauthorized commitSequence/effects"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Revalidate complete source/receipt qualification before paging; replay original lost-receipt request Counterexample: No token-domain swaps, redacted-raw-as-exact or unauthorized commitSequence/effects"
     },
     {
-      "caseKey": "D7-SCENARIO-35",
+      "caseKey": "BUDGET",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 35; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 55,
+      "originalCondition": {
+        "scenario": "Independent budgets",
+        "normativeLocation": "Execution §1/View §7",
+        "positiveRequiredResult": "Checked per-dimension minimum for rows/AST/work/dependencies/points/panels",
+        "counterexampleRequiredRejection": "No zero-as-unlimited, silent N+1 sampling or restart budget refill"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: Checked per-dimension minimum for rows/AST/work/dependencies/points/panels Counterexample: No zero-as-unlimited, silent N+1 sampling or restart budget refill"
     },
     {
-      "caseKey": "D7-SCENARIO-36",
+      "caseKey": "TERMS",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "named scenario ordinal 36; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 56,
+      "originalCondition": {
+        "scenario": "Terms/controlled migration",
+        "normativeLocation": "Lexicon/Impact §2",
+        "positiveRequiredResult": "columnId≠FieldId, Facet≠CEL Profile, separate source/provenance domains",
+        "counterexampleRequiredRejection": "Controlled schema/locale spelling drift fails; equal historical natural words do not"
+      },
+      "currentTarget": "D7 retained owner text plus named A2 overlay where applicable",
       "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "oracle": "Positive: columnId≠FieldId, Facet≠CEL Profile, separate source/provenance domains Counterexample: Controlled schema/locale spelling drift fails; equal historical natural words do not"
     },
     {
-      "caseKey": "D7-NONFALLBACK-01",
+      "caseKey": "NONROLLBACK:EntitySet and bag",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 1; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 64,
+      "originalCondition": {
+        "topic": "EntitySet and bag",
+        "fixture": "BAG"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The EntitySet and bag obligation remains independently testable through fixture BAG; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-02",
+      "caseKey": "NONROLLBACK:Unique canonical DAG",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 2; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 65,
+      "originalCondition": {
+        "topic": "Unique canonical DAG",
+        "fixture": "DAG"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Unique canonical DAG obligation remains independently testable through fixture DAG; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-03",
+      "caseKey": "NONROLLBACK:Row schema",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 3; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 66,
+      "originalCondition": {
+        "topic": "Row schema",
+        "fixture": "SCHEMA"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Row schema obligation remains independently testable through fixture SCHEMA; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-04",
+      "caseKey": "NONROLLBACK:CEL/optional/error",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 4; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 67,
+      "originalCondition": {
+        "topic": "CEL/optional/error",
+        "fixture": "OPTIONAL"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The CEL/optional/error obligation remains independently testable through fixture OPTIONAL; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-05",
+      "caseKey": "NONROLLBACK:related any/none",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 5; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 68,
+      "originalCondition": {
+        "topic": "related any/none",
+        "fixture": "RELATED"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The related any/none obligation remains independently testable through fixture RELATED; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-06",
+      "caseKey": "NONROLLBACK:Exact entities",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 6; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 69,
+      "originalCondition": {
+        "topic": "Exact entities",
+        "fixture": "REFS"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Exact entities obligation remains independently testable through fixture REFS; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-07",
+      "caseKey": "NONROLLBACK:Six identity categories",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 7; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 70,
+      "originalCondition": {
+        "topic": "Six identity categories",
+        "fixture": "LINEAGE"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Six identity categories obligation remains independently testable through fixture LINEAGE; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-08",
+      "caseKey": "NONROLLBACK:QueryRef",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 8; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 71,
+      "originalCondition": {
+        "topic": "QueryRef",
+        "fixture": "QUERYREF"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The QueryRef obligation remains independently testable through fixture QUERYREF; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-09",
+      "caseKey": "NONROLLBACK:ActionEvidence reissuance",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 9; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 72,
+      "originalCondition": {
+        "topic": "ActionEvidence reissuance",
+        "fixture": "LINEAGE"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The ActionEvidence reissuance obligation remains independently testable through fixture LINEAGE; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-10",
+      "caseKey": "NONROLLBACK:Data security barrier",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 10; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 73,
+      "originalCondition": {
+        "topic": "Data security barrier",
+        "fixture": "BARRIER"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Data security barrier obligation remains independently testable through fixture BARRIER; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-11",
+      "caseKey": "NONROLLBACK:Atomic results/revocation",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 11; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 74,
+      "originalCondition": {
+        "topic": "Atomic results/revocation",
+        "fixture": "COMPLETE/AUTH"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Atomic results/revocation obligation remains independently testable through fixture COMPLETE/AUTH; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-12",
+      "caseKey": "NONROLLBACK:Numbers/aggregation",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 12; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 75,
+      "originalCondition": {
+        "topic": "Numbers/aggregation",
+        "fixture": "NUMERIC"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Numbers/aggregation obligation remains independently testable through fixture NUMERIC; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-13",
+      "caseKey": "NONROLLBACK:TypedLiteral/Orderable",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 13; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 76,
+      "originalCondition": {
+        "topic": "TypedLiteral/Orderable",
+        "fixture": "VALUE"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The TypedLiteral/Orderable obligation remains independently testable through fixture VALUE; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-14",
+      "caseKey": "NONROLLBACK:Read sets/cache/incremental",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 14; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 77,
+      "originalCondition": {
+        "topic": "Read sets/cache/incremental",
+        "fixture": "CACHE"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Read sets/cache/incremental obligation remains independently testable through fixture CACHE; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-15",
+      "caseKey": "NONROLLBACK:Versions/features",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 15; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 78,
+      "originalCondition": {
+        "topic": "Versions/features",
+        "fixture": "FEATURE"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Versions/features obligation remains independently testable through fixture FEATURE; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-16",
+      "caseKey": "NONROLLBACK:DynamicBlock",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 16; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 79,
+      "originalCondition": {
+        "topic": "DynamicBlock",
+        "fixture": "DYNAMIC"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The DynamicBlock obligation remains independently testable through fixture DYNAMIC; no rollback/fallback is introduced."
     },
     {
-      "caseKey": "D7-NONFALLBACK-17",
+      "caseKey": "NONROLLBACK:Native table/Record/Node",
       "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
       "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
-      "sourceClause": "non-fallback theme ordinal 17; exact original name/condition remains in source bytes",
-      "target": "D7 §§3–19 plus local retained scenarios",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 80,
+      "originalCondition": {
+        "topic": "Native table/Record/Node",
+        "fixture": "DOMAIN"
+      },
+      "currentTarget": "D7 retained Query owner clauses and D7 §§5–19",
+      "disposition": "retain",
+      "oracle": "The Native table/Record/Node obligation remains independently testable through fixture DOMAIN; no rollback/fallback is introduced."
     },
     {
       "caseKey": "A2-01",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-01",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 86,
+      "originalCondition": "Preserve separate Fields/Refs; read Entries with notes, fail unavailable providers and never auto-merge (VALUE/REFS/SEARCH).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Preserve separate Fields/Refs; read Entries with notes, fail unavailable providers and never auto-merge (VALUE/REFS/SEARCH)."
     },
     {
       "caseKey": "A2-02",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-02",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 87,
+      "originalCondition": "Hide the entire hidden-parent edge while independently visible spouse remains; literals have no endpoints (BARRIER/GRAPH).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Hide the entire hidden-parent edge while independently visible spouse remains; literals have no endpoints (BARRIER/GRAPH)."
     },
     {
       "caseKey": "A2-03",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-03",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 88,
+      "originalCondition": "Structural/member/dependency/document-link relations retain separate IDs, never graph merging (GRAPH).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Structural/member/dependency/document-link relations retain separate IDs, never graph merging (GRAPH)."
     },
     {
       "caseKey": "A2-04",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-04",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 89,
+      "originalCondition": "Read seven-member period and scope from author/control sources; rename/move preserves meaning; D4-versioned week/DST rules (CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Read seven-member period and scope from author/control sources; rename/move preserves meaning; D4-versioned week/DST rules (CALENDAR)."
     },
     {
       "caseKey": "A2-05",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-05",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 90,
+      "originalCondition": "D6 unique/many configuration and negative-range CAS remain; collection post-query cannot substitute (POST).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D6 unique/many configuration and negative-range CAS remain; collection post-query cannot substitute (POST)."
     },
     {
       "caseKey": "A2-06",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-06",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 91,
+      "originalCondition": "Date/instant end-exclusive; incomparable scopes remain separate. D9 owns import/export formats; Query has no implicit conversion (VALUE/CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Date/instant end-exclusive; incomparable scopes remain separate. D9 owns import/export formats; Query has no implicit conversion (VALUE/CALENDAR)."
     },
     {
       "caseKey": "A2-07",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-07",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 92,
+      "originalCondition": "D9 input adapters and original D3 create/copy ownership; D7 grants neither cross-owner Resource access nor recursive import (PROMOTE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D9 input adapters and original D3 create/copy ownership; D7 grants neither cross-owner Resource access nor recursive import (PROMOTE)."
     },
     {
       "caseKey": "A2-08",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-08",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 93,
+      "originalCondition": "D9/D10 sync mapping and D6 transactions; D7 consumes only committed Fields, without credentials/cursors in source (FIELD).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D9/D10 sync mapping and D6 transactions; D7 consumes only committed Fields, without credentials/cursors in source (FIELD)."
     },
     {
       "caseKey": "A2-09",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-09",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 94,
+      "originalCondition": "Same schema/errors across callers; unknown provider is not empty (FEATURE/ACCESSIBLE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Same schema/errors across callers; unknown provider is not empty (FEATURE/ACCESSIBLE)."
     },
     {
       "caseKey": "A2-10",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-10",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 95,
+      "originalCondition": "D4 Field-owned relations, no separate unlimited RelationType ontology or business-specific Query syntax (EXT).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D4 Field-owned relations, no separate unlimited RelationType ontology or business-specific Query syntax (EXT)."
     },
     {
       "caseKey": "A2-11",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-11",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 96,
+      "originalCondition": "D2/D4 replace old specialization with ordinary+Facets; preserve opaque source upstream, typed reads need definitions (VALUE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D2/D4 replace old specialization with ordinary+Facets; preserve opaque source upstream, typed reads need definitions (VALUE)."
     },
     {
       "caseKey": "A2-12",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-12",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 97,
+      "originalCondition": "D5 temporary Entry selectors and whole-source version; explicit D6 conflict/merge, never UI lists deciding a Record domain (FIELD).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D5 temporary Entry selectors and whole-source version; explicit D6 conflict/merge, never UI lists deciding a Record domain (FIELD)."
     },
     {
       "caseKey": "A2-13",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-13",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 98,
+      "originalCondition": "Inverse uses actual canonical owner, current auth and complete D6 incidence; lost index means full scan or unavailable (BARRIER/CACHE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Inverse uses actual canonical owner, current auth and complete D6 incidence; lost index means full scan or unavailable (BARRIER/CACHE)."
     },
     {
       "caseKey": "A2-14",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-14",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 99,
+      "originalCondition": "Same as05: title/path do not participate in CalendarScope uniqueness; empty Query cannot bypass preview gates (POST).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Same as05: title/path do not participate in CalendarScope uniqueness; empty Query cannot bypass preview gates (POST)."
     },
     {
       "caseKey": "A2-15",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-15",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 100,
+      "originalCondition": "People/Calendar/Graph map existing D1 capabilities, no new formal surface; D10 installs runtime, D8 owns interaction (EXT/ACCESSIBLE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "People/Calendar/Graph map existing D1 capabilities, no new formal surface; D10 installs runtime, D8 owns interaction (EXT/ACCESSIBLE)."
     },
     {
       "caseKey": "A2-16",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-16",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 101,
+      "originalCondition": "Organizations Catalog uses generic read; preserve source for unknown schemes and report unavailable when queried (VALUE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Organizations Catalog uses generic read; preserve source for unknown schemes and report unavailable when queried (VALUE)."
     },
     {
       "caseKey": "A2-17",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-17",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 102,
+      "originalCondition": "structural_parent and organizations/parent read/traverse separately; changing the latter does not move Node (GRAPH/FIELD).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "structural_parent and organizations/parent read/traverse separately; changing the latter does not move Node (GRAPH/FIELD)."
     },
     {
       "caseKey": "A2-18",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-18",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 103,
+      "originalCondition": "Organization relationship types retain FieldId/direction and graph labels (GRAPH).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Organization relationship types retain FieldId/direction and graph labels (GRAPH)."
     },
     {
       "caseKey": "A2-19",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-19",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 104,
+      "originalCondition": "Rename/merge/historical identifiers never auto-merge identity; explicit D3 operations validate separately (REFS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Rename/merge/historical identifiers never auto-merge identity; explicit D3 operations validate separately (REFS)."
     },
     {
       "caseKey": "A2-20",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-20",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 105,
+      "originalCondition": "position/rank/department are existing typed members; new position values add no Query field/operator (EXT/COLLEAGUE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "position/rank/department are existing typed members; new position values add no Query field/operator (EXT/COLLEAGUE)."
     },
     {
       "caseKey": "A2-21",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-21",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 106,
+      "originalCondition": "Schema/connector/state remain separate; Query does not repair author facts, and missing D10 capabilities stop by contract (FEATURE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Schema/connector/state remain separate; Query does not repair author facts, and missing D10 capabilities stop by contract (FEATURE)."
     },
     {
       "caseKey": "A2-22",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-22",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 107,
+      "originalCondition": "Existing D1 official optional-module instance, no new surface; physical release proof remains absent (ACCESSIBLE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Existing D1 official optional-module instance, no new surface; physical release proof remains absent (ACCESSIBLE)."
     },
     {
       "caseKey": "A2-23",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-23",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 108,
+      "originalCondition": "Complete §2.6 mapping below; D4 unordered Facet sets do not create a single-Profile query domain (EXT).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Complete §2.6 mapping below; D4 unordered Facet sets do not create a single-Profile query domain (EXT)."
     },
     {
       "caseKey": "A2-24",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-24",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 109,
+      "originalCondition": "Complete D9 template output+D3 compound+D4 composition gates; installation/template priority cannot override schema (PROMOTE/POST).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Complete D9 template output+D3 compound+D4 composition gates; installation/template priority cannot override schema (PROMOTE/POST)."
     },
     {
       "caseKey": "A2-25",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-25",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 110,
+      "originalCondition": "D2/D4 preserve opaque source; D7 does not infer unknown Facets during typed reads or add a second write path (FEATURE/FIELD).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D2/D4 preserve opaque source; D7 does not infer unknown Facets during typed reads or add a second write path (FEATURE/FIELD)."
     },
     {
       "caseKey": "A2-26",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-26",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 111,
+      "originalCondition": "Old Task specialization is ordinary+tasks/task with one NodeRef; no separate tasks domain (DOMAIN).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Old Task specialization is ordinary+tasks/task with one NodeRef; no separate tasks domain (DOMAIN)."
     },
     {
       "caseKey": "A2-27",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-27",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 112,
+      "originalCondition": "Range is not Event; Calendar View displays explicit time columns without inventing reminders/participants (CALENDAR/VIEW).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Range is not Event; Calendar View displays explicit time columns without inventing reminders/participants (CALENDAR/VIEW)."
     },
     {
       "caseKey": "A2-28",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-28",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 113,
+      "originalCondition": "Different rule-pack versions/sources do not merge isHoliday; unclosed D10 algorithms are unavailable, with no copied author fact (CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Different rule-pack versions/sources do not merge isHoliday; unclosed D10 algorithms are unavailable, with no copied author fact (CALENDAR)."
     },
     {
       "caseKey": "A2-29",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-29",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 114,
+      "originalCondition": "End-exclusive/offset/arbitrary precision; unbounded values require explicit bounds, and View rejects nonpositive intervals (VALUE/EMPTY).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "End-exclusive/offset/arbitrary precision; unbounded values require explicit bounds, and View rejects nonpositive intervals (VALUE/EMPTY)."
     },
     {
       "caseKey": "A2-30",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-30",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 115,
+      "originalCondition": "Original D4 recurrence originalStart internal key with complete horizon/override binding; old evidence does not revive (CALENDAR/AUTH).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Original D4 recurrence originalStart internal key with complete horizon/override binding; old evidence does not revive (CALENDAR/AUTH)."
     },
     {
       "caseKey": "A2-31",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-31",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 116,
+      "originalCondition": "Infinite RRULE expands completely only within finite horizon; original RDATE/EXDATE/override rules, no occurrence Nodes (CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Infinite RRULE expands completely only within finite horizon; original RDATE/EXDATE/override rules, no occurrence Nodes (CALENDAR)."
     },
     {
       "caseKey": "A2-32",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-32",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 117,
+      "originalCondition": "Source binding UID/RECURRENCE-ID belongs to D3/D9/D10; title/path/UID is not Query identity (REFS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Source binding UID/RECURRENCE-ID belongs to D3/D9/D10; title/path/UID is not Query identity (REFS)."
     },
     {
       "caseKey": "A2-33",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-33",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 118,
+      "originalCondition": "subscribe/copy/adopt are different authority Actions; D7 result subscription is not ICS subscription (TERMS/PROMOTE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "subscribe/copy/adopt are different authority Actions; D7 result subscription is not ICS subscription (TERMS/PROMOTE)."
     },
     {
       "caseKey": "A2-34",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-34",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 119,
+      "originalCondition": "D9 component mapping/loss and bounded recurrence, not one Node per component; D7 consumes admitted typed sources only (CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D9 component mapping/loss and bounded recurrence, not one Node per component; D7 consumes admitted typed sources only (CALENDAR)."
     },
     {
       "caseKey": "A2-35",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-35",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 120,
+      "originalCondition": "Disabling a UI module does not change D2 Task/Template interpretation; Query remains Node/Facet without old Task-enum fallback (DOMAIN).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Disabling a UI module does not change D2 Task/Template interpretation; Query remains Node/Facet without old Task-enum fallback (DOMAIN)."
     },
     {
       "caseKey": "A2-36",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-36",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 121,
+      "originalCondition": "D10 contribution-level permissions; D7 consumes pure schema/Query/View definitions, never whole-package authorization (EXT).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D10 contribution-level permissions; D7 consumes pure schema/Query/View definitions, never whole-package authorization (EXT)."
     },
     {
       "caseKey": "A2-37",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-37",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 122,
+      "originalCondition": "Settings/Marketplace belong to D8/D10; D7 Lexicon maps names, adds no Diary module and claims no UI acceptance (TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Settings/Marketplace belong to D8/D10; D7 Lexicon maps names, adds no Diary module and claims no UI acceptance (TERMS)."
     },
     {
       "caseKey": "A2-38",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-38",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 123,
+      "originalCondition": "Domain names do not create executable Query plugins; Business uses existing schemas/packs, without a medical product promise (EXT).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Domain names do not create executable Query plugins; Business uses existing schemas/packs, without a medical product promise (EXT)."
     },
     {
       "caseKey": "A2-39",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-39",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 124,
+      "originalCondition": "D9 generation/default/ongoing-schema responsibilities differ; full preparation conflicts reject and templates retain no later authority (PROMOTE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D9 generation/default/ongoing-schema responsibilities differ; full preparation conflicts reject and templates retain no later authority (PROMOTE)."
     },
     {
       "caseKey": "A2-40",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-40",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 125,
+      "originalCondition": "One Calendar contains three distinct Facet semantics; old Time/Chrono are historical rejected/retired terms, not wire aliases (CALENDAR/TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "One Calendar contains three distinct Facet semantics; old Time/Chrono are historical rejected/retired terms, not wire aliases (CALENDAR/TERMS)."
     },
     {
       "caseKey": "A2-41",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-41",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 126,
+      "originalCondition": "MyWorks filters Library creators; status changes same Node. Edition identity requires explicit D3 create+relation (LIBRARY).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "MyWorks filters Library creators; status changes same Node. Edition identity requires explicit D3 create+relation (LIBRARY)."
     },
     {
       "caseKey": "A2-42",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-42",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 127,
+      "originalCondition": "Library Fields/Work Node/Resource/citation keep original ownership; media add no Query domain (LIBRARY).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Library Fields/Work Node/Resource/citation keep original ownership; media add no Query domain (LIBRARY)."
     },
     {
       "caseKey": "A2-43",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-43",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 128,
+      "originalCondition": "Calendar/Library canonical names do not change by language; D8/D10 UI/manifest implementation remains (TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Calendar/Library canonical names do not change by language; D8/D10 UI/manifest implementation remains (TERMS)."
     },
     {
       "caseKey": "A2-44",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-44",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 129,
+      "originalCondition": "D4 Library naming: Work may be self-authored/external, Bibliography is derived; no new References entity (LIBRARY/TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D4 Library naming: Work may be self-authored/external, Bibliography is derived; no new References entity (LIBRARY/TERMS)."
     },
     {
       "caseKey": "A2-45",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-45",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 130,
+      "originalCondition": "Period/range/event retain respective Fields/unique scopes/recurrence despite one module (CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Period/range/event retain respective Fields/unique scopes/recurrence despite one module (CALENDAR)."
     },
     {
       "caseKey": "A2-46",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-46",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 131,
+      "originalCondition": "Mobile local Core Query is distinct from notification/ICS/participant dependencies; network denial does not delete source (ACCESSIBLE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Mobile local Core Query is distinct from notification/ICS/participant dependencies; network denial does not delete source (ACCESSIBLE)."
     },
     {
       "caseKey": "A2-47",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-47",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 132,
+      "originalCondition": "One Calendar product grouping does not merge ontology/capabilities; D7 does not reopen D1 navigation (CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "One Calendar product grouping does not merge ontology/capabilities; D7 does not reopen D1 navigation (CALENDAR)."
     },
     {
       "caseKey": "A2-48",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-48",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 133,
+      "originalCondition": "Different Template/Preset choices for a period retain Node/scope, without diary identity/membership (CALENDAR/DOMAIN).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Different Template/Preset choices for a period retain Node/scope, without diary identity/membership (CALENDAR/DOMAIN)."
     },
     {
       "caseKey": "A2-49",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-49",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 134,
+      "originalCondition": "D10 verified contribution generation enters Query closure; unaccepted providers cannot inject schemas, configuration UI belongs to D10 (FEATURE).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D10 verified contribution generation enters Query closure; unaccepted providers cannot inject schemas, configuration UI belongs to D10 (FEATURE)."
     },
     {
       "caseKey": "A2-50",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-50",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 135,
+      "originalCondition": "Disabling rules invalidates/resets dependent derived Queries while preserving sources; unreferenced packs add no dependency (CACHE/CALENDAR).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Disabling rules invalidates/resets dependent derived Queries while preserving sources; unreferenced packs add no dependency (CACHE/CALENDAR)."
     },
     {
       "caseKey": "A2-51",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-51",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 136,
+      "originalCondition": "Qualify D2 AsciiDoc Profile, CEL Profile and Facet separately, never three meanings of bare Profile (TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Qualify D2 AsciiDoc Profile, CEL Profile and Facet separately, never three meanings of bare Profile (TERMS)."
     },
     {
       "caseKey": "A2-52",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-52",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 137,
+      "originalCondition": "D3 SourceBinding/Provenance/OriginBinding and D7 ResultSubscription retain their meanings, owners and actions (TERMS/REFS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D3 SourceBinding/Provenance/OriginBinding and D7 ResultSubscription retain their meanings, owners and actions (TERMS/REFS)."
     },
     {
       "caseKey": "A2-53",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-53",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 138,
+      "originalCondition": "Complete D1–D6 Lexicons are inputs. D7 adds34 concepts/inherited bindings, including Conditional Source Change/Effect Delivery Epoch, without redefining Node (TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Complete D1–D6 Lexicons are inputs. D7 adds34 concepts/inherited bindings, including Conditional Source Change/Effect Delivery Epoch, without redefining Node (TERMS)."
     },
     {
       "caseKey": "A2-54",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-54",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 139,
+      "originalCondition": "Exact controlled locale/wire/type spelling drift fails; user source/historical words do not (TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Exact controlled locale/wire/type spelling drift fails; user source/historical words do not (TERMS)."
     },
     {
       "caseKey": "A2-55",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-55",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 140,
+      "originalCondition": "Distinguish Library Work, task/project work and Reference/NodeRef/link; Query uses stable schema IDs (TERMS/LIBRARY).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Distinguish Library Work, task/project work and Reference/NodeRef/link; Query uses stable schema IDs (TERMS/LIBRARY)."
     },
     {
       "caseKey": "A2-56",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-56",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 141,
+      "originalCondition": "D9 NodeTemplate/OfficeTemplate/Preset/default inputs provide one complete source; D7 Actions share no free template blob (PROMOTE/TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "D9 NodeTemplate/OfficeTemplate/Preset/default inputs provide one complete source; D7 Actions share no free template blob (PROMOTE/TERMS)."
     },
     {
       "caseKey": "A2-57",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory §9 A2-57",
-      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 142,
+      "originalCondition": "Atomic prototype replacement S1–S7 without compatibility aliases; Lexicon records deletion targets, preserving history (TERMS).",
+      "currentTarget": "D7 retained owner clauses and D7 §§3–19; downstream owner work remains where named",
       "disposition": "retain-and-route-by-real-owner",
-      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+      "oracle": "Atomic prototype replacement S1–S7 without compatibility aliases; Lexicon records deletion targets, preserving history (TERMS)."
     },
     {
-      "caseKey": "FACET-01",
+      "caseKey": "FACET:§2.6-01",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 1; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 150,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-01",
+        "d7Fixture": "EXT/PROMOTE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-01 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture EXT/PROMOTE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-02",
+      "caseKey": "FACET:§2.6-02",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 2; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 151,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-02",
+        "d7Fixture": "FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-02 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-03",
+      "caseKey": "FACET:§2.6-03",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 3; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 152,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-03",
+        "d7Fixture": "EXT/CALENDAR"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-03 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture EXT/CALENDAR; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-04",
+      "caseKey": "FACET:§2.6-04",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 4; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 153,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-04",
+        "d7Fixture": "EXT"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-04 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture EXT; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-05",
+      "caseKey": "FACET:§2.6-05",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 5; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 154,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-05",
+        "d7Fixture": "EXT/LIBRARY"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-05 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture EXT/LIBRARY; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-06",
+      "caseKey": "FACET:§2.6-06",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 6; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 155,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-06",
+        "d7Fixture": "DOMAIN"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-06 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture DOMAIN; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-07",
+      "caseKey": "FACET:§2.6-07",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 7; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 156,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-07",
+        "d7Fixture": "FEATURE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-07 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FEATURE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-08",
+      "caseKey": "FACET:§2.6-08",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 8; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 157,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-08",
+        "d7Fixture": "FEATURE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-08 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FEATURE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-09",
+      "caseKey": "FACET:§2.6-09",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 9; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 158,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-09",
+        "d7Fixture": "VALUE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-09 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture VALUE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-10",
+      "caseKey": "FACET:§2.6-10",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 10; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 159,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-10",
+        "d7Fixture": "FEATURE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-10 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FEATURE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-11",
+      "caseKey": "FACET:§2.6-11",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 11; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 160,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-11",
+        "d7Fixture": "VALUE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-11 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture VALUE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-12",
+      "caseKey": "FACET:§2.6-12",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 12; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 161,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-12",
+        "d7Fixture": "FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-12 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-13",
+      "caseKey": "FACET:§2.6-13",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 13; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 162,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-13",
+        "d7Fixture": "FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-13 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-14",
+      "caseKey": "FACET:§2.6-14",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 14; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 163,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-14",
+        "d7Fixture": "FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-14 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-15",
+      "caseKey": "FACET:§2.6-15",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 15; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 164,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-15",
+        "d7Fixture": "DOMAIN"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-15 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture DOMAIN; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "FACET-16",
+      "caseKey": "FACET:§2.6-16",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Facet source-qualified case ordinal 16; exact original name/condition remains in source bytes",
-      "target": "D7 §§9,11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 165,
+      "originalCondition": {
+        "sourceQualifiedKey": "§2.6-16",
+        "d7Fixture": "ACCESSIBLE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §2.6-16 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture ACCESSIBLE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-01",
+      "caseKey": "PEOPLE:§13.5-01",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 1; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 166,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-01",
+        "d7Fixture": "SEARCH/REFS"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-01 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture SEARCH/REFS; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-02",
+      "caseKey": "PEOPLE:§13.5-02",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 2; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 167,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-02",
+        "d7Fixture": "TERMS/VALUE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-02 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture TERMS/VALUE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-03",
+      "caseKey": "PEOPLE:§13.5-03",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 3; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 168,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-03",
+        "d7Fixture": "BARRIER/GRAPH"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-03 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture BARRIER/GRAPH; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-04",
+      "caseKey": "PEOPLE:§13.5-04",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 4; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 169,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-04",
+        "d7Fixture": "DOMAIN/FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-04 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture DOMAIN/FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-05",
+      "caseKey": "PEOPLE:§13.5-05",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 5; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 170,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-05",
+        "d7Fixture": "DOMAIN"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-05 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture DOMAIN; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-06",
+      "caseKey": "PEOPLE:§13.5-06",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 6; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 171,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-06",
+        "d7Fixture": "PROMOTE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-06 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture PROMOTE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-07",
+      "caseKey": "PEOPLE:§13.5-07",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 7; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 172,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-07",
+        "d7Fixture": "DOMAIN"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-07 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture DOMAIN; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-08",
+      "caseKey": "PEOPLE:§13.5-08",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 8; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 173,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-08",
+        "d7Fixture": "VALUE/FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-08 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture VALUE/FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-09",
+      "caseKey": "PEOPLE:§13.5-09",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 9; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 174,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-09",
+        "d7Fixture": "CALENDAR"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-09 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture CALENDAR; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-10",
+      "caseKey": "PEOPLE:§13.5-10",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 10; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 175,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-10",
+        "d7Fixture": "COLLEAGUE"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-10 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture COLLEAGUE; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-11",
+      "caseKey": "PEOPLE:§13.5-11",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 11; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 176,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-11",
+        "d7Fixture": "FIELD"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-11 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-12",
+      "caseKey": "PEOPLE:§13.5-12",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 12; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 177,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-12",
+        "d7Fixture": "SEARCH"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-12 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture SEARCH; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-13",
+      "caseKey": "PEOPLE:§13.5-13",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 13; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 178,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-13",
+        "d7Fixture": "COLLEAGUE/GRAPH"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-13 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture COLLEAGUE/GRAPH; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-14",
+      "caseKey": "PEOPLE:§13.5-14",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 14; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 179,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-14",
+        "d7Fixture": "EXT/CALENDAR"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-14 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture EXT/CALENDAR; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-15",
+      "caseKey": "PEOPLE:§13.5-15",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 15; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 180,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-15",
+        "d7Fixture": "FIELD/DOMAIN"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-15 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD/DOMAIN; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "PEOPLE-16",
+      "caseKey": "PEOPLE:§13.5-16",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "People source-qualified case ordinal 16; exact original name/condition remains in source bytes",
-      "target": "D7 §§9–11,15; D4 remains semantic owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 181,
+      "originalCondition": {
+        "sourceQualifiedKey": "§13.5-16",
+        "d7Fixture": "FIELD/BARRIER"
+      },
+      "currentTarget": "D7 generic Query/Action validation plus D4-owned semantics",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original §13.5-16 source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture FIELD/BARRIER; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "ICS-01",
+      "caseKey": "ICS:master/occurrence identity",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "ICS source-qualified case ordinal 1; exact original name/condition remains in source bytes",
-      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 187,
+      "originalCondition": {
+        "sourceQualifiedKey": "master/occurrence identity",
+        "d7Fixture": "Separate D3 Node identity from originalStart key; no materialization"
+      },
+      "currentTarget": "D7 §§3,9,15 plus D9-owned mapping boundaries",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original master/occurrence identity source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture Separate D3 Node identity from originalStart key; no materialization; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "ICS-02",
+      "caseKey": "ICS:subscribe/sync",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "ICS source-qualified case ordinal 2; exact original name/condition remains in source bytes",
-      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 188,
+      "originalCondition": {
+        "sourceQualifiedKey": "subscribe/sync",
+        "d7Fixture": "D9/D10 own external source and D3 binding; not d7_subscribe"
+      },
+      "currentTarget": "D7 §§3,9,15 plus D9-owned mapping boundaries",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original subscribe/sync source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture D9/D10 own external source and D3 binding; not d7_subscribe; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "ICS-03",
+      "caseKey": "ICS:copy/import",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "ICS source-qualified case ordinal 3; exact original name/condition remains in source bytes",
-      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 189,
+      "originalCondition": {
+        "sourceQualifiedKey": "copy/import",
+        "d7Fixture": "Original D3 fresh identity/owner-local Resource mode; Query has no effects"
+      },
+      "currentTarget": "D7 §§3,9,15 plus D9-owned mapping boundaries",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original copy/import source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture Original D3 fresh identity/owner-local Resource mode; Query has no effects; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "ICS-04",
+      "caseKey": "ICS:promote/adopt",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "ICS source-qualified case ordinal 4; exact original name/condition remains in source bytes",
-      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 190,
+      "originalCondition": {
+        "sourceQualifiedKey": "promote/adopt",
+        "d7Fixture": "Explicit Action/complete source; rowHandle cannot become NodeRef"
+      },
+      "currentTarget": "D7 §§3,9,15 plus D9-owned mapping boundaries",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original promote/adopt source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture Explicit Action/complete source; rowHandle cannot become NodeRef; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "ICS-05",
+      "caseKey": "ICS:mixed VCALENDAR",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "ICS source-qualified case ordinal 5; exact original name/condition remains in source bytes",
-      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 191,
+      "originalCondition": {
+        "sourceQualifiedKey": "mixed VCALENDAR",
+        "d7Fixture": "D9 classification mapping/loss; D7 typed input rejects arbitrary JSON"
+      },
+      "currentTarget": "D7 §§3,9,15 plus D9-owned mapping boundaries",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original mixed VCALENDAR source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture D9 classification mapping/loss; D7 typed input rejects arbitrary JSON; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "ICS-06",
+      "caseKey": "ICS:recurrence/timezone budget",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "ICS source-qualified case ordinal 6; exact original name/condition remains in source bytes",
-      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
-      "disposition": "retain-or-named-current-successor",
-      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 192,
+      "originalCondition": {
+        "sourceQualifiedKey": "recurrence/timezone budget",
+        "d7Fixture": "Full D4 horizon/moved exceptions/coverage/limits; overflow fails without truncation or guessed tzdb"
+      },
+      "currentTarget": "D7 §§3,9,15 plus D9-owned mapping boundaries",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "The original recurrence/timezone budget source-qualified condition remains exact in the immutable Mandatory source and is exercised by D7 fixture Full D4 horizon/moved exceptions/coverage/limits; overflow fails without truncation or guessed tzdb; D7 does not replace the real upstream owner."
     },
     {
-      "caseKey": "CHART-SECTION-15",
+      "caseKey": "CHART-L194",
       "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
       "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
-      "sourceClause": "Mandatory Chart §15; every row/inline condition remains distinct in source",
-      "target": "D7 §§5–6,16 and retained View owner",
-      "disposition": "retain; wide-to-long and ordering work must be Query-visible, never renderer computation",
-      "oracle": "Renderer may not invent unpivot/sort/data facts; isolated/self/parallel/cycle and missing/sparse semantics remain reviewable separately."
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 194,
+      "originalCondition": "## 5. All Chart §15 families and cross-cutting checks",
+      "currentTarget": "D7 retained View owner and D7 §§5–6,17",
+      "disposition": "retain-or-defer-as-explicitly-named",
+      "oracle": "## 5. All Chart §15 families and cross-cutting checks"
+    },
+    {
+      "caseKey": "CHART-L196",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 196,
+      "originalCondition": "View §3 lists six basic charts, seven nonchart presentations and network. Section6 rejects/defers each remaining family with its necessary generic contract. tree/treemap/Gantt, statistical density/quantiles, map/financial data and similar features gain no implicit support from generic chart-library parameters. Forms are D8 interactions generating Actions.",
+      "currentTarget": "D7 retained View owner and D7 §§5–6,17",
+      "disposition": "retain-or-defer-as-explicitly-named",
+      "oracle": "View §3 lists six basic charts, seven nonchart presentations and network. Section6 rejects/defers each remaining family with its necessary generic contract. tree/treemap/Gantt, statistical density/quantiles, map/financial data and similar features gain no implicit support from generic chart-library parameters. Forms are D8 interactions generating Actions."
+    },
+    {
+      "caseKey": "CHART-L198",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "retainedCurrentMirror": "docs/design/a2-final-design/d7/owners/scenarios/source.md",
+      "retainedMirrorLine": 198,
+      "originalCondition": "Section15.8 maps individually: wide tables=WIDE; all ordering=ORDER; empty/zero/missing=EMPTY; PanelPartition=PANEL; tooltip/reference explanation=VIEW with overlays currently unsupported; exact scale/domain/unit=VALUE/VIEW; graph/tree/Gantt=GRAPH and View§6; version rebinding=VIEW/FEATURE; stable color/legend=PANEL; resources=BUDGET; accessibility/CJK/RTL/print/six surfaces=ACCESSIBLE; multiple DynamicBlocks=DYNAMIC; errors/late validation=COMPLETE.",
+      "currentTarget": "D7 retained View owner and D7 §§5–6,17",
+      "disposition": "retain-or-defer-as-explicitly-named",
+      "oracle": "Section15.8 maps individually: wide tables=WIDE; all ordering=ORDER; empty/zero/missing=EMPTY; PanelPartition=PANEL; tooltip/reference explanation=VIEW with overlays currently unsupported; exact scale/domain/unit=VALUE/VIEW; graph/tree/Gantt=GRAPH and View§6; version rebinding=VIEW/FEATURE; stable color/legend=PANEL; resources=BUDGET; accessibility/CJK/RTL/print/six surfaces=ACCESSIBLE; multiple DynamicBlocks=DYNAMIC; errors/late validation=COMPLETE."
     }
   ],
   "terminology_registry": {
@@ -1897,5 +2562,7 @@
       "self_closed": false
     }
   },
-  "next_gate": "Fixed-SHA independent non-author review of this complete D7 author candidate and the two navigation repairs; then D8-D10 full integration, fresh global non-author review, explicit acceptedDesignSha, and same-SHA freeze/start material."
+  "next_gate": "Fixed-SHA independent non-author review of this complete D7 author candidate and the two navigation repairs; then D8-D10 full integration, fresh global non-author review, explicit acceptedDesignSha, and same-SHA freeze/start material.",
+  "case_mapping_method": "Exact condition expansion from the byte-retained current scenario owner artifact, which preserves the immutable fixed-S/Mandatory source-qualified IDs and conditions. The immutable source path/blob remains the authority; the mirror line is review navigation, not a second source.",
+  "search_matching_clarification": "Exact text remains exact; D4 nfc-for-compare paths normalize candidate and needle for comparison only. Both remain case-sensitive. No automatic case fold/fuzzy/tokenizer/Pinyin/transliteration."
 }

@@ -135,7 +135,7 @@ D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 
 
 D7 现已整合为完整作者候选。fixed-S 十三份 D7 source 与额外 D9 coordinated D3-D7 binding source 均已 FULL。current 双语 D7 owner afterimage 已按 byte-identical 复制到 d7/owners；D7-REGISTRY.json 复用 exact current Registry blob，保持 34 concepts / 8 cross-stage bindings。D7.md 与 D7-SCHEMAS.md 只对具名 fixed97/current-D2 successor 应用 overlay；其它保留条款继续直接存在于复制 owner 正文。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
-D7-SEARCH.md 整合 SEARCH-01 到 SEARCH-08，但不建立第二 search executor 或 persistent authority。plain text 与 visual filter 是默认路径；optional shortcut mode 必须 explicit，并采用带前缀 operator，因此 ordinary colon text、URL、drive-letter path 不会被 silent parse。保存只保存 canonical Query semantics，不保存 UI parser state。current matching 保持 deterministic NFC exact-substring，且不声称 automatic fuzzy、Pinyin 或 tokenizer。
+D7-SEARCH.md 整合 SEARCH-01 到 SEARCH-08，但不建立第二 search executor 或 persistent authority。plain text 与 visual filter 是默认路径；optional shortcut mode 必须 explicit，并采用带前缀 operator，因此 ordinary colon text、URL、drive-letter path 不会被 silent parse。保存只保存 canonical Query semantics，不保存 UI parser state。current matching 保持 retained exact 与 explicit `nfc-for-compare` 两种 basis，substring/equality 均大小写敏感，且不声称 automatic fuzzy、Pinyin 或 tokenizer。
 
 D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN evidence、20 项 integration obligation、全部 8 项 SEARCH obligation、scenario/non-fallback ordinal、A2-01–57、Facet/People/ICS group、Chart §15、terminology Registry coverage 与两项 navigation finding。D8–D10 继续只在真实 D7 producer/consumer intersection 上 PARTIAL；完整 module 留待后续。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 

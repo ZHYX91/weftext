@@ -47,7 +47,7 @@ Global text search 默认在 selected Workspace/root 或 explicit subtree 搜 au
 
 ## 4. Match、Unicode、Boolean composition 与 sort
 
-current generation 保留 D7 SearchContribution 的 matching boundary：deterministic NFC comparison + exact scalar substring，不自动 fuzzy、stemming、token-language inference、transliteration 或 Pinyin。comparison 不改 source bytes。case 使用 retained case-sensitive comparison；未来 case-fold profile 必须通过 explicit versioned semantic addition，不能仅由 UI toggle 引入。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+current generation 保留 D7 SearchContribution 的 matching boundary。built-in title/body text 与 D4 `normalization:"exact"` text path 使用精确、大小写敏感的 Unicode scalar 比较；D4 `normalization:"nfc-for-compare"` path 只在比较时对 candidate 与 needle 都做 NFC，不改写 source bytes。`contains` 在所选 comparison basis 上执行 exact substring，equality 提供 retained exact-match rank。不存在 automatic case folding、fuzzy、stemming、token-language inference、transliteration 或 Pinyin；未来 comparison profile 必须通过 explicit versioned semantic addition，不能仅由 UI toggle 引入。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 CJK 直接按 Unicode scalar substring 工作，不需要 whitespace tokenizer。RTL 只影响 presentation。quoted phrase 是一条 exact scalar sequence。普通 plain search text 是一个 literal phrase，不会自动按词拆分。visual filter row 默认 AND；underlying Query expression 可表示时，visual builder 提供 explicit OR group 与 NOT。
 
