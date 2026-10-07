@@ -86,7 +86,7 @@ Native Document Table Row, Field Value Occurrence, NodeRefCollection row, Query 
 
 A renderer consumes View data and is not the owner of Query or aggregation. wide-to-long is a Query transform and is not called renderer melt. A D7-deferred layout cannot be marked supported. A table/list fallback must be described as "same complete data alternative; graphical renderer unavailable" rather than a sampled fallback.
 
-**View builder** means the lossless D8 editing surface over the current D7 `ViewSpec/1` and current SavedDefinition/DynamicBlock owner. It is not a schema, author object, parser, registry, or persistence kind. **advanced ViewSpec route** means editing the exact current owner representation when the basic controls cannot express a legal member; it is not a migration or escape from validation.
+**View builder** means the lossless D8 editing surface over the current D7 `ViewSpec/1` and current SavedDefinition/DynamicBlock owner. Its definition-save validation is static and consumes no ResultHandle; complete-result/data validation remains the existing D7 runtime View gate. It is not a schema, author object, parser, registry, or persistence kind. **advanced ViewSpec route** means editing the exact current owner representation when the basic controls cannot express a legal member; it is not a migration or escape from either gate.
 
 ## 9. Controlled aliases
 
