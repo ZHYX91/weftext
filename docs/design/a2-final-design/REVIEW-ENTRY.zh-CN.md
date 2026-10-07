@@ -4,7 +4,7 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D6 作者候选复核入口——D6 fixed01cc 残余修订
+# A2 D1–D6 作者候选复核入口——当前残余交回
 
 状态：仅作者候选；未独立接受、未实现、未合并、未发布、未部署、未全局冻结。
 
@@ -15,7 +15,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 固定历史输入 S：7e18168dad3e6d120fce0dd607dc10fa7894e252。
 受保护 inputs blob：787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 候选 branch：docs/a2-final-design-integration。
-本次 D6 残余修订从精确作者 head `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始。
+D6 四残余修订从精确作者 head `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续这批 D4/D5 R1 映射 + D6 source-map hash 窄修从 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd` 开始。
 
 下一位非作者复核者必须绑定 PR metadata/交接记录的实际 final stop SHA，不得追 moving branch。
 
@@ -24,7 +24,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 - 有界 D1/D2 findings 继续 independent CLOSED。
 - 有界 D3 P1-01/P1-02 继续在 fixed-a62 independent CLOSED。
 - D4/D5 P2-02 只在 fixed4282 的六份真实 D10 来源资格有界范围 independent CLOSED。
-- D4/D5 P2-01 R1/R2 是另一个 author-resolved-pending-independent 对象，由非作者固定 immutable32cf 复核。本 D6 修订不关闭、也不重开它。
+- fixed32cf 对 D4/D5 P2-01 给出 REVISE P0=0/P1=0/P2=1。R2 已独立 CLOSED；R1 在 202 条中通过 188 条，留下 14 条残余（D4 1 条、D5 13 条）。这 14 条映射已在本 follow-up 修订，仍只为 author-resolved-pending-independent；它们不是 D6 finding。
 
 全局 A2 未 accepted。
 
@@ -62,7 +62,8 @@ fixed01cc 仍 OPEN/PARTIAL，本次修订：
 - fixed97 ACCEPTANCE **760/760** 原 row/source text 保留，**115** 个 D6 intersection 保留完整 EN/ZH row；
 - 5 条原精确 fixed97 target 保持不变，其余 **110** 不再使用 generic D6-IMPACT placeholder；
 - parent/fixed97/current-A2 记录真实中英文 path+blob pair；fixed-S snapshot 保持实际存在的单份受保护 source，不编造双语 snapshot/JSON twin；
-- current D6 main 真实 blob 是 `50632ba345aeab1e28970e219ec53a7fceea5a3e` / `3a4bceae305d30f72b42866f468d4a911dae7f0a`。
+- current D6 main 真实 blob 是 `50632ba345aeab1e28970e219ec53a7fceea5a3e` / `3a4bceae305d30f72b42866f468d4a911dae7f0a`；
+- 本 follow-up 起点的 `D6-SOURCE-MAP.zh-CN.md` 真实 blob 为 `d297f52153492e3b392f3b972d39001fbf1b405b`；D6-SOURCE-MAP.json 的 `current_candidate_blobs.source_map_human_zh` 与 current human-map 双语 pair 必须都记录该真实 blob。这只是机械证据修正，不新增 D6 finding。
 
 fixed97 的 D6 直接所有者完整合同继续保留在 Control §17.1–§17.7：ResultPage、12 成员的 BudgetBinding、ImportJob、受管配置/控制读取、ByteHandle/ByteRead、读取前授权/ObservationScope、SourceBinding/OriginBinding。
 

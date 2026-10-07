@@ -36683,7 +36683,7 @@
     "lexicon_zh": "d1434f8d3d244c07c1a6034cff2a8e5fe4afb14e",
     "registry": "678db2c6b0316d6c431bcfe494add46cfd2a6e11",
     "source_map_human_en": "3c30604c27aa9f8255403d61c0f1c207255cbfff",
-    "source_map_human_zh": "a52200146c4993f1fa0a66f68aa6ec6170d0c23d"
+    "source_map_human_zh": "d297f52153492e3b392f3b972d39001fbf1b405b"
   },
   "bilingual_sync": {
     "status": "current residual repair synchronized at blob level; semantic closure still requires new exact-stop independent review",
@@ -36817,7 +36817,7 @@
       },
       "chinese": {
         "path": "docs/design/a2-final-design/D6-SOURCE-MAP.zh-CN.md",
-        "blob": "a52200146c4993f1fa0a66f68aa6ec6170d0c23d"
+        "blob": "d297f52153492e3b392f3b972d39001fbf1b405b"
       }
     }
   ],

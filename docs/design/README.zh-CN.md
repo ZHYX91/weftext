@@ -89,4 +89,4 @@ translation_status: source
 
 ## A2 最终设计整合候选
 
-fixed PR4 design head 之上的 A2 candidate 包含自包含 D1–D6 作者候选、source/disposition tracking 与[复核入口](a2-final-design/REVIEW-ENTRY.zh-CN.md)。fixed-a62 已独立 CLOSED 有界 D3 P1；fixed4282 仅独立 CLOSED D4/D5 P2-02 的“六份 D10 真实来源资格”有界范围，D4/D5 P2-01 R1/R2 仅 author-resolved-pending-independent，并在 fixed32cf 由非作者另审。D6 中 fixed829 只保留为 finding-origin provenance，后续独立对象为 fixed01cc：P1-01 与 P2-03 已在 fixed01cc 独立 CLOSED，P1-02/P2-01/P2-02 加导航 P2 从 fixed32cf 修订后仍待新的 exact-stop 复核。D6/global A2 未 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。该候选未独立接受、未实现、未合并、未发布。
+fixed PR4 design head 之上的 A2 candidate 包含自包含 D1–D6 作者候选、source/disposition tracking 与[复核入口](a2-final-design/REVIEW-ENTRY.zh-CN.md)。fixed-a62 已独立 CLOSED 有界 D3 P1；fixed4282 仅独立 CLOSED D4/D5 P2-02 的“六份 D10 真实来源资格”有界范围。fixed32cf 随后独立 CLOSED P2-01 R2，并通过 188/202 条 R1 映射；14 条 R1 残余已在当前作者候选修订，仍待新的 exact-stop 复核。D6 中 fixed829 只保留为 finding-origin provenance，后续独立对象为 fixed01cc：P1-01 与 P2-03 已独立 CLOSED，P1-02/P2-01/P2-02 加导航 P2 在 D6 残余修订后仍待 exact-stop 复核。D6/global A2 未 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。该候选未独立接受、未实现、未合并、未发布。

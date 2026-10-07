@@ -5,7 +5,7 @@ translation_status: synced
 ---
 
 [简体中文](REVIEW-ENTRY.zh-CN.md)
-# A2 D1-D6 author-candidate review entry — D6 fixed01cc residual repair
+# A2 D1-D6 author-candidate review entry — current residual handoff
 
 Status: author candidate only; not independently accepted, implemented, merged, released, deployed, or globally frozen.
 
@@ -16,7 +16,7 @@ Fixed base SHA: 97f4734f82a760cb6716c8122b84494da2b61164.
 Fixed historical input S: 7e18168dad3e6d120fce0dd607dc10fa7894e252.
 Protected inputs blob: 787d03c31a55496f81ed03fd54a6fdfff50a2ad4.
 Candidate branch: docs/a2-final-design-integration.
-This D6 residual repair starts from exact author head `32cfb9c387deddb12fb021a44147df0d7ffab322`.
+The D6 four-residual repair started from exact author head `32cfb9c387deddb12fb021a44147df0d7ffab322`. This later narrow D4/D5 R1 mapping plus D6 source-map-hash follow-up starts from `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`.
 
 The next non-author reviewer must bind the exact final stop SHA recorded in PR metadata/handoff. Do not follow a moving branch.
 
@@ -25,7 +25,7 @@ The next non-author reviewer must bind the exact final stop SHA recorded in PR m
 - bounded D1/D2 findings remain independently CLOSED.
 - bounded D3 P1-01/P1-02 remain independently CLOSED at fixed-a62.
 - D4/D5 P2-02 remains independently CLOSED only in the fixed4282 bounded six-real-D10-source qualification scope.
-- D4/D5 P2-01 R1/R2 is a separate author-resolved-pending-independent object under immutable fixed32cf non-author review. This D6 repair does not close or reopen it.
+- The fixed32cf D4/D5 P2-01 review returned REVISE P0=0/P1=0/P2=1. R2 is independently CLOSED; R1 passed 188/202 mappings and left 14 residuals (1 D4, 13 D5). Those 14 mappings are repaired in this follow-up and remain author-resolved-pending-independent; they are not D6 findings.
 
 Global A2 is not accepted.
 
@@ -63,7 +63,8 @@ Review the machine map itself:
 - all **760/760** fixed97 ACCEPTANCE rows and source text remain present; all **115** D6 intersections retain complete EN/ZH rows;
 - the five pre-existing precise fixed97 targets are unchanged; the other **110** no longer use the generic D6-IMPACT placeholder;
 - real parent/fixed97/current-A2 bilingual path+blob pairs are recorded. Fixed-S snapshots remain their actual single preserved source objects; no nonexistent bilingual snapshot/JSON twin is invented;
-- current D6 main blobs are the actual `50632ba345aeab1e28970e219ec53a7fceea5a3e` / `3a4bceae305d30f72b42866f468d4a911dae7f0a`.
+- current D6 main blobs are the actual `50632ba345aeab1e28970e219ec53a7fceea5a3e` / `3a4bceae305d30f72b42866f468d4a911dae7f0a`;
+- the actual `D6-SOURCE-MAP.zh-CN.md` blob at this follow-up start is `d297f52153492e3b392f3b972d39001fbf1b405b`; D6-SOURCE-MAP.json must record that same blob in both `current_candidate_blobs.source_map_human_zh` and the current human-map bilingual pair. This is mechanical evidence correction, not a new D6 finding.
 
 Retain the complete fixed97 D6 direct-owner contracts in Control §17.1–§17.7: ResultPage, twelve-member BudgetBinding, ImportJob, management/control read, ByteHandle/ByteRead, authorization-before-read/ObservationScope, and SourceBinding/OriginBinding.
 

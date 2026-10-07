@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D5-SOURCE-MAP.zh-CN.md)
 # A2 D5 source, intake, supersession, and current-consumer audit map
 
-Status: **A2-D4D5:P2-02 is independently CLOSED only in its fixed4282 bounded six-D10-source scope. A2-D4D5:P2-01 R1/R2 is author-resolved-pending-independent only.** D5 normative semantics are not rewritten by this audit repair.
+Status: **A2-D4D5:P2-02 remains independently CLOSED only in its fixed4282 bounded six-D10-source scope. At fixed32cf, P2-01 R2 was independently CLOSED; R1 passed 188/202 combined D4+D5 mappings and left 14 residuals. D5 contains 13 of those residuals; they are repaired here and remain author-resolved-pending-independent.** D5 normative semantics are not rewritten by this audit repair.
 
 ## 1. Fixed-S D5 source coverage
 
@@ -21,7 +21,7 @@ The current D5 candidate still has six distinct row domains and no persistent Re
 
 Mandatory source lines 1–924 are covered **716/716** through 33 actual-owner groups; generic “D4/D5 intake” is no longer used as the current target. D6 persistence, D9 Office/template/conversion, D10 package/provider/connector/credential/execution custody, D3 binding, and D4 typed facts retain their actual owners.
 
-The **130 D5-relevant fixed97 rows** preserve actual EN and ZH rows with source path/blob/line. R1 re-audits **130/130** rows to actual current holders/consumers and records actual file+section target, disposition, owner, basis and exact source-row oracle. Counts do not replace the source conditions.
+The **130 D5-relevant fixed97 rows** preserve actual EN and ZH rows with source path/blob/line. The fixed32cf independent review passed **117/130** D5 R1 mappings and left 13 residuals. This repair remaps the six D2 Witness/language/product rows to D2, five native-table export rows to D9, and the two holder/proof rows to the real D5/D4 inner consumers plus D6 outer `/3` proof. All 13 repaired rows remain author-resolved-pending-independent. Counts do not replace the source conditions.
 
 ## 3. Direct D10 qualification
 
@@ -35,10 +35,10 @@ Raw references to Proof2/Key2/wire12/PAB3 remain source-qualified historical/ori
 - Mandatory line 111 `phones[]` → D5 §4/§14/§19.2 + D4 §10.1/§16.2: equal phone values can remain distinct occurrence/note targets in one revision; no durable row identity is created.
 - Mandatory lines 183/210 → D5 §14 + D4 §8/§16.4: Organizations inverse display/edit resolves the real authored relation side and does not persist an inverse membership row.
 - Mandatory 303–304 → D5 §14/§19.2/§19.5 plus D4 Calendar; derived occurrence stays non-Node unless explicit D3 promote/adopt. Line 305 is grouping metadata only. Line 306 keeps D5 as domain/import consumer while provider token/etag/cursor/credentials/fetch state stays with D10 connector/subscription control.
-- fixed97 `AD2-18` now maps to D2 native video semantics; `FC34C-D6-01` maps to D6-CONTROL §21.4/§21.5 + D10 execution responsibility; D8 presentation-policy rows map to SPEC §8.2/SCHEMAS §6.4; D9 export rows map to SPEC §8.3/SCHEMAS §6.5. None uses D5 §17 as a semantic catch-all.
+- The fixed32cf residuals now follow their actual owners: `AD2-29`, `N36-06`, `M37-08`, `M38-11`, `M39-06`, `FC4R-PROD-10` point primarily to D2 language/Witness/CSP/product-projection clauses; `FC4R-TABLE-01/02/05/06/08` point to D9 SPEC §8.3 + SCHEMAS §6.5/§6.5.1 with the D2 grid as dependency; `FC34B-HOLDER-04/05` preserve D5/D4 inner locator/context versions while D6-CONTROL §3.4 + D6-SCHEMAS §5.1 supply the fresh outer source+format proof.
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. The later fixed4282 independent review independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope** and left P2-01 OPEN with R1/R2 residuals. This author repair addresses only R1/R2 and leaves P2-01 author-resolved-pending-independent pending a new fixed-stop non-author review.
+D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. Fixed4282 independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope**. Fixed32cf later returned REVISE P0=0/P1=0/P2=1 for P2-01: R2 was independently CLOSED; R1 passed 188/202 combined mappings and left 14 residuals, 13 in D5. This repair addresses those 13 D5 rows (plus the one D4 row in the paired map); repaired R1 remains author-resolved-pending-independent pending a new exact-stop review.
 
 D6 author work stopped at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` with five D6 findings author-resolved-pending-independent; it is not accepted and is not closed by this D5 audit repair. D7–D10 full modules, Mandatory 925–1141, and fresh global review remain pending. Runtime/OS/GUI/replica/migration/activation evidence is UNRUN.

@@ -21340,23 +21340,24 @@
         "line": 50,
         "row": "| AD2-29 | SPEC §§1–4 | PSV/CSV/DSV/TSV、cols、header/footer、span/dup/alignment/style、a AsciiDoc cell完整进入 semantic corpus。 ；其中英文名称均为本条引用的协议标识或固定字面量，不改变本条中文条件。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D2.md §2, §6, §7, §11 transcript §1.1/§3.4, §12 schema transcript §4.4 | also: D5.md §3/§19.1 as consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§2",
+          "§6",
+          "§7",
+          "§11 transcript §1.1/§3.4",
+          "§12 schema transcript §4.4"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "D5.md §3/§19.1 as consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | AD2-29 | SPEC §§1–4 | PSV/CSV/DSV/TSV tables, cols, header/footer, spans, duplication, alignment, style, and a AsciiDoc cells all participate in the semantic corpus. |"
+      "disposition": "explicit-defer",
+      "owner": "D2 fixed-2.0.26 language/Witness/CSP/product-projection owner; D5 is only a structured-edit/table consumer",
+      "basis": "The complete legal table corpus and observable table semantics are D2 language/product-projection obligations; D5 cannot reduce them to its structured-edit surface.",
+      "oracle": "AD2-29: exact EN/CN source rows remain authoritative. PSV/CSV/DSV/TSV, cols, header/footer, spans, duplication, alignment, style and AsciiDoc cells all remain in the D2 semantic corpus and product projection; lack of a D5 rich control cannot narrow language validity."
     },
     {
       "id": "AD2-38",
@@ -22240,23 +22241,21 @@
         "line": 406,
         "row": "| N36-06 | SPEC §§2–3 | 每个CoreBlockKind及mark/atom必须命中本profile唯一行；table列/跨度/对齐、section编号、image参数和callout关联各有正反向字段变更，不能以“未列公开字段”漏收。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D2.md §5, §6, §11 transcript §2–§3.4, §12 schema transcript §4.4",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§5",
+          "§6",
+          "§11 transcript §2–§3.4",
+          "§12 schema transcript §4.4"
         ],
-        "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
-        ]
+        "also": []
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | N36-06 | SPEC §§2–3 | Every CoreBlockKind and mark/atom maps to exactly one profile row; table column/span/alignment, section numbering, image parameters, and callout associations all have positive/negative changes and cannot be omitted as “unlisted public fields.” |"
+      "disposition": "explicit-defer",
+      "owner": "D2 witness, provenance, catalog-observation and product-projection owner",
+      "basis": "Matches the independently consistent D4 mapping for the same fixed97 row: the profile/evidence projection is D2-owned, not D5 table editing.",
+      "oracle": "N36-06: exact EN/CN source rows remain authoritative. Every CoreBlockKind and mark/atom has exactly one profile row; table span/alignment, section numbering, image parameters and callout associations retain their positive/negative facts and cannot disappear as unlisted fields."
     },
     {
       "id": "N36-08",
@@ -22368,23 +22367,22 @@
         "line": 420,
         "row": "| M37-08 | SPEC §§2–3 | reinitialize返回new Cell时final row绑定new subject；旧临时Cell不重复进入CSP。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D2.md §6, §11 transcript §2.2–§2.6, §12 schema transcript §4.1–§4.3 | also: D5.md §3 only as downstream table consumer",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§6",
+          "§11 transcript §2.2–§2.6",
+          "§12 schema transcript §4.1–§4.3"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "D5.md §3 only as downstream table consumer"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | M37-08 | SPEC §§2–3 | When reinitialize returns a new Cell, the final row binds the new subject and the old temporary Cell does not also enter CSP. |"
+      "disposition": "explicit-defer",
+      "owner": "D2 Witness/producer-observation and CSP owner",
+      "basis": "Cell object identity, producer-time bind and final-subject evidence are D2 oracle/CSP mechanics; D5 does not decide which Ruby Cell becomes the semantic subject.",
+      "oracle": "M37-08: exact EN/CN source rows remain authoritative. When Cell#reinitialize returns a new Cell, the final row binds that new subject; the old temporary Cell remains supporting/history evidence and cannot also enter CSP/head closure."
     },
     {
       "id": "M38-11",
@@ -22400,23 +22398,22 @@
         "line": 443,
         "row": "| M38-11 | SPEC §§2–3 | New Cell Cell#reinitialize返回新对象且final row指向新Cell时，new Cell必须有head；old Cell不得是额外head。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D2.md §6, §11 transcript §2.3–§2.6, §12 schema transcript §4.3 | also: D5.md §3 only as downstream table consumer",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§6",
+          "§11 transcript §2.3–§2.6",
+          "§12 schema transcript §4.3"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "D5.md §3 only as downstream table consumer"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | M38-11 | SPEC §§2–3 | If Cell#reinitialize returns a new object and the final row points to it, the new Cell has the head and the old Cell is not an extra head. |"
+      "disposition": "explicit-defer",
+      "owner": "D2 semantic-head closure/current Witness owner",
+      "basis": "Head selection follows D2's exact latest-snapshot/structural-closure verifier, not D5 row editing.",
+      "oracle": "M38-11: exact EN/CN source rows remain authoritative. If reinitialize returns a new Cell and the final row points to it, the new Cell owns the head; the old Cell cannot survive as an extra head."
     },
     {
       "id": "M39-05",
@@ -22464,23 +22461,23 @@
         "line": 454,
         "row": "| M39-06 | SPEC §§2–3 | Inner Document catalog parent 结构： root D1 → table → final Cell → cell_inner_document D2 实际 catalog register发生于： D2.register(...) 要求： catalogRecord.parent → D2 D2已经通过 cell_inner_document进入 closure，所以 record可live。 错误： catalogRecord.parent → D1 若实际receiver是D2，则： FAIL 不能因top-level root更方便而重写parent。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D2.md §5, §6, §11 transcript §2.4/§2.7, §12 schema transcript §4.3 | also: D5.md §3 only as downstream table consumer",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§5",
+          "§6",
+          "§11 transcript §2.4/§2.7",
+          "§12 schema transcript §4.3"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "D5.md §3 only as downstream table consumer"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | M39-06 | SPEC §§2–3 | A catalog record created by an inner Document stores parent -> that inner Document, which is live through cell_inner_document; it is not reassigned to the root. |"
+      "disposition": "explicit-defer",
+      "owner": "D2 catalog-ownership and semantic-head-closure owner",
+      "basis": "Catalog liveness/parentage belongs to D2 Witness closure; the table cell merely supplies the cell_inner_document forward edge.",
+      "oracle": "M39-06: exact EN/CN source rows remain authoritative. A catalog record registered by an inner Document keeps parent→that inner Document, which is live through cell_inner_document; it is never reassigned to the top-level root for convenience."
     },
     {
       "id": "FC4R-PROD-01",
@@ -22656,23 +22653,25 @@
         "line": 474,
         "row": "| FC4R-PROD-10 | SPEC §§3.4,8.3 | native table 的 format/grid/frame/stripes、physical columnStart/colspan/rowspan 及 TOC levels 必须供产品 consumer 直接读取；合法复杂表或 TOC 不能为了 render/export 再建 parser。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D2.md §6, §7, §9, §11 transcript §3.4, §12 schema transcript §4.4 | also: docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 as D9 consumer; D5.md §3/§19.1 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "D2.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§6",
+          "§7",
+          "§9",
+          "§11 transcript §3.4",
+          "§12 schema transcript §4.4"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 as D9 consumer",
+          "D5.md §3/§19.1 as native-table consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC4R-PROD-10 | SPEC §§3.4,8.3 | Native table format/grid/frame/stripes and physical columnStart/colspan/rowspan plus TOC levels are available to product consumers; a valid complex table or TOC cannot require a second parser merely to render/export correctly. |"
+      "disposition": "explicit-defer",
+      "owner": "D2 current product-projection owner; D9/D5 consume the frozen product facts",
+      "basis": "Native table physical grid/style facts and TOC levels are produced once by D2 and directly consumed by D8/D9/D5; no consumer may create a second parser.",
+      "oracle": "FC4R-PROD-10: exact EN/CN source rows remain authoritative. format/grid/frame/stripes, physical columnStart/colspan/rowspan and TOC levels remain directly available from D2 product projection; complex legal tables/TOCs render/export from those frozen facts without reparsing."
     },
     {
       "id": "FC4R-PROD-11",
@@ -22939,23 +22938,22 @@
         "line": 507,
         "row": "| FC4R-TABLE-01 | SPEC §8.3 | 只有一个 unique lowercase-ASCII leaf amount 的 native table 可直接暴露 COLUMN=amount、SET=native_table，不要求 ordinary Node export metadata。 |；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 (native table→Office dataset selection, L459) | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1; D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4; D5.md §3/§19.1/§19.2 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§8.3 (native table→Office dataset selection, L459)"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1",
+          "D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4",
+          "D5.md §3/§19.1/§19.2 as native-table consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC4R-TABLE-01 | SPEC §8.3 | A native table with one uniquely named lowercase-ASCII leaf column amount may expose COLUMN=amount and SET=native_table with no author export metadata. |"
+      "disposition": "explicit-defer",
+      "owner": "D9 ExportPlan/3 native-table SET/COLUMN selector and token-binding owner; D2 supplies the frozen D2TableBlock/3+D2TableCell/3 grid; D5 is only a table consumer",
+      "basis": "The short native_table/leaf naming rule is D9 export-template selection over D2's frozen physical table projection, not D5 structured editing.",
+      "oracle": "FC4R-TABLE-01: exact EN/CN source rows remain authoritative. A single unique lowercase-ASCII leaf `amount` may use COLUMN=amount and SET=native_table without ordinary-Node export metadata; D9 SCHEMAS §6.5.1 owns that positive short-name rule."
     },
     {
       "id": "FC4R-TABLE-02",
@@ -22971,23 +22969,22 @@
         "line": 508,
         "row": "| FC4R-TABLE-02 | SPEC §8.3 | multi-row header 中两个 leaf 都是 Amount、上层分别 Plan/Actual 时，leaf alone ambiguous，必须用 shortest unique header suffix 确定 physical column。 |；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 (native table→Office dataset selection, L459) | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1; D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4; D5.md §3/§19.1/§19.2 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§8.3 (native table→Office dataset selection, L459)"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1",
+          "D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4",
+          "D5.md §3/§19.1/§19.2 as native-table consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC4R-TABLE-02 | SPEC §8.3 | In a multi-row header where two leaf columns are Amount under distinct parents Plan and Actual, leaf alone is ambiguous and the shortest unique header suffix selects the intended physical column deterministically. |"
+      "disposition": "explicit-defer",
+      "owner": "D9 ExportPlan/3 native-table SET/COLUMN selector and token-binding owner; D2 supplies the frozen D2TableBlock/3+D2TableCell/3 grid; D5 is only a table consumer",
+      "basis": "Shortest-unique header qualification is the D9 selector algorithm over D2 header-grid facts; D5 does not choose between same-name leaves.",
+      "oracle": "FC4R-TABLE-02: exact EN/CN source rows remain authoritative. Two Amount leaves under Plan/Actual make bare Amount ambiguous; resolution proceeds to the shortest unique header suffix and deterministically selects the intended physical column."
     },
     {
       "id": "FC4R-TABLE-05",
@@ -23003,23 +23000,22 @@
         "line": 511,
         "row": "| FC4R-TABLE-05 | SPEC §8.3 | CJK、RTL、combining-character 与 normalization-distinct header 按 exact Unicode scalar sequence、normalization=none、case-sensitive、保留 whitespace 比较；non-ASCII qualified name 使用固定 ASCII digest token。 |；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 (native table→Office dataset selection, L459) | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1; D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4; D5.md §3/§19.1/§19.2 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§8.3 (native table→Office dataset selection, L459)"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1",
+          "D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4",
+          "D5.md §3/§19.1/§19.2 as native-table consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC4R-TABLE-05 | SPEC §8.3 | CJK, RTL, combining-character and normalization-distinct header text compare by exact Unicode scalar sequence with normalization=none/case-sensitive/whitespace-preserving semantics; non-ASCII qualified names use the fixed ASCII digest token. |"
+      "disposition": "explicit-defer",
+      "owner": "D9 ExportPlan/3 native-table SET/COLUMN selector and token-binding owner; D2 supplies the frozen D2TableBlock/3+D2TableCell/3 grid; D5 is only a table consumer",
+      "basis": "Unicode comparison and digest-token construction are D9 external-name/selector rules over D2 semantic header text.",
+      "oracle": "FC4R-TABLE-05: exact EN/CN source rows remain authoritative. CJK/RTL/combining/normalization-distinct header text compares by exact Unicode scalar sequence with normalization=none, case-sensitive and whitespace-preserving semantics; qualified/non-ASCII selectors use the fixed ASCII digest token."
     },
     {
       "id": "FC4R-TABLE-06",
@@ -23035,23 +23031,22 @@
         "line": 512,
         "row": "| FC4R-TABLE-06 | SPEC §8.3 | 空 header、重复 label、colspan/rowspan merged head 必须从 D2 table-grid facts 确定性构造 headerPath；rowspan 不得把同一 source cell 在后续 path level 重复计入。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 (native table→Office dataset selection, L459) | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1; D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4; D5.md §3/§19.1/§19.2 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§8.3 (native table→Office dataset selection, L459)"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1",
+          "D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4",
+          "D5.md §3/§19.1/§19.2 as native-table consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC4R-TABLE-06 | SPEC §8.3 | Empty header cells, repeated labels and merged colspan/rowspan heads construct deterministic headerPath segments from D2 table-grid facts; rowspan does not duplicate one source cell into later path levels. |"
+      "disposition": "explicit-defer",
+      "owner": "D9 ExportPlan/3 native-table SET/COLUMN selector and token-binding owner; D2 supplies the frozen D2TableBlock/3+D2TableCell/3 grid; D5 is only a table consumer",
+      "basis": "D9 constructs headerPath from the frozen D2 physical table grid; D5 editing is not the naming algorithm.",
+      "oracle": "FC4R-TABLE-06: exact EN/CN source rows remain authoritative. Empty/repeated/merged header cells build deterministic headerPath segments from D2 grid facts; a rowspan cell contributes once and is not duplicated into later path levels."
     },
     {
       "id": "FC4R-TABLE-08",
@@ -23067,23 +23062,22 @@
         "line": 514,
         "row": "| FC4R-TABLE-08 | SPEC §8.3 | 一个 repeat SET 内全部 data.SET.COLUMN token 必须解析到同一 selected table/rowset；落到另一 SET/table、unknown column 或无法消歧时必须 template_invalid/ambiguous，禁止 implicit join。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 (native table→Office dataset selection, L459) | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1; D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4; D5.md §3/§19.1/§19.2 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§8.3 (native table→Office dataset selection, L459)"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1",
+          "D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4",
+          "D5.md §3/§19.1/§19.2 as native-table consumer only"
         ]
       },
-      "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC4R-TABLE-08 | SPEC §8.3 | Every data.SET.COLUMN token in one repeat SET must resolve to the same selected table/rowset; a token that resolves another SET/table, an unknown column or irreducible collision is template_invalid/ambiguous rather than an implicit join. |"
+      "disposition": "explicit-defer",
+      "owner": "D9 ExportPlan/3 native-table SET/COLUMN selector and token-binding owner; D2 supplies the frozen D2TableBlock/3+D2TableCell/3 grid; D5 is only a table consumer",
+      "basis": "Repeat-SET binding consistency and template_invalid/ambiguous errors are D9 export-template rules; D5 cannot infer an implicit join.",
+      "oracle": "FC4R-TABLE-08: exact EN/CN source rows remain authoritative. Every data.SET.COLUMN token in one repeat SET must resolve to the same selected table/rowset; cross-SET/table, unknown-column or irreducible collision remains template_invalid/ambiguous, never an implicit join."
     },
     {
       "id": "FC4B-VAL-01",
@@ -24128,23 +24122,26 @@
         "line": 653,
         "row": "| FC34B-HOLDER-04 | SPEC §§7–8 | D5 native table edit同样消费source+format；format变而旧table locator/sourceVersion碰巧相同，仍stale。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D5.md §0, §3.2, §10, §19.1, §19.8 | also: D6-CONTROL.md §3.4 document_format current dependency; D6-SCHEMAS.md §5.1; D2.md §9/§12 schema transcript §4.4",
       "currentA2Target": {
         "file": "D5.md",
         "sections": [
-          "§3",
+          "§0",
+          "§3.2",
+          "§10",
           "§19.1",
-          "§19.2"
+          "§19.8"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "D6-CONTROL.md §3.4 document_format current dependency",
+          "D6-SCHEMAS.md §5.1",
+          "D2.md §9/§12 schema transcript §4.4"
         ]
       },
       "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC34B-HOLDER-04 | SPEC §§7–8 | D5 native table edit also consumes source+format; a format change stales the old preparation even when table locator/SourceVersion happen to match. |"
+      "owner": "D5 native-table edit consumer; D6 owns fresh outer source+document_format Proof3 currentness; D2 owns the frozen table projection",
+      "basis": "A D5 structured table edit keeps its existing locator/inner source selectors but, as a managed-Document semantic consumer, current fresh preparation also consumes D6 source+document_format proof.",
+      "oracle": "FC34B-HOLDER-04: exact EN/CN source rows remain authoritative. A document_format stamp/binding change stales the old preparation even when table locator and production SourceVersion happen to match; equal source bytes/version never substitute for format equality."
     },
     {
       "id": "FC34B-HOLDER-05",
@@ -24160,23 +24157,23 @@
         "line": 654,
         "row": "| FC34B-HOLDER-05 | SPEC §§7–8 | D4/D5为了配 /3 而机械升级RelationReadContext、table locator、occurrenceKey或numeric sourceRevision；FAIL。 |"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "D5.md §0, §19.8 | also: D4.md §0/§8/§16.4/§16.7 (RelationReadContext/2 and original inner sourceRevision); D6-CONTROL.md §3.4; D6-SCHEMAS.md §5.1",
       "currentA2Target": {
         "file": "D5.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§0",
+          "§19.8"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "D4.md §0/§8/§16.4/§16.7 (RelationReadContext/2 and original inner sourceRevision)",
+          "D6-CONTROL.md §3.4",
+          "D6-SCHEMAS.md §5.1"
         ]
       },
       "disposition": "retain",
-      "owner": "D5 native-table/row-domain/physical-column owner with D2 as parser/product producer",
-      "basis": "This row directly constrains D5 table structure/edit selection; D2 supplies the native semantic grid and no persistent row identity is invented.",
-      "oracle": "fixed97 exact EN row: | FC34B-HOLDER-05 | SPEC §§7–8 | Mechanical version bumps of D4/D5 inner RelationReadContext, table locator, occurrenceKey, or numeric sourceRevision merely to match /3 are rejected. |"
+      "owner": "Split current-holder rule: D4 owns RelationReadContext/2 inner semantics; D5 owns table locator/OccurrenceKey/numeric sourceRevision inner semantics; D6 owns the fresh outer /3 proof family",
+      "basis": "The fixed97 successor updates only the outer current qualification to Descriptor3/Proof3/Prepared3. It does not mechanically bump D4/D5 inner locator/context/occurrence/sourceRevision versions.",
+      "oracle": "FC34B-HOLDER-05: exact EN/CN source rows remain authoritative. Mechanical inner-version bumps merely to match `/3` are rejected: D4 RelationReadContext/2 remains its real inner type; D5 locators/OccurrenceKey/numeric sourceRevision retain their actual inner contracts; D6 Proof3 supplies current outer source/format qualification."
     },
     {
       "id": "FC34B-CR-01",
@@ -26874,7 +26871,7 @@
     "chineseRowsMatched": 130,
     "missing": 0,
     "rowCountsAreInventoryOnly": true,
-    "actualOwnerRemap": "R1 complete for all 130 selected rows; row counts remain inventory only"
+    "actualOwnerRemap": "fixed32cf independently passed 117/130 D5 R1 mappings; 13 residual row(s) repaired after that review and remain author-resolved-pending-independent"
   },
   "d10_direct_source_qualification": [
     {
@@ -27911,13 +27908,33 @@
   ],
   "p2_repair_state": {
     "A2-D4D5:P2-01": {
-      "status": "R1/R2-author-resolved-pending-independent",
+      "status": "R2-independent-CLOSED-at-fixed32cf; R1-residuals-author-resolved-pending-independent",
       "independentClose": false,
-      "startHead": "01cc40b819df78fbe724f1c64c27284ad60fc6c8",
-      "basis": "R1 re-audits all 130 fixed97 selected rows to actual current owners/consumers with exact EN+ZH source rows retained; R2 splits Mandatory 303-306 without changing source bytes.",
-      "residuals": {
-        "R1": "author-resolved-pending-independent: 130/130 actual owner/current-clause mappings",
-        "R2": "author-resolved-pending-independent: 303-304 recurrence/identity, 305 grouping, 306 connector/subscription control"
+      "fixedReviewSha": "32cfb9c387deddb12fb021a44147df0d7ffab322",
+      "fixedReviewVerdict": "REVISE P0=0/P1=0/P2=1",
+      "r2": {
+        "status": "independent-CLOSED",
+        "basis": "Mandatory 303/304 recurrence+derived occurrence, 305 heading metadata, and 306 connector/control split accepted at fixed32cf."
+      },
+      "r1": {
+        "status": "author-resolved-pending-independent",
+        "fixedReviewPassed": "117/130",
+        "residualIds": [
+          "AD2-29",
+          "N36-06",
+          "M37-08",
+          "M38-11",
+          "M39-06",
+          "FC4R-PROD-10",
+          "FC4R-TABLE-01",
+          "FC4R-TABLE-02",
+          "FC4R-TABLE-05",
+          "FC4R-TABLE-06",
+          "FC4R-TABLE-08",
+          "FC34B-HOLDER-04",
+          "FC34B-HOLDER-05"
+        ],
+        "basis": "The listed residual rows are remapped here to their actual current owners/clauses; independent re-review is still required."
       }
     },
     "A2-D4D5:P2-02": {

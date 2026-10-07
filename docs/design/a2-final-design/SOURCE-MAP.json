@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D1-D6 author candidates integrated. D1/D2 and bounded D3 findings retain independent CLOSED state. D4/D5 fixed4282 P2-02 bounded CLOSED; P2-01 R1/R2 is author-resolved-pending-independent under separate immutable fixed32cf non-author review. D6 fixed01cc independent review CLOSED P1-01/P2-03 and left P1-02/P2-01/P2-02/navigation P2 for the current fixed32cf author residual repair; D7-D10/global remain pending.",
+  "status": "A2 D1-D6 author candidates integrated. D1/D2 and bounded D3 findings retain independent CLOSED state. D4/D5 P2-02 remains bounded CLOSED at fixed4282; fixed32cf independently CLOSED P2-01 R2 and passed 188/202 R1 mappings, with 14 R1 residuals repaired in the current author candidate pending re-review. D6 fixed01cc independently CLOSED P1-01/P2-03 while the four D6 residuals remain pending exact-stop independent review; D7-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2344,7 +2344,7 @@
   "next_batch": "First bind a new non-author review to the exact final D6 residual-repair stop SHA and review only A2-D6-829-P1-02, A2-D6-829-P2-01, A2-D6-829-P2-02, and A2-D6-01CC-P2-01 plus their direct regressions. A2-D6-829-P1-01 and P2-03 remain independently CLOSED at fixed01cc. D4/D5 P2-01 R1/R2 remains a separate immutable fixed32cf non-author review object and is not decided here. D7 must not start while the D6 P1 remains independently open; complete D7-D10, Mandatory 925-1141, fresh Pro/global review, explicit accepted-design SHA, and same-SHA freeze/implementation-start material remain later gates.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
-    "status": "fixed4282 P2-02 bounded independent CLOSED; P2-01 R1/R2 author-resolved-pending-independent under separate immutable fixed32cf non-author review; not part of D6 residual finding count",
+    "status": "fixed4282 P2-02 bounded independent CLOSED; fixed32cf P2-01 R2 independently CLOSED; R1 passed 188/202 and left 14 residual mappings repaired in the current author candidate, still author-resolved-pending-independent",
     "d4": {
       "main": "D4.md",
       "impact": "D4-IMPACT.md",
@@ -2376,11 +2376,13 @@
       "d3": "fixed-a62 independent narrow CLOSED D3:P1-01 and D3:P1-02",
       "fixed_a62": "a62aa7d4eaf56113cd1e9e32336ae8814f83589b: P0=0/P1=0/P2=2; D4/D5 semantic LIMITED PASS, audit package REVISE",
       "review_request": "7b6e1f16-fa41-499c-b078-647f1942e94e",
-      "p2_01": "R1/R2 author-resolved-pending-independent; separate non-author review bound to immutable 32cfb9c387deddb12fb021a44147df0d7ffab322; not CLOSED by this D6 task",
+      "p2_01": "fixed32cf REVISE P0=0/P1=0/P2=1: R2 independent CLOSED; R1 188/202 passed, 14 residuals repaired after review and pending new exact-stop re-review",
       "p2_02": "bounded independent CLOSED at fixed4282",
       "independentClose": false,
       "fixed_4282": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a follow-up independent review completed",
-      "fixed_32cf": "32cfb9c387deddb12fb021a44147df0d7ffab322 is the separate D4/D5 R1/R2 review object; this D6 author task does not decide that review"
+      "fixed_32cf": "32cfb9c387deddb12fb021a44147df0d7ffab322 independent review object: R2 CLOSED; R1 188/202 passed with 14 residuals",
+      "r1_followup": "1 D4 + 13 D5 residual mappings repaired from start d1ab2a5c0762450877614ad14340a26cfa0c1dfd; author-resolved-pending-independent",
+      "r2": "independent CLOSED at fixed32cf"
     },
     "runtime": "UNRUN",
     "auditCoverage": {

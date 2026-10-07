@@ -41023,23 +41023,22 @@
         "line": 510,
         "row": "| FC4R-TABLE-04 | SPEC §8.3 | table title 与 full header path 仍 byte-equal 时，必须使用 closed zero-based table/column occurrence qualifier；ordinal 来自 frozen product projection，不能来自 UI/memory order。 |；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。"
       },
-      "target": "D5.md §3, §19.1, §19.2 | also: D2.md §7 / §12 schema transcript §4.4; docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5",
+      "target": "docs/design/asciidoc-annotation-final-design/SPEC.md §8.3 (native table→Office selector, L459) | also: docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1; D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4; D5.md §3/§19.1/§19.2 as native-table consumer only",
       "currentA2Target": {
-        "file": "D5.md",
+        "file": "docs/design/asciidoc-annotation-final-design/SPEC.md",
         "sections": [
-          "§3",
-          "§19.1",
-          "§19.2"
+          "§8.3 (native table→Office selector, L459)"
         ],
         "also": [
-          "D2.md §7 / §12 schema transcript §4.4",
-          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5"
+          "docs/design/asciidoc-annotation-final-design/SCHEMAS.md §6.5/§6.5.1",
+          "D2.md §6/§7/§9, §11 transcript §3.4, §12 schema transcript §4.4",
+          "D5.md §3/§19.1/§19.2 as native-table consumer only"
         ]
       },
       "disposition": "explicit-defer",
-      "owner": "D5 native-table/physical-column owner with D2 as parser/product producer",
-      "basis": "The qualifier is a D5 table-column occurrence rule; its presence in the D4 audit set is source qualification, not D4 ownership.",
-      "oracle": "fixed97 exact EN row: | FC4R-TABLE-04 | SPEC §8.3 | When table title and full header path are still byte-equal, the closed zero-based table/column occurrence qualifier is required; the ordinal is computed from the frozen product projection, not UI/memory order. |"
+      "owner": "D9 native-table export selector/token-binding owner; D2 frozen product-projection producer; D5 native-table consumer only",
+      "basis": "The closed zero-based table/column occurrence qualifier is a D9 export selector over frozen D2TableBlock/3+D2TableCell/3 facts. D5 may consume/edit the table but does not own selector ordering or occurrence disambiguation.",
+      "oracle": "FC4R-TABLE-04: exact EN/CN source rows remain authoritative. D9 SPEC §8.3 L459 and SCHEMAS §6.5.1 require leaf→shortest header suffix→exact title→zero-based table/column occurrence, computed from the frozen product projection; UI/memory order, guessed suffixes and author-source rewrites are forbidden."
     },
     {
       "id": "FC4B-D8-02",
@@ -44156,7 +44155,7 @@
     "chineseRowsMatched": 72,
     "missing": 0,
     "rowCountsAreInventoryOnly": true,
-    "actualOwnerRemap": "R1 complete for all 72 selected rows; row counts remain inventory only"
+    "actualOwnerRemap": "fixed32cf independently passed 71/72 D4 R1 mappings; 1 residual row(s) repaired after that review and remain author-resolved-pending-independent"
   },
   "d10_direct_source_qualification": [
     {
@@ -45176,13 +45175,21 @@
   ],
   "p2_repair_state": {
     "A2-D4D5:P2-01": {
-      "status": "R1/R2-author-resolved-pending-independent",
+      "status": "R2-independent-CLOSED-at-fixed32cf; R1-residuals-author-resolved-pending-independent",
       "independentClose": false,
-      "startHead": "01cc40b819df78fbe724f1c64c27284ad60fc6c8",
-      "basis": "R1 re-audits all 72 fixed97 selected rows to actual current owners/consumers with exact EN+ZH source rows retained; R2 splits Mandatory 303-306 without changing source bytes.",
-      "residuals": {
-        "R1": "author-resolved-pending-independent: 72/72 actual owner/current-clause mappings",
-        "R2": "author-resolved-pending-independent: 303-304 recurrence/identity, 305 grouping, 306 connector/subscription control"
+      "fixedReviewSha": "32cfb9c387deddb12fb021a44147df0d7ffab322",
+      "fixedReviewVerdict": "REVISE P0=0/P1=0/P2=1",
+      "r2": {
+        "status": "independent-CLOSED",
+        "basis": "Mandatory 303/304 recurrence+derived occurrence, 305 heading metadata, and 306 connector/control split accepted at fixed32cf."
+      },
+      "r1": {
+        "status": "author-resolved-pending-independent",
+        "fixedReviewPassed": "71/72",
+        "residualIds": [
+          "FC4R-TABLE-04"
+        ],
+        "basis": "The listed residual rows are remapped here to their actual current owners/clauses; independent re-review is still required."
       }
     },
     "A2-D4D5:P2-02": {
