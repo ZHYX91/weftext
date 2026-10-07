@@ -26,7 +26,7 @@ The current author candidate integrates D1 through D7. It is authored work, not 
 | D3 | integrated current author candidate; a separate fixed-a62 non-author narrow review CLOSED the two bounded D3 P1 findings; this is not global A2 acceptance |
 | D4 | integrated current author candidate; A2-D4D5:P2-02 remains bounded CLOSED at fixed4282 and A2-D4D5:P2-01 is bounded CLOSED after the fixed1fc4 independent review; no global acceptance |
 | D5 | integrated current author candidate; A2-D4D5:P2-02 remains bounded CLOSED at fixed4282 and A2-D4D5:P2-01 is bounded CLOSED after the fixed1fc4 independent review; no global acceptance |
-| D6 | Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN. |
+| D6 | Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All earlier bounded semantic closures retain only their recorded scopes. `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` are author-repaired navigation metadata and remain pending independent review at the exact final stop SHA; neither is self-closed. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN. |
 | D7 | integrated complete author candidate with byte-retained coordinated owner texts, fixed97 current overlay, SEARCH-01-08, machine source/case map and Registry; pending fixed-SHA independent review |
 | D8 | TODO as a full module; D7 consumed only real editor/direction/accessibility/RTL intersections |
 | D9 | TODO as a full module; D7 consumed only coordinated binding and direct construction/import/export intersections |
@@ -45,7 +45,7 @@ No TODO module is treated as accepted, complete, or semantically read merely bec
 - D5.md, D5-IMPACT.md, and D5-LEXICON.md form the D5 author candidate; D5-SOURCE-MAP.json retains provenance.
 - D6.md, D6-CONTROL.md, D6-SCHEMAS.md, D6-IMPACT.md, D6-LEXICON.md and D6-REGISTRY.json form the current D6 author candidate; D6-SOURCE-MAP.json preserves detailed provenance.
 - D7.md, D7-SCHEMAS.md, D7-SEARCH.md, D7-IMPACT.md and D7-REGISTRY.json plus the byte-retained d7/owners subtree form the current complete D7 author candidate; D7-SOURCE-MAP.json is its machine trace.
-- REVIEW-ENTRY.md is the review entry for the D1-D6 author candidate.
+- REVIEW-ENTRY.md is the review entry for the D1-D7 author candidate.
 - SOURCE-MAP.md gives the human-readable source/disposition map.
 - SOURCE-MAP.json records all 49 fixed-S inputs, exact S blobs, read status, current sources, and source-qualified obligation groups.
 
@@ -57,4 +57,4 @@ For D8 through D10 there is no complete A2 current definition yet. Direct produc
 
 ## 5. Acceptance boundary
 
-Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
+Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All earlier bounded semantic closures retain only their recorded scopes. `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` are author-repaired navigation metadata and remain pending independent review at the exact final stop SHA; neither is self-closed. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.

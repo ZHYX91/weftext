@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](REVIEW-ENTRY.zh-CN.md)
 # A2 D1-D7 author-candidate review entry — D7 integration and navigation repair
 
-Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
+Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All earlier bounded semantic closures retain only their recorded scopes. `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` are author-repaired navigation metadata and remain pending independent review at the exact final stop SHA; neither is self-closed. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 1. Fixed objects and author chronology
 
@@ -44,9 +44,9 @@ Three adjacent fixed-S cross-owner groups with the same old-version ambiguity ar
 
 ### Navigation P2
 
-Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
+The fixed454e non-author navigation review passed the four earlier wording residuals and left two navigation-only P2 findings: `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01`. This author candidate repairs both. The first now has one role-neutral pending state and one detailed provenance location in D7-SOURCE-MAP.json while historical sourceEvidence remains unchanged. The second rewrites the old fixed-5c present-tense sentence as historical chronology and records the later fixed446 bounded independent closure without converting it into global acceptance.
 
-Historical chronology: fixed829 origin → fixed01cc earlier review → fixed32cf/d1ab repairs → fixed1fc4 review → fixed5e21 semantic review → fixed9c3b navigation review. Earlier verdicts describe those fixed objects only.
+Both findings remain pending independent review at the actual final stop SHA. Historical chronology is fixed829 origin → fixed01cc earlier review → fixed32cf/d1ab repairs → fixed1fc4 review → fixed5e21 semantic review → fixed9c3b navigation review → fixed454e navigation review. Earlier verdicts describe those fixed objects only.
 
 ## 4. Evidence and nonclaims
 

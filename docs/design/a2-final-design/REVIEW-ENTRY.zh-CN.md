@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D7 作者候选复核入口——D7 整合与导航修订
 
-最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。`A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据已由作者修订，但仍等待实际 final stop SHA 的独立复核；作者不自行关闭。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
