@@ -16,11 +16,11 @@ translation_status: source
 
 fresh authoring 使用 QuerySpec/2，外层执行 carrier 继续是 wireVersion2。QuerySpec/1 保持准确的历史/版本 decoder，绝不原地扩宽。QuerySpec/2 只增加 D7-QUERY-V2 规定的版本化 source 与通用 union_all。
 
-实现必须加入 D6 §19 / D6-SCHEMAS §11 的 D6-owned FileBinding metadata producer。Node basename/path 与 Resource basename 先通过当前 Ref disclosure 和 locator_state，在一个受保护 current SourceObservation/FileObjectBinding cut 上取值；仅为 locator metadata 时不要求 source_read/resource_read/structure_state。另行读取 body 或 Resource bytes 时仍走原 content gate。rename/move、auth generation 或 observation 变化都会 reset 依赖结果。
+实现必须加入 D6 §19 / D6-SCHEMAS §11 定义的文件绑定元数据生产者，由 D6 负责。读取节点文件名、节点路径或资源文件名时，先完成当前引用的披露检查并取得 locator_state 权限，再从同一受保护观察截面的当前 SourceObservation/FileObjectBinding 取值。仅披露位置元数据不要求 source_read/resource_read/structure_state；另行读取正文或资源字节仍须通过原内容读取权限检查。重命名、移动、授权代次或观察状态发生变化时，依赖这些数据的结果必须重置。
 
 fresh QuerySpec/2 的 title 是 Optional<text>。Temporal Calendar/Timeline 与 link-display consumer 必须使用 D7-QUERY-V2 中明确的 Optional 处理；filename/path 永远不能补造 title，本地化“无标题”只能是 presentation-only placeholder。union_all 必须实现带 inputOrdinal 的准确 internal K constructor，保留重复 input branch，继承既有 checked result/work/byte budget，并在 take/paging 顺序具有语义之前要求显式 sort。
 
-fixed97 的当前 prepare/effect 主链继续是 PAB4/Descriptor3/Proof3/PreparedIntent3、Action prepare/input version 3、ActionSpec2、D7ProposedInput3、EffectManifest3/EffectBytes3、D3 wire13、Notice3/CP4/ChangeRecord1、current D2DocumentSnapshot/3 与 Value4 Annotation。任何 predecessor decoder 都不原地扩宽。
+fixed97 的当前准备与效果主链继续保留 PAB4/Descriptor3/Proof3/PreparedIntent3、Action 准备请求与输入的第 3 版、ActionSpec2、D7ProposedInput3、EffectManifest3/EffectBytes3、D3 wire13、Notice3/CP4/ChangeRecord1、当前 D2DocumentSnapshot/3 以及 Value4 批注。这些名称分别指向原有的准备绑定、描述符、依赖证明、准备意图、动作输入、效果运输、身份请求、安装记录、文档快照和批注类型；各环节继续使用其真实版本。不得在旧版本标签下扩宽任何前代解码器。
 
 ## 3. Search compiler 与 machine-oracle 边界
 
