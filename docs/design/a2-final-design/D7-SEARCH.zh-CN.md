@@ -6,56 +6,56 @@ translation_status: source
 [English](D7-SEARCH.md)
 # A2 D7 搜索语义与 SEARCH-01–08
 
-状态：current D7 作者候选中的规范搜索设计；D8 interaction implementation 仍属于后续完整模块批次。
+状态：这是当前 D7 作者候选中的规范搜索设计；D8 的具体交互实现仍属于后续完整模块批次。
 
-## 1. 裁决与替代方案
+## 1. 方案裁决
 
-本批比较三种完整 interaction 方案。
+本批比较了三种完整的交互方案。
 
 | 方案 | 优点 | 成本 / 风险 | 裁决 |
 | --- | --- | --- | --- |
-| 仅 plain text + visual filter | 普通用户零语法学习、无词法歧义 | 熟练用户键盘效率较低；复杂条件不便复制 | 保留为默认 ordinary experience |
-| ordinary box 自动解析常见 field-colon 文本 | 短、熟悉 | 会混淆正文 title:、URL、drive letter、CJK punctuation 与未完成输入；错误回退可能执行另一条 Query | 拒绝 |
-| plain text 默认 + visual filter + 显式 shortcut-condition mode | 无需学语法，同时提供确定的 expert path，并 round-trip 到同一 Query | 需要一个小型 parser 与清楚的 mode indicator | 选择 |
+| 只提供普通文本输入和可视化筛选 | 普通用户无需学习语法，且不存在词法歧义 | 熟练用户仅靠键盘操作时效率较低；复杂条件不便复制 | 保留为默认体验 |
+| 在普通搜索框中自动解析常见的“字段:值”写法 | 写法短且熟悉 | 会误判正文里的 title:、URL、Windows 盘符、CJK 标点和未完成输入；解析失败后若退回普通搜索，还可能执行与用户原意不同的 Query | 拒绝 |
+| 普通文本输入为默认，同时提供可视化筛选和显式的快捷条件模式 | 不要求用户学习语法，同时给熟练用户提供确定、可复制、可往返编辑的快捷路径 | 需要一个小型解析器，并且界面必须清楚显示当前模式 | 选择 |
 
-选择后的模型只有一个 execution authority：每个成功 search state 都编译到既有 D7 Query algebra，并走相同 D6 authorization、complete-range、budget、result、paging 与 reset 规范。不存在第二 full-text executor，也不存在不同于 saved Query 的 durable search object。
+所选方案只有一套执行权威。任何成功的搜索状态都会编译成既有的 D7 Query，并沿用相同的 D6 授权、完整范围证明、预算、结果、分页和重置规则。系统不新增第二个全文搜索执行器，也不建立区别于 saved Query 的持久搜索对象。
 
-## 2. Search object vocabulary
+## 2. 搜索对象的名称与边界
 
-current D3/D2 没有一个可把所有文件 label 都等同进去的 generic authored Node name，因此搜索词汇明确分开：
+当前 D3/D2 并不存在一个可以把所有“文件名称”都合并进去的通用作者字段，因此搜索界面必须区分下列概念：
 
-- document title：current D2 native document title，可 null；
-- document subtitle：current D2 native subtitle，可 null；
-- file name：在有权读取 metadata 时使用 current D6 physical FileBinding basename；
-- path：在有权 disclosure path 时使用 current D6 physical relative path；
-- resource name：Resource FileBinding basename，与 Document title 分域；
-- logical hierarchy：用来枚举 Node 的 D3 parent/order scope，不是 stable path identity；
-- body：完整 current D2 evaluation barrier 下的 D2 semantic body_text；
-- contributed text：explicit selected current SearchContribution 的 Field/textPath。
+- 文档标题：当前 D2 原生文档标题，可以不存在；
+- 文档副标题：当前 D2 原生副标题，可以不存在；
+- 文件名：只有在当前主体有权读取相应元数据时，才使用当前 D6 FileBinding 的 basename；
+- 路径：只有在当前主体有权读取路径时，才使用 D6 当前相对路径；
+- 资源名称：Resource 的 FileBinding basename，与 Document 标题不是同一概念；
+- 逻辑层级：用于枚举 Node 的 D3 parent/order 范围，不是稳定路径身份；
+- 正文：通过完整当前 D2 求值屏障取得的语义正文 body_text；
+- 扩展贡献文本：由显式选中的当前 SearchContribution 提供的 Field/textPath。
 
-titleless Document 继续 titleless。filename、path、list placeholder 或 first paragraph 可以作为 UI fallback 显示，但绝不能成为 title data。duplicate title、不同允许位置中的 duplicate filename、相等 contributed string 都不会合并 identity。
+无标题文档必须继续保持“无标题”。文件名、路径、列表占位文字或第一段可以作为界面回退显示，但绝不能被写成标题事实。同名标题、位于不同合法位置的同名文件、内容相同的扩展贡献文本，都不能合并身份。
 
-rename/move 在 D3 保持 identity 的情况下改变 current filename/path match，而 NodeRef 保持不变。因此 old result 按普通 currentness rule stale；saved Query 重新对 current authorized FileBinding 执行，而不是把旧 display path 冻结成 identity。
+若 D3 规则允许改名或移动而保持身份，则当前文件名或路径的匹配结果可以变化，但 NodeRef 不变。旧结果按正常当前性规则失效；保存的 Query 会在重新执行时读取当前获权的 FileBinding，而不会把旧显示路径冻结成身份。
 
-## 3. 三种产品搜索 preset；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+## 3. 三种产品搜索入口
 
-File-list filter 只在已经选定的 logical list scope 上运行。默认 scope 是 current D3 parent、nonrecursive、只含 live Node；不读 body text、Annotation body、Trash、attachment extraction 或 OCR。UI 可明确打开 recursive subtree 或 Resources；这些开关必须编译成 explicit Query scope/source choice，并分别取得 disclosure。这个 surface 的 empty input 表示 browse selected list scope，不是 empty full-Workspace search。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+**文件列表筛选**只在已经选定的逻辑列表范围内运行。默认范围是当前 D3 parent 的直接子项，不递归，只包含 live Node；默认不读取正文、Annotation 正文、Trash、附件提取文本或 OCR。界面可以明确开启递归子树或 Resource 搜索；这些选项必须编译成明确的 Query 范围和数据源，并分别取得披露权限。此入口中，空输入表示“浏览当前列表范围”，绝不是一次空字符串的全 Workspace 搜索。
 
-Quick open 默认在 selected Workspace/root scope 搜 authorized live managed Node，读取 title/subtitle 与独立获权的 filename metadata。body、Annotation body、attachment extracted text、OCR 与 Trash 默认关闭。明确开启 Resources 才加入 authorized Resource 与 resource-name match。Quick open 仍是 Query preset，不是按文字做 identity lookup。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+**快速打开**默认在选定 Workspace/root 范围内搜索获权的 live managed Node，读取标题、副标题以及另行获权的文件名元数据。正文、Annotation 正文、附件提取文本、OCR 和 Trash 默认关闭。只有用户明确开启 Resource 选项时，才加入获权 Resource 以及资源名称匹配。快速打开仍然是 Query 预设，不是按文本执行身份查找。
 
-Global text search 默认在 selected Workspace/root 或 explicit subtree 搜 authorized live Document，title/subtitle/body 默认开启。Resource、attachment extraction/OCR、Annotation body 与 Trash 都是 explicit opt-in scope。attachment content 只有真实 current extraction/SearchContribution dependency 成立时可用。Annotation text 必须先过 annotation disclosure/read 再取得 body。missing provider、incomplete extraction、hidden source 或 unmaterialized placeholder 对 complete search 是 unavailable，不是 successful empty match。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+**全局正文搜索**默认在选定 Workspace/root 或明确子树中搜索获权的 live Document，并默认启用标题、副标题和正文。Resource、附件提取/OCR、Annotation 正文和 Trash 均为明确的可选范围。附件内容只有在真实的当前提取结果或 SearchContribution 依赖成立时才可搜索。Annotation 文本必须先通过 Annotation 的披露和读取权限，才能取得正文。提供方缺失、提取未完整、来源被隐藏或 placeholder 尚未物化时，完整搜索必须返回不可用状态，绝不能把它们当作“零命中”。
 
-## 4. Match、Unicode、Boolean composition 与 sort
+## 4. 匹配、Unicode、布尔组合与排序
 
-current generation 保留 D7 SearchContribution 的 matching boundary。built-in title/body text 与 D4 `normalization:"exact"` text path 使用精确、大小写敏感的 Unicode scalar 比较；D4 `normalization:"nfc-for-compare"` path 只在比较时对 candidate 与 needle 都做 NFC，不改写 source bytes。`contains` 在所选 comparison basis 上执行 exact substring，equality 提供 retained exact-match rank。不存在 automatic case folding、fuzzy、stemming、token-language inference、transliteration 或 Pinyin；未来 comparison profile 必须通过 explicit versioned semantic addition，不能仅由 UI toggle 引入。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+本代保留既有 D7 SearchContribution 的匹配边界。内建 title/body 文本以及 D4 声明为 `normalization:"exact"` 的 text path 使用精确、区分大小写的 Unicode 标量比较；D4 声明为 `normalization:"nfc-for-compare"` 的 path 只在比较时分别对候选文本与 needle 做 NFC，不改写作者源字节。`contains` 在所选比较 basis 上执行精确子串匹配，equality 则提供既有的 exact-match 排名。系统不自动进行大小写折叠、模糊匹配、词干提取、按语言猜分词、转写或拼音搜索；未来若增加新的 comparison profile，必须通过明确且版本化的语义扩展，不能只靠界面开关改变结果。
 
-CJK 直接按 Unicode scalar substring 工作，不需要 whitespace tokenizer。RTL 只影响 presentation。quoted phrase 是一条 exact scalar sequence。普通 plain search text 是一个 literal phrase，不会自动按词拆分。visual filter row 默认 AND；underlying Query expression 可表示时，visual builder 提供 explicit OR group 与 NOT。
+CJK 文本直接按照 Unicode 标量子串匹配，不依赖空白分词。RTL 只影响呈现，不改变匹配。带引号的短语表示一条精确的标量序列。普通搜索框中的文本整体作为一个字面短语处理，不会自动拆成多个词。可视化筛选的多行条件默认用 AND 连接；当既有 Query 表达式能够表示时，界面可以显式创建 OR 分组和 NOT 条件。
 
-shortcut mode 中相邻 primary term 是 AND，OR、NOT 与 parentheses 按下述 grammar。match rank 与 role order 继续以复制到本候选的 Query Algebra owner text 中 retained D7 SearchContribution rank 为 exact 权威；UI 不能加入 private fuzzy score。若 retained comparator 完全相等，Query 以 canonical subject key，再以 selected contribution identity 作为明确 stable tie，保证 paging deterministic。general Query sort 仍由作者定义，绝不跟 viewport order。
+快捷条件模式中，相邻的基本条件表示 AND，OR、NOT 和括号遵循下一节的语法。匹配排名和角色顺序继续以本候选复制的 Query Algebra owner 正文中既有 SearchContribution 排名规则为准，界面不得私自增加模糊分值。当既有比较器完全相等时，Query 先以规范 subject key，再以所选 contribution identity 作为稳定的最终并列顺序，从而保证分页确定。一般 Query 的排序仍由作者定义，不能跟随视口中的临时顺序。
 
-## 5. Shortcut-condition mode
+## 5. 快捷条件模式
 
-shortcut parsing 只在 opt-in 后启用；单纯输入 colon 永远不会开启。visible mode indicator 是 interaction state；parse 成功后 semantic object 是 compiled Query condition。
+快捷语法必须由用户显式开启；仅仅输入冒号不会启用它。界面中的模式标记属于交互状态；解析成功后，真正的语义对象仍是编译后的 Query 条件。
 
 ```text
 Shortcut mode v1
@@ -81,61 +81,61 @@ whitespace between adjacent primary terms is AND
 a colon is syntax only inside a recognized @ operator
 unknown @ operator or invalid field/member path is a parse error
 incomplete input is a draft parse state and executes no Query
-```；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+```
 
-@ prefix 是刻意选择。ordinary title:、https://example.test、C:\\notes\\a.adoc、time 12:30、quoted prose 与 CJK full-width punctuation 都保持 literal；只有用户明确进入 shortcut mode 并使用 recognized @ operator 才产生语法。若想在 shortcut mode 搜以 operator spelling 开头的文字，可 quote 或 escape leading @。
+选择 @ 前缀是为了避免误解析普通文字。在普通模式中，title:、https://example.test、C:\\notes\\a.adoc、12:30、带引号的普通句子以及 CJK 全角标点都只是字面文本。即使已经进入快捷条件模式，也只有识别到受支持的 @ 操作符时才产生语法含义。若要在快捷模式中搜索以操作符拼写开头的文字，可以使用引号或转义开头的 @。
 
-unknown @ operator、unknown FieldId、unavailable Field definition、illegal member path、unmatched quote/parenthesis 或 invalid value 都在 exact draft span 报 error，UI 不执行 fallback literal Query。incomplete input 保留 editable draft，同样执行零 Query；这样错误不会 silent 变成更宽搜索。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+未知的 @ 操作符、未知 FieldId、不可用的 Field 定义、非法成员路径、未闭合的引号或括号、以及非法值，都必须在输入 Draft 的准确位置报告错误。界面不得退回到另一条字面 Query。未完成输入保持为可编辑 Draft，同样不执行 Query；因此解析错误不会静默变成更宽的搜索。
 
-第一代 built-in keyword set 是 title、subtitle、filename、path、body、resource-name 与 field。刻意不设 generic file 或 name，因为它们会把不同 domain 合并。field 必须给 stable D4 FieldId；若还有 member path，则必须用 Query 同一份 current Registry 验证。localized label 与 alias 不能替代 stable ID。
+第一代内建关键字集合固定为 title、subtitle、filename、path、body、resource-name 和 field。本代刻意不提供笼统的 file 或 name 关键字，因为这会混淆不同数据域。field 必须使用稳定的 D4 FieldId；若给出成员路径，还必须用与 Query 相同的当前 Registry 进行验证。界面本地化标签和别名都不能替代稳定 ID。
 
-## 6. Visual filter 与 round-trip
+## 6. 可视化筛选与往返编辑
 
-plain input、visual filter 与 shortcut mode 都编辑同一个 condition model。可表示的 Query condition 可以 lossless round-trip 成 visual chip 与 shortcut text；presentation chip 重排不能改变 semantics。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+普通输入、可视化筛选和快捷条件模式都编辑同一份条件模型。能被便利语法表示的 Query 条件，应当可以在可视化条件和快捷文本之间无损往返；仅调整筛选项的显示顺序不能改变语义。
 
-完整 Query 可能包含 convenience grammar 表示不了的 condition。该条件必须作为 opaque-but-editable advanced condition node 留在 visual model；切 shortcut mode 时要明确显示它不能转换成文本，绝不能丢掉。用户可打开 full Query editor 继续编辑；保存绝不能只 serialize 当前可见 chips。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+完整 Query 可能包含便利语法无法表达的条件。此类条件必须作为“高级条件”节点保留在可视化模型中；切换到快捷文本时，界面应明确说明该条件无法用快捷文本表示，绝不能把它丢掉。用户仍可打开完整 Query 编辑器修改它。保存时必须序列化完整的 canonical Query，不能只保存当前看得见的筛选项。
 
-keyboard、pointer、touch 与 assistive-technology control 都调用同一 condition operation。focus 绑定 logical condition ID，而不是 DOM index。search refresh、sort 或 epoch reset 使旧 result-row focus/selection/evidence stale，并把 focus 放回 stable container，不能把 reused visual row 交给另一对象。IME preedit 执行零 Query；只有 finalized input 可以更新 search draft。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+键盘、指针、触摸和辅助技术都应调用同一组条件操作。焦点绑定逻辑条件 ID，而不是 DOM 下标。搜索刷新、排序或结果 epoch 重置后，旧结果行的焦点、选区和 evidence 都要失效，并把焦点返回稳定容器；不得把复用后的视觉行错误地赋给另一个对象。IME 预编辑阶段不得发起 Query，只有输入法完成确认后的文本才能更新搜索 Draft。
 
-CJK IME、RTL text、bidi isolation、screen-reader label、mobile sheet 与 hardware keyboard path 是 D8 interaction obligation。本 D7 批冻结其 semantic target 与 acceptance requirement，但不声称 platform execution。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+CJK 输入法、RTL 文本、双向文本隔离、读屏名称、移动端面板和硬件键盘路径均属于后续 D8 的交互验收义务。本批只冻结它们应当对应的语义目标和验收条件，不声称任何平台行为已经通过。
 
-## 7. Permission、index state、count、ranking 与 snippet；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+## 7. 权限、索引状态、命中数、排名与摘要
 
-authorization 与 minimum disclosure 必须先于任何 sensitive source、Field、contribution、attachment、Annotation 或 index-private read。Search 不得通过 hit count、ranking gap、snippet、completion suggestion 或 unavailable reason 泄露 hidden existence。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+授权与最低披露必须先于任何敏感来源、Field、Contribution、附件、Annotation 或索引私有数据读取。Search 不得通过命中数量、排名缺口、摘要、补全提示或错误原因泄露隐藏对象是否存在。
 
-Derived Index 只做 candidate accelerator。building、partial、stale、unavailable 与 proved complete zero-result Query 完全不同。complete search 必须具备 current authorized query_scan，以及全部真实 positive/negative source、Registry、contribution、extraction 与 authorization dependency。partial exploration 只可显示 explicit covered range，并持续标为 incomplete；不能签发 complete ActionEvidence，也不能把 current page 当 whole result。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+Derived Index 只能作为候选加速器。building、partial、stale、unavailable 与“已证明完整且零结果”必须严格区分。完整搜索要求当前授权的 query_scan，并覆盖真实的正负来源范围、Registry、Contribution、提取结果和授权依赖。部分探索只能显示已经明确覆盖的范围，并持续标记为不完整；它不能签发完整 ActionEvidence，也不能把当前页冒充整个结果集。
 
-selected Field/SearchContribution/provider/extraction missing 时，在普通 disclosure gate 后返回 retained unavailable/reset result，绝不能 fallback-empty。budget exhaustion 按 retained D7 budget error 使 complete result 失败；不能返回 first N rows再称 complete。cancellation 保持 retained explicit outcome。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+缺失所选 Field、SearchContribution、提供方或提取数据时，应在正常披露门之后返回既有的 unavailable/reset 结果，不得退化为空 Contribution。若预算耗尽，完整结果按既有 D7 预算错误失败，不能返回前 N 条后宣称完整。取消继续使用既有明确 outcome。
 
-hit count 只从 authorized complete result 计算。building 时 UI 可以不显示 count 或显示 unknown，不能估计 hidden matches。ranking 只用 authorized matched value 与 retained D7 comparator。
+命中总数只能从获权且完整的结果计算。索引仍在构建时，界面可以不显示数量，或显示“未知”，不得估算隐藏命中。排名只能使用已经获权的匹配值和既有 D7 比较器。
 
-snippet/highlight 只能从已经 authorized 的 matched semantic text 派生。其 scalar offset 是 result value 内的 ephemeral presentation offset，不是 D3 Locator coordinate。打开 hit 时沿真实 Ref/provenance/Locator rule 做 fresh current resolution/read；若 result/source stale，就 revalidate/reset，不能把 display offset 套到新 bytes。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+摘要和高亮只能从已经获权的匹配语义文本派生。它们的标量偏移仅是该结果值内部的临时呈现坐标，不是 D3 Locator。打开命中项时，必须按照真实的 Ref、provenance 或 Locator 规则重新执行一次当前解析和读取；若结果或来源已经过期，则重新验证或重置，不能把旧显示偏移套到新字节上。
 
-## 8. Persistence、reopen、copy 与 import；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+## 8. 保存、重开、复制与导入
 
-保存 search 只保存既有 canonical Query definition，以及 explicit scope、parameter、stable D4 FieldId、selected SearchContribution contributionId/version dependency 与 author-defined ordering。shortcut string 不是 durable search authority。非作者 device 可以为 convenience 记 parser version 或 last text，但它们可丢弃，不能进入 DynamicBlock、DefinitionTransfer、result cache 或 ActionEvidence。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+保存搜索时只保存既有 canonical Query 定义，以及明确的范围、参数、稳定 D4 FieldId、所选 SearchContribution 的 contributionId/version 依赖和作者定义的排序。快捷文本本身不是持久搜索权威。设备可以为便利而记住解析器版本或上次输入文字，但这些状态可丢弃，且不得进入 DynamicBlock、DefinitionTransfer、结果缓存或 ActionEvidence。
 
-reopen 先按 recorded author schema decode saved Query，再资格化 current definition、Registry、contribution 与 permission。Field deletion 或 incompatible type change 走 Registry migration/unavailability；SearchContribution removal/version change 走 D10 activation dependency；permission change reset current result。rename/move 改 current filename/path value，但不按文字改变 stable content identity。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+重开时先按保存时记录的作者 schema 解码 Query，再对当前 definition、Registry、Contribution 和权限重新资格化。Field 被删除或类型不兼容时，遵循 Registry 的迁移/不可用规则；SearchContribution 被移除或版本变化时，遵循 D10 激活依赖规则；权限变化会重置当前结果。改名或移动只改变当前文件名/路径值，不会按文本改变稳定内容身份。
 
-copy/fork/import 对 canonical Query payload 使用既有 D7 Definition Transfer。typed Ref 与 DefinitionAddress root 按 D3 规则 map；FieldId 与 SearchContribution stable identity 继续作为 semantic dependency，不从 label 猜。unknown payload 不自动变成新 search syntax。old result row、snippet 与 evidence 不会被复制成 current authority。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+复制、fork 或导入搜索定义时，对 canonical Query payload 使用既有 D7 Definition Transfer。typed Ref 与 DefinitionAddress root 按 D3 规则映射；FieldId 与 SearchContribution 的稳定身份继续作为语义依赖，不能从显示标签猜测。未知 payload 不会自动转换成新搜索语法。旧结果行、摘要和 evidence 也不会被复制成当前权限。
 
-## 9. List、full search 与 saved Query 的 hit equivalence
+## 9. 列表搜索、全文搜索与 saved Query 的结果等价
 
-当 file-list、global search 与 saved Query 配置成 byte-equivalent canonical condition、scope、contribution set、ordering 与 current dependency cut 时，它们具有相同 D7 result semantics。surface pagination 或 virtualization 不改变 membership/order。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+当文件列表、全局搜索和 saved Query 使用逐字节等价的 canonical 条件、范围、Contribution 集、排序和当前依赖 cut 时，它们必须具有相同的 D7 结果语义。不同界面的分页或虚拟化不能改变成员集合和顺序。
 
-capability difference 必须显式。无法取得 required provider、complete range、secure snippet、bidi interaction 或 assistive navigation 的 surface，要报告对应 capability unavailable/incomplete，不能改跑另一条 hidden Query。跨 device equality 是 canonical Query 与 qualified dependency 的 semantic equality，不是 pixel equality。
+能力差异必须明确呈现。如果某个界面无法取得所需提供方、完整范围、安全摘要、双向文本交互或辅助技术导航，就应把相应能力标为不可用或不完整，而不是偷偷执行另一条 Query。跨设备的一致性要求是 canonical Query 与已资格化依赖的语义一致，不要求像素布局一致。
 
-## 10. SEARCH-01–08 acceptance；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
-；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
-| ID | Normative D7 closure 与后续 D8 acceptance ；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。 |
-| --- | --- ；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。 |
-| SEARCH-01 | File-list filter、quick open、global text search 使用 §3 的 scope；empty input browse 与 explicit search 分开；recursion、Resource、Annotation、Trash、body、attachment/OCR 都必须 explicit。 。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。 |
-| SEARCH-02 | title/subtitle/filename/path/resource-name/hierarchy 分域；titleless 不补 title；duplicate display value 保留 distinct Ref；rename/move 使 old result qualification stale，但不按 text 改 identity。 ；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。 |
-| SEARCH-03 | current matching 按 §4 保留 exact 与 `nfc-for-compare` 两种 comparison basis：二者都大小写敏感，substring/equality 只使用该字段已声明的 Unicode scalar 比较规则，比较不会改写 source bytes；CJK 与 RTL 结果语义保持确定，Boolean AND/OR/NOT 必须显式；不声称 fuzzy、tokenizer、Pinyin 或 stemming，未来未支持模式也不能 silent run。以上英文只表示固定协议标识、字段名和状态名，均受本条中文条件约束，不形成另一套搜索语义。 |
-| SEARCH-04 | Shortcut mode 必须 explicit，并采用 §5 的 @ operator、quote、escape、precedence 与 error；ordinary colon text、URL、drive letter、title: 继续 literal；invalid/incomplete shortcut 执行零 alternate Query。 ；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。 。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。 |
-| SEARCH-05 | Visual/shortcut condition 编辑同一 model；无法表示的 advanced condition 保留不丢；focus/keyboard/touch/AT/IME/CJK/RTL 语义按 §6，并等待后续 D8 platform evidence。 |
-| SEARCH-06 | permission 先于 sensitive read；hidden count/rank/snippet 不泄露；index building/partial/stale/unavailable 与 complete zero 分开；missing contribution/provider 与 budget 有 explicit unavailable/error；ordinary open/edit/save 独立。 ；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。 。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。 |
-| SEARCH-07 | save/reopen/copy/import 持久化 canonical Query 与 stable semantic dependency，不保存 UI state；Field/contribution/version/permission change 重新资格化或 reset；old result 不取得新 current eligibility。 。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。 |
-| SEARCH-08 | hit 打开时 fresh current authorized resolve source；snippet/highlight offset 不是 Locator；同 canonical condition 在 list/full/saved surface 产生同 membership/order，同时 capability difference 明示。 。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。 |
+## 10. SEARCH-01–08 验收义务
 
-以上是 design acceptance obligation；本批不宣称任何 product search、platform interaction、tokenizer、provider、accessibility、performance 或 cross-device test 已 PASS。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+| ID | D7 规范闭合与后续 D8 验收 |
+| --- | --- |
+| SEARCH-01 | 文件列表筛选、快速打开和全局正文搜索使用 §3 的范围；空输入浏览与显式搜索分开；递归、Resource、Annotation、Trash、正文及附件/OCR 范围都必须明确选择。 |
+| SEARCH-02 | 标题、副标题、文件名、路径、资源名和逻辑层级彼此分域；无标题不得用文件名补造；显示值相同的对象仍保留不同 Ref；改名/移动使旧结果资格失效，但不按文字改变身份。 |
+| SEARCH-03 | 当前匹配按 §4 保留 exact 与 `nfc-for-compare` 两种比较 basis：二者都区分大小写，substring/equality 只使用该字段声明的 Unicode 标量比较规则，并且比较不会改写 source bytes；CJK 与 RTL 的结果语义保持确定，AND/OR/NOT 必须显式；不声称模糊、分词、拼音或词干能力；未来未支持模式不能静默执行。 |
+| SEARCH-04 | 快捷模式必须显式开启，并采用 §5 的 @ 操作符、引号、转义、优先级和错误规则；普通冒号文本、URL、Windows 盘符和 title: 保持字面含义；非法或未完成快捷输入不执行替代 Query。 |
+| SEARCH-05 | 可视化条件与快捷条件编辑同一模型；无法表达的高级条件必须保留；焦点、键盘、触摸、辅助技术、IME、CJK 和 RTL 语义按 §6 固定，平台证据留给后续 D8。 |
+| SEARCH-06 | 权限先于敏感读取；隐藏命中数、排名和摘要不得泄露；索引构建中、部分、过期、不可用与完整零结果分开；Contribution/提供方缺失和预算耗尽有明确不可用或错误结果；普通打开、编辑和保存不受无关完整搜索证明阻断。 |
+| SEARCH-07 | 保存、重开、复制和导入持久化 canonical Query 与稳定语义依赖，而不是设备 UI 状态；Field、Contribution、版本或权限变化会重新资格化或重置；旧结果不会获得新的当前资格。 |
+| SEARCH-08 | 打开命中项时重新执行当前获权的来源解析；摘要/高亮偏移不是 Locator；相同 canonical 条件在列表、全文搜索和 saved Query 中产生相同成员和顺序，同时允许能力差异明确呈现。 |
+
+这些都是设计验收义务。本批不宣称任何产品搜索、平台交互、分词器、提供方、辅助技术、性能或跨设备测试已经通过。

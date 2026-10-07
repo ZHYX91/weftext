@@ -4,15 +4,15 @@ translation_status: source
 ---
 
 [English](D7-SCHEMAS.md)
-# A2 D7 Current Schema Overlay
+# A2 D7 当前 Schema 补充
 
-状态：D7 作者候选的 current-schema companion；不是实现或独立接受。
+状态：这是 D7 作者候选的当前 schema companion；不是实现，也不是独立接受。
 
 ## 1. 优先级
 
-byte-complete 的保留 D7 author schema 位于 d7/owners。本 companion 只具名 fixed97 改变的 current successor dispatch 与 cross-field rule。下文没有改变的 QuerySpec/ParameterSpec/TypedLiteral/TypeSpec/TerminalSchema/ViewSpec/QueryCall/CEL/operator member，继续使用本地保留 owner 正文中的 exact closed shape。
+逐字节保留的 D7 作者 schema 位于 d7/owners。本 companion 只列出 fixed97 改变的当前 successor 分派，以及因此发生变化的跨字段规则。下文没有具名改变的 QuerySpec、ParameterSpec、TypedLiteral、TypeSpec、TerminalSchema、ViewSpec、QueryCall、CEL 与操作符成员，继续使用本地保留 owner 正文中的精确闭合结构。
 
-## 2. Current version inventory
+## 2. 当前版本清单
 
 ```text
 Query outer: wireVersion 2
@@ -29,9 +29,9 @@ D3 fresh request: wire13
 D6 fresh proof: InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3
 ```
 
-outer successor 永远不意味着 inner successor。historical bytes 必须先按 recorded tag 分派，之后才可能进入 unseen-current validation。
+外层 successor 的版本变化绝不意味着内层类型自动升版。历史字节必须先按记录时的 tag 分派，之后才能判断是否进入针对未见请求的当前验证。
 
-## 3. Current Action prepare 与 input
+## 3. 当前 Action 准备与输入
 
 ```text
 D7ActionPrepareRequest/3 = {
@@ -55,9 +55,9 @@ D7ActionInput/3 = {
 }
 ```
 
-D7ActionSpec/2 是 fixed-parent ActionSpec/1 顶层 version 2：保留所有合法 fixed-parent intent，但移除 fixed97 已替换的 historical apply-suggestion arm，并加入 fixed97 owner 定义的 current closed Annotation intents。version 2 不放宽其它 Action intent。
+D7ActionSpec/2 是 fixed-parent ActionSpec/1 的顶层 version 2：它保留 fixed-parent 中仍然合法的全部 intent，移除 fixed97 已经替代的历史 apply-suggestion 分支，并加入 fixed97 owner 定义的当前闭合 Annotation intent。version 2 不会顺带放宽任何其它 Action intent。
 
-selectedSources 使用 retained SourceVersionRef profile，本身不证明 currentness；currentness 来自 prepare 绑定的完整 observation/proof。
+selectedSources 使用既有 SourceVersionRef profile，但它本身不证明当前性；当前性来自 prepare 阶段绑定的完整 Observation 与 proof。
 
 ## 4. PreparedActionBinding/4
 
@@ -85,9 +85,9 @@ PreparedActionBinding/4 = {
 }
 ```
 
-D7ActionInput 的六个 member 分别与 PAB 对应 member byte-equal。D6-owned current action 的 D6 ownerInput canonical descriptor 必须是 exact D7ActionInput/3，pinRefs 只覆盖受保护 proposed 与实际 source/definition/rule evidence，并遵循 D6 排序。D3-owned identity action 保留 D3 owner descriptor；PAB4 只是 cross-owner preparation，不创建第二 D3 request authority。
+D7ActionInput 中的六个成员分别与 PAB 中对应成员逐字节相等。对于 D6 所有的当前 Action，D6 ownerInput 的 canonical descriptor 必须是精确的 D7ActionInput/3；其 pinRefs 只覆盖实际受保护的 proposed 以及 source/definition/rule 证据，并遵守 D6 的规范排序。D3 所有的 identity Action 保留 D3 自己的 owner descriptor；PAB4 只是跨 owner 的准备记录，不会建立第二份 D3 请求权威。
 
-bindingToken 是随机受保护 association material，不从 request bytes 推导，因此不存在 hash cycle。original request、binding、preview、proof、pins、plan 与 final P 仍是一个 decision。
+bindingToken 是随机生成并受保护的关联材料，不从 request 字节推导，因此不存在 request-hash 自引用环。原始 request、binding、preview、proof、pins、plan 和最终 P 仍属于同一个 decision。
 
 ## 5. D7ProposedInput/3
 
@@ -109,7 +109,7 @@ legal pairs:
   annotation_value      <-> d3_symbolic_result9
 ```
 
-D6 current concrete Annotation after 使用完整 Value/4 bytes；symbolic Result/9 arm 只在 retained D3 branch 合法。d3_annotation_value3 在 Input3 中非法。真实 historical Input2/PAB3 继续保留 annotation_value3 与原 pins，绝不升级。
+D6 当前的 concrete Annotation 后像使用完整 Value/4 字节；symbolic Result/9 分支只在既有 D3 分支中合法。d3_annotation_value3 在 Input3 中非法。真实历史 Input2/PAB3 继续保留 annotation_value3 与原 pins，绝不能被升级重编码。
 
 ## 6. EffectManifest/3 与 EffectBytes/3
 
@@ -135,9 +135,9 @@ EffectBytes/3 = {
 }
 ```
 
-EffectItem/3 保留 predecessor effect arms 与 fixed97 选定的 current owner-specific successor arms。每个 byte slot 使用 EffectBytes/3，decoder 不通过递归猜 member name 来发现 slot。preview/committed 是不同 phase；delivery epoch 只授权 transport，不改变 semantic effect bytes。
+EffectItem/3 保留 predecessor 中仍然有效的 effect 分支，以及 fixed97 选定的当前 owner-specific successor 分支。所有字节槽都使用 EffectBytes/3；decoder 不能通过递归猜字段名来发现字节槽。preview 与 committed 是两个不同 phase；delivery epoch 只授权本次传输，不会改变语义 effect bytes。
 
-## 7. Source plan 与 D6 current type
+## 7. Source plan 与 D6 当前类型
 
 ```text
 source-plan dispatch:
@@ -161,24 +161,24 @@ portable current D6:
   ChangeRecord/1
 ```
 
-即使 contained production version 相同，SourceVersion 与 SourceObservation 仍是不同 domain。fresh read 可以为同一 authenticated production version 建立新的 current Observation，但不能改写 saved Locator、DefinitionAddress、prepared selector、Query result 或 ActionEvidence。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+即使其中包含的 production version 相同，SourceVersion 与 SourceObservation 仍属于不同数据域。一次新的读取可以为同一个已认证 production version 建立新的当前 Observation，但不能因此改写 saved Locator、DefinitionAddress、已经准备好的 selector、Query result 或 ActionEvidence。
 
-## 8. Strict JSON 与 numeric decode；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+## 8. 严格 JSON 与数值解码
 
-全部 closed object 拒绝 duplicate key、unknown member、missing required member、非法 null 与 cross-arm member。除非 exact schema 明确另有定义，Optional 表示 member absence。JSON Boolean 不能当 integer。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+所有闭合 object 都拒绝重复 key、未知成员、缺少必需成员、非法 null 和跨 union 分支成员。除非某个精确 schema 明确另有规定，Optional 表示成员缺席。JSON Boolean 不能当作整数。
 
-D7 integer/decimal 保持 retained Value/CEL profile 的 exact canonical textual decoder；D3/D6 Counter 与其它 bounded meta-wire integer 保持自己的 range/overflow rule。outer current version 不能 silent 接受 inner decoder 原本拒绝的 exponent、host floating value、negative zero 或 nested numeric representation。反过来，current heading effectiveLevel 等 arbitrary-precision D7 integer 也不能因 host 或 historical schema 使用 int64 就被拒绝。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+D7 integer/decimal 继续使用既有 Value/CEL profile 的精确规范文本 decoder；D3/D6 Counter 及其它有界 meta-wire integer 继续使用各自的范围和 overflow 规则。外层 current version 不能让内层 decoder 静默接受原本非法的指数形式、host 浮点、negative zero 或不同的嵌套数值表示。反过来，current heading 的 effectiveLevel 等任意精度 D7 integer 也不能仅因为 host 或历史 schema 使用 int64 就被拒绝。
 
-## 9. Query execution closure
+## 9. Query 执行闭合
 
-Query outer 仍为 wireVersion2，完整 QuerySpec/1 author grammar 位于 d7/owners/query-algebra。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 共同形成一条 closed path。unknown feature 或 unavailable dependency 不能被转换为空 bag。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+Query 外层仍为 wireVersion2，完整的 QuerySpec/1 作者语法位于 d7/owners/query-algebra。DAG 验证、canonical ordinal、CEL 类型检查、feature gate、来源资格、terminal schema、结果编码、分页/订阅重置和完整错误顺序共同构成一条闭合执行路径。未知 feature 或不可用 dependency 不能被转换成空 bag。
 
-## 10. Search schema boundary
+## 10. 搜索 schema 边界
 
-Search 不新增 persistent Query/View schema。plain search、visual condition 与 optional shortcut grammar 都编译为 ordinary QuerySpec/1，并绑定 current SearchContribution dependency。保存时只保存 canonical Query definition。shortcut parser version、text cursor、open filter popover、recent query、expansion state 与 device direction 都是 interaction state，不进入 DynamicBlock 或 saved Query。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+Search 不新增持久 Query 或 View schema。普通搜索、可视化条件和可选快捷语法都会编译成普通 QuerySpec/1，并绑定当前 SearchContribution 依赖。保存时只保存 canonical Query definition。快捷解析器版本、文本光标、已展开筛选面板、最近搜索、折叠状态和设备方向都属于交互状态，不进入 DynamicBlock 或 saved Query。
 
-详细 grammar 与 SEARCH-01 到 SEARCH-08 acceptance 位于 D7-SEARCH。
+详细语法与 SEARCH-01 至 SEARCH-08 验收义务位于 D7-SEARCH。
 
-## 11. Historical recovery
+## 11. 历史恢复
 
-saved、planned、unknown、committed 与 transport-recovery 都先定位 exact original owner/version，再应用 current unseen gate。旧 request fingerprint、MinimumMapping、pins、tokens、clock、custody、installation proof、outbox、effect bytes 与 unknown responsibility 全部按原产生版本保留。current schema 不为无法证明实际部署的 prototype 声明 permanent migration。
+saved、planned、unknown、committed 以及传输恢复路径都必须先定位精确的原 owner/version，再应用针对未见请求的当前门禁。旧 request fingerprint、MinimumMapping、pins、tokens、clock、custody、installation proof、outbox、effect bytes 和 unknown 责任全部按实际产生它们的版本保留。当前 schema 不会为无法证明实际部署过的 prototype 虚构永久 migration。

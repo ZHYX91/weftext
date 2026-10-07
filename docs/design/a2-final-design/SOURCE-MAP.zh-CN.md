@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。本 D7 作者批已经修订 `A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据，但作者不自行关闭；两项都等待实际 final stop SHA 的独立复核。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 
 ## 12. D4/D5 审计映射复核谱系
@@ -129,16 +129,16 @@ D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 
 
 旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
 
-最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。本 D7 作者批已经修订 `A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据，但作者不自行关闭；两项都等待实际 final stop SHA 的独立复核。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 ## 13. D7 整合
 
-D7 现已整合为完整作者候选。fixed-S 十三份 D7 source 与额外 D9 coordinated D3-D7 binding source 均已 FULL。current 双语 D7 owner afterimage 已按 byte-identical 复制到 d7/owners；D7-REGISTRY.json 复用 exact current Registry blob，保持 34 concepts / 8 cross-stage bindings。D7.md 与 D7-SCHEMAS.md 只对具名 fixed97/current-D2 successor 应用 overlay；其它保留条款继续直接存在于复制 owner 正文。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+D7 现已整合为完整作者候选。fixed-S 的十三份 D7 来源以及额外的 D9 coordinated D3-D7 binding 来源均已完整读取。当前双语 D7 owner afterimage 按原 blob 复制到 d7/owners；D7-REGISTRY.json 复用准确的当前 Registry blob，继续包含 34 个 concept 和 8 个 cross-stage binding。D7.md 与 D7-SCHEMAS.md 只对具名的 fixed97/current-D2 successor 应用补充规则，其余保留条款仍直接由复制的 owner 正文承担。
 
-D7-SEARCH.md 整合 SEARCH-01 到 SEARCH-08，但不建立第二 search executor 或 persistent authority。plain text 与 visual filter 是默认路径；optional shortcut mode 必须 explicit，并采用带前缀 operator，因此 ordinary colon text、URL、drive-letter path 不会被 silent parse。保存只保存 canonical Query semantics，不保存 UI parser state。current matching 保持 retained exact 与 explicit `nfc-for-compare` 两种 basis，substring/equality 均大小写敏感，且不声称 automatic fuzzy、Pinyin 或 tokenizer。
+D7-SEARCH.md 已整合 SEARCH-01 至 SEARCH-08，但没有建立第二个搜索执行器或持久权威。普通文本与可视化筛选是默认路径；可选快捷模式必须显式进入，并使用带 @ 前缀的操作符，因此普通冒号文字、URL、Windows 盘符和 title: 不会被静默解析。保存时只保存 canonical Query 语义，不保存设备侧解析器状态。当前匹配保留 exact 与显式 `nfc-for-compare` 两种比较 basis，substring/equality 均区分大小写，并且不声称已经提供自动模糊、拼音或分词能力。
 
-D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN evidence、20 项 integration obligation、全部 8 项 SEARCH obligation、scenario/non-fallback ordinal、A2-01–57、Facet/People/ICS group、Chart §15、terminology Registry coverage 与两项 navigation finding。D8–D10 继续只在真实 D7 producer/consumer intersection 上 PARTIAL；完整 module 留待后续。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN 证据状态、20 项整合义务、全部 8 项 SEARCH 义务、scenario/non-fallback 序号、A2-01–57、Facet/People/ICS 组、Chart §15、terminology Registry 覆盖以及两项导航 finding。D8–D10 只在真实 D7 producer/consumer 交叉上记为 PARTIAL；它们的完整模块仍留给后续。
 
-fixed454e 非作者导航复核通过四项旧 residual，并新开 A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01。本作者候选已修订两项 navigation，但不自行关闭。A2-D6-01CC-P2-01 现在只有一个 role-neutral pending status，并统一引用 D7-SOURCE-MAP.json 的 detail；historical sourceEvidence 不变。A2-NAV-454E-P2-01 则由上面 §8 的 fixed-5c/fixed446 历史措辞修订解决。两项都等待 actual final stop SHA 的独立复核。
+fixed454e 非作者导航复核通过此前四项残余措辞，并新开 A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01 两项导航 P2。本作者候选已修订两项导航问题，但不自行关闭。前者现在只有一个角色中性的待复核状态，并统一引用 D7-SOURCE-MAP.json 的详细 provenance；历史 sourceEvidence 不变。后者把 fixed-5c 的旧现实时态改成历史叙述，并明确后续 fixed446 独立复核已在有界范围关闭 D1/D2 映射修订；该有界结论不构成 D6 或全局 A2 接受。两项 finding 都等待实际 final stop SHA 的独立复核。
 
-product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior 继续 UNRUN。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
+产品 runtime、OS、GUI、renderer/export、database、真实 replica、provider、performance、migration 与 activation 行为在本批全部为 UNRUN。

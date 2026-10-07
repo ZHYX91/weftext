@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
+Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All prior bounded semantic closures retain only their recorded scopes. This D7 author batch repairs `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` as navigation metadata, but neither is self-closed; both await independent review at the actual final stop SHA. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 
 ## 12. D4/D5 audit-map review lineage
@@ -126,7 +126,7 @@ D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.
 
 The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
 
-Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
+Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All prior bounded semantic closures retain only their recorded scopes. This D7 author batch repairs `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` as navigation metadata, but neither is self-closed; both await independent review at the actual final stop SHA. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 13. D7 integration
 
