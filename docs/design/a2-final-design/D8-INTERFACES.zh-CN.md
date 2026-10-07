@@ -274,6 +274,6 @@ Remote/offline hosted author source 不因本地有 parser 就获得 commit auth
 
 渲染/导出是分离的 consumer 调用，只对现任 ResultHandle 执行既有 D7 View §7 完整运行期验证，并保持原顺序，包括完整结果、全量数据 key/order/domain/hierarchy、budget 与交付检查。运行期数据/provider/renderer 失败绝不得写入或使已保存 ViewSpec 失效。
 
-基础 builder 对无法无损表达的合法成员返回显式 `advanced_required` 呈现状态；它只是 D8 界面条件，**不是**新的 ViewSpec 成员或可携带错误码。高级/源码路径编辑真实现任 owner 字节，并继续受同一个 D7 解码器与 D6 保存/现任性门约束。
+基础 builder 只有在 member 已被现任 D7 ViewSpec/1 decoder 接受、但基础控件无法无损表达时，才返回显式 `advanced_required` 呈现状态；它只是 D8 界面条件，**不是**新的 ViewSpec 成员或可携带错误码。不在现任 D7 封闭集合中的 layout/member 必须在 `advanced_required` 之前由静态门返回 D7-owned typed error，包括 `unsupported_layout`，也不能通过高级路径保存成 current ViewSpec。高级/源码路径仍可按真实 owner/decoder 编辑 exact raw Source 或真正 historical/future bytes；一旦尝试 current ViewSpec save，仍受同一个 D7 decoder 与 D6 保存/现任性门约束。
 
 Desktop、WebUI、Mobile 可以承载基础 builder；CLI、Server 提供相同的定义读取、严格验证与 owner 保存操作；WebUI 使用 Server Core。缺少图形能力与定义本身是否有效必须分开报告。
