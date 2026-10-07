@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "fixed5e21 independent REVISE: 0 open P1 / 1 open P2; semantic P2-01 independently CLOSED; navigation P2 repaired by coordinator pending independent review; not D6/global acceptance",
+  "status": "fixed9c3b independent navigation REVISE: 0 open P1 / 1 open P2; semantic P2-01 independently CLOSED; navigation P2 repaired by coordinator pending independent review; not D6/global acceptance",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "start_head": "32cfb9c387deddb12fb021a44147df0d7ffab322",
@@ -38064,7 +38064,7 @@
     ],
     "partial": [
       "D7-D10 as complete A2 modules: only explicit direct-holder/load-bearing intersections needed by D6 were consumed",
-      "D4/D5 R1/R2: fixed01cc direct-target regression PASS is not closure of the separate fixed32cf non-author R1/R2 review object"
+      "D4/D5 whole-module/global acceptance remains outside this D6 review; bounded P2-01 mapping review is CLOSED at fixed1fc4."
     ],
     "unread": [
       "unlisted D7-D10 owner files as complete-module sources",
@@ -38219,11 +38219,11 @@
     "lexicon_en": "4b63173f660b55bc220659320cf0834abae07b2b",
     "lexicon_zh": "d1434f8d3d244c07c1a6034cff2a8e5fe4afb14e",
     "registry": "678db2c6b0316d6c431bcfe494add46cfd2a6e11",
-    "source_map_human_en": "7db332483d2d842be37e8a1366f62fe75f1c63e8",
-    "source_map_human_zh": "f82868c5f7dc85df4e56aefa9e91896173e65f95"
+    "source_map_human_en": "276c184ff8d00af2961ed6764048c4e2389eb0fb",
+    "source_map_human_zh": "21efcd99e95656f01f1ab35a6837ea3d9a6ff3c9"
   },
   "bilingual_sync": {
-    "status": "current residual repair synchronized at blob level; semantic closure still requires new exact-stop independent review",
+    "status": "Semantic P2-01 independently CLOSED at fixed5e21; current navigation metadata repair awaits exact-stop independent review.",
     "currentPairs": "real current A2 D6 main/control/impact/lexicon/source-map human EN/ZH blobs are listed in bilingual_source_pairs/current_candidate_blobs",
     "parentPairs": "four real current-parent D6 EN/ZH pairs recorded",
     "fixed97Pairs": "SPEC/SCHEMAS real EN/ZH pairs plus ACCEPTANCE per-row sourceEnglish/sourceChinese",
@@ -38350,11 +38350,11 @@
       "role": "current-A2-D6-source-map-human",
       "english": {
         "path": "docs/design/a2-final-design/D6-SOURCE-MAP.md",
-        "blob": "7db332483d2d842be37e8a1366f62fe75f1c63e8"
+        "blob": "276c184ff8d00af2961ed6764048c4e2389eb0fb"
       },
       "chinese": {
         "path": "docs/design/a2-final-design/D6-SOURCE-MAP.zh-CN.md",
-        "blob": "f82868c5f7dc85df4e56aefa9e91896173e65f95"
+        "blob": "21efcd99e95656f01f1ab35a6837ea3d9a6ff3c9"
       }
     }
   ],
@@ -38363,7 +38363,7 @@
   "repair_review_head": "01cc40b819df78fbe724f1c64c27284ad60fc6c8",
   "repair_review_head_role": "historical fixed01cc independent review; repair_review_result is its historical verdict, not current state",
   "repair_start_head": "32cfb9c387deddb12fb021a44147df0d7ffab322",
-  "final_stop_binding": "Exact final stop SHA is intentionally recorded in PR metadata and author handoff after all changed blobs materialize; this machine map does not self-hash an unknown future commit.",
+  "final_stop_binding": "Exact final stop SHA is intentionally recorded in PR metadata and handoff after all changed blobs materialize; this machine map does not self-hash an unknown future commit.",
   "repair_review_result": {
     "verdict": "REVISE",
     "residual_findings": {
@@ -38386,10 +38386,10 @@
     ],
     "d4d5_direct_target_regression": "PASS at fixed01cc only; does not close the separately reviewed fixed32cf R1/R2 object or global A2"
   },
-  "current_repair_start_head": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
-  "current_repair_start_head_role": "coordinator metadata-only repair after fixed5e21 bounded review",
-  "latest_independent_review_sha": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
-  "latest_independent_review_role": "latest non-author bounded semantic/navigation review; not global acceptance",
+  "current_repair_start_head": "9c3b84282a7d000c53342e14e09fffe3f6138e4e",
+  "current_repair_start_head_role": "coordinator metadata-only follow-up after fixed9c3b navigation review",
+  "latest_independent_review_sha": "9c3b84282a7d000c53342e14e09fffe3f6138e4e",
+  "latest_independent_review_role": "latest bounded non-author navigation review: four residual wording items under the same P2; zero new findings",
   "latest_independent_review_result": {
     "verdict": "REVISE",
     "residual_findings": {
@@ -38397,14 +38397,13 @@
       "P2": 1
     },
     "newFindings": 0,
-    "newly_closed": [
-      "A2-D6-829-P2-01"
-    ],
+    "newly_closed": [],
     "retained_prior_closures": [
       "A2-D6-829-P1-01",
       "A2-D6-829-P1-02",
       "A2-D6-829-P2-02",
-      "A2-D6-829-P2-03"
+      "A2-D6-829-P2-03",
+      "A2-D6-829-P2-01"
     ],
     "open_at_review": [
       "A2-D6-01CC-P2-01"
@@ -38490,6 +38489,34 @@
       ],
       "pending_after_this_author_repair": [
         "A2-D6-829-P2-01",
+        "A2-D6-01CC-P2-01"
+      ],
+      "acceptance": "not D6/global acceptance"
+    }
+  },
+  "historical_review_fixed5e21": {
+    "sha": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
+    "role": "historical semantic-closure and navigation verdict",
+    "result": {
+      "verdict": "REVISE",
+      "residual_findings": {
+        "P1": 0,
+        "P2": 1
+      },
+      "newFindings": 0,
+      "newly_closed": [
+        "A2-D6-829-P2-01"
+      ],
+      "retained_prior_closures": [
+        "A2-D6-829-P1-01",
+        "A2-D6-829-P1-02",
+        "A2-D6-829-P2-02",
+        "A2-D6-829-P2-03"
+      ],
+      "open_at_review": [
+        "A2-D6-01CC-P2-01"
+      ],
+      "pending_after_this_author_repair": [
         "A2-D6-01CC-P2-01"
       ],
       "acceptance": "not D6/global acceptance"

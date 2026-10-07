@@ -18,7 +18,7 @@ translation_status: source
 
 Mandatory source 1–924 行中的 **716/716 个非空行**已分入 33 个来源限定 group。跨模块事项明确写真实 owner 与目标：D6 persistence defer 给 D6，D9 template/conversion defer 给 D9，D10 package/provider/connector control 归 D10；D4 继续拥有 Semantic Namespace、Field、Relation 与 Calendar 语义。925–1141 行仍留给后续 D7–D10/global。
 
-**72 条 D4 相关 fixed97 acceptance row**继续逐条保存真实英文/中文 row 与 source path/blob/line。fixed32cf 独立复核通过 **71/72** 条 D4 R1 映射，只留下 `FC4R-TABLE-04`；本次把它改回 D9 native-table export selector/token-binding 主 owner，D2 只负责 frozen product projection，D5 只作适用 consumer。修后仍待独立复核。数量只证明库存，不能替代原 row 条件。
+**72 条 D4 相关 fixed97 acceptance row**继续逐条保存真实英文/中文 row 与 source path/blob/line。fixed32cf 独立复核通过 **71/72** 条 D4 R1 映射，只留下 `FC4R-TABLE-04`；本次把它改回 D9 native-table export selector/token-binding 主 owner，D2 只负责 frozen product projection，D5 只作适用 consumer。该残余随后在 fixed1fc4 独立复核通过；这是有界 P2-01 关闭，不代表 D4 全模块接受。数量只证明库存，不能替代原 row 条件。
 
 ## 3. 真实 D10 direct source qualification
 

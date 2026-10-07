@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
 
 
 ## 12. D4/D5 审计映射复核谱系
@@ -129,4 +129,4 @@ D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 
 
 旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
 
-最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。

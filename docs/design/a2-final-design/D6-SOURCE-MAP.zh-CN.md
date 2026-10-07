@@ -7,7 +7,7 @@ translation_status: source
 
 # A2 D6 fixed5e21 导航修订来源映射
 
-最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
 
 ## 1. 固定复核时间线
 
@@ -16,7 +16,8 @@ finding origin：fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。
 四残余作者修订起点：`32cfb9c387deddb12fb021a44147df0d7ffab322`。
 后续 follow-up：`d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。
 较早非作者固定对象：`1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。
-最新非作者固定对象：`5e21e9f00e1fa4e893f2544211133adbeac35ae0`。
+语义关闭复核：`5e21e9f00e1fa4e893f2544211133adbeac35ae0`。
+最新导航复核：`9c3b84282a7d000c53342e14e09fffe3f6138e4e`。
 
 fixed1fc4 已独立 CLOSED P1-02 与 P2-02，并通过 D4/D5 十四条残余；结合原 188/202 条 R1 通过项和 R2 关闭，A2-D4D5:P2-01 现为 bounded CLOSED。fixed5e21 随后独立 CLOSED 语义 P2；仅导航问题仍待关闭。
 
@@ -34,7 +35,7 @@ fixed-S snapshot 字节完全不改；current F/M/P/I/D 架构不重新设计；
 
 [A2 REVIEW-ENTRY](REVIEW-ENTRY.zh-CN.md)
 
-最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
 
 D6-SOURCE-MAP.json 保存当前 D6 评审状态；其他机器 map 引用它。较早固定裁决是历史证据，不是当前待审问题。不自填未知未来 commit；实际交回 SHA 记录在 PR metadata。
 

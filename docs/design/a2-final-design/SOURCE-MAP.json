@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D6 author candidates integrated; prior bounded closures retained. D4/D5 P2-01 CLOSED at fixed1fc4, P2-02 bounded CLOSED at fixed4282. D6 fixed5e21: REVISE 0 open P1 / 1 open P2 (navigation only). D7-D10/SEARCH/global remain pending.",
+  "status": "D1-D6 author candidates integrated; prior bounded closures retained. D4/D5 P2-01 CLOSED at fixed1fc4, P2-02 bounded CLOSED at fixed4282. D6 navigation fixed9c3b: REVISE 0 open P1 / 1 open P2 (navigation only). D7-D10/SEARCH/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2416,9 +2416,9 @@
       "D6-SOURCE-MAP.md",
       "D6-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "See currentReviewRef for current D6 state; latest review fixed5e21 leaves navigation only pending.",
-    "reviewFixedSha": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
-    "repairStartSha": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
+    "status": "See currentReviewRef for current D6 state; latest navigation review fixed9c3b leaves navigation only pending.",
+    "reviewFixedSha": "9c3b84282a7d000c53342e14e09fffe3f6138e4e",
+    "repairStartSha": "9c3b84282a7d000c53342e14e09fffe3f6138e4e",
     "findings": {
       "A2-D6-829-P1-01": "independent-CLOSED-at-fixed01cc",
       "A2-D6-829-P1-02": "independent-CLOSED-at-fixed1fc4",
