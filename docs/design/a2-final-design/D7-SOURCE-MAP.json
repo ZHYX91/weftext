@@ -4715,11 +4715,11 @@
           "d7_planned_preview_opened"
         ],
         "parentCurrentRule": "D7 consumes actual complete D6 Plan3/Profile3/Policy3, while real already-issued families fixed to profile1/2 retain original Plan1 for their authorized replacement, uncommitted create/fork and recovery. Current symbolic-effect version2 payloadFormat is the closed Plan1|Plan3 encoding union selected by the protected family and actual decoder, not caller downgrade; no relabeling or Policy3 injection. D10 planned-preview2 restores original DecisionKey2 and actual Manifest2/EffectBytes2, not another producer or decision. Historical Plan1/symbolic1/Manifest1 real records retain exact decoding and custody; issuer A never replaces inactive target W/B domain. D7 Preview Transport section8 owns the exact wire2 D6/PAB3 planned-preview producer; D10 only consumes it and its complete original pinned semantics. D10AuthorPreparationLink is a separate atomic protected association, not a D7 member or second submit.",
-        "disposition": "named-current-successor-overlay+historical-record-only",
+        "disposition": "named-current-successor-overlay+exact-historical-dispatch",
         "owner": "D6/D7/D10",
         "currentTarget": "D7 §18/§19; D7-REGISTRY-QUALIFICATION B13",
-        "positiveOracle": "Fresh Plan4/Profile4/Genesis2 + Policy3 + current Effect3/D10 Link2 chain.",
-        "negativeOracle": "Real Plan1/Plan3/Profile3/symbolic2/Manifest1-2/planned-preview2 retain exact family/custody."
+        "positiveOracle": "Fresh bootstrap uses Plan4/Profile4/Genesis2 and fresh current preview/effect payload uses Effect3 while the real planned-preview reopen surface dispatches the exact protected record version.",
+        "negativeOracle": "Do not mechanically version-bump the reopen surface or relabel historical Plan1/Plan3/Profile3/symbolic2/Manifest1-2 records."
       }
     ],
     "read_method": "fixed-S and parent-current machine registries structurally expanded; thirteen parent-current bindings individually qualified against fixed97/A2 successors"
