@@ -61,13 +61,13 @@ Pause/cancel prevents only not-yet-planned future batches. It does not roll back
 
 ## 7. Export semantic interface
 
-D9 freezes the semantic flow `prepare→inspect→publish/state/cancel`; this A2 candidate does **not** invent an additional public export wire envelope. The host route may differ by surface but must consume the same current `ExportPlan/3`, `D9ExportConfirmation/1`, staged-byte and publication-intent semantics.
+D9 freezes the semantic flow `prepare→inspect→publish/state/cancel`; this A2 candidate does **not** invent an additional public export wire envelope. The host route may differ by surface but fresh unseen export must consume the same current `ExportPlan/4`, `D9ExportConfirmation/2`, staged-byte and publication-intent semantics. Recorded Plan/Confirmation1-/3 families remain exact recovery inputs.
 
-Prepare finishes complete input/catalog/projection/loss/staged bytes before returning. Inspect is read-only and rechecks current disclosure. Confirmation binds exact Plan/loss choices. Publish is create-only and binds the original destination intent. State/cancel operate on that publication responsibility and never become author commit.
+Prepare finishes complete input/catalog/projection/loss/staged bytes before returning. Annotation content comes only from the exact current annotation_content carrier; View export first passes the original D7 runtime gate and freezes one exact renderer/profile/assets binding. Inspect is read-only and rechecks current disclosure. Confirmation binds exact Plan/loss choices. Publish is create-only and binds the original destination intent. Print produces only `D9PrintReceipt/1`. State/cancel operate on the original delivery responsibility and never become author commit.
 
 ## 8. Export to Resource
 
-Saving one staged dataFile as a Resource is a separate D7/D3 author operation using the exact staged bytes, explicit owner/name and current write authorization. Export confirmation grants no write capability. External publication and Resource creation expose two distinct outcomes and receipts.
+Saving one staged dataFile as a Resource is a separate D7/D3 author operation using the exact staged bytes, explicit owner/name and current write authorization. Export confirmation grants no write capability. External publication, print delivery and Resource creation expose three distinct outcomes; none can substitute for another.
 
 ## 9. Office-template compiler interface
 
