@@ -22,13 +22,13 @@ current implementation 必须面向 D3 wire13、PAB4、Effect3、D2Snapshot3 与
 | I01 IR/codec | 完整严格解码器：覆盖封闭成员/联合体、重复/未知/null/Unicode/Counter/顺序/预算、格式覆盖，并与独立 parser/render 结果对照。 |
 | I02 hostile files | 覆盖 ZIP 名称别名/路径穿越/link/device/压缩炸弹、ODF 重复项、XML DTD/XXE/entity、active/encrypted/unknown variant、恶意 stdout/slot、exit-zero truncated output 以及全部限制。 |
 | I03 OS sandbox | 对具名 Windows/Linux/macOS build 提供 file/network/process-tree/resource/cleanup 隔离证据，不能只凭 timeout 或 container 名称。 |
-| I04 mapping/admission | 覆盖完整 D2 parse/product、D4 Registry 的 type/qualifier/cardinality/reference/control 校验、fresh-root authority，以及 ConversionInput/Result9/PAB4/Effect3 的字节闭合。 |
+| I04 mapping/admission | 覆盖完整 D2 解析/产物、D4 Registry 的类型、限定符、基数、引用与控制校验、fresh-root 权威，以及 ConversionInput/Result9/PAB4/Effect3 的字节闭合。 |
 | I05 real ImportJob | 覆盖 10k Nodes、10 个 batches、超过内存的输入、SCC/coupling group、真实 D6 commit 前后 fault、lost receipt、restart、revoke、cancel，以及 TTL/pins。 |
 | I06 Office template | 使用真实 Word/WPS/LibreOffice DOCX/ODT/XLSX/ODS，覆盖拆分/混合样式、escape、非法 XML scalar、类型化 none/complex value、可见 native selector、0/1/N repeat，以及 merge/limit。 |
 | I07 document output | 覆盖 H1–H9 现任 source semantics、target loss、body/bibliography 单一放置、style bundle，以及 CJK/RTL/AT/font/pagination 的具名 Office 版本证据。 |
 | I08 typed export | 覆盖 D7 各 result domain、reset/order/bag/tie/none/graph、任意精度值、date/instant、公式注入反例与 typed spreadsheet output。 |
 | I09 publication | 验证 create-only 文件系统边界；覆盖 ENOSPC、名称冲突、用户移动、flush、rename 前后 crash 与 revoke race；unknown 状态不得换名重发。 |
-| I10 region | 覆盖 PDF Crop/MediaBox/UserUnit/Rotate、EXIF、density/rounding 等几何与图像元数据，d9rg1 + l1 currentness、copy/fork、stale/not-visible，以及 keyboard/AT 交互。 |
+| I10 region | 覆盖 PDF 的 Crop/MediaBox/UserUnit/Rotate、EXIF、density/rounding 等几何与图像元数据，d9rg1 + l1 的现任性、copy/fork、stale/not-visible，以及键盘/AT 交互。 |
 | I11 surfaces | 覆盖 Desktop/CLI/Server/WebUI 的语义一致性、Mobile 负向能力、D1 overlap reason priority、非泄露 error，以及 D8 generated proposal 与 Draft 的冲突。 |
 | I12 release/naming | 覆盖完整依赖/SBOM/许可/模型/字体/平台安装卸载、无 provider/config 后门、历史名称扫描，并把 capability 与真实 gate 绑定。 |
 
@@ -66,7 +66,7 @@ D4 mapping test 使用真实 Registry definition，覆盖 type/qualifier/cardina
 
 ## 6. Node Template 证据
 
-测试必须覆盖重复 source、self/cross-template 的 fresh subject 重写、owner-local Resource remap、external-current reference policy、只枚举 index 而不读取 body 的 Annotation omission、parameter type、title/body_text/field_append overlap，以及 D2 reparse equality。
+测试必须覆盖重复 source、同模板/跨模板的 fresh subject 重写、owner-local Resource remap、external-current reference policy、只枚举 index 而不读取 body 的 Annotation omission、参数类型、title/body_text/field_append 的重叠，以及 D2 重解析相等性。
 
 parent-import 与 simple collection 分支按原 D3/D7 request 测试。sourceSubjectBindings 与 receipt resultAllocations 必须唯一 join，不保存第二 identity map。
 
@@ -78,7 +78,7 @@ saved/planned/unknown 必须保留原 request/OperationId/pins/owner，不依赖
 
 ## 8. Export 证据
 
-测试必须覆盖：renderer registry unavailable 时 exact-source/resource/query_json 的 generationPolicy=none；rendered document 的 D2Snapshot3 + D8 presentation binding；body/bibliography 选择；narrow Field/Query/native_table 不额外读取 body；graph/scalar/rows 的完整值；canonical set 排序；现任 output-name validity/PortableAlias/reserved-name rule；以及 Plan3/Receipt3 与 historical strict dispatch。
+测试必须覆盖：renderer registry unavailable 时 exact-source/resource/query_json 的 generationPolicy=none；渲染文档使用 D2Snapshot3 + D8 presentation binding；body/bibliography 选择；narrow Field/Query/native_table 不额外读取 body；graph/scalar/rows 的完整值；canonical set 排序；现任输出名 validity/PortableAlias/reserved-name rule；以及 Plan3/Receipt3 与 historical strict dispatch。
 
 initial loss report、data bytes、loss-report.json、manifest.json、stagedOutputs 在 confirm 前冻结并验证。confirm 后任何变化必须失败，不能 rerender。
 
