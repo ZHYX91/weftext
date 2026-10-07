@@ -142,7 +142,7 @@ D8EditPrepareRequest/3 = {
 }
 ~~~
 
-Unknown arms, members, or illegal null reject. An Annotation caller cannot provide actor/time/trusted/suggestion evidence. The reconfirm arm contains no caller-provided value.
+Unknown arms, members, or illegal null reject. An Annotation caller cannot provide actor/time/trusted/suggestion evidence. The reconfirm arm contains no caller-provided value. SourceTransform profile/compilation availability is not a member of D8EditInput/3 or PreparedEditBinding/3 and does not become a second D8 save certificate; an upstream disabled/unavailable transform plan may coexist with an otherwise legal ordinary Source save.
 
 ## 6. PreparedEditBinding/3
 
@@ -267,6 +267,8 @@ D8 Search controls produce only the D7 compiler input and consume the real Query
 A D8 renderer consumes only D7 ViewSpec/1={format:"weftext.view",version:1,inputSchema,layout,bindings,options}. D8 adds no filter, sort, CEL, aggregate, or script member. The formal View validation error family remains D7-owned.
 
 The View builder has **no portable schema**. Its working value is the complete strict-decoded `ViewSpec/1` plus ephemeral UI selection/focus/validation state. Saved Query/View/DynamicBlock occurrences remain current D2/D7 SavedDefinition author data; `DynamicBlock/1` retains only its real Query/View call and declared bindings. Builder control availability, advanced-route choice, validation messages, open tabs, selection, dirty state, or device layout are never serialized into ViewSpec/DynamicBlock or a hidden sidecar.
+
+Definition-save validation is not a new wire or schema. It consumes only the existing D7 strict decoder, current definition owner/revision/authorization, current terminal schema, and static layout/binding/type/option rules. It consumes no ResultHandle. The existing D7 View §7 runtime validator remains the sole complete-result validator and is invoked only for render/export; its value/key/order/domain/hierarchy/budget/delivery errors do not mutate or invalidate the saved definition.
 
 A basic builder may construct a new complete `ViewSpec/1` only from the exact closed members already owned by D7. It may not synthesize a partial ViewSpec, drop unknown-to-the-control but legal current members, or coerce a future/unknown version into version 1.
 
