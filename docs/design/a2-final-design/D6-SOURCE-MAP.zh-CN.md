@@ -5,9 +5,9 @@ translation_status: source
 
 [English](D6-SOURCE-MAP.md)
 
-# A2 D6 fixed1fc4 两项 P2 作者修订来源映射
+# A2 D6 fixed5e21 导航修订来源映射
 
-状态：fixed1fc4 独立复核后，D6 仍为 **REVISE，0 个开放 P1、2 个开放 P2**。P1-01/P2-03 继续保留 fixed01cc 的 independently CLOSED；P1-02/P2-02 已在 fixed1fc4 independently CLOSED。本作者批次只修 `A2-D6-829-P2-01` 与 `A2-D6-01CC-P2-01`；在新的 exact-stop 复核前，两项都只标 author-resolved-pending-independent。这不是 D6/global 接受、实现、激活或发布。
+最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
 
 ## 1. 固定复核时间线
 
@@ -15,9 +15,10 @@ finding origin：fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。
 较早非作者复核：fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。
 四残余作者修订起点：`32cfb9c387deddb12fb021a44147df0d7ffab322`。
 后续 follow-up：`d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。
-最新非作者固定对象：`1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。
+较早非作者固定对象：`1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。
+最新非作者固定对象：`5e21e9f00e1fa4e893f2544211133adbeac35ae0`。
 
-fixed1fc4 已独立 CLOSED P1-02 与 P2-02，并通过 D4/D5 十四条残余；结合原 188/202 条 R1 通过项和 R2 关闭，A2-D4D5:P2-01 现为 bounded CLOSED。本作者批次只接入上面两项 D6 P2。
+fixed1fc4 已独立 CLOSED P1-02 与 P2-02，并通过 D4/D5 十四条残余；结合原 188/202 条 R1 通过项和 R2 关闭，A2-D4D5:P2-01 现为 bounded CLOSED。fixed5e21 随后独立 CLOSED 语义 P2；仅导航问题仍待关闭。
 
 ## 2. P2-01——按义务 disposition
 
@@ -31,9 +32,11 @@ fixed-S snapshot 字节完全不改；current F/M/P/I/D 架构不重新设计；
 
 ## 3. Navigation P2——单一详细状态入口
 
-[A2 REVIEW-ENTRY](REVIEW-ENTRY.zh-CN.md) 与本文是 D6 的详细状态/provenance 入口。D4/D5 human map 改为链接这两个入口，不再复制 D6 stop/status；A2 README 与 A2 SOURCE-MAP 同步 fixed1fc4：P1-01/P1-02/P2-02/P2-03 在各自记录的复核对象上 bounded independently CLOSED；只有 P2-01 与 navigation 在本批修订，并继续等待独立复核。
+[A2 REVIEW-ENTRY](REVIEW-ENTRY.zh-CN.md)
 
-机器 map 记录 fixed829 为 finding origin、fixed01cc 为较早独立 D6 复核、fixed32cf/d1ab 为作者修订时间线、fixed1fc4 为最新独立复核，并把本批起点记录为 fixed1fc4。文件不会自指未知未来 final commit；真实 stop 只放 PR metadata/交接。
+最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
+
+D6-SOURCE-MAP.json 保存当前 D6 评审状态；其他机器 map 引用它。较早固定裁决是历史证据，不是当前待审问题。不自填未知未来 commit；实际交回 SHA 记录在 PR metadata。
 
 ## 4. 保留证据与边界
 

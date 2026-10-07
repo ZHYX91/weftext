@@ -5,9 +5,9 @@ translation_status: synced
 ---
 
 [简体中文](REVIEW-ENTRY.zh-CN.md)
-# A2 D1-D6 author-candidate review entry — fixed1fc4 two-P2 handoff
+# A2 D1-D6 author-candidate review entry — fixed5e21 navigation repair
 
-Status: author candidate only; not independently accepted, implemented, merged, released, deployed, or globally frozen. The fixed1fc4 independent review left D6 at **REVISE with 0 open P1 and 2 open P2**. This author batch repairs those two P2s; both remain author-resolved-pending-independent until a new exact-stop non-author review.
+Latest independent review: fixed5e21 (`5e21e9f00e1fa4e893f2544211133adbeac35ae0`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
 
 ## 1. Fixed objects and author chronology
 
@@ -17,7 +17,7 @@ Fixed historical input S: 7e18168dad3e6d120fce0dd607dc10fa7894e252.
 Protected inputs blob: 787d03c31a55496f81ed03fd54a6fdfff50a2ad4.
 Candidate branch: docs/a2-final-design-integration.
 
-D6 finding origin is fixed829 `829efce6aacbe944714e093c98065b01d50b2593`. The first non-author repair review was fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`. The four-residual author repair started at `32cfb9c387deddb12fb021a44147df0d7ffab322`; the later narrow follow-up passed through `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`. The next independent review fixed the completed candidate at `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`. This two-P2 author repair starts from that exact head.
+D6 finding origin is fixed829 `829efce6aacbe944714e093c98065b01d50b2593`. The first non-author repair review was fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`. The four-residual author repair started at `32cfb9c387deddb12fb021a44147df0d7ffab322`; the later narrow follow-up passed through `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`. The next independent review fixed the completed candidate at `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`. The previous two-P2 repair started there. The latest independent review fixed 5e21e9f00e1fa4e893f2544211133adbeac35ae0 and closed the semantic P2; this metadata-only repair starts from fixed5e21.
 
 The next non-author reviewer must bind the exact final stop SHA recorded in PR metadata/handoff. Do not follow a moving branch.
 
@@ -32,7 +32,7 @@ The next non-author reviewer must bind the exact final stop SHA recorded in PR m
 
 None of these bounded conclusions accepts D6 or global A2.
 
-## 3. Two D6 P2s repaired in this author batch
+## 3. Retained semantic repair and current navigation repair
 
 ### P2-01
 
@@ -44,9 +44,9 @@ Three adjacent fixed-S cross-owner groups with the same old-version ambiguity ar
 
 ### Navigation P2
 
-`A2-D6-01CC-P2-01` is repaired by making this REVIEW-ENTRY plus D6-SOURCE-MAP the single detailed D6 status/provenance entry. D4/D5 human maps now link here instead of copying a stale D6 stop/status. A2 README and A2 SOURCE-MAP are synchronized to the fixed1fc4 review state.
+Latest independent review: fixed5e21 (`5e21e9f00e1fa4e893f2544211133adbeac35ae0`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
 
-The current bounded chronology is: fixed829 finding origin → fixed01cc review and earlier closures → `32cfb9c387deddb12fb021a44147df0d7ffab322` author repair start → `d1ab2a5c0762450877614ad14340a26cfa0c1dfd` follow-up → fixed1fc4 independent review closing P1-02/P2-02 and the D4/D5 residual set → this two-P2 author repair. The two P2s in this batch are not self-CLOSED.
+Historical chronology: fixed829 origin → fixed01cc earlier review → fixed32cf/d1ab repairs → fixed1fc4 review → fixed5e21 review. Earlier verdicts describe those fixed objects only.
 
 ## 4. Evidence and nonclaims
 

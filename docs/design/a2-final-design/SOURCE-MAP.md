@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-D6 remains an author candidate. Detailed section/case/registry-pointer provenance is in [D6-SOURCE-MAP](D6-SOURCE-MAP.md), while [REVIEW-ENTRY](REVIEW-ENTRY.md) is the single detailed review-status chronology. Fixed1fc4 leaves D6 REVISE with 0 open P1 and 2 open P2; P1-01/P1-02/P2-02/P2-03 retain bounded independent closures, while P2-01 and navigation are repaired here and remain pending independent review. D7-D10 remain future full-module batches.
+Latest independent review: fixed5e21 (`5e21e9f00e1fa4e893f2544211133adbeac35ae0`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
 
 
 ## 12. D4/D5 audit-map review lineage
@@ -126,4 +126,4 @@ D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.
 
 The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
 
-D3's two bounded findings remain independently CLOSED at fixed-a62. Fixed829 remains only the origin of the five D6 findings; fixed01cc is the earlier D6 independent review object, and fixed1fc4 is the latest fixed D6 review object. P1-01/P2-03 remain CLOSED from fixed01cc; fixed1fc4 additionally CLOSED P1-02/P2-02 and the D4/D5 residual set. D6 now has only P2-01 plus A2-D6-01CC-P2-01 under this author repair; neither is self-CLOSED. D7-D10 full modules, Mandatory 925-1141 and fresh global review remain pending; runtime evidence remains UNRUN.
+Latest independent review: fixed5e21 (`5e21e9f00e1fa4e893f2544211133adbeac35ae0`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "A2 D6 fixed1fc4 two-P2 author repair: P1-01/P1-02/P2-02/P2-03 retain bounded independent closures; P2-01 and navigation are author-repaired-pending-independent; 0 open P1 / 2 pending P2; not D6/global acceptance or implementation",
+  "status": "fixed5e21 independent REVISE: 0 open P1 / 1 open P2; semantic P2-01 independently CLOSED; navigation P2 repaired by coordinator pending independent review; not D6/global acceptance",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "start_head": "32cfb9c387deddb12fb021a44147df0d7ffab322",
@@ -38075,7 +38075,7 @@
   "nonclaims": [
     "source-map mechanics and documentation checks do not certify semantic acceptance",
     "P1-01 and P2-03 are independently CLOSED only at fixed01cc and are not reopened here",
-    "P2-01/navigation are author-repaired-pending-independent only; P1-02/P2-02 retain fixed1fc4 independent closures",
+    "P2-01 independently CLOSED at fixed5e21; only navigation remains pending independent review; prior bounded closures retained",
     "not D6/global acceptance, implementation, merge, activation, release or deployment",
     "D7-D10 full modules and Mandatory 925-1141 remain pending"
   ],
@@ -38137,7 +38137,7 @@
       "closedAt": "1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc"
     },
     "A2-D6-829-P2-01": {
-      "status": "author-repaired-after-fixed1fc4-pending-independent",
+      "status": "independent-CLOSED-at-fixed5e21",
       "sources": [
         "fixed-S D6 Control blob 32a8a863... §§5-13 lines98-247",
         "fixed-S D3 SourceBinding/OriginBinding owner",
@@ -38149,7 +38149,8 @@
         "real parent/fixed97/current A2 EN/ZH path+blob evidence in bilingual_source_pairs"
       ],
       "oracle": "All 47 former hybrid groups are per-obligation audited: 27 split into 84 sub-obligations, 18 are single-disposition retained/current, 2 historical-only. Old body-SQLite/checkout-only/same-database carrier choices are superseded by F/M/P/I/D while true one-authority/retrieval/identity/continuity/completeness/idempotency duties remain explicit. Three adjacent cross-owner groups add six explicit sub-obligations. Source identities/bytes/inventories remain unchanged.",
-      "independentClose": false
+      "independentClose": true,
+      "closedAt": "5e21e9f00e1fa4e893f2544211133adbeac35ae0"
     },
     "A2-D6-829-P2-02": {
       "status": "independent-CLOSED-at-fixed1fc4",
@@ -38184,7 +38185,7 @@
       "closedAt": "01cc40b819df78fbe724f1c64c27284ad60fc6c8"
     },
     "A2-D6-01CC-P2-01": {
-      "status": "author-repaired-after-fixed1fc4-pending-independent",
+      "status": "coordinator-metadata-repaired-after-fixed5e21-pending-independent",
       "independentClose": false,
       "sources": [
         "fixed01cc independent review navigation finding",
@@ -38197,7 +38198,7 @@
         "D6-SOURCE-MAP EN/ZH + machine review fields",
         "PR #5 body"
       ],
-      "oracle": "Navigation distinguishes fixed829 finding origin, fixed01cc earlier review, fixed32cf/d1ab author chronology, fixed1fc4 latest independent review/closures, and this two-P2 repair. REVIEW-ENTRY plus D6-SOURCE-MAP are detailed status entries; D4/D5 maps link instead of duplicating D6 status. No future SHA is self-inserted and no D6/global acceptance is claimed."
+      "oracle": "Human and machine current status agrees with fixed5e21. SOURCE-MAP and D4/D5 machine maps reference this detailed D6 state, preserve fixed1fc4 D4/D5 closure and explicitly qualify older reviews as history. No new semantic disposition or global acceptance is claimed."
     }
   },
   "review_fixed_sha": "829efce6aacbe944714e093c98065b01d50b2593",
@@ -38218,8 +38219,8 @@
     "lexicon_en": "4b63173f660b55bc220659320cf0834abae07b2b",
     "lexicon_zh": "d1434f8d3d244c07c1a6034cff2a8e5fe4afb14e",
     "registry": "678db2c6b0316d6c431bcfe494add46cfd2a6e11",
-    "source_map_human_en": "2f01facc69adb505158626c6f4b599ebcbc5f213",
-    "source_map_human_zh": "c1ff067999e88c39c7ac27705dd3d9635ecf2d3d"
+    "source_map_human_en": "7db332483d2d842be37e8a1366f62fe75f1c63e8",
+    "source_map_human_zh": "f82868c5f7dc85df4e56aefa9e91896173e65f95"
   },
   "bilingual_sync": {
     "status": "current residual repair synchronized at blob level; semantic closure still requires new exact-stop independent review",
@@ -38349,18 +38350,18 @@
       "role": "current-A2-D6-source-map-human",
       "english": {
         "path": "docs/design/a2-final-design/D6-SOURCE-MAP.md",
-        "blob": "2f01facc69adb505158626c6f4b599ebcbc5f213"
+        "blob": "7db332483d2d842be37e8a1366f62fe75f1c63e8"
       },
       "chinese": {
         "path": "docs/design/a2-final-design/D6-SOURCE-MAP.zh-CN.md",
-        "blob": "c1ff067999e88c39c7ac27705dd3d9635ecf2d3d"
+        "blob": "f82868c5f7dc85df4e56aefa9e91896173e65f95"
       }
     }
   ],
   "original_five_finding_repair_start_head": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a",
   "review_fixed_sha_role": "fixed829 finding-origin review object; retained as provenance",
   "repair_review_head": "01cc40b819df78fbe724f1c64c27284ad60fc6c8",
-  "repair_review_head_role": "non-author independent review of the completed fixed01cc D6 candidate",
+  "repair_review_head_role": "historical fixed01cc independent review; repair_review_result is its historical verdict, not current state",
   "repair_start_head": "32cfb9c387deddb12fb021a44147df0d7ffab322",
   "final_stop_binding": "Exact final stop SHA is intentionally recorded in PR metadata and author handoff after all changed blobs materialize; this machine map does not self-hash an unknown future commit.",
   "repair_review_result": {
@@ -38385,29 +38386,30 @@
     ],
     "d4d5_direct_target_regression": "PASS at fixed01cc only; does not close the separately reviewed fixed32cf R1/R2 object or global A2"
   },
-  "current_repair_start_head": "1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc",
-  "current_repair_start_head_role": "author start for the two residual P2 repairs after fixed1fc4 independent review",
-  "latest_independent_review_sha": "1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc",
-  "latest_independent_review_role": "non-author fixed review of the completed pre-this-batch candidate",
+  "current_repair_start_head": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
+  "current_repair_start_head_role": "coordinator metadata-only repair after fixed5e21 bounded review",
+  "latest_independent_review_sha": "5e21e9f00e1fa4e893f2544211133adbeac35ae0",
+  "latest_independent_review_role": "latest non-author bounded semantic/navigation review; not global acceptance",
   "latest_independent_review_result": {
     "verdict": "REVISE",
     "residual_findings": {
       "P1": 0,
-      "P2": 2
+      "P2": 1
     },
-    "independently_closed_at_fixed1fc4": [
-      "A2-D6-829-P1-02",
-      "A2-D6-829-P2-02",
-      "A2-D4D5:P2-01 bounded residual set"
+    "newFindings": 0,
+    "newly_closed": [
+      "A2-D6-829-P2-01"
     ],
     "retained_prior_closures": [
       "A2-D6-829-P1-01",
-      "A2-D6-829-P2-03",
-      "A2-D4D5:P2-02 bounded fixed4282",
-      "bounded D1/D2 and D3 findings"
+      "A2-D6-829-P1-02",
+      "A2-D6-829-P2-02",
+      "A2-D6-829-P2-03"
+    ],
+    "open_at_review": [
+      "A2-D6-01CC-P2-01"
     ],
     "pending_after_this_author_repair": [
-      "A2-D6-829-P2-01",
       "A2-D6-01CC-P2-01"
     ],
     "acceptance": "not D6/global acceptance"
@@ -38464,6 +38466,33 @@
         "idempotent replay",
         "no silent LWW/multi-master author commit"
       ]
+    }
+  },
+  "historical_review_fixed1fc4": {
+    "sha": "1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc",
+    "role": "historical fixed-object verdict only",
+    "result": {
+      "verdict": "REVISE",
+      "residual_findings": {
+        "P1": 0,
+        "P2": 2
+      },
+      "independently_closed_at_fixed1fc4": [
+        "A2-D6-829-P1-02",
+        "A2-D6-829-P2-02",
+        "A2-D4D5:P2-01 bounded residual set"
+      ],
+      "retained_prior_closures": [
+        "A2-D6-829-P1-01",
+        "A2-D6-829-P2-03",
+        "A2-D4D5:P2-02 bounded fixed4282",
+        "bounded D1/D2 and D3 findings"
+      ],
+      "pending_after_this_author_repair": [
+        "A2-D6-829-P2-01",
+        "A2-D6-01CC-P2-01"
+      ],
+      "acceptance": "not D6/global acceptance"
     }
   }
 }

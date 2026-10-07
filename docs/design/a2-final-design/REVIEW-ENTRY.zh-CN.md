@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D6 作者候选复核入口——fixed1fc4 后两项 P2 交回
+# A2 D1–D6 作者候选复核入口——fixed5e21 后导航修订
 
-状态：仅作者候选；未独立接受、未实现、未合并、未发布、未部署、未全局冻结。fixed1fc4 独立复核后，D6 仍为 **REVISE，0 个开放 P1、2 个开放 P2**。本作者批次修这两项 P2；在新的 exact-stop 非作者复核前，两项都只标 author-resolved-pending-independent。
+最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -16,7 +16,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 受保护 inputs blob：787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 候选 branch：docs/a2-final-design-integration。
 
-D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第一次非作者修订复核是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。四残余作者修订从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续窄修经过 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。下一轮独立复核把完成候选固定在 `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。本两项 P2 作者修订从该精确 head 开始。
+D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第一次非作者修订复核是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。四残余作者修订从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续窄修经过 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。下一轮独立复核把完成候选固定在 `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。此前两项 P2 修订从该 head 开始。最新独立复核固定 5e21e9f00e1fa4e893f2544211133adbeac35ae0 并关闭语义 P2；本次纯元数据修订从 fixed5e21 开始。
 
 下一位非作者复核者必须绑定 PR metadata/交接记录的实际 final stop SHA，不得追 moving branch。
 
@@ -31,7 +31,7 @@ D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第�
 
 上述有界结论都不构成 D6 或全局 A2 接受。
 
-## 3. 本作者批次修订的两项 D6 P2
+## 3. 保留的语义修订与当前导航修订
 
 ### P2-01
 
@@ -43,9 +43,9 @@ D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第�
 
 ### Navigation P2
 
-`A2-D6-01CC-P2-01` 通过把本文与 D6-SOURCE-MAP 设为 D6 详细状态/provenance 的单一入口来修订。D4/D5 human map 不再复制易漂移的 D6 stop/status，而是链接到这两个入口；A2 README 与 A2 SOURCE-MAP 同步 fixed1fc4 复核状态。
+最新独立复核：fixed5e21（`5e21e9f00e1fa4e893f2544211133adbeac35ae0`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。
 
-当前有界时间线是：fixed829 finding origin → fixed01cc 复核及既往关闭 → `32cfb9c387deddb12fb021a44147df0d7ffab322` 作者修订起点 → `d1ab2a5c0762450877614ad14340a26cfa0c1dfd` follow-up → fixed1fc4 独立复核关闭 P1-02/P2-02 与 D4/D5 残余集 → 本两项 P2 作者修订。本批两项 P2 不得自行标 CLOSED。
+历史时间线：fixed829 来源 → fixed01cc 较早复核 → fixed32cf/d1ab 修订 → fixed1fc4 复核 → fixed5e21 复核。较早裁决只描述各自固定对象。
 
 ## 4. 证据与非声明边界
 

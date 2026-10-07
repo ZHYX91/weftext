@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "status": "A2 D5 author source/case audit map; P2-02 independently CLOSED bounded at fixed4282; P2-01 R1/R2 author-resolved-pending-independent; no D6/D7-D10/global acceptance",
+  "status": "A2 D5 audit map: P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "protected_inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -25578,8 +25578,8 @@
   "review_state": {
     "d1d2": "fixed-446 independent findings CLOSED; retained",
     "d3": "fixed-a62 independent narrow review CLOSED D3:P1-01 and D3:P1-02",
-    "d5": "fixed-a62 a62aa7d4eaf56113cd1e9e32336ae8814f83589b non-author review request 7b6e1f16-fa41-499c-b078-647f1942e94e: semantic LIMITED PASS, audit package REVISE with P2-01/P2-02; this repair remains author-resolved-pending-independent only",
-    "d6": "author candidate stopped at 829; fixed-829 read-only review does not establish D6 acceptance",
+    "d5": "P2-01 bounded CLOSED after fixed1fc4; P2-02 bounded CLOSED at fixed4282; earlier fixed-a62 LIMITED PASS retained without expanding scope",
+    "d6": "Current D6 status: D6-SOURCE-MAP.json#/latest_independent_review_result; chronology and boundaries: REVIEW-ENTRY.md (Chinese: REVIEW-ENTRY.zh-CN.md)",
     "pending": "D7-D10 full modules, Mandatory 925-1141, fresh Pro/global review",
     "runtime_os_gui_replica": "UNRUN"
   },
@@ -26871,7 +26871,7 @@
     "chineseRowsMatched": 130,
     "missing": 0,
     "rowCountsAreInventoryOnly": true,
-    "actualOwnerRemap": "fixed32cf independently passed 117/130 D5 R1 mappings; 13 residual row(s) repaired after that review and remain author-resolved-pending-independent"
+    "actualOwnerRemap": "130/130 cumulative bounded R1 pass: fixed32cf prior pass plus all 13 residuals independently passed at fixed1fc4; not a fresh full-module review"
   },
   "d10_direct_source_qualification": [
     {
@@ -27908,33 +27908,44 @@
   ],
   "p2_repair_state": {
     "A2-D4D5:P2-01": {
-      "status": "R2-independent-CLOSED-at-fixed32cf; R1-residuals-author-resolved-pending-independent",
-      "independentClose": false,
-      "fixedReviewSha": "32cfb9c387deddb12fb021a44147df0d7ffab322",
-      "fixedReviewVerdict": "REVISE P0=0/P1=0/P2=1",
+      "status": "independent-CLOSED-bounded-at-fixed1fc4",
+      "independentClose": true,
+      "fixedReviewSha": "1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc",
+      "fixedReviewVerdict": "bounded P2-01 CLOSED; all 14 residuals passed, prior R2 and 188/202 R1 retained",
       "r2": {
         "status": "independent-CLOSED",
         "basis": "Mandatory 303/304 recurrence+derived occurrence, 305 heading metadata, and 306 connector/control split accepted at fixed32cf."
       },
       "r1": {
-        "status": "author-resolved-pending-independent",
-        "fixedReviewPassed": "117/130",
-        "residualIds": [
-          "AD2-29",
-          "N36-06",
-          "M37-08",
-          "M38-11",
-          "M39-06",
-          "FC4R-PROD-10",
-          "FC4R-TABLE-01",
-          "FC4R-TABLE-02",
-          "FC4R-TABLE-05",
-          "FC4R-TABLE-06",
-          "FC4R-TABLE-08",
-          "FC34B-HOLDER-04",
-          "FC34B-HOLDER-05"
-        ],
-        "basis": "The listed residual rows are remapped here to their actual current owners/clauses; independent re-review is still required."
+        "status": "independent-CLOSED-bounded",
+        "fixedReviewPassed": "130/130 cumulative",
+        "residualIds": [],
+        "basis": "All residual IDs preserved in historical_fixed32cf were independently passed at fixed1fc4; unchanged underlying row/target mapping retained."
+      },
+      "historical_fixed32cf": {
+        "role": "historical fixed-object verdict only",
+        "sha": "32cfb9c387deddb12fb021a44147df0d7ffab322",
+        "verdict": "REVISE P0=0/P1=0/P2=1",
+        "r1": {
+          "status": "author-resolved-pending-independent",
+          "fixedReviewPassed": "117/130",
+          "residualIds": [
+            "AD2-29",
+            "N36-06",
+            "M37-08",
+            "M38-11",
+            "M39-06",
+            "FC4R-PROD-10",
+            "FC4R-TABLE-01",
+            "FC4R-TABLE-02",
+            "FC4R-TABLE-05",
+            "FC4R-TABLE-06",
+            "FC4R-TABLE-08",
+            "FC34B-HOLDER-04",
+            "FC34B-HOLDER-05"
+          ],
+          "basis": "The listed residual rows are remapped here to their actual current owners/clauses; independent re-review is still required."
+        }
       }
     },
     "A2-D4D5:P2-02": {
