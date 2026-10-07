@@ -1751,6 +1751,6 @@
       "D8-ACCEPTANCE.md",
       "D8-ACCEPTANCE.zh-CN.md"
     ],
-    "rule": "JSON is the sole six-field structural authority for inherited cases and current overlay. Human tables are bilingual semantic projections preserving row IDs, positive/negative polarity, contract boundaries, and evidence/status boundaries; projected cells must not contain raw table delimiters."
+    "rule": "JSON is the sole structural authority. inheritedCases rows are exactly {id,group,positive,negative,contract,evidence}; currentOverlay rows are exactly {id,scenario,positive,negative,contract,status}. Human tables are bilingual semantic projections preserving the exact ID union/order, positive/negative polarity, contract boundaries, and evidence/status boundaries; projected cells must escape table delimiters."
   }
 }
