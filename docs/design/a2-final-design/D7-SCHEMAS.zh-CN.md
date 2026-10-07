@@ -161,7 +161,7 @@ portable current D6:
   ChangeRecord/1
 ```
 
-即使 contained production version 相同，SourceVersion 与 SourceObservation 仍是不同 domain。fresh read 可以为同一 authenticated production version 建立新的 current Observation，但不能改写 saved Locator、DefinitionAddress、prepared selector、Query result 或 ActionEvidence。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+即使 contained production version 相同，SourceVersion 与 SourceObservation 仍是不同 domain。fresh read 可以为同一 authenticated production version 建立新的 current Observation，但不能改写 saved Locator、DefinitionAddress、prepared selector、Query result 或 ActionEvidence。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ## 8. Strict JSON 与 numeric decode；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
 
@@ -171,7 +171,7 @@ D7 integer/decimal 保持 retained Value/CEL profile 的 exact canonical textual
 
 ## 9. Query execution closure
 
-Query outer 仍为 wireVersion2，完整 QuerySpec/1 author grammar 位于 d7/owners/query-algebra。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 共同形成一条 closed path。unknown feature 或 unavailable dependency 不能被转换为空 bag。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。
+Query outer 仍为 wireVersion2，完整 QuerySpec/1 author grammar 位于 d7/owners/query-algebra。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 共同形成一条 closed path。unknown feature 或 unavailable dependency 不能被转换为空 bag。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ## 10. Search schema boundary
 
