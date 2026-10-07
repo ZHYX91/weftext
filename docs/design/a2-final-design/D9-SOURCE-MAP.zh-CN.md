@@ -15,7 +15,7 @@ translation_status: source
 - current D9 owner afterimage：八组中英文件均 FULL。
 - Mandatory source §14 的 884–924 行：FULL。
 - current D7 D9-binding 与 PreparedActionBinding owner 中英对：FULL。
-- final AsciiDoc/Annotation successor：D9 直接相关 SPEC/SCHEMAS/ACCEPTANCE 中英均已读；fresh author submission currentize 到 wire13/PAB4/Effect3，export/publication currentize 到 Plan3/Receipt3。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+- final AsciiDoc/Annotation successor：已完整阅读 D9 直接相关的 SPEC/SCHEMAS/ACCEPTANCE 中英文；fresh author submission 已更新到 wire13/PAB4/Effect3，export/publication 已更新到 Plan3/Receipt3。
 - D10：只读取具名 D9 direct intersection，记为 PARTIAL；完整 D10 仍 UNREAD，留后续。
 
 本 D9 批唯一 A2 具名语义修订是 qualified native-table 的 Office authoring spelling：唯一 lowercase-ASCII leaf 继续使用 data.native_table.COLUMN；fresh qualified/non-ASCII binding 使用可见 native.table[...]::column[...] bytes。FC 的 nt_/nc_ identifier 只作为 internal compiled Plan key，不能替代自包含 template bytes。真实 historical frozen record 逐字保留。
