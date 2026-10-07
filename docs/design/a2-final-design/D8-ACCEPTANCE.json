@@ -1674,33 +1674,33 @@
     },
     {
       "id": "VIEW-BLD-03",
-      "scenario": "pie zero/negative/duplicate/count",
-      "positive": "A statically legal pie ViewSpec can be saved independently of current result values; on a complete current result, legal zero-total follows the named D7 state and all runtime value/key/category rules are enforced.",
-      "negative": "Negative values, illegal zero-total, duplicate semantic keys, excess categories, implicit Other/top-N/drop, or renderer coercion fails the runtime View gate, renders nothing, and does not invalidate or mutate the saved definition.",
+      "scenario": "pie zero-total, negative, duplicate and category limits",
+      "positive": "A statically legal current pie ViewSpec can be saved without reading ResultHandle values. On a complete current result, zero-total is the named legal D7 empty-total state and preserves zero-valued rows in the accessible table.",
+      "negative": "Negative values, duplicate semantic keys, excess categories, implicit Other/top-N/drop, unit/domain violations, or renderer coercion fail the runtime View gate, render nothing, and never invalidate or mutate the saved legal definition.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#3",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-04",
-      "scenario": "hierarchy and cycle",
-      "positive": "Definition-save handling preserves every statically legal authored hierarchy member losslessly and routes unsupported controls to advanced/source; runtime validation checks the complete current hierarchy before any supported rendering.",
-      "negative": "Missing parent, self/cycle, or same-id-different-label data fails the runtime View gate and is never UI-repaired; deferred tree/treemap rendering stays unsupported without invalidating preserved legal author bytes.",
+      "scenario": "deferred tree layouts and current network boundary",
+      "positive": "Current ViewSpec/1 network remains a legal closed layout with its existing circle_v1/layered_v1 semantics. tree/treemap/sunburst are deferred and fail the definition-save static gate with unsupported_layout before any ResultHandle or renderer check; exact raw Source and genuine historical/future bytes remain preservable only under their real owner/decoder.",
+      "negative": "Advanced/source routing never expands the current ViewSpec/1 union or turns deferred tree bytes into a legal current definition. D8 invents no current missing-parent/self/cycle/same-id-label runtime validator for those deferred layouts and never UI-repairs such data; the full Mandatory §15.7#4 obligations remain requirements for a future named successor.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#4",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-05",
-      "scenario": "Gantt/dependency/deferred boundary",
-      "positive": "Definition-save handling preserves statically legal authored Gantt-related members exactly through open/cancel/save/reopen and keeps the unsupported graphical route explicit; runtime value checks occur only when a supported consumer exists.",
-      "negative": "Mixed invalid date/instant data, end-before-start, invalid progress/dependency, or a deferred Gantt renderer cannot be normalized, rendered, or claimed supported, and runtime failure does not rewrite preserved legal author bytes.",
+      "scenario": "deferred Gantt/dependency boundary",
+      "positive": "Current timeline remains the supported closed interval layout under its existing semantics. Gantt is deferred and a current ViewSpec/1 definition using it fails the definition-save static gate with unsupported_layout; raw Source and genuine historical/future bytes remain exact under their real owner/decoder and are not silently upgraded.",
+      "negative": "Advanced/source routing cannot make Gantt a legal current ViewSpec. D8 does not invent current runtime validators for mixed date/instant, end-before-start, progress, unknown/self/cycle/hidden predecessors or read-only dependency rules; those complete Mandatory §15.7#5 obligations remain explicit requirements for a future named successor, and timeline never masquerades as scheduling.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#5",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-06",
-      "scenario": "boxplot/quantile/deferred boundary",
-      "positive": "Definition-save handling preserves statically legal authored members through builder/advanced routing; supported alternatives may consume existing complete current data without D8 inventing quantiles.",
-      "negative": "Bad runtime quartile order fails the runtime View gate; D8 never calculates quantiles or enables deferred boxplot merely because a chart library can, and the saved legal definition is not rewritten.",
+      "scenario": "deferred boxplot/quantile boundary",
+      "positive": "Current supported layouts such as table may display raw observations or statistics already produced explicitly by Query. boxplot/quantile are deferred and fail the current ViewSpec/1 definition-save static gate with unsupported_layout; exact raw Source and genuine historical/future bytes stay under their real owner/decoder.",
+      "negative": "Advanced/source routing cannot legalize boxplot/quantile as current ViewSpec/1. D8 never calculates private quantiles, infers quartiles, or invents a current quartile-order runtime validator; the complete Mandatory §15.7#6 quartile-order/raw-observation obligations remain explicit requirements for a future named successor.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#6",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
