@@ -3,20 +3,14 @@
   "version": 1,
   "status": "author-resolved-pending-independent-review",
   "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
-  "structureAuthority": {
-    "canonical": "D9-ACCEPTANCE.json",
-    "projections": [
-      "D9-ACCEPTANCE.md",
-      "D9-ACCEPTANCE.zh-CN.md"
-    ]
-  },
+  "structureAuthority": "D9-ACCEPTANCE.json is the sole row authority; EN/ZH Markdown tables are projections preserving ID order, positive/negative polarity, contract and evidence boundaries. New M15 and ANNEXP rows are design oracles only.",
   "counts": {
     "sourceOwned": 53,
     "r02r03r04": 8,
-    "mandatory": 10,
-    "current": 9,
-    "total": 80,
-    "uniqueIds": 80
+    "mandatory": 20,
+    "current": 16,
+    "total": 97,
+    "uniqueIds": 97
   },
   "rows": [
     {
@@ -2094,6 +2088,216 @@
       "status": "author-resolved-pending-independent-review"
     },
     {
+      "id": "M15-01",
+      "scenario": {
+        "en": "Wide multi-measure and duplicate bar series",
+        "zh": "宽表多指标与重复柱图 series"
+      },
+      "positive": {
+        "en": "Query supplies the accepted explicit long-form rows and D7 runtime validation proves unique semantic keys before Plan4 freezes one exact ViewSpec and renderer profile.",
+        "zh": "Query 显式产生已接受的 long-form rows；D7 runtime validation 在 Plan4 冻结唯一 ViewSpec 与 renderer profile 前证明 semantic key 唯一。"
+      },
+      "negative": {
+        "en": "No renderer melt/unpivot, display-label series identity, duplicate-key merge, implicit aggregation or hidden re-query may create chart semantics.",
+        "zh": "renderer 不得自行 melt/unpivot，不得用 display label 当 series identity，不得合并 duplicate key、隐式聚合或隐藏重跑 Query。"
+      },
+      "contract": "Mandatory §15.5/§15.7#1/§15.8.1; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-02",
+      "scenario": {
+        "en": "Line order, gaps and deterministic delivery",
+        "zh": "折线顺序、缺口与确定性交付"
+      },
+      "positive": {
+        "en": "The exact complete D7 result establishes order; line runtime validation requires monotonic x per series and the frozen Plan preserves Query/panel/legend order across renderer/export.",
+        "zh": "精确完整 D7 result 建立顺序；line runtime validation 要求每个 series 的 x 单调，frozen Plan 在 renderer/export 间保持 Query/panel/legend 顺序。"
+      },
+      "negative": {
+        "en": "No renderer sorting, locale/map iteration order, duplicate/disordered x repair, fabricated gap or partial-page ordering.",
+        "zh": "不得由 renderer 排序，不得使用 locale/map iteration order，不得修复 duplicate/disordered x、伪造 gap 或使用 partial page 顺序。"
+      },
+      "contract": "Mandatory §15.5/§15.7#2/§15.8.2; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-03",
+      "scenario": {
+        "en": "Pie values, zero/negative/domain and category limits",
+        "zh": "饼图数值、零/负值、domain 与类别限制"
+      },
+      "positive": {
+        "en": "A complete result passes the existing D7 pie/domain/unit/budget rules before renderer binding; valid zero-total uses the named D7 state and exact loss/profile semantics.",
+        "zh": "完整 result 必须先通过既有 D7 pie/domain/unit/budget 规则才可绑定 renderer；合法 zero-total 使用 D7 具名状态与精确 loss/profile 语义。"
+      },
+      "negative": {
+        "en": "Negative values, illegal zero-total, duplicate keys, excess categories, unit mismatch, implicit Other/top-N/drop or renderer coercion fail rather than alter data.",
+        "zh": "负值、非法 zero-total、duplicate key、类别超限、unit mismatch、隐式 Other/top-N/drop 或 renderer coercion 都必须失败，不能改写数据。"
+      },
+      "contract": "Mandatory §15.5/§15.7#3/§15.8.3–15.8.4; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-04",
+      "scenario": {
+        "en": "Hierarchy/cycle and deferred tree/treemap export",
+        "zh": "层级/循环与延期 tree/treemap 导出"
+      },
+      "positive": {
+        "en": "Legal authored hierarchy members remain preserved by D7/D8; D9 chart export reports renderer_unavailable for deferred hierarchy layouts while retaining exact ViewSpec/data for another valid consumer.",
+        "zh": "合法 hierarchy 作者成员继续由 D7/D8 保留；D9 chart export 对延期 hierarchy layout 返回 renderer_unavailable，同时保持精确 ViewSpec/data 供其它合法 consumer 使用。"
+      },
+      "negative": {
+        "en": "No missing-parent/cycle repair, parent-value inference, hidden tree conversion, or rows-as-chart substitution is allowed.",
+        "zh": "不得修复 missing parent/cycle，不得推断 parent value，不得隐藏转换成 tree，也不得用 rows 冒充 chart。"
+      },
+      "contract": "Mandatory §15.7#4/§15.8.7; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-05",
+      "scenario": {
+        "en": "Gantt/dependency deferred export",
+        "zh": "Gantt/dependency 延期导出"
+      },
+      "positive": {
+        "en": "Legal Gantt-related author bytes remain losslessly represented, but D9's first chart profile returns stable renderer_unavailable until a closed D7 layout exists.",
+        "zh": "合法 Gantt 相关作者字节继续无损表示，但在 D7 存在封闭 layout 前，D9 第一代 chart profile 稳定返回 renderer_unavailable。"
+      },
+      "negative": {
+        "en": "No renderer-defined interval/dependency kind/lag/calendar semantics, date coercion or silent table replacement may claim Gantt support.",
+        "zh": "不得由 renderer 自定义 interval/dependency kind/lag/calendar 语义，不得 date coercion，也不得以静默 table 替换冒充 Gantt support。"
+      },
+      "contract": "Mandatory §15.7#5/§15.8.7; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-06",
+      "scenario": {
+        "en": "Boxplot/quantile deferred export",
+        "zh": "箱线图/分位数延期导出"
+      },
+      "positive": {
+        "en": "Existing complete data remains available to supported consumers, while D9's first chart profile returns renderer_unavailable for boxplot/quantile layouts.",
+        "zh": "现有完整数据仍可供受支持 consumer 使用，但 D9 第一代 chart profile 对 boxplot/quantile layout 返回 renderer_unavailable。"
+      },
+      "negative": {
+        "en": "No D9 quantile calculation, quartile repair, chart-library passthrough or hidden statistical derivation.",
+        "zh": "D9 不得计算 quantile、修复 quartile、直接透传 chart library，也不得隐藏派生统计量。"
+      },
+      "contract": "Mandatory §15.7#6/§15.8.7; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-07",
+      "scenario": {
+        "en": "Complete result, empty states and first-page rejection",
+        "zh": "完整结果、empty state 与首分页拒绝"
+      },
+      "positive": {
+        "en": "Plan4 freezes a View only after the current complete ResultHandle and D7 runtime gate distinguish empty/zero/none from unavailable/stale/incomplete and bind complete-result evidence.",
+        "zh": "Plan4 只有在现任完整 ResultHandle 与 D7 runtime gate 区分 empty/zero/none 与 unavailable/stale/incomplete 并绑定完整结果证据后才冻结 View。"
+      },
+      "negative": {
+        "en": "First page, stale cache, timeout, partial cursor, old epoch or fabricated complete-zero can never produce a semantic chart Plan.",
+        "zh": "首分页、stale cache、timeout、partial cursor、旧 epoch 或伪造 complete-zero 都不能产生 semantic chart Plan。"
+      },
+      "contract": "Mandatory §15.5/§15.7#7/§15.8.4; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-08",
+      "scenario": {
+        "en": "Authorization/reset/schema/profile/renderer currentness",
+        "zh": "授权、reset、schema/profile/renderer 现任性"
+      },
+      "positive": {
+        "en": "Query authorization generation, epoch, ViewSpec hash, renderer/profile version and actual asset evidence are frozen and rechecked before delivery; schema/profile changes require a new Plan.",
+        "zh": "Query authorization generation、epoch、ViewSpec hash、renderer/profile version 与实际 asset evidence 必须冻结并在交付前复验；schema/profile 改变要求 new Plan。"
+      },
+      "negative": {
+        "en": "No old result after reset, stale renderer/profile, field-label rebinding, provider failure as empty data, or cached output reuse after currentness loss.",
+        "zh": "不得在 reset 后使用旧 result，不得用 stale renderer/profile、按 field label 重绑定、把 provider failure 当 empty data，或在 currentness 丢失后复用 cached output。"
+      },
+      "contract": "Mandatory §15.5/§15.7#8/§15.8.8; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-09",
+      "scenario": {
+        "en": "Cross-surface CJK/RTL/print/assets/accessibility/loss",
+        "zh": "跨端 CJK/RTL/print/assets/accessibility/loss"
+      },
+      "positive": {
+        "en": "Named DOCX/XLSX/PDF/SVG/PNG/print profiles freeze exact font/color/page/accessibility assets, preserve logical order and CJK/RTL, emit same-data accessible table plus title/description alt semantics, and report every target loss.",
+        "zh": "具名 DOCX/XLSX/PDF/SVG/PNG/print profile 冻结精确 font/color/page/accessibility asset，保持逻辑顺序与 CJK/RTL，输出同数据 accessible table 与 title/description alt 语义，并报告全部 target loss。"
+      },
+      "negative": {
+        "en": "No device font/theme default, color-only meaning, omitted alt/accessibility data, non-deterministic palette/order, or Office-template bypass; §14 still applies to Office routes.",
+        "zh": "不得使用设备 font/theme 默认值，不得仅靠颜色表达含义，不得遗漏 alt/accessibility data，不得 palette/order 非确定，也不得绕过 Office template；Office route 继续满足 §14。"
+      },
+      "contract": "Mandatory §15.5–15.7#9/§15.8.6/§15.8.8; Mandatory §14; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M15-10",
+      "scenario": {
+        "en": "Dashboard/block isolation and one-result panel scope",
+        "zh": "Dashboard/block 隔离与单结果 panel scope"
+      },
+      "positive": {
+        "en": "Each View block freezes and validates its own complete result/binding/assets; one denied or unavailable block remains an isolated error while unrelated authorized blocks remain usable.",
+        "zh": "每个 View block 独立冻结并验证自己的完整 result/binding/assets；一个 denied/unavailable block 只保留自身错误，其它已授权 block 继续可用。"
+      },
+      "negative": {
+        "en": "No cross-block hidden reads, authorization sharing, implicit joins, poisoning of unrelated blocks, or Dashboard-wide View/Query authority.",
+        "zh": "不得跨 block 隐藏读取、共享 authorization、隐式 join、污染无关 block，也不得建立 Dashboard-wide View/Query authority。"
+      },
+      "contract": "Mandatory §15.7#10/§15.8.5; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
       "id": "CUR-01",
       "scenario": {
         "en": "Current author versions",
@@ -2121,14 +2325,14 @@
         "zh": "当前 export 版本"
       },
       "positive": {
-        "en": "Fresh export/publication strict-decodes ExportPlan3/PublicationReceipt3 with complete pins, order, names and recovery.",
-        "zh": "fresh export/publication strict-decode ExportPlan3/PublicationReceipt3，并完整保留 pins/order/names/recovery。"
+        "en": "Fresh unseen export/publication strict-decodes ExportPlan4/PublicationReceipt4 (or PrintReceipt1) with complete pins/order/names; recorded Plan/Receipt1-3 retain exact recovery.",
+        "zh": "fresh unseen export/publication strict-decode ExportPlan4/PublicationReceipt4（或 PrintReceipt1）并保留完整 pins/order/names；已记录 Plan/Receipt1-3 保持精确 recovery。"
       },
       "negative": {
-        "en": "Historical Plan/Receipt1/2 never repin, rename, re-encode or read-time-sort into current.",
-        "zh": "historical Plan/Receipt1/2 不 repin、rename、re-encode 或 read-time-sort 成 current。"
+        "en": "No Plan/Receipt1-3 repin, rename, re-encode, read-time sort or migration into /4.",
+        "zh": "不得把 Plan/Receipt1-3 repin、rename、re-encode、read-time sort 或迁移成 /4。"
       },
-      "contract": "D9 Main §12; FC SCHEMAS §6.5",
+      "contract": "D9 Main §12; D9 Schemas §§9–13; final FC SCHEMAS §6.6",
       "evidence": {
         "en": "author design evidence; independent review pending",
         "zh": "作者设计证据；等待独立复核"
@@ -2268,40 +2472,166 @@
         "zh": "Current Annotation Value/4 / R6 export-copy-import consumer 边界"
       },
       "positive": {
-        "en": "Node-template omission remains scoped to Node-template construction. Any D9 profile that actually exports current Annotation content consumes the complete PortableAnnotationRecord/4 and D3-Annotation-Value/4 through the current owner read chain; portable backup preserves exact inline source/attribution/reply/target, rendered Review Bundle uses the sole R6 AnnotationInlineProfile and discloses target context only under its own permissions.",
-        "zh": "Node Template omission 只作用于 Node Template construction。任何真正导出 current Annotation content 的 D9 profile 都必须通过 current owner read chain 消费完整 PortableAnnotationRecord/4 与 D3-Annotation-Value/4；portable backup 保留 exact inline source/attribution/reply/target，rendered Review Bundle 只使用唯一 R6 AnnotationInlineProfile，并且 target context 只在自身权限成功时披露。"
+        "en": "Node-template omission remains construction-only. Actual current Annotation content export uses the closed annotation_content carrier from one exact D8AnnotationReadResponse/1, PortableAnnotationRecord/4 canonical pin and sole R6 body result; backup and Review Bundle then follow their distinct closed projections.",
+        "zh": "Node Template omission 只作用于 construction。真正的现任 Annotation 内容导出使用封闭 annotation_content carrier，它逐字来自一次 D8AnnotationReadResponse/1、PortableAnnotationRecord/4 canonical pin 与唯一 R6 body result；backup 与 Review Bundle 再进入各自封闭 projection。"
       },
       "negative": {
-        "en": "annotation_index is omission-directory evidence only and cannot stand in for Annotation body reads. No historical plain_text fallback, second parser, hidden-target leak, text-guessed locator, authenticated-origin fabrication, or global plain-only downgrade is allowed.",
-        "zh": "annotation_index 仅是 omission-directory evidence，不能替代 Annotation body read。不得 historical plain_text fallback、第二 parser、hidden-target leak、按 text 猜 locator、伪造 authenticated origin，也不得把 Node Template 的省略扩大成全局 plain-only。"
+        "en": "annotation_index is omission-only. No D7 annotation_body string, historical plain_text, second parser, hidden-target leak or guessed locator may replace the complete carrier.",
+        "zh": "annotation_index 只用于 omission。不得用 D7 annotation_body string、historical plain_text、第二 parser、hidden-target leak 或猜测 locator 替代完整 carrier。"
       },
-      "contract": "D9 Main §13a; D9 Schemas §16a; final FC SPEC §§9.1–9.12,16; SCHEMAS §7",
+      "contract": "D9 Main §13a; D9 Schemas §16a; final FC SCHEMAS §§6.6,7; SPEC §§9.1–9.12,16a",
       "evidence": {
         "en": "author design/current-owner integration; product R6/Review Bundle execution UNRUN",
         "zh": "作者设计/current-owner 整合；产品 R6/Review Bundle 执行 UNRUN"
       },
-      "status": "author-resolved-pending-independent-review",
-      "source": {
-        "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-        "ranges": [
-          "§9.1–9.12 L476–674",
-          "§16 L940–977"
-        ],
-        "schemaPath": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "schemaRanges": [
-          "§7 L2261–2371"
-        ],
-        "acceptanceIds": [
-          "AN2-39",
-          "FC4B-D8-03",
-          "FC4B-LIFE-03",
-          "FC4C-READ-02",
-          "FC4C-READ-06",
-          "FC4C-SUG-10",
-          "FC4C-STORE-08",
-          "FC4C-STORE-12"
-        ]
-      }
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "ANNEXP-01",
+      "scenario": {
+        "en": "Readable Annotation body with hidden target",
+        "zh": "可读 Annotation 正文、target 隐藏"
+      },
+      "positive": {
+        "en": "A current annotation_content carrier freezes exact AnnotationRef/Observation/revision/PortableRecord4 pin and R6 body. Review Bundle exports body, attribution and reply while targetResolution/context remain unavailable.",
+        "zh": "现任 annotation_content carrier 冻结精确 AnnotationRef/Observation/revision/PortableRecord4 pin 与 R6 body。Review Bundle 导出正文、署名与 reply，同时 targetResolution/context 保持 unavailable。"
+      },
+      "negative": {
+        "en": "Hidden target must not suppress readable body/attribution or leak target bytes/label; annotation_index and D7 annotation_body strings cannot substitute for the carrier.",
+        "zh": "隐藏 target 不得压掉可读 body/attribution，也不得泄露 target bytes/label；annotation_index 与 D7 annotation_body string 都不能替代 carrier。"
+      },
+      "contract": "D9 Main §13a; final FC SCHEMAS §6.6; SPEC §16a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "ANNEXP-02",
+      "scenario": {
+        "en": "Portable Annotation backup exact records",
+        "zh": "Portable Annotation backup 精确记录"
+      },
+      "positive": {
+        "en": "annotation_backup emits canonical D9AnnotationBackupFile/1 over exact selected PortableAnnotationRecord/4 values including exact inline source, reply and attribution.",
+        "zh": "annotation_backup 以精确选中的 PortableAnnotationRecord/4 value 生成 canonical D9AnnotationBackupFile/1，包含 exact inline source、reply 与 attribution。"
+      },
+      "negative": {
+        "en": "Backup serializes no current permission/capability, Observation token, PAB, ActionEvidence, guessed locator or authenticated-origin upgrade.",
+        "zh": "backup 不序列化当前 permission/capability、Observation token、PAB、ActionEvidence、猜测 locator 或 authenticated-origin 升级。"
+      },
+      "contract": "final FC SCHEMAS §6.6; D9 Main §13a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "ANNEXP-03",
+      "scenario": {
+        "en": "Independent source-history and target-context disclosure",
+        "zh": "source-history 与 target-context 独立披露"
+      },
+      "positive": {
+        "en": "Review Bundle independently selects/discloses source-history and target-context fragments under the same cut, each with typed origins and complete loss evidence.",
+        "zh": "Review Bundle 在同一 cut 中分别选择并披露 source-history 与 target-context fragment，每项都有 typed origin 与完整 loss evidence。"
+      },
+      "negative": {
+        "en": "Failure or denial of either optional context cannot be represented as empty facts, cannot widen the other permission, and cannot remove an otherwise-readable body.",
+        "zh": "任一可选 context 失败或 deny 都不能伪装 empty fact，不能扩大另一项 permission，也不能移除原本可读 body。"
+      },
+      "contract": "final FC SCHEMAS §6.6; SPEC §§9.11,16a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "ANNEXP-04",
+      "scenario": {
+        "en": "Annotation revision/Observation/pin staleness",
+        "zh": "Annotation revision/Observation/pin 过期"
+      },
+      "positive": {
+        "en": "Plan freeze and final barrier recheck the exact current Observation, AnnotationRevisionToken and record pin; any change requires a new Plan.",
+        "zh": "Plan freeze 与 final barrier 复验精确现任 Observation、AnnotationRevisionToken 与 record pin；任一变化都要求 new Plan。"
+      },
+      "negative": {
+        "en": "Equal body text, contradictory pin, old revision, lost qualification or re-read from another cut cannot revive the Plan or reconstruct record authority.",
+        "zh": "body 文本相同、pin 矛盾、旧 revision、资格丢失或另一 cut 的 re-read 都不能复活 Plan，也不能重建 record authority。"
+      },
+      "contract": "final FC SCHEMAS §6.6; D9 Main §13a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "ANNEXP-05",
+      "scenario": {
+        "en": "Annotation Plan freeze, loss, confirm and delivery",
+        "zh": "Annotation Plan freeze、loss、confirm 与交付"
+      },
+      "positive": {
+        "en": "Catalog/selection/projection/loss/staged bytes freeze before Confirmation2; explicit choices lead to create-only Receipt4, independent Resource author handoff, or the selected non-publication delivery.",
+        "zh": "Catalog/selection/projection/loss/staged bytes 在 Confirmation2 前冻结；显式 choice 后只能进入 create-only Receipt4、独立 Resource author handoff 或所选非发布 delivery。"
+      },
+      "negative": {
+        "en": "Confirmation cannot change Annotation record/context, rerun read, switch target/destination or make Resource creation/external publication atomic.",
+        "zh": "Confirmation 不得改变 Annotation record/context，不得重跑 read、切换 target/destination，也不得把 Resource creation 与 external publication 合成原子结果。"
+      },
+      "contract": "final FC SCHEMAS §6.6; D9 Interfaces §7–8",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "ANNEXP-06",
+      "scenario": {
+        "en": "Annotation omission/copy/import/history separation",
+        "zh": "Annotation omission/copy/import/history 分离"
+      },
+      "positive": {
+        "en": "annotation_index remains omission-only; copy/import continue current identity/attribution rules; Plan/Receipt1-3 and Value3/plain_text retain their exact historical recovery.",
+        "zh": "annotation_index 继续只用于 omission；copy/import 继续现任 identity/attribution 规则；Plan/Receipt1-3 与 Value3/plain_text 保留精确历史恢复。"
+      },
+      "negative": {
+        "en": "No semantic-string body substitute, global plain-only downgrade, old-locator copy, source-derived identity, or migration of saved/planned/unknown bytes.",
+        "zh": "不得用 semantic string 替代 body，不得全局 plain-only downgrade，不得复制旧 locator、从 source 推 identity，也不得迁移 saved/planned/unknown bytes。"
+      },
+      "contract": "D9 Main §13a/§14; final FC SCHEMAS §6.6/§7",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-10",
+      "scenario": {
+        "en": "Fresh export /4 and historical /1-/3 dispatch",
+        "zh": "fresh export /4 与历史 /1-/3 分派"
+      },
+      "positive": {
+        "en": "Unseen current export uses Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2 and Receipt4 or PrintReceipt1 with the single recursive pin union.",
+        "zh": "unseen current export 使用 Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2，以及 Receipt4 或 PrintReceipt1，并继续使用唯一递归 pin union。"
+      },
+      "negative": {
+        "en": "Plan/Receipt1-3, Catalog2, Selection1, Projection1, Loss1, Confirmation1 and bundle1 are never repinned, re-encoded, sorted, renamed or upgraded into /4.",
+        "zh": "Plan/Receipt1-3、Catalog2、Selection1、Projection1、Loss1、Confirmation1 与 bundle1 绝不 repin、re-encode、排序、改名或升级成 /4。"
+      },
+      "contract": "D9 Main §12; D9 Schemas §§9–13; final FC SCHEMAS §6.6",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
     }
   ],
   "sourceQualifiedPolicy": {
