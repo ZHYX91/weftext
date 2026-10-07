@@ -252,8 +252,8 @@
         "en": "Export Plan"
       },
       "owner": "D9",
-      "canonical": "ExportPlan/3",
-      "definition": "current immutable output preparation",
+      "canonical": "ExportPlan/4",
+      "definition": "fresh-current immutable output preparation; Plan1-3 exact recovery",
       "forbidden": "D6 PreparedIntent/author ledger"
     },
     {
@@ -263,9 +263,9 @@
         "en": "Export Input Catalog"
       },
       "owner": "D9",
-      "canonical": "ExportInputCatalog/2",
-      "definition": "complete authorized Plan input catalog",
-      "forbidden": "author source"
+      "canonical": "ExportInputCatalog/3",
+      "definition": "complete authorized Plan input catalog including annotation_content",
+      "forbidden": "author source/annotation_index-as-body"
     },
     {
       "id": "weftext.term.export-content-selection",
@@ -274,8 +274,8 @@
         "en": "Export Content Selection"
       },
       "owner": "D9",
-      "canonical": "ExportContentSelection/1",
-      "definition": "explicit body/bibliography selection",
+      "canonical": "ExportContentSelection/2",
+      "definition": "explicit document/Annotation/View selection",
       "forbidden": "permission grant"
     },
     {
@@ -285,9 +285,9 @@
         "en": "Export Projection"
       },
       "owner": "D9",
-      "canonical": "ExportProjection/1",
-      "definition": "bounded bindings/datasets projection",
-      "forbidden": "free dictionary"
+      "canonical": "ExportProjection/2",
+      "definition": "bounded bindings/datasets/Annotation/View projection",
+      "forbidden": "free dictionary/second renderer authority"
     },
     {
       "id": "weftext.term.export-input-location",
@@ -296,8 +296,8 @@
         "en": "Export Input Location"
       },
       "owner": "D9",
-      "canonical": "closed location union",
-      "definition": "Plan-local evidence",
+      "canonical": "ExportInputLocation/2",
+      "definition": "Plan-local source/Annotation/View evidence location",
       "forbidden": "Locator/identity"
     },
     {
@@ -307,8 +307,8 @@
         "en": "Export Loss Location"
       },
       "owner": "D9",
-      "canonical": "input+projection location union",
-      "definition": "Plan-local loss evidence",
+      "canonical": "ExportLossLocation/2",
+      "definition": "Plan-local loss evidence including Annotation/View aspects",
       "forbidden": "cross-Plan address"
     },
     {
@@ -318,9 +318,9 @@
         "en": "Export Loss Report"
       },
       "owner": "D9",
-      "canonical": "ExportLossReport/1",
-      "definition": "fixed output loss proposal",
-      "forbidden": "Import LossReport"
+      "canonical": "ExportLossReport/2",
+      "definition": "fresh-current fixed output loss proposal",
+      "forbidden": "Import LossReport/historical LossReport1"
     },
     {
       "id": "weftext.term.export-blocks",
@@ -351,9 +351,9 @@
         "en": "Publication Receipt"
       },
       "owner": "D9",
-      "canonical": "PublicationReceipt/3",
-      "definition": "external publication fact",
-      "forbidden": "D3/D6 author receipt"
+      "canonical": "PublicationReceipt/4",
+      "definition": "fresh-current external publication fact",
+      "forbidden": "D3/D6 author receipt/print-only receipt"
     },
     {
       "id": "weftext.term.import-loss-report",
@@ -420,6 +420,39 @@
       "canonical": "RegionBody + d9rg1",
       "definition": "non-identity geometry",
       "forbidden": "complete Locator"
+    },
+    {
+      "id": "weftext.term.annotation-content-carrier",
+      "names": {
+        "zh": "批注内容载体",
+        "en": "Annotation Content Carrier"
+      },
+      "owner": "D9",
+      "canonical": "D9AnnotationContentInput/1",
+      "definition": "one exact current Annotation read frozen into export Plan",
+      "forbidden": "annotation_index/semantic string/permission capability"
+    },
+    {
+      "id": "weftext.term.view-render-binding",
+      "names": {
+        "zh": "视图渲染绑定",
+        "en": "View Render Binding"
+      },
+      "owner": "D9",
+      "canonical": "D9ViewRenderBinding/1",
+      "definition": "finite renderer/profile/assets binding over complete D7 result and ViewSpec",
+      "forbidden": "View authority/Query transform/free chart config"
+    },
+    {
+      "id": "weftext.term.print-receipt",
+      "names": {
+        "zh": "打印回执",
+        "en": "Print Receipt"
+      },
+      "owner": "D9",
+      "canonical": "D9PrintReceipt/1",
+      "definition": "print-only delivery outcome from confirmed Plan4",
+      "forbidden": "external publication/D3-D6 author receipt"
     }
   ],
   "publicKinds": [

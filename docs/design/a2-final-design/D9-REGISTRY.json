@@ -9,10 +9,16 @@
     "conversionInput": "ConversionInput/2",
     "templateRecipe": "TemplateRecipe/2",
     "templateConstruction": "TemplateConstructionInput/2",
-    "exportPlan": "ExportPlan/3",
-    "publicationReceipt": "PublicationReceipt/3",
+    "exportPlan": "ExportPlan/4",
+    "publicationReceipt": "PublicationReceipt/4",
     "dependencyProof": "DependencyProof/3",
-    "effects": "EffectManifest/3 + EffectBytes/3"
+    "effects": "EffectManifest/3 + EffectBytes/3",
+    "exportCatalog": "ExportInputCatalog/3",
+    "exportSelection": "ExportContentSelection/2",
+    "exportProjection": "ExportProjection/2",
+    "exportLossReport": "ExportLossReport/2",
+    "exportConfirmation": "D9ExportConfirmation/2",
+    "printReceipt": "D9PrintReceipt/1"
   },
   "concepts": [
     {
@@ -218,8 +224,8 @@
       "zh": "导出计划",
       "en": "Export Plan",
       "owner": "D9",
-      "canonical": "ExportPlan/3",
-      "meaning": "current immutable output preparation",
+      "canonical": "ExportPlan/4",
+      "meaning": "fresh-current immutable output preparation; Plan1-3 remain exact recovery",
       "excludes": "D6 PreparedIntent/author ledger"
     },
     {
@@ -227,17 +233,17 @@
       "zh": "导出输入目录",
       "en": "Export Input Catalog",
       "owner": "D9",
-      "canonical": "ExportInputCatalog/2",
-      "meaning": "complete authorized Plan input catalog",
-      "excludes": "author source"
+      "canonical": "ExportInputCatalog/3",
+      "meaning": "complete authorized Plan input catalog including one closed annotation_content carrier",
+      "excludes": "author source/annotation_index-as-body"
     },
     {
       "id": "weftext.term.export-content-selection",
       "zh": "导出内容选择",
       "en": "Export Content Selection",
       "owner": "D9",
-      "canonical": "ExportContentSelection/1",
-      "meaning": "explicit body/bibliography selection",
+      "canonical": "ExportContentSelection/2",
+      "meaning": "explicit document/Annotation/View selection",
       "excludes": "permission grant"
     },
     {
@@ -245,17 +251,17 @@
       "zh": "导出投影",
       "en": "Export Projection",
       "owner": "D9",
-      "canonical": "ExportProjection/1",
-      "meaning": "bounded bindings/datasets projection",
-      "excludes": "free dictionary"
+      "canonical": "ExportProjection/2",
+      "meaning": "bounded bindings/datasets/Annotation/View projection",
+      "excludes": "free dictionary/second renderer authority"
     },
     {
       "id": "weftext.term.export-input-location",
       "zh": "导出输入位置",
       "en": "Export Input Location",
       "owner": "D9",
-      "canonical": "closed location union",
-      "meaning": "Plan-local evidence",
+      "canonical": "ExportInputLocation/2",
+      "meaning": "Plan-local source/Annotation/View evidence location",
       "excludes": "Locator/identity"
     },
     {
@@ -263,8 +269,8 @@
       "zh": "导出损失位置",
       "en": "Export Loss Location",
       "owner": "D9",
-      "canonical": "input+projection location union",
-      "meaning": "Plan-local loss evidence",
+      "canonical": "ExportLossLocation/2",
+      "meaning": "Plan-local loss evidence including Annotation/View aspects",
       "excludes": "cross-Plan address"
     },
     {
@@ -272,9 +278,9 @@
       "zh": "导出损失报告",
       "en": "Export Loss Report",
       "owner": "D9",
-      "canonical": "ExportLossReport/1",
-      "meaning": "fixed output loss proposal",
-      "excludes": "Import LossReport"
+      "canonical": "ExportLossReport/2",
+      "meaning": "fresh-current fixed output loss proposal",
+      "excludes": "Import LossReport/historical LossReport1"
     },
     {
       "id": "weftext.term.export-blocks",
@@ -299,9 +305,9 @@
       "zh": "外部发布回执",
       "en": "Publication Receipt",
       "owner": "D9",
-      "canonical": "PublicationReceipt/3",
-      "meaning": "external publication fact",
-      "excludes": "D3/D6 author receipt"
+      "canonical": "PublicationReceipt/4",
+      "meaning": "fresh-current external publication fact",
+      "excludes": "D3/D6 author receipt/print-only receipt"
     },
     {
       "id": "weftext.term.import-loss-report",
@@ -356,6 +362,33 @@
       "canonical": "RegionBody + d9rg1",
       "meaning": "non-identity geometry",
       "excludes": "complete Locator"
+    },
+    {
+      "id": "weftext.term.annotation-content-carrier",
+      "zh": "批注内容载体",
+      "en": "Annotation Content Carrier",
+      "owner": "D9",
+      "canonical": "D9AnnotationContentInput/1",
+      "meaning": "one exact current Annotation read frozen into export Plan",
+      "excludes": "annotation_index/semantic string/permission capability"
+    },
+    {
+      "id": "weftext.term.view-render-binding",
+      "zh": "视图渲染绑定",
+      "en": "View Render Binding",
+      "owner": "D9",
+      "canonical": "D9ViewRenderBinding/1",
+      "meaning": "finite renderer/profile/assets binding over complete D7 result and ViewSpec",
+      "excludes": "View authority/Query transform/free chart config"
+    },
+    {
+      "id": "weftext.term.print-receipt",
+      "zh": "打印回执",
+      "en": "Print Receipt",
+      "owner": "D9",
+      "canonical": "D9PrintReceipt/1",
+      "meaning": "print-only delivery outcome from confirmed Plan4",
+      "excludes": "external publication/D3-D6 author receipt"
     }
   ],
   "inheritedOwners": {
@@ -513,14 +546,37 @@
     "imagePhysicalSize": "image_physical_size/1",
     "region": "d9rg1",
     "queryResultExport": "weftext.query-result-export/1",
-    "exportLoss": "weftext.export-loss/1",
-    "exportBundle": "weftext.export-bundle/1"
+    "exportLoss": "weftext.export-loss/2",
+    "exportBundle": "weftext.export-bundle/2",
+    "annotationBackup": "weftext.annotation-backup/1",
+    "viewAccessibility": "same-data-table-alt-text/1",
+    "viewLayouts": [
+      "metric",
+      "bar",
+      "line",
+      "scatter",
+      "pie",
+      "heatmap"
+    ],
+    "viewTargets": [
+      "docx",
+      "xlsx",
+      "pdf",
+      "svg",
+      "png",
+      "print"
+    ]
   },
   "namedSupersede": {
     "target": "final FC SCHEMAS §6.5.1 fresh qualified native-table authoring token spelling",
     "currentRule": "visible native.table[...]::column[...] grammar; nt_/nc_ remain internal compiled Plan keys",
     "simplePositive": "data.native_table.COLUMN remains for unique lowercase-ASCII leaf",
-    "historical": "genuine frozen hash-authored template/Plan bytes retain exact decoder"
+    "historical": "genuine frozen hash-authored template/Plan bytes retain exact decoder",
+    "exportSuccessor": {
+      "target": "final FC SCHEMAS §6.6 fresh-current export family",
+      "currentRule": "fresh unseen export uses Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4; Annotation content and finite View rendering are closed members",
+      "historical": "Plan/Receipt1-3, Catalog2, Selection1, Projection1, Loss1, Confirmation1 and bundle1 retain exact decoder/bytes/recovery"
+    }
   },
   "evidence": "design registry only; product/runtime UNRUN; independent review pending"
 }
