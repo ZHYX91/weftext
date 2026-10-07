@@ -150,7 +150,7 @@ D8EditPrepareRequest/3 = {
 
 Unknown arm/member/null rejects。
 Annotation caller 不得携 actor/time/trusted/suggestion evidence。
-reconfirm arm 不携 caller value。
+reconfirm arm 不携 caller value。SourceTransform 的 profile/compilation 可用性不是 D8EditInput/3 或 PreparedEditBinding/3 的成员，也不能变成第二份 D8 保存证书；上游 disabled/unavailable transform plan 可以与其它条件均合法的普通 Source 保存同时存在。
 
 ## 6. PreparedEditBinding/3
 
@@ -299,6 +299,8 @@ D8 不加入 filter/sort/CEL/aggregate/script member。
 View validation error family保持 D7 owner。
 
 View builder **没有可携带 schema**。它的工作值只是完整严格解码的 `ViewSpec/1`，再加仅存于设备会话的选择、焦点与验证状态。Saved Query/View/DynamicBlock occurrence 继续属于现任 D2/D7 SavedDefinition 作者数据；`DynamicBlock/1` 仍只保存真实 Query/View 调用与声明绑定。builder 控件是否可用、高级路径选择、验证消息、打开的标签页、选区、脏状态或设备布局都不得序列化进 ViewSpec/DynamicBlock，也不得写入隐藏 sidecar。
+
+定义保存校验不是新的 wire 或 schema。它只消费既有 D7 严格解码器、现任定义 owner/revision/authorization、现任 terminal schema 与静态 layout/binding/type/option 规则，不消费 ResultHandle。既有 D7 View §7 runtime validator 仍是唯一完整结果校验器，只在 render/export 时调用；其中 value/key/order/domain/hierarchy/budget/delivery 错误不得改写或使已保存定义失效。
 
 basic builder 只能从 D7 已拥有的 closed member 构造完整新 `ViewSpec/1`；不得合成 partial ViewSpec、丢弃“控件未知但 current 合法”的 member，也不得把 future/unknown version coercion 成 version 1。
 
