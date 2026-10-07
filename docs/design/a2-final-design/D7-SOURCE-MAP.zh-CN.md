@@ -22,7 +22,7 @@ fixed-S D7 十三份来源以及额外 D9 coordinated D3-D7 binding source，继
 
 ## 3. Registry 资格
 
-immutable fixed-S Registry 是 34 concepts / 8 cross-stage bindings。parent-current Registry 与 D7-REGISTRY.json 是同一个 blob 3cab5124f46822729093d5d955908b05eb65bb87，实际包含 34 concepts / 13 bindings。
+immutable fixed-S Registry 实际是 34 个 concept、8 条 cross-stage binding。parent-current Registry 与 D7-REGISTRY.json 共用同一个 blob 3cab5124f46822729093d5d955908b05eb65bb87，实际是 34 个 concept、13 条 binding。
 
 D7-REGISTRY-QUALIFICATION 对 B01-B13 逐条映射。D7-REGISTRY.json 继续是唯一 parent-current machine Registry，不被改写。A2 只在 fixed97/current owner 真实改变时具名 fresh successor；未变化的 inner version 保持不变，真实 historical record 保留原 decoder。
 
@@ -30,7 +30,7 @@ D7-REGISTRY-QUALIFICATION 对 B01-B13 逐条映射。D7-REGISTRY.json 继续是�
 
 D7-QUERY-V2 将 QuerySpec/2 定义为当前新建作者 schema，QuerySpec/1 则继续由单独的准确 decoder 解释。QuerySpec/2 增加可空的 current title/subtitle、获权的 Node 文件名与路径、获权的 Resource 文件名，以及要求输入 schema 完全相等的通用 union_all。所有 read 都绑定真实 D2/D6 producer、授权结果、同一 cut 的 current Observation/FileBinding 和最终 barrier。
 
-D7-SEARCH 现在给出完整 shortcut lexer、递归 precedence grammar、keyword boundary、escape、FieldId/member-path validation、三个 preset 的 empty-input behavior 以及 explicit source override。visual 与 shortcut 生成同一 ephemeral SearchConditionAst/1，并确定性编译到 QuerySpec/2。D7-SEARCH-FIXTURES.json 保存 machine 正反等价 fixture。任何 parser error 都不能 fallback 到另一条 Query。
+D7-SEARCH 现在完整规定快捷模式的 lexer、递归优先级 grammar、关键字边界、转义规则、FieldId/member-path 验证、三个 preset 的空输入行为，以及显式 source override。可视化条件和 shortcut 生成同一份临时 SearchConditionAst/1，并确定性编译到 QuerySpec/2。D7-SEARCH-FIXTURES.json 保存机器可核的正反等价 fixture；任何 parser error 都不能退回另一条 Query。
 
 ## 5. Immutable source trace
 

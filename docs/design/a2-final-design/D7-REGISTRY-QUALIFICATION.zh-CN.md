@@ -20,7 +20,7 @@ A2 不创建另一份 Registry 对象。A2 保留 parent-current 的 34/13，并
 
 | ID | Parent-current owner / 含义 | A2 disposition | fresh A2 concrete rule | 历史保留 |
 | --- | --- | --- | --- | --- |
-| B01 | D3 identity algebra / D7 runtime payload | retained-current | EntityRef、Locator、LogicalOccurrenceKey、ResultRowHandle、Provenance、ActionEvidence 保持原 owner 与分域 | 所有 recorded form 均留在原 owner |
+| B01 | D3 identity algebra / D7 runtime payload | retained-current | EntityRef、Locator、LogicalOccurrenceKey、ResultRowHandle、Provenance 与 ActionEvidence 这六类对象继续由原语义 owner 分别负责，彼此不合并 | 已记录的各种形式都留在各自原 owner 下 |
 | B02 | D4 schema and authorship | retained-current | FacetId、FieldId、FieldSelector、authoredProvenance 继续由 D4/D5 拥有 | 不做版本改写 |
 | B03 | D6 control and transport | named-current-successor-overlay | 保留 SourceObservation/1、SourceVersionRef/1、CommitDomain/2、Frontier/2、OwnerInputBinding/2 与 ObservationScope/2 的原职责；新的完整 proof 使用 DependencyProof/3，不沿用 parent 文本中的 /2 | 真实 Proof2 与旧 protected record 继续按准确 decoder 和 pins 恢复 |
 | B04 | D2 occurrence / D7 payload | named-current-successor-overlay | saved Query/View 仍是 D2 occurrence，但 fresh A2 carrier 使用 current D2 product/SavedDefinition，并可承载 QuerySpec/2；不创建 ViewRef | Profile2 措辞只作来源历史；真实 old payload 仍按原字节 |
