@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D7 author candidates integrated. fixed85bdadf incremental D7 review = REVISE (P0=0/P1=0/P2=1); P1-01/P1-02/Impact-sync P2 independently CLOSED there; source-map P2-02 remains CLOSED at fixed1068244; sole P2-01 author-repaired and pending independent review. D8-D10/global remain pending.",
+  "status": "D1-D8 author candidates integrated. D7 non-author review at fixed26be PASS (P0=0/P1=0/P2=0); final D7 residual CLOSED. D8 FULL author candidate is author-resolved-pending-independent. D9-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -315,7 +315,7 @@
       "bytes": 78383,
       "lines": 1287,
       "blobAtFixedS": "ff8b4e9b65d35c91862e02dc4160dbae51f8b5ea",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -327,7 +327,7 @@
       "bytes": 60887,
       "lines": 177,
       "blobAtFixedS": "549e6cfb0f8f4b840f99c64545d3f6b91fabc782",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -339,7 +339,7 @@
       "bytes": 16615,
       "lines": 120,
       "blobAtFixedS": "30a2f69fe3e2e314618da6649dd81b699405269e",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -351,7 +351,7 @@
       "bytes": 28744,
       "lines": 192,
       "blobAtFixedS": "8bef38395d3debb82b2b3ffa2461825b270cf742",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -363,7 +363,7 @@
       "bytes": 40338,
       "lines": 226,
       "blobAtFixedS": "25cc65e63ad15211024f76053ae9eb335bd5de2f",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -375,7 +375,7 @@
       "bytes": 4614,
       "lines": 34,
       "blobAtFixedS": "a0478a53a7ba191c068610a51c526e64841aad66",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -555,7 +555,7 @@
       "bytes": 7640,
       "lines": 66,
       "blobAtFixedS": "9856514edfe5f843566a7b5c1f79642683391a39",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     },
     {
@@ -591,7 +591,7 @@
       "bytes": 7259,
       "lines": 69,
       "blobAtFixedS": "a7c1984777307d3a1945e2cd373f98be7bf1ad44",
-      "readStatus": "todo_unread_this_batch",
+      "readStatus": "fully_read_and_mapped_d8_batch",
       "a2Disposition": "defer_to_later_A2_batch"
     }
   ],
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Fixed-SHA non-author incremental review only of A2-D7-2F89-P2-01 and the directly changed Search fixture/oracle delta; then D8-D10 full integration and fresh Pro/global review.",
+  "next_batch": "Fixed-SHA non-author full D8 review; then D9 and D10 full owner integration, followed by fresh Pro/global A2 review.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2460,9 +2460,9 @@
     }
   },
   "pending_scope": [
-    "independent fixed-stop review of A2-D7-2F89-P1-01, P1-02, P2-01 and A2-D7-1068244-P2-01",
-    "D8-D10 full A2 owner modules",
-    "Search+D8 runtime/platform evidence",
+    "D8 fixed-stop independent full review",
+    "D9-D10 full A2 owner modules",
+    "D8/Search runtime/platform/AT/performance evidence",
     "fresh Pro/global review",
     "runtime/OS/GUI/real-replica/migration/activation evidence"
   ],
@@ -2488,7 +2488,7 @@
       "D7-REGISTRY-QUALIFICATION.zh-CN.md",
       "D7-SEARCH-FIXTURES.json"
     ],
-    "status": "fixed85bdadf incremental review REVISE P0=0/P1=0/P2=1; P1-01/P1-02/Impact-sync P2 independently CLOSED there, source-map P2-02 remains CLOSED at fixed1068244; sole P2-01 author-repaired and OPEN pending independent fixed-SHA review",
+    "status": "fixed26be non-author review PASS P0=0/P1=0/P2=0; final A2-D7-2F89-P2-01 CLOSED",
     "authorStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
     "fixedS13": "FULL",
     "currentOwnerBilingual": "FULL",
@@ -2500,16 +2500,16 @@
       "blob": "3cab5124f46822729093d5d955908b05eb65bb87",
       "qualification": "D7-REGISTRY-QUALIFICATION.md"
     },
-    "search": "SEARCH-01-08 integrated in D7-SEARCH; pending independent review and later D8 platform evidence",
+    "search": "SEARCH-01-08 accepted in D7 design scope at fixed26be; D8 runtime/platform interaction evidence remains separate",
     "sourceMap": "D7-SOURCE-MAP.json",
     "runtime": "UNRUN",
-    "reviewFixedSha": "85bdadf448e0475715b62debe215fa4d04e30ab2",
+    "reviewFixedSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
     "review": {
-      "verdict": "REVISE",
+      "verdict": "PASS",
       "severity": {
         "P0": 0,
         "P1": 0,
-        "P2": 1
+        "P2": 0
       },
       "independentlyClosedPrior": [
         "A2-D6-01CC-P2-01",
@@ -2518,17 +2518,10 @@
         "A2-D7-2F89-P2-02",
         "A2-D7-2F89-P1-01",
         "A2-D7-2F89-P1-02",
-        "A2-D7-1068244-P2-01"
-      ],
-      "closureReviewShas": {
-        "A2-D7-2F89-P2-02": "1068244d982a22140d8753b0483c63135b092999",
-        "A2-D7-2F89-P1-01": "85bdadf448e0475715b62debe215fa4d04e30ab2",
-        "A2-D7-2F89-P1-02": "85bdadf448e0475715b62debe215fa4d04e30ab2",
-        "A2-D7-1068244-P2-01": "85bdadf448e0475715b62debe215fa4d04e30ab2"
-      },
-      "openPendingIndependent": [
+        "A2-D7-1068244-P2-01",
         "A2-D7-2F89-P2-01"
-      ]
+      ],
+      "openPendingIndependent": []
     },
     "repairFiles": [
       "D7-SEARCH.md",
@@ -2552,5 +2545,44 @@
       "d6Metadata": "D6-owned FileBinding metadata projection under existing entity_state+locator_state",
       "d9QueryJson": "terminal result export only; saved Query definitions remain D7 Definition Transfer/D3 author path"
     }
+  },
+  "d8_integration": {
+    "files": [
+      "D8.md",
+      "D8.zh-CN.md",
+      "D8-INTERFACES.md",
+      "D8-INTERFACES.zh-CN.md",
+      "D8-SCHEMAS.md",
+      "D8-SCHEMAS.zh-CN.md",
+      "D8-DIRECTION.md",
+      "D8-DIRECTION.zh-CN.md",
+      "D8-ACCEPTANCE.md",
+      "D8-ACCEPTANCE.zh-CN.md",
+      "D8-ACCEPTANCE.json",
+      "D8-LEXICON.md",
+      "D8-LEXICON.zh-CN.md",
+      "D8-TERMS.json",
+      "D8-REGISTRY.json",
+      "D8-IMPACT.md",
+      "D8-IMPACT.zh-CN.md",
+      "D8-SOURCE-MAP.json",
+      "D8-SOURCE-MAP.md",
+      "D8-SOURCE-MAP.zh-CN.md"
+    ],
+    "status": "FULL author candidate; author-resolved-pending-independent",
+    "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
+    "fixedS8": "FULL",
+    "currentOwnerBilingual": "FULL",
+    "acceptance": {
+      "fixedCases": 160,
+      "inheritedD6FaCases": 177,
+      "currentOverlay": 26,
+      "currentAsciiDocAnnotationObligationsMapped": 760
+    },
+    "search": "SEARCH-01-08 interaction consumes accepted D7 semantics and all 27 current fixtures",
+    "view": "D7 ViewSpec/1 semantics retained; D8 owns renderer/interaction/AT; wide=Query long-form, order=Query sort + line strict x",
+    "sourceMap": "D8-SOURCE-MAP.json",
+    "runtime": "UNRUN",
+    "review": "pending fixed-SHA non-author full D8 review"
   }
 }

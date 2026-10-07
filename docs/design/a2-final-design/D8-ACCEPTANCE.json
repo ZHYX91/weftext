@@ -1,0 +1,1667 @@
+{
+  "format": "weftext.a2-d8-acceptance",
+  "version": 1,
+  "status": "author-resolved-pending-independent",
+  "fixedInputCommit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "fixedCaseCount": 160,
+  "d6FaCaseCount": 177,
+  "inheritedCases": [
+    {
+      "id": "RTL-001",
+      "group": "Arabic-only/document/edit",
+      "positive": "Source/Write/Read body: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-002",
+      "group": "Arabic-only/document/save",
+      "positive": "Source/Write/Read body: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-003",
+      "group": "Arabic-only/document/reload",
+      "positive": "Source/Write/Read body: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-004",
+      "group": "Arabic-only/document/offline",
+      "positive": "Source/Write/Read body: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-005",
+      "group": "Arabic-only/document/conflict",
+      "positive": "Source/Write/Read body: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-006",
+      "group": "Arabic-only/document/recovery",
+      "positive": "Source/Write/Read body: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-007",
+      "group": "Arabic-only/document/direction",
+      "positive": "Source/Write/Read body: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-008",
+      "group": "Arabic-only/name/edit",
+      "positive": "Node names/navigation labels: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-009",
+      "group": "Arabic-only/name/save",
+      "positive": "Node names/navigation labels: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-010",
+      "group": "Arabic-only/name/reload",
+      "positive": "Node names/navigation labels: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-011",
+      "group": "Arabic-only/name/offline",
+      "positive": "Node names/navigation labels: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-012",
+      "group": "Arabic-only/name/conflict",
+      "positive": "Node names/navigation labels: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-013",
+      "group": "Arabic-only/name/recovery",
+      "positive": "Node names/navigation labels: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-014",
+      "group": "Arabic-only/name/direction",
+      "positive": "Node names/navigation labels: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-015",
+      "group": "Arabic-only/property/edit",
+      "positive": "Complete D4 properties/repeated facts: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-016",
+      "group": "Arabic-only/property/save",
+      "positive": "Complete D4 properties/repeated facts: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-017",
+      "group": "Arabic-only/property/reload",
+      "positive": "Complete D4 properties/repeated facts: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-018",
+      "group": "Arabic-only/property/offline",
+      "positive": "Complete D4 properties/repeated facts: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-019",
+      "group": "Arabic-only/property/conflict",
+      "positive": "Complete D4 properties/repeated facts: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-020",
+      "group": "Arabic-only/property/recovery",
+      "positive": "Complete D4 properties/repeated facts: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-021",
+      "group": "Arabic-only/property/direction",
+      "positive": "Complete D4 properties/repeated facts: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-022",
+      "group": "Arabic-only/table/edit",
+      "positive": "Native table cells: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-023",
+      "group": "Arabic-only/table/save",
+      "positive": "Native table cells: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-024",
+      "group": "Arabic-only/table/reload",
+      "positive": "Native table cells: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-025",
+      "group": "Arabic-only/table/offline",
+      "positive": "Native table cells: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-026",
+      "group": "Arabic-only/table/conflict",
+      "positive": "Native table cells: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-027",
+      "group": "Arabic-only/table/recovery",
+      "positive": "Native table cells: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-028",
+      "group": "Arabic-only/table/direction",
+      "positive": "Native table cells: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-029",
+      "group": "Arabic-only/query/edit",
+      "positive": "Query results/DynamicBlock: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-030",
+      "group": "Arabic-only/query/save",
+      "positive": "Query results/DynamicBlock: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-031",
+      "group": "Arabic-only/query/reload",
+      "positive": "Query results/DynamicBlock: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-032",
+      "group": "Arabic-only/query/offline",
+      "positive": "Query results/DynamicBlock: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-033",
+      "group": "Arabic-only/query/conflict",
+      "positive": "Query results/DynamicBlock: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-034",
+      "group": "Arabic-only/query/recovery",
+      "positive": "Query results/DynamicBlock: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-035",
+      "group": "Arabic-only/query/direction",
+      "positive": "Query results/DynamicBlock: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-036",
+      "group": "Arabic-only/annotation/edit",
+      "positive": "Current Value/4 + R6 Annotation: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-037",
+      "group": "Arabic-only/annotation/save",
+      "positive": "Current Value/4 + R6 Annotation: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-038",
+      "group": "Arabic-only/annotation/reload",
+      "positive": "Current Value/4 + R6 Annotation: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-039",
+      "group": "Arabic-only/annotation/offline",
+      "positive": "Current Value/4 + R6 Annotation: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-040",
+      "group": "Arabic-only/annotation/conflict",
+      "positive": "Current Value/4 + R6 Annotation: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-041",
+      "group": "Arabic-only/annotation/recovery",
+      "positive": "Current Value/4 + R6 Annotation: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-042",
+      "group": "Arabic-only/annotation/direction",
+      "positive": "Current Value/4 + R6 Annotation: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-043",
+      "group": "Arabic-only/search/edit",
+      "positive": "Search results/hit navigation: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-044",
+      "group": "Arabic-only/search/save",
+      "positive": "Search results/hit navigation: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-045",
+      "group": "Arabic-only/search/reload",
+      "positive": "Search results/hit navigation: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-046",
+      "group": "Arabic-only/search/offline",
+      "positive": "Search results/hit navigation: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-047",
+      "group": "Arabic-only/search/conflict",
+      "positive": "Search results/hit navigation: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-048",
+      "group": "Arabic-only/search/recovery",
+      "positive": "Search results/hit navigation: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-049",
+      "group": "Arabic-only/search/direction",
+      "positive": "Search results/hit navigation: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-050",
+      "group": "Hebrew-only/document/edit",
+      "positive": "Source/Write/Read body: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-051",
+      "group": "Hebrew-only/document/save",
+      "positive": "Source/Write/Read body: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-052",
+      "group": "Hebrew-only/document/reload",
+      "positive": "Source/Write/Read body: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-053",
+      "group": "Hebrew-only/document/offline",
+      "positive": "Source/Write/Read body: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-054",
+      "group": "Hebrew-only/document/conflict",
+      "positive": "Source/Write/Read body: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-055",
+      "group": "Hebrew-only/document/recovery",
+      "positive": "Source/Write/Read body: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-056",
+      "group": "Hebrew-only/document/direction",
+      "positive": "Source/Write/Read body: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-057",
+      "group": "Hebrew-only/name/edit",
+      "positive": "Node names/navigation labels: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-058",
+      "group": "Hebrew-only/name/save",
+      "positive": "Node names/navigation labels: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-059",
+      "group": "Hebrew-only/name/reload",
+      "positive": "Node names/navigation labels: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-060",
+      "group": "Hebrew-only/name/offline",
+      "positive": "Node names/navigation labels: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-061",
+      "group": "Hebrew-only/name/conflict",
+      "positive": "Node names/navigation labels: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-062",
+      "group": "Hebrew-only/name/recovery",
+      "positive": "Node names/navigation labels: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-063",
+      "group": "Hebrew-only/name/direction",
+      "positive": "Node names/navigation labels: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-064",
+      "group": "Hebrew-only/property/edit",
+      "positive": "Complete D4 properties/repeated facts: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-065",
+      "group": "Hebrew-only/property/save",
+      "positive": "Complete D4 properties/repeated facts: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-066",
+      "group": "Hebrew-only/property/reload",
+      "positive": "Complete D4 properties/repeated facts: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-067",
+      "group": "Hebrew-only/property/offline",
+      "positive": "Complete D4 properties/repeated facts: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-068",
+      "group": "Hebrew-only/property/conflict",
+      "positive": "Complete D4 properties/repeated facts: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-069",
+      "group": "Hebrew-only/property/recovery",
+      "positive": "Complete D4 properties/repeated facts: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-070",
+      "group": "Hebrew-only/property/direction",
+      "positive": "Complete D4 properties/repeated facts: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-071",
+      "group": "Hebrew-only/table/edit",
+      "positive": "Native table cells: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-072",
+      "group": "Hebrew-only/table/save",
+      "positive": "Native table cells: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-073",
+      "group": "Hebrew-only/table/reload",
+      "positive": "Native table cells: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-074",
+      "group": "Hebrew-only/table/offline",
+      "positive": "Native table cells: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-075",
+      "group": "Hebrew-only/table/conflict",
+      "positive": "Native table cells: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-076",
+      "group": "Hebrew-only/table/recovery",
+      "positive": "Native table cells: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-077",
+      "group": "Hebrew-only/table/direction",
+      "positive": "Native table cells: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-078",
+      "group": "Hebrew-only/query/edit",
+      "positive": "Query results/DynamicBlock: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-079",
+      "group": "Hebrew-only/query/save",
+      "positive": "Query results/DynamicBlock: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-080",
+      "group": "Hebrew-only/query/reload",
+      "positive": "Query results/DynamicBlock: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-081",
+      "group": "Hebrew-only/query/offline",
+      "positive": "Query results/DynamicBlock: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-082",
+      "group": "Hebrew-only/query/conflict",
+      "positive": "Query results/DynamicBlock: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-083",
+      "group": "Hebrew-only/query/recovery",
+      "positive": "Query results/DynamicBlock: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-084",
+      "group": "Hebrew-only/query/direction",
+      "positive": "Query results/DynamicBlock: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-085",
+      "group": "Hebrew-only/annotation/edit",
+      "positive": "Current Value/4 + R6 Annotation: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-086",
+      "group": "Hebrew-only/annotation/save",
+      "positive": "Current Value/4 + R6 Annotation: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-087",
+      "group": "Hebrew-only/annotation/reload",
+      "positive": "Current Value/4 + R6 Annotation: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-088",
+      "group": "Hebrew-only/annotation/offline",
+      "positive": "Current Value/4 + R6 Annotation: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-089",
+      "group": "Hebrew-only/annotation/conflict",
+      "positive": "Current Value/4 + R6 Annotation: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-090",
+      "group": "Hebrew-only/annotation/recovery",
+      "positive": "Current Value/4 + R6 Annotation: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-091",
+      "group": "Hebrew-only/annotation/direction",
+      "positive": "Current Value/4 + R6 Annotation: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-092",
+      "group": "Hebrew-only/search/edit",
+      "positive": "Search results/hit navigation: Type and preview against logical targets. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Visual order/DOM index cannot choose a different target.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-093",
+      "group": "Hebrew-only/search/save",
+      "positive": "Search results/hit navigation: Explicit confirmation and an actual Core receipt establish commit. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Composition, preview, or timeout never impersonates commit. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-094",
+      "group": "Hebrew-only/search/reload",
+      "positive": "Search results/hit navigation: Reauthorized reads preserve exact values and direction isolation. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "No normalization, character loss, or revival through old Locators.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-095",
+      "group": "Hebrew-only/search/offline",
+      "positive": "Search results/hit navigation: Distinguish local Core commit from remote Draft only. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Remote offline clients cannot interpret/commit hosted author source locally.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-096",
+      "group": "Hebrew-only/search/conflict",
+      "positive": "Search results/hit navigation: Retain Base/current/proposed and obtain a new preview. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Equal title/value/key or ABA never permits automatic overwrite.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-097",
+      "group": "Hebrew-only/search/recovery",
+      "positive": "Search results/hit navigation: Recover the actual original decision through its original request. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Lost receipts cannot cause duplicate writes under a new OperationId. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RTL-098",
+      "group": "Hebrew-only/search/direction",
+      "positive": "Search results/hit navigation: Switch ltr/rtl/auto while preserving logical content/Core intent. Query/search are read-only; edit/save addresses their real author inputs or explicit target Actions, not result write permission.",
+      "negative": "Translation, locale, or dir=auto cannot substitute for complete RTL capability.",
+      "contract": "Main§2–11；Direction§2–7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "WIRE-01",
+      "group": "strict decoder",
+      "positive": "Accept legal closed shapes and integer boundaries",
+      "negative": "Reject duplicate/unknown/missing/null/bool/exponent/fraction/-0/overflow and wrong unions",
+      "contract": "Interfaces§1–6",
+      "evidence": "bounded-wire; semantic-review; real-decoder-pending"
+    },
+    {
+      "id": "SRC-01",
+      "group": "authority",
+      "positive": "Source/Write/Read share one Draft/source and retain invalid Drafts",
+      "negative": "Invalid Drafts cannot mix old body/new header or emit partial canonical projections",
+      "contract": "Main§2/4；Interfaces§3",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SRC-02",
+      "group": "mapping",
+      "positive": "Complete Core maps bind schema paths/flow ranges to unique raw fragments, with generated/escaped/atomic spans read-only",
+      "negative": "Equal display text cannot select the wrong paragraph/cell, and old mapBinding cannot be reused",
+      "contract": "Interfaces§3/8",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SRC-03",
+      "group": "current grammar",
+      "positive": "Validate complete current D2 Asciidoctor 2.0.26 source/product, including deep headings, rich inline, STEM/Mermaid and full native tables; unsupported rich editing remains Source-valid and exact-source editable.",
+      "negative": "No D8 reduced dialect, HTML/DOM reverse parser, or source-invalid result caused only by a missing rich adapter.",
+      "contract": "D8§2–3；Interfaces§2–4；Schemas§2–4",
+      "evidence": "author-resolved-pending-independent; product-parser-pending"
+    },
+    {
+      "id": "POS-01",
+      "group": "coordinates",
+      "positive": "Bidirectional UTF-8/UTF-16/scalar/D2-logical-EOL conversion includes BOM/emoji/CRLF",
+      "negative": "Do not split surrogates/CRLF or treat NEL/LS/PS as D2 newlines",
+      "contract": "Main§5",
+      "evidence": "bounded-coordinates; platform-implementation-pending"
+    },
+    {
+      "id": "POS-02",
+      "group": "bidi caret",
+      "positive": "Distinguish dual affinity, visual left/right, and logical previous/next in one layout epoch.",
+      "negative": "Round trips require a successful first step, collapsed selection, and unchanged epoch; endpoint clamping is separate and affinity cannot disappear.",
+      "contract": "Direction§4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "POS-03",
+      "group": "grapheme",
+      "positive": "Default movement/deletion preserves ZWJ/combining clusters and codepoint inspection is explicit",
+      "negative": "Direction never reverses Backspace/Delete targets",
+      "contract": "Main§5；Direction§4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "POS-04",
+      "group": "selection",
+      "positive": "Correct reverse anchor/focus, Shift, multiline/atomic and drag selection",
+      "negative": "Virtualization/wrapping/asynchronous reorder cannot reuse old pixels/DOM targets",
+      "contract": "Main§5；Direction§4/6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "IME-01",
+      "group": "composition",
+      "positive": "Normalize begin/update/end and final input into one Draft transaction",
+      "negative": "Double final input, Enter/slash/submit shortcuts cannot duplicate or prematurely write",
+      "contract": "Main§6",
+      "evidence": "bounded-composition; real-IME-pending"
+    },
+    {
+      "id": "IME-02",
+      "group": "composition lifecycle",
+      "positive": "Cancellation restores the preimage and unfinished background preedit is retained explicitly",
+      "negative": "Blur/direction change/virtual unmount cannot silently confirm or lose input",
+      "contract": "Main§6；Direction§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "CLIP-01",
+      "group": "clipboard",
+      "positive": "Separate logical text copy and exact Source copy, with clipboard success before cut deletion",
+      "negative": "Reject visual reversal, injected isolates, deletion before clipboard failure, and implicit HTML execution",
+      "contract": "Main§7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "CLIP-02",
+      "group": "paste",
+      "positive": "Write inert text succeeds completely or reports unrepresentability, while Source retains the original proposal",
+      "negative": "Table newline/pipe/TSV or foreign-owner Resource cannot be silently converted, truncated, or downloaded",
+      "contract": "Main§7；Interfaces§3",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "UNDO-01",
+      "group": "local undo",
+      "positive": "One group per IME/paste and a shared Draft stack across surfaces After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "No grouping across owners/submission boundaries or stealing Undo from composition Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§8",
+      "evidence": "bounded-composition; semantic-review"
+    },
+    {
+      "id": "UNDO-02",
+      "group": "committed undo",
+      "positive": "A new inverse plan at the current cut preserves subsequent unrelated edits After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "No old-receipt rollback, permission bypass, or fictitious cross-Workspace atomic Undo Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§8/9",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "UNDO-03",
+      "group": "undo protocol",
+      "positive": "Prepare only a D8 single-source inverse whose complete current after version matches; Redo is Undo of Undo. After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Reject later same-owner edits/ABA/control effects/stale Annotation/missing history pins/non-D8 origin. Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Interfaces§7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "PLAN-01",
+      "group": "serial binding",
+      "positive": "Only the current serial's complete preview may confirm After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Late prepare, later input, or changed focus cannot submit a different Draft Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§3",
+      "evidence": "bounded-state; real-Core-pending"
+    },
+    {
+      "id": "PLAN-02",
+      "group": "unknown outcome",
+      "positive": "Unknown/planned recovers the same request, with one effect under repeated requests After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "Reject repetition under a new OperationId, cancellation/timeout treated as failure, or receipt overwrite of later input Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§3/11",
+      "evidence": "bounded-state; real-Core-pending"
+    },
+    {
+      "id": "PLAN-03",
+      "group": "effects",
+      "positive": "All manifest pages, byte ranges, and epochs are obtainable and decoded correctly",
+      "negative": "Reject missing pages, mixed epochs, symbolic subjects pretending to be Refs, or previews as receipts",
+      "contract": "Interfaces§4/5；D7 Effects",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "ACL-01",
+      "group": "partial field",
+      "positive": "Phone-only users use D7 Field selection/narrow editing with explicit metadata qualification",
+      "negative": "D8 full source, hidden Fields, or cached receipts cannot bypass qualification",
+      "contract": "Main§2/10；Interfaces§2/4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "ACL-02",
+      "group": "revocation",
+      "positive": "Revocation stops new delivery and current authorization precedes original-decision recovery",
+      "negative": "Disclose no hidden version/error reason/Field value and never claim delivered bytes can be recalled",
+      "contract": "Main§3/9；Interfaces§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "STALE-01",
+      "group": "ABA",
+      "positive": "Version7→8→9 invalidates old selectors even with equal text",
+      "negative": "Equal key/title/digest cannot revive them",
+      "contract": "Main§9",
+      "evidence": "bounded-state; real-Core-pending"
+    },
+    {
+      "id": "ANCHOR-01",
+      "group": "annotation",
+      "positive": "Explicit current same-owner replacement target passes Core validation/preview",
+      "negative": "Reject fuzzy defaults among duplicates, Field/carrier targets, Draft Locators, and cross-owner targets",
+      "contract": "Main§9；Interfaces§4",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "ANCHOR-02",
+      "group": "suggestion",
+      "positive": "Original D7 replacement binds exact range/version for atomic submission",
+      "negative": "Reject direction-reversed replacement, stale acceptance, and unknown Resource-region profiles",
+      "contract": "Main§9/10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "FIELD-01",
+      "group": "typed values",
+      "positive": "Equal-value distinct occurrences retain notes/provenance/order and full FieldId disambiguates",
+      "negative": "Reject summaries overwriting multivalues, empty=null, locale-guessed numbers/dates, or inverse copies",
+      "contract": "Main§10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "TABLE-01",
+      "group": "native table",
+      "positive": "Preserve ragged rows, escaped pipes, blank/comment trivia and row domain; retain set_native_cell/insert_native_row/remove_native_row/reorder_native_rows/toggle_checklist/both promotions under original shapes. A two-row reorder may prepare with trivia proof.",
+      "negative": "Reject rectangular padding/first-row schema/row IDs/unsupported reorder or missing trivia proof. Multirow wording cannot disable closed reorder; insertion is not one NativeSelector.",
+      "contract": "Main§10；D5§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "VIEW-01",
+      "group": "result selection",
+      "positive": "Query epoch fixes targets, distinguishes paging/all-result, and deduplicates Nodes",
+      "negative": "Reject automatically writable aggregate/Ref columns, refreshed expanded selections, or page-as-whole",
+      "contract": "Main§10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "VIEW-02",
+      "group": "collection",
+      "positive": "Create/remove uses complete post-query including top/take, explicit parent, and four distinct deletion domains",
+      "negative": "Reject labels as FieldId, row numbers as Refs, remove-as-Trash, or current-page membership proof",
+      "contract": "Main§10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "VIEW-03",
+      "group": "board",
+      "positive": "Drag and keyboard column selection produce the same Field value/Core intent",
+      "negative": "RTL cannot reverse relation ownership, numeric/time axes, or Field values",
+      "contract": "Main§10；Direction§5",
+      "evidence": "bounded-direction; real-host-pending"
+    },
+    {
+      "id": "MIX-01",
+      "group": "mixed corpus",
+      "positive": "Preserve logical digits/brackets/URL/path/email/Ref/citation/CJK/Latin/code/formula content",
+      "negative": "Technical tokens resist adjacent name direction, and inert code/formula never executes",
+      "contract": "Direction§3",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "DIR-01",
+      "group": "authority",
+      "positive": "Explicit shell locale/setting and document/flow auto-neutral fallback have defined precedence",
+      "negative": "No portable sidecar/unknown D2-header semantics or guessed cross-revision block preferences",
+      "contract": "Direction§2",
+      "evidence": "bounded-direction; semantic-review"
+    },
+    {
+      "id": "DIR-02",
+      "group": "mirroring",
+      "positive": "Navigation/menu/pane/grid/icons follow the mirroring table and remain keyboard reachable",
+      "negative": "No indiscriminate scaleX mirroring of brand/media/math/data axes/relation arrows",
+      "contract": "Direction§5",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "A11Y-01",
+      "group": "keyboard/AT",
+      "positive": "All actions work by keyboard/screen reader with stable role/name/state and logical reading order",
+      "negative": "Reject trapped/lost/drifting focus, duplicate same-source pane reading, and noisy IME live regions",
+      "contract": "Direction§6/7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "A11Y-02",
+      "group": "reflow",
+      "positive": "Test 200% text/400% page/320px, high contrast/reduced motion, and detail alternatives for two-dimensional tables",
+      "negative": "Reject hidden actions on zoom, color-only meaning, or drag-only operations",
+      "contract": "Direction§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SCALE-01",
+      "group": "virtualization",
+      "positive": "100k navigation nodes/10k result rows/at most 200 items per transport page, pinned composition/focus, long names and rapid direction changes",
+      "negative": "Reject DOM indices as identity, locale sorting, local parsers, or partial results posing as complete",
+      "contract": "Impact§2；Direction§6",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "SCALE-02",
+      "group": "budgets",
+      "positive": "Narrower D6/D5 budgets reject completely while retaining Draft and responsive asynchronous UI",
+      "negative": "No truncation, silent batch splitting, UI-blocking computation, or proposal loss through dirty-cache cleanup",
+      "contract": "Impact§2；Main§11",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "PARITY-01",
+      "group": "surfaces",
+      "positive": "Same Desktop/Server WebUI/Mobile intent produces the same domain outcome/error/commit",
+      "negative": "Reject remote-offline local authority, excluded Mobile conversion/Agent entry, or untested-host support claims",
+      "contract": "Main§11；Direction§7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "LOCAL-01",
+      "group": "localization",
+      "positive": "Report four capabilities separately; RTL shell may use a currently translated UI language.",
+      "negative": "Arabic citations/dir=auto/Unicode storage do not prove Arabic UI translation.",
+      "contract": "Direction§1/7",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "RECOVER-01",
+      "group": "draft persistence",
+      "positive": "Quota failure, restart, and background resume expose actual Draft/submission states After an authorized actual receipt updates Base, derive buffer by current Draft exact equality; successor typing/Undo may return to after and become clean while keeping the newer serial.",
+      "negative": "No unsaved Draft labelled saved, old cache exposed after user change, or silent dirty TTL deletion Receipts never overwrite Draft/selection or update Base before authorization; equal values never weaken actual version/ABA checks.",
+      "contract": "Main§11",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "EXT-01",
+      "group": "unsupported",
+      "positive": "Undelivered D9 templates/regions/conversion and realtime collaboration are explicitly unavailable",
+      "negative": "No hidden capability through second UI parsers/formats/background network/new identity",
+      "contract": "Main§1/9/10",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "WIRE-02",
+      "group": "D2 Snapshot/3 embedding",
+      "positive": "d8_document.snapshot is complete current D2DocumentSnapshot/3 on the same owner/current SourceObservation/document_format cut.",
+      "negative": "Reject historical snapshot-as-current, direct payload wrappers, mismatched owner/cut, or D8 reconstruction of D2 product.",
+      "contract": "D8§1–3；Interfaces§2；Schemas§1–2",
+      "evidence": "author-resolved-pending-independent; real-decoder-pending"
+    },
+    {
+      "id": "DIR-03",
+      "group": "D7 View label precedence",
+      "positive": "Existing View textDirection governs labels; personal container direction only layout/auto-neutral fallback. All direction combinations preserve Core intent.",
+      "negative": "Document overrides cannot replace saved View direction; shell changes cannot write ViewSpec/Query.",
+      "contract": "Direction§2；D7 View§2",
+      "evidence": "semantic-review; platform-implementation-pending"
+    },
+    {
+      "id": "MAP-01",
+      "group": "repeated paragraphs/equal cells",
+      "positive": "Distinct paths distinguish equal display strings with correct bidirectional scalar mapping",
+      "negative": "Text search/DOM index cannot replace maps",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "MAP-02",
+      "group": "join/escape/atomic/adjacency",
+      "positive": "Joined spaces, escaped pipes and atoms remain read-only; adjacent text accumulates offsets.",
+      "negative": "Displayed read-only characters cannot become writable raw bytes.",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "MAP-03",
+      "group": "map binding/reverse selection",
+      "positive": "Complete owner/Base/serial/source/mapBinding and preserved anchor/focus direction",
+      "negative": "Reject old serial/source or equal-text ABA without reversing replacement",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-01",
+      "group": "first character in empty body",
+      "positive": "Arabic/Hebrew/mixed first input works through a legal empty-body site",
+      "negative": "No paragraphs/empty textRuns cannot permanently disable Write",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-02",
+      "group": "Enter/merge/emptying",
+      "positive": "Complete tree differences, whitespace, multiline successor carets for region splice/break/site insertion and retyping after emptying",
+      "negative": "Reject extra macro/marker/anchor/trivia changes completely",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-03",
+      "group": "EOL/Undo/commit",
+      "positive": "Full LF/CRLF/CR traces preserve untouched bytes, one Undo group, and complete prepare→preview→receipt",
+      "negative": "D2-valid, a bounded model, or preview is not commit",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-04",
+      "group": "asynchronous input",
+      "positive": "One-request queue preserves later input through native before/after logs without predecessor results overwriting later host state",
+      "negative": "Composition/nonempty queue forbids prepare/confirm; unproved linkage retains input",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "NATIVE-01",
+      "group": "disabled generated native bulk",
+      "positive": "No generated UI entry for 1000/1001/ragged/missing/trivia/duplicate/stale/extra-change cases. Retain original D7 cell/insert/remove/reorder/checklist/both promotion shapes, including proved two-row reorder.",
+      "negative": "No splitting/Source bypass or human-origin proof claim. Missing trivia proof rejects reorder; multirow wording cannot disable it, and insertion is not one NativeSelector.",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "ANNOT-01",
+      "group": "current Annotation target resolution",
+      "positive": "Value4 targets preserve distinct whole-document/resource and Locator/region currentness, with stable production address + fresh current Observation and D8 targetResolution exact",
+      "negative": "mapped",
+      "contract": "candidate",
+      "evidence": "ambiguous"
+    },
+    {
+      "id": "CARET-01",
+      "group": "endpoints/dual affinity",
+      "positive": "Test empty/single-grapheme/bidi/soft-wrap with conditional inverse for successful adjacent moves",
+      "negative": "Clamped first steps need not round-trip and dual stops cannot be deduplicated by logical position",
+      "contract": "Interfaces§3/8；Main§9/10；Direction§2/4",
+      "evidence": "architecture-obligation; bounded-fixtures-only; real-Core/host-pending"
+    },
+    {
+      "id": "WRITE-05",
+      "group": "D2 header EOF",
+      "positive": "Title/attribute/comment EOF at actual nonzero scalar column provides a site with necessary EOLs before first input",
+      "negative": "Do not require EOF column zero or append body text into header",
+      "contract": "Interfaces§3.2/3.4/8.5；D2§4.2/4.3",
+      "evidence": "grammar-derived bounded witnesses; real Core pending"
+    },
+    {
+      "id": "WRITE-06",
+      "group": "discovery trivia/carrier EOF",
+      "positive": "Sites/blank regions after the last carrier/comment preserve prefixes and construct missing separators before input",
+      "negative": "Discovery prefix is not a protected frame and body cannot precede a later carrier",
+      "contract": "Interfaces§3.2/3.4/8.5；D2§4.2/4.3",
+      "evidence": "grammar-derived bounded witnesses; real Core pending"
+    },
+    {
+      "id": "WRITE-07",
+      "group": "blank/BOM/three-EOL families",
+      "positive": "Ten EOF/blank boundaries × three EOLs × two BOM states, first text/space/tab/Enter followed by clearing/Undo/Redo/retyping",
+      "negative": "Bounded oracle is not complete D2/Core proof; preserve spaces/tabs/BOM/EOL",
+      "contract": "Interfaces§3.2/3.4/8.5；D2§4.2/4.3",
+      "evidence": "grammar-derived bounded witnesses; real Core pending"
+    },
+    {
+      "id": "WRITE-08",
+      "group": "immediate blank acceptance",
+      "positive": "First space/tab becomes exact Draft with plain caret",
+      "negative": "deleting the last nonblank preserves unselected whitespace;No indefinite pending-prefix or mandatory Source fallback for ordinary blanks",
+      "contract": "Interfaces§3/8；Main§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-09",
+      "group": "multiline successors",
+      "positive": "Deleting one of two EOLs creates an editable multiline paragraph; reload needs no old Undo log.",
+      "negative": "No single-line-only restriction or Undo pretending to be Backspace/Delete.",
+      "contract": "Interfaces§3/8；Main§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-10",
+      "group": "all EOLs/selections",
+      "positive": "Mixed EOL, reverse selection, whole-grapheme-end caret after CRLF joining, untouched bytes preserved",
+      "negative": "No split CRLF, normalization of other EOLs, or reversed replacement",
+      "contract": "Interfaces§3/8；Main§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-11",
+      "group": "region protection/boundaries",
+      "positive": "Maximal regions never cross parent/header/carrier/comment/anchor/protected boundaries; empty regions only at raw-safe EOF.",
+      "negative": "Structural sites cannot become directly spliceable zero regions; new syntax rejects completely.",
+      "contract": "Interfaces§3/8；Main§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "WRITE-12",
+      "group": "input presentation/recovery",
+      "positive": "Write displays actual source EOLs/paragraph gaps, Read retains D2 logical text, and Undo/Redo uses new serial/maps",
+      "negative": "No normalized whole-native-buffer writeback, serial rollback, or Copy Text as export",
+      "contract": "Interfaces§3/8；Main§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "ORIGIN-01",
+      "group": "complete current origins",
+      "positive": "Every current D2 addressable product occurrence/slot carries real sourceOrigins; ordinary Draft flows additionally provide D8 editable/navigation maps and can rebuild them after dirty full-source replacement.",
+      "negative": "No fixed 16-occurrence ceiling, Base-Locator dependency, DOM ordinal, equal-text search, or fabricated writable origin for generated/multi-origin values.",
+      "contract": "D8§2–3；Interfaces§3–4；current D2 sourceOrigins",
+      "evidence": "author-resolved-pending-independent; real-Core/host-pending"
+    },
+    {
+      "id": "ORIGIN-02",
+      "group": "nonwritable origins",
+      "positive": "Exact scalar/escape/join/atom ranges distinguish repeated atoms, escaped cells, and equal tokens in protected content",
+      "negative": "Nonnull navigation does not grant scalar write permission or D3 Annotation addresses",
+      "contract": "Interfaces§3/8；Main§4/5/7/8；Direction§4/6；Terminology",
+      "evidence": "architecture obligation; finite grammar/schema witnesses; real Core/host pending"
+    },
+    {
+      "id": "TERMS-01",
+      "group": "current upstream consumers",
+      "positive": "Consume complete current D2 Asciidoctor product and exact sourceOrigins; D8 no longer freezes the old reduced 5-Inline/16-body subset.",
+      "negative": "Do not add a D8 parser/dialect or reinterpret D3 Annotation target resource as a D2 Inline kind.",
+      "contract": "D8§2–3；Interfaces§2–4；Lexicon§6",
+      "evidence": "author-resolved-pending-independent; real-Core/host-pending"
+    },
+    {
+      "id": "FA-01",
+      "group": "Observation domains",
+      "positive": "Complete current observations bind read/project/maps/queues/prepare/Undo; production A-r1 differs from B-r1",
+      "negative": "Bare Counters, externalSequence or equal bytes cannot replace Base",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-02",
+      "group": "External source and continuity",
+      "positive": "Authorized external exact source/Draft remains readable and retainable; structural selectors separately obtain managed admission",
+      "negative": "External ABA, watcher gaps and observer reconstruction cannot re-sign old Base",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-03",
+      "group": "Prior scope",
+      "positive": "Named local_source admits ordinary single-Document reads/Drafts/saves without unrelated whole-Workspace Query proof",
+      "negative": "No fallback after failed checks, hidden-read-first expansion, or relabelling strong actions ordinary",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-04",
+      "group": "Strong-path scope",
+      "positive": "complete/Annotation/Undo/strong structural-relation paths retain workspace_constraints and actual additional-range qualification",
+      "negative": "Insufficient scope stops for explicit reprepare, never silent expansion of frozen ObservationScope",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-05",
+      "group": "Semantics/protection axes",
+      "positive": "ordinary+strict may succeed; observed_only requires trusted interactive entry and prior explicit choice",
+      "negative": "kind=document/manual claims cannot weaken protection; Annotation/Undo/Automation/managed_atomic cannot downgrade",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-06",
+      "group": "Weak-save timing",
+      "positive": "Retain actual B/N; observed C before last check conflicts with Base; disclose unobserved C after-check risk",
+      "negative": "B/N retention cannot claim preservation of unknown C; unknown installation is not saved or retried under a new ID",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-07",
+      "group": "Invalid versus pending",
+      "positive": "After D2/local typed validation only explicitly permitted unproved complete obligations may remain pending",
+      "negative": "D2/D4 invalidity or missing mandatory strong proof cannot impersonate semantic_pending success",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-08",
+      "group": "Saved-definition restriction",
+      "positive": "Validate complete static D7 definition closure/types; declared parameters may remain unbound and Query is not executed",
+      "negative": "ordinary cannot silently prepare undecodable definitions; raw/Draft repair remains available",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-09",
+      "group": "Version plan and no-op",
+      "positive": "Unchanged managed bytes/value and source-state preserve the complete production version and H even across operation domains; equal-byte external admission shows complete external before, original H+1 proposed basis, and sealed managed after; changed-byte external/managed saves likewise produce the actual planned version",
+      "negative": "Do not treat equal-byte admission as no effect, preallocate ChangeId, apply old revision+1, or synthesize managed inner revision from externalSequence; saved/planned recovery allocates no second version or ChangeId",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-10",
+      "group": "Preparation/publication state",
+      "positive": "Prepared returns actual semanticState/protection/retained; seal and portable publication remain distinct",
+      "negative": "Device Draft, preview and retention are not Saved; CP3 receivers do not reuse sender tokens",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-11",
+      "group": "Queue without caret",
+      "positive": "TextReplace rebinds exact positions through its original nonnull map/replacement/host log and new projection; DraftWritten uses its explicit caret",
+      "negative": "No added TextReplace caret; ambiguous grapheme/selection linkage stops the queue while retaining input",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-12",
+      "group": "Complete Undo",
+      "positive": "New Undo requires complete current production version, bytes, observation/cut/permission/dependencies to match original after",
+      "negative": "Changed history, external ABA, equal revisions across domains and missing pins cannot impersonate original after",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-13",
+      "group": "Historical recovery",
+      "positive": "Recover real old wire/binding saved/planned/unknown records with original bytes and current authorization/custody first",
+      "negative": "New profiles/consumers/preview TTL do not retroactively reject; no added fields or new request replacing the original",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-14",
+      "group": "actual submit entries",
+      "positive": "Current D8 prepare/submit uses D8EditPrepareRequest/3 → PreparedEditBinding/3 → original d6_commit_request/2; current D3 identity/lifecycle uses real wire13 while genuine historical wire12 retains its decoder.",
+      "negative": "Do not mechanically bump D6 submit, require D6 planToken for native D3 paths, or replace a historical request with a new one.",
+      "contract": "Interfaces§6–9；Schemas§5–9；D8§6–8",
+      "evidence": "author-resolved-pending-independent; real-Core/host-pending"
+    },
+    {
+      "id": "FA-15",
+      "group": "effects producer",
+      "positive": "Current PB3 consumes the actual EffectManifest/3 + EffectBytes/3 producer with complete pages/cursors/epoch and original-request association.",
+      "negative": "A coordinated current path returns its real unavailable/conflict result when evidence/runtime is unavailable; do not copy PB2/Effect2, guess a preview, reuse a click, or use owner_update_required as a generic placeholder.",
+      "contract": "Interfaces§6–8；Schemas§6/9；D8§6",
+      "evidence": "author-resolved-pending-independent; real-Core/host-pending"
+    },
+    {
+      "id": "FA-16",
+      "group": "Conflict-purpose separation",
+      "positive": "D8 Base accepts only ordinary current SourceObservation; ConflictRecords route to named owners",
+      "negative": "Conflict-installation-purpose evidence cannot qualify current D8 source, Query or SourceVersionRef; no acceptance before review",
+      "contract": "Interfaces§1–9；Main§14；Impact§5",
+      "evidence": "architecture-obligation; independent-review-pending; real-Core/host-pending"
+    },
+    {
+      "id": "FA-17",
+      "group": "native table header/title boundary",
+      "positive": "Native AsciiDoc table header/footer syntax remains legal Source under current D2; ordinary first-row cell editing and independent Document-title editing remain separate.",
+      "negative": "A first row/header presentation never creates durable row identity, Field schema or title; unsupported structured header editing falls back to Source rather than rejecting legal table syntax.",
+      "contract": "D8§2/9；current D5 native-table contract",
+      "evidence": "author-resolved-pending-independent; real-Core/host-pending"
+    }
+  ],
+  "currentizedIds": [
+    "SRC-03",
+    "WIRE-02",
+    "ORIGIN-01",
+    "ANNOT-01",
+    "TERMS-01",
+    "FA-14",
+    "FA-15",
+    "FA-17",
+    "RTL-036",
+    "RTL-037",
+    "RTL-038",
+    "RTL-039",
+    "RTL-040",
+    "RTL-041",
+    "RTL-042",
+    "RTL-085",
+    "RTL-086",
+    "RTL-087",
+    "RTL-088",
+    "RTL-089",
+    "RTL-090",
+    "RTL-091"
+  ],
+  "currentOverlay": [
+    {
+      "id": "CUR-01",
+      "scenario": "current version dispatch",
+      "positive": "wire2 Draft read/write + Snapshot3; prepare/PB3/Proof3/PIntent3/Effect3; Annotation Value4/R6; presentation policy record2",
+      "negative": "No blanket version bump or historical decoder widening",
+      "contract": "D8§1；Interfaces§1/6–10；Schemas§1–10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-02",
+      "scenario": "title/subtitle/titleless",
+      "positive": "Title/subtitle consume current D2 metadata; titleless remains none and presentation may derive displayTitle only",
+      "negative": "No filename/path/first-paragraph title fabrication",
+      "contract": "D8§2/10；D7-QUERY-V2§3/6",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-03",
+      "scenario": "full AsciiDoc",
+      "positive": "Complete Asciidoctor 2.0.26 source stays valid; rich editing appears only with proven writable origins",
+      "negative": "No old reduced dialect and no second parser",
+      "contract": "D8§2–3",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-04",
+      "scenario": "PB3 complete preview",
+      "positive": "All Effect3 pages/bytes/epoch and PB3 request association are available before confirm",
+      "negative": "No page-as-preview, copied Effect2, or expired confirmation reuse",
+      "contract": "D8§6；Interfaces§6–8",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-05",
+      "scenario": "Annotation Value4/R6",
+      "positive": "Read/Draft/edit uses Value4, R6 rich body, Core attribution and exact target qualification",
+      "negative": "No plain_text fallback, caller actor/time authority, or old evidence revival",
+      "contract": "D8§8；Schemas§7–8",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-06",
+      "scenario": "presentation policy",
+      "positive": "One current head derives logical /1; concurrent heads remain explicit and final P creates ChangeId/record",
+      "negative": "No LWW/arrival-order winner, ambient default, or pre-P committed record",
+      "contract": "Interfaces§10；Schemas§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-07",
+      "scenario": "metadata least privilege",
+      "positive": "filename/path metadata uses D6 entity_state+locator_state same cut and final barrier",
+      "negative": "No source_read/resource_read requirement and no content capability grant",
+      "contract": "D8§10；D7-QUERY-V2§4–6",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "CUR-08",
+      "scenario": "union occurrence",
+      "positive": "Mixed Node/Resource result keeps union_all invocation/operator/inputOrdinal/parent K and duplicate occurrences",
+      "negative": "No UI deduplication by equal cells",
+      "contract": "D8§10；D7-QUERY-V2§6.2",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-01",
+      "scenario": "preset/empty",
+      "positive": "Use current D7 preset scope/source defaults and browse/invalid-empty distinctions",
+      "negative": "No empty Global enumeration or hidden source enablement",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-02",
+      "scenario": "source identity",
+      "positive": "title/subtitle/node filename/path/resource filename and identity remain distinct",
+      "negative": "No filename-as-title or name-derived content capability",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-03",
+      "scenario": "matching",
+      "positive": "Use D7 exact/NFC/case-sensitive/CJK/RTL and deterministic order",
+      "negative": "No fuzzy/tokenizer/stemming/Pinyin UI expansion",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-04",
+      "scenario": "shortcut",
+      "positive": "Only explicit shortcut mode parses the closed grammar",
+      "negative": "No plain title:/URL/drive false syntax and no fallback Query",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-05",
+      "scenario": "surface equivalence",
+      "positive": "visual/shortcut/plain UI round-trips the same D7 compiler input and retains advanced opaque state",
+      "negative": "No dropped advanced condition; IME preedit issues no Query",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-06",
+      "scenario": "permission/index",
+      "positive": "Authorization precedes count/rank/snippet/index; partial/stale/building differ from complete zero",
+      "negative": "No page-as-all or missing-provider-as-empty",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-07",
+      "scenario": "persistence",
+      "positive": "Saved Query uses versioned D7 definition and DefinitionTransfer; UI state stays separate",
+      "negative": "No query_json as Query author source or QuerySpec1 widening",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "SEARCH-08",
+      "scenario": "hit resolution",
+      "positive": "Open hit uses fresh current resolution; snippet/highlight offsets remain display-only",
+      "negative": "No stable Locator/write selector inferred from result offsets",
+      "contract": "D8§10",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "VIEW-01",
+      "scenario": "wide multi-measure",
+      "positive": "Query derive→unnest→project→sort produces long-form compatible measures",
+      "negative": "No renderer melt/unpivot or unit-label type coercion",
+      "contract": "D8§11；D7 View§4",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "VIEW-02",
+      "scenario": "ordered line",
+      "positive": "Query establishes order and line validates strictly increasing x per series",
+      "negative": "No renderer/hashmap/locale implicit sort",
+      "contract": "D8§11；D7 View§2/4",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "VIEW-03",
+      "scenario": "complete renderer",
+      "positive": "Semantic chart waits for complete currently deliverable ResultHandle and exposes same-data accessible table",
+      "negative": "No sampling, first-page chart, hidden fetch or unauthorized tooltip enrichment",
+      "contract": "D8§11",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "VIEW-04",
+      "scenario": "deferred layouts",
+      "positive": "Only current D7 closed layouts render; deferred families report unsupported_layout",
+      "negative": "No chart-library passthrough",
+      "contract": "D8§11",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "RTL-99",
+      "scenario": "dual affinity/layout epoch",
+      "positive": "Logical caret + affinity + epoch survives bidi/wrap/font relayout through exact reconstruction",
+      "negative": "No DOM index identity or stale-coordinate replay",
+      "contract": "D8-DIRECTION§4–6",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "AT-01",
+      "scenario": "accessibility",
+      "positive": "role/name/state/focus/logical order, IME noise control, 200/400%/320px/high contrast/reduced motion are explicit",
+      "negative": "No Unicode persistence used as proof of RTL shell/AT implementation",
+      "contract": "D8-DIRECTION§10–13",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "PERF-01",
+      "scenario": "input latency",
+      "positive": "p95 input≤50ms and layout≤100ms over ≥1000 events, cold/warm 3 runs",
+      "negative": "No mean-only claim or UI-thread heavy parse",
+      "contract": "D8-IMPACT§13",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "PERF-02",
+      "scenario": "scale",
+      "positive": "Desktop10MiB/100k lines, Mobile1MiB/10k, 1MiB line, 10x overflow, 100k nav/10k rows/page200, memory caps",
+      "negative": "No truncation/split transaction/dirty clear to meet budget",
+      "contract": "D8§13；D8-IMPACT§13",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "D9-01",
+      "scenario": "clipboard/conversion boundary",
+      "positive": "Current D8 paste is text/plain; rich clipboard/Office conversion follows D9 conversion/mapping/loss",
+      "negative": "No HTML/RTF execution or automatic bulk paste into existing grids",
+      "contract": "D8§5/14",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    },
+    {
+      "id": "D10-01",
+      "scenario": "agent/contribution boundary",
+      "positive": "Agent/tool output becomes only a closed D7 Action or explicit D8 proposal and SearchContribution remains D7 Query",
+      "negative": "No arbitrary source patch, ambient system clipboard/workspace mount, or second Search engine",
+      "contract": "D8§14",
+      "status": "author-resolved-pending-independent; product-host-UNRUN"
+    }
+  ],
+  "counts": {
+    "fixed": 160,
+    "inherited": 177,
+    "currentOverlay": 26,
+    "totalCurrentObligations": 203
+  },
+  "evidenceBoundary": "design obligations only; product/platform execution UNRUN"
+}

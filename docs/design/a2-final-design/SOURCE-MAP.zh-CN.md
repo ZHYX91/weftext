@@ -69,7 +69,7 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D7–D10。
 
-D3、D4、D5 都是作者候选，并有模块级 source map。D7–D10 完整模块仍 TODO；D4/D5 direct producer/consumer 阅读明确只是 partial，不能据此把这些 owner 模块标成完成。
+D3、D4、D5 都是作者候选并有模块级 source map。D7 已在 fixed26be 的 D7 范围独立 PASS；D8 现为 FULL 作者候选，等待独立复核。D9–D10 完整模块仍 TODO；direct producer/consumer 阅读不能把这些 owner 模块标成完成。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立增量复核结论为 REVISE：P0=0 / P1=0 / P2=1。该复核已独立 CLOSED `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02` 与 `A2-D7-1068244-P2-01`；`A2-D7-2F89-P2-02` 继续保持 fixed1068244 的 independently CLOSED。唯一 OPEN finding 是 `A2-D7-2F89-P2-01`，范围已收窄为真实 strict QuerySpec/2/CanonicalGraph Search compiler oracle。本作者批只修这一项并继续等待 fixed-SHA 独立复核。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 D7 残余。D7 因而在 D7 范围 accepted；D8、D9–D10 与 global A2 仍分别 pending。产品/runtime 证据仍为 UNRUN。
 
 
 ## 12. D4/D5 审计映射复核谱系
@@ -137,9 +137,9 @@ D7 现已整合为完整作者候选。fixed-S 的十三份 D7 来源以及额�
 
 D7-SEARCH.md 已整合 SEARCH-01 至 SEARCH-08，但没有建立第二个搜索执行器或持久权威。普通文本与可视化筛选是默认路径；可选快捷模式必须显式进入，并使用带 @ 前缀的操作符，因此普通冒号文字、URL、Windows 盘符和 title: 不会被静默解析。保存时只保存 canonical Query 语义，不保存设备侧解析器状态。当前匹配保留 exact 与显式 `nfc-for-compare` 两种比较 basis，substring/equality 均区分大小写，并且不声称已经提供自动模糊、拼音或分词能力。
 
-D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN 证据状态、20 项整合义务、全部 8 项 SEARCH 义务、scenario/non-fallback 序号、A2-01–57、Facet/People/ICS 组、Chart §15、terminology Registry 覆盖以及两项导航 finding。D8–D10 只在真实 D7 producer/consumer 交叉上记为 PARTIAL；它们的完整模块仍留给后续。
+D7-SOURCE-MAP.json 记录完整 D7 provenance 与 fixed26be accepted scope。D8-SOURCE-MAP.json 现已逐项登记 fixed D8 prose/cases、Mandatory §15/RTL、SEARCH-01–08 interaction、current View/FC 协调与 D8 direct producer/consumer。D9–D10 仍只在真实 D8 intersection 上 PARTIAL；其完整模块留后续。
 
-fixed2f89 已独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立关闭 A2-D7-2F89-P2-02；fixed85bdadf 再独立关闭剩余两个 P1 与 Impact-sync P2，只留下 A2-D7-2F89-P2-01。当前作者修复只处理这一 machine-oracle 残余，详细 author-repaired/pending-independent 状态记录在 D7-SOURCE-MAP.json。
+fixed2f89 独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 关闭 A2-D7-2F89-P2-02；fixed85bdadf 关闭两个 P1 与 Impact-sync P2；后续 fixed26be 非作者复核关闭最终 A2-D7-2F89-P2-01，并给出 PASS 0/0/0。
 
 产品 runtime、OS、GUI、renderer/export、database、真实 replica、provider、performance、migration 与 activation 行为在本批全部为 UNRUN。
 
@@ -153,3 +153,12 @@ fixed1068244（`1068244d982a22140d8753b0483c63135b092999`）独立增量复核�
 ## 15. fixed85bdadf 唯一 D7 残余与真实 compiler oracle
 
 fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立把 D7 repair ledger 收敛到 P0=0 / P1=0 / P2=1。P1-01、P1-02 与 A2-D7-1068244-P2-01 均在该 SHA CLOSED；P2-02 继续保持 fixed1068244 CLOSED。本继任作者 delta 只触碰唯一 P2-01 Search oracle 与必要状态/导航文字：19 个正例现在都带真实可严格解码的 QuerySpec/2 与直接 §5 CanonicalGraph serialization，8 个 negative/incomplete/browse case 继续保持零 Query。已关闭的 Registry/D6 metadata/D9 query_json 合同均不重开。
+
+
+## 16. D8 完整作者整合
+
+D8 本批精确从 fixed26be 开始。fixed 八件 D8 输入全部 FULL 并完成映射。`D8-SOURCE-MAP.json` 逐项登记 54 个 fixed prose section、160 个 fixed case、RTL 九问/七类场景、Mandatory §15 的 19 个 heading、SEARCH-01–08 与 27 个 current Search fixture、两层 replacement router，以及 current AsciiDoc/Annotation 全部 760 个 acceptance obligation，并标注 D8 applicability。
+
+current D8 使用完整 Asciidoctor 2.0.26 product、D2DocumentSnapshot/3、wire2 read/Draft transform、D8EditPrepareRequest/3 + PreparedEditBinding/3 + Proof3/PIntent3/Effect3、Annotation Value4/R6、current D8 presentation-policy owner、current D7 Search/View 语义，以及分离的 RTL/AT/性能实现门。D9/D10 只按 D8 直接边界读取。
+
+D8 状态为 **author-resolved-pending-independent**。产品/runtime/GUI/IME/AT/OS/多副本/性能/migration/activation/deployment 证据全部 UNRUN。D9/D10 完整模块与 global A2 留后续。

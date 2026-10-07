@@ -14,7 +14,7 @@ translation_status: source
 
 对已经在本目录整合的模块，本目录是唯一 A2 候选正文。早期 snapshots、D6 file-authority owner afterimage 和 AsciiDoc/Annotation final-design candidate 继续作为来源与历史 decoder 证据，但不与 A2 形成第二套 current definition。
 
-当前作者候选已整合 D1–D7；仍只是作者候选，不是独立接受。D8–D10 完整模块留待后续批次。
+当前作者候选已整合 D1–D8。D7 后续已在 fixed26be 获非作者 PASS（P0=0/P1=0/P2=0）；D8 是完整作者候选，等待 fixed-SHA 独立复核。D9–D10 完整模块留待后续批次。
 
 ## 2. 本批进度
 
@@ -26,13 +26,13 @@ translation_status: source
 | D4 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D5 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D6 | fixed2f89 已独立 CLOSED fixed454e 之后剩余的两项 navigation finding；既有 D6 bounded semantic closure 仍只保留各自记录范围。 |
-| D7 | fixed85bdadf 增量复核 = REVISE（P0=0/P1=0/P2=1）；P1-01/P1-02 与 Impact-sync P2 已在那里独立 CLOSED，source-map P2-02 继续在 fixed1068244 CLOSED；本作者修订只处理 P2-01，等待 fixed-SHA 独立复核 |
-| D8 | 完整模块仍 TODO；D7 只消费真实 editor/direction/accessibility/RTL 交叉 |
+| D7 | fixed26be 非作者复核 = PASS（P0=0/P1=0/P2=0）；最终 A2-D7-2F89-P2-01 在该 SHA CLOSED；此前有界 closure 继续绑定各自原 SHA |
+| D8 | 本批已形成 FULL 作者候选：fixed 八件输入、current successor、SEARCH interaction、View/RTL/AT、schemas/acceptance/terms/registry/source maps 均已整合；状态 author-resolved-pending-independent |
 | D9 | 完整模块仍 TODO；D7 只消费 coordinated binding 与直接 construction/import/export 交叉 |
 | D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
-| Mandatory A2 source | 保留 D4/D5 证据覆盖 1–924 行；D7 批已读并映射 D7 所需 925–1141 与具名 A2/Facet/People/ICS/Chart 义务；D8–D10 owner module 整合仍留后续 |
+| Mandatory A2 source | D8 已完整消费 D8 适用的 §15.1–15.8.9 chart/View interaction 与 RTL mandatory intake；D9–D10 owner module 完整整合留后续 |
 
-仅知道路径、route、blob 或标题，绝不等于已经语义全文阅读；任何 TODO 模块都不得据此写成 accepted 或 complete。
+仅知道路径、route、blob 或标题，绝不等于已经语义全文阅读；任何 TODO 模块都不得据此写成 accepted 或 complete。D8 已不再是 TODO，但仍只是未接受的作者候选。
 
 ## 3. 当前文件
 
@@ -44,18 +44,19 @@ translation_status: source
 - D5.zh-CN.md、D5-IMPACT.zh-CN.md、D5-LEXICON.zh-CN.md 构成 D5 作者候选；D5-SOURCE-MAP.json 保留 provenance。
 - D6.zh-CN.md、D6-CONTROL.zh-CN.md、D6-SCHEMAS.zh-CN.md、D6-IMPACT.zh-CN.md、D6-LEXICON.zh-CN.md 与 D6-REGISTRY.json 构成 current D6 作者候选；D6-SOURCE-MAP.json 保存细粒度 provenance。
 - D7.zh-CN.md、D7-SCHEMAS.zh-CN.md、D7-QUERY-V2.zh-CN.md、D7-SEARCH.zh-CN.md、D7-IMPACT.zh-CN.md、D7-REGISTRY.json 与 D7-REGISTRY-QUALIFICATION.zh-CN.md，再加上逐字节保留的 d7/owners 子树，共同构成当前 D7 作者候选；D7-SEARCH-FIXTURES.json 保存快捷解析的机器验收例，D7-SOURCE-MAP.json 保存机器来源追踪。
-- REVIEW-ENTRY.zh-CN.md 是 D1–D7 作者候选复核入口。
+- D8.zh-CN.md、D8-INTERFACES.zh-CN.md、D8-SCHEMAS.zh-CN.md、D8-DIRECTION.zh-CN.md、D8-ACCEPTANCE.zh-CN.md、D8-LEXICON.zh-CN.md、D8-IMPACT.zh-CN.md、D8-TERMS.json、D8-REGISTRY.json 与 D8-SOURCE-MAP.json 构成当前完整 D8 作者候选。
+- REVIEW-ENTRY.zh-CN.md 是 D1–D8 作者候选复核入口。
 - SOURCE-MAP.zh-CN.md 是人类可读的来源与 disposition 图。
 - SOURCE-MAP.json 逐条记录 49 个固定 S 输入的 S blob、阅读状态、current 来源以及 source-qualified 义务组。
 
 ## 4. 候选内部优先级
 
-对 D1–D7，本目录对应文件是 current candidate。只有当 D1.zh-CN.md、D2.zh-CN.md 或 SOURCE-MAP 明确标记 historical decoder 或 source-qualified evidence 时，早期正文才继续承担历史恢复或证据义务。
+对 D1–D8，本目录对应文件是 current candidate。只有当 D1.zh-CN.md、D2.zh-CN.md 或 SOURCE-MAP 明确标记 historical decoder 或 source-qualified evidence 时，早期正文才继续承担历史恢复或证据义务。
 
-D8–D10 目前还没有完整 A2 current definition；D7 消费的 direct producer/consumer 不等于这些完整 owner 模块已被静默整合。
+D9–D10 目前还没有完整 A2 current definition；D8 消费的 direct producer/consumer 不等于这些完整 owner 模块已被静默整合。
 
 ## 5. 接受边界
 
-fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立增量复核结论为 REVISE：P0=0 / P1=0 / P2=1。该复核已独立 CLOSED `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02` 与 `A2-D7-1068244-P2-01`；`A2-D7-2F89-P2-02` 继续保持 fixed1068244 的 independently CLOSED。唯一 OPEN finding 是 `A2-D7-2F89-P2-01`，范围只剩真实 QuerySpec/2/CanonicalGraph Search compiler oracle。本作者批只修这一项残余，不自行关闭；此前有界 closure 继续绑定各自原 SHA。不声称 D7 或 global A2 已接受。
+后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 因而在 D7 范围 accepted；这不接受 D8 或 global A2。
 
-D8–D10 完整模块、Search+D8 执行证据与 fresh independent Pro/global review 继续 pending；产品/runtime 证据仍 UNRUN。
+D8 fixed-SHA 独立复核、D9–D10 完整模块、D8/Search runtime-platform 证据与 fresh independent Pro/global review 继续 pending；产品/runtime 证据仍 UNRUN。

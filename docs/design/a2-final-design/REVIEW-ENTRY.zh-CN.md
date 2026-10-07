@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D7 作者候选复核入口——D7 整合与导航修订
+# A2 D1–D8 作者候选复核入口——D8 完整整合
 
-fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立增量复核结论为 REVISE：P0=0 / P1=0 / P2=1。该复核已独立 CLOSED `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02` 与 `A2-D7-1068244-P2-01`；`A2-D7-2F89-P2-02` 继续保持 fixed1068244 的 independently CLOSED。唯一残余是 `A2-D7-2F89-P2-01`，范围已经收窄为真实 QuerySpec/2/CanonicalGraph Search compiler oracle。本作者批精确从 fixed85bdadf 开始，只修这一项且不自行关闭；此前有界 closure 继续绑定各自记录 SHA。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。本 D8 作者批精确从 fixed26be 开始，状态 author-resolved-pending-independent，不自行接受 D8 或 global A2。D9–D10 完整模块与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -53,6 +53,11 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 现已作为作者候选 FULL：fixed-S D7 十三份来源、额外 D9 binding source、current 双语 D7 owner set、current Registry 与具名 A2 direct intersection 均记录在 D7-SOURCE-MAP.json。D8–D10 仍只在 D7 具名 producer/consumer intersection 上 PARTIAL；其完整 A2 module 继续 pending。
+D7 已 FULL，并在 fixed26be 的 D7 范围独立 PASS。D8 现已形成 FULL 作者候选：fixed 八件 D8 输入、current D6-FA 与 AsciiDoc/Annotation successor、SEARCH-01–08 interaction、current View renderer/AT 义务、双语 schemas/lexicon/impact、160-case 继承及 current overlay、machine/human source map 均已整合。D8 仍等待 fixed-SHA 独立复核。D9–D10 只在 D8 具名 producer/consumer intersection 上 PARTIAL；其完整 A2 module 继续 pending。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
+
+
+## D8 复核目标
+
+下一位非作者只绑定 PR #5 的最终 stop SHA。D8 当前状态为 `author-resolved-pending-independent`，不得继承作者自我接受。重点核验 `D8-SOURCE-MAP.json`、`D8-ACCEPTANCE.json`、current PB3/Value4/Snapshot3 边界、SEARCH-01–08 interaction、current D7 View 两个 hard answer、RTL/AT/性能义务，以及 S49/inputs 零变。D9/D10 完整模块与 global A2 不属于本轮 D8 接受范围。

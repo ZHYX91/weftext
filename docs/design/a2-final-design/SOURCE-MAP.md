@@ -66,7 +66,7 @@ SOURCE-MAP.json records machine-readable obligation groups, dispositions, source
 
 Fixed-S D4 and D5 sources required by this batch are now fully read and mapped: D4 main/Impact/Lexicon plus the immutable catalog, and D5 main/Impact/Lexicon. Mandatory scenario input §§1-14 (lines 1-924) is read for D4/D5; lines 925-1141 remain for later D7-D10 work.
 
-D3, D4 and D5 are author candidates with module-level source maps. D7-D10 full-module integration remains TODO; D4/D5 direct producer/consumer reads are explicitly partial and do not mark those owner modules complete.
+D3, D4 and D5 are author candidates with module-level source maps. D7 is independently PASS at fixed26be in its D7 scope; D8 is now a FULL author candidate pending independent review. D9-D10 full-module integration remains TODO; direct producer/consumer reads do not mark those owner modules complete.
 
 ## 8. D1/D2 source-map completeness repair
 
@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-Independent incremental review fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) concluded REVISE with P0=0 / P1=0 / P2=1. It independently CLOSED `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, and `A2-D7-1068244-P2-01`; `A2-D7-2F89-P2-02` remains independently CLOSED at fixed1068244. The sole OPEN finding is `A2-D7-2F89-P2-01`, narrowed to the real strict QuerySpec/2/CanonicalGraph Search compiler oracle. This author batch repairs only that residual and leaves it pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+A subsequent non-author review bound to fixed26be (`26be071d4c2075343d9ebf272e00f23769ce0d64`) concluded PASS with P0=0 / P1=0 / P2=0 and CLOSED the final D7 residual. D7 is accepted in its D7 scope; D8, D9-D10 and global A2 remain independently pending. Product/runtime evidence is UNRUN.
 
 
 ## 12. D4/D5 audit-map review lineage
@@ -134,9 +134,9 @@ D7 is now integrated as a complete author candidate. The fixed-S thirteen D7 sou
 
 D7-SEARCH.md integrates SEARCH-01 through SEARCH-08 without creating a second search executor or persistent authority. Plain text and visual filters are the default; optional shortcut mode is explicit and uses prefixed operators so ordinary colon text, URLs and drive-letter paths are not silently parsed. Saving stores canonical Query semantics, not UI parser state. Current matching preserves the retained exact versus explicit `nfc-for-compare` basis, with case-sensitive substring/equality and no automatic fuzzy/Pinyin/tokenizer claim.
 
-D7-SOURCE-MAP.json records fixed/current blobs, FULL/PARTIAL/UNRUN evidence, twenty integration obligations, all eight SEARCH obligations, scenario/non-fallback ordinals, A2-01–57, Facet/People/ICS groups, Chart §15, terminology Registry coverage and the two navigation findings. D8-D10 remain partial only at true D7 producer/consumer intersections; their full modules remain later.
+D7-SOURCE-MAP.json records the complete D7 provenance and the accepted fixed26be scope. D8-SOURCE-MAP.json now records all fixed D8 prose/cases, Mandatory §15/RTL, SEARCH-01–08 interaction, current View/FC coordination and D8 direct producer/consumer boundaries. D9-D10 remain partial only at true D8 intersections; their full modules remain later.
 
-fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. fixed1068244 additionally closed A2-D7-2F89-P2-02. fixed85bdadf then independently closed the two remaining P1 findings and the Impact-sync P2, leaving only A2-D7-2F89-P2-01. The current author repair addresses only that machine-oracle residual; its author-repaired/pending-independent state is recorded in D7-SOURCE-MAP.json.
+fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. fixed1068244 closed A2-D7-2F89-P2-02. fixed85bdadf closed the two P1 findings and Impact-sync P2. The later fixed26be non-author review closed the final A2-D7-2F89-P2-01 and returned PASS 0/0/0.
 
 Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior remains UNRUN.
 
@@ -149,3 +149,12 @@ The residual repair keeps the already-closed immutable source trace unchanged. I
 ## 15. fixed85bdadf sole D7 residual and real compiler oracle
 
 fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) independently reduced the D7 repair ledger to P0=0 / P1=0 / P2=1. P1-01, P1-02 and A2-D7-1068244-P2-01 are CLOSED at that SHA; P2-02 remains CLOSED at fixed1068244. This successor-author delta touches only the sole P2-01 Search oracle and necessary status/navigation text: all 19 positive fixtures now carry real strict-decodable QuerySpec/2 plus direct §5 CanonicalGraph serializations, while the 8 negative/incomplete/browse cases remain zero-Query. No closed Registry/D6 metadata/D9 query_json contract is reopened.
+
+
+## 16. D8 full author integration
+
+The D8 batch starts exactly from fixed26be. All eight fixed D8 inputs are FULL and mapped. `D8-SOURCE-MAP.json` enumerates 54 fixed prose sections, all 160 fixed cases, RTL nine questions/seven scenario groups, 19 Mandatory §15 headings, SEARCH-01–08 plus 27 current Search fixtures, both replacement routers, and all 760 current AsciiDoc/Annotation acceptance obligations with explicit D8 applicability.
+
+Current D8 uses full Asciidoctor 2.0.26 product semantics, D2DocumentSnapshot/3, wire2 read/Draft transforms, D8EditPrepareRequest/3 + PreparedEditBinding/3 + Proof3/PIntent3/Effect3, Annotation Value4/R6, the current D8 presentation-policy owner, current D7 Search/View semantics, and separate RTL/AT/performance implementation gates. D9/D10 are read only at direct D8 boundaries.
+
+D8 status is **author-resolved-pending-independent**. Product/runtime/GUI/IME/AT/OS/multi-replica/performance/migration/activation/deployment evidence remains UNRUN. D9/D10 full modules and global A2 remain later.

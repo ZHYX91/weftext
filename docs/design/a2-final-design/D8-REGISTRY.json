@@ -1,0 +1,89 @@
+{
+  "format": "weftext.a2-d8-registry",
+  "version": 1,
+  "status": "author-resolved-pending-independent",
+  "fixedInputCommit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "candidateStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
+  "currentFamilies": [
+    {
+      "name": "document_read",
+      "outer": "D8/2",
+      "inner": "D2DocumentSnapshot/3"
+    },
+    {
+      "name": "draft_projection",
+      "outer": "D8/2",
+      "inner": "D2 current product + DraftEditMap"
+    },
+    {
+      "name": "edit_prepare",
+      "outer": "D8EditPrepareRequest/3",
+      "inner": "PreparedEditBinding/3"
+    },
+    {
+      "name": "d6_prepare",
+      "outer": "d6_commit_request/2",
+      "inner": "InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3"
+    },
+    {
+      "name": "effects",
+      "outer": "EffectManifest/3",
+      "inner": "EffectBytes/3"
+    },
+    {
+      "name": "annotation",
+      "outer": "D8AnnotationRead/Draft/1",
+      "inner": "PortableAnnotationRecord/4 + Value/4 + R6"
+    },
+    {
+      "name": "presentation_policy",
+      "outer": "SetRequest/2",
+      "inner": "logical /1 + immutable record /2"
+    },
+    {
+      "name": "search",
+      "outer": "D7 QuerySpec/2",
+      "inner": "SearchConditionAst/1 + CanonicalGraph"
+    },
+    {
+      "name": "view",
+      "outer": "D7 ViewSpec/1",
+      "inner": "D8 renderer interaction"
+    }
+  ],
+  "rowDomains": [
+    "native_document_table",
+    "d4_field_occurrence",
+    "node_ref_collection",
+    "d7_derived_query",
+    "external_import_ir",
+    "resource_preview"
+  ],
+  "unicode": {
+    "editor": "18.0.0",
+    "uax9": "rev52",
+    "uax29": "rev49",
+    "d7CelNfc": "15.1"
+  },
+  "performance": {
+    "inputP95Ms": 50,
+    "layoutP95Ms": 100,
+    "eventCountMinimum": 1000,
+    "runsEachColdWarm": 3,
+    "desktopBytes": 10485760,
+    "desktopLines": 100000,
+    "mobileBytes": 1048576,
+    "mobileLines": 10000,
+    "singleLineBytes": 1048576,
+    "navigationNodes": 100000,
+    "gridRows": 10000,
+    "pageMaximum": 200,
+    "desktopMemoryMiB": 256,
+    "mobileMemoryMiB": 128
+  },
+  "searchOwner": "D7",
+  "viewOwner": "D7",
+  "authorCommitOwner": "D3/D6",
+  "currentD8Status": "author-resolved-pending-independent",
+  "productEvidence": "UNRUN"
+}
