@@ -14906,7 +14906,7 @@
     "D8-DIRECTION.md": "76a21f73dbc8db2c8778ce7840b45e6f5d019867",
     "D8-DIRECTION.zh-CN.md": "8b9535a5ac8a0e9fb49df1445e83121f79857851",
     "D8-ACCEPTANCE.md": "2d6d4a7ef28643885b5603d4929ef9d921d5e662",
-    "D8-ACCEPTANCE.zh-CN.md": "2352ad5c6dd24475ebe42f1d1016d58c39f99807",
+    "D8-ACCEPTANCE.zh-CN.md": "fd536227a1c628017c113982d7b1aa17e4d342fb",
     "D8-ACCEPTANCE.json": "a67f5b42168583b2a5ac9f2f94f330a01c931449",
     "D8-LEXICON.md": "0689dc2d9e0ab6a524d226159e7b105834475ecb",
     "D8-LEXICON.zh-CN.md": "697b8ac6029370b4ca0bbaf79f0ee7cd064fb0e3",
@@ -14979,6 +14979,6 @@
     "view": "D7 ViewSpec/Definition owner retained; D8 builder/renderer/interaction/AT currentized; VIEW-CUR namespace + VIEW-BLD-01..10",
     "historical": "fixed sources/blobs/line ranges, original conditions, D1–D7 accepted history, and genuine historical decoders/bytes retained; no migration fabricated",
     "productEvidence": "UNRUN",
-    "bilingual": "Chinese acceptance projection normalized to checker language threshold; inline-code token set now exactly matches English; IDs/order/polarity unchanged"
+    "bilingual": "Chinese acceptance projection passes the repository mixed-language predicate locally; 213/213 IDs/order/columns and inline-code token parity preserved"
   }
 }
