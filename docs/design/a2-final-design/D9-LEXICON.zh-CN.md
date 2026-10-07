@@ -23,8 +23,11 @@ translation_status: source
 | Node Template / Template Recipe | D2 Template 身份 / D9 一次性构造配方 | 不具有持久实例绑定，也不执行脚本插值 |
 | Office Template / Placeholder / Style Directive / Repeat Band | 普通 Office 字节与可见编译器语法 | 不存在 content-control/named-range/ExcelTable 隐藏层 |
 | Render Snapshot / D7 Result Pin | D9 有限投影 / 固定由 D7 拥有的完整结果 | 不是作者快照或 rowHandle 身份 |
-| Export Plan | D9 current immutable output preparation，current type `ExportPlan/3` | 非 D6 PreparedIntent 或 author ledger |
-| Staged Output / Publication Receipt | 完整未发布字节 / 外部发布事实，现任为 `PublicationReceipt/3` | 绝不是 D3/D6 author receipt |
+| Export Plan | D9 current immutable output preparation，fresh type `ExportPlan/4` | 非 D6 PreparedIntent 或 author ledger |
+| Annotation Content Carrier | D9 从一次精确现任 `D8AnnotationReadResponse/1` 构造的封闭 export input | 不是 annotation_index、第二 parser 或 permission carrier |
+| View Render Binding | D9 在完整 D7 result + `ViewSpec/1` 之上的有限 renderer/profile/assets binding | 不是 View authority、Query transform 或通用 chart-library config |
+| Staged Output / Publication Receipt | 完整未发布字节 / 外部发布事实，fresh 为 `PublicationReceipt/4` | 绝不是 D3/D6 author receipt |
+| Print Receipt | D9 print-only delivery outcome，`D9PrintReceipt/1` | 不是 author receipt 或 external-publication proof |
 | Import Loss / Export Loss | 相互分离的 D9 fixed-proposal loss domain | 不是 safety approval 或跨域 address |
 | Image Physical Size / imageSizes | 可验证的源物理事实 / 用户 output layout choice | 绝不猜测 host DPI 或 viewport |
 | Region Body / d9rg1 | D9 non-identity geometry | 非 complete Locator；outer l1 仍归 D3 |
@@ -45,13 +48,13 @@ translation_status: source
 
 ## Current-version names
 
-final current D9 协调 D7 `PreparedActionBinding/4`、D3 `D3IdentityOperationRequest/13`、D6 `DependencyProof/3` 与 Effect3，以及 D9 `ExportPlan/3` / `PublicationReceipt/3`。D10 较早 naming companion 中 PAB3/Plan2/Receipt2 只表示 intermediate owner provenance；final FC 适用处由本文具名 supersede。
+final current D9 协调 D7 `PreparedActionBinding/4`、D3 `D3IdentityOperationRequest/13`、D6 `DependencyProof/3` 与 Effect3，以及 fresh D9 `ExportPlan/4` / `PublicationReceipt/4` / `D9PrintReceipt/1`。Plan/Receipt3 继续是精确 recovery family。D10 较早 naming companion 中 PAB3/Plan2/Receipt2 只表示 intermediate owner provenance；final FC 适用处由本文具名 supersede。
 
 `D7ResultPin` 不拥有 D7 schema/value semantics；nested TerminalSchema/V 仍归 D7。`TemplateRecipe/2` 不拥有 D2 Template identity。`RegionBody/d9rg1` 不拥有 D3 Resource region identity。
 
 ## Office native selector terminology
 
-**visible native selector** 指 Office template 中精确可见的 `native.table[...]::column[...]` 文本。**compiled native key** 指 Plan3 内部 ASCII `nt_...` / `nc_...` identifier。二者刻意分离：visible bytes 才是 authoring authority；compiled key 只服务于 canonical Plan structure。完整 `D9NativeTableSelector/1` 保存 semantic selector。
+**visible native selector** 指 Office template 中精确可见的 `native.table[...]::column[...]` 文本。**compiled native key** 指适用 Plan3/Plan4 binding record 内部的 ASCII `nt_...` / `nc_...` identifier。二者刻意分离：visible bytes 才是 authoring authority；compiled key 只服务于 canonical Plan structure。完整 `D9NativeTableSelector/1` 保存 semantic selector。
 
 ## Retirement names
 
