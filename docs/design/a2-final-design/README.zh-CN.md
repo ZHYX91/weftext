@@ -45,7 +45,7 @@ translation_status: source
 - D6.zh-CN.md、D6-CONTROL.zh-CN.md、D6-SCHEMAS.zh-CN.md、D6-IMPACT.zh-CN.md、D6-LEXICON.zh-CN.md 与 D6-REGISTRY.json 构成 current D6 作者候选；D6-SOURCE-MAP.json 保存细粒度 provenance。
 - D7.zh-CN.md、D7-SCHEMAS.zh-CN.md、D7-QUERY-V2.zh-CN.md、D7-SEARCH.zh-CN.md、D7-IMPACT.zh-CN.md、D7-REGISTRY.json 与 D7-REGISTRY-QUALIFICATION.zh-CN.md，再加上逐字节保留的 d7/owners 子树，共同构成当前 D7 作者候选；D7-SEARCH-FIXTURES.json 保存快捷解析的机器验收例，D7-SOURCE-MAP.json 保存机器来源追踪。
 - D8.zh-CN.md、D8-INTERFACES.zh-CN.md、D8-SCHEMAS.zh-CN.md、D8-DIRECTION.zh-CN.md、D8-ACCEPTANCE.zh-CN.md、D8-LEXICON.zh-CN.md、D8-IMPACT.zh-CN.md、D8-TERMS.json、D8-REGISTRY.json 与 D8-SOURCE-MAP.json 构成已保全的 D8 作者候选。c98b 五项 finding 的作者修订已存在，等待 exact-final-SHA 独立复核；作者不自行关闭 finding。
-- D9.zh-CN.md、D9-INTERFACES.zh-CN.md、D9-SCHEMAS.zh-CN.md、D9-ACCEPTANCE.zh-CN.md/JSON、D9-IMPACT.zh-CN.md、D9-LEXICON.zh-CN.md、D9-TERMS.json、D9-REGISTRY.json 与 D9-SOURCE-MAP.zh-CN.md/JSON 构成完整 D9 作者候选。qualified native-table Office authoring 对 simple `data.native_table.COLUMN` 保持原拼法；fresh qualified/non-ASCII 情况使用可见的 `native.table[...]::column[...]`；internal `nt_/nc_` 仅作为 Plan metadata。
+- D9.zh-CN.md、D9-INTERFACES.zh-CN.md、D9-SCHEMAS.zh-CN.md、D9-ACCEPTANCE.zh-CN.md/JSON、D9-IMPACT.zh-CN.md、D9-LEXICON.zh-CN.md、D9-TERMS.json、D9-REGISTRY.json 与 D9-SOURCE-MAP.zh-CN.md/JSON 共同构成完整 D9 作者候选。qualified native-table Office authoring 对 simple `data.native_table.COLUMN` 保持原拼法；fresh qualified/non-ASCII 情况使用可见的 `native.table[...]::column[...]`；internal `nt_/nc_` 仅作为 Plan metadata，不产生另一套作者权威。
 - REVIEW-ENTRY.zh-CN.md 是 D1–D9 作者候选复核入口。
 - SOURCE-MAP.zh-CN.md 是人类可读的来源与 disposition 图。
 - SOURCE-MAP.json 逐条记录 49 个固定 S 输入的 S blob、阅读状态、current 来源以及 source-qualified 义务组。
