@@ -118,15 +118,15 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-D6 已形成作者候选，并已有 fixed01cc 非作者裁决。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)。fixed01cc 已独立 CLOSED D6 P1-01 与 P2-03；P1-02/P2-01/P2-02 和导航 P2 从 fixed32cf 修订，目前仅 author-resolved-pending-independent。D7–D10 仍留待后续完整模块批次。
+D6 继续是作者候选。详细 section/case/registry-pointer provenance 见 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md)，完整评审状态时间线统一见 [REVIEW-ENTRY](REVIEW-ENTRY.zh-CN.md)。fixed1fc4 后 D6 仍为 REVISE、0 个开放 P1、2 个开放 P2；P1-01/P1-02/P2-02/P2-03 保留有界独立关闭，P2-01 与 navigation 在本批作者修订后仍待独立复核。D7–D10 继续留待后续完整模块批次。
 
 
 ## 12. D4/D5 审计映射复核谱系
 
-fixed-a62 在 D4/D5 semantic LIMITED PASS 后留下两个 audit P2；fixed4282 后续仅独立 CLOSED P2-02 的六份 D10 真实来源资格有界范围。fixed32cf 对 P2-01 给出 REVISE P0=0/P1=0/P2=1：R2 已独立 CLOSED；R1 在 D4+D5 合计 202 条中通过 188 条并留下 14 条残余（D4 1 条、D5 13 条）。当前作者候选已修这 14 条映射，但仍仅 author-resolved-pending-independent。
+D4/D5 方面，fixed4282 仅独立 CLOSED P2-02 的六份 D10 真实来源资格有界范围。fixed32cf 已独立 CLOSED P2-01 R2 并通过 188/202 条 R1；fixed1fc4 随后独立通过全部 14 条残余 R1 映射。因此 A2-D4D5:P2-01 现为 bounded CLOSED，但不构成 D4/D5 全局接受。
 
 D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 170 个 fixed-S D5 非空行全部放入来源限定的连续义务组，并逐项写 current target、disposition、owner、basis 和 oracle。Mandatory 1–924 行为 716/716，按真实 owner/defer 路由。fixed97 selected rows 同时保存真实 EN/ZH 原 row（D4 72/72；D5 130/130）。D4-CATALOG-MAP.json 按 RFC 6901 用 7 个无重叠 subtree 覆盖 2,854/2,854 pointer，文档根使用空字符串而不是 slash，同时保持不可变 fixed catalog 为唯一规范值权威。Mandatory 的跨文件 target 已改为逐文件 target array；current workflow/freeze/handoff 三组分别落到 REVIEW-ENTRY §5.1–§5.3，不再指向不存在的 §7。
 
 旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
 
-两个有界 D3 finding 已在 fixed-a62 独立 CLOSED。fixed829 现在只表示 D6 五项 finding 的 origin；后续独立复核对象是 fixed01cc。fixed01cc 已独立 CLOSED D6 P1-01 与 P2-03，P1-02/P2-01/P2-02 加 A2-D6-01CC-P2-01 在 D6 残余修订后仍待新的 exact-stop 复核。D4/D5 方面，fixed32cf 已独立 CLOSED R2 并接受 188/202 条 R1 映射；14 条 R1 残余当前仅作者修复。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending；runtime 证据仍 UNRUN。
+两个有界 D3 finding 继续在 fixed-a62 独立 CLOSED。fixed829 只表示 D6 五项 finding origin；fixed01cc 是较早 D6 独立复核对象，fixed1fc4 是最新固定 D6 复核对象。P1-01/P2-03 保留 fixed01cc 的 CLOSED；fixed1fc4 又 CLOSED P1-02/P2-02 并通过 D4/D5 残余集。D6 现只剩 P2-01 与 A2-D6-01CC-P2-01 由本作者批次修订，两项都不得自行 CLOSED。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending；runtime 证据仍 UNRUN。

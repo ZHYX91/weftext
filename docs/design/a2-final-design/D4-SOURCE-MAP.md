@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D4-SOURCE-MAP.zh-CN.md)
 # A2 D4 source, catalog, intake, and current-consumer audit map
 
-Status: **A2-D4D5:P2-02 remains independently CLOSED only in its fixed4282 bounded six-D10-source scope. At fixed32cf, P2-01 R2 was independently CLOSED; R1 passed 188/202 combined D4+D5 mappings and left 14 residuals. D4's sole residual `FC4R-TABLE-04` is repaired here and is author-resolved-pending-independent.** This file does not independently accept D4, D6, D7–D10, or global A2.
+Status: **A2-D4D5:P2-02 remains independently CLOSED only in its fixed4282 bounded six-D10-source scope. After the fixed1fc4 independent review, A2-D4D5:P2-01 is now bounded CLOSED: R2 remained CLOSED, and the prior 188/202 R1 pass plus all 14 residual mappings (including D4 `FC4R-TABLE-04`) passed independent review.** This file does not independently accept D4, D6, D7–D10, or global A2.
 
 ## 1. Fixed-S D4 source coverage
 
@@ -36,6 +36,6 @@ Raw D10 references to historical/original `DependencyProof/2`, `DependencyKey/2`
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain independently CLOSED. The two bounded D3 P1 findings were independently CLOSED at fixed-a62. Fixed4282 independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope**. The later fixed32cf P2-01 review returned REVISE P0=0/P1=0/P2=1: R2 was independently CLOSED, while R1 passed 188/202 combined mappings and identified 14 residuals (1 D4, 13 D5). This repair addresses those 14 only; the repaired R1 remains author-resolved-pending-independent pending a new exact-stop review.
+D1/D2 fixed-446 findings remain independently CLOSED. The two bounded D3 P1 findings remain independently CLOSED at fixed-a62. Fixed4282 independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope**. For P2-01, fixed32cf independently CLOSED R2 and passed 188/202 R1 mappings; the later fixed1fc4 independent review passed all 14 residual mappings (1 D4, 13 D5), so the combined P2-01 is now bounded CLOSED. This does not accept D4/D5 globally.
 
-D6 author work stopped at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` with its five D6 findings author-resolved-pending-independent. That separate exact-SHA review is not D6 acceptance and is not closed by this D4/D5 audit repair. D7–D10 full modules, Mandatory 925–1141, and fresh Pro/global review remain pending. Runtime, OS, GUI, real-replica, migration, activation, and deployment evidence are UNRUN.
+For current D6 review state, do not duplicate a moving status here; use [A2 REVIEW-ENTRY](REVIEW-ENTRY.md) and [D6-SOURCE-MAP](D6-SOURCE-MAP.md) as the single status/provenance entry points. D7–D10 full modules, Mandatory 925–1141, and fresh Pro/global review remain pending. Runtime, OS, GUI, real-replica, migration, activation, and deployment evidence are UNRUN.

@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D5-SOURCE-MAP.zh-CN.md)
 # A2 D5 source, intake, supersession, and current-consumer audit map
 
-Status: **A2-D4D5:P2-02 remains independently CLOSED only in its fixed4282 bounded six-D10-source scope. At fixed32cf, P2-01 R2 was independently CLOSED; R1 passed 188/202 combined D4+D5 mappings and left 14 residuals. D5 contains 13 of those residuals; they are repaired here and remain author-resolved-pending-independent.** D5 normative semantics are not rewritten by this audit repair.
+Status: **A2-D4D5:P2-02 remains independently CLOSED only in its fixed4282 bounded six-D10-source scope. After the fixed1fc4 independent review, A2-D4D5:P2-01 is now bounded CLOSED: R2 remained CLOSED, and the prior 188/202 R1 pass plus all 14 residual mappings (13 in D5) passed independent review.** D5 normative semantics are not rewritten by this audit repair.
 
 ## 1. Fixed-S D5 source coverage
 
@@ -21,7 +21,7 @@ The current D5 candidate still has six distinct row domains and no persistent Re
 
 Mandatory source lines 1–924 are covered **716/716** through 33 actual-owner groups; generic “D4/D5 intake” is no longer used as the current target. D6 persistence, D9 Office/template/conversion, D10 package/provider/connector/credential/execution custody, D3 binding, and D4 typed facts retain their actual owners.
 
-The **130 D5-relevant fixed97 rows** preserve actual EN and ZH rows with source path/blob/line. The fixed32cf independent review passed **117/130** D5 R1 mappings and left 13 residuals. This repair remaps the six D2 Witness/language/product rows to D2, five native-table export rows to D9, and the two holder/proof rows to the real D5/D4 inner consumers plus D6 outer `/3` proof. All 13 repaired rows remain author-resolved-pending-independent. Counts do not replace the source conditions.
+The **130 D5-relevant fixed97 rows** preserve actual EN and ZH rows with source path/blob/line. The fixed32cf independent review passed **117/130** D5 R1 mappings and left 13 residuals. Those 13, together with the one D4 residual, later passed the fixed1fc4 independent review; the combined A2-D4D5:P2-01 is therefore bounded CLOSED. The six D2 Witness/language/product rows remain with D2, five native-table export rows remain with D9, and the two holder/proof rows remain with the real D5/D4 inner consumers plus D6 outer `/3` proof. Counts do not replace the source conditions.
 
 ## 3. Direct D10 qualification
 
@@ -39,6 +39,6 @@ Raw references to Proof2/Key2/wire12/PAB3 remain source-qualified historical/ori
 
 ## 5. Review state
 
-D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 were independently CLOSED at fixed-a62. Fixed4282 independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope**. Fixed32cf later returned REVISE P0=0/P1=0/P2=1 for P2-01: R2 was independently CLOSED; R1 passed 188/202 combined mappings and left 14 residuals, 13 in D5. This repair addresses those 13 D5 rows (plus the one D4 row in the paired map); repaired R1 remains author-resolved-pending-independent pending a new exact-stop review.
+D1/D2 fixed-446 findings remain CLOSED; D3 P1-01/P1-02 remain independently CLOSED at fixed-a62. Fixed4282 independently **CLOSED P2-02 only in the bounded six-D10-source qualification scope**. For P2-01, fixed32cf independently CLOSED R2 and passed 188/202 R1 mappings; the later fixed1fc4 independent review passed all 14 residual mappings (13 in D5), so P2-01 is now bounded CLOSED. This does not accept D4/D5 globally.
 
-D6 author work stopped at `01cc40b819df78fbe724f1c64c27284ad60fc6c8` with five D6 findings author-resolved-pending-independent; it is not accepted and is not closed by this D5 audit repair. D7–D10 full modules, Mandatory 925–1141, and fresh global review remain pending. Runtime/OS/GUI/replica/migration/activation evidence is UNRUN.
+For current D6 review state, do not duplicate a moving status here; use [A2 REVIEW-ENTRY](REVIEW-ENTRY.md) and [D6-SOURCE-MAP](D6-SOURCE-MAP.md) as the single status/provenance entry points. D7–D10 full modules, Mandatory 925–1141, and fresh global review remain pending. Runtime/OS/GUI/replica/migration/activation evidence is UNRUN.

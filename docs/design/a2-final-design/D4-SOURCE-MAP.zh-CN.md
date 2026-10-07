@@ -6,7 +6,7 @@ translation_status: source
 [English](D4-SOURCE-MAP.md)
 # A2 D4 来源、catalog、intake 与 current-consumer 审计映射
 
-状态：**A2-D4D5:P2-02 继续仅在 fixed4282 的六份 D10 真实来源有界范围内独立 CLOSED。fixed32cf 已独立 CLOSED P2-01 R2；R1 在 D4+D5 合计 202 条中通过 188 条并留下 14 条残余。D4 唯一残余 `FC4R-TABLE-04` 已在本次修订，仍仅 author-resolved-pending-independent。** 本文不独立接受 D4、D6、D7–D10 或全局 A2。
+状态：**A2-D4D5:P2-02 继续仅在 fixed4282 的六份 D10 真实来源有界范围内独立 CLOSED。fixed1fc4 独立复核后，A2-D4D5:P2-01 现为 bounded CLOSED：R2 保持 CLOSED，原 188/202 条 R1 通过项加全部 14 条残余映射（含 D4 `FC4R-TABLE-04`）均通过独立复核。** 本文不独立接受 D4、D6、D7–D10 或全局 A2。
 
 ## 1. fixed-S D4 来源覆盖
 
@@ -35,6 +35,6 @@ D10 原文中的历史/原 owner `DependencyProof/2`、`DependencyKey/2`、`wire
 
 ## 5. 评审状态
 
-D1/D2 fixed-446 findings 继续 independent CLOSED；两个有界 D3 P1 已在 fixed-a62 被独立 CLOSED。fixed4282 继续只在“六份真实 D10 来源资格”有界范围内独立 **CLOSED P2-02**。后续 fixed32cf 对 P2-01 给出 REVISE P0=0/P1=0/P2=1：R2 已独立 CLOSED；R1 在 D4+D5 合计 202 条中通过 188 条，留下 14 条残余（D4 1 条、D5 13 条）。本次只修这 14 条，修后 R1 仍为 author-resolved-pending-independent，必须由新的 exact-stop 非作者复核裁决。
+D1/D2 fixed-446 findings 继续 independent CLOSED；两个有界 D3 P1 继续在 fixed-a62 被独立 CLOSED。fixed4282 继续只在“六份真实 D10 来源资格”有界范围独立 **CLOSED P2-02**。P2-01 方面，fixed32cf 已独立 CLOSED R2 并通过 188/202 条 R1；后续 fixed1fc4 独立复核通过全部 14 条残余映射（D4 1 条、D5 13 条），因此合并后的 P2-01 现为 bounded CLOSED。这不构成 D4/D5 全局接受。
 
-D6 作者写入已停在 `01cc40b819df78fbe724f1c64c27284ad60fc6c8`，五项 D6 finding 仍只是 author-resolved-pending-independent；其独立 exact-SHA 复核与本 D4/D5 审计分离，本次不构成 D6 acceptance。D7–D10 完整模块、Mandatory 925–1141 与 fresh Pro/global 仍 pending。runtime、OS、GUI、真实 replica、migration、activation、deployment 全部 UNRUN。
+D6 当前评审状态不再在本文复制易漂移的摘要；统一以 [A2 REVIEW-ENTRY](REVIEW-ENTRY.zh-CN.md) 与 [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md) 为状态/provenance 入口。D7–D10 完整模块、Mandatory 925–1141 与 fresh Pro/global 仍 pending。runtime、OS、GUI、真实 replica、migration、activation、deployment 全部 UNRUN。
