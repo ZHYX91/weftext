@@ -1659,80 +1659,80 @@
     {
       "id": "VIEW-BLD-01",
       "scenario": "grouped aggregate bar duplicate",
-      "positive": "Builder accepts a complete long-form grouped result only when each required (state,series) binding is unique and current; save/reopen preserves the exact validated ViewSpec.",
-      "negative": "Duplicate (state,series), hidden auto-merge, renderer aggregation, or silent member loss rejects validation and writes nothing.",
+      "positive": "Definition-save gate accepts and round-trips a statically legal long-form bar ViewSpec against the current terminal schema; with a complete current result, runtime validation renders only when each required (state,series) semantic key is unique.",
+      "negative": "Duplicate runtime semantic keys, hidden auto-merge, renderer aggregation, or silent member loss fails the runtime View gate and renders nothing; it does not invalidate or rewrite the saved definition.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#1",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-02",
       "scenario": "ordered line, gap, and incomplete page",
-      "positive": "Builder binds the explicit Query-sorted x/series columns; line validates strict x order, represents declared missing/gap semantics, and waits for the complete result.",
-      "negative": "Renderer sorting, duplicate/disordered x acceptance, first-page-as-chart, or gap fabrication is rejected/unavailable.",
+      "positive": "Definition-save gate accepts the statically valid x/series bindings; runtime validation uses the explicit Query order, requires strictly increasing x within each series, represents declared gap semantics, and waits for the complete current result.",
+      "negative": "Duplicate/disordered runtime x, renderer sorting, first-page-as-chart, or gap fabrication fails or remains unavailable at runtime without rewriting the saved definition.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#2",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-03",
       "scenario": "pie zero/negative/duplicate/count",
-      "positive": "Builder validates the closed pie value/key rules and preserves exact authored options; a valid complete zero-total follows the named D7 state.",
-      "negative": "Negative/illegal zero-total, duplicate semantic key, excess category, implicit Other/top-N/drop, or renderer coercion cannot be saved/rendered as valid.",
+      "positive": "A statically legal pie ViewSpec can be saved independently of current result values; on a complete current result, legal zero-total follows the named D7 state and all runtime value/key/category rules are enforced.",
+      "negative": "Negative values, illegal zero-total, duplicate semantic keys, excess categories, implicit Other/top-N/drop, or renderer coercion fails the runtime View gate, renders nothing, and does not invalidate or mutate the saved definition.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#3",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-04",
       "scenario": "hierarchy and cycle",
-      "positive": "Legal hierarchy members are preserved losslessly and routed advanced/source while the deferred graphical hierarchy layout reports unsupported.",
-      "negative": "Missing parent/self/cycle/same-id-different-label is never repaired by UI; deferred tree/treemap cannot be exposed because a library can draw it.",
+      "positive": "Definition-save handling preserves every statically legal authored hierarchy member losslessly and routes unsupported controls to advanced/source; runtime validation checks the complete current hierarchy before any supported rendering.",
+      "negative": "Missing parent, self/cycle, or same-id-different-label data fails the runtime View gate and is never UI-repaired; deferred tree/treemap rendering stays unsupported without invalidating preserved legal author bytes.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#4",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-05",
       "scenario": "Gantt/dependency/deferred boundary",
-      "positive": "Legal authored Gantt-related source members remain exact through open/cancel/reopen and the unsupported graphical route is explicit.",
-      "negative": "Mixed invalid date/instant, end-before-start, invalid progress/dependency, or a deferred Gantt renderer cannot be normalized, written, or claimed supported.",
+      "positive": "Definition-save handling preserves statically legal authored Gantt-related members exactly through open/cancel/save/reopen and keeps the unsupported graphical route explicit; runtime value checks occur only when a supported consumer exists.",
+      "negative": "Mixed invalid date/instant data, end-before-start, invalid progress/dependency, or a deferred Gantt renderer cannot be normalized, rendered, or claimed supported, and runtime failure does not rewrite preserved legal author bytes.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#5",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-06",
       "scenario": "boxplot/quantile/deferred boundary",
-      "positive": "Legal authored members are retained through builder/advanced routing and existing current data may be displayed only by supported alternatives.",
-      "negative": "Bad quartile order rejects; D8 never calculates quantiles and never enables deferred boxplot merely because the chart library can.",
+      "positive": "Definition-save handling preserves statically legal authored members through builder/advanced routing; supported alternatives may consume existing complete current data without D8 inventing quantiles.",
+      "negative": "Bad runtime quartile order fails the runtime View gate; D8 never calculates quantiles or enables deferred boxplot merely because a chart library can, and the saved legal definition is not rewritten.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#6",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-07",
       "scenario": "incomplete ResultHandle",
-      "positive": "Builder can save a valid definition independently of result pages; renderer waits for a complete current ResultHandle and exposes incomplete_result distinctly.",
-      "negative": "First page, stale page cache, or timeout cannot be treated as a complete chart or complete-zero result.",
+      "positive": "Builder saves a statically valid definition independently of result pages; renderer/export waits for a complete current ResultHandle and exposes incomplete_result distinctly.",
+      "negative": "First page, stale page cache, timeout, or other incomplete data cannot be treated as a complete chart or complete-zero result and cannot invalidate or mutate the saved definition.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#7",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-08",
       "scenario": "ACL reset offline provider and renderer crash",
-      "positive": "Permission/currentness/reset/provider states remain typed and definition bytes survive; renderer crash can fall back to the same complete authorized data where allowed.",
-      "negative": "Old authorization/result/schema is never reused after reset; offline/provider/renderer failure cannot become empty data or mutate the ViewSpec.",
+      "positive": "Definition bytes survive result ACL/reset/offline/provider/renderer states; runtime validation rechecks current result authorization/epoch and may use only an allowed same-complete-data fallback after renderer failure.",
+      "negative": "Old authorization/result/schema is never reused after reset; offline/provider/data/renderer failure cannot become empty data and cannot mutate or invalidate the ViewSpec, while a revoked definition owner still blocks a new save through the definition-save gate.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#8",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-09",
       "scenario": "cross-surface CJK RTL print and fallback",
-      "positive": "Desktop/WebUI/Mobile/CLI/Server read/validate the same definition; claimed renderers preserve CJK/RTL semantics, logical order, accessible same-data fallback, and print/export meaning.",
-      "negative": "Surface-specific UI cannot alter Query/ViewSpec semantics, reorder RTL data, sample Mobile data, or let CLI/Server claim pixels they do not render.",
+      "positive": "Desktop/WebUI/Mobile/CLI/Server apply the same static definition-save semantics; claimed renderers then apply the same complete-result runtime semantics while preserving CJK/RTL logical order, same-data accessibility, and print/export meaning.",
+      "negative": "Surface UI cannot alter Query/ViewSpec semantics, reverse RTL data, sample Mobile data, or let CLI/Server claim pixels; runtime capability failure cannot rewrite the saved definition.",
       "contract": "D8§11.1–11.2；Direction§9–11；Mandatory§15.7#9",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     },
     {
       "id": "VIEW-BLD-10",
       "scenario": "Dashboard block failure isolation",
-      "positive": "Each Dashboard block validates/authorizes/renders independently over its own complete result; one denied/unavailable block has an isolated error while other authorized blocks remain usable.",
-      "negative": "One block failure cannot leak its data, poison unrelated blocks, trigger hidden cross-block reads, or make Dashboard itself a new Query/authorization boundary.",
+      "positive": "Each Dashboard block has its own static definition-save gate and independent runtime authorization/complete-result/render gate; one denied/unavailable block has an isolated error while other authorized blocks remain usable.",
+      "negative": "One block runtime failure cannot leak data, poison unrelated blocks, trigger hidden cross-block reads, create a Dashboard authorization boundary, or invalidate another block's saved definition.",
       "contract": "D8§11.1–11.2；Mandatory§15.7#10",
       "status": "author-resolved-pending-independent-review; product-host-UNRUN"
     }
