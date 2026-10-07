@@ -11,7 +11,7 @@ translation_status: source
 
 ## 1. 替换边界
 
-Core 继续保留 D2/D4 领域解释和 D3/D6 事务权威。conversion/Office/XML/model/runtime dependency 留在可选 coordinator/worker package。实现必须把未发布 legacy ImportIr/YAML proposal decoder、free provider command/fallback alias、旧 attr/record/H1–H9/formula-reorder/broad-view template parser、free export dictionary、rowHandle identity 与 D9-private Locator alias 作为一个 migration set 清理；historical research file 只保留历史证据。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+Core 继续保留 D2/D4 的领域解释以及 D3/D6 的事务权威。conversion、Office、XML、model 与 runtime dependency 留在可选 coordinator/worker package。实现时必须把未发布 legacy ImportIr/YAML proposal decoder、free provider command/fallback alias、旧 attr/record/H1–H9/formula-reorder/broad-view template parser、free export dictionary、rowHandle identity 与 D9-private Locator alias 作为一个 migration set 清理；historical research file 只保留历史证据。
 
 current implementation 必须面向 D3 wire13、PAB4、Effect3、D2Snapshot3 与 ExportPlan/Receipt3。真实已存 historical record 仍用 exact decoder，而不是 current/historical 双写。
 
@@ -19,18 +19,18 @@ current implementation 必须面向 D3 wire13、PAB4、Effect3、D2Snapshot3 与
 
 | Gate | 必需证据 |
 | --- | --- |
-| I01 IR/codec | 完整 strict decoder：closed member/union、duplicate/unknown/null/Unicode/Counter/order/budget、format coverage，以及独立 parser/render 对照。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I02 hostile files | ZIP alias/traversal/link/device/bomb、ODF repeat、XML DTD/XXE/entity、active/encrypted/unknown variant、恶意 stdout/slot/exit-zero truncated output 与全部 limit。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I03 OS sandbox | 具名 Windows/Linux/macOS build 的 file/network/process-tree/resource/cleanup 隔离证据，不能只看 timeout/container 名。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I04 mapping/admission | 完整 D2 parse/product、D4 Registry/type/qualifier/cardinality/reference/control、fresh-root authority，以及 ConversionInput/Result9/PAB4/Effect3 字节闭合。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I05 real ImportJob | 10k Nodes/10 batches/超过内存输入、SCC/coupling group、真实 D6 commit 前后 fault、lost receipt、restart、revoke、cancel、TTL/pins。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I06 Office template | 真实 Word/WPS/LibreOffice DOCX/ODT/XLSX/ODS，split/mixed style、escape、非法 XML scalar、typed none/complex value、visible native selector、0/1/N repeat、merge/limit。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I07 document output | H1–H9 current source semantics、target loss、body/bibliography 单一放置、style bundle、CJK/RTL/AT/font/pagination 的具名 Office 版本证据。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I08 typed export | D7 各 result domain、reset/order/bag/tie/none/graph、任意精度值、date/instant、公式注入反例与 typed spreadsheet output。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I09 publication | 可证明的 create-only filesystem boundary；ENOSPC/name conflict/user move/flush/rename crash/revoke race；unknown 不换名重发。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I10 region | Crop/MediaBox/UserUnit/Rotate/EXIF/density/rounding、d9rg1 + l1 currentness、copy/fork、stale/not-visible、keyboard/AT。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I11 surfaces | Desktop/CLI/Server/WebUI parity、Mobile negative capability、D1 overlap reason priority、nondisclosing error、D8 generated proposal/Draft conflict。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
-| I12 release/naming | 完整 dependency/SBOM/license/model/font/platform install/uninstall、无 provider/config backdoor、legacy-name scan、capability 与真实 gate 绑定。 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
+| I01 IR/codec | 完整 strict decoder：覆盖封闭 member/union、duplicate/unknown/null/Unicode/Counter/order/budget、format coverage，并与独立 parser/render 结果对照。 |
+| I02 hostile files | 覆盖 ZIP alias/traversal/link/device/bomb、ODF repeat、XML DTD/XXE/entity、active/encrypted/unknown variant、恶意 stdout/slot、exit-zero truncated output 以及全部 limit。 |
+| I03 OS sandbox | 对具名 Windows/Linux/macOS build 提供 file/network/process-tree/resource/cleanup 隔离证据，不能只凭 timeout 或 container 名称。 |
+| I04 mapping/admission | 覆盖完整 D2 parse/product、D4 Registry/type/qualifier/cardinality/reference/control、fresh-root authority，以及 ConversionInput/Result9/PAB4/Effect3 字节闭合。 |
+| I05 real ImportJob | 覆盖 10k Nodes、10 batches、超过内存的输入、SCC/coupling group、真实 D6 commit 前后 fault、lost receipt、restart、revoke、cancel、TTL/pins。 |
+| I06 Office template | 使用真实 Word/WPS/LibreOffice DOCX/ODT/XLSX/ODS，覆盖 split/mixed style、escape、非法 XML scalar、typed none/complex value、visible native selector、0/1/N repeat、merge/limit。 |
+| I07 document output | 覆盖 H1–H9 现任 source semantics、target loss、body/bibliography 单一放置、style bundle，以及 CJK/RTL/AT/font/pagination 的具名 Office 版本证据。 |
+| I08 typed export | 覆盖 D7 各 result domain、reset/order/bag/tie/none/graph、任意精度值、date/instant、公式注入反例与 typed spreadsheet output。 |
+| I09 publication | 验证 create-only filesystem boundary；覆盖 ENOSPC/name conflict/user move/flush/rename crash/revoke race；unknown 状态不得换名重发。 |
+| I10 region | 覆盖 Crop/MediaBox/UserUnit/Rotate/EXIF/density/rounding、d9rg1 + l1 currentness、copy/fork、stale/not-visible、keyboard/AT。 |
+| I11 surfaces | 覆盖 Desktop/CLI/Server/WebUI parity、Mobile negative capability、D1 overlap reason priority、nondisclosing error，以及 D8 generated proposal/Draft conflict。 |
+| I12 release/naming | 覆盖完整 dependency/SBOM/license/model/font/platform install/uninstall、无 provider/config backdoor、legacy-name scan，并把 capability 与真实 gate 绑定。 |
 
 某个 profile 通过只开放精确 format × operation × variant × route × platform × version 组合。library/profile semantics 变化必须重跑受影响 gate。
 
@@ -54,19 +54,19 @@ hash-derived nt_/nc_ 只测试为 internal Plan key 或 genuine historical autho
 
 ## 4. Worker 与 provider 证据
 
-Docling Lite current install evidence 的 completeForExecution=false，因此继续 unavailable。XPS/OXPS、OFD、CAJ/HN 不能从候选 library、extension recognition 或其它 variant 继承 availability。每个 provider record 必须绑定 exact dependency version、license/distribution decision、model/font asset、sandbox evidence 与 corpus test。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+Docling Lite 的现任 install evidence 中 completeForExecution=false，因此继续不可用。XPS/OXPS、OFD、CAJ/HN 不能从候选 library、extension recognition 或其它 variant 继承 availability。每个 provider record 都必须绑定精确 dependency version、license/distribution decision、model/font asset、sandbox evidence 与 corpus test。
 
 Worker budget 在 route step/retry 间累计。cleanup 必须证明整个 process tree 已终止；不确定 cleanup 隔离 output 并 disable route。Worker output 在 pin 前独立 decode/validate。
 
 ## 5. Import 与 mapping 证据
 
-CSV fixture 包含 quoted newline、double quote、duplicate header、ragged record、empty file 与 exact Unicode。Workbook fixture 区分 numeric lexeme、blank/absent/empty、formula/cache、hidden sheet/row/column、merge anchor/covered cell 与 source coordinate。Page/flow fixture 保留完整 geometry/reading order/unrepresented issue。coverage 漏项即使 IR decoder 通过也必须失败。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+CSV fixture 覆盖 quoted newline、double quote、duplicate header、ragged record、empty file 与精确 Unicode。Workbook fixture 区分 numeric lexeme、blank/absent/empty、formula/cache、hidden sheet/row/column、merge anchor/covered cell 与 source coordinate。Page/flow fixture 保留完整 geometry/reading order/unrepresented issue。只要 coverage 有漏项，即使 IR decoder 通过也必须失败。
 
 D4 mapping test 使用真实 Registry definition，覆盖 type/qualifier/cardinality/relation/Calendar 正反例。不得按 label 映 Field，也不得让 fresh root 借 existing-owner 权限。
 
 ## 6. Node Template 证据
 
-测试覆盖 duplicate source、self/cross-template fresh subject rewrite、owner-local Resource remap、external-current reference policy、只枚举 index 而不读 body 的 Annotation omission、parameter type、title/body_text/field_append overlap、D2 reparse equality。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+测试必须覆盖 duplicate source、self/cross-template fresh subject rewrite、owner-local Resource remap、external-current reference policy、只枚举 index 而不读取 body 的 Annotation omission、parameter type、title/body_text/field_append overlap，以及 D2 reparse equality。
 
 parent-import 与 simple collection 分支按原 D3/D7 request 测试。sourceSubjectBindings 与 receipt resultAllocations 必须唯一 join，不保存第二 identity map。
 
@@ -74,23 +74,23 @@ parent-import 与 simple collection 分支按原 D3/D7 request 测试。sourceSu
 
 fresh current 测试使用 PAB4 与 wire13 mode-legal shape。旧 PAB1/2/3/wire11/12 只测试 recovery，不静默升级。读取大 record 前证明 MinimumMapping。page 1 前已有完整 preview bytes/effects，pagination 零 semantic rerun。
 
-saved/planned/unknown 保留原 request/OperationId/pins/owner，不依赖 expired preview TTL 或 current business validation，除非 current disclosure/custody fence 本身要求。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+saved/planned/unknown 必须保留原 request/OperationId/pins/owner，不依赖已过期的 preview TTL 或当前 business validation；只有 current disclosure/custody fence 本身要求时才例外。
 
 ## 8. Export 证据
 
-覆盖 renderer registry unavailable 时 exact-source/resource/query_json generationPolicy=none；rendered document 的 D2Snapshot3 + D8 presentation binding；body/bibliography selection；narrow Field/Query/native_table 不额外读 body；graph/scalar/rows 完整值；canonical set ordering；current output-name validity/PortableAlias/reserved-name rule；Plan3/Receipt3 与 historical strict dispatch。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+测试必须覆盖：renderer registry unavailable 时 exact-source/resource/query_json 的 generationPolicy=none；rendered document 的 D2Snapshot3 + D8 presentation binding；body/bibliography selection；narrow Field/Query/native_table 不额外读取 body；graph/scalar/rows 完整值；canonical set ordering；现任 output-name validity/PortableAlias/reserved-name rule；以及 Plan3/Receipt3 与 historical strict dispatch。
 
 initial loss report、data bytes、loss-report.json、manifest.json、stagedOutputs 在 confirm 前冻结并验证。confirm 后任何变化必须失败，不能 rerender。
 
 ## 9. Typed format 与 image 证据
 
-CSV dangerous starter 包含 ASCII/fullwidth 及 leading Unicode White_Space。TSV 内嵌 separator/newline 拒绝。XLSX/ODS 的 text 保持 text，任意精度 numeric policy 与 none/empty/absent 分离，永不计算 formula。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+CSV dangerous starter 覆盖 ASCII/fullwidth 以及前导 Unicode White_Space。TSV 含内嵌 separator/newline 时必须拒绝。XLSX/ODS 中的 text 必须保持 text；任意精度 numeric policy 与 none/empty/absent 分离，并且永不计算 formula。
 
-image physical size 只用真实 density fact、exact ratio 与 half-even rounding。missing/invalid/conflicting density 分支分离。explicit imageSizes 是 output layout policy，不是 source evidence。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+image physical size 只使用真实 density fact、精确 ratio 与 half-even rounding。missing/invalid/conflicting density 分支必须分开。显式 imageSizes 是 output layout policy，不是 source evidence。
 
 ## 10. Publication 与 Resource handoff
 
-真实 filesystem test 覆盖 create-only atomic bundle、flush order、conflict、rename 前后 crash、user move、restart 与 revoke race。recovery 不换 final name。external PublicationReceipt/3 与 author Resource receipt 分离并独立恢复。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+真实 filesystem test 必须覆盖 create-only atomic bundle、flush order、conflict、rename 前后 crash、user move、restart 与 revoke race。recovery 不得更换 final name。external PublicationReceipt/3 与 author Resource receipt 必须分离并独立恢复。
 
 ## 11. Evidence ledger
 
