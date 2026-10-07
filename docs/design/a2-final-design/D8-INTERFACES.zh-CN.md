@@ -161,7 +161,7 @@ Annotation pin encoding 是 d3_annotation_value4。
 
 ordinary/complete 与 strict/observed_only 是独立轴。
 observed_only 仅 trusted interactive single existing live Document whole-source save；
-Annotation/Undo/structured/bulk/automation/managed_atomic 不能使用。
+Annotation/Undo/structured/bulk/automation/managed_atomic 不能使用。SourceTransform 的 profile/compilation 不可用只是上游 producer 结果：它可以把 transform emission 冻结为 disabled，同时让其它条件均合法的普通 Source 保存继续；D8 不得伪造空 transform event/artifact，也不得在 recovery 中把它升级为成功。
 
 prepare 成功只说明 immutable plan/preview 已建立，不等于 Saved。提交仍是原 D6 request；计划/提交阶段 revalidate descriptor/proof/dependencies/authorization/install。
 
@@ -265,12 +265,14 @@ Remote/offline hosted author source 不因本地有 parser 就获得 commit auth
 
 不新增可携带的 `D8ViewBuilder` wire。builder 只组合既有现任 owner 接口：
 
-1. 读取现任 D2 SavedDefinition、D7 Query 或 DynamicBlock occurrence，以及其精确 owner/revision；
+1. 读取现任 D2 SavedDefinition、D7 Query 或 DynamicBlock occurrence，以及其精确 owner/revision/authorization；
 2. 严格解码实际记录的 `ViewSpec/1`，并取得现任 D7 terminal schema；
-3. 使用既有 D7 ViewSpec 验证器校验全部 binding、类型与 option；
+3. 只执行定义保存检查：封闭形状以及静态 layout/binding/type/option 兼容性；不得请求或检查 ResultHandle 分页与数据值；
 4. 把**完整且精确的 ViewSpec**作为工作值，包括基础控件无法表达的合法成员；
-5. 保存前重新取得授权、owner/revision、Query/schema 与完整 ViewSpec 的现任资格，再走既有 definition-owner/D6 commit operation；
-6. 取消、错误、权限丢失、owner/revision 过期、重置或依赖不可用时都不得写入。
+5. 保存前重新取得授权、owner/revision、Query/schema 与完整 ViewSpec 的现任资格，重新执行同一组静态定义保存检查，再走既有 definition-owner/D6 commit operation；
+6. 取消、静态定义错误、权限丢失、owner/revision 过期、schema 改变、重置或定义依赖不可用时都不得写入。
+
+渲染/导出是分离的 consumer 调用，只对现任 ResultHandle 执行既有 D7 View §7 完整运行期验证，并保持原顺序，包括完整结果、全量数据 key/order/domain/hierarchy、budget 与交付检查。运行期数据/provider/renderer 失败绝不得写入或使已保存 ViewSpec 失效。
 
 基础 builder 对无法无损表达的合法成员返回显式 `advanced_required` 呈现状态；它只是 D8 界面条件，**不是**新的 ViewSpec 成员或可携带错误码。高级/源码路径编辑真实现任 owner 字节，并继续受同一个 D7 解码器与 D6 保存/现任性门约束。
 
