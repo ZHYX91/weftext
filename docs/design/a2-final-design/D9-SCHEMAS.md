@@ -239,7 +239,7 @@ Fresh current content export is encoded only through final-FC `D9AnnotationConte
 
 ## 16b. Current View render binding
 
-Fresh View export consumes only final-FC `D9ViewRenderBinding/1` over one complete `D7ResultPin` and exact `ViewSpec/1`. The D7 View §7 runtime gate executes first in its original order. The first closed D9 profile admits only metric/bar/line/scatter/pie/heatmap and named DOCX/XLSX/PDF/SVG/PNG/print profiles; unsupported combinations return renderer_unavailable. SemanticStateKey/SnapshotResultKey/ViewSpec hashes are cross-checks only. Complete result and actual renderer/font/color/page/accessibility pins remain in the Plan/4 typed proof/evidence union.
+Fresh View export consumes only final-FC `D9ViewRenderBinding/1` over one complete `D7ResultPin` and exact `ViewSpec/1`. The D7 View §7 order executes first, including closed/static ViewSpec decoding: layouts outside the current D7 closed set fail with `unsupported_layout` before D9 selection. For a valid current D7 layout, the first D9 chart profile renders only metric/bar/line/scatter/pie/heatmap with named DOCX/XLSX/PDF/SVG/PNG/print profiles; a valid non-six layout such as network, or a missing backend/profile for a six-chart layout, returns `renderer_unavailable`. SemanticStateKey/SnapshotResultKey/ViewSpec hashes are cross-checks only. Complete result and actual renderer/font/color/page/accessibility pins remain in the Plan/4 typed proof/evidence union.
 
 ## 17. D9 error
 

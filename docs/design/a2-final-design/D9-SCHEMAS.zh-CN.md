@@ -143,7 +143,7 @@ template path 按精确 Unicode scalar sequence、normalization none、case-sens
 
 ## 11. Output names 与 bundle
 
-`D9ControlledRelativeOutputName/1` 保持精确 UTF-8，只由“/”分隔的非空 component 组成。empty/dot/dotdot component、backslash、control、forbidden punctuation、trailing space/dot、rooted/drive/UNC 以及 reserved device-name stem 都必须拒绝。
+`D9ControlledRelativeOutputName/1` 保留精确 UTF-8，只能由“/”分隔的非空路径分量组成。空分量、“.”、“..”、反斜杠、控制字符、协议禁用标点、末尾空格或点号、根路径、盘符、UNC 形式，以及保留设备名的 stem 都必须拒绝。
 
 PortableAlias 固定执行 Unicode 15.1 NFC → full default CaseFolding C/F → NFC，而且只用于拒绝判定。完整 bundle 必须拒绝精确重复、alias 相等与 alias-prefix 冲突。loss-report.json 与 manifest.json 是保留的根成员。
 
@@ -238,7 +238,7 @@ fresh current 内容导出只能通过 final-FC `ExportInputCatalog/3` 中的 `D
 
 ## 16b. Current View render binding
 
-fresh View export 只消费 final-FC `D9ViewRenderBinding/1`，绑定一个完整 `D7ResultPin` 与精确 `ViewSpec/1`。既有 D7 View §7 runtime gate 必须先按原顺序执行。第一代封闭 D9 profile 只接收 metric/bar/line/scatter/pie/heatmap 与具名 DOCX/XLSX/PDF/SVG/PNG/print profile；不支持组合返回 renderer_unavailable。SemanticStateKey/SnapshotResultKey/ViewSpec hash 只做交叉校验。完整 result 与真实 renderer/font/color/page/accessibility pin 继续进入 Plan/4 的 typed proof/evidence union。
+fresh View export 只消费 final-FC `D9ViewRenderBinding/1`，绑定一个完整 `D7ResultPin` 与精确 `ViewSpec/1`。既有 D7 View §7 顺序必须先执行，其中第一步就是封闭的静态 ViewSpec 解码：不属于现任 D7 封闭集合的布局先返回 `unsupported_layout`，不能进入 D9 选择。对于合法的现任 D7 布局，第一代 D9 chart profile 只渲染 metric、bar、line、scatter、pie、heatmap，并要求具名 DOCX/XLSX/PDF/SVG/PNG/print profile；network 等其它合法布局，或者六种图表缺少 backend/profile 时，返回 `renderer_unavailable`。SemanticStateKey、SnapshotResultKey 与 ViewSpec 的 hash 只用于交叉校验；完整 result 与真实 renderer、font、color、page、accessibility pin 继续进入 Plan/4 的类型化 proof/evidence 并集。
 
 ## 17. D9 error
 

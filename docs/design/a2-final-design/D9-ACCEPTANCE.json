@@ -1649,15 +1649,15 @@
       "id": "FA13",
       "scenario": {
         "en": "table_document input header=true generates a display header option",
-        "zh": "table_document 输入 header=true，但目标生成展示 header option"
+        "zh": "表格文档输入声明 header=true，而目标侧只请求展示表头选项"
       },
       "positive": {
         "en": "Distinguish input header from ordinary first-row target cells; reject every D2 table header/attribute option, without new syntax",
-        "zh": "输入 header 与目标普通首行 cell 区分；任何 D2 table header/attribute option 拒绝，无新增语法"
+        "zh": "输入中的 header 与目标普通首行单元格必须区分；任何 D2 表头或属性选项都应拒绝，不能因此新增语法。"
       },
       "negative": {
         "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
-        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、以部分成功替代完整结果，也不得违反该条来源限定的原始条件。"
       },
       "contract": "source-qualified D9 owner row FA13; final-current overlays apply where named",
       "evidence": {
@@ -1681,15 +1681,15 @@
       "id": "FA14",
       "scenario": {
         "en": "Published bundle treated as CP3/Resource author receipt, or P loss recovered from matching files",
-        "zh": "已发布外部 bundle 被当作 CP3/Resource author receipt；或 P 丢失后凭文件匹配恢复成功"
+        "zh": "把已发布的外部 bundle 当成 CP3 或 Resource 作者回执，或在 P 丢失后仅凭文件匹配恢复成功"
       },
       "positive": {
         "en": "Separate original authorities; do not reconstruct author P seal/charges; retain unknown responsibility",
-        "zh": "两类结果保持各自原 authority；原作者单 P seal/charge 不重建，未知责任保留"
+        "zh": "外部发布与作者写入保持各自原有权威；不得重建作者侧唯一 P 封存或计费，无法证明时保留未知责任。"
       },
       "negative": {
         "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
-        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、以部分成功替代完整结果，也不得违反该条来源限定的原始条件。"
       },
       "contract": "source-qualified D9 owner row FA14; final-current overlays apply where named",
       "evidence": {
@@ -1713,15 +1713,15 @@
       "id": "R02-01",
       "scenario": {
         "en": "Node-template closure and fresh identity",
-        "zh": "节点模板闭包与 fresh identity"
+        "zh": "节点模板闭包与新身份"
       },
       "positive": {
         "en": "Duplicate sources reject; self/cross-template references resolve to unique fresh subjects; owner-local Resources remap; parent import and simple collection use their original requests; changed template/recipe revision stales preparation.",
-        "zh": "重复 source 拒绝；self/cross-template reference 解析到唯一 fresh subject；owner-local Resource 改写；parent import 与 simple collection 使用原 request；template/recipe revision 变化使准备 stale。"
+        "zh": "重复 source 必须拒绝；同模板或跨模板引用只能解析到唯一的新 subject；owner-local Resource 按规则改写；parent import 与 simple collection 继续使用原请求；template/recipe revision 变化使准备结果过期。"
       },
       "negative": {
         "en": "No second identity map, output-hash equivalence, hidden membership shortcut, or replacement request after lost receipt.",
-        "zh": "不得建立第二 identity map、按 output hash 认等、隐藏 membership shortcut，也不得在 lost receipt 后换 request。"
+        "zh": "不得建立第二套身份映射，不得按输出摘要判定相等，不得使用隐藏的 membership shortcut，也不得在回执丢失后更换原请求。"
       },
       "contract": "current Acceptance r02 template block",
       "evidence": {
@@ -1797,15 +1797,15 @@
       "id": "R03-02",
       "scenario": {
         "en": "Image density and layout policy",
-        "zh": "图片 density 与 layout policy"
+        "zh": "图片密度与布局策略"
       },
       "positive": {
         "en": "Absolute/relative density, orientation, exact rational conversion, half-even quantization and explicit imageSizes are validated as separate source-fact and layout-policy axes.",
-        "zh": "absolute/relative density、orientation、exact rational conversion、half-even quantization 与 explicit imageSizes 按 source fact / layout policy 两轴验证。"
+        "zh": "绝对或相对密度、方向、精确有理数换算、向偶数舍入以及显式 imageSizes，必须分别按源事实与布局策略两条轴验证。"
       },
       "negative": {
         "en": "No 72/96 DPI, viewport density, conflicting metadata choice, or layout value rewritten as source fact.",
-        "zh": "不得用 72/96 DPI、viewport density、挑冲突 metadata，或把 layout value 倒写成 source fact。"
+        "zh": "不得猜测 72/96 DPI 或 viewport density，不得挑选互相冲突的 metadata，也不得把布局选择倒写成源事实。"
       },
       "contract": "current Acceptance r03 image block",
       "evidence": {
@@ -1864,11 +1864,11 @@
       },
       "positive": {
         "en": "Historical 57/63/59/82/90/130 and 12-scenario evidence sets remain separately scoped and keep their original finite claims.",
-        "zh": "historical 57/63/59/82/90/130 与 12-scenario evidence set 分别记账并保留原有限 claim。"
+        "zh": "历史的 57、63、59、82、90、130 与 12 场景证据集分别记账，只保留各自原有的有限结论。"
       },
       "negative": {
         "en": "No summing counts into product, Office, OS, authorization, crash or global acceptance.",
-        "zh": "不得把计数相加冒充 product、Office、OS、authorization、crash 或 global acceptance。"
+        "zh": "不得把这些计数相加后冒充产品、Office、操作系统、授权、崩溃恢复或全局接受证据。"
       },
       "contract": "current Acceptance r04 evidence boundary",
       "evidence": {
@@ -1923,15 +1923,15 @@
       "id": "M14-03",
       "scenario": {
         "en": "Progressive table/title/occurrence qualification",
-        "zh": "逐级 table/title/occurrence qualification"
+        "zh": "逐级限定表格、标题与 occurrence"
       },
       "positive": {
         "en": "If suffix still collides, exact table title is added; if still colliding, explicit zero-based table/column occurrence resolves against the frozen projection.",
-        "zh": "suffix 仍碰撞时加入 exact table title；仍碰撞时用显式 zero-based table/column occurrence 对 frozen projection 消歧。"
+        "zh": "header suffix 仍冲突时加入精确 table title；若仍冲突，再用显式的零基 table/column occurrence 对冻结投影消歧。"
       },
       "negative": {
         "en": "No opaque ID, memory order, UI order or hash-only authoring.",
-        "zh": "不得使用 opaque ID、memory order、UI order 或 hash-only authoring。"
+        "zh": "不得使用 opaque ID、内存顺序、界面顺序或只靠 hash 的作者语法。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -1944,15 +1944,15 @@
       "id": "M14-04",
       "scenario": {
         "en": "Unicode and escaping grammar",
-        "zh": "Unicode 与 escaping grammar"
+        "zh": "Unicode 与转义语法"
       },
       "positive": {
         "en": "CJK/RTL/combining/emoji/space/slash/double-colon/quote/bracket text is represented visibly with JSON-string escaping and exact scalar comparison.",
-        "zh": "CJK/RTL/combining/emoji/space/slash/double-colon/quote/bracket 以可见 JSON-string escape 表示，并按 exact scalar compare。"
+        "zh": "CJK、RTL、组合字符、emoji、空格、slash、双冒号、引号与方括号，都必须用可见的 JSON 字符串转义表示，并按精确 Unicode scalar 比较。"
       },
       "negative": {
         "en": "No normalization, locale case fold or hidden digest as author meaning.",
-        "zh": "不得 normalization、locale case fold 或用 hidden digest 表示 author meaning。"
+        "zh": "不得额外 normalization，不得使用 locale case fold，也不得以隐藏摘要表达作者含义。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -1986,15 +1986,15 @@
       "id": "M14-06",
       "scenario": {
         "en": "Later collision changes fresh ambiguity only",
-        "zh": "后续碰撞只改变 fresh ambiguity"
+        "zh": "后续碰撞只影响新准备的歧义判定"
       },
       "positive": {
         "en": "Adding a colliding table/column makes a formerly short token ambiguous for a fresh Plan and requires a visible stronger selector.",
-        "zh": "新增碰撞 table/column 使原 short token 在 fresh Plan 中 ambiguous，并要求更强 visible selector。"
+        "zh": "新增冲突的 table/column 后，原来的短 token 在新 Plan 中若不再唯一，就必须判为 ambiguous，并要求更强的可见 selector。"
       },
       "negative": {
         "en": "Already frozen Plan/selector/staged bytes are not rewritten by later workspace state.",
-        "zh": "already-frozen Plan/selector/staged bytes 不被 later workspace state 改写。"
+        "zh": "已经冻结的 Plan、selector 与 staged bytes 不得被后续 Workspace 状态改写。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -2104,7 +2104,7 @@
       "contract": "Mandatory §15.5/§15.7#1/§15.8.1; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
@@ -2125,91 +2125,91 @@
       "contract": "Mandatory §15.5/§15.7#2/§15.8.2; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
     {
       "id": "M15-03",
       "scenario": {
-        "en": "Pie values, zero/negative/domain and category limits",
-        "zh": "饼图数值、零/负值、domain 与类别限制"
+        "en": "Pie values, zero-total, negatives, domain and category limits",
+        "zh": "饼图数值、零总量、负值、坐标域与类别限制"
       },
       "positive": {
-        "en": "A complete result passes the existing D7 pie/domain/unit/budget rules before renderer binding; valid zero-total uses the named D7 state and exact loss/profile semantics.",
-        "zh": "完整 result 必须先通过既有 D7 pie/domain/unit/budget 规则才可绑定 renderer；合法 zero-total 使用 D7 具名状态与精确 loss/profile 语义。"
+        "en": "A complete result passes the existing D7 pie/domain/unit/budget rules before renderer binding. Zero-total is the legal named empty-total state, preserves zero-valued rows in the accessible table, and never divides by zero.",
+        "zh": "完整结果必须先通过既有 D7 饼图、坐标域、单位与预算规则，才能绑定渲染器。总量为零是合法的具名空总量状态；可访问表格仍保留值为零的原始行，并且绝不执行除零。"
       },
       "negative": {
-        "en": "Negative values, illegal zero-total, duplicate keys, excess categories, unit mismatch, implicit Other/top-N/drop or renderer coercion fail rather than alter data.",
-        "zh": "负值、非法 zero-total、duplicate key、类别超限、unit mismatch、隐式 Other/top-N/drop 或 renderer coercion 都必须失败，不能改写数据。"
+        "en": "Negative pie values, duplicate categories, category/budget overflow, unit mismatch, implicit Other/top-N/drop or renderer coercion fail under the original D7 runtime rules; zero-total itself is not an error and no failure mutates a saved legal definition.",
+        "zh": "饼图出现负值、重复类别、类别或预算超限、单位不一致，或试图隐式生成 Other、只取前 N 项、丢弃数据、由渲染器强制转换时，都按原 D7 运行期规则失败；总量为零本身不是错误，任何失败也不得修改已经合法保存的定义。"
       },
       "contract": "Mandatory §15.5/§15.7#3/§15.8.3–15.8.4; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
     {
       "id": "M15-04",
       "scenario": {
-        "en": "Hierarchy/cycle and deferred tree/treemap export",
-        "zh": "层级/循环与延期 tree/treemap 导出"
+        "en": "Deferred tree layouts versus supported current network",
+        "zh": "延期树形布局与现任 network 布局的边界"
       },
       "positive": {
-        "en": "Legal authored hierarchy members remain preserved by D7/D8; D9 chart export reports renderer_unavailable for deferred hierarchy layouts while retaining exact ViewSpec/data for another valid consumer.",
-        "zh": "合法 hierarchy 作者成员继续由 D7/D8 保留；D9 chart export 对延期 hierarchy layout 返回 renderer_unavailable，同时保持精确 ViewSpec/data 供其它合法 consumer 使用。"
+        "en": "Current D7 network remains a valid closed ViewSpec layout and keeps its circle_v1/layered_v1 runtime semantics. tree/treemap/sunburst are not current ViewSpec/1 layouts and therefore fail closed/static decoding with unsupported_layout before any D9 renderer is selected. If a valid current network View reaches this six-chart D9 route, it is renderer_unavailable unless a separately named network profile exists.",
+        "zh": "现任 D7 的 network 仍是合法的封闭 ViewSpec 布局，并保留 circle_v1 与 layered_v1 的运行期语义。tree、treemap、sunburst 并不是现任 ViewSpec/1 布局，因此必须在选择任何 D9 渲染器之前，于封闭静态解码阶段返回 unsupported_layout。合法的现任 network View 若进入本 D9 六图表路线，而又没有另行具名的 network profile，则返回 renderer_unavailable。"
       },
       "negative": {
-        "en": "No missing-parent/cycle repair, parent-value inference, hidden tree conversion, or rows-as-chart substitution is allowed.",
-        "zh": "不得修复 missing parent/cycle，不得推断 parent value，不得隐藏转换成 tree，也不得用 rows 冒充 chart。"
+        "en": "D9 never treats deferred tree bytes as a legal current saved View, repairs missing-parent/cycle data, infers parent values, converts network into tree, or substitutes data rows while claiming a chart.",
+        "zh": "D9 不得把延期的树形布局字节当成可合法保存的现任 View，不得修补缺失父节点或循环、推断父节点数值、把 network 偷换成 tree，也不得以普通数据行冒充图表。"
       },
       "contract": "Mandatory §15.7#4/§15.8.7; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
     {
       "id": "M15-05",
       "scenario": {
-        "en": "Gantt/dependency deferred export",
-        "zh": "Gantt/dependency 延期导出"
+        "en": "Gantt/dependency remains outside current ViewSpec/1",
+        "zh": "Gantt 与依赖调度仍不属于现任 ViewSpec/1"
       },
       "positive": {
-        "en": "Legal Gantt-related author bytes remain losslessly represented, but D9's first chart profile returns stable renderer_unavailable until a closed D7 layout exists.",
-        "zh": "合法 Gantt 相关作者字节继续无损表示，但在 D7 存在封闭 layout 前，D9 第一代 chart profile 稳定返回 renderer_unavailable。"
+        "en": "Source/query data that could support a future Gantt remains losslessly available under its real owner. Because Gantt is not in the current D7 ViewSpec/1 closed layout set, a current Gantt View definition fails static closed decoding with unsupported_layout and never reaches D9 renderer selection.",
+        "zh": "未来可能用于 Gantt 的源数据与查询数据仍由真实 owner 无损保留。由于 Gantt 不在现任 D7 ViewSpec/1 的封闭布局集合内，当前若把 Gantt 写成 View 定义，必须在静态封闭解码阶段返回 unsupported_layout，不能进入 D9 渲染器选择。"
       },
       "negative": {
-        "en": "No renderer-defined interval/dependency kind/lag/calendar semantics, date coercion or silent table replacement may claim Gantt support.",
-        "zh": "不得由 renderer 自定义 interval/dependency kind/lag/calendar 语义，不得 date coercion，也不得以静默 table 替换冒充 Gantt support。"
+        "en": "No renderer-defined milestone, interval, dependency kind, lag, working-calendar or critical-path semantics; timeline cannot masquerade as Gantt and rows cannot silently replace the requested chart.",
+        "zh": "不得由渲染器自行定义 milestone、区间、依赖类型、lag、工作日历或关键路径语义；timeline 不能冒充 Gantt，普通数据行也不能静默替代所请求的图表。"
       },
       "contract": "Mandatory §15.7#5/§15.8.7; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
     {
       "id": "M15-06",
       "scenario": {
-        "en": "Boxplot/quantile deferred export",
-        "zh": "箱线图/分位数延期导出"
+        "en": "Boxplot/quantile remains outside current ViewSpec/1",
+        "zh": "箱线图与分位数仍不属于现任 ViewSpec/1"
       },
       "positive": {
-        "en": "Existing complete data remains available to supported consumers, while D9's first chart profile returns renderer_unavailable for boxplot/quantile layouts.",
-        "zh": "现有完整数据仍可供受支持 consumer 使用，但 D9 第一代 chart profile 对 boxplot/quantile layout 返回 renderer_unavailable。"
+        "en": "Raw observations and any explicitly queried statistics remain available to their real consumers. boxplot/quantile are not current D7 ViewSpec/1 layouts, so a current definition fails static closed decoding with unsupported_layout before D9 renderer selection.",
+        "zh": "原始观测值以及 Query 已显式计算出的统计结果继续供真实 consumer 使用。boxplot 与 quantile 不是现任 D7 ViewSpec/1 布局，因此当前定义必须在 D9 渲染器选择之前，于静态封闭解码阶段返回 unsupported_layout。"
       },
       "negative": {
-        "en": "No D9 quantile calculation, quartile repair, chart-library passthrough or hidden statistical derivation.",
-        "zh": "D9 不得计算 quantile、修复 quartile、直接透传 chart library，也不得隐藏派生统计量。"
+        "en": "D9 never calculates quantiles, infers quartiles, accepts chart-library configuration as authority, calls renderer_unavailable for an invalid current layout, or silently derives statistics.",
+        "zh": "D9 不得自行计算分位数、猜测四分位数、把图库配置当作权威，也不得把无效的现任布局误报成 renderer_unavailable，更不能静默派生统计量。"
       },
       "contract": "Mandatory §15.7#6/§15.8.7; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
@@ -2230,7 +2230,7 @@
       "contract": "Mandatory §15.5/§15.7#7/§15.8.4; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
@@ -2251,7 +2251,7 @@
       "contract": "Mandatory §15.5/§15.7#8/§15.8.8; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
@@ -2272,7 +2272,7 @@
       "contract": "Mandatory §15.5–15.7#9/§15.8.6/§15.8.8; Mandatory §14; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
@@ -2280,20 +2280,20 @@
       "id": "M15-10",
       "scenario": {
         "en": "Dashboard/block isolation and one-result panel scope",
-        "zh": "Dashboard/block 隔离与单结果 panel scope"
+        "zh": "Dashboard 中各 block 的隔离与单结果 panel 范围"
       },
       "positive": {
         "en": "Each View block freezes and validates its own complete result/binding/assets; one denied or unavailable block remains an isolated error while unrelated authorized blocks remain usable.",
-        "zh": "每个 View block 独立冻结并验证自己的完整 result/binding/assets；一个 denied/unavailable block 只保留自身错误，其它已授权 block 继续可用。"
+        "zh": "每个 View block 都独立冻结并验证自己的完整 result、binding 与 assets；某个 block 被拒绝或不可用时，只保留该 block 的错误，其它已授权 block 仍可继续使用。"
       },
       "negative": {
         "en": "No cross-block hidden reads, authorization sharing, implicit joins, poisoning of unrelated blocks, or Dashboard-wide View/Query authority.",
-        "zh": "不得跨 block 隐藏读取、共享 authorization、隐式 join、污染无关 block，也不得建立 Dashboard-wide View/Query authority。"
+        "zh": "不得跨 block 隐藏读取、共享 authorization、隐式 join 或污染无关 block，也不得建立覆盖整个 Dashboard 的 View/Query 权威。"
       },
       "contract": "Mandatory §15.7#10/§15.8.5; D9 Main §12a",
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
-        "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
@@ -2343,15 +2343,15 @@
       "id": "CUR-03",
       "scenario": {
         "en": "Current D2 product",
-        "zh": "当前 D2 product"
+        "zh": "现任 D2 product"
       },
       "positive": {
         "en": "D9 consumes D2DocumentSnapshot3 including legal H6–H9/native fixed-baseline semantics and exact sourceOrigins.",
-        "zh": "D9 消费 D2DocumentSnapshot3，包括合法 H6–H9/native fixed-baseline semantics 与 exact sourceOrigins。"
+        "zh": "D9 消费 D2DocumentSnapshot3，其中包括合法 H6–H9、原生固定基线语义与精确 sourceOrigins。"
       },
       "negative": {
         "en": "Target renderer limitations never make legal current source invalid or reintroduce an H1–H5-only dialect.",
-        "zh": "target renderer limit 不得让合法 current source invalid，也不得恢复 H1–H5-only dialect。"
+        "zh": "目标渲染器的限制不得让合法现任 source 变成 invalid，也不得重新引入只支持 H1–H5 的旧方言。"
       },
       "contract": "D9 Main §4/§12; FC SPEC §8.4",
       "evidence": {
