@@ -8,9 +8,9 @@ translation_status: source
 
 状态：author-resolved-pending-independent-review。fixed-S 的 160 个 case ID 与 D6-FA 后续 17 个 case 全部保留；具名 current successor 仍在同一 case ID 上更新 current 表述，不让旧 current 字面静默继续。本批已修复验收结构、View builder/legacy route 与 source-map/FC applicability；全部仅为作者修订，状态仍为 author-resolved-pending-independent-review，等待固定 SHA 非作者增量复核。
 
-结构权威：`D8-ACCEPTANCE.json` 是 inherited/current overlay 六字段（ID、场景、正向、反向、规范、证据/状态）的唯一结构源；本文件与英文文件是双语语义投影，必须保持相同 ID、正反极性、contract/evidence 边界。投影 cell 内禁止裸表格分隔符导致列漂移。
+结构权威：`D8-ACCEPTANCE.json` 是唯一结构源。inheritedCases 使用 ID/group/positive/negative/contract/evidence 六字段；currentOverlay 使用 ID/scenario/positive/negative/contract/status 六字段。本文件与英文文件是双语语义投影，必须保持精确相同的 ID 并集与顺序，以及正反极性、contract 和 evidence/status 边界；投影 cell 内的表格分隔符必须转义。
 
-| ID | 场景 | 正向 | 反向 | 规范 | 当前证据层 |
+| ID | 分组 | 正向 | 反向 | 规范 | 证据 |
 |---|---|---|---|---|---|
 | RTL-001 | Arabic-only/document/edit | Source/Write/Read正文：按logical目标输入并预览。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。 | 视觉次序/DOM索引不得选错目标 | 主稿§2–11；Direction§2–7 | semantic-review; platform-implementation-pending |
 | RTL-002 | Arabic-only/document/save | Source/Write/Read正文：明确确认后Core实际receipt证明提交。查询/搜索为纯读取，edit/save指其真实作者输入或显式目标Action；自身无写权限。；合法receipt更新Base后按当前Draft exact equality派生buffer，后继输入/undo回到after可clean且serial保持新值 | composition/preview/超时不冒充提交；receipt不覆盖Draft/selection；撤权不提前更新Base；同值不放宽真实revision/ABA门 | 主稿§2–11；Direction§2–7 | semantic-review; platform-implementation-pending |
