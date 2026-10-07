@@ -99,7 +99,7 @@ renderer 只是 View consumer，不是 Query 或 aggregate owner。wide-to-long 
 
 table/list fallback 必须描述为“使用同一份完整数据的替代表达；graphical renderer unavailable”，不能描述成 sampled fallback。
 
-**View builder** 指 D8 在 current D7 `ViewSpec/1` 与 current SavedDefinition/DynamicBlock owner 之上的无损编辑 surface；它不是 schema、author object、parser、registry 或 persistence kind。**advanced ViewSpec route** 指 basic controls 无法表达合法 member 时编辑 exact current owner representation 的路径；它不是 migration，也不能绕过 validation。
+**View builder** 指 D8 在 current D7 `ViewSpec/1` 与 current SavedDefinition/DynamicBlock owner 之上的无损编辑 surface；其定义保存校验只检查静态条件，不消费 ResultHandle，完整结果/数据校验继续由既有 D7 运行期 View 门负责。它不是 schema、author object、parser、registry 或 persistence kind。**advanced ViewSpec route** 指 basic controls 无法表达合法 member 时编辑 exact current owner representation 的路径；它不是 migration，也不能绕过任一校验门。
 
 ## 9. Controlled aliases
 
