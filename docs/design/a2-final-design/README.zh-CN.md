@@ -28,7 +28,7 @@ translation_status: source
 | D6 | fixed2f89 已独立 CLOSED fixed454e 之后剩余的两项 navigation finding；既有 D6 bounded semantic closure 仍只保留各自记录范围。 |
 | D7 | fixed26be 非作者复核 = PASS（P0=0/P1=0/P2=0）；最终 A2-D7-2F89-P2-01 在该 SHA CLOSED；此前有界 closure 继续绑定各自原 SHA |
 | D8 | 已保全作者候选；fixed5eca 已独立 CLOSED P1-01/P1-02/P2-02，ff10 又独立 CLOSED P2-01 与 D8-5ECA-P2-01；现在只剩 P1-03 在收窄后的延期布局保存冲突上 OPEN；acceptance JSON 继续是唯一六字段结构源，213/213 唯一 ID 与确定性 guard 保持；source-map 审计仍为 direct 167 / upstream 146 / 保留 owner 447，共 114 行作者 applicability 改动 |
-| D9 | 完整作者候选：八份 fixed-S 均为 FULL，现任 D9 owner 中英文 FULL，Mandatory §14 与 D9 适用 Mandatory §15 均 FULL，D7 binding/PAB/View consumer FULL，final-FC D9 successor FULL；现任 wire13/PAB4/Effect3 + Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1，并精确恢复 Plan/Receipt1–3；Acceptance 97 行 / Registry 41 concept；三个 D9-BAF finding 等待 exact-final-SHA 独立复核 |
+| D9 | 完整作者候选：八份 fixed-S 来源均已全文读取，现任 D9 owner 中英文均已全文读取，Mandatory §14 与 D9 适用 Mandatory §15 均已覆盖；D7 的 binding/PAB/View consumer 已覆盖，final-FC D9 successor 已覆盖；现任使用 wire13/PAB4/Effect3 与 Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1，并精确恢复 Plan/Receipt1–3；Acceptance 共 97 行，Registry/Terms 共 41 个 concept；三个 D9-BAF finding 等待绑定最终 SHA 的独立复核 |
 | D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
 | Mandatory A2 source | D8 已完整消费 D8 适用的 §15.1–15.8.9 chart/View interaction 与 RTL intake；D9 消费 Mandatory §14 的 884–924 行，以及 D9 适用 §15.5–15.8 的 1042–1141 行和全部十个 View/export fixture；D10 owner module 完整整合留后续 |
 

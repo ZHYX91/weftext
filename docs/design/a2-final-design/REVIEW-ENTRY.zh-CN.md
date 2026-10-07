@@ -69,7 +69,7 @@ D8 不属于本 D9 作者批。fixed5eca 与 ff10 的 closure 都保持固定。
 
 必须核验：
 
-- D9-BAF-P1-01：唯一 annotation_content carrier、精确 PortableAnnotationRecord/4 backup bytes、R6 Review Bundle 的 body/attribution、独立授权 context、revision/Observation/pin stale 处理、递归 evidencePins、freeze/loss/confirm/create-only/Resource/print 路径与精确历史恢复；
+- D9-BAF-P1-01：唯一的 annotation_content 内容载体、精确 PortableAnnotationRecord/4 备份字节、R6 Review Bundle 的正文与署名、独立授权的上下文、revision/Observation/pin 过期处理、递归 evidencePins、冻结与损失确认、create-only/Resource/print 路径，以及精确历史恢复；
 - D9-BAF-P1-02：完整 D7 View runtime 顺序、unsupported_layout 与 renderer_unavailable 的正确分层、有限六图表 Plan4 route、Mandatory §15.5–15.8 十个 fixture、renderer/profile/assets/a11y/loss evidence，以及禁止 Query rerun 或 data-row substitution；
 - D9-BAF-P2-02：修正 fixed predecessor range，并用独立 current §6.6/§16a blob 具名承接，同时不丢 §7/§17 义务；
 - D9-SOURCE-MAP.json、D9-REGISTRY.json、D9-TERMS.json 与全部 97 个 D9-ACCEPTANCE 唯一 row，包括本批新修改的中文投影；
