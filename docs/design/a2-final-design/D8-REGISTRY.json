@@ -48,7 +48,7 @@
     {
       "name": "view",
       "outer": "D7 ViewSpec/1",
-      "inner": "D8 lossless View builder + renderer/interaction over current D7 ViewSpec/1; SavedDefinition/DynamicBlock owner retained"
+      "inner": "D8 lossless View builder with static definition-save gate; renderer/export uses current D7 complete-result runtime validation; SavedDefinition/DynamicBlock owner retained"
     }
   ],
   "rowDomains": [
