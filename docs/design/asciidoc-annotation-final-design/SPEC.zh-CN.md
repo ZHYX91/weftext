@@ -1017,7 +1017,7 @@ Annotation 内容路径先执行普通现任 Annotation read，并从这一次�
 
 portable backup 只序列化精确选中的 PortableAnnotationRecord/4 value，不携带任何当前 permission/capability state。Review Bundle 只消费 owner read 已经产生的唯一 R6 body 结果，并从同一个 Value/4 取得 purpose/review metadata、reply 与 attribution。source/history excerpt 与 target context 是两个独立的可选 disclosure projection：任一披露失败都不能压掉原本可读的 Annotation body/attribution；target unavailable 也不能被猜成 label/source excerpt。annotation_index 继续只承担 omission 目录，绝不能替代这条内容路径。
 
-View export 先冻结一个完整 D7ResultPin 与一个精确现任 ViewSpec/1，按既有 D7 View runtime validation 顺序完整通过后，才冻结 ViewSpec hash、D7 SemanticStateKey/SnapshotResultKey hash、result epoch/auth generation、唯一 renderer/profile/version、精确 D8 presentation decision，以及全部实际消费的 renderer/font/color/page/accessibility asset pin。第一代 D9 chart-export profile 刻意保持有限，只包括 metric、bar、line、scatter、pie、heatmap。原本 deferred 或其它不支持的 layout/backend 对 chart export 稳定返回 renderer_unavailable，不能把 data rows 静默冒充 chart。
+View export 先冻结一个完整 D7ResultPin 与一个精确现任 ViewSpec/1，然后按既有 D7 View 原验证顺序执行，并从封闭的静态 ViewSpec 解码开始。不属于现任 D7 封闭集合的布局在这一阶段直接返回 unsupported_layout。只有合法的现任 View 继续通过后续运行期门禁后，Core 才冻结 ViewSpec hash、D7 SemanticStateKey/SnapshotResultKey hash、result epoch/auth generation、唯一 renderer/profile/version、精确 D8 presentation decision，以及全部实际消费的 renderer/font/color/page/accessibility asset pin。第一代 D9 chart-export profile 刻意保持有限，只包括 metric、bar、line、scatter、pie、heatmap。network 等其它合法 D7 现任布局，或者六种图表缺少 backend/profile 时，在这条 chart route 上返回 renderer_unavailable，不能把普通数据行静默冒充图表。
 
 这条专用 View route 的现任正向 target 只包括具名已接受 profile 支持的 DOCX、XLSX、PDF、SVG、PNG 与 print。每个 profile 都必须保留 D7 的同数据 accessible table、plain-text title/description 或等价 alt-text 语义、逻辑 Query/panel 顺序、CJK/RTL、高对比/非纯颜色编码、有限 page/font/color asset 与完整 loss 报告。DOCX/XLSX profile 若消费 Office template，仍受 Mandatory §14 的可见模板 authority 与 repeat/style 规则约束。renderer library 名称或通用 ECharts/Vega 类配置绝不是 author input。
 
@@ -1028,7 +1028,7 @@ ExportPlan/3、PublicationReceipt/3 与所有更早的 plan/catalog/projection/l
 
 ## 17. Error、recovery与版本边界
 
-共同顺序保持：closed decode → minimum disclosure/capability → authority/domain/backend/trust → stable key与saved/planned/unseen → current target/source/control → dependency/semantic/budget → one planning CAS → install → one P seal → output authorization。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
+共同顺序保持：封闭解码 → 最低披露与能力检查 → authority/domain/backend/trust 检查 → stable key 与 saved/planned/unseen 分派 → 当前 target/source/control 检查 → dependency/semantic/budget 检查 → 唯一 planning CAS → install → 唯一 P seal → output authorization。
 
 saved结果先按原owner/version重放；planned恢复原request/descriptor/proof/prepared/pins/Notice/install/version basis，不能就地升级；unknown保留原Approval/Money/claim/external-effect/stop责任。只有unseen current使用Descriptor3/PAB4/Edit3/ExportPlan3/Notice3/CP4/Declaration2等。存在decoder或历史设计文字不等于某prototype曾部署；只有实际可证明存在的record承担其历史decoder义务。
 
