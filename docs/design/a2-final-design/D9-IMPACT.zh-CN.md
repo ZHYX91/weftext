@@ -74,7 +74,7 @@ parent-import 与 simple collection 分支按原 D3/D7 request 测试。sourceSu
 
 fresh current 测试使用 PAB4 与 wire13 mode-legal shape。旧 PAB1/2/3/wire11/12 只测试 recovery，不静默升级。读取大 record 前证明 MinimumMapping。page 1 前已有完整 preview bytes/effects，pagination 零 semantic rerun。
 
-saved/planned/unknown 必须保留原 request/OperationId/pins/owner，不依赖已过期的 preview TTL 或当前 business validation；只有 current disclosure/custody fence 本身要求时才例外。
+saved/planned/unknown 三类恢复状态必须保留原始请求、OperationId、pins 与 owner；它们不得依赖已经过期的 preview TTL 或现任业务验证，只有现任 disclosure/custody fence 本身要求时例外。
 
 ## 8. Export 证据
 
