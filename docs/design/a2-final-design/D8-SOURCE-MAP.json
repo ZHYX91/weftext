@@ -7420,14 +7420,14 @@
         "id": "T3-XF-17",
         "line": 307,
         "text": "| T3-XF-17 | SPEC §§11–13 | If the profile is unavailable at prepare time, emission can freeze disabled while the ordinary save still succeeds. |",
-        "d8Applicability": "not-applicable-to-D8-retain-original-owner",
-        "currentTarget": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13",
-        "disposition": "retain-current-owner-not-D8-direct-consumer",
+        "d8Applicability": "upstream-current-prerequisite",
+        "currentTarget": "D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness)",
+        "disposition": "retain-upstream-owner-and-bind-D8-current-prerequisite",
         "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
         "sourceBlob": "f5f5b9b212b281838aabc281171217623285820e",
         "sourceSection": "SPEC §§11–13",
         "currentOwner": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13",
-        "auditBasis": "Full-row semantic audit: this complete obligation remains under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13; it adds no D8-specific authoring/read/edit/render/save/builder/AT contract, so D8 does not duplicate or supersede it.",
+        "auditBasis": "Full-row semantic audit: producer semantics remain under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13; D8 consumes the ordinary-save/prepare/recovery currentness prerequisite at D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness) and does not redefine the producer contract.",
         "auditStatus": "author-resolved-pending-independent-review"
       },
       {
@@ -7672,14 +7672,14 @@
         "id": "T3-XF-35",
         "line": 325,
         "text": "| T3-XF-35 | SPEC §§11–13 | An unavailable result is decided before planning and freezes disabled; the ordinary source save still succeeds. |",
-        "d8Applicability": "not-applicable-to-D8-retain-original-owner",
-        "currentTarget": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13",
-        "disposition": "retain-current-owner-not-D8-direct-consumer",
+        "d8Applicability": "upstream-current-prerequisite",
+        "currentTarget": "D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness)",
+        "disposition": "retain-upstream-owner-and-bind-D8-current-prerequisite",
         "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
         "sourceBlob": "f5f5b9b212b281838aabc281171217623285820e",
         "sourceSection": "SPEC §§11–13",
         "currentOwner": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13",
-        "auditBasis": "Full-row semantic audit: this complete obligation remains under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13; it adds no D8-specific authoring/read/edit/render/save/builder/AT contract, so D8 does not duplicate or supersede it.",
+        "auditBasis": "Full-row semantic audit: producer semantics remain under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13; D8 consumes the ordinary-save/prepare/recovery currentness prerequisite at D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness) and does not redefine the producer contract.",
         "auditStatus": "author-resolved-pending-independent-review"
       },
       {
@@ -8512,14 +8512,14 @@
         "id": "X34-06",
         "line": 385,
         "text": "| X34-06 | SPEC §§2,11–13 | The current decoder rejects mixing retired PortableEdit/2 with current /3; genuinely historical saved/planned data keeps its original rules. Compilation unavailable does not block ordinary source save and recovery cannot upgrade emission. |",
-        "d8Applicability": "not-applicable-to-D8-retain-original-owner",
-        "currentTarget": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§2,11–13",
-        "disposition": "retain-current-owner-not-D8-direct-consumer",
+        "d8Applicability": "upstream-current-prerequisite",
+        "currentTarget": "D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness)",
+        "disposition": "retain-upstream-owner-and-bind-D8-current-prerequisite",
         "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
         "sourceBlob": "f5f5b9b212b281838aabc281171217623285820e",
         "sourceSection": "SPEC §§2,11–13",
         "currentOwner": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§2,11–13",
-        "auditBasis": "Full-row semantic audit: this complete obligation remains under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§2,11–13; it adds no D8-specific authoring/read/edit/render/save/builder/AT contract, so D8 does not duplicate or supersede it.",
+        "auditBasis": "Full-row semantic audit: producer semantics remain under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§2,11–13; D8 consumes the ordinary-save/prepare/recovery currentness prerequisite at D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness) and does not redefine the producer contract.",
         "auditStatus": "author-resolved-pending-independent-review"
       },
       {
@@ -11788,14 +11788,14 @@
         "id": "FC34-ST-19",
         "line": 624,
         "text": "| FC34-ST-19 | SPEC §§11–13 | If a cross-generated-anchor edit cannot preserve boundary slots, compilation returns unavailable; ordinary save may continue but no empty-event CoreSourceEditPlan or artifact is fabricated. |",
-        "d8Applicability": "not-applicable-to-D8-retain-original-owner",
-        "currentTarget": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13",
-        "disposition": "retain-current-owner-not-D8-direct-consumer",
+        "d8Applicability": "upstream-current-prerequisite",
+        "currentTarget": "D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness)",
+        "disposition": "retain-upstream-owner-and-bind-D8-current-prerequisite",
         "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
         "sourceBlob": "f5f5b9b212b281838aabc281171217623285820e",
         "sourceSection": "SPEC §§11–13",
         "currentOwner": "docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13",
-        "auditBasis": "Full-row semantic audit: this complete obligation remains under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13; it adds no D8-specific authoring/read/edit/render/save/builder/AT contract, so D8 does not duplicate or supersede it.",
+        "auditBasis": "Full-row semantic audit: producer semantics remain under docs/design/asciidoc-annotation-final-design/SPEC.md SPEC §§11–13; D8 consumes the ordinary-save/prepare/recovery currentness prerequisite at D8.md§6–7; D8-INTERFACES.md§6/8–9; D8-SCHEMAS.md§5–6/9 (save/prepare/recovery currentness) and does not redefine the producer contract.",
         "auditStatus": "author-resolved-pending-independent-review"
       },
       {
@@ -14084,10 +14084,10 @@
     "audit": {
       "method": "760/760 full obligation-row semantic audit. Each decision is based on the complete row obligation; ID prefix/keyword/count/green CI is not acceptance evidence. Every row retains original id/line/text/source blob and names its exact current SPEC section owner; direct/upstream rows additionally name the concrete D8 consumer section/validator.",
       "status": "author-resolved-pending-independent-review",
-      "changedApplicabilityRows": 110,
+      "changedApplicabilityRows": 114,
       "counts": {
-        "not-applicable-to-D8-retain-original-owner": 451,
-        "upstream-current-prerequisite": 142,
+        "not-applicable-to-D8-retain-original-owner": 447,
+        "upstream-current-prerequisite": 146,
         "direct-or-immediate-D8-consumer": 167
       },
       "rowCount": 760,
@@ -14970,15 +14970,31 @@
     "fixedProseBroadWholeFileTargets": 0,
     "fcRows": "760/760 full-row semantic applicability/current-owner audit authored; exact current SPEC section owner on every row; direct/upstream rows additionally bind concrete D8 section/validator; independent review pending",
     "fcCounts": {
-      "not-applicable-to-D8-retain-original-owner": 451,
-      "upstream-current-prerequisite": 142,
+      "not-applicable-to-D8-retain-original-owner": 447,
+      "upstream-current-prerequisite": 146,
       "direct-or-immediate-D8-consumer": 167
     },
-    "fcApplicabilityChanges": 110,
-    "acceptance": "213 total current obligations; 213 unique IDs; JSON structural authority; EN/ZH projections preserve the exact JSON ID order and six-column shape",
-    "view": "D7 ViewSpec/Definition owner retained; D8 builder/renderer/interaction/AT currentized; VIEW-CUR namespace + VIEW-BLD-01..10",
+    "fcApplicabilityChanges": 114,
+    "acceptance": "213 total current obligations; 213 unique IDs; JSON sole six-field structural authority; docs checker enforces actual group counts/ID uniqueness, EN exact projection, ZH six-column ID order, escaping, and VIEW-BLD namespace without replacing VIEW-01/02/03",
+    "view": "D7 ViewSpec/Definition owner retained; D8 definition-save gate is static and consumes no ResultHandle; renderer/export keeps the existing D7 §7 complete-result validation; VIEW-CUR namespace + VIEW-BLD-01..10",
     "historical": "fixed sources/blobs/line ranges, original conditions, D1–D7 accepted history, and genuine historical decoders/bytes retained; no migration fabricated",
     "productEvidence": "UNRUN",
-    "bilingual": "Chinese acceptance projection passes mixed-language and forbidden-terminology predicates; ANNOT-01 keeps Trash/suspend/restore as technical lifecycle terms"
+    "bilingual": "Chinese acceptance projection passes mixed-language and forbidden-terminology predicates; ANNOT-01 keeps Trash/suspend/restore as technical lifecycle terms",
+    "fixed5ecaIndependentReview": {
+      "reviewSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+      "independentlyClosed": [
+        "D8-C98B-P1-01",
+        "D8-C98B-P1-02",
+        "D8-C98B-P2-02"
+      ],
+      "residualOpen": [
+        "D8-C98B-P1-03",
+        "D8-C98B-P2-01"
+      ],
+      "addedOpen": [
+        "D8-5ECA-P2-01"
+      ],
+      "currentAuthorState": "three residual objects author-resolved-pending-independent-review at the later candidate; no author-side closure claimed"
+    }
   }
 }
