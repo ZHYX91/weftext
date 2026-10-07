@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D6 author candidates integrated; prior bounded closures retained. D4/D5 P2-01 CLOSED at fixed1fc4, P2-02 bounded CLOSED at fixed4282. D6 navigation fixed9c3b: REVISE 0 open P1 / 1 open P2 (navigation only). D7-D10/SEARCH/global remain pending.",
+  "status": "D1-D7 author candidates integrated; bounded prior closures retained. Latest independent navigation review fixed454e leaves 0 P1 / 2 navigation P2 author-repaired and pending independent fixed-stop review. D8-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Independently review the metadata-only navigation repair at its actual fixed handoff SHA, preserving semantic P2-01 CLOSED at fixed5e21. Then complete D7-D10, Mandatory 925-1141 and SEARCH-01-08, followed by fresh independent Pro/global review, explicit acceptedDesignSha and same-design-SHA freeze/startup material. No D6 P1 remains open.",
+  "next_batch": "Fixed-SHA independent non-author review of this complete D7 author candidate and the two navigation repairs; then D8-D10 full integration, fresh global non-author review, explicit acceptedDesignSha, and same-SHA freeze/start material.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2416,16 +2416,16 @@
       "D6-SOURCE-MAP.md",
       "D6-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "See currentReviewRef for current D6 state; latest navigation review fixed9c3b leaves navigation only pending.",
-    "reviewFixedSha": "9c3b84282a7d000c53342e14e09fffe3f6138e4e",
-    "repairStartSha": "9c3b84282a7d000c53342e14e09fffe3f6138e4e",
+    "status": "Latest fixed-object navigation review at fixed454e: REVISE, 0 open P1 / 2 open P2 navigation findings. Author repairs are present in the D7 integration candidate and await independent fixed-stop review.",
+    "reviewFixedSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
+    "repairStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
     "findings": {
       "A2-D6-829-P1-01": "independent-CLOSED-at-fixed01cc",
       "A2-D6-829-P1-02": "independent-CLOSED-at-fixed1fc4",
       "A2-D6-829-P2-01": "independent-CLOSED-at-fixed5e21",
       "A2-D6-829-P2-02": "independent-CLOSED-at-fixed1fc4",
       "A2-D6-829-P2-03": "independent-CLOSED-at-fixed01cc",
-      "A2-D6-01CC-P2-01": "coordinator-metadata-repaired-after-fixed5e21-pending-independent"
+      "A2-D6-01CC-P2-01": "pending-independent-review; detail=D7-SOURCE-MAP.json#/navigation_findings/A2-D6-01CC-P2-01"
     },
     "runtime": "UNRUN: product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment",
     "findingOriginReviewSha": "829efce6aacbe944714e093c98065b01d50b2593",
@@ -2433,7 +2433,7 @@
       "verdict": "REVISE",
       "residuals": {
         "P1": 0,
-        "P2": 1
+        "P2": 2
       },
       "independentlyClosed": [
         "A2-D6-829-P1-01",
@@ -2443,9 +2443,10 @@
         "A2-D6-829-P2-03"
       ],
       "pendingNewExactStopReview": [
-        "A2-D6-01CC-P2-01"
+        "A2-D6-01CC-P2-01",
+        "A2-NAV-454E-P2-01"
       ],
-      "detailRef": "D6-SOURCE-MAP.json#/latest_independent_review_result"
+      "detailRef": "D7-SOURCE-MAP.json#/navigation_findings"
     },
     "auditCoverage": {
       "sectionMappings": "299/299 concrete current targets; original 23 fixed-S Control precise placements retained",
@@ -2459,17 +2460,46 @@
         "3a4bceae305d30f72b42866f468d4a911dae7f0a"
       ]
     },
-    "nextGate": "Independently review the metadata-only navigation repair at its actual fixed handoff SHA, preserving semantic P2-01 CLOSED at fixed5e21. Then complete D7-D10, Mandatory 925-1141 and SEARCH-01-08, followed by fresh independent Pro/global review, explicit acceptedDesignSha and same-design-SHA freeze/startup material. No D6 P1 remains open.",
+    "nextGate": "Fixed-SHA independent non-author review of this complete D7 author candidate and the two navigation repairs; then D8-D10 full integration, fresh global non-author review, explicit acceptedDesignSha, and same-SHA freeze/start material.",
     "currentReviewRef": {
-      "path": "D6-SOURCE-MAP.json",
-      "pointer": "/latest_independent_review_result"
+      "path": "D7-SOURCE-MAP.json",
+      "pointer": "/navigation_findings/A2-D6-01CC-P2-01"
     }
   },
   "pending_scope": [
-    "D7-D10 full A2 owner modules",
-    "Mandatory source lines 925-1141",
+    "independent fixed-stop review of complete D7 candidate and two navigation P2 repairs",
+    "D8-D10 full A2 owner modules",
     "fresh Pro/global review",
-    "runtime/OS/GUI/real-replica/migration/activation evidence",
-    "SEARCH-01-08 in D7/D8 and final global review"
-  ]
+    "runtime/OS/GUI/real-replica/migration/activation evidence"
+  ],
+  "d7_integration": {
+    "files": [
+      "D7.md",
+      "D7.zh-CN.md",
+      "D7-SCHEMAS.md",
+      "D7-SCHEMAS.zh-CN.md",
+      "D7-SEARCH.md",
+      "D7-SEARCH.zh-CN.md",
+      "D7-IMPACT.md",
+      "D7-IMPACT.zh-CN.md",
+      "D7-REGISTRY.json",
+      "D7-SOURCE-MAP.json",
+      "D7-SOURCE-MAP.md",
+      "D7-SOURCE-MAP.zh-CN.md",
+      "d7/owners/**",
+      "d7/coordination/d9-binding/**"
+    ],
+    "status": "A2 D7 complete author candidate; SEARCH-01-08 integrated; pending fixed-SHA independent review; D8-D10 full modules and global acceptance remain pending",
+    "authorStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
+    "fixedS13": "FULL",
+    "currentOwnerBilingual": "FULL",
+    "registry": {
+      "concepts": 34,
+      "crossStageBindings": 8,
+      "blob": "3cab5124f46822729093d5d955908b05eb65bb87"
+    },
+    "search": "SEARCH-01-08 integrated in D7-SEARCH; pending independent review and later D8 platform evidence",
+    "sourceMap": "D7-SOURCE-MAP.json",
+    "runtime": "UNRUN"
+  }
 }

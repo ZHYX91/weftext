@@ -87,7 +87,7 @@ A fixed-5c non-author review found a **mapping omission, not a new semantic defe
 
 The D2 Impact source blob is exactly `956b3b768b97704c2e95dd8242b69507698ad3a7`. The earlier private-report typo is not used. Current D5's no-persistent-Record/RecordCollection and no-RecordRef decision remains the current A2 boundary; this mapping repair does not revive the fixed-S optional Record-domain wording.
 
-The fixed-5c review findings are not self-closed by this author. The Record-boundary author fix is present at the current A2 head and still requires non-author review; this source-map repair likewise awaits non-author review.
+At the fixed-5c author-repair point, the author did not self-close either finding. A subsequent fixed446 independent review boundedly CLOSED the Record-boundary and source-map completeness repair. That later conclusion applies only to its fixed D1/D2 mapping scope and is not D6 or global A2 acceptance; the earlier sentence is historical chronology, not a current pending claim.
 
 
 
@@ -127,3 +127,15 @@ D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.
 The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
 
 Latest independent navigation review: fixed9c3b (`9c3b84282a7d000c53342e14e09fffe3f6138e4e`), REVISE with 0 open P1 / 1 open P2. `A2-D6-829-P2-01` is independently CLOSED at fixed5e21; all prior bounded closures remain. Only `A2-D6-01CC-P2-01` remains OPEN. This coordinator repair updates review metadata only and awaits independent fixed-commit review; it does not accept D6/global A2. D7-D10 full modules, Mandatory 925-1141, SEARCH-01-08 and fresh independent Pro/global review remain pending; runtime evidence is UNRUN.
+
+## 13. D7 integration
+
+D7 is now integrated as a complete author candidate. The fixed-S thirteen D7 sources and the additional D9 coordinated D3-D7 binding source were fully read. The complete current bilingual D7 owner afterimages are copied byte-identically under d7/owners; D7-REGISTRY.json reuses the exact 34-concept / 8-cross-stage-binding current Registry blob. D7.md and D7-SCHEMAS.md apply only named fixed97/current-D2 successor overlays; every other retained clause remains in the copied owner text.
+
+D7-SEARCH.md integrates SEARCH-01 through SEARCH-08 without creating a second search executor or persistent authority. Plain text and visual filters are the default; optional shortcut mode is explicit and uses prefixed operators so ordinary colon text, URLs and drive-letter paths are not silently parsed. Saving stores canonical Query semantics, not UI parser state. Current matching preserves deterministic NFC exact-substring semantics and no automatic fuzzy/Pinyin/tokenizer claim.
+
+D7-SOURCE-MAP.json records fixed/current blobs, FULL/PARTIAL/UNRUN evidence, twenty integration obligations, all eight SEARCH obligations, scenario/non-fallback ordinals, A2-01–57, Facet/People/ICS groups, Chart §15, terminology Registry coverage and the two navigation findings. D8-D10 remain partial only at true D7 producer/consumer intersections; their full modules remain later.
+
+The fixed454e non-author navigation review passed the four earlier residuals and opened A2-D6-01CC-P2-01 plus A2-NAV-454E-P2-01. This author candidate repairs both navigation items but does not self-close them. A2-D6-01CC-P2-01 now uses one role-neutral pending status and one detail reference in D7-SOURCE-MAP.json; historical sourceEvidence is unchanged. A2-NAV-454E-P2-01 is repaired by the historical fixed-5c/fixed446 wording in §8 above. Both await independent review of the actual final stop SHA.
+
+Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior remains UNRUN.

@@ -14,7 +14,7 @@ translation_status: source
 
 对已经在本目录整合的模块，本目录是唯一 A2 候选正文。早期 snapshots、D6 file-authority owner afterimage 和 AsciiDoc/Annotation final-design candidate 继续作为来源与历史 decoder 证据，但不与 A2 形成第二套 current definition。
 
-当前作者候选已整合 D1–D6；仍只是作者候选，不是独立接受。D7–D10 完整模块留待后续批次。
+当前作者候选已整合 D1–D7；仍只是作者候选，不是独立接受。D8–D10 完整模块留待后续批次。
 
 ## 2. 本批进度
 
@@ -26,11 +26,11 @@ translation_status: source
 | D4 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D5 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D6 | 最新独立导航复核：fixed9c3b（`9c3b84282a7d000c53342e14e09fffe3f6138e4e`），REVISE，0 个开放 P1 / 1 个开放 P2。`A2-D6-829-P2-01` 已在 fixed5e21 独立 CLOSED；此前各项有界关闭继续保留。仅 `A2-D6-01CC-P2-01` 仍 OPEN。本轮由协调者只修复评审元数据，等待固定提交独立复核；不构成 D6/全局 A2 接受。D7–D10 完整模块、Mandatory 925–1141、SEARCH-01–08 与全新独立 Pro 全局终审继续 pending；runtime 证据仍 UNRUN。 |
-| D7 | 完整模块仍 TODO；已读 D2 交集与 D3-direct 中文 owner 输入 |
-| D8 | 完整模块仍 TODO；已读 D1/D2 交集与 D3-direct 中文 owner 输入 |
-| D9 | 完整模块仍 TODO；已读 D2 交集与 D3-direct 中文 owner 输入 |
-| D10 | 完整模块仍 TODO；已读 TASK/导航与部分 D3-direct 中文 owner 输入 |
-| Mandatory A2 source | D4/D5 适用 §1–§14（1–924 行）已读并映射；925–1141 行留待后续批次 |
+| D7 | 已整合完整作者候选：byte-retained coordinated owner 正文、fixed97 current overlay、SEARCH-01–08、machine source/case map 与 Registry；等待 fixed-SHA 独立复核 |
+| D8 | 完整模块仍 TODO；D7 只消费真实 editor/direction/accessibility/RTL 交叉 |
+| D9 | 完整模块仍 TODO；D7 只消费 coordinated binding 与直接 construction/import/export 交叉 |
+| D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
+| Mandatory A2 source | 保留 D4/D5 证据覆盖 1–924 行；D7 批已读并映射 D7 所需 925–1141 与具名 A2/Facet/People/ICS/Chart 义务；D8–D10 owner module 整合仍留后续 |
 
 仅知道路径、route、blob 或标题，绝不等于已经语义全文阅读；任何 TODO 模块都不得据此写成 accepted 或 complete。
 
@@ -43,15 +43,16 @@ translation_status: source
 - D4.zh-CN.md、D4-IMPACT.zh-CN.md、D4-LEXICON.zh-CN.md 构成 D4 作者候选；D4-SOURCE-MAP.json 与 D4-CATALOG-MAP.json 保留 provenance。
 - D5.zh-CN.md、D5-IMPACT.zh-CN.md、D5-LEXICON.zh-CN.md 构成 D5 作者候选；D5-SOURCE-MAP.json 保留 provenance。
 - D6.zh-CN.md、D6-CONTROL.zh-CN.md、D6-SCHEMAS.zh-CN.md、D6-IMPACT.zh-CN.md、D6-LEXICON.zh-CN.md 与 D6-REGISTRY.json 构成 current D6 作者候选；D6-SOURCE-MAP.json 保存细粒度 provenance。
+- D7.zh-CN.md、D7-SCHEMAS.zh-CN.md、D7-SEARCH.zh-CN.md、D7-IMPACT.zh-CN.md、D7-REGISTRY.json 与 byte-retained d7/owners 子树共同构成 current 完整 D7 作者候选；D7-SOURCE-MAP.json 保存 machine trace。
 - REVIEW-ENTRY.zh-CN.md 是 D1-D6 作者候选复核入口。
 - SOURCE-MAP.zh-CN.md 是人类可读的来源与 disposition 图。
 - SOURCE-MAP.json 逐条记录 49 个固定 S 输入的 S blob、阅读状态、current 来源以及 source-qualified 义务组。
 
 ## 4. 候选内部优先级
 
-对 D1–D6，本目录对应文件是 current candidate。只有当 D1.zh-CN.md、D2.zh-CN.md 或 SOURCE-MAP 明确标记 historical decoder 或 source-qualified evidence 时，早期正文才继续承担历史恢复或证据义务。
+对 D1–D7，本目录对应文件是 current candidate。只有当 D1.zh-CN.md、D2.zh-CN.md 或 SOURCE-MAP 明确标记 historical decoder 或 source-qualified evidence 时，早期正文才继续承担历史恢复或证据义务。
 
-D7–D10 目前还没有完整 A2 current definition；为闭合 D3–D5 而消费的 direct producer/consumer 不等于完整 owner 模块已被静默整合。
+D8–D10 目前还没有完整 A2 current definition；D7 消费的 direct producer/consumer 不等于这些完整 owner 模块已被静默整合。
 
 ## 5. 接受边界
 

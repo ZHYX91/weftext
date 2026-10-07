@@ -1,0 +1,1901 @@
+{
+  "schema_version": 1,
+  "status": "A2 D7 complete author candidate; SEARCH-01-08 integrated; pending fixed-SHA independent review; D8-D10 full modules and global acceptance remain pending",
+  "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
+  "author_start_sha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
+  "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "protected_inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+  "fixed_s_sources": [
+    {
+      "id": "d7-query-view-action",
+      "path": "docs/design/snapshots/d7-query-view-action/source.md",
+      "blob": "feddfc703e9dc63c7606d1ed4a872a6124b33a94",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-implementation-impact-and-test-outline",
+      "path": "docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md",
+      "blob": "d4528248f0d1a3e9c47dd5e3b7a06005969061a7",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-narrow-field-qualification",
+      "path": "docs/design/snapshots/d7-narrow-field-qualification/source.md",
+      "blob": "624ef9921a818014ef041a3db65960d3c4d22d4f",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-prepared-action-binding",
+      "path": "docs/design/snapshots/d7-prepared-action-binding/source.md",
+      "blob": "af7c1231b4937e15ca2527336abf72bb3f05c977",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-definition-transfer",
+      "path": "docs/design/snapshots/d7-definition-transfer/source.md",
+      "blob": "4adeac0b31bd16cd2d8fce5ada35e30f0e15353c",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-query-algebra",
+      "path": "docs/design/snapshots/d7-query-algebra/source.md",
+      "blob": "bd5f861cf0d207edb6be43acfedbd7481f05c092",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-value-and-cel-profile",
+      "path": "docs/design/snapshots/d7-value-and-cel-profile/source.md",
+      "blob": "a9afa8c8c916918497126f04577b7d7f23c2adf7",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-view-contract",
+      "path": "docs/design/snapshots/d7-view-contract/source.md",
+      "blob": "fccf7c99b7ca3125d4001fe58db36c5dae36835f",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-execution-and-action-interfaces",
+      "path": "docs/design/snapshots/d7-execution-and-action-interfaces/source.md",
+      "blob": "b163966f42efb875907a734e611122f304a5d55f",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-preview-and-effects-transport",
+      "path": "docs/design/snapshots/d7-preview-and-effects-transport/source.md",
+      "blob": "0677a2cf98def5fc61f43c66197716f18fc51cd1",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-scenario-dispositions",
+      "path": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "blob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-terminology-and-naming-lexicon",
+      "path": "docs/design/snapshots/d7-terminology-and-naming-lexicon/source.md",
+      "blob": "51996db30be35c029851aac856e806d4dad9d9c6",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d7-terminology-registry",
+      "path": "docs/design/snapshots/d7-terminology-registry/source.json",
+      "blob": "4615d8c03df22ba9630728f946715de8e4308438",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    },
+    {
+      "id": "d9-coordinated-d3-d7-binding-amendment",
+      "path": "docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "blob": "01efb97587a33670f4a63783015843070a3099db",
+      "read_status": "FULL",
+      "disposition": "retain-or-named-current-successor"
+    }
+  ],
+  "current_owner_sources": [
+    {
+      "id": "d7-query-view-action",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-query-view-action/source.md",
+      "en_blob": "6d75b79fa3173772d5cb996c264c41c06c6a4315",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-query-view-action/source.zh-CN.md",
+      "zh_blob": "7832c2060e4b9bccc716d6cc55e1635c22319f23",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-implementation-impact",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-implementation-impact-and-test-outline/source.md",
+      "en_blob": "30c12de85daf294452f541a5b0929f39d7bac483",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-implementation-impact-and-test-outline/source.zh-CN.md",
+      "zh_blob": "b5dc0a2b2ea07ae9dceb06ba92f24593006090a7",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-narrow-field",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-narrow-field-qualification/source.md",
+      "en_blob": "4f0cfeded1c0471988e2d5d712ab997ac4d90adb",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-narrow-field-qualification/source.zh-CN.md",
+      "zh_blob": "f15d8e826e75c03bba7b751171832ece5e17d085",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-prepared-action-binding",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.md",
+      "en_blob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.zh-CN.md",
+      "zh_blob": "35f2dcb22c321552984bf996e5d8a6e6d6b85275",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-definition-transfer",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-definition-transfer/source.md",
+      "en_blob": "6d92b30604515709fc7c9d1cd54eea03e9f5c4db",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-definition-transfer/source.zh-CN.md",
+      "zh_blob": "f38d6788cb11c154a4ae1c68f6bd40e0695dda53",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-query-algebra",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-query-algebra/source.md",
+      "en_blob": "11e0137865a08b5cb6cfb898be3c299748174286",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-query-algebra/source.zh-CN.md",
+      "zh_blob": "bdf891d7cf9676972fdacf39605629283296c0d9",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-value-cel",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-value-and-cel-profile/source.md",
+      "en_blob": "eeb402e78a51191c5f653c4d9fe80ae87bb9d941",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-value-and-cel-profile/source.zh-CN.md",
+      "zh_blob": "77ad7bb32761ab2b21eab950a180533f014cdf7e",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-view",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-view-contract/source.md",
+      "en_blob": "bc2c3014fc43c8d6d45072625cdd0a2785aac68d",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-view-contract/source.zh-CN.md",
+      "zh_blob": "2fb0aa7497314fd7919fc6b98cd5647f92891c72",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-execution-action",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-execution-and-action-interfaces/source.md",
+      "en_blob": "b919463604407022d3f76fff328f2cfe53be62df",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-execution-and-action-interfaces/source.zh-CN.md",
+      "zh_blob": "3acbcf6e66bfbc9e25a9a930cbed2001532981c4",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-effects",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.md",
+      "en_blob": "32e9a5f889a6627e05a397d9738ff171982f0838",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.zh-CN.md",
+      "zh_blob": "04f395984ed5ca1da9838fe277376ef4da8c8dfd",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-scenarios",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-scenario-dispositions/source.md",
+      "en_blob": "e24f74601b3ad68d0212e58d7b7e63080946d7ce",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-scenario-dispositions/source.zh-CN.md",
+      "zh_blob": "1e28d2cb3d943f74162b2ff630952ab642a8534e",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-lexicon",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-terminology-and-naming-lexicon/source.md",
+      "en_blob": "470cd345ee5c766f493b7d0e1c39003c2e285f59",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d7-terminology-and-naming-lexicon/source.zh-CN.md",
+      "zh_blob": "1a433f5e9d625431347ae91398fe90ba1de32050",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d7-registry",
+      "en": "docs/design/d6-file-authority-reopen/owners/d7-terminology-registry/source.json",
+      "en_blob": "3cab5124f46822729093d5d955908b05eb65bb87",
+      "zh": null,
+      "zh_blob": null,
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    },
+    {
+      "id": "d9-binding",
+      "en": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "en_blob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "zh": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.zh-CN.md",
+      "zh_blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
+      "read_status": "FULL",
+      "target": "local byte-identical copy under d7/owners or d7/coordination"
+    }
+  ],
+  "extra_sources": {
+    "mandatory": {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "read_status": "FULL across retained D4/D5 evidence plus this D7 batch; D7 source-qualified rows mapped here"
+    },
+    "rtl_intake": {
+      "path": "docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md",
+      "blob": "a7c1984777307d3a1945e2cd373f98be7bf1ad44",
+      "read_status": "FULL",
+      "disposition": "D7 semantic intersections retained; D8 platform implementation remains later"
+    },
+    "fixed97": {
+      "path": "docs/design/asciidoc-annotation-final-design",
+      "read_status": "PARTIAL D7/D2/D3/D6/D8/D9/D10 direct clauses only outside already-full D2 regions",
+      "disposition": "current successor authority only for named intersections"
+    }
+  },
+  "read_coverage": [
+    {
+      "scope": "fixed-S D7 thirteen sources",
+      "status": "FULL"
+    },
+    {
+      "scope": "fixed-S D9 coordinated D3-D7 binding source",
+      "status": "FULL"
+    },
+    {
+      "scope": "current D7 owner bilingual set and current D9 binding bilingual source",
+      "status": "FULL"
+    },
+    {
+      "scope": "A2 D1",
+      "status": "FULL"
+    },
+    {
+      "scope": "A2 D2 bilingual complete native/product family",
+      "status": "FULL"
+    },
+    {
+      "scope": "A2 D3",
+      "status": "PARTIAL: complete D7-direct identity/wire13/DefinitionTransfer/recovery sections; module has prior A2 source-map evidence, not reread wholesale here"
+    },
+    {
+      "scope": "A2 D4 bilingual and immutable Catalog95/limits7",
+      "status": "FULL; catalog structurally expanded"
+    },
+    {
+      "scope": "A2 D5 bilingual",
+      "status": "FULL"
+    },
+    {
+      "scope": "A2 D6 bilingual plus current successor schemas",
+      "status": "FULL for D7-required main/current schema intersections"
+    },
+    {
+      "scope": "D8",
+      "status": "PARTIAL by design: direct editor/direction/accessibility/RTL producer-consumer intersections only; full module intentionally later"
+    },
+    {
+      "scope": "D9",
+      "status": "PARTIAL by design: coordinated binding plus direct construction/import/export intersections; full module intentionally later"
+    },
+    {
+      "scope": "D10",
+      "status": "PARTIAL by design: SearchContribution/Catalog and D7 approval/effects/custody intersections plus fixed97 mixed-version current types; full module intentionally later"
+    },
+    {
+      "scope": "product runtime/OS/GUI/renderer/export/database/real-replica/performance",
+      "status": "UNRUN"
+    }
+  ],
+  "current_files": [
+    "D7.md",
+    "D7.zh-CN.md",
+    "D7-SCHEMAS.md",
+    "D7-SCHEMAS.zh-CN.md",
+    "D7-SEARCH.md",
+    "D7-SEARCH.zh-CN.md",
+    "D7-IMPACT.md",
+    "D7-IMPACT.zh-CN.md",
+    "D7-REGISTRY.json",
+    "D7-SOURCE-MAP.json",
+    "D7-SOURCE-MAP.md",
+    "D7-SOURCE-MAP.zh-CN.md",
+    "d7/owners/**",
+    "d7/coordination/d9-binding/**"
+  ],
+  "integration_obligations": [
+    {
+      "id": "D7-INT-01",
+      "target": "D7 §§1,4,17",
+      "disposition": "retain+current-overlay",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-02",
+      "target": "D7 §§2,4,12; D7-SCHEMAS",
+      "disposition": "named-current-successor",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-03",
+      "target": "D7 §3",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-04",
+      "target": "D7 §5",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-05",
+      "target": "D7 §6",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-06",
+      "target": "D7 §§7–8",
+      "disposition": "named-current-successor",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-07",
+      "target": "D7 §3",
+      "disposition": "retain+stable-address-current-read",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-08",
+      "target": "D7 §9",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-09",
+      "target": "D7 §9",
+      "disposition": "retain+D4-current-consumer",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-10",
+      "target": "D7 §10; D7-SEARCH",
+      "disposition": "retain+D10-activation-consumer",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-11",
+      "target": "D7 §11",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-12",
+      "target": "D7 §12; D7-SCHEMAS §§2–6",
+      "disposition": "named-current-successor",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-13",
+      "target": "D7 §13; D7-SCHEMAS §7",
+      "disposition": "retain-role-specific",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-14",
+      "target": "D7 §14",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-15",
+      "target": "D7 §§15–16",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-16",
+      "target": "D7 §17; retained View owner",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-17",
+      "target": "D7 §18; D7-SCHEMAS §6",
+      "disposition": "named-current-successor",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-18",
+      "target": "D7 §19",
+      "disposition": "retain",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-19",
+      "target": "D7 §20; D7-REGISTRY.json",
+      "disposition": "byte-retain+current-name-overlay",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    },
+    {
+      "id": "D7-INT-20",
+      "target": "D7 §21; D7-SOURCE-MAP",
+      "disposition": "new-machine-trace",
+      "oracle": "The source-qualified condition remains independently judgeable at the named current target; current successor wording may not broaden historical recovery."
+    }
+  ],
+  "search_obligations": [
+    {
+      "id": "SEARCH-01",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §3 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-02",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §2 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-03",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §4 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-04",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §5 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-05",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §6 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-06",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §7 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-07",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §8 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    },
+    {
+      "id": "SEARCH-08",
+      "source_kind": "user-authorized-inline-intake",
+      "source_materialization": "private instruction is not copied verbatim into the public repository",
+      "target": "D7-SEARCH §9 and §10",
+      "disposition": "integrated-current-design-pending-independent-review",
+      "oracle": "One canonical D7 Query semantics, explicit scope/authorization/currentness, no silent fallback, and later D8 interaction evidence where applicable."
+    }
+  ],
+  "source_qualified_cases": [
+    {
+      "caseKey": "D7-SCENARIO-01",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 1; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-02",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 2; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-03",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 3; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-04",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 4; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-05",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 5; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-06",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 6; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-07",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 7; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-08",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 8; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-09",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 9; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-10",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 10; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-11",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 11; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-12",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 12; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-13",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 13; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-14",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 14; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-15",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 15; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-16",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 16; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-17",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 17; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-18",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 18; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-19",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 19; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-20",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 20; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-21",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 21; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-22",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 22; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-23",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 23; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-24",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 24; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-25",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 25; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-26",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 26; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-27",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 27; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-28",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 28; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-29",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 29; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-30",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 30; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-31",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 31; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-32",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 32; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-33",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 33; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-34",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 34; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-35",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 35; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-SCENARIO-36",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "named scenario ordinal 36; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-01",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 1; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-02",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 2; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-03",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 3; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-04",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 4; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-05",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 5; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-06",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 6; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-07",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 7; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-08",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 8; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-09",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 9; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-10",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 10; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-11",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 11; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-12",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 12; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-13",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 13; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-14",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 14; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-15",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 15; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-16",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 16; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "D7-NONFALLBACK-17",
+      "sourcePath": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "sourceBlob": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "sourceClause": "non-fallback theme ordinal 17; exact original name/condition remains in source bytes",
+      "target": "D7 §§3–19 plus local retained scenarios",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "A2-01",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-01",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-02",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-02",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-03",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-03",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-04",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-04",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-05",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-05",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-06",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-06",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-07",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-07",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-08",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-08",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-09",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-09",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-10",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-10",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-11",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-11",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-12",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-12",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-13",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-13",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-14",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-14",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-15",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-15",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-16",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-16",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-17",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-17",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-18",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-18",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-19",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-19",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-20",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-20",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-21",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-21",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-22",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-22",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-23",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-23",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-24",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-24",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-25",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-25",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-26",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-26",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-27",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-27",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-28",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-28",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-29",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-29",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-30",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-30",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-31",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-31",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-32",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-32",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-33",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-33",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-34",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-34",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-35",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-35",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-36",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-36",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-37",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-37",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-38",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-38",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-39",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-39",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-40",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-40",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-41",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-41",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-42",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-42",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-43",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-43",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-44",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-44",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-45",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-45",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-46",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-46",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-47",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-47",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-48",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-48",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-49",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-49",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-50",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-50",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-51",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-51",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-52",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-52",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-53",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-53",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-54",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-54",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-55",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-55",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-56",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-56",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "A2-57",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory §9 A2-57",
+      "target": "D7 §§3–19; owner-specific D8–D10 interaction remains later where the case belongs there",
+      "disposition": "retain-and-route-by-real-owner",
+      "oracle": "D7 closes only its Query/View/Action/search portion; implementation/platform behavior remains unrun."
+    },
+    {
+      "caseKey": "FACET-01",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 1; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-02",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 2; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-03",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 3; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-04",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 4; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-05",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 5; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-06",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 6; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-07",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 7; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-08",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 8; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-09",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 9; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-10",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 10; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-11",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 11; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-12",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 12; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-13",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 13; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-14",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 14; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-15",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 15; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "FACET-16",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Facet source-qualified case ordinal 16; exact original name/condition remains in source bytes",
+      "target": "D7 §§9,11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-01",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 1; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-02",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 2; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-03",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 3; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-04",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 4; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-05",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 5; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-06",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 6; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-07",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 7; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-08",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 8; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-09",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 9; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-10",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 10; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-11",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 11; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-12",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 12; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-13",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 13; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-14",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 14; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-15",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 15; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "PEOPLE-16",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "People source-qualified case ordinal 16; exact original name/condition remains in source bytes",
+      "target": "D7 §§9–11,15; D4 remains semantic owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "ICS-01",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "ICS source-qualified case ordinal 1; exact original name/condition remains in source bytes",
+      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "ICS-02",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "ICS source-qualified case ordinal 2; exact original name/condition remains in source bytes",
+      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "ICS-03",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "ICS source-qualified case ordinal 3; exact original name/condition remains in source bytes",
+      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "ICS-04",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "ICS source-qualified case ordinal 4; exact original name/condition remains in source bytes",
+      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "ICS-05",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "ICS source-qualified case ordinal 5; exact original name/condition remains in source bytes",
+      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "ICS-06",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "ICS source-qualified case ordinal 6; exact original name/condition remains in source bytes",
+      "target": "D7 §§3,9,15; D9 mapping remains downstream owner",
+      "disposition": "retain-or-named-current-successor",
+      "oracle": "Judge the exact source-qualified condition independently; no count collapse or implied fallback."
+    },
+    {
+      "caseKey": "CHART-SECTION-15",
+      "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sourceClause": "Mandatory Chart §15; every row/inline condition remains distinct in source",
+      "target": "D7 §§5–6,16 and retained View owner",
+      "disposition": "retain; wide-to-long and ordering work must be Query-visible, never renderer computation",
+      "oracle": "Renderer may not invent unpivot/sort/data facts; isolated/self/parallel/cycle and missing/sparse semantics remain reviewable separately."
+    }
+  ],
+  "terminology_registry": {
+    "currentBlob": "3cab5124f46822729093d5d955908b05eb65bb87",
+    "fixedSBlob": "4615d8c03df22ba9630728f946715de8e4308438",
+    "concepts": 34,
+    "crossStageBindings": 8,
+    "read_method": "complete reversible structural field expansion; copied current machine Registry remains byte-identical",
+    "disposition": "all original fields retained; current successor names are overlay-only and historical names remain valid for recorded bytes"
+  },
+  "current_successors": {
+    "query_outer": "wireVersion2",
+    "QuerySpec": "1",
+    "ViewSpec": "1",
+    "D7ActionSpec": "2",
+    "D7ActionPrepareRequest": "3",
+    "D7ActionInput": "3",
+    "PreparedActionBinding": "4",
+    "D7ProposedInput": "3",
+    "MinimumMapping": "3 retained",
+    "EffectManifest": "3",
+    "EffectBytes": "3",
+    "D3_request": "wire13",
+    "D6_outer": "Descriptor3/Proof3/PreparedIntent3/Notice3/CP4/ChangeRecord1",
+    "sourcePlans": "/1 ordinary-fresh, /2 D3 guarded canonical conflict, /3 D6 source conflict"
+  },
+  "protected_invariants": {
+    "s49_and_inputs": "must remain byte-identical",
+    "exact_inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+    "no_second_authority": true,
+    "no_product_implementation": true,
+    "no_global_acceptance": true
+  },
+  "navigation_findings": {
+    "A2-D6-01CC-P2-01": {
+      "status": "author-repaired-pending-independent-review",
+      "role_neutral_current_wording": "pending independent review",
+      "detailed_provenance": "This D7 takeover records the latest fixed-object review as the origin of the navigation repair; historical sourceEvidence and bounded semantic closures are unchanged.",
+      "historical_source_evidence": "unchanged",
+      "self_closed": false
+    },
+    "A2-NAV-454E-P2-01": {
+      "status": "author-repaired-pending-independent-review",
+      "repair": "Root bilingual SOURCE-MAP now states that the old fixed-5c wording was historical author status and the subsequent fixed446 non-author review boundedly closed that D1/D2 mapping repair; this is not global acceptance.",
+      "self_closed": false
+    }
+  },
+  "next_gate": "Fixed-SHA independent non-author review of this complete D7 author candidate and the two navigation repairs; then D8-D10 full integration, fresh global non-author review, explicit acceptedDesignSha, and same-SHA freeze/start material."
+}
