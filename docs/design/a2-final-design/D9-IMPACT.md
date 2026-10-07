@@ -14,7 +14,7 @@ Status: **author-resolved-pending-independent-review**. This is an implementatio
 
 Core keeps D2/D4 domain interpretation and D3/D6 transaction authority. Conversion/Office/XML/model/runtime dependencies remain in optional coordinator/worker packages. The implementation must replace unpublished legacy ImportIr/YAML proposal decoders, free provider command/fallback aliases, old attr/record/H1–H9/formula-reorder/broad-view template parsing, free export dictionaries, rowHandle identity and D9-private Locator aliases as one migration set; historical research files remain historical evidence only.
 
-Current implementation must target D3 wire13, PAB4, Effect3, D2Snapshot3 and ExportPlan/Receipt3. It must retain exact decoders for genuinely stored historical records instead of dual-writing current and historical shapes.
+Current implementation must target D3 wire13, PAB4, Effect3, D2Snapshot3 and fresh ExportPlan/Receipt4. It must retain exact decoders for genuinely stored Plan/Receipt1-/2-/3 and other historical records instead of dual-writing or migrating them.
 
 ## 2. I01–I12 gates — all UNRUN
 
@@ -79,9 +79,15 @@ saved/planned/unknown cases preserve original request/OperationId/pins/owner and
 
 ## 8. Export evidence
 
-Tests cover exact-source/resource/query_json generationPolicy=none with renderer registries unavailable; rendered document D2Snapshot3 + D8 presentation binding; body/bibliography selection; narrow Field/Query/native_table no-extra-body-read; graph/scalar/rows complete values; canonical set ordering; current output-name validity/PortableAlias/reserved-name rules; Plan3/Receipt3 strict historical dispatch.
+Tests cover exact-source/resource/query_json generationPolicy=none with renderer registries unavailable; rendered document D2Snapshot3 + D8 presentation binding; body/bibliography selection; narrow Field/Query/native_table no-extra-body-read; graph/scalar/rows complete values; canonical set ordering; current output-name validity/PortableAlias/reserved-name rules; fresh Plan4/Receipt4 plus strict historical Plan/Receipt1-/2-/3 dispatch.
 
 Initial loss report, data bytes, loss-report.json, manifest.json and stagedOutputs are frozen and verified before confirmation. Any mutation after confirmation must fail rather than re-render.
+
+## 8a. Annotation content and Mandatory §15 View evidence
+
+Annotation conformance must cover a normal readable Value/4 export; the minimal target-hidden case where R6 body/attribution/reply remain exportable while target context is unavailable; portable-backup canonical record bytes; independent source-history versus target-context disclosure; changed revision/Observation/record-pin staleness; contradictory pins; authorization loss; and exact saved/planned/unknown dispatch. annotation_index must fail as a body source, and no D7 annotation_body semantic string may substitute for the complete record carrier.
+
+View conformance consumes every D9-applicable Mandatory §15 fixture, not just one bar example. It must prove complete-result and D7 runtime validation before Plan freeze; long-form/order/domain/unit/empty-none-zero/panel/color/a11y semantics; negative/duplicate/invalid-order failures; incomplete first page; authorization reset; renderer/profile unavailability; font/color/page/alt-text losses; CJK/RTL/print equivalence; and Dashboard block isolation. The supported first profile covers metric/bar/line/scatter/pie/heatmap only. Hierarchy/Gantt/boxplot and unsupported backends remain explicit unavailable, never data-row substitution. Office View routes also rerun the applicable Mandatory §14 template/style/repeat fixtures.
 
 ## 9. Typed formats and image evidence
 
@@ -91,7 +97,7 @@ Image physical size uses actual density facts, exact ratios and half-even roundi
 
 ## 10. Publication and Resource handoff
 
-Real filesystem tests cover create-only atomic bundle publication, flush ordering, conflict, crash before/after rename, user move, restart and revoke race. Recovery never changes the final name. External PublicationReceipt/3 and author Resource receipt remain distinct and independently recoverable.
+Real filesystem tests cover create-only atomic bundle publication, flush ordering, conflict, crash before/after rename, user move, restart and revoke race. Recovery never changes the final name. Fresh external PublicationReceipt/4, D9PrintReceipt/1 and author Resource receipt are three distinct outcomes; historical PublicationReceipt/3 remains independently recoverable.
 
 ## 11. Evidence ledger
 

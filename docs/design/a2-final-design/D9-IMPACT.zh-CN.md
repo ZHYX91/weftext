@@ -13,7 +13,7 @@ translation_status: source
 
 Core 继续保留 D2/D4 的领域解释以及 D3/D6 的事务权威。conversion、Office、XML、model 与 runtime dependency 留在可选 coordinator/worker package。实现时必须把未发布 legacy ImportIr/YAML proposal decoder、free provider command/fallback alias、旧 attr/record/H1–H9/formula-reorder/broad-view template parser、free export dictionary、rowHandle identity 与 D9-private Locator alias 作为一个 migration set 清理；historical research file 只保留历史证据。
 
-current implementation 必须面向 D3 wire13、PAB4、Effect3、D2Snapshot3 与 ExportPlan/Receipt3。真实已存 historical record 仍用 exact decoder，而不是 current/historical 双写。
+current implementation 必须面向 D3 wire13、PAB4、Effect3、D2Snapshot3 与 fresh ExportPlan/Receipt4。真实已存 Plan/Receipt1-/2-/3 与其它 historical record 继续使用 exact decoder，不能双写或迁移。
 
 ## 2. I01–I12 gates — 全部 UNRUN
 
@@ -78,9 +78,15 @@ saved/planned/unknown 三类恢复状态必须保留原始请求、OperationId�
 
 ## 8. Export 证据
 
-测试必须覆盖：渲染器注册表不可用时 exact-source/resource/query_json 仍使用 generationPolicy=none；渲染文档使用 D2Snapshot3 与 D8 呈现绑定；显式选择 body/bibliography；窄 Field/Query/native_table 不得额外读取 body；完整保留 graph/scalar/rows 值；集合按 canonical 规则排序；现任输出名执行 validity、PortableAlias 与 reserved-name 检查；Plan3/Receipt3 对历史版本保持严格分派。
+测试必须覆盖：渲染器注册表不可用时 exact-source/resource/query_json 仍使用 generationPolicy=none；渲染文档使用 D2Snapshot3 与 D8 呈现绑定；显式选择 body/bibliography；窄 Field/Query/native_table 不得额外读取 body；完整保留 graph/scalar/rows 值；集合按 canonical 规则排序；现任输出名执行 validity、PortableAlias 与 reserved-name 检查；fresh Plan4/Receipt4，以及 Plan/Receipt1-/2-/3 的严格历史分派。
 
 initial loss report、data bytes、loss-report.json、manifest.json、stagedOutputs 在 confirm 前冻结并验证。confirm 后任何变化必须失败，不能 rerender。
+
+## 8a. Annotation 内容与 Mandatory §15 View 证据
+
+Annotation conformance 必须覆盖：普通可读 Value/4 导出；最小 target-hidden 反例，其中 R6 body/attribution/reply 仍可导出而 target context 为 unavailable；portable backup 的 canonical record bytes；source-history 与 target-context 独立 disclosure；revision/Observation/record-pin 改变导致 stale；pin 矛盾；授权丢失；以及精确 saved/planned/unknown 分派。annotation_index 必须作为 body source 失败，也不能用 D7 annotation_body semantic string 替代完整 record carrier。
+
+View conformance 必须消费全部 D9 适用 Mandatory §15 fixture，而不是只补一个 bar 例子。测试要证明 Plan freeze 前已经完成完整结果与 D7 runtime validation；long-form/order/domain/unit/empty-none-zero/panel/color/a11y 语义；negative/duplicate/invalid-order 失败；首个 page 不完整；authorization reset；renderer/profile unavailable；font/color/page/alt-text loss；CJK/RTL/print 等价；以及 Dashboard block isolation。第一代支持 profile 只包括 metric/bar/line/scatter/pie/heatmap。hierarchy/Gantt/boxplot 与不支持 backend 都必须明确 unavailable，不能以 data rows 替代。Office View route 还要重跑适用的 Mandatory §14 template/style/repeat fixture。
 
 ## 9. Typed format 与 image 证据
 
@@ -90,7 +96,7 @@ image physical size 只使用真实 density fact、精确 ratio 与 half-even ro
 
 ## 10. Publication 与 Resource handoff
 
-真实文件系统测试必须覆盖 create-only atomic bundle、flush 顺序、conflict、rename 前后 crash、用户移动、restart 与 revoke race。recovery 不得更换 final name。external PublicationReceipt/3 与 author Resource receipt 必须分离并独立恢复。
+真实文件系统测试必须覆盖 create-only atomic bundle、flush 顺序、conflict、rename 前后 crash、用户移动、restart 与 revoke race。recovery 不得更换 final name。fresh external PublicationReceipt/4、D9PrintReceipt/1 与 author Resource receipt 是三种不同 outcome；historical PublicationReceipt/3 继续独立恢复。
 
 ## 11. Evidence ledger
 
