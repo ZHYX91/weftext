@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -273,6 +274,207 @@ def check_pair(english: Path, chinese: Path, errors: list[str]) -> None:
     check_links(chinese, chinese_text, errors)
 
 
+
+D8_ACCEPTANCE_DIR = Path("docs/design/a2-final-design")
+D8_ACCEPTANCE_FIELDS = ("id", "scenario", "positive", "negative", "contract", "status")
+D8_ACCEPTANCE_GROUP_COUNTS = {"inheritedCases": 177, "currentOverlay": 36, "total": 213}
+
+
+def _split_markdown_table_row(line: str) -> list[str] | None:
+    stripped = line.strip()
+    if not (stripped.startswith("|") and stripped.endswith("|")):
+        return None
+    body = stripped[1:-1]
+    cells: list[str] = []
+    current: list[str] = []
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char == "\\" and index + 1 < len(body) and body[index + 1] == "|":
+            current.append("|")
+            index += 2
+            continue
+        if char == "|":
+            cells.append("".join(current).strip())
+            current = []
+            index += 1
+            continue
+        current.append(char)
+        index += 1
+    cells.append("".join(current).strip())
+    return cells
+
+
+def _d8_projection_rows(
+    path: Path, ids: set[str], errors: list[str], root: Path
+) -> list[tuple[str, ...]]:
+    rows: list[tuple[str, ...]] = []
+    seen: set[str] = set()
+    display = path.relative_to(root)
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        cells = _split_markdown_table_row(line)
+        if not cells or cells[0] not in ids:
+            continue
+        row_id = cells[0]
+        if row_id in seen:
+            errors.append(f"{display}:{line_number}: duplicate D8 acceptance projection ID {row_id}")
+            continue
+        seen.add(row_id)
+        if len(cells) != 6:
+            errors.append(
+                f"{display}:{line_number}: D8 acceptance projection row {row_id} "
+                "must have exactly six escaped cells"
+            )
+            continue
+        rows.append(tuple(cells))
+    return rows
+
+
+def validate_d8_acceptance(root: Path = ROOT) -> list[str]:
+    errors: list[str] = []
+    base = root / D8_ACCEPTANCE_DIR
+    json_path = base / "D8-ACCEPTANCE.json"
+    en_path = base / "D8-ACCEPTANCE.md"
+    zh_path = base / "D8-ACCEPTANCE.zh-CN.md"
+    if not (json_path.is_file() and en_path.is_file() and zh_path.is_file()):
+        return errors
+
+    display_json = json_path.relative_to(root)
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"{display_json}: invalid D8 acceptance JSON: {exc}"]
+
+    inherited = data.get("inheritedCases")
+    overlay = data.get("currentOverlay")
+    if not isinstance(inherited, list) or not isinstance(overlay, list):
+        return [f"{display_json}: inheritedCases/currentOverlay must both be arrays"]
+
+    actual_group_counts = {
+        "inheritedCases": len(inherited),
+        "currentOverlay": len(overlay),
+        "total": len(inherited) + len(overlay),
+    }
+    if actual_group_counts != D8_ACCEPTANCE_GROUP_COUNTS:
+        errors.append(
+            f"{display_json}: D8 acceptance groups are {actual_group_counts}, "
+            f"expected {D8_ACCEPTANCE_GROUP_COUNTS}"
+        )
+
+    rows = [*inherited, *overlay]
+    ids: list[str] = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            errors.append(f"{display_json}: acceptance row {index} must be an object")
+            continue
+        if len(row) != 6 or set(row) != set(D8_ACCEPTANCE_FIELDS):
+            errors.append(
+                f"{display_json}: acceptance row {index} must contain exactly "
+                f"{D8_ACCEPTANCE_FIELDS}"
+            )
+            continue
+        row_id = row["id"]
+        if not isinstance(row_id, str) or not row_id:
+            errors.append(f"{display_json}: acceptance row {index} has invalid id")
+            continue
+        ids.append(row_id)
+        for field in D8_ACCEPTANCE_FIELDS[1:]:
+            if not isinstance(row[field], str) or not row[field]:
+                errors.append(
+                    f"{display_json}: acceptance row {row_id} field {field} "
+                    "must be non-empty text"
+                )
+
+    unique_ids = set(ids)
+    if len(ids) != len(unique_ids):
+        errors.append(f"{display_json}: D8 acceptance IDs must be unique")
+
+    counts = data.get("counts")
+    if not isinstance(counts, dict):
+        errors.append(f"{display_json}: counts must be an object")
+    else:
+        expected_counts = {
+            "inherited": len(inherited),
+            "currentOverlay": len(overlay),
+            "totalCurrentObligations": len(rows),
+            "uniqueIds": len(unique_ids),
+        }
+        for key, expected_value in expected_counts.items():
+            if counts.get(key) != expected_value:
+                errors.append(
+                    f"{display_json}: counts.{key}={counts.get(key)!r} "
+                    f"does not match actual {expected_value}"
+                )
+
+    authority = data.get("structureAuthority")
+    if not isinstance(authority, dict) or authority.get("canonical") != "D8-ACCEPTANCE.json":
+        errors.append(
+            f"{display_json}: structureAuthority must name D8-ACCEPTANCE.json as canonical"
+        )
+    elif authority.get("projections") != ["D8-ACCEPTANCE.md", "D8-ACCEPTANCE.zh-CN.md"]:
+        errors.append(
+            f"{display_json}: structureAuthority projections must be the EN/ZH acceptance tables"
+        )
+
+    inherited_ids = {
+        row.get("id") for row in inherited if isinstance(row, dict) and isinstance(row.get("id"), str)
+    }
+    overlay_ids = {
+        row.get("id") for row in overlay if isinstance(row, dict) and isinstance(row.get("id"), str)
+    }
+    old_view_ids = {"VIEW-01", "VIEW-02", "VIEW-03"}
+    new_view_ids = {f"VIEW-BLD-{number:02d}" for number in range(1, 11)}
+    if not old_view_ids.issubset(inherited_ids):
+        errors.append(f"{display_json}: inherited VIEW-01/02/03 namespace changed")
+    actual_builder_ids = {
+        row_id for row_id in overlay_ids if row_id.startswith("VIEW-BLD-")
+    }
+    if actual_builder_ids != new_view_ids:
+        errors.append(f"{display_json}: current overlay must contain exactly VIEW-BLD-01..10")
+    if inherited_ids & new_view_ids:
+        errors.append(
+            f"{display_json}: VIEW-BLD namespace must not replace inherited VIEW-01/02/03"
+        )
+
+    en_rows = _d8_projection_rows(en_path, unique_ids, errors, root)
+    zh_rows = _d8_projection_rows(zh_path, unique_ids, errors, root)
+    en_ids = [row[0] for row in en_rows]
+    zh_ids = [row[0] for row in zh_rows]
+    if en_ids != ids:
+        errors.append(
+            f"{en_path.relative_to(root)}: D8 acceptance ID order must exactly match JSON"
+        )
+    if zh_ids != ids:
+        errors.append(
+            f"{zh_path.relative_to(root)}: D8 acceptance ID order must exactly match JSON"
+        )
+
+    json_by_id = {
+        row["id"]: row
+        for row in rows
+        if isinstance(row, dict) and len(row) == 6 and set(row) == set(D8_ACCEPTANCE_FIELDS)
+    }
+    for cells in en_rows:
+        source = json_by_id.get(cells[0])
+        if source is None:
+            continue
+        expected = tuple(source[field] for field in D8_ACCEPTANCE_FIELDS)
+        if cells != expected:
+            errors.append(
+                f"{en_path.relative_to(root)}: D8 acceptance row {cells[0]} "
+                "must be the exact six-field JSON projection"
+            )
+
+    for cells in zh_rows:
+        if any(not value for value in cells[1:]):
+            errors.append(
+                f"{zh_path.relative_to(root)}: D8 acceptance row {cells[0]} "
+                "must preserve non-empty scenario/positive/negative/contract/status boundaries"
+            )
+
+    return errors
+
+
 def main() -> int:
     errors: list[str] = []
     paths = tracked_markdown()
@@ -303,6 +505,8 @@ def main() -> int:
         for label, pattern in HISTORICAL_LABELS.items():
             if pattern.search(text):
                 errors.append(f"{path}: public documentation contains {label}")
+
+    errors.extend(validate_d8_acceptance(ROOT))
 
     if errors:
         print("Documentation check failed:", file=sys.stderr)
