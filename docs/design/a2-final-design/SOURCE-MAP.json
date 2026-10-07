@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. D8 remains author-resolved-pending-independent-review. D9 complete integration from exact 5eca is author-resolved-pending-independent-review. D10/global remain pending.",
+  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. D8 fixed5eca independently closed P1-01/P1-02/P2-02; residual P1-03/P2-01 plus D8-5ECA-P2-01 are successor-author-resolved-pending-independent-review. D9 complete integration and ROOT-D9-ZH-P2-01 Chinese-quality repair are author-resolved-pending-independent-review. D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Independent fixed-SHA D8 result handling remains separate; perform a new fixed-final-SHA non-author D9 review, then complete D10 full owner integration, followed by fresh Pro/global A2 review.",
+  "next_batch": "Bind the exact final SHA for a non-author D8 incremental review of D8-C98B-P1-03/D8-C98B-P2-01/D8-5ECA-P2-01 only. Separately perform the complete non-author D9 module review including ROOT-D9-ZH-P2-01. Neither scope accepts the other. Then complete D10 full owner integration followed by a fresh Pro/global A2 review.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2573,7 +2573,7 @@
       "D8-SOURCE-MAP.md",
       "D8-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "author-resolved-pending-independent-review; five c98b findings repaired; no self-acceptance",
+    "status": "fixed5eca independently closed D8-C98B-P1-01/D8-C98B-P1-02/D8-C98B-P2-02; successor author resolved residual D8-C98B-P1-03/D8-C98B-P2-01/D8-5ECA-P2-01; those three remain pending independent review",
     "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "c98b five-finding repair synchronized affected EN/ZH contracts; pending independent verification",
@@ -2590,12 +2590,12 @@
     "view": "D7 Query/Definition/ViewSpec/1 owner retained; D8 owns lossless builder + renderer/interaction/AT; current overlay IDs use VIEW-CUR-* and Mandatory §15.7 uses VIEW-BLD-01..10",
     "sourceMap": "D8-SOURCE-MAP.json",
     "runtime": "UNRUN",
-    "review": "pending exact-final-SHA non-author incremental/full D8 review; green CI is consistency evidence only",
+    "review": "next review is exact-final-SHA non-author incremental review of only D8-C98B-P1-03, D8-C98B-P2-01 and D8-5ECA-P2-01; fixed5eca closures and unchanged accepted scopes are not reopened; green CI is consistency evidence only",
     "semanticAudit": {
       "fixedProseSections": 54,
       "broadWholeFileTargets": 0,
       "mappingNavigation": "author-resolved-pending-independent-review",
-      "fcApplicability": "760/760 full-row audit; exact current SPEC section owner on every row; 167 direct + 142 upstream bind concrete D8 section/validator; 451 remain at source owner; pending independent review",
+      "fcApplicability": "760/760 full-row audit; exact current SPEC section owner on every row; 167 direct + 146 upstream bind concrete D8 section/validator; 447 remain at source owner; 114 authored applicability changes; residual changes pending independent review",
       "fcApplicabilityChanges": 110,
       "historicalToCurrentDisposition": "author-resolved-pending-independent-review; historical decoders/bytes retained, no migration fabricated",
       "perObligationVerification": "author-resolved-pending-independent-review"
@@ -2618,9 +2618,24 @@
         "D8-C98B-P2-02"
       ],
       "sourceMapBlob": "d9c4d54cb6577fde934ce8df0c7a403d47d2cb14",
-      "status": "author-resolved-pending-independent-review",
+      "status": "fixed5eca independently CLOSED P1-01/P1-02/P2-02; P1-03/P2-01 plus new D8-5ECA-P2-01 successor-author-resolved-pending-independent-review",
       "productRuntime": "UNRUN",
-      "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged"
+      "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged",
+      "fixed5ecaReview": {
+        "reviewSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+        "independentlyClosed": [
+          "D8-C98B-P1-01",
+          "D8-C98B-P1-02",
+          "D8-C98B-P2-02"
+        ],
+        "residualOpen": [
+          "D8-C98B-P1-03",
+          "D8-C98B-P2-01"
+        ],
+        "addedOpen": [
+          "D8-5ECA-P2-01"
+        ]
+      }
     }
   },
   "d9_integration": {
@@ -2644,7 +2659,7 @@
       "D9-SOURCE-MAP.md",
       "D9-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "author-resolved-pending-independent-review; complete D9 owner integration authored; no self-acceptance",
+    "status": "complete D9 author integration preserved; ROOT-D9-ZH-P2-01 natural-Chinese quality repair authored without D9 English semantic changes; both remain author-resolved-pending-independent-review",
     "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "FULL",
@@ -2678,6 +2693,14 @@
       "snapshots": 49,
       "inputsBlob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4"
     },
-    "evidenceBoundary": "design/source consistency only; I01-I12 and product/runtime/GUI/Office/OS/performance/deployment UNRUN"
+    "evidenceBoundary": "design/source consistency only; I01-I12 and product/runtime/GUI/Office/OS/performance/deployment UNRUN",
+    "chineseQualityRepair": {
+      "finding": "ROOT-D9-ZH-P2-01",
+      "status": "author-resolved-pending-independent-review",
+      "affectedPublicChineseFiles": 10,
+      "fillerOccurrencesRemoved": 108,
+      "semanticEnglishChanges": 0,
+      "scope": "natural Chinese prose, punctuation, protocol-literal preservation and EN/ZH structural parity; full D9 semantic acceptance remains separate"
+    }
   }
 }
