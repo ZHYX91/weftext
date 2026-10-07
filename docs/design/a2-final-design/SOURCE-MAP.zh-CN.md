@@ -167,7 +167,7 @@ D8 已保全候选首次真实推送在 7e3f；本五项修订精确从 c98b（`
 
 D9 从 exact `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，现已是完整作者候选，不再是 TODO module。八份 fixed-S D9 source 为 FULL；八组 current D9 owner 中英为 FULL；Mandatory §14 的 884–924 行 FULL；current D7 D9-binding/PAB owner 中英 FULL；D9 适用 final AsciiDoc/Annotation successor FULL。D9 必要 read gap 为 0。D10 仍仅在具名 D9 direct intersection 上 PARTIAL，不构成完整 D10 整合。
 
-fresh current author 工作消费 D3 wire13、D7 PAB4、DependencyProof3、Effect3。fresh export/publication 消费 ExportPlan3/PublicationReceipt3 以及 current D2Snapshot3/D8 presentation binding。historical wire11/12、PAB1/2/3、Recipe/ConversionInput1、Plan/Receipt1/2 只按原 decoder/bytes 恢复。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+fresh current author 工作使用 D3 wire13、D7 PAB4、DependencyProof3 与 Effect3。fresh export/publication 使用 ExportPlan3/PublicationReceipt3，以及现任 D2Snapshot3/D8 presentation binding。historical wire11/12、PAB1/2/3、Recipe/ConversionInput1、Plan/Receipt1/2 只按原 decoder 与原始 bytes 恢复。
 
 Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：唯一 lowercase-ASCII native-table leaf 继续使用 `data.native_table.COLUMN`；qualified/non-ASCII fresh Office template bytes 使用可见 `native.table[...]::column[...]`，按 shortest suffix/title/occurrence 逐级限定。final-FC `nt_/nc_` 只作 internal compiled Plan key，不是 hidden authoring authority。ordinary Node 不增加 export-mapping schema。
 
