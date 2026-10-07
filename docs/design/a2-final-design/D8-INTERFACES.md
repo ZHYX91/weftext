@@ -137,7 +137,7 @@ PreparedEditBinding/3 has these exact current semantic members:
 
 For the current OwnerInputBinding, ownerKind=intentKind=d8_edit/3 and canonicalDescriptorBytes is D3-CJ/3(D8EditInput/3). Current effect bytes use EffectBytes/3. The Annotation pin encoding is d3_annotation_value4.
 
-ordinary/complete and strict/observed_only are independent axes. observed_only is limited to the qualified trusted interactive whole-source save of one existing live Document. Annotation, Undo, structured, bulk, automation, and managed_atomic paths cannot use it.
+ordinary/complete and strict/observed_only are independent axes. observed_only is limited to the qualified trusted interactive whole-source save of one existing live Document. Annotation, Undo, structured, bulk, automation, and managed_atomic paths cannot use it. SourceTransform profile/compilation unavailability is an upstream producer result: it may freeze transform emission disabled while an otherwise legal ordinary Source save continues, and D8 must not fabricate an empty transform event/artifact or upgrade it during recovery.
 
 Prepare success proves only that an immutable plan and preview exist. It is not Saved. Submission remains the original D6 request; planning and final submission revalidate descriptor, proof, dependencies, authorization, and installation.
 
@@ -219,12 +219,14 @@ Desktop/CLI/Mobile local Core and Server Core call the same interfaces; WebUI ca
 
 There is no new portable `D8ViewBuilder` wire. The builder composes existing current-owner calls:
 
-1. read the current D2 SavedDefinition/D7 Query-or-DynamicBlock occurrence and its exact owner/revision;
+1. read the current D2 SavedDefinition/D7 Query-or-DynamicBlock occurrence and its exact owner/revision/authorization;
 2. strict-decode the recorded `ViewSpec/1` and obtain the current D7 terminal schema;
-3. run the existing D7 ViewSpec validator over every binding/type/option;
+3. run only the definition-save checks over closed shape plus static layout/binding/type/options; do not request or inspect ResultHandle pages or values;
 4. retain the exact complete ViewSpec as the builder working value, including legal members not represented by basic controls;
-5. on save, re-read/requalify authorization, owner/revision, Query/schema and the complete ViewSpec, then submit through the existing definition-owner/D6 commit operation;
-6. on cancel, error, permission loss, stale owner/revision, reset, or unavailable dependency, write nothing.
+5. on save, re-read/requalify authorization, owner/revision, Query/schema and the complete ViewSpec, re-run the same static definition-save checks, then submit through the existing definition-owner/D6 commit operation;
+6. on cancel, static definition error, permission loss, stale owner/revision, schema change, reset, or unavailable definition dependency, write nothing.
+
+Rendering/export is a separate consumer call. It applies the existing D7 View §7 full runtime validation to a current ResultHandle in its original order, including complete-result, whole-data key/order/domain/hierarchy, budget, and delivery checks. Runtime data/provider/renderer failure never writes or invalidates the saved ViewSpec.
 
 The basic builder returns an explicit `advanced_required` presentation state when a legal member cannot be represented without loss; this state is a D8 UI condition, **not** a new ViewSpec member or portable error code. The advanced/source route edits the exact current owner bytes and remains subject to the same D7 decoder and D6 save/currentness gates.
 
