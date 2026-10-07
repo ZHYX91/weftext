@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D8 Implementation Impact and Acceptance Overlay
 
-Status: author-resolved-pending-independent. This file states implementation and test obligations only. Except for repository checks explicitly listed in the final handoff, it does not claim that product behavior has been executed.
+Status: author-resolved-pending-independent-review. This file states implementation and test obligations only. Except for repository checks explicitly listed in the final handoff, it does not claim that product behavior has been executed.
 
 ## 1. Core implementation surface
 
@@ -151,6 +151,10 @@ A deferred layout returns unsupported_layout; a chart library cannot silently en
 
 Desktop, WebUI, and Mobile separately test pixels, keyboard, focus, AT, RTL, high contrast, zoom, and reduced motion. A Mobile fallback uses the same complete data.
 
+Builder tests use the real current D7 definition decoder/validator and the existing definition-owner save path. They verify open -> edit -> cancel/save -> reopen; strict column/type validation; lossless retention of legal members not represented by basic controls; stale owner/revision and permission revocation; current Query/schema change; advanced/source routing; DynamicBlock retention; and the absence of a second View/Query store or hidden UI sidecar. A historical `.weftext-query view=...` sample is never silently rewritten: without a proved current Definition Transfer mapping it remains exact-source/advanced-only.
+
+Mandatory §15.7 has ten separately identified product obligations, `VIEW-BLD-01` through `VIEW-BLD-10`: grouped aggregate duplicate, line order/gap/incomplete, pie zero/negative/duplicate/count, hierarchy/cycle/deferred status, Gantt/dependency/deferred status, boxplot/quantile/deferred status, incomplete ResultHandle, ACL/reset/offline/provider/renderer failure, Desktop/WebUI/Server/Mobile/CLI plus CJK/RTL/print equivalence, and Dashboard one-block failure isolation. Deferred layouts are tested for preservation plus explicit unsupported rendering, not implemented pixels.
+
 ## 12. Unicode / RTL / AT corpus
 
 Unicode 18, UAX #9 revision 52, and UAX #29 revision 49 conformance is combined with all fixed 98 RTL cases, without collapsing them into one smoke test.
@@ -195,4 +199,4 @@ Evidence is reported separately for:
 - performance;
 - migration/activation/deployment.
 
-At author-candidate time, every product category above remains UNRUN. GitHub documentation/source checks establish repository consistency only; they do not establish D8 semantic acceptance. The original D8 source-map classification and per-obligation semantic audit gap remains open for the later non-author full D8 review.
+At author-candidate time, every product category above remains UNRUN. GitHub documentation/source checks establish repository consistency only; they do not establish D8 semantic acceptance. The author has repaired the D8 source-map navigation and per-obligation applicability audit; both remain pending fixed-SHA independent semantic review rather than self-accepted. Product/runtime evidence remains UNRUN.

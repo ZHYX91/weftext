@@ -6,7 +6,7 @@ translation_status: source
 [English](D8-SCHEMAS.md)
 # A2 D8 Closed Schemas and Version Dispatch
 
-状态：author-resolved-pending-independent。本文关闭 D8 current schema/version 路由，不扩大历史 decoder。完整 owner 语义见 D8 与 D8-INTERFACES；嵌入类型继续由 D2/D3/D4/D6/D7 owner 定义。
+状态：author-resolved-pending-independent-review。本文关闭 D8 current schema/version 路由，不扩大历史 decoder。完整 owner 语义见 D8 与 D8-INTERFACES；嵌入类型继续由 D2/D3/D4/D6/D7 owner 定义。
 
 ## 1. 当前 family 对照
 
@@ -297,6 +297,10 @@ D8 Search controls只生产 D7 compiler input，并消费 real QuerySpec/2/Canon
 D8 renderer只消费 D7 ViewSpec/1={format:"weftext.view",version:1,inputSchema,layout,bindings,options}。
 D8 不加入 filter/sort/CEL/aggregate/script member。
 View validation error family保持 D7 owner。
+
+View builder **没有 portable schema**。它的 working value 只是完整 strict-decoded `ViewSpec/1` 加 ephemeral UI selection/focus/validation state。Saved Query/View/DynamicBlock occurrence 继续是 current D2/D7 SavedDefinition author data；`DynamicBlock/1` 仍只保存真实 Query/View call 与 declared bindings。builder control availability、advanced-route 选择、validation message、open tab、selection、dirty state 或 device layout 都不得序列化进 ViewSpec/DynamicBlock 或隐藏 sidecar。
+
+basic builder 只能从 D7 已拥有的 closed member 构造完整新 `ViewSpec/1`；不得合成 partial ViewSpec、丢弃“控件未知但 current 合法”的 member，也不得把 future/unknown version coercion 成 version 1。
 
 ## 13. Closed editor error family
 

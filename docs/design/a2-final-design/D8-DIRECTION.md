@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D8 Direction, Bidi, Layout and Accessibility
 
-Status: author-resolved-pending-independent. This file carries the fixed-S Direction/Accessibility source, the RTL mandatory intake, the D6-FA afterimage, and current D2/D7/D8 owner contracts. It does not claim that any platform renderer, IME, font stack, assistive technology, or localization has been implemented.
+Status: author-resolved-pending-independent-review. This file carries the fixed-S Direction/Accessibility source, the RTL mandatory intake, the D6-FA afterimage, and current D2/D7/D8 owner contracts. It does not claim that any platform renderer, IME, font stack, assistive technology, or localization has been implemented.
 
 ## 1. Four capabilities remain separate
 
@@ -95,6 +95,8 @@ Native-table Tab/Shift+Tab, arrow navigation, and structured editing always bind
 D7 Query/View order remains semantic authority. RTL never reverses category/series/legend/panel semantic order, Query sort, network edge direction, or calendar time. A renderer may mirror screen geometry, while accessible table, export, and keyboard order still use the original typed data/order.
 
 Chart hover/selection/focus uses the D7 projected key/column identity. A rendered bar index cannot be used to rediscover source. Hiding a series is reversible device-local presentation state, is marked as partial display, and changes neither Query/ViewSpec nor a full-export claim.
+
+The View builder follows the same logical order. Binding pickers expose the current terminal-schema `columnId` and type, not a visual index. Reordering controls changes only a D7 member whose order is author-significant; CSS/RTL mirroring never rewrites that order. A basic builder that cannot expose a legal member provides an accessible advanced/source route rather than dropping it. Validation errors identify the exact field/binding in logical order, remain focusable, and do not reveal unauthorized schema/data.
 
 ## 10. Assistive technology
 

@@ -7,9 +7,9 @@ translation_status: source
 
 # A2 D8 来源映射
 
-状态：保留既有 D8 作者候选；本继任作者窄批只修复双语同步，等待独立复核。
+状态：c98b 的五项 D8 finding 已由作者修订；仅为 `author-resolved-pending-independent-review`。作者不自行关闭 P1/P2，也不接受 D8/global A2。
 
-本文件只记录 provenance，不建立第二规范。现有机器库存继续由 D8-SOURCE-MAP.json 承担。本窄修复不重新生成 fixed 八件输入、160 个 fixed case、Mandatory 库存、current FC 库存或 SEARCH fixture 库存。
+本文件只记录 provenance，不建立第二规范。机器库存继续由 `D8-SOURCE-MAP.json` 承担。本 c98b 修订不重新生成 fixed 八源、160 个 fixed case、FA17 继承、Mandatory/RTL/SEARCH 库存、replacement router 或受保护 inputs；只修复独立复核指出的不完整 D8 current routing/applicability。
 
 ## 1. 已保全库存与本次范围
 
@@ -17,17 +17,17 @@ translation_status: source
 
 这些数量只表示库存存在，不证明每项 source obligation 已完成语义映射，也不证明 D8 已被独立接受。
 
-## 2. 仍开放的来源映射与语义核销缺口
+## 2. c98b 来源映射/applicability 作者修订
 
-本次双语同步不会改写 fixedProseSections 数组。7e3f 已保全候选中，这个数组共有 54 项，其中 50 项的 currentTargets 仍是宽泛整文件 target，没有精确到 current section。
+54 个 `fixedProseSections` 全部保留原 source path/blob/section/line range，并改为 section-level current target；宽泛整文件 target 现为 0/54。current AsciiDoc/Annotation FC 库存仍严格是 760 条原 source row；每条现在都记录原 source path/blob/section/line、current owner、D8 applicability、适用时的 section-level D8 target、disposition 与逐行 audit basis。
 
-这个 50/54 的导航缺口继续保持 OPEN。原作者留下的 FC applicability 分类、historical→current disposition 核销，以及逐项义务语义验证也继续 OPEN。文档检查变绿、数量、hash 或来源清单都不能关闭这些缺口。
+作者按完整 obligation 文本重新核了 760/760 行，其中 110 行 applicability 被修订。当前作者计数为 direct/immediate D8 consumer 167、upstream current prerequisite 142、保留在真实 non-D8 current owner 451。评审点名的 AD2-31、AD2-35、WFX-H18、WFX-R15、FC4A-PROD-02 均已显式成为 direct D8 consumer。这些全部只是**作者修订结果**：每行状态仍是 `author-resolved-pending-independent-review`；section 存在、数量、hash 与 docs CI 只提供机械证据，不等于独立语义接受。
 
-后续必须由绑定固定 SHA 的非作者完整 D8 复核决定如何关闭或修订。
+后续 fixed-SHA 非作者复核必须独立验证或修订这些 classification/disposition。历史 decoder/bytes 与原 source-qualified 条件保持不变，不从历史记录虚构 current migration。
 
 ## 3. 本窄修复实际改变的内容
 
-本修复只同步 D8 main、interfaces、schemas、direction/accessibility、lexicon、impact 与 acceptance 的中英文，并更新机器映射中这些已改变候选文件的 target blob 引用和 OPEN 状态说明。
+本修订同步 D8 main、interfaces、schemas、direction/accessibility、lexicon、impact 与 acceptance 中英文；同时修复 View builder/旧入口合同、验收 ID/极性、机器 map target blob，并记录五项 finding 的作者修订状态，但不自行关闭复核。
 
 fixedProseSections 的 source path、blob、section、disposition、owner 与现有 currentTargets 其余内容保持原样。不建立第二份 source catalog 或 replacement inventory。
 

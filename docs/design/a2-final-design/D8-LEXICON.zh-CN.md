@@ -7,7 +7,7 @@ translation_status: source
 
 # A2 D8 术语与命名
 
-状态：author-resolved-pending-independent。固定 S 的九个 D8 concept identity 继续保留。D10 R08 提供的 technical-interface-owner 元数据仅作为当前协调输入；真正的 current schema version 仍由现任 D8 owner 决定。Prepared Edit Binding 当前是 /3，不能把旧 /2 提案重新解释为 current。
+状态：author-resolved-pending-independent-review。固定 S 的九个 D8 concept identity 继续保留。D10 R08 提供的 technical-interface-owner 元数据仅作为当前协调输入；真正的 current schema version 仍由现任 D8 owner 决定。Prepared Edit Binding 当前是 /3，不能把旧 /2 提案重新解释为 current。
 
 ## 1. 九个 D8 domain concept
 
@@ -98,6 +98,8 @@ OccurrenceKey 不是持久 row identity；rowHandle 不是 author ID。
 renderer 只是 View consumer，不是 Query 或 aggregate owner。wide-to-long 是 Query transform，不能称作 renderer melt。D7 已 defer 的 layout 不得标记为 supported。
 
 table/list fallback 必须描述为“使用同一份完整数据的替代表达；graphical renderer unavailable”，不能描述成 sampled fallback。
+
+**View builder** 指 D8 在 current D7 `ViewSpec/1` 与 current SavedDefinition/DynamicBlock owner 之上的无损编辑 surface；它不是 schema、author object、parser、registry 或 persistence kind。**advanced ViewSpec route** 指 basic controls 无法表达合法 member 时编辑 exact current owner representation 的路径；它不是 migration，也不能绕过 validation。
 
 ## 9. Controlled aliases
 

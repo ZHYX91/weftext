@@ -1,7 +1,7 @@
 {
   "format": "weftext.a2-d8-terms",
   "version": 1,
-  "status": "author-resolved-pending-independent",
+  "status": "author-resolved-pending-independent-review",
   "concepts": [
     {
       "conceptId": "weftext.term.edit_session",
@@ -155,7 +155,9 @@
       "QuerySpec/2",
       "ViewSpec/1",
       "EffectManifest/3",
-      "EffectBytes/3"
+      "EffectBytes/3",
+      "SavedQueryDefinition",
+      "DynamicBlock/1"
     ]
   },
   "forbiddenAliases": [

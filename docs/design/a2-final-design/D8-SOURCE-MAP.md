@@ -8,9 +8,9 @@ translation_status: synced
 
 # A2 D8 Source Map
 
-Status: preserved D8 author candidate; bilingual synchronization repaired in this narrow successor batch; pending independent review.
+Status: five c98b D8 findings author-repaired; `author-resolved-pending-independent-review`. No P1/P2 or D8/global acceptance is self-closed.
 
-This file is provenance, not an alternate specification. The existing machine inventory remains D8-SOURCE-MAP.json. The narrow repair does not regenerate the fixed eight inputs, 160 fixed cases, Mandatory inventory, current FC inventory, or SEARCH fixture inventory.
+This file is provenance, not an alternate specification. `D8-SOURCE-MAP.json` remains the machine inventory. This c98b repair does not regenerate the fixed eight sources, 160 fixed cases, FA17 inheritance, Mandatory/RTL/SEARCH inventories, replacement routers, or protected inputs; it repairs their D8 current routing and applicability where the independent review found it incomplete.
 
 ## 1. Preserved inventory and current scope
 
@@ -18,17 +18,17 @@ The existing machine map still contains 54 fixed-S D8 prose-section entries, all
 
 This count is inventory only. It does not establish that every source obligation has been semantically mapped or independently accepted.
 
-## 2. Open source-map and semantic-audit gap
+## 2. c98b source-map/applicability repair
 
-The fixedProseSections array is intentionally not rewritten in this bilingual-sync repair. At the 7e3f preserved candidate, 50 of its 54 entries still use broad whole-file currentTargets rather than precise current section navigation.
+All 54 `fixedProseSections` retain their original source path/blob/section/line range and now carry section-level current targets; broad whole-file targets are 0/54. The current AsciiDoc/Annotation FC inventory remains exactly 760 source rows and now records, per row, the original source path/blob/section/line plus current owner, D8 applicability, section-level D8 target when applicable, disposition and row-specific audit basis.
 
-That 50/54 navigation gap remains OPEN. The original author FC applicability classification, historical-to-current disposition audit, and per-obligation semantic verification also remain OPEN. No green documentation check, count, hash, or source inventory closes those gaps.
+The authored audit reclassified 110 rows after full obligation-text review. Current authored counts are 167 direct/immediate D8 consumers, 142 upstream current prerequisites and 451 obligations retained at their actual non-D8 current owner. The reviewer examples AD2-31, AD2-35, WFX-H18, WFX-R15 and FC4A-PROD-02 are now explicit direct D8 consumers. These are **author repair results only**: every row remains `author-resolved-pending-independent-review`; section existence, counts, hashes and green documentation checks are mechanical evidence, not independent semantic acceptance.
 
-A later fixed-SHA non-author full D8 review must evaluate and close or revise them.
+A fixed-SHA non-author reviewer must verify or revise this authored classification/disposition. Historical decoders/bytes and original source-qualified conditions remain intact; no current migration is inferred from history.
 
 ## 3. What this narrow repair changes
 
-This repair synchronizes the D8 bilingual main, interfaces, schemas, direction/accessibility, lexicon, impact, and acceptance documents. It also updates the machine map's target blob references for those changed candidate files and records the open-gap status.
+This repair synchronizes the D8 bilingual main, interfaces, schemas, direction/accessibility, lexicon, impact and acceptance documents; repairs the View builder/legacy-entry contract and acceptance identity/polarity; updates the machine map target blobs; and records the five finding repairs without self-closing review.
 
 The fixedProseSections source path, blob, section, disposition, owner, and existing currentTargets are otherwise preserved. No second source catalog or replacement inventory is created.
 

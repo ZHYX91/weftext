@@ -14,7 +14,7 @@ translation_status: source
 
 对已经在本目录整合的模块，本目录是唯一 A2 候选正文。早期 snapshots、D6 file-authority owner afterimage 和 AsciiDoc/Annotation final-design candidate 继续作为来源与历史 decoder 证据，但不与 A2 形成第二套 current definition。
 
-当前作者候选保留 D1–D8 的既有整合。D7 后续已在 fixed26be 获非作者 PASS（P0=0/P1=0/P2=0）。D8 是已保全的作者候选；本窄批只修复双语文档同步，原作者留下的 FC 分类、historical→current disposition、逐项义务语义核销与来源映射导航缺口继续保持 OPEN，等待 fixed-SHA 非作者复核。D9–D10 完整模块留待后续批次。
+当前作者候选保留 D1–D8 的既有整合。D7 后续已在 fixed26be 获非作者 PASS（P0=0/P1=0/P2=0）。D8 继续是未接受的作者候选；本批从 exact c98b 出发，一次作者修订五项独立 D8 finding（验收结构、View ID/builder/旧入口路由、source-map/FC applicability、双语断裂），全部仅为 `author-resolved-pending-independent-review`。D9–D10 完整模块留待后续批次。
 
 ## 2. 本批进度
 
@@ -27,7 +27,7 @@ translation_status: source
 | D5 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D6 | fixed2f89 已独立 CLOSED fixed454e 之后剩余的两项 navigation finding；既有 D6 bounded semantic closure 仍只保留各自记录范围。 |
 | D7 | fixed26be 非作者复核 = PASS（P0=0/P1=0/P2=0）；最终 A2-D7-2F89-P2-01 在该 SHA CLOSED；此前有界 closure 继续绑定各自原 SHA |
-| D8 | 已保全作者候选；本窄批同步 main/interfaces/schemas/direction/lexicon/impact/acceptance 中英文。既有来源清单不重做，但 FC/history disposition、逐项语义复核与宽泛 source-map target 继续 OPEN；状态为待独立复核 |
+| D8 | 已保全作者候选；c98b 五项修订已落作者候选：acceptance JSON 唯一结构源 + 213/213 唯一 ID、View `VIEW-CUR-*`/`VIEW-BLD-01..10` + builder/旧入口路由、54/54 section-level prose mapping、760/760 FC 审计、中文 §6/§9 修复；全部等待独立复核 |
 | D9 | 完整模块仍 TODO；D7 只消费 coordinated binding 与直接 construction/import/export 交叉 |
 | D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
 | Mandatory A2 source | D8 已完整消费 D8 适用的 §15.1–15.8.9 chart/View interaction 与 RTL mandatory intake；D9–D10 owner module 完整整合留后续 |
@@ -44,7 +44,7 @@ translation_status: source
 - D5.zh-CN.md、D5-IMPACT.zh-CN.md、D5-LEXICON.zh-CN.md 构成 D5 作者候选；D5-SOURCE-MAP.json 保留 provenance。
 - D6.zh-CN.md、D6-CONTROL.zh-CN.md、D6-SCHEMAS.zh-CN.md、D6-IMPACT.zh-CN.md、D6-LEXICON.zh-CN.md 与 D6-REGISTRY.json 构成 current D6 作者候选；D6-SOURCE-MAP.json 保存细粒度 provenance。
 - D7.zh-CN.md、D7-SCHEMAS.zh-CN.md、D7-QUERY-V2.zh-CN.md、D7-SEARCH.zh-CN.md、D7-IMPACT.zh-CN.md、D7-REGISTRY.json 与 D7-REGISTRY-QUALIFICATION.zh-CN.md，再加上逐字节保留的 d7/owners 子树，共同构成当前 D7 作者候选；D7-SEARCH-FIXTURES.json 保存快捷解析的机器验收例，D7-SOURCE-MAP.json 保存机器来源追踪。
-- D8.zh-CN.md、D8-INTERFACES.zh-CN.md、D8-SCHEMAS.zh-CN.md、D8-DIRECTION.zh-CN.md、D8-ACCEPTANCE.zh-CN.md、D8-LEXICON.zh-CN.md、D8-IMPACT.zh-CN.md、D8-TERMS.json、D8-REGISTRY.json 与 D8-SOURCE-MAP.json 构成已保全的 D8 作者候选。本窄批修复双语同步，但来源映射导航与语义核销缺口继续开放。
+- D8.zh-CN.md、D8-INTERFACES.zh-CN.md、D8-SCHEMAS.zh-CN.md、D8-DIRECTION.zh-CN.md、D8-ACCEPTANCE.zh-CN.md、D8-LEXICON.zh-CN.md、D8-IMPACT.zh-CN.md、D8-TERMS.json、D8-REGISTRY.json 与 D8-SOURCE-MAP.json 构成已保全的 D8 作者候选。c98b 五项 finding 的作者修订已存在，等待 exact-final-SHA 独立复核；作者不自行关闭 finding。
 - REVIEW-ENTRY.zh-CN.md 是 D1–D8 作者候选复核入口。
 - SOURCE-MAP.zh-CN.md 是人类可读的来源与 disposition 图。
 - SOURCE-MAP.json 逐条记录 49 个固定 S 输入的 S blob、阅读状态、current 来源以及 source-qualified 义务组。
@@ -59,4 +59,4 @@ D9–D10 目前还没有完整 A2 current definition；D8 消费的 direct produ
 
 后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 因而在 D7 范围 accepted；这不接受 D8 或 global A2。
 
-D8 fixed-SHA 独立复核必须同时核验仍开放的 source-map、FC、history disposition 与逐项语义核销缺口。D9–D10 完整模块、D8/Search runtime-platform 证据与 fresh independent Pro/global review 继续 pending；产品/runtime 证据仍 UNRUN。
+D8 fixed-SHA 独立复核必须核验本次五项作者修订：54/54 section navigation、760 条 applicability/current-owner 审计、213/213 acceptance ID/极性、current D7 View builder/旧入口路由，以及双语 §6/§9 同步。D9–D10 完整模块、D8/Search runtime-platform 证据与 fresh independent Pro/global review 继续 pending；产品/runtime 证据仍 UNRUN。

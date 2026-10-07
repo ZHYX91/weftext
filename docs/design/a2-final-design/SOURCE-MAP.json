@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D8 author candidates preserved. D7 non-author review at fixed26be PASS (P0=0/P1=0/P2=0). D8 bilingual synchronization repaired from fixed7e3f, pending independent review; source-map navigation and FC/history/per-obligation semantic audit remain OPEN. D9-D10/global remain pending.",
+  "status": "D1-D8 author candidates preserved. D7 fixed26be non-author PASS remains. D8 c98b five-finding author repair is author-resolved-pending-independent-review; D9-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2571,34 +2571,53 @@
       "D8-SOURCE-MAP.md",
       "D8-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "preserved author candidate; bilingual-sync author-repaired-pending-independent; semantic/source-map audit OPEN",
+    "status": "author-resolved-pending-independent-review; five c98b findings repaired; no self-acceptance",
     "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
     "fixedS8": "FULL",
-    "currentOwnerBilingual": "synchronized in narrow successor repair; pending independent verification",
+    "currentOwnerBilingual": "c98b five-finding repair synchronized affected EN/ZH contracts; pending independent verification",
     "acceptance": {
       "fixedCases": 160,
       "inheritedD6FaCases": 177,
-      "currentOverlay": 26,
-      "currentAsciiDocAnnotationObligationsMapped": 760
+      "currentOverlay": 36,
+      "totalCurrentObligations": 213,
+      "uniqueIds": 213,
+      "currentAsciiDocAnnotationObligationsMapped": 760,
+      "projectionRoundTrip": "213/213 EN+ZH row IDs in JSON order; six columns per row; ANNOT-01/WRITE-08 polarity repaired"
     },
     "search": "SEARCH-01-08 interaction consumes accepted D7 semantics and all 27 current fixtures",
-    "view": "D7 ViewSpec/1 semantics retained; D8 owns renderer/interaction/AT; wide=Query long-form, order=Query sort + line strict x",
+    "view": "D7 Query/Definition/ViewSpec/1 owner retained; D8 owns lossless builder + renderer/interaction/AT; current overlay IDs use VIEW-CUR-* and Mandatory §15.7 uses VIEW-BLD-01..10",
     "sourceMap": "D8-SOURCE-MAP.json",
     "runtime": "UNRUN",
-    "review": "pending fixed-SHA non-author full D8 review; green CI is not acceptance",
+    "review": "pending exact-final-SHA non-author incremental/full D8 review; green CI is consistency evidence only",
     "semanticAudit": {
       "fixedProseSections": 54,
-      "broadWholeFileTargets": 50,
-      "mappingNavigation": "OPEN",
-      "fcApplicability": "OPEN",
-      "historicalToCurrentDisposition": "OPEN",
-      "perObligationVerification": "OPEN"
+      "broadWholeFileTargets": 0,
+      "mappingNavigation": "author-resolved-pending-independent-review",
+      "fcApplicability": "760/760 full-row audit; exact current SPEC section owner on every row; 167 direct + 142 upstream bind concrete D8 section/validator; 451 remain at source owner; pending independent review",
+      "fcApplicabilityChanges": 110,
+      "historicalToCurrentDisposition": "author-resolved-pending-independent-review; historical decoders/bytes retained, no migration fabricated",
+      "perObligationVerification": "author-resolved-pending-independent-review"
     },
     "bilingualSyncRepair": {
       "startSha": "7e3f0272f112cf0b8e61ab14fb9eaf72917e754b",
       "scope": "main/interfaces/schemas/direction/lexicon/impact/acceptance + entry/status docs",
       "status": "author-repaired-pending-independent",
-      "sourceInventoryRegenerated": false
+      "sourceInventoryRegenerated": false,
+      "historical": true,
+      "followedBy": "c98b five-finding repair"
+    },
+    "fiveFindingRepair": {
+      "startSha": "c98b1b161751c5a01220da37568c78b5cef13841",
+      "findings": [
+        "D8-C98B-P1-01",
+        "D8-C98B-P1-02",
+        "D8-C98B-P1-03",
+        "D8-C98B-P2-01",
+        "D8-C98B-P2-02"
+      ],
+      "sourceMapBlob": "768efbe3687b563d2b93172856c895edd34cfce5",
+      "status": "author-resolved-pending-independent-review",
+      "productRuntime": "UNRUN"
     }
   }
 }

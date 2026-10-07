@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D8 作者候选复核入口——D8 双语同步修复
+# A2 D1–D8 作者候选复核入口——D8 c98b 五项 finding 修订
 
-后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。已保全的 D8 候选首次真实推送在 `7e3f0272f112cf0b8e61ab14fb9eaf72917e754b`；本继任作者窄批精确从该 SHA 开始，只修双语文档同步，不重新执行原 D8 整合。原作者留下的 FC 分类、historical→current disposition、source-map 导航与逐项义务语义核销缺口继续 OPEN；本作者不自行接受 D8 或 global A2。D9–D10 完整模块与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
+后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。已保全的 D8 候选首次真实推送在 `7e3f0272f112cf0b8e61ab14fb9eaf72917e754b`。本继任作者批精确从 `c98b1b161751c5a01220da37568c78b5cef13841` 开始，修订 `D8-C98B-P1-01`、`D8-C98B-P1-02`、`D8-C98B-P1-03`、`D8-C98B-P2-01`、`D8-C98B-P2-02`。五项全部仍只是 `author-resolved-pending-independent-review`，不自行接受 D8/global A2。D9–D10 完整模块与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -53,11 +53,11 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 已在 fixed26be 的 D7 范围独立 PASS。D8 保持 7e3f 已保全的候选状态。本窄修复只同步 main/interfaces/schemas/direction/lexicon/impact/acceptance 中英文，并更新直接受影响的状态和 blob 元数据；它不关闭原 source-map、FC、history disposition 或逐项语义核销缺口。D8 仍等待 fixed-SHA 非作者完整复核。D9–D10 只在 D8 具名 producer/consumer intersection 上 PARTIAL；其完整 A2 module 继续 pending。
+D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是 7e3f 起的已保全、未接受候选。c98b 五项作者修订修复 acceptance 字段丢失/极性与 View ID 冲突，补 current D7 View builder 和旧入口路由，完成 54/54 section-level prose navigation 与 760/760 FC current-owner/applicability 作者审计，并修中文 §6/§9 断句。作者不自行关闭任何 P1/P2。D8 仍等待 exact-final-SHA 独立复核。D9–D10 只在 D8 具名 producer/consumer intersection 上 PARTIAL；其完整 A2 module 继续 pending。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
 
 
 ## D8 复核目标
 
-下一位非作者只绑定 PR #5 的最终 stop SHA。D8 继续等待独立复核；不得因为双语同步或 CI 变绿就推导语义接受。重点核验 `D8-SOURCE-MAP.json`、`D8-ACCEPTANCE.json`、current PB3/Value4/Snapshot3 边界、SEARCH-01–08 interaction、current D7 View 两个 hard answer、RTL/AT/性能义务，以及 S49/inputs 零变。还必须处理仍开放的来源映射/语义缺口：54 个 `fixedProseSections` 中有 50 个仍使用宽泛整文件 target，FC applicability 与 historical→current/逐项义务 disposition 也尚未独立闭合。D9/D10 完整模块与 global A2 不属于本轮 D8 接受范围。
+下一位非作者只绑定 PR #5 的最终 stop SHA。D8 继续等待独立复核；不得因为作者修订或 CI 变绿就推导语义接受。重点核验 `D8-SOURCE-MAP.json`、`D8-ACCEPTANCE.json`、current PB3/Value4/Snapshot3 边界、SEARCH-01–08 interaction、current D7 View hard answer/builder/旧入口路由、RTL/AT/性能义务，以及 S49/inputs 零变。必须重新核作者给出的 54/54 section navigation、760/760 FC 分类（direct 167 / upstream 142 / 保留 owner 451；110 行 applicability 作者改动）、acceptance 213/213 唯一性/极性与十个 `VIEW-BLD-01..10` fixture；它们都只是作者 resolved，复核者可以修订。D9/D10 完整模块与 global A2 不属于本轮 D8 接受范围。

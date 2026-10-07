@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D8 Closed Schemas and Version Dispatch
 
-Status: author-resolved-pending-independent. This file closes current D8 schema/version routing without widening historical decoders. Full owner semantics are in D8 and D8-INTERFACES. Embedded types remain owned by D2/D3/D4/D6/D7.
+Status: author-resolved-pending-independent-review. This file closes current D8 schema/version routing without widening historical decoders. Full owner semantics are in D8 and D8-INTERFACES. Embedded types remain owned by D2/D3/D4/D6/D7.
 
 ## 1. Current family table
 
@@ -265,6 +265,10 @@ They are never encoded into QuerySpec, ViewSpec, Document source, Annotation Val
 D8 Search controls produce only the D7 compiler input and consume the real QuerySpec/2/CanonicalGraph. There is no new D8 Search wire. Saving a Query remains a D7 definition operation.
 
 A D8 renderer consumes only D7 ViewSpec/1={format:"weftext.view",version:1,inputSchema,layout,bindings,options}. D8 adds no filter, sort, CEL, aggregate, or script member. The formal View validation error family remains D7-owned.
+
+The View builder has **no portable schema**. Its working value is the complete strict-decoded `ViewSpec/1` plus ephemeral UI selection/focus/validation state. Saved Query/View/DynamicBlock occurrences remain current D2/D7 SavedDefinition author data; `DynamicBlock/1` retains only its real Query/View call and declared bindings. Builder control availability, advanced-route choice, validation messages, open tabs, selection, dirty state, or device layout are never serialized into ViewSpec/DynamicBlock or a hidden sidecar.
+
+A basic builder may construct a new complete `ViewSpec/1` only from the exact closed members already owned by D7. It may not synthesize a partial ViewSpec, drop unknown-to-the-control but legal current members, or coerce a future/unknown version into version 1.
 
 ## 13. Closed editor error family
 

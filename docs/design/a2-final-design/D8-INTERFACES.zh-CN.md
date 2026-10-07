@@ -6,7 +6,7 @@ translation_status: source
 [English](D8-INTERFACES.md)
 # A2 D8 当前接口与状态机
 
-状态：author-resolved-pending-independent。本文是 D8 当前接口 owner；只在具名 successor 上替代 fixed-S / D6-FA 旧 current 版本，真实历史 decoder 保持原样。
+状态：author-resolved-pending-independent-review。本文是 D8 当前接口 owner；只在具名 successor 上替代 fixed-S / D6-FA 旧 current 版本，真实历史 decoder 保持原样。
 
 ## 1. 公共 decoder 与 owner 边界
 
@@ -260,3 +260,18 @@ WebUI 仅 Server。
 一个 surface 缺 renderer/IME/table editor 时返回真实 capability unavailable，
 不得改 request meaning。
 Remote/offline hosted author source 不因本地有 parser 就获得 commit authority。
+
+## 13. View builder interface boundary
+
+不新增 portable `D8ViewBuilder` wire。builder 只组合既有 current-owner call：
+
+1. 读取 current D2 SavedDefinition/D7 Query 或 DynamicBlock occurrence 及其 exact owner/revision；
+2. strict-decode 实际记录的 `ViewSpec/1`，并取得 current D7 terminal schema；
+3. 用 existing D7 ViewSpec validator 校验全部 binding/type/option；
+4. 将**完整 exact ViewSpec**作为 working value，包括 basic controls 没有表达的合法 member；
+5. save 前重新读取/qualification authorization、owner/revision、Query/schema 与完整 ViewSpec，再走既有 definition-owner/D6 commit operation；
+6. cancel、error、权限丢失、owner/revision stale、reset 或 dependency unavailable 都不得写入。
+
+basic builder 对无法无损表达的合法 member 返回显式 `advanced_required` presentation state；它只是 D8 UI condition，**不是**新 ViewSpec member 或 portable error code。advanced/source route 编辑真实 current owner bytes，并继续受同一 D7 decoder 与 D6 save/currentness gate 约束。
+
+Desktop/WebUI/Mobile 可承载 basic builder；CLI/Server 提供相同 definition read、strict validation 与 owner save operation；WebUI 使用 Server Core。缺 graphical capability 与 definition validity 分开报告。

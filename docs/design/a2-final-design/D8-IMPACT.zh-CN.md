@@ -6,7 +6,7 @@ translation_status: source
 [English](D8-IMPACT.md)
 # A2 D8 Implementation Impact and Acceptance Overlay
 
-状态：author-resolved-pending-independent。本文只描述实现/测试义务；除最终 handoff 明确列出的 repository checks 外，不声称产品行为已经执行。
+状态：author-resolved-pending-independent-review。本文只描述实现/测试义务；除最终 handoff 明确列出的 repository checks 外，不声称产品行为已经执行。
 
 ## 1. Core implementation surface
 
@@ -168,6 +168,10 @@ Desktop、WebUI 与 Mobile 分别测试 pixel/keyboard/focus/AT/RTL。
 同时分别测试 high-contrast、zoom 与 reduced-motion。
 Mobile fallback必须同完整 data。
 
+builder tests 使用真实 current D7 definition decoder/validator 与既有 definition-owner save path，覆盖 open → edit → cancel/save → reopen、strict column/type validation、basic control 无法表达的合法 member 无损保留、stale owner/revision、权限撤销、current Query/schema 改变、advanced/source routing、DynamicBlock 保留，以及不存在第二套 View/Query store 或 hidden UI sidecar。historical `.weftext-query view=...` 样本不得静默重写；没有 proved current Definition Transfer mapping 时保持 exact-source/advanced-only。
+
+Mandatory §15.7 十个 fixture 分别对应唯一 product obligation `VIEW-BLD-01`–`VIEW-BLD-10`：grouped aggregate duplicate、line order/gap/incomplete、pie zero/negative/duplicate/count、hierarchy/cycle/deferred、Gantt/dependency/deferred、boxplot/quantile/deferred、incomplete ResultHandle、ACL/reset/offline/provider/renderer failure、Desktop/WebUI/Server/Mobile/CLI + CJK/RTL/print equivalence，以及 Dashboard 单块失败隔离。deferred layout 只测试无损保留 + explicit unsupported rendering，不测试并不存在的 pixels。
+
 ## 12. Unicode/RTL/AT corpus
 
 Unicode18/UAX9r52/UAX29r49 conformance plus fixed 98 RTL cases逐项执行，
@@ -219,4 +223,4 @@ D9/D10 full module acceptance 不由 D8 测试代替。
 - performance；
 - migration/activation/deployment。
 
-本作者批创建时这些产品类别全部 UNRUN。GitHub docs/source checks 只能证明 repository consistency，不能证明 D8 已完成语义接受。原 D8 source-map 的 FC 分类、historical→current disposition 与逐项义务语义核销缺口继续保持 OPEN，留给后续固定 SHA 的非作者完整 D8 复核。
+本作者批创建时这些产品类别全部 UNRUN。GitHub docs/source checks 只能证明 repository consistency，不能证明 D8 已完成语义接受。作者已修订 D8 source-map navigation 与逐项 applicability/historical-current disposition；这些修订仍等待 fixed-SHA 非作者语义复核，作者不自行接受。产品/runtime 证据继续 UNRUN。

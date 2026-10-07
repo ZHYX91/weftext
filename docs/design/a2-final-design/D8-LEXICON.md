@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D8 Terminology and Naming
 
-Status: author-resolved-pending-independent. The nine fixed-S D8 concept identities remain. D10 R08 technical-interface-owner metadata is consumed as current coordination input, while the current schema version comes from the real D8 owner. Prepared Edit Binding is currently /3; the older /2 proposal is not made current again.
+Status: author-resolved-pending-independent-review. The nine fixed-S D8 concept identities remain. D10 R08 technical-interface-owner metadata is consumed as current coordination input, while the current schema version comes from the real D8 owner. Prepared Edit Binding is currently /3; the older /2 proposal is not made current again.
 
 ## 1. Nine D8 domain concepts
 
@@ -85,6 +85,8 @@ Native Document Table Row, Field Value Occurrence, NodeRefCollection row, Query 
 ## 8. View/renderer vocabulary
 
 A renderer consumes View data and is not the owner of Query or aggregation. wide-to-long is a Query transform and is not called renderer melt. A D7-deferred layout cannot be marked supported. A table/list fallback must be described as "same complete data alternative; graphical renderer unavailable" rather than a sampled fallback.
+
+**View builder** means the lossless D8 editing surface over the current D7 `ViewSpec/1` and current SavedDefinition/DynamicBlock owner. It is not a schema, author object, parser, registry, or persistence kind. **advanced ViewSpec route** means editing the exact current owner representation when the basic controls cannot express a legal member; it is not a migration or escape from validation.
 
 ## 9. Controlled aliases
 

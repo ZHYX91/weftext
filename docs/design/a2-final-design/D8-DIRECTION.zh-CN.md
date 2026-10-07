@@ -6,7 +6,7 @@ translation_status: source
 [English](D8-DIRECTION.md)
 # A2 D8 Direction, Bidi, Layout and Accessibility
 
-状态：author-resolved-pending-independent。本文承接 fixed-S Direction/Accessibility、RTL mandatory intake、D6-FA afterimage 与 current D2/D7/D8 owner。它不声称任何平台 renderer、IME、字体、AT 或本地化已经实现。
+状态：author-resolved-pending-independent-review。本文承接 fixed-S Direction/Accessibility、RTL mandatory intake、D6-FA afterimage 与 current D2/D7/D8 owner。它不声称任何平台 renderer、IME、字体、AT 或本地化已经实现。
 
 ## 1. 四种能力必须分开
 
@@ -114,6 +114,8 @@ chart hover/selection/focus 使用 D7 projected key/column identity；
 禁止按 rendered bar index 重找 source。
 隐藏 series 是可逆 device presentation state并标记 partial display，
 不修改 Query/ViewSpec 或 full export claim。
+
+View builder 使用同一 logical order。binding picker 暴露 current terminal-schema `columnId` 与 type，不用视觉 index；只有 D7 本来就把次序定义为 author-significant 的 member 才能由 reorder control 改变，CSS/RTL mirror 不能改写该 author order。basic builder 无法表达合法 member 时必须提供 accessible advanced/source route，不能丢 member。validation error 以 logical order 指明 exact field/binding、可聚焦，同时不得泄露未授权 schema/data。
 
 ## 10. Assistive technology
 

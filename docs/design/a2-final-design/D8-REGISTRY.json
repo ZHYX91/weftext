@@ -1,7 +1,7 @@
 {
   "format": "weftext.a2-d8-registry",
   "version": 1,
-  "status": "author-resolved-pending-independent",
+  "status": "author-resolved-pending-independent-review",
   "fixedInputCommit": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "candidateStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
   "currentFamilies": [
@@ -48,7 +48,7 @@
     {
       "name": "view",
       "outer": "D7 ViewSpec/1",
-      "inner": "D8 renderer interaction"
+      "inner": "D8 lossless View builder + renderer/interaction over current D7 ViewSpec/1; SavedDefinition/DynamicBlock owner retained"
     }
   ],
   "rowDomains": [
@@ -84,6 +84,6 @@
   "searchOwner": "D7",
   "viewOwner": "D7",
   "authorCommitOwner": "D3/D6",
-  "currentD8Status": "author-resolved-pending-independent",
+  "currentD8Status": "author-resolved-pending-independent-review",
   "productEvidence": "UNRUN"
 }

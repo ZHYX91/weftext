@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D8 Current Interfaces and State Machines
 
-Status: author-resolved-pending-independent. This file is the current D8 interface owner. It supersedes former-current fixed-S / D6-FA versions only where a named successor exists; genuine historical decoders remain exact.
+Status: author-resolved-pending-independent-review. This file is the current D8 interface owner. It supersedes former-current fixed-S / D6-FA versions only where a named successor exists; genuine historical decoders remain exact.
 
 ## 1. Common decode and owner boundary
 
@@ -214,3 +214,18 @@ When a current coordinated path has a real owner-specific unavailable/conflict r
 ## 12. Surface parity
 
 Desktop/CLI/Mobile local Core and Server Core call the same interfaces; WebUI calls Server. If a surface lacks a renderer, IME adapter, or table editor, it reports the real capability as unavailable rather than changing request meaning. Remote/offline hosted author source does not gain local commit authority merely because a local parser exists.
+
+## 13. View builder interface boundary
+
+There is no new portable `D8ViewBuilder` wire. The builder composes existing current-owner calls:
+
+1. read the current D2 SavedDefinition/D7 Query-or-DynamicBlock occurrence and its exact owner/revision;
+2. strict-decode the recorded `ViewSpec/1` and obtain the current D7 terminal schema;
+3. run the existing D7 ViewSpec validator over every binding/type/option;
+4. retain the exact complete ViewSpec as the builder working value, including legal members not represented by basic controls;
+5. on save, re-read/requalify authorization, owner/revision, Query/schema and the complete ViewSpec, then submit through the existing definition-owner/D6 commit operation;
+6. on cancel, error, permission loss, stale owner/revision, reset, or unavailable dependency, write nothing.
+
+The basic builder returns an explicit `advanced_required` presentation state when a legal member cannot be represented without loss; this state is a D8 UI condition, **not** a new ViewSpec member or portable error code. The advanced/source route edits the exact current owner bytes and remains subject to the same D7 decoder and D6 save/currentness gates.
+
+Desktop/WebUI/Mobile may host the basic builder. CLI/Server expose the same definition read, strict validation, and owner save operations; WebUI uses Server Core. Missing graphical capability is reported independently from definition validity.
