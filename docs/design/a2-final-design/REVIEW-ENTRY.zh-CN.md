@@ -69,14 +69,14 @@ D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是已保全、未接受
 
 必须核验：
 
-- 八份 fixed-S D9 source、current D9 owner 中英 afterimage、Mandatory §14 的 884–924 行、两层 replacement router、current D7 D9-binding/PAB owner，以及 D9 适用 final-FC successor；；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+- 八份 fixed-S D9 source、现任 D9 owner 中英文 afterimage、Mandatory §14 的 884–924 行、两层 replacement router、现任 D7 D9-binding/PAB owner，以及适用于 D9 的 final-FC successor；
 - D9-SOURCE-MAP.json、D9-REGISTRY.json、D9-TERMS.json 与 D9-ACCEPTANCE.json 中 80 个唯一 obligation；
-- 单一 Core parser/identity/authorization 边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止第二 identity/ledger/patch authority；；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
-- Node Template Recipe/ConstructionInput、sourceSubjectBindings 到原 receipt join、PAB4/MinimumMapping/current wire13 与 saved/planned/unknown recovery；；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
-- 普通 Office token/style/repeat 规则和可见 qualified native-table selector grammar：template bytes 自包含、nt_/nc_ 只作 internal Plan key、shortest-unique suffix/title/occurrence、same-rowset repeat、Unicode escape；；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
-- 完整 ExportPlan/3 与 PublicationReceipt/3 字段、typed evidence/recovery pins、generationPolicy=none exact path、D2Snapshot3/D8 presentation rendering、output-name canonicalization、confirmation immutability、create-only publication 与独立 Resource author receipt；；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+- 单一 Core parser/identity/authorization 边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
+- Node Template Recipe/ConstructionInput、sourceSubjectBindings 与原 receipt 的 join、PAB4/MinimumMapping/current wire13，以及 saved/planned/unknown recovery；
+- 普通 Office token/style/repeat 规则，以及可见的 qualified native-table selector grammar：template bytes 必须自包含，nt_/nc_ 只作 internal Plan key，并采用 shortest-unique suffix/title/occurrence、same-rowset repeat 与 Unicode escape；
+- 完整 ExportPlan/3 与 PublicationReceipt/3 字段、typed evidence/recovery pins、generationPolicy=none exact path、D2Snapshot3/D8 presentation rendering、output-name canonicalization、confirmation immutability、create-only publication，以及与之分离的 Resource author receipt；
 - current PortableAnnotationRecord/4 / Value4 / 唯一 R6 AnnotationInlineProfile consumer 边界：Node Template omission 只局限 construction，annotation_index 绝不能替代 body read 或形成全局 plain-only downgrade；
-- worker/route/sandbox、D9 no-network、image/region、Mobile negative conversion surface，以及 direct-but-not-full D10 intersection；；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+- worker/route/sandbox、D9 默认不联网、image/region、Mobile negative conversion surface，以及与 D10 直接相交但不等于完整 D10 的边界。
 - historical 57/63/59/82/90/130/12 evidence set 分开记账；I01–I12 及产品/runtime/GUI/Office/OS/performance/deployment 全部继续 UNRUN。
 
 独立复核必须报告 P0/P1/P2 disposition 与任何必要 read gap。完成前 D9 不能超出 author-resolved-pending-independent-review。之后仍必须完整整合 D10，并做全新非作者 Pro/global A2 终审。
