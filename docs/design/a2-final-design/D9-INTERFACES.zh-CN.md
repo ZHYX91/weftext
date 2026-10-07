@@ -42,7 +42,7 @@ D3 先执行原 saved/planned/unseen request/input 查找，再执行 concrete p
 ## 4. Error priority
 
 D9 public error 只有在 D1 surface/capability 处理之后才使用 current closed D9 family。顺序为：
-closed decode/version → D1 static surface/release capability → current audience/entry authorization → 适用时 current Workspace/domain/P continuity → exact pins/dependencies/currentness → format/business validation → budget。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+封闭解码/version → D1 静态 surface/release capability → 当前 audience/entry authorization → 适用时检查当前 Workspace/domain/P continuity → 精确 pins/dependencies/currentness → format/business validation → budget。
 
 一旦进入 D3/D6/D7/D8，就逐字返回原 owner error。D10 不包装 D9 error。无权 caller 不得获知 format/profile/provider/version、hidden object count 或详细 dependency state。
 
@@ -70,13 +70,13 @@ prepare 在返回前完成全部 input/catalog/projection/loss/staged bytes。in
 
 ## 9. Office-template compiler interface
 
-compiler 消费 immutable Office template bytes、完整授权 projection 与 Plan policy。它单次扫描 visible token，编译 exact binding record，验证 style/repeat/layout/safety，并返回 staged output 与 exact loss evidence。它没有 Workspace path、任意 callback 或 permission handle。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+compiler 消费不可变的 Office template 字节、完整授权 projection 与 Plan policy。它只扫描一次可见 token，编译精确 binding record，验证 style/repeat/layout/safety，并返回 staged output 与精确 loss evidence。它没有 Workspace path、任意 callback 或 permission handle。
 
-qualified native-table authoring 由 compiler 读取 visible `native.table[...]::column[...]` token。它可以派生 internal `nt_...` / `nc_...` Plan key，但 visible template token 仍是 authoring authority。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+qualified native-table authoring 由 compiler 读取可见的 `native.table[...]::column[...]` token。它可以派生内部 `nt_...` / `nc_...` Plan key，但可见 template token 仍是 authoring authority。
 
 ## 10. Worker interface
 
-唯一 worker-facing control object 是 `WorkerInvocation/1`。slot/handle 由 host 分配。Worker 不能选择 executable、path、network、retry、loss choice、final publication destination 或 author operation。Host 验证每个 declared output byte，并拒绝 undeclared output。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+唯一面向 worker 的控制对象是 `WorkerInvocation/1`。slot/handle 由 host 分配。Worker 不能选择 executable、path、network、retry、loss choice、final publication destination 或 author operation。Host 必须验证每个 declared output byte，并拒绝任何 undeclared output。
 
 ## 11. Region interface
 
@@ -84,4 +84,4 @@ qualified native-table authoring 由 compiler 读取 visible `native.table[...]:
 
 ## 12. Surfaces
 
-Desktop/CLI local mode 可协调本地 reviewed provider。Remote Desktop/CLI 与 WebUI 调 Server。Server 不接受 client arbitrary filesystem path。Mobile 没有 conversion execution/delegation/approval path。presentation difference、CJK/RTL 与 transport framing 不得改变 request bytes 或 domain outcome。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+Desktop/CLI local mode 可以协调本地经过评审的 provider。Remote Desktop/CLI 与 WebUI 均调用 Server；Server 不接受 client 提供的任意 filesystem path。Mobile 没有 conversion execution/delegation/approval path。presentation difference、CJK/RTL 与 transport framing 都不得改变 request bytes 或 domain outcome。
