@@ -168,9 +168,9 @@ Desktop、WebUI 与 Mobile 分别测试 pixel/keyboard/focus/AT/RTL。
 同时分别测试 high-contrast、zoom 与 reduced-motion。
 Mobile fallback必须同完整 data。
 
-builder 测试使用真实的现任 D7 定义解码器/验证器与既有定义 owner 保存路径，覆盖“打开→编辑→取消或保存→重开”、严格列/类型验证、基础控件无法表达的合法成员无损保留、owner/revision 过期、权限撤销、现任 Query/schema 改变、高级/源码路由、DynamicBlock 保留，以及不得出现第二套 View/Query 存储或隐藏界面附属状态。历史 `.weftext-query view=...` 样本不得静默重写；只有现任 Definition Transfer 能证明完整映射时才可显式转换，否则保持精确源码/高级编辑路径。
+builder 测试使用真实的现任 D7 严格解码器、静态 schema/binding/type/option 检查与既有定义 owner 保存路径；静态合法定义的保存**不要求**完整 ResultHandle。测试覆盖“打开→编辑→取消或保存→重开”、基础控件无法表达的合法成员无损保留、owner/revision 过期、权限撤销、现任 Query/schema 改变、高级/源码路由、DynamicBlock 保留，以及不得出现第二套 View/Query 存储或隐藏界面附属状态。运行期测试另行调用保持不变的 D7 View §7 完整结果验证器，并证明负值、重复键、非法顺序、不完整/离线/provider/数据失败、预算失败或 renderer 失败只阻止渲染，不改写已保存定义。历史 `.weftext-query view=...` 样本不得静默重写；只有现任 Definition Transfer 能证明完整映射时才可显式转换，否则保持精确源码/高级编辑路径。
 
-Mandatory §15.7 的十个 fixture 分别对应唯一产品义务 `VIEW-BLD-01`–`VIEW-BLD-10`：分组聚合重复键、折线顺序/缺口/不完整、饼图零值/负值/重复/数量、层级/循环/延期、Gantt/依赖/延期、箱线图/分位数/延期、不完整 ResultHandle、ACL/重置/离线/provider/渲染器失败、Desktop/WebUI/Server/Mobile/CLI 的 CJK/RTL/打印等价，以及 Dashboard 单块失败隔离。延期布局只测试无损保留与明确“不支持渲染”，不测试并不存在的图形像素。
+Mandatory §15.7 的十个 fixture 分别对应唯一产品义务 `VIEW-BLD-01`–`VIEW-BLD-10`；每一项都把定义保存/静态一侧与完整结果/运行期一侧分开记录：分组聚合重复键、折线顺序/缺口/不完整、饼图零值/负值/重复/数量、层级/循环/延期、Gantt/依赖/延期、箱线图/分位数/延期、不完整 ResultHandle、ACL/重置/离线/provider/渲染器失败、Desktop/WebUI/Server/Mobile/CLI 的 CJK/RTL/打印等价，以及 Dashboard 单块失败隔离。延期布局只测试无损保留与明确“不支持渲染”，不测试并不存在的图形像素。
 
 ## 12. Unicode/RTL/AT corpus
 
@@ -223,4 +223,4 @@ D9/D10 full module acceptance 不由 D8 测试代替。
 - performance；
 - migration/activation/deployment。
 
-本作者批创建时这些产品类别全部 UNRUN。GitHub docs/source checks 只能证明 repository consistency，不能证明 D8 已完成语义接受。作者已修订 D8 source-map navigation 与逐项 applicability/historical-current disposition；这些修订仍等待 fixed-SHA 非作者语义复核，作者不自行接受。产品/runtime 证据继续 UNRUN。
+本作者批创建时这些产品类别全部 UNRUN。GitHub docs/source checks 只能证明 repository consistency，不能证明 D8 已完成语义接受。source-map 导航在机械层面已经是 54/54 section-level，宽泛整文件 target 为 0。本轮作者修订只把四个 SourceTransform 普通保存/恢复同族项改列为 upstream-current-prerequisite，并为唯一 D8 acceptance JSON 及其投影增加结构 guard；这些变化仍等待 fixed-SHA 非作者复核，作者不自行接受。产品/runtime 证据继续 UNRUN。
