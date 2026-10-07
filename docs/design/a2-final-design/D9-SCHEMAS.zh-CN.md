@@ -92,15 +92,15 @@ selector 放在同一 outer `{{ ... }}`、`{{ ↓ ... }}`、`{{ → ... }}` toke
 
 ## 9. Export content 与 projection
 
-`ExportContentSelection/1` 保持 exact `{version:1,bodyInput,bibliographyInput}`；每个 input 为 null 或一个 exact Document catalog index。
+`ExportContentSelection/1` 是冻结的 Plan/3 前身。fresh Plan/4 使用 final-FC `ExportContentSelection/2`，在保留 body/bibliography 语义的同时增加封闭 Annotation selection 与一个可选 View input。
 
-`ExportProjection/1` 精确为 `{version:1,bindings,datasets}`。binding path 必须唯一；value 使用有界 RenderSnapshot union。dataset name/column 都是封闭值，row 保留完整冻结的 order/bag，每个 cell 都必须具有非空 origin。
+`ExportProjection/1` 继续精确用于 Plan/3 recovery。fresh Plan/4 使用 final-FC `ExportProjection/2`：既有 binding/dataset 仍为封闭结构，并额外携带 Annotation projection 与最多一个 View projection，全部使用 typed `ExportInputLocation/2` origin。
 
 `D7ResultPin` 是 D9 对完整 D7 TerminalSchema/V result 及其 producer epoch/auth/cut/dependency 的内部 control evidence。D9 不重新定义 D7 V。
 
-## 10. ExportPlan/3
+## 10. Historical ExportPlan/3 与 fresh ExportPlan/4
 
-final FC 的 exact current shape 为：
+冻结的 /3 前身 exact shape 为：
 ```text
 ExportPlan/3 = {
   kind:"d9_export_plan",version:3,
@@ -129,15 +129,15 @@ ExportPlan/3 = {
 }
 ```
 
-任何同名简化 object 都不是合法 Plan。除明示可 null 的 document/template/route binding 外，上述 member 全部必填。`planToken` 只使用 current `d9_export_plan/3` tag。`inputCatalog` 精确复用 `ExportInputCatalog/2`，不另改名为 D9 wrapper。
+任何同名简化 object 都不是合法 Plan/3 recovery record。其 `d9_export_plan/3` tag、Catalog/2、Selection/1、Projection/1、Loss/1、confirmation bytes 与 recovery 语义全部逐字保留。fresh unseen export 使用 final FC SCHEMAS §6.6 的精确 `ExportPlan/4` family；它只新增 Annotation carrier、有限 View binding 及必要的版本化继任类型，既有 D6 proof/pin/budget 边界不变。
 
-`D9ExportInputDomain/1` 精确为 `document|native_table|node_collection|query_rows|query_json|resource`。`D9ExportTarget/1` 使用 final FC 的封闭 target union：asciidoc_source、resource_exact、带 profileId 的 html/pdf/docx/odt、csv_utf8、tsv_utf8、带 profileId 的 xlsx/ods，以及 query_json。对 exact-source/resource/query-json 的 plan 强制使用 `generationPolicy={kind:"none"}`，且文档、模板和路由 binding 全部为 null。
+`D9ExportInputDomain/1` 继续精确用于 Plan/3。fresh `D9ExportInputDomain/2` 只新增 annotation 与 view。`D9ExportTarget/1` 使用 final FC 的封闭 target union：asciidoc_source、resource_exact、带 profileId 的 html/pdf/docx/odt、csv_utf8、tsv_utf8、带 profileId 的 xlsx/ods，以及 query_json。对 exact-source/resource/query-json 的 plan 强制使用 `generationPolicy={kind:"none"}`，且文档、模板和路由 binding 全部为 null。
 
 `generationPolicy.render` 冻结封闭的 bindingChoices、missingPolicy、imageSizes、layoutChoices 与 nativeTableBindings。native-table binding record 按精确编译出的 (setName,columnName) 排序并去重，同时逐项冻结精确的 `D9NativeTableSelector/1`。本 A2 D9 候选只改变 fresh qualified Office authoring spelling；Plan3 selector/binding record 继续使用 final FC type。
 
 document rendering 的 `D9DocumentRenderBinding/1` 绑定 ownerNodeRef、现任 SourceObservation、精确 D2-Document-Snapshot/3 pin、ManagedDocumentSemanticQualification/1 与实际消费的精确 D8PresentationDecision/1。route step 必须连续为 0..N-1，并逐步冻结 provider/version/input/output profile/options hash、BudgetBinding/1 与已排序去重的 evidencePins。style bundle 按 styleBundleId 排序并去重。
 
-`recoveryPins` 只保留原 recovery contract 真正需要、且不能从其它 typed Plan member 到达的 pin。`evidencePins` 必须精确等于 inputCatalog、documentRenderBinding、templateBinding、routeBinding、styleBundles、dependencyProof、observationProof、stagedOutputs 的递归 typed PinRef 与 recoveryPins 的 pinToken-sorted/unique 并集；它不是自由 extension array。
+Plan/3 recovery 的 recoveryPins/evidencePins 保留原精确历史 union。fresh Plan/4 只通过 typed projection 与 viewRenderBinding 扩展同一递归并集，因此实际消费的 Annotation record/context 与 View renderer/asset pin 都由这一份 union 到达，不建立第二 evidence inventory。
 
 template path 按精确 Unicode scalar sequence、normalization none、case-sensitive canonical sort 排序。controlled output name 先通过完整 validity/alias/prefix/reserved 检查，再让 stagedOutputs 按实际存储的原始 unsigned UTF-8 bytes 排序。全部 set-like array 都拒绝 duplicate/conflict。合法 input permutation 只允许在 freeze 前 canonicalize 一次；frozen/received/recovery record 必须已经 canonical，读取时绝不修复。
 
@@ -147,9 +147,9 @@ template path 按精确 Unicode scalar sequence、normalization none、case-sens
 
 PortableAlias 固定执行 Unicode 15.1 NFC → full default CaseFolding C/F → NFC，而且只用于拒绝判定。完整 bundle 必须拒绝精确重复、alias 相等与 alias-prefix 冲突。loss-report.json 与 manifest.json 是保留的根成员。
 
-staged output metadata 与 `PublicationReceipt/3.outputs` 按 exact stored output name sorted unique。
+staged output metadata 与 PublicationReceipt/3-/4 的 output set 都按 exact stored output name sorted unique。
 
-## 12. ExportLossReport/1 与 confirmation
+## 12. Versioned ExportLossReport 与 confirmation
 
 `ExportLossReport/1` 保持：
 ```text
@@ -157,11 +157,11 @@ staged output metadata 与 `PublicationReceipt/3.outputs` 按 exact stored outpu
 ```
 location 使用封闭的 ExportInputLocation，并扩展到 binding、dataset_cell 与 block projection location。source_range 使用 UTF-8 字节偏移；template_range 使用 Unicode 标量偏移。
 
-`D9ExportConfirmation/1` 精确为 `{planToken,lossChoices}`。choice 必须排序且唯一，并覆盖 report matrix 定义的全部 requires_choice/blocking。confirmation 不得修改 Plan 或 staged bytes。
+`D9ExportConfirmation/1` 继续用于 Plan/3 recovery。fresh Plan/4 使用 `ExportLossReport/2` 与 `D9ExportConfirmation/2`；choice matrix 不变，同时 confirmation 还冻结 Annotation/View selection、ViewSpec、renderer/profile/assets 与 staged bytes。
 
-## 13. PublicationReceipt/3
+## 13. Historical PublicationReceipt/3 与 fresh PublicationReceipt/4
 
-final FC 的 exact current shape 为：
+冻结的 /3 前身 exact shape 为：
 ```text
 PublicationReceipt/3 = {
   kind:"d9_publication_receipt",version:3,
@@ -181,7 +181,7 @@ PublicationReceipt/3 = {
 }
 ```
 
-current token tag 只能是 `d9_publication/3`。所有与 Plan 重复的 member 都必须与 protected Plan/confirmation byte-equal；outputs 是实际 published 的 controlled-name/digest set。此 receipt 只证明 external publication，绝不能替代 D3 ChangeId/CP 或 Resource author success。historical Plan/Receipt1/2 即使旧 name 不符合 current predicate，也继续原 tag、bytes、name、permission 与 unknown-publication recovery。
+/3 recovery 的 token tag 继续是 `d9_publication/3`。fresh external publication 使用 final-FC `PublicationReceipt/4` 与 `d9_publication/4` tag；重复 Plan member 必须和 protected Plan/4、confirmation/2 逐字相等。两种 receipt 都不是 D3/D6 author receipt。print 改用 `D9PrintReceipt/1`。Plan/Receipt1-/2-/3 全部继续原 tag、bytes、name、permission 与 unknown recovery。
 
 ## 14. Query JSON 与 typed tabular export
 
@@ -232,6 +232,13 @@ AnnotationInlineBody/1 = {
 ```
 
 target projection 使用现任 D3 拥有的封闭 document/document_element/document_range/resource/resource_region union。body 只通过现任 `AnnotationInlineProfile/1` R6 profile 求值，使用固定到提交的 Asciidoctor Ruby 2.0.26 baseline，并保持 secure、managed adapter/file/network/process effects disabled。既有 D9 `annotation_index` export-catalog arm 继续只表示 omission-directory evidence，不能替代完整 Value/4 read。historical Value/3/plain_text record 只保留 historical decoding。
+
+
+fresh current 内容导出只能通过 final-FC `ExportInputCatalog/3` 中的 `D9AnnotationContentInput/1` 编码。它逐字来自一次 `D8AnnotationReadResponse/1`，并冻结完整 PortableAnnotationRecord/4 canonical pin、Observation、revision token、body result 与 targetResolution。portable backup 输出 canonical `D9AnnotationBackupFile/1` bytes，不携带当前 capability。Review Bundle 只使用 owner 已产生的 R6 semantic body；source/history 与 target context 继续独立 disclosure。`annotation_index` 永远不能提供内容。
+
+## 16b. Current View render binding
+
+fresh View export 只消费 final-FC `D9ViewRenderBinding/1`，绑定一个完整 `D7ResultPin` 与精确 `ViewSpec/1`。既有 D7 View §7 runtime gate 必须先按原顺序执行。第一代封闭 D9 profile 只接收 metric/bar/line/scatter/pie/heatmap 与具名 DOCX/XLSX/PDF/SVG/PNG/print profile；不支持组合返回 renderer_unavailable。SemanticStateKey/SnapshotResultKey/ViewSpec hash 只做交叉校验。完整 result 与真实 renderer/font/color/page/accessibility pin 继续进入 Plan/4 的 typed proof/evidence union。
 
 ## 17. D9 error
 

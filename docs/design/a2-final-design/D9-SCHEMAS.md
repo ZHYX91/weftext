@@ -93,15 +93,15 @@ This named revision supersedes fresh authoring of qualified FC hash tokens only.
 
 ## 9. Export content and projection
 
-`ExportContentSelection/1` remains exact `{version:1,bodyInput,bibliographyInput}`; each input is null or one exact Document catalog index.
+`ExportContentSelection/1` is the frozen Plan/3 predecessor. Fresh Plan/4 uses final-FC `ExportContentSelection/2`, adding closed Annotation selections and one optional View input while retaining body/bibliography semantics.
 
-`ExportProjection/1` remains exact `{version:1,bindings,datasets}`. Binding paths are unique; values use the bounded RenderSnapshot union. Dataset names/columns are closed and rows preserve the complete frozen order and bag. Each cell has nonempty origins.
+`ExportProjection/1` remains exact for Plan/3 recovery. Fresh Plan/4 uses final-FC `ExportProjection/2`: existing bindings/datasets remain closed and it additionally carries Annotation projections plus at most one View projection, all with typed `ExportInputLocation/2` origins.
 
 `D7ResultPin` is internal D9 control evidence over a complete D7 TerminalSchema/V result and its producing epoch/auth/cut/dependencies. D9 does not redefine D7 V.
 
-## 10. ExportPlan/3
+## 10. Historical ExportPlan/3 and fresh ExportPlan/4
 
-The exact current Final-FC shape is:
+The exact frozen /3 predecessor shape is:
 ```text
 ExportPlan/3 = {
   kind:"d9_export_plan",version:3,
@@ -130,15 +130,15 @@ ExportPlan/3 = {
 }
 ```
 
-No namesake abbreviated object is a valid Plan. Every member above is required except the explicitly nullable render/template/route bindings. `planToken` uses only the current `d9_export_plan/3` tag. `inputCatalog` is exactly the retained `ExportInputCatalog/2`, not a renamed D9 wrapper.
+No namesake abbreviated object is a valid Plan/3 recovery record. Its `d9_export_plan/3` tag, Catalog/2, Selection/1, Projection/1, Loss/1, confirmation bytes and recovery semantics remain exact. Fresh unseen export uses the exact `ExportPlan/4` family in final FC SCHEMAS §6.6; its only closed extensions are the Annotation carrier and finite View binding plus necessary versioned successor types, while existing D6 proof/pin/budget boundaries remain unchanged.
 
-`D9ExportInputDomain/1` is exactly `document|native_table|node_collection|query_rows|query_json|resource`. `D9ExportTarget/1` is the closed Final-FC target union: asciidoc_source, resource_exact, html/pdf/docx/odt with profileId, csv_utf8, tsv_utf8, xlsx/ods with profileId, and query_json. Exact-source/resource/query-json plans require `generationPolicy={kind:"none"}` and null document/template/route bindings.
+`D9ExportInputDomain/1` remains exact for Plan/3. Fresh `D9ExportInputDomain/2` adds only annotation and view. `D9ExportTarget/1` is the closed Final-FC target union: asciidoc_source, resource_exact, html/pdf/docx/odt with profileId, csv_utf8, tsv_utf8, xlsx/ods with profileId, and query_json. Exact-source/resource/query-json plans require `generationPolicy={kind:"none"}` and null document/template/route bindings.
 
 `generationPolicy.render` freezes the closed bindingChoices, missingPolicy, imageSizes, layoutChoices and nativeTableBindings arrays. Native-table binding records remain sorted/unique by exact compiled (setName,columnName), and each freezes the exact `D9NativeTableSelector/1`. This A2 D9 candidate changes only the fresh qualified Office authoring spelling; the Plan3 selector/binding record remains the Final-FC type.
 
 For document rendering, `D9DocumentRenderBinding/1` binds ownerNodeRef, current SourceObservation, exact D2-Document-Snapshot/3 pin, ManagedDocumentSemanticQualification/1 and the exact D8PresentationDecision/1 actually consumed. Route steps are continuous 0..N-1 and each step freezes provider/version/input/output profile/options hash, BudgetBinding/1 and sorted/unique evidencePins. Style bundles are sorted/unique by styleBundleId.
 
-`recoveryPins` contains only the retained original recovery pins not otherwise reachable by the typed Plan. `evidencePins` is exactly the pinToken-sorted/unique recursive typed PinRef union of inputCatalog, documentRenderBinding, templateBinding, routeBinding, styleBundles, dependencyProof, observationProof, stagedOutputs and recoveryPins; it is not a free extension array.
+For Plan/3 recovery, recoveryPins/evidencePins retain that exact historical union. Fresh Plan/4 extends the same single recursive union only through its typed projection and viewRenderBinding, so every actually consumed Annotation record/context and View renderer/asset pin is reachable without a second evidence inventory.
 
 Template paths canonical-sort by exact Unicode scalar sequence, normalization none and case-sensitive. Controlled output names first pass the complete validity/alias/prefix/reserved checks, then stagedOutputs sort by exact stored raw unsigned UTF-8 bytes. All set-like arrays reject duplicates/conflicts. Legal input permutations canonicalize once before freeze; frozen/received/recovery records must already be canonical and are never repaired on read.
 
@@ -148,9 +148,9 @@ Template paths canonical-sort by exact Unicode scalar sequence, normalization no
 
 PortableAlias is Unicode 15.1 NFC → full default CaseFolding C/F → NFC per component and is rejection-only. Exact duplicate, equal alias and alias-prefix conflicts reject across the complete bundle. loss-report.json and manifest.json are reserved root members.
 
-Staged output metadata and `PublicationReceipt/3.outputs` are sorted unique by exact stored output name.
+Staged output metadata and every PublicationReceipt/3-/4 output set are sorted unique by exact stored output name.
 
-## 12. ExportLossReport/1 and confirmation
+## 12. Versioned ExportLossReport and confirmation
 
 `ExportLossReport/1` remains:
 ```text
@@ -158,11 +158,11 @@ Staged output metadata and `PublicationReceipt/3.outputs` are sorted unique by e
 ```
 Locations are the closed ExportInputLocation plus binding/dataset_cell/block projection locations. source_range uses UTF-8 bytes; template_range uses Unicode scalar offsets.
 
-`D9ExportConfirmation/1` exact `{planToken,lossChoices}`. Choices are sorted unique and cover every requires_choice/blocking item as defined by the report matrix. Confirmation never mutates Plan/staged bytes.
+`D9ExportConfirmation/1` remains Plan/3 recovery. Fresh Plan/4 uses `ExportLossReport/2` and `D9ExportConfirmation/2`; the choice matrix is unchanged, and confirmation additionally freezes Annotation/View selections, ViewSpec, renderer/profile/assets and staged bytes.
 
-## 13. PublicationReceipt/3
+## 13. Historical PublicationReceipt/3 and fresh PublicationReceipt/4
 
-The exact current Final-FC shape is:
+The exact frozen /3 predecessor shape is:
 ```text
 PublicationReceipt/3 = {
   kind:"d9_publication_receipt",version:3,
@@ -182,7 +182,7 @@ PublicationReceipt/3 = {
 }
 ```
 
-The current token tag is only `d9_publication/3`. Every repeated Plan member is byte-equal to the protected Plan/confirmation, and outputs are the actual published controlled-name/digest set. This receipt proves external publication only; it is never D3 ChangeId/CP or Resource-author success. Historical Plan/Receipt1/2 retain original tags, bytes, names, permissions and unknown-publication recovery even when a historical name would fail the current predicate.
+The /3 token tag remains `d9_publication/3` for exact recovery. Fresh external publication uses final-FC `PublicationReceipt/4` with tag `d9_publication/4`; repeated Plan members remain byte-equal to protected Plan/4 and confirmation/2. Neither receipt is a D3/D6 author receipt. Print instead uses `D9PrintReceipt/1`. Plan/Receipt1-/2-/3 retain original tags, bytes, names, permissions and unknown recovery.
 
 ## 14. Query JSON and typed tabular export
 
@@ -233,6 +233,13 @@ AnnotationInlineBody/1 = {
 ```
 
 The target projection is the closed document/document_element/document_range/resource/resource_region union owned by current D3. Body evaluation uses only the current `AnnotationInlineProfile/1` R6 profile with its commit-qualified Asciidoctor Ruby 2.0.26 baseline and secure no-managed-adapter/no-file/no-network/no-process effects. The existing D9 `annotation_index` export-catalog arm remains omission-directory evidence and cannot substitute for reading a complete Value/4. Historical Value/3/plain_text records retain historical decoding only.
+
+
+Fresh current content export is encoded only through final-FC `D9AnnotationContentInput/1` inside `ExportInputCatalog/3`. It is built from one exact `D8AnnotationReadResponse/1` and freezes the complete PortableAnnotationRecord/4 canonical pin, Observation, revision token, body result and targetResolution. Portable backup emits canonical `D9AnnotationBackupFile/1` bytes without current capabilities. Review Bundle uses only the owner-produced R6 semantic body; source/history and target context remain independent disclosure projections. `annotation_index` never supplies content.
+
+## 16b. Current View render binding
+
+Fresh View export consumes only final-FC `D9ViewRenderBinding/1` over one complete `D7ResultPin` and exact `ViewSpec/1`. The D7 View §7 runtime gate executes first in its original order. The first closed D9 profile admits only metric/bar/line/scatter/pie/heatmap and named DOCX/XLSX/PDF/SVG/PNG/print profiles; unsupported combinations return renderer_unavailable. SemanticStateKey/SnapshotResultKey/ViewSpec hashes are cross-checks only. Complete result and actual renderer/font/color/page/accessibility pins remain in the Plan/4 typed proof/evidence union.
 
 ## 17. D9 error
 
