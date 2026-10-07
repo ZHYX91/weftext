@@ -16,19 +16,19 @@ current coordinated D7 双语 owner set 全部 FULL，并按 byte-for-byte 复�
 
 ## 2. Current 与 cross-owner read
 
-A2 D1、D2 为 FULL，D2 包含完整 current native AsciiDoc product family。A2 D4、D5 为 FULL，包括 D4 immutable Catalog 的 7 个 global limits 与 95 个 named record。A2 D6 及 current successor schema 已覆盖 D7 所需全部 authority/currentness/index/recovery intersection。
+A2 D1、D2 为 FULL，D2 包含完整 current native AsciiDoc product family。A2 D4、D5 为 FULL，包括 D4 immutable Catalog 的 7 个 global limits 与 95 个 named record。A2 D6 及 current successor schema 已覆盖 D7 所需全部 authority/currentness/index/recovery intersection。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 A2 D3 没有在已经完成早期 A2 integration 后整篇重复读取；本轮读取完整 D7-direct identity、wire13、stable-address、Definition Transfer 与 recovery section。D8、D9、D10 刻意只在真实 D7 producer/consumer intersection 上记 PARTIAL；其完整 A2 module 留给后续 batch。machine map 明确记录该差别。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ## 3. Case coverage
 
-machine map 分别保存 20 项 integration obligation、SEARCH-01 到 SEARCH-08、36 个 retained D7 named-scenario ordinal、17 个 non-fallback-theme ordinal、Mandatory A2-01 到 A2-57、16 个 Facet case、16 个 People case、6 个 ICS case，以及完整 Chart §15 group。
+machine map 分别保存 20 项 integration obligation、SEARCH-01 到 SEARCH-08、36 个 retained D7 named-scenario ordinal、17 个 non-fallback-theme ordinal、Mandatory A2-01 到 A2-57、16 个 Facet case、16 个 People case、6 个 ICS case，以及完整 Chart §15 group。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ordinal key 不替代 source 中的人类名称或条件；它绑定 immutable exact source path/blob，并让 reviewer 回到 source bytes 判定。local retained current scenarios 继续保留全部 human name。任何 group 都不能因为计数完整就自动 accepted。；本句保留的英文名称均为协议标识、字段名、状态名或固定字面量，均按上述中文条件解释，不形成另一套规范含义。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ## 4. 具名 current supersession
 
-只应用窄范围 current successor：current D2DocumentSnapshot/3 heading/body semantics、current Annotation Value4/R6 body read、fixed97 PAB4/Action3/Effect3 outer family、D3 wire13/D6 Proof3 currentness，以及新增 SEARCH design。historical decoder bytes 与 saved/planned/unknown recovery 继续走原 version。
+只应用窄范围 current successor：current D2DocumentSnapshot/3 heading/body semantics、current Annotation Value4/R6 body read、fixed97 PAB4/Action3/Effect3 outer family、D3 wire13/D6 Proof3 currentness，以及新增 SEARCH design。historical decoder bytes 与 saved/planned/unknown recovery 继续走原 version。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 SourceRevisionPlan/1、/2、/3 保持按角色分域，不能随 outer successor 重编号。MinimumMapping/3 保持 retained。
 
@@ -44,6 +44,6 @@ A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01 都只是 author-repaired navigation meta
 
 ## 7. Evidence boundary
 
-repository documentation、input-integrity、JSON 与 map check 只能证明 mechanical consistency。product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior 在本批全部 UNRUN。
+repository documentation、input-integrity、JSON 与 map check 只能证明 mechanical consistency。product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior 在本批全部 UNRUN。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 下一位 reviewer 必须绑定 actual final stop SHA，不能追 moving branch。D8 到 D10 完整 integration 与后续 fresh global 非作者 review 继续 pending。

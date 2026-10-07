@@ -141,4 +141,4 @@ D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN evidence、20 
 
 fixed454e 非作者导航复核通过四项旧 residual，并新开 A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01。本作者候选已修订两项 navigation，但不自行关闭。A2-D6-01CC-P2-01 现在只有一个 role-neutral pending status，并统一引用 D7-SOURCE-MAP.json 的 detail；historical sourceEvidence 不变。A2-NAV-454E-P2-01 则由上面 §8 的 fixed-5c/fixed446 历史措辞修订解决。两项都等待 actual final stop SHA 的独立复核。
 
-product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior 继续 UNRUN。
+product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior 继续 UNRUN。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。

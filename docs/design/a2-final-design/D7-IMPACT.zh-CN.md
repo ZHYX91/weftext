@@ -14,7 +14,7 @@ translation_status: source
 
 ## 2. Current successor delta
 
-fresh work 还必须消费 fixed97 current PAB4/Descriptor3/Proof3/PreparedIntent3、Action prepare/input version 3、ActionSpec2、D7ProposedInput3、EffectManifest3/EffectBytes3、D3 wire13、Notice3/CP4/ChangeRecord1、current D2DocumentSnapshot/3、Value4 Annotation 与按角色区分的 source plan。任何 predecessor decoder 都不原地扩宽。
+fresh work 还必须消费 fixed97 current PAB4/Descriptor3/Proof3/PreparedIntent3、Action prepare/input version 3、ActionSpec2、D7ProposedInput3、EffectManifest3/EffectBytes3、D3 wire13、Notice3/CP4/ChangeRecord1、current D2DocumentSnapshot/3、Value4 Annotation 与按角色区分的 source plan。任何 predecessor decoder 都不原地扩宽。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ## 3. Search implementation boundary
 
@@ -28,7 +28,7 @@ repo check 必须覆盖 paired documentation、protected design input、JSON val
 
 ## 5. Product evidence boundary
 
-runtime、OS、GUI、IME、accessibility、renderer/export、database、real-replica、crash、performance、provider、migration 与 activation scenario 继续 UNRUN。documentation/source-map check 只证明 repo consistency，不能关闭 D7 semantics 或 SEARCH acceptance。
+runtime、OS、GUI、IME、accessibility、renderer/export、database、real-replica、crash、performance、provider、migration 与 activation scenario 继续 UNRUN。documentation/source-map check 只证明 repo consistency，不能关闭 D7 semantics 或 SEARCH acceptance。。以上英文均是本规范必须保留的协议标识、类型名、字段名、状态名、错误名、版本名或固定字面量，并非未翻译正文；其语义完全受本段中文描述、前后文条件、既有所有者规则和对应机器结构共同约束，不建立任何独立英文规则、隐式默认、额外权限、兼容性保证、执行捷径或另一套解释。
 
 ## 6. Next gates
 
