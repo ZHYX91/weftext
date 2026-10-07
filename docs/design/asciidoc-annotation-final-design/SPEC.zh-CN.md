@@ -448,7 +448,7 @@ D8DocumentRenderBinding/1 冻结 exact D2 snapshot pin 与实际使用的 D8Pres
 
 ### 8.3 D9 semantic/rendered export 与 exact preparation
 
-D9 current export 使用 SCHEMAS §6.5 ExportPlan/3。exact AsciiDoc source、exact Resource 与 query_json 强制 generationPolicy=none，并且没有 template/route/document-render binding；它们不依赖 generation-policy registry、renderer、provider 或 run-in policy，所以无关 provider/configuration failure 不能阻断这些 exact path。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+D9 的 fresh unseen current export 使用 SCHEMAS §6.6 的 ExportPlan/4 successor。exact AsciiDoc source、exact Resource 与 query_json 继续强制 generationPolicy=none，并且没有 template、route、document-render 或 View-render binding。这些与 policy 无关的正向路径完整继承 §6.5 规则：它们不依赖 generation-policy registry、renderer、provider 或 run-in policy，因此无关 provider/configuration failure 不能阻断。
 
 rendered document target 冻结 exact D2DocumentSnapshot/3 及其 evaluation binding、ManagedDocumentSemanticQualification/1、实际消费的 exact D8PresentationDecision/1 与 accepted route/profile chain。HTML 与 D8 使用同一 product/run-in decision。DOCX/ODT 在 selected target profile 支持时可把 effective 1–9 映射到显式 heading style；更大的 arbitrary-precision level 与 target limit 只能成为 explicit loss/unavailability，不能使 D2 syntax invalid。prepare 前必须重新验证 include/environment dependency；Plan 冻结后，later include/source/presentation-policy change 不得 rerender 或修改该 Plan。
 
@@ -456,15 +456,15 @@ generation policy 是有限 **per-plan** closed value：binding choice、missing
 
 所有 set-like collection 的 canonical comparator 同样属于 Plan contract：route steps 的 array position 必须等于 step=0..N-1，step.evidencePins 按 pinToken；styleBundles 按 styleBundleId。bindingChoices/missingPolicy 的 templatePath 按 exact Unicode scalar sequence lexicographic 比较，normalization=none、case-sensitive，精确 scalar prefix 较短者在前；禁止 locale/case-folding，两个 array 必须共用这一 comparator 完成跨集合互斥。对于 stagedOutputs/receipt.outputs，fresh-current 名称必须先满足 SCHEMAS §6.5 的 D9ControlledRelativeOutputName/1，完整 bundle 还必须通过确定性的 exact-name、portable alias、文件/目录前缀和系统保留名称冲突检查；随后才按原始 protocol name 的无符号 UTF-8 字节做字典序比较，完全相同的字节前缀较短者在前。这个 comparator 本身仍不执行 normalization、case folding、locale collation、host/path-library ordering 或 separator rewrite。nativeTableBindings 继续以 (setName,columnName) 为 key；已有 imageSizes/layoutChoices/lossChoices/top-level evidencePins/recoveryPins 继续各自既定 key。D9 prepare 必须在冻结 Plan bytes/token/pins/staged manifest/confirmation basis 前先检测 duplicate/conflict 再 canonical sort，使合法 input permutation 得到 byte-for-byte 相同 Plan。冻结、接收或恢复的 current record 若已乱序、名称 duplicate/conflict 或名称不属于闭合 output-name 域，必须失败；读路径不能排序、normalize、rename 或用 LWW 修复 protected bytes。
 
-D9ControlledRelativeOutputName/1 把 fixed-parent 的“controlled relative name”要求闭合为 fresh current ExportPlan/3 的唯一输出名称协议。最终 output name 由 Core 决定，worker 不选择文件系统路径。external-bundle 的 dataFiles 名称、每个 ExportPlan/3 stagedOutputs.name、每个 PublicationReceipt/3 outputs.name、bundle manifest 中的 reportFile 名称，以及 server-download 交付所消费的名称都使用同一协议域。根级系统成员固定为 loss-report.json 与 manifest.json；二者由 Core 生成，必须出现在 stagedOutputs 与 receipt.outputs 中，并在 Plan 冻结前与全部 dataFile 一起执行同一 alias/prefix 冲突检查。普通 dataFile 可以使用 assets/图/附件.png 这类嵌套名称，但不得占用或 alias 根级系统名称，也不得把它们当目录前缀。Resource handoff 消费所选 dataFile 的原始已验证 bytes/name；独立的 resourceName 仍是 D3 author intent，不能通过重命名 export output 推导。
+D9ControlledRelativeOutputName/1 把 fixed-parent 的“controlled relative name”要求闭合为 fresh current ExportPlan/4 的唯一输出名称协议。最终 output name 由 Core 决定，worker 不选择文件系统路径。external-bundle 的 dataFiles 名称、每个 ExportPlan/4 stagedOutputs.name、每个 PublicationReceipt/4 outputs.name、D9PrintReceipt/1.output.name、bundle manifest 中的 reportFile 名称，以及 server-download 交付所消费的名称都使用同一协议域。根级系统成员固定为 loss-report.json 与 manifest.json；二者由 Core 生成，必须出现在 stagedOutputs 与 receipt.outputs 中，并在 Plan 冻结前与全部 dataFile 一起执行同一 alias/prefix 冲突检查。普通 dataFile 可以使用 assets/图/附件.png 这类嵌套名称，但不得占用或 alias 根级系统名称，也不得把它们当目录前缀。Resource handoff 消费所选 dataFile 的原始已验证 bytes/name；独立的 resourceName 仍是 D3 author intent，不能通过重命名 export output 推导。
 
 协议名称保持原字节。Unicode normalization 与 case folding 只用于派生 SCHEMAS 定义的拒绝用 portable alias key，绝不改写 stored name、manifest、pin、digest、confirmation、receipt 或 published bytes。选定 destination 的文件系统或 storage API 若不能无损创建某个协议合法名称，可以额外判 destination unavailable；这只是 host capability 检查，不是协议 authority。它不能让协议非法名称变合法、改变 alias 关系、normalize/rename 已冻结名称、覆盖已有目标或把失败 bundle 降级成 partial copy。名称安全、alias、prefix、reserved 冲突属于结构安全失败，不能由 ExportLossChoice 接受；它们也不能反向把合法 AsciiDoc/Resource/Query source 判 invalid，或改变稳定 source identity。
 
-current prepare 必须把完整候选 dataFile 名称集合与固定 report/manifest 名称一起验证，再进行 output 排序、token 分配、pin、staging 或 confirmation。inspect/confirmation/publication/receipt 必须保持这些原始名称。saved/planned/unknown current work 恢复原 names、bytes、pins、OperationId/token 与 installation/publication evidence；unknown publication 不得换名重试。真正 historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 继续使用记录时的 decoder、name、ordering、bytes、pins 与 recovery，即使某个旧名称按 D9ControlledRelativeOutputName/1 会失败，也不得读时 migration、resort、repin 或 re-encode。
+current prepare 必须把完整候选 dataFile 名称集合与固定 report/manifest 名称一起验证，再进行 output 排序、token 分配、pin、staging 或 confirmation。inspect/confirmation/publication/receipt 必须保持这些原始名称。saved/planned/unknown current work 恢复原 names、bytes、pins、OperationId/token 与 installation/publication evidence；unknown publication 不得换名重试。真实记录的 ExportPlan/1-/2-/3 与 PublicationReceipt/1-/2-/3 继续使用记录时的 decoder、token tag、name、ordering、bytes、pins 与 recovery；即使某个旧名称按 D9ControlledRelativeOutputName/1 会失败，也不得在读取时 migration、resort、repin、rename 或 re-encode 成 /4。
 
-template binding inputIndex 必须选择 exact template catalog item，pin/profile decoder 必须 byte-equal/accepted。route steps 冻结真实 provider/version/profile transition，terminal profile 必须匹配 target。Plan3 只使用 protected d9_export_plan/3 token；PublicationReceipt3 使用 d9_publication/3。historical Plan/Receipt1-/2 保留原 tag/bytes/pins/recovery；confirmation/inspect/unknown-publication lookup 必须先按 token tag，再按 record version strict dispatch。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+template binding inputIndex 必须选择 exact template catalog item，pin/profile decoder 必须 byte-equal/accepted。route steps 冻结真实 provider/version/profile transition，terminal profile 必须匹配 target。fresh Plan4 只使用 protected d9_export_plan/4 token；PublicationReceipt4 使用 d9_publication/4，print-only delivery 使用 d9_print/1。真实记录的 Plan/Receipt3 与更早版本继续保留原 tag、bytes、pins 与 recovery；confirmation/inspect/unknown-publication lookup 必须先按 token tag，再按 record version strict dispatch，因此任何 /3 record 都不能升级成 /4。
 
-Plan evidencePins 只有一个 derivation：input catalog、document render binding、template、route、styles、dependency/observation proof、staged outputs 中递归可达的 typed PinRef，加 explicit retained recoveryPins，再按 pinToken 排序去重。漏 reachable pin 或加入 unrelated evidence 都改变/破坏 Plan。PublicationReceipt3 必须重复 exact target/template/route/styles/generation-policy/presentation selection 与实际 output digest。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+Plan evidencePins 仍只有一套 derivation，不是自由集合。fresh Plan4 必须递归收集 input catalog、projection、document render binding、View render binding、template、route、styles、dependency/observation proof 与 staged outputs 中真正可达的 typed PinRef，再并入显式保留的 recoveryPins，并按 pinToken 排序去重。漏掉可达 pin 或加入无关 evidence 都会改变或破坏 Plan。PublicationReceipt4 必须重复 exact target/template/route/styles/generation-policy/View-render/presentation selection 与实际 output digest；/3 的 derivation 只对真实记录的 /3 recovery 保持原义。
 
 native table→Office dataset name 完全按 SCHEMAS §6.5.1，不给 ordinary Node 增加 export metadata。Core 从 D2TableBlock/3/D2TableCell/3 导出 physical column，包括 multi-row head 与 colspan/rowspan。text comparison 固定 exact Unicode scalar sequence、normalization=none、case-sensitive、保留 whitespace。resolver 依次尝试 leaf、最短更长 header suffix、exact table title、确定性 table/column occurrence ordinal。例如唯一 lowercase-ASCII leaf `amount` 可直接用 `data.native_table.amount`；Plan/Actual 下都有 Amount 时，bare Amount 必须 ambiguous，只能选 Plan/Amount 或 Actual/Amount 的 qualified selector/token；两张同标题表 full path 也相同则必须再加 frozen occurrence qualifier。0 candidate 为 mapping_required；最终仍多 candidate 为 ambiguous_binding；禁止 first/last、猜 suffix 或改 author source。简单唯一 lowercase-ASCII leaf 保留 short COLUMN token；qualified/CJK/RTL/combining selector 使用 SCHEMAS 固定 ASCII digest token。后来新增同名 table/column 可以让 fresh short binding 变 ambiguous；already prepared Plan 因已冻结原 projection/selector/staged bytes 而保持 immutable。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
 
@@ -475,7 +475,7 @@ native table→Office dataset name 完全按 SCHEMAS §6.5.1，不给 ordinary N
 
 replacement router 必须显式接管 D2 implementation impact、D7 Definition Transfer、D9 Import IR、D9 Acceptance Matrix 的 current statements。D2 历史 Profile-v2 implementation prohibition 保持 immutable snapshot evidence，但 current implementation obligation 使用 D2DocumentSnapshot/3 与上述完整 native-baseline product family。D9 Import IR 保留 ImportIR/1、Mapping/1、ConversionInput/2 及所有 file safety/mapping/loss 规则；只有 current outer author submission 改为 D3IdentityOperationRequest/13，真实 saved/planned wire12 import decision 仍精确恢复。D9 Acceptance S12 只在旧“五级 heading”前提上被 supersede：WeftextManaged authored 6–9 为合法，必须贯穿 D2/D7/D8/D9；target 不支持某深度时走显式 loss/degradation，不能拒绝 source。
 
-禁止全局字符串替换去升级 historical wire12、document_snapshot wire2 或 ExportPlan/1-/2 record。saved/planned/unknown recovery 必须先于 current producer gate，并保持原 bytes、permissions、errors、confirmation 与 publication responsibility。
+禁止全局字符串替换去升级 historical wire12、document_snapshot wire2 或 ExportPlan/1-/2-/3 record。saved/planned/unknown recovery 必须先于 current producer gate，并保持原 bytes、permissions、errors、confirmation 与 publication responsibility。
 
 Stage4A 当时明确把 Annotation mutation/alias 留给独立后续批；current candidate 已在随后 Stage4B 的 §§9–16 与 SCHEMAS §§6–7 完成 Value/4/D8/D7/alias chain。本次 A-residual repair 不重写该链；直接共享合同触碰只包括 generic wire13 expectedAuthority optionality 修正，以及 current EffectItem/3 新增 typed presentation_policy_change owner effect，后续都应与本 fixed head 一起做直接增量非作者复核。fixed19f Annotation 的三个独立残余 finding 与 physical-JSON aggregate source gap 仍明确留在本批范围外。
 
@@ -1030,7 +1030,7 @@ ExportPlan/3、PublicationReceipt/3 与所有更早的 plan/catalog/projection/l
 
 共同顺序保持：封闭解码 → 最低披露与能力检查 → authority/domain/backend/trust 检查 → stable key 与 saved/planned/unseen 分派 → 当前 target/source/control 检查 → dependency/semantic/budget 检查 → 唯一 planning CAS → install → 唯一 P seal → output authorization。
 
-saved结果先按原owner/version重放；planned恢复原request/descriptor/proof/prepared/pins/Notice/install/version basis，不能就地升级；unknown保留原Approval/Money/claim/external-effect/stop责任。只有unseen current使用Descriptor3/PAB4/Edit3/ExportPlan3/Notice3/CP4/Declaration2等。存在decoder或历史设计文字不等于某prototype曾部署；只有实际可证明存在的record承担其历史decoder义务。
+saved result 先按原 owner/version 重放；planned 恢复原 request/descriptor/proof/prepared/pins/Notice/install/version basis，不能就地升级；unknown 保留原 Approval/Money/claim/external-effect/stop 责任。只有 unseen current 使用 Descriptor3/PAB4/Edit3/ExportPlan4/Notice3/CP4/Declaration2 等；真实记录的 ExportPlan3 继续走 /3 decoder 与 recovery。存在 decoder 或历史设计文字不等于某 prototype 曾部署；只有实际可证明存在的 record 承担其历史 decoder 义务。
 
 缺SourceTransform artifact、Index行、provider或新strong proof不能被永久 owner_update_required 当成通用禁用。协调已落库的current正向路径应按其具体 proof_unavailable/state_unavailable/dependency_conflict 等closed error恢复；raw/source/Draft/repair等不依赖缺失strong authority的路径继续按原资格。
 
@@ -1078,8 +1078,19 @@ D7CreateAnnotationIntent/2
 D7ActionSpec/2
 D7ActionPrepareRequest/3
 D7ActionInput/3
-ExportPlan/3
-PublicationReceipt/3
+D9ExportPlanToken/4
+D9PublicationToken/4
+D9PrintToken/1
+ExportInputCatalog/3
+ExportContentSelection/2
+ExportProjection/2
+ExportLossReport/2
+D9ExportConfirmation/2
+D9AnnotationContentInput/1
+D9ViewRenderBinding/1
+ExportPlan/4
+PublicationReceipt/4
+D9PrintReceipt/1
 PortableTransformCompilation/1
 SourceTransformPortableEvent/3
 CoreSourceEditPlan/2
