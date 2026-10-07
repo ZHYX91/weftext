@@ -7,44 +7,51 @@ translation_status: synced
 [简体中文](D7-SOURCE-MAP.zh-CN.md)
 # A2 D7 Source and Case Map
 
-Status: machine trace companion for the complete D7 author candidate; not independent acceptance.
+Status: author repair after the fixed2f89 full D7 review. The four fixed2f89 findings are repaired here but remain OPEN pending independent review.
 
-## 1. Fixed sources
+## 1. Fixed objects and prior closures
 
-All thirteen fixed-S D7 sources were read in full. The additional fixed-S D9 coordinated D3-D7 binding source was also read in full. Exact paths and Git blobs are recorded in D7-SOURCE-MAP.json. Fixed snapshots and docs/design/inputs.json are protected and unchanged.
+The repair start is 2f89a55cb1f924a47281f59e6419fff7c0c206ed. Base remains 97f4734f82a760cb6716c8122b84494da2b61164, fixed S remains 7e18168dad3e6d120fce0dd607dc10fa7894e252, and the protected inputs blob remains 787d03c31a55496f81ed03fd54a6fdfff50a2ad4.
 
-The current coordinated D7 bilingual owner set was read in full and is copied byte-for-byte into d7/owners. The current D9 binding bilingual source is copied under d7/coordination. D7-REGISTRY.json reuses the exact current 34-concept, 8-cross-stage-binding machine Registry blob.
+fixed2f89 independently closed A2-D6-01CC-P2-01, A2-NAV-454E-P2-01 and COORD-D7-DOC-QUALITY-01 in bounded scope. They are not current pending findings. The current four D7 findings are recorded in D7-SOURCE-MAP.json as OPEN with author repair present.
 
-## 2. Current and cross-owner reads
+## 2. Read coverage
 
-A2 D1 and D2 were full reads; D2 includes the complete current native AsciiDoc product family. A2 D4 and D5 were full reads, including the immutable D4 Catalog with 7 global limits and 95 named records. A2 D6 and its current successor schemas were read through every D7-required authority/currentness/index/recovery intersection.
+The fixed-S D7 thirteen sources and the extra D9 coordinated D3-D7 binding source remain FULL from the completed D7 review. The current bilingual D7 owner set remains FULL. D1/D2/D4/D5 and D7-required D6 intersections retain the previously recorded coverage. D3/D8/D9/D10 remain PARTIAL only at the named direct D7 producer/consumer intersections; their whole modules were not reopened.
 
-A2 D3 was read through the complete D7-direct identity, wire13, stable-address, Definition Transfer and recovery sections rather than being reread wholesale after its earlier A2 integration. D8, D9 and D10 are intentionally PARTIAL at their real D7 producer/consumer intersections. Their full A2 modules remain later batches. This distinction is recorded explicitly in the machine map.
+This repair reread only the direct evidence needed for the four findings: the fixed-S and parent-current terminology registries, the closed Query read/source grammar, current D2 title/subtitle product, D6 SourceObservation/FileObjectBinding/Policy gates, immutable Mandatory/scenario source ranges, and the exact current source-map package.
 
-## 3. Case coverage
+## 3. Registry qualification
 
-The machine map contains separate rows for the twenty integration obligations, SEARCH-01 through SEARCH-08, thirty-six retained D7 named-scenario ordinals, seventeen non-fallback-theme ordinals, Mandatory A2-01 through A2-57, sixteen Facet cases, sixteen People cases, six ICS cases, and the complete Chart §15 group.
+The immutable fixed-S Registry is 34 concepts / 8 cross-stage bindings. The parent-current Registry and D7-REGISTRY.json are the same blob 3cab5124f46822729093d5d955908b05eb65bb87 and contain 34 concepts / 13 bindings.
 
-The ordinal keys do not replace source names or conditions. They bind the exact immutable source path/blob and direct a reviewer back to the source bytes; the local retained current scenarios keep all human names. No group is accepted merely because its count is complete.
+D7-REGISTRY-QUALIFICATION maps B01-B13 individually. D7-REGISTRY.json remains the only parent-current machine Registry and is not rewritten. A2 only names fresh successor versions where the actual fixed97/current owner changed; unchanged inner versions remain unchanged and real historical records keep their original decoders.
 
-## 4. Named current supersessions
+## 4. Query and Search repair
 
-Only narrow current successors are applied: current D2DocumentSnapshot/3 headings/body semantics, current Annotation Value4/R6 body read, fixed97 PAB4/Action3/Effect3 outer families, D3 wire13/D6 Proof3 currentness, and the new SEARCH design. Historical decoder bytes and saved/planned/unknown recovery remain under their original versions.
+D7-QUERY-V2 defines QuerySpec/2 as the current new-author schema. QuerySpec/1 remains an exact separate decoder. QuerySpec/2 adds current Optional title/subtitle, authorized Node filename/path, authorized Resource filename and one generic schema-equal union_all operator. All reads bind real D2/D6 producers, authorization, same-cut current Observation/FileBinding and final barriers.
 
-SourceRevisionPlan/1, /2 and /3 remain role-specific and are not renumbered by an outer successor. MinimumMapping/3 remains retained.
+D7-SEARCH defines the complete shortcut lexer, recursive precedence grammar, keyword boundaries, escaping, FieldId/member-path validation, all preset empty-input behavior and explicit source overrides. Visual and shortcut forms produce the same ephemeral SearchConditionAst/1 and deterministic QuerySpec/2. D7-SEARCH-FIXTURES.json contains the machine positive/negative equivalence fixtures. No parser error falls back to another Query.
 
-## 5. SEARCH provenance
+## 5. Immutable source trace
 
-SEARCH-01 through SEARCH-08 came from the authorized inline task. The private instruction is deliberately not copied verbatim into the public repository. D7-SOURCE-MAP.json records normalized obligation IDs, current targets and review oracles; D7-SEARCH contains the public normative design. This preserves the user's no-private-Chat requirement while keeping every obligation individually reviewable.
+D7-SOURCE-MAP.json schema version 2 no longer labels current-mirror summaries as original conditions. The 20 D7 integration obligations each carry immutable fixed-S sourceId/path/blob/section/range, precise current target, disposition, owner and positive/negative oracle.
 
-## 6. Navigation findings
+Of the previous 151 case rows, 148 remain source-qualified case rows with immutable fixed-S or Mandatory source slices. The three old Chart mirror rows CHART-L194/L196/L198 are retained only as navigation summaries. Mandatory Chart §15 is separately mapped as seventeen contiguous obligation groups covering §15.1 through §15.8.9, including all ten §15.7 fixtures and both §15.8.9 hard questions.
 
-A2-D6-01CC-P2-01 and A2-NAV-454E-P2-01 are author-repaired navigation metadata only and remain pending independent fixed-SHA review. Neither is self-closed.
+The retained current scenario mirror remains useful as a current disposition target, but it never replaces immutable source text.
 
-The first now uses one role-neutral current pending status and one detailed provenance location in this machine map; historical sourceEvidence and semantic findings are untouched. The second changes the old fixed-5c sentence into historical chronology: the author did not self-close it at that time, and the later fixed446 independent review boundedly closed the D1/D2 mapping repair. That bounded result is not D6 or global A2 acceptance.
+## 6. Current finding state
 
-## 7. Evidence boundary
+- A2-D7-2F89-P1-01: author repair present in D7 §20, D7-REGISTRY-QUALIFICATION and machine bindingQualification; still OPEN pending independent review.
+- A2-D7-2F89-P1-02: author repair present in D7-QUERY-V2, D7-SCHEMAS and D7-SEARCH; still OPEN pending independent review.
+- A2-D7-2F89-P2-01: author repair present in D7-SEARCH and D7-SEARCH-FIXTURES.json; still OPEN pending independent review.
+- A2-D7-2F89-P2-02: author repair present in D7-SOURCE-MAP.json immutable ranges/cases/chart groups; still OPEN pending independent review.
 
-Repository documentation, input-integrity, JSON and map checks can prove only mechanical consistency. Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior is UNRUN in this batch.
+No author statement closes these four findings.
 
-The next reviewer must bind the actual final stop SHA and must not follow the moving branch. D8 through D10 full integration and the later fresh global non-author review remain pending.
+## 7. Evidence boundary and next gate
+
+Repository documentation, input-integrity, JSON and source-map checks prove mechanical consistency only. Product Search, runtime, Desktop/Mobile/WebUI GUI, IME/AT, renderer/export, real index/provider, CAS/races, migration, deployment and historical execution remain UNRUN.
+
+The next gate is a fixed-SHA non-author incremental review of the four fixed2f89 findings and their affected direct surfaces. D8-D10 full integration and the later fresh Pro/global A2 review remain separate.

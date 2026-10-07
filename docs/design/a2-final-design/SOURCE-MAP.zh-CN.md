@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。本 D7 作者批已经修订 `A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据，但作者不自行关闭；两项都等待实际 final stop SHA 的独立复核。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 
 ## 12. D4/D5 审计映射复核谱系
@@ -129,7 +129,7 @@ D4-SOURCE-MAP.json 已将 906 个 fixed-S D4 非空行、D5-SOURCE-MAP.json 将 
 
 旧 fixed-S D5 Inline-only/no-span/no-block/no-header 限制已明确由 current D5 §0/§3/§19.1 与 current D2 full native-table surface 具名 supersede。6 份真实 D10 双语 direct file 均按 direct_partial_not_full_D10 做来源限定；原 Proof2/Key2/wire12/PAB3 继续是 historical/original-owner source，fresh current dispatch 仍由真实 A2 successor owner 闭合。
 
-最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。本 D7 作者批已经修订 `A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据，但作者不自行关闭；两项都等待实际 final stop SHA 的独立复核。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 ## 13. D7 整合
 
@@ -142,3 +142,10 @@ D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN 证据状态�
 fixed454e 非作者导航复核通过此前四项残余措辞，并新开 A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01 两项导航 P2。本作者候选已修订两项导航问题，但不自行关闭。前者现在只有一个角色中性的待复核状态，并统一引用 D7-SOURCE-MAP.json 的详细 provenance；历史 sourceEvidence 不变。后者把 fixed-5c 的旧现实时态改成历史叙述，并明确后续 fixed446 独立复核已在有界范围关闭 D1/D2 映射修订；该有界结论不构成 D6 或全局 A2 接受。两项 finding 都等待实际 final stop SHA 的独立复核。
 
 产品 runtime、OS、GUI、renderer/export、database、真实 replica、provider、performance、migration 与 activation 行为在本批全部为 UNRUN。
+
+
+## 14. fixed2f89 D7 修复
+
+fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+
+本修复新增 D7-QUERY-V2，用于 versioned QuerySpec/2 metadata source 与 union_all；新增 D7-REGISTRY-QUALIFICATION，用于 fixed-S 34/8 与 parent-current 34/13 的逐 binding 资格；同时补全 shortcut grammar、D7-SEARCH-FIXTURES.json，以及 immutable-source D7 source-map row/Chart group。D7-REGISTRY.json 继续与 parent-current Registry 逐字节相同；snapshots 与 inputs 继续受保护。

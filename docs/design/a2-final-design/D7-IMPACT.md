@@ -15,11 +15,11 @@ The complete retained implementation/test outline is preserved byte-for-byte at 
 
 ## 2. Current successor deltas
 
-Fresh work additionally consumes the fixed97 current PAB4/Descriptor3/Proof3/PreparedIntent3, Action prepare/input version 3, ActionSpec2, D7ProposedInput3, EffectManifest3/EffectBytes3, D3 wire13, Notice3/CP4/ChangeRecord1, current D2DocumentSnapshot/3, Value4 Annotation, and role-specific source plans. No predecessor decoder is widened in place.
+Fresh work additionally consumes QuerySpec/2, the fixed97 current PAB4/Descriptor3/Proof3/PreparedIntent3, Action prepare/input version 3, ActionSpec2, D7ProposedInput3, EffectManifest3/EffectBytes3, D3 wire13, Notice3/CP4/ChangeRecord1, current D2DocumentSnapshot/3, Value4 Annotation, and role-specific source plans. QuerySpec/2 adds only the current metadata sources and union_all documented in D7-QUERY-V2. No predecessor decoder is widened in place.
 
 ## 3. Search implementation boundary
 
-Search UI must compile ordinary text, visual filters and explicit shortcut mode to the same Query planner. An index provider may only return candidates and coverage evidence; Core rereads authorized current values before match/rank and requires real query_scan for complete results. Search parser errors never fall back to another Query.
+Search UI must compile ordinary text, visual filters and explicit shortcut mode through the same SearchConditionAst/1 compiler into QuerySpec/2. D7-SEARCH-FIXTURES.json freezes lexer/parser/visual equivalence examples. An index provider may only return candidates and coverage evidence; Core rereads authorized current values before match/rank and requires real query_scan for complete results. Search parser errors never fall back to another Query.
 
 D8 later owns the concrete input widgets, focus model, IME adapters, mobile sheet and assistive-technology evidence. This batch freezes semantics only.
 

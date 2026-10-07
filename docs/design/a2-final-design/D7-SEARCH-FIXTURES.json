@@ -1,0 +1,332 @@
+{
+  "schema_version": 1,
+  "status": "candidate design fixtures for A2-D7-2F89-P2-01; not product test evidence",
+  "parser": "shortcut-mode-v1",
+  "canonical_ast": "SearchConditionAst/1 from D7-SEARCH §6",
+  "invariants": [
+    "positive shortcut and visual forms canonicalize to byte-equal SearchConditionAst/1",
+    "positive forms compile to byte-equal QuerySpec/2 CanonicalGraph for the same preset/scope/source controls",
+    "negative and incomplete forms compile no Query and never fall back to plain mode"
+  ],
+  "fixtures": [
+    {
+      "id": "CHAIN-AND",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "A AND B AND C",
+      "status": "ok",
+      "ast": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      }
+    },
+    {
+      "id": "PRECEDENCE",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "A OR B AND C",
+      "status": "ok",
+      "ast": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "and",
+            "children": [
+              {
+                "kind": "literal",
+                "value": "B"
+              },
+              {
+                "kind": "literal",
+                "value": "C"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "NOT-AND",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "NOT @title:x AND y",
+      "status": "ok",
+      "ast": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "not",
+            "child": {
+              "kind": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "x"
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "y"
+          }
+        ]
+      }
+    },
+    {
+      "id": "REPEATED-NOT",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "NOT NOT A",
+      "status": "ok",
+      "ast": {
+        "kind": "not",
+        "child": {
+          "kind": "not",
+          "child": {
+            "kind": "literal",
+            "value": "A"
+          }
+        }
+      }
+    },
+    {
+      "id": "ADJACENCY",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "A B C",
+      "status": "ok",
+      "ast": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      }
+    },
+    {
+      "id": "LITERAL-KEYWORDS",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "\"AND\" OR \"OR\" OR \"NOT\"",
+      "status": "ok",
+      "ast": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "AND"
+          },
+          {
+            "kind": "literal",
+            "value": "OR"
+          },
+          {
+            "kind": "literal",
+            "value": "NOT"
+          }
+        ]
+      }
+    },
+    {
+      "id": "URL",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "https://example.test/a:b",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "https://example.test/a:b"
+      }
+    },
+    {
+      "id": "WINDOWS-DRIVE",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "C:\\\\notes\\\\a.adoc",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "C:\\\\notes\\\\a.adoc"
+      }
+    },
+    {
+      "id": "PLAIN-TITLE-COLON",
+      "preset": "quick_open",
+      "mode": "plain",
+      "input": "title: quarterly",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "title: quarterly"
+      }
+    },
+    {
+      "id": "QUOTED-AT",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "\"@title:x\"",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "@title:x"
+      }
+    },
+    {
+      "id": "ESCAPED-AT",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "\\\\@title:x",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "@title:x"
+      }
+    },
+    {
+      "id": "CJK-RTL",
+      "preset": "global",
+      "mode": "shortcut",
+      "input": "\"中文 مرحبا\"",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "中文 مرحبا"
+      }
+    },
+    {
+      "id": "UNMATCHED-QUOTE",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "\"abc",
+      "status": "incomplete",
+      "error": "invalid_request_on_submit"
+    },
+    {
+      "id": "UNMATCHED-PAREN",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "(A OR B",
+      "status": "incomplete",
+      "error": "invalid_request_on_submit"
+    },
+    {
+      "id": "QUICK-BODY-OVERRIDE",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "@body:needle",
+      "status": "ok",
+      "sourceEffects": {
+        "enable": [
+          "body"
+        ],
+        "domains": [
+          "node"
+        ]
+      },
+      "ast": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      }
+    },
+    {
+      "id": "FIELD-ONLY",
+      "preset": "global",
+      "mode": "shortcut",
+      "input": "@title:Alice",
+      "status": "ok",
+      "plainNeedleRequired": false,
+      "ast": {
+        "kind": "source_term",
+        "source": {
+          "kind": "title"
+        },
+        "value": "Alice"
+      }
+    },
+    {
+      "id": "RESOURCE-OVERRIDE",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "@resource-name:manual.pdf",
+      "status": "ok",
+      "sourceEffects": {
+        "enable": [
+          "resource_file_name"
+        ],
+        "domains": [
+          "resource"
+        ]
+      },
+      "ast": {
+        "kind": "source_term",
+        "source": {
+          "kind": "resource_file_name"
+        },
+        "value": "manual.pdf"
+      }
+    },
+    {
+      "id": "FIELD-ID-MEMBER",
+      "preset": "global",
+      "mode": "shortcut",
+      "input": "@field(people/name,text):Alice",
+      "status": "ok",
+      "ast": {
+        "kind": "source_term",
+        "source": {
+          "kind": "field",
+          "fieldId": "people/name",
+          "memberPath": [
+            "text"
+          ]
+        },
+        "value": "Alice"
+      }
+    },
+    {
+      "id": "UNKNOWN-OPERATOR",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "@foo:x",
+      "status": "error",
+      "error": "unknown_shortcut_field"
+    },
+    {
+      "id": "INCOMPATIBLE-AND",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "@title:x AND @resource-name:y",
+      "status": "error",
+      "error": "source_not_applicable"
+    }
+  ]
+}

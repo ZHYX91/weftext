@@ -17,7 +17,8 @@ The byte-complete retained D7 author schemas live under d7/owners. This companio
 
 ```text
 Query outer: wireVersion 2
-QuerySpec: version 1
+QuerySpec current: version 2
+QuerySpec retained decoder: version 1
 ViewSpec: version 1
 Action prepare: D7ActionPrepareRequest/3
 Action author: D7ActionSpec/2
@@ -172,11 +173,11 @@ D7 integer and decimal values keep the exact canonical textual decoders of the r
 
 ## 9. Query execution closure
 
-Query outer remains wireVersion2 and the complete QuerySpec/1 author grammar remains in d7/owners/query-algebra. DAG validation, canonical ordinal, CEL typing, feature gates, source qualification, terminal schema, result encoding, paging/subscription reset, and complete error ordering are one closed path. Unknown feature or unavailable dependency cannot be converted into an empty bag.
+Query outer remains wireVersion2. QuerySpec/2 is the current author schema and is defined by the retained QuerySpec/1 grammar plus exactly the versioned additions in D7-QUERY-V2: current Optional title/subtitle, authorized Node file name/path, authorized Resource file name, and union_all. QuerySpec/1 remains a separate exact decoder and is never widened. DAG validation, canonical ordinal, CEL typing, feature gates, source qualification, terminal schema, result encoding, paging/subscription reset and complete error ordering remain one closed path. Unknown feature or unavailable dependency cannot become an empty bag.
 
 ## 10. Search schema boundary
 
-Search introduces no new persistent Query or View schema. Plain search, visual conditions, and the optional shortcut grammar compile to an ordinary QuerySpec/1 plus current SearchContribution dependencies. Saving stores only the canonical Query definition. Shortcut parser version, text cursor, open filter popover, recent query, expansion state, and device direction are interaction state and do not enter DynamicBlock or saved Query.
+Search introduces no second persistent Search or View schema. Plain search, visual conditions and the optional shortcut grammar compile deterministically to QuerySpec/2 plus current SearchContribution dependencies. D7-SEARCH defines the ephemeral SearchConditionAst/1 only as compiler IR; it is never persisted. Saving stores only the canonical Query definition. Shortcut parser version, text cursor, open filter popover, recent query, expansion state and device direction are interaction state and do not enter DynamicBlock or saved Query.
 
 The detailed grammar and SEARCH-01 through SEARCH-08 acceptance are in D7-SEARCH.
 

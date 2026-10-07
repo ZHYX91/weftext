@@ -7,136 +7,151 @@ translation_status: synced
 [简体中文](D7-SEARCH.zh-CN.md)
 # A2 D7 Search Semantics and SEARCH-01–08
 
-Status: normative D7 search design inside the current author candidate. D8 interaction implementation remains a later full-module batch.
+Status: normative D7 search design inside the current author candidate. This revision repairs A2-D7-2F89-P1-02 and A2-D7-2F89-P2-01; independent review is still required. D8 interaction implementation remains a later full-module batch.
 
-## 1. Decision and alternatives
+## 1. Decision and one execution authority
 
-Three complete interaction alternatives were compared.
+The selected UX remains plain text by default, visual filters for ordinary structured use, and an explicitly selected shortcut-condition mode for experts. Ordinary users never need shortcut syntax. Automatically interpreting every colon as syntax remains rejected.
 
-| Alternative | Strength | Cost / risk | Decision |
-| --- | --- | --- | --- |
-| Plain text plus visual filters only | zero syntax learning, no lexical ambiguity | keyboard-heavy for expert use; hard to copy a complex condition | retained as the default ordinary experience |
-| Automatically parse familiar field-colon text in the ordinary box | short and familiar | confuses prose containing title:, URLs, drive letters, CJK punctuation and incomplete input; error fallback can execute a different Query than intended | rejected |
-| Plain text default plus visual filters plus an explicit shortcut-condition mode | no syntax required, deterministic expert path, round-trips to one Query | needs one small parser and explicit mode indication | selected |
+All successful search execution uses Core QuerySpec/2. There is no second full-text executor, hidden shell filter, search-only data store or durable search authority. When Nodes and Resources are both selected, one QuerySpec/2 builds homogeneous branches and combines their identical public search-row schema with union_all before the final sort/project.
 
-The selected model has one execution authority: every successful search state compiles to the existing D7 Query algebra and executes through the same D6 authorization, complete-range, budget, result, paging and reset contracts. There is no second full-text executor and no durable search object distinct from saved Query.
+Saving stores the canonical Query definition, not the shortcut string, visual-chip order or device state.
 
-## 2. Search object vocabulary
+## 2. Search objects and current Query sources
 
-Current D3/D2 has no generic authored Node name that can be silently equated with all file labels. The search vocabulary therefore separates:
+The vocabulary remains deliberately separate:
 
-- document title: current D2 native document title, nullable;
-- document subtitle: current D2 native subtitle, nullable;
-- file name: the current D6 physical FileBinding basename where that metadata is authorized;
-- path: the current D6 physical relative path where path disclosure is authorized;
-- resource name: the current Resource FileBinding basename, distinct from a Document title;
-- logical hierarchy: the D3 parent/order scope used to enumerate Nodes, never a stable path identity;
-- body: D2 semantic body_text under the complete current D2 evaluation barrier;
-- contributed text: an explicitly selected current SearchContribution Field/textPath.
+- document title: current D2 native title, Optional;
+- document subtitle: current D2 native subtitle, Optional;
+- Node file name: basename derived by the QuerySpec/2 node_file_name source;
+- Node relative path: exact PortableRelativePath from node_relative_path;
+- Resource file name: basename from resource_file_name;
+- logical hierarchy: D3 selector/placement scope, never a stable path identity;
+- body: D2 semantic body_text;
+- contributed text: explicitly selected current SearchContribution Field/textPath.
 
-A titleless Document remains titleless. A filename, path, list placeholder or first paragraph may be displayed as a UI fallback, but it never becomes title data. Duplicate titles, duplicate filenames in different allowed locations, and equal contributed strings do not merge identity.
+The exact authorization, SourceObservation/FileObjectBinding, same-cut, rename/move reset and no-identity/no-write rules for the first five built-in sources are in D7-QUERY-V2. A titleless Document remains titleless; filename/path never fabricates title. Equal titles or file names never merge distinct Refs.
 
-Rename or move changes current filename/path matching while preserving NodeRef when D3 says identity is preserved. An old result therefore becomes stale under its ordinary currentness rules; saved Query semantics are re-executed against the current authorized FileBinding instead of freezing an old display path as identity.
+## 3. Presets, empty input and source enablement
 
-## 3. Three product search presets
+File-list filter defaults to the current selected parent, nonrecursive, live Nodes only. Its ordinary-text sources are title and node_file_name. body, subtitle, path, Resources, Annotation bodies, Trash and attachment extraction/OCR are off unless explicitly enabled. With no ordinary needle and no structured condition, this surface is browse mode and executes no search Query.
 
-File-list filter operates over the already selected logical list scope. Default scope is the current D3 parent, nonrecursive, live Nodes only. It does not read body text, Annotation bodies, Trash, attachment extraction or OCR. A UI may explicitly enable recursive subtree or Resources; those switches compile to explicit Query scope/source choices and require their own disclosure. Empty input in this surface means browse the selected list scope; it is not an empty full-workspace search.
+Quick Open defaults to authorized live Nodes under the selected Workspace/root scope with title, subtitle and node_file_name enabled. body and path are off. A Resources control adds the Resource domain and resource_file_name. With no needle and no structured condition, Quick Open is browse mode, not an empty-needle search.
 
-Quick open defaults to authorized live managed Nodes in the selected Workspace/root scope and reads title/subtitle plus separately authorized filename metadata. Body, Annotation bodies, attachment extracted text, OCR and Trash are off by default. An explicit Resources toggle includes authorized Resources and resource-name matching. Quick open is still a Query preset, not identity lookup by text.
+Global text search defaults to authorized live Documents in the selected Workspace/root or explicit subtree with title, subtitle and body enabled. Node filename/path, Resources, attachment extraction/OCR, Annotation bodies and Trash are explicit source/scope controls. With no needle and no structured condition, Global Search does not enumerate the Workspace; it is an unexecuted empty draft and submit returns invalid_request.
 
-Global text search defaults to authorized live Documents in the selected Workspace/root or explicit subtree, with title/subtitle and body enabled. Resources, attachment extraction/OCR, Annotation bodies and Trash are explicit opt-in scopes. Attachment content is available only through the real current extraction/SearchContribution dependency. Annotation text requires annotation disclosure/read before obtaining the body. Missing provider, incomplete extraction, hidden source or unmaterialized placeholder is unavailable for a complete search, never a successful empty match.
+A structured field/source condition is a valid search without a plain needle. An explicit shortcut source term also enables that source even when the preset default is off: for example @body:x in Quick Open enables body, @path:x enables Node path, and @resource-name:x enables the Resource domain and resource_file_name. The equivalent visual control changes the same compiler input. Permission/provider failure remains a Query failure; an explicit source is never silently dropped.
 
-## 4. Match, Unicode, Boolean composition, and sort
+Source applicability is closed. title/subtitle/filename/path/body/@field are Node-only; resource-name is Resource-only. NOT preserves its child's domain set, AND intersects domain sets, and OR unions them. An AND whose domain intersection is empty is source_not_applicable rather than an accidental zero-result query. This prevents NOT @title:x from becoming an all-Resources predicate.
 
-The current generation preserves the retained D7 SearchContribution matching boundary. Built-in title/body text and D4 text paths declared `normalization:"exact"` use exact case-sensitive Unicode-scalar comparison; a D4 path declared `normalization:"nfc-for-compare"` applies NFC to both the candidate and needle for comparison only, without rewriting source bytes. `contains` is exact substring on that selected comparison basis, while equality supplies the retained exact-match rank. There is no automatic case folding, fuzzy matching, stemming, token-language inference, transliteration or Pinyin; any future comparison profile requires an explicit versioned semantic addition rather than a UI-only toggle.
+## 4. Match, Unicode, Boolean composition and sort
 
-CJK works as ordinary Unicode scalar substring matching and requires no whitespace tokenizer. RTL affects presentation only. A quoted phrase is one exact scalar sequence. Plain ordinary search text is one literal phrase; it is not implicitly split into terms. Visual filter rows default to AND, and the visual builder offers explicit OR groups and NOT where the underlying Query expression is representable.
+The current matching boundary is unchanged. Built-in title/subtitle/body and file metadata use their declared exact comparison. A D4 text path with normalization:"exact" is exact and case-sensitive; normalization:"nfc-for-compare" applies NFC to candidate and needle for comparison only and never rewrites source bytes. contains is exact substring on the selected comparison basis. There is no automatic case folding, fuzzy match, stemming, tokenizer, transliteration or Pinyin.
 
-In shortcut mode, adjacent primary terms are AND, while OR, NOT and parentheses use the grammar below. Match ranking and role ordering remain the exact retained D7 SearchContribution rank defined in the copied Query Algebra owner text; UI code cannot add a private fuzzy score. Where the retained comparator is equal, Query appends the canonical subject key and then the selected contribution identity as an explicit stable tie so pagination is deterministic. General Query sorting remains user-defined and never follows viewport order.
+CJK and RTL text are ordinary Unicode scalar text. RTL changes presentation only. Ordinary plain-search mode treats the entire input as one literal phrase; AND, OR, NOT, colon, @, URL syntax and parentheses have no special meaning there.
 
-## 5. Shortcut-condition mode
+For default search ranking, exact title is rank 0; exact subtitle, Node/Resource file name and contribution role=name are rank 1; exact alias or exact Node relative path is rank 2; non-body substring matches are rank 3; body/content-only matches are rank 4. Only already-authorized values participate. Equal rank is followed by the explicit user sort when present, then canonical subject key and contribution/source identity for a deterministic tie. UI order and locale collation never supply a hidden tie.
 
-Shortcut parsing is opt-in. Merely typing a colon never enables it. The visible mode indicator is interaction state; once parsing succeeds, the semantic object is the compiled Query condition.
+## 5. Shortcut lexer and recursive grammar
 
-```text
+Shortcut parsing is active only after the user explicitly selects shortcut mode. The input is one UTF-8 line; NUL and line breaks are invalid.
+
+~~~text
 Shortcut mode v1
 
-plain-token        := escaped-token | quoted-value
-field-condition    := @title:value
-                    | @subtitle:value
-                    | @filename:value
-                    | @path:value
-                    | @body:value
-                    | @resource-name:value
-                    | @field(field-id[,member-path]):value
-value              := quoted-value | escaped-token
-quoted-value       := "..." with backslash escaping for quote and backslash
-boolean-expression := primary
-                    | NOT primary
-                    | primary AND primary
-                    | primary OR primary
-primary            := plain-token | field-condition | ( boolean-expression )
+shortcut-input := ws? or-expr ws?
+or-expr        := and-expr (ws1 OR ws1 and-expr)*
+and-expr       := unary-expr ((ws1 AND ws1 | adjacency) unary-expr)*
+adjacency      := ws1
+unary-expr     := NOT ws1 unary-expr | primary
+primary        := field-condition | literal-term | "(" ws? or-expr ws? ")"
+field-condition := builtin-field ":" value
+                 | field-ref ":" value
+builtin-field  := @title | @subtitle | @filename | @path | @body | @resource-name
+field-ref      := @field "(" field-id ("," member-path)? ")"
+value          := quoted-value | bare-token
+literal-term   := quoted-value | bare-token
+~~~
 
-precedence: parentheses > NOT > AND > OR
-whitespace between adjacent primary terms is AND
-a colon is syntax only inside a recognized @ operator
-unknown @ operator or invalid field/member path is a parse error
-incomplete input is a draft parse state and executes no Query
-```
+The lexer runs before the grammar:
 
-The @ prefix is deliberate. Ordinary title:, https://example.test, C:\\notes\\a.adoc, time 12:30, quoted prose, and CJK full-width punctuation remain literal unless the user explicitly enters shortcut mode and uses a recognized @ operator. To search text beginning with an operator spelling inside shortcut mode, quote it or escape the leading @.
+- ASCII space and tab separate tokens outside quotes.
+- Parentheses are structural only when unescaped and outside quotes.
+- Colon is ordinary text except the one colon immediately following a recognized field operator head.
+- A bare token is a nonempty sequence of Unicode scalars other than unescaped space/tab/quote/parenthesis. Backslash is literal unless followed by one of backslash, quote, parenthesis, @, colon, space or tab; those pairs decode to the escaped scalar. A trailing ordinary backslash is therefore a literal, while an unfinished reserved escape is an incomplete draft.
+- quoted-value starts and ends with a double quote. Inside it, backslash escapes double quote or backslash; every other scalar, including whitespace, colon, @, CJK and RTL text, is literal. A missing closing quote is incomplete.
+- unescaped uppercase ASCII AND, OR and NOT are keywords only as complete lexer tokens. Lowercase forms are literals. To search the uppercase words literally, quote them.
+- a token beginning with an unescaped @ followed by a recognized operator head is parsed as a source term. An unknown @name: operator is unknown_shortcut_field, not a literal fallback. Escaping the leading @ makes the whole token literal.
+- field-id uses the exact D4 FieldId grammar. member-path is 1..8 dot-separated lowerCamel ASCII ObjectMemberSpec names, each 1..64 bytes. It is validated against the same current Registry/Field TypeSpec used by Query. Labels and localized names never substitute.
 
-Unknown @ operators, unknown FieldIds, unavailable Field definitions, illegal member paths, unmatched quotes/parentheses, or invalid values are errors at their exact draft span. The UI executes no fallback literal Query. Incomplete input is preserved as an editable draft and likewise executes nothing. This prevents an error from silently becoming a broader search.
+OR has the lowest precedence, then AND/adjacency, then recursive NOT, then primary/parentheses. NOT NOT A is therefore legal and remains two explicit not nodes. A AND B AND C and adjacency A B C are legal chains.
 
-The first-generation built-in keyword set is title, subtitle, filename, path, body, resource-name and field. There is intentionally no generic file or name keyword because those words collapse distinct domains. field requires a stable D4 FieldId and, when present, an explicit member path validated against the same current Registry used by Query. Localized labels and aliases never replace the stable ID.
+An unmatched quote/parenthesis, missing operand, missing field value, incomplete @field(...), unfinished reserved escape or other unfinished token is a draft-incomplete state and executes no Query. On explicit submit the same state returns invalid_request with the exact source span. A syntactically complete unknown field/operator/value returns its specific parse/compile error. No error path executes an alternate literal Query.
 
-## 6. Visual filters and round-trip
+## 6. One condition AST and deterministic Query compilation
 
-Plain input, visual filters and shortcut mode all edit one condition model. A representable Query condition can round-trip losslessly to visual chips and shortcut text. Reordering presentation chips must not change semantics.
+Shortcut input and visual controls both produce the same ephemeral compiler AST:
 
-A complete Query may contain a condition outside the convenience grammar. That condition is retained as an opaque-but-editable advanced condition node in the visual model; switching to shortcut mode must show that it is not text-representable and must not drop it. The user may open the full Query editor to edit it. Saving never serializes only the visible chips.
+~~~text
+SearchConditionAst/1 :=
+    {kind:"literal",value:text}
+  | {kind:"source_term",source:<closed source selector>,value:text}
+  | {kind:"not",child:SearchConditionAst/1}
+  | {kind:"and",children:[SearchConditionAst/1...]}
+  | {kind:"or",children:[SearchConditionAst/1...]}
+~~~
 
-Keyboard, pointer, touch and assistive-technology controls invoke the same condition operations. Focus remains bound to a logical condition ID, not a DOM index. Search refresh, sort or epoch reset invalidates result-row focus/selection/evidence and returns focus to a stable container rather than transferring a reused visual row to another object. IME preedit never dispatches a Query; only finalized input may update the search draft.
+This AST is not persisted and is not a second query language authority. and/or nodes flatten only adjacent nodes of the same operator while preserving source order; NOT is never algebraically cancelled. Visual editing uses the same node kinds and source selectors, so switching surfaces cannot drop a condition.
 
-CJK IME, RTL text, bidi isolation, screen-reader labels, mobile sheets and hardware keyboard paths are D8 interaction obligations. This D7 batch freezes their semantic targets and acceptance requirements but does not claim platform execution.
+Compilation is deterministic:
 
-## 7. Permission, index state, count, ranking, and snippets
+1. resolve the preset, explicit scope and enabled sources;
+2. validate every source and Field against QuerySpec/2 and the current Registry;
+3. compute each AST node's applicable subject domains using §3;
+4. create the Node and, when enabled, Resource scan/read/filter/project branches;
+5. project every surviving branch to one identical search-row schema with Optional<NodeRef>, Optional<ResourceRef>, display text, rank and stable source key;
+6. combine multiple branches with QuerySpec/2 union_all;
+7. apply the explicit deterministic sort and final project.
 
-Authorization and minimum disclosure precede every sensitive source, Field, contribution, attachment, Annotation or index-private read. Search does not learn hidden existence from hit counts, ranking gaps, snippets, completion suggestions or unavailable reasons.
+A condition outside the shortcut/visual subset remains an opaque advanced Query condition in the visual editor and is never lost. It can only be edited by the full Query editor. Saving always saves QuerySpec/2, never SearchConditionAst/1.
 
-Derived Index is only a candidate accelerator. building, partial, stale and unavailable are distinct from a proved complete zero-result Query. A complete search requires current authorized query_scan plus all real positive/negative source, Registry, contribution, extraction and authorization dependencies. A partial exploration may show only its explicitly covered range and must remain visibly incomplete; it cannot issue complete ActionEvidence or claim that the current page is the whole result.
+D7-SEARCH-FIXTURES.json is the machine oracle for parser/visual equivalence. For every positive fixture, shortcut AST and visual AST must be byte-equal after canonical AST serialization and must compile to byte-equal CanonicalGraph descriptions. Negative/incomplete fixtures compile nothing.
 
-Missing selected Field/SearchContribution/provider/extraction data is evaluated after the ordinary disclosure gate and returns the retained unavailable/reset result. It never falls back to an empty contribution. Budget exhaustion fails the complete result under the retained D7 budget error; it does not return the first N rows as complete. Cancellation has the retained explicit outcome.
+## 7. Permission, index state, count, ranking and snippets
 
-Hit count is computed only from the authorized complete result. A UI may omit a count or say unknown while building; it cannot estimate hidden matches. Ranking uses only authorized matched values and the retained D7 comparator.
+Authorization and minimum disclosure precede every sensitive source, Field, contribution, attachment, Annotation or index-private read. Hidden objects cannot leak through hit counts, rank gaps, snippets, completions or unavailable reasons.
 
-Snippets and highlights are derived only from the already authorized matched semantic text. Their scalar offsets are ephemeral presentation offsets inside that result value; they are not D3 Locator coordinates. Opening a hit performs a fresh current resolution/read through the actual Ref/provenance/Locator rules. If the result or source is stale, open/search revalidates or resets instead of mapping a display offset onto new bytes.
+Derived Index remains only a candidate accelerator. building, partial, stale and unavailable are distinct from a proved complete zero-result Query. A complete search requires current authorized query_scan and all actual positive/negative source, Registry, contribution, extraction and authorization dependencies. A partial exploration cannot issue a complete ResultHandle/ActionEvidence or claim the current page is all results.
 
-## 8. Persistence, reopen, copy, and import
+Missing selected source/Field/SearchContribution/provider/extraction data is evaluated after the ordinary disclosure gate and returns the existing unavailable/reset result. It never falls back to an empty contribution. Budget exhaustion fails the complete result; it does not return the first N rows as complete.
 
-Saving a search stores the existing canonical Query definition and its explicit scope, parameters, stable D4 FieldIds, selected SearchContribution contributionId/version dependencies, and author-defined ordering. The shortcut string is not durable search authority. A non-author device may remember parser version or the user's last text for convenience, but this state is discardable and never enters DynamicBlock, DefinitionTransfer, result cache or ActionEvidence.
+Snippets/highlights derive only from already-authorized semantic text. Their scalar offsets are ephemeral result-display offsets, not Locators. Opening a hit performs a fresh current resolution/read and resets when the result/source is stale.
 
-Reopen decodes the saved Query under its recorded author schema and then qualifies current definitions, Registry, contributions and permissions. Field deletion or incompatible type change follows the Registry migration/unavailability contract. SearchContribution removal/version change follows the D10 activation dependency rule. Permission changes reset current results. Rename/move changes current filename/path values but not stable content identity.
+## 8. Persistence, reopen, copy and import
 
-Copy/fork/import uses existing D7 Definition Transfer over the canonical Query payload. Typed Refs and DefinitionAddress roots are mapped by the D3 rules; FieldIds and SearchContribution stable identities remain semantic dependencies rather than being guessed from labels. Unknown payloads never convert themselves into a new search syntax. Old result rows, snippets and evidence are not copied as current authority.
+New current saved searches use QuerySpec/2. The saved definition includes explicit scope, parameters, stable FieldIds, SearchContribution contributionId/version dependencies and author ordering. Shortcut text, parser cursor, source popover, recent history and device direction are interaction state only.
 
-## 9. Hit equivalence across list, full search, and saved Query
+Reopen dispatches the recorded QuerySpec version before current qualification. QuerySpec/1 remains exact and is never reinterpreted as /2. Field deletion/type change, contribution removal/version change, permission changes and FileBinding changes follow their real Registry/currentness reset rules.
 
-When file-list, global search and a saved Query are configured with byte-equivalent canonical conditions, scope, contribution set, ordering and current dependency cut, they have the same D7 result semantics. Surface pagination or virtualization does not change membership or ordering.
+Definition Transfer maps typed Ref/DefinitionAddress slots under the version-specific Query schema. D9 exact query_json copy/export/import preserves the recorded version and bytes. No filename/path string becomes a DefinitionAddress or identity.
 
-Capability differences are explicit. A surface that cannot obtain a required provider, complete range, secure snippet, bidi interaction or assistive navigation reports that capability unavailable/incomplete; it does not run a different hidden query. Cross-device equality is semantic equality of the canonical Query and qualified dependencies, not pixel equality.
+## 9. Cross-surface and cross-device equivalence
+
+For the same QuerySpec/2 bytes, parameters, scope and current dependency cut, File List, Quick Open, Global Search and a saved Query have identical Query membership/order semantics. Different surfaces may expose different preset controls, but a control that is available maps to the same source/AST rule above.
+
+Keyboard, pointer, touch and assistive-technology operations invoke the same condition model. Focus binds logical condition/result identity rather than DOM position. IME preedit executes no Query. CJK/RTL input, bidi isolation, screen-reader labels, mobile sheets and hardware keyboard behavior remain D8 implementation obligations; this D7 design does not claim them tested.
 
 ## 10. SEARCH-01–08 acceptance
 
-| ID | Normative D7 closure and later D8 acceptance |
+| ID | Current design obligation |
 | --- | --- |
-| SEARCH-01 | File-list filter, quick open and global text search use the scopes in §3; browsing empty input is separate from explicit search; recursion, Resource, Annotation, Trash, body and attachment/OCR scope are explicit. |
-| SEARCH-02 | Title/subtitle/filename/path/resource-name/hierarchy remain separate; titleless stays titleless; duplicate display values preserve distinct Refs; rename/move invalidates old result qualification without changing identity by text. |
-| SEARCH-03 | Current matching preserves exact versus `nfc-for-compare` per §4: both are case-sensitive, substring/equality use the selected Unicode-scalar comparison basis, and source bytes are not rewritten; CJK and RTL are deterministic; Boolean AND/OR/NOT is explicit; no fuzzy/tokenizer/Pinyin/stemming claim; unsupported future modes do not silently run. |
-| SEARCH-04 | Shortcut mode is explicit and uses @ operators, quoting, escaping, precedence and errors from §5; ordinary colon text, URLs, drive letters and title: remain literal; invalid/incomplete shortcut text executes no alternate Query. |
-| SEARCH-05 | Visual and shortcut conditions edit one model; nonrepresentable advanced conditions are retained, not dropped; focus/keyboard/touch/AT/IME/CJK/RTL semantics follow §6 and later D8 platform evidence. |
-| SEARCH-06 | Permission precedes sensitive reads; hidden counts/ranks/snippets do not leak; index building/partial/stale/unavailable differs from complete zero; missing contribution/provider and budget have explicit unavailable/error outcomes; ordinary open/edit/save remains independent. |
-| SEARCH-07 | Save/reopen/copy/import persists canonical Query and stable semantic dependencies, not UI state; Field/contribution/version/permission changes requalify or reset; old results never acquire new current eligibility. |
-| SEARCH-08 | A hit opens through a fresh current authorized source resolution; snippet/highlight offsets are not Locators; equivalent canonical conditions produce equivalent membership/order across list/full/saved surfaces while capability differences remain explicit. |
+| SEARCH-01 | File List, Quick Open and Global Search use the preset scopes and empty-input behavior in §3. Recursive scope, Resources, Annotation, Trash, body and attachment/OCR are explicit. |
+| SEARCH-02 | title/subtitle/Node filename/Node path/Resource filename/hierarchy are distinct; QuerySpec/2 supplies real producers; titleless remains titleless; rename/move resets through real dependencies without changing identity by text. |
+| SEARCH-03 | exact versus nfc-for-compare follows §4; comparison is case-sensitive, Unicode-scalar and deterministic; no fuzzy/tokenizer/Pinyin/stemming claim. |
+| SEARCH-04 | shortcut mode is explicit and the complete lexer/grammar is §5; ordinary title:, URL, drive colon and prose remain literal in plain mode; shortcut errors/incomplete drafts execute no fallback Query. |
+| SEARCH-05 | visual and shortcut controls produce the same SearchConditionAst/1 and CanonicalGraph under §6; advanced conditions are retained; D8 platform interaction remains later evidence. |
+| SEARCH-06 | permission precedes sensitive reads; hidden counts/ranks/snippets do not leak; index states differ from complete zero; missing sources/providers and budget have explicit failure; ordinary open/edit/save remains independent. |
+| SEARCH-07 | save/reopen/copy/import persists the versioned canonical Query, not UI state; /1 and /2 dispatch separately; Field/contribution/FileBinding/permission changes requalify or reset; old result evidence never gains current authority. |
+| SEARCH-08 | a hit opens through fresh current authorized resolution; snippet offsets are not Locators; identical QuerySpec/2 semantics stay identical across surfaces/devices subject only to explicitly unavailable capabilities. |
 
-These rows are design acceptance obligations. No product search, platform interaction, tokenizer, provider, accessibility, performance, or cross-device test is claimed PASS in this batch.
+These are design obligations. Product Search, GUI/IME/AT, provider, performance and cross-device execution remain UNRUN.

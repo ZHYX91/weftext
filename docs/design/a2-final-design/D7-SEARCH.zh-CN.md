@@ -6,136 +6,151 @@ translation_status: source
 [English](D7-SEARCH.md)
 # A2 D7 搜索语义与 SEARCH-01–08
 
-状态：这是当前 D7 作者候选中的规范搜索设计；D8 的具体交互实现仍属于后续完整模块批次。
+状态：这是当前 D7 作者候选中的规范搜索设计。本修订处理 A2-D7-2F89-P1-02 与 A2-D7-2F89-P2-01，但仍需独立复核。D8 的具体交互实现继续属于后续完整模块批次。
 
-## 1. 方案裁决
+## 1. 方案裁决与唯一执行权威
 
-本批比较了三种完整的交互方案。
+产品方向保持不变：默认使用普通文本，可视化筛选承担常规结构化条件，熟练用户可以显式进入快捷条件模式。普通用户无需学习快捷语法；普通搜索框也不会把所有冒号自动解释成操作符。
 
-| 方案 | 优点 | 成本 / 风险 | 裁决 |
-| --- | --- | --- | --- |
-| 只提供普通文本输入和可视化筛选 | 普通用户无需学习语法，且不存在词法歧义 | 熟练用户仅靠键盘操作时效率较低；复杂条件不便复制 | 保留为默认体验 |
-| 在普通搜索框中自动解析常见的“字段:值”写法 | 写法短且熟悉 | 会误判正文里的 title:、URL、Windows 盘符、CJK 标点和未完成输入；解析失败后若退回普通搜索，还可能执行与用户原意不同的 Query | 拒绝 |
-| 普通文本输入为默认，同时提供可视化筛选和显式的快捷条件模式 | 不要求用户学习语法，同时给熟练用户提供确定、可复制、可往返编辑的快捷路径 | 需要一个小型解析器，并且界面必须清楚显示当前模式 | 选择 |
+所有成功搜索都由 Core QuerySpec/2 执行。不存在第二个全文搜索执行器、shell 私下过滤、搜索专用数据存储或第二持久权威。Node 与 Resource 同时启用时，一个 QuerySpec/2 分别建立同 schema 分支，再用 union_all 合并，最后统一 sort/project。
 
-所选方案只有一套执行权威。任何成功的搜索状态都会编译成既有的 D7 Query，并沿用相同的 D6 授权、完整范围证明、预算、结果、分页和重置规则。系统不新增第二个全文搜索执行器，也不建立区别于 saved Query 的持久搜索对象。
+保存时只保存 canonical Query definition，不保存快捷文本、可视化 chip 顺序或设备交互状态。
 
-## 2. 搜索对象的名称与边界
+## 2. 搜索对象与当前 Query source
 
-当前 D3/D2 并不存在一个可以把所有“文件名称”都合并进去的通用作者字段，因此搜索界面必须区分下列概念：
+搜索词汇继续严格分域：
 
-- 文档标题：当前 D2 原生文档标题，可以不存在；
-- 文档副标题：当前 D2 原生副标题，可以不存在；
-- 文件名：只有在当前主体有权读取相应元数据时，才使用当前 D6 FileBinding 的 basename；
-- 路径：只有在当前主体有权读取路径时，才使用 D6 当前相对路径；
-- 资源名称：Resource 的 FileBinding basename，与 Document 标题不是同一概念；
-- 逻辑层级：用于枚举 Node 的 D3 parent/order 范围，不是稳定路径身份；
-- 正文：通过完整当前 D2 求值屏障取得的语义正文 body_text；
-- 扩展贡献文本：由显式选中的当前 SearchContribution 提供的 Field/textPath。
+- document title：current D2 native title，类型为 Optional；
+- document subtitle：current D2 native subtitle，类型为 Optional；
+- Node file name：由 QuerySpec/2 的 node_file_name source 从当前 FileBinding 派生 basename；
+- Node relative path：由 node_relative_path 返回准确 PortableRelativePath；
+- Resource file name：由 resource_file_name 返回 basename；
+- logical hierarchy：D3 selector/placement scope，不是稳定 path identity；
+- body：D2 semantic body_text；
+- contributed text：显式选择的 current SearchContribution Field/textPath。
 
-无标题文档必须继续保持“无标题”。文件名、路径、列表占位文字或第一段可以作为界面回退显示，但绝不能被写成标题事实。同名标题、位于不同合法位置的同名文件、内容相同的扩展贡献文本，都不能合并身份。
+前五个内建 source 的授权、SourceObservation/FileObjectBinding、同 cut、rename/move reset 以及“不授身份/写权限”规则由 D7-QUERY-V2 统一定义。无标题 Document 继续无标题，filename/path 永不补造 title。相同 title 或 file name 也不会合并不同 Ref。
 
-若 D3 规则允许改名或移动而保持身份，则当前文件名或路径的匹配结果可以变化，但 NodeRef 不变。旧结果按正常当前性规则失效；保存的 Query 会在重新执行时读取当前获权的 FileBinding，而不会把旧显示路径冻结成身份。
+## 3. Preset、空输入与 source enablement
 
-## 3. 三种产品搜索入口
+File List filter 默认只看当前选中 parent 的直接 live Node，不递归。普通文字默认匹配 title 与 node_file_name。body、subtitle、path、Resources、Annotation body、Trash、attachment extraction/OCR 默认关闭，只有显式打开才参与。没有普通 needle 且没有 structured condition 时，此 surface 是 browse mode，不执行 Search Query。
 
-**文件列表筛选**只在已经选定的逻辑列表范围内运行。默认范围是当前 D3 parent 的直接子项，不递归，只包含 live Node；默认不读取正文、Annotation 正文、Trash、附件提取文本或 OCR。界面可以明确开启递归子树或 Resource 搜索；这些选项必须编译成明确的 Query 范围和数据源，并分别取得披露权限。此入口中，空输入表示“浏览当前列表范围”，绝不是一次空字符串的全 Workspace 搜索。
+Quick Open 默认搜索 selected Workspace/root 下获权的 live Node，并启用 title、subtitle、node_file_name。body 与 path 默认关闭。Resources 控件会加入 Resource domain 与 resource_file_name。没有 needle 且没有 structured condition 时，Quick Open 也是 browse mode，不把空 needle 当搜索。
 
-**快速打开**默认在选定 Workspace/root 范围内搜索获权的 live managed Node，读取标题、副标题以及另行获权的文件名元数据。正文、Annotation 正文、附件提取文本、OCR 和 Trash 默认关闭。只有用户明确开启 Resource 选项时，才加入获权 Resource 以及资源名称匹配。快速打开仍然是 Query 预设，不是按文本执行身份查找。
+Global Search 默认搜索 selected Workspace/root 或明确 subtree 中的获权 live Document，并启用 title、subtitle、body。Node filename/path、Resources、attachment extraction/OCR、Annotation body 与 Trash 都必须显式开启。没有 needle 且没有 structured condition 时，Global Search 不枚举整个 Workspace；它保持未执行 draft，提交时返回 invalid_request。
 
-**全局正文搜索**默认在选定 Workspace/root 或明确子树中搜索获权的 live Document，并默认启用标题、副标题和正文。Resource、附件提取/OCR、Annotation 正文和 Trash 均为明确的可选范围。附件内容只有在真实的当前提取结果或 SearchContribution 依赖成立时才可搜索。Annotation 文本必须先通过 Annotation 的披露和读取权限，才能取得正文。提供方缺失、提取未完整、来源被隐藏或 placeholder 尚未物化时，完整搜索必须返回不可用状态，绝不能把它们当作“零命中”。
+即使没有普通 needle，只要有 structured field/source condition 就是合法搜索。快捷 source term 还会显式启用对应 source：例如 Quick Open 中的 @body:x 会开启 body，@path:x 开启 Node path，@resource-name:x 会开启 Resource domain 与 resource_file_name。对应的可视化控件修改同一 compiler input。权限或 provider 失败仍然是 Query 失败，显式 source 绝不能被静默丢弃。
 
-## 4. 匹配、Unicode、布尔组合与排序
+source applicability 是闭合的。title/subtitle/filename/path/body/@field 只适用于 Node；resource-name 只适用于 Resource。NOT 保持 child 的 domain set，AND 取交集，OR 取并集。AND 的 domain intersection 若为空，返回 source_not_applicable，而不是偶然得到零结果。这样 NOT @title:x 也不会变成“匹配所有 Resource”。
 
-本代保留既有 D7 SearchContribution 的匹配边界。内建 title/body 文本以及 D4 声明为 `normalization:"exact"` 的 text path 使用精确、区分大小写的 Unicode 标量比较；D4 声明为 `normalization:"nfc-for-compare"` 的 path 只在比较时分别对候选文本与 needle 做 NFC，不改写作者源字节。`contains` 在所选比较 basis 上执行精确子串匹配，equality 则提供既有的 exact-match 排名。系统不自动进行大小写折叠、模糊匹配、词干提取、按语言猜分词、转写或拼音搜索；未来若增加新的 comparison profile，必须通过明确且版本化的语义扩展，不能只靠界面开关改变结果。
+## 4. 匹配、Unicode、Boolean 组合与排序
 
-CJK 文本直接按照 Unicode 标量子串匹配，不依赖空白分词。RTL 只影响呈现，不改变匹配。带引号的短语表示一条精确的标量序列。普通搜索框中的文本整体作为一个字面短语处理，不会自动拆成多个词。可视化筛选的多行条件默认用 AND 连接；当既有 Query 表达式能够表示时，界面可以显式创建 OR 分组和 NOT 条件。
+当前 matching boundary 不变。内建 title/subtitle/body 与文件元数据使用各自声明的 exact comparison。D4 text path 若声明 normalization:"exact"，就执行区分大小写的精确比较；若声明 normalization:"nfc-for-compare"，只在比较时分别对 candidate 与 needle 做 NFC，不改写 source bytes。contains 在选定 comparison basis 上执行精确 substring。系统不自动 case-fold、fuzzy、stemming、tokenizer、transliteration 或 Pinyin。
 
-快捷条件模式中，相邻的基本条件表示 AND，OR、NOT 和括号遵循下一节的语法。匹配排名和角色顺序继续以本候选复制的 Query Algebra owner 正文中既有 SearchContribution 排名规则为准，界面不得私自增加模糊分值。当既有比较器完全相等时，Query 先以规范 subject key，再以所选 contribution identity 作为稳定的最终并列顺序，从而保证分页确定。一般 Query 的排序仍由作者定义，不能跟随视口中的临时顺序。
+CJK 与 RTL 都按普通 Unicode scalar 文本处理；RTL 只改变呈现。普通 plain-search mode 把整段输入当一个 literal phrase，AND、OR、NOT、colon、@、URL 语法与 parentheses 在这里都没有特殊含义。
 
-## 5. 快捷条件模式
+默认 rank 中，title exact 为 0；subtitle、Node/Resource file name 以及 contribution role=name 的 exact 为 1；alias exact 或 Node relative path exact 为 2；非 body 的 substring 为 3；body/content-only 为 4。只有已经获权的值可以进入 rank。rank 相同后先使用明确的用户 sort；再以 canonical subject key 与 contribution/source identity 做稳定 tie。UI 顺序与 locale collation 不提供隐藏排序。
 
-快捷语法必须由用户显式开启；仅仅输入冒号不会启用它。界面中的模式标记属于交互状态；解析成功后，真正的语义对象仍是编译后的 Query 条件。
+## 5. Shortcut lexer 与递归 grammar
 
-```text
+只有用户显式选择 shortcut mode 后才启动快捷解析。输入是一行 UTF-8；NUL 与换行非法。
+
+~~~text
 Shortcut mode v1
 
-plain-token        := escaped-token | quoted-value
-field-condition    := @title:value
-                    | @subtitle:value
-                    | @filename:value
-                    | @path:value
-                    | @body:value
-                    | @resource-name:value
-                    | @field(field-id[,member-path]):value
-value              := quoted-value | escaped-token
-quoted-value       := "..." with backslash escaping for quote and backslash
-boolean-expression := primary
-                    | NOT primary
-                    | primary AND primary
-                    | primary OR primary
-primary            := plain-token | field-condition | ( boolean-expression )
+shortcut-input := ws? or-expr ws?
+or-expr        := and-expr (ws1 OR ws1 and-expr)*
+and-expr       := unary-expr ((ws1 AND ws1 | adjacency) unary-expr)*
+adjacency      := ws1
+unary-expr     := NOT ws1 unary-expr | primary
+primary        := field-condition | literal-term | "(" ws? or-expr ws? ")"
+field-condition := builtin-field ":" value
+                 | field-ref ":" value
+builtin-field  := @title | @subtitle | @filename | @path | @body | @resource-name
+field-ref      := @field "(" field-id ("," member-path)? ")"
+value          := quoted-value | bare-token
+literal-term   := quoted-value | bare-token
+~~~
 
-precedence: parentheses > NOT > AND > OR
-whitespace between adjacent primary terms is AND
-a colon is syntax only inside a recognized @ operator
-unknown @ operator or invalid field/member path is a parse error
-incomplete input is a draft parse state and executes no Query
-```
+lexer 先于 grammar 执行：
 
-选择 @ 前缀是为了避免误解析普通文字。在普通模式中，title:、https://example.test、C:\\notes\\a.adoc、12:30、带引号的普通句子以及 CJK 全角标点都只是字面文本。即使已经进入快捷条件模式，也只有识别到受支持的 @ 操作符时才产生语法含义。若要在快捷模式中搜索以操作符拼写开头的文字，可以使用引号或转义开头的 @。
+- quote 外的 ASCII space/tab 分隔 token。
+- parenthesis 只有在 quote 外且未 escape 时才是结构符号。
+- colon 通常只是普通文本；只有紧跟 recognized field operator head 的那一个 colon 才具有语法意义。
+- bare token 是非空 Unicode scalar 序列，但不能含未 escape 的 space/tab/quote/parenthesis。backslash 只有在后面是 backslash、quote、parenthesis、@、colon、space 或 tab 时才作为 escape；这些 pair 解码成被 escape 的 scalar。其它位置的 backslash 是普通字面字符，因此 Windows path 不需要把每个 backslash 都改写。若输入停在一个已经开始但尚未完成的 reserved escape，则是 incomplete draft。
+- quoted-value 由 double quote 包围。内部只把 backslash+double quote 与 backslash+backslash 当 escape；其它 scalar，包括 whitespace、colon、@、CJK、RTL，都是 literal。没有 closing quote 时为 incomplete。
+- 未 escape 的 uppercase ASCII AND、OR、NOT 只有作为完整 lexer token 时才是 keyword。lowercase 形式是 literal。若要搜索大写关键字本身，使用 quote。
+- primary 开头若出现未 escape 的 @ 并匹配 recognized operator head，就解析为 source term。未知 @name: 返回 unknown_shortcut_field，不能 fallback 成 literal。escape leading @ 后，整段按 literal 处理。
+- field-id 使用准确 D4 FieldId grammar。member-path 由 1..8 个 dot-separated lowerCamel ASCII ObjectMemberSpec name 组成，每段 1..64 bytes，并必须使用 Query 同一 current Registry/Field TypeSpec 验证。label 或 localized name 不能替代。
 
-未知的 @ 操作符、未知 FieldId、不可用的 Field 定义、非法成员路径、未闭合的引号或括号、以及非法值，都必须在输入 Draft 的准确位置报告错误。界面不得退回到另一条字面 Query。未完成输入保持为可编辑 Draft，同样不执行 Query；因此解析错误不会静默变成更宽的搜索。
+优先级从低到高是 OR、AND/adjacency、递归 NOT、primary/parentheses。NOT NOT A 合法，并保留两个显式 not node；A AND B AND C 与 adjacency A B C 都是合法链。
 
-第一代内建关键字集合固定为 title、subtitle、filename、path、body、resource-name 和 field。本代刻意不提供笼统的 file 或 name 关键字，因为这会混淆不同数据域。field 必须使用稳定的 D4 FieldId；若给出成员路径，还必须用与 Query 相同的当前 Registry 进行验证。界面本地化标签和别名都不能替代稳定 ID。
+unmatched quote/parenthesis、missing operand、missing field value、未完成 @field(...)、unfinished reserved escape 或其它未完成 token 都是 draft-incomplete，不执行 Query。用户显式提交时，同一状态返回带准确 source span 的 invalid_request。语法已经完整但 field/operator/value 未知时，返回对应 parse/compile error。任何 error path 都不会执行另一条 literal Query。
 
-## 6. 可视化筛选与往返编辑
+## 6. 唯一 condition AST 与确定性 Query 编译
 
-普通输入、可视化筛选和快捷条件模式都编辑同一份条件模型。能被便利语法表示的 Query 条件，应当可以在可视化条件和快捷文本之间无损往返；仅调整筛选项的显示顺序不能改变语义。
+shortcut input 与 visual control 都生成同一份 ephemeral compiler AST：
 
-完整 Query 可能包含便利语法无法表达的条件。此类条件必须作为“高级条件”节点保留在可视化模型中；切换到快捷文本时，界面应明确说明该条件无法用快捷文本表示，绝不能把它丢掉。用户仍可打开完整 Query 编辑器修改它。保存时必须序列化完整的 canonical Query，不能只保存当前看得见的筛选项。
+~~~text
+SearchConditionAst/1 :=
+    {kind:"literal",value:text}
+  | {kind:"source_term",source:<closed source selector>,value:text}
+  | {kind:"not",child:SearchConditionAst/1}
+  | {kind:"and",children:[SearchConditionAst/1...]}
+  | {kind:"or",children:[SearchConditionAst/1...]}
+~~~
 
-键盘、指针、触摸和辅助技术都应调用同一组条件操作。焦点绑定逻辑条件 ID，而不是 DOM 下标。搜索刷新、排序或结果 epoch 重置后，旧结果行的焦点、选区和 evidence 都要失效，并把焦点返回稳定容器；不得把复用后的视觉行错误地赋给另一个对象。IME 预编辑阶段不得发起 Query，只有输入法完成确认后的文本才能更新搜索 Draft。
+这个 AST 不持久化，也不是第二查询语言权威。and/or 只把相邻同类 operator flatten，并保留 source order；NOT 不做代数抵消。visual editor 使用同样 node kind 与 source selector，因此 surface 切换不能丢条件。
 
-CJK 输入法、RTL 文本、双向文本隔离、读屏名称、移动端面板和硬件键盘路径均属于后续 D8 的交互验收义务。本批只冻结它们应当对应的语义目标和验收条件，不声称任何平台行为已经通过。
+compiler 的顺序固定：
+
+1. resolve preset、显式 scope 与 enabled sources；
+2. 按 QuerySpec/2 与 current Registry 验证全部 source/Field；
+3. 按 §3 计算每个 AST node 的 applicable subject domains；
+4. 建立 Node branch，以及启用时的 Resource scan/read/filter/project branch；
+5. 每个有效 branch 投影到同一 search-row schema：Optional<NodeRef>、Optional<ResourceRef>、display text、rank、stable source key；
+6. 多 branch 时使用 QuerySpec/2 union_all；
+7. 应用明确的 deterministic sort 与 final project。
+
+快捷/可视化子集无法表达的完整 Query condition，必须作为 opaque advanced Query condition 留在 visual editor，绝不能丢失；只能通过 full Query editor 修改。保存时始终保存 QuerySpec/2，不保存 SearchConditionAst/1。
+
+D7-SEARCH-FIXTURES.json 是 parser/visual equivalence 的 machine oracle。每个 positive fixture 的 shortcut AST 与 visual AST 在 canonical AST serialization 后必须逐字节相等，并编译成逐字节相等的 CanonicalGraph 描述。negative/incomplete fixture 不产生任何 Query。
 
 ## 7. 权限、索引状态、命中数、排名与摘要
 
-授权与最低披露必须先于任何敏感来源、Field、Contribution、附件、Annotation 或索引私有数据读取。Search 不得通过命中数量、排名缺口、摘要、补全提示或错误原因泄露隐藏对象是否存在。
+authorization 与 minimum disclosure 必须先于任何 sensitive source、Field、contribution、attachment、Annotation 或 index-private read。hidden object 不得通过 hit count、rank gap、snippet、completion 或 unavailable reason 泄露。
 
-Derived Index 只能作为候选加速器。building、partial、stale、unavailable 与“已证明完整且零结果”必须严格区分。完整搜索要求当前授权的 query_scan，并覆盖真实的正负来源范围、Registry、Contribution、提取结果和授权依赖。部分探索只能显示已经明确覆盖的范围，并持续标记为不完整；它不能签发完整 ActionEvidence，也不能把当前页冒充整个结果集。
+Derived Index 仍只做 candidate accelerator。building、partial、stale、unavailable 与 proved complete zero-result Query 分开。complete search 需要 current authorized query_scan，以及全部真实 positive/negative source、Registry、contribution、extraction 与 authorization dependencies。partial exploration 不能签发 complete ResultHandle/ActionEvidence，也不能把 current page 当作完整结果。
 
-缺失所选 Field、SearchContribution、提供方或提取数据时，应在正常披露门之后返回既有的 unavailable/reset 结果，不得退化为空 Contribution。若预算耗尽，完整结果按既有 D7 预算错误失败，不能返回前 N 条后宣称完整。取消继续使用既有明确 outcome。
+selected source/Field/SearchContribution/provider/extraction data 缺失时，在普通 disclosure gate 后返回既有 unavailable/reset result；不能 fallback 成 empty contribution。budget exhaustion 使完整结果失败，不能返回前 N 条再宣称 complete。
 
-命中总数只能从获权且完整的结果计算。索引仍在构建时，界面可以不显示数量，或显示“未知”，不得估算隐藏命中。排名只能使用已经获权的匹配值和既有 D7 比较器。
-
-摘要和高亮只能从已经获权的匹配语义文本派生。它们的标量偏移仅是该结果值内部的临时呈现坐标，不是 D3 Locator。打开命中项时，必须按照真实的 Ref、provenance 或 Locator 规则重新执行一次当前解析和读取；若结果或来源已经过期，则重新验证或重置，不能把旧显示偏移套到新字节上。
+snippet/highlight 只能从已获权的 semantic text 派生。它们的 scalar offset 只是 result-display offset，不是 Locator。打开 hit 时重新执行 fresh current resolution/read；result/source stale 时必须 reset。
 
 ## 8. 保存、重开、复制与导入
 
-保存搜索时只保存既有 canonical Query 定义，以及明确的范围、参数、稳定 D4 FieldId、所选 SearchContribution 的 contributionId/version 依赖和作者定义的排序。快捷文本本身不是持久搜索权威。设备可以为便利而记住解析器版本或上次输入文字，但这些状态可丢弃，且不得进入 DynamicBlock、DefinitionTransfer、结果缓存或 ActionEvidence。
+新的 current saved search 使用 QuerySpec/2。saved definition 记录 explicit scope、parameters、stable FieldId、SearchContribution contributionId/version dependency 与作者 ordering。shortcut text、parser cursor、source popover、recent history、device direction 都只是 interaction state。
 
-重开时先按保存时记录的作者 schema 解码 Query，再对当前 definition、Registry、Contribution 和权限重新资格化。Field 被删除或类型不兼容时，遵循 Registry 的迁移/不可用规则；SearchContribution 被移除或版本变化时，遵循 D10 激活依赖规则；权限变化会重置当前结果。改名或移动只改变当前文件名/路径值，不会按文本改变稳定内容身份。
+reopen 先按 recorded QuerySpec version 分派，再做 current qualification。QuerySpec/1 保持准确旧语法，永远不按 /2 重新解释。Field deletion/type change、contribution removal/version change、permission change、FileBinding change 都走各自真实 Registry/currentness reset。
 
-复制、fork 或导入搜索定义时，对 canonical Query payload 使用既有 D7 Definition Transfer。typed Ref 与 DefinitionAddress root 按 D3 规则映射；FieldId 与 SearchContribution 的稳定身份继续作为语义依赖，不能从显示标签猜测。未知 payload 不会自动转换成新搜索语法。旧结果行、摘要和 evidence 也不会被复制成当前权限。
+Definition Transfer 按版本对应 Query schema 映射 typed Ref/DefinitionAddress slot。D9 exact query_json copy/export/import 保留 recorded version 与 bytes。filename/path string 永远不会变成 DefinitionAddress 或 identity。
 
-## 9. 列表搜索、全文搜索与 saved Query 的结果等价
+## 9. 跨 surface 与跨 device 等价
 
-当文件列表、全局搜索和 saved Query 使用逐字节等价的 canonical 条件、范围、Contribution 集、排序和当前依赖 cut 时，它们必须具有相同的 D7 结果语义。不同界面的分页或虚拟化不能改变成员集合和顺序。
+同一 QuerySpec/2 bytes、parameters、scope 与 current dependency cut，在 File List、Quick Open、Global Search 和 saved Query 上必须得到相同 Query membership/order semantics。不同 surface 可以提供不同 preset control，但只要某个 control 可用，就必须映射到上述同一 source/AST 规则。
 
-能力差异必须明确呈现。如果某个界面无法取得所需提供方、完整范围、安全摘要、双向文本交互或辅助技术导航，就应把相应能力标为不可用或不完整，而不是偷偷执行另一条 Query。跨设备的一致性要求是 canonical Query 与已资格化依赖的语义一致，不要求像素布局一致。
+keyboard、pointer、touch 与 assistive-technology operation 调用同一个 condition model。focus 绑定 logical condition/result identity，而不是 DOM position。IME preedit 不执行 Query。CJK/RTL input、bidi isolation、screen-reader label、mobile sheet、hardware keyboard 仍是 D8 implementation obligation；本 D7 design 不声称已经实测。
 
-## 10. SEARCH-01–08 验收义务
+## 10. SEARCH-01–08 验收
 
-| ID | D7 规范闭合与后续 D8 验收 |
+| ID | 当前设计义务 |
 | --- | --- |
-| SEARCH-01 | 文件列表筛选、快速打开和全局正文搜索使用 §3 的范围；空输入浏览与显式搜索分开；递归、Resource、Annotation、Trash、正文及附件/OCR 范围都必须明确选择。 |
-| SEARCH-02 | 标题、副标题、文件名、路径、资源名和逻辑层级彼此分域；无标题不得用文件名补造；显示值相同的对象仍保留不同 Ref；改名/移动使旧结果资格失效，但不按文字改变身份。 |
-| SEARCH-03 | 当前匹配按 §4 保留 exact 与 `nfc-for-compare` 两种比较 basis：二者都区分大小写，substring/equality 只使用该字段声明的 Unicode 标量比较规则，并且比较不会改写 source bytes；CJK 与 RTL 的结果语义保持确定，AND/OR/NOT 必须显式；不声称模糊、分词、拼音或词干能力；未来未支持模式不能静默执行。 |
-| SEARCH-04 | 快捷模式必须显式开启，并采用 §5 的 @ 操作符、引号、转义、优先级和错误规则；普通冒号文本、URL、Windows 盘符和 title: 保持字面含义；非法或未完成快捷输入不执行替代 Query。 |
-| SEARCH-05 | 可视化条件与快捷条件编辑同一模型；无法表达的高级条件必须保留；焦点、键盘、触摸、辅助技术、IME、CJK 和 RTL 语义按 §6 固定，平台证据留给后续 D8。 |
-| SEARCH-06 | 权限先于敏感读取；隐藏命中数、排名和摘要不得泄露；索引构建中、部分、过期、不可用与完整零结果分开；Contribution/提供方缺失和预算耗尽有明确不可用或错误结果；普通打开、编辑和保存不受无关完整搜索证明阻断。 |
-| SEARCH-07 | 保存、重开、复制和导入持久化 canonical Query 与稳定语义依赖，而不是设备 UI 状态；Field、Contribution、版本或权限变化会重新资格化或重置；旧结果不会获得新的当前资格。 |
-| SEARCH-08 | 打开命中项时重新执行当前获权的来源解析；摘要/高亮偏移不是 Locator；相同 canonical 条件在列表、全文搜索和 saved Query 中产生相同成员和顺序，同时允许能力差异明确呈现。 |
+| SEARCH-01 | File List、Quick Open、Global Search 使用 §3 的 preset scope 与 empty-input behavior；recursive、Resources、Annotation、Trash、body、attachment/OCR 都必须显式。 |
+| SEARCH-02 | title/subtitle/Node filename/Node path/Resource filename/hierarchy 分域；QuerySpec/2 提供真实 producer；titleless 不补 title；rename/move 通过真实 dependency reset，但不按 text 改 identity。 |
+| SEARCH-03 | exact 与 nfc-for-compare 按 §4 分开；比较区分大小写、基于 Unicode scalar 且 deterministic；不声称 fuzzy/tokenizer/Pinyin/stemming。 |
+| SEARCH-04 | shortcut mode 必须显式，完整 lexer/grammar 见 §5；plain mode 中普通 title:、URL、drive colon 与 prose 都是 literal；shortcut error/incomplete draft 不执行 fallback Query。 |
+| SEARCH-05 | visual 与 shortcut 生成同一 SearchConditionAst/1 和 §6 CanonicalGraph；advanced condition 保留不丢；D8 platform interaction 继续等待后续 evidence。 |
+| SEARCH-06 | permission 先于 sensitive read；hidden count/rank/snippet 不泄露；index state 与 complete zero 分开；missing source/provider 与 budget 有明确失败；ordinary open/edit/save 独立。 |
+| SEARCH-07 | save/reopen/copy/import 持久化 versioned canonical Query，不保存 UI state；/1 与 /2 分开 dispatch；Field/contribution/FileBinding/permission 变化重新资格化或 reset；old result evidence 不续权。 |
+| SEARCH-08 | hit 打开时 fresh current authorized resolve；snippet offset 不是 Locator；相同 QuerySpec/2 semantics 跨 surface/device 保持一致，只允许显式 unavailable capability 差异。 |
 
-这些都是设计验收义务。本批不宣称任何产品搜索、平台交互、分词器、提供方、辅助技术、性能或跨设备测试已经通过。
+以上都是设计义务。Product Search、GUI/IME/AT、provider、performance 与跨设备执行继续 UNRUN。

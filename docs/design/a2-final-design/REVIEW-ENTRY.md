@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](REVIEW-ENTRY.zh-CN.md)
 # A2 D1-D7 author-candidate review entry — D7 integration and navigation repair
 
-Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All earlier bounded semantic closures retain only their recorded scopes. `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` are author-repaired navigation metadata and remain pending independent review at the exact final stop SHA; neither is self-closed. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 1. Fixed objects and author chronology
 
@@ -17,7 +17,7 @@ Fixed historical input S: 7e18168dad3e6d120fce0dd607dc10fa7894e252.
 Protected inputs blob: 787d03c31a55496f81ed03fd54a6fdfff50a2ad4.
 Candidate branch: docs/a2-final-design-integration.
 
-D6 finding origin is fixed829 `829efce6aacbe944714e093c98065b01d50b2593`. The first non-author repair review was fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`. The four-residual author repair started at `32cfb9c387deddb12fb021a44147df0d7ffab322`; the later narrow follow-up passed through `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`. The next independent review fixed the completed candidate at `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`. The previous two-P2 repair started there. The semantic closure review fixed 5e21e9f00e1fa4e893f2544211133adbeac35ae0 and closed the semantic P2; the latest fixed454e navigation review passed the four prior wording residuals and opened two navigation-only P2 items. This D7 author integration starts from fixed454e and repairs those two items without self-closing them.
+D6 finding origin is fixed829 `829efce6aacbe944714e093c98065b01d50b2593`. The first non-author repair review was fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`. The four-residual author repair started at `32cfb9c387deddb12fb021a44147df0d7ffab322`; the later narrow follow-up passed through `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`. The next independent review fixed the completed candidate at `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`. The previous two-P2 repair started there. The semantic closure review fixed 5e21e9f00e1fa4e893f2544211133adbeac35ae0 and closed the semantic P2. fixed454e then opened two navigation-only P2 items. The later full D7 review fixed at 2f89a55cb1f924a47281f59e6419fff7c0c206ed independently closed both navigation items and the document-quality coordination item, while opening four D7 findings. This repair batch starts exactly from fixed2f89 and addresses only those four findings without self-closing them.
 
 The next non-author reviewer must bind the exact final stop SHA recorded in PR metadata/handoff. Do not follow a moving branch.
 
@@ -42,11 +42,13 @@ All 47 legacy `retain-or-named-current-successor` groups are re-audited by oblig
 
 Three adjacent fixed-S cross-owner groups with the same old-version ambiguity are also split so old wire/Policy numbers are historical while their cross-owner business obligations remain explicit. This does not reopen the already-closed Key3/Registry or D4/D5 findings.
 
-### Navigation P2
+### fixed2f89 independent review state
 
-The fixed454e non-author navigation review passed the four earlier wording residuals and left two navigation-only P2 findings: `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01`. This author candidate repairs both. The first now has one role-neutral pending state and one detailed provenance location in D7-SOURCE-MAP.json while historical sourceEvidence remains unchanged. The second rewrites the old fixed-5c present-tense sentence as historical chronology and records the later fixed446 bounded independent closure without converting it into global acceptance.
+At fixed2f89 the independent reviewer CLOSED `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` in their bounded scopes. They are not current pending findings.
 
-Both findings remain pending independent review at the actual final stop SHA. Historical chronology is fixed829 origin → fixed01cc earlier review → fixed32cf/d1ab repairs → fixed1fc4 review → fixed5e21 semantic review → fixed9c3b navigation review → fixed454e navigation review. Earlier verdicts describe those fixed objects only.
+The same review opened four D7 findings: `A2-D7-2F89-P1-01` (Registry 34/8 versus 34/13 qualification), `A2-D7-2F89-P1-02` (missing Query producers for search metadata), `A2-D7-2F89-P2-01` (shortcut grammar/preset closure), and `A2-D7-2F89-P2-02` (source-map fidelity). This author candidate contains repairs for all four, but their status remains OPEN pending independent fixed-SHA review.
+
+Historical chronology is fixed829 origin → fixed01cc earlier review → fixed32cf/d1ab repairs → fixed1fc4 review → fixed5e21 semantic review → fixed9c3b/fixed454e navigation reviews → fixed2f89 full D7 review. Earlier verdicts describe only their fixed objects.
 
 ## 4. Evidence and nonclaims
 

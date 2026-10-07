@@ -16,7 +16,8 @@ translation_status: source
 
 ```text
 Query outer: wireVersion 2
-QuerySpec: version 1
+QuerySpec current: version 2
+QuerySpec retained decoder: version 1
 ViewSpec: version 1
 Action prepare: D7ActionPrepareRequest/3
 Action author: D7ActionSpec/2
@@ -171,11 +172,11 @@ D7 integer/decimal 继续使用既有 Value/CEL profile 的精确规范文本 de
 
 ## 9. Query 执行闭合
 
-Query 外层仍为 wireVersion2，完整的 QuerySpec/1 作者语法位于 d7/owners/query-algebra。DAG 验证、canonical ordinal、CEL 类型检查、feature gate、来源资格、terminal schema、结果编码、分页/订阅重置和完整错误顺序共同构成一条闭合执行路径。未知 feature 或不可用 dependency 不能被转换成空 bag。
+Query outer 仍为 wireVersion2。QuerySpec/2 是 current author schema，由 retained QuerySpec/1 grammar 加上 D7-QUERY-V2 中准确的 versioned additions 构成：current Optional title/subtitle、获权 Node filename/path、获权 Resource filename 以及 union_all。QuerySpec/1 继续作为单独的准确 decoder，绝不原地扩宽。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 仍是一条闭合路径。unknown feature 或 unavailable dependency 不能变成 empty bag。
 
 ## 10. 搜索 schema 边界
 
-Search 不新增持久 Query 或 View schema。普通搜索、可视化条件和可选快捷语法都会编译成普通 QuerySpec/1，并绑定当前 SearchContribution 依赖。保存时只保存 canonical Query definition。快捷解析器版本、文本光标、已展开筛选面板、最近搜索、折叠状态和设备方向都属于交互状态，不进入 DynamicBlock 或 saved Query。
+Search 不新增第二持久 Search 或 View schema。普通搜索、可视化条件与可选快捷语法都确定性编译到 QuerySpec/2，并绑定 current SearchContribution dependency。D7-SEARCH 的 ephemeral SearchConditionAst/1 只作为 compiler IR，绝不持久化。保存时只保存 canonical Query definition。shortcut parser version、text cursor、open filter popover、recent query、expansion state 与 device direction 都是 interaction state，不进入 DynamicBlock 或 saved Query。
 
 详细语法与 SEARCH-01 至 SEARCH-08 验收义务位于 D7-SEARCH。
 

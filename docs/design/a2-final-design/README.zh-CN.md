@@ -25,8 +25,8 @@ translation_status: source
 | D3 | 已整合为 current 作者候选；另一个 fixed-a62 非作者窄复核已 CLOSED 两个有界 D3 P1 finding；这不是 global A2 acceptance |
 | D4 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D5 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
-| D6 | 最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。`A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据已由作者修订，但仍等待实际 final stop SHA 的独立复核；作者不自行关闭。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。 |
-| D7 | 已整合完整作者候选：byte-retained coordinated owner 正文、fixed97 current overlay、SEARCH-01–08、machine source/case map 与 Registry；等待 fixed-SHA 独立复核 |
+| D6 | fixed2f89 已独立 CLOSED fixed454e 之后剩余的两项 navigation finding；既有 D6 bounded semantic closure 仍只保留各自记录范围。 |
+| D7 | fixed2f89 完整复核 = REVISE（P0=0/P1=2/P2=2）；当前作者修复已处理四项 finding，仍等待 fixed-SHA 独立复核 |
 | D8 | 完整模块仍 TODO；D7 只消费真实 editor/direction/accessibility/RTL 交叉 |
 | D9 | 完整模块仍 TODO；D7 只消费 coordinated binding 与直接 construction/import/export 交叉 |
 | D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
@@ -56,4 +56,4 @@ D8–D10 目前还没有完整 A2 current definition；D7 消费的 direct produ
 
 ## 5. 接受边界
 
-最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。`A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据已由作者修订，但仍等待实际 final stop SHA 的独立复核；作者不自行关闭。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。

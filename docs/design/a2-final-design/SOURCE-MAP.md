@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All prior bounded semantic closures retain only their recorded scopes. This D7 author batch repairs `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` as navigation metadata, but neither is self-closed; both await independent review at the actual final stop SHA. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 
 ## 12. D4/D5 audit-map review lineage
@@ -126,7 +126,7 @@ D4-SOURCE-MAP.json now maps all 906 fixed-S D4 nonblank lines and D5-SOURCE-MAP.
 
 The old fixed-S D5 Inline-only/no-span/no-block/no-header restriction is explicitly named-superseded by current D5 §0/§3/§19.1 and the current D2 full native-table surface. Six real D10 bilingual direct files are source-qualified as direct_partial_not_full_D10; raw Proof2/Key2/wire12/PAB3 references remain historical/original-owner source, while fresh current dispatch remains with the actual A2 successor owner.
 
-Latest independent navigation review: fixed454e (`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`), REVISE with 0 open P1 / 2 open P2 navigation findings. All prior bounded semantic closures retain only their recorded scopes. This D7 author batch repairs `A2-D6-01CC-P2-01` and `A2-NAV-454E-P2-01` as navigation metadata, but neither is self-closed; both await independent review at the actual final stop SHA. D7 is now a complete author candidate including SEARCH-01-08. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 13. D7 integration
 
@@ -136,6 +136,12 @@ D7-SEARCH.md integrates SEARCH-01 through SEARCH-08 without creating a second se
 
 D7-SOURCE-MAP.json records fixed/current blobs, FULL/PARTIAL/UNRUN evidence, twenty integration obligations, all eight SEARCH obligations, scenario/non-fallback ordinals, A2-01–57, Facet/People/ICS groups, Chart §15, terminology Registry coverage and the two navigation findings. D8-D10 remain partial only at true D7 producer/consumer intersections; their full modules remain later.
 
-The fixed454e non-author navigation review passed the four earlier residuals and opened A2-D6-01CC-P2-01 plus A2-NAV-454E-P2-01. This author candidate repairs both navigation items but does not self-close them. A2-D6-01CC-P2-01 now uses one role-neutral pending status and one detail reference in D7-SOURCE-MAP.json; historical sourceEvidence is unchanged. A2-NAV-454E-P2-01 is repaired by the historical fixed-5c/fixed446 wording in §8 above. Both await independent review of the actual final stop SHA.
+fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. The current author repair instead addresses the four D7 findings from that full review. Their detailed OPEN/pending-independent-review status is in D7-SOURCE-MAP.json; none is self-closed.
 
 Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior remains UNRUN.
+
+## 14. fixed2f89 D7 repair
+
+Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+
+The repair introduces D7-QUERY-V2 for the versioned QuerySpec/2 metadata sources and union_all, D7-REGISTRY-QUALIFICATION for fixed-S 34/8 versus parent-current 34/13 binding-by-binding qualification, a closed shortcut grammar plus D7-SEARCH-FIXTURES.json, and immutable-source D7 source-map rows/Chart groups. D7-REGISTRY.json remains byte-identical to the parent-current Registry; snapshots and inputs remain protected.

@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D7 作者候选复核入口——D7 整合与导航修订
 
-最新独立导航复核固定在 fixed454e（`454eaa7ff51b820fc47dfd4735a7c2ac830b1bee`），结论为 REVISE：开放 P1 为 0，开放 P2 为 2，且两项都只涉及导航。此前各项有界语义关闭只保留各自记录范围。`A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01` 的导航元数据已由作者修订，但仍等待实际 final stop SHA 的独立复核；作者不自行关闭。D7 现为包含 SEARCH-01–08 的完整作者候选。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -16,7 +16,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 受保护 inputs blob：787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 候选 branch：docs/a2-final-design-integration。
 
-D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第一次非作者修订复核是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。四残余作者修订从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续窄修经过 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。下一轮独立复核把完成候选固定在 `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。此前两项 P2 修订从该 head 开始。语义关闭复核固定 5e21e9f00e1fa4e893f2544211133adbeac35ae0 并关闭语义 P2；最新 fixed454e 导航复核已通过此前四处残余措辞，并新开两项 navigation-only P2。本 D7 作者整合从 fixed454e 开始修订这两项，但不自行关闭。
+D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第一次非作者修订复核是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。四残余作者修订从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续窄修经过 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。下一轮独立复核把完成候选固定在 `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。此前两项 P2 修订从该 head 开始。语义关闭复核固定 5e21e9f00e1fa4e893f2544211133adbeac35ae0 并关闭语义 P2。fixed454e 随后新开两项 navigation-only P2。之后 fixed2f89 完整 D7 独立复核在有界范围关闭这两项 navigation finding 与 document-quality coordination finding，同时新开四项 D7 finding。本修复批精确从 fixed2f89 开始，只处理这四项，作者不自行关闭。
 
 下一位非作者复核者必须绑定 PR metadata/交接记录的实际 final stop SHA，不得追 moving branch。
 
@@ -41,11 +41,13 @@ D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第�
 
 另有 3 个紧邻 fixed-S cross-owner group 存在相同旧版本歧义，也按同一原则拆分：旧 wire/Policy 数字只作历史限定，跨 owner 的真实业务义务继续明确保留。本次不重开已关闭的 Key3/Registry 或 D4/D5 findings。
 
-### Navigation P2
+### fixed2f89 独立复核状态
 
-fixed454e 非作者导航复核通过此前四项残余措辞，并留下两项只涉及导航的 P2：`A2-D6-01CC-P2-01` 与 `A2-NAV-454E-P2-01`。本作者候选已经修订两项。前者现在只有一个角色中性的待复核状态，详细 provenance 统一放在 D7-SOURCE-MAP.json，历史 sourceEvidence 不变。后者把 fixed-5c 的旧现实时态改成历史叙述，并记录后续 fixed446 的有界独立关闭，但不会把它升级成全局接受。
+fixed2f89 独立复核已在有界范围 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`；它们不再是当前 pending finding。
 
-两项 finding 都继续等待实际 final stop SHA 的独立复核。历史时间线为 fixed829 来源 → fixed01cc 较早复核 → fixed32cf/d1ab 修订 → fixed1fc4 复核 → fixed5e21 语义复核 → fixed9c3b 导航复核 → fixed454e 导航复核。较早裁决只描述各自 fixed object。
+同一复核新开四项 D7 finding：`A2-D7-2F89-P1-01`（Registry 34/8 与 34/13 分层资格）、`A2-D7-2F89-P1-02`（搜索元数据缺 Query producer）、`A2-D7-2F89-P2-01`（shortcut grammar/preset 未闭合）、`A2-D7-2F89-P2-02`（source-map fidelity）。当前作者候选已经为四项提供修复，但状态仍是 OPEN，等待 fixed-SHA 独立复核。
+
+历史时间线为 fixed829 来源 → fixed01cc 较早复核 → fixed32cf/d1ab 修订 → fixed1fc4 复核 → fixed5e21 语义复核 → fixed9c3b/fixed454e 导航复核 → fixed2f89 完整 D7 复核。较早裁决只描述各自 fixed object。
 
 ## 4. 证据与非声明边界
 
