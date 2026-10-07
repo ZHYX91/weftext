@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D9 作者候选复核入口——D9 完整整合
 
-后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 D7 残余；此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。D8 继续是已保全、未接受的作者候选，其独立复核保持单独 pending。本 D9 作者批精确从 `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，完整整合八份 D9 fixed source、current bilingual owner、Mandatory §14、current D7 D9-binding/PAB consumer 与 final-FC D9 successor，并把 D9 统一保持在 `author-resolved-pending-independent-review`。不自行接受 D8、D9 或 global A2。完整 D10 与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
+后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 D7 残余；此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。之后 fixed5eca 的 D8 非作者复审独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02，保留 D8-C98B-P1-03、D8-C98B-P2-01 为 OPEN，并新增 D8-5ECA-P2-01 OPEN；本继任作者候选只修这三项残余。本 D9 作者批精确从 `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，完整整合八份 D9 fixed source、current bilingual owner、Mandatory §14、current D7 D9-binding/PAB consumer 与 final-FC D9 successor；D9 与 ROOT-D9-ZH-P2-01 均仍只到 `author-resolved-pending-independent-review`。不自行接受 D8、D9 或 global A2。完整 D10 与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -54,18 +54,18 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是已保全、未接受候选，等待自己的 exact-final-SHA 独立复核。D9 现在从 exact 5eca 形成完整作者候选：八份 fixed-S FULL、current D9 owner 中英 FULL、Mandatory §14 FULL、D7 D9-binding/PAB consumer FULL、D9 相关 final-FC successor FULL；fresh author currentize 到 wire13/PAB4/Effect3，export/publication 到 Plan3/Receipt3，并闭合可见 native-table selector 与 current Value4/R6 Annotation consumer 设计边界。所有 D9 结果只为 author-resolved-pending-independent-review。完整 D10 仍留后续。
+D7 已在 fixed26be 的 D7 范围独立 PASS。D8 在 fixed5eca 已独立 CLOSED P1-01/P1-02/P2-02；本继任作者只修残余 P1-03/P2-01 与 D8-5ECA-P2-01，三项继续等待 exact-final-SHA 独立复核。D9 从 exact 5eca 形成完整作者候选：八份 fixed-S FULL、current D9 owner 中英 FULL、Mandatory §14 FULL、D7 D9-binding/PAB consumer FULL、D9 相关 final-FC successor FULL；fresh author currentize 到 wire13/PAB4/Effect3，export/publication 到 Plan3/Receipt3，并保留可见 native-table selector 与 current Value4/R6 Annotation consumer 设计边界。本轮自然中文质量修订移除了后加的填充说明，但未改变 D9 英文规范语义。所有 D9 结果仍只为 author-resolved-pending-independent-review。完整 D10 仍留后续。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
 
 
 ## D8 复核目标
 
-下一位非作者只绑定 PR #5 的最终 stop SHA。D8 继续等待独立复核；不得因为作者修订或 CI 变绿就推导语义接受。重点核验 `D8-SOURCE-MAP.json`、`D8-ACCEPTANCE.json`、current PB3/Value4/Snapshot3 边界、SEARCH-01–08 interaction、current D7 View hard answer/builder/旧入口路由、RTL/AT/性能义务，以及 S49/inputs 零变。必须重新核作者给出的 54/54 section navigation、760/760 FC 分类（direct 167 / upstream 142 / 保留 owner 451；110 行 applicability 作者改动）、acceptance 213/213 唯一性/极性与十个 `VIEW-BLD-01..10` fixture；它们都只是作者 resolved，复核者可以修订。D9/D10 完整模块与 global A2 不属于本轮 D8 接受范围。
+下一位非作者只绑定 PR #5 的最终 stop SHA，对 D8-C98B-P1-03、D8-C98B-P2-01、D8-5ECA-P2-01 做增量复审；不得重开 fixed5eca 已关闭项或未变化的 D1–D7/D8 已接受范围，也不得因为作者修订或 CI 变绿就推导语义接受。重点核验十个 `VIEW-BLD-01..10` 中静态定义保存门与既有 D7 §7 运行期 View 门的分离；四个 SourceTransform 普通保存/恢复同族项以及更新后的 760 行计数（direct 167 / upstream 146 / 保留 owner 447；114 行作者 applicability 改动）；54/54 section navigation 且宽泛整文件 target 为 0；以及 213/213 唯一 ID 的 D8-ACCEPTANCE JSON/投影确定性 guard。S49/inputs 必须保持零变。D9/D10 完整模块与 global A2 不属于本轮 D8 增量接受范围。
 
 ## D9 复核目标
 
-下一位非作者 reviewer 必须绑定 PR #5 的 exact final stop SHA，对 D9 做新的完整独立复核。D9 只是完整作者候选；source coverage、machine map、count、hash 和绿色文档 CI 都不是 acceptance。
+下一位非作者 reviewer 必须绑定 PR #5 的 exact final stop SHA，对 D9 做新的完整独立复核。D9 只是完整作者候选；source coverage、machine map、count、hash 和绿色文档 CI 都不是 acceptance。ROOT-D9-ZH-P2-01 也必须在这次 D9 复核中独立检查：十份受影响的中文公开文件应是自然、完整的翻译，保留必要协议字面量并维持中英文结构一致，不能再依赖填充说明绕过 checker。该 D9 复核不接受单独的 D8 残余范围。
 
 必须核验：
 
