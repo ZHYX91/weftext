@@ -738,7 +738,7 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "60ead89ec1bdd2d174ce1cbb72e8b019ead7bc76",
+        "blob": "eaa9a4d2e1e1e6fb6244c1a6a6ad56245674288f",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2223",
@@ -748,7 +748,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "422c4e992483a2c01b33423caa6448bff4937e2b",
+        "blob": "3eec4a89ea0eb14d593d5dadb27de6198cc121e6",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2327",
@@ -760,7 +760,7 @@
     "spec": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-        "blob": "d87367aff8a23bbae4b727decb112c90a78f0bbd",
+        "blob": "12d748ee58581813af6422ce9be11b65d655382c",
         "ranges": [
           "§8.3 L439–463",
           "§8.4 L464–471",
@@ -771,7 +771,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-        "blob": "c156c460eddcf58331a4b602dc6c5ad48f95717a",
+        "blob": "4d8170069d13354215845ee05046e5826c9b74f6",
         "ranges": [
           "§8.3 L449–473",
           "§8.4 L474–481",
@@ -804,7 +804,7 @@
       "spec": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-          "blob": "d87367aff8a23bbae4b727decb112c90a78f0bbd",
+          "blob": "12d748ee58581813af6422ce9be11b65d655382c",
           "ranges": [
             "§9.1–9.12 L476–674",
             "§16 L940–949",
@@ -814,7 +814,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-          "blob": "c156c460eddcf58331a4b602dc6c5ad48f95717a",
+          "blob": "4d8170069d13354215845ee05046e5826c9b74f6",
           "ranges": [
             "§9.1–9.12 L486–695",
             "§16 L1002–1011",
@@ -826,7 +826,7 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "60ead89ec1bdd2d174ce1cbb72e8b019ead7bc76",
+          "blob": "eaa9a4d2e1e1e6fb6244c1a6a6ad56245674288f",
           "ranges": [
             "§6.6 L2261–2572",
             "§7 L2573–2733"
@@ -835,7 +835,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "422c4e992483a2c01b33423caa6448bff4937e2b",
+          "blob": "3eec4a89ea0eb14d593d5dadb27de6198cc121e6",
           "ranges": [
             "§6.6 L2365–2676",
             "§7 L2677–2840"
@@ -862,7 +862,7 @@
       "mandatory15": "FULL-D9-applicable L1042–1141",
       "currentCarrier": "final FC SCHEMAS §6.6 D9ViewRenderBinding/1",
       "target": "D9.md §12a; D9-SCHEMAS.md §16b; D9-IMPACT.md §8a; D9-ACCEPTANCE M15-01..10",
-      "rule": "D7 runtime validation precedes Plan4. First D9 chart profile is finite metric/bar/line/scatter/pie/heatmap with named DOCX/XLSX/PDF/SVG/PNG/print profiles; deferred/unsupported remains renderer_unavailable without data-row substitution."
+      "rule": "D7 closed/static ViewSpec decoding remains first. Deferred tree/treemap/sunburst/Gantt/boxplot/quantile fail with unsupported_layout before D9. For a valid D7 current layout, the finite D9 chart route renders only metric/bar/line/scatter/pie/heatmap; valid non-six layouts such as network, or missing named backends/profiles for the six charts, return renderer_unavailable. No data-row substitution."
     },
     "predecessorRangeCorrection": {
       "finding": "D9-BAF-P2-02",
@@ -950,7 +950,7 @@
   },
   "acceptanceAuthority": {
     "json": "D9-ACCEPTANCE.json",
-    "blob": "9b2e45858ce2e753858abb285d21d02b5e3f30b2",
+    "blob": "e5b6c1bcd0a0c34f01866efacb2a8680023d0b7c",
     "rows": 97,
     "uniqueIds": 97
   },
@@ -979,7 +979,7 @@
     "mandatory15D9Applicable": "FULL",
     "finalFCExportSuccessorENZH": "FULL-current-successor"
   },
-  "evidenceBoundary": "author design/source mapping only; three fixed-baf findings are author-resolved-pending-independent-review; ROOT-D9-ZH remains separately pending independent review; product/worker/Office/OS/performance/deployment UNRUN",
+  "evidenceBoundary": "author design/source mapping only; D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10; product/worker/Office/OS/performance/deployment UNRUN",
   "mandatory15": {
     "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
     "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
@@ -993,6 +993,6 @@
     "D9-BAF-P1-01": "author-resolved-pending-independent-review: closed Annotation content carrier and Plan4 path added",
     "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite current View export route + Mandatory15 consumers added",
     "D9-BAF-P2-02": "author-resolved-pending-independent-review: predecessor/current FC ranges corrected and split",
-    "ROOT-D9-ZH-P2-01": "separate ff10 candidate under independent review; not self-closed here"
+    "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; this closure is not reopened by the current D9-BAF repair. New Chinese text introduced by the three-finding repair remains part of that repair's exact-final-SHA independent review."
   }
 }
