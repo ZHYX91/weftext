@@ -300,9 +300,9 @@ View validation error family保持 D7 owner。
 
 View builder **没有可携带 schema**。它的工作值只是完整严格解码的 `ViewSpec/1`，再加仅存于设备会话的选择、焦点与验证状态。Saved Query/View/DynamicBlock occurrence 继续属于现任 D2/D7 SavedDefinition 作者数据；`DynamicBlock/1` 仍只保存真实 Query/View 调用与声明绑定。builder 控件是否可用、高级路径选择、验证消息、打开的标签页、选区、脏状态或设备布局都不得序列化进 ViewSpec/DynamicBlock，也不得写入隐藏 sidecar。
 
-定义保存校验不是新的 wire 或 schema。它只消费既有 D7 严格解码器、现任定义 owner/revision/authorization、现任 terminal schema 与静态 layout/binding/type/option 规则，不消费 ResultHandle。既有 D7 View §7 runtime validator 仍是唯一完整结果校验器，只在 render/export 时调用；其中 value/key/order/domain/hierarchy/budget/delivery 错误不得改写或使已保存定义失效。
+定义保存校验不是新的 wire 或 schema。它只消费既有 D7 严格解码器、现任定义 owner/revision/authorization、现任 terminal schema 与静态 layout/binding/type/option 规则，不消费 ResultHandle。现任 D7 decoder 的封闭 layout/member 集合本身就是这个静态门的一部分：tree/treemap/sunburst、Gantt、boxplot/quantile 仍不属于 ViewSpec/1，必须返回 `unsupported_layout`，不能变成 advanced member。只有通过静态门的定义才进入既有 D7 View §7 runtime validator；该 validator 仍是唯一完整结果校验器，只在 render/export 时调用，其中 value/key/order/domain/budget/delivery 错误不得改写或使已保存的合法定义失效。
 
-basic builder 只能从 D7 已拥有的 closed member 构造完整新 `ViewSpec/1`；不得合成 partial ViewSpec、丢弃“控件未知但 current 合法”的 member，也不得把 future/unknown version coercion 成 version 1。
+basic builder 只能从 D7 已拥有的 closed member 构造完整新 `ViewSpec/1`；不得合成 partial ViewSpec、丢弃“控件未知但 current 合法”的 member，不得把延期/unknown layout 强行加入现任 union，也不得把 future/unknown version coercion 成 version 1。exact raw Source 与真正 historical/future record 只按真实 owner/decoder 保全；这种保全不等于 current ViewSpec save。
 
 ## 13. Closed editor error family
 
