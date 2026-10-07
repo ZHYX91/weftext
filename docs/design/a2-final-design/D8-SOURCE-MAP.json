@@ -1,7 +1,7 @@
 {
   "format": "weftext.a2-d8-source-map",
   "version": 1,
-  "status": "author-resolved-pending-independent",
+  "status": "preserved D8 author candidate; bilingual-sync repaired in narrow successor batch; pending independent review; source-map navigation/semantic audit OPEN",
   "fixedS": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "candidateStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
   "baseSha": "97f4734f82a760cb6716c8122b84494da2b61164",
@@ -10254,23 +10254,23 @@
     }
   ],
   "targetBlobs": {
-    "D8.md": "de34baeb665efbe574f0efddcb0d77deea32ce3e",
-    "D8.zh-CN.md": "36668f544ab6da35bcf5e33efb8393f8959a0560",
-    "D8-INTERFACES.md": "ed5a1c2db1a9a80318270afde506ce7dd07d5743",
-    "D8-INTERFACES.zh-CN.md": "934807fde6c83f0054cff12b5b60a46a68eb324c",
-    "D8-SCHEMAS.md": "9d472246817116cce6d0542ad62d84f667ebd768",
-    "D8-SCHEMAS.zh-CN.md": "5e1dcbbac6033f0ba8e7c27826b81cc70f75a1bf",
-    "D8-DIRECTION.md": "ca3ec71e139174ccf6c8a6a31767bd7125f83046",
-    "D8-DIRECTION.zh-CN.md": "1048f738a500bdb8357602ae0fc1e52988ead586",
-    "D8-ACCEPTANCE.md": "66b33b7cc1c5ccf033db4aaf7cb9468e91a2bdde",
-    "D8-ACCEPTANCE.zh-CN.md": "9ab0ba757ef359578f19ceef598ccd4d8554900c",
+    "D8.md": "41a1c0063c19cdcb8e5b86d9c0e4c67d844039f1",
+    "D8.zh-CN.md": "076e21daa9463bd9d87c7c99a73c2da89e903d93",
+    "D8-INTERFACES.md": "08a951b5c3302521c4f9c99b198b8dd92639c326",
+    "D8-INTERFACES.zh-CN.md": "9fa838c994bca18823c8025aaf2e70d6648e0fb7",
+    "D8-SCHEMAS.md": "418e761633040aa0aa72f8463df0f375fb340892",
+    "D8-SCHEMAS.zh-CN.md": "fa1d3018c3dbefd267b482865d014fc24310e0ab",
+    "D8-DIRECTION.md": "0ccd2c36eeb1b7bd89af6c597b5940bc64f0510f",
+    "D8-DIRECTION.zh-CN.md": "dc0359821c36036ced151048db76abf91b7c6cf7",
+    "D8-ACCEPTANCE.md": "779c6e9351388f79f0618d169f9dc9f022072e78",
+    "D8-ACCEPTANCE.zh-CN.md": "fa5ad3fd1dee8645ce1d5d464c93a01a072439f7",
     "D8-ACCEPTANCE.json": "940440531bd9243bbdbda2b31c18da695dc5d035",
-    "D8-LEXICON.md": "778122a0bb0b1008fe54774bebc3bfa110461991",
-    "D8-LEXICON.zh-CN.md": "b49e8cd0486aafd684c5f5a9ee90d85350376534",
+    "D8-LEXICON.md": "bddee74b570df41e6dc75602389e007a9e4103a1",
+    "D8-LEXICON.zh-CN.md": "93c5b601b48c770a8caf2d202b506031dc236bbd",
     "D8-TERMS.json": "72f102d556e248a72f1b6bd92e92600039d6cc27",
     "D8-REGISTRY.json": "14e0cd0559a63e0c48b5da139cb3fff44047890a",
-    "D8-IMPACT.md": "326b89fedbe91fd9d665045e109f97cb092327ac",
-    "D8-IMPACT.zh-CN.md": "1f80b26e0f9d4795568e8e30341717f6d1cf83cc"
+    "D8-IMPACT.md": "a01d24cbeca4ac493ee0003228e09d933107d10b",
+    "D8-IMPACT.zh-CN.md": "44fe53be08b68e2ffc50a7dbbafea3a559e20c2e"
   },
   "evidenceBoundary": {
     "fullRead": [
@@ -10289,7 +10289,13 @@
       "D10 full A2 module review",
       "global A2 final review"
     ],
-    "productEvidence": "UNRUN"
+    "productEvidence": "UNRUN",
+    "openGaps": [
+      "50/54 fixedProseSections still use broad whole-file currentTargets",
+      "FC applicability classification not independently closed",
+      "historical-to-current dispositions not independently closed",
+      "per-obligation semantic verification not independently closed"
+    ]
   },
   "currentizedFixedCaseIds": [
     "SRC-03",
@@ -10316,5 +10322,18 @@
     "FA-14",
     "FA-15",
     "FA-17"
-  ]
+  ],
+  "bilingualSyncRepair": {
+    "startSha": "7e3f0272f112cf0b8e61ab14fb9eaf72917e754b",
+    "scope": "bilingual-document-synchronization-only",
+    "status": "author-repaired-pending-independent",
+    "sourceInventoryRegenerated": false,
+    "fixedProseSectionsChanged": false,
+    "fixedProseSectionCount": 54,
+    "broadWholeFileTargetCount": 50,
+    "mappingNavigationAudit": "OPEN",
+    "fcHistoricalPerObligationSemanticAudit": "OPEN",
+    "chapterNavigationChange": "only bilingual heading alignment; existing broad currentTargets intentionally retained for later non-author semantic/navigation repair",
+    "acceptanceMeaning": "not D8 acceptance; green documentation checks are repository consistency only"
+  }
 }

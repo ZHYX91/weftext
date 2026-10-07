@@ -5,9 +5,9 @@ translation_status: synced
 ---
 
 [简体中文](REVIEW-ENTRY.zh-CN.md)
-# A2 D1-D8 author-candidate review entry — D8 full integration
+# A2 D1-D8 author-candidate review entry — D8 bilingual synchronization repair
 
-A subsequent non-author review bound to fixed26be (`26be071d4c2075343d9ebf272e00f23769ce0d64`) concluded PASS with P0=0 / P1=0 / P2=0 and CLOSED the final `A2-D7-2F89-P2-01`. Earlier bounded closures remain bound to their original SHAs. D7 is accepted in its D7 scope. This D8 author batch starts exactly from fixed26be, is author-resolved-pending-independent, and does not self-accept D8 or global A2. D9-D10 full modules and fresh Pro/global review remain pending; product/runtime evidence is UNRUN.
+A subsequent non-author review bound to fixed26be (`26be071d4c2075343d9ebf272e00f23769ce0d64`) concluded PASS with P0=0 / P1=0 / P2=0 and CLOSED the final `A2-D7-2F89-P2-01`. Earlier bounded closures remain bound to their original SHAs. D7 is accepted in its D7 scope. The preserved D8 candidate was first pushed at `7e3f0272f112cf0b8e61ab14fb9eaf72917e754b`; this narrow successor-author batch starts exactly there and repairs bilingual document synchronization only. It does not re-run the original D8 integration, does not self-accept D8/global A2, and leaves the original FC classification, historical-to-current disposition, source-map navigation, and per-obligation semantic-review gaps OPEN. D9-D10 full modules and fresh Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 1. Fixed objects and author chronology
 
@@ -54,11 +54,11 @@ Historical chronology is fixed829 origin → fixed01cc → fixed32cf/d1ab → fi
 
 FULL for this repair is limited to the D6 source-map semantic disposition/navigation surfaces and the already-recorded fixed/current owner evidence needed to judge them. Fixed-S snapshots and `docs/design/inputs.json` are protected and unchanged.
 
-D7 is FULL and independently PASS at fixed26be in its D7 scope. D8 is now FULL as an author candidate: fixed eight D8 inputs, current D6-FA and AsciiDoc/Annotation successors, SEARCH-01–08 interaction, current View renderer/AT duties, bilingual schemas/lexicon/impact, 160-case inheritance plus current overlays, and machine/human source maps are integrated. D8 remains pending a fixed-SHA independent review. D9-D10 remain PARTIAL only at named D8 producer/consumer intersections; their complete A2 modules remain pending.
+D7 is independently PASS at fixed26be in its D7 scope. D8 remains the preserved candidate created at 7e3f. This narrow repair synchronizes the bilingual main/interfaces/schemas/direction/lexicon/impact/acceptance text and updates only directly affected status/blob metadata. It does not close the original source-map/FC/history/per-obligation semantic audit. D8 remains pending a fixed-SHA independent full review. D9-D10 remain PARTIAL only at named D8 producer/consumer intersections; their complete A2 modules remain pending.
 
 Product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment behavioral evidence is UNRUN. Documentation/machine/CI checks establish repository consistency only, not semantic acceptance. Final A2 still requires later complete integration, a fresh Pro/global non-author review, one explicit accepted-design SHA, and freeze/implementation-start material on that accepted SHA.
 
 
 ## D8 review target
 
-Review the exact final stop SHA from PR #5. The D8 candidate status is `author-resolved-pending-independent`: do not inherit an acceptance claim from this author. Verify `D8-SOURCE-MAP.json`, `D8-ACCEPTANCE.json`, current PB3/Value4/Snapshot3 boundaries, SEARCH-01–08 interaction, current D7 View hard answers, RTL/AT/performance obligations, and protected S49/inputs immutability. D9/D10 full modules and global A2 are out of this D8 review scope.
+Review the exact final stop SHA from PR #5. The D8 candidate remains pending independent review; do not infer semantic acceptance from bilingual synchronization or green CI. Verify `D8-SOURCE-MAP.json`, `D8-ACCEPTANCE.json`, current PB3/Value4/Snapshot3 boundaries, SEARCH-01–08 interaction, current D7 View hard answers, RTL/AT/performance obligations, and protected S49/inputs immutability. The reviewer must also resolve the still-open source-map navigation/semantic gap: 50 of 54 `fixedProseSections` still use broad whole-file targets, and the FC applicability plus historical-to-current/per-obligation semantic disposition has not been independently closed. D9/D10 full modules and global A2 are out of this D8 review scope.

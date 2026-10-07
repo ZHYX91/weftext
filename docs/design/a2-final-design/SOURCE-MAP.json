@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D8 author candidates integrated. D7 non-author review at fixed26be PASS (P0=0/P1=0/P2=0); final D7 residual CLOSED. D8 FULL author candidate is author-resolved-pending-independent. D9-D10/global remain pending.",
+  "status": "D1-D8 author candidates preserved. D7 non-author review at fixed26be PASS (P0=0/P1=0/P2=0). D8 bilingual synchronization repaired from fixed7e3f, pending independent review; source-map navigation and FC/history/per-obligation semantic audit remain OPEN. D9-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Fixed-SHA non-author full D8 review; then D9 and D10 full owner integration, followed by fresh Pro/global A2 review.",
+  "next_batch": "Fixed-SHA non-author full D8 review including the OPEN source-map navigation/FC/history/per-obligation semantic audit; then D9 and D10 full owner integration, followed by fresh Pro/global A2 review.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2461,6 +2461,8 @@
   },
   "pending_scope": [
     "D8 fixed-stop independent full review",
+    "D8 source-map navigation audit: 50/54 fixedProseSections still use broad whole-file targets",
+    "D8 FC applicability, historical-to-current disposition and per-obligation semantic audit",
     "D9-D10 full A2 owner modules",
     "D8/Search runtime/platform/AT/performance evidence",
     "fresh Pro/global review",
@@ -2569,10 +2571,10 @@
       "D8-SOURCE-MAP.md",
       "D8-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "FULL author candidate; author-resolved-pending-independent",
+    "status": "preserved author candidate; bilingual-sync author-repaired-pending-independent; semantic/source-map audit OPEN",
     "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
     "fixedS8": "FULL",
-    "currentOwnerBilingual": "FULL",
+    "currentOwnerBilingual": "synchronized in narrow successor repair; pending independent verification",
     "acceptance": {
       "fixedCases": 160,
       "inheritedD6FaCases": 177,
@@ -2583,6 +2585,20 @@
     "view": "D7 ViewSpec/1 semantics retained; D8 owns renderer/interaction/AT; wide=Query long-form, order=Query sort + line strict x",
     "sourceMap": "D8-SOURCE-MAP.json",
     "runtime": "UNRUN",
-    "review": "pending fixed-SHA non-author full D8 review"
+    "review": "pending fixed-SHA non-author full D8 review; green CI is not acceptance",
+    "semanticAudit": {
+      "fixedProseSections": 54,
+      "broadWholeFileTargets": 50,
+      "mappingNavigation": "OPEN",
+      "fcApplicability": "OPEN",
+      "historicalToCurrentDisposition": "OPEN",
+      "perObligationVerification": "OPEN"
+    },
+    "bilingualSyncRepair": {
+      "startSha": "7e3f0272f112cf0b8e61ab14fb9eaf72917e754b",
+      "scope": "main/interfaces/schemas/direction/lexicon/impact/acceptance + entry/status docs",
+      "status": "author-repaired-pending-independent",
+      "sourceInventoryRegenerated": false
+    }
   }
 }

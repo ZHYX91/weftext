@@ -66,7 +66,7 @@ SOURCE-MAP.json records machine-readable obligation groups, dispositions, source
 
 Fixed-S D4 and D5 sources required by this batch are now fully read and mapped: D4 main/Impact/Lexicon plus the immutable catalog, and D5 main/Impact/Lexicon. Mandatory scenario input §§1-14 (lines 1-924) is read for D4/D5; lines 925-1141 remain for later D7-D10 work.
 
-D3, D4 and D5 are author candidates with module-level source maps. D7 is independently PASS at fixed26be in its D7 scope; D8 is now a FULL author candidate pending independent review. D9-D10 full-module integration remains TODO; direct producer/consumer reads do not mark those owner modules complete.
+D3, D4 and D5 are author candidates with module-level source maps. D7 is independently PASS at fixed26be in its D7 scope. D8 remains the preserved 7e3f author candidate; this narrow successor batch repairs bilingual synchronization but leaves its source-map navigation and semantic-audit gaps OPEN pending independent review. D9-D10 full-module integration remains TODO; direct producer/consumer reads do not mark those owner modules complete.
 
 ## 8. D1/D2 source-map completeness repair
 
@@ -134,7 +134,7 @@ D7 is now integrated as a complete author candidate. The fixed-S thirteen D7 sou
 
 D7-SEARCH.md integrates SEARCH-01 through SEARCH-08 without creating a second search executor or persistent authority. Plain text and visual filters are the default; optional shortcut mode is explicit and uses prefixed operators so ordinary colon text, URLs and drive-letter paths are not silently parsed. Saving stores canonical Query semantics, not UI parser state. Current matching preserves the retained exact versus explicit `nfc-for-compare` basis, with case-sensitive substring/equality and no automatic fuzzy/Pinyin/tokenizer claim.
 
-D7-SOURCE-MAP.json records the complete D7 provenance and the accepted fixed26be scope. D8-SOURCE-MAP.json now records all fixed D8 prose/cases, Mandatory §15/RTL, SEARCH-01–08 interaction, current View/FC coordination and D8 direct producer/consumer boundaries. D9-D10 remain partial only at true D8 intersections; their full modules remain later.
+D7-SOURCE-MAP.json records the complete D7 provenance and the accepted fixed26be scope. D8-SOURCE-MAP.json preserves the D8 inventory for fixed prose/cases, Mandatory §15/RTL, SEARCH-01–08, current View/FC coordination and direct producer/consumer boundaries. That inventory is not a semantic-closure claim: 50 of 54 fixedProseSections still use broad whole-file currentTargets, and FC/history/per-obligation semantic disposition remains OPEN. D9-D10 remain partial only at true D8 intersections; their full modules remain later.
 
 fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. fixed1068244 closed A2-D7-2F89-P2-02. fixed85bdadf closed the two P1 findings and Impact-sync P2. The later fixed26be non-author review closed the final A2-D7-2F89-P2-01 and returned PASS 0/0/0.
 
@@ -151,10 +151,10 @@ The residual repair keeps the already-closed immutable source trace unchanged. I
 fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) independently reduced the D7 repair ledger to P0=0 / P1=0 / P2=1. P1-01, P1-02 and A2-D7-1068244-P2-01 are CLOSED at that SHA; P2-02 remains CLOSED at fixed1068244. This successor-author delta touches only the sole P2-01 Search oracle and necessary status/navigation text: all 19 positive fixtures now carry real strict-decodable QuerySpec/2 plus direct §5 CanonicalGraph serializations, while the 8 negative/incomplete/browse cases remain zero-Query. No closed Registry/D6 metadata/D9 query_json contract is reopened.
 
 
-## 16. D8 full author integration
+## 16. D8 preserved candidate and bilingual synchronization repair
 
-The D8 batch starts exactly from fixed26be. All eight fixed D8 inputs are FULL and mapped. `D8-SOURCE-MAP.json` enumerates 54 fixed prose sections, all 160 fixed cases, RTL nine questions/seven scenario groups, 19 Mandatory §15 headings, SEARCH-01–08 plus 27 current Search fixtures, both replacement routers, and all 760 current AsciiDoc/Annotation acceptance obligations with explicit D8 applicability.
+The preserved D8 candidate was first pushed at 7e3f. Its existing inventory contains 54 fixed prose-section rows, 160 fixed cases, the RTL intake, Mandatory §15 rows, SEARCH-01–08 plus 27 current Search fixtures, both replacement routers, and the current AsciiDoc/Annotation acceptance inventory. This narrow repair does not regenerate or semantically reclassify that inventory.
 
-Current D8 uses full Asciidoctor 2.0.26 product semantics, D2DocumentSnapshot/3, wire2 read/Draft transforms, D8EditPrepareRequest/3 + PreparedEditBinding/3 + Proof3/PIntent3/Effect3, Annotation Value4/R6, the current D8 presentation-policy owner, current D7 Search/View semantics, and separate RTL/AT/performance implementation gates. D9/D10 are read only at direct D8 boundaries.
+The bilingual main/interfaces/schemas/direction/lexicon/impact/acceptance text is synchronized in this successor batch, and only directly affected target-blob/status metadata is updated. The original mapping/semantic audit remains OPEN: 50/54 fixedProseSections still point only at broad whole-file targets, while FC applicability, historical-to-current disposition and per-obligation semantic verification have not been independently closed.
 
-D8 status is **author-resolved-pending-independent**. Product/runtime/GUI/IME/AT/OS/multi-replica/performance/migration/activation/deployment evidence remains UNRUN. D9/D10 full modules and global A2 remain later.
+Current D8 continues to consume full Asciidoctor 2.0.26 product semantics, D2DocumentSnapshot/3, wire2 read/Draft transforms, D8EditPrepareRequest/3 + PreparedEditBinding/3 + Proof3/PIntent3/Effect3, Annotation Value4/R6, the current D8 presentation-policy owner, and accepted D7 Search/View semantics. Product/runtime/GUI/IME/AT/OS/multi-replica/performance/migration/activation/deployment evidence remains UNRUN. D8 remains pending fixed-SHA independent full review; D9/D10 full modules and global A2 remain later.

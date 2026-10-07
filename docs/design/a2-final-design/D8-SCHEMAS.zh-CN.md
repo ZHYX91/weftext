@@ -8,24 +8,24 @@ translation_status: source
 
 状态：author-resolved-pending-independent。本文关闭 D8 current schema/version 路由，不扩大历史 decoder。完整 owner 语义见 D8 与 D8-INTERFACES；嵌入类型继续由 D2/D3/D4/D6/D7 owner 定义。
 
-## 1. Current family table
+## 1. 当前 family 对照
 
-| Family | current author/read family | historical handling |
+| family | 当前作者/读取 family | 历史处理 |
 | --- | --- | --- |
-| Document read | D8 outer wireVersion2 + D2DocumentSnapshot/3 | old D2 snapshots only by recorded decoder |
-| Draft project / text replace / write | D8 wireVersion2 | wire1 historical only |
-| Edit prepare | D8EditPrepareRequest/3 + D8EditInput/3 + PreparedEditBinding/3 | /1 and /2 exact historical recovery |
-| D6 prepare/submit | InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3 + d6_commit_request/2 | recorded owner version first |
-| Preview | EffectManifest/3 + EffectBytes/3 | Effect1/2 exact historical |
-| Annotation author value | PortableAnnotationRecord/4 + D3-Annotation-Value/4 | Value3/old annotation records historical |
-| Annotation read/draft | D8AnnotationRead*/1 + D8AnnotationDraft*/1 | no generic version coercion |
-| Presentation policy | logical policy/1 + immutable record/2 + SetRequest/2 | older prototype not dual-read |
-| View | D7 ViewSpec/1 | D8 does not bump |
-| Search | D7 QuerySpec/2 for new authoring; QuerySpec/1 exact | D8 never rewrites saved Query version |
+| Document 读取 | D8 outer wireVersion2 + D2DocumentSnapshot/3 | 旧 D2 snapshot 只按记录 decoder 分派 |
+| Draft projection / text replace / write | D8 wireVersion2 | wire1 仅用于历史恢复 |
+| Edit prepare | D8EditPrepareRequest/3 + D8EditInput/3 + PreparedEditBinding/3 | /1 与 /2 保留逐字节历史恢复 |
+| D6 prepare/submit | InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3 + d6_commit_request/2 | 先按记录的 owner version 分派 |
+| Preview | EffectManifest/3 + EffectBytes/3 | Effect1/2 保持真实历史 family |
+| Annotation author value | PortableAnnotationRecord/4 + D3-Annotation-Value/4 | Value3 与旧 Annotation record 保持历史语义 |
+| Annotation read/draft | D8AnnotationRead*/1 + D8AnnotationDraft*/1 | 不做通用版本强制转换 |
+| Presentation policy | logical policy/1 + immutable record/2 + SetRequest/2 | 旧 prototype 不建立 dual-read |
+| View | D7 ViewSpec/1 | D8 不机械升版 |
+| Search | 新 authoring 使用 D7 QuerySpec/2；QuerySpec/1 继续精确分派 | D8 不改写已保存 Query 的版本 |
 
 Outer number similarity never implies inner schema upgrade.
 
-## 2. Source target and document response
+## 2. Source target 与 Document response
 
 ~~~text
 D8SourceTarget/2 = {
@@ -53,9 +53,12 @@ D8DocumentResponse/2 = {
 }
 ~~~
 
-Cross-fields：ownerNodeRef/workspace/domain/sourceObservation/snapshot owner 必须一致；managed token 必须认证到 sourceObservation.sourceVersion。Snapshot/3 的 valid/invalid 分支保持 D2 owner exact。
+Cross-fields：
+ownerNodeRef/workspace/domain/sourceObservation/snapshot owner 必须一致；
+managed token 必须认证到 sourceObservation.sourceVersion。
+Snapshot/3 的 valid/invalid 分支保持 D2 owner exact。
 
-## 3. Draft projection shape
+## 3. Draft projection 形状
 
 ~~~text
 DraftMapBinding/2 = {
@@ -72,13 +75,18 @@ DraftEditMap/2 = {
 }
 ~~~
 
-DraftFlow/2 = {path:BodyPath,text,segments:[...]}; editable segment 的 sourceRange 非 null，read-only escape/join/atom segment 不通过编辑 map 暴露 raw-scalar 写权限。
+DraftFlow/2 = {path:BodyPath,text,segments:[...]}; editable segment 的 sourceRange 非 null，
+read-only escape/join/atom segment 不通过编辑 map 暴露 raw-scalar 写权限。
 
-PlainRegion/2 = {sourceRange,text,parentPath,childStart,childEnd}；text 是 raw exact slice，允许 empty/blank/EOL-only。DraftSite/2 = {sourceRange,parentPath,childIndex}，sourceRange 为 zero width。
+PlainRegion/2 = {sourceRange,text,parentPath,childStart,childEnd}；
+text 是 raw exact slice，
+允许 empty/blank/EOL-only。
+DraftSite/2 = {sourceRange,parentPath,childIndex}，
+sourceRange 为 zero width。
 
 NavigationOrigins/2 与 DraftEditMap/2 分开；navigation segment relation=scalar|escape|join|atom 且 sourceRange 总是实际 origin。
 
-## 4. Draft write commands
+## 4. Draft write 命令
 
 ~~~text
 DraftTextReplaceRequest/2 = {
@@ -96,7 +104,7 @@ DraftWriteCommand/2 =
 
 所有 ordinal/offset 是 proposal-local Counter；不能跨 serial/revision。text_replace 的 replacementText 禁 CR/LF；splice/insert 可携完整 CR/LF/CRLF。endpoint 必须 grapheme boundary 且 CRLF 原子。
 
-## 5. D8EditIntent/3 and prepare
+## 5. D8EditIntent/3 与 prepare
 
 ~~~text
 D8EditIntent/3 =
@@ -140,7 +148,9 @@ D8EditPrepareRequest/3 = {
 }
 ~~~
 
-Unknown arm/member/null rejects。Annotation caller 不得携 actor/time/trusted/suggestion evidence。reconfirm arm 不携 caller value。
+Unknown arm/member/null rejects。
+Annotation caller 不得携 actor/time/trusted/suggestion evidence。
+reconfirm arm 不携 caller value。
 
 ## 6. PreparedEditBinding/3
 
@@ -165,9 +175,14 @@ PreparedEditBinding/3 = {
 }
 ~~~
 
-proposedInputs 恰一项。Document pin 是 exact UTF-8 source；Annotation pin payloadKind=annotation_value 且 bytes=D3-CJ/3(complete Core Value/4)。sourceInputs byte-equal inputDescriptor.sourceInputs。OwnerInputBinding ownerKind/intentKind=d8_edit/3，canonicalDescriptorBytes 是完整 D8EditInput/3。
+proposedInputs 恰一项。
+Document pin 是 exact UTF-8 source；
+Annotation pin payloadKind=annotation_value 且 bytes=D3-CJ/3(complete Core Value/4)。
+sourceInputs byte-equal inputDescriptor.sourceInputs。
+OwnerInputBinding ownerKind/intentKind=d8_edit/3，
+canonicalDescriptorBytes 是完整 D8EditInput/3。
 
-## 7. Annotation current read/draft
+## 7. Annotation 当前 read/draft
 
 ~~~text
 D8AnnotationBodyRead/1 =
@@ -198,7 +213,7 @@ D8AnnotationDraftProjection/1 = {
 
 Draft editable projection绝不包含完整 attribution authority。readonly 不可 prepare。
 
-## 8. Annotation Value/4 and R6 references
+## 8. Annotation Value/4 与 R6 引用
 
 D8 不复制 D3 owner schema，但 current D8 必须只消费：
 - PortableAnnotationRecord/4；
@@ -222,9 +237,14 @@ EffectManifest/3 = {
 }
 ~~~
 
-EffectItem/3 保留既有 arm 并增加 typed presentation_policy_change。EffectBytes/3 current encoding 使用 owner 已闭合集合，包括 exact_source_utf8、resource_bytes、d3_annotation_value4、d3_symbolic_result9、d7_definition_transfer_effects2、d3_canonical_effects1、workspace bootstrap 1/3/4、d7_symbolic_json3、field_entries2。D8 不增加自由 encoding。
+EffectItem/3 保留既有 arm 并增加 typed presentation_policy_change。
+EffectBytes/3 current encoding 使用 owner 已闭合集合，
+其中包括 exact_source_utf8、resource_bytes 与 d3_annotation_value4。
+还包括 d3_symbolic_result9、d7_definition_transfer_effects2 与 d3_canonical_effects1。
+Workspace bootstrap 继续保留 1/3/4，并包括 d7_symbolic_json3 与 field_entries2。
+D8 不增加自由 encoding。
 
-## 10. Presentation policy current schemas
+## 10. Presentation policy 当前 schemas
 
 ~~~text
 D8WorkspacePresentationPolicy/1 = {
@@ -258,7 +278,7 @@ D8PresentationPolicySetRequest/2 = {
 
 address 的 recordSha256 绑定 prefixed canonical /2 bytes。parents/head arrays sorted unique。logical /1 只从唯一 current /2 record 机械投影，不单独持久化。final P 前没有 committed record/hash/pin/ChangeId。
 
-## 11. Direction/layout state
+## 11. Direction/layout 状态
 
 这些是 D8 UI state，不是 author wire：
 - DirectionPreference = ltr|rtl|auto
@@ -270,11 +290,13 @@ address 的 recordSha256 绑定 prefixed canonical /2 bytes。parents/head array
 
 不得编码进 QuerySpec、ViewSpec、Document source、Annotation Value 或 hidden sidecar。
 
-## 12. Search/View consumed schemas
+## 12. Search/View 消费 schemas
 
 D8 Search controls只生产 D7 compiler input，并消费 real QuerySpec/2/CanonicalGraph；不新增 D8 Search wire。保存 Query 仍是 D7 definition。
 
-D8 renderer只消费 D7 ViewSpec/1={format:"weftext.view",version:1,inputSchema,layout,bindings,options}。D8 不加入 filter/sort/CEL/aggregate/script member。View validation error family保持 D7 owner。
+D8 renderer只消费 D7 ViewSpec/1={format:"weftext.view",version:1,inputSchema,layout,bindings,options}。
+D8 不加入 filter/sort/CEL/aggregate/script member。
+View validation error family保持 D7 owner。
 
 ## 13. Closed editor error family
 
@@ -291,9 +313,9 @@ D8EditorError/2 = {
 }
 ~~~
 
-该 family 是继承且 closed。current coordinated producer/path 若已有真实 owner unavailable/conflict 结果，不得把 `owner_update_required` 当通用 implementation 占位。
+该 family 是继承且 closed。current coordinated producer/path 若已有真实 owner unavailable/conflict 结果，不得把 owner_update_required 当通用 implementation 占位。
 
-## 14. Error/version matrix
+## 14. Error/version 矩阵
 
 current D8 decoder 不能：
 - 在 wireVersion2 prepare 上接受 /3 intent；
@@ -305,4 +327,6 @@ current D8 decoder 不能：
 - 将 device direction/layout state 当 author member；
 - 将 non-current Annotation plain_text 当 current R6。
 
-每个 genuine old record先按记录 version/tag dispatch，再执行其原 recovery；unknown future version fail closed。
+每个 genuine old record先按记录 version/tag dispatch，
+再执行其原 recovery；
+unknown future version fail closed。

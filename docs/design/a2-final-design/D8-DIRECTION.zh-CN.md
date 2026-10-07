@@ -11,7 +11,8 @@ translation_status: source
 ## 1. 四种能力必须分开
 
 1. Unicode 内容保全：source bytes、logical text、Ref/Field/CEL 等标识不得因 locale/direction 改写。
-2. bidi text editing：caret、selection、hit-test、copy/delete 遵守 logical text + UAX #9。
+2. bidi text editing：
+caret、selection、hit-test、copy/delete 遵守 logical text + UAX #9。
 3. RTL shell：pane/tree/menu/grid/icon/toolbar 的视觉几何与 focus path。
 4. RTL localization：Arabic/Hebrew UI strings、plural、punctuation、control labels、AT names。
 
@@ -21,7 +22,10 @@ translation_status: source
 
 编辑/selection/grapheme 使用 Unicode 18.0.0、UAX #9 rev52 与 UAX #29 rev49。D7 CEL 的 Unicode15.1 仅属于 weftext.cel/1 NFC 匹配 profile；D8 不借它改变 editor grapheme 或 bidi 行为。改变 Unicode/UAX/data 版本需要具名 successor、数据版本、fixture 和独立复核。
 
-CRLF 是一个 logical EOL unit；NEL/LS/PS 不自动成为 D2 newline。UTF-8 byte、UTF-16 code unit、Unicode scalar、extended grapheme 与 visual glyph offset 都不可互换。
+CRLF 是一个 logical EOL unit；
+NEL/LS/PS 不自动成为 D2 newline。
+UTF-8 byte、UTF-16 code unit、Unicode scalar、extended
+grapheme 与 visual glyph offset 都不可互换。
 
 ## 3. Direction precedence
 
@@ -38,13 +42,13 @@ run-in/separate 是 Workspace presentation policy，与 bidi direction 独立；
 
 ## 4. Caret model
 
-\`\`\`text
+```text
 LogicalCaret = {
  logicalPosition,
  affinity:"upstream"|"downstream",
  layoutEpoch
 }
-\`\`\`
+```
 
 一个 logical point 可以有两个真实 visual stop。affinity 只选择 visual side，不是 source offset/identity。font load、soft wrap、zoom 或 container width 改变会产生新 LayoutEpoch；旧 visual coordinate 不能跨 epoch 直接复用。
 
@@ -69,13 +73,21 @@ pointer/touch hit-test 返回 logical point + affinity + layoutEpoch。相同 vi
 
 ## 7. Logical copy and technical tokens
 
-Copy Text 始终输出 logical text order；RTL visual display 不反转字符。Ref、CEL、path、email、URL、citation key、ASCII/numeric technical token 使用 direction isolation 让视觉可读，但 source/value bytes 不改写。Copy Source Fragment 输出 raw exact source order。
+Copy Text 始终输出 logical text order；
+RTL visual display 不反转字符。
+Ref、CEL、path、email、URL、citation key、ASCII/numeric
+technical token 使用 direction isolation 让视觉可读，
+但 source/value bytes 不改写。
+Copy Source Fragment 输出 raw exact source order。
 
 Visual selection 跨 bidi run 时，执行范围仍由 logical anchor/focus 规范化；不得按 DOM visual fragment 顺序拼接 replacement。
 
 ## 8. Shell mirroring
 
-RTL shell 可镜像 navigation tree、pane affordance、menu/submenu、breadcrumb geometry、drawer/sidebar、logical previous/next 等显式 directional controls。不得机械镜像：
+RTL shell 可镜像 navigation tree、pane affordance、menu/submenu、breadcrumb
+geometry、drawer/sidebar、logical previous/next 等显式 directional
+controls。
+不得机械镜像：
 - brand/logo；
 - image/media content；
 - math/STEM；
@@ -85,17 +97,30 @@ RTL shell 可镜像 navigation tree、pane affordance、menu/submenu、breadcrum
 - calendar chronology meaning；
 - native table logical column/Field identity。
 
-native table Tab/Shift+Tab、arrow navigation 与 structured edit 始终绑定 logical row/column；RTL 只改变视觉位置，不交换 FieldId/columnId 或 relationship direction。
+native table Tab/Shift+Tab、arrow navigation
+与 structured edit 始终绑定 logical row/column；
+RTL 只改变视觉位置，
+不交换 FieldId/columnId 或 relationship direction。
 
 ## 9. View interaction
 
-D7 Query/View order是语义 authority。RTL 不能反转 category/series/legend/panel semantic order、Query sort、network edge direction 或 calendar time。renderer 可在屏幕几何上镜像，但 accessible table、export、keyboard order 仍使用原 typed data/order。
+D7 Query/View order是语义 authority。
+RTL 不能反转 category/series/legend/panel semantic order、Query
+sort、network edge direction 或 calendar time。
+renderer 可在屏幕几何上镜像，
+但 accessible table、export、keyboard order 仍使用原 typed data/order。
 
-chart hover/selection/focus 使用 D7 projected key/column identity；禁止按 rendered bar index 重找 source。隐藏 series 是可逆 device presentation state并标记 partial display，不修改 Query/ViewSpec 或 full export claim。
+chart hover/selection/focus 使用 D7 projected key/column identity；
+禁止按 rendered bar index 重找 source。
+隐藏 series 是可逆 device presentation state并标记 partial display，
+不修改 Query/ViewSpec 或 full export claim。
 
 ## 10. Assistive technology
 
-每个 interactive control 提供真实 role/name/state/value/checked/expanded/selected/busy/invalid。focus order follows logical task/Query order，不按 CSS visual reorder。screen reader：
+每个 interactive control 提供真实 role/name/state/value/checked/expanded/selected/busy/invalid。
+focus order follows logical task/Query order，
+不按 CSS visual reorder。
+screen reader：
 - Document/Source 按 logical content 朗读；
 - heading level 使用 current effective heading level，不能把 H6–H9 降成 H5；
 - titleless 不朗读 filename 作为 title；
@@ -111,7 +136,9 @@ IME preedit 不逐字符 live announce；composition start/update/end 有 bounde
 
 必须覆盖 keyboard-only、200% 与 400% zoom、320 CSS px、high contrast、reduced motion。focus indicator 在双向文本和 high contrast 下可见。无 hover 也能获得 tooltip 等价信息。二维图形若无法在窄屏完整呈现，可切换 D7 允许的同一完整数据 table/list alternative并明确 renderer unavailable；不能 sampling/truncate 当 support。
 
-Mobile touch target、sheet、virtual keyboard 与 hardware keyboard 都调用相同 logical intent。screen resize/orientation change 不改变 Draft source、selection identity、Query semantics 或 author permission。
+Mobile touch target、sheet、virtual keyboard 与 hardware keyboard 都调用相同 logical intent。
+screen resize/orientation change 不改变 Draft source、selection
+identity、Query semantics 或 author permission。
 
 ## 12. RTL acceptance matrix
 

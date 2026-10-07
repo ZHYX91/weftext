@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D8-ACCEPTANCE.zh-CN.md)
 # A2 D8 Acceptance Matrix
 
-Status: author-resolved-pending-independent. All 160 fixed-S case IDs and the 17 D6-FA successor cases are retained. Named current successors currentize the same case ID; no old-current wording silently remains current.
+Status: author-resolved-pending-independent. All 160 fixed-S case IDs and the 17 D6-FA successor cases are retained. Named current successors currentize the same case ID; no old-current wording silently remains current. This bilingual synchronization repair does not close the original FC classification, historical-to-current disposition, source-map navigation, or per-obligation semantic-review gaps.
 
 | ID | Scenario | Positive | Negative | Contract | Current evidence layer |
 |---|---|---|---|---|---|
