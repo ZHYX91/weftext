@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D7-IMPACT.zh-CN.md)
 # A2 D7 Implementation Impact and Acceptance Overlay
 
-Status: design impact for the D7 author candidate after the fixed1068244 incremental review. No implementation or product behavior is claimed.
+Status: design impact for the D7 author candidate after the fixed85bdadf independent incremental review. That review left only A2-D7-2F89-P2-01 open; this author repair addresses only that machine-oracle residual and does not self-close it. No implementation or product behavior is claimed.
 
 ## 1. Retained implementation surface
 
@@ -25,11 +25,11 @@ The fixed97 current preparation/effect chain remains PAB4/Descriptor3/Proof3/Pre
 
 ## 3. Search compiler and machine-oracle boundary
 
-Ordinary text, visual conditions and explicit shortcut mode all produce the same SearchConditionAst/1 and compile through one QuerySpec/2 path. D7-SEARCH-FIXTURES.json is a design machine oracle: each positive case records shortcut AST, UI-neutral visual input/AST, canonical AST, a complete reviewable QuerySpec/2 canonical description and a full structural CanonicalGraph description. Negative/incomplete/browse cases record no Query.
+Ordinary text, visual conditions and explicit shortcut mode all produce the same SearchConditionAst/1 and compile through one QuerySpec/2 path. D7-SEARCH-FIXTURES.json is a design machine oracle: each positive case records shortcut AST, UI-neutral visual input/AST, canonical AST, non-wire compiler-review metadata, an actual strict-decodable QuerySpec/2 object, and the normative §5 CanonicalGraph serialization with canonical CEL ASTs/reference ordinals/field order. Negative/incomplete/browse cases record no Query. The mixed Node/Resource OR oracle contains real per-domain CEL specialization, one identical public schema, real union_all input order and the final sort/project.
 
 Implementation/conformance must cover recursive precedence, adjacency, repeated NOT, exact keyword boundaries, FieldId/member-path grammar, the corrected single-backslash Windows and escaped-@ examples, bare trailing-backslash literal behavior, quoted trailing-escape incompleteness, all three preset empty states, explicit source override, Optional title handling, Node/Resource OR through union_all, incompatible-domain AND rejection and QuerySpec/1-vs-/2 strict dispatch.
 
-The machine oracle is not evidence that a product parser or compiler ran. Product tests must later execute the real parser/compiler and compare their produced canonical AST/Query graph against these design oracles.
+The machine oracle is not evidence that a product parser or compiler ran. Repository/design checks may strict-check the fixture shapes and mechanically recompute the §5 relation graph, but product tests must later execute the real parser/QuerySpec decoder/CEL compiler and compare their produced canonical AST/Query graph against these design oracles.
 
 ## 4. Save/copy/export owner boundaries
 
@@ -45,4 +45,4 @@ Runtime, OS, GUI, IME, accessibility, renderer/export, real QuerySpec/2 parser/c
 
 ## 7. Next gates
 
-The next gate is a fixed-SHA non-author incremental review of the two remaining P1 findings and two P2 findings from fixed1068244, plus only their directly affected regression surfaces. A2-D7-2F89-P2-02 stays independently CLOSED at fixed1068244 and is not rerun as an open finding. D8-D10 full modules, Search+D8 platform execution evidence, and the later fresh Pro/global review remain separate.
+The next gate is a fixed-SHA non-author incremental review only of A2-D7-2F89-P2-01 and the directly changed Search fixture/oracle surfaces. A2-D7-2F89-P1-01, A2-D7-2F89-P1-02 and A2-D7-1068244-P2-01 remain independently CLOSED at fixed85bdadf; A2-D7-2F89-P2-02 remains independently CLOSED at fixed1068244. D8-D10 full modules, Search+D8 platform execution evidence, and the later fresh Pro/global review remain separate.

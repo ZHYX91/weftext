@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02` (immutable source trace). The remaining findings are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and new `A2-D7-1068244-P2-01` (Impact EN/ZH sync). This author batch repairs those four residuals but does not self-close them. The earlier bounded closures `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` remain closed. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent incremental review fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) concluded REVISE with P0=0 / P1=0 / P2=1. It independently CLOSED `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, and `A2-D7-1068244-P2-01`; `A2-D7-2F89-P2-02` remains independently CLOSED at fixed1068244. The sole OPEN finding is `A2-D7-2F89-P2-01`, narrowed to the real strict QuerySpec/2/CanonicalGraph Search compiler oracle. This author batch repairs only that residual and leaves it pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 
 ## 12. D4/D5 audit-map review lineage
@@ -136,7 +136,7 @@ D7-SEARCH.md integrates SEARCH-01 through SEARCH-08 without creating a second se
 
 D7-SOURCE-MAP.json records fixed/current blobs, FULL/PARTIAL/UNRUN evidence, twenty integration obligations, all eight SEARCH obligations, scenario/non-fallback ordinals, A2-01–57, Facet/People/ICS groups, Chart §15, terminology Registry coverage and the two navigation findings. D8-D10 remain partial only at true D7 producer/consumer intersections; their full modules remain later.
 
-fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. fixed1068244 additionally closed A2-D7-2F89-P2-02. The current author repair addresses only the two remaining P1 and two P2 residuals from fixed1068244; their detailed author-repaired/pending-independent state is recorded in D7-SOURCE-MAP.json.
+fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. fixed1068244 additionally closed A2-D7-2F89-P2-02. fixed85bdadf then independently closed the two remaining P1 findings and the Impact-sync P2, leaving only A2-D7-2F89-P2-01. The current author repair addresses only that machine-oracle residual; its author-repaired/pending-independent state is recorded in D7-SOURCE-MAP.json.
 
 Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior remains UNRUN.
 
@@ -145,3 +145,7 @@ Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performanc
 Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02` (immutable source trace). The remaining findings are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and new `A2-D7-1068244-P2-01` (Impact EN/ZH sync). This author batch repairs those four residuals but does not self-close them. The earlier bounded closures `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` remain closed. No D7/global acceptance is claimed.
 
 The residual repair keeps the already-closed immutable source trace unchanged. It corrects the global Registry navigation to fixed-S 34/8 versus parent-current 34/13, adds the D6-owned least-privilege FileBinding metadata producer consumed by QuerySpec/2, closes the QuerySpec/2 Optional-title/union_all/D9-query_json direct consumer contracts, repairs the shortcut machine oracle and escape cases, and synchronizes D7-IMPACT EN/ZH. S49 snapshots and inputs remain protected.
+
+## 15. fixed85bdadf sole D7 residual and real compiler oracle
+
+fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) independently reduced the D7 repair ledger to P0=0 / P1=0 / P2=1. P1-01, P1-02 and A2-D7-1068244-P2-01 are CLOSED at that SHA; P2-02 remains CLOSED at fixed1068244. This successor-author delta touches only the sole P2-01 Search oracle and necessary status/navigation text: all 19 positive fixtures now carry real strict-decodable QuerySpec/2 plus direct §5 CanonicalGraph serializations, while the 8 negative/incomplete/browse cases remain zero-Query. No closed Registry/D6 metadata/D9 query_json contract is reopened.

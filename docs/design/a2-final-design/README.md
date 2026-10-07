@@ -27,7 +27,7 @@ The current author candidate integrates D1 through D7. It is authored work, not 
 | D4 | integrated current author candidate; A2-D4D5:P2-02 remains bounded CLOSED at fixed4282 and A2-D4D5:P2-01 is bounded CLOSED after the fixed1fc4 independent review; no global acceptance |
 | D5 | integrated current author candidate; A2-D4D5:P2-02 remains bounded CLOSED at fixed4282 and A2-D4D5:P2-01 is bounded CLOSED after the fixed1fc4 independent review; no global acceptance |
 | D6 | fixed2f89 independently CLOSED the two navigation findings that remained after fixed454e; prior bounded D6 semantic closures remain limited to their recorded scope. |
-| D7 | fixed1068244 incremental review = REVISE (P0=0/P1=2/P2=2); source-map P2-02 independently CLOSED; current author repair addresses the remaining 2 P1 / 2 P2 and awaits fixed-SHA independent review |
+| D7 | fixed85bdadf incremental review = REVISE (P0=0/P1=0/P2=1); P1-01/P1-02 and Impact-sync P2 independently CLOSED there, source-map P2-02 remains CLOSED at fixed1068244; this author repair addresses only P2-01 and awaits fixed-SHA independent review |
 | D8 | TODO as a full module; D7 consumed only real editor/direction/accessibility/RTL intersections |
 | D9 | TODO as a full module; D7 consumed only coordinated binding and direct construction/import/export intersections |
 | D10 | TODO as a full module; D7 consumed SearchContribution/Catalog and D7 approval/effects/custody intersections |
@@ -57,6 +57,6 @@ For D8 through D10 there is no complete A2 current definition yet. Direct produc
 
 ## 5. Acceptance boundary
 
-Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02` (immutable source trace). The remaining findings are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and new `A2-D7-1068244-P2-01` (Impact EN/ZH sync). This author batch repairs those four residuals but does not self-close them. The earlier bounded closures `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` remain closed. No D7/global acceptance is claimed.
+Independent incremental review fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) concluded REVISE with P0=0 / P1=0 / P2=1. It independently CLOSED `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, and `A2-D7-1068244-P2-01`; `A2-D7-2F89-P2-02` remains independently CLOSED at fixed1068244. The sole OPEN finding is `A2-D7-2F89-P2-01`, limited to the real QuerySpec/2/CanonicalGraph Search compiler oracle. This author batch repairs only that residual and does not self-close it. Earlier bounded closures remain at their recorded SHAs. No D7/global acceptance is claimed.
 
 D8-D10 full modules, Search+D8 execution evidence and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.

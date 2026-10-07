@@ -6,19 +6,19 @@ translation_status: source
 [English](D7-SOURCE-MAP.md)
 # A2 D7 来源与案例映射
 
-状态：这是 fixed1068244 之后的作者残余修复。immutable-source trace P2-02 已独立 CLOSED；剩余 2 个 P1 与 2 个 P2 在此完成作者修复，但仍保持 OPEN 等待独立复核。
+状态：这是 fixed85bdadf 之后的唯一残余作者修复。该独立复核结论为 REVISE、P0=0/P1=0/P2=1：P1-01、P1-02 与 Impact-sync P2 已在 fixed85bdadf independently CLOSED，immutable-source trace P2-02 继续在 fixed1068244 CLOSED；只有 P2-01 在本批完成作者修复并继续 OPEN 等待独立复核。
 
 ## 1. 固定对象与既有关闭
 
 本修复起点是 2f89a55cb1f924a47281f59e6419fff7c0c206ed。base 继续是 97f4734f82a760cb6716c8122b84494da2b61164，fixed S 继续是 7e18168dad3e6d120fce0dd607dc10fa7894e252，受保护 inputs blob 继续是 787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 
-fixed2f89 已在有界范围独立关闭 A2-D6-01CC-P2-01、A2-NAV-454E-P2-01 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立 CLOSED A2-D7-2F89-P2-02。当前残余是两个 P1、A2-D7-2F89-P2-01 与 A2-D7-1068244-P2-01；本作者批修复它们，但状态仍是 OPEN pending independent review。
+fixed2f89 已在有界范围独立关闭 A2-D6-01CC-P2-01、A2-NAV-454E-P2-01 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立 CLOSED A2-D7-2F89-P2-02；fixed85bdadf 再独立 CLOSED A2-D7-2F89-P1-01、A2-D7-2F89-P1-02 与 A2-D7-1068244-P2-01。当前只剩 A2-D7-2F89-P2-01；本作者批只修这一项，状态继续 OPEN pending independent review。
 
 ## 2. 阅读覆盖
 
 fixed-S D7 十三份来源以及额外 D9 coordinated D3-D7 binding source，继续沿用已完成 D7 复核的完整阅读证据。current 双语 D7 owner set 也继续保持完整阅读。D1/D2/D4/D5 与 D7 所需 D6 交叉沿用此前记录的覆盖；D3/D8/D9/D10 仍只覆盖具名的 D7 直接生产者/消费者交叉，本批没有重新审查这些完整模块。
 
-本修复只重读四项 finding 的直接证据：fixed-S 与 parent-current 术语 Registry、闭合的 Query read/source grammar、current D2 title/subtitle 产品、D6 SourceObservation/FileObjectBinding/Policy 门、immutable Mandatory/scenario source range，以及准确的 current source-map package。
+本修复只重读唯一 P2 所需的直接证据：适用的 root/design AGENTS、受保护 inputs 与两层 replacements、current QuerySpec/2、Query Algebra、Value/CEL、Query/View/Action §5 CanonicalGraph、D7-SEARCH、完整 Search fixture oracle，以及 Impact/status surface。此前已接受的 D6 metadata、Registry 与 D9 query_json 语义均不重开。
 
 ## 3. Registry 资格
 
@@ -30,7 +30,7 @@ D7-REGISTRY-QUALIFICATION 对 B01-B13 逐条映射。D7-REGISTRY.json 继续是�
 
 D7-QUERY-V2 继续以 QuerySpec/2 作为当前作者 successor，但 FileBinding metadata 改为消费 D6-owned producer，并由 entity_state+locator_state 授权，而不是要求 whole content read 或 structure_state。它还闭合 Optional-title 直接 consumer、准确 union_all LogicalOccurrenceKey constructor 与 D9 query_json 的 result-only 边界。
 
-D7-SEARCH 冻结 trailing backslash 的唯一分类；D7-SEARCH-FIXTURES.json 现在实际包含 shortcut/visual/canonical AST 以及完整 QuerySpec/2 与 CanonicalGraph 审查描述。三个 preset 空输入、source override、Node/Resource 混合 OR、Optional handling 与 /1-/2 严格版本边界都进入 machine oracle。D7-IMPACT 中英文同步到同一组义务。
+D7-SEARCH 保留已经关闭的 lexer/escape 行为；D7-SEARCH-FIXTURES.json 现在实际包含 shortcut/visual/canonical AST、可严格解码的真实 QuerySpec/2 对象，以及直接序列化 §5 的 CanonicalGraph。原 compiler description 只作为明确非 wire 的 review metadata 保留。Node/Resource 混合 OR 真实按 domain 专门化为合法 CEL branch，并以同一 schema、union_all 与最终 sort/project 收束；Optional、Field/member NFC 与既有 negative/browse case 全部保留。D7-IMPACT 中英文同步到这一边界。
 
 ## 5. Immutable source trace
 
@@ -42,16 +42,16 @@ retained current scenario mirror 仍可用于 current disposition 导航，但�
 
 ## 6. 当前 finding 状态
 
-- A2-D7-2F89-P1-01：作者残余修复已存在；继续 OPEN，等待独立复核。
-- A2-D7-2F89-P1-02：作者残余修复位于 D6 §19/D6-SCHEMAS §11 与 D7-QUERY-V2/D7-SCHEMAS/D7-SEARCH；继续 OPEN。
-- A2-D7-2F89-P2-01：作者残余修复位于 D7-SEARCH 与 D7-SEARCH-FIXTURES.json；继续 OPEN。
-- A2-D7-2F89-P2-02：已在 fixed1068244 独立 CLOSED；本批不重开 immutable mapping rows/groups。
-- A2-D7-1068244-P2-01：作者修复位于同步后的 D7-IMPACT 中英文；继续 OPEN。
+- A2-D7-2F89-P1-01：已在 fixed85bdadf independently CLOSED。
+- A2-D7-2F89-P1-02：已在 fixed85bdadf independently CLOSED。
+- A2-D7-2F89-P2-01：唯一 OPEN finding；真实 QuerySpec/2/CanonicalGraph oracle 作者修复已位于 D7-SEARCH 与 D7-SEARCH-FIXTURES.json，等待对本 fixed delta 的独立复核。
+- A2-D7-2F89-P2-02：已在 fixed1068244 independently CLOSED；本批不重开 immutable mapping rows/groups。
+- A2-D7-1068244-P2-01：已在 fixed85bdadf independently CLOSED。
 
-作者没有自行关闭当前四项残余 finding。
+作者不自行关闭 A2-D7-2F89-P2-01，也不声称 D7/global acceptance。
 
 ## 7. 证据边界与下一 gate
 
 仓库文档检查、输入完整性检查、JSON 与 source-map 检查只能证明机械一致性。Product Search、runtime、Desktop/Mobile/WebUI GUI、IME/AT、renderer/export、真实 index/provider、CAS/race、migration、deployment 与历史执行全部继续记为 UNRUN。
 
-下一 gate 只对 A2-D7-2F89-P1-01、P1-02、P2-01、A2-D7-1068244-P2-01 及其直接回归面做 fixed-SHA 非作者增量复核。已经关闭的 P2-02 只作为既有证据保留。D8-D10 完整整合与后续 fresh Pro/global A2 review 继续分开。
+下一 gate 只对 A2-D7-2F89-P2-01 与本次直接变化的 Search fixture/oracle delta 做 fixed-SHA 非作者增量复核。此前四项 closure 均继续绑定各自原 review SHA。D8-D10 完整整合与后续 fresh Pro/global A2 review 继续分开。

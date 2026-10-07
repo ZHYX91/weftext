@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D7 作者候选复核入口——D7 整合与导航修订
 
-fixed1068244（`1068244d982a22140d8753b0483c63135b092999`）独立增量复核结论为 REVISE：P0=0 / P1=2 / P2=2，并已独立 CLOSED `A2-D7-2F89-P2-02`。当前残余为 `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01` 与 `A2-D7-1068244-P2-01`。本作者批修复这四项残余，但不自行关闭；此前有界关闭的 `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01` 继续保持 CLOSED。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立增量复核结论为 REVISE：P0=0 / P1=0 / P2=1。该复核已独立 CLOSED `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02` 与 `A2-D7-1068244-P2-01`；`A2-D7-2F89-P2-02` 继续保持 fixed1068244 的 independently CLOSED。唯一残余是 `A2-D7-2F89-P2-01`，范围已经收窄为真实 QuerySpec/2/CanonicalGraph Search compiler oracle。本作者批精确从 fixed85bdadf 开始，只修这一项且不自行关闭；此前有界 closure 继续绑定各自记录 SHA。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -45,9 +45,9 @@ D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第�
 
 fixed2f89 独立复核已在有界范围 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`；它们不再是当前 pending finding。
 
-fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02、P2-01 为 OPEN，并新增 D7-IMPACT 中英漂移 finding A2-D7-1068244-P2-01。本作者批精确从 fixed1068244 开始，只修这四项残余，且不自行关闭。
+fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02、P2-01 为 OPEN，并新增 D7-IMPACT 中英漂移 finding A2-D7-1068244-P2-01。下一轮 fixed85bdadf 独立复核又 CLOSED P1-01、P1-02 与 Impact-sync P2，只留下 P2-01 OPEN。本作者批精确从 fixed85bdadf 开始，只修该 QuerySpec/CanonicalGraph oracle 残余，且不自行关闭。
 
-历史时间线为 fixed829 来源 → fixed01cc → fixed32cf/d1ab → fixed1fc4 → fixed5e21 → fixed9c3b/fixed454e → fixed2f89 完整 D7 复核 → fixed1068244 增量复核。较早裁决只描述各自 fixed object。
+历史时间线为 fixed829 来源 → fixed01cc → fixed32cf/d1ab → fixed1fc4 → fixed5e21 → fixed9c3b/fixed454e → fixed2f89 完整 D7 复核 → fixed1068244 增量复核 → fixed85bdadf 单残余复核。较早裁决只描述各自 fixed object。
 
 ## 4. 证据与非声明边界
 

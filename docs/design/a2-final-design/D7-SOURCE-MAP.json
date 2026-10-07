@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "status": "A2 D7 fixed1068244 residual repair candidate: immutable-source trace P2-02 independently CLOSED; remaining 2 P1 / 2 P2 author-repaired and OPEN pending independent review; D8-D10/global remain pending.",
+  "status": "A2 D7 sole residual repair after fixed85bdadf: fixed85bdadf independent review REVISE P0=0/P1=0/P2=1; P1-01/P1-02/Impact-sync P2 CLOSED there, source-trace P2-02 remains CLOSED at fixed1068244; only P2-01 author-repaired and OPEN pending independent review; D8-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "author_start_sha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
@@ -4771,7 +4771,7 @@
       "reviewSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed"
     }
   },
-  "next_gate": "Fixed-SHA non-author incremental review only of A2-D7-2F89-P1-01, P1-02, P2-01 and A2-D7-1068244-P2-01 plus directly affected regressions. A2-D7-2F89-P2-02 remains independently CLOSED at fixed1068244. D8-D10 full modules and fresh Pro/global review remain later.",
+  "next_gate": "Fixed-SHA non-author incremental review only of A2-D7-2F89-P2-01 and the directly changed Search fixture/oracle delta. P1-01, P1-02 and A2-D7-1068244-P2-01 remain independently CLOSED at fixed85bdadf; A2-D7-2F89-P2-02 remains independently CLOSED at fixed1068244. D8-D10 full modules and fresh Pro/global review remain later.",
   "case_mapping_method": "Immutable fixed-S/Mandatory source path+blob+exact line range/slice is the original condition authority. Current retained mirror text is navigation/current-target evidence only and is never labeled originalCondition.",
   "search_matching_clarification": "Exact text remains exact; D4 nfc-for-compare paths normalize candidate and needle for comparison only. Both remain case-sensitive. No automatic case fold/fuzzy/tokenizer/Pinyin/transliteration.",
   "author_repair_start_sha": "1068244d982a22140d8753b0483c63135b092999",
@@ -5211,6 +5211,38 @@
       "owner": "D9 workers/export",
       "disposition": "terminal-result-export-only; not QuerySpec author carrier",
       "consumer": "D7-QUERY-V2 §7 / D7-SEARCH §8"
+    }
+  },
+  "fixed85bdadf_review": {
+    "reviewSha": "85bdadf448e0475715b62debe215fa4d04e30ab2",
+    "verdict": "REVISE",
+    "severity": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 1
+    },
+    "independentlyClosed": [
+      "A2-D7-2F89-P1-01",
+      "A2-D7-2F89-P1-02",
+      "A2-D7-1068244-P2-01"
+    ],
+    "retainedPriorClosures": {
+      "A2-D7-2F89-P2-02": "1068244d982a22140d8753b0483c63135b092999",
+      "A2-D6-01CC-P2-01": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
+      "A2-NAV-454E-P2-01": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
+      "COORD-D7-DOC-QUALITY-01": "2f89a55cb1f924a47281f59e6419fff7c0c206ed"
+    },
+    "soleResidual": {
+      "A2-D7-2F89-P2-01": {
+        "reviewStatus": "OPEN-at-fixed85bdadf",
+        "authorStatus": "author-repaired-pending-independent-review",
+        "scope": "real strict-decodable QuerySpec/2 and normative §5 CanonicalGraph oracle only",
+        "targets": [
+          "D7-SEARCH §§4-6",
+          "D7-SEARCH-FIXTURES.json",
+          "D7-IMPACT §3"
+        ]
+      }
     }
   }
 }

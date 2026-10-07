@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](REVIEW-ENTRY.zh-CN.md)
 # A2 D1-D7 author-candidate review entry — D7 integration and navigation repair
 
-Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02`; the current residuals are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-1068244-P2-01`. This author batch repairs those four residuals but does not self-close them. Earlier bounded closures, including `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`, remain closed. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent incremental review fixed85bdadf (`85bdadf448e0475715b62debe215fa4d04e30ab2`) concluded REVISE with P0=0 / P1=0 / P2=1. It independently CLOSED `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, and `A2-D7-1068244-P2-01`; `A2-D7-2F89-P2-02` remains independently CLOSED at fixed1068244. The sole residual is `A2-D7-2F89-P2-01`, narrowed to the real QuerySpec/2/CanonicalGraph Search compiler oracle. This author batch starts exactly from fixed85bdadf, repairs only that residual and does not self-close it. Earlier bounded closures remain at their recorded SHAs. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 1. Fixed objects and author chronology
 
@@ -46,9 +46,9 @@ Three adjacent fixed-S cross-owner groups with the same old-version ambiguity ar
 
 At fixed2f89 the independent reviewer CLOSED `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` in their bounded scopes. They are not current pending findings.
 
-fixed1068244 later independently CLOSED A2-D7-2F89-P2-02. It retained P1-01, P1-02 and P2-01 as OPEN and added A2-D7-1068244-P2-01 for D7-IMPACT EN/ZH drift. This author batch starts exactly from fixed1068244 and repairs only those four residuals without self-closing them.
+fixed1068244 later independently CLOSED A2-D7-2F89-P2-02. It retained P1-01, P1-02 and P2-01 as OPEN and added A2-D7-1068244-P2-01 for D7-IMPACT EN/ZH drift. The next fixed85bdadf independent review then CLOSED P1-01, P1-02 and the Impact-sync P2, leaving only P2-01 OPEN. This author batch starts exactly from fixed85bdadf and repairs only that QuerySpec/CanonicalGraph oracle residual without self-closing it.
 
-Historical chronology is fixed829 origin → fixed01cc → fixed32cf/d1ab → fixed1fc4 → fixed5e21 → fixed9c3b/fixed454e → fixed2f89 full D7 review → fixed1068244 incremental review. Earlier verdicts describe only their fixed objects.
+Historical chronology is fixed829 origin → fixed01cc → fixed32cf/d1ab → fixed1fc4 → fixed5e21 → fixed9c3b/fixed454e → fixed2f89 full D7 review → fixed1068244 incremental review → fixed85bdadf sole-residual review. Earlier verdicts describe only their fixed objects.
 
 ## 4. Evidence and nonclaims
 

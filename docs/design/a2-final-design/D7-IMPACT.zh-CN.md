@@ -6,7 +6,7 @@ translation_status: source
 [English](D7-IMPACT.md)
 # A2 D7 实现影响与验收补充
 
-状态：这是 fixed1068244 增量独审之后的 D7 作者候选实现影响说明；不声称任何实现或产品行为已经完成。
+状态：这是 fixed85bdadf 独立增量复核之后的 D7 作者候选实现影响说明。该复核只留下 A2-D7-2F89-P2-01 OPEN；本作者修订只处理这一 machine-oracle 残余，不自行关闭它，也不声称任何实现或产品行为已经完成。
 
 ## 1. 保留的实现范围
 
@@ -24,11 +24,11 @@ fixed97 的当前准备与效果主链继续保留 PAB4/Descriptor3/Proof3/Prepa
 
 ## 3. Search compiler 与 machine-oracle 边界
 
-普通文本、visual condition 与显式 shortcut mode 都生成同一 SearchConditionAst/1，并走唯一 QuerySpec/2 compiler。D7-SEARCH-FIXTURES.json 是设计 machine oracle：每个正例实际保存 shortcut AST、与具体 UI widget 无关的 visual input/AST、canonical AST、完整可审查的 QuerySpec/2 canonical description 与完整结构化 CanonicalGraph description；negative、incomplete 与 browse case 明确不生成 Query。
+普通文本、visual condition 与显式 shortcut mode 都生成同一 SearchConditionAst/1，并走唯一 QuerySpec/2 compiler。D7-SEARCH-FIXTURES.json 是设计 machine oracle：每个正例实际保存 shortcut AST、与具体 UI widget 无关的 visual input/AST、canonical AST、非 wire 的 compiler-review metadata、可按 QuerySpec/2 严格解码的真实对象，以及带 canonical CEL AST/reference ordinal/field order 的规范 §5 CanonicalGraph serialization；negative、incomplete 与 browse case 明确不生成 Query。Node/Resource 混合 OR oracle 具有真实的逐 domain CEL 专门化、同一 public schema、真实 union_all input order 与最终 sort/project。
 
 实现与 conformance 必须覆盖递归 precedence、adjacency、repeated NOT、准确 keyword boundary、FieldId/member-path grammar、修正后的单反斜线 Windows 与 escaped-@ 例、bare trailing backslash 的字面规则、quoted trailing escape 的 incomplete 分类、三个 preset 的空输入、显式 source override、Optional title 处理、Node/Resource OR 经 union_all、domain 不相容 AND 的拒绝，以及 QuerySpec/1 与 /2 的严格分派。
 
-这些 machine oracle 不是“产品 parser/compiler 已运行”的证据。后续产品测试必须真正运行 parser/compiler，并把其 canonical AST/Query graph 与这些设计 oracle 比较。
+这些 machine oracle 不是“产品 parser/compiler 已运行”的证据。仓库/设计检查可以严格检查 fixture shape 并机械重算 §5 relation graph，但后续产品测试仍必须真正运行 parser、QuerySpec decoder 与 CEL compiler，并把其 canonical AST/Query graph 与这些设计 oracle 比较。
 
 ## 4. 保存/复制/导出 owner 边界
 
@@ -44,4 +44,4 @@ runtime、OS、GUI、IME、辅助技术、renderer/export、真实 QuerySpec/2 p
 
 ## 7. 后续 gate
 
-下一 gate 是对 fixed1068244 独审仍剩的 2 个 P1 与 2 个 P2，以及它们直接影响的 regression surface 做 fixed-SHA 非作者增量复核。A2-D7-2F89-P2-02 已在 fixed1068244 独立 CLOSED，本批不把它重新列成 OPEN。D8-D10 完整模块、Search+D8 平台执行证据与后续 fresh Pro/global review 继续分开。
+下一 gate 只对 A2-D7-2F89-P2-01 与本次直接变化的 Search fixture/oracle surface 做 fixed-SHA 非作者增量复核。A2-D7-2F89-P1-01、A2-D7-2F89-P1-02 与 A2-D7-1068244-P2-01 继续保持 fixed85bdadf 的 independently CLOSED；A2-D7-2F89-P2-02 继续保持 fixed1068244 的 independently CLOSED。D8-D10 完整模块、Search+D8 平台执行证据与后续 fresh Pro/global review 继续分开。

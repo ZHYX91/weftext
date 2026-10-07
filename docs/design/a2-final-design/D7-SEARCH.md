@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](D7-SEARCH.zh-CN.md)
 # A2 D7 Search Semantics and SEARCH-01–08
 
-Status: normative D7 search design inside the current author candidate. This revision repairs A2-D7-2F89-P1-02 and A2-D7-2F89-P2-01; independent review is still required. D8 interaction implementation remains a later full-module batch.
+Status: normative D7 search design inside the current author candidate. The fixed85bdadf independent review closed the prior Registry/QuerySpec coordination findings and left only A2-D7-2F89-P2-01; this revision author-repairs that machine-oracle residual and still requires fixed-SHA independent review. D8 interaction implementation remains a later full-module batch.
 
 ## 1. Decision and one execution authority
 
@@ -50,7 +50,7 @@ The current matching boundary is unchanged. Built-in title/subtitle/body and fil
 
 CJK and RTL text are ordinary Unicode scalar text. RTL changes presentation only. Ordinary plain-search mode treats the entire input as one literal phrase; AND, OR, NOT, colon, @, URL syntax and parentheses have no special meaning there.
 
-For default search ranking, exact title is rank 0; exact subtitle, Node/Resource file name and contribution role=name are rank 1; exact alias or exact Node relative path is rank 2; non-body substring matches are rank 3; body/content-only matches are rank 4. Only already-authorized values participate. Equal rank is followed by the explicit user sort when present, then canonical subject key and contribution/source identity for a deterministic tie. UI order and locale collation never supply a hidden tie.
+For default search ranking, exact title is rank 0; exact subtitle, Node/Resource file name and contribution role=name are rank 1; exact alias or exact Node relative path is rank 2; non-body substring matches are rank 3; body/content-only matches are rank 4. Only already-authorized values participate. Equal rank is followed by the explicit user sort when present. The canonical subject/source-occurrence tie is the mandatory ascending LogicalOccurrenceKey already defined by Query Algebra §3; it is not a synthetic CEL helper. The current fixtures carry no explicit user sort, so their actual QuerySpec/2 sort has only `row.rank`, after which that mandatory K tie applies. `source_key` remains projected search-row data and does not replace K. UI order and locale collation never supply a hidden tie.
 
 ## 5. Shortcut lexer and recursive grammar
 
@@ -115,9 +115,11 @@ Compilation is deterministic:
 
 Optional title/subtitle values match only in the some branch; none is never coerced to empty text. A titleless body match may therefore carry display=none, and the UI may render a non-authoritative placeholder without changing Query data. A condition outside the shortcut/visual subset remains an opaque advanced Query condition in the visual editor and is never lost. It can only be edited by the full Query editor. Saving always saves QuerySpec/2, never SearchConditionAst/1.
 
-D7-SEARCH-FIXTURES.json is the machine oracle for parser/visual/compiler equivalence. Every positive fixture contains the actual shortcut AST, an explicit UI-neutral visual-condition input, the visual AST, the expected canonical AST, a complete reviewable QuerySpec/2 canonical description, and the full expected CanonicalGraph description rather than an unexplained digest. The QuerySpec description records preset/scope, exact enabled sources, subject domains, optional handling, branch schemas, union_all use, deterministic sort and terminal schema; the CanonicalGraph description records every scan/read/filter/derive/project/union/sort stage and branch order. These oracle descriptions are design fixtures, not claims that a product parser/compiler was executed.
+D7-SEARCH-FIXTURES.json is the machine oracle for parser/visual/compiler equivalence. Every positive fixture contains the actual shortcut AST, an explicit UI-neutral visual-condition input, the visual AST, the expected canonical AST, explicitly non-wire `compilerReviewDescription` metadata, an actual `expectedQuerySpec` that is strict-decodable as QuerySpec/2, and a full `expectedCanonicalGraph` serialization of the existing Query/View/Action §5 algorithm rather than an unexplained digest. `expectedQuerySpec` has exactly the normal `format/version/parameters/relations/scalars/result` top level and uses the real plural scan domains/selectors, read `input/from/bindings`, CEL filter predicates, `{name,expr}` derive/project fields, `{expr,direction,none}` sort keys, TypedLiteral/Optional parameters, result shape, and QuerySpec/2 `union_all` where required. The review description is only a readable record of preset/scope/source compiler inputs and cannot be decoded or executed as Query.
 
-For a positive fixture, shortcutAst, visualAst and canonicalAst must be byte-equal under the stated canonical AST serialization, and both surfaces must yield the recorded QuerySpec/2/CanonicalGraph description. Negative, incomplete and browse/no-query fixtures record both expected QuerySpec and CanonicalGraph as null and execute no alternate Query.
+`expectedCanonicalGraph` starts at the result relation, removes author relation IDs, assigns `canonicalOrdinal` by the retained dependency order, records non-reference parameters, canonical `weftext.cel/1` ASTs, reference ordinals and declared field order, sorts ParameterSpecs by name bytes, and preserves `union_all.inputs` order. Its CEL-AST object rendering is fixture-only structural evidence for the existing profile, not a new CEL syntax, wire format or graph protocol. The mixed Node/Resource OR fixture first specializes the SearchConditionAst per legal domain, compiles distinct legal CEL predicates, projects one identical public schema, then uses the real `union_all` and final sort/project.
+
+For a positive fixture, shortcutAst, visualAst and canonicalAst remain byte-equal under the stated canonical AST serialization; `expectedQuerySpec` and `expectedCanonicalGraph` are the expected outputs for both surfaces. Negative, incomplete and browse/no-query fixtures record both objects as null and execute no alternate Query. These are design oracles only: the product QuerySpec/2 decoder, CEL parser/compiler and Search compiler remain UNRUN.
 
 ## 7. Permission, index state, count, ranking and snippets
 

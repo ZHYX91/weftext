@@ -118,7 +118,7 @@ D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通�
 
 ## D6 整合更新
 
-fixed1068244（`1068244d982a22140d8753b0483c63135b092999`）独立增量复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已独立 CLOSED `A2-D7-2F89-P2-02`（immutable source trace）；剩余 finding 为 `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`，以及新增的 `A2-D7-1068244-P2-01`（Impact 中英同步）。本作者批修复这四项残余，但不自行关闭。此前有界关闭的 `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01` 继续保持 CLOSED。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立增量复核结论为 REVISE：P0=0 / P1=0 / P2=1。该复核已独立 CLOSED `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02` 与 `A2-D7-1068244-P2-01`；`A2-D7-2F89-P2-02` 继续保持 fixed1068244 的 independently CLOSED。唯一 OPEN finding 是 `A2-D7-2F89-P2-01`，范围已收窄为真实 strict QuerySpec/2/CanonicalGraph Search compiler oracle。本作者批只修这一项并继续等待 fixed-SHA 独立复核。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
 
 
 ## 12. D4/D5 审计映射复核谱系
@@ -139,7 +139,7 @@ D7-SEARCH.md 已整合 SEARCH-01 至 SEARCH-08，但没有建立第二个搜索�
 
 D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN 证据状态、20 项整合义务、全部 8 项 SEARCH 义务、scenario/non-fallback 序号、A2-01–57、Facet/People/ICS 组、Chart §15、terminology Registry 覆盖以及两项导航 finding。D8–D10 只在真实 D7 producer/consumer 交叉上记为 PARTIAL；它们的完整模块仍留给后续。
 
-fixed2f89 已独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立关闭 A2-D7-2F89-P2-02。当前作者修复只处理 fixed1068244 剩余的 2 个 P1 与 2 个 P2，详细的 author-repaired/pending-independent 状态记录在 D7-SOURCE-MAP.json。
+fixed2f89 已独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立关闭 A2-D7-2F89-P2-02；fixed85bdadf 再独立关闭剩余两个 P1 与 Impact-sync P2，只留下 A2-D7-2F89-P2-01。当前作者修复只处理这一 machine-oracle 残余，详细 author-repaired/pending-independent 状态记录在 D7-SOURCE-MAP.json。
 
 产品 runtime、OS、GUI、renderer/export、database、真实 replica、provider、performance、migration 与 activation 行为在本批全部为 UNRUN。
 
@@ -149,3 +149,7 @@ fixed2f89 已独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01�
 fixed1068244（`1068244d982a22140d8753b0483c63135b092999`）独立增量复核结论为 REVISE：P0=0 / P1=2 / P2=2，并已独立 CLOSED `A2-D7-2F89-P2-02`（immutable source trace）。当前残余 finding 是 `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`，以及新增的 `A2-D7-1068244-P2-01`（Impact 中英同步）。本作者批修复这四项残余，但不自行关闭。此前有界关闭的 `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01` 继续保持 CLOSED。不声称 D7 或 global A2 已接受。
 
 本批保持已经关闭的 immutable source trace 不变；修正顶层 Registry 导航中的 fixed-S 34/8 与 parent-current 34/13，加入 QuerySpec/2 消费的 D6-owned 最小权限 FileBinding metadata producer，闭合 QuerySpec/2 的 Optional-title/union_all/D9-query_json 直接 consumer，修复 shortcut machine oracle 与 escape 案例，并同步 D7-IMPACT 中英文。S49 snapshots 与 inputs 继续受保护。
+
+## 15. fixed85bdadf 唯一 D7 残余与真实 compiler oracle
+
+fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立把 D7 repair ledger 收敛到 P0=0 / P1=0 / P2=1。P1-01、P1-02 与 A2-D7-1068244-P2-01 均在该 SHA CLOSED；P2-02 继续保持 fixed1068244 CLOSED。本继任作者 delta 只触碰唯一 P2-01 Search oracle 与必要状态/导航文字：19 个正例现在都带真实可严格解码的 QuerySpec/2 与直接 §5 CanonicalGraph serialization，8 个 negative/incomplete/browse case 继续保持零 Query。已关闭的 Registry/D6 metadata/D9 query_json 合同均不重开。
