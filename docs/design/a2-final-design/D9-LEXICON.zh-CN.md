@@ -20,9 +20,9 @@ translation_status: source
 | Coupling Group / Import Batch | 不可拆分的 author dependency group / 一个原子 request | 不是 UI/Query page 或 worker process |
 | Conversion Input | D9 不可变的 raw/IR/mapping/loss/route evidence | 不是 identity、OriginBinding 或 author source |
 | Worker Invocation | D9 worker-control record | 无 path、command、permission 或 publication authority |
-| Node Template / Template Recipe | D2 Template identity / D9 一次性 construction recipe | 不具有 persistent instance binding，也不执行 script interpolation |
-| Office Template / Placeholder / Style Directive / Repeat Band | 普通 Office 字节与可见 compiler syntax | 不存在 content-control/named-range/ExcelTable 隐藏层 |
-| Render Snapshot / D7 Result Pin | D9 有限 projection / 固定 D7-owned complete result | 不是 author snapshot 或 rowHandle identity |
+| Node Template / Template Recipe | D2 Template 身份 / D9 一次性构造配方 | 不具有持久实例绑定，也不执行脚本插值 |
+| Office Template / Placeholder / Style Directive / Repeat Band | 普通 Office 字节与可见编译器语法 | 不存在 content-control/named-range/ExcelTable 隐藏层 |
+| Render Snapshot / D7 Result Pin | D9 有限投影 / 固定由 D7 拥有的完整结果 | 不是作者快照或 rowHandle 身份 |
 | Export Plan | D9 current immutable output preparation，current type `ExportPlan/3` | 非 D6 PreparedIntent 或 author ledger |
 | Staged Output / Publication Receipt | 完整未发布字节 / 外部发布事实，现任为 `PublicationReceipt/3` | 绝不是 D3/D6 author receipt |
 | Import Loss / Export Loss | 相互分离的 D9 fixed-proposal loss domain | 不是 safety approval 或跨域 address |
@@ -55,7 +55,7 @@ final current D9 协调 D7 `PreparedActionBinding/4`、D3 `D3IdentityOperationRe
 
 ## Retirement names
 
-fresh current 路径拒绝未发布 legacy ImportIr/YAML proposal、attr/record alias、formula-reorder/broad-view template grammar、free provider command/fallback、free binding dictionary、rowHandle identity、generic author-receipt alias 与 D9-private Locator kind。historical research file 只能在明确 non-authoritative provenance 的前提下保留这些文字。
+fresh current 路径拒绝未发布的 legacy ImportIr/YAML proposal、attr/record alias、formula-reorder/broad-view template grammar、自由 provider 命令/回退、自由 binding dictionary、rowHandle 身份、通用 author-receipt alias 与 D9-private Locator kind。historical research file 只能在明确标注为非权威来源证据的前提下保留这些文字。
 
 ## D10 direct boundary
 
