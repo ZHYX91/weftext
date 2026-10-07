@@ -49,7 +49,7 @@ source applicability 是闭合的。title/subtitle/filename/path/body/@field 只
 
 CJK 与 RTL 都按普通 Unicode scalar 文本处理；RTL 只改变呈现。普通 plain-search mode 把整段输入当一个 literal phrase，AND、OR、NOT、colon、@、URL 语法与 parentheses 在这里都没有特殊含义。
 
-默认 rank 中，title exact 为 0；subtitle、Node/Resource file name 以及 contribution role=name 的 exact 为 1；alias exact 或 Node relative path exact 为 2；非 body 的 substring 为 3；body/content-only 为 4。只有已经获权的值可以进入 rank。rank 相同后先使用明确的用户 sort。canonical subject/source-occurrence 的稳定 tie 由 Query Algebra §3 已规定、始终追加的升序 LogicalOccurrenceKey 承担，不是编译器临时伪造的 CEL helper。当前 fixtures 没有显式 user sort，因此真实 QuerySpec/2 的 sort 只有 `row.rank`，随后直接使用该强制 K tie；`source_key` 继续只是投影到 search row 的数据，不替代 K。UI 顺序与 locale collation 不提供隐藏排序。
+默认 rank 中，title exact 为 0；subtitle、Node/Resource file name 以及 contribution role=name 的 exact 为 1；alias exact 或 Node relative path exact 为 2；非 body 的 substring 为 3；body/content-only 为 4。只有已经获权的值可以进入 rank。rank 相同后先使用明确的用户 sort；再以 canonical subject key 与 contribution/source identity 做稳定 tie。UI 顺序与 locale collation 不提供隐藏排序。
 
 ## 5. Shortcut lexer 与递归 grammar
 
@@ -120,7 +120,7 @@ D7-SEARCH-FIXTURES.json 是 parser、visual 与 compiler 等价的 machine oracl
 
 `expectedCanonicalGraph` 从 result relation 开始，删除作者 relation ID，按既有 dependency order 分配 `canonicalOrdinal`，记录 non-reference parameter、canonical `weftext.cel/1` AST、reference ordinal 与 declared field order，按参数名 bytes 排序 ParameterSpec，并原样保留 `union_all.inputs` 顺序。其中 CEL-AST object 只是在 fixture 中对既有 profile 做结构化证据呈现，不是新的 CEL 语法、wire format 或 graph protocol。Node/Resource 混合 OR fixture 会先按合法 domain 专门化 SearchConditionAst，再编译为各自合法 CEL predicate，投影相同 public schema，最后使用真实 `union_all` 与最终 sort/project。
 
-正例继续要求 shortcutAst、visualAst 与 canonicalAst 按规定 canonical AST serialization 逐字节相等；`expectedQuerySpec` 与 `expectedCanonicalGraph` 是两种 surface 共用的预期编译结果。negative、incomplete 与 browse/no-query fixture 的两个对象都明确为 null，且不会执行替代 Query。这些仍只是设计 oracle：真实产品 QuerySpec/2 decoder、CEL parser/compiler 与 Search compiler 全部保持 UNRUN。
+正例继续要求 shortcutAst、visualAst 与 canonicalAst 按规定 canonical AST serialization 逐字节相等；`expectedQuerySpec` 与 `expectedCanonicalGraph` 是两种 surface 共用的预期编译结果。为了在不发明 Ref literal、也不引入可覆盖 Optional<Ref> 输入的前提下构造另一 domain 的 absent Ref，fixture 使用类型为 `list<NodeRef,0>` 或 `list<ResourceRef,0>` 的 version-2 parameter；这种类型唯一合法值就是空列表，默认值也是 `[]`，因此 `at(param.empty_*_refs, 0)` 会得到所需的强类型 Optional none，而 invocation argument 不可能把它替换成 present Ref。negative、incomplete 与 browse/no-query fixture 的两个对象都明确为 null，且不会执行替代 Query。这些仍只是设计 oracle：真实产品 QuerySpec/2 decoder、CEL parser/compiler 与 Search compiler 全部保持 UNRUN。
 
 ## 7. 权限、索引状态、命中数、排名与摘要
 

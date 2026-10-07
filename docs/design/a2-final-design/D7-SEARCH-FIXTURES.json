@@ -7,6 +7,7 @@
     "all 19 positive shortcut and visual forms retain byte-equal SearchConditionAst/1",
     "all 19 positives carry an actual strict QuerySpec/2 object with only format/version/parameters/relations/scalars/result at top level",
     "scan/read/filter/derive/project/sort/union_all use the closed D7 shapes; executable expressions are real weftext.cel/1 strings and no review placeholder is executable syntax",
+    "all 19 positives use singleton typed empty-list parameters list<NodeRef,0>/list<ResourceRef,0> plus at(...,0) for opposite-domain Optional none; the parameter type admits no nonempty override",
     "expectedCanonicalGraph directly serializes D7 Query, View and Action §5: result-root traversal, canonicalOrdinal assignment, removed author relation IDs, canonical CEL ASTs, reference ordinals, declared field order and union input order",
     "Node/Resource OR is specialized per legal domain before CEL compilation, projects one identical public schema, uses union_all in Node-then-Resource input order and then one final sort/project",
     "negative, incomplete and browse/no-query forms carry expectedQuerySpec=null and expectedCanonicalGraph=null and never fall back to plain mode",
@@ -129,24 +130,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -330,14 +331,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -2356,31 +2368,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -2452,7 +2464,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -2640,24 +2652,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -2841,14 +2853,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -4872,31 +4895,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -4968,7 +4991,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -5140,24 +5163,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -5341,14 +5364,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -6216,31 +6250,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -6312,7 +6346,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -6438,24 +6472,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -6639,14 +6673,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -7464,31 +7509,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -7560,7 +7605,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -7722,24 +7767,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -7923,14 +7968,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -9949,31 +10005,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -10045,7 +10101,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -10207,24 +10263,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -10408,14 +10464,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -12434,31 +12501,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -12530,7 +12597,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -12626,24 +12693,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -12827,14 +12894,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -13638,31 +13716,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -13734,7 +13812,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -13830,24 +13908,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -14031,14 +14109,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -14842,31 +14931,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -14938,7 +15027,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -15034,24 +15123,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -15235,14 +15324,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -16046,31 +16146,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -16142,7 +16242,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -16238,24 +16338,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -16439,14 +16539,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -17250,31 +17361,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -17346,7 +17457,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -17442,24 +17553,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -17643,14 +17754,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -18454,31 +18576,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -18550,7 +18672,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -18646,24 +18768,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -18847,14 +18969,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -19658,31 +19791,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -19754,7 +19887,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -19893,24 +20026,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -20094,14 +20227,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -20444,31 +20588,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -20546,7 +20690,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -20658,24 +20802,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -20859,14 +21003,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -21309,31 +21464,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -21405,7 +21560,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -21524,24 +21679,24 @@
         },
         "parameters": [
           {
-            "name": "none_node_ref",
+            "name": "empty_node_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "node_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "node_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -21707,14 +21862,25 @@
               "fields": [
                 {
                   "name": "node_ref",
-                  "source": "param.none_node_ref",
+                  "source": "at(param.empty_node_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_node_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_node_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -22054,31 +22220,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_node_ref",
+            "name": "empty_node_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "node_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "node_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -22134,7 +22300,7 @@
             "fields": [
               {
                 "name": "node_ref",
-                "expr": "param.none_node_ref"
+                "expr": "at(param.empty_node_refs, 0)"
               },
               {
                 "name": "resource_ref",
@@ -22269,24 +22435,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -22470,14 +22636,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -22833,31 +23010,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -22937,7 +23114,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -23053,24 +23230,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -23254,14 +23431,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -24065,31 +24253,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -24161,7 +24349,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -24352,45 +24540,45 @@
         },
         "parameters": [
           {
-            "name": "none_node_ref",
+            "name": "empty_node_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "node_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "node_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           },
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -24593,14 +24781,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -25041,14 +25240,25 @@
               "fields": [
                 {
                   "name": "node_ref",
-                  "source": "param.none_node_ref",
+                  "source": "at(param.empty_node_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_node_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_node_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -25402,52 +25612,52 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_node_ref",
+            "name": "empty_node_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "node_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "node_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           },
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -25519,7 +25729,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -25586,7 +25796,7 @@
             "fields": [
               {
                 "name": "node_ref",
-                "expr": "param.none_node_ref"
+                "expr": "at(param.empty_node_refs, 0)"
               },
               {
                 "name": "resource_ref",
@@ -25753,24 +25963,24 @@
         },
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -25954,14 +26164,25 @@
                 },
                 {
                   "name": "resource_ref",
-                  "source": "param.none_resource_ref",
+                  "source": "at(param.empty_resource_refs, 0)",
                   "ast": {
-                    "kind": "member",
-                    "target": {
-                      "kind": "identifier",
-                      "name": "param"
-                    },
-                    "name": "none_resource_ref"
+                    "kind": "call",
+                    "name": "at",
+                    "args": [
+                      {
+                        "kind": "member",
+                        "target": {
+                          "kind": "identifier",
+                          "name": "param"
+                        },
+                        "name": "empty_resource_refs"
+                      },
+                      {
+                        "kind": "literal",
+                        "type": "int64",
+                        "value": "0"
+                      }
+                    ]
                   }
                 },
                 {
@@ -26304,31 +26525,31 @@
             }
           }
         ],
-        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle; this object is not decoded as QuerySpec."
+        "note": "Non-wire compiler review metadata only. expectedQuerySpec is the strict QuerySpec/2 compiler-output oracle. Opposite-domain absent Refs are typed with singleton list<Ref,0> default parameters plus at(...,0), so callers cannot substitute a present Ref."
       },
       "expectedQuerySpec": {
         "format": "weftext.query",
         "version": 2,
         "parameters": [
           {
-            "name": "none_resource_ref",
+            "name": "empty_resource_refs",
             "type": {
-              "kind": "optional",
+              "kind": "list",
               "item": {
                 "kind": "resource_ref"
-              }
+              },
+              "maximum": 0
             },
             "required": false,
             "default": {
               "type": {
-                "kind": "optional",
+                "kind": "list",
                 "item": {
                   "kind": "resource_ref"
-                }
+                },
+                "maximum": 0
               },
-              "value": {
-                "state": "none"
-              }
+              "value": []
             }
           }
         ],
@@ -26406,7 +26627,7 @@
               },
               {
                 "name": "resource_ref",
-                "expr": "param.none_resource_ref"
+                "expr": "at(param.empty_resource_refs, 0)"
               },
               {
                 "name": "display",
@@ -26484,7 +26705,7 @@
       "expectedQuerySpec=null",
       "expectedCanonicalGraph=null"
     ],
-    "note": "compilerReviewDescription is explicitly non-wire. expectedQuerySpec is the actual strict-decodable QuerySpec/2 oracle. expectedCanonicalGraph is mechanically recomputable from that QuerySpec under D7 Query, View and Action §5 plus the recorded canonical CEL ASTs; it is not a digest and is not a new runtime protocol."
+    "note": "compilerReviewDescription is explicitly non-wire. expectedQuerySpec is the actual strict-decodable QuerySpec/2 oracle. Opposite-domain absent Refs use singleton list<Ref,0> defaults and at(...,0), so invocation cannot inject a present Ref. expectedCanonicalGraph is mechanically recomputable from that QuerySpec under D7 Query, View and Action §5 plus the recorded canonical CEL ASTs; it is not a digest and is not a new runtime protocol."
   },
   "version_oracles": [
     {
