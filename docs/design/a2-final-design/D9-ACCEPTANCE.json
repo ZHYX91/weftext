@@ -1,0 +1,2316 @@
+{
+  "format": "weftext.a2-d9-acceptance",
+  "version": 1,
+  "status": "author-resolved-pending-independent-review",
+  "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+  "structureAuthority": {
+    "canonical": "D9-ACCEPTANCE.json",
+    "projections": [
+      "D9-ACCEPTANCE.md",
+      "D9-ACCEPTANCE.zh-CN.md"
+    ]
+  },
+  "counts": {
+    "sourceOwned": 53,
+    "r02r03r04": 8,
+    "mandatory": 10,
+    "current": 9,
+    "total": 80,
+    "uniqueIds": 80
+  },
+  "rows": [
+    {
+      "id": "D9-01",
+      "scenario": {
+        "en": "Owned closed ImportIR with page/flow/workbook branches; PDF and actual XLSX sources test a second distinct structure; common source, resources, loss, and Core mapping",
+        "zh": "自有封闭ImportIR，page/flow/workbook分支；PDF与真实XLSX源验证第二种不同结构；共同来源、资源、loss和Core映射"
+      },
+      "positive": {
+        "en": "Owned closed ImportIR with page/flow/workbook branches; PDF and actual XLSX sources test a second distinct structure; common source, resources, loss, and Core mapping",
+        "zh": "自有封闭ImportIR，page/flow/workbook分支；PDF与真实XLSX源验证第二种不同结构；共同来源、资源、loss和Core映射"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row D9-01; final-current overlays apply where named",
+      "evidence": {
+        "en": "Both source byte sets and extracted IR, independent pypdf/openpyxl reads, negative schema/CSV cases; Flow still needs real DOCX/ODT corpora.",
+        "zh": "两类源bytes及提取IR、独立pypdf/openpyxl读取、负向schema/CSV；Flow仍待真实DOCX/ODT语料。"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 19,
+        "raw": "| D9-01 | Owned closed ImportIR with page/flow/workbook branches; PDF and actual XLSX sources test a second distinct structure; common source, resources, loss, and Core mapping | Both source byte sets and extracted IR, independent pypdf/openpyxl reads, negative schema/CSV cases; Flow still needs real DOCX/ODT corpora. |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 18,
+        "zhRaw": "| D9-01 | 自有封闭ImportIR，page/flow/workbook分支；PDF与真实XLSX源验证第二种不同结构；共同来源、资源、loss和Core映射 | 两类源bytes及提取IR、独立pypdf/openpyxl读取、负向schema/CSV；Flow仍待真实DOCX/ODT语料。 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "D9-02",
+      "scenario": {
+        "en": "Fixed-version Provider/Route and strict sandbox; existing PDF adapter is not production-ready; candidate MuPDF for XPS and OFDRW for OFD; CAJ/HN has no execution profile and may remain an inert attachment",
+        "zh": "Provider/Route固定版本、严格sandbox；PDF现有adapter未生产就绪；XPS候选MuPDF；OFD候选OFDRW；CAJ/HN无执行profile，保留惰性附件"
+      },
+      "positive": {
+        "en": "Fixed-version Provider/Route and strict sandbox; existing PDF adapter is not production-ready; candidate MuPDF for XPS and OFDRW for OFD; CAJ/HN has no execution profile and may remain an inert attachment",
+        "zh": "Provider/Route固定版本、严格sandbox；PDF现有adapter未生产就绪；XPS候选MuPDF；OFD候选OFDRW；CAJ/HN无执行profile，保留惰性附件"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row D9-02; final-current overlays apply where named",
+      "evidence": {
+        "en": "Primary-source research and local inventory; these candidates were not installed/run or license-approved, and Windows/Linux coverage is not claimed.",
+        "zh": "一手来源调查和本地inventory；未安装运行这些候选、不作许可批准，不声称Windows/Linux覆盖。"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 20,
+        "raw": "| D9-02 | Fixed-version Provider/Route and strict sandbox; existing PDF adapter is not production-ready; candidate MuPDF for XPS and OFDRW for OFD; CAJ/HN has no execution profile and may remain an inert attachment | Primary-source research and local inventory; these candidates were not installed/run or license-approved, and Windows/Linux coverage is not claimed. |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 19,
+        "zhRaw": "| D9-02 | Provider/Route固定版本、严格sandbox；PDF现有adapter未生产就绪；XPS候选MuPDF；OFD候选OFDRW；CAJ/HN无执行profile，保留惰性附件 | 一手来源调查和本地inventory；未安装运行这些候选、不作许可批准，不声称Windows/Linux覆盖。 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "D9-03",
+      "scenario": {
+        "en": "Ordinary text tokens, exact ASCII spaces, single-pass escaping without rescanning values, closed namespaces, none policy, one row/column band, logical-forward ↓/→, and consistent-format inheritance",
+        "zh": "普通文本token、精确ASCII空格、单次转义、不重扫值、closed namespaces、none policy、单row/column band、↓/→逻辑正向、格式一致继承"
+      },
+      "positive": {
+        "en": "Ordinary text tokens, exact ASCII spaces, single-pass escaping without rescanning values, closed namespaces, none policy, one row/column band, logical-forward ↓/→, and consistent-format inheritance",
+        "zh": "普通文本token、精确ASCII空格、单次转义、不重扫值、closed namespaces、none policy、单row/column band、↓/→逻辑正向、格式一致继承"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row D9-03; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite token/run/repeat counterexamples passed; complete Office parsers/interoperability await implementation. This replaces X-001 with explicit semantics, not automatic acceptance of an old candidate.",
+        "zh": "有限token/run/repeat反例通过；完整Office parser和互通待实施。X-001由此替换为明确合同，非历史candidate自动转freeze。"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 21,
+        "raw": "| D9-03 | Ordinary text tokens, exact ASCII spaces, single-pass escaping without rescanning values, closed namespaces, none policy, one row/column band, logical-forward ↓/→, and consistent-format inheritance | Finite token/run/repeat counterexamples passed; complete Office parsers/interoperability await implementation. This replaces X-001 with explicit semantics, not automatic acceptance of an old candidate. |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 20,
+        "zhRaw": "| D9-03 | 普通文本token、精确ASCII空格、单次转义、不重扫值、closed namespaces、none policy、单row/column band、↓/→逻辑正向、格式一致继承 | 有限token/run/repeat反例通过；完整Office parser和互通待实施。X-001由此替换为明确合同，非历史candidate自动转freeze。 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "D9-04",
+      "scenario": {
+        "en": "Unique H1–H5 mapping, explicit outline, visible style exemplars, and unique body/bibliography placement without localized-style-name guessing",
+        "zh": "H1–H5唯一映射、显式outline、可见style样板、body/bibliography唯一放置，不按localized style名猜"
+      },
+      "positive": {
+        "en": "Unique H1–H5 mapping, explicit outline, visible style exemplars, and unique body/bibliography placement without localized-style-name guessing",
+        "zh": "H1–H5唯一映射、显式outline、可见style样板、body/bibliography唯一放置，不按localized style名猜"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row D9-04; final-current overlays apply where named",
+      "evidence": {
+        "en": "DOCX/ODT XML-fragment structural checks, with no Office/WPS/LibreOffice rendering pass claimed.",
+        "zh": "DOCX/ODT XML片段结构验证；未声称在Office/WPS/LibreOffice渲染通过。"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 22,
+        "raw": "| D9-04 | Unique H1–H5 mapping, explicit outline, visible style exemplars, and unique body/bibliography placement without localized-style-name guessing | DOCX/ODT XML-fragment structural checks, with no Office/WPS/LibreOffice rendering pass claimed. |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 21,
+        "zhRaw": "| D9-04 | H1–H5唯一映射、显式outline、可见style样板、body/bibliography唯一放置，不按localized style名猜 | DOCX/ODT XML片段结构验证；未声称在Office/WPS/LibreOffice渲染通过。 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Current D2 product permits authored/effective H6-H9; target rendering limits are loss/unavailability per CUR-03."
+    },
+    {
+      "id": "D9-05",
+      "scenario": {
+        "en": "Explicit document/native_table/node_collection/query_rows/query_json domains; typed snapshot, projection/loss, exact numeric/date policy; external output separate from Resource commit",
+        "zh": "document/native_table/node_collection/query_rows/query_json显式域；typed snapshot、projection/loss、精确数字/日期策略；外部输出与Resource提交分开"
+      },
+      "positive": {
+        "en": "Explicit document/native_table/node_collection/query_rows/query_json domains; typed snapshot, projection/loss, exact numeric/date policy; external output separate from Resource commit",
+        "zh": "document/native_table/node_collection/query_rows/query_json显式域；typed snapshot、projection/loss、精确数字/日期策略；外部输出与Resource提交分开"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row D9-05; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification matrix and boundary analysis, finite CSV parsing and typed-grid evidence; actual exporters/publication faults/authorization races await implementation.",
+        "zh": "规范矩阵及边界分析；CSV有限解析、typed grid证据；真实导出器/发布故障/权限竞争待实施。"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 23,
+        "raw": "| D9-05 | Explicit document/native_table/node_collection/query_rows/query_json domains; typed snapshot, projection/loss, exact numeric/date policy; external output separate from Resource commit | Specification matrix and boundary analysis, finite CSV parsing and typed-grid evidence; actual exporters/publication faults/authorization races await implementation. |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 22,
+        "zhRaw": "| D9-05 | document/native_table/node_collection/query_rows/query_json显式域；typed snapshot、projection/loss、精确数字/日期策略；外部输出与Resource提交分开 | 规范矩阵及边界分析；CSV有限解析、typed grid证据；真实导出器/发布故障/权限竞争待实施。 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S01",
+      "scenario": {
+        "en": "Two-page PDF with a table, ordinary user import",
+        "zh": "双页PDF有表格，用户普通导入"
+      },
+      "positive": {
+        "en": "One document Node by default, never automatic per-page Nodes; table text/geometry observations do not become Fields",
+        "zh": "默认一个document Node，不自动每页Node；表格文字与几何观察不自动Field"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S01; final-current overlays apply where named",
+      "evidence": {
+        "en": "Actual PDF, two parsers, visual image inspection",
+        "zh": "实际PDF、两parser、图像目视"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 29,
+        "raw": "| S01 | Two-page PDF with a table, ordinary user import | One document Node by default, never automatic per-page Nodes; table text/geometry observations do not become Fields | Actual PDF, two parsers, visual image inspection |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 28,
+        "zhRaw": "| S01 | 双页PDF有表格，用户普通导入 | 默认一个document Node，不自动每页Node；表格文字与几何观察不自动Field | 实际PDF、两parser、图像目视 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S02",
+      "scenario": {
+        "en": "XLSX 16-digit number, whitespace, blank/absent/empty, formula with/without cache, hidden content, merge",
+        "zh": "XLSX numeric16位、空格、blank/absent/empty、formula有/无cache、hidden、merge"
+      },
+      "positive": {
+        "en": "Preserve lexemes/coordinates/source types; no recalculation or copying merged values; explicit loss/rejection in mapping",
+        "zh": "lexeme/坐标/源类型保留；无重算/复制merge值；映射显式loss/拒绝"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S02; final-current overlays apply where named",
+      "evidence": {
+        "en": "Actual XLSX and independent openpyxl",
+        "zh": "实际XLSX及独立openpyxl"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 30,
+        "raw": "| S02 | XLSX 16-digit number, whitespace, blank/absent/empty, formula with/without cache, hidden content, merge | Preserve lexemes/coordinates/source types; no recalculation or copying merged values; explicit loss/rejection in mapping | Actual XLSX and independent openpyxl |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 29,
+        "zhRaw": "| S02 | XLSX numeric16位、空格、blank/absent/empty、formula有/无cache、hidden、merge | lexeme/坐标/源类型保留；无重算/复制merge值；映射显式loss/拒绝 | 实际XLSX及独立openpyxl |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S03",
+      "scenario": {
+        "en": "CSV duplicate header, quoted newline, ragged rows, empty file",
+        "zh": "CSV重复header、quoted newline、ragged、空文件"
+      },
+      "positive": {
+        "en": "Ordinal mapping and retained text; reject ragged rows; no fabricated row for empty input",
+        "zh": "ordinal mapping、保留文字；ragged拒绝；空文件不伪造一行"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S03; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite actual CSV",
+        "zh": "有限实际CSV"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 31,
+        "raw": "| S03 | CSV duplicate header, quoted newline, ragged rows, empty file | Ordinal mapping and retained text; reject ragged rows; no fabricated row for empty input | Finite actual CSV |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 30,
+        "zhRaw": "| S03 | CSV重复header、quoted newline、ragged、空文件 | ordinal mapping、保留文字；ragged拒绝；空文件不伪造一行 | 有限实际CSV |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S04",
+      "scenario": {
+        "en": "PDF extension with non-PDF bytes; DTD, ZIP traversal/bomb",
+        "zh": "扩展名PDF但bytes不是PDF；含DTD、zip traversal、zip bomb"
+      },
+      "positive": {
+        "en": "Probe recognition grants no execution; parser/isolation failure causes no author write",
+        "zh": "probe识别不授执行；安全parser/隔离失败，无author写"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S04; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification; production attack corpus pending",
+        "zh": "规范；攻击语料待生产"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 32,
+        "raw": "| S04 | PDF extension with non-PDF bytes; DTD, ZIP traversal/bomb | Probe recognition grants no execution; parser/isolation failure causes no author write | Specification; production attack corpus pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 31,
+        "zhRaw": "| S04 | 扩展名PDF但bytes不是PDF；含DTD、zip traversal、zip bomb | probe识别不授执行；安全parser/隔离失败，无author写 | 规范；攻击语料待生产 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S05",
+      "scenario": {
+        "en": "Hung worker, child still writing, exit0 with incomplete IR",
+        "zh": "worker挂起/子进程继续写/退出0但IR不完整"
+      },
+      "positive": {
+        "en": "Kill the entire tree before cleanup; unverified output cannot be pinned/committed; no workspace mount",
+        "zh": "kill全树后才清理；unverified输出不可pin/commit；无工作区挂载"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S05; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification; actual OS isolation pending",
+        "zh": "规范；OS隔离待实机"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 33,
+        "raw": "| S05 | Hung worker, child still writing, exit0 with incomplete IR | Kill the entire tree before cleanup; unverified output cannot be pinned/committed; no workspace mount | Specification; actual OS isolation pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 32,
+        "zhRaw": "| S05 | worker挂起/子进程继续写/退出0但IR不完整 | kill全树后才清理；unverified输出不可pin/commit；无工作区挂载 | 规范；OS隔离待实机 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S06",
+      "scenario": {
+        "en": "CAJ-HN, missing MuPDF license or OFDRW dependency",
+        "zh": "CAJ-HN、缺MuPDF许可或OFDRW依赖"
+      },
+      "positive": {
+        "en": "Explicit unavailable with normative D1 reason; explicit inert-original storage allowed; no extension-changing fallback",
+        "zh": "明确unavailable和D1规范reason；可明确存不执行原件；不换后缀fallback"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S06; final-current overlays apply where named",
+      "evidence": {
+        "en": "Primary-source research/specification",
+        "zh": "一手调查/规范"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 34,
+        "raw": "| S06 | CAJ-HN, missing MuPDF license or OFDRW dependency | Explicit unavailable with normative D1 reason; explicit inert-original storage allowed; no extension-changing fallback | Primary-source research/specification |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 33,
+        "zhRaw": "| S06 | CAJ-HN、缺MuPDF许可或OFDRW依赖 | 明确unavailable和D1规范reason；可明确存不执行原件；不换后缀fallback | 一手调查/规范 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S07",
+      "scenario": {
+        "en": "Office template containing macro, formula, OLE, external relationship, signature",
+        "zh": "Office中macro、公式、OLE、external rel、签名模板"
+      },
+      "positive": {
+        "en": "Reject the whole template; do not execute or silently strip prohibited content and claim success",
+        "zh": "本代模板整体拒绝，不执行/去除后伪称成功"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S07; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification; hostile-template suite pending",
+        "zh": "规范；恶意模板套件待实施"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 35,
+        "raw": "| S07 | Office template containing macro, formula, OLE, external relationship, signature | Reject the whole template; do not execute or silently strip prohibited content and claim success | Specification; hostile-template suite pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 34,
+        "zhRaw": "| S07 | Office中macro、公式、OLE、external rel、签名模板 | 本代模板整体拒绝，不执行/去除后伪称成功 | 规范；恶意模板套件待实施 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S08",
+      "scenario": {
+        "en": "One token across same-style versus mixed-style runs",
+        "zh": "同token跨同style和mixed style runs"
+      },
+      "positive": {
+        "en": "Recognize the former logically; template_invalid for the latter; no first-run sampling",
+        "zh": "前者逻辑识别，后者template_invalid；不first-run取样"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S08; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite run model",
+        "zh": "有限run模型"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 36,
+        "raw": "| S08 | One token across same-style versus mixed-style runs | Recognize the former logically; template_invalid for the latter; no first-run sampling | Finite run model |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 35,
+        "zhRaw": "| S08 | 同token跨同style和mixed style runs | 前者逻辑识别，后者template_invalid；不first-run取样 | 有限run模型 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S09",
+      "scenario": {
+        "en": "{{meta.title}}, NBSP, old attr/record aliases, values containing template syntax",
+        "zh": "{{meta.title}}、NBSP、attr/record旧alias、值含模板语法"
+      },
+      "positive": {
+        "en": "Reject invalid syntax; explicit four-brace escape; never rescan replacement values",
+        "zh": "无效语法拒绝；显式四brace转义；替换值不重扫"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S09; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite scanner",
+        "zh": "有限scanner"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 37,
+        "raw": "| S09 | `{{meta.title}}`, NBSP, old attr/record aliases, values containing template syntax | Reject invalid syntax; explicit four-brace escape; never rescan replacement values | Finite scanner |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 36,
+        "zhRaw": "| S09 | `{{meta.title}}`、NBSP、attr/record旧alias、值含模板语法 | 无效语法拒绝；显式四brace转义；替换值不重扫 | 有限scanner |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S10",
+      "scenario": {
+        "en": "Unknown path, none, empty text, multi-occurrence Field",
+        "zh": "未知path、none、empty text、多occurrence Field"
+      },
+      "positive": {
+        "en": "Unknown/ambiguous blocks; none requires exact missing policy; empty text may be empty; export report binds actual binding/template sources",
+        "zh": "unknown/ambiguous阻断；none需精确missing policy；empty可为空；导出报告绑定实际binding与模板来源"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S10; final-current overlays apply where named",
+      "evidence": {
+        "en": "Scanner and finite r03 export model",
+        "zh": "scanner与r03有限导出模型"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 38,
+        "raw": "| S10 | Unknown path, none, empty text, multi-occurrence Field | Unknown/ambiguous blocks; none requires exact missing policy; empty text may be empty; export report binds actual binding/template sources | Scanner and finite r03 export model |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 37,
+        "zhRaw": "| S10 | 未知path、none、empty text、多occurrence Field | unknown/ambiguous阻断；none需精确missing policy；empty可为空；导出报告绑定实际binding与模板来源 | scanner与r03有限导出模型 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S11",
+      "scenario": {
+        "en": "↓/→, 0/1/N, RTL, cross-band merge, formula, row/column overflow",
+        "zh": "↓/→、0/1/N、RTL、cross merge、公式、超行列上限"
+      },
+      "positive": {
+        "en": "Same logical indices, zero deletion, footprint preflight, cross-band/formula rejection",
+        "zh": "逻辑索引一致，零删除，预检footprint，跨band/公式拒绝"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S11; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite repeat model",
+        "zh": "有限repeat模型"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 39,
+        "raw": "| S11 | ↓/→, 0/1/N, RTL, cross-band merge, formula, row/column overflow | Same logical indices, zero deletion, footprint preflight, cross-band/formula rejection | Finite repeat model |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 38,
+        "zhRaw": "| S11 | ↓/→、0/1/N、RTL、cross merge、公式、超行列上限 | 逻辑索引一致，零删除，预检footprint，跨band/公式拒绝 | 有限repeat模型 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S12",
+      "scenario": {
+        "en": "H1–H5, source H6, localized Heading label pretending to be a heading",
+        "zh": "H1–H5、source H6、localized Heading label伪标题"
+      },
+      "positive": {
+        "en": "D2 has only five levels; explicit outline mapping; source H6 requires loss/rejection",
+        "zh": "D2仅5级；显式outline映射；source H6需loss/拒绝"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S12; final-current overlays apply where named",
+      "evidence": {
+        "en": "XML fragments/specification",
+        "zh": "XML片段+规范"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 40,
+        "raw": "| S12 | H1–H5, source H6, localized Heading label pretending to be a heading | D2 has only five levels; explicit outline mapping; source H6 requires loss/rejection | XML fragments/specification |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 39,
+        "zhRaw": "| S12 | H1–H5、source H6、localized Heading label伪标题 | D2仅5级；显式outline映射；source H6需loss/拒绝 | XML片段+规范 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "The old five-level D2 premise is superseded by CUR-03 / FC4A-ROUTE-03; source H6-H9 remains legal current source."
+    },
+    {
+      "id": "S13",
+      "scenario": {
+        "en": "Bibliography placement inside body and separate slot together",
+        "zh": "同时body内部bibliography和独立slot"
+      },
+      "positive": {
+        "en": "One complete rendering, explicit relocation; reject multiple placements",
+        "zh": "唯一完整渲染，明确relocation；多个placement拒绝"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S13; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification; actual citation renderer pending",
+        "zh": "规范；实际citation renderer待实施"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 41,
+        "raw": "| S13 | Bibliography placement inside body and separate slot together | One complete rendering, explicit relocation; reject multiple placements | Specification; actual citation renderer pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 40,
+        "zhRaw": "| S13 | 同时body内部bibliography和独立slot | 唯一完整渲染，明确relocation；多个placement拒绝 | 规范；实际citation renderer待实施 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S14",
+      "scenario": {
+        "en": "Template inserts 1001 Nodes, or Node/resources split across batches",
+        "zh": "模板插入1001个Nodes，或Node+资源被分到不同批"
+      },
+      "positive": {
+        "en": "Reject the indivisible group as a whole; never install the first 1000",
+        "zh": "不可拆组整体拒绝；不先落前1000"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S14; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite partition model",
+        "zh": "有限partition模型"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 42,
+        "raw": "| S14 | Template inserts 1001 Nodes, or Node/resources split across batches | Reject the indivisible group as a whole; never install the first 1000 | Finite partition model |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 41,
+        "zhRaw": "| S14 | 模板插入1001个Nodes，或Node+资源被分到不同批 | 不可拆组整体拒绝；不先落前1000 | 有限partition模型 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S15",
+      "scenario": {
+        "en": "10,000 independent Nodes; failure before sixth commit or response lost after it",
+        "zh": "10,000独立Node，第六批commit前失败/commit后失去response"
+      },
+      "positive": {
+        "en": "Exact prefix 5/6; original OperationId replay without duplicate Nodes",
+        "zh": "精确前缀5/6；原OperationId重放，无重复Node"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S15; final-current overlays apply where named",
+      "evidence": {
+        "en": "Ten-batch model and isolated SQLite, not actual D6 crash",
+        "zh": "10批模型、隔离SQLite；非真实D6 crash"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 43,
+        "raw": "| S15 | 10,000 independent Nodes; failure before sixth commit or response lost after it | Exact prefix 5/6; original OperationId replay without duplicate Nodes | Ten-batch model and isolated SQLite, not actual D6 crash |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 42,
+        "zhRaw": "| S15 | 10,000独立Node，第六批commit前失败/commit后失去response | 精确前缀5/6；原OperationId重放，无重复Node | 10批模型、隔离SQLite；非真实D6 crash |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S16",
+      "scenario": {
+        "en": "User explicitly imports the same file twice",
+        "zh": "用户把同文件导入两次"
+      },
+      "positive": {
+        "en": "Two fresh identity groups; digest/row coordinates are not upsert keys",
+        "zh": "fresh两组identity；digest/row coordinate不是upsert key"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S16; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification and original D3 contract",
+        "zh": "规范及D3原合同"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 44,
+        "raw": "| S16 | User explicitly imports the same file twice | Two fresh identity groups; digest/row coordinates are not upsert keys | Specification and original D3 contract |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 43,
+        "zhRaw": "| S16 | 用户把同文件导入两次 | fresh两组identity；digest/row coordinate不是upsert key | 规范及D3原合同 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S17",
+      "scenario": {
+        "en": "Save original Resource under an existing Node",
+        "zh": "原件Resource保存到既有Node"
+      },
+      "positive": {
+        "en": "Original D3 create_resource, owner and complete write authorization; ordinary import cannot borrow an existing owner",
+        "zh": "原D3 create_resource，owner和完整写权；不能ordinary import借existing owner"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S17; final-current overlays apply where named",
+      "evidence": {
+        "en": "Original D3 matrix check",
+        "zh": "原D3矩阵规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 45,
+        "raw": "| S17 | Save original Resource under an existing Node | Original D3 create_resource, owner and complete write authorization; ordinary import cannot borrow an existing owner | Original D3 matrix check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 44,
+        "zhRaw": "| S17 | 原件Resource保存到既有Node | 原D3 create_resource，owner和完整写权；不能ordinary import借existing owner | 原D3矩阵规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S18",
+      "scenario": {
+        "en": "Source/Registry/schema/route/template/permissions change around proposal",
+        "zh": "proposal前后source/Registry/schema/route/模板/权限变化"
+      },
+      "positive": {
+        "en": "Old preparation fails/resets; complete new preview, no changed input under old confirmation",
+        "zh": "旧准备失败或reset；完整新preview，不能沿旧确认换输入"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S18; final-current overlays apply where named",
+      "evidence": {
+        "en": "D6/D7/D8 specification check",
+        "zh": "D6/D7/D8规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 46,
+        "raw": "| S18 | Source/Registry/schema/route/template/permissions change around proposal | Old preparation fails/resets; complete new preview, no changed input under old confirmation | D6/D7/D8 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 45,
+        "zhRaw": "| S18 | proposal前后source/Registry/schema/route/模板/权限变化 | 旧准备失败或reset；完整新preview，不能沿旧确认换输入 | D6/D7/D8规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S19",
+      "scenario": {
+        "en": "Server allows only Field reading but export requires complete body or hidden Query dependencies",
+        "zh": "Server只许读Field但导出包含完整body或隐藏Query依赖"
+      },
+      "positive": {
+        "en": "Fail before preparation; no extraction followed by masking; unreadable never becomes none",
+        "zh": "prepare前整体拒绝；不能先提取后遮蔽；不把unreadable变none"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S19; final-current overlays apply where named",
+      "evidence": {
+        "en": "Original authorization specification check",
+        "zh": "原授权规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 47,
+        "raw": "| S19 | Server allows only Field reading but export requires complete body or hidden Query dependencies | Fail before preparation; no extraction followed by masking; unreadable never becomes none | Original authorization specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 46,
+        "zhRaw": "| S19 | Server只许读Field但导出包含完整body或隐藏Query依赖 | prepare前整体拒绝；不能先提取后遮蔽；不把unreadable变none | 原授权规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S20",
+      "scenario": {
+        "en": "Empty nonterminal first Query page or changed authorization generation",
+        "zh": "Query第一页空nonterminal或权限换代"
+      },
+      "positive": {
+        "en": "Continue to the actual terminal; reset the whole export on generation change, never mix epochs",
+        "zh": "继续直到真正terminal；换代整个export reset，不混前后epochs"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S20; final-current overlays apply where named",
+      "evidence": {
+        "en": "D7 specification check",
+        "zh": "D7规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 48,
+        "raw": "| S20 | Empty nonterminal first Query page or changed authorization generation | Continue to the actual terminal; reset the whole export on generation change, never mix epochs | D7 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 47,
+        "zhRaw": "| S20 | Query第一页空nonterminal或权限换代 | 继续直到真正terminal；换代整个export reset，不混前后epochs | D7规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S21",
+      "scenario": {
+        "en": "Equal-valued bag rows, unordered rows, changed rowHandle",
+        "zh": "同值bag行、无序rows、rowHandle变化"
+      },
+      "positive": {
+        "en": "Preserve the bag; explicit stable sort/tie keys or reject; never export rowHandle",
+        "zh": "bag保留；显式稳定sort/tie keys，否则拒绝；不导出rowHandle"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S21; final-current overlays apply where named",
+      "evidence": {
+        "en": "D5/D7 specification check",
+        "zh": "D5/D7规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 49,
+        "raw": "| S21 | Equal-valued bag rows, unordered rows, changed rowHandle | Preserve the bag; explicit stable sort/tie keys or reject; never export rowHandle | D5/D7 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 48,
+        "zhRaw": "| S21 | 同值bag行、无序rows、rowHandle变化 | bag保留；显式稳定sort/tie keys，否则拒绝；不导出rowHandle | D5/D7规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S22",
+      "scenario": {
+        "en": "Dangerous CSV formula prefix, none/empty, complex values, long numbers",
+        "zh": "CSV危险公式头、none和empty、复杂值、长数字"
+      },
+      "positive": {
+        "en": "Reject dangerous text; complete ExportLossReport binds fixed result/projection/files/confirmation; typed sheet/JSON alternatives",
+        "zh": "危险text拒绝；ExportLossReport完整绑定固定结果/投影/文件与确认；typed sheet/JSON可替代"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S22; final-current overlays apply where named",
+      "evidence": {
+        "en": "Finite report/confirmation fragments among 82 assertions; target-application safety pending",
+        "zh": "82项中有限报告/确认片段；目标应用安全待实施"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 50,
+        "raw": "| S22 | Dangerous CSV formula prefix, none/empty, complex values, long numbers | Reject dangerous text; complete ExportLossReport binds fixed result/projection/files/confirmation; typed sheet/JSON alternatives | Finite report/confirmation fragments among 82 assertions; target-application safety pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 49,
+        "zhRaw": "| S22 | CSV危险公式头、none和empty、复杂值、长数字 | 危险text拒绝；ExportLossReport完整绑定固定结果/投影/文件与确认；typed sheet/JSON可替代 | 82项中有限报告/确认片段；目标应用安全待实施 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S23",
+      "scenario": {
+        "en": "Crash after external rename; destination created/moved by someone else",
+        "zh": "外部发布rename后crash、目标被别人创建/移动"
+      },
+      "positive": {
+        "en": "Create-only; recover published only from proved original intent, otherwise unknown without renamed retry",
+        "zh": "create-only；原intent恢复可证才published，无法证unknown，不换名字重复写"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S23; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification; actual filesystem fault tests pending",
+        "zh": "规范；真实文件系统fault tests待实施"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 51,
+        "raw": "| S23 | Crash after external rename; destination created/moved by someone else | Create-only; recover published only from proved original intent, otherwise unknown without renamed retry | Specification; actual filesystem fault tests pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 50,
+        "zhRaw": "| S23 | 外部发布rename后crash、目标被别人创建/移动 | create-only；原intent恢复可证才published，无法证unknown，不换名字重复写 | 规范；真实文件系统fault tests待实施 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S24",
+      "scenario": {
+        "en": "External file published but create_resource fails",
+        "zh": "已发布外部文件但create_resource失败"
+      },
+      "positive": {
+        "en": "Two separate actual results; no combined atomic receipt or deletion of user files",
+        "zh": "两个独立真实结果，不生成综合原子receipt或删除用户文件"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S24; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification",
+        "zh": "规范"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 52,
+        "raw": "| S24 | External file published but create_resource fails | Two separate actual results; no combined atomic receipt or deletion of user files | Specification |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 51,
+        "zhRaw": "| S24 | 已发布外部文件但create_resource失败 | 两个独立真实结果，不生成综合原子receipt或删除用户文件 | 规范 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S25",
+      "scenario": {
+        "en": "Template tasks/task facts copied to an ordinary target Node",
+        "zh": "Template的tasks/task事实复制到target普通Node"
+      },
+      "positive": {
+        "en": "Remove wf-kind, validate targetFacets and all facts through D4; source Template unchanged and parameters never execute",
+        "zh": "移除wf-kind，targetFacets+facts完整D4校验；Template源不改，参数不exec"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S25; final-current overlays apply where named",
+      "evidence": {
+        "en": "D2/D4 specification check",
+        "zh": "D2/D4规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 53,
+        "raw": "| S25 | Template tasks/task facts copied to an ordinary target Node | Remove wf-kind, validate targetFacets and all facts through D4; source Template unchanged and parameters never execute | D2/D4 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 52,
+        "zhRaw": "| S25 | Template的tasks/task事实复制到target普通Node | 移除wf-kind，targetFacets+facts完整D4校验；Template源不改，参数不exec | D2/D4规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S26",
+      "scenario": {
+        "en": "Complex Node Template closure through collection entry with failed membership",
+        "zh": "Node Template复杂closure来自集合入口且membership不成立"
+      },
+      "positive": {
+        "en": "Complex collection instantiation unsupported; simple collection_create retains complete requireMembership",
+        "zh": "本代复杂集合实例化unsupported；简单collection_create完整requireMembership"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S26; final-current overlays apply where named",
+      "evidence": {
+        "en": "D7 specification check",
+        "zh": "D7规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 54,
+        "raw": "| S26 | Complex Node Template closure through collection entry with failed membership | Complex collection instantiation unsupported; simple collection_create retains complete requireMembership | D7 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 53,
+        "zhRaw": "| S26 | Node Template复杂closure来自集合入口且membership不成立 | 本代复杂集合实例化unsupported；简单collection_create完整requireMembership | D7规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S27",
+      "scenario": {
+        "en": "Template/conversion proposal meets a dirty D8 Draft",
+        "zh": "模板/转换proposal遇到D8 dirty Draft"
+      },
+      "positive": {
+        "en": "Preserve generated origin, explicit acceptance/conflict, original full scope/workspace_constraints; no silent overwrite",
+        "zh": "保持generated来源；明确接收/冲突，原full scope与workspace_constraints，不无声覆盖"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S27; final-current overlays apply where named",
+      "evidence": {
+        "en": "D8 specification check",
+        "zh": "D8规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 55,
+        "raw": "| S27 | Template/conversion proposal meets a dirty D8 Draft | Preserve generated origin, explicit acceptance/conflict, original full scope/workspace_constraints; no silent overwrite | D8 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 54,
+        "zhRaw": "| S27 | 模板/转换proposal遇到D8 dirty Draft | 保持generated来源；明确接收/冲突，原full scope与workspace_constraints，不无声覆盖 | D8规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S28",
+      "scenario": {
+        "en": "PDF rotation/crop, image EXIF, old-revision region, copy/fork",
+        "zh": "PDF旋转/crop、image EXIF、旧revision区域、copy/fork"
+      },
+      "positive": {
+        "en": "d9rg1 geometry plus original l1 exact Ref/revision; changed content is stale, fresh outer binding reissued, no second identity",
+        "zh": "d9rg1纯几何＋原l1准确Ref/revision；不同内容stale，fresh外层重签，不存在第二身份"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S28; final-current overlays apply where named",
+      "evidence": {
+        "en": "D3/D9 semantic check; actual decoding pending",
+        "zh": "D3/D9语义核对；实际解码待实施"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 56,
+        "raw": "| S28 | PDF rotation/crop, image EXIF, old-revision region, copy/fork | d9rg1 geometry plus original l1 exact Ref/revision; changed content is stale, fresh outer binding reissued, no second identity | D3/D9 semantic check; actual decoding pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 55,
+        "zhRaw": "| S28 | PDF旋转/crop、image EXIF、旧revision区域、copy/fork | d9rg1纯几何＋原l1准确Ref/revision；不同内容stale，fresh外层重签，不存在第二身份 | D3/D9语义核对；实际解码待实施 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S29",
+      "scenario": {
+        "en": "Mobile upload starts conversion or delegates/approves Server conversion",
+        "zh": "Mobile上传触发转换、委托/批准Server conversion"
+      },
+      "positive": {
+        "en": "D1 unsupported_surface; Mobile consumes only ordinary attachments and committed results",
+        "zh": "D1 unsupported_surface；Mobile仅普通附件和已commit结果"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S29; final-current overlays apply where named",
+      "evidence": {
+        "en": "D1 specification check",
+        "zh": "D1规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 57,
+        "raw": "| S29 | Mobile upload starts conversion or delegates/approves Server conversion | D1 unsupported_surface; Mobile consumes only ordinary attachments and committed results | D1 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 56,
+        "zhRaw": "| S29 | Mobile上传触发转换、委托/批准Server conversion | D1 unsupported_surface；Mobile仅普通附件和已commit结果 | D1规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S30",
+      "scenario": {
+        "en": "Full-selection Native grid paste, rich HTML, existing generic patch",
+        "zh": "全选Native grid批贴、rich HTML、existing generic patch"
+      },
+      "positive": {
+        "en": "D8 prohibitions remain; only explicit new-Node file conversion/plain paste; no splitting into seven actions to bypass limits",
+        "zh": "D8禁用项保持；本代仅显式新Node文件转换/plain粘贴，不拆为七actions规避"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S30; final-current overlays apply where named",
+      "evidence": {
+        "en": "D5/D8 specification check",
+        "zh": "D5/D8规范核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 58,
+        "raw": "| S30 | Full-selection Native grid paste, rich HTML, existing generic patch | D8 prohibitions remain; only explicit new-Node file conversion/plain paste; no splitting into seven actions to bypass limits | D5/D8 specification check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 57,
+        "zhRaw": "| S30 | 全选Native grid批贴、rich HTML、existing generic patch | D8禁用项保持；本代仅显式新Node文件转换/plain粘贴，不拆为七actions规避 | D5/D8规范核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S31",
+      "scenario": {
+        "en": "Custom people/account service with equal identifier or unknown preset",
+        "zh": "custom people/account service与identifier相同/未知预设"
+      },
+      "positive": {
+        "en": "Never infer service from label/note; first scalar mapping is unsupported, original may be retained; future typed mapping needs exact D4 preset/custom branches",
+        "zh": "不从label/note猜服务；首代scalar mapping对此unsupported，保留原件；未来typed mapping须D4 preset/custom精确分支"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S31; final-current overlays apply where named",
+      "evidence": {
+        "en": "D4 source/limit check",
+        "zh": "D4来源与限制核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 59,
+        "raw": "| S31 | Custom people/account service with equal identifier or unknown preset | Never infer service from label/note; first scalar mapping is unsupported, original may be retained; future typed mapping needs exact D4 preset/custom branches | D4 source/limit check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 58,
+        "zhRaw": "| S31 | custom people/account service与identifier相同/未知预设 | 不从label/note猜服务；首代scalar mapping对此unsupported，保留原件；未来typed mapping须D4 preset/custom精确分支 | D4来源与限制核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S32",
+      "scenario": {
+        "en": "ICS UID/RECURRENCE-ID, supplied Node UUID, automatic upsert",
+        "zh": "ICS UID/RECURRENCE-ID、自带Node UUID、自动upsert"
+      },
+      "positive": {
+        "en": "ICS production profile remains unavailable; no external stable ID becomes D3 identity, OriginBinding, or sync-write authority",
+        "zh": "ICS生产profile未开放；本代不把外部stable id当D3 identity，不创建OriginBinding或sync写权"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S32; final-current overlays apply where named",
+      "evidence": {
+        "en": "D3/D4 boundary check",
+        "zh": "D3/D4边界核对"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 60,
+        "raw": "| S32 | ICS UID/RECURRENCE-ID, supplied Node UUID, automatic upsert | ICS production profile remains unavailable; no external stable ID becomes D3 identity, OriginBinding, or sync-write authority | D3/D4 boundary check |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 59,
+        "zhRaw": "| S32 | ICS UID/RECURRENCE-ID、自带Node UUID、自动upsert | ICS生产profile未开放；本代不把外部stable id当D3 identity，不创建OriginBinding或sync写权 | D3/D4边界核对 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S33",
+      "scenario": {
+        "en": "Green IR schema check but extraction omitted a sheet/hidden object",
+        "zh": "只拿IR schema绿灯却提取漏掉sheet/隐藏对象"
+      },
+      "positive": {
+        "en": "Coverage is a separate gate; unproved coverage is invalid_output; every discovered unsupported object becomes issue/loss",
+        "zh": "coverage是独立门；无法证则invalid_output，所有已发现未支持内容列issue/loss"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S33; final-current overlays apply where named",
+      "evidence": {
+        "en": "Limited real-fixture comparison; production coverage pending",
+        "zh": "真实fixture有限对照；生产覆盖待实施"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 61,
+        "raw": "| S33 | Green IR schema check but extraction omitted a sheet/hidden object | Coverage is a separate gate; unproved coverage is invalid_output; every discovered unsupported object becomes issue/loss | Limited real-fixture comparison; production coverage pending |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 60,
+        "zhRaw": "| S33 | 只拿IR schema绿灯却提取漏掉sheet/隐藏对象 | coverage是独立门；无法证则invalid_output，所有已发现未支持内容列issue/loss | 真实fixture有限对照；生产覆盖待实施 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "S34",
+      "scenario": {
+        "en": "Mapping/construction changes loss, analysis expires, or preparation shows counts only",
+        "zh": "mapping/construction改变导致新损失、分析过期、准备只给计数"
+      },
+      "positive": {
+        "en": "Complete reanalysis and reset of old loss acceptance; user adjudicates every new choice; inspect complete source/resources/groups; original full D7 effects remain mandatory",
+        "zh": "重新完整分析并重置旧loss接受，完整新choice必须用户裁决；完整源/资源/分组可inspect，原D7全效果仍必需"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row S34; final-current overlays apply where named",
+      "evidence": {
+        "en": "Specification",
+        "zh": "规范"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 62,
+        "raw": "| S34 | Mapping/construction changes loss, analysis expires, or preparation shows counts only | Complete reanalysis and reset of old loss acceptance; user adjudicates every new choice; inspect complete source/resources/groups; original full D7 effects remain mandatory | Specification |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 61,
+        "zhRaw": "| S34 | mapping/construction改变导致新损失、分析过期、准备只给计数 | 重新完整分析并重置旧loss接受，完整新choice必须用户裁决；完整源/资源/分组可inspect，原D7全效果仍必需 | 规范 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA01",
+      "scenario": {
+        "en": "Same Node has revision 1 in production domains A and B; import/template token selects A's observation",
+        "zh": "同 Node 在生产域 A 与 B 的 revision 都为 1，导入/模板 token 指 A 的观察"
+      },
+      "positive": {
+        "en": "Match complete production SourceVersion and current Observation item by item; B:1 is not A:1, and old Counter never causes latest-read/re-signing",
+        "zh": "完整生产 SourceVersion 与当前 Observation 逐项匹配；不把 B:1 当 A:1，不由 old Counter 读 latest 补签"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA01; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 102,
+        "raw": "| FA01 | Same Node has revision 1 in production domains A and B; import/template token selects A's observation | Match complete production SourceVersion and current Observation item by item; B:1 is not A:1, and old Counter never causes latest-read/re-signing | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 99,
+        "zhRaw": "| FA01 | 同 Node 在生产域 A 与 B 的 revision 都为 1，导入/模板 token 指 A 的观察 | 完整生产 SourceVersion 与当前 Observation 逐项匹配；不把 B:1 当 A:1，不由 old Counter 读 latest 补签 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA02",
+      "scenario": {
+        "en": "Pure synchronization preserves production version A while receiving domain B has a valid current observation",
+        "zh": "纯同步保留 A 的生产版本，接收域 B 当前观察有效"
+      },
+      "positive": {
+        "en": "Positive path: authenticate A's canonical RevisionTokenBinding/2 + original sealed-outbox association, prove B current Observation.sourceVersion equals A exactly, then validate the original Locator coordinate/profile and final same-cut gate. Keep payload/token unchanged; do not revive old selector/PAB/Draft/ActionEvidence. Real production ABA, missing binding/outbox, unproved rematerialization or equal external bytes stays stale/unavailable",
+        "zh": "正向路径：认证 A 的 canonical RevisionTokenBinding/2 + original sealed-outbox 关联，证明 B 当前 Observation.sourceVersion 与 A 完整版本逐字相等，再验证原 Locator coordinate/profile 与最终 same-cut 门；payload/token 不改，旧 selector/PAB/Draft/ActionEvidence 不复活。真实 production ABA、binding/outbox 缺失、rematerialization 不可证明或 external 仅 bytes 相同仍 stale/unavailable"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA02; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 103,
+        "raw": "| FA02 | Pure synchronization preserves production version A while receiving domain B has a valid current observation | Positive path: authenticate A's canonical RevisionTokenBinding/2 + original sealed-outbox association, prove B current Observation.sourceVersion equals A exactly, then validate the original Locator coordinate/profile and final same-cut gate. Keep payload/token unchanged; do not revive old selector/PAB/Draft/ActionEvidence. Real production ABA, missing binding/outbox, unproved rematerialization or equal external bytes stays stale/unavailable | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 100,
+        "zhRaw": "| FA02 | 纯同步保留 A 的生产版本，接收域 B 当前观察有效 | 正向路径：认证 A 的 canonical RevisionTokenBinding/2 + original sealed-outbox 关联，证明 B 当前 Observation.sourceVersion 与 A 完整版本逐字相等，再验证原 Locator coordinate/profile 与最终 same-cut 门；payload/token 不改，旧 selector/PAB/Draft/ActionEvidence 不复活。真实 production ABA、binding/outbox 缺失、rematerialization 不可证明或 external 仅 bytes 相同仍 stale/unavailable | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA03",
+      "scenario": {
+        "en": "Recipe/2 fixed source changes version, with old bytes still pinned or equal generated output",
+        "zh": "Recipe/2 固定源改版，但旧 bytes 仍 pin 或生成结果相同"
+      },
+      "positive": {
+        "en": "Old construction fails dependency_conflict, never follows latest; old recipe stays readable with explicit new-source/new-recipe path",
+        "zh": "旧构造 dependency_conflict，不跟随 latest；保留原配方可读及明确新来源/新配方路径"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA03; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 104,
+        "raw": "| FA03 | Recipe/2 fixed source changes version, with old bytes still pinned or equal generated output | Old construction fails dependency_conflict, never follows latest; old recipe stays readable with explicit new-source/new-recipe path | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 101,
+        "zhRaw": "| FA03 | Recipe/2 固定源改版，但旧 bytes 仍 pin 或生成结果相同 | 旧构造 dependency_conflict，不跟随 latest；保留原配方可读及明确新来源/新配方路径 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA04",
+      "scenario": {
+        "en": "Recipe/1 retains only a Counter and user explicitly upgrades",
+        "zh": "Recipe/1 只剩裸 Counter，用户明确升级"
+      },
+      "positive": {
+        "en": "Show original-version provability and new user choice; do not guess production domain; preserve slots and separately confirm original create_resource without overwriting old recipe",
+        "zh": "显示真实原版本可证性与用户新选择；不猜生产域；保留全部 slots，原 create_resource 完整确认另存，不覆盖原配方"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA04; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 105,
+        "raw": "| FA04 | Recipe/1 retains only a Counter and user explicitly upgrades | Show original-version provability and new user choice; do not guess production domain; preserve slots and separately confirm original create_resource without overwriting old recipe | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 102,
+        "zhRaw": "| FA04 | Recipe/1 只剩裸 Counter，用户明确升级 | 显示真实原版本可证性与用户新选择；不猜生产域；保留全部 slots，原 create_resource 完整确认另存，不覆盖原配方 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA05",
+      "scenario": {
+        "en": "Template enumerates omittedAnnotations without body authorization",
+        "zh": "模板仅枚举 omittedAnnotations，未授权其 body"
+      },
+      "positive": {
+        "en": "Complete state/annotation-directory authorization and positive/negative proof first; store only version addresses, never read bodies or treat hidden items as zero/default full omission",
+        "zh": "先完整 state/annotation 目录资格及正负证明，仅保存版本地址；不读 body，不把隐藏项当零或默认全量省略"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA05; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 106,
+        "raw": "| FA05 | Template enumerates omittedAnnotations without body authorization | Complete state/annotation-directory authorization and positive/negative proof first; store only version addresses, never read bodies or treat hidden items as zero/default full omission | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 103,
+        "zhRaw": "| FA05 | 模板仅枚举 omittedAnnotations，未授权其 body | 先完整 state/annotation 目录资格及正负证明，仅保存版本地址；不读 body，不把隐藏项当零或默认全量省略 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA06",
+      "scenario": {
+        "en": "Two domains share Workspace/OperationId; sixth Job batch unknown; device generation changes",
+        "zh": "同 Workspace/OperationId 的两域请求、Job 第六批 unknown、设备换代"
+      },
+      "positive": {
+        "en": "Complete CommitDomain in key; recover exact prefix from original request, without cross-domain claim/repeat/budget reset",
+        "zh": "key 含完整 CommitDomain；原请求恢复精确前缀，不跨域认领、重做或清空预算"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA06; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 107,
+        "raw": "| FA06 | Two domains share Workspace/OperationId; sixth Job batch unknown; device generation changes | Complete CommitDomain in key; recover exact prefix from original request, without cross-domain claim/repeat/budget reset | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 104,
+        "zhRaw": "| FA06 | 同 Workspace/OperationId 的两域请求、Job 第六批 unknown、设备换代 | key 含完整 CommitDomain；原请求恢复精确前缀，不跨域认领、重做或清空预算 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA07",
+      "scenario": {
+        "en": "Native wire12 prepared batch is asked for D6 planToken, or a preview header is treated as complete afterimage",
+        "zh": "wire12 D3 prepared batch 被要求 D6 planToken，或把 preview header 当完整后像"
+      },
+      "positive": {
+        "en": "Actual native shape and complete /3, manifest/pages/bytes producers only; reject missing complete evidence, no second submit",
+        "zh": "只接受实际原生形状和完整 /3、manifest/pages/bytes producer；拒绝缺失完整证据，不开第二提交"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA07; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 108,
+        "raw": "| FA07 | Native wire12 prepared batch is asked for D6 planToken, or a preview header is treated as complete afterimage | Actual native shape and complete /3, manifest/pages/bytes producers only; reject missing complete evidence, no second submit | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 105,
+        "zhRaw": "| FA07 | wire12 D3 prepared batch 被要求 D6 planToken，或把 preview header 当完整后像 | 只接受实际原生形状和完整 /3、manifest/pages/bytes producer；拒绝缺失完整证据，不开第二提交 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Fresh current dispatch is wire13/PAB4/Effect3 per CUR-01; genuine wire12/PAB3 remains historical recovery only."
+    },
+    {
+      "id": "FA08",
+      "scenario": {
+        "en": "externalSequence=5 and template/Field inner revision expects 5",
+        "zh": "externalSequence=5，模板/Field inner revision 要求 5"
+      },
+      "positive": {
+        "en": "Not a managed revision; explicit legal admission first when needed; new H follows actual production domain, no automatic source write",
+        "zh": "不能当 managed revision；需要时先显式合法 admission，新版 H 按真正生产域分配，无自动源写入"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA08; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 109,
+        "raw": "| FA08 | externalSequence=5 and template/Field inner revision expects 5 | Not a managed revision; explicit legal admission first when needed; new H follows actual production domain, no automatic source write | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 106,
+        "zhRaw": "| FA08 | externalSequence=5，模板/Field inner revision 要求 5 | 不能当 managed revision；需要时先显式合法 admission，新版 H 按真正生产域分配，无自动源写入 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA09",
+      "scenario": {
+        "en": "Job already saved/planned while current D7 producer lacks acceptance, preview TTL expired, or source advanced to r6",
+        "zh": "Job 已 saved/planned，而当前 D7 producer 未接受、preview TTL 过期或源 r6 已改变"
+      },
+      "positive": {
+        "en": "Original authorization/custody/continuity first; saved original bytes/planned original plan recover; new profile gate applies only to unseen and does not cancel history",
+        "zh": "原记录授权/custody/连续性先行，saved 原 bytes/planned 原计划恢复；新 profile 门只作用 unseen，不取消历史责任"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA09; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 110,
+        "raw": "| FA09 | Job already saved/planned while current D7 producer lacks acceptance, preview TTL expired, or source advanced to r6 | Original authorization/custody/continuity first; saved original bytes/planned original plan recover; new profile gate applies only to unseen and does not cancel history | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 107,
+        "zhRaw": "| FA09 | Job 已 saved/planned，而当前 D7 producer 未接受、preview TTL 过期或源 r6 已改变 | 原记录授权/custody/连续性先行，saved 原 bytes/planned 原计划恢复；新 profile 门只作用 unseen，不取消历史责任 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA10",
+      "scenario": {
+        "en": "Unrelated complete sealed Frontier extension, or actual source/route/Query-negative-range change",
+        "zh": "无关完整 sealed Frontier 扩展；或 source/route/Query 负范围实际变化"
+      },
+      "positive": {
+        "en": "Former survives only through real scope_dependencies evidence; latter fails/resets old preparation; never re-sign Observation or mix authorization epochs",
+        "zh": "前者仅按真实 scope_dependencies 证明保持；后者旧准备失败/reset，绝不重签旧 Observation 或拼权限 epochs"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA10; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 111,
+        "raw": "| FA10 | Unrelated complete sealed Frontier extension, or actual source/route/Query-negative-range change | Former survives only through real scope_dependencies evidence; latter fails/resets old preparation; never re-sign Observation or mix authorization epochs | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 108,
+        "zhRaw": "| FA10 | 无关完整 sealed Frontier 扩展；或 source/route/Query 负范围实际变化 | 前者仅按真实 scope_dependencies 证明保持；后者旧准备失败/reset，绝不重签旧 Observation 或拼权限 epochs | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA11",
+      "scenario": {
+        "en": "Lost output pin re-rendered to equal digest; source/authorization/route changes after unknown rename",
+        "zh": "output pin 丢失后重渲染同摘要；rename unknown 后源/权限/route 改变"
+      },
+      "positive": {
+        "en": "No reconstruction of output fact or renamed publication; only original intent/occupancy/continuity recovery, otherwise unknown",
+        "zh": "不重建原输出事实或换名发布；只按原 publication intent/占有/连续性恢复，不能证明则 unknown"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA11; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 112,
+        "raw": "| FA11 | Lost output pin re-rendered to equal digest; source/authorization/route changes after unknown rename | No reconstruction of output fact or renamed publication; only original intent/occupancy/continuity recovery, otherwise unknown | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 109,
+        "zhRaw": "| FA11 | output pin 丢失后重渲染同摘要；rename unknown 后源/权限/route 改变 | 不重建原输出事实或换名发布；只按原 publication intent/占有/连续性恢复，不能证明则 unknown | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA12",
+      "scenario": {
+        "en": "Conversion proposal asserts human origin or strict-capability failure selects observed_only",
+        "zh": "转换 proposal 自称 human，或 strict 能力失败后选 observed_only"
+      },
+      "positive": {
+        "en": "Reject weakening import/construction/Query export/Resource creation; D8 explicitly accepts generated proposal and retains dirty Draft conflict",
+        "zh": "导入、构造、Query 导出、Resource 创建均拒绝弱化；D8 明确接收 generated proposal 并保留 dirty Draft 冲突"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA12; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 113,
+        "raw": "| FA12 | Conversion proposal asserts human origin or strict-capability failure selects observed_only | Reject weakening import/construction/Query export/Resource creation; D8 explicitly accepts generated proposal and retains dirty Draft conflict | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 110,
+        "zhRaw": "| FA12 | 转换 proposal 自称 human，或 strict 能力失败后选 observed_only | 导入、构造、Query 导出、Resource 创建均拒绝弱化；D8 明确接收 generated proposal 并保留 dirty Draft 冲突 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA13",
+      "scenario": {
+        "en": "table_document input header=true generates a display header option",
+        "zh": "table_document 输入 header=true，但目标生成展示 header option"
+      },
+      "positive": {
+        "en": "Distinguish input header from ordinary first-row target cells; reject every D2 table header/attribute option, without new syntax",
+        "zh": "输入 header 与目标普通首行 cell 区分；任何 D2 table header/attribute option 拒绝，无新增语法"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA13; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 114,
+        "raw": "| FA13 | table_document input header=true generates a display header option | Distinguish input header from ordinary first-row target cells; reject every D2 table header/attribute option, without new syntax | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 111,
+        "zhRaw": "| FA13 | table_document 输入 header=true，但目标生成展示 header option | 输入 header 与目标普通首行 cell 区分；任何 D2 table header/attribute option 拒绝，无新增语法 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "FA14",
+      "scenario": {
+        "en": "Published bundle treated as CP3/Resource author receipt, or P loss recovered from matching files",
+        "zh": "已发布外部 bundle 被当作 CP3/Resource author receipt；或 P 丢失后凭文件匹配恢复成功"
+      },
+      "positive": {
+        "en": "Separate original authorities; do not reconstruct author P seal/charges; retain unknown responsibility",
+        "zh": "两类结果保持各自原 authority；原作者单 P seal/charge 不重建，未知责任保留"
+      },
+      "negative": {
+        "en": "No silent fallback, authority broadening, hidden identity, partial-success substitution, or behavior that contradicts the complete source-qualified row.",
+        "zh": "不得静默回退、扩大权威、建立隐藏身份、用部分成功替代完整结果，也不得违反该完整 source-qualified 原行。"
+      },
+      "contract": "source-qualified D9 owner row FA14; final-current overlays apply where named",
+      "evidence": {
+        "en": "Design oracle, not executed",
+        "zh": "设计 oracle，未执行"
+      },
+      "source": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "line": 115,
+        "raw": "| FA14 | Published bundle treated as CP3/Resource author receipt, or P loss recovered from matching files | Separate original authorities; do not reconstruct author P seal/charges; retain unknown responsibility | Design oracle, not executed |",
+        "zhPath": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "zhBlob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "zhLine": 112,
+        "zhRaw": "| FA14 | 已发布外部 bundle 被当作 CP3/Resource author receipt；或 P 丢失后凭文件匹配恢复成功 | 两类结果保持各自原 authority；原作者单 P seal/charge 不重建，未知责任保留 | 设计 oracle，未执行 |"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "currentDisposition": "Retain source-qualified obligation/evidence; apply the final-current R02/R03/R04/M14/CUR overlays where they refine or supersede version, heading, export, Annotation, or recovery premises."
+    },
+    {
+      "id": "R02-01",
+      "scenario": {
+        "en": "Node-template closure and fresh identity",
+        "zh": "节点模板闭包与 fresh identity"
+      },
+      "positive": {
+        "en": "Duplicate sources reject; self/cross-template references resolve to unique fresh subjects; owner-local Resources remap; parent import and simple collection use their original requests; changed template/recipe revision stales preparation.",
+        "zh": "重复 source 拒绝；self/cross-template reference 解析到唯一 fresh subject；owner-local Resource 改写；parent import 与 simple collection 使用原 request；template/recipe revision 变化使准备 stale。"
+      },
+      "negative": {
+        "en": "No second identity map, output-hash equivalence, hidden membership shortcut, or replacement request after lost receipt.",
+        "zh": "不得建立第二 identity map、按 output hash 认等、隐藏 membership shortcut，也不得在 lost receipt 后换 request。"
+      },
+      "contract": "current Acceptance r02 template block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R02-02",
+      "scenario": {
+        "en": "Hidden rows, columns, ranges, sheets and merges",
+        "zh": "隐藏 row、column、range、sheet 与 merge"
+      },
+      "positive": {
+        "en": "Typed hiddenPolicy and explicit mapping govern exclude/include; hidden positions do not renumber bindings; hidden headers reject when required; merges and manifest/groups are recomputed exactly.",
+        "zh": "typed hiddenPolicy 与 explicit mapping 决定 exclude/include；hidden position 不重排行绑定；需要的 hidden header 必须拒绝；merge 与 manifest/groups 精确重算。"
+      },
+      "negative": {
+        "en": "No message-based hidden inference, silent include, shifted coordinates, or choice-driven execution.",
+        "zh": "不得按 message 猜 hidden、静默 include、移动坐标或让 choice 执行转换。"
+      },
+      "contract": "current Acceptance r02 hidden-content block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R02-03",
+      "scenario": {
+        "en": "D7 value/export applicability",
+        "zh": "D7 value/export 适用条件"
+      },
+      "positive": {
+        "en": "NodeRef/object/quantity/scalar none/graph preserve D7 types; RenderSnapshot accepts only explicit supported projections; auth-generation reset and same-SET item scope are enforced.",
+        "zh": "NodeRef/object/quantity/scalar none/graph 保留 D7 类型；RenderSnapshot 只接受显式支持的 projection；执行 auth-generation reset 与 same-SET item scope。"
+      },
+      "negative": {
+        "en": "No stringify fallback, implicit first, cross-SET join, or rowHandle identity.",
+        "zh": "不得 stringify fallback、implicit first、cross-SET join 或 rowHandle identity。"
+      },
+      "contract": "current Acceptance r02 export block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R03-01",
+      "scenario": {
+        "en": "Export catalog/projection/loss chain",
+        "zh": "Export catalog/projection/loss 完整链"
+      },
+      "positive": {
+        "en": "ExportInputCatalog, ExportProjection, ExportLossReport, confirmation and staged bundle close producer/consumer inputs for Optional text, Document/Field/Annotation omissions, repeated equal rows, graph/scalar and empty results.",
+        "zh": "ExportInputCatalog、ExportProjection、ExportLossReport、confirmation、staged bundle 对 Optional text、Document/Field/Annotation omission、重复同值行、graph/scalar 与 empty result 完整闭合。"
+      },
+      "negative": {
+        "en": "No address-only proof, missing origin, post-confirm mutation, or current-permission bypass.",
+        "zh": "不得只凭 address、漏 origin、confirm 后改写或绕 current permission。"
+      },
+      "contract": "current Acceptance r03 export block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R03-02",
+      "scenario": {
+        "en": "Image density and layout policy",
+        "zh": "图片 density 与 layout policy"
+      },
+      "positive": {
+        "en": "Absolute/relative density, orientation, exact rational conversion, half-even quantization and explicit imageSizes are validated as separate source-fact and layout-policy axes.",
+        "zh": "absolute/relative density、orientation、exact rational conversion、half-even quantization 与 explicit imageSizes 按 source fact / layout policy 两轴验证。"
+      },
+      "negative": {
+        "en": "No 72/96 DPI, viewport density, conflicting metadata choice, or layout value rewritten as source fact.",
+        "zh": "不得用 72/96 DPI、viewport density、挑冲突 metadata，或把 layout value 倒写成 source fact。"
+      },
+      "contract": "current Acceptance r03 image block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R04-01",
+      "scenario": {
+        "en": "ContentSelection applicability",
+        "zh": "ContentSelection 适用条件"
+      },
+      "positive": {
+        "en": "body/bibliography are selected only by ExportContentSelection; pure Query, narrow Field, collection and native_table do not gain body reads or fabricated omissions.",
+        "zh": "body/bibliography 只由 ExportContentSelection 选择；pure Query、narrow Field、collection、native_table 不增加 body read 或虚构 omission。"
+      },
+      "negative": {
+        "en": "No Document-pin-implies-body rule, no slot-implies-read rule, and no unreadable-as-empty.",
+        "zh": "不得用 Document pin 推导 body，不得用 slot 推导 read，也不得把 unreadable 当 empty。"
+      },
+      "contract": "current Acceptance r04 selection block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R04-02",
+      "scenario": {
+        "en": "Coherent bundle bytes and all exits",
+        "zh": "连贯 bundle bytes 与全部出口"
+      },
+      "positive": {
+        "en": "Actual fixtures and explicit selections produce the complete initial loss set and exact data/report/manifest bytes; confirmation freezes bytes; publish, download and Resource handoff recheck their current qualification.",
+        "zh": "actual fixture 与 explicit selection 产生完整 initial loss set 及 exact data/report/manifest bytes；confirmation 冻结 bytes；publish/download/Resource handoff 分别重验 current qualification。"
+      },
+      "negative": {
+        "en": "No independent partial proofs substituted for one coherent Plan or post-confirm regeneration.",
+        "zh": "不得用彼此独立的局部证明代替一个 coherent Plan，也不得 confirm 后 regenerate。"
+      },
+      "contract": "current Acceptance r04 consumer-chain block",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "R04-03",
+      "scenario": {
+        "en": "Evidence-accounting boundary",
+        "zh": "证据记账边界"
+      },
+      "positive": {
+        "en": "Historical 57/63/59/82/90/130 and 12-scenario evidence sets remain separately scoped and keep their original finite claims.",
+        "zh": "historical 57/63/59/82/90/130 与 12-scenario evidence set 分别记账并保留原有限 claim。"
+      },
+      "negative": {
+        "en": "No summing counts into product, Office, OS, authorization, crash or global acceptance.",
+        "zh": "不得把计数相加冒充 product、Office、OS、authorization、crash 或 global acceptance。"
+      },
+      "contract": "current Acceptance r04 evidence boundary",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-01",
+      "scenario": {
+        "en": "Office template bytes are self-contained binding authority",
+        "zh": "Office template bytes 自包含 binding authority"
+      },
+      "positive": {
+        "en": "Fresh Office bytes visibly encode every binding; qualified native-table binding uses the visible native.table selector grammar and compiles to the frozen selector.",
+        "zh": "fresh Office bytes 可见编码全部 binding；qualified native-table binding 使用 visible native.table selector grammar，并编译到 frozen selector。"
+      },
+      "negative": {
+        "en": "No hidden Plan-only hash token, designer database, content-control requirement or ordinary-Node export metadata.",
+        "zh": "不得依赖 hidden Plan-only hash token、designer database、content control，也不得给 ordinary Node 增 export metadata。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-02",
+      "scenario": {
+        "en": "Shortest unique column selector",
+        "zh": "最短唯一 column selector"
+      },
+      "positive": {
+        "en": "Unique simple ASCII leaf uses data.native_table.COLUMN; otherwise shortest unique header suffix is required.",
+        "zh": "唯一 simple ASCII leaf 使用 data.native_table.COLUMN；否则必须使用 shortest unique header suffix。"
+      },
+      "negative": {
+        "en": "Zero match fails; multiple matches cannot choose first/current/cached column.",
+        "zh": "0 match 必须失败；多 match 不得选择 first/current/cached column。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-03",
+      "scenario": {
+        "en": "Progressive table/title/occurrence qualification",
+        "zh": "逐级 table/title/occurrence qualification"
+      },
+      "positive": {
+        "en": "If suffix still collides, exact table title is added; if still colliding, explicit zero-based table/column occurrence resolves against the frozen projection.",
+        "zh": "suffix 仍碰撞时加入 exact table title；仍碰撞时用显式 zero-based table/column occurrence 对 frozen projection 消歧。"
+      },
+      "negative": {
+        "en": "No opaque ID, memory order, UI order or hash-only authoring.",
+        "zh": "不得使用 opaque ID、memory order、UI order 或 hash-only authoring。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-04",
+      "scenario": {
+        "en": "Unicode and escaping grammar",
+        "zh": "Unicode 与 escaping grammar"
+      },
+      "positive": {
+        "en": "CJK/RTL/combining/emoji/space/slash/double-colon/quote/bracket text is represented visibly with JSON-string escaping and exact scalar comparison.",
+        "zh": "CJK/RTL/combining/emoji/space/slash/double-colon/quote/bracket 以可见 JSON-string escape 表示，并按 exact scalar compare。"
+      },
+      "negative": {
+        "en": "No normalization, locale case fold or hidden digest as author meaning.",
+        "zh": "不得 normalization、locale case fold 或用 hidden digest 表示 author meaning。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-05",
+      "scenario": {
+        "en": "Repeat SET source unification",
+        "zh": "Repeat SET 来源统一"
+      },
+      "positive": {
+        "en": "Every token in one repeat band resolves to the same real source table/rowset/order; sibling columns read the same item scope.",
+        "zh": "同一 repeat band 全部 token 解析到同一真实 source table/rowset/order；sibling column 读取同一 item scope。"
+      },
+      "negative": {
+        "en": "No cross-table row assembly, implicit join or per-token first match.",
+        "zh": "不得跨 table 拼 row、implicit join 或逐 token first match。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-06",
+      "scenario": {
+        "en": "Later collision changes fresh ambiguity only",
+        "zh": "后续碰撞只改变 fresh ambiguity"
+      },
+      "positive": {
+        "en": "Adding a colliding table/column makes a formerly short token ambiguous for a fresh Plan and requires a visible stronger selector.",
+        "zh": "新增碰撞 table/column 使原 short token 在 fresh Plan 中 ambiguous，并要求更强 visible selector。"
+      },
+      "negative": {
+        "en": "Already frozen Plan/selector/staged bytes are not rewritten by later workspace state.",
+        "zh": "already-frozen Plan/selector/staged bytes 不被 later workspace state 改写。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-07",
+      "scenario": {
+        "en": "Three tabular domains stay separate",
+        "zh": "三种 tabular domain 分离"
+      },
+      "positive": {
+        "en": "ordinary Document native table, schema-bearing collection/query dataset, and ordinary no-template XLSX each retain their own source/schema/identity rules.",
+        "zh": "ordinary Document native table、schema-bearing collection/query dataset、ordinary no-template XLSX 保持各自 source/schema/identity rule。"
+      },
+      "negative": {
+        "en": "No hidden persistent Record or export-only schema added to ordinary Node.",
+        "zh": "不得给 ordinary Node 新增 hidden persistent Record 或 export-only schema。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-08",
+      "scenario": {
+        "en": "Template copy/move/style/stale behavior",
+        "zh": "Template copy/move/style/stale 行为"
+      },
+      "positive": {
+        "en": "Template bytes/style IDs remain ordinary visible Office content; exact template pin/profile/route revision is frozen; changes require a new Plan.",
+        "zh": "template bytes/style ID 保持普通可见 Office content；冻结 exact template pin/profile/route revision；变化要求 new Plan。"
+      },
+      "negative": {
+        "en": "No localized style-name guess, stale cache reuse or silent template normalization.",
+        "zh": "不得猜 localized style name、复用 stale cache 或静默 normalize template。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-09",
+      "scenario": {
+        "en": "No-template XLSX positive path",
+        "zh": "无模板 XLSX 正向路径"
+      },
+      "positive": {
+        "en": "Typed XLSX/ODS export can use the explicit dataset projection without an Office template when the target profile supports it.",
+        "zh": "target profile 支持时，typed XLSX/ODS export 可直接使用 explicit dataset projection，无需 Office template。"
+      },
+      "negative": {
+        "en": "No formula execution, arbitrary stringification or hidden native-table binding is introduced.",
+        "zh": "不得执行 formula、任意 stringify 或引入 hidden native-table binding。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "M14-10",
+      "scenario": {
+        "en": "Unavailable, malicious and stale cases",
+        "zh": "Unavailable、malicious、stale 反例"
+      },
+      "positive": {
+        "en": "Mobile conversion is unavailable; unsafe/corrupt input rejects; stale source/route/template/authorization forces the exact current error/reprepare/recovery path.",
+        "zh": "Mobile conversion unavailable；unsafe/corrupt input 拒绝；stale source/route/template/authorization 进入 exact current error/reprepare/recovery path。"
+      },
+      "negative": {
+        "en": "No fallback provider, execution on discovery, permission downgrade or new-name retry.",
+        "zh": "不得 fallback provider、discovery 后执行、permission downgrade 或换新 name retry。"
+      },
+      "contract": "Mandatory §14 + D9 Main §7/§12",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN",
+        "zh": "设计 oracle；产品执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-01",
+      "scenario": {
+        "en": "Current author versions",
+        "zh": "当前 author 版本"
+      },
+      "positive": {
+        "en": "Fresh D9 author submission uses D3 wire13, D7 PAB4, DependencyProof3 and Effect3 under original D3/D6 stages.",
+        "zh": "fresh D9 author submission 使用 D3 wire13、D7 PAB4、DependencyProof3、Effect3，并保持原 D3/D6 stage。"
+      },
+      "negative": {
+        "en": "No PAB3/wire12 current claim, mechanical version bump, planToken injection or second submit owner.",
+        "zh": "不得把 PAB3/wire12 写成 current，不得 mechanical version bump、planToken injection 或第二 submit owner。"
+      },
+      "contract": "D9 Main §1/§9; FC SPEC §8.4",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-02",
+      "scenario": {
+        "en": "Current export versions",
+        "zh": "当前 export 版本"
+      },
+      "positive": {
+        "en": "Fresh export/publication strict-decodes ExportPlan3/PublicationReceipt3 with complete pins, order, names and recovery.",
+        "zh": "fresh export/publication strict-decode ExportPlan3/PublicationReceipt3，并完整保留 pins/order/names/recovery。"
+      },
+      "negative": {
+        "en": "Historical Plan/Receipt1/2 never repin, rename, re-encode or read-time-sort into current.",
+        "zh": "historical Plan/Receipt1/2 不 repin、rename、re-encode 或 read-time-sort 成 current。"
+      },
+      "contract": "D9 Main §12; FC SCHEMAS §6.5",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-03",
+      "scenario": {
+        "en": "Current D2 product",
+        "zh": "当前 D2 product"
+      },
+      "positive": {
+        "en": "D9 consumes D2DocumentSnapshot3 including legal H6–H9/native fixed-baseline semantics and exact sourceOrigins.",
+        "zh": "D9 消费 D2DocumentSnapshot3，包括合法 H6–H9/native fixed-baseline semantics 与 exact sourceOrigins。"
+      },
+      "negative": {
+        "en": "Target renderer limitations never make legal current source invalid or reintroduce an H1–H5-only dialect.",
+        "zh": "target renderer limit 不得让合法 current source invalid，也不得恢复 H1–H5-only dialect。"
+      },
+      "contract": "D9 Main §4/§12; FC SPEC §8.4",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-04",
+      "scenario": {
+        "en": "Controlled output names",
+        "zh": "受控 output name"
+      },
+      "positive": {
+        "en": "All fresh data/report/manifest/receipt/download names pass current Unicode-15.1 validity/alias/prefix/reserved checks and canonical orders before freeze.",
+        "zh": "全部 fresh data/report/manifest/receipt/download name 在 freeze 前通过 current Unicode-15.1 validity/alias/prefix/reserved check 与 canonical order。"
+      },
+      "negative": {
+        "en": "Destination cannot rename/normalize/overwrite/partial-copy a frozen legal Plan.",
+        "zh": "destination 不得 rename/normalize/overwrite/partial-copy frozen legal Plan。"
+      },
+      "contract": "D9 Schemas §11; FC SCHEMAS §6.5",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-05",
+      "scenario": {
+        "en": "Exact-source/resource/query-json positive paths",
+        "zh": "exact-source/resource/query-json 正向路径"
+      },
+      "positive": {
+        "en": "generationPolicy=none remains uniquely available independent of renderer/template/provider registries when source qualification itself is valid.",
+        "zh": "source qualification 本身合法时，generationPolicy=none 不依赖 renderer/template/provider registry，保持唯一正向路径。"
+      },
+      "negative": {
+        "en": "Provider unavailability cannot invalidate source bytes or block these policy-independent targets.",
+        "zh": "provider unavailable 不得让 source bytes invalid 或阻断这些 policy-independent target。"
+      },
+      "contract": "D9 Main §12; FC4R-EXP-01/02",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-06",
+      "scenario": {
+        "en": "D8 dependency remains pending review",
+        "zh": "D8 dependency 仍待复核"
+      },
+      "positive": {
+        "en": "D9 consumes named D8 Source/Draft/presentation interfaces at the fixed candidate without claiming D8 findings closed.",
+        "zh": "D9 在 fixed candidate 上消费具名 D8 Source/Draft/presentation interface，不声称 D8 finding 已关闭。"
+      },
+      "negative": {
+        "en": "No D9 acceptance may be used as retroactive D8 acceptance.",
+        "zh": "不得用 D9 acceptance 反向宣称 D8 accepted。"
+      },
+      "contract": "D9 Main §1/§14",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-07",
+      "scenario": {
+        "en": "D10 direct boundary",
+        "zh": "D10 direct boundary"
+      },
+      "positive": {
+        "en": "D9 keeps conversion/publication ownership, worker no-network default, Mobile negative conversion surface and separate PublicationReceipt/Resource author outcome.",
+        "zh": "D9 保持 conversion/publication owner、worker no-network default、Mobile negative conversion surface，以及 PublicationReceipt/Resource author outcome 分离。"
+      },
+      "negative": {
+        "en": "D10 control/naming cannot widen D9 wire, worker egress, template semantics or author commit.",
+        "zh": "D10 control/naming 不得扩 D9 wire、worker egress、template semantics 或 author commit。"
+      },
+      "contract": "D9 Main §14; D10 CANDIDATE direct clauses",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-08",
+      "scenario": {
+        "en": "Author-review boundary",
+        "zh": "作者与复核边界"
+      },
+      "positive": {
+        "en": "This batch may prove source coverage and document consistency but remains author-resolved-pending-independent-review.",
+        "zh": "本批可以证明 source coverage 与 document consistency，但状态仍为 author-resolved-pending-independent-review。"
+      },
+      "negative": {
+        "en": "No green CI/count/hash/source-map row self-closes D9 or global A2.",
+        "zh": "不得用 green CI/count/hash/source-map row 自行关闭 D9 或 global A2。"
+      },
+      "contract": "D9 Main §15",
+      "evidence": {
+        "en": "author design evidence; independent review pending",
+        "zh": "作者设计证据；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "CUR-09",
+      "scenario": {
+        "en": "Current Annotation Value/4 / R6 export-copy-import consumer boundary",
+        "zh": "Current Annotation Value/4 / R6 export-copy-import consumer 边界"
+      },
+      "positive": {
+        "en": "Node-template omission remains scoped to Node-template construction. Any D9 profile that actually exports current Annotation content consumes the complete PortableAnnotationRecord/4 and D3-Annotation-Value/4 through the current owner read chain; portable backup preserves exact inline source/attribution/reply/target, rendered Review Bundle uses the sole R6 AnnotationInlineProfile and discloses target context only under its own permissions.",
+        "zh": "Node Template omission 只作用于 Node Template construction。任何真正导出 current Annotation content 的 D9 profile 都必须通过 current owner read chain 消费完整 PortableAnnotationRecord/4 与 D3-Annotation-Value/4；portable backup 保留 exact inline source/attribution/reply/target，rendered Review Bundle 只使用唯一 R6 AnnotationInlineProfile，并且 target context 只在自身权限成功时披露。"
+      },
+      "negative": {
+        "en": "annotation_index is omission-directory evidence only and cannot stand in for Annotation body reads. No historical plain_text fallback, second parser, hidden-target leak, text-guessed locator, authenticated-origin fabrication, or global plain-only downgrade is allowed.",
+        "zh": "annotation_index 仅是 omission-directory evidence，不能替代 Annotation body read。不得 historical plain_text fallback、第二 parser、hidden-target leak、按 text 猜 locator、伪造 authenticated origin，也不得把 Node Template 的省略扩大成全局 plain-only。"
+      },
+      "contract": "D9 Main §13a; D9 Schemas §16a; final FC SPEC §§9.1–9.12,16; SCHEMAS §7",
+      "evidence": {
+        "en": "author design/current-owner integration; product R6/Review Bundle execution UNRUN",
+        "zh": "作者设计/current-owner 整合；产品 R6/Review Bundle 执行 UNRUN"
+      },
+      "status": "author-resolved-pending-independent-review",
+      "source": {
+        "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+        "ranges": [
+          "§9.1–9.12 L476–674",
+          "§16 L940–977"
+        ],
+        "schemaPath": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+        "schemaRanges": [
+          "§7 L2261–2371"
+        ],
+        "acceptanceIds": [
+          "AN2-39",
+          "FC4B-D8-03",
+          "FC4B-LIFE-03",
+          "FC4C-READ-02",
+          "FC4C-READ-06",
+          "FC4C-SUG-10",
+          "FC4C-STORE-08",
+          "FC4C-STORE-12"
+        ]
+      }
+    }
+  ],
+  "sourceQualifiedPolicy": {
+    "rows": "D9-01..05, S01..S34 and FA01..FA14",
+    "rule": "These 53 rows preserve the current-D9-owner source obligations and historical evidence wording. They are not standalone final-current authority where R02/R03/R04/M14/CUR successor rows or final FC explicitly supersede a premise.",
+    "namedSupersedes": {
+      "D9-04": "Current D2 product permits authored/effective H6-H9; target rendering limits are loss/unavailability per CUR-03.",
+      "S12": "The old five-level D2 premise is superseded by CUR-03 / FC4A-ROUTE-03; source H6-H9 remains legal current source.",
+      "FA07": "Fresh current dispatch is wire13/PAB4/Effect3 per CUR-01; genuine wire12/PAB3 remains historical recovery only."
+    }
+  }
+}

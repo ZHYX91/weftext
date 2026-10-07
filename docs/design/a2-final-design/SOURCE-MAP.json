@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D8 author candidates preserved. D7 fixed26be non-author PASS remains. D8 c98b five-finding author repair is author-resolved-pending-independent-review; D9-D10/global remain pending.",
+  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. D8 remains author-resolved-pending-independent-review. D9 complete integration from exact 5eca is author-resolved-pending-independent-review. D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Fixed-SHA non-author full D8 review including the OPEN source-map navigation/FC/history/per-obligation semantic audit; then D9 and D10 full owner integration, followed by fresh Pro/global A2 review.",
+  "next_batch": "Independent fixed-SHA D8 result handling remains separate; perform a new fixed-final-SHA non-author D9 review, then complete D10 full owner integration, followed by fresh Pro/global A2 review.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2463,10 +2463,12 @@
     "D8 fixed-stop independent full review",
     "D8 source-map navigation audit: 50/54 fixedProseSections still use broad whole-file targets",
     "D8 FC applicability, historical-to-current disposition and per-obligation semantic audit",
-    "D9-D10 full A2 owner modules",
     "D8/Search runtime/platform/AT/performance evidence",
     "fresh Pro/global review",
-    "runtime/OS/GUI/real-replica/migration/activation evidence"
+    "runtime/OS/GUI/real-replica/migration/activation evidence",
+    "D9 fixed-final-SHA independent full review",
+    "D10 full A2 owner module",
+    "D9 implementation gates I01-I12 and product/Office/OS/runtime evidence"
   ],
   "d7_integration": {
     "files": [
@@ -2620,5 +2622,62 @@
       "productRuntime": "UNRUN",
       "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged"
     }
+  },
+  "d9_integration": {
+    "files": [
+      "D9.md",
+      "D9.zh-CN.md",
+      "D9-INTERFACES.md",
+      "D9-INTERFACES.zh-CN.md",
+      "D9-SCHEMAS.md",
+      "D9-SCHEMAS.zh-CN.md",
+      "D9-ACCEPTANCE.md",
+      "D9-ACCEPTANCE.zh-CN.md",
+      "D9-ACCEPTANCE.json",
+      "D9-IMPACT.md",
+      "D9-IMPACT.zh-CN.md",
+      "D9-LEXICON.md",
+      "D9-LEXICON.zh-CN.md",
+      "D9-TERMS.json",
+      "D9-REGISTRY.json",
+      "D9-SOURCE-MAP.json",
+      "D9-SOURCE-MAP.md",
+      "D9-SOURCE-MAP.zh-CN.md"
+    ],
+    "status": "author-resolved-pending-independent-review; complete D9 owner integration authored; no self-acceptance",
+    "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+    "fixedS8": "FULL",
+    "currentOwnerBilingual": "FULL",
+    "mandatory14": "FULL lines 884-924",
+    "d7CurrentConsumers": "FULL D9-binding + PAB owner EN/ZH",
+    "finalFCSuccessors": "FULL for D9-relevant current SPEC/SCHEMAS/ACCEPTANCE including Value4/R6 direct consumer",
+    "d10Direct": "PARTIAL-direct-D9-only; complete D10 UNREAD/later",
+    "currentVersions": {
+      "author": "D3IdentityOperationRequest/13 + PreparedActionBinding/4 + DependencyProof/3 + EffectManifest/3/EffectBytes/3",
+      "conversion": "D9/1 artifact wire + D9/2 Workspace orchestration + ConversionInput/2 + TemplateRecipe/2 + TemplateConstructionInput/2",
+      "export": "ExportPlan/3 + PublicationReceipt/3",
+      "document": "D2DocumentSnapshot/3",
+      "annotation": "PortableAnnotationRecord/4 + D3-Annotation-Value/4 + sole R6 AnnotationInlineProfile/1"
+    },
+    "acceptance": {
+      "structuralAuthority": "D9-ACCEPTANCE.json",
+      "uniqueRows": 80,
+      "status": "author design oracles; independent review pending"
+    },
+    "sourceMap": {
+      "structuralAuthority": "D9-SOURCE-MAP.json",
+      "necessaryD9ReadGaps": 0
+    },
+    "namedRevision": {
+      "topic": "Mandatory §14 native-table Office authoring",
+      "current": "unique simple lowercase-ASCII leaf keeps data.native_table.COLUMN; qualified/non-ASCII fresh authoring uses visible native.table[...]::column[...] selector",
+      "internal": "nt_/nc_ remain compiled Plan keys only",
+      "historical": "genuine frozen hash-authored records retain exact decoder"
+    },
+    "protected": {
+      "snapshots": 49,
+      "inputsBlob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4"
+    },
+    "evidenceBoundary": "design/source consistency only; I01-I12 and product/runtime/GUI/Office/OS/performance/deployment UNRUN"
   }
 }

@@ -1,0 +1,23 @@
+---
+source_language: zh-CN
+translation_status: source
+---
+
+[English](D9-SOURCE-MAP.md)
+
+# A2 D9 来源映射
+
+状态：**author-resolved-pending-independent-review**。
+
+机器权威为 D9-SOURCE-MAP.json。
+
+- fixed S：八份 D9 source 均 FULL 阅读，并以连续无缺口的 section/line range 从第 1 行覆盖到各文件末行。
+- current D9 owner afterimage：八组中英文件均 FULL。
+- Mandatory source §14 的 884–924 行：FULL。
+- current D7 D9-binding 与 PreparedActionBinding owner 中英对：FULL。
+- final AsciiDoc/Annotation successor：D9 直接相关 SPEC/SCHEMAS/ACCEPTANCE 中英均已读；fresh author submission currentize 到 wire13/PAB4/Effect3，export/publication currentize 到 Plan3/Receipt3。
+- D10：只读取具名 D9 direct intersection，记为 PARTIAL；完整 D10 仍 UNREAD，留后续。
+
+本 D9 批唯一 A2 具名语义修订是 qualified native-table 的 Office authoring spelling：唯一 lowercase-ASCII leaf 继续使用 data.native_table.COLUMN；fresh qualified/non-ASCII binding 使用可见 native.table[...]::column[...] bytes。FC 的 nt_/nc_ identifier 只作为 internal compiled Plan key，不能替代自包含 template bytes。真实 historical frozen record 逐字保留。
+
+受保护 S49 与 docs/design/inputs.json blob 787d03c31a55496f81ed03fd54a6fdfff50a2ad4 保持 immutable。historical 有界 evidence set 57/63/59/82/90/130/12 分开记账。source coverage、count、hash、绿色 docs check 都不是语义接受。

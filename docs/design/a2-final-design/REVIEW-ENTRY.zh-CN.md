@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D8 作者候选复核入口——D8 c98b 五项 finding 修订
+# A2 D1–D9 作者候选复核入口——D9 完整整合
 
-后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。已保全的 D8 候选首次真实推送在 `7e3f0272f112cf0b8e61ab14fb9eaf72917e754b`。本继任作者批精确从 `c98b1b161751c5a01220da37568c78b5cef13841` 开始，修订 `D8-C98B-P1-01`、`D8-C98B-P1-02`、`D8-C98B-P1-03`、`D8-C98B-P2-01`、`D8-C98B-P2-02`。五项全部仍只是 `author-resolved-pending-independent-review`，不自行接受 D8/global A2。D9–D10 完整模块与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
+后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 D7 残余；此前有界 closure 继续绑定各自原 SHA。D7 在 D7 范围 accepted。D8 继续是已保全、未接受的作者候选，其独立复核保持单独 pending。本 D9 作者批精确从 `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，完整整合八份 D9 fixed source、current bilingual owner、Mandatory §14、current D7 D9-binding/PAB consumer 与 final-FC D9 successor，并把 D9 统一保持在 `author-resolved-pending-independent-review`。不自行接受 D8、D9 或 global A2。完整 D10 与 fresh Pro/global 复核继续 pending；产品/runtime 证据仍 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -15,6 +15,7 @@ Base branch：docs/asciidoc-annotation-final-design。
 固定历史输入 S：7e18168dad3e6d120fce0dd607dc10fa7894e252。
 受保护 inputs blob：787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 候选 branch：docs/a2-final-design-integration。
+D9 作者整合起点 SHA：5eca16c40cdf2e1892f6930d51c632ea720a460c。
 
 D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第一次非作者修订复核是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。四残余作者修订从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续窄修经过 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。下一轮独立复核把完成候选固定在 `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。此前两项 P2 修订从该 head 开始。语义关闭复核固定 5e21e9f00e1fa4e893f2544211133adbeac35ae0 并关闭语义 P2。fixed454e 随后新开两项 navigation-only P2。之后 fixed2f89 完整 D7 独立复核在有界范围关闭这两项 navigation finding 与 document-quality coordination finding，同时新开四项 D7 finding。本修复批精确从 fixed2f89 开始，只处理这四项，作者不自行关闭。
 
@@ -53,7 +54,7 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是 7e3f 起的已保全、未接受候选。c98b 五项作者修订修复 acceptance 字段丢失/极性与 View ID 冲突，补 current D7 View builder 和旧入口路由，完成 54/54 section-level prose navigation 与 760/760 FC current-owner/applicability 作者审计，并修中文 §6/§9 断句。作者不自行关闭任何 P1/P2。D8 仍等待 exact-final-SHA 独立复核。D9–D10 只在 D8 具名 producer/consumer intersection 上 PARTIAL；其完整 A2 module 继续 pending。
+D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是已保全、未接受候选，等待自己的 exact-final-SHA 独立复核。D9 现在从 exact 5eca 形成完整作者候选：八份 fixed-S FULL、current D9 owner 中英 FULL、Mandatory §14 FULL、D7 D9-binding/PAB consumer FULL、D9 相关 final-FC successor FULL；fresh author currentize 到 wire13/PAB4/Effect3，export/publication 到 Plan3/Receipt3，并闭合可见 native-table selector 与 current Value4/R6 Annotation consumer 设计边界。所有 D9 结果只为 author-resolved-pending-independent-review。完整 D10 仍留后续。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
 
@@ -61,3 +62,21 @@ D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是 7e3f 起的已保全
 ## D8 复核目标
 
 下一位非作者只绑定 PR #5 的最终 stop SHA。D8 继续等待独立复核；不得因为作者修订或 CI 变绿就推导语义接受。重点核验 `D8-SOURCE-MAP.json`、`D8-ACCEPTANCE.json`、current PB3/Value4/Snapshot3 边界、SEARCH-01–08 interaction、current D7 View hard answer/builder/旧入口路由、RTL/AT/性能义务，以及 S49/inputs 零变。必须重新核作者给出的 54/54 section navigation、760/760 FC 分类（direct 167 / upstream 142 / 保留 owner 451；110 行 applicability 作者改动）、acceptance 213/213 唯一性/极性与十个 `VIEW-BLD-01..10` fixture；它们都只是作者 resolved，复核者可以修订。D9/D10 完整模块与 global A2 不属于本轮 D8 接受范围。
+
+## D9 复核目标
+
+下一位非作者 reviewer 必须绑定 PR #5 的 exact final stop SHA，对 D9 做新的完整独立复核。D9 只是完整作者候选；source coverage、machine map、count、hash 和绿色文档 CI 都不是 acceptance。
+
+必须核验：
+
+- 八份 fixed-S D9 source、current D9 owner 中英 afterimage、Mandatory §14 的 884–924 行、两层 replacement router、current D7 D9-binding/PAB owner，以及 D9 适用 final-FC successor；
+- D9-SOURCE-MAP.json、D9-REGISTRY.json、D9-TERMS.json 与 D9-ACCEPTANCE.json 中 80 个唯一 obligation；
+- 单一 Core parser/identity/authorization 边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止第二 identity/ledger/patch authority；
+- Node Template Recipe/ConstructionInput、sourceSubjectBindings 到原 receipt join、PAB4/MinimumMapping/current wire13 与 saved/planned/unknown recovery；
+- 普通 Office token/style/repeat 规则和可见 qualified native-table selector grammar：template bytes 自包含、nt_/nc_ 只作 internal Plan key、shortest-unique suffix/title/occurrence、same-rowset repeat、Unicode escape；
+- 完整 ExportPlan/3 与 PublicationReceipt/3 字段、typed evidence/recovery pins、generationPolicy=none exact path、D2Snapshot3/D8 presentation rendering、output-name canonicalization、confirmation immutability、create-only publication 与独立 Resource author receipt；
+- current PortableAnnotationRecord/4 / Value4 / 唯一 R6 AnnotationInlineProfile consumer 边界：Node Template omission 只局限 construction，annotation_index 绝不能替代 body read 或形成全局 plain-only downgrade；
+- worker/route/sandbox、D9 no-network、image/region、Mobile negative conversion surface，以及 direct-but-not-full D10 intersection；
+- historical 57/63/59/82/90/130/12 evidence set 分开记账；I01–I12 及产品/runtime/GUI/Office/OS/performance/deployment 全部继续 UNRUN。
+
+独立复核必须报告 P0/P1/P2 disposition 与任何必要 read gap。完成前 D9 不能超出 author-resolved-pending-independent-review。之后仍必须完整整合 D10，并做全新非作者 Pro/global A2 终审。

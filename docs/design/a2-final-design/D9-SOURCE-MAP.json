@@ -1,0 +1,912 @@
+{
+  "format": "weftext.a2-d9-source-map",
+  "version": 1,
+  "status": "author-resolved-pending-independent-review",
+  "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+  "baseSha": "97f4734f82a760cb6716c8122b84494da2b61164",
+  "fixedS": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "protected": {
+    "snapshots": 49,
+    "inputsPath": "docs/design/inputs.json",
+    "inputsBlob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+    "rule": "byte-identical; absent from D9 delta"
+  },
+  "replacementChain": [
+    {
+      "path": "docs/design/d6-file-authority-reopen/replacements.json",
+      "blob": "2b4983a9c4deb058a12ef1ebf315bae67b27617d",
+      "role": "fixed S -> D6-FA D9 owner afterimages"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/replacements.json",
+      "role": "D6-FA -> final FC successors where named"
+    }
+  ],
+  "fixedSources": [
+    {
+      "topic": "d9-conversion-templates-and-workers",
+      "path": "docs/design/snapshots/d9-conversion-templates-and-workers/source.md",
+      "blob": "09ae93591c8394c9ca01f4972a052713e08eaa05",
+      "lineCount": 130,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 转换、模板与 Worker",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 22,
+          "section": "## 1. 产品选择与范围",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 23,
+          "endLine": 41,
+          "section": "## 2. 不变量与上游承接",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 42,
+          "endLine": 63,
+          "section": "## 3. 状态所有者及执行链",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 64,
+          "endLine": 84,
+          "section": "## 4. 新接口与原提交边界",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 85,
+          "endLine": 100,
+          "section": "## 5. 准备证据如何绑定原 D3/D6",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 101,
+          "endLine": 110,
+          "section": "## 6. 有界导入 Job",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 111,
+          "endLine": 122,
+          "section": "## 7. D8 后续边界的逐项归属",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 123,
+          "endLine": 130,
+          "section": "## 8. 完整替代与接受条件",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-import-ir-and-mapping",
+      "path": "docs/design/snapshots/d9-import-ir-and-mapping/source.md",
+      "blob": "05ea6c59b0687062765e3cfb5ef29e2741ef0764",
+      "lineCount": 154,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 Import IR 与映射",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 30,
+          "section": "## 1. 冻结与可扩展边界",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 31,
+          "endLine": 43,
+          "section": "## 2. 来源、置信度与完整性",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 44,
+          "endLine": 51,
+          "section": "## 3. Page 分支",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 52,
+          "endLine": 65,
+          "section": "### 图片物理尺寸 profile（image_physical_size/1）",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 66,
+          "endLine": 83,
+          "section": "## 4. Flow 分支",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 84,
+          "endLine": 95,
+          "section": "## 5. Workbook 分支及 CellValue",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 96,
+          "endLine": 124,
+          "section": "## 6. ImportMapping/1",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 125,
+          "endLine": 138,
+          "section": "## 7. LossReport/1",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 139,
+          "endLine": 150,
+          "section": "## 8. Resource Region Profile/1",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 151,
+          "endLine": 154,
+          "section": "## 9. 第二结构验证的判定",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-templates",
+      "path": "docs/design/snapshots/d9-templates/source.md",
+      "blob": "f3318ee0f8de190b95758898a434ec4c17c0f61c",
+      "lineCount": 172,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 模板",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 32,
+          "section": "## 1. 普通文本占位符的唯一语法",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 33,
+          "endLine": 63,
+          "section": "## 2. 绑定域、值与缺失",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 64,
+          "endLine": 78,
+          "section": "## 3. 逻辑容器与格式继承",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 79,
+          "endLine": 101,
+          "section": "## 4. body、bibliography 与标题样式",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 102,
+          "endLine": 113,
+          "section": "## 5. 重复区、方向与碰撞",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 114,
+          "endLine": 135,
+          "section": "## 6. Node Template 的一次性构造",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 136,
+          "endLine": 158,
+          "section": "## 6a. 精确构造请求、准备绑定与原回执",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 159,
+          "endLine": 164,
+          "section": "## 7. 首代限制与实施门",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 165,
+          "endLine": 172,
+          "section": "## 8. 最小完整Office例子",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-workers-and-export",
+      "path": "docs/design/snapshots/d9-workers-and-export/source.md",
+      "blob": "e0698ccab275b02681ece827c79d982001a987a4",
+      "lineCount": 150,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 Worker 与导出",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 31,
+          "section": "## 1. Provider、Route 与 capability",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 32,
+          "endLine": 47,
+          "section": "## 2. 隔离执行与输入不可信",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 48,
+          "endLine": 80,
+          "section": "## 3. 导出域和精确快照",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 81,
+          "endLine": 132,
+          "section": "## 3a. 导出来源、投影、损失与确认的闭合域",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 133,
+          "endLine": 146,
+          "section": "## 4. 生成、确认和外部发布",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 147,
+          "endLine": 150,
+          "section": "## 5. 有界证据与完整验收",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-coordinated-d3-d7-binding-amendment",
+      "path": "docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "blob": "01efb97587a33670f4a63783015843070a3099db",
+      "lineCount": 86,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 配套 D3/D7 准备绑定修订",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 20,
+          "section": "## 1. D3下游模板承接条款的精确替换",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 21,
+          "endLine": 24,
+          "section": "## 2. D7 Prepared Action Binding 完整规范 replacement",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 25,
+          "endLine": 39,
+          "section": "## 1. 一份不可变准备记录",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 40,
+          "endLine": 51,
+          "section": "## 2. D3显式wire11承接",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 52,
+          "endLine": 61,
+          "section": "## 3. D6承接与寿命",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 62,
+          "endLine": 68,
+          "section": "## 4. 版本及历史",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 69,
+          "endLine": 72,
+          "section": "## 3. 必须同批生效的镜像及版本消费",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 73,
+          "endLine": 78,
+          "section": "### 02 Decisions\\D6 Storage Transactions Permissions and Sync\\D6 Control Interfaces.md",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 79,
+          "endLine": 86,
+          "section": "### 02 Decisions\\D7 Query View Action\\D7 Preview and Effects Transport.md",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-acceptance-matrix",
+      "path": "docs/design/snapshots/d9-acceptance-matrix/source.md",
+      "blob": "433872d86808debd6ac05bafe1b7c2b10cde14dc",
+      "lineCount": 89,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 20,
+          "section": "# D9 接受矩阵与场景裁决",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 21,
+          "endLine": 59,
+          "section": "## 完整压力场景",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 60,
+          "endLine": 65,
+          "section": "## 证据归属",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 66,
+          "endLine": 75,
+          "section": "## r02 必须联合核对的反例与证据边界",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 76,
+          "endLine": 81,
+          "section": "## r03 导出组合与单位检查",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 82,
+          "endLine": 89,
+          "section": "## r04 消费适用条件与完整有限链",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-implementation-impact-and-test-outline",
+      "path": "docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md",
+      "blob": "cbf53ac8b0a4096ea16705bcd06894db597fd9bf",
+      "lineCount": 65,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 实现影响与测试轮廓",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 22,
+          "section": "## 影响与替换顺序",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 23,
+          "endLine": 41,
+          "section": "## 实施验收门（本轮均未关闭）",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 42,
+          "endLine": 51,
+          "section": "## r02 必须联合核对的反例与证据边界",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 52,
+          "endLine": 57,
+          "section": "## r03 导出组合与单位检查",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 58,
+          "endLine": 65,
+          "section": "## r04 消费适用条件与完整有限链",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-terminology-and-naming-lexicon",
+      "path": "docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md",
+      "blob": "9dd39f6fe1e8d6924ca492ec596f902b158eb32b",
+      "lineCount": 48,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9-LEXICON; D9-TERMS.json; D9-REGISTRY.json",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 48,
+          "section": "# D9 术语与命名门",
+          "currentTarget": "D9-LEXICON; D9-TERMS.json; D9-REGISTRY.json",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    }
+  ],
+  "currentOwnerSources": [
+    {
+      "topic": "d9-conversion-templates-and-workers",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.md",
+        "blob": "b9ff7da0ab0bcce23fe3f4b6510a8743b6138f8f",
+        "lineCount": 155,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.zh-CN.md",
+        "blob": "5a22f08fc86492bfc32f860af8872b1797879c87",
+        "lineCount": 152,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-import-ir-and-mapping",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.md",
+        "blob": "d9eb42eef8537b7b7fe5f3d60819c3ed3403c1d8",
+        "lineCount": 166,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.zh-CN.md",
+        "blob": "cba3b0acf3817c115b4486082fd1c91800b1f9fd",
+        "lineCount": 167,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-templates",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.md",
+        "blob": "bc79681ffdb05b59869f558c958a9a606cb98a5f",
+        "lineCount": 194,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.zh-CN.md",
+        "blob": "5f8cfdf1854a0da3fd71e1da04b438e07cad7ec6",
+        "lineCount": 193,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-workers-and-export",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-workers-and-export/source.md",
+        "blob": "24f561ba98f78d0a54290f3e338987fbfae66228",
+        "lineCount": 173,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-workers-and-export/source.zh-CN.md",
+        "blob": "bcb9b2100e1c67caab89a4459ba2f8798f8c5990",
+        "lineCount": 173,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-coordinated-d3-d7-binding-amendment",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+        "blob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+        "lineCount": 66,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.zh-CN.md",
+        "blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
+        "lineCount": 65,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-acceptance-matrix",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "lineCount": 118,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "blob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "lineCount": 115,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-implementation-impact-and-test-outline",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-implementation-impact-and-test-outline/source.md",
+        "blob": "5c1cf0f02114df93d6e4a69e9c715f0d48559551",
+        "lineCount": 83,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-implementation-impact-and-test-outline/source.zh-CN.md",
+        "blob": "7dc441e74ecf726bf589b8907759c02a369ad110",
+        "lineCount": 82,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-terminology-and-naming-lexicon",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-terminology-and-naming-lexicon/source.md",
+        "blob": "077d3d9c7d6b3203318d2b31edec5d5e7983a8ff",
+        "lineCount": 71,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-terminology-and-naming-lexicon/source.zh-CN.md",
+        "blob": "24c3fbd44487160af071a9c99cf30dcb76eda3b3",
+        "lineCount": 70,
+        "read": "FULL"
+      }
+    }
+  ],
+  "mandatory14": {
+    "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+    "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+    "startLine": 884,
+    "endLine": 924,
+    "read": "FULL",
+    "target": "D9.md§7–12; D9-SCHEMAS.md§8–13; D9-ACCEPTANCE M14-01..10"
+  },
+  "d7Current": [
+    {
+      "path": "docs/design/a2-final-design/d7/coordination/d9-binding/source.md",
+      "blob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "read": "FULL"
+    },
+    {
+      "path": "docs/design/a2-final-design/d7/coordination/d9-binding/source.zh-CN.md",
+      "blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
+      "read": "FULL"
+    },
+    {
+      "path": "docs/design/a2-final-design/d7/owners/prepared-action-binding/source.md",
+      "blob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "read": "FULL"
+    },
+    {
+      "path": "docs/design/a2-final-design/d7/owners/prepared-action-binding/source.zh-CN.md",
+      "blob": "35f2dcb22c321552984bf996e5d8a6e6d6b85275",
+      "read": "FULL"
+    }
+  ],
+  "finalFC": {
+    "read": "FULL for D9-relevant successors",
+    "schemas": [
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+        "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
+        "ranges": [
+          "§6.1 L1589–1677",
+          "§6.5 L1997–2223",
+          "§6.5.1 L2224–2315"
+        ]
+      },
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+        "blob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
+        "ranges": [
+          "§6.1 L1680–1776",
+          "§6.5 L2101–2327",
+          "§6.5.1 L2328–2415"
+        ]
+      }
+    ],
+    "spec": [
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+        "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
+        "ranges": [
+          "§8.3 L439–463",
+          "§8.4 L464–471",
+          "§16 L940–977"
+        ]
+      },
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+        "blob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+        "ranges": [
+          "§8.3 L449–473",
+          "§8.4 L474–481",
+          "§16 L1002–1045"
+        ]
+      }
+    ],
+    "acceptance": {
+      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "blob": "f5f5b9b212b281838aabc281171217623285820e",
+      "ranges": [
+        "D9 direct/upstream current rows including FC4R-EXP/TABLE/WIRE, FC4A-EXP/ROUTE, FC4D-EXP, FC4F-EXP, FC4G-NAME and named prerequisites"
+      ],
+      "zhPath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md"
+    },
+    "namedRevision": {
+      "supersedes": "fresh qualified/non-ASCII hash-token authoring sentence in final FC §6.5.1",
+      "current": "visible native.table[...]::column[...] Office bytes; nt_/nc_ internal compiled keys only",
+      "preserves": "simple unique ASCII leaf positive path and all genuine historical frozen bytes"
+    },
+    "annotationCurrent": {
+      "spec": [
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+          "ranges": [
+            "§9.1–9.12 L476–674",
+            "§16 L940–977"
+          ],
+          "read": "FULL-direct-current-consumer",
+          "blob": "8de513b6031d37af894756a422df85f1a3d96f8d"
+        },
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+          "ranges": [
+            "§9.1–9.12 L486–695",
+            "§16 L1002–1045"
+          ],
+          "read": "FULL-direct-current-consumer",
+          "blob": "20907167b6e4e968e431be2489f8e61d70722fa1"
+        }
+      ],
+      "schemas": [
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+          "ranges": [
+            "§7 L2261–2371"
+          ],
+          "read": "FULL-direct-current-consumer",
+          "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56"
+        },
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+          "ranges": [
+            "§7 corresponding current Value4/R6 block"
+          ],
+          "read": "FULL-direct-current-consumer",
+          "blob": "6f8340dc31da9829888a7bfd2f8be36598bec66a"
+        }
+      ],
+      "acceptanceIds": [
+        "AN2-39",
+        "FC4B-D8-03",
+        "FC4B-LIFE-03",
+        "FC4C-READ-02",
+        "FC4C-READ-06",
+        "FC4C-SUG-10",
+        "FC4C-STORE-08",
+        "FC4C-STORE-12"
+      ],
+      "target": "D9.md §13a; D9-SCHEMAS.md §16a; D9-ACCEPTANCE CUR-09",
+      "rule": "Node-template Annotation omission is local to construction. Actual current Annotation export/copy/import consumes complete Value/4/R6 owner facts; annotation_index alone is omission-directory evidence."
+    }
+  },
+  "d10Direct": {
+    "read": "PARTIAL-direct-D9-only",
+    "completeModule": "UNREAD; later D10 integration",
+    "sources": [
+      {
+        "path": "docs/design/d10/CANDIDATE.md",
+        "blob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+        "ranges": [
+          "§1–2 L13–27",
+          "§11 L205–218",
+          "§17 L369–381",
+          "§22–23 L455–472"
+        ]
+      },
+      {
+        "path": "docs/design/d10/CANDIDATE.zh-CN.md",
+        "blob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
+        "ranges": [
+          "§1–2 L13–27",
+          "§11 L204–217",
+          "§17 L368–380",
+          "§22–23 L454–471"
+        ]
+      },
+      {
+        "path": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
+        "blob": "097b58db2418dd2e425114d78b5977edb22edcb3",
+        "ranges": [
+          "§8.2 L351–429"
+        ]
+      },
+      {
+        "path": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
+        "blob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
+        "ranges": [
+          "§8.2 L350–428"
+        ]
+      }
+    ]
+  },
+  "acceptanceAuthority": {
+    "json": "D9-ACCEPTANCE.json",
+    "rows": 80,
+    "uniqueIds": 80
+  },
+  "historicalEvidence": {
+    "sets": [
+      57,
+      63,
+      59,
+      82,
+      90,
+      130,
+      12
+    ],
+    "rule": "separate bounded evidence; not additive product acceptance"
+  },
+  "readCoverage": {
+    "fixedS8": "FULL",
+    "currentD9OwnerENZH": "FULL",
+    "mandatory14": "FULL",
+    "d7CoordinationPABENZH": "FULL",
+    "finalFCD9RelevantENZH": "FULL",
+    "d10Direct": "PARTIAL",
+    "d10Complete": "UNREAD",
+    "d9NecessaryGaps": 0,
+    "finalFCAnnotationCurrentENZH": "FULL-direct-current-consumer"
+  },
+  "evidenceBoundary": "author design/source mapping only; independent D9 review pending; product/worker/Office/OS/performance/deployment UNRUN"
+}

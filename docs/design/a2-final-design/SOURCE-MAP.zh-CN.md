@@ -162,3 +162,15 @@ D8 已保全候选首次真实推送在 7e3f；本五项修订精确从 c98b（`
 本修订把 `D8-ACCEPTANCE.json` 设为六字段唯一结构源，恢复 ANNOT-01 与 WRITE-08 的完整正反极性，把 current View overlay 改到 `VIEW-CUR-*`，增加十个 `VIEW-BLD-01..10` Mandatory §15.7 oracle，得到 213/213 唯一 current obligation。正文补齐基于 current D7 ViewSpec/Definition 的无损 builder lifecycle，并明确 historical `.weftext-query view=...` 与 current `DynamicBlock/1` 路由，不建立第二 View/Query schema/store。同时把 54/54 fixed prose row 映射到 section-level target，并完成 760/760 FC 的逐行 applicability/current-owner 作者审计（direct 167、upstream 142、保留 non-D8 owner 451；110 行 applicability 改动）。中文 §6/§9 断句按完整英文合同修复。
 
 五项 finding 全部仍只是 `author-resolved-pending-independent-review`。数量、schema/列数检查和 docs CI 只提供机械证据，不代表语义接受。current D8 继续消费完整 Asciidoctor 2.0.26/D2 product、exact Source/Draft/edit/currentness、Annotation Value4/R6、presentation-policy owner 与已接受 D7 Search/View 语义。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D9/D10 仅在具名 D8 边界 PARTIAL；其完整模块与 global A2 留后续。
+
+## 17. D9 完整作者整合
+
+D9 从 exact `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，现已是完整作者候选，不再是 TODO module。八份 fixed-S D9 source 为 FULL；八组 current D9 owner 中英为 FULL；Mandatory §14 的 884–924 行 FULL；current D7 D9-binding/PAB owner 中英 FULL；D9 适用 final AsciiDoc/Annotation successor FULL。D9 必要 read gap 为 0。D10 仍仅在具名 D9 direct intersection 上 PARTIAL，不构成完整 D10 整合。
+
+fresh current author 工作消费 D3 wire13、D7 PAB4、DependencyProof3、Effect3。fresh export/publication 消费 ExportPlan3/PublicationReceipt3 以及 current D2Snapshot3/D8 presentation binding。historical wire11/12、PAB1/2/3、Recipe/ConversionInput1、Plan/Receipt1/2 只按原 decoder/bytes 恢复。
+
+Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：唯一 lowercase-ASCII native-table leaf 继续使用 `data.native_table.COLUMN`；qualified/non-ASCII fresh Office template bytes 使用可见 `native.table[...]::column[...]`，按 shortest suffix/title/occurrence 逐级限定。final-FC `nt_/nc_` 只作 internal compiled Plan key，不是 hidden authoring authority。ordinary Node 不增加 export-mapping schema。
+
+current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正 export/copy/import current Annotation content 的 profile 必须通过唯一 R6 AnnotationInlineProfile 消费完整 PortableAnnotationRecord/4 / Value4，并在 current disclosure 下保持 target/reply/attribution 边界。
+
+`D9-ACCEPTANCE.json` 是 80 条结构权威；`D9-SOURCE-MAP.json` 保存 fixed/current/successor provenance。historical finite evidence 57/63/59/82/90/130/12 分开记账、不可相加。I01–I12 与全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN。D9 仍为 `author-resolved-pending-independent-review`；docs/JSON 绿色检查不能接受它。

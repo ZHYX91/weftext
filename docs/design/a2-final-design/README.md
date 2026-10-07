@@ -15,7 +15,7 @@ This A2 integration is based on parent commit 97f4734f82a760cb6716c8122b84494da2
 
 This directory is the only A2 candidate authority for modules integrated here. Earlier snapshots, D6 file-authority owner afterimages, and the AsciiDoc/Annotation final-design candidate remain source provenance and historical decoder evidence; they do not form a second current A2 definition.
 
-The current author candidate preserves the D1-D8 integration. D7 has a subsequent fixed26be non-author PASS (P0=0/P1=0/P2=0). D8 remains an unaccepted author candidate; starting from exact c98b, this batch author-repairs the five independent D8 findings (acceptance structure, View IDs/builder/legacy routing, source-map/FC applicability, and bilingual breakage) and leaves every result `author-resolved-pending-independent-review`. D9-D10 remain future full-module batches.
+The current author candidate preserves D1-D8 and adds the complete D9 author integration from exact `5eca16c40cdf2e1892f6930d51c632ea720a460c`. D7 has a subsequent fixed26be non-author PASS (P0=0/P1=0/P2=0). D8 remains an unaccepted author candidate pending its fixed-SHA independent review. D9 is now a complete author candidate with status `author-resolved-pending-independent-review`; it does not self-accept D9 or D8. D10 remains the later full-module batch.
 
 ## 2. Batch progress
 
@@ -29,11 +29,11 @@ The current author candidate preserves the D1-D8 integration. D7 has a subsequen
 | D6 | fixed2f89 independently CLOSED the two navigation findings that remained after fixed454e; prior bounded D6 semantic closures remain limited to their recorded scope. |
 | D7 | fixed26be non-author review = PASS (P0=0/P1=0/P2=0); the final A2-D7-2F89-P2-01 is CLOSED there; earlier bounded closures keep their original SHAs |
 | D8 | preserved author candidate; c98b five-finding repair authored: acceptance JSON structural authority + 213/213 unique IDs, View `VIEW-CUR-*`/`VIEW-BLD-01..10` + builder/legacy route, 54/54 section-level prose mapping, 760/760 FC audit, Chinese §6/§9 repair; all pending independent review |
-| D9 | TODO as a full module; D7 consumed only coordinated binding and direct construction/import/export intersections |
+| D9 | complete author candidate: eight fixed-S sources FULL, current D9 owner EN/ZH FULL, Mandatory §14 FULL, D7 binding/PAB current consumers FULL, final-FC D9 successors FULL; current wire13/PAB4/Effect3 + ExportPlan3/Receipt3; visible self-contained native-table selector revision; pending fixed-SHA independent review |
 | D10 | TODO as a full module; D7 consumed SearchContribution/Catalog and D7 approval/effects/custody intersections |
-| Mandatory A2 source | D8 consumed the complete D8-applicable §15.1–15.8.9 chart/View interaction set and the RTL mandatory intake; D9-D10 owner-module completion remains later |
+| Mandatory A2 source | D8 consumed the complete D8-applicable §15.1–15.8.9 chart/View interaction set and RTL intake; D9 now fully consumes Mandatory §14 lines 884–924 including five hard constraints and ten Office/template fixtures; D10 owner-module completion remains later |
 
-No TODO module is treated as accepted, complete, or semantically read merely because its path, route, blob, or title is known. D8 is no longer TODO but remains an unaccepted author candidate.
+No TODO module is treated as accepted, complete, or semantically read merely because its path, route, blob, or title is known. D8 and D9 are no longer TODO but both remain unaccepted author candidates pending independent review.
 
 ## 3. Current files
 
@@ -46,18 +46,19 @@ No TODO module is treated as accepted, complete, or semantically read merely bec
 - D6.md, D6-CONTROL.md, D6-SCHEMAS.md, D6-IMPACT.md, D6-LEXICON.md and D6-REGISTRY.json form the current D6 author candidate; D6-SOURCE-MAP.json preserves detailed provenance.
 - D7.md, D7-SCHEMAS.md, D7-QUERY-V2.md, D7-SEARCH.md, D7-IMPACT.md, D7-REGISTRY.json and D7-REGISTRY-QUALIFICATION.md plus the byte-retained d7/owners subtree form the current D7 author candidate; D7-SEARCH-FIXTURES.json is the shortcut/parser oracle and D7-SOURCE-MAP.json is the machine trace.
 - D8.md, D8-INTERFACES.md, D8-SCHEMAS.md, D8-DIRECTION.md, D8-ACCEPTANCE.md, D8-LEXICON.md, D8-IMPACT.md, D8-TERMS.json, D8-REGISTRY.json and D8-SOURCE-MAP.json form the preserved D8 author candidate. The c98b five-finding author repair is present and awaits exact-final-SHA independent review; no finding is self-closed.
-- REVIEW-ENTRY.md is the review entry for the D1-D8 author candidate.
+- D9.md, D9-INTERFACES.md, D9-SCHEMAS.md, D9-ACCEPTANCE.md/JSON, D9-IMPACT.md, D9-LEXICON.md, D9-TERMS.json, D9-REGISTRY.json and D9-SOURCE-MAP.md/JSON form the complete D9 author candidate. The qualified native-table Office authoring revision keeps simple `data.native_table.COLUMN` and uses visible `native.table[...]::column[...]` for qualified/non-ASCII fresh authoring; internal `nt_/nc_` keys remain Plan metadata only.
+- REVIEW-ENTRY.md is the review entry for the D1-D9 author candidate.
 - SOURCE-MAP.md gives the human-readable source/disposition map.
 - SOURCE-MAP.json records all 49 fixed-S inputs, exact S blobs, read status, current sources, and source-qualified obligation groups.
 
 ## 4. Precedence inside this candidate
 
-For D1 through D8, the A2 files in this directory are the current candidate text. A named historical decoder or historical scenario remains normative only for historical recovery or source-qualified evidence when D1.md, D2.md, or SOURCE-MAP explicitly says so.
+For D1 through D9, the A2 files in this directory are the current candidate text. A named historical decoder or historical scenario remains normative only for historical recovery or source-qualified evidence when D1.md, D2.md, or SOURCE-MAP explicitly says so.
 
-For D9 through D10 there is no complete A2 current definition yet. Direct producer/consumer material consumed for D8 does not silently integrate those full owner modules.
+For D10 there is no complete A2 current definition yet. D9 reads only the named direct D10 intersections (specialized-executor boundary, worker no-network rule, Mobile negative surface, PublicationReceipt/Resource split and technical-interface naming); that PARTIAL read does not integrate the complete D10 module.
 
 ## 5. Acceptance boundary
 
 A subsequent non-author review bound to fixed26be (`26be071d4c2075343d9ebf272e00f23769ce0d64`) concluded PASS with P0=0 / P1=0 / P2=0 and CLOSED the final `A2-D7-2F89-P2-01`. Earlier bounded closures remain bound to their original SHAs. D7 is therefore accepted in its D7 scope; this does not accept D8 or global A2.
 
-D8 fixed-SHA independent review must verify the authored five-finding repair, including 54/54 section navigation, the 760-row applicability/current-owner audit, 213/213 acceptance identity/polarity, the current D7 View builder/legacy-entry route, and bilingual §6/§9 synchronization. D9-D10 full modules, D8/Search runtime-platform evidence and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+D8 fixed-SHA independent review remains pending and must verify its authored five-finding repair. D9 now also requires a separate fixed-final-SHA independent review of the complete eight-source/current-owner/Mandatory/FC integration, 80 D9 acceptance obligations, wire13/PAB4/Effect3, ExportPlan3/Receipt3, visible native-table selectors, Value4/R6 consumer boundary, recovery and source-map coverage. D10 complete integration, D8/Search/D9 runtime-platform evidence and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.

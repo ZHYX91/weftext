@@ -1,0 +1,540 @@
+{
+  "format": "weftext.a2-d9-terms",
+  "version": 1,
+  "status": "author-resolved-pending-independent-review",
+  "terms": [
+    {
+      "id": "weftext.term.source-artifact",
+      "names": {
+        "zh": "来源工件",
+        "en": "Source Artifact"
+      },
+      "owner": "D9",
+      "canonical": "SourceArtifact",
+      "definition": "host-pinned external bytes",
+      "forbidden": "path/hash identity"
+    },
+    {
+      "id": "weftext.term.import-ir",
+      "names": {
+        "zh": "导入中间表示",
+        "en": "Import IR"
+      },
+      "owner": "D9",
+      "canonical": "ImportIR/1",
+      "definition": "closed typed conversion IR",
+      "forbidden": "third-party AST or author source"
+    },
+    {
+      "id": "weftext.term.source-location",
+      "names": {
+        "zh": "来源位置",
+        "en": "Source Location"
+      },
+      "owner": "D9",
+      "canonical": "SourceLocation",
+      "definition": "input-version evidence coordinate",
+      "forbidden": "D3 Locator/write target"
+    },
+    {
+      "id": "weftext.term.import-observation",
+      "names": {
+        "zh": "导入观察",
+        "en": "Import Observation"
+      },
+      "owner": "D9",
+      "canonical": "Observation",
+      "definition": "extraction evidence",
+      "forbidden": "authorization/provenance grant"
+    },
+    {
+      "id": "weftext.term.conversion-provider",
+      "names": {
+        "zh": "转换提供方",
+        "en": "Conversion Provider"
+      },
+      "owner": "D9",
+      "canonical": "Provider installed record",
+      "definition": "reviewed executable adapter",
+      "forbidden": "Model Provider/free command"
+    },
+    {
+      "id": "weftext.term.conversion-route",
+      "names": {
+        "zh": "转换路由",
+        "en": "Conversion Route"
+      },
+      "owner": "D9",
+      "canonical": "routeId/profileId",
+      "definition": "finite reviewed pipeline",
+      "forbidden": "free fallback"
+    },
+    {
+      "id": "weftext.term.import-mapping",
+      "names": {
+        "zh": "导入映射",
+        "en": "Import Mapping"
+      },
+      "owner": "D9",
+      "canonical": "ImportMapping/1",
+      "definition": "explicit conversion choice",
+      "forbidden": "Query/Action/generic patch"
+    },
+    {
+      "id": "weftext.term.mapping-proposal",
+      "names": {
+        "zh": "映射提案",
+        "en": "Mapping Proposal"
+      },
+      "owner": "D9",
+      "canonical": "d9_import_analysis",
+      "definition": "fixed pre-prepare proposal",
+      "forbidden": "author plan"
+    },
+    {
+      "id": "weftext.term.import-job",
+      "names": {
+        "zh": "导入作业",
+        "en": "Import Job"
+      },
+      "owner": "D6",
+      "canonical": "ImportJob",
+      "definition": "finite groups/batches operated by D9",
+      "forbidden": "second ledger/job-wide atomicity"
+    },
+    {
+      "id": "weftext.term.coupling-group",
+      "names": {
+        "zh": "耦合组",
+        "en": "Coupling Group"
+      },
+      "owner": "D9",
+      "canonical": "ConversionInput/prepare group",
+      "definition": "indivisible author dependency group",
+      "forbidden": "UI/Query page"
+    },
+    {
+      "id": "weftext.term.import-batch",
+      "names": {
+        "zh": "导入批次",
+        "en": "Import Batch"
+      },
+      "owner": "D9",
+      "canonical": "one original D3/D6 request",
+      "definition": "finite commit batch",
+      "forbidden": "arbitrary 1000 slicing"
+    },
+    {
+      "id": "weftext.term.conversion-input",
+      "names": {
+        "zh": "转换输入证据",
+        "en": "Conversion Input"
+      },
+      "owner": "D9",
+      "canonical": "ConversionInput/2",
+      "definition": "raw/IR/mapping/loss/route evidence",
+      "forbidden": "identity/author source"
+    },
+    {
+      "id": "weftext.term.worker-invocation",
+      "names": {
+        "zh": "Worker 调用记录",
+        "en": "Worker Invocation"
+      },
+      "owner": "D9",
+      "canonical": "WorkerInvocation/1",
+      "definition": "fixed worker control",
+      "forbidden": "path/command/permission"
+    },
+    {
+      "id": "weftext.term.template-recipe",
+      "names": {
+        "zh": "模板配方",
+        "en": "Template Recipe"
+      },
+      "owner": "D9",
+      "canonical": "TemplateRecipe/2",
+      "definition": "one-shot D2 Template construction recipe",
+      "forbidden": "second Template identity"
+    },
+    {
+      "id": "weftext.term.template-construction-input",
+      "names": {
+        "zh": "模板构造输入",
+        "en": "Template Construction Input"
+      },
+      "owner": "D9",
+      "canonical": "TemplateConstructionInput/2",
+      "definition": "pins/recipe/parameters/resources/loss evidence",
+      "forbidden": "author source"
+    },
+    {
+      "id": "weftext.term.office-template",
+      "names": {
+        "zh": "Office 模板",
+        "en": "Office Template"
+      },
+      "owner": "D9",
+      "canonical": "weftext.office-template/1",
+      "definition": "ordinary visible Office template bytes",
+      "forbidden": "macro/script/hidden designer mapping"
+    },
+    {
+      "id": "weftext.term.template-placeholder",
+      "names": {
+        "zh": "模板占位符",
+        "en": "Template Placeholder"
+      },
+      "owner": "D9",
+      "canonical": "Office token grammar",
+      "definition": "visible value binding",
+      "forbidden": "content-control/named-range authority"
+    },
+    {
+      "id": "weftext.term.visible-native-selector",
+      "names": {
+        "zh": "可见原生表选择器",
+        "en": "Visible Native Selector"
+      },
+      "owner": "D9",
+      "canonical": "native.table[...]::column[...]",
+      "definition": "self-contained qualified native-table authoring",
+      "forbidden": "hash-only authoring authority"
+    },
+    {
+      "id": "weftext.term.style-directive",
+      "names": {
+        "zh": "样式指令",
+        "en": "Style Directive"
+      },
+      "owner": "D9",
+      "canonical": "visible style directive",
+      "definition": "visible style sample",
+      "forbidden": "executable command"
+    },
+    {
+      "id": "weftext.term.repeat-band",
+      "names": {
+        "zh": "重复带",
+        "en": "Repeat Band"
+      },
+      "owner": "D9",
+      "canonical": "row/column repeat contract",
+      "definition": "one complete row/column",
+      "forbidden": "implicit join/partial band"
+    },
+    {
+      "id": "weftext.term.render-snapshot",
+      "names": {
+        "zh": "渲染快照",
+        "en": "Render Snapshot"
+      },
+      "owner": "D9",
+      "canonical": "finite RenderSnapshot union",
+      "definition": "authorized rendering projection",
+      "forbidden": "author snapshot"
+    },
+    {
+      "id": "weftext.term.d7-result-pin",
+      "names": {
+        "zh": "D7 结果固定证据",
+        "en": "D7 Result Pin"
+      },
+      "owner": "D9",
+      "canonical": "D7ResultPin",
+      "definition": "pin of complete D7 result; nested types stay D7",
+      "forbidden": "rowHandle identity"
+    },
+    {
+      "id": "weftext.term.export-plan",
+      "names": {
+        "zh": "导出计划",
+        "en": "Export Plan"
+      },
+      "owner": "D9",
+      "canonical": "ExportPlan/3",
+      "definition": "current immutable output preparation",
+      "forbidden": "D6 PreparedIntent/author ledger"
+    },
+    {
+      "id": "weftext.term.export-input-catalog",
+      "names": {
+        "zh": "导出输入目录",
+        "en": "Export Input Catalog"
+      },
+      "owner": "D9",
+      "canonical": "ExportInputCatalog/2",
+      "definition": "complete authorized Plan input catalog",
+      "forbidden": "author source"
+    },
+    {
+      "id": "weftext.term.export-content-selection",
+      "names": {
+        "zh": "导出内容选择",
+        "en": "Export Content Selection"
+      },
+      "owner": "D9",
+      "canonical": "ExportContentSelection/1",
+      "definition": "explicit body/bibliography selection",
+      "forbidden": "permission grant"
+    },
+    {
+      "id": "weftext.term.export-projection",
+      "names": {
+        "zh": "导出投影",
+        "en": "Export Projection"
+      },
+      "owner": "D9",
+      "canonical": "ExportProjection/1",
+      "definition": "bounded bindings/datasets projection",
+      "forbidden": "free dictionary"
+    },
+    {
+      "id": "weftext.term.export-input-location",
+      "names": {
+        "zh": "导出输入位置",
+        "en": "Export Input Location"
+      },
+      "owner": "D9",
+      "canonical": "closed location union",
+      "definition": "Plan-local evidence",
+      "forbidden": "Locator/identity"
+    },
+    {
+      "id": "weftext.term.export-loss-location",
+      "names": {
+        "zh": "导出损失位置",
+        "en": "Export Loss Location"
+      },
+      "owner": "D9",
+      "canonical": "input+projection location union",
+      "definition": "Plan-local loss evidence",
+      "forbidden": "cross-Plan address"
+    },
+    {
+      "id": "weftext.term.export-loss-report",
+      "names": {
+        "zh": "导出损失报告",
+        "en": "Export Loss Report"
+      },
+      "owner": "D9",
+      "canonical": "ExportLossReport/1",
+      "definition": "fixed output loss proposal",
+      "forbidden": "Import LossReport"
+    },
+    {
+      "id": "weftext.term.export-blocks",
+      "names": {
+        "zh": "导出块投影",
+        "en": "Export Blocks"
+      },
+      "owner": "D9",
+      "canonical": "internal ExportBlocks",
+      "definition": "read-only D2 compilation",
+      "forbidden": "author block ID"
+    },
+    {
+      "id": "weftext.term.staged-output",
+      "names": {
+        "zh": "暂存输出",
+        "en": "Staged Output"
+      },
+      "owner": "D9",
+      "canonical": "validated staging record",
+      "definition": "complete unpublished bytes",
+      "forbidden": "author revision"
+    },
+    {
+      "id": "weftext.term.publication-receipt",
+      "names": {
+        "zh": "外部发布回执",
+        "en": "Publication Receipt"
+      },
+      "owner": "D9",
+      "canonical": "PublicationReceipt/3",
+      "definition": "external publication fact",
+      "forbidden": "D3/D6 author receipt"
+    },
+    {
+      "id": "weftext.term.import-loss-report",
+      "names": {
+        "zh": "导入损失报告",
+        "en": "Import Loss Report"
+      },
+      "owner": "D9",
+      "canonical": "LossReport/1",
+      "definition": "import/template loss proposal",
+      "forbidden": "export report"
+    },
+    {
+      "id": "weftext.term.import-loss-issue",
+      "names": {
+        "zh": "导入问题",
+        "en": "Import Loss Issue"
+      },
+      "owner": "D9",
+      "canonical": "IR issue",
+      "definition": "raw observed issue",
+      "forbidden": "security approval/completeness proof"
+    },
+    {
+      "id": "weftext.term.template-loss-location",
+      "names": {
+        "zh": "模板损失位置",
+        "en": "Template Loss Location"
+      },
+      "owner": "D9",
+      "canonical": "template_source|template_annotation",
+      "definition": "template evidence location",
+      "forbidden": "D3 Locator"
+    },
+    {
+      "id": "weftext.term.image-physical-size",
+      "names": {
+        "zh": "图片物理尺寸",
+        "en": "Image Physical Size"
+      },
+      "owner": "D9",
+      "canonical": "image_physical_size/1",
+      "definition": "verified source physical fact",
+      "forbidden": "72/96 DPI guess"
+    },
+    {
+      "id": "weftext.term.image-size-selection",
+      "names": {
+        "zh": "图片尺寸选择",
+        "en": "Image Size Selection"
+      },
+      "owner": "D9",
+      "canonical": "imageSizes",
+      "definition": "user frozen layout choice",
+      "forbidden": "source physical fact"
+    },
+    {
+      "id": "weftext.term.region-body",
+      "names": {
+        "zh": "区域几何体",
+        "en": "Region Body"
+      },
+      "owner": "D9",
+      "canonical": "RegionBody + d9rg1",
+      "definition": "non-identity geometry",
+      "forbidden": "complete Locator"
+    }
+  ],
+  "publicKinds": [
+    {
+      "kind": "d9_probe",
+      "owner": "D9 Probe Interface",
+      "consumes": "SourceArtifact + fixed route candidate",
+      "returns": "probe result; no author effect"
+    },
+    {
+      "kind": "d9_probe_result",
+      "owner": "D9 Probe Interface",
+      "consumes": "exact probe evidence",
+      "returns": "profile candidate"
+    },
+    {
+      "kind": "d9_convert",
+      "owner": "D9 Conversion Start Interface",
+      "consumes": "SourceArtifact + accepted route/options/budget",
+      "returns": "d9_conversion_started"
+    },
+    {
+      "kind": "d9_conversion_started",
+      "owner": "D9 Conversion Start Interface",
+      "consumes": "accepted start",
+      "returns": "job token/status; not identity"
+    },
+    {
+      "kind": "d9_conversion_state",
+      "owner": "D9 Conversion Job Interface",
+      "consumes": "conversion job token",
+      "returns": "d9_conversion_state_result"
+    },
+    {
+      "kind": "d9_conversion_state_result",
+      "owner": "D9 Conversion Job Interface",
+      "consumes": "WorkerInvocation/IR state",
+      "returns": "validated state/result; no author receipt"
+    },
+    {
+      "kind": "d9_conversion_cancel",
+      "owner": "D9 Conversion Job Interface",
+      "consumes": "conversion job token",
+      "returns": "cancel request"
+    },
+    {
+      "kind": "d9_import_analyze",
+      "owner": "D9 Import Analysis Interface",
+      "consumes": "ImportIR + mapping/loss inputs",
+      "returns": "d9_import_analysis"
+    },
+    {
+      "kind": "d9_import_analysis",
+      "owner": "D9 Import Analysis Interface",
+      "consumes": "fixed analysis cut",
+      "returns": "proposal/loss/group/batch catalog"
+    },
+    {
+      "kind": "d9_import_choose",
+      "owner": "D9 Import Analysis Interface",
+      "consumes": "analysis token + explicit choices",
+      "returns": "successor analysis"
+    },
+    {
+      "kind": "d9_import_prepare",
+      "owner": "D9 Import Preparation Interface",
+      "consumes": "fixed analysis + D6 ImportJob control",
+      "returns": "d9_import_prepared; author plan stays D7/D3/D6"
+    },
+    {
+      "kind": "d9_import_prepared",
+      "owner": "D9 Import Preparation Interface",
+      "consumes": "exact prepared batch",
+      "returns": "original D7 prepared outcome"
+    },
+    {
+      "kind": "d9_import_next",
+      "owner": "D9 Import Preparation Interface",
+      "consumes": "D6 ImportJob + authoritative predecessor outcome",
+      "returns": "unique next d9_import_prepared"
+    },
+    {
+      "kind": "d9_import_state",
+      "owner": "D9 Import Job State Interface",
+      "consumes": "D6-owned ImportJob",
+      "returns": "d9_import_state_result"
+    },
+    {
+      "kind": "d9_import_state_result",
+      "owner": "D9 Import Job State Interface",
+      "consumes": "D6 ImportJob + original receipts",
+      "returns": "read-only progress/result projection"
+    },
+    {
+      "kind": "d9_template_analyze",
+      "owner": "D9 Node Template Analysis Interface",
+      "consumes": "D2 Template + D9 recipe/construction",
+      "returns": "d9_import_analysis"
+    },
+    {
+      "kind": "d9_error",
+      "owner": "D9 Error Interface",
+      "consumes": "D9 public failure",
+      "returns": "closed D9 error; downstream owner errors pass through"
+    }
+  ],
+  "aliases": {
+    "forbiddenFresh": [
+      "ImportIr",
+      "record/attr template aliases",
+      "free provider command/fallback",
+      "generic author-receipt alias",
+      "D9-private Locator"
+    ],
+    "historicalRule": "historical research and genuine saved/planned records retain source-qualified original spelling; no fresh compatibility alias"
+  },
+  "evidence": "author-resolved-pending-independent-review; no naming row is runtime implementation"
+}
