@@ -36,7 +36,7 @@ WorkspaceRef and CommitDomain must match exactly. Static potential scope/authori
 
 D9 never submits author changes itself. A current prepared author operation is passed through D7 current `PreparedActionBinding/4`, current `D3IdentityOperationRequest/13` or the existing `d6_commit_request/2`, `DependencyProof/3`, current PIntent and `EffectManifest/3` / `EffectBytes/3`.
 
-D3 stage 5 validates the original request and inputs, stage 14 revalidates concrete payload/effects/currentness, stage 15 seals only the original request. The D6 planning CAS/P remains single. A D9 wrapper cannot add planToken, a second DecisionKey, a second receipt or a second CAS.
+D3 first performs the original saved/planned/unseen request-and-input lookup, then the final concrete payload/effects/currentness revalidation, and finally seals only the original request. The D6 planning CAS/P remains single. A D9 wrapper cannot add planToken, a second DecisionKey, a second receipt or a second CAS.
 
 MinimumMapping is validated before fetching large binding/PIntent records. The built-in D9 Node-template adapter is the only non-null D9 construction producer; arbitrary public construction kinds reject.
 

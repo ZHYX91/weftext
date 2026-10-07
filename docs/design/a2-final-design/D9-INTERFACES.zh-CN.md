@@ -35,14 +35,14 @@ WorkspaceRef 与 CommitDomain 必须 exact match。static potential scope/author
 
 D9 自己永不提交 author change。current prepared author operation 通过 D7 current `PreparedActionBinding/4`、current `D3IdentityOperationRequest/13` 或既有 `d6_commit_request/2`、`DependencyProof/3`、current PIntent 与 `EffectManifest/3` / `EffectBytes/3` 交回原 owner。
 
-D3 stage 5 验原 request/input，stage 14 复验 concrete payload/effects/currentness，stage 15 只 seal 原 request。D6 planning CAS/P 仍唯一。D9 wrapper 不得添加 planToken、第二 DecisionKey、第二 receipt 或第二 CAS。
+D3 先执行原 saved/planned/unseen request/input 查找，再执行 concrete payload/effects/currentness 的最终复验，最后只封存原 request。D6 planning CAS/P 仍唯一。D9 wrapper 不得添加 planToken、第二 DecisionKey、第二 receipt 或第二 CAS。
 
 读取大型 binding/PIntent record 前先验证 MinimumMapping。只有 built-in D9 Node-template adapter 能生产非 null 的 D9 construction；任意 public construction kind 都拒绝。
 
 ## 4. Error priority
 
 D9 public error 只有在 D1 surface/capability 处理之后才使用 current closed D9 family。顺序为：
-closed decode/version → D1 static surface/release capability → current audience/entry authorization → 适用时 current Workspace/domain/P continuity → exact pins/dependencies/currentness → format/business validation → budget。
+closed decode/version → D1 static surface/release capability → current audience/entry authorization → 适用时 current Workspace/domain/P continuity → exact pins/dependencies/currentness → format/business validation → budget。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
 
 一旦进入 D3/D6/D7/D8，就逐字返回原 owner error。D10 不包装 D9 error。无权 caller 不得获知 format/profile/provider/version、hidden object count 或详细 dependency state。
 
@@ -70,13 +70,13 @@ prepare 在返回前完成全部 input/catalog/projection/loss/staged bytes。in
 
 ## 9. Office-template compiler interface
 
-compiler 消费 immutable Office template bytes、完整授权 projection 与 Plan policy。它单次扫描 visible token，编译 exact binding record，验证 style/repeat/layout/safety，并返回 staged output 与 exact loss evidence。它没有 Workspace path、任意 callback 或 permission handle。
+compiler 消费 immutable Office template bytes、完整授权 projection 与 Plan policy。它单次扫描 visible token，编译 exact binding record，验证 style/repeat/layout/safety，并返回 staged output 与 exact loss evidence。它没有 Workspace path、任意 callback 或 permission handle。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
 
-qualified native-table authoring 由 compiler 读取 visible `native.table[...]::column[...]` token。它可以派生 internal `nt_...` / `nc_...` Plan key，但 visible template token 仍是 authoring authority。
+qualified native-table authoring 由 compiler 读取 visible `native.table[...]::column[...]` token。它可以派生 internal `nt_...` / `nc_...` Plan key，但 visible template token 仍是 authoring authority。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
 
 ## 10. Worker interface
 
-唯一 worker-facing control object 是 `WorkerInvocation/1`。slot/handle 由 host 分配。Worker 不能选择 executable、path、network、retry、loss choice、final publication destination 或 author operation。Host 验证每个 declared output byte，并拒绝 undeclared output。
+唯一 worker-facing control object 是 `WorkerInvocation/1`。slot/handle 由 host 分配。Worker 不能选择 executable、path、network、retry、loss choice、final publication destination 或 author operation。Host 验证每个 declared output byte，并拒绝 undeclared output。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
 
 ## 11. Region interface
 
@@ -84,4 +84,4 @@ qualified native-table authoring 由 compiler 读取 visible `native.table[...]:
 
 ## 12. Surfaces
 
-Desktop/CLI local mode 可协调本地 reviewed provider。Remote Desktop/CLI 与 WebUI 调 Server。Server 不接受 client arbitrary filesystem path。Mobile 没有 conversion execution/delegation/approval path。presentation difference、CJK/RTL 与 transport framing 不得改变 request bytes 或 domain outcome。
+Desktop/CLI local mode 可协调本地 reviewed provider。Remote Desktop/CLI 与 WebUI 调 Server。Server 不接受 client arbitrary filesystem path。Mobile 没有 conversion execution/delegation/approval path。presentation difference、CJK/RTL 与 transport framing 不得改变 request bytes 或 domain outcome。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
