@@ -28,7 +28,7 @@ translation_status: source
 | D6 | fixed2f89 已独立 CLOSED fixed454e 之后剩余的两项 navigation finding；既有 D6 bounded semantic closure 仍只保留各自记录范围。 |
 | D7 | fixed26be 非作者复核 = PASS（P0=0/P1=0/P2=0）；最终 A2-D7-2F89-P2-01 在该 SHA CLOSED；此前有界 closure 继续绑定各自原 SHA |
 | D8 | 已保全作者候选；c98b 五项修订已落作者候选：acceptance JSON 唯一结构源 + 213/213 唯一 ID、View `VIEW-CUR-*`/`VIEW-BLD-01..10` + builder/旧入口路由、54/54 section-level prose mapping、760/760 FC 审计、中文 §6/§9 修复；全部等待独立复核 |
-| D9 | 完整作者候选：八份 fixed-S FULL、current D9 owner 中英 FULL、Mandatory §14 FULL、D7 binding/PAB current consumer FULL、final-FC D9 successor FULL；current wire13/PAB4/Effect3 + ExportPlan3/Receipt3；具名可见自包含 native-table selector 修订；等待 fixed-SHA 独立复核 ；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。 |
+| D9 | 完整作者候选：八份 fixed-S 均为 FULL，现任 D9 owner 中英文 FULL，Mandatory §14 FULL，D7 binding/PAB 现任 consumer FULL，final-FC D9 successor FULL；现任版本为 wire13/PAB4/Effect3 + ExportPlan3/Receipt3；已加入具名、可见且自包含的 native-table selector 修订；等待 fixed-SHA 独立复核 |
 | D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
 | Mandatory A2 source | D8 已完整消费 D8 适用的 §15.1–15.8.9 chart/View interaction 与 RTL intake；D9 现已完整消费 Mandatory §14 的 884–924 行、五项硬约束和十项 Office/template fixture；D10 owner module 完整整合留后续 |
 
@@ -45,7 +45,7 @@ translation_status: source
 - D6.zh-CN.md、D6-CONTROL.zh-CN.md、D6-SCHEMAS.zh-CN.md、D6-IMPACT.zh-CN.md、D6-LEXICON.zh-CN.md 与 D6-REGISTRY.json 构成 current D6 作者候选；D6-SOURCE-MAP.json 保存细粒度 provenance。
 - D7.zh-CN.md、D7-SCHEMAS.zh-CN.md、D7-QUERY-V2.zh-CN.md、D7-SEARCH.zh-CN.md、D7-IMPACT.zh-CN.md、D7-REGISTRY.json 与 D7-REGISTRY-QUALIFICATION.zh-CN.md，再加上逐字节保留的 d7/owners 子树，共同构成当前 D7 作者候选；D7-SEARCH-FIXTURES.json 保存快捷解析的机器验收例，D7-SOURCE-MAP.json 保存机器来源追踪。
 - D8.zh-CN.md、D8-INTERFACES.zh-CN.md、D8-SCHEMAS.zh-CN.md、D8-DIRECTION.zh-CN.md、D8-ACCEPTANCE.zh-CN.md、D8-LEXICON.zh-CN.md、D8-IMPACT.zh-CN.md、D8-TERMS.json、D8-REGISTRY.json 与 D8-SOURCE-MAP.json 构成已保全的 D8 作者候选。c98b 五项 finding 的作者修订已存在，等待 exact-final-SHA 独立复核；作者不自行关闭 finding。
-- D9.zh-CN.md、D9-INTERFACES.zh-CN.md、D9-SCHEMAS.zh-CN.md、D9-ACCEPTANCE.zh-CN.md/JSON、D9-IMPACT.zh-CN.md、D9-LEXICON.zh-CN.md、D9-TERMS.json、D9-REGISTRY.json 与 D9-SOURCE-MAP.zh-CN.md/JSON 构成完整 D9 作者候选。qualified native-table Office authoring 保留 simple `data.native_table.COLUMN`，fresh qualified/non-ASCII 使用可见 `native.table[...]::column[...]`；internal `nt_/nc_` 只作 Plan metadata。；其中英文名称仅表示固定协议标识、字段名或固定字面量，均按本条中文条件解释。
+- D9.zh-CN.md、D9-INTERFACES.zh-CN.md、D9-SCHEMAS.zh-CN.md、D9-ACCEPTANCE.zh-CN.md/JSON、D9-IMPACT.zh-CN.md、D9-LEXICON.zh-CN.md、D9-TERMS.json、D9-REGISTRY.json 与 D9-SOURCE-MAP.zh-CN.md/JSON 构成完整 D9 作者候选。qualified native-table Office authoring 对 simple `data.native_table.COLUMN` 保持原拼法；fresh qualified/non-ASCII 情况使用可见的 `native.table[...]::column[...]`；internal `nt_/nc_` 仅作为 Plan metadata。
 - REVIEW-ENTRY.zh-CN.md 是 D1–D9 作者候选复核入口。
 - SOURCE-MAP.zh-CN.md 是人类可读的来源与 disposition 图。
 - SOURCE-MAP.json 逐条记录 49 个固定 S 输入的 S blob、阅读状态、current 来源以及 source-qualified 义务组。
