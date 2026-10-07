@@ -78,7 +78,7 @@ saved/planned/unknown 三类恢复状态必须保留原始请求、OperationId�
 
 ## 8. Export 证据
 
-测试必须覆盖：renderer registry unavailable 时 exact-source/resource/query_json 的 generationPolicy=none；渲染文档使用 D2Snapshot3 + D8 presentation binding；body/bibliography 选择；narrow Field/Query/native_table 不额外读取 body；graph/scalar/rows 的完整值；canonical set 排序；现任输出名 validity/PortableAlias/reserved-name rule；以及 Plan3/Receipt3 与 historical strict dispatch。
+测试必须覆盖：渲染器注册表不可用时 exact-source/resource/query_json 仍使用 generationPolicy=none；渲染文档使用 D2Snapshot3 与 D8 呈现绑定；显式选择 body/bibliography；窄 Field/Query/native_table 不得额外读取 body；完整保留 graph/scalar/rows 值；集合按 canonical 规则排序；现任输出名执行 validity、PortableAlias 与 reserved-name 检查；Plan3/Receipt3 对历史版本保持严格分派。
 
 initial loss report、data bytes、loss-report.json、manifest.json、stagedOutputs 在 confirm 前冻结并验证。confirm 后任何变化必须失败，不能 rerender。
 
