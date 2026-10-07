@@ -109,11 +109,11 @@ Compilation is deterministic:
 2. validate every source and Field against QuerySpec/2 and the current Registry;
 3. compute each AST node's applicable subject domains using §3;
 4. create the Node and, when enabled, Resource scan/read/filter/project branches;
-5. project every surviving branch to one identical search-row schema with Optional<NodeRef>, Optional<ResourceRef>, display text, rank and stable source key;
+5. project every surviving branch to one identical search-row schema with Optional<NodeRef>, Optional<ResourceRef>, Optional<text> display, rank and stable source key;
 6. combine multiple branches with QuerySpec/2 union_all;
 7. apply the explicit deterministic sort and final project.
 
-A condition outside the shortcut/visual subset remains an opaque advanced Query condition in the visual editor and is never lost. It can only be edited by the full Query editor. Saving always saves QuerySpec/2, never SearchConditionAst/1.
+Optional title/subtitle values match only in the some branch; none is never coerced to empty text. A titleless body match may therefore carry display=none, and the UI may render a non-authoritative placeholder without changing Query data. A condition outside the shortcut/visual subset remains an opaque advanced Query condition in the visual editor and is never lost. It can only be edited by the full Query editor. Saving always saves QuerySpec/2, never SearchConditionAst/1.
 
 D7-SEARCH-FIXTURES.json is the machine oracle for parser/visual equivalence. For every positive fixture, shortcut AST and visual AST must be byte-equal after canonical AST serialization and must compile to byte-equal CanonicalGraph descriptions. Negative/incomplete fixtures compile nothing.
 

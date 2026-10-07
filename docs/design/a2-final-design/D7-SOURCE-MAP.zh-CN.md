@@ -16,9 +16,9 @@ fixed2f89 已在有界范围独立关闭 A2-D6-01CC-P2-01、A2-NAV-454E-P2-01 �
 
 ## 2. 阅读覆盖
 
-fixed-S D7 十三份来源以及额外 D9 coordinated D3-D7 binding source，继续沿用已完成 D7 复核的 FULL 证据。current 双语 D7 owner set 继续 FULL。D1/D2/D4/D5 与 D7 所需 D6 交叉沿用此前记录的覆盖。D3/D8/D9/D10 仍只在具名 D7 direct producer/consumer intersection 上 PARTIAL；本批没有重开 whole module。
+fixed-S D7 十三份来源以及额外 D9 coordinated D3-D7 binding source，继续沿用已完成 D7 复核的完整阅读证据。current 双语 D7 owner set 也继续保持完整阅读。D1/D2/D4/D5 与 D7 所需 D6 交叉沿用此前记录的覆盖；D3/D8/D9/D10 仍只覆盖具名的 D7 直接生产者/消费者交叉，本批没有重新审查这些完整模块。
 
-本修复只重读四项 finding 的直接证据：fixed-S 与 parent-current terminology Registry、closed Query read/source grammar、current D2 title/subtitle product、D6 SourceObservation/FileObjectBinding/Policy gate、immutable Mandatory/scenario source range，以及准确 current source-map package。
+本修复只重读四项 finding 的直接证据：fixed-S 与 parent-current 术语 Registry、闭合的 Query read/source grammar、current D2 title/subtitle 产品、D6 SourceObservation/FileObjectBinding/Policy 门、immutable Mandatory/scenario source range，以及准确的 current source-map package。
 
 ## 3. Registry 资格
 
@@ -28,7 +28,7 @@ D7-REGISTRY-QUALIFICATION 对 B01-B13 逐条映射。D7-REGISTRY.json 继续是�
 
 ## 4. Query 与 Search 修复
 
-D7-QUERY-V2 将 QuerySpec/2 定义为 current new-author schema；QuerySpec/1 保持单独准确 decoder。QuerySpec/2 增加 current Optional title/subtitle、获权 Node filename/path、获权 Resource filename，以及一个要求输入 schema 完全相等的通用 union_all。所有 read 都绑定真实 D2/D6 producer、authorization、同 cut current Observation/FileBinding 与最终 barrier。
+D7-QUERY-V2 将 QuerySpec/2 定义为当前新建作者 schema，QuerySpec/1 则继续由单独的准确 decoder 解释。QuerySpec/2 增加可空的 current title/subtitle、获权的 Node 文件名与路径、获权的 Resource 文件名，以及要求输入 schema 完全相等的通用 union_all。所有 read 都绑定真实 D2/D6 producer、授权结果、同一 cut 的 current Observation/FileBinding 和最终 barrier。
 
 D7-SEARCH 现在给出完整 shortcut lexer、递归 precedence grammar、keyword boundary、escape、FieldId/member-path validation、三个 preset 的 empty-input behavior 以及 explicit source override。visual 与 shortcut 生成同一 ephemeral SearchConditionAst/1，并确定性编译到 QuerySpec/2。D7-SEARCH-FIXTURES.json 保存 machine 正反等价 fixture。任何 parser error 都不能 fallback 到另一条 Query。
 
@@ -51,6 +51,6 @@ retained current scenario mirror 仍可用于 current disposition 导航，但�
 
 ## 7. 证据边界与下一 gate
 
-repository documentation、input-integrity、JSON 与 source-map check 只能证明 mechanical consistency。Product Search、runtime、Desktop/Mobile/WebUI GUI、IME/AT、renderer/export、真实 index/provider、CAS/race、migration、deployment 与 historical execution 全部继续 UNRUN。
+仓库文档检查、输入完整性检查、JSON 与 source-map 检查只能证明机械一致性。Product Search、runtime、Desktop/Mobile/WebUI GUI、IME/AT、renderer/export、真实 index/provider、CAS/race、migration、deployment 与历史执行全部继续记为 UNRUN。
 
 下一 gate 是对四项 fixed2f89 finding 及其受影响 direct surface 做 fixed-SHA 非作者增量复核。D8-D10 完整整合与后续 fresh Pro/global A2 review 继续分开。

@@ -102,55 +102,57 @@ SearchConditionAst/1 :=
 
 这个 AST 不持久化，也不是第二查询语言权威。and/or 只把相邻同类 operator flatten，并保留 source order；NOT 不做代数抵消。visual editor 使用同样 node kind 与 source selector，因此 surface 切换不能丢条件。
 
-compiler 的顺序固定：
+编译顺序固定：
 
-1. resolve preset、显式 scope 与 enabled sources；
-2. 按 QuerySpec/2 与 current Registry 验证全部 source/Field；
-3. 按 §3 计算每个 AST node 的 applicable subject domains；
-4. 建立 Node branch，以及启用时的 Resource scan/read/filter/project branch；
-5. 每个有效 branch 投影到同一 search-row schema：Optional<NodeRef>、Optional<ResourceRef>、display text、rank、stable source key；
-6. 多 branch 时使用 QuerySpec/2 union_all；
-7. 应用明确的 deterministic sort 与 final project。
+1. 先确定 preset、显式 scope 和已启用的数据源；
+2. 用 QuerySpec/2 与当前 Registry 验证全部 source 和 Field；
+3. 按 §3 计算每个 AST 节点适用的 subject domain；
+4. 建立 Node 分支，以及启用时的 Resource scan/read/filter/project 分支；
+5. 每个有效分支都投影到同一 search-row schema，其中包含 Optional<NodeRef>、Optional<ResourceRef>、Optional<text> display、rank 和稳定 source key；
+6. 存在多个分支时使用 QuerySpec/2 union_all；
+7. 最后执行明确且确定的 sort 与 project。
 
-快捷/可视化子集无法表达的完整 Query condition，必须作为 opaque advanced Query condition 留在 visual editor，绝不能丢失；只能通过 full Query editor 修改。保存时始终保存 QuerySpec/2，不保存 SearchConditionAst/1。
+可空 title/subtitle 只有在 some 分支才参与匹配，none 永远不会被强制转换成空文本。无标题 Document 通过正文命中时可以得到 display=none；界面可显示非作者占位文字，但不能把占位文字写回 Query 数据。
 
-D7-SEARCH-FIXTURES.json 是 parser/visual equivalence 的 machine oracle。每个 positive fixture 的 shortcut AST 与 visual AST 在 canonical AST serialization 后必须逐字节相等，并编译成逐字节相等的 CanonicalGraph 描述。negative/incomplete fixture 不产生任何 Query。
+快捷/可视化子集无法表达的完整 Query condition，必须作为 opaque advanced Query condition 保留在可视化编辑器中，绝不能丢失；只有完整 Query editor 能修改它。保存时始终保存 QuerySpec/2，不保存 SearchConditionAst/1。
+
+D7-SEARCH-FIXTURES.json 是 parser 与可视化等价的机器 oracle。每个正例的 shortcut AST 与 visual AST 在 canonical AST serialization 后必须逐字节相同，并编译成逐字节相同的 CanonicalGraph；负例和未完成输入都不产生 Query。
 
 ## 7. 权限、索引状态、命中数、排名与摘要
 
-authorization 与 minimum disclosure 必须先于任何 sensitive source、Field、contribution、attachment、Annotation 或 index-private read。hidden object 不得通过 hit count、rank gap、snippet、completion 或 unavailable reason 泄露。
+授权和最低披露检查必须先于任何敏感 source、Field、contribution、附件、Annotation 或索引私有数据读取。隐藏对象不得通过命中数量、排名缺口、摘要、补全提示或不可用原因泄露。
 
-Derived Index 仍只做 candidate accelerator。building、partial、stale、unavailable 与 proved complete zero-result Query 分开。complete search 需要 current authorized query_scan，以及全部真实 positive/negative source、Registry、contribution、extraction 与 authorization dependencies。partial exploration 不能签发 complete ResultHandle/ActionEvidence，也不能把 current page 当作完整结果。
+Derived Index 仍只用于候选加速。索引处于 building、partial、stale 或 unavailable，必须与“已经证明完整且结果为零”的 Query 区分。完整搜索需要当前获权的 query_scan，以及所有真实的正负 source、Registry、contribution、提取结果和授权依赖。部分探索不能签发完整 ResultHandle/ActionEvidence，也不能把当前 page 冒充完整结果。
 
-selected source/Field/SearchContribution/provider/extraction data 缺失时，在普通 disclosure gate 后返回既有 unavailable/reset result；不能 fallback 成 empty contribution。budget exhaustion 使完整结果失败，不能返回前 N 条再宣称 complete。
+已选择的 source、Field、SearchContribution、provider 或提取数据缺失时，在普通披露门之后返回既有 unavailable/reset 结果；不能退化为空 contribution。预算耗尽会让完整结果失败，不能返回前 N 条后再宣称完整。
 
-snippet/highlight 只能从已获权的 semantic text 派生。它们的 scalar offset 只是 result-display offset，不是 Locator。打开 hit 时重新执行 fresh current resolution/read；result/source stale 时必须 reset。
+snippet/highlight 只能从已经获权的语义文本派生；其中的 scalar offset 只是结果显示偏移，不是 Locator。打开命中项时必须重新执行 fresh current resolution/read；结果或来源已经 stale 时必须 reset。
 
 ## 8. 保存、重开、复制与导入
 
-新的 current saved search 使用 QuerySpec/2。saved definition 记录 explicit scope、parameters、stable FieldId、SearchContribution contributionId/version dependency 与作者 ordering。shortcut text、parser cursor、source popover、recent history、device direction 都只是 interaction state。
+新的当前保存搜索使用 QuerySpec/2。saved definition 记录明确 scope、parameters、稳定 FieldId、SearchContribution 的 contributionId/version 依赖和作者排序。shortcut text、parser cursor、source popover、recent history 与 device direction 都只是交互状态。
 
-reopen 先按 recorded QuerySpec version 分派，再做 current qualification。QuerySpec/1 保持准确旧语法，永远不按 /2 重新解释。Field deletion/type change、contribution removal/version change、permission change、FileBinding change 都走各自真实 Registry/currentness reset。
+重开时先按记录的 QuerySpec version 分派，再做当前资格检查。QuerySpec/1 保持准确旧语法，永远不按 /2 重新解释。Field 删除或改型、contribution 移除或换版、权限变化、FileBinding 变化，都按各自真实 Registry/currentness 规则触发 reset。
 
-Definition Transfer 按版本对应 Query schema 映射 typed Ref/DefinitionAddress slot。D9 exact query_json copy/export/import 保留 recorded version 与 bytes。filename/path string 永远不会变成 DefinitionAddress 或 identity。
+Definition Transfer 按对应版本的 Query schema 映射 typed Ref 与 DefinitionAddress slot。D9 对 query_json 的精确 copy/export/import 保留记录版本和原 bytes。filename/path 字符串永远不会变成 DefinitionAddress 或 identity。
 
 ## 9. 跨 surface 与跨 device 等价
 
-同一 QuerySpec/2 bytes、parameters、scope 与 current dependency cut，在 File List、Quick Open、Global Search 和 saved Query 上必须得到相同 Query membership/order semantics。不同 surface 可以提供不同 preset control，但只要某个 control 可用，就必须映射到上述同一 source/AST 规则。
+只要 QuerySpec/2 bytes、parameters、scope 与当前 dependency cut 相同，File List、Quick Open、Global Search 和 saved Query 就必须得到相同的成员集合与排序语义。不同 surface 可以提供不同 preset control，但任何可用 control 都必须映射到上述同一 source/AST 规则。
 
-keyboard、pointer、touch 与 assistive-technology operation 调用同一个 condition model。focus 绑定 logical condition/result identity，而不是 DOM position。IME preedit 不执行 Query。CJK/RTL input、bidi isolation、screen-reader label、mobile sheet、hardware keyboard 仍是 D8 implementation obligation；本 D7 design 不声称已经实测。
+键盘、指针、触摸与辅助技术操作调用同一个 condition model。focus 绑定逻辑条件或结果身份，而不是 DOM position。IME 预编辑不执行 Query。CJK/RTL 输入、双向文本隔离、读屏 label、移动端面板和硬件键盘仍属于 D8 实现义务；本 D7 设计不声称已经实测。
 
 ## 10. SEARCH-01–08 验收
 
 | ID | 当前设计义务 |
 | --- | --- |
-| SEARCH-01 | File List、Quick Open、Global Search 使用 §3 的 preset scope 与 empty-input behavior；recursive、Resources、Annotation、Trash、body、attachment/OCR 都必须显式。 |
-| SEARCH-02 | title/subtitle/Node filename/Node path/Resource filename/hierarchy 分域；QuerySpec/2 提供真实 producer；titleless 不补 title；rename/move 通过真实 dependency reset，但不按 text 改 identity。 |
-| SEARCH-03 | exact 与 nfc-for-compare 按 §4 分开；比较区分大小写、基于 Unicode scalar 且 deterministic；不声称 fuzzy/tokenizer/Pinyin/stemming。 |
-| SEARCH-04 | shortcut mode 必须显式，完整 lexer/grammar 见 §5；plain mode 中普通 title:、URL、drive colon 与 prose 都是 literal；shortcut error/incomplete draft 不执行 fallback Query。 |
-| SEARCH-05 | visual 与 shortcut 生成同一 SearchConditionAst/1 和 §6 CanonicalGraph；advanced condition 保留不丢；D8 platform interaction 继续等待后续 evidence。 |
-| SEARCH-06 | permission 先于 sensitive read；hidden count/rank/snippet 不泄露；index state 与 complete zero 分开；missing source/provider 与 budget 有明确失败；ordinary open/edit/save 独立。 |
-| SEARCH-07 | save/reopen/copy/import 持久化 versioned canonical Query，不保存 UI state；/1 与 /2 分开 dispatch；Field/contribution/FileBinding/permission 变化重新资格化或 reset；old result evidence 不续权。 |
-| SEARCH-08 | hit 打开时 fresh current authorized resolve；snippet offset 不是 Locator；相同 QuerySpec/2 semantics 跨 surface/device 保持一致，只允许显式 unavailable capability 差异。 |
+| SEARCH-01 | File List、Quick Open、Global Search 使用 §3 的 preset 范围与空输入行为；递归、Resources、Annotation、Trash、body、attachment/OCR 都必须显式选择。 |
+| SEARCH-02 | title、subtitle、Node 文件名、Node 路径、Resource 文件名与 hierarchy 分域；QuerySpec/2 提供真实 producer；titleless 不补 title；rename/move 通过真实 dependency 使旧结果 reset，但不按文字改变 identity。 |
+| SEARCH-03 | exact 与 nfc-for-compare 按 §4 分开；比较区分大小写，基于 Unicode scalar 且结果确定；不声称 fuzzy、tokenizer、Pinyin 或 stemming。 |
+| SEARCH-04 | shortcut mode 必须显式开启，完整 lexer/grammar 见 §5；plain mode 中普通 title:、URL、盘符冒号和 prose 都按 literal 处理；shortcut error 或 incomplete draft 不执行 fallback Query。 |
+| SEARCH-05 | visual 与 shortcut 生成同一 SearchConditionAst/1 和 §6 CanonicalGraph；advanced condition 必须保留；D8 的平台交互继续等待后续 evidence。 |
+| SEARCH-06 | 权限先于敏感读取；隐藏 count/rank/snippet 不泄露；索引状态与完整零结果分开；source/provider 缺失和预算耗尽都有明确失败；普通 open/edit/save 独立。 |
+| SEARCH-07 | save/reopen/copy/import 持久化带版本的 canonical Query，不保存 UI state；/1 与 /2 分开 dispatch；Field、contribution、FileBinding 或权限变化都会重新资格化或 reset；旧 result evidence 不续权。 |
+| SEARCH-08 | 打开 hit 时执行 fresh current authorized resolve；snippet offset 不是 Locator；相同 QuerySpec/2 语义跨 surface/device 保持一致，只允许明确标示的 unavailable capability 差异。 |
 
 以上都是设计义务。Product Search、GUI/IME/AT、provider、performance 与跨设备执行继续 UNRUN。

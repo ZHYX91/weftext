@@ -172,7 +172,7 @@ D7 integer/decimal 继续使用既有 Value/CEL profile 的精确规范文本 de
 
 ## 9. Query 执行闭合
 
-Query outer 仍为 wireVersion2。QuerySpec/2 是 current author schema，由 retained QuerySpec/1 grammar 加上 D7-QUERY-V2 中准确的 versioned additions 构成：current Optional title/subtitle、获权 Node filename/path、获权 Resource filename 以及 union_all。QuerySpec/1 继续作为单独的准确 decoder，绝不原地扩宽。DAG validation、canonical ordinal、CEL typing、feature gate、source qualification、terminal schema、result encoding、paging/subscription reset 与完整 error order 仍是一条闭合路径。unknown feature 或 unavailable dependency 不能变成 empty bag。
+Query outer 继续使用 wireVersion2。QuerySpec/2 是当前作者 schema：它以保留的 QuerySpec/1 grammar 为基础，只增加 D7-QUERY-V2 明确列出的版本化能力，包括可空的当前 title/subtitle、获权的 Node 文件名与路径、获权的 Resource 文件名，以及 union_all。QuerySpec/1 仍由独立 decoder 按原规则解释，绝不原地扩宽。DAG 验证、规范 ordinal、CEL 类型检查、feature gate、来源资格、terminal schema、结果编码、分页/订阅重置和完整错误顺序继续组成一条闭合执行链；未知 feature 或不可用 dependency 都不能伪装成空 bag。
 
 ## 10. 搜索 schema 边界
 
