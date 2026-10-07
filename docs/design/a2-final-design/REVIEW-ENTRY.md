@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](REVIEW-ENTRY.zh-CN.md)
 # A2 D1-D7 author-candidate review entry — D7 integration and navigation repair
 
-Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02`; the current residuals are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-1068244-P2-01`. This author batch repairs those four residuals but does not self-close them. Earlier bounded closures, including `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`, remain closed. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 ## 1. Fixed objects and author chronology
 
