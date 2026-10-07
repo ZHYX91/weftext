@@ -78,15 +78,15 @@ The lexer runs before the grammar:
 - ASCII space and tab separate tokens outside quotes.
 - Parentheses are structural only when unescaped and outside quotes.
 - Colon is ordinary text except the one colon immediately following a recognized field operator head.
-- A bare token is a nonempty sequence of Unicode scalars other than unescaped space/tab/quote/parenthesis. Backslash is literal unless followed by one of backslash, quote, parenthesis, @, colon, space or tab; those pairs decode to the escaped scalar. A trailing ordinary backslash is therefore a literal, while an unfinished reserved escape is an incomplete draft.
-- quoted-value starts and ends with a double quote. Inside it, backslash escapes double quote or backslash; every other scalar, including whitespace, colon, @, CJK and RTL text, is literal. A missing closing quote is incomplete.
+- A bare token is a nonempty sequence of Unicode scalars other than unescaped space/tab/quote/parenthesis. Backslash followed by one of backslash, quote, parenthesis, @, colon, space or tab decodes to that escaped scalar. Before any other following scalar the backslash itself is literal. A backslash that is the final scalar of a bare token is **always one complete literal backslash**, never an incomplete escape.
+- quoted-value starts and ends with a double quote. Inside it, backslash escapes only double quote or backslash; every other scalar, including whitespace, colon, @, CJK and RTL text, is literal. If EOF occurs after an opening quote, the draft is incomplete. If the last scalar inside that open quote is a backslash, the unique classification is `incomplete_quoted_escape` at that backslash; otherwise it is `incomplete_quote`.
 - unescaped uppercase ASCII AND, OR and NOT are keywords only as complete lexer tokens. Lowercase forms are literals. To search the uppercase words literally, quote them.
 - a token beginning with an unescaped @ followed by a recognized operator head is parsed as a source term. An unknown @name: operator is unknown_shortcut_field, not a literal fallback. Escaping the leading @ makes the whole token literal.
 - field-id uses the exact D4 FieldId grammar. member-path is 1..8 dot-separated lowerCamel ASCII ObjectMemberSpec names, each 1..64 bytes. It is validated against the same current Registry/Field TypeSpec used by Query. Labels and localized names never substitute.
 
 OR has the lowest precedence, then AND/adjacency, then recursive NOT, then primary/parentheses. NOT NOT A is therefore legal and remains two explicit not nodes. A AND B AND C and adjacency A B C are legal chains.
 
-An unmatched quote/parenthesis, missing operand, missing field value, incomplete @field(...), unfinished reserved escape or other unfinished token is a draft-incomplete state and executes no Query. On explicit submit the same state returns invalid_request with the exact source span. A syntactically complete unknown field/operator/value returns its specific parse/compile error. No error path executes an alternate literal Query.
+An unmatched parenthesis, missing operand, missing field value, incomplete @field(...), `incomplete_quote`, `incomplete_quoted_escape` or other unfinished structured token is a draft-incomplete state and executes no Query. A trailing backslash in a bare token is not in this set: it is a literal scalar. On explicit submit an incomplete state returns invalid_request with the exact source span. A syntactically complete unknown field/operator/value returns its specific parse/compile error. No error path executes an alternate literal Query.
 
 ## 6. One condition AST and deterministic Query compilation
 
@@ -115,7 +115,9 @@ Compilation is deterministic:
 
 Optional title/subtitle values match only in the some branch; none is never coerced to empty text. A titleless body match may therefore carry display=none, and the UI may render a non-authoritative placeholder without changing Query data. A condition outside the shortcut/visual subset remains an opaque advanced Query condition in the visual editor and is never lost. It can only be edited by the full Query editor. Saving always saves QuerySpec/2, never SearchConditionAst/1.
 
-D7-SEARCH-FIXTURES.json is the machine oracle for parser/visual equivalence. For every positive fixture, shortcut AST and visual AST must be byte-equal after canonical AST serialization and must compile to byte-equal CanonicalGraph descriptions. Negative/incomplete fixtures compile nothing.
+D7-SEARCH-FIXTURES.json is the machine oracle for parser/visual/compiler equivalence. Every positive fixture contains the actual shortcut AST, an explicit UI-neutral visual-condition input, the visual AST, the expected canonical AST, a complete reviewable QuerySpec/2 canonical description, and the full expected CanonicalGraph description rather than an unexplained digest. The QuerySpec description records preset/scope, exact enabled sources, subject domains, optional handling, branch schemas, union_all use, deterministic sort and terminal schema; the CanonicalGraph description records every scan/read/filter/derive/project/union/sort stage and branch order. These oracle descriptions are design fixtures, not claims that a product parser/compiler was executed.
+
+For a positive fixture, shortcutAst, visualAst and canonicalAst must be byte-equal under the stated canonical AST serialization, and both surfaces must yield the recorded QuerySpec/2/CanonicalGraph description. Negative, incomplete and browse/no-query fixtures record both expected QuerySpec and CanonicalGraph as null and execute no alternate Query.
 
 ## 7. Permission, index state, count, ranking and snippets
 
@@ -133,7 +135,7 @@ New current saved searches use QuerySpec/2. The saved definition includes explic
 
 Reopen dispatches the recorded QuerySpec version before current qualification. QuerySpec/1 remains exact and is never reinterpreted as /2. Field deletion/type change, contribution removal/version change, permission changes and FileBinding changes follow their real Registry/currentness reset rules.
 
-Definition Transfer maps typed Ref/DefinitionAddress slots under the version-specific Query schema. D9 exact query_json copy/export/import preserves the recorded version and bytes. No filename/path string becomes a DefinitionAddress or identity.
+Definition Transfer maps typed Ref/DefinitionAddress slots under the version-specific Query schema; saved-definition copy/fork/import uses that D7/D3 author path and preserves the embedded QuerySpec version/bytes. D9 `query_json` is only the static export of a complete terminal result (`weftext.query-result-export/1`); it never contains QuerySpec author bytes and cannot create or migrate a saved Query. No filename/path string becomes a DefinitionAddress or identity.
 
 ## 9. Cross-surface and cross-device equivalence
 

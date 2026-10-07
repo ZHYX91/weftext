@@ -13,7 +13,9 @@ Status: author repair for A2-D7-2F89-P1-02. This is a candidate current-schema s
 
 QuerySpec/2 is the current author schema for newly authored A2 queries. It keeps the QuerySpec/1 top-level members, parameter rules, DAG rules, CEL profile, result families and every v1 operator except where this document explicitly adds the current read sources and union_all. The outer execution carrier remains wireVersion2.
 
-QuerySpec/1 is not widened. A real saved QuerySpec/1, if one exists, is decoded and executed under its exact /1 grammar and error rules. Copy, fork, import, export, QueryRef and historical recovery preserve the recorded QuerySpec version. There is no automatic rewrite or deployment migration from /1 to /2. Editing and explicitly saving as /2 creates a new definition revision under the ordinary D2/D3 rules.
+QuerySpec/1 is not widened. A real saved QuerySpec/1, if one exists, is decoded and executed under its exact /1 grammar and error rules. QueryRef, reopen, historical recovery and D7 Definition Transfer dispatch the recorded embedded QuerySpec version. Copy/fork/import of a saved definition therefore preserves the author payload through the existing D3/D7 Definition Transfer path. There is no automatic rewrite or deployment migration from /1 to /2. Editing and explicitly saving as /2 creates a new definition revision under the ordinary D2/D3 rules.
+
+D9 `query_json` is deliberately **not** a QuerySpec carrier. Its owner serializes the already-complete terminal D7 result as `weftext.query-result-export/1`; it preserves TerminalSchema, typed terminal data, bag/order semantics and author Refs in values, while removing runtime handles/paging. It neither copies nor migrates a saved Query definition.
 
 ## 2. Closed QuerySpec/2 additions
 
@@ -47,41 +49,76 @@ The value is the D2 semantic value from that one evaluation. Filename, path, fir
 
 ## 4. D6 Node file metadata producer
 
-node_file_name and node_relative_path consume the actual current D6 SourceObservation/1 for the Node and its present FileObjectBinding/1. The order is closed:
+`node_file_name` and `node_relative_path` consume only the D6-owned `D6FileBindingMetadataObservation/1` from D6 §19 / D6-SCHEMAS §11. D7 does not read FileObjectBinding directly and does not invent a path capability.
 
-1. decode QuerySpec/2 and the Ref;
-2. apply D3/D6 Ref-state disclosure;
-3. require current source_read; node_relative_path additionally requires current structure_state before any placement-sensitive path disclosure;
-4. obtain the complete current SourceObservation/1 and present FileObjectBinding/1 from the same observer cut;
-5. validate PortableRelativePath and the ordinary D6 continuity/dependency proof;
-6. derive the requested text and revalidate the complete Query barrier before publication.
+The order is closed:
 
-node_file_name is the final nonempty PortableRelativePath segment after "/". It does not strip an extension, normalize Unicode, case-fold, percent-decode or use host path rules. node_relative_path is the exact canonical PortableRelativePath text and never a host-native path.
+1. decode QuerySpec/2 and the NodeRef;
+2. apply the ordinary D3/D6 Ref-state disclosure;
+3. D6 requires the existing `entity_state` and `locator_state` grants for that exact Ref, with deny-before-allow/default deny, before reading FileBinding locator metadata;
+4. D6 establishes the complete current protected SourceObservation/1 and present FileObjectBinding/1 in one observer cut and returns only the protected metadata observation/value;
+5. D7 validates the requested projection and binds that exact observation plus the current authorization dependency;
+6. revalidate the complete Query barrier before publication.
 
-Absent, placeholder, conflict, gapped or otherwise unproved current binding is source_unavailable/proof_unavailable under the existing owner mapping. A hidden or unauthorized Ref is not_visible. Equal bytes, digest, basename or path from an old Observation never restores qualification.
+Neither source requires `source_read`, `resource_read`, `structure_state` or `source_envelope_state` merely to disclose the FileBinding locator. A Query that separately reads body/source/Resource bytes still needs the original content capability for that separate read. The metadata producer may internally validate protected SourceObservation/FileObjectBinding evidence for correctness; those protected bytes/tokens are not exposed as Query cells.
+
+`node_file_name` is the final nonempty PortableRelativePath segment after "/". It does not strip an extension, normalize Unicode, case-fold, percent-decode or use host path rules. `node_relative_path` is the exact canonical PortableRelativePath text and never a host-native path.
+
+Absent, placeholder, conflict, gapped or otherwise unproved current binding is source_unavailable/proof_unavailable under the D6 owner mapping after authorization. A hidden or unauthorized Ref is not_visible before locator metadata is read. Equal bytes, digest, basename or path from an old Observation never restores qualification.
 
 ## 5. D6 Resource file-name producer
 
-resource_file_name is valid only from ResourceRef. Ref/owner disclosure precedes the existing resource_read gate. Core then obtains the Resource's complete current SourceObservation/1 and present FileObjectBinding/1 under the same cut and derives the basename exactly as in §4.
+`resource_file_name` is valid only from ResourceRef and consumes the same D6-owned metadata producer with projection=basename. Ref/owner disclosure and the exact `entity_state` + `locator_state` gates precede FileBinding metadata access. It does **not** require `resource_read` merely to reveal the authorized locator label; a separate Resource byte/descriptor read still uses its original gate.
 
-The source grants no Resource bytes beyond what resource_read already authorizes, and the projected basename grants no Resource identity, owner change, copy right or write authority. Missing or unmaterialized bytes/binding are unavailable rather than an empty name.
+The projected basename grants no Resource identity, owner change, copy right, ByteHandle or write authority. Missing/unmaterialized/gapped binding is unavailable rather than an empty name.
 
-## 6. Same-cut dependencies and invalidation
+## 6. Same-cut dependencies, direct consumers and union identity
 
-Every metadata read contributes the real authorization dependency and the exact source/observation dependency that produced it. D2 title/subtitle also contributes document_format and the complete D2 evaluation dependency set. File metadata binds the exact SourceObservation/1 and FileObjectBinding/1. Selector/query_scan dependencies remain separate and still prove the selected visible population and its negative range.
+Every metadata read contributes the real authorization dependency and the exact D6 protected SourceObservation/FileObjectBinding that produced it. D2 title/subtitle also contributes document_format and the complete D2 evaluation dependency set. Selector/query_scan dependencies remain separate and still prove the selected visible population and its negative range.
 
-All bindings of one read batch are from one complete Query cut. A rename, move or external rename that changes FileObjectBinding.relativePath invalidates the old result even when the Ref and file bytes are unchanged. A D2 metadata change invalidates title/subtitle through the D2 snapshot dependency. A structure change that changes a selected subtree invalidates through the ordinary placement/query_scan dependency even if one file path is unchanged.
+All bindings of one read batch are from one complete Query cut. A Policy/auth-generation change, rename, move or external rename that changes FileObjectBinding.relativePath invalidates the old result even when the Ref and file bytes are unchanged. A D2 metadata change invalidates title/subtitle through the D2 snapshot dependency. A structure change that changes a selected subtree invalidates through the ordinary placement/query_scan dependency even if one FileBinding path is unchanged.
 
-None of these sources turns filename or path into identity, a Locator, Provenance, SourceVersion, ActionEvidence or write capability.
+None of these sources turns filename or path into identity, a D3 Locator, Provenance, SourceVersion, ActionEvidence or write capability.
 
-## 7. Save, copy, import and consumer dispatch
+### 6.1 QuerySpec/2 title consumers
 
-SavedQueryDefinition, DynamicBlock and QueryRef preserve the embedded QuerySpec version. Definition Transfer walks typed Refs/DefinitionAddress slots according to the version-specific schema and does not scan text, paths or filenames. D9 query_json copy/export/import preserves exact QuerySpec bytes and version unless the user explicitly authors a new revision. D8 editors and the D7 Search compiler emit QuerySpec/2 for new current definitions that require these sources.
+Fresh QuerySpec/2 `title` is Optional<text>. Any retained current consumer that needs a nonoptional display label must adapt explicitly rather than reinterpreting the source type.
 
-A v1 decoder never accepts subtitle, node_file_name, node_relative_path, resource_file_name or union_all. Unknown future versions fail under the existing definition/version boundary. No second Query registry, Search executor or migration ledger is introduced.
+For the Temporal Query/View positive chain, the fresh /2 witness reads `title:Optional<text>`, retains that optional column in the terminal/a11y data, and derives `displayTitle = row.title.orValue('')` before the Calendar/Timeline projection. The View binds the nonoptional `displayTitle` column. Empty display text is only a presentation value: D8 may render a localized "untitled" placeholder while preserving the separate Optional title state. Neither the empty value nor a placeholder is persisted back as author title, participates in identity, or falls back to filename/path.
+
+For link display, an explicit source label still wins. Otherwise a freshly authorized target-title read yields Optional<text>: some(v) projects v; none projects a titleless/empty display label. A target that is not readable continues to use the call site's already-known unavailable-link presentation state. Filename/path are never consulted to synthesize target title.
+
+A genuine QuerySpec/1 definition keeps its exact /1 title type/decoder. It is not reinterpreted as Optional and receives no automatic migration merely because the current D2 product permits titleless Documents.
+
+### 6.2 `union_all` LogicalOccurrenceKey and order
+
+QuerySpec/2 extends the retained closed K tagged tree by exactly one constructor:
+
+~~~text
+{kind:"union_all",
+ base:{invocation:I,operator:o},
+ inputOrdinal:Counter,
+ parent:K}
+~~~
+
+`inputOrdinal` is the zero-based index 0..15 of the corresponding entry in the author `inputs` array. Array order is semantic and therefore retained by canonicalization. Duplicate relation IDs in `inputs` are legal: `union_all [r,r]` emits two copies of every parent occurrence, tagged with inputOrdinal 0 and 1, so bag duplicates remain distinct even when public cells and parent K are byte-equal.
+
+The shared upstream relation node is evaluated under the ordinary DAG once; each union input occurrence copies its complete rows into the union branch and charges the ordinary checked union output row/byte/work budgets. Parent relation errors keep their original canonical operator/error ordering; a union schema mismatch is a static QuerySpec/2 type/graph error at the union node. `union_all` itself is unordered, so `take` is invalid until an explicit `sort`. After sort keys compare equal, the full K tree including `inputOrdinal` supplies the retained deterministic internal tie; paging therefore cannot collapse or reorder duplicate branches.
+
+`union_all` still erases implicit Action lineage. A later Action must select an explicit Ref and obtain fresh authorization; the new K is never public identity or ActionEvidence.
+
+## 7. Save, copy, import/export and consumer dispatch
+
+SavedQueryDefinition, DynamicBlock and QueryRef preserve the embedded QuerySpec version. Definition Transfer walks typed Ref/DefinitionAddress slots according to the version-specific schema and does not scan text, paths or filenames. Saved-definition copy/fork/import uses that D7 Definition Transfer plus the ordinary D3 author operation and preserves the embedded QuerySpec bytes/version unless the user authors a new definition revision.
+
+D9 `query_json` remains a terminal-result export profile only: it serializes the complete result's TerminalSchema and data and never carries QuerySpec author bytes. Importing that result file therefore cannot create, migrate or refresh a saved Query definition.
+
+D8 editors and the D7 Search compiler emit QuerySpec/2 for new current definitions that require these sources. A v1 decoder never accepts subtitle, node_file_name, node_relative_path, resource_file_name or union_all. Unknown future versions fail under the existing definition/version boundary. No second Query registry, Search executor or migration ledger is introduced.
 
 ## 8. Acceptance oracles
 
-Positive cases include a titleless Node matched by node_file_name, a Node whose native title differs from its basename, a Node move that changes node_relative_path while preserving NodeRef, an absent subtitle represented as Optional none, and a Resource matched only by resource_file_name.
+Positive cases include: a principal with `entity_state+locator_state` but no `source_read` matching a titleless Node by node_file_name; a Resource basename match without `resource_read`; a Node whose native title differs from its basename; a Node move that changes node_relative_path while preserving NodeRef; an absent subtitle represented as Optional none; a titleless temporal item whose QuerySpec/2 Calendar witness derives nonauthoritative displayTitle without writing a title; a titleless readable link target that never falls back to filename; and `union_all [r,r]` preserving two occurrences through explicit sort/paging.
 
-Negative cases include a hidden Ref, source_read/resource_read denial, path disclosure without structure_state, placeholder or gapped Observation, stale FileBinding after rename, an old QuerySpec/1 carrying a v2-only source, and union_all inputs with unequal schemas. None may fall back to an index value, shell filter, old Observation or empty result.
+Negative cases include a hidden Ref, missing `locator_state`, placeholder or gapped Observation, stale FileBinding after rename, content-read denial on a separate body/Resource-byte read, an old QuerySpec/1 carrying a v2-only source, union_all inputs with unequal schemas, and `take` applied directly to unordered union_all. None may fall back to an index value, shell filter, stronger content permission, filename-as-title, old Observation or empty result.
+
+Saved-definition copy/fork/import must retain the recorded embedded QuerySpec version through Definition Transfer. D9 query_json must remain a terminal result serialization and must never be accepted as QuerySpec author source.

@@ -115,7 +115,7 @@ D6-D9 producer/consumer intersections remain direct partial reads. D10 is now al
 
 ## D6 integration update
 
-Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02` (immutable source trace). The remaining findings are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and new `A2-D7-1068244-P2-01` (Impact EN/ZH sync). This author batch repairs those four residuals but does not self-close them. The earlier bounded closures `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` remain closed. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
 
 
 ## 12. D4/D5 audit-map review lineage
@@ -130,18 +130,18 @@ Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`
 
 ## 13. D7 integration
 
-D7 is now integrated as a complete author candidate. The fixed-S thirteen D7 sources and the additional D9 coordinated D3-D7 binding source were fully read. The complete current bilingual D7 owner afterimages are copied byte-identically under d7/owners; D7-REGISTRY.json reuses the exact 34-concept / 8-cross-stage-binding current Registry blob. D7.md and D7-SCHEMAS.md apply only named fixed97/current-D2 successor overlays; every other retained clause remains in the copied owner text.
+D7 is now integrated as a complete author candidate. The fixed-S thirteen D7 sources and the additional D9 coordinated D3-D7 binding source were fully read. The complete current bilingual D7 owner afterimages are copied byte-identically under d7/owners. The immutable fixed-S Registry is 34 concepts / 8 cross-stage bindings; the parent-current Registry and byte-identical D7-REGISTRY.json are 34 concepts / 13 cross-stage bindings. D7-REGISTRY-QUALIFICATION applies the A2 named-successor/current-history overlay without creating a second Registry. D7.md and D7-SCHEMAS.md apply only named fixed97/current-D2 successors; every other retained clause remains in the copied owner text.
 
 D7-SEARCH.md integrates SEARCH-01 through SEARCH-08 without creating a second search executor or persistent authority. Plain text and visual filters are the default; optional shortcut mode is explicit and uses prefixed operators so ordinary colon text, URLs and drive-letter paths are not silently parsed. Saving stores canonical Query semantics, not UI parser state. Current matching preserves the retained exact versus explicit `nfc-for-compare` basis, with case-sensitive substring/equality and no automatic fuzzy/Pinyin/tokenizer claim.
 
 D7-SOURCE-MAP.json records fixed/current blobs, FULL/PARTIAL/UNRUN evidence, twenty integration obligations, all eight SEARCH obligations, scenario/non-fallback ordinals, A2-01–57, Facet/People/ICS groups, Chart §15, terminology Registry coverage and the two navigation findings. D8-D10 remain partial only at true D7 producer/consumer intersections; their full modules remain later.
 
-fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. The current author repair instead addresses the four D7 findings from that full review. Their detailed OPEN/pending-independent-review status is in D7-SOURCE-MAP.json; none is self-closed.
+fixed2f89 independently closed the two navigation findings and COORD-D7-DOC-QUALITY-01. fixed1068244 additionally closed A2-D7-2F89-P2-02. The current author repair addresses only the two remaining P1 and two P2 residuals from fixed1068244; their detailed author-repaired/pending-independent state is recorded in D7-SOURCE-MAP.json.
 
 Product/runtime/OS/GUI/renderer/export/database/real-replica/provider/performance/migration/activation behavior remains UNRUN.
 
-## 14. fixed2f89 D7 repair
+## 14. fixed1068244 residual D7 repair
 
-Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02` (immutable source trace). The remaining findings are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and new `A2-D7-1068244-P2-01` (Impact EN/ZH sync). This author batch repairs those four residuals but does not self-close them. The earlier bounded closures `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` remain closed. No D7/global acceptance is claimed.
 
-The repair introduces D7-QUERY-V2 for the versioned QuerySpec/2 metadata sources and union_all, D7-REGISTRY-QUALIFICATION for fixed-S 34/8 versus parent-current 34/13 binding-by-binding qualification, a closed shortcut grammar plus D7-SEARCH-FIXTURES.json, and immutable-source D7 source-map rows/Chart groups. D7-REGISTRY.json remains byte-identical to the parent-current Registry; snapshots and inputs remain protected.
+The residual repair keeps the already-closed immutable source trace unchanged. It corrects the global Registry navigation to fixed-S 34/8 versus parent-current 34/13, adds the D6-owned least-privilege FileBinding metadata producer consumed by QuerySpec/2, closes the QuerySpec/2 Optional-title/union_all/D9-query_json direct consumer contracts, repairs the shortcut machine oracle and escape cases, and synchronizes D7-IMPACT EN/ZH. S49 snapshots and inputs remain protected.

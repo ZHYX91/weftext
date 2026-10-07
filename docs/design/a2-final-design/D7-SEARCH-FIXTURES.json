@@ -1,12 +1,14 @@
 {
-  "schema_version": 1,
-  "status": "candidate design fixtures for A2-D7-2F89-P2-01; not product test evidence",
+  "schema_version": 2,
+  "status": "candidate design machine oracle for A2-D7-2F89-P2-01; author-repaired after fixed1068244; not product parser/compiler test evidence",
   "parser": "shortcut-mode-v1",
   "canonical_ast": "SearchConditionAst/1 from D7-SEARCH §6",
   "invariants": [
     "positive shortcut and visual forms canonicalize to byte-equal SearchConditionAst/1",
-    "positive forms compile to byte-equal QuerySpec/2 CanonicalGraph for the same preset/scope/source controls",
-    "negative and incomplete forms compile no Query and never fall back to plain mode"
+    "positive forms map to the recorded complete QuerySpec/2 canonical description and full CanonicalGraph description for the same preset/scope/source controls",
+    "negative, incomplete and browse/no-query forms compile no Query and never fall back to plain mode",
+    "bare trailing backslash is one literal scalar; only an open quoted value ending in backslash is incomplete_quoted_escape",
+    "QuerySpec/1 never accepts QuerySpec/2-only sources or union_all"
   ],
   "fixtures": [
     {
@@ -31,6 +33,249 @@
             "value": "C"
           }
         ]
+      },
+      "shortcutAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "visualInput": {
+        "control": "group",
+        "operator": "and",
+        "children": [
+          {
+            "control": "literal",
+            "value": "A"
+          },
+          {
+            "control": "literal",
+            "value": "B"
+          },
+          {
+            "control": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "visualAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "canonicalAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "and",
+          "children": [
+            {
+              "kind": "literal",
+              "value": "A"
+            },
+            {
+              "kind": "literal",
+              "value": "B"
+            },
+            {
+              "kind": "literal",
+              "value": "C"
+            }
+          ]
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "and",
+              "children": [
+                {
+                  "kind": "literal",
+                  "value": "A"
+                },
+                {
+                  "kind": "literal",
+                  "value": "B"
+                },
+                {
+                  "kind": "literal",
+                  "value": "C"
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "and",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "value": "A"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "B"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "C"
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -60,6 +305,285 @@
             ]
           }
         ]
+      },
+      "shortcutAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "and",
+            "children": [
+              {
+                "kind": "literal",
+                "value": "B"
+              },
+              {
+                "kind": "literal",
+                "value": "C"
+              }
+            ]
+          }
+        ]
+      },
+      "visualInput": {
+        "control": "group",
+        "operator": "or",
+        "children": [
+          {
+            "control": "literal",
+            "value": "A"
+          },
+          {
+            "control": "group",
+            "operator": "and",
+            "children": [
+              {
+                "control": "literal",
+                "value": "B"
+              },
+              {
+                "control": "literal",
+                "value": "C"
+              }
+            ]
+          }
+        ]
+      },
+      "visualAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "and",
+            "children": [
+              {
+                "kind": "literal",
+                "value": "B"
+              },
+              {
+                "kind": "literal",
+                "value": "C"
+              }
+            ]
+          }
+        ]
+      },
+      "canonicalAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "and",
+            "children": [
+              {
+                "kind": "literal",
+                "value": "B"
+              },
+              {
+                "kind": "literal",
+                "value": "C"
+              }
+            ]
+          }
+        ]
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "or",
+          "children": [
+            {
+              "kind": "literal",
+              "value": "A"
+            },
+            {
+              "kind": "and",
+              "children": [
+                {
+                  "kind": "literal",
+                  "value": "B"
+                },
+                {
+                  "kind": "literal",
+                  "value": "C"
+                }
+              ]
+            }
+          ]
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "or",
+              "children": [
+                {
+                  "kind": "literal",
+                  "value": "A"
+                },
+                {
+                  "kind": "and",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "value": "B"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "C"
+                    }
+                  ]
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "or",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "value": "A"
+                    },
+                    {
+                      "kind": "and",
+                      "children": [
+                        {
+                          "kind": "literal",
+                          "value": "B"
+                        },
+                        {
+                          "kind": "literal",
+                          "value": "C"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -86,6 +610,263 @@
             "value": "y"
           }
         ]
+      },
+      "shortcutAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "not",
+            "child": {
+              "kind": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "x"
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "y"
+          }
+        ]
+      },
+      "visualInput": {
+        "control": "group",
+        "operator": "and",
+        "children": [
+          {
+            "control": "not",
+            "child": {
+              "control": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "x"
+            }
+          },
+          {
+            "control": "literal",
+            "value": "y"
+          }
+        ]
+      },
+      "visualAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "not",
+            "child": {
+              "kind": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "x"
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "y"
+          }
+        ]
+      },
+      "canonicalAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "not",
+            "child": {
+              "kind": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "x"
+            }
+          },
+          {
+            "kind": "literal",
+            "value": "y"
+          }
+        ]
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "and",
+          "children": [
+            {
+              "kind": "not",
+              "child": {
+                "kind": "source_term",
+                "source": {
+                  "kind": "title"
+                },
+                "value": "x"
+              }
+            },
+            {
+              "kind": "literal",
+              "value": "y"
+            }
+          ]
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "and",
+              "children": [
+                {
+                  "kind": "not",
+                  "child": {
+                    "kind": "source_term",
+                    "source": {
+                      "kind": "title"
+                    },
+                    "value": "x"
+                  }
+                },
+                {
+                  "kind": "literal",
+                  "value": "y"
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "and",
+                  "children": [
+                    {
+                      "kind": "not",
+                      "child": {
+                        "kind": "source_term",
+                        "source": {
+                          "kind": "title"
+                        },
+                        "value": "x"
+                      }
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "y"
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -103,6 +884,199 @@
             "value": "A"
           }
         }
+      },
+      "shortcutAst": {
+        "kind": "not",
+        "child": {
+          "kind": "not",
+          "child": {
+            "kind": "literal",
+            "value": "A"
+          }
+        }
+      },
+      "visualInput": {
+        "control": "not",
+        "child": {
+          "control": "not",
+          "child": {
+            "control": "literal",
+            "value": "A"
+          }
+        }
+      },
+      "visualAst": {
+        "kind": "not",
+        "child": {
+          "kind": "not",
+          "child": {
+            "kind": "literal",
+            "value": "A"
+          }
+        }
+      },
+      "canonicalAst": {
+        "kind": "not",
+        "child": {
+          "kind": "not",
+          "child": {
+            "kind": "literal",
+            "value": "A"
+          }
+        }
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "not",
+          "child": {
+            "kind": "not",
+            "child": {
+              "kind": "literal",
+              "value": "A"
+            }
+          }
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "not",
+              "child": {
+                "kind": "not",
+                "child": {
+                  "kind": "literal",
+                  "value": "A"
+                }
+              }
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "not",
+                  "child": {
+                    "kind": "not",
+                    "child": {
+                      "kind": "literal",
+                      "value": "A"
+                    }
+                  }
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -127,6 +1101,249 @@
             "value": "C"
           }
         ]
+      },
+      "shortcutAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "visualInput": {
+        "control": "group",
+        "operator": "and",
+        "children": [
+          {
+            "control": "literal",
+            "value": "A"
+          },
+          {
+            "control": "literal",
+            "value": "B"
+          },
+          {
+            "control": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "visualAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "canonicalAst": {
+        "kind": "and",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "A"
+          },
+          {
+            "kind": "literal",
+            "value": "B"
+          },
+          {
+            "kind": "literal",
+            "value": "C"
+          }
+        ]
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "and",
+          "children": [
+            {
+              "kind": "literal",
+              "value": "A"
+            },
+            {
+              "kind": "literal",
+              "value": "B"
+            },
+            {
+              "kind": "literal",
+              "value": "C"
+            }
+          ]
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "and",
+              "children": [
+                {
+                  "kind": "literal",
+                  "value": "A"
+                },
+                {
+                  "kind": "literal",
+                  "value": "B"
+                },
+                {
+                  "kind": "literal",
+                  "value": "C"
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "and",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "value": "A"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "B"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "C"
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -151,6 +1368,249 @@
             "value": "NOT"
           }
         ]
+      },
+      "shortcutAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "AND"
+          },
+          {
+            "kind": "literal",
+            "value": "OR"
+          },
+          {
+            "kind": "literal",
+            "value": "NOT"
+          }
+        ]
+      },
+      "visualInput": {
+        "control": "group",
+        "operator": "or",
+        "children": [
+          {
+            "control": "literal",
+            "value": "AND"
+          },
+          {
+            "control": "literal",
+            "value": "OR"
+          },
+          {
+            "control": "literal",
+            "value": "NOT"
+          }
+        ]
+      },
+      "visualAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "AND"
+          },
+          {
+            "kind": "literal",
+            "value": "OR"
+          },
+          {
+            "kind": "literal",
+            "value": "NOT"
+          }
+        ]
+      },
+      "canonicalAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "literal",
+            "value": "AND"
+          },
+          {
+            "kind": "literal",
+            "value": "OR"
+          },
+          {
+            "kind": "literal",
+            "value": "NOT"
+          }
+        ]
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "or",
+          "children": [
+            {
+              "kind": "literal",
+              "value": "AND"
+            },
+            {
+              "kind": "literal",
+              "value": "OR"
+            },
+            {
+              "kind": "literal",
+              "value": "NOT"
+            }
+          ]
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "or",
+              "children": [
+                {
+                  "kind": "literal",
+                  "value": "AND"
+                },
+                {
+                  "kind": "literal",
+                  "value": "OR"
+                },
+                {
+                  "kind": "literal",
+                  "value": "NOT"
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "or",
+                  "children": [
+                    {
+                      "kind": "literal",
+                      "value": "AND"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "OR"
+                    },
+                    {
+                      "kind": "literal",
+                      "value": "NOT"
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -162,17 +1622,319 @@
       "ast": {
         "kind": "literal",
         "value": "https://example.test/a:b"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "https://example.test/a:b"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "https://example.test/a:b"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "https://example.test/a:b"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "https://example.test/a:b"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "https://example.test/a:b"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "https://example.test/a:b"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "https://example.test/a:b"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
       "id": "WINDOWS-DRIVE",
       "preset": "quick_open",
       "mode": "shortcut",
-      "input": "C:\\\\notes\\\\a.adoc",
+      "input": "C:\\notes\\a.adoc",
       "status": "ok",
       "ast": {
         "kind": "literal",
-        "value": "C:\\\\notes\\\\a.adoc"
+        "value": "C:\\notes\\a.adoc"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "C:\\notes\\a.adoc"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "C:\\notes\\a.adoc"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "C:\\notes\\a.adoc"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "C:\\notes\\a.adoc"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "C:\\notes\\a.adoc"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "C:\\notes\\a.adoc"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "C:\\notes\\a.adoc"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -184,6 +1946,157 @@
       "ast": {
         "kind": "literal",
         "value": "title: quarterly"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "title: quarterly"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "title: quarterly"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "title: quarterly"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "title: quarterly"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "title: quarterly"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "title: quarterly"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "title: quarterly"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -195,17 +2108,319 @@
       "ast": {
         "kind": "literal",
         "value": "@title:x"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "@title:x"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "@title:x"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "@title:x"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "@title:x"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "@title:x"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "@title:x"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "@title:x"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
       "id": "ESCAPED-AT",
       "preset": "quick_open",
       "mode": "shortcut",
-      "input": "\\\\@title:x",
+      "input": "\\@title:x",
       "status": "ok",
       "ast": {
         "kind": "literal",
         "value": "@title:x"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "@title:x"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "@title:x"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "@title:x"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "@title:x"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "@title:x"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "@title:x"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "@title:x"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -217,6 +2432,157 @@
       "ast": {
         "kind": "literal",
         "value": "中文 مرحبا"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "中文 مرحبا"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "中文 مرحبا"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "中文 مرحبا"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "中文 مرحبا"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "global",
+        "scope": {
+          "kind": "workspace_or_explicit_subtree"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "body_text"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "中文 مرحبا"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_or_explicit_subtree"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "body_text"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "中文 مرحبا"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_or_explicit_subtree"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "body_text"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "中文 مرحبا"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -225,7 +2591,9 @@
       "mode": "shortcut",
       "input": "\"abc",
       "status": "incomplete",
-      "error": "invalid_request_on_submit"
+      "error": "invalid_request_on_submit",
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
     },
     {
       "id": "UNMATCHED-PAREN",
@@ -233,7 +2601,9 @@
       "mode": "shortcut",
       "input": "(A OR B",
       "status": "incomplete",
-      "error": "invalid_request_on_submit"
+      "error": "invalid_request_on_submit",
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
     },
     {
       "id": "QUICK-BODY-OVERRIDE",
@@ -255,6 +2625,184 @@
           "kind": "body_text"
         },
         "value": "needle"
+      },
+      "shortcutAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "visualInput": {
+        "control": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "visualAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "canonicalAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name",
+          "body_text",
+          "body"
+        ],
+        "conditionAst": {
+          "kind": "source_term",
+          "source": {
+            "kind": "body_text"
+          },
+          "value": "needle"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name",
+              "body_text",
+              "body"
+            ],
+            "conditionAst": {
+              "kind": "source_term",
+              "source": {
+                "kind": "body_text"
+              },
+              "value": "needle"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name",
+                  "body_text",
+                  "body"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "body_text"
+                  },
+                  "value": "needle"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -270,6 +2818,178 @@
           "kind": "title"
         },
         "value": "Alice"
+      },
+      "shortcutAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "title"
+        },
+        "value": "Alice"
+      },
+      "visualInput": {
+        "control": "source_term",
+        "source": {
+          "kind": "title"
+        },
+        "value": "Alice"
+      },
+      "visualAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "title"
+        },
+        "value": "Alice"
+      },
+      "canonicalAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "title"
+        },
+        "value": "Alice"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "global",
+        "scope": {
+          "kind": "workspace_or_explicit_subtree"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "body_text"
+        ],
+        "conditionAst": {
+          "kind": "source_term",
+          "source": {
+            "kind": "title"
+          },
+          "value": "Alice"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_or_explicit_subtree"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "body_text"
+            ],
+            "conditionAst": {
+              "kind": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "Alice"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_or_explicit_subtree"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "body_text"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "title"
+                  },
+                  "value": "Alice"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -292,6 +3012,175 @@
           "kind": "resource_file_name"
         },
         "value": "manual.pdf"
+      },
+      "shortcutAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "resource_file_name"
+        },
+        "value": "manual.pdf"
+      },
+      "visualInput": {
+        "control": "source_term",
+        "source": {
+          "kind": "resource_file_name"
+        },
+        "value": "manual.pdf"
+      },
+      "visualAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "resource_file_name"
+        },
+        "value": "manual.pdf"
+      },
+      "canonicalAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "resource_file_name"
+        },
+        "value": "manual.pdf"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "resource"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name",
+          "resource_file_name"
+        ],
+        "conditionAst": {
+          "kind": "source_term",
+          "source": {
+            "kind": "resource_file_name"
+          },
+          "value": "manual.pdf"
+        },
+        "branchSchemas": [
+          {
+            "domain": "resource",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "resource_file_name"
+            ],
+            "conditionAst": {
+              "kind": "source_term",
+              "source": {
+                "kind": "resource_file_name"
+              },
+              "value": "manual.pdf"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "resource"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "resource",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "resource_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "resource_file_name"
+                  },
+                  "value": "manual.pdf"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -310,6 +3199,209 @@
           ]
         },
         "value": "Alice"
+      },
+      "shortcutAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "field",
+          "fieldId": "people/name",
+          "memberPath": [
+            "text"
+          ]
+        },
+        "value": "Alice"
+      },
+      "visualInput": {
+        "control": "source_term",
+        "source": {
+          "kind": "field",
+          "fieldId": "people/name",
+          "memberPath": [
+            "text"
+          ]
+        },
+        "value": "Alice"
+      },
+      "visualAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "field",
+          "fieldId": "people/name",
+          "memberPath": [
+            "text"
+          ]
+        },
+        "value": "Alice"
+      },
+      "canonicalAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "field",
+          "fieldId": "people/name",
+          "memberPath": [
+            "text"
+          ]
+        },
+        "value": "Alice"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "global",
+        "scope": {
+          "kind": "workspace_or_explicit_subtree"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "body_text",
+          "field:people/name:text"
+        ],
+        "conditionAst": {
+          "kind": "source_term",
+          "source": {
+            "kind": "field",
+            "fieldId": "people/name",
+            "memberPath": [
+              "text"
+            ]
+          },
+          "value": "Alice"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_or_explicit_subtree"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "body_text",
+              "field:people/name:text"
+            ],
+            "conditionAst": {
+              "kind": "source_term",
+              "source": {
+                "kind": "field",
+                "fieldId": "people/name",
+                "memberPath": [
+                  "text"
+                ]
+              },
+              "value": "Alice"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_or_explicit_subtree"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "body_text",
+                  "field:people/name:text"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "field",
+                    "fieldId": "people/name",
+                    "memberPath": [
+                      "text"
+                    ]
+                  },
+                  "value": "Alice"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
       }
     },
     {
@@ -318,7 +3410,9 @@
       "mode": "shortcut",
       "input": "@foo:x",
       "status": "error",
-      "error": "unknown_shortcut_field"
+      "error": "unknown_shortcut_field",
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
     },
     {
       "id": "INCOMPATIBLE-AND",
@@ -326,7 +3420,861 @@
       "mode": "shortcut",
       "input": "@title:x AND @resource-name:y",
       "status": "error",
-      "error": "source_not_applicable"
+      "error": "source_not_applicable",
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
+    },
+    {
+      "id": "TRAILING-BACKSLASH",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "abc\\",
+      "status": "ok",
+      "ast": {
+        "kind": "literal",
+        "value": "abc\\"
+      },
+      "shortcutAst": {
+        "kind": "literal",
+        "value": "abc\\"
+      },
+      "visualInput": {
+        "control": "literal",
+        "value": "abc\\"
+      },
+      "visualAst": {
+        "kind": "literal",
+        "value": "abc\\"
+      },
+      "canonicalAst": {
+        "kind": "literal",
+        "value": "abc\\"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name"
+        ],
+        "conditionAst": {
+          "kind": "literal",
+          "value": "abc\\"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "literal",
+              "value": "abc\\"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "literal",
+                  "value": "abc\\"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
+      }
+    },
+    {
+      "id": "QUOTED-TRAILING-ESCAPE",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "\"abc\\",
+      "status": "incomplete",
+      "error": "incomplete_quoted_escape_on_submit",
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
+    },
+    {
+      "id": "NODE-RESOURCE-OR",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "@title:x OR @resource-name:y",
+      "status": "ok",
+      "sourceEffects": {
+        "enable": [
+          "resource_file_name"
+        ],
+        "domains": [
+          "node",
+          "resource"
+        ]
+      },
+      "ast": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "title"
+            },
+            "value": "x"
+          },
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "resource_file_name"
+            },
+            "value": "y"
+          }
+        ]
+      },
+      "shortcutAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "title"
+            },
+            "value": "x"
+          },
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "resource_file_name"
+            },
+            "value": "y"
+          }
+        ]
+      },
+      "visualInput": {
+        "control": "group",
+        "operator": "or",
+        "children": [
+          {
+            "control": "source_term",
+            "source": {
+              "kind": "title"
+            },
+            "value": "x"
+          },
+          {
+            "control": "source_term",
+            "source": {
+              "kind": "resource_file_name"
+            },
+            "value": "y"
+          }
+        ]
+      },
+      "visualAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "title"
+            },
+            "value": "x"
+          },
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "resource_file_name"
+            },
+            "value": "y"
+          }
+        ]
+      },
+      "canonicalAst": {
+        "kind": "or",
+        "children": [
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "title"
+            },
+            "value": "x"
+          },
+          {
+            "kind": "source_term",
+            "source": {
+              "kind": "resource_file_name"
+            },
+            "value": "y"
+          }
+        ]
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node",
+          "resource"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name",
+          "resource_file_name"
+        ],
+        "conditionAst": {
+          "kind": "or",
+          "children": [
+            {
+              "kind": "source_term",
+              "source": {
+                "kind": "title"
+              },
+              "value": "x"
+            },
+            {
+              "kind": "source_term",
+              "source": {
+                "kind": "resource_file_name"
+              },
+              "value": "y"
+            }
+          ]
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name"
+            ],
+            "conditionAst": {
+              "kind": "or",
+              "children": [
+                {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "title"
+                  },
+                  "value": "x"
+                },
+                {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "resource_file_name"
+                  },
+                  "value": "y"
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          },
+          {
+            "domain": "resource",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "resource_file_name"
+            ],
+            "conditionAst": {
+              "kind": "or",
+              "children": [
+                {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "title"
+                  },
+                  "value": "x"
+                },
+                {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "resource_file_name"
+                  },
+                  "value": "y"
+                }
+              ]
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": {
+          "op": "union_all",
+          "branchOrder": [
+            "node",
+            "resource"
+          ]
+        },
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "op": "union_all",
+              "inputs": [
+                {
+                  "branchIndex": 0,
+                  "domain": "node"
+                },
+                {
+                  "branchIndex": 1,
+                  "domain": "resource"
+                }
+              ]
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "or",
+                  "children": [
+                    {
+                      "kind": "source_term",
+                      "source": {
+                        "kind": "title"
+                      },
+                      "value": "x"
+                    },
+                    {
+                      "kind": "source_term",
+                      "source": {
+                        "kind": "resource_file_name"
+                      },
+                      "value": "y"
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          },
+          {
+            "branchIndex": 1,
+            "domain": "resource",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "resource_file_name"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "or",
+                  "children": [
+                    {
+                      "kind": "source_term",
+                      "source": {
+                        "kind": "title"
+                      },
+                      "value": "x"
+                    },
+                    {
+                      "kind": "source_term",
+                      "source": {
+                        "kind": "resource_file_name"
+                      },
+                      "value": "y"
+                    }
+                  ]
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": "{kind:\"union_all\",base:{invocation:I,operator:o},inputOrdinal:Counter,parent:K}"
+      }
+    },
+    {
+      "id": "EMPTY-FILE-LIST",
+      "preset": "file_list",
+      "mode": "plain",
+      "input": "",
+      "status": "browse",
+      "noQuery": true,
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
+    },
+    {
+      "id": "EMPTY-QUICK-OPEN",
+      "preset": "quick_open",
+      "mode": "plain",
+      "input": "",
+      "status": "browse",
+      "noQuery": true,
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
+    },
+    {
+      "id": "EMPTY-GLOBAL",
+      "preset": "global",
+      "mode": "plain",
+      "input": "",
+      "status": "incomplete",
+      "error": "invalid_request_on_submit",
+      "noQuery": true,
+      "expectedQuerySpecCanonicalDescription": null,
+      "expectedCanonicalGraph": null
+    },
+    {
+      "id": "OPTIONAL-TITLE-NONE-BODY",
+      "preset": "quick_open",
+      "mode": "shortcut",
+      "input": "@body:needle",
+      "status": "ok",
+      "sourceEffects": {
+        "enable": [
+          "body_text"
+        ],
+        "domains": [
+          "node"
+        ]
+      },
+      "semanticOracle": {
+        "inputState": "title=none, body contains needle",
+        "match": true,
+        "display": "none or presentation-only placeholder; filename/path must not synthesize title"
+      },
+      "ast": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "shortcutAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "visualInput": {
+        "control": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "visualAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "canonicalAst": {
+        "kind": "source_term",
+        "source": {
+          "kind": "body_text"
+        },
+        "value": "needle"
+      },
+      "expectedQuerySpecCanonicalDescription": {
+        "format": "weftext.query",
+        "version": 2,
+        "preset": "quick_open",
+        "scope": {
+          "kind": "workspace_root"
+        },
+        "subjectDomains": [
+          "node"
+        ],
+        "enabledSources": [
+          "title",
+          "subtitle",
+          "node_file_name",
+          "body_text"
+        ],
+        "conditionAst": {
+          "kind": "source_term",
+          "source": {
+            "kind": "body_text"
+          },
+          "value": "needle"
+        },
+        "branchSchemas": [
+          {
+            "domain": "node",
+            "selector": {
+              "kind": "workspace_root"
+            },
+            "reads": [
+              "title",
+              "subtitle",
+              "node_file_name",
+              "body_text"
+            ],
+            "conditionAst": {
+              "kind": "source_term",
+              "source": {
+                "kind": "body_text"
+              },
+              "value": "needle"
+            },
+            "optionalHandling": "Optional title/subtitle match only some; none never coerces to empty for matching; display may remain none",
+            "projectSchema": {
+              "nodeRef": "Optional<NodeRef>",
+              "resourceRef": "Optional<ResourceRef>",
+              "display": "Optional<text>",
+              "rank": "int64",
+              "sourceKey": "text"
+            }
+          }
+        ],
+        "combine": null,
+        "sortKeys": [
+          "rank",
+          "explicit_user_sort_if_any",
+          "canonical_subject_key",
+          "source_key"
+        ],
+        "terminal": {
+          "kind": "rows",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          }
+        }
+      },
+      "expectedCanonicalGraph": {
+        "root": {
+          "op": "project",
+          "schema": {
+            "nodeRef": "Optional<NodeRef>",
+            "resourceRef": "Optional<ResourceRef>",
+            "display": "Optional<text>",
+            "rank": "int64",
+            "sourceKey": "text"
+          },
+          "input": {
+            "op": "sort",
+            "keys": [
+              "rank",
+              "explicit_user_sort_if_any",
+              "canonical_subject_key",
+              "source_key"
+            ],
+            "input": {
+              "branchIndex": 0,
+              "domain": "node"
+            }
+          }
+        },
+        "branches": [
+          {
+            "branchIndex": 0,
+            "domain": "node",
+            "stages": [
+              {
+                "op": "scan",
+                "selector": {
+                  "kind": "workspace_root"
+                }
+              },
+              {
+                "op": "read",
+                "sources": [
+                  "title",
+                  "subtitle",
+                  "node_file_name",
+                  "body_text"
+                ]
+              },
+              {
+                "op": "filter",
+                "conditionAst": {
+                  "kind": "source_term",
+                  "source": {
+                    "kind": "body_text"
+                  },
+                  "value": "needle"
+                }
+              },
+              {
+                "op": "derive",
+                "fields": [
+                  "display",
+                  "rank",
+                  "source_key"
+                ]
+              },
+              {
+                "op": "project",
+                "schema": {
+                  "nodeRef": "Optional<NodeRef>",
+                  "resourceRef": "Optional<ResourceRef>",
+                  "display": "Optional<text>",
+                  "rank": "int64",
+                  "sourceKey": "text"
+                }
+              }
+            ]
+          }
+        ],
+        "unionOccurrenceKey": null
+      }
+    }
+  ],
+  "oracle_contract": {
+    "positive_fields": [
+      "shortcutAst",
+      "visualInput",
+      "visualAst",
+      "canonicalAst",
+      "expectedQuerySpecCanonicalDescription",
+      "expectedCanonicalGraph"
+    ],
+    "negative_fields": [
+      "expectedQuerySpecCanonicalDescription=null",
+      "expectedCanonicalGraph=null"
+    ],
+    "note": "The QuerySpec entry is a complete canonical review description of the generated QuerySpec/2, not a replacement wire schema. The CanonicalGraph is recorded structurally rather than as an unexplained digest."
+  },
+  "version_oracles": [
+    {
+      "id": "V1-REJECTS-NODE-FILE-NAME",
+      "querySpecVersion": 1,
+      "source": {
+        "kind": "node_file_name"
+      },
+      "expected": "strict_decode_reject",
+      "migration": false
+    },
+    {
+      "id": "V1-REJECTS-UNION-ALL",
+      "querySpecVersion": 1,
+      "operator": "union_all",
+      "expected": "strict_decode_reject",
+      "migration": false
+    },
+    {
+      "id": "V2-ACCEPTS-METADATA-AND-UNION",
+      "querySpecVersion": 2,
+      "expected": "decode_under_D7-QUERY-V2_then_current_qualification",
+      "migration": false
+    },
+    {
+      "id": "D9-QUERY-JSON-NOT-AUTHOR-QUERY",
+      "profile": "weftext.query-result-export/1",
+      "expected": "terminal_result_only; never QuerySpec author source"
     }
   ]
 }

@@ -133,19 +133,19 @@ fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核�
 
 ## 13. D7 整合
 
-D7 现已整合为完整作者候选。fixed-S 的十三份 D7 来源以及额外的 D9 coordinated D3-D7 binding 来源均已完整读取。当前双语 D7 owner afterimage 按原 blob 复制到 d7/owners；D7-REGISTRY.json 复用准确的当前 Registry blob，继续包含 34 个 concept 和 8 个 cross-stage binding。D7.md 与 D7-SCHEMAS.md 只对具名的 fixed97/current-D2 successor 应用补充规则，其余保留条款仍直接由复制的 owner 正文承担。
+D7 现已整合为完整作者候选。fixed-S 的十三份 D7 来源以及额外的 D9 coordinated D3-D7 binding 来源均已完整读取。当前双语 D7 owner afterimage 按原 blob 复制到 d7/owners。immutable fixed-S Registry 是 34 个 concept / 8 条 cross-stage binding；parent-current Registry 与逐字节相同的 D7-REGISTRY.json 是 34/13。D7-REGISTRY-QUALIFICATION 只叠加 A2 的具名 successor/current-history 资格，不建立第二 Registry。D7.md 与 D7-SCHEMAS.md 只对具名 fixed97/current-D2 successor 应用补充规则，其余保留条款仍直接由复制的 owner 正文承担。
 
 D7-SEARCH.md 已整合 SEARCH-01 至 SEARCH-08，但没有建立第二个搜索执行器或持久权威。普通文本与可视化筛选是默认路径；可选快捷模式必须显式进入，并使用带 @ 前缀的操作符，因此普通冒号文字、URL、Windows 盘符和 title: 不会被静默解析。保存时只保存 canonical Query 语义，不保存设备侧解析器状态。当前匹配保留 exact 与显式 `nfc-for-compare` 两种比较 basis，substring/equality 均区分大小写，并且不声称已经提供自动模糊、拼音或分词能力。
 
 D7-SOURCE-MAP.json 记录 fixed/current blob、FULL/PARTIAL/UNRUN 证据状态、20 项整合义务、全部 8 项 SEARCH 义务、scenario/non-fallback 序号、A2-01–57、Facet/People/ICS 组、Chart §15、terminology Registry 覆盖以及两项导航 finding。D8–D10 只在真实 D7 producer/consumer 交叉上记为 PARTIAL；它们的完整模块仍留给后续。
 
-fixed454e 非作者导航复核通过此前四项残余措辞，并新开 A2-D6-01CC-P2-01 与 A2-NAV-454E-P2-01 两项导航 P2。本作者候选已修订两项导航问题，但不自行关闭。前者现在只有一个角色中性的待复核状态，并统一引用 D7-SOURCE-MAP.json 的详细 provenance；历史 sourceEvidence 不变。后者把 fixed-5c 的旧现实时态改成历史叙述，并明确后续 fixed446 独立复核已在有界范围关闭 D1/D2 映射修订；该有界结论不构成 D6 或全局 A2 接受。两项 finding 都等待实际 final stop SHA 的独立复核。
+fixed2f89 已独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立关闭 A2-D7-2F89-P2-02。当前作者修复只处理 fixed1068244 剩余的 2 个 P1 与 2 个 P2，详细的 author-repaired/pending-independent 状态记录在 D7-SOURCE-MAP.json。
 
 产品 runtime、OS、GUI、renderer/export、database、真实 replica、provider、performance、migration 与 activation 行为在本批全部为 UNRUN。
 
 
-## 14. fixed2f89 D7 修复
+## 14. fixed1068244 残余 D7 修复
 
-fixed2f89（`2f89a55cb1f924a47281f59e6419fff7c0c206ed`）完整 D7 独立复核结论为 REVISE：P0=0 / P1=2 / P2=2。该复核已在有界范围独立 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`。本作者修复处理仍 OPEN 的四项 D7 finding：`A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`、`A2-D7-2F89-P2-02`；四项都只是“作者修复已存在、等待 fixed-SHA 独立复核”，作者不自行关闭。不声称 D7 或全局 A2 已接受。D8–D10 完整模块与全新的独立 Pro/global 复核继续 pending；产品/runtime 证据仍为 UNRUN。
+fixed1068244（`1068244d982a22140d8753b0483c63135b092999`）独立增量复核结论为 REVISE：P0=0 / P1=2 / P2=2，并已独立 CLOSED `A2-D7-2F89-P2-02`（immutable source trace）。当前残余 finding 是 `A2-D7-2F89-P1-01`、`A2-D7-2F89-P1-02`、`A2-D7-2F89-P2-01`，以及新增的 `A2-D7-1068244-P2-01`（Impact 中英同步）。本作者批修复这四项残余，但不自行关闭。此前有界关闭的 `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01` 继续保持 CLOSED。不声称 D7 或 global A2 已接受。
 
-本修复新增 D7-QUERY-V2，用于 versioned QuerySpec/2 metadata source 与 union_all；新增 D7-REGISTRY-QUALIFICATION，用于 fixed-S 34/8 与 parent-current 34/13 的逐 binding 资格；同时补全 shortcut grammar、D7-SEARCH-FIXTURES.json，以及 immutable-source D7 source-map row/Chart group。D7-REGISTRY.json 继续与 parent-current Registry 逐字节相同；snapshots 与 inputs 继续受保护。
+本批保持已经关闭的 immutable source trace 不变；修正顶层 Registry 导航中的 fixed-S 34/8 与 parent-current 34/13，加入 QuerySpec/2 消费的 D6-owned 最小权限 FileBinding metadata producer，闭合 QuerySpec/2 的 Optional-title/union_all/D9-query_json 直接 consumer，修复 shortcut machine oracle 与 escape 案例，并同步 D7-IMPACT 中英文。S49 snapshots 与 inputs 继续受保护。

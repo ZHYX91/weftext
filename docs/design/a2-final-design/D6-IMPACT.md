@@ -419,3 +419,10 @@ These are not claims of runtime, crypto, provider, crash, performance, OS, GUI o
 ## 14. Review boundary
 
 The D6 author does not independently close this candidate. D7-D10 full modules remain pending. Documentation and machine-source checks validate only their named mechanics.
+
+
+## 15. D7 FileBinding metadata producer obligations
+
+Implement the §19 / SCHEMAS §11 producer as D6-owned protected state, not shell filesystem access. Acceptance must include at least: Node basename with `entity_state+locator_state` but no `source_read`; Resource basename with no `resource_read`; Node relative path with no `structure_state`; exact deny/default-deny non-disclosure; absent/placeholder/gap unavailable; external/coordinated rename invalidation with equal bytes; policy revocation reset; and proof that returned text grants no identity/write/source bytes. Query body/Resource-byte reads in the same operation must still fail independently without their original content capabilities.
+
+These are design/implementation obligations only. No product metadata reader is claimed to have run in this batch.

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D7 author candidates integrated. fixed2f89 full D7 review = REVISE (P0=0/P1=2/P2=2); three prior navigation/doc-quality findings independently closed; four D7 findings have author repairs and remain OPEN pending fixed-SHA independent review. D8-D10/global remain pending.",
+  "status": "D1-D7 author candidates integrated. fixed1068244 incremental D7 review = REVISE (P0=0/P1=2/P2=2); A2-D7-2F89-P2-02 independently CLOSED; remaining 2 P1 / 2 P2 author-repaired and pending independent review. D8-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Fixed-SHA non-author incremental review of A2-D7-2F89-P1-01, P1-02, P2-01 and P2-02 plus affected direct surfaces; then D8-D10 full integration and fresh Pro/global review.",
+  "next_batch": "Fixed-SHA non-author incremental review of the four residual findings after fixed1068244 and directly affected surfaces; then D8-D10 full integration and fresh Pro/global review.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2460,8 +2460,9 @@
     }
   },
   "pending_scope": [
-    "independent fixed-stop review of the four fixed2f89 D7 findings",
+    "independent fixed-stop review of A2-D7-2F89-P1-01, P1-02, P2-01 and A2-D7-1068244-P2-01",
     "D8-D10 full A2 owner modules",
+    "Search+D8 runtime/platform evidence",
     "fresh Pro/global review",
     "runtime/OS/GUI/real-replica/migration/activation evidence"
   ],
@@ -2487,7 +2488,7 @@
       "D7-REGISTRY-QUALIFICATION.zh-CN.md",
       "D7-SEARCH-FIXTURES.json"
     ],
-    "status": "fixed2f89 full review REVISE; four D7 findings author-repaired and OPEN pending independent fixed-SHA review",
+    "status": "fixed1068244 incremental review REVISE; source-map P2-02 independently CLOSED; remaining 2 P1 / 2 P2 author-repaired and OPEN pending independent fixed-SHA review",
     "authorStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
     "fixedS13": "FULL",
     "currentOwnerBilingual": "FULL",
@@ -2502,7 +2503,7 @@
     "search": "SEARCH-01-08 integrated in D7-SEARCH; pending independent review and later D8 platform evidence",
     "sourceMap": "D7-SOURCE-MAP.json",
     "runtime": "UNRUN",
-    "reviewFixedSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
+    "reviewFixedSha": "1068244d982a22140d8753b0483c63135b092999",
     "review": {
       "verdict": "REVISE",
       "severity": {
@@ -2513,22 +2514,46 @@
       "independentlyClosedPrior": [
         "A2-D6-01CC-P2-01",
         "A2-NAV-454E-P2-01",
-        "COORD-D7-DOC-QUALITY-01"
+        "COORD-D7-DOC-QUALITY-01",
+        "A2-D7-2F89-P2-02"
       ],
       "openPendingIndependent": [
         "A2-D7-2F89-P1-01",
         "A2-D7-2F89-P1-02",
         "A2-D7-2F89-P2-01",
-        "A2-D7-2F89-P2-02"
+        "A2-D7-1068244-P2-01"
       ]
     },
     "repairFiles": [
+      "SOURCE-MAP.md",
+      "SOURCE-MAP.zh-CN.md",
+      "D6.md",
+      "D6.zh-CN.md",
+      "D6-SCHEMAS.md",
+      "D6-SCHEMAS.zh-CN.md",
+      "D6-IMPACT.md",
+      "D6-IMPACT.zh-CN.md",
       "D7-QUERY-V2.md",
-      "D7-REGISTRY-QUALIFICATION.md",
+      "D7-QUERY-V2.zh-CN.md",
+      "D7-SCHEMAS.md",
+      "D7-SCHEMAS.zh-CN.md",
       "D7-SEARCH.md",
+      "D7-SEARCH.zh-CN.md",
       "D7-SEARCH-FIXTURES.json",
-      "D7-SOURCE-MAP.json"
+      "D7-IMPACT.md",
+      "D7-IMPACT.zh-CN.md",
+      "D7-SOURCE-MAP.json",
+      "D7-SOURCE-MAP.md",
+      "D7-SOURCE-MAP.zh-CN.md",
+      "README.md",
+      "README.zh-CN.md",
+      "REVIEW-ENTRY.md",
+      "REVIEW-ENTRY.zh-CN.md"
     ],
-    "repairStartSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed"
+    "repairStartSha": "1068244d982a22140d8753b0483c63135b092999",
+    "directCoordination": {
+      "d6Metadata": "D6-owned FileBinding metadata projection under existing entity_state+locator_state",
+      "d9QueryJson": "terminal result export only; saved Query definitions remain D7 Definition Transfer/D3 author path"
+    }
   }
 }

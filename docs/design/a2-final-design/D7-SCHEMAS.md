@@ -173,7 +173,7 @@ D7 integer and decimal values keep the exact canonical textual decoders of the r
 
 ## 9. Query execution closure
 
-Query outer remains wireVersion2. QuerySpec/2 is the current author schema and is defined by the retained QuerySpec/1 grammar plus exactly the versioned additions in D7-QUERY-V2: current Optional title/subtitle, authorized Node file name/path, authorized Resource file name, and union_all. QuerySpec/1 remains a separate exact decoder and is never widened. DAG validation, canonical ordinal, CEL typing, feature gates, source qualification, terminal schema, result encoding, paging/subscription reset and complete error ordering remain one closed path. Unknown feature or unavailable dependency cannot become an empty bag.
+Query outer remains wireVersion2. QuerySpec/2 is the current author schema and is defined by the retained QuerySpec/1 grammar plus exactly the versioned additions in D7-QUERY-V2: current Optional title/subtitle, D6-owned Node file name/path and Resource file name, and union_all. The file-binding sources consume only D6FileBindingMetadataObservation/1 under the existing entity_state+locator_state gates; they do not acquire source_read/resource_read/structure_state by implication. QuerySpec/1 remains a separate exact decoder and is never widened. union_all extends the retained internal K tree only with the exact inputOrdinal constructor in D7-QUERY-V2 and remains unordered until explicit sort. DAG validation, canonical ordinal, CEL typing, feature gates, source qualification, terminal schema, result encoding, paging/subscription reset and complete error ordering remain one closed path. Unknown feature or unavailable dependency cannot become an empty bag.
 
 ## 10. Search schema boundary
 

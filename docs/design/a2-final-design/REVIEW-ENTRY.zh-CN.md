@@ -45,9 +45,9 @@ D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第�
 
 fixed2f89 独立复核已在有界范围 CLOSED `A2-D6-01CC-P2-01`、`A2-NAV-454E-P2-01` 与 `COORD-D7-DOC-QUALITY-01`；它们不再是当前 pending finding。
 
-同一复核新开四项 D7 finding：`A2-D7-2F89-P1-01`（Registry 34/8 与 34/13 分层资格）、`A2-D7-2F89-P1-02`（搜索元数据缺 Query producer）、`A2-D7-2F89-P2-01`（shortcut grammar/preset 未闭合）、`A2-D7-2F89-P2-02`（source-map fidelity）。当前作者候选已经为四项提供修复，但状态仍是 OPEN，等待 fixed-SHA 独立复核。
+fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02、P2-01 为 OPEN，并新增 D7-IMPACT 中英漂移 finding A2-D7-1068244-P2-01。本作者批精确从 fixed1068244 开始，只修这四项残余，且不自行关闭。
 
-历史时间线为 fixed829 来源 → fixed01cc 较早复核 → fixed32cf/d1ab 修订 → fixed1fc4 复核 → fixed5e21 语义复核 → fixed9c3b/fixed454e 导航复核 → fixed2f89 完整 D7 复核。较早裁决只描述各自 fixed object。
+历史时间线为 fixed829 来源 → fixed01cc → fixed32cf/d1ab → fixed1fc4 → fixed5e21 → fixed9c3b/fixed454e → fixed2f89 完整 D7 复核 → fixed1068244 增量复核。较早裁决只描述各自 fixed object。
 
 ## 4. 证据与非声明边界
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "status": "A2 D7 fixed2f89 review repair candidate: four findings repaired by author and still OPEN pending independent review; D8-D10/global remain pending.",
+  "status": "A2 D7 fixed1068244 residual repair candidate: immutable-source trace P2-02 independently CLOSED; remaining 2 P1 / 2 P2 author-repaired and OPEN pending independent review; D8-D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "author_start_sha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
@@ -4746,7 +4746,9 @@
       "node_relative_path",
       "resource_file_name",
       "union_all"
-    ]
+    ],
+    "QueryV2MetadataProducer": "D6FileBindingMetadataObservation/1 under entity_state+locator_state; no implied source_read/resource_read/structure_state",
+    "QueryV2UnionKey": "{kind:\"union_all\",base:{invocation:I,operator:o},inputOrdinal:Counter,parent:K}"
   },
   "protected_invariants": {
     "s49_and_inputs": "must remain byte-identical",
@@ -4769,10 +4771,10 @@
       "reviewSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed"
     }
   },
-  "next_gate": "Fixed-SHA non-author incremental review of A2-D7-2F89-P1-01, P1-02, P2-01 and P2-02 plus affected direct surfaces. D8-D10 full modules and fresh Pro/global review remain later.",
+  "next_gate": "Fixed-SHA non-author incremental review only of A2-D7-2F89-P1-01, P1-02, P2-01 and A2-D7-1068244-P2-01 plus directly affected regressions. A2-D7-2F89-P2-02 remains independently CLOSED at fixed1068244. D8-D10 full modules and fresh Pro/global review remain later.",
   "case_mapping_method": "Immutable fixed-S/Mandatory source path+blob+exact line range/slice is the original condition authority. Current retained mirror text is navigation/current-target evidence only and is never labeled originalCondition.",
   "search_matching_clarification": "Exact text remains exact; D4 nfc-for-compare paths normalize candidate and needle for comparison only. Both remain case-sensitive. No automatic case fold/fuzzy/tokenizer/Pinyin/transliteration.",
-  "author_repair_start_sha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
+  "author_repair_start_sha": "1068244d982a22140d8753b0483c63135b092999",
   "previous_case_inventory_review": {
     "reviewedPreviousRows": 151,
     "retainedAsSourceQualifiedRows": 148,
@@ -5133,13 +5135,82 @@
         ]
       },
       "A2-D7-2F89-P2-02": {
-        "status": "OPEN-author-repair-present-pending-independent-review",
+        "status": "independently-CLOSED-at-fixed1068244",
         "targets": [
           "D7-SOURCE-MAP.json#/integration_obligations",
           "/source_qualified_cases",
           "/mandatory_chart_groups"
+        ],
+        "reviewSha": "1068244d982a22140d8753b0483c63135b092999"
+      }
+    }
+  },
+  "fixed1068244_review": {
+    "reviewSha": "1068244d982a22140d8753b0483c63135b092999",
+    "verdict": "REVISE",
+    "severity": {
+      "P0": 0,
+      "P1": 2,
+      "P2": 2
+    },
+    "independentlyClosed": [
+      "A2-D7-2F89-P2-02"
+    ],
+    "retainedPriorClosures": [
+      "A2-D6-01CC-P2-01",
+      "A2-NAV-454E-P2-01",
+      "COORD-D7-DOC-QUALITY-01"
+    ],
+    "residuals": {
+      "A2-D7-2F89-P1-01": {
+        "status": "OPEN-author-repaired-pending-independent-review",
+        "targets": [
+          "SOURCE-MAP.md §13",
+          "SOURCE-MAP.zh-CN.md §13",
+          "D7-REGISTRY-QUALIFICATION"
+        ]
+      },
+      "A2-D7-2F89-P1-02": {
+        "status": "OPEN-author-repaired-pending-independent-review",
+        "targets": [
+          "D6 §19",
+          "D6-SCHEMAS §11",
+          "D7-QUERY-V2 §§4-8",
+          "D7-SCHEMAS",
+          "D7-SEARCH §8"
+        ]
+      },
+      "A2-D7-2F89-P2-01": {
+        "status": "OPEN-author-repaired-pending-independent-review",
+        "targets": [
+          "D7-SEARCH §§5-6",
+          "D7-SEARCH-FIXTURES.json"
+        ]
+      },
+      "A2-D7-1068244-P2-01": {
+        "status": "OPEN-author-repaired-pending-independent-review",
+        "targets": [
+          "D7-IMPACT.md",
+          "D7-IMPACT.zh-CN.md"
         ]
       }
+    }
+  },
+  "direct_coordination": {
+    "d6FileBindingMetadata": {
+      "owner": "D6",
+      "targets": [
+        "D6 §19",
+        "D6-SCHEMAS §11",
+        "D6-IMPACT §15"
+      ],
+      "authorization": "entity_state + locator_state; no content-read implication",
+      "consumer": "QuerySpec/2 node_file_name/node_relative_path/resource_file_name"
+    },
+    "d9QueryJson": {
+      "owner": "D9 workers/export",
+      "disposition": "terminal-result-export-only; not QuerySpec author carrier",
+      "consumer": "D7-QUERY-V2 §7 / D7-SEARCH §8"
     }
   }
 }

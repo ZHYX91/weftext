@@ -418,3 +418,10 @@ current A2 D3 wire13 已具备有界 current-consumer afterimage，真实 fixed-
 ## 14. Review boundary
 
 D6 作者不独立关闭本候选。D7-D10 完整模块仍待后续。文档与机器 source 检查只验证其具名机械性质。
+
+
+## 15. D7 FileBinding metadata producer 实施义务
+
+必须把 §19 / SCHEMAS §11 的 producer 实现为 D6-owned 受保护状态读取，不能让 shell 直接检查文件系统。验收至少覆盖：只有 `entity_state+locator_state`、没有 `source_read` 时读取 Node basename；没有 `resource_read` 时读取 Resource basename；没有 `structure_state` 时读取 Node relative path；deny/default-deny 的精确非披露；absent/placeholder/gap 返回 unavailable；bytes 相同但发生外部或协调 rename 时旧结果失效；policy 撤权触发 reset；以及返回文本不授身份、写权限或 source bytes。同一操作若另外读取正文或 Resource bytes，在缺少原 content capability 时仍必须独立失败。
+
+以上只是设计/实现义务，本批不声称已经运行真实产品 metadata reader。

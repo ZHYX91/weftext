@@ -27,7 +27,7 @@ The current author candidate integrates D1 through D7. It is authored work, not 
 | D4 | integrated current author candidate; A2-D4D5:P2-02 remains bounded CLOSED at fixed4282 and A2-D4D5:P2-01 is bounded CLOSED after the fixed1fc4 independent review; no global acceptance |
 | D5 | integrated current author candidate; A2-D4D5:P2-02 remains bounded CLOSED at fixed4282 and A2-D4D5:P2-01 is bounded CLOSED after the fixed1fc4 independent review; no global acceptance |
 | D6 | fixed2f89 independently CLOSED the two navigation findings that remained after fixed454e; prior bounded D6 semantic closures remain limited to their recorded scope. |
-| D7 | fixed2f89 full review = REVISE (P0=0/P1=2/P2=2); current author repair addresses all four findings and remains pending fixed-SHA independent review |
+| D7 | fixed1068244 incremental review = REVISE (P0=0/P1=2/P2=2); source-map P2-02 independently CLOSED; current author repair addresses the remaining 2 P1 / 2 P2 and awaits fixed-SHA independent review |
 | D8 | TODO as a full module; D7 consumed only real editor/direction/accessibility/RTL intersections |
 | D9 | TODO as a full module; D7 consumed only coordinated binding and direct construction/import/export intersections |
 | D10 | TODO as a full module; D7 consumed SearchContribution/Catalog and D7 approval/effects/custody intersections |
@@ -57,4 +57,6 @@ For D8 through D10 there is no complete A2 current definition yet. Direct produc
 
 ## 5. Acceptance boundary
 
-Independent full D7 review fixed2f89 (`2f89a55cb1f924a47281f59e6419fff7c0c206ed`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED the bounded findings `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01`. This author repair addresses the four still-OPEN D7 findings `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and `A2-D7-2F89-P2-02`; each is author-repaired but remains pending fixed-SHA independent review. No D7/global acceptance is claimed. D8-D10 full modules and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.
+Independent incremental review fixed1068244 (`1068244d982a22140d8753b0483c63135b092999`) concluded REVISE with P0=0 / P1=2 / P2=2. It independently CLOSED `A2-D7-2F89-P2-02` (immutable source trace). The remaining findings are `A2-D7-2F89-P1-01`, `A2-D7-2F89-P1-02`, `A2-D7-2F89-P2-01`, and new `A2-D7-1068244-P2-01` (Impact EN/ZH sync). This author batch repairs those four residuals but does not self-close them. The earlier bounded closures `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` remain closed. No D7/global acceptance is claimed.
+
+D8-D10 full modules, Search+D8 execution evidence and fresh independent Pro/global review remain pending; product/runtime evidence is UNRUN.

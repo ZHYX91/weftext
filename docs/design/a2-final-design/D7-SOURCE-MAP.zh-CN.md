@@ -6,13 +6,13 @@ translation_status: source
 [English](D7-SOURCE-MAP.md)
 # A2 D7 来源与案例映射
 
-状态：这是 fixed2f89 完整 D7 复核之后的作者修复。四项 fixed2f89 finding 已有作者修复，但仍保持 OPEN，等待独立复核。
+状态：这是 fixed1068244 之后的作者残余修复。immutable-source trace P2-02 已独立 CLOSED；剩余 2 个 P1 与 2 个 P2 在此完成作者修复，但仍保持 OPEN 等待独立复核。
 
 ## 1. 固定对象与既有关闭
 
 本修复起点是 2f89a55cb1f924a47281f59e6419fff7c0c206ed。base 继续是 97f4734f82a760cb6716c8122b84494da2b61164，fixed S 继续是 7e18168dad3e6d120fce0dd607dc10fa7894e252，受保护 inputs blob 继续是 787d03c31a55496f81ed03fd54a6fdfff50a2ad4。
 
-fixed2f89 已在有界范围独立关闭 A2-D6-01CC-P2-01、A2-NAV-454E-P2-01 与 COORD-D7-DOC-QUALITY-01；它们不再是当前 pending finding。当前四项 D7 finding 在 D7-SOURCE-MAP.json 中继续标为 OPEN，只注明作者修复已存在。
+fixed2f89 已在有界范围独立关闭 A2-D6-01CC-P2-01、A2-NAV-454E-P2-01 与 COORD-D7-DOC-QUALITY-01；fixed1068244 又独立 CLOSED A2-D7-2F89-P2-02。当前残余是两个 P1、A2-D7-2F89-P2-01 与 A2-D7-1068244-P2-01；本作者批修复它们，但状态仍是 OPEN pending independent review。
 
 ## 2. 阅读覆盖
 
@@ -26,11 +26,11 @@ immutable fixed-S Registry 实际是 34 个 concept、8 条 cross-stage binding�
 
 D7-REGISTRY-QUALIFICATION 对 B01-B13 逐条映射。D7-REGISTRY.json 继续是唯一 parent-current machine Registry，不被改写。A2 只在 fixed97/current owner 真实改变时具名 fresh successor；未变化的 inner version 保持不变，真实 historical record 保留原 decoder。
 
-## 4. Query 与 Search 修复
+## 4. Query 与 Search 残余修复
 
-D7-QUERY-V2 将 QuerySpec/2 定义为当前新建作者 schema，QuerySpec/1 则继续由单独的准确 decoder 解释。QuerySpec/2 增加可空的 current title/subtitle、获权的 Node 文件名与路径、获权的 Resource 文件名，以及要求输入 schema 完全相等的通用 union_all。所有 read 都绑定真实 D2/D6 producer、授权结果、同一 cut 的 current Observation/FileBinding 和最终 barrier。
+D7-QUERY-V2 继续以 QuerySpec/2 作为当前作者 successor，但 FileBinding metadata 改为消费 D6-owned producer，并由 entity_state+locator_state 授权，而不是要求 whole content read 或 structure_state。它还闭合 Optional-title 直接 consumer、准确 union_all LogicalOccurrenceKey constructor 与 D9 query_json 的 result-only 边界。
 
-D7-SEARCH 现在完整规定快捷模式的 lexer、递归优先级 grammar、关键字边界、转义规则、FieldId/member-path 验证、三个 preset 的空输入行为，以及显式 source override。可视化条件和 shortcut 生成同一份临时 SearchConditionAst/1，并确定性编译到 QuerySpec/2。D7-SEARCH-FIXTURES.json 保存机器可核的正反等价 fixture；任何 parser error 都不能退回另一条 Query。
+D7-SEARCH 冻结 trailing backslash 的唯一分类；D7-SEARCH-FIXTURES.json 现在实际包含 shortcut/visual/canonical AST 以及完整 QuerySpec/2 与 CanonicalGraph 审查描述。三个 preset 空输入、source override、Node/Resource 混合 OR、Optional handling 与 /1-/2 严格版本边界都进入 machine oracle。D7-IMPACT 中英文同步到同一组义务。
 
 ## 5. Immutable source trace
 
@@ -42,15 +42,16 @@ retained current scenario mirror 仍可用于 current disposition 导航，但�
 
 ## 6. 当前 finding 状态
 
-- A2-D7-2F89-P1-01：作者修复位于 D7 §20、D7-REGISTRY-QUALIFICATION 与 machine bindingQualification；继续 OPEN，等待独立复核。
-- A2-D7-2F89-P1-02：作者修复位于 D7-QUERY-V2、D7-SCHEMAS 与 D7-SEARCH；继续 OPEN，等待独立复核。
-- A2-D7-2F89-P2-01：作者修复位于 D7-SEARCH 与 D7-SEARCH-FIXTURES.json；继续 OPEN，等待独立复核。
-- A2-D7-2F89-P2-02：作者修复位于 D7-SOURCE-MAP.json 的 immutable range/case/chart group；继续 OPEN，等待独立复核。
+- A2-D7-2F89-P1-01：作者残余修复已存在；继续 OPEN，等待独立复核。
+- A2-D7-2F89-P1-02：作者残余修复位于 D6 §19/D6-SCHEMAS §11 与 D7-QUERY-V2/D7-SCHEMAS/D7-SEARCH；继续 OPEN。
+- A2-D7-2F89-P2-01：作者残余修复位于 D7-SEARCH 与 D7-SEARCH-FIXTURES.json；继续 OPEN。
+- A2-D7-2F89-P2-02：已在 fixed1068244 独立 CLOSED；本批不重开 immutable mapping rows/groups。
+- A2-D7-1068244-P2-01：作者修复位于同步后的 D7-IMPACT 中英文；继续 OPEN。
 
-作者没有自行关闭这四项。
+作者没有自行关闭当前四项残余 finding。
 
 ## 7. 证据边界与下一 gate
 
 仓库文档检查、输入完整性检查、JSON 与 source-map 检查只能证明机械一致性。Product Search、runtime、Desktop/Mobile/WebUI GUI、IME/AT、renderer/export、真实 index/provider、CAS/race、migration、deployment 与历史执行全部继续记为 UNRUN。
 
-下一 gate 是对四项 fixed2f89 finding 及其受影响 direct surface 做 fixed-SHA 非作者增量复核。D8-D10 完整整合与后续 fresh Pro/global A2 review 继续分开。
+下一 gate 只对 A2-D7-2F89-P1-01、P1-02、P2-01、A2-D7-1068244-P2-01 及其直接回归面做 fixed-SHA 非作者增量复核。已经关闭的 P2-02 只作为既有证据保留。D8-D10 完整整合与后续 fresh Pro/global A2 review 继续分开。

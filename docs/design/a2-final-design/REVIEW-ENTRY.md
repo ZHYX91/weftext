@@ -46,9 +46,9 @@ Three adjacent fixed-S cross-owner groups with the same old-version ambiguity ar
 
 At fixed2f89 the independent reviewer CLOSED `A2-D6-01CC-P2-01`, `A2-NAV-454E-P2-01`, and `COORD-D7-DOC-QUALITY-01` in their bounded scopes. They are not current pending findings.
 
-The same review opened four D7 findings: `A2-D7-2F89-P1-01` (Registry 34/8 versus 34/13 qualification), `A2-D7-2F89-P1-02` (missing Query producers for search metadata), `A2-D7-2F89-P2-01` (shortcut grammar/preset closure), and `A2-D7-2F89-P2-02` (source-map fidelity). This author candidate contains repairs for all four, but their status remains OPEN pending independent fixed-SHA review.
+fixed1068244 later independently CLOSED A2-D7-2F89-P2-02. It retained P1-01, P1-02 and P2-01 as OPEN and added A2-D7-1068244-P2-01 for D7-IMPACT EN/ZH drift. This author batch starts exactly from fixed1068244 and repairs only those four residuals without self-closing them.
 
-Historical chronology is fixed829 origin → fixed01cc earlier review → fixed32cf/d1ab repairs → fixed1fc4 review → fixed5e21 semantic review → fixed9c3b/fixed454e navigation reviews → fixed2f89 full D7 review. Earlier verdicts describe only their fixed objects.
+Historical chronology is fixed829 origin → fixed01cc → fixed32cf/d1ab → fixed1fc4 → fixed5e21 → fixed9c3b/fixed454e → fixed2f89 full D7 review → fixed1068244 incremental review. Earlier verdicts describe only their fixed objects.
 
 ## 4. Evidence and nonclaims
 

@@ -1008,3 +1008,27 @@ Fold, compaction, receiver admission, D10 continuityPins consumption, and recove
 When no valid current after evidence can exist, the current producer emits ScheduleContinuityInvalidation/2 instead of fabricating ScheduleRecurrenceEvidence/2. binding_changed requires complete trusted evidence of a selected-business discontinuity; unavailable/unknown after, missing history, unknown decoder, observer/producer gap, or inability to retain a required transition is gap. Invalidation compares the same current witness/registration, atomically advances the next checked transition/revision, keeps the last valid checkpoint, and is permanently non-resetting for that generation. Its artifact pin is exactly Invalidation2ArtifactBytes above. The fixed-parent inbox/capacity/final-counter reservation, authorization, compaction and unrelated-source-availability rules remain unchanged.
 
 A current schedule proof that semantically parses a managed Document must include both source and document_format dependencies. If source/profile bytes are unchanged but format-proof continuity has a gap, the result is gap; a real binding transition is binding_changed even when the final recurrence/range value happens to compare equal. An existing Subscription1 remains a historical retention owner with Witness1/Step1/Invalidation1 and their exact /1 artifact domains. It may become a same-generation Subscription2 only through explicit continue plus complete retained history proving no intervening format/rule/business discontinuity and establishing the current Evidence2/Proof3 cut; otherwise replace is required. The bridge preserves every old pin/producer association and starts using /2 domains only for newly produced Witness2/Step2/Invalidation2 artifacts. It never repins or re-encodes a version-1 witness/step/invalidation as version 2 and never resets an invalid generation.
+
+
+## 11. D7 file-binding metadata direct types
+
+The D6-owned protected metadata producer used by fresh QuerySpec/2 is closed as follows:
+
+~~~text
+D6FileBindingMetadataReadRequest/1 = {
+  kind:"d6_file_binding_metadata_read",version:1,
+  workspaceRef:WorkspaceRef,ref:NodeRef|ResourceRef,
+  projection:"basename"|"relative_path"
+}
+
+D6FileBindingMetadataObservation/1 = {
+  kind:"d6_file_binding_metadata_observation",version:1,
+  workspaceRef:WorkspaceRef,ref:NodeRef|ResourceRef,
+  projection:"basename"|"relative_path",value:text,
+  observation:SourceObservation/1
+}
+~~~
+
+Cross-fields are exact: request/observation WorkspaceRef and Ref are byte-equal; observation.entityRef equals ref; observation.fileObjectBinding is present; `relative_path` requires NodeRef and value equals the complete PortableRelativePath; `basename` accepts NodeRef or ResourceRef and value equals the final nonempty '/' segment. No AnnotationRef arm, absent arm, nullable value or host-path representation exists.
+
+This type is protected internal evidence. It is never accepted in InputDescriptor.sourceInputs, never becomes SourceVersionRef, never grants source/resource bytes, and never replaces the ordinary authorization DependencyKey. Its consumer must bind the existing authorization proof plus the exact SourceObservation/FileObjectBinding and revalidate them at its final barrier.

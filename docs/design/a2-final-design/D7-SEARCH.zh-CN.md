@@ -77,15 +77,15 @@ lexer 先于 grammar 执行：
 - quote 外的 ASCII space/tab 分隔 token。
 - parenthesis 只有在 quote 外且未 escape 时才是结构符号。
 - colon 通常只是普通文本；只有紧跟 recognized field operator head 的那一个 colon 才具有语法意义。
-- bare token 是非空 Unicode scalar 序列，但不能含未 escape 的 space/tab/quote/parenthesis。backslash 只有在后面是 backslash、quote、parenthesis、@、colon、space 或 tab 时才作为 escape；这些 pair 解码成被 escape 的 scalar。其它位置的 backslash 是普通字面字符，因此 Windows path 不需要把每个 backslash 都改写。若输入停在一个已经开始但尚未完成的 reserved escape，则是 incomplete draft。
-- quoted-value 由 double quote 包围。内部只把 backslash+double quote 与 backslash+backslash 当 escape；其它 scalar，包括 whitespace、colon、@、CJK、RTL，都是 literal。没有 closing quote 时为 incomplete。
+- bare token 是非空 Unicode scalar 序列，但不能含未 escape 的 space/tab/quote/parenthesis。backslash 后面若是 backslash、quote、parenthesis、@、colon、space 或 tab，就把这两个字符解码成后一个 escaped scalar；若后面是其它 scalar，则 backslash 本身就是 literal。bare token 的最后一个 scalar 若是 backslash，它**始终是一个完整的字面反斜线**，绝不属于 incomplete escape。
+- quoted-value 由 double quote 包围。内部只把 backslash+double quote 与 backslash+backslash 当 escape；其它 scalar，包括 whitespace、colon、@、CJK、RTL，都是 literal。已经进入 quote 后遇到 EOF 时，draft 为 incomplete；若 open quote 内最后一个 scalar 是 backslash，则唯一分类为该位置的 `incomplete_quoted_escape`，否则是 `incomplete_quote`。
 - 未 escape 的 uppercase ASCII AND、OR、NOT 只有作为完整 lexer token 时才是 keyword。lowercase 形式是 literal。若要搜索大写关键字本身，使用 quote。
 - primary 开头若出现未 escape 的 @ 并匹配 recognized operator head，就解析为 source term。未知 @name: 返回 unknown_shortcut_field，不能 fallback 成 literal。escape leading @ 后，整段按 literal 处理。
 - field-id 使用准确 D4 FieldId grammar。member-path 由 1..8 个 dot-separated lowerCamel ASCII ObjectMemberSpec name 组成，每段 1..64 bytes，并必须使用 Query 同一 current Registry/Field TypeSpec 验证。label 或 localized name 不能替代。
 
 优先级从低到高是 OR、AND/adjacency、递归 NOT、primary/parentheses。NOT NOT A 合法，并保留两个显式 not node；A AND B AND C 与 adjacency A B C 都是合法链。
 
-unmatched quote/parenthesis、missing operand、missing field value、未完成 @field(...)、unfinished reserved escape 或其它未完成 token 都是 draft-incomplete，不执行 Query。用户显式提交时，同一状态返回带准确 source span 的 invalid_request。语法已经完整但 field/operator/value 未知时，返回对应 parse/compile error。任何 error path 都不会执行另一条 literal Query。
+unmatched parenthesis、missing operand、missing field value、未完成 @field(...)、`incomplete_quote`、`incomplete_quoted_escape` 或其它未完成 structured token 都是 draft-incomplete，不执行 Query。bare token 末尾的 backslash 不在此列，它就是 literal scalar。用户显式提交 incomplete state 时返回带准确 source span 的 invalid_request。语法已经完整但 field/operator/value 未知时，返回对应 parse/compile error。任何 error path 都不会执行另一条 literal Query。
 
 ## 6. 唯一 condition AST 与确定性 Query 编译
 
@@ -116,7 +116,9 @@ SearchConditionAst/1 :=
 
 快捷/可视化子集无法表达的完整 Query condition，必须作为 opaque advanced Query condition 保留在可视化编辑器中，绝不能丢失；只有完整 Query editor 能修改它。保存时始终保存 QuerySpec/2，不保存 SearchConditionAst/1。
 
-D7-SEARCH-FIXTURES.json 是 parser 与可视化等价的机器 oracle。每个正例的 shortcut AST 与 visual AST 在 canonical AST serialization 后必须逐字节相同，并编译成逐字节相同的 CanonicalGraph；负例和未完成输入都不产生 Query。
+D7-SEARCH-FIXTURES.json 是 parser、visual 与 compiler 等价的 machine oracle。每个正例都实际保存 shortcut AST、明确且与具体 UI widget 无关的 visual-condition input、visual AST、expected canonical AST、可直接审查的完整 QuerySpec/2 canonical description，以及完整 expected CanonicalGraph description，而不是没有生成依据的 hash。QuerySpec description 记录 preset/scope、准确 enabled sources、subject domains、Optional 处理、branch schema、是否使用 union_all、确定性 sort 与 terminal schema；CanonicalGraph description 记录每一个 scan/read/filter/derive/project/union/sort stage 及 branch order。这些都是设计 fixture，不声称已经运行真实产品 parser/compiler。
+
+正例要求 shortcutAst、visualAst 与 canonicalAst 按规定 canonical AST serialization 逐字节相等，并且两种 surface 都得到记录的 QuerySpec/2/CanonicalGraph description。negative、incomplete 与 browse/no-query fixture 的 expected QuerySpec 和 CanonicalGraph 都明确为 null，且不会执行替代 Query。
 
 ## 7. 权限、索引状态、命中数、排名与摘要
 
@@ -134,7 +136,7 @@ snippet/highlight 只能从已经获权的语义文本派生；其中的 scalar 
 
 重开时先按记录的 QuerySpec version 分派，再做当前资格检查。QuerySpec/1 保持准确旧语法，永远不按 /2 重新解释。Field 删除或改型、contribution 移除或换版、权限变化、FileBinding 变化，都按各自真实 Registry/currentness 规则触发 reset。
 
-Definition Transfer 按对应版本的 Query schema 映射 typed Ref 与 DefinitionAddress slot。D9 对 query_json 的精确 copy/export/import 保留记录版本和原 bytes。filename/path 字符串永远不会变成 DefinitionAddress 或 identity。
+Definition Transfer 按对应版本的 Query schema 映射 typed Ref 与 DefinitionAddress slot；saved-definition copy/fork/import 走这个 D7/D3 作者路径，并保留 embedded QuerySpec version/bytes。D9 的 `query_json` 只负责把完整 terminal result 静态导出为 `weftext.query-result-export/1`，绝不包含 QuerySpec author bytes，也不能创建或迁移 saved Query。filename/path 字符串永远不会变成 DefinitionAddress 或 identity。
 
 ## 9. 跨 surface 与跨 device 等价
 

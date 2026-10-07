@@ -1135,3 +1135,27 @@ fold、compaction、receiver admission、D10 continuityPins consumption 与 reco
 当不存在合法 current after evidence 时，current producer 必须产生 ScheduleContinuityInvalidation/2，不能伪造 ScheduleRecurrenceEvidence/2。binding_changed 需要完整可信的 selected-business discontinuity 证据；after unavailable/unknown、missing history、unknown decoder、observer/producer gap 或无法保留必要 transition 均为 gap。Invalidation 比较同一 current witness/registration，原子推进下一 checked transition/revision，保留最后合法 checkpoint，并对该 generation 永久不可 reset。其 artifact pin 必须精确使用上面的 Invalidation2ArtifactBytes。fixed-parent inbox/capacity/final-counter reservation、authorization、compaction 与无关 source 可用性规则保持不变。
 
 Schedule current proof 中真实解析 managed Document 时必须含 source + document_format dependency。source/profile bytes 未变但 format proof continuity gap 得到 gap；binding 发生真实改变得到 binding_changed，即使最终 recurrence/range 值碰巧相同。已有 Subscription1 继续作为 historical retention owner，并配套 Witness1/Step1/Invalidation1 及其精确 /1 artifact domain。它只有通过 explicit continue + complete retained history 证明没有 intervening format/rule/business discontinuity，并建立 current Evidence2/Proof3 cut，才可变成 same-generation Subscription2；否则必须 replace。这个 bridge 保留每个旧 pin 与 producer association；只有 bridge 之后新产生的 Witness2/Step2/Invalidation2 才使用 /2 domain。绝不把 version-1 witness/step/invalidation repin 或重新编码成 version 2，也绝不 reset invalid generation。
+
+
+## 11. D7 文件绑定元数据直接类型
+
+fresh QuerySpec/2 使用的 D6-owned 受保护 metadata producer 采用下列闭合形状：
+
+~~~text
+D6FileBindingMetadataReadRequest/1 = {
+  kind:"d6_file_binding_metadata_read",version:1,
+  workspaceRef:WorkspaceRef,ref:NodeRef|ResourceRef,
+  projection:"basename"|"relative_path"
+}
+
+D6FileBindingMetadataObservation/1 = {
+  kind:"d6_file_binding_metadata_observation",version:1,
+  workspaceRef:WorkspaceRef,ref:NodeRef|ResourceRef,
+  projection:"basename"|"relative_path",value:text,
+  observation:SourceObservation/1
+}
+~~~
+
+cross-field 要求精确：request/observation 的 WorkspaceRef 与 Ref 逐字节相等；observation.entityRef 等于 ref；observation.fileObjectBinding 必须是 present；`relative_path` 只接受 NodeRef，且 value 等于完整 PortableRelativePath；`basename` 接受 NodeRef 或 ResourceRef，且 value 等于最后一个非空 '/' segment。不存在 AnnotationRef arm、absent arm、nullable value 或 host-path 表示。
+
+该类型只是受保护内部证据。它不能进入 InputDescriptor.sourceInputs，不能变成 SourceVersionRef，不授 source/resource bytes，也不替代普通 authorization DependencyKey。consumer 必须同时绑定既有 authorization proof 与准确 SourceObservation/FileObjectBinding，并在最终 barrier 重验。
