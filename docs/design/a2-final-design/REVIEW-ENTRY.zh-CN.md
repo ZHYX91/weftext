@@ -54,28 +54,30 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 已在 fixed26be 的 D7 范围独立 PASS。D8 在 fixed5eca 已独立 CLOSED P1-01/P1-02/P2-02；本继任作者只修残余 P1-03/P2-01 与 D8-5ECA-P2-01，三项继续等待 exact-final-SHA 独立复核。D9 从 exact 5eca 形成完整作者候选：八份 fixed-S FULL、current D9 owner 中英 FULL、Mandatory §14 FULL、D7 D9-binding/PAB consumer FULL、D9 相关 final-FC successor FULL；fresh author currentize 到 wire13/PAB4/Effect3，export/publication 到 Plan3/Receipt3，并保留可见 native-table selector 与 current Value4/R6 Annotation consumer 设计边界。本轮自然中文质量修订移除了后加的填充说明，但未改变 D9 英文规范语义。所有 D9 结果仍只为 author-resolved-pending-independent-review。完整 D10 仍留后续。
+D7 已在 fixed26be 独立 PASS。D8 的 fixed5eca closure 保持，ff10 又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01；只剩收窄后的 D8-C98B-P1-03 OPEN，且不属于本 D9 修复。D9 从 exact 5eca 形成完整作者候选；Mandatory §14 与 D9 适用 Mandatory §15 均已读取，现任 D7 D9-binding/PAB/View consumer 已覆盖，final-FC Plan4/Annotation/View successor 已整合。D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 都只是 author-resolved-pending-independent-review。ROOT-D9-ZH-P2-01 已在 ff10 独立 CLOSED，不重开。完整 D10 仍留后续。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
 
 
 ## D8 复核目标
 
-下一位非作者只绑定 PR #5 的最终 stop SHA，对 D8-C98B-P1-03、D8-C98B-P2-01、D8-5ECA-P2-01 做增量复审；不得重开 fixed5eca 已关闭项或未变化的 D1–D7/D8 已接受范围，也不得因为作者修订或 CI 变绿就推导语义接受。重点核验十个 `VIEW-BLD-01..10` 中静态定义保存门与既有 D7 §7 运行期 View 门的分离；四个 SourceTransform 普通保存/恢复同族项以及更新后的 760 行计数（direct 167 / upstream 146 / 保留 owner 447；114 行作者 applicability 改动）；54/54 section navigation 且宽泛整文件 target 为 0；以及 213/213 唯一 ID 的 D8-ACCEPTANCE JSON/投影确定性 guard。S49/inputs 必须保持零变。D9/D10 完整模块与 global A2 不属于本轮 D8 增量接受范围。
+D8 不属于本 D9 作者批。fixed5eca 与 ff10 的 closure 都保持固定。唯一仍 OPEN 的 D8 对象是 D8-C98B-P1-03，范围已收窄到 VIEW-BLD-04/05/06 与 Main §11.2 的延期布局合法保存措辞。它需要另开最窄作者修复，再交非作者复审；不得把当前 D9 head 当作这项修复。
 
 ## D9 复核目标
 
-下一位非作者 reviewer 必须绑定 PR #5 的 exact final stop SHA，对 D9 做新的完整独立复核。D9 只是完整作者候选；source coverage、machine map、count、hash 和绿色文档 CI 都不是 acceptance。ROOT-D9-ZH-P2-01 也必须在这次 D9 复核中独立检查：十份受影响的中文公开文件应是自然、完整的翻译，保留必要协议字面量并维持中英文结构一致，不能再依赖填充说明绕过 checker。该 D9 复核不接受单独的 D8 残余范围。
+下一位非作者 reviewer 只绑定 PR #5 的 exact final stop SHA，对 D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 做增量修复复审。D9 仍只是作者候选；source coverage、machine map、count、hash 与绿色文档 CI 都不是 acceptance。ROOT-D9-ZH-P2-01 已在 ff10 独立 CLOSED，不得重开；但本三修批新修改的中文属于当前增量复审范围。该 D9 复审不接受单独的 D8 窄残余。
 
 必须核验：
 
-- 八份 fixed-S D9 source、现任 D9 owner 中英文 afterimage、Mandatory §14 的 884–924 行、两层 replacement router、现任 D7 D9-binding/PAB owner，以及适用于 D9 的 final-FC successor；
-- D9-SOURCE-MAP.json、D9-REGISTRY.json、D9-TERMS.json 与 D9-ACCEPTANCE.json 中 80 个唯一 obligation；
+- D9-BAF-P1-01：唯一 annotation_content carrier、精确 PortableAnnotationRecord/4 backup bytes、R6 Review Bundle 的 body/attribution、独立授权 context、revision/Observation/pin stale 处理、递归 evidencePins、freeze/loss/confirm/create-only/Resource/print 路径与精确历史恢复；
+- D9-BAF-P1-02：完整 D7 View runtime 顺序、unsupported_layout 与 renderer_unavailable 的正确分层、有限六图表 Plan4 route、Mandatory §15.5–15.8 十个 fixture、renderer/profile/assets/a11y/loss evidence，以及禁止 Query rerun 或 data-row substitution；
+- D9-BAF-P2-02：修正 fixed predecessor range，并用独立 current §6.6/§16a blob 具名承接，同时不丢 §7/§17 义务；
+- D9-SOURCE-MAP.json、D9-REGISTRY.json、D9-TERMS.json 与全部 97 个 D9-ACCEPTANCE 唯一 row，包括本批新修改的中文投影；
 - 单一 Core 解析器/身份/授权边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
 - Node Template Recipe/ConstructionInput、sourceSubjectBindings 与原 receipt 的关联、PAB4/MinimumMapping/现任 wire13，以及 saved/planned/unknown 的恢复规则；
 - 普通 Office token/style/repeat 规则，以及可见的 qualified native-table selector grammar：template bytes 必须自包含，nt_/nc_ 只作内部 Plan key，并采用最短唯一 suffix/title/occurrence、同一 rowset 的 repeat 与 Unicode escape；
-- 完整 ExportPlan/3 与 PublicationReceipt/3 字段、类型化 evidence/recovery pins、generationPolicy=none 精确路径、D2Snapshot3/D8 呈现渲染、output-name 规范化、confirmation 不可变、create-only 发布，以及与之分离的 Resource author receipt；
-- current PortableAnnotationRecord/4 / Value4 / 唯一 R6 AnnotationInlineProfile consumer 边界：Node Template omission 只局限 construction，annotation_index 绝不能替代 body read 或形成全局 plain-only downgrade；
+- fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 封闭 family，并精确恢复 Plan/Receipt1–3；generationPolicy=none 精确路径、D2Snapshot3/D8 呈现渲染、output-name 规范化、confirmation 不可变、create-only 发布，以及独立 Resource author receipt；
+- current PortableAnnotationRecord/4 / Value4 / 唯一 R6 AnnotationInlineProfile consumer 边界保持不变；annotation_index 绝不能替代新的内容 carrier；
 - worker/route/sandbox、D9 默认不联网、image/region、Mobile negative conversion surface，以及与 D10 直接相交但不等于完整 D10 的边界。
 - historical 57/63/59/82/90/130/12 evidence set 分开记账；I01–I12 及产品/runtime/GUI/Office/OS/performance/deployment 全部继续 UNRUN。
 
