@@ -27,7 +27,7 @@ translation_status: source
 | D5 | 已整合为 current 作者候选；A2-D4D5:P2-02 继续在 fixed4282 有界 CLOSED，A2-D4D5:P2-01 已在 fixed1fc4 独立复核后 bounded CLOSED；不构成全局接受 |
 | D6 | fixed2f89 已独立 CLOSED fixed454e 之后剩余的两项 navigation finding；既有 D6 bounded semantic closure 仍只保留各自记录范围。 |
 | D7 | fixed26be 非作者复核 = PASS（P0=0/P1=0/P2=0）；最终 A2-D7-2F89-P2-01 在该 SHA CLOSED；此前有界 closure 继续绑定各自原 SHA |
-| D8 | 已保全作者候选；本窄批同步 main/interfaces/schemas/direction/lexicon/impact/acceptance 中英文。既有来源库存不重做，但 FC/history disposition、逐项语义复核与宽泛 source-map target 继续 OPEN；状态为待独立复核 |
+| D8 | 已保全作者候选；本窄批同步 main/interfaces/schemas/direction/lexicon/impact/acceptance 中英文。既有来源清单不重做，但 FC/history disposition、逐项语义复核与宽泛 source-map target 继续 OPEN；状态为待独立复核 |
 | D9 | 完整模块仍 TODO；D7 只消费 coordinated binding 与直接 construction/import/export 交叉 |
 | D10 | 完整模块仍 TODO；D7 只消费 SearchContribution/Catalog 与 D7 approval/effects/custody 交叉 |
 | Mandatory A2 source | D8 已完整消费 D8 适用的 §15.1–15.8.9 chart/View interaction 与 RTL mandatory intake；D9–D10 owner module 完整整合留后续 |
