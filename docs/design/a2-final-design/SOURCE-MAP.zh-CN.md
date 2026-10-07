@@ -69,7 +69,7 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D7–D10。
 
-D3、D4、D5 都是作者候选并有模块级 source map。D7 已在 fixed26be 的 D7 范围独立 PASS。D8 继续是未接受的作者候选；c98b 五项 finding 的作者修订现覆盖验收结构、View builder/旧入口路由、source-map applicability/navigation 与双语断裂，统一状态为 `author-resolved-pending-independent-review`。D9–D10 完整模块仍 TODO；direct producer/consumer 阅读不能把这些 owner 模块标成完成。
+D3、D4、D5 都是作者候选并有模块级 source map。D7 已在 fixed26be 的 D7 范围独立 PASS。D8 在 fixed5eca 已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02；本继任作者只修 D8-C98B-P1-03、D8-C98B-P2-01 与 D8-5ECA-P2-01，三项仍是 `author-resolved-pending-independent-review`。D9 已是完整作者候选，其中文质量修订仍待独立复核；D10 完整模块仍 TODO。direct producer/consumer 阅读不能把 D10 标成完成。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -137,7 +137,7 @@ D7 现已整合为完整作者候选。fixed-S 的十三份 D7 来源以及额�
 
 D7-SEARCH.md 已整合 SEARCH-01 至 SEARCH-08，但没有建立第二个搜索执行器或持久权威。普通文本与可视化筛选是默认路径；可选快捷模式必须显式进入，并使用带 @ 前缀的操作符，因此普通冒号文字、URL、Windows 盘符和 title: 不会被静默解析。保存时只保存 canonical Query 语义，不保存设备侧解析器状态。当前匹配保留 exact 与显式 `nfc-for-compare` 两种比较 basis，substring/equality 均区分大小写，并且不声称已经提供自动模糊、拼音或分词能力。
 
-D7-SOURCE-MAP.json 记录完整 D7 provenance 与 fixed26be accepted scope。D8-SOURCE-MAP.json 保留 fixed D8 prose/case、Mandatory §15/RTL、SEARCH-01–08、current View/FC 协调与 direct producer/consumer 库存。c98b 作者修订已把 54/54 fixedProseSections 映射到 section-level current target（宽泛整文件 0），并对 760/760 FC 行写入显式 current owner/basis（direct 167、upstream 142、保留 non-D8 owner 451）；这些结果仍全部等待 fixed-SHA 独立语义复核。D9–D10 仍只在真实 D8 intersection 上 PARTIAL；其完整模块留后续。
+D7-SOURCE-MAP.json 记录完整 D7 provenance 与 fixed26be accepted scope。D8-SOURCE-MAP.json 保留 fixed D8 prose/case、Mandatory §15/RTL、SEARCH-01–08、current View/FC 协调与 direct producer/consumer 库存。导航继续保持 54/54 section-level target，宽泛整文件为 0。本轮 SourceTransform 残余修订把四行改为 upstream-current-prerequisite，因此 760 行作者库存现为 direct 167、upstream 146、保留 non-D8 owner 447，共 114 行作者 applicability 改动；这些残余变化仍待绑定最终 SHA 的独立复核。D9 是完整作者候选；D10 只在具名交叉上保持 PARTIAL。
 
 fixed2f89 独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 关闭 A2-D7-2F89-P2-02；fixed85bdadf 关闭两个 P1 与 Impact-sync P2；后续 fixed26be 非作者复核关闭最终 A2-D7-2F89-P2-01，并给出 PASS 0/0/0。
 
@@ -159,9 +159,9 @@ fixed85bdadf（`85bdadf448e0475715b62debe215fa4d04e30ab2`）独立把 D7 repair 
 
 D8 已保全候选首次真实推送在 7e3f；本五项修订精确从 c98b（`c98b1b161751c5a01220da37568c78b5cef13841`）开始。不可变库存继续是 54 个 fixed prose-section row、160 个 fixed case + FA17 继承、RTL intake、Mandatory §15、SEARCH-01–08 与 27 个 current Search fixture、两层 replacement router，以及严格 760 条 current AsciiDoc/Annotation acceptance row；S49/inputs 不重新生成。
 
-本修订把 `D8-ACCEPTANCE.json` 设为六字段唯一结构源，恢复 ANNOT-01 与 WRITE-08 的完整正反极性，把 current View overlay 改到 `VIEW-CUR-*`，增加十个 `VIEW-BLD-01..10` Mandatory §15.7 oracle，得到 213/213 唯一 current obligation。正文补齐基于 current D7 ViewSpec/Definition 的无损 builder lifecycle，并明确 historical `.weftext-query view=...` 与 current `DynamicBlock/1` 路由，不建立第二 View/Query schema/store。同时把 54/54 fixed prose row 映射到 section-level target，并完成 760/760 FC 的逐行 applicability/current-owner 作者审计（direct 167、upstream 142、保留 non-D8 owner 451；110 行 applicability 改动）。中文 §6/§9 断句按完整英文合同修复。
+本修订把 `D8-ACCEPTANCE.json` 设为六字段唯一结构源，恢复 ANNOT-01 与 WRITE-08 的完整正反极性，把 current View overlay 改到 `VIEW-CUR-*`，增加十个 `VIEW-BLD-01..10` Mandatory §15.7 oracle，得到 213/213 唯一 current obligation。本继任 delta 为 JSON/中英文投影加入确定性结构 guard，并把静态定义保存门与保持不变的 D7 §7 完整结果运行期 View 门明确分离，不建立第二 View/Query schema/store。54/54 fixed prose row 继续使用 section-level target；760/760 FC 逐行 applicability/current-owner 作者库存更新为 direct 167、upstream 146、保留 non-D8 owner 447，共 114 行 applicability 改动。
 
-五项 finding 全部仍只是 `author-resolved-pending-independent-review`。数量、schema/列数检查和 docs CI 只提供机械证据，不代表语义接受。current D8 继续消费完整 Asciidoctor 2.0.26/D2 product、exact Source/Draft/edit/currentness、Annotation Value4/R6、presentation-policy owner 与已接受 D7 Search/View 语义。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D9/D10 仅在具名 D8 边界 PARTIAL；其完整模块与 global A2 留后续。
+fixed5eca 非作者复审已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02。D8-C98B-P1-03、D8-C98B-P2-01 与 D8-5ECA-P2-01 由本继任 delta 作者修订，但仍待独立复核；作者不自行 CLOSED。数量、结构检查和 docs CI 只提供机械证据，不代表语义接受。current D8 继续消费完整 Asciidoctor 2.0.26/D2 product、exact Source/Draft/edit/currentness、Annotation Value4/R6、presentation-policy owner 与已接受 D7 Search/View 语义。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D9 只是完整作者候选；D10 与 global A2 留后续。
 
 ## 17. D9 完整作者整合
 
@@ -174,3 +174,5 @@ Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：�
 current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正 export/copy/import current Annotation content 的 profile 必须通过唯一 R6 AnnotationInlineProfile 消费完整 PortableAnnotationRecord/4 / Value4，并在 current disclosure 下保持 target/reply/attribution 边界。
 
 `D9-ACCEPTANCE.json` 是 80 条结构权威；`D9-SOURCE-MAP.json` 保存 fixed/current/successor provenance。historical finite evidence 57/63/59/82/90/130/12 分开记账、不可相加。I01–I12 与全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN。D9 仍为 `author-resolved-pending-independent-review`；docs/JSON 绿色检查不能接受它。
+
+后续 D9 中文质量修订已移除十份受影响公开中文文件中的重复填充说明，保留必要的协议/type/member 字面量与中英文结构一致性，并且没有修改 D9 英文规范语义。ROOT-D9-ZH-P2-01 因而仍是 author-resolved-pending-independent-review，随单独的 D9 完整独立复核处理。
