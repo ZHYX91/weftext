@@ -2395,12 +2395,56 @@ D9ExportCatalogPayload/3 =
     {kind:"document",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
   | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
   | {kind:"field",ownerVersion:SourceVersion/2,ownerObservation:SourceObservation/1,
-     fieldId:FieldId,entries:[D4Entry...]}
+     fieldId:FieldId,entries:[Entry/1...]}
   | {kind:"annotation_index",ownerVersion:SourceVersion/2,
      targets:[D9EntityVersionAddress/2...]}
   | D9AnnotationContentInput/1
   | {kind:"template",origin:D9ExportTemplateOrigin/1,pin:PinRef/2}
   | {kind:"query_result",result:D7ResultPin}
+
+
+D9EntityVersionAddress/2 = {
+  ref:EntityRef,
+  sourceVersion:SourceVersion/2
+}
+
+D9ExportTemplateOrigin/1 =
+    {kind:"artifact",source:SourceArtifact}
+  | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1}
+  | {kind:"route_asset",routeRevision:Token,assetId:text,assetVersion:text}
+
+D9ExportBindingProjection/1 = {
+  path:text,
+  value:RenderSnapshot,
+  origins:[ExportInputLocation/2...]
+}
+
+D9ExportCellProjection/1 = {
+  value:RenderSnapshot|null,
+  origins:[ExportInputLocation/2...]
+}
+
+D9ExportColumnProjection/1 = {
+  name:text,
+  valueKind:text,
+  nullable:Boolean
+}
+
+D9ExportRowProjection/1 = {
+  cells:[D9ExportCellProjection/1...]
+}
+
+D9ExportDatasetProjection/1 = {
+  name:text,
+  columns:[D9ExportColumnProjection/1...],
+  rows:[D9ExportRowProjection/1...]
+}
+
+D9AnnotationBackupFile/1 = {
+  format:"weftext.annotation-backup",
+  version:1,
+  records:[PortableAnnotationRecord/4...]
+}
 
 D9AnnotationSelection/1 = {
   inputIndex:Counter,
@@ -2613,7 +2657,7 @@ D9PrintReceipt/1 = {
 
 ExportInputCatalog/3 逐字保留 /2 的全部 arm，只新增 annotation_content。该 arm 必须从一次真实现任 D8AnnotationReadResponse/1 构造：annotationRef、sourceObservation、annotationRevisionToken、value、body 与 targetResolution 都与该 read 逐字相等。record 精确为对应 PortableAnnotationRecord/4；recordPin 在既有 PinRef/2 完整性规则下选择 D3-CJ/3(record) 的精确字节。Plan 的 dependencyProof 与 observationProof 覆盖同一 cut 的 Annotation read，以及任何独立获权的 context read。最终 export barrier 同时复验 sourceObservation 与 annotationRevisionToken；正文文本相同不能替代已经变化的 revision。
 
-annotation_index 继续只作为 omission-directory evidence，绝不能填充 annotation_content、annotationInputs 或 Annotation 正文/context projection。portable backup 要求 inputDomain=annotation、target.kind=annotation_backup、一个或多个 mode=portable_backup selection、generationPolicy=none，并从每个已选 recordPin 导出精确 record bytes。它不序列化当前 permission、SourceObservation capability、revision-signing capability、PAB 或 ActionEvidence。Review Bundle 要求 mode=review_bundle_r6，且只消费已经由 D8AnnotationBodyRead/1 产生的结果：valid 使用其 R6 semantic text，absent 使用 null，invalid 则 renderer unavailable，绝不再选第二 parser。purpose、appearance、labels、reviewState、suggestion、reply 与 attribution 都来自同一完整 Value/4。
+annotation_index 继续只作为 omission-directory evidence，绝不能填充 annotation_content、annotationInputs 或 Annotation 正文/context projection。portable backup 要求 inputDomain=annotation、target.kind=annotation_backup、一个或多个 mode=portable_backup selection、generationPolicy=none，并生成精确 D9AnnotationBackupFile/1：records 按完整 canonical AnnotationRef bytes 排序且唯一，每个 record 必须逐字等于对应已选 recordPin 的 D3-CJ/3 解码值；整个 backup file 使用 D3-CJ/3(D9AnnotationBackupFile/1) 的 canonical UTF-8 bytes。它不序列化当前 permission、SourceObservation capability、revision-signing capability、PAB 或 ActionEvidence。Review Bundle 要求 mode=review_bundle_r6，且只消费已经由 D8AnnotationBodyRead/1 产生的结果：valid 使用其 R6 semantic text，absent 使用 null，invalid 则 renderer unavailable，绝不再选第二 parser。purpose、appearance、labels、reviewState、suggestion、reply 与 attribution 都来自同一完整 Value/4。
 
 Annotation 正文/署名与 target/source context 独立做资格校验。includeSourceHistory 与 includeTargetContext 只是选择是否尝试，不代表 permission。target hidden/unavailable 时写成 targetContext.state=unavailable，不能压掉原本合法的 Review Bundle 正文、署名或 reply。任何 disclosed fragment 都必须来自同一 cut 中另行获权的 catalog input，并带非空 ExportInputLocation/2 origins。缺少 context 只能由相应 projection state 与完整 loss item 表示，不得用 display label、annotation_index 或猜测 target bytes 替代。
 

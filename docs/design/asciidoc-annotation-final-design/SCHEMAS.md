@@ -2291,12 +2291,56 @@ D9ExportCatalogPayload/3 =
     {kind:"document",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
   | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
   | {kind:"field",ownerVersion:SourceVersion/2,ownerObservation:SourceObservation/1,
-     fieldId:FieldId,entries:[D4Entry...]}
+     fieldId:FieldId,entries:[Entry/1...]}
   | {kind:"annotation_index",ownerVersion:SourceVersion/2,
      targets:[D9EntityVersionAddress/2...]}
   | D9AnnotationContentInput/1
   | {kind:"template",origin:D9ExportTemplateOrigin/1,pin:PinRef/2}
   | {kind:"query_result",result:D7ResultPin}
+
+
+D9EntityVersionAddress/2 = {
+  ref:EntityRef,
+  sourceVersion:SourceVersion/2
+}
+
+D9ExportTemplateOrigin/1 =
+    {kind:"artifact",source:SourceArtifact}
+  | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1}
+  | {kind:"route_asset",routeRevision:Token,assetId:text,assetVersion:text}
+
+D9ExportBindingProjection/1 = {
+  path:text,
+  value:RenderSnapshot,
+  origins:[ExportInputLocation/2...]
+}
+
+D9ExportCellProjection/1 = {
+  value:RenderSnapshot|null,
+  origins:[ExportInputLocation/2...]
+}
+
+D9ExportColumnProjection/1 = {
+  name:text,
+  valueKind:text,
+  nullable:Boolean
+}
+
+D9ExportRowProjection/1 = {
+  cells:[D9ExportCellProjection/1...]
+}
+
+D9ExportDatasetProjection/1 = {
+  name:text,
+  columns:[D9ExportColumnProjection/1...],
+  rows:[D9ExportRowProjection/1...]
+}
+
+D9AnnotationBackupFile/1 = {
+  format:"weftext.annotation-backup",
+  version:1,
+  records:[PortableAnnotationRecord/4...]
+}
 
 D9AnnotationSelection/1 = {
   inputIndex:Counter,
@@ -2509,7 +2553,7 @@ D9PrintReceipt/1 = {
 
 ExportInputCatalog/3 keeps every /2 arm byte-for-byte and adds only annotation_content. That arm is formed from one actual current D8AnnotationReadResponse/1: annotationRef, sourceObservation, annotationRevisionToken, value, body, and targetResolution are byte-equal to that read. record is exactly the PortableAnnotationRecord/4 formed from those fields and recordPin selects exactly D3-CJ/3(record) bytes under the existing PinRef/2 integrity rules. The Plan dependencyProof and observationProof cover the same-cut Annotation read and any separately authorized context reads. The final export barrier rechecks both sourceObservation and annotationRevisionToken; equal body text cannot substitute for a changed revision.
 
-annotation_index remains omission-directory evidence only and can never populate annotation_content, annotationInputs, or an Annotation body/context projection. Portable backup requires inputDomain=annotation, target.kind=annotation_backup, one or more mode=portable_backup selections, generationPolicy=none, and exact record bytes derived from each selected recordPin. It serializes no current permission, SourceObservation capability, revision-signing capability, PAB, or ActionEvidence. Review Bundle requires mode=review_bundle_r6 and uses only the already-produced D8AnnotationBodyRead/1: valid uses its R6 semantic text, absent uses null, and invalid is renderer unavailable rather than a second parse. Purpose, appearance, labels, reviewState, suggestion, reply and attribution come from the same complete Value/4.
+annotation_index remains omission-directory evidence only and can never populate annotation_content, annotationInputs, or an Annotation body/context projection. Portable backup requires inputDomain=annotation, target.kind=annotation_backup, one or more mode=portable_backup selections, generationPolicy=none, and generates exactly D9AnnotationBackupFile/1: records are sorted/unique by complete canonical AnnotationRef bytes, every record is byte-equal to the D3-CJ/3 value selected by its chosen recordPin, and the backup file is the canonical UTF-8 D3-CJ/3(D9AnnotationBackupFile/1) bytes. It serializes no current permission, SourceObservation capability, revision-signing capability, PAB, or ActionEvidence. Review Bundle requires mode=review_bundle_r6 and uses only the already-produced D8AnnotationBodyRead/1: valid uses its R6 semantic text, absent uses null, and invalid is renderer unavailable rather than a second parse. Purpose, appearance, labels, reviewState, suggestion, reply and attribution come from the same complete Value/4.
 
 Annotation body/attribution and target/source context are independently qualified. includeSourceHistory and includeTargetContext select an attempt, not permission. A hidden/unavailable target yields targetContext.state=unavailable without suppressing an otherwise legal Review Bundle body, attribution or reply. A disclosed fragment must derive from separately authorized catalog inputs in the same cut and carry nonempty ExportInputLocation/2 origins. Missing context is represented by the corresponding projection state and complete loss item; it is never replaced by display labels, annotation_index, or guessed target bytes.
 
