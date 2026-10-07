@@ -21,7 +21,7 @@ translation_status: source
 
 54 个 `fixedProseSections` 全部保留原 source path/blob/section/line range，并改为 section-level current target；宽泛整文件 target 现为 0/54。current AsciiDoc/Annotation FC 库存仍严格是 760 条原 source row；每条现在都记录原 source path/blob/section/line、current owner、D8 applicability、适用时的 section-level D8 target、disposition 与逐行 audit basis。
 
-作者按完整 obligation 文本重新核了 760/760 行，其中 110 行 applicability 被修订。当前作者计数为 direct/immediate D8 consumer 167、upstream current prerequisite 142、保留在真实 non-D8 current owner 451。评审点名的 AD2-31、AD2-35、WFX-H18、WFX-R15、FC4A-PROD-02 均已显式成为 direct D8 consumer。这些全部只是**作者修订结果**：每行状态仍是 `author-resolved-pending-independent-review`；section 存在、数量、hash 与 docs CI 只提供机械证据，不等于独立语义接受。
+作者按完整 obligation 文本重新核了 760/760 行；本次残余修订后，共有 114 行 applicability 与原分类相比被调整。当前作者计数为 direct/immediate D8 consumer 167、upstream current prerequisite 146、保留在真实 non-D8 current owner 447。本轮把 T3-XF-17、T3-XF-35、X34-06、FC34-ST-19 调整为与 FC34-ST-02 相同的 upstream-current-prerequisite save/prepare/recovery 边界；其 SourceTransform producer 语义仍归 final AsciiDoc/Annotation SPEC 所有。这些全部只是**作者修订结果**：每个变更行仍是 `author-resolved-pending-independent-review`；section 存在、数量、hash 与 docs CI 只提供机械证据，不等于独立语义接受。
 
 后续 fixed-SHA 非作者复核必须独立验证或修订这些 classification/disposition。历史 decoder/bytes 与原 source-qualified 条件保持不变，不从历史记录虚构 current migration。
 
@@ -38,3 +38,5 @@ fixedProseSections 的 source path、blob、section、disposition、owner 与现
 此前登记为 FULL 的阅读范围继续只表示阅读证据：fixed 八件 D8 输入、D6-FA D8 afterimage、current D8 直接相关的 AsciiDoc/Annotation owner section、D7 Search 与 27 个 fixture、current D7 View contract。它们不等于 D8 语义接受。
 
 D9 与 D10 只在具名 D8 direct producer/consumer 边界记为 PARTIAL；其完整 A2 模块在本轮接受范围仍为 UNREAD。global A2 终审同样 UNREAD。产品 GUI、IME、AT、OS、多副本与性能证据继续 UNRUN。
+
+在 fixed5eca（`5eca16c40cdf2e1892f6930d51c632ea720a460c`）的非作者复审中，D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02 已独立 CLOSED；D8-C98B-P1-03 与 D8-C98B-P2-01 仍 OPEN，并新增 D8-5ECA-P2-01 为 OPEN。本轮作者修订只处理这三个残余对象，不自行把任何一个改成 CLOSED。
