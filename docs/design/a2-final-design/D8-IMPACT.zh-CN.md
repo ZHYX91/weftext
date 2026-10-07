@@ -168,9 +168,9 @@ Desktop、WebUI 与 Mobile 分别测试 pixel/keyboard/focus/AT/RTL。
 同时分别测试 high-contrast、zoom 与 reduced-motion。
 Mobile fallback必须同完整 data。
 
-builder tests 使用真实 current D7 definition decoder/validator 与既有 definition-owner save path，覆盖 open → edit → cancel/save → reopen、strict column/type validation、basic control 无法表达的合法 member 无损保留、stale owner/revision、权限撤销、current Query/schema 改变、advanced/source routing、DynamicBlock 保留，以及不存在第二套 View/Query store 或 hidden UI sidecar。historical `.weftext-query view=...` 样本不得静默重写；没有 proved current Definition Transfer mapping 时保持 exact-source/advanced-only。
+builder 测试使用真实的现任 D7 定义解码器/验证器与既有定义 owner 保存路径，覆盖“打开→编辑→取消或保存→重开”、严格列/类型验证、基础控件无法表达的合法成员无损保留、owner/revision 过期、权限撤销、现任 Query/schema 改变、高级/源码路由、DynamicBlock 保留，以及不得出现第二套 View/Query 存储或隐藏界面附属状态。历史 `.weftext-query view=...` 样本不得静默重写；只有现任 Definition Transfer 能证明完整映射时才可显式转换，否则保持精确源码/高级编辑路径。
 
-Mandatory §15.7 十个 fixture 分别对应唯一 product obligation `VIEW-BLD-01`–`VIEW-BLD-10`：grouped aggregate duplicate、line order/gap/incomplete、pie zero/negative/duplicate/count、hierarchy/cycle/deferred、Gantt/dependency/deferred、boxplot/quantile/deferred、incomplete ResultHandle、ACL/reset/offline/provider/renderer failure、Desktop/WebUI/Server/Mobile/CLI + CJK/RTL/print equivalence，以及 Dashboard 单块失败隔离。deferred layout 只测试无损保留 + explicit unsupported rendering，不测试并不存在的 pixels。
+Mandatory §15.7 的十个 fixture 分别对应唯一产品义务 `VIEW-BLD-01`–`VIEW-BLD-10`：分组聚合重复键、折线顺序/缺口/不完整、饼图零值/负值/重复/数量、层级/循环/延期、Gantt/依赖/延期、箱线图/分位数/延期、不完整 ResultHandle、ACL/重置/离线/provider/渲染器失败、Desktop/WebUI/Server/Mobile/CLI 的 CJK/RTL/打印等价，以及 Dashboard 单块失败隔离。延期布局只测试无损保留与明确“不支持渲染”，不测试并不存在的图形像素。
 
 ## 12. Unicode/RTL/AT corpus
 

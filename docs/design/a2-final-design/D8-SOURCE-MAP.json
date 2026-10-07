@@ -14900,20 +14900,20 @@
     "D8.md": "7fba0b66a37e5cf1402cc5b3a16fc6d094904d4a",
     "D8.zh-CN.md": "7b8cce9c138241b12619aa7c3a3e201287646be9",
     "D8-INTERFACES.md": "0eb7bdec0f0f96d98248ddc7204079e58a838312",
-    "D8-INTERFACES.zh-CN.md": "4194f0e1658ea45730330f9e125864806496dc5a",
+    "D8-INTERFACES.zh-CN.md": "ff79672822e0e42478f695e5b73ea6aab8b0baab",
     "D8-SCHEMAS.md": "cde555e16678c27d8cb64d579bad4b1ee868bb5f",
-    "D8-SCHEMAS.zh-CN.md": "04b5b1c71abc65ec2cd65f51b3118d217b97266f",
+    "D8-SCHEMAS.zh-CN.md": "3af1c97fecb1d6eb09e01c8487388c60da58fcd8",
     "D8-DIRECTION.md": "76a21f73dbc8db2c8778ce7840b45e6f5d019867",
     "D8-DIRECTION.zh-CN.md": "8b9535a5ac8a0e9fb49df1445e83121f79857851",
     "D8-ACCEPTANCE.md": "2d6d4a7ef28643885b5603d4929ef9d921d5e662",
-    "D8-ACCEPTANCE.zh-CN.md": "ef1d43cb34c3bfd0a66e3ba14b344353ff4c294d",
+    "D8-ACCEPTANCE.zh-CN.md": "5a2b6f56da060d89cc9dece86e2e85486884ade0",
     "D8-ACCEPTANCE.json": "a67f5b42168583b2a5ac9f2f94f330a01c931449",
     "D8-LEXICON.md": "0689dc2d9e0ab6a524d226159e7b105834475ecb",
     "D8-LEXICON.zh-CN.md": "697b8ac6029370b4ca0bbaf79f0ee7cd064fb0e3",
     "D8-TERMS.json": "2ce2f8d5c5a5166cbf25e5a1e8ff0e99f32ad876",
     "D8-REGISTRY.json": "073da7119e5d2437a76287340275fee03ae51ef2",
     "D8-IMPACT.md": "d5cc19e977e179ed31f834fddfb0a8c3b1f2ac5e",
-    "D8-IMPACT.zh-CN.md": "32a8d70a6dc18974926727cc0cced23ea06114ee"
+    "D8-IMPACT.zh-CN.md": "73948d71bc3faf5c962b04a9909c9913f5b47fb8"
   },
   "evidenceBoundary": "author-side design/source-map repair only; fixed-SHA independent review still required; all Core/GUI/IME/AT/Office/OS/performance product execution UNRUN",
   "currentizedFixedCaseIds": [
@@ -14978,6 +14978,7 @@
     "acceptance": "213 total current obligations; 213 unique IDs; JSON structural authority; EN/ZH projections preserve the exact JSON ID order and six-column shape",
     "view": "D7 ViewSpec/Definition owner retained; D8 builder/renderer/interaction/AT currentized; VIEW-CUR namespace + VIEW-BLD-01..10",
     "historical": "fixed sources/blobs/line ranges, original conditions, D1–D7 accepted history, and genuine historical decoders/bytes retained; no migration fabricated",
-    "productEvidence": "UNRUN"
+    "productEvidence": "UNRUN",
+    "bilingual": "Chinese acceptance/builder prose normalized after check_docs mixed-language gate; semantics/IDs/polarity unchanged"
   }
 }

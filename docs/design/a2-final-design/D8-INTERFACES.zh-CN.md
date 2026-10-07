@@ -263,15 +263,15 @@ Remote/offline hosted author source 不因本地有 parser 就获得 commit auth
 
 ## 13. View builder interface boundary
 
-不新增 portable `D8ViewBuilder` wire。builder 只组合既有 current-owner call：
+不新增可携带的 `D8ViewBuilder` wire。builder 只组合既有现任 owner 接口：
 
-1. 读取 current D2 SavedDefinition/D7 Query 或 DynamicBlock occurrence 及其 exact owner/revision；
-2. strict-decode 实际记录的 `ViewSpec/1`，并取得 current D7 terminal schema；
-3. 用 existing D7 ViewSpec validator 校验全部 binding/type/option；
-4. 将**完整 exact ViewSpec**作为 working value，包括 basic controls 没有表达的合法 member；
-5. save 前重新读取/qualification authorization、owner/revision、Query/schema 与完整 ViewSpec，再走既有 definition-owner/D6 commit operation；
-6. cancel、error、权限丢失、owner/revision stale、reset 或 dependency unavailable 都不得写入。
+1. 读取现任 D2 SavedDefinition、D7 Query 或 DynamicBlock occurrence，以及其精确 owner/revision；
+2. 严格解码实际记录的 `ViewSpec/1`，并取得现任 D7 terminal schema；
+3. 使用既有 D7 ViewSpec 验证器校验全部 binding、类型与 option；
+4. 把**完整且精确的 ViewSpec**作为工作值，包括基础控件无法表达的合法成员；
+5. 保存前重新取得授权、owner/revision、Query/schema 与完整 ViewSpec 的现任资格，再走既有 definition-owner/D6 commit operation；
+6. 取消、错误、权限丢失、owner/revision 过期、重置或依赖不可用时都不得写入。
 
-basic builder 对无法无损表达的合法 member 返回显式 `advanced_required` presentation state；它只是 D8 UI condition，**不是**新 ViewSpec member 或 portable error code。advanced/source route 编辑真实 current owner bytes，并继续受同一 D7 decoder 与 D6 save/currentness gate 约束。
+基础 builder 对无法无损表达的合法成员返回显式 `advanced_required` 呈现状态；它只是 D8 界面条件，**不是**新的 ViewSpec 成员或可携带错误码。高级/源码路径编辑真实现任 owner 字节，并继续受同一个 D7 解码器与 D6 保存/现任性门约束。
 
-Desktop/WebUI/Mobile 可承载 basic builder；CLI/Server 提供相同 definition read、strict validation 与 owner save operation；WebUI 使用 Server Core。缺 graphical capability 与 definition validity 分开报告。
+Desktop、WebUI、Mobile 可以承载基础 builder；CLI、Server 提供相同的定义读取、严格验证与 owner 保存操作；WebUI 使用 Server Core。缺少图形能力与定义本身是否有效必须分开报告。
