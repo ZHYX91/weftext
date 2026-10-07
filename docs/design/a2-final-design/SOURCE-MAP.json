@@ -2615,10 +2615,10 @@
         "D8-C98B-P2-01",
         "D8-C98B-P2-02"
       ],
-      "sourceMapBlob": "25a55fbd5294f9a3a39a6ee63c89d5a2a2dc7b09",
+      "sourceMapBlob": "d9c4d54cb6577fde934ce8df0c7a403d47d2cb14",
       "status": "author-resolved-pending-independent-review",
       "productRuntime": "UNRUN",
-      "bilingual": "Chinese acceptance projection normalized to repository language predicate; semantics unchanged"
+      "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged"
     }
   }
 }
