@@ -147,7 +147,7 @@ template path 按精确 Unicode scalar sequence、normalization none、case-sens
 
 PortableAlias 固定执行 Unicode 15.1 NFC → full default CaseFolding C/F → NFC，而且只用于拒绝判定。完整 bundle 必须拒绝精确重复、alias 相等与 alias-prefix 冲突。loss-report.json 与 manifest.json 是保留的根成员。
 
-staged output metadata 与 PublicationReceipt/3-/4 的 output set 都按 exact stored output name sorted unique。
+暂存输出元数据与 PublicationReceipt/3-/4 的输出集合，都按精确存储的输出名排序并去重。
 
 ## 12. Versioned ExportLossReport 与 confirmation
 
@@ -157,7 +157,7 @@ staged output metadata 与 PublicationReceipt/3-/4 的 output set 都按 exact s
 ```
 location 使用封闭的 ExportInputLocation，并扩展到 binding、dataset_cell 与 block projection location。source_range 使用 UTF-8 字节偏移；template_range 使用 Unicode 标量偏移。
 
-`D9ExportConfirmation/1` 继续用于 Plan/3 recovery。fresh Plan/4 使用 `ExportLossReport/2` 与 `D9ExportConfirmation/2`；choice matrix 不变，同时 confirmation 还冻结 Annotation/View selection、ViewSpec、renderer/profile/assets 与 staged bytes。
+`D9ExportConfirmation/1` 继续用于 Plan/3 的恢复。现任 Plan/4 使用 `ExportLossReport/2` 与 `D9ExportConfirmation/2`；选择矩阵保持不变，同时 confirmation 还冻结 Annotation/View 的选择、ViewSpec、renderer/profile/assets 与 staged bytes。
 
 ## 13. Historical PublicationReceipt/3 与 fresh PublicationReceipt/4
 

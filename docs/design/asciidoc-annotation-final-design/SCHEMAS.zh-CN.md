@@ -2671,7 +2671,7 @@ Plan/4 的 `evidencePins` 必须精确等于 `Pins(inputCatalog)`、`Pins(projec
 
 D9ExportConfirmation/2 不能改变 catalog、Annotation/View selection、projection、ViewSpec、renderer/profile/assets、route/template、target、destination、loss report 或 staged bytes。external publication 继续 create-only，并生成 PublicationReceipt/4；Resource handoff 继续走原 D7/D3 对精确 staged bytes 的独立 author 路径。print destination 使用同一个 frozen/staged/confirmed Plan，只生成 D9PrintReceipt/1；它不授予 author capability，也不能声称 external publication。现任 Plan/4 bundle 使用 D9ExportBundleManifest/2。
 
-真实 ExportPlan/1-/2-/3、PublicationReceipt/1-/2-/3、其 plan/publication token tag、ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1、D9ExportConfirmation/1、bundle manifest/1、pins、confirmation bytes 与 saved/planned/unknown recovery 全部保留精确历史 decoder。不得把 /3 record repin、re-encode、排序、改名或升级成 /4。
+真实的 ExportPlan/1-/2-/3 与 PublicationReceipt/1-/2-/3，以及各自的 plan/publication token tag、ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1、D9ExportConfirmation/1 和 bundle manifest/1，都保留精确的历史 decoder；pins、confirmation bytes 与 saved/planned/unknown recovery 也保持原义。不得把 /3 record 重新 pin、重新编码、排序、改名或升级成 /4。
 
 
 # 7. Annotation closed values

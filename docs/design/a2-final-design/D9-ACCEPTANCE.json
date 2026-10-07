@@ -1755,15 +1755,15 @@
       "id": "R02-03",
       "scenario": {
         "en": "D7 value/export applicability",
-        "zh": "D7 value/export 适用条件"
+        "zh": "D7 值与导出的适用条件"
       },
       "positive": {
         "en": "NodeRef/object/quantity/scalar none/graph preserve D7 types; RenderSnapshot accepts only explicit supported projections; auth-generation reset and same-SET item scope are enforced.",
-        "zh": "NodeRef/object/quantity/scalar none/graph 保留 D7 类型；RenderSnapshot 只接受显式支持的 projection；执行 auth-generation reset 与 same-SET item scope。"
+        "zh": "NodeRef、object、quantity、scalar none 与 graph 都保留 D7 原类型；RenderSnapshot 只接受明确支持的 projection；authorization generation 变化必须 reset，并保持同一 SET 的 item scope。"
       },
       "negative": {
         "en": "No stringify fallback, implicit first, cross-SET join, or rowHandle identity.",
-        "zh": "不得 stringify fallback、implicit first、cross-SET join 或 rowHandle identity。"
+        "zh": "不得使用 stringify fallback，不得隐式选择 first，不得跨 SET join，也不得把 rowHandle 当作 identity。"
       },
       "contract": "current Acceptance r02 export block",
       "evidence": {
@@ -1776,15 +1776,15 @@
       "id": "R03-01",
       "scenario": {
         "en": "Export catalog/projection/loss chain",
-        "zh": "Export catalog/projection/loss 完整链"
+        "zh": "Export 目录、投影与损失的完整链"
       },
       "positive": {
         "en": "ExportInputCatalog, ExportProjection, ExportLossReport, confirmation and staged bundle close producer/consumer inputs for Optional text, Document/Field/Annotation omissions, repeated equal rows, graph/scalar and empty results.",
-        "zh": "ExportInputCatalog、ExportProjection、ExportLossReport、confirmation、staged bundle 对 Optional text、Document/Field/Annotation omission、重复同值行、graph/scalar 与 empty result 完整闭合。"
+        "zh": "ExportInputCatalog、ExportProjection、ExportLossReport、confirmation 与 staged bundle 对 Optional text、Document/Field/Annotation omission、重复同值行、graph/scalar 与 empty result 都必须完整闭合。"
       },
       "negative": {
         "en": "No address-only proof, missing origin, post-confirm mutation, or current-permission bypass.",
-        "zh": "不得只凭 address、漏 origin、confirm 后改写或绕 current permission。"
+        "zh": "不得只凭 address 推导来源，不得遗漏 origin，不得在 confirm 后改写，也不得绕过当前 permission。"
       },
       "contract": "current Acceptance r03 export block",
       "evidence": {
@@ -1881,15 +1881,15 @@
       "id": "M14-01",
       "scenario": {
         "en": "Office template bytes are self-contained binding authority",
-        "zh": "Office template bytes 自包含 binding authority"
+        "zh": "Office 模板字节必须自包含 binding authority"
       },
       "positive": {
         "en": "Fresh Office bytes visibly encode every binding; qualified native-table binding uses the visible native.table selector grammar and compiles to the frozen selector.",
-        "zh": "fresh Office bytes 可见编码全部 binding；qualified native-table binding 使用 visible native.table selector grammar，并编译到 frozen selector。"
+        "zh": "fresh Office 字节必须可见地编码全部 binding；qualified native-table binding 使用可见的 native.table selector grammar，并编译成冻结的 selector。"
       },
       "negative": {
         "en": "No hidden Plan-only hash token, designer database, content-control requirement or ordinary-Node export metadata.",
-        "zh": "不得依赖 hidden Plan-only hash token、designer database、content control，也不得给 ordinary Node 增 export metadata。"
+        "zh": "不得依赖隐藏的 Plan-only hash token、designer database 或 content control，也不得给普通 Node 增加 export metadata。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -2007,15 +2007,15 @@
       "id": "M14-07",
       "scenario": {
         "en": "Three tabular domains stay separate",
-        "zh": "三种 tabular domain 分离"
+        "zh": "三种 tabular domain 必须分离"
       },
       "positive": {
         "en": "ordinary Document native table, schema-bearing collection/query dataset, and ordinary no-template XLSX each retain their own source/schema/identity rules.",
-        "zh": "ordinary Document native table、schema-bearing collection/query dataset、ordinary no-template XLSX 保持各自 source/schema/identity rule。"
+        "zh": "普通 Document 的 native table、带 schema 的 collection/query dataset、以及普通无模板 XLSX，各自保持独立的 source、schema 与 identity 规则。"
       },
       "negative": {
         "en": "No hidden persistent Record or export-only schema added to ordinary Node.",
-        "zh": "不得给 ordinary Node 新增 hidden persistent Record 或 export-only schema。"
+        "zh": "不得给普通 Node 增加隐藏的 persistent Record 或只用于 export 的 schema。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -2028,15 +2028,15 @@
       "id": "M14-08",
       "scenario": {
         "en": "Template copy/move/style/stale behavior",
-        "zh": "Template copy/move/style/stale 行为"
+        "zh": "模板复制、移动、样式与 stale 行为"
       },
       "positive": {
         "en": "Template bytes/style IDs remain ordinary visible Office content; exact template pin/profile/route revision is frozen; changes require a new Plan.",
-        "zh": "template bytes/style ID 保持普通可见 Office content；冻结 exact template pin/profile/route revision；变化要求 new Plan。"
+        "zh": "template bytes 与 style ID 仍是普通可见 Office content；必须冻结精确 template pin、profile 与 route revision，任一变化都要求 new Plan。"
       },
       "negative": {
         "en": "No localized style-name guess, stale cache reuse or silent template normalization.",
-        "zh": "不得猜 localized style name、复用 stale cache 或静默 normalize template。"
+        "zh": "不得猜测 localized style name，不得复用 stale cache，也不得静默 normalize template。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -2070,15 +2070,15 @@
       "id": "M14-10",
       "scenario": {
         "en": "Unavailable, malicious and stale cases",
-        "zh": "Unavailable、malicious、stale 反例"
+        "zh": "Unavailable、malicious 与 stale 反例"
       },
       "positive": {
         "en": "Mobile conversion is unavailable; unsafe/corrupt input rejects; stale source/route/template/authorization forces the exact current error/reprepare/recovery path.",
-        "zh": "Mobile conversion unavailable；unsafe/corrupt input 拒绝；stale source/route/template/authorization 进入 exact current error/reprepare/recovery path。"
+        "zh": "Mobile conversion 保持 unavailable；unsafe 或 corrupt input 必须拒绝；source、route、template 或 authorization stale 时，进入精确的现任 error、reprepare 与 recovery 路径。"
       },
       "negative": {
         "en": "No fallback provider, execution on discovery, permission downgrade or new-name retry.",
-        "zh": "不得 fallback provider、discovery 后执行、permission downgrade 或换新 name retry。"
+        "zh": "不得使用 fallback provider，不得在 discovery 后直接执行，不得 permission downgrade，也不得换新名称重试。"
       },
       "contract": "Mandatory §14 + D9 Main §7/§12",
       "evidence": {
@@ -2364,15 +2364,15 @@
       "id": "CUR-04",
       "scenario": {
         "en": "Controlled output names",
-        "zh": "受控 output name"
+        "zh": "受控输出名"
       },
       "positive": {
         "en": "All fresh data/report/manifest/receipt/download names pass current Unicode-15.1 validity/alias/prefix/reserved checks and canonical orders before freeze.",
-        "zh": "全部 fresh data/report/manifest/receipt/download name 在 freeze 前通过 current Unicode-15.1 validity/alias/prefix/reserved check 与 canonical order。"
+        "zh": "全部 fresh data、report、manifest、receipt 与 download name，在 freeze 前都必须通过现任 Unicode 15.1 的 validity、alias、prefix、reserved-name 检查与 canonical order。"
       },
       "negative": {
         "en": "Destination cannot rename/normalize/overwrite/partial-copy a frozen legal Plan.",
-        "zh": "destination 不得 rename/normalize/overwrite/partial-copy frozen legal Plan。"
+        "zh": "destination 不得 rename、normalize、overwrite 或 partial-copy 已冻结的合法 Plan。"
       },
       "contract": "D9 Schemas §11; FC SCHEMAS §6.5",
       "evidence": {
@@ -2427,15 +2427,15 @@
       "id": "CUR-07",
       "scenario": {
         "en": "D10 direct boundary",
-        "zh": "D10 direct boundary"
+        "zh": "D10 直接交叉边界"
       },
       "positive": {
         "en": "D9 keeps conversion/publication ownership, worker no-network default, Mobile negative conversion surface and separate PublicationReceipt/Resource author outcome.",
-        "zh": "D9 保持 conversion/publication owner、worker no-network default、Mobile negative conversion surface，以及 PublicationReceipt/Resource author outcome 分离。"
+        "zh": "D9 继续拥有 conversion/publication；worker 默认无网络；Mobile 保持 negative conversion surface；PublicationReceipt 与 Resource 作者结果继续分离。"
       },
       "negative": {
         "en": "D10 control/naming cannot widen D9 wire, worker egress, template semantics or author commit.",
-        "zh": "D10 control/naming 不得扩 D9 wire、worker egress、template semantics 或 author commit。"
+        "zh": "D10 control/naming 不得扩展 D9 wire、worker egress、template semantics 或 author commit。"
       },
       "contract": "D9 Main §14; D10 CANDIDATE direct clauses",
       "evidence": {

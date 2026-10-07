@@ -25,7 +25,7 @@ translation_status: source
 | Render Snapshot / D7 Result Pin | D9 有限投影 / 固定由 D7 拥有的完整结果 | 不是作者快照或 rowHandle 身份 |
 | Export Plan | D9 current immutable output preparation，fresh type `ExportPlan/4` | 非 D6 PreparedIntent 或 author ledger |
 | Annotation Content Carrier | D9 从一次精确现任 `D8AnnotationReadResponse/1` 构造的封闭 export input | 不是 annotation_index、第二 parser 或 permission carrier |
-| View Render Binding | D9 在完整 D7 result + `ViewSpec/1` 之上的有限 renderer/profile/assets binding | 不是 View authority、Query transform 或通用 chart-library config |
+| View 渲染绑定 | D9 在完整 D7 result 与 `ViewSpec/1` 之上建立有限的 renderer/profile/assets 绑定 | 不是 View 权威、Query 转换或通用图库配置 |
 | Staged Output / Publication Receipt | 完整未发布字节 / 外部发布事实，fresh 为 `PublicationReceipt/4` | 绝不是 D3/D6 author receipt |
 | Print Receipt | D9 print-only delivery outcome，`D9PrintReceipt/1` | 不是 author receipt 或 external-publication proof |
 | Import Loss / Export Loss | 相互分离的 D9 fixed-proposal loss domain | 不是 safety approval 或跨域 address |
