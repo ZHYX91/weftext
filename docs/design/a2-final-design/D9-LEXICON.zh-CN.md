@@ -21,7 +21,7 @@ translation_status: source
 | Conversion Input | D9 不可变的 raw/IR/mapping/loss/route evidence | 不是 identity、OriginBinding 或 author source |
 | Worker Invocation | D9 worker-control record | 无 path、command、permission 或 publication authority |
 | Node Template / Template Recipe | D2 Template 身份 / D9 一次性构造配方 | 不具有持久实例绑定，也不执行脚本插值 |
-| Office Template / Placeholder / Style Directive / Repeat Band | 普通 Office 字节与可见编译器语法 | 不存在 content-control/named-range/ExcelTable 隐藏层 |
+| Office 模板 / 占位符 / 样式指令 / 重复带 | 普通 Office 字节与可见编译器语法 | 不依赖内容控件、命名区域或 Excel 表格的隐藏层 |
 | Render Snapshot / D7 Result Pin | D9 有限投影 / 固定由 D7 拥有的完整结果 | 不是作者快照或 rowHandle 身份 |
 | Export Plan | D9 current immutable output preparation，fresh type `ExportPlan/4` | 非 D6 PreparedIntent 或 author ledger |
 | Annotation Content Carrier | D9 从一次精确现任 `D8AnnotationReadResponse/1` 构造的封闭 export input | 不是 annotation_index、第二 parser 或 permission carrier |

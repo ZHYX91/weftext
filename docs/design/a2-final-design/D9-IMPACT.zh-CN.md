@@ -86,7 +86,7 @@ initial loss report、data bytes、loss-report.json、manifest.json、stagedOutp
 
 Annotation conformance 必须覆盖：普通可读 Value/4 导出；最小 target-hidden 反例，其中 R6 body/attribution/reply 仍可导出而 target context 为 unavailable；portable backup 的 canonical record bytes；source-history 与 target-context 独立 disclosure；revision/Observation/record-pin 改变导致 stale；pin 矛盾；授权丢失；以及精确 saved/planned/unknown 分派。annotation_index 必须作为 body source 失败，也不能用 D7 annotation_body semantic string 替代完整 record carrier。
 
-View conformance 必须消费全部 D9 适用 Mandatory §15 fixture，而不是只补一个 bar 例子。测试要证明 Plan freeze 前已经完成完整结果与 D7 runtime validation；long-form/order/domain/unit/empty-none-zero/panel/color/a11y 语义；negative/duplicate/invalid-order 失败；首个 page 不完整；authorization reset；renderer/profile unavailable；font/color/page/alt-text loss；CJK/RTL/print 等价；以及 Dashboard block isolation。第一代支持 profile 只包括 metric/bar/line/scatter/pie/heatmap。hierarchy/Gantt/boxplot 与不支持 backend 都必须明确 unavailable，不能以 data rows 替代。Office View route 还要重跑适用的 Mandatory §14 template/style/repeat fixture。
+View conformance 必须覆盖全部 D9 适用的 Mandatory §15 fixture，不能只增加一个 bar 示例。测试必须证明：Plan 冻结前已经取得完整 result 并按原顺序完成 D7 运行期验证；long-form、顺序、坐标域、单位、empty/none/zero、panel、颜色与无障碍语义都保持；负值、重复 key、无效顺序、首个分页不完整、authorization reset、renderer/profile 不可用、font/color/page/alt-text loss、CJK/RTL/print 等价，以及 Dashboard block 隔离都有明确结果。第一代 D9 chart profile 只支持 metric、bar、line、scatter、pie、heatmap。延期的 tree/treemap/sunburst、Gantt、boxplot/quantile 必须在现任 ViewSpec 封闭解码阶段返回 unsupported_layout；network 等 D7 已支持但没有具名 D9 chart profile 的布局，以及六种图表缺少 backend/profile 的情况，才返回 renderer_unavailable。两条路径都不能用普通数据行替代图表。Office View route 还必须重跑适用的 Mandatory §14 模板、样式与重复区 fixture。
 
 ## 9. Typed format 与 image 证据
 
