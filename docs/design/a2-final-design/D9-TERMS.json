@@ -429,8 +429,8 @@
       },
       "owner": "D9",
       "canonical": "D9AnnotationContentInput/1",
-      "definition": "one exact current Annotation read frozen into export Plan",
-      "forbidden": "annotation_index/semantic string/permission capability"
+      "definition": "one exact current Annotation read frozen into Plan4 with one-to-one canonical selection/projection admission",
+      "forbidden": "annotation_index/semantic string/permission capability/duplicate or cross-mode selection"
     },
     {
       "id": "weftext.term.view-render-binding",
@@ -440,8 +440,8 @@
       },
       "owner": "D9",
       "canonical": "D9ViewRenderBinding/1",
-      "definition": "finite renderer/profile/assets binding over complete D7 result and ViewSpec",
-      "forbidden": "View authority/Query transform/free chart config"
+      "definition": "finite six-layout renderer/profile/assets binding over one complete D7 result + ViewSpec with fixed complete_data output scope",
+      "forbidden": "View authority/Query transform/free chart config/current_display/local legend visibility"
     },
     {
       "id": "weftext.term.print-receipt",
