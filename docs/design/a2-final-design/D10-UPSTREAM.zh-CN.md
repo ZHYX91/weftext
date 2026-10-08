@@ -173,7 +173,14 @@ ActivationBinding、DelegationLease、StandingApprovalEnvelope、AutomationDefin
 
 `maxRuns` 消费发生在第一次受保护执行前的 D10 Run-admission CAS，不进入 D6 author ledger。CAS 按同一 `leaseId` 谱系累计历史，写 `LeaseRunUse/1`；同 Run restart 不重复消费，准入后的 failed/cancelled/crash 不退款。只有一个**尚无 LeaseRunUse 的新 Run**在累计消费已达到 `maxRuns` 时才返回 D10 `delegation_exhausted`。已经有完整 `LeaseRunUse/1` 的同 Run 后续受保护步骤和原 planned request 恢复不再比较 remaining count，也不再次消费；即使 `maxRuns=1` 且累计已经为 1，也不能把该同 Run 当成新 Run 拒绝。它们仍必须逐步验证当前授权、准确 `leaseRevision`、可信时间、ActivationBinding、批准和预算；撤销、过期、revision/binding 变化或连续性不可证明仍会阻止执行。
 
-### 3.5 D10 Workspace 自助管理、bootstrap profile/3 与不可逆 stop
+### 3.5 D10 Workspace 自助管理、bootstrap Profile4/Plan4 与不可逆 stop
+
+**现任 bootstrap consumer 修正（作者修补，待独审）：**D10-CONTROL §12、D6 Control §§10.2/20.2、FC SCHEMAS §9 与 D7 B13 共同要求 fresh issuer 选取的 `WorkspaceBootstrapProfile/4`、`WorkspaceBootstrapPlan/4`、`WorkspaceTrustGenesis/2` 和 Policy/3；下面旧 Profile3/Plan3/Genesis1 只作为历史。只有真实 `administer_issuer` 能为之后新 family 选择 Profile4，replay/upgrade 不会选择。原 Profile2 非 Field 集合固定，D10 `d10_control_self` 只作为明确新签发 family 初始 Policy3 与当前 D6 能力及完整目标 Registry Field grant 的一部分；既有 family 新授权必须真实当前 `policy_admin`。
+
+唯一原 D3 认证 issuer/proposal/custody、Registry seed 对完整 fork 历史、OperationId、planning CAS、DecisionKey 和 final P 保持。Plan4 暂存一根受信 root、按 revision-token revision1 后 source-transform revision2 排序的两条签名 Declaration2/DomainSealKeyHandle2（后条 predecessor 哈希准确前条、各自 PoP/root 签名、同一 ChangeId）。必需 `initialPresentationPolicy:D8PresentationPolicyBootstrapInit/1` 用 issuer 实证空历史 before stamp revision1、parents=[]、proposal revision1/separate、typed preview committed=null。仅 final P 生成 D8 /2 record/hash/pin/address/effect/receipt/outbox/head，同时激活两 trust handles 与 Workspace；输家/abort 不留单 profile/policy prefix。saved/planned/unknown 恢复原 plan/handles/init bytes，ordinary copy/continue/failover 不 fresh bootstrap。真实历史 Profile1–3/Plan1/Plan3 使用原 decoder，不迁移。
+
+**具名 interactive producer 修正：**D10-CONTROL §7.1 可信到场 `d10_interactive_run_start` 是唯一无 Automation 的 Run+Run-targeted Lease+Stop 创建器；认证 principal、D1 `automation.manage`、当前 Policy/3 self grant、完整有限收窄 LeaseSpec、准确 activation/clock/ResourceUseGrant、预留安全容量和同一 control store 原子 CAS/result 都不可省。不是第八 ControlBody、模型权威或 D6 作者事务。首次受保护执行才一次消费 `LeaseRunUse/1`；同 Run 后续及原 planned D6 recovery 不二次消费，但仍核当前门禁。D6/D7 只收到原作者 step、现任 PAB4/Link2/ApprovalUse2 与原 P；真实历史 PAB3/Link1/ApprovalUse1 保留。错 store、容量失败、撤权/未知状态不得制造替代 Run 或作者请求。
+
 
 这是对固定 S D6 Control 的显式协调修订，不改写 S 快照。
 
