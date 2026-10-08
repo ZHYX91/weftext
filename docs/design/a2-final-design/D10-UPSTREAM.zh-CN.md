@@ -28,10 +28,10 @@ revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未�
 
 以下保持不变：
 
-- D3 wireVersion12、Result/9、mode、identity/lifecycle stages 与 receipts；
+- A2 首次 D3IdentityOperationRequest/13 与 Input13 保留原 identity/lifecycle mode 和 receipt owner；真实历史 wireVersion12、Result/9 与既存记录继续沿其精确 decoder、原始字节和恢复；
 - D6 `d6_commit_request` 与 `d6_commit_receipt` 当前 wireVersion=2 exact shape、DecisionKey/2 `(Workspace, CommitDomain, OperationId)` ledger key 与唯一 author commit point；
-- D7 `ActionSpec`、`d7_action_prepare`、`d7_action_prepared` 与 `PreparedActionBinding/3` exact shape；
-- D7 `EffectManifest/2`、EffectBytes item/schema 与 committed transport；
+- D7 `ActionSpec`、`d7_action_prepare`、`d7_action_prepared` 与 `PreparedActionBinding/4` exact shape；
+- D7 首次 `EffectManifest/3` 与 `EffectBytes/3` 保留原同 decision 的 preview/committed 分域；真实历史 EffectManifest2/EffectBytes2 继续使用原保存字节及 decoder；
 - D8 `PreparedEditBinding/3`、Draft/IME/explicit confirmation；
 - D4 Registry、D7 Narrow Field Qualification 与 D6 Policy/ObservationScope；
 - 原当前授权、deny 优先级、信息不披露、authority/fence、dependency CAS、replay 与 planned 恢复规则。
@@ -54,9 +54,9 @@ D6 `d6_error` object shape 与 disposition 集合保持，但第一份共同公�
 
 建议在 D6 主文唯一 author commit point 和 planning/commit 依赖重验附近新增：
 
-> 对采用 D10 Standing Approval 的 D6-owned Action，D7 prepare 完成后，Core 必须依据已保存的 PreparedActionBinding/3、完整 owner_fields preview、实际 MutationFootprint、current D6 authorization 及 D10 当前控制记录，独立构造受管 `ApprovalUse/1`。客户端仍只持原 `d6_commit_request`；不得向 request 增加 approved、approvalId、delegation、proof、budget override 或 effect override。
+> 对采用 D10 Standing Approval 的 D6-owned Action，D7 prepare 完成后，Core 必须依据已保存的 PreparedActionBinding/4、完整 owner_fields preview、实际 MutationFootprint、current D6 authorization 及 D10 当前控制记录，独立构造受管 `ApprovalUse/2`。客户端仍只持原 `d6_commit_request`；不得向 request 增加 approved、approvalId、delegation、proof、budget override 或 effect override。
 >
-> `ApprovalUse/1` 不可变地绑定 approvalId/revision、Run/step、原完整 canonical D6 request、planToken、对应 PreparedActionBinding、完整 preview semantic binding、实际 footprint proof、DelegationLease/ActivationBinding、approval-count reservation 和全部适用 budget/cost reservations。它是附加授权证据，不是第二 author plan、第二 ledger、receipt 或 capability token。
+> `ApprovalUse/2` 不可变地绑定 approvalId/revision、Run/step、原完整 canonical D6 request、planToken、对应 PreparedActionBinding、完整 preview semantic binding、实际 footprint proof、DelegationLease/ActivationBinding、approval-count reservation 和全部适用 budget/cost reservations。它是附加授权证据，不是第二 author plan、第二 ledger、receipt 或 capability token。
 >
 > Core 只能为 `single_field_member` 建立 ApprovalUse。共同前提是：当前完整 Field 恰一 Entry；原 Action 为 `set_field_member`；owner、FieldId、memberPath、memberType 与 envelope 准确匹配；value 满足 closed constraint；D7 Narrow Field Qualification 成功；完整 preview 已形成且可披露。实际结果只有两个允许分支：
 >
@@ -117,7 +117,7 @@ external-consent 控制路径另消费 D10-CONTROL §7 拥有的准确受保护 
 
 在当前 D6 Control §3.6 的受管 PreparedIntent producer 边界补充：
 
-> D10 Broker 本身不是 PreparedIntent producer。D10 Agent/Automation 的工作区修改只能调用已有 D7/D8/Core closed adapter。对于 `single_field_member`，D7 prepare 先按原合同生成 PreparedActionBinding/3、PreparedIntent、preview 和原 `d6_commit_request`；随后 Core-managed D10 approval adapter 才可从受保护记录建立 ApprovalUse。D10 runtime 不得直接构造 PreparedIntent、MutationFootprint、source bytes 或 proof。
+> D10 Broker 本身不是 PreparedIntent producer。D10 Agent/Automation 的工作区修改只能调用已有 D7/D8/Core closed adapter。对于 `single_field_member`，D7 prepare 先按原合同生成 PreparedActionBinding/4、PreparedIntent、preview 和原 `d6_commit_request`；随后 Core-managed D10 approval adapter 才可从受保护记录建立 ApprovalUse。D10 runtime 不得直接构造 PreparedIntent、MutationFootprint、source bytes 或 proof。
 >
 > ApprovalUse 不改变 `d6_commit_request` exact members、canonical request key、planToken tag、protocolOwner 或 ledger key。它通过受保护内部关联绑定原 planToken；外部 caller 没有可追加 approval 字段。
 
@@ -205,7 +205,7 @@ External send 竞争继续归 D10 transport boundary，而不是 D6：首次不�
 
 将 §5 当前“user 看到 preview 后通过原 D3/D6 提交入口确认”的语义替换为：
 
-> ActionSpec 默认确认仍是：当前用户取得并验证完整 preview 后，明确发送 prepare 返回的原 D3/D6 request。只有 D10/1 coordinated `single_field_member` profile 可以在没有本次人机点击时继续：Core 必须从这次 fresh D7 prepare 的完整 PreparedActionBinding/3、EffectManifest/EffectBytes、实际 MutationFootprint 和 current authorization 机械证明有效 ApprovalUse。这个例外不创建 D7 confirmation token、不修改 request，也不表示用户逐字阅读 preview。其它 ActionSpec kind 和 D3-owned intent 继续原交互确认。
+> ActionSpec 默认确认仍是：当前用户取得并验证完整 preview 后，明确发送 prepare 返回的原 D3/D6 request。只有 D10/1 coordinated `single_field_member` profile 可以在没有本次人机点击时继续：Core 必须从这次 fresh D7 prepare 的完整 PreparedActionBinding/4、EffectManifest/EffectBytes、实际 MutationFootprint 和 current authorization 机械证明有效 ApprovalUse。这个例外不创建 D7 confirmation token、不修改 request，也不表示用户逐字阅读 preview。其它 ActionSpec kind 和 D3-owned intent 继续原交互确认。
 
 ### 4.2 standing-approval eligibility，包括 raw no-op
 
@@ -230,7 +230,7 @@ External send 竞争继续归 D10 transport boundary，而不是 D6：首次不�
 
 ### 4.4 不可逆 stop 与 D7 prepare 的绑定
 
-D7 ActionSpec、PreparedActionBinding/3、EffectManifest/EffectBytes wire 不增加 caller-supplied stop 字段。对于 D10 自动 author-submit，Core 在 prepare 成功后用受保护内部关联把 planToken 绑定到当前 Run/Automation/Lease 与其 ExecutionStopLatch refs；调用方不能删除、替换或自报这些 refs。final submit 由本提案 §3.5 所指定的实际 D6 seal consumer 在真正 transaction 内重验 stop。D7 交互路径本身不因 stop 获得新的自动确认能力；stop 只会阻止仍未线性化的后台 submit。
+D7 ActionSpec、PreparedActionBinding/4、EffectManifest/EffectBytes wire 不增加 caller-supplied stop 字段。对于 D10 自动 author-submit，Core 在 prepare 成功后用受保护内部关联把 planToken 绑定到当前 Run/Automation/Lease 与其 ExecutionStopLatch refs；调用方不能删除、替换或自报这些 refs。final submit 由本提案 §3.5 所指定的实际 D6 seal consumer 在真正 transaction 内重验 stop。D7 交互路径本身不因 stop 获得新的自动确认能力；stop 只会阻止仍未线性化的后台 submit。
 
 ## 5. D7 Preview and Effects Transport — planned 恢复扩展
 
@@ -267,7 +267,7 @@ d7_planned_preview_opened {
 3. 原 D6 current authorization、原 ObservationScope 与完整 preview disclosure 资格；
 4. current authority/custody/ledger continuity；
 5. 同 key canonical request byte-equal 且 ledger state=planned；
-6. 原 PreparedActionBinding/3、其 semantic preview 与全部必要 pins 完整可证；
+6. 原 PreparedActionBinding/4、其 semantic preview 与全部必要 pins 完整可证；
 7. 建立新的有限 recovery delivery epoch，返回 fresh action_preview token/cursor/header。
 
 新 epoch 的语义 item、排序、EffectBytes payload 和 profile 必须逐字来自原 planned 保存的 immutable preview，不得重跑 Query、重新解析 current definition、重新选择 target、重新生成 proposed source 或切换 Registry。它只重新签发运输句柄。
@@ -377,7 +377,7 @@ kind 归属是完整单值映射：每个 kind 恰有一个 interface owner，�
 
 
 
-本命名补充自身不修改 D9 行为或 wire；下表消费实际 D9 文件权威后像的当前版本。Workspace 接口与模板/导出生产端显式采用 /2，纯工件 Worker 保持 /1，真实旧决议继续原 decoder/恢复，版本化语义归实际 D9 owner。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的原 concept-contract `firstFreeze` 继续是已接受 D9 r04 合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它。R08 提议追加 naming 与逐 kind technical-interface-owner metadata，并具有独立 R08 candidate 来源；不能倒称这些逐项 ID/owner 已经作为 S 原行存在。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
+本命名补充自身不修改 D9 行为或 wire；下表消费实际 D9 文件权威后像的当前版本。Workspace orchestration 按原 D9/2，模板和导出的类型版本则由上一张现任精确类型表各自定义，不再一概当 /2；纯工件 Worker 仍是原 /1，真实旧决议按原 decoder/字节恢复，版本化语义归实际 D9 owner。下表把 D9 lexicon 中的分组词拆成稳定 concept ID，并把八份 D9 来源新增的主要受控 type/profile 归到唯一 owner。所有 D9-owned 行的原 concept-contract `firstFreeze` 继续是已接受 D9 r04 合同；`weftext.term.import-job` 是明确继承例外：D6 已拥有 concept、names、locale 与历史 firstFreeze，D9 只消费它。R08 提议追加 naming 与逐 kind technical-interface-owner metadata，并具有独立 R08 candidate 来源；不能倒称这些逐项 ID/owner 已经作为 S 原行存在。除 D9 已冻结的语义流程 `prepare→inspect→publish/state/cancel` 外，不新增 per-concept CLI verb、独立 UI 控件名或 locale key；内部概念明确写无。不存在已发布兼容 alias，迁移只清理未发布旧受控名称。
 
 迁移删除目标代码：M-import=旧 source ID/`ImportIr`/YAML proposal decoder、fixtures、help、generated samples；M-route=自由 command/fallback/provider alias 与 route inventory；M-template=旧 attr/record/H1–H9/formula-reorder/宽泛 view 模板 parser/help/samples；M-export=自由 binding dictionary、rowHandle identity、author-snapshot export、generic author-receipt alias；M-region=D9 私有 Locator kind/opaque registry identity；M-none=没有具体旧原型，仅删除实现中未列受控 alias。历史研究文本不迁移。
 
@@ -424,7 +424,7 @@ kind 归属是完整单值映射：每个 kind 恰有一个 interface owner，�
 继承 owner 必须显式保持：
 
 - D2 `Template` meta-kind 仍拥有 Node Template 的作者身份；D9 只拥有 `TemplateRecipe/2`/construction evidence。
-- D7 `TerminalSchema`、V 值代数和 `PreparedActionBinding/3` 继续归 D7；`D7ResultPin` 只 pin 这些既有事实。
+- D7 `TerminalSchema`、V 值代数和 `PreparedActionBinding/4` 继续归 D7；`D7ResultPin` 只 pin 这些既有事实。
 - D3 `SourceBinding`、`ForeignIdentityKey`、`OriginBinding`、`ResourceRegionLocator/l1` 与 D3/D6 author receipt 继续归原 owner。D9 的 `RegionBody/d9rg1` 只是内层几何，`PublicationReceipt/4` 只能表示外部发布。
 - D6 `SourceVersion`、`BudgetBinding`、Token 与 job/commit 权威不改。
 

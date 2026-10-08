@@ -29,10 +29,10 @@ This proposal still opens only one narrow automatic author profile from the D10 
 
 The following remain unchanged:
 
-- D3 wireVersion12, Result/9, modes, identity/lifecycle steps, and receipts;
+- Fresh A2 D3IdentityOperationRequest/13 and Input13 retain the original identity/lifecycle modes and receipt owner; genuine historical wireVersion12, Result/9 and already saved records retain their exact original decoder, payload bytes and recovery;
 - current wireVersion=2 exact shapes of D6 `d6_commit_request` and `d6_commit_receipt`, the DecisionKey/2 `(Workspace, CommitDomain, OperationId)` ledger key, and the unique author commit point;
-- exact shapes of D7 `ActionSpec`, `d7_action_prepare`, `d7_action_prepared`, and `PreparedActionBinding/3`;
-- D7 `EffectManifest/2`, EffectBytes item/schema, and committed transport;
+- exact shapes of D7 `ActionSpec`, `d7_action_prepare`, `d7_action_prepared`, and `PreparedActionBinding/4`;
+- Fresh D7 `EffectManifest/3` and `EffectBytes/3` retain the same-decision preview/committed separation; genuine historical EffectManifest2/EffectBytes2 retain their exact original persisted bytes and decoder;
 - D8 `PreparedEditBinding/3`, Draft/IME/explicit confirmation;
 - D4 Registry, D7 Narrow Field Qualification, and D6 Policy/ObservationScope;
 - existing current authorization, deny precedence, non-disclosure, authority/fence, dependency CAS, replay, and planned recovery.
@@ -55,9 +55,9 @@ Add after the D6 main-document current `PrincipalContext`, generation, and revoc
 
 Add near the unique D6 author commit point and planning/commit dependency revalidation rules:
 
-> For a D6-owned Action using D10 Standing Approval, after D7 prepare completes, Core independently constructs managed `ApprovalUse/1` from the saved PreparedActionBinding/3, complete owner_fields preview, actual MutationFootprint, current D6 authorization, and current D10 control records. The client still holds only the original `d6_commit_request`; it cannot add approved, approvalId, delegation, proof, budget override, or effect override to the request.
+> For a D6-owned Action using D10 Standing Approval, after D7 prepare completes, Core independently constructs managed `ApprovalUse/2` from the saved PreparedActionBinding/4, complete owner_fields preview, actual MutationFootprint, current D6 authorization, and current D10 control records. The client still holds only the original `d6_commit_request`; it cannot add approved, approvalId, delegation, proof, budget override, or effect override to the request.
 >
-> `ApprovalUse/1` immutably binds approvalId/revision, Run/step, complete canonical D6 request, planToken, corresponding PreparedActionBinding, complete preview semantic binding, actual footprint proof, DelegationLease/ActivationBinding, approval-count reservation, and every applicable budget/cost reservation. It is additional authorization evidence, not a second author plan, second ledger, receipt, or capability token.
+> `ApprovalUse/2` immutably binds approvalId/revision, Run/step, complete canonical D6 request, planToken, corresponding PreparedActionBinding, complete preview semantic binding, actual footprint proof, DelegationLease/ActivationBinding, approval-count reservation, and every applicable budget/cost reservation. It is additional authorization evidence, not a second author plan, second ledger, receipt, or capability token.
 >
 > Core may establish ApprovalUse only for `single_field_member`. Common prerequisites are: exactly one Entry in the current complete Field; original Action is `set_field_member`; owner, FieldId, memberPath, and memberType exactly match the envelope; value satisfies the closed constraint; D7 Narrow Field Qualification succeeds; and complete preview exists and is disclosable. There are only two allowed actual-effect branches:
 >
@@ -118,7 +118,7 @@ Extend D6 final transaction and recovery:
 
 At the current D6 Control §3.6 managed PreparedIntent producer boundary, add:
 
-> D10 Broker itself is not a PreparedIntent producer. A D10 Agent/Automation workspace mutation can only call an existing D7/D8/Core closed adapter. For `single_field_member`, D7 prepare first produces PreparedActionBinding/3, PreparedIntent, preview, and the original `d6_commit_request` under its normal contract; only then may a Core-managed D10 approval adapter build ApprovalUse from protected records. D10 runtime cannot directly construct PreparedIntent, MutationFootprint, source bytes, or proof.
+> D10 Broker itself is not a PreparedIntent producer. A D10 Agent/Automation workspace mutation can only call an existing D7/D8/Core closed adapter. For `single_field_member`, D7 prepare first produces PreparedActionBinding/4, PreparedIntent, preview, and the original `d6_commit_request` under its normal contract; only then may a Core-managed D10 approval adapter build ApprovalUse from protected records. D10 runtime cannot directly construct PreparedIntent, MutationFootprint, source bytes, or proof.
 >
 > ApprovalUse changes no exact `d6_commit_request` member, canonical request key, planToken tag, protocolOwner, or ledger key. It is associated with the original planToken only through protected internal records; no external caller can append an approval field.
 
@@ -206,7 +206,7 @@ External send competition remains owned by the D10 transport boundary rather tha
 
 Replace the current §5 semantics that the user confirms through the original D3/D6 submission after seeing preview with:
 
-> Default ActionSpec confirmation remains: after obtaining and validating a complete current preview, the current user explicitly sends the original D3/D6 request returned by prepare. Only the D10/1 coordinated `single_field_member` profile may continue without this operation's human click: Core must mechanically prove valid ApprovalUse from the complete PreparedActionBinding/3, EffectManifest/EffectBytes, actual MutationFootprint, and current authorization of this fresh D7 prepare. This exception creates no D7 confirmation token, changes no request, and does not claim a user read preview item by item. Every other ActionSpec kind and D3-owned intent keeps original interactive confirmation.
+> Default ActionSpec confirmation remains: after obtaining and validating a complete current preview, the current user explicitly sends the original D3/D6 request returned by prepare. Only the D10/1 coordinated `single_field_member` profile may continue without this operation's human click: Core must mechanically prove valid ApprovalUse from the complete PreparedActionBinding/4, EffectManifest/EffectBytes, actual MutationFootprint, and current authorization of this fresh D7 prepare. This exception creates no D7 confirmation token, changes no request, and does not claim a user read preview item by item. Every other ActionSpec kind and D3-owned intent keeps original interactive confirmation.
 
 ### 4.2 standing-approval eligibility including raw no-op
 
@@ -231,7 +231,7 @@ Add:
 
 ### 4.4 Irreversible stop binding for D7 prepare
 
-D7 ActionSpec, PreparedActionBinding/3, and EffectManifest/EffectBytes add no caller-supplied stop field. For D10 unattended author-submit, after successful prepare Core creates a protected internal association from planToken to the current Run/Automation/Lease and its ExecutionStopLatch refs; the caller cannot remove, replace, or self-assert those refs. Final submission is rechecked by the actual D6 seal consumer specified in this proposal §3.5 inside the real transaction. The D7 interactive path gains no new automatic-confirmation authority from stop; stop only prevents a background submit that has not yet linearized.
+D7 ActionSpec, PreparedActionBinding/4, and EffectManifest/EffectBytes add no caller-supplied stop field. For D10 unattended author-submit, after successful prepare Core creates a protected internal association from planToken to the current Run/Automation/Lease and its ExecutionStopLatch refs; the caller cannot remove, replace, or self-assert those refs. Final submission is rechecked by the actual D6 seal consumer specified in this proposal §3.5 inside the real transaction. The D7 interactive path gains no new automatic-confirmation authority from stop; stop only prevents a background submit that has not yet linearized.
 
 ## 5. D7 Preview and Effects Transport — planned recovery extension
 
@@ -268,7 +268,7 @@ The unique order is:
 3. original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility;
 4. current authority/custody/ledger continuity;
 5. byte-equal canonical request at the same key with ledger state=planned;
-6. complete original PreparedActionBinding/3, semantic preview, and all required pins;
+6. complete original PreparedActionBinding/4, semantic preview, and all required pins;
 7. create a new finite recovery delivery epoch and return a fresh action_preview token/cursor/header.
 
 The new epoch's semantic items, order, EffectBytes payloads, and profile come byte-equivalently from the immutable preview saved with the planned decision. It cannot rerun Query, parse a current drifted definition, reselect a target, regenerate proposed source, or switch Registry. It only reissues transport handles.
@@ -378,7 +378,7 @@ Kind ownership is a complete single-valued mapping: each kind has exactly one in
 
 
 
-This naming addition itself changes no D9 behavior or wire; the table consumes the current versions of the actual D9 file-authority afterimages. Workspace interface orchestration is D9/2; named template/ExportPlan/4 and their nested families use their individual exact current versions; pure external artifact interfaces and WorkerInvocation/1 retain their original contracts., and real historical decisions retain their original decoder/recovery. Those versioned semantics remain owned by the actual D9 owner. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's original concept-contract `firstFreeze` remains its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R08 proposes additional naming and per-kind technical-interface-owner metadata with its own candidate provenance; it does not retroactively claim those per-kind IDs/owners were already lines in S. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
+This naming addition itself changes no D9 behavior or wire; the table consumes the current versions of the actual D9 file-authority afterimages. Workspace interface orchestration is D9/2; named template/ExportPlan/4 and their nested families use their individual exact current versions; pure external artifact interfaces and WorkerInvocation/1 retain their original contracts; real historical decisions retain their original decoder/recovery. Those versioned semantics remain owned by the actual D9 owner. The table splits grouped D9 lexicon terms into stable concept IDs and assigns major controlled types/profiles introduced across the eight D9 sources to exactly one owner. Every D9-owned row's original concept-contract `firstFreeze` remains its accepted D9 r04 contract. `weftext.term.import-job` is the explicit inherited exception: D6 already owns the concept, names, locale, and historical firstFreeze, while D9 only consumes it. R08 proposes additional naming and per-kind technical-interface-owner metadata with its own candidate provenance; it does not retroactively claim those per-kind IDs/owners were already lines in S. Apart from D9's already frozen semantic flow `prepare→inspect→publish/state/cancel`, there is no new per-concept CLI verb, standalone UI-control name, or locale key. Internal concepts explicitly say none. There is no published compatibility alias and migration only removes unpublished controlled names.
 
 Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decoder, fixtures, help, generated samples; M-route=free-command/fallback/provider aliases and route inventory; M-template=old attr/record/H1–H9/formula-reorder/broad-view template parser/help/samples; M-export=free binding dictionary, rowHandle identity, author-snapshot export, generic author-receipt alias; M-region=D9-private Locator kind/opaque registry identity; M-none=no specific predecessor, only unlisted controlled aliases. Historical research text is not migrated.
 
@@ -425,7 +425,7 @@ Migration deletion codes: M-import=old source-ID/`ImportIr`/YAML-proposal decode
 Inherited ownership remains explicit:
 
 - D2 `Template` meta-kind retains Node-Template author identity; D9 owns only `TemplateRecipe/2` and construction evidence.
-- D7 `TerminalSchema`, V algebra, and `PreparedActionBinding/3` remain D7-owned; `D7ResultPin` only pins those existing facts.
+- D7 `TerminalSchema`, V algebra, and `PreparedActionBinding/4` remain D7-owned; `D7ResultPin` only pins those existing facts.
 - D3 `SourceBinding`, `ForeignIdentityKey`, `OriginBinding`, `ResourceRegionLocator/l1`, and D3/D6 author receipts remain original-owner concepts. D9 `RegionBody/d9rg1` is inner geometry only, and `PublicationReceipt/4` can represent only external publication.
 - D6 `SourceVersion`, `BudgetBinding`, Token, and job/commit authority remain unchanged.
 
