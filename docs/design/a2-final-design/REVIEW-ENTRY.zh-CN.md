@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D9 作者候选复核入口——D9 完整整合
 
-D7 fixed26be 的独立 PASS 只覆盖 D7；此前 fixed5eca/ff10 的 D8、fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02、fixed4da7 的 D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01、fixed79026 的 D9-BAF-P1-01 均保持原固定范围 CLOSED。fixed466b 又独立 CLOSED D9-4DA7-MAP-P2-01（现任 SPEC alias 和历史来源资格），但报告仍为 REVISE 0P0/1P1/1P2：D9-BAF-P1-02 同族残余（别名 D9-466B-P1-01）及新 D9-466B-P2-01 原 wire2 错误确定分派。本作者批仅修这两项，都只标 author-resolved-pending-independent-review，不自行 CLOSED 或声称 global PASS。完整 D10 和 fresh Pro/global A2 留后续；产品行为全部 UNRUN。
+D7 fixed26be 的非作者 PASS 只覆盖 D7。fixed5eca/ff10、fixed8b6、fixed4da7、fixed79026、fixed466b 及 fixed6012 原 D9-BAF-P1-02/D9-466B-P2-01 的独立 CLOSED 都绑定原有界范围。fixed6012 的 REVISE 0P0/1P1/1P2 只源于新开两项：D9-6012-P1-01 误把 ViewSpec.nodeDetails 设为 graph query_json 必需数据；D9-6012-P2-01 误把 invalid_output 限为 worker-only。本作者批只修这两项，均为 author-resolved-pending-independent-review，不自判 CLOSED 或 D9/global PASS。产品 UNRUN；完整 D10 与 fresh Pro/global A2 非作者终审留后续。
 
 ## 1. 固定对象与作者时间线
 
@@ -54,7 +54,7 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 在 fixed26be 独立 PASS；最后一个 D8 P1 与 D9-BAF-P2-02 都已在 fixed8b6 独立 CLOSED。当前 D9 设计保留精确的 Annotation Value4/R6 carrier、六图表 complete_data 导出、原 D7/FC owner 和记录型 Plan/Receipt1–3 恢复。两个 D9 P1 残余与两个 fixed8b6 P2 仅作者已修、待独审，另有单独的 root mapping 事项；ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED。D10 全文与 A2 全局终审均未完成。
+原两项 D9 P1 及 fixed8b6/fixed4da7 旧 P2 已在后续各自有界复核中独立 CLOSED。当前仅新增 fixed6012 的 P1/P2 两项由作者修补、待独审；ROOT-D9-ZH-P2-01 在 ff10 保持 CLOSED。本历史整合段落不重开旧 finding。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
 
@@ -65,12 +65,12 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 
 ## D9 复核目标
 
-下一位独立非作者须固定最终实际 SHA，仅审 fixed466b→最终的（1）D9-BAF-P1-02 / D9-466B-P1-01：八域、七 payload 的实际 owner 分派，包括首次无 Annotation/Query 的 asciidoc_source 与 resource_exact、native_table/窄 Field、完整 Query/Collection/graph、D8 Annotation、D7 View，以及被消费才需要的 template/route/resource 权限；（2）D9-466B-P2-01：原 wire2 d9_error 的确定分类，分别核获权请求选错、真实受保护 Plan 确证完整性矛盾、证明/来源/域不可得、失权叠加坏 index/layout、合法 D7 owner §7 不变。入口包括 FC SCHEMAS §6.6.1、SPEC §§8.3/16a/17、D9-INTERFACES §§4/7、D9-SCHEMAS §16b、原 D9 Workers/Export §3a/3b 与 Conversion/Templates/Workers §4a。fixed466b 映射 P2 与更早结论均已 CLOSED，不重做 D10 全文/全局，也不把绿色 docs 当成设计/产品 PASS。
+新独立非作者需固定 PR #5 的真实最终 SHA，仅复审 fixed6012→最终的 D9-6012-P1-01、D9-6012-P2-01。graph 对照原 D7 execution/action §1 TerminalSchema、原 D9 workers/export §3 query_json {nodes,edges}、所有真实列/V/顺序及可选 D7 network ViewSpec.nodeDetails?；获权孤立 node、空 edges、无 ViewSpec 须通过，漏 nodes.displayName、截断、乱序须拒绝。覆盖对照原 D9 Import IR §2 Host/Core、S33：worker 成功且 IR schema 合格但 XLSX 漏 sheet → invalid_output，并保留 D9 Region §8 签发；请求方 View index=99/wrong payload 仍 invalid_request，已证旧受保护矛盾 integrity_conflict，proof/source 可用性及当前授权/已进入 D7 原序不变。保留 fixed6012/更早 CLOSED、§3a 原 token 顺序和历史 Plan1–3；完整 D10/global 留后续。绿色 docs 不等于语义 PASS。
 
 必须核验：
 
 - D9-BAF-P1-01（fixed79026 已独立 CLOSED，仅保留上下文）：核唯一 Annotation Value4/PortableRecord4/R6 carrier、独立 context 披露、catalog index/mode/projection 精确一一对应及被选中 annotation_content payload.recordPin 的逐字校验、跨输入域排他、Annotation Plan 禁选普通 Document body、review/backup 目标不兼容、重复或未选 projection 拒绝、pin/currentness、freeze→loss→confirm→create-only/Resource/print 路径；
-- D9-BAF-P1-02（别名 D9-466B-P1-01，本批）：审八域与七种目录 arm，原 Source/Resource/Field/table 最小读取、完整 Query/Collection/graph、按消费而定的 template/route/asset/Resource 输入，首次无需 Query/Annotation/旧 Plan 的 Source/Resource；保留 D7 View §7、Annotation recordPin、View hash/print/complete_data 及 §3a token/原子保存。新 D9-466B-P2-01：审原 wireVersion2 d9_error 的获权错误 index/类型 invalid_request、只有受保护真实矛盾已证才使用 integrity_conflict、证明/来源/域不可得分别用 proof_unavailable/source_unavailable/domain_unavailable、失权先 not_visible/reset、不能套 worker invalid_output、合法 result 则返回原 D7 owner error；
+- D9-BAF-P1-02 / D9-466B-P1-01 与 D9-466B-P2-01 已在 fixed6012 独立 CLOSED，仅作上下文；当前只审新增 D9-6012-P1-01（完整 graph schema/data 不需 nodeDetails）与 D9-6012-P2-01（请求方 selector 外保留 Host/Core/worker/Region 原 invalid_output）；
 - D9-8B6-P2-01 / D9-8B6-P2-02（fixed4da7 有界范围独立 CLOSED，只保留上下文，不是新增复核目标）：保持 Annotation selection/projection 集合、保留原序的 disclosure fragment、canonical origins、renderer asset/evidence-pin 数组，以及合法 D7 network 在当前六布局 D9 路线必定 renderer_unavailable；不得把 graph query_json 降成 rows，也不得丢实际 D7 nodes/edges 列/V/顺序；network ViewSpec.nodeDetails 是可选展示绑定，不是 graph TerminalSchema/data 的必需成员。D9-BAF-P2-02 的来源范围独立 CLOSED 结论仍固定在 fixed8b6；
 - ROOT-8B6-MAP-P2-01（fixed4da7 独立 CLOSED，本批不重复裁决）：保留 D8-SOURCE-MAP.json 中现任 consumer ACCEPTANCE.md path/blob 与原 760 条来源行的 source blob 不同角色。另核 D9-SOURCE-MAP.json 的当前来源资格、D9-REGISTRY.json、D9-TERMS.json 与全部 104 个唯一 D9-ACCEPTANCE row 及中英文投影；
 - 单一 Core 解析器/身份/授权边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
