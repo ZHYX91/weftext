@@ -65,7 +65,7 @@ Recommended implementation order:
 - `ControlPrepareBinding/3` uses stable `(scope incarnation, principal, requestId)` plus complete canonical intent bytes. Recovery order is current visibility/authority → same-key comparison → saved-decision replay → only an undecided operation checks current expected revision/eligibility.
 - Configuration revision and usageRevision are separate; control ID/incarnation is never reused. Retire/archive cannot delete records still pinned by planned, unknown, uncertain, evidence, or dedup state.
 - Implement all four `ResourceUseGrant/1` variants separately: cost, secret, egress, external-effect. Grant renewal/revision never clears spent/held/attempt/use, and replacing a grant never clears an old reservation or actual-account liability.
-- The old non-Field set of fixed-S profile/2 is frozen byte-for-byte in tests; only profile/3 adds `d10_control_self`. Upgrade, replay, replacement, continue, and failover cannot alter an existing family's profile.
+- The old non-Field set of fixed-S profile/2 is frozen byte-for-byte in tests; only explicit issuer-selected current Profile4/Plan4 adds `d10_control_self`. Upgrade, replay, replacement, continue, and failover cannot alter an existing family's profile.
 - PackageManifest dependencies resolve inside the concrete dependent Contribution. Contribution availability is independent, so an unavailable connector cannot transitively disable a same-package schema/template/pack.
 
 These are contract implementation obligations and do not claim that this author stage ran real Core/OS/provider implementation tests.
@@ -208,6 +208,8 @@ Implement the common Run/admission/current-read origin as the same closed `RunOr
 
 Required positive and negative cases: directly create an interactive Run with no Automation, read its exact origin, admit it once under a Run-targeted `maxRuns=1` Lease, then continue/restart the same Run with remaining=0; a new Run, fake Automation, changed origin, wrong Lease target, lost admission continuity, or unauthorized nested binding must take the named rejection without a second admission. In parallel, an Automation occurrence keeps its real immutable origin and one original claim/Run across restart; it cannot switch to interactive to rerun a terminal occurrence. These are implementation acceptance obligations, not executed test results.
 
+**Direct interactive Run production, not deferred to product design:** D10-CONTROL §7.1 specifies attended authenticated human intent and D1 `automation.manage`, current Policy/3 self grant, complete finite attenuated LeaseSpec, active binding/clock/resource/budget and exactly one same-Authority-Store Run(Image2)+Run-targeted Lease(Image1)+StopOwner/latch(Image1) transaction with pre-reserved stop capacity, stable key and original result. Initial creation consumes no maxRuns; original LeaseRunUse admission CAS consumes once. The second step, exact planned D6 recovery and lost-response Run result reuse that fact even with maxRuns1; current revocation/expiry/stop/unknown prevents fresh execution. Mutants must include forged attended event/principal, overbroad Field/grant, changed intent same key, wrong store, StopCapacity/budget overflow, lost time continuity, and restart uncertainty with **zero partial records**. D6 §21/D7 qualification is the named consumer; neither a second author ledger nor an eighth ControlBody is acceptable.
+
 Scheduler persists definition revision, finite schedule horizon, sourceOccurrenceKey, claim owner, Run identity, LeaseRunUse link, and actual skipped/started/terminal outcome. First-generation serial semantics require:
 
 - one `AutomationOccurrenceKey/1` maps to at most one Run identity and one durable claim;
@@ -259,7 +261,7 @@ Error-owner tests cover the D10→D6 boundary:
 - D6 permission loss remains original `not_visible`;
 - dependency/semantic/budget conflicts remain original owner codes and cannot be masked by approval error.
 
-Planned-preview recovery uses the real PreparedActionBinding/3, preview semantic record, and pins retained by a planned decision to open a new finite epoch. Tests prove that an expired old preview token can still deliver original semantics under current audience/ObservationScope/permission/continuity and that current Query/definition/target drift cannot change recovery contents. Expiry of the recovery token changes no planned record and revives no old token.
+Planned-preview recovery uses fresh PAB4 or genuinely recorded PAB3 from the original protected record, preview semantic record, and pins retained by a planned decision to open a new finite epoch. Tests prove that an expired old preview token can still deliver original semantics under current audience/ObservationScope/permission/continuity and that current Query/definition/target drift cannot change recovery contents. Expiry of the recovery token changes no planned record and revives no old token.
 
 Core race/recovery tests include at least:
 
@@ -469,7 +471,7 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 34. stable-key r5 success/response loss, then r6 update: protected complete B decides equality; public historical r5 exposes only seven-kind summary/receipt/deltas with no A/B/M, current read separately returns r6; same key different complete B returns `control_conflict`;
 35. grant renewal/revision/new grant races an old `uncertain` reservation and proves spent/held/attempt/account liability never resets;
 36. exact-target stop (`requestId==target.id`) races Run admission, D6 final commit, and external send; include first receipt, lost-response query after target r5→r6, hidden/continuity error ordering, pre-reserved MAX boundary, and proof that stop does not block settlement, authoritative abort, or evidence cleanup;
-37. profile/2 family does not gain `d10_control_self` on upgrade; profile/3 affects only new families after explicit issuer update;
+37. profile/2 family does not gain `d10_control_self` on upgrade; current Profile4/Plan4 affects only issuer-selected fresh families;
 38. per-Contribution dependency: an unavailable connector does not disable same-package schema/template/pack;
 39. Calendar/Library/People/Organizations D10 PackageId→module→schema mappings remain type-distinct from D4 namespace owner/Facet and reject a same-name third-party spoof;
 40. design accepted while release/surface/policy/version/health gate fails still produces the real D1 unavailable result;
@@ -478,10 +480,15 @@ The author stage of this candidate ran no new D10 bounded state-machine model, s
 43. U12 branch modes: current ICS production profile unsupported with zero author effect; two separately explicit ordinary-file imports without D3 binding are fresh while same canonical request recovery replays; D3-bound path covers never_bound/active_live/active_non_live/retired/conflict/miss, with retired fresh only via explicit Adopt and no UID-only decision.
 44. T02 discovery records/reuses pending admission without making an unadmitted tool callable; current Catalog is byte-stable, and restart/uncertainty of an existing prepared invocation resumes the original admitted descriptor/request rather than generating a replacement request.
 45. E05 eventual-consistency readback miss remains `outcome_unknown` for the same immutable effect/target/request bytes/original key; later readback may resolve it, but no new effectId/target/payload/key is created and expired proof does not authorize resend.
-46. cold restart after D7 prepare restores the exact `D10AuthorPreparationLink/1` and original D6 request; unknown link continuity is `state_unavailable`, while a proven never-saved prepare may be recreated.
+46. fresh D7 PAB4/EffectManifest3/EffectBytes3 cold restart restores exact `D10AuthorPreparationLink/2`, `ApprovalUse/2` and original D6 request/pins; genuine historical Link1/PAB3/ApprovalUse1 restores its exact original decoder/bytes. Unknown link continuity is `state_unavailable`; reprepare only if proved never saved.
 47. external consent remains valid across legal prepared→submitting lifecycle revision because it binds effect Ref + requestDigest; any frozen request semantic change requires a new effect/consent; sendAttemptId and every billableAttemptId remain distinct.
 48. supplemental planned/external approvals have no independent early-revoke state action in generation one; time/binding/grant/authorization/stop gates block use without fabricating generic revoked state.
 49. `activation.current` is derived from the same-cut selector; stale selector CAS fails, successor switch is atomic, and historical ActivationBinding generation/revision is unchanged by becoming non-current.
+
+50. Attended no-Automation interactive-start atomically creates Run/Lease/Stop and maxRuns1 admits once, continues second step/restarted original planned work; fake principal/event, wrong store and budget/StopCapacity/clock/revocation races leave no half-state.
+51. Fresh Profile4/Plan4/Genesis2 create/fork signs two Declaration2 in revision-token rev1 then source-transform rev2 order and activates both handles in one P; mandatory D8 parents[]/revision1/separate is committed=null before P, materializing complete /2 record/hash/pin/effect/outbox/head only at P. Actual Plan1/Plan3, ordinary copy and continue retain original records.
+52. Fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2 and genuine historical PAB3/Manifest2/Link1/ApprovalUse1 each have positive and wrong-version/pins/preview-digest mutants; original planned request survives restart without regeneration.
+53. W and H Stop access one W-scoped Image1/StopOwner and receive the identical revision/result; cross-Workspace, wrong store, hidden, missing H target authority and lost continuity take original errors, and response loss/target r5→r6 preserves original stop. Safety capacity and D6 final P/external handoff linearize.
 
 Each case includes positive and mutant/negative paths and is not satisfied by string-log comparison. Any case not actually executed remains pending in the evidence table.
 ## 16. Completion gate
