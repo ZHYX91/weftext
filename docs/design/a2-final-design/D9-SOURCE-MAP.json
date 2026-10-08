@@ -738,24 +738,24 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "0aa1caa055742c7122d560fc1f4ecbf005f5daba",
+        "blob": "d23e255e0054e71f4192fac00b295753c8916e05",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2225",
           "§6.5.1 L2226–2262",
-          "§6.6 L2263–2614",
-          "§6.6.1 L2559–2614"
+          "§6.6 L2263–2617",
+          "§6.6.1 L2559–2617"
         ]
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "4e60c53ede30f89d678153b34d38a05173424df9",
+        "blob": "831b4342db5f94bb469c5443052e662c7416ce7b",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
           "§6.5.1 L2337–2375",
-          "§6.6 L2376–2727",
-          "§6.6.1 L2672–2727"
+          "§6.6 L2376–2730",
+          "§6.6.1 L2672–2730"
         ]
       }
     ],
@@ -810,7 +810,7 @@
       "spec": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-          "blob": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
+          "blob": "e3f53e8b860e8414e4257732165ced84a4bb67f1",
           "ranges": [
             "§9.1–9.12 L476–669",
             "§16 L946–955",
@@ -820,7 +820,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-          "blob": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
+          "blob": "5dbf6685f2c6814decc9d5b68766083bb5bca423",
           "ranges": [
             "§9.1–9.12 L496–705",
             "§16 L1012–1021",
@@ -832,21 +832,21 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "0aa1caa055742c7122d560fc1f4ecbf005f5daba",
+          "blob": "d23e255e0054e71f4192fac00b295753c8916e05",
           "ranges": [
-            "§6.6 L2263–2614",
-            "§6.6.1 L2559–2614",
-            "§7 L2615–2775"
+            "§6.6 L2263–2617",
+            "§6.6.1 L2559–2617",
+            "§7 L2618–2778"
           ],
           "read": "FULL-direct-current-consumer"
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "4e60c53ede30f89d678153b34d38a05173424df9",
+          "blob": "831b4342db5f94bb469c5443052e662c7416ce7b",
           "ranges": [
-            "§6.6 L2376–2727",
-            "§6.6.1 L2672–2727",
-            "§7 L2728–2891"
+            "§6.6 L2376–2730",
+            "§6.6.1 L2672–2730",
+            "§7 L2731–2894"
           ],
           "read": "FULL-direct-current-consumer"
         }
@@ -940,10 +940,10 @@
         "A2 D9 main/version references"
       ],
       "currentBlobs": {
-        "specEN": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
-        "specZH": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
-        "schemasEN": "4fea409faf33456d2b8155af7a08dbcea2bce1ba",
-        "schemasZH": "567f6cef36e0257d9192448eedb83f64b1c89bff",
+        "specEN": "e3f53e8b860e8414e4257732165ced84a4bb67f1",
+        "specZH": "5dbf6685f2c6814decc9d5b68766083bb5bca423",
+        "schemasEN": "d23e255e0054e71f4192fac00b295753c8916e05",
+        "schemasZH": "831b4342db5f94bb469c5443052e662c7416ce7b",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
@@ -1000,7 +1000,7 @@
   },
   "acceptanceAuthority": {
     "json": "D9-ACCEPTANCE.json",
-    "blob": "4a54d5f63bce3a0f00ae73f2de548573241afe99",
+    "blob": "07da08efe12e3db2d4a745da0a234c7fb9de1924",
     "rows": 104,
     "uniqueIds": 104
   },
@@ -1040,12 +1040,13 @@
     "target": "D9.md§12a; D9-SCHEMAS.md§10/§16b; D9-IMPACT.md§8a; D9-ACCEPTANCE M15-01..10"
   },
   "reviewFindings": {
-    "D9-BAF-P1-01": "author-resolved-pending-independent-review: exact current Annotation carrier, cross-domain exclusion, strict one-to-one selection/projection and mode/target admission, and canonical arrays; pending independent verdict",
-    "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite six-chart route now uses fixed complete_data scope and closed target/destination/receipt relations; no author-side closure claimed",
+    "D9-BAF-P1-01": "author-resolved-pending-independent-review at this incremental author head: each portable_backup projection.recordPin equals selected annotation_content payload.recordPin and exact PortableAnnotationRecord4; A/PA normal and A-index/PB negative even with two authorized union pins; no extra wire",
+    "D9-BAF-P1-02": "author-resolved-pending-independent-review at this incremental author head: projection/binding ViewSpec SHA256 equality with exact ViewSpec, public authorization before protected business errors without changing D7 owner order, PrintReceipt planToken to original authenticated confirmed protected print Plan with View binding/output/loss, no nonexistent receipt target",
     "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
     "D9-8B6-P2-01": "author-resolved-pending-independent-review: new Plan4 arrays classified as set-like versus ordered with canonical comparators/cardinality/conflict rules",
     "D9-8B6-P2-02": "author-resolved-pending-independent-review: current network exception removed; network is always renderer_unavailable on the closed six-member D9 renderer union until a future versioned successor",
     "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
-    "ROOT-8B6-MAP-P2-01": "coordinated separately in D8-SOURCE-MAP: top-level current consumer blob corrected while per-row original source blobs remain retained provenance"
+    "ROOT-8B6-MAP-P2-01": "coordinated separately in D8-SOURCE-MAP: top-level current consumer blob corrected while per-row original source blobs remain retained provenance",
+    "D9-4DA7-MAP-P2-01": "author-resolved-pending-independent-review: finalFC.schemas/annotationCurrent and finalFC.versionCoordination.currentBlobs SCHEMAS EN/ZH (and modified SPEC aliases) updated to actual current Git blobs; SOURCE-MAP.json finalMappedBlobs coordinated separately; historic predecessorRangeCorrection and frozen inventories preserved"
   }
 }

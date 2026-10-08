@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D9 作者候选复核入口——D9 完整整合
 
-D7 在 fixed26be 的 D7 范围独立 PASS。fixed5eca/ff10 的 D8 关闭结果保持；fixed8b6 已独立 CLOSED 最后一个 D8-C98B-P1-03 与 D9-BAF-P2-02。ROOT-D9-ZH-P2-01 保持 ff10 独立 CLOSED。本 D9 作者批保全八份 fixed-S/current D9 整合，修复 D9-BAF-P1-01/P1-02、D9-8B6-P2-01/P2-02，以及另外记录的 ROOT-8B6-MAP-P2-01 路径/blob 不匹配。新修复均等待绑定最终 SHA 的非作者复核，不宣称 D9/global 接受或产品执行；完整 D10 与全新 Pro/global 终审留后续。
+D7 在 fixed26be 的 D7 范围独立 PASS。fixed5eca/ff10 的 D8 关闭结果保持；fixed8b6 已独立 CLOSED 最后一个 D8-C98B-P1-03 与 D9-BAF-P2-02。ROOT-D9-ZH-P2-01 保持 ff10 独立 CLOSED。本 D9 作者批保全八份 fixed-S/current D9 整合，修复 D9-BAF-P1-01/P1-02、D9-8B6-P2-01/P2-02，以及另外记录的 ROOT-8B6-MAP-P2-01 路径/blob 不匹配。fixed4da7 非作者复核确认仅剩两项 P1，并另列 D9-4DA7-MAP-P2-01 的 current/final blob 别名漂移。本增量只修这三项，已独立 CLOSED 的 D9-8B6-P2-01/P2-02 与 ROOT-8B6-MAP-P2-01 不重开。三项均仅记 author-resolved-pending-independent-review，仍等待固定最终 SHA 的非作者复核，不宣称 D9/global 接受或产品执行；完整 D10 与全新 Pro/global 终审留后续。
 
 ## 1. 固定对象与作者时间线
 
@@ -65,12 +65,12 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 
 ## D9 复核目标
 
-下一位非作者 reviewer 必须固定 PR #5 的实际最终 SHA，增量复核 D9-BAF-P1-01、D9-BAF-P1-02、D9-8B6-P2-01、D9-8B6-P2-02，并单独核 ROOT-8B6-MAP-P2-01 的映射。D9-BAF-P2-02 在 fixed8b6 已 CLOSED，ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED；本次只核新改的中英文、跨域选择、mode/target/receipt 关系，不重开已接受 D8 范围或历史 Plan/Receipt decoder。绿色 docs 与数量不等于语义接受。
+下一位非作者 reviewer 必须固定 PR #5 的实际最终 SHA，增量复核 D9-BAF-P1-01、D9-BAF-P1-02、D9-8B6-P2-01、D9-8B6-P2-02，另核 D9-4DA7-MAP-P2-01 的全部现任 blob 别名；ROOT-8B6-MAP-P2-01 已独立 CLOSED，不再重开。D9-BAF-P2-02 在 fixed8b6 已 CLOSED，ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED；本次只核新改的中英文、跨域选择、mode/target/receipt 关系，不重开已接受 D8 范围或历史 Plan/Receipt decoder。绿色 docs 与数量不等于语义接受。
 
 必须核验：
 
-- D9-BAF-P1-01：核唯一 Annotation Value4/PortableRecord4/R6 carrier、独立 context 披露、catalog index/mode/projection 精确一一对应、跨输入域排他、Annotation Plan 禁选普通 Document body、review/backup 目标不兼容、重复或未选 projection 拒绝、pin/currentness、freeze→loss→confirm→create-only/Resource/print 路径；
-- D9-BAF-P1-02：核完整 D7 ResultPin/ViewSpec 运行期原序、固定 complete_data scope、三个 resultInput 相等、renderer.layout 与 ViewSpec.layout 相等、targetKind/profileId/destination/receipt 一致、同数据可访问表格、本地隐藏 legend 不干扰导出，及六图表到 DOCX/XLSX/PDF/SVG/PNG/print 的正向路径；
+- D9-BAF-P1-01：核唯一 Annotation Value4/PortableRecord4/R6 carrier、独立 context 披露、catalog index/mode/projection 精确一一对应及被选中 annotation_content payload.recordPin 的逐字校验、跨输入域排他、Annotation Plan 禁选普通 Document body、review/backup 目标不兼容、重复或未选 projection 拒绝、pin/currentness、freeze→loss→confirm→create-only/Resource/print 路径；
+- D9-BAF-P1-02：核完整 D7 ResultPin/ViewSpec 运行期原序、固定 complete_data scope、三个 resultInput 相等、renderer.layout 与 ViewSpec.layout 以及 projection/binding ViewSpec hash 均相符、现任授权优先级与受保护 print Plan/回执/output/loss 关联、targetKind/profileId/destination/receipt 一致、同数据可访问表格、本地隐藏 legend 不干扰导出，及六图表到 DOCX/XLSX/PDF/SVG/PNG/print 的正向路径；
 - D9-8B6-P2-01 / D9-8B6-P2-02：核 Annotation selection/projection 集合、保留原序的 disclosure fragment、canonical origins、renderer asset/evidence-pin 数组，以及合法 D7 network 在当前六布局 D9 路线必定 renderer_unavailable；不得把 graph/nested nodeDetails/query_json 降级成 rows。D9-BAF-P2-02 的来源范围独立 CLOSED 结论仍固定在 fixed8b6；
 - ROOT-8B6-MAP-P2-01：单独核 D8-SOURCE-MAP.json 中现任 consumer ACCEPTANCE.md path/blob 与原 760 条来源行的 source blob 不同角色。另核 D9-SOURCE-MAP.json 的当前来源资格、D9-REGISTRY.json、D9-TERMS.json 与全部 104 个唯一 D9-ACCEPTANCE row 及中英文投影；
 - 单一 Core 解析器/身份/授权边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
