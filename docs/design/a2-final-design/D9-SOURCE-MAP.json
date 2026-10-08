@@ -749,7 +749,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "b41e6d383fc553d7adf14f2a8f05a5c2788467d6",
+        "blob": "4e60c53ede30f89d678153b34d38a05173424df9",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
@@ -842,7 +842,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "b41e6d383fc553d7adf14f2a8f05a5c2788467d6",
+          "blob": "4e60c53ede30f89d678153b34d38a05173424df9",
           "ranges": [
             "§6.6 L2376–2727",
             "§6.6.1 L2672–2727",
