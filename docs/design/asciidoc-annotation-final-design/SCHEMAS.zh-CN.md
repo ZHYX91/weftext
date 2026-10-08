@@ -2675,12 +2675,14 @@ D9PrintReceipt/1 = {
 
 固定准入顺序为：（1）严格检查 closed/version/union/member/null；（2）验证已经冻结的 set-like array 本来就处于 canonical 顺序且没有 duplicate/conflict；（3）验证 catalog index 与 payload kind；（4）验证 selection 与 projection 的基数和 mode 对应；（5）验证 View 的 result、ViewSpec、renderer、target、destination 与 receipt 关系；（6）验证现任 authorization、Observation/revision/result epoch 与 typed pins/proofs；（7）按 owner 原顺序执行 Annotation 或 D7 View 的语义与现任性门；（8）验证 route/profile/assets、budget 与 loss；全部通过后才能冻结 staged bytes。关系不一致时直接拒绝，不能通过补读、重跑 Query、静默删除 union arm、重排 protected bytes、renderer fallback 或改写 projection 来修复。
 
+跨输入域的排他关系同样强制执行：inputDomain 不是 annotation 时，contentSelection.annotationInputs 和 projection.annotations 都必须为空；inputDomain 不是 view 时，contentSelection.viewInput、viewRenderBinding 与 projection.view 都必须为 null。catalog 中存在某个 input，并不代表可在未选择、未授权的情况下消费它，也不得通过无关 projection 偷带内容。这些关系必须在输出准备前的严格准入阶段检查。
+
 当 inputDomain=annotation：
-- annotationInputs 必须非空；viewInput=null、viewRenderBinding=null、projection.view=null、documentRenderBinding=null。
+- annotationInputs 必须非空；bodyInput=null、bibliographyInput=null、viewInput=null、viewRenderBinding=null、projection.view=null、documentRenderBinding=null。
 - annotationInputs 是以 inputIndex 为 key 的 set-like array，按 Counter 递增排序且唯一。同一个 catalog input 在一个 Plan 中最多出现一次，因此只能选择一个 mode。同一 Plan 混用 portable_backup 与 review_bundle_r6 必须拒绝；需要两种输出时使用两个 Plan。
 - 每个选中的 inputIndex 必须精确指向一个 inputCatalog.items[index]，且 payload 必须是 annotation_content。
 - projection.annotations 与 annotationInputs 的基数和递增 inputIndex 顺序完全一致。每个位置上，portable_backup selection 只能对应 portable_backup projection，并且 inputIndex 与 recordPin 逐字相等；review_bundle_r6 只能对应同一 inputIndex 的 review_bundle_r6 projection。选中后缺 projection、未选却出现 projection、重复 index、跨 mode 对应，或 [0,1,0] 这类序列，即使各 catalog item 单独都已获权，也必须拒绝。
-- portable_backup selection 要求 includeSourceHistory=false 且 includeTargetContext=false；两个 flag 对 backup 不适用，true 必须拒绝，不能静默忽略。此模式还要求 target.kind=annotation_backup 且 generationPolicy.kind=none。
+- portable_backup selection 要求 includeSourceHistory=false 且 includeTargetContext=false；两个 flag 对 backup 不适用，true 必须拒绝，不能静默忽略。此模式还要求 target.kind=annotation_backup 且 generationPolicy.kind=none。反过来，review_bundle_r6 不得选择 annotation_backup 目标；必须使用具名且已接受的 Review Bundle 渲染目标与 profile，不能以 review 语义写入备份文件。
 - 对 review_bundle_r6：未请求 source history 时，includeSourceHistory=false 且 sourceHistory.state=not_requested；请求时 includeSourceHistory=true，结果只能是 disclosed 或 unavailable。target context 独立遵循同一规则。已经请求但无权披露时必须记录 unavailable，不能伪装成 not_requested 或空事实。
 - D9AnnotationDisclosureProjection/1.fragments 是有顺序的 sequence，保持获权 producer/context 的原顺序，不能排序。state=disclosed 时至少一个 fragment。每个 fragment 的 origins 是非空 set-like array，按 canonical D3-CJ/3(ExportInputLocation/2) bytes 排序并去重；重复 origin 必须拒绝。
 
