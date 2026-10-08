@@ -2307,9 +2307,9 @@ D9 fresh prepare 必须 strict-decode 全部 choices，并验证完整 current o
 
 D9ExportTemplateBinding/1.inputIndex 必须选择 inputCatalog.items[index] 中恰一个 payload.kind=template 项；pin 与该 item.pin byte-equal。profileId/profileVersion 必须选择能成功解码这些 exact bytes 的 accepted decoder；profile mismatch/unavailable 是 template unavailable，不得 fallback。不存在第二 template registry 或 filename lookup。
 
-nonnull route 的 steps 非空并从0连续。每一步 input/output profile 都由该 exact provider/version 接受。terminal output profile 必须与 target 相等：html/pdf/docx/odt/xlsx/ods 使用 target.profileId；csv_utf8 固定 "text/csv-utf8/1"；tsv_utf8 固定 "text/tsv-utf8/1"。routeBinding.profileId/profileVersion 指向包含这条 exact terminal chain 的 accepted route profile。target/terminal mismatch 直接拒绝 prepare，不可自动换 route。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+nonnull route 的 steps 非空并从0连续。每一步 input/output profile 都由该 exact provider/version 接受。terminal output profile 必须与 target 相等：html/pdf/docx/odt/xlsx/ods 使用 target.profileId；csv_utf8 固定 "text/csv-utf8/1"；tsv_utf8 固定 "text/tsv-utf8/1"。routeBinding.profileId/profileVersion 指向包含这条 exact terminal chain 的 accepted route profile。target/terminal mismatch 直接拒绝 prepare，不可自动换 route。
 
-document render 时，documentSnapshotPin 选择 ownerNodeRef/sourceObservation 对应的 exact D2-Document-Snapshot/3 bytes。snapshot evaluation 的 root SourceObservation 与 ManagedDocumentSemanticQualification.sourceObservation 都必须 byte-equal sourceObservation，document_format 必须 current，而且 §4.4 的全部 include/environment/dependency 必须在 final export read barrier 验证。presentation 恰是生成 staged output 使用的 D8PresentationDecision/1。explicit/no-body/conflict-fallback decision 不含 Workspace policy pin；workspace_default 才包含实际消费的 exact current D8 policy binding。后来 source/include/policy 改变都不能修改或 rerender 已 prepared plan；fresh prepare 才读取 fresh current bindings。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+document render 时，documentSnapshotPin 选择 ownerNodeRef/sourceObservation 对应的 exact D2-Document-Snapshot/3 bytes。snapshot evaluation 的 root SourceObservation 与 ManagedDocumentSemanticQualification.sourceObservation 都必须 byte-equal sourceObservation，document_format 必须 current，而且 §4.4 的全部 include/environment/dependency 必须在 final export read barrier 验证。presentation 恰是生成 staged output 使用的 D8PresentationDecision/1。explicit/no-body/conflict-fallback decision 不含 Workspace policy pin；workspace_default 才包含实际消费的 exact current D8 policy binding。后来 source/include/policy 改变都不能修改或 rerender 已 prepared plan；fresh prepare 才读取 fresh current bindings。
 
 Pins(X) 表示只沿 closed typed value X 中 schema 真正声明为 PinRef/2 的 member（或含这些 member 的 closed type）递归取得 PinRef/2；text/digest/handle 都不算。对真实记录的 ExportPlan/3，推导精确 /3 evidencePins 时不得递归 plan 自身的 evidencePins member；其 evidencePins 继续严格等于下面这些前身成员的 pinToken 排序唯一并集。fresh ExportPlan/4 继承同一递归 PinRef 规则，只通过 §6.6 明确列出的 typed projection 与 viewRenderBinding 成员扩展该并集：
 
@@ -2329,7 +2329,7 @@ recoveryPins 自身按 pinToken 排序唯一，只允许 fixed-parent recovery c
 
 ### 6.5.1 Native table → Office SET/COLUMN naming
 
-native table dataset name 只从 authorized D2TableBlock/3 product projection 与 Office template 推导；ordinary Node 不增加任何 export configuration。text comparison 使用 exact Unicode scalar sequence，normalization=none、case-sensitive、保留 whitespace。CJK、RTL、combining-character 因而都有 host-independent 单一规则。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+native table dataset name 只从 authorized D2TableBlock/3 product projection 与 Office template 推导；ordinary Node 不增加任何 export configuration。text comparison 使用 exact Unicode scalar sequence，normalization=none、case-sensitive、保留 whitespace。CJK、RTL、combining-character 因而都有 host-independent 单一规则。
 
 对每个 physical table column，按 head-row source order 构造 headerPath。一个 head cell 的 [columnStart,columnStart+colspan) 覆盖该 column 时，其 semantic inline text 贡献一次；rowspan 在后续 logical row 不重复同一 cell。空 header cell 贡献 empty string。column leaf 是最后一个 segment，没有 head segment 时是 empty。table title 是完整 semantic title text 或 null。
 
@@ -2338,7 +2338,7 @@ selector 只允许按以下固定次序选择最短唯一 qualifier：
 1. candidate tables 中 leaf text alone；
 2. 以 leaf 结尾的最短 headerPath suffix；
 3. 同一 header suffix 加 exact table title；
-4. 同样 facts 再加 zero-based table occurrence（在 byte-equal title/path candidate 中）以及必要时 zero-based column occurrence（同一 table 内 byte-equal full header path）。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+4. 同样 facts 再加 zero-based table occurrence（在 byte-equal title/path candidate 中）以及必要时 zero-based column occurrence（同一 table 内 byte-equal full header path）。
 
 每一级：0 match 为 mapping_required；1 个即选中；>1 才进入下一层。最终 occurrence 层仍不是1个时 ambiguous_binding。禁止 first/last winner、猜 suffix、current UI order、filename、rowHandle、path guess 或强迫修改 author source。同一 repeat SET 的全部 binding 必须解析到同一 table/rowset。
 
@@ -2357,11 +2357,11 @@ base32hex_lower 是完整256-bit digest 的52字符 lowercase RFC4648 base32hex�
 
 后来新增 same-name column/table 可以让旧 short selector 变成不唯一；fresh prepare 必须 ambiguous_binding，直到 template 使用新 required qualified token。old prepared ExportPlan 已冻结 table projection/selector/staged bytes，因此保持 immutable。
 
-ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保持 fixed-parent closed shape/semantics。D9NativeTableTokenBinding/1 只记录 existing dataset SET/COLUMN name 的 derivation，不新增第二 dataset schema。每个 native-table dataset column/cell 的 projection origins 必须指向 binding 选择的同一个 inputIndex/tableLocator，table grid facts 只取 D2TableCell/3。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+ExportInputCatalog/2、ExportContentSelection/1、ExportProjection/1、ExportLossReport/1 保持 fixed-parent closed shape/semantics。D9NativeTableTokenBinding/1 只记录 existing dataset SET/COLUMN name 的 derivation，不新增第二 dataset schema。每个 native-table dataset column/cell 的 projection origins 必须指向 binding 选择的同一个 inputIndex/tableLocator，table grid facts 只取 D2TableCell/3。
 
 D9ExportConfirmation/1 继续是记录型 ExportPlan/3 的精确 confirmation：不得改变 catalog、projection、route、target、destination、generation policy、report、budget、presentation 或 staged bytes。fresh ExportPlan/4 使用 §6.6 的 D9ExportConfirmation/2；它继承相同不可变性，并额外冻结新的 Annotation/View selection 与 renderer 成员。lossChoices 继续按 lossKey 排序唯一，并完整覆盖 requires_choice/blocking。PublicationReceipt/3 与自己的 protected /3 Plan/confirmation byte-match；PublicationReceipt/4 与 protected /4 Plan/Confirmation2 byte-match，并记录实际 published output digest。
 
-current plan token 只能使用 d9_export_plan/3，current publication token 只能使用 d9_publication/3。lookup/inspect/confirmation/unknown recovery 必须先按 token tag 分派，再 strict-decode record.version。historical ExportPlan/1-/2 与 PublicationReceipt/1-/2 保持原 token tags、exact bytes、pins、permissions、confirmation、unknown-publication state 和 recovery；旧 token 永不 repin/reencode 成 /3。；本句保留的英文仅表示固定协议标识、字段名、状态名或字面量，均按上述中文条件解释，不形成另一套规范含义。
+真实记录的 ExportPlan/3 只使用 d9_export_plan/3 token，真实记录的 PublicationReceipt/3 使用 d9_publication/3。fresh unseen ExportPlan/4 使用 d9_export_plan/4，fresh external publication 使用 d9_publication/4，print-only delivery 使用 d9_print/1。lookup、inspect、confirmation 与 unknown recovery 必须先按 token tag 分派，再严格解码 record.version。ExportPlan/1-/2-/3 与 PublicationReceipt/1-/2-/3 都保留各自记录的 tag、精确 bytes、pins、permissions、confirmation、unknown-publication state 与 recovery；任何已记录 token 都不得 repin 或重新编码成 /4。
 
 
 ## 6.6 fresh-current D9 export /4 继任族
