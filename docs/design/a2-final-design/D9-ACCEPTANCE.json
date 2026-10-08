@@ -2619,12 +2619,12 @@
         "zh": "Annotation selection/projection 一一对应"
       },
       "positive": {
-        "en": "Two authorized annotation_content inputs selected once each as inputIndex 0 then 1 produce exactly two same-index/same-mode projections in canonical order; hidden target context may remain unavailable without suppressing readable R6 body/attribution.",
-        "zh": "两个已获权 annotation_content input 分别以 inputIndex 0、1 各选择一次时，必须按 canonical 顺序产生恰好两个同 index、同 mode 的 projection；target context 隐藏时仍可保持 unavailable，而不压掉可读 R6 body/attribution。"
+        "en": "Two authorized annotation_content inputs selected once each as inputIndex 0 then 1 produce exactly two same-index/same-mode projections in canonical order; hidden target context may remain unavailable without suppressing readable R6 body/attribution. All unrelated document/View selection and projection slots are empty/null in this Annotation Plan.",
+        "zh": "两个已获权 annotation_content input 分别以 inputIndex 0、1 各选择一次时，必须按 canonical 顺序产生恰好两个同 index、同 mode 的 projection；target context 隐藏时仍可保持 unavailable，而不压掉可读 R6 body/attribution。 该 Annotation Plan 中无关的 Document/View selection 与 projection 字段必须为空或 null。"
       },
       "negative": {
-        "en": "Sequence [0,1,0], duplicate inputIndex, mixed modes in one Plan, selected-without-projection, unselected projection, or portable_backup selection paired with review_bundle_r6 projection rejects before any reread; complete pins cannot cure it.",
-        "zh": "序列 [0,1,0]、重复 inputIndex、同一 Plan 混用 mode、选择后缺 projection、未选择却出现 projection，或 portable_backup selection 却配 review_bundle_r6 projection，都必须在任何 reread 前拒绝；pins 完整也不能弥补关系错误。"
+        "en": "Sequence [0,1,0], duplicate inputIndex, mixed modes in one Plan, selected-without-projection, unselected projection, or portable_backup selection paired with review_bundle_r6 projection rejects before any reread; complete pins cannot cure it. Annotation selections/projections in another inputDomain, a nonnull document body/bibliography selection in the Annotation domain, or review_bundle_r6 paired with an annotation_backup target are likewise rejected.",
+        "zh": "序列 [0,1,0]、重复 inputIndex、同一 Plan 混用 mode、选择后缺 projection、未选择却出现 projection，或 portable_backup selection 却配 review_bundle_r6 projection，都必须在任何 reread 前拒绝；pins 完整也不能弥补关系错误。 在其它 inputDomain 偷带 Annotation selection/projection、Annotation 域选择普通 Document body/bibliography，或 review_bundle_r6 配 annotation_backup 目标，也都必须拒绝。"
       },
       "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §13a",
       "evidence": {
