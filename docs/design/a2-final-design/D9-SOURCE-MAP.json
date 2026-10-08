@@ -1,7 +1,7 @@
 {
   "format": "weftext.a2-d9-source-map",
   "version": 1,
-  "status": "author-resolved-pending-independent-review",
+  "status": "author-resolved-pending-independent-review for ONLY new D9-6012-P1-01 and D9-6012-P2-01; all prior fixed6012/fixed466b and older independently CLOSED finding scopes preserved; D9 product execution UNRUN, D10/full A2 pending",
   "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
   "baseSha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixedS": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
@@ -738,7 +738,7 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "8814cbaad045582271421e15dcd7ddf8770de44c",
+        "blob": "6f502263994bd04a0653d2054ac603517697ece0",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2225",
@@ -749,7 +749,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
+        "blob": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
@@ -762,7 +762,7 @@
     "spec": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-        "blob": "420639250fc14b1e01632cb634523f87f1fafb2e",
+        "blob": "d5c43f060c04069905bf084c916637d49a6f319a",
         "ranges": [
           "§8.3 L439–463",
           "§8.4 L464–471",
@@ -774,7 +774,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-        "blob": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
+        "blob": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
         "ranges": [
           "§8.3 L449–483",
           "§8.4 L484–491",
@@ -804,13 +804,13 @@
       "schemas": "§6.5 freezes recorded Plan3 predecessor/shared rules; §6.6 is fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4 plus Annotation carrier and finite View renderer",
       "spec": "§8.3 shared exact-source/resource/query_json, controlled-name/canonical-pin/unknown-publication rules now bind fresh Plan4; §16a behavior closure; §17 unseen-current dispatch and §18 inventory name /4",
       "historical": "Plan/Receipt1-3 and predecessor closed families retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery; no migration",
-      "admission": "Final FC SCHEMAS §6.6.1 is sole current eight-domain producer dispatch: public closed decode→D1 static capability→current audience/entry authorization→Workspace/domain/P, then real selected original D6/D2 Document source_read, Resource resource_read, D2 native_table/narrow D4 Field, complete D7 Query/Collection, D8 Annotation or D7 View ResultPin. Seven catalog arms only; field is narrow input not a public domain; template/route/resource dependencies only when used. Authorized fresh caller missing viewInput=99 or wrong payload uses existing D9/2 wire2 d9_error.invalid_request before D7; authenticated saved/frozen protected Plan contradiction uses integrity_conflict only with proved reachable contradictory evidence; unproved/missing proof, source and domain use proof_unavailable, source_unavailable and applicable domain_unavailable/original owner disposition. Original D7 §7 errors, no new wire, all pin, hash, scope, route, loss/budget and §3a token→report→atomic freeze remain mandatory."
+      "admission": "The final FC SCHEMAS §6.6.1 still owns all eight D9ExportInputDomain/2 producer branches and seven catalog arms, original D1/current audience/Workspace gates, exact Plan4 selection/owner/pin/recordPin/View hash/loss/budget and unchanged §3a private-token→referencing report/manifest→atomic-save. D7 original TerminalSchema.kind selects rows (all typed columns and rows), scalar (one V, including none), or graph (exact complete nodes/edges RowsSchema with nodeRef/sourceRef/targetRef/relationColumn/derivationColumn bindings and static query_json data={nodes,edges}); no extra nodeDetails query member or ViewSpec is required, isolated nodes with zero edges are legal. Preserve all actual node columns/V and D7 bag/order; a present displayName column may not disappear. D9/2 authorized caller View selector invalid index/kind remains invalid_request, only proved authenticated protected Plan contradiction integrity_conflict, missing proof/source/domain original availability; original independent D9 Host/Core IR format-coverage S33 can still return invalid_output after worker OK + schema-valid IR missing an XLSX sheet/hidden object, and D9 Region new-issuance format/geometry and actual worker output validators retain their original applicable invalid_output. Only the caller selector is excluded."
     },
     "annotationCurrent": {
       "spec": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-          "blob": "420639250fc14b1e01632cb634523f87f1fafb2e",
+          "blob": "d5c43f060c04069905bf084c916637d49a6f319a",
           "ranges": [
             "§9.1–9.12 L476–669",
             "§16 L946–955",
@@ -820,7 +820,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-          "blob": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
+          "blob": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
           "ranges": [
             "§9.1–9.12 L496–705",
             "§16 L1012–1021",
@@ -832,7 +832,7 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "8814cbaad045582271421e15dcd7ddf8770de44c",
+          "blob": "6f502263994bd04a0653d2054ac603517697ece0",
           "ranges": [
             "§6.6 L2263–2634",
             "§6.6.1 L2559–2634",
@@ -842,7 +842,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
+          "blob": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
           "ranges": [
             "§6.6 L2376–2747",
             "§6.6.1 L2672–2747",
@@ -870,7 +870,7 @@
       "mandatory15": "FULL-D9-applicable L1042–1141",
       "currentCarrier": "final FC SCHEMAS §6.6 D9ViewRenderBinding/1",
       "target": "D9.md §12a; D9-SCHEMAS.md §16b; D9-IMPACT.md §8a; D9-ACCEPTANCE M15-01..10 + PLAN4-REL-02/03 + PLAN4-CAN-02/03 + VIEW-SCOPE-01",
-      "rule": "Only after public authorization and the actual selected domain's original scope/producer qualification may the private View route check catalog index presence, payload.kind=query_result and genuine D7ResultPin. Invalid caller index=99 or wrong payload uses original wire2 invalid_request without fabricating D7 or worker invalid_output. Authenticated original Plan proof contradiction requires actual reachable proof for integrity_conflict; unproved pin/source/domain use actual availability disposition. With a real selected D7 result, D7 View §7 runs closed decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery, before D9 renderer/profile. The current D9 six-chart route uses complete_data/a11y, exact hash/target/receipt and canonical assets; supported D7 network remains renderer_unavailable, deferred layouts unsupported_layout, no Query rerun or local legend scope."
+      "rule": "A selected real D7ResultPin enters the unchanged original D7 View §7 closed decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery after current entry authorization. ViewSpec network.nodeDetails? is only an optional presentation binding; graph query_json is a separate generationPolicy=none static result with exact D7 TerminalSchema/data={nodes,edges}, all real columns/V and original order, legal isolated nodes/zero edges without ViewSpec. D9 renderer export remains six metric/bar/line/scatter/pie/heatmap charts with complete_data/same-data accessible table and exact hash/target/receipt; D7 legal network graphics stay renderer_unavailable on this D9 route. Caller-selected View index=99/wrong payload is D9/2 wire2 invalid_request, not any output validator's invalid_output; real covered D7 errors, original Host/Core format coverage and D9 Region issuance retain their separate existing gates."
     },
     "predecessorRangeCorrection": {
       "finding": "D9-BAF-P2-02",
@@ -927,7 +927,7 @@
     },
     "versionCoordination": {
       "status": "author-resolved-pending-independent-review; coordinator precheck, not a separate finding count",
-      "current": "Only fresh unseen matching the selected one of eight D9ExportInputDomain/2 needs its own original authorized source input; Source/Resource/Field exact reads never require an unrelated whole-Workspace Query/D8 Annotation. Query-backed Collection/query_rows/query_json require complete real D7 result; annotation uses D8, view uses D7ResultPin then D7 View §7. Fresh Plan4 original §3a private token before referenced report/manifest and atomically saved complete bytes. Existing Plan/Receipt1-3 and current protected receipts keep original decoder/lookup/recovery. Existing D9/2 wire2 error meanings are explicitly kept; no new error family or owner.",
+      "current": "Fresh unseen actual selected eight-domain owner inputs produce ExportPlan/4 under original §3a random non-public token before referenced report/manifest and one atomic complete Plan storage; Query-free exact Source/Resource/Field, full D7 Query/Collection/graph typed V and ordered result, D8 Annotation and D7 View qualification stay intact. Query_json graph only has D7 schema and static data={nodes,edges}; optional network ViewSpec.nodeDetails does not create data authority. The D9/2 selector error is invalid_request, not invalid_output, but original Host/Core coverage S33 and Region issuance retain their own output-validation codes. Recorded Plan/Receipt1–3/pins/confirmation/recovery and original D1/entered owner errors remain exactly historical.",
       "retained": "recorded ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3 and token/confirmation/bundle predecessors retain exact decoder/bytes/pins/recovery and are never repinned/re-encoded into /4",
       "currentizedLocations": [
         "FC SPEC §8.3",
@@ -940,10 +940,10 @@
         "A2 D9 main/version references"
       ],
       "currentBlobs": {
-        "specEN": "420639250fc14b1e01632cb634523f87f1fafb2e",
-        "specZH": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
-        "schemasEN": "8814cbaad045582271421e15dcd7ddf8770de44c",
-        "schemasZH": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
+        "specEN": "d5c43f060c04069905bf084c916637d49a6f319a",
+        "specZH": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
+        "schemasEN": "6f502263994bd04a0653d2054ac603517697ece0",
+        "schemasZH": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
@@ -1000,7 +1000,7 @@
   },
   "acceptanceAuthority": {
     "json": "D9-ACCEPTANCE.json",
-    "blob": "d4f0bd4fe81cd25414d1f6e131b7001ed1f4cf94",
+    "blob": "80091c51372d6badc04cc53216bb8c5ebac24e80",
     "rows": 104,
     "uniqueIds": 104
   },
@@ -1041,13 +1041,15 @@
   },
   "reviewFindings": {
     "D9-BAF-P1-01": "independently CLOSED at fixed79026 (alias D9-8B6-P1-01): exact selection↔payload.recordPin↔projection and canonical PortableAnnotationRecord4, original independent Annotation permissions/hidden context retained",
-    "D9-BAF-P1-02": "author-resolved-pending-independent-review for fixed466b residual alias D9-466B-P1-01: complete eight original inputDomain producers plus seven closed catalog payload arms, Query-free Document/Resource/Field, actual D2 native_table and D4 narrow Field, complete D7 Query/Collection/graph, D8 Annotation and D7 View owner qualification; conditional template/route/asset/resource reads; no blanket D8/D7 producer.",
+    "D9-BAF-P1-02": "independently CLOSED at fixed6012 (alias D9-466B-P1-01): all eight selected input domains, seven closed catalog payloads, Query-free Source/Resource/Field, native_table/narrow D4, complete D7 Query/Collection/graph, D8 Annotation and D7 View, conditional template/route/asset/read scopes accepted within this fixed scope",
     "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
     "D9-8B6-P2-01": "independently CLOSED at fixed4da7 in bounded D9 canonical-array scope; current canonical comparator/order/origins rules preserved, no reopening",
     "D9-8B6-P2-02": "independently CLOSED at fixed4da7 in bounded D9 renderer scope: current network remains renderer_unavailable for closed six-layout D9 route, no reopening",
     "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
     "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7 in bounded mapping scope: D8-SOURCE-MAP current consumer pointer corrected, retained 760 row-source provenance unchanged",
     "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current/final FC SPEC/SCHEMAS blob aliases and ff10 predecessorRangeCorrection + D4/D5 direct-read + 760-row provenance were checked and accepted within that fixed scope; this batch refreshes only legitimate new current consumers",
-    "D9-466B-P2-01": "author-resolved-pending-independent-review: original Workspace D9/2 wire2 d9_error.invalid_request for authorized invalid requested View index/kind, only proved authenticated protected Plan contradiction yields integrity_conflict, missing proof/source/domain receives proof_unavailable/source_unavailable/domain_unavailable as appropriate, retained D1/owner errors/prior auth priority, invalid_output only actual worker output"
+    "D9-466B-P2-01": "independently CLOSED at fixed6012: authorized caller-selected View index=99/wrong payload dispatches existing D9/2 wire2 invalid_request, original proved authenticated protected contradiction integrity_conflict, unavailable proof/source/domain and auth/entered D7 error order accepted within fixed scope",
+    "D9-6012-P1-01": "author-resolved-pending-independent-review: graph TerminalSchema has nodes/edges RowsSchema and five binding IDs only; static query_json data={nodes,edges} retains all original typed V/actual columns/bag/order, legal isolated node and zero edges with no ViewSpec.nodeDetails, rejects omitted present displayName/column or truncated/reordered values; no new D7/query_json wire",
+    "D9-6012-P2-01": "author-resolved-pending-independent-review: original invalid_output remains applicable to separate D9 Host/Core IR format coverage S33 (worker success + schema-valid IR but omitted XLSX sheet/hidden object) and D9 Region issuance format/geometry as well as real worker validation; ONLY authorized caller View catalog selector uses original invalid_request, kept protected integrity_conflict/proof/source/auth precedence and original envelopes"
   }
 }
