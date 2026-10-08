@@ -373,7 +373,7 @@ kind 归属是完整单值映射：每个 kind 恰有一个 interface owner，�
 | `D9ViewRenderBinding` | `D9ViewRenderBinding/1`，真实完整 D7ResultPin/ViewSpec/1，六图表与 complete_data |
 | `Source/Resource/Query` | 按所选域由 source_read/resource_read 或完整 D7 Query 生产；`query_json` graph 原 `{nodes,edges}`，不要求 ViewSpec.nodeDetails |
 | `WorkerInvocation` | `WorkerInvocation/1`，独立 Host/Core IR 覆盖与 Region 校验保留各自原 invalid_output |
-| `D3/D6 作者回执` | 不能用 PublicationReceipt/4 或 PrintReceipt/1 替代；Resource handoff 为独立原 D7/D3 作者请求 |
+| `D3/D6 author receipt` | 不能用 PublicationReceipt/4 或 PrintReceipt/1 替代；Resource handoff 为独立原 D7/D3 作者请求 |
 
 
 
