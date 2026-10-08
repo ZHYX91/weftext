@@ -738,31 +738,31 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "a131ea62b396577aec660f00526dca964e870b6e",
+        "blob": "8814cbaad045582271421e15dcd7ddf8770de44c",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2225",
           "§6.5.1 L2226–2262",
-          "§6.6 L2263–2617",
-          "§6.6.1 L2559–2617"
+          "§6.6 L2263–2634",
+          "§6.6.1 L2559–2634"
         ]
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "c2b257af55c120a2a783297867e835c0619276fd",
+        "blob": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
           "§6.5.1 L2337–2375",
-          "§6.6 L2376–2730",
-          "§6.6.1 L2672–2730"
+          "§6.6 L2376–2747",
+          "§6.6.1 L2672–2747"
         ]
       }
     ],
     "spec": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-        "blob": "72e66559cc5761ff75303bfee3598d4226b2637c",
+        "blob": "420639250fc14b1e01632cb634523f87f1fafb2e",
         "ranges": [
           "§8.3 L439–463",
           "§8.4 L464–471",
@@ -774,7 +774,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-        "blob": "8e85b87c900fc18f679cd2b434eb8b37c18dfd0e",
+        "blob": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
         "ranges": [
           "§8.3 L449–483",
           "§8.4 L484–491",
@@ -804,13 +804,13 @@
       "schemas": "§6.5 freezes recorded Plan3 predecessor/shared rules; §6.6 is fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4 plus Annotation carrier and finite View renderer",
       "spec": "§8.3 shared exact-source/resource/query_json, controlled-name/canonical-pin/unknown-publication rules now bind fresh Plan4; §16a behavior closure; §17 unseen-current dispatch and §18 inventory name /4",
       "historical": "Plan/Receipt1-3 and predecessor closed families retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery; no migration",
-      "admission": "§6.6.1 public closed decode→D1 capability→current entry authorization→Workspace/domain/P continuity; then existing saved/planned/unknown/inspect/receipt look up original protected Plan/token/version and recovery, while fresh unseen prepare privately constructs Plan from real authorized owner inputs without preexisting Plan. Minimal authorized View index/kind/D7ResultPin routing precedes entry to original D7 §7; all later D9 selection/projection recordPin, View hash, target/receipt, canonical arrays, exact pins/loss/budget remain mandatory. Original §3a name preflight→unique non-public planToken before referenced report/manifest/Plan→dataFiles/loss/staged freeze→atomic complete Plan storage and only then token disclosure."
+      "admission": "Final FC SCHEMAS §6.6.1 is sole current eight-domain producer dispatch: public closed decode→D1 static capability→current audience/entry authorization→Workspace/domain/P, then real selected original D6/D2 Document source_read, Resource resource_read, D2 native_table/narrow D4 Field, complete D7 Query/Collection, D8 Annotation or D7 View ResultPin. Seven catalog arms only; field is narrow input not a public domain; template/route/resource dependencies only when used. Authorized fresh caller missing viewInput=99 or wrong payload uses existing D9/2 wire2 d9_error.invalid_request before D7; authenticated saved/frozen protected Plan contradiction uses integrity_conflict only with proved reachable contradictory evidence; unproved/missing proof, source and domain use proof_unavailable, source_unavailable and applicable domain_unavailable/original owner disposition. Original D7 §7 errors, no new wire, all pin, hash, scope, route, loss/budget and §3a token→report→atomic freeze remain mandatory."
     },
     "annotationCurrent": {
       "spec": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-          "blob": "72e66559cc5761ff75303bfee3598d4226b2637c",
+          "blob": "420639250fc14b1e01632cb634523f87f1fafb2e",
           "ranges": [
             "§9.1–9.12 L476–669",
             "§16 L946–955",
@@ -820,7 +820,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-          "blob": "8e85b87c900fc18f679cd2b434eb8b37c18dfd0e",
+          "blob": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
           "ranges": [
             "§9.1–9.12 L496–705",
             "§16 L1012–1021",
@@ -832,21 +832,21 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "a131ea62b396577aec660f00526dca964e870b6e",
+          "blob": "8814cbaad045582271421e15dcd7ddf8770de44c",
           "ranges": [
-            "§6.6 L2263–2617",
-            "§6.6.1 L2559–2617",
-            "§7 L2618–2778"
+            "§6.6 L2263–2634",
+            "§6.6.1 L2559–2634",
+            "§7 L2635–2795"
           ],
           "read": "FULL-direct-current-consumer"
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "c2b257af55c120a2a783297867e835c0619276fd",
+          "blob": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
           "ranges": [
-            "§6.6 L2376–2730",
-            "§6.6.1 L2672–2730",
-            "§7 L2731–2894"
+            "§6.6 L2376–2747",
+            "§6.6.1 L2672–2747",
+            "§7 L2748–2911"
           ],
           "read": "FULL-direct-current-consumer"
         }
@@ -862,7 +862,7 @@
         "FC4C-STORE-12"
       ],
       "target": "D9.md §13a; D9-SCHEMAS.md §16a; D9-ACCEPTANCE CUR-09 + ANNEXP-01..06 + PLAN4-REL-01 + PLAN4-CAN-01/03",
-      "rule": "annotation_index remains omission-only. Actual current Annotation content export consumes one exact D8AnnotationReadResponse/1 carrier and final-FC §6.6.1 enforces one inputIndex/one mode/one projection, portable-backup false context flags, independent Review Bundle disclosure and canonical selection/origin sets without reread repair."
+      "rule": "Annotation is ONE of eight exact D9ExportInputDomain/2 cases, not a global producer precondition. annotation_content consumes one actual current D8AnnotationReadResponse/1; annotation_index remains omission-only. The independently CLOSED fixed79026 recordPin selection/projection relation, complete Value4/R6 body/attribution/reply independent from hidden context, frozen revision/Observation and portable backup no-capability constraints are retained. No default Annotation read on Source/Resource/Field/Query/Collection/View."
     },
     "viewCurrent": {
       "d7Owner": "docs/design/a2-final-design/d7/owners/view/source.md",
@@ -870,7 +870,7 @@
       "mandatory15": "FULL-D9-applicable L1042–1141",
       "currentCarrier": "final FC SCHEMAS §6.6 D9ViewRenderBinding/1",
       "target": "D9.md §12a; D9-SCHEMAS.md §16b; D9-IMPACT.md §8a; D9-ACCEPTANCE M15-01..10 + PLAN4-REL-02/03 + PLAN4-CAN-02/03 + VIEW-SCOPE-01",
-      "rule": "After public closed decode/D1/current audience authorization and Workspace/domain/P continuity, fresh unseen View privately routes its selected inputIndex to an actual catalog query_result D7ResultPin; index=99 missing or wrong field/annotation payload rejects without entering D7. With a real result, the original D7 §7 closed/static ViewSpec decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery order remains intact. D9 then enforces exact three resultInput, ViewSpec hash, renderer/target/complete_data/a11y and receipt relations. Six metric/bar/line/scatter/pie/heatmap layouts retain named positive routes; current valid D7 network remains renderer_unavailable on the closed D9 union; no requery, local legend scope or data-row substitution."
+      "rule": "Only after public authorization and the actual selected domain's original scope/producer qualification may the private View route check catalog index presence, payload.kind=query_result and genuine D7ResultPin. Invalid caller index=99 or wrong payload uses original wire2 invalid_request without fabricating D7 or worker invalid_output. Authenticated original Plan proof contradiction requires actual reachable proof for integrity_conflict; unproved pin/source/domain use actual availability disposition. With a real selected D7 result, D7 View §7 runs closed decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery, before D9 renderer/profile. The current D9 six-chart route uses complete_data/a11y, exact hash/target/receipt and canonical assets; supported D7 network remains renderer_unavailable, deferred layouts unsupported_layout, no Query rerun or local legend scope."
     },
     "predecessorRangeCorrection": {
       "finding": "D9-BAF-P2-02",
@@ -927,7 +927,7 @@
     },
     "versionCoordination": {
       "status": "author-resolved-pending-independent-review; coordinator precheck, not a separate finding count",
-      "current": "fresh unseen export uses ExportPlan/4 without requiring a previously stored Plan, and inherits original D9 worker/export §3a token and atomic-save order; recorded requests/receipts use actual protected Plan lookup and unchanged recovery. PublicationReceipt/4 or D9PrintReceipt/1 continue as distinct outcomes. §6.5 exact-source/resource/complete graph query_json generationPolicy=none, controlled names/canonical ordering, template/route/style, recursive pins and unknown-publication gates are retained.",
+      "current": "Only fresh unseen matching the selected one of eight D9ExportInputDomain/2 needs its own original authorized source input; Source/Resource/Field exact reads never require an unrelated whole-Workspace Query/D8 Annotation. Query-backed Collection/query_rows/query_json require complete real D7 result; annotation uses D8, view uses D7ResultPin then D7 View §7. Fresh Plan4 original §3a private token before referenced report/manifest and atomically saved complete bytes. Existing Plan/Receipt1-3 and current protected receipts keep original decoder/lookup/recovery. Existing D9/2 wire2 error meanings are explicitly kept; no new error family or owner.",
       "retained": "recorded ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3 and token/confirmation/bundle predecessors retain exact decoder/bytes/pins/recovery and are never repinned/re-encoded into /4",
       "currentizedLocations": [
         "FC SPEC §8.3",
@@ -940,10 +940,10 @@
         "A2 D9 main/version references"
       ],
       "currentBlobs": {
-        "specEN": "72e66559cc5761ff75303bfee3598d4226b2637c",
-        "specZH": "8e85b87c900fc18f679cd2b434eb8b37c18dfd0e",
-        "schemasEN": "a131ea62b396577aec660f00526dca964e870b6e",
-        "schemasZH": "c2b257af55c120a2a783297867e835c0619276fd",
+        "specEN": "420639250fc14b1e01632cb634523f87f1fafb2e",
+        "specZH": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
+        "schemasEN": "8814cbaad045582271421e15dcd7ddf8770de44c",
+        "schemasZH": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
@@ -1000,7 +1000,7 @@
   },
   "acceptanceAuthority": {
     "json": "D9-ACCEPTANCE.json",
-    "blob": "0e47db82666ff9a7756cb914614303e826873a15",
+    "blob": "d4f0bd4fe81cd25414d1f6e131b7001ed1f4cf94",
     "rows": 104,
     "uniqueIds": 104
   },
@@ -1041,12 +1041,13 @@
   },
   "reviewFindings": {
     "D9-BAF-P1-01": "independently CLOSED at fixed79026 (alias D9-8B6-P1-01): exact selection↔payload.recordPin↔projection and canonical PortableAnnotationRecord4, original independent Annotation permissions/hidden context retained",
-    "D9-BAF-P1-02": "author-resolved-pending-independent-review after fixed79026 residual (alias D9-79026-P1-01): separate fresh unseen no-Plan producer from existing protected Plan recovery; authorized minimal View index/kind/result routing before full original D7 §7; §3a original private token before loss-report/manifest and complete atomic save; View hash/print/access priority unchanged",
+    "D9-BAF-P1-02": "author-resolved-pending-independent-review for fixed466b residual alias D9-466B-P1-01: complete eight original inputDomain producers plus seven closed catalog payload arms, Query-free Document/Resource/Field, actual D2 native_table and D4 narrow Field, complete D7 Query/Collection/graph, D8 Annotation and D7 View owner qualification; conditional template/route/asset/resource reads; no blanket D8/D7 producer.",
     "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
     "D9-8B6-P2-01": "independently CLOSED at fixed4da7 in bounded D9 canonical-array scope; current canonical comparator/order/origins rules preserved, no reopening",
     "D9-8B6-P2-02": "independently CLOSED at fixed4da7 in bounded D9 renderer scope: current network remains renderer_unavailable for closed six-layout D9 route, no reopening",
     "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
     "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7 in bounded mapping scope: D8-SOURCE-MAP current consumer pointer corrected, retained 760 row-source provenance unchanged",
-    "D9-4DA7-MAP-P2-01": "author-resolved-pending-independent-review after fixed79026: finalFC.spec[0]/[1] and every actual current finalFC.spec/schemas, annotationCurrent and versionCoordination currentBlobs alias map to the same final Git tree; unchanged historical predecessorRangeCorrection, D4/D5 direct reads and original 760 row provenance"
+    "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current/final FC SPEC/SCHEMAS blob aliases and ff10 predecessorRangeCorrection + D4/D5 direct-read + 760-row provenance were checked and accepted within that fixed scope; this batch refreshes only legitimate new current consumers",
+    "D9-466B-P2-01": "author-resolved-pending-independent-review: original Workspace D9/2 wire2 d9_error.invalid_request for authorized invalid requested View index/kind, only proved authenticated protected Plan contradiction yields integrity_conflict, missing proof/source/domain receives proof_unavailable/source_unavailable/domain_unavailable as appropriate, retained D1/owner errors/prior auth priority, invalid_output only actual worker output"
   }
 }
