@@ -272,12 +272,12 @@ d7_planned_preview_opened {
 3. 原 D6 current authorization、原 ObservationScope 与完整 preview disclosure 资格；
 4. current authority/custody/ledger continuity；
 5. 同 key canonical request byte-equal 且 ledger state=planned；
-6. 原 PreparedActionBinding/4、其 semantic preview 与全部必要 pins 完整可证；
+6. 按**受保护记录实际保存的 artifact version/domain**选择并严格解码完整原 prepared binding 字节及 immutable preview（fresh PAB4/EffectManifest3/EffectBytes3，或真实历史已存 PAB3/EffectManifest2/EffectBytes2），只按**原记录对应版本**复核 preview semantic digest，核对原 request/OperationId/DecisionKey 与全部原 owner/preview/EffectBytes pins；真实历史决议不得被 PAB4-only 门挡住；
 7. 建立新的有限 recovery delivery epoch，返回 fresh action_preview token/cursor/header。
 
-新 epoch 的语义 item、排序、EffectBytes payload 和 profile 必须逐字来自原 planned 保存的 immutable preview，不得重跑 Query、重新解析 current definition、重新选择 target、重新生成 proposed source 或切换 Registry。它只重新签发运输句柄。
+新 epoch 的语义 item、排序、EffectBytes payload 和 profile 必须逐字来自原 planned 保存的 immutable preview，且继续使用该记录原 closed decoder/semantic hash 与 pin directory；current PAB4 不得覆盖或重标记历史 PAB3/Manifest2。原 preview token 过期不等于已保存 planned preview 丢失，不得用无关 current PAB4 替换原 binding；不得重跑 Query、重新解析 current definition、重新选择 target、重新生成 proposed source 或切换 Registry。它只重新签发运输句柄。
 
-新 recovery epoch 有独立有限 TTL；它不延长或复活旧 preview token/cursor。page 和 EffectBytes 继续使用原 D7 transport。恢复 epoch 过期使用 `preview_expired`；epoch 已证明失效用 `reset_required`；pin/continuity 不可证、request/state 不匹配用 `effects_unavailable`；更早 authorization failure 仍 `not_visible`。不新增新的 effects error enum。
+新 recovery epoch 有独立有限 TTL；它不延长或复活旧 preview token/cursor。page 和 EffectBytes 继续使用原 D7 transport。**新** recovery epoch 过期使用 `preview_expired`；epoch 已证明失效用 `reset_required`；pin/continuity 不可证、记录 domain/version 错、原 preview digest 不符或 request/非 planned state 不匹配用 `effects_unavailable`；更早的 audience/权限/ObservationScope/disclosure 失败仍 `not_visible`。禁止重新 prepare、旧字节按新标签重哈希、延长旧 token、新增 owner 或作者 mutation。不新增新的 effects error enum。
 
 ### 5.2 交互批准消费边界
 

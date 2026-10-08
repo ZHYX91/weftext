@@ -273,12 +273,12 @@ The unique order is:
 3. original D6 current authorization, original ObservationScope, and complete-preview disclosure eligibility;
 4. current authority/custody/ledger continuity;
 5. byte-equal canonical request at the same key with ledger state=planned;
-6. complete original PreparedActionBinding/4, semantic preview, and all required pins;
+6. select by the **recorded protected artifact version/domain**, strict-decode the complete original prepared binding bytes and immutable preview (fresh PAB4/EffectManifest3/EffectBytes3, or a genuine saved historical PAB3/EffectManifest2/EffectBytes2), recompute only the correct **original version-specific** preview semantic digest, and verify the original request/OperationId/DecisionKey and *all* original owner/preview/EffectBytes pins; no PAB4-only gate for an actual historical decision;
 7. create a new finite recovery delivery epoch and return a fresh action_preview token/cursor/header.
 
-The new epoch's semantic items, order, EffectBytes payloads, and profile come byte-equivalently from the immutable preview saved with the planned decision. It cannot rerun Query, parse a current drifted definition, reselect a target, regenerate proposed source, or switch Registry. It only reissues transport handles.
+The new epoch's semantic items, order, EffectBytes payloads, and profile come byte-equivalently from the immutable preview saved with the planned decision, under that record's original closed decoder/semantic hash and pin directory; current PAB4 never overwrites or relabels historical PAB3/Manifest2. An expired original preview token is not evidence that its saved planned preview disappeared, and an unrelated current PAB4 must not replace the original binding. It cannot rerun Query, parse a current drifted definition, reselect a target, regenerate proposed source, or switch Registry. It only reissues transport handles.
 
-The recovery epoch has an independent finite TTL and neither extends nor revives old preview token/cursor. Page and EffectBytes continue to use original D7 transport. Expired recovery epoch uses `preview_expired`; proven epoch invalidation uses `reset_required`; unprovable pin/continuity or request/state mismatch uses `effects_unavailable`; earlier authorization failure remains `not_visible`. No new effects-error enum is added.
+The recovery epoch has an independent finite TTL and neither extends nor revives old preview token/cursor. Page and EffectBytes continue to use original D7 transport. Expired **new** recovery epoch uses `preview_expired`; proven epoch invalidation uses `reset_required`; unprovable pin/continuity, wrong recorded domain/version, original preview digest mismatch or request/non-planned state mismatch uses `effects_unavailable`; earlier audience/permission/ObservationScope/disclosure failure remains `not_visible`. No reprepare, rehash-under-new-tag, extended old token, new owner or author mutation is permitted. No new effects-error enum is added.
 
 ### 5.2 Interactive approval consumption boundary
 
