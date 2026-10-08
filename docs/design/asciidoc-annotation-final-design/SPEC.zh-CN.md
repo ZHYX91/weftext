@@ -452,7 +452,8 @@ D9 的 fresh unseen current export 使用 SCHEMAS §6.6 的 ExportPlan/4 success
 
 rendered document target 冻结 exact D2DocumentSnapshot/3 及其 evaluation binding、ManagedDocumentSemanticQualification/1、实际消费的 exact D8PresentationDecision/1 与 accepted route/profile chain。HTML 与 D8 使用同一 product/run-in decision。DOCX/ODT 在 selected target profile 支持时可把 effective 1–9 映射到显式 heading style；更大的 arbitrary-precision level 与 target limit 只能成为 explicit loss/unavailability，不能使 D2 syntax invalid。prepare 前必须重新验证 include/environment dependency；Plan 冻结后，later include/source/presentation-policy change 不得 rerender 或修改该 Plan。
 
-generation policy 是有限的 per-plan 封闭值，只包含 binding choice、missingPolicy=empty、显式 Resource image size、layout choice 与 native-table token binding。
+generation policy 是每个 Plan 内的有限封闭值。
+允许的成员仅包括 binding choice、missingPolicy=empty、显式 Resource image size、layout choice 与 native-table token binding。
 不存在外部 generation-policy registry/descriptor。missing policy 不能绕过 permission/type/unknown-path error；image size 与 layout 始终由精确授权的 ResourceRef 和 fixed Templates rule 决定。
 
 所有 set-like collection 的 canonical comparator 同样属于 Plan contract：route steps 的 array position 必须等于 step=0..N-1，step.evidencePins 按 pinToken；styleBundles 按 styleBundleId。bindingChoices/missingPolicy 的 templatePath 按 exact Unicode scalar sequence lexicographic 比较，normalization=none、case-sensitive，精确 scalar prefix 较短者在前；禁止 locale/case-folding，两个 array 必须共用这一 comparator 完成跨集合互斥。对于 stagedOutputs/receipt.outputs，fresh-current 名称必须先满足 SCHEMAS §6.5 的 D9ControlledRelativeOutputName/1，完整 bundle 还必须通过确定性的 exact-name、portable alias、文件/目录前缀和系统保留名称冲突检查；随后才按原始 protocol name 的无符号 UTF-8 字节做字典序比较，完全相同的字节前缀较短者在前。这个 comparator 本身仍不执行 normalization、case folding、locale collation、host/path-library ordering 或 separator rewrite。nativeTableBindings 继续以 (setName,columnName) 为 key；已有 imageSizes/layoutChoices/lossChoices/top-level evidencePins/recoveryPins 继续各自既定 key。D9 prepare 必须在冻结 Plan bytes/token/pins/staged manifest/confirmation basis 前先检测 duplicate/conflict 再 canonical sort，使合法 input permutation 得到 byte-for-byte 相同 Plan。冻结、接收或恢复的 current record 若已乱序、名称 duplicate/conflict 或名称不属于闭合 output-name 域，必须失败；读路径不能排序、normalize、rename 或用 LWW 修复 protected bytes。
@@ -467,14 +468,17 @@ template binding inputIndex 必须选择 exact template catalog item，pin/profi
 
 Plan evidencePins 仍只有一套 derivation，不是自由集合。fresh Plan4 必须递归收集 input catalog、projection、document render binding、View render binding、template、route、styles、dependency/observation proof 与 staged outputs 中真正可达的 typed PinRef，再并入显式保留的 recoveryPins，并按 pinToken 排序去重。漏掉可达 pin 或加入无关 evidence 都会改变或破坏 Plan。PublicationReceipt4 必须重复 exact target/template/route/styles/generation-policy/View-render/presentation selection 与实际 output digest；/3 的 derivation 只对真实记录的 /3 recovery 保持原义。
 
-native table→Office dataset name 完全遵循 SCHEMAS §6.5.1，ordinary Node 不增加 export metadata。Core 从 D2TableBlock/3 与 D2TableCell/3 推导 physical column，包括 multi-row head、colspan 与 rowspan。
+native table→Office dataset name 完全遵循 SCHEMAS §6.5.1；ordinary Node 不增加任何 export metadata。
+Core 从 D2TableBlock/3 与 D2TableCell/3 推导物理列，覆盖多行表头以及 colspan、rowspan。
 文本比较固定使用精确 Unicode scalar sequence：不做 normalization、区分大小写并保留 whitespace。resolver 依次尝试 leaf、最短且更长的 header suffix、精确 table title、确定性的 table/column occurrence ordinal。
-例如，唯一的 lowercase-ASCII leaf amount 可以直接使用 data.native_table.amount；Plan/Actual 下都存在 Amount 时，bare Amount 必须判为 ambiguous，只能选择 Plan/Amount 或 Actual/Amount 的 qualified selector/token。两张同标题表的 full path 仍相同时，还必须加入冻结的 occurrence qualifier。
+例如，唯一的 lowercase-ASCII leaf `amount` 可以直接使用 `data.native_table.amount`；Plan/Actual 下都存在 Amount 时，bare Amount 必须判为 ambiguous，只能选择 Plan/Amount 或 Actual/Amount 的 qualified selector/token。两张同标题表的 full path 仍相同时，还必须加入冻结的 occurrence qualifier。
 没有 candidate 时返回 mapping_required；仍有多个 candidate 时返回 ambiguous_binding。禁止 first/last wins、猜测 suffix 或改写 author source。简单且唯一的 lowercase-ASCII leaf 保留 short COLUMN token；qualified/CJK/RTL/combining selector 使用 SCHEMAS 固定的 ASCII digest token。
 后续新增同名 table/column 可以让 fresh short binding 变为 ambiguous；已经 prepared 的 Plan 因为冻结了原 projection、selector 与 staged bytes，继续保持 immutable。
 
 原 D9 permission/state machine 继续承担实际约束：potential scope/authorization 必须先于敏感读取；inspect/confirmation/publish/delivery 都要重新验证 current authorization；unreadable 不能被解释成 none；不同 Query authorization generation 不得混用。
-create-only external publication 保留 durability 与 unknown-outcome 规则；Save-as-Resource 继续是独立的 current D3 create_resource preparation/receipt。fresh current D3 request 仍遵守修正后的 optional expectedAuthority mode matrix。
+create-only external publication 继续保留 durability 与 unknown-outcome 规则。
+Save-as-Resource 继续是独立的 current D3 create_resource preparation/receipt。
+fresh current D3 request 仍遵守修正后的 optional expectedAuthority mode matrix。
 
 
 ### 8.4 fixed-parent direct-holder dispatch 与历史边界

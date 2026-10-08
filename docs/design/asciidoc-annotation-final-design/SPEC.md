@@ -744,7 +744,13 @@ CoreSourceEditPlan/2 = {
   afterPin:PinRef/2,
   transformEmission:TransformEmissionPlan/1
 }
-``` Emission is either disabled with `no_exact_core_edit_plan|transform_profile_unavailable`, or required with exact profile, expectedTrustRevision, and expectedTrustKeyId. The caller cannot choose. A winning required plan cannot downgrade during recovery; a disabled plan cannot upgrade. Seal cannot recompile or reorder events.
+
+TransformEmissionPlan/1 =
+  disabled{reason:"no_exact_core_edit_plan"|"transform_profile_unavailable"}
+| required{profile:"d6_source_transform_seal/1",expectedTrustRevision,expectedTrustKeyId}
+```
+
+Core determines the arm mechanically before planning; the caller cannot choose it. After a winning plan freezes, required cannot downgrade and disabled cannot upgrade. A required seal revalidates the exact profile, trust revision, trust key and usable handle. Seal cannot recompile, reorder or merge events.
 
 ## 12. Signed transform evidence and outbox
 
