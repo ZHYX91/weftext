@@ -8,7 +8,7 @@ translation_status: source
 # D10 125 条稳定场景验收投影
 
 唯一结构权威：`D10-ACCEPTANCE.json`。这里逐字投影全部 125 条稳定 ID 的场景、来源、候选结果、禁止条件和回归 oracle，全部属于设计义务，产品 UNRUN，不是独立 PASS。
-本表的历史坐标与源时代用词逐项取自未改动的 `docs/design/d10/SCENARIO-DISPOSITIONS.zh-CN.md`，绝不拿现任 `D10-SCENARIOS.zh-CN.md` 冒充历史字节；现任改名只存于 `D10-ACCEPTANCE.json.currentOverlay.sourceEraToCurrent` 与 A2 投影。
+本表的历史坐标与源时代用词逐项取自未改动的 docs/design/d10/SCENARIO-DISPOSITIONS.zh-CN.md，绝不拿现任 D10-SCENARIOS.zh-CN.md 冒充历史字节；现任改名只存于 `D10-ACCEPTANCE.json.currentOverlay.sourceEraToCurrent` 与 A2 投影。
 
 | ID | 来源 | 处置 | 执行 | 正向规则 | 反向风险 | 验收证据义务 |
 | --- | --- | --- | --- | --- | --- | --- |
