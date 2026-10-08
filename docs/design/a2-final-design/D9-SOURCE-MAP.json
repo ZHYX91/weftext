@@ -749,7 +749,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "831b4342db5f94bb469c5443052e662c7416ce7b",
+        "blob": "624504164bc76cb4ed11087718a0d979ad96498c",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
@@ -842,7 +842,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "831b4342db5f94bb469c5443052e662c7416ce7b",
+          "blob": "624504164bc76cb4ed11087718a0d979ad96498c",
           "ranges": [
             "§6.6 L2376–2730",
             "§6.6.1 L2672–2730",
@@ -943,7 +943,7 @@
         "specEN": "e3f53e8b860e8414e4257732165ced84a4bb67f1",
         "specZH": "5dbf6685f2c6814decc9d5b68766083bb5bca423",
         "schemasEN": "d23e255e0054e71f4192fac00b295753c8916e05",
-        "schemasZH": "831b4342db5f94bb469c5443052e662c7416ce7b",
+        "schemasZH": "624504164bc76cb4ed11087718a0d979ad96498c",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
