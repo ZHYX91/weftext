@@ -2402,6 +2402,8 @@ D9ViewRendererBinding/1 = {
   evidencePins:[PinRef/2...]
 }
 
+D9ViewOutputScope/1 := "complete_data"
+
 D9ViewRenderBinding/1 = {
   resultInput:Counter,
   querySemanticSha256:"sha256:<64 lowercase hex>",
@@ -2411,12 +2413,13 @@ D9ViewRenderBinding/1 = {
   viewSpec:ViewSpec/1,
   viewSpecSha256:"sha256:<64 lowercase hex>",
   renderer:D9ViewRendererBinding/1,
-  presentation:D8PresentationDecision/1
+  outputScope:D9ViewOutputScope/1
 }
 
 D9ViewExportProjection/1 = {
   resultInput:Counter,
   viewSpecSha256:"sha256:<64 lowercase hex>",
+  outputScope:D9ViewOutputScope/1,
   accessibility:"same_data_table_required"
 }
 
@@ -2553,6 +2556,41 @@ D9PrintReceipt/1 = {
 }
 ~~~
 
+### 6.6.1 Plan/4 relational admission and canonical collections
+
+The /4 JSON shapes above are closed, and the following cross-field relations are also part of strict admission. Complete evidencePins coverage cannot substitute for these relations.
+
+Admission order is fixed: (1) strict closed/version/union/member/null decode; (2) verify every frozen set-like array is already canonical and duplicate/conflict free; (3) validate catalog indices and payload kinds; (4) validate selection-to-projection cardinality and mode relations; (5) validate View result/ViewSpec/renderer/target/destination/receipt relations; (6) validate current authorization, Observation/revision/result epoch and typed pins/proofs; (7) run the existing Annotation or D7 View semantic/currentness gate in its owner-defined order; (8) validate route/profile/assets, budget and loss; then and only then freeze staged bytes. A relation failure rejects the candidate. It is never repaired by a supplemental read, Query rerun, hidden arm deletion, reordering of protected bytes, renderer fallback or projection rewrite.
+
+For inputDomain=annotation:
+- annotationInputs is nonempty, viewInput=null, viewRenderBinding=null, projection.view=null, and documentRenderBinding=null.
+- annotationInputs is a set-like array keyed by inputIndex, sorted by ascending Counter and unique. One catalog input may appear at most once in the Plan and therefore has exactly one mode. Mixed portable_backup and review_bundle_r6 modes in one Plan are rejected; use separate Plans.
+- Each selected inputIndex names exactly one inputCatalog.items[index] whose payload is annotation_content.
+- projection.annotations has exactly the same cardinality and ascending inputIndex sequence as annotationInputs. At each position, portable_backup maps only to a portable_backup projection with byte-equal inputIndex and recordPin; review_bundle_r6 maps only to a review_bundle_r6 projection with the same inputIndex. A selected input without a projection, an unselected projection, duplicate index, cross-mode projection, or sequence [0,1,0] is invalid even when every referenced catalog item is individually authorized.
+- A portable_backup selection requires includeSourceHistory=false and includeTargetContext=false; both flags are inapplicable and true is rejected rather than ignored. target.kind must be annotation_backup and generationPolicy.kind must be none.
+- For review_bundle_r6, includeSourceHistory=false requires sourceHistory.state=not_requested and true requires disclosed or unavailable; the same rule applies independently to includeTargetContext and targetContext. Requested-but-denied context is unavailable, never not_requested or empty facts.
+- D9AnnotationDisclosureProjection/1.fragments is an ordered sequence preserving the authorized producer/context order. state=disclosed has one or more fragments. Fragment order is never sorted. Each fragment origins array is a nonempty set-like array sorted/unique by canonical D3-CJ/3(ExportInputLocation/2) bytes; duplicate origins reject.
+
+For inputDomain=view:
+- bodyInput=null, bibliographyInput=null, annotationInputs=[], viewInput is nonnull, documentRenderBinding=null, viewRenderBinding is nonnull, and projection.view is nonnull. Document export remains a separate input-domain path and may continue to use D9DocumentRenderBinding/1.presentation; D8 document presentation is not a View data-scope control.
+- contentSelection.viewInput, viewRenderBinding.resultInput, and projection.view.resultInput are byte-equal and select exactly one query_result catalog item. All hash/epoch/auth fields in the binding derive from that exact selected D7ResultPin.
+- viewRenderBinding.renderer.layout is byte-equal to viewRenderBinding.viewSpec.layout.
+- viewRenderBinding.outputScope and projection.view.outputScope are both exactly complete_data. This first profile exports every series/panel/item represented by the complete authorized D7 result and ViewSpec. Device-local legend hide/show state is not author data and cannot change export scope. The same-data accessible table covers the identical complete-data scope. Supporting current_display later requires a versioned successor with stable hidden-series keys and a qualified local-state source; it cannot be added as a Boolean or inferred from absence.
+- The outer target.kind is exactly one of docx|xlsx|pdf|svg|png|print, equals renderer.targetKind, and its profileId is byte-equal to renderer.profileId. target.kind=print iff destination.kind=print; every non-print View target rejects a print destination.
+- renderer.assets is a set-like array sorted by (role rank font<color_profile<page_profile<accessibility_profile, UTF8(assetId), UTF8(assetVersion), pin.pinToken) and unique. The same (role,assetId) with non-byte-equal version/pin is a conflict. Multiple font/color assets with different assetId are allowed. The array may be empty only when the accepted renderer/profile proves it consumes no external asset of these roles.
+- renderer.evidencePins is a set-like array sorted/unique by pinToken; it contains exactly the installation/profile evidence required by that renderer route and no unrelated pin.
+- Current D9ViewRendererBinding/1.layout remains the closed six-member union. A valid D7 network View therefore always returns renderer_unavailable on this current D9 route. Installing a profile cannot expand the union; network graphics require an actual future versioned renderer/schema successor.
+
+Delivery/receipt compatibility is also closed:
+- destination.kind=external_bundle may produce PublicationReceipt/4; repeated Plan members, including viewRenderBinding, are byte-equal. PublicationReceipt/4.presentation is byte-equal to documentRenderBinding.presentation when that document binding exists, otherwise it is null; it never carries View output scope.
+- destination.kind=print produces only D9PrintReceipt/1; its viewRenderBinding is byte-equal to the Plan and its target is the Plan print target.
+- destination.kind=resource_handoff produces only the existing separate D7/D3 author result over exact staged bytes; no PublicationReceipt/4 or D9PrintReceipt/1 is fabricated.
+- destination.kind=server_download uses the existing delivery/state result and produces neither portable publication nor print receipt.
+
+Canonicalization happens exactly once before Plan/4 freeze. A frozen, received, inspect, confirmation, saved/planned/unknown or recovery record must already satisfy these orders and relations; noncanonical arrays or relational mismatch reject without read-time sorting/repair. Existing D7 row order, Annotation disclosure-fragment order and other owner-defined ordered sequences are preserved and are not globally sorted.
+
+D9ViewRenderBinding/1 and Plan/4 remain design-candidate types with product execution UNRUN; this correction changes no deployed/recorded View-binding bytes. Once a /4 family is actually accepted/deployed, adding another View output scope or renderer-layout member requires a versioned successor rather than widening /1 in place.
+
 ExportInputCatalog/3 keeps every /2 arm byte-for-byte and adds only annotation_content. That arm is formed from one actual current D8AnnotationReadResponse/1: annotationRef, sourceObservation, annotationRevisionToken, value, body, and targetResolution are byte-equal to that read. record is exactly the PortableAnnotationRecord/4 formed from those fields and recordPin selects exactly D3-CJ/3(record) bytes under the existing PinRef/2 integrity rules. The Plan dependencyProof and observationProof cover the same-cut Annotation read and any separately authorized context reads. The final export barrier rechecks both sourceObservation and annotationRevisionToken; equal body text cannot substitute for a changed revision.
 
 annotation_index remains omission-directory evidence only and can never populate annotation_content, annotationInputs, or an Annotation body/context projection. Portable backup requires inputDomain=annotation, target.kind=annotation_backup, one or more mode=portable_backup selections, generationPolicy=none, and generates exactly D9AnnotationBackupFile/1: records are sorted/unique by complete canonical AnnotationRef bytes, every record is byte-equal to the D3-CJ/3 value selected by its chosen recordPin, and the backup file is the canonical UTF-8 D3-CJ/3(D9AnnotationBackupFile/1) bytes. It serializes no current permission, SourceObservation capability, revision-signing capability, PAB, or ActionEvidence. Review Bundle requires mode=review_bundle_r6 and uses only the already-produced D8AnnotationBodyRead/1: valid uses its R6 semantic text, absent uses null, and invalid is renderer unavailable rather than a second parse. Purpose, appearance, labels, reviewState, suggestion, reply and attribution come from the same complete Value/4.
@@ -2563,7 +2601,7 @@ A View export has inputDomain=view, exactly one viewInput selecting a query_resu
 
 querySemanticSha256 is SHA-256 of D3-CJ/3(the exact D7 SemanticStateKey) and snapshotResultSha256 is SHA-256 of D3-CJ/3(the exact D7 SnapshotResultKey) retained by the selected D7ResultPin. resultEpoch and authorizationGeneration are byte-equal to that same result evidence; viewSpecSha256 is SHA-256 of D3-CJ/3(the exact ViewSpec/1). These hashes are frozen cross-checks, not identities or new cache authorities. The selected D7ResultPin remains the complete result/cut/dependency authority.
 
-A View renderer binding is valid only for one named installed renderer/profile/version and one exact target kind. Its asset bindings contain every actually consumed font, color, page and accessibility profile pin; its evidencePins contain only the renderer/profile installation evidence required by that route. The fixed accessibility profile requires the same complete data table plus title/description alt-text semantics, query/panel order, CJK/RTL preservation and non-color-only meaning. PDF, SVG, PNG and print profiles may render the six layouts directly. DOCX/XLSX profiles may do so only when their named profile proves the same View semantics; if an Office template is used, §6.5.1 visible-template authority and all §14 rules still apply. Unsupported backend/profile/layout combinations are stable unavailable results, never silent data-table substitution.
+A View renderer binding is valid only for one named installed renderer/profile/version and one exact target kind. Its canonical asset/evidence collections and target/profile relation are defined by §6.6.1. The fixed complete_data scope requires the same complete data table plus title/description alt-text semantics, query/panel order, CJK/RTL preservation and non-color-only meaning. PDF, SVG, PNG and print profiles may render the six layouts directly. DOCX/XLSX profiles may do so only when their named profile proves the same View semantics; if an Office template is used, §6.5.1 visible-template authority and all §14 rules still apply. Unsupported backend/profile/layout combinations are stable unavailable results, never silent data-table substitution.
 
 For Plan/4, `evidencePins` is exactly the pinToken-sorted/unique recursive union of `Pins(inputCatalog)`, `Pins(projection)`, `Pins(documentRenderBinding)`, `Pins(viewRenderBinding)`, `Pins(templateBinding)`, `Pins(routeBinding)`, `Pins(styleBundles)`, `Pins(dependencyProof)`, `Pins(observationProof)`, `Pins(stagedOutputs)`, and `recoveryPins`, excluding the Plan's own `evidencePins` member. Thus Annotation record/context pins and every View renderer/asset/result dependency actually consumed are covered by the existing one-union rule.
 
