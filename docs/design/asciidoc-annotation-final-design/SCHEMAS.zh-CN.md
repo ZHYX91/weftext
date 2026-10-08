@@ -2309,7 +2309,9 @@ D9ExportTemplateBinding/1.inputIndex 必须选择 inputCatalog.items[index] 中�
 
 nonnull route 的 steps 必须非空并从 0 连续编号。每一步的 input/output profile 都必须被该 exact provider/version 接受。
 terminal output profile 必须与 target 完全一致。
-html/pdf/docx/odt/xlsx/ods 使用 target.profileId；csv_utf8 固定为 "text/csv-utf8/1"；tsv_utf8 固定为 "text/tsv-utf8/1"。
+对于六种文档或 Office 目标 html/pdf/docx/odt/xlsx/ods，目标配置必须使用 target.profileId 中已经冻结的 profile。
+csv_utf8 的 terminal profile 固定为 "text/csv-utf8/1"，不得改成其它值。
+tsv_utf8 的 terminal profile 固定为 "text/tsv-utf8/1"，同样不得改成其它值。
 routeBinding.profileId/profileVersion 必须指向包含这条精确 terminal chain 的 accepted route profile。target 与 terminal 不匹配时直接拒绝 prepare，不能自动改换 route。
 
 document render 时，documentSnapshotPin 必须选择 ownerNodeRef/sourceObservation 对应的 exact D2-Document-Snapshot/3 bytes。snapshot evaluation 的 root SourceObservation 与 ManagedDocumentSemanticQualification.sourceObservation 都必须和 sourceObservation 逐字相等。
