@@ -433,6 +433,10 @@ Schedule current proof 中真实解析 managed Document 时必须含 source + do
 
 revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未激活、未实现。最近一次完整历史 R08 评审绑定 C8=`d99f053b9386c9c9e1664251fdec9f00e33fac2c` 与 S=`7e18168dad3e6d120fce0dd607dc10fa7894e252`，结论 REVISE（P0=0、P1=3、P2=8）。十一项历史最终处置仍为 OPEN。具名修订已有限定独立复核，实际跨 owner 整合及 fresh 全局接受仍未完成；D10-REVIEW 区分各层证据。
 
+## 0.3 首次新建与真实记录的唯一分派
+
+本合同只消费同一个 D6 闭合生产者，不建立 D10 第二类型权威。首次 ControlPrepareBinding/3 在真实 D6 planning/seal 屏障冻结 ControlDependencies/3、D10WorkspaceReadDependencies/2、D10ControlInput/2、D10ControlEffectPlan/2。Automation 或 Run 记录的现任后像/pin 是 Image2/Pin2，其余**十七类仍使用合法的 Image1/Pin1**，通过唯一 mixed tagged carrier 分派；真实历史 Image1 Automation/Run 则继续走原 decoder。已有决议关联的 ControlPrepareBinding1/2、Dependencies1/2 保留原 tag、字节和责任链。新 D10 作者步骤按 D7 PAB4、EffectManifest3/EffectBytes3、D10AuthorPreparationLink2、ApprovalUse2 与同一原 D6 request；历史 PAB3/Link1/ApprovalUse1 的 preview digest 和 decoder 不能按新代数重签。原 Control §7 的公共 result/error 与十九类完整 current view 继续现行；§8.1/§8.2 中已被 §0 继任的 Image1/Plan1/ApprovalUse1 示例只在真实旧版本恢复范围有效。已安装 stop/Money/unknown 与未用容量不能因同步、I 重建、回执读取、重试、相同 digest 或显示名归零。ScheduleSubscription2、Witness/Step/Invalidation2、Inventory2/Record3 与 mixed claim/pin 只按 §0 全部精确 owner schema；不存在自造 StoreIncarnationProof 请求或第二持久决策账本。
+
 ## 1. 权威、适用范围与错误边界
 
 Core 仍是唯一作者事务权威。Workspace 作者提交、saved decision、receipt 和 planned recovery 继续由 D6 拥有；本合同不得保存第二份作者成功 ledger。部署 trust、package、secret、external account、pricing 和资源使用授权属于 D10 host control domain，不授予 Workspace 内容权限。

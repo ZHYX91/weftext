@@ -61,7 +61,7 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 
 - Workspace 自助控制由 proposed D6 Policy/3 `d10_control_self` 授权；Workspace 管理由原 `policy_admin`，Registry activation 另验 `registry_admin`。deployment trust/account/secret/pricing/grant 由 D10 DeploymentControlPolicy 管理，不得借 Workspace admin 或 issuer admin。
 - 会影响作者提交的 Workspace 控制变更继续使用原 D6 authority store、`PreparedIntent`、决议/receipt 与作者提交点。`DeploymentControlDecision` 只保存部署控制结果；host adapter 不得写作者 source。
-- `ControlPrepareBinding/2` 使用 `(scope incarnation, principal, requestId)` 稳定键和完整规范意图字节。恢复顺序固定为：先验证当前可见性/权限，再比较同键完整输入，再重放已保存决议；只有尚无决议时才检查当前 expected revision 和执行资格。
+- `ControlPrepareBinding/3` 使用 `(scope incarnation, principal, requestId)` 稳定键和完整规范意图字节。恢复顺序固定为：先验证当前可见性/权限，再比较同键完整输入，再重放已保存决议；只有尚无决议时才检查当前 expected revision 和执行资格。
 - configuration revision 与 usageRevision 分离；control ID/incarnation 永不复用。retire/archive 不能删掉 planned、unknown、uncertain、evidence 或 dedup 仍引用的记录。
 - `ResourceUseGrant/1` 的 cost/secret/egress/external-effect 四类分别实现；grant renew/revision 不清零 spent/held/attempt/use，换 grant 也不清除旧 reservation 和实际 account liability。
 - fixed S profile/2 的旧非 Field 集合必须由测试常量逐字固定；profile/3 才增加 `d10_control_self`。升级、replay、replacement、continue/failover 不能改既有 family profile。
