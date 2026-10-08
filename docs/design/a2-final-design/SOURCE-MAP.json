@@ -2768,15 +2768,15 @@
     }
   },
   "d10_integration": {
-    "status": "complete D10 author candidate, author-resolved-pending-independent-review; fixed8d7 D9 bounded ACCEPT only, neither D10 nor global A2 independently accepted",
+    "status": "complete D10 author candidate, fixed7390 independent REVISE 0P0/1P1/1P2; three independently CLOSED at7390, two remaining author-resolved-pending-independent; fixed8d7 D9 bounded ACCEPT only, no D10/global A2 acceptance",
     "fixedStartSha": "8d7f165ace4f8c72305d2e7b21a12b3c4e5fbe56",
     "sourceMap": {
       "path": "docs/design/a2-final-design/D10-SOURCE-MAP.json",
-      "blob": "e7d7c19e10fa257ddeddf381b5b8a84c212b4b25"
+      "blob": "611b16e825d7883b0e3aef6c132a2777be79ef73"
     },
     "acceptance": {
       "path": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
-      "blob": "ea758c2b61228c24fd8100cfd1716a71897b3092",
+      "blob": "ff3f015afe175ce30aaf9f4ceb2b578b27b7e5af",
       "stableIDs": 125,
       "groupCounts": {
         "U": 27,
@@ -2790,53 +2790,53 @@
       "projections": [
         {
           "path": "docs/design/a2-final-design/D10-ACCEPTANCE.md",
-          "blob": "53711d1ef198627e85a3e401d17d6faf2d51ace0"
+          "blob": "80dadfe01c43d003756372fe60e7754755ff8dd9"
         },
         {
           "path": "docs/design/a2-final-design/D10-ACCEPTANCE.zh-CN.md",
-          "blob": "bee907042f48ca818a712878109e7204f83d59fc"
+          "blob": "94c76489aac5211d6ef87a1de8c197f900b234bc"
         }
       ]
     },
     "currentD10": [
       {
         "path": "docs/design/a2-final-design/D10.md",
-        "blob": "e38d85c6a1b06bbd8cd6299fdc22593a3bc60845",
+        "blob": "fdf1dd623f4de568e3e37c56da28c84bf8a13992",
         "originalPath": "docs/design/d10/CANDIDATE.md",
         "originalBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10.zh-CN.md",
-        "blob": "7218397a3d234f47efeb742409e03220a02fec60",
+        "blob": "69671a226f2a3d9bfc6abd6308e742012d005c72",
         "originalPath": "docs/design/d10/CANDIDATE.zh-CN.md",
         "originalBlob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-CONTROL.md",
-        "blob": "1615052d3cd87460c4c2f4f47a2d030b53812d3c",
+        "blob": "7026470286f64a7402d144c92a5fa10e2d4137a8",
         "originalPath": "docs/design/d10/CONTROL-CONTRACT.md",
         "originalBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
-        "blob": "c47c850a7214930e3c276f4f7eb55fb3909fd385",
+        "blob": "39ea2077e1c8a89182e6646ad23c859347c1fae9",
         "originalPath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
         "originalBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-IMPACT.md",
-        "blob": "12cdd7319c486979df1ad28a27b14eb602d010c0",
+        "blob": "a5516c2f7884c8b20846e73f470d7434c12d1a4a",
         "originalPath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
         "originalBlob": "50031c9db36232ec439aa2c96d312465250dab04",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-        "blob": "7867a9d4bb7c99871cad9b691d65de5b82013c24",
+        "blob": "c15b4a179cab0a24af0d526f553079a8b8c7a19f",
         "originalPath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
         "originalBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
         "authorRead": "FULL"
@@ -2899,28 +2899,28 @@
       },
       {
         "path": "docs/design/a2-final-design/D10-LEXICON.md",
-        "blob": "8ad3c5470958b07f086d3bc42c74ee0de95885b6",
+        "blob": "38d1e94a50a49371757342a9d3a0adaa201528ab",
         "originalPath": "docs/design/d10/TERMINOLOGY.md",
         "originalBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-LEXICON.zh-CN.md",
-        "blob": "c5be34ae45e95734a86c7336df9fc117e207f467",
+        "blob": "c8d98139ff02e3f2fa6b86616dbed0faa4379363",
         "originalPath": "docs/design/d10/TERMINOLOGY.zh-CN.md",
         "originalBlob": "fa364f50e80a5c7e15a61286d6cc9be54d597a51",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-UPSTREAM.md",
-        "blob": "9f331e6bd499f9271d667d82ebb077f9b0be8053",
+        "blob": "f6ea67b0f834968cc3cdb92a33910e47134d6510",
         "originalPath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
         "originalBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
         "authorRead": "FULL"
       },
       {
         "path": "docs/design/a2-final-design/D10-UPSTREAM.zh-CN.md",
-        "blob": "ebae90aed00351573e297203086772360439feed",
+        "blob": "912a1d50b79c16b5d06ce502ab338ac336587380",
         "originalPath": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
         "originalBlob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
         "authorRead": "FULL"
@@ -2934,7 +2934,7 @@
       "currentFC": "7/7 FULL",
       "directD6D9Afterimage": "12/12 FULL",
       "knownNecessaryAuthorGap": 0,
-      "independentReading": "PENDING"
+      "independentReading": "fixed7390 full D10 non-author completed, necessary D10 semantic read gap0; author subsequent two-delta repair unreviewed"
     },
     "mandatory": {
       "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
@@ -3081,11 +3081,22 @@
     "actualCurrentOwner": "D3 fresh Request13, D6 Input3/Proof3/Key3 (15 kinds), D7 PAB4/Effect3, D8 Edit3/Value4, D10 ControlBinding3/Deps3/Input2/mixed Image2+Image1/Schedule2/Inventory2/ResponsibilityRecord3/ApprovalUse2, D9 distinct ExportPlan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/PublicationReceipt4/PrintReceipt1 and genuine historical decoders",
     "independent": {
       "D9": "fixed8d7 D9-only ACCEPT 0P0/0P1/0P2; required gap 0 and all D9 registered findings CLOSED",
-      "D10": "PENDING full original/current non-author",
+      "D10": "fixed7390 complete D10 non-author REVISE 0P0/1P1/1P2, 0 new, necessary D10 gap0; P1-01/P1-03/P2-02 independently CLOSED at that SHA only; P1-02/P2-01 newly author-resolved pending 6ac774ab non-author delta review, NOT independent PASS",
       "fullProA2": "PENDING separate fresh full A2 review",
       "acceptedDesignSha": null
     },
     "runtime": "UNRUN (Core, real authorization CAS, OS/GUI/IME/AT, Office, provider/external effects, concurrency/crash, migration/performance/activation/deployment)",
-    "historical": "Old PR2 R08 11 findings, original 17-kind D9 public mapping/36+1, fixed S source rows and all Plan/Receipt old records remain provenance/recovery only; no new Resolver12 or second current owner"
+    "historical": "Old PR2 R08 11 findings, original 17-kind D9 public mapping/36+1, fixed S source rows and all Plan/Receipt old records remain provenance/recovery only; no new Resolver12 or second current owner",
+    "residualD10Repair": {
+      "fixedIndependentHead": "7390de028fc27abc842467b05c4e5b22ada941ba",
+      "status": "author-resolved-pending-independent",
+      "ids": [
+        "D10-1CA-P1-02",
+        "D10-1CA-P2-01"
+      ],
+      "newIndependentFindings": 0,
+      "necessaryReadGap": 0,
+      "followUp": "6ac774ab must review actual 7390->final delta; separate fresh Pro full-A2 required"
+    }
   }
 }
