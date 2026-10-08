@@ -14,7 +14,7 @@ translation_status: source
 
 对已经在本目录整合的模块，本目录是唯一 A2 候选正文。早期 snapshots、D6 file-authority owner afterimage 和 AsciiDoc/Annotation final-design candidate 继续作为来源与历史 decoder 证据，但不与 A2 形成第二套 current definition。
 
-当前作者候选保留 D1–D8 与完整 D9 整合，不进入 D10。D7 fixed26be 独立 PASS 只覆盖 D7；fixed5eca/ff10 的 D8 和 fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02 均保持 CLOSED。fixed4da7 已独立 CLOSED D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01，fixed79026 又独立 CLOSED D9-BAF-P1-01（别名 D9-8B6-P1-01）。本轮仅余 D9-BAF-P1-02（别名 D9-79026-P1-01）及 D9-4DA7-MAP-P2-01 两项为 author-resolved-pending-independent-review；不自行宣告 D9/global PASS 或产品执行。ROOT-D9-ZH-P2-01 在 ff10 继续独立 CLOSED。
+当前候选保留 D1–D8 与完整 D9 整合，不进入 D10。D7 fixed26be PASS 只覆盖 D7；fixed5eca/ff10 的 D8、fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02、fixed4da7 的 D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01、fixed79026 的 D9-BAF-P1-01、fixed466b 的 D9-4DA7-MAP-P2-01 均按原范围独立 CLOSED。只有原 D9-BAF-P1-02（别名 D9-466B-P1-01）和新 D9-466B-P2-01 仍为 author-resolved-pending-independent-review。不宣告 D9/global PASS；产品行为 UNRUN；ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED。
 
 ## 2. 本批进度
 
@@ -60,4 +60,4 @@ D10 目前还没有完整 A2 current definition。D9 只读取 D10 的具名直�
 
 后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 因而在 D7 范围 accepted；这不接受 D8 或 global A2。
 
-D8-C98B-P1-03、D9-BAF-P2-02 在 fixed8b6，D9-8B6-P2-01/P2-02 与 ROOT-8B6-MAP-P2-01 在 fixed4da7，D9-BAF-P1-01 在 fixed79026，ROOT-D9-ZH-P2-01 在 ff10 均已独立 CLOSED。下一位新非作者须固定 PR #5 的真实最终 SHA，仅复核 fixed79026→最终增量的 D9-BAF-P1-02（首次 unseen Plan 构造与已有 Plan 恢复区分、获权后最小 View result 路由）及 D9-4DA7-MAP-P2-01（包括 finalFC.spec[0]/[1] 的全部现任 blob 别名）。规范入口为 final FC SCHEMAS §6.6.1、SPEC §§8.3/16a/17、D9-INTERFACES §§4/7 与原 D9 workers/export §3a。完整 D10、全新 Pro/global A2 终审、唯一 accepted-design SHA 和同 SHA 冻结/实施启动留后续；产品/runtime 仍 UNRUN。
+D8-C98B-P1-03/D9-BAF-P2-02 在 fixed8b6，D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01 在 fixed4da7，D9-BAF-P1-01 在 fixed79026，D9-4DA7-MAP-P2-01 在 fixed466b，ROOT-D9-ZH-P2-01 在 ff10 均独立 CLOSED。下一位独立审查者必须固定 PR #5 最终真实 SHA，只核 fixed466b→最终的原 D9-BAF-P1-02 八域/七 catalog producer 分派（Query-free Source/Resource/窄 Field，以及真实完整 Query/Collection/Annotation/View），与新 D9-466B-P2-01 原 wire2 invalid_request/integrity_conflict/证明、来源、域不可得错误。规范入口：FC SCHEMAS §6.6.1、FC SPEC §§8.3/16a/17、D9 Interfaces §§4/7、原 Workers/Export §3a/3b 和 Conversion/Templates/Workers §4a。D10 全文、fresh Pro/global A2 与 accepted-design SHA/启动留后续；产品/runtime UNRUN。
