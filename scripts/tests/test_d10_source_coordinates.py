@@ -150,36 +150,35 @@ class D10SourceCoordinates(unittest.TestCase):
                 self.assertEqual(ids, [fields[0] for fields in table], f"{language} {name}: original ID ordering")
             for index, row in enumerate(rows):
                 key = row["id"]
-                with self.subTest(language=language, case=key):
-                    line_number, raw, original = numbered[index]
-                    record = row["source"][language]
-                    # Path.as_posix works on both PosixPath and WindowsPath.
-                    self.assertEqual(source_path.relative_to(ROOT).as_posix(), record["path"])
-                    self.assertEqual(sha, record["blob"])
-                    self.assertEqual(line_number, record["line"])
-                    self.assertEqual(raw, record["raw"])
-                    original_expected = [
-                        key, record["location"], row["negative"][language],
-                        row["disposition"][language], row["executionMode"][language],
-                        row["positive"][language], row["oracle"][language],
-                    ]
-                    self.assertEqual(original_expected, original, "original seven source cells")
-                    projected_expected = [
-                        key, record["location"], row["disposition"][language],
-                        row["executionMode"][language], row["positive"][language],
-                        row["negative"][language], row["oracle"][language],
-                    ]
-                    for column, (actual, expected) in enumerate(zip(projected[index], projected_expected)):
-                        self.assertEqual(expected, actual, f"{language} {key}: acceptance column {column}")
-                    current_expected_unchanged = [
-                        key, None, row["negative"][language], row["disposition"][language],
-                        row["executionMode"][language], None, row["oracle"][language],
-                    ]
-                    for column in (0, 2, 3, 4, 6):
-                        self.assertEqual(
-                            current_expected_unchanged[column], current[index][column],
-                            f"{language} {key}: current scenario column {column}",
-                        )
+                line_number, raw, original = numbered[index]
+                record = row["source"][language]
+                # Path.as_posix works on both PosixPath and WindowsPath.
+                self.assertEqual(source_path.relative_to(ROOT).as_posix(), record["path"])
+                self.assertEqual(sha, record["blob"])
+                self.assertEqual(line_number, record["line"])
+                self.assertEqual(raw, record["raw"])
+                original_expected = [
+                    key, record["location"], row["negative"][language],
+                    row["disposition"][language], row["executionMode"][language],
+                    row["positive"][language], row["oracle"][language],
+                ]
+                self.assertEqual(original_expected, original, "original seven source cells")
+                projected_expected = [
+                    key, record["location"], row["disposition"][language],
+                    row["executionMode"][language], row["positive"][language],
+                    row["negative"][language], row["oracle"][language],
+                ]
+                for column, (actual, expected) in enumerate(zip(projected[index], projected_expected)):
+                    self.assertEqual(expected, actual, f"{language} {key}: acceptance column {column}")
+                current_expected_unchanged = [
+                    key, None, row["negative"][language], row["disposition"][language],
+                    row["executionMode"][language], None, row["oracle"][language],
+                ]
+                for column in (0, 2, 3, 4, 6):
+                    self.assertEqual(
+                        current_expected_unchanged[column], current[index][column],
+                        f"{language} {key}: current scenario column {column}",
+                    )
             # Overlay is derived from the *actual current display* against the
             # historical cells. No copy of scenario meanings or second map.
             for index, row in enumerate(rows):
