@@ -1043,10 +1043,10 @@
     "D9-BAF-P1-01": "author-resolved-pending-independent-review at this incremental author head: each portable_backup projection.recordPin equals selected annotation_content payload.recordPin and exact PortableAnnotationRecord4; A/PA normal and A-index/PB negative even with two authorized union pins; no extra wire",
     "D9-BAF-P1-02": "author-resolved-pending-independent-review at this incremental author head: projection/binding ViewSpec SHA256 equality with exact ViewSpec, public authorization before protected business errors without changing D7 owner order, PrintReceipt planToken to original authenticated confirmed protected print Plan with View binding/output/loss, no nonexistent receipt target",
     "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
-    "D9-8B6-P2-01": "author-resolved-pending-independent-review: new Plan4 arrays classified as set-like versus ordered with canonical comparators/cardinality/conflict rules",
-    "D9-8B6-P2-02": "author-resolved-pending-independent-review: current network exception removed; network is always renderer_unavailable on the closed six-member D9 renderer union until a future versioned successor",
+    "D9-8B6-P2-01": "independently CLOSED at fixed4da7 in bounded D9 canonical-array scope; current canonical comparator/order/origins rules preserved, no reopening",
+    "D9-8B6-P2-02": "independently CLOSED at fixed4da7 in bounded D9 renderer scope: current network remains renderer_unavailable for closed six-layout D9 route, no reopening",
     "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
-    "ROOT-8B6-MAP-P2-01": "coordinated separately in D8-SOURCE-MAP: top-level current consumer blob corrected while per-row original source blobs remain retained provenance",
+    "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7 in bounded mapping scope: D8-SOURCE-MAP current consumer pointer corrected, retained 760 row-source provenance unchanged",
     "D9-4DA7-MAP-P2-01": "author-resolved-pending-independent-review: finalFC.schemas/annotationCurrent and finalFC.versionCoordination.currentBlobs SCHEMAS EN/ZH (and modified SPEC aliases) updated to actual current Git blobs; SOURCE-MAP.json finalMappedBlobs coordinated separately; historic predecessorRangeCorrection and frozen inventories preserved"
   }
 }
