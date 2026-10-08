@@ -14,7 +14,7 @@ translation_status: source
 
 对已经在本目录整合的模块，本目录是唯一 A2 候选正文。早期 snapshots、D6 file-authority owner afterimage 和 AsciiDoc/Annotation final-design candidate 继续作为来源与历史 decoder 证据，但不与 A2 形成第二套 current definition。
 
-当前作者候选保留 D1–D8 与从 fixed5eca 完成的 D9 整合。D7 在 fixed26be 独立 PASS；此前 D8 关闭范围保留，fixed8b6 又独立 CLOSED 最后一个 D8-C98B-P1-03 和 D9-BAF-P2-02。ROOT-D9-ZH-P2-01 在 ff10 独立 CLOSED。现任 D9-BAF-P1-01/P1-02 与 D9-8B6-P2-01/P2-02 只有作者修复、待独立复核；ROOT-8B6-MAP-P2-01 是单独待核销的映射修复。D10 全文与 A2 全局终审留后续。
+当前作者候选保留 D1–D8 与完整 D9 整合，不进入 D10。D7 fixed26be 独立 PASS 只覆盖 D7；fixed5eca/ff10 的 D8 和 fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02 均保持 CLOSED。fixed4da7 已独立 CLOSED D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01，fixed79026 又独立 CLOSED D9-BAF-P1-01（别名 D9-8B6-P1-01）。本轮仅余 D9-BAF-P1-02（别名 D9-79026-P1-01）及 D9-4DA7-MAP-P2-01 两项为 author-resolved-pending-independent-review；不自行宣告 D9/global PASS 或产品执行。ROOT-D9-ZH-P2-01 在 ff10 继续独立 CLOSED。
 
 ## 2. 本批进度
 
@@ -60,4 +60,4 @@ D10 目前还没有完整 A2 current definition。D9 只读取 D10 的具名直�
 
 后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 因而在 D7 范围 accepted；这不接受 D8 或 global A2。
 
-D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，本批不再请求 D8 复审。后续新非作者须固定真实最终 SHA，复核 D9-BAF-P1-01/P1-02 与 D9-8B6-P2-01/P2-02，包括跨域 selection/projection、目标兼容、complete_data scope、canonical array、network 不可用边界、Annotation Review Bundle/backup 与双语/current-source mapping。ROOT-8B6-MAP-P2-01 的原来源行 blob 及现任 consumer blob 另行核销。D9-BAF-P2-02 与 ROOT-D9-ZH-P2-01 按原 fixed SHA CLOSED。D10 全文、全新 Pro/global A2 终审、唯一 accepted-design SHA 与同 SHA 的冻结/实施启动留后续；产品/runtime 证据全部 UNRUN。
+D8-C98B-P1-03、D9-BAF-P2-02 在 fixed8b6，D9-8B6-P2-01/P2-02 与 ROOT-8B6-MAP-P2-01 在 fixed4da7，D9-BAF-P1-01 在 fixed79026，ROOT-D9-ZH-P2-01 在 ff10 均已独立 CLOSED。下一位新非作者须固定 PR #5 的真实最终 SHA，仅复核 fixed79026→最终增量的 D9-BAF-P1-02（首次 unseen Plan 构造与已有 Plan 恢复区分、获权后最小 View result 路由）及 D9-4DA7-MAP-P2-01（包括 finalFC.spec[0]/[1] 的全部现任 blob 别名）。规范入口为 final FC SCHEMAS §6.6.1、SPEC §§8.3/16a/17、D9-INTERFACES §§4/7 与原 D9 workers/export §3a。完整 D10、全新 Pro/global A2 终审、唯一 accepted-design SHA 和同 SHA 冻结/实施启动留后续；产品/runtime 仍 UNRUN。
