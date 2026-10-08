@@ -738,29 +738,31 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "f125d384f1d1f0c06c94e80ef955a42c522eb82d",
+        "blob": "4fea409faf33456d2b8155af7a08dbcea2bce1ba",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2225",
           "§6.5.1 L2226–2262",
-          "§6.6 L2263–2574"
+          "§6.6 L2263–2612",
+          "§6.6.1 L2559–2612"
         ]
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "9e0bd3c434924df76ee0bf30bf4b66d073ffbd74",
+        "blob": "0f60fa63b4e4f5a6c268b37153f30be7609ee712",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
           "§6.5.1 L2337–2375",
-          "§6.6 L2376–2687"
+          "§6.6 L2376–2725",
+          "§6.6.1 L2672–2725"
         ]
       }
     ],
     "spec": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-        "blob": "d6281234a7b6e5e16649ebf098ce23c0a41dddc1",
+        "blob": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
         "ranges": [
           "§8.3 L439–463",
           "§8.4 L464–471",
@@ -772,7 +774,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-        "blob": "e16d5b084122dfb5f8b7fec4dd56c09dfa0c9bed",
+        "blob": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
         "ranges": [
           "§8.3 L449–483",
           "§8.4 L484–491",
@@ -807,7 +809,7 @@
       "spec": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-          "blob": "d6281234a7b6e5e16649ebf098ce23c0a41dddc1",
+          "blob": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
           "ranges": [
             "§9.1–9.12 L476–669",
             "§16 L946–955",
@@ -817,7 +819,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-          "blob": "e16d5b084122dfb5f8b7fec4dd56c09dfa0c9bed",
+          "blob": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
           "ranges": [
             "§9.1–9.12 L496–705",
             "§16 L1012–1021",
@@ -829,19 +831,21 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "f125d384f1d1f0c06c94e80ef955a42c522eb82d",
+          "blob": "4fea409faf33456d2b8155af7a08dbcea2bce1ba",
           "ranges": [
-            "§6.6 L2263–2574",
-            "§7 L2575–2735"
+            "§6.6 L2263–2612",
+            "§6.6.1 L2559–2612",
+            "§7 L2613–2773"
           ],
           "read": "FULL-direct-current-consumer"
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "9e0bd3c434924df76ee0bf30bf4b66d073ffbd74",
+          "blob": "0f60fa63b4e4f5a6c268b37153f30be7609ee712",
           "ranges": [
-            "§6.6 L2376–2687",
-            "§7 L2688–2851"
+            "§6.6 L2376–2725",
+            "§6.6.1 L2672–2725",
+            "§7 L2726–2889"
           ],
           "read": "FULL-direct-current-consumer"
         }
@@ -856,16 +860,16 @@
         "FC4C-STORE-08",
         "FC4C-STORE-12"
       ],
-      "target": "D9.md §13a; D9-SCHEMAS.md §16a; D9-ACCEPTANCE CUR-09 + ANNEXP-01..06",
-      "rule": "annotation_index is omission-only. Actual current Annotation content export consumes the exact D8AnnotationReadResponse/1 carrier, complete Value4/R6 owner facts and independently qualified context disclosure."
+      "target": "D9.md §13a; D9-SCHEMAS.md §16a; D9-ACCEPTANCE CUR-09 + ANNEXP-01..06 + PLAN4-REL-01 + PLAN4-CAN-01/03",
+      "rule": "annotation_index remains omission-only. Actual current Annotation content export consumes one exact D8AnnotationReadResponse/1 carrier and final-FC §6.6.1 enforces one inputIndex/one mode/one projection, portable-backup false context flags, independent Review Bundle disclosure and canonical selection/origin sets without reread repair."
     },
     "viewCurrent": {
       "d7Owner": "docs/design/a2-final-design/d7/owners/view/source.md",
       "read": "FULL current View owner; runtime §7 and supported/deferred layouts preserved",
       "mandatory15": "FULL-D9-applicable L1042–1141",
       "currentCarrier": "final FC SCHEMAS §6.6 D9ViewRenderBinding/1",
-      "target": "D9.md §12a; D9-SCHEMAS.md §16b; D9-IMPACT.md §8a; D9-ACCEPTANCE M15-01..10",
-      "rule": "D7 closed/static ViewSpec decoding remains first. Deferred tree/treemap/sunburst/Gantt/boxplot/quantile fail with unsupported_layout before D9. For a valid D7 current layout, the finite D9 chart route renders only metric/bar/line/scatter/pie/heatmap; valid non-six layouts such as network, or missing named backends/profiles for the six charts, return renderer_unavailable. No data-row substitution."
+      "target": "D9.md §12a; D9-SCHEMAS.md §16b; D9-IMPACT.md §8a; D9-ACCEPTANCE M15-01..10 + PLAN4-REL-02/03 + PLAN4-CAN-02/03 + VIEW-SCOPE-01",
+      "rule": "D7 closed/static ViewSpec decoding remains first. Deferred tree/treemap/sunburst/Gantt/boxplot/quantile fail unsupported_layout before D9. The current D9 renderer union is exactly metric/bar/line/scatter/pie/heatmap with outputScope=complete_data; current D7 network is always renderer_unavailable on this route regardless of installed profile. Three resultInput fields, renderer.layout/ViewSpec.layout, target/profile/destination/receipt and canonical renderer arrays must match mechanically; no data-row or local-legend substitution."
     },
     "predecessorRangeCorrection": {
       "finding": "D9-BAF-P2-02",
@@ -942,6 +946,15 @@
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
+    },
+    "plan4Relations": {
+      "status": "author-resolved-pending-independent-review",
+      "owner": "final FC SCHEMAS §6.6.1 / SPEC §16a",
+      "annotation": "annotationInputs and projection.annotations are one-to-one by unique ascending inputIndex and one mode; portable_backup context flags false; ordered disclosure fragments preserved",
+      "view": "viewInput=resultInput=projection.resultInput; renderer.layout=ViewSpec.layout; binding/projection outputScope=complete_data; dedicated View route has documentRenderBinding=null",
+      "delivery": "target/profile/destination/receipt compatibility is closed; external_bundle→Receipt4, print→PrintReceipt1, resource_handoff→separate D7/D3 author result, server_download→delivery state",
+      "canonical": "annotation selection/projection, renderer assets and renderer evidencePins canonicalize once before freeze; frozen/recovery noncanonical records reject; D7 rows and disclosure fragments preserve semantic order",
+      "versioning": "D9ViewRenderBinding/1 and Plan4 remain candidate/UNRUN with no deployed recorded View-binding bytes; any post-acceptance scope/layout expansion requires a versioned successor"
     }
   },
   "d10Direct": {
@@ -986,9 +999,9 @@
   },
   "acceptanceAuthority": {
     "json": "D9-ACCEPTANCE.json",
-    "blob": "e5b6c1bcd0a0c34f01866efacb2a8680023d0b7c",
-    "rows": 97,
-    "uniqueIds": 97
+    "blob": "a0fabac164841198106de601449377747ded2f0f7c",
+    "rows": 104,
+    "uniqueIds": 104
   },
   "historicalEvidence": {
     "sets": [
@@ -1015,7 +1028,7 @@
     "mandatory15D9Applicable": "FULL",
     "finalFCExportSuccessorENZH": "FULL-current-successor"
   },
-  "evidenceBoundary": "author design/source mapping only; D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 plus the directly coordinated /3→/4 current-version wording are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10; D8-C98B-P1-03 is separately author-resolved-pending-independent-review; product/worker/Office/OS/runtime/crash/performance/deployment UNRUN",
+  "evidenceBoundary": "author design/source mapping only; D9-BAF-P1-01 and D9-BAF-P1-02 plus D9-8B6-P2-01/P2-02 are author-resolved-pending-independent-review; D9-BAF-P2-02 is independently CLOSED at fixed8b6; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10; D8-C98B-P1-03 is independently CLOSED at fixed8b6; product/worker/Office/OS/runtime/crash/performance/deployment UNRUN",
   "mandatory15": {
     "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
     "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
@@ -1026,9 +1039,12 @@
     "target": "D9.md§12a; D9-SCHEMAS.md§10/§16b; D9-IMPACT.md§8a; D9-ACCEPTANCE M15-01..10"
   },
   "reviewFindings": {
-    "D9-BAF-P1-01": "author-resolved-pending-independent-review: closed Annotation content carrier and Plan4 path added",
-    "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite current View export route + Mandatory15 consumers added",
-    "D9-BAF-P2-02": "author-resolved-pending-independent-review: predecessor/current FC ranges corrected and split",
-    "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; this closure is not reopened by the current D9-BAF repair. New Chinese text introduced by the three-finding repair remains part of that repair's exact-final-SHA independent review."
+    "D9-BAF-P1-01": "author-resolved-pending-independent-review: carrier path retained and fixed8b6 residual cross-field one-to-one/canonical admission repaired; no author-side closure claimed",
+    "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite six-chart route now uses fixed complete_data scope and closed target/destination/receipt relations; no author-side closure claimed",
+    "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
+    "D9-8B6-P2-01": "author-resolved-pending-independent-review: new Plan4 arrays classified as set-like versus ordered with canonical comparators/cardinality/conflict rules",
+    "D9-8B6-P2-02": "author-resolved-pending-independent-review: current network exception removed; network is always renderer_unavailable on the closed six-member D9 renderer union until a future versioned successor",
+    "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
+    "ROOT-8B6-MAP-P2-01": "coordinated separately in D8-SOURCE-MAP: top-level current consumer blob corrected while per-row original source blobs remain retained provenance"
   }
 }
