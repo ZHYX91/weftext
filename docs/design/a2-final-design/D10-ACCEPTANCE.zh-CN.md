@@ -141,3 +141,15 @@ translation_status: source
 **现任 D08 裁决（原来源行仍保留）：**先进行 D10 非作者独立设计复核，再进行全新 Pro 完整 A2 非作者设计终审；全部门满足后才可明确 acceptedDesignSha 并同 SHA 冻结。真正的 activation/实施是后续工作。旧 D08 的 activation 字样和绿色文档 CI 均不能倒置设计接受的顺序。
 
 **读数/证据边界：** U27/F37/A14/T10/E10/P19/D08=125/125；实际产品与外部发包/OS/AT/并发/恢复全部 UNRUN。旧 U12 三分支和 P19 current 版本的单独 currentOverlay 在唯一 JSON 中详列，原场景不删不改；完整原表见 [D10 场景](D10-SCENARIOS.zh-CN.md)。
+
+## fixed1ca 作者修补验收门（非独立接受）
+
+**唯一机器验收权威**仍为 `D10-ACCEPTANCE.json`：恰 125 个原稳定场景 ID，中英历史 source tuple 与未改原 blob 逐字校验，另列五个具名 `authorRepairGates`。修复 finding ID **不是再发明五个 D10 scenario ID**。产品执行均为 **UNRUN**，各 gate 状态均为 `author-resolved-pending-independent`。
+
+- `D10-1CA-P1-01`：历史 source path/blob/line/raw、原 location/positive 与 A2 当前改名 overlay 分离；当前行不能冒作原行。
+- `D10-1CA-P1-02`：受信认证本人到场的 interactive Run 在真实 control store 原子建 Run-targeted 有限 Lease/Stop；`maxRuns=1` 首次执行仅一次、同 Run 后续/原 planned 恢复不再消费；伪 principal/扩权 scope/错 store/竞争不得留下半态。
+- `D10-1CA-P1-03`：fresh D6 Profile4/Plan4/Genesis2 携带顺序双签名 trust declaration 与必需 D8 空历史初始化，同**唯一原 final P**激活；真实历史/ordinary copy/continue 不再 bootstrap。
+- `D10-1CA-P2-01`：fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2 与历史 PAB3/Manifest2/Link1/ApprovalUse1 按**真实记录版本**分派并保留原请求/pins。
+- `D10-1CA-P2-02`：W/H 分别授权的 Stop 读取投影**唯一** W-scoped StopOwner/latch/revision/result；跨 workspace/store、隐藏 H 权限和 Stop/final-P/external 竞争保持原门禁。
+
+任何历史 `docs/design/d10/` 原文件、S49 snapshots 或固定 inputs 均未改写。
