@@ -4,9 +4,9 @@ translation_status: source
 ---
 
 [English](REVIEW-ENTRY.md)
-# A2 D1–D9 作者候选复核入口——D9 完整整合
+# A2 D1–D10 作者候选复核入口——完整 D10 交回
 
-D7 fixed26be 的非作者 PASS 只覆盖 D7。fixed5eca/ff10、fixed8b6、fixed4da7、fixed79026、fixed466b 及 fixed6012 原 D9-BAF-P1-02/D9-466B-P2-01 的独立 CLOSED 都绑定原有界范围。fixed6012 的 REVISE 0P0/1P1/1P2 只源于新开两项：D9-6012-P1-01 误把 ViewSpec.nodeDetails 设为 graph query_json 必需数据；D9-6012-P2-01 误把 invalid_output 限为 worker-only。本作者批只修这两项，均为 author-resolved-pending-independent-review，不自判 CLOSED 或 D9/global PASS。产品 UNRUN；完整 D10 与 fresh Pro/global A2 非作者终审留后续。
+fixed8d7 非作者完整 D9 有界审查已 ACCEPT 0P0/0P1/0P2、必要阅读 gap=0，并独立 CLOSED D9-6012-P1-01/P2-01；更早 fixed6012/fixed466b 及其它所有 bounded CLOSED 维持。此结论绝不接受 D10 或全球 A2。完整 D10 九组双语作者候选已整合，状态仅 author-resolved-pending-independent-review，全部产品测试 UNRUN。下一步先完整 D10 非作者，再全新 Pro 完整 A2 独立审查。
 
 ## 1. 固定对象与作者时间线
 
@@ -19,7 +19,7 @@ D9 作者整合起点 SHA：5eca16c40cdf2e1892f6930d51c632ea720a460c。
 
 D6 finding 来源是 fixed829 `829efce6aacbe944714e093c98065b01d50b2593`。第一次非作者修订复核是 fixed01cc `01cc40b819df78fbe724f1c64c27284ad60fc6c8`。四残余作者修订从 `32cfb9c387deddb12fb021a44147df0d7ffab322` 开始；后续窄修经过 `d1ab2a5c0762450877614ad14340a26cfa0c1dfd`。下一轮独立复核把完成候选固定在 `1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc`。此前两项 P2 修订从该 head 开始。语义关闭复核固定 5e21e9f00e1fa4e893f2544211133adbeac35ae0 并关闭语义 P2。fixed454e 随后新开两项 navigation-only P2。之后 fixed2f89 完整 D7 独立复核在有界范围关闭这两项 navigation finding 与 document-quality coordination finding，同时新开四项 D7 finding。本修复批精确从 fixed2f89 开始，只处理这四项，作者不自行关闭。
 
-下一位非作者复核者必须绑定 PR metadata/交接记录的实际 final stop SHA，不得追 moving branch。
+下一位非作者必须固定 PR #5 最终实际 SHA，独立全文复核 D10 原始十八文件、现任九组双语、固定 S49、原 125 场景、全部当前直接生产者与消费者；其后另开展全新 Pro 完整 A2 独立审查。不追 moving branch，也不采用 synthetic merge SHA。
 
 ## 2. 保留的独立状态
 
@@ -65,12 +65,12 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 
 ## D9 复核目标
 
-新独立非作者需固定 PR #5 的真实最终 SHA，仅复审 fixed6012→最终的 D9-6012-P1-01、D9-6012-P2-01。graph 对照原 D7 execution/action §1 TerminalSchema、原 D9 workers/export §3 query_json {nodes,edges}、所有真实列/V/顺序及可选 D7 network ViewSpec.nodeDetails?；获权孤立 node、空 edges、无 ViewSpec 须通过，漏 nodes.displayName、截断、乱序须拒绝。覆盖对照原 D9 Import IR §2 Host/Core、S33：worker 成功且 IR schema 合格但 XLSX 漏 sheet → invalid_output，并保留 D9 Region §8 签发；请求方 View index=99/wrong payload 仍 invalid_request，已证旧受保护矛盾 integrity_conflict，proof/source 可用性及当前授权/已进入 D7 原序不变。保留 fixed6012/更早 CLOSED、§3a 原 token 顺序和历史 Plan1–3；完整 D10/global 留后续。绿色 docs 不等于语义 PASS。
+历史 fixed6012→fixed8d7 D9 复核已 ACCEPT 并 CLOSED 两项 D9-6012 新回归；下列 D9 checklist 只保留原有界证据与恢复条件，不再是当前 OPEN 项。本轮现任审查目标是完整 D10 与真实 A2 D1–D9 直接消费者，其后另做全新 Pro A2 总审。
 
 必须核验：
 
 - D9-BAF-P1-01（fixed79026 已独立 CLOSED，仅保留上下文）：核唯一 Annotation Value4/PortableRecord4/R6 carrier、独立 context 披露、catalog index/mode/projection 精确一一对应及被选中 annotation_content payload.recordPin 的逐字校验、跨输入域排他、Annotation Plan 禁选普通 Document body、review/backup 目标不兼容、重复或未选 projection 拒绝、pin/currentness、freeze→loss→confirm→create-only/Resource/print 路径；
-- D9-BAF-P1-02 / D9-466B-P1-01 与 D9-466B-P2-01 已在 fixed6012 独立 CLOSED，仅作上下文；当前只审新增 D9-6012-P1-01（完整 graph schema/data 不需 nodeDetails）与 D9-6012-P2-01（请求方 selector 外保留 Host/Core/worker/Region 原 invalid_output）；
+- D9-BAF-P1-02 / D9-466B-P1-01 与 D9-466B-P2-01 已在 fixed6012 独立 CLOSED；fixed8d7 进一步 CLOSED D9-6012-P1-01/P2-01，所有旧 finding 仅作历史来源，不重新裁决。
 - D9-8B6-P2-01 / D9-8B6-P2-02（fixed4da7 有界范围独立 CLOSED，只保留上下文，不是新增复核目标）：保持 Annotation selection/projection 集合、保留原序的 disclosure fragment、canonical origins、renderer asset/evidence-pin 数组，以及合法 D7 network 在当前六布局 D9 路线必定 renderer_unavailable；不得把 graph query_json 降成 rows，也不得丢实际 D7 nodes/edges 列/V/顺序；network ViewSpec.nodeDetails 是可选展示绑定，不是 graph TerminalSchema/data 的必需成员。D9-BAF-P2-02 的来源范围独立 CLOSED 结论仍固定在 fixed8b6；
 - ROOT-8B6-MAP-P2-01（fixed4da7 独立 CLOSED，本批不重复裁决）：保留 D8-SOURCE-MAP.json 中现任 consumer ACCEPTANCE.md path/blob 与原 760 条来源行的 source blob 不同角色。另核 D9-SOURCE-MAP.json 的当前来源资格、D9-REGISTRY.json、D9-TERMS.json 与全部 104 个唯一 D9-ACCEPTANCE row 及中英文投影；
 - 单一 Core 解析器/身份/授权边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
@@ -82,3 +82,13 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 - historical 57/63/59/82/90/130/12 evidence set 分开记账；I01–I12 及产品/runtime/GUI/Office/OS/performance/deployment 全部继续 UNRUN。
 
 独立复核必须报告 P0/P1/P2 disposition 与任何必要 read gap。完成前 D9 不能超出 author-resolved-pending-independent-review。之后仍必须完整整合 D10，并做全新非作者 Pro/global A2 终审。
+
+## 6. 现任 D10 完整非作者审查交接
+
+必须冻结 Draft PR #5 **真实最终 HEAD**，不能使用 synthetic merge ref。范围：原 D10 九组双语 18 份完整文件、固定 S49（包括 D4 61 Field/7 Facet）、Mandatory §§1–15、原 125 项 D10 场景及全部未编号约束、现任 A2 D1–D9 与 D6/FC 直接 owner。当前九组完整双语文件为 D10、D10-CONTROL、D10-UPSTREAM、D10-LEXICON、D10-SCENARIOS、D10-IMPACT、D10-REVIEW、D10-TASK、D10-READING。唯一 D10-ACCEPTANCE.json 及双语投影是结构验收权威；D10-SOURCE-MAP.json 是来源路由，不建立新 Registry。[现任 D10](D10.zh-CN.md) 与 [D10 来源映射](D10-SOURCE-MAP.json) 只是导航，不是接受证据。
+
+新非作者必须核原 CONTROL §§1–16.2、CANDIDATE §§1–25 全部 inline/未编号/封闭成员，全部场景/race、ToolValue 有限代数、精确 Principal/auth/egress/secret/Money/stop 限制，D6 唯一 P 与受保护 I/派生 D；十九类可读 current K 投影；D6 mixed Binding3/Deps3/Input2/Image2+Image1/Inventory2/ResponsibilityRecord3/Schedule2/ApprovalUse2、D7 PAB4/Effect3 和真实历史 decoder；Package/Contribution/Pack、四官方 module、D4 Registry/SearchContribution 纯数据边界、D9 Plan4/Annotation/View/print 以及真实 Plan/Receipt1–3。P19 旧 17-kind/36+1 是历史来源库存，不是 current 上限，不新造 Resolver12 或第二 owner。
+
+重点负面是 U12 的 ICS、普通 fresh 导入、真正 D3 SourceBinding/Adopt 分轴，同 Run maxRuns 恢复，standing approval 精确 raw-no-op、planned-preview 只读恢复，不可逆 stop/fence/unknown 与真实费用责任，schedule A→B→A/gap、D1 五端及不可信模型/外部正文；证明 D2 AsciiDoc、D7 Query/View、D8 Source/Write/Read/IME/Annotation、D9 Office/query_json/Source/Resource 正向路径不会因无关 D10 provider 退化。原 R08 十一项及有界独审须单独分账，不能作者自关。
+
+当前 D10 仅 **author-resolved-pending-independent-review**，尚未独立接受或激活。完整 D10 非作者须报告 P0/P1/P2 和必要阅读 gap；其后独立开展**全新 Pro 完整 A2 固定 SHA 总审**，P0/P1=0、全部 P2 有明确处置、必要 gap=0 才能指定 acceptedDesignSha。同 SHA 冻结与真实实施启动包仍另行执行。产品/Core/OS/IME/AT/Office/MCP/model/真实外部发送/D6 CAS/race/performance/migration/activation/deployment 均 UNRUN。
