@@ -6,7 +6,7 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D9 作者候选复核入口——D9 完整整合
 
-D7 fixed26be 的独立 PASS 仅覆盖 D7；fixed5eca/ff10 的 D8 已关结论与 fixed8b6 的 D8-C98B-P1-03、D9-BAF-P2-02 均保留 CLOSED。fixed4da7 已独立 CLOSED D9-8B6-P2-01/P2-02 与 ROOT-8B6-MAP-P2-01。fixed79026 的非作者又独立 CLOSED D9-BAF-P1-01（别名 D9-8B6-P1-01），认可 Annotation 所选 payload.recordPin 对应关系、View hash、PrintReceipt 真实关联以及已有 Plan 的授权顺序；但留下同族 D9-BAF-P1-02 一项 P1 残余（别名 D9-79026-P1-01）与 D9-4DA7-MAP-P2-01 一项 P2 仍 OPEN。本增量仅作者修这两项，状态都是 author-resolved-pending-independent-review，不自行 CLOSED。完整 D10、产品实施与全新 Pro/global A2 终审留后续。
+D7 fixed26be 的独立 PASS 只覆盖 D7；此前 fixed5eca/ff10 的 D8、fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02、fixed4da7 的 D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01、fixed79026 的 D9-BAF-P1-01 均保持原固定范围 CLOSED。fixed466b 又独立 CLOSED D9-4DA7-MAP-P2-01（现任 SPEC alias 和历史来源资格），但报告仍为 REVISE 0P0/1P1/1P2：D9-BAF-P1-02 同族残余（别名 D9-466B-P1-01）及新 D9-466B-P2-01 原 wire2 错误确定分派。本作者批仅修这两项，都只标 author-resolved-pending-independent-review，不自行 CLOSED 或声称 global PASS。完整 D10 和 fresh Pro/global A2 留后续；产品行为全部 UNRUN。
 
 ## 1. 固定对象与作者时间线
 
@@ -65,12 +65,12 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 
 ## D9 复核目标
 
-下一位非作者必须固定 PR #5 的最终实际 SHA，只增量复核 fixed79026→新 head 的 D9-BAF-P1-02（别名 D9-79026-P1-01）及 D9-4DA7-MAP-P2-01。核公共授权门禁、原已有 Plan 恢复与 fresh unseen 首次构造、获权后最小 View index/kind/真实 D7ResultPin 定位、D7 §7 原序，以及原 §3a 在 report/manifest/Plan 前分配唯一未公开 token 并完整原子保存的时点。还须核对包括 D9-SOURCE-MAP.json/finalFC/spec[0]/[1] 在内的全部现任 FC SPEC/SCHEMAS 别名，保留历史 predecessorRangeCorrection 与 D4/D5 来源。D9-BAF-P1-01 在 fixed79026、D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01 在 fixed4da7、D9-BAF-P2-02 在 fixed8b6、ROOT-D9-ZH-P2-01 在 ff10 已独立 CLOSED，本轮不重复裁决。绿色 CI/count 不能代替语义 PASS。
+下一位独立非作者须固定最终实际 SHA，仅审 fixed466b→最终的（1）D9-BAF-P1-02 / D9-466B-P1-01：八域、七 payload 的实际 owner 分派，包括首次无 Annotation/Query 的 asciidoc_source 与 resource_exact、native_table/窄 Field、完整 Query/Collection/graph、D8 Annotation、D7 View，以及被消费才需要的 template/route/resource 权限；（2）D9-466B-P2-01：原 wire2 d9_error 的确定分类，分别核获权请求选错、真实受保护 Plan 确证完整性矛盾、证明/来源/域不可得、失权叠加坏 index/layout、合法 D7 owner §7 不变。入口包括 FC SCHEMAS §6.6.1、SPEC §§8.3/16a/17、D9-INTERFACES §§4/7、D9-SCHEMAS §16b、原 D9 Workers/Export §3a/3b 与 Conversion/Templates/Workers §4a。fixed466b 映射 P2 与更早结论均已 CLOSED，不重做 D10 全文/全局，也不把绿色 docs 当成设计/产品 PASS。
 
 必须核验：
 
 - D9-BAF-P1-01（fixed79026 已独立 CLOSED，仅保留上下文）：核唯一 Annotation Value4/PortableRecord4/R6 carrier、独立 context 披露、catalog index/mode/projection 精确一一对应及被选中 annotation_content payload.recordPin 的逐字校验、跨输入域排他、Annotation Plan 禁选普通 Document body、review/backup 目标不兼容、重复或未选 projection 拒绝、pin/currentness、freeze→loss→confirm→create-only/Resource/print 路径；
-- D9-BAF-P1-02（别名 D9-79026-P1-01，本次增量）：核首次 unseen bar(state,task_count)→PDF、完整 Alice Annotation 备份与 generationPolicy=none 的 graph query_json 均无预存 Plan；原 saved/planned/unknown、inspect/confirm/publish/print Plan 查找与恢复不变；获权 index=99/field 错类型在进入 D7 前拒绝，合法 result 保持 D7 §7 全部原序；失权加坏 index/layout 仍不披露，已关闭 recordPin/ViewSpec hash/PrintReceipt/complete_data 规则保持；
+- D9-BAF-P1-02（别名 D9-466B-P1-01，本批）：审八域与七种目录 arm，原 Source/Resource/Field/table 最小读取、完整 Query/Collection/graph、按消费而定的 template/route/asset/Resource 输入，首次无需 Query/Annotation/旧 Plan 的 Source/Resource；保留 D7 View §7、Annotation recordPin、View hash/print/complete_data 及 §3a token/原子保存。新 D9-466B-P2-01：审原 wireVersion2 d9_error 的获权错误 index/类型 invalid_request、只有受保护真实矛盾已证才使用 integrity_conflict、证明/来源/域不可得分别用 proof_unavailable/source_unavailable/domain_unavailable、失权先 not_visible/reset、不能套 worker invalid_output、合法 result 则返回原 D7 owner error；
 - D9-8B6-P2-01 / D9-8B6-P2-02（fixed4da7 有界范围独立 CLOSED，只保留上下文，不是新增复核目标）：保持 Annotation selection/projection 集合、保留原序的 disclosure fragment、canonical origins、renderer asset/evidence-pin 数组，以及合法 D7 network 在当前六布局 D9 路线必定 renderer_unavailable；不得把 graph/nested nodeDetails/query_json 降级成 rows。D9-BAF-P2-02 的来源范围独立 CLOSED 结论仍固定在 fixed8b6；
 - ROOT-8B6-MAP-P2-01（fixed4da7 独立 CLOSED，本批不重复裁决）：保留 D8-SOURCE-MAP.json 中现任 consumer ACCEPTANCE.md path/blob 与原 760 条来源行的 source blob 不同角色。另核 D9-SOURCE-MAP.json 的当前来源资格、D9-REGISTRY.json、D9-TERMS.json 与全部 104 个唯一 D9-ACCEPTANCE row 及中英文投影；
 - 单一 Core 解析器/身份/授权边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
