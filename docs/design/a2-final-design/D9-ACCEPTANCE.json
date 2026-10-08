@@ -3,14 +3,14 @@
   "version": 1,
   "status": "author-resolved-pending-independent-review",
   "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
-  "structureAuthority": "D9-ACCEPTANCE.json is the sole row authority; EN/ZH Markdown tables are projections preserving ID order, positive/negative polarity, contract and evidence boundaries. New M15 and ANNEXP rows are design oracles only.",
+  "structureAuthority": "D9-ACCEPTANCE.json is the sole row authority; EN/ZH Markdown tables are projections preserving ID order, positive/negative polarity, contract and evidence boundaries. M15/ANNEXP/PLAN4/VIEW-SCOPE rows are design oracles only and product execution is UNRUN.",
   "counts": {
     "sourceOwned": 53,
     "r02r03r04": 8,
     "mandatory": 20,
-    "current": 16,
-    "total": 97,
-    "uniqueIds": 97
+    "current": 23,
+    "total": 104,
+    "uniqueIds": 104
   },
   "rows": [
     {
@@ -2157,12 +2157,12 @@
         "zh": "延期树形布局与现任 network 布局的边界"
       },
       "positive": {
-        "en": "Current D7 network remains a valid closed ViewSpec layout and keeps its circle_v1/layered_v1 runtime semantics. tree/treemap/sunburst are not current ViewSpec/1 layouts and therefore fail closed/static decoding with unsupported_layout before any D9 renderer is selected. If a valid current network View reaches this six-chart D9 route, it is renderer_unavailable unless a separately named network profile exists.",
-        "zh": "现任 D7 的 network 仍是合法的封闭 ViewSpec 布局，并保留 circle_v1 与 layered_v1 的运行期语义。tree、treemap、sunburst 并不是现任 ViewSpec/1 布局，因此必须在选择任何 D9 渲染器之前，于封闭静态解码阶段返回 unsupported_layout。合法的现任 network View 若进入本 D9 六图表路线，而又没有另行具名的 network profile，则返回 renderer_unavailable。"
+        "en": "Current D7 network remains a valid closed ViewSpec layout with its circle_v1/layered_v1 graph semantics, but D9ViewRendererBinding/1.layout is a closed six-member union and therefore every current network export on this route is renderer_unavailable. tree/treemap/sunburst remain unsupported_layout before D9.",
+        "zh": "现任 D7 network 继续是合法的封闭 ViewSpec 布局，并保留 circle_v1/layered_v1 的 graph 语义；但 D9ViewRendererBinding/1.layout 是封闭的六成员 union，因此当前 route 上所有 network 图形导出都固定返回 renderer_unavailable。tree/treemap/sunburst 仍在进入 D9 前返回 unsupported_layout。"
       },
       "negative": {
-        "en": "D9 never treats deferred tree bytes as a legal current saved View, repairs missing-parent/cycle data, infers parent values, converts network into tree, or substitutes data rows while claiming a chart.",
-        "zh": "D9 不得把延期的树形布局字节当成可合法保存的现任 View，不得修补缺失父节点或循环、推断父节点数值、把 network 偷换成 tree，也不得以普通数据行冒充图表。"
+        "en": "Installing or naming a network renderer profile cannot expand the current closed union. Network graphics require an actual future versioned renderer/schema successor; D9 must not convert network to tree or rows, drop nested nodeDetails/V/TerminalSchema graph data, or claim graphical success through query_json.",
+        "zh": "仅安装或命名 network renderer profile 不能扩展现任 closed union。network graphics 必须等待真实 future versioned renderer/schema successor；D9 不得把 network 转成 tree 或 rows，不得丢弃嵌套 nodeDetails/V/TerminalSchema graph 数据，也不得把 query_json 冒充图形成功。"
       },
       "contract": "Mandatory §15.7#4/§15.8.7; D9 Main §12a",
       "evidence": {
@@ -2609,6 +2609,153 @@
       "evidence": {
         "en": "design oracle; product execution UNRUN; independent review pending",
         "zh": "设计 oracle；产品执行 UNRUN；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "PLAN4-REL-01",
+      "scenario": {
+        "en": "Annotation selection/projection one-to-one relation",
+        "zh": "Annotation selection/projection 一一对应"
+      },
+      "positive": {
+        "en": "Two authorized annotation_content inputs selected once each as inputIndex 0 then 1 produce exactly two same-index/same-mode projections in canonical order; hidden target context may remain unavailable without suppressing readable R6 body/attribution.",
+        "zh": "两个已获权 annotation_content input 分别以 inputIndex 0、1 各选择一次时，必须按 canonical 顺序产生恰好两个同 index、同 mode 的 projection；target context 隐藏时仍可保持 unavailable，而不压掉可读 R6 body/attribution。"
+      },
+      "negative": {
+        "en": "Sequence [0,1,0], duplicate inputIndex, mixed modes in one Plan, selected-without-projection, unselected projection, or portable_backup selection paired with review_bundle_r6 projection rejects before any reread; complete pins cannot cure it.",
+        "zh": "序列 [0,1,0]、重复 inputIndex、同一 Plan 混用 mode、选择后缺 projection、未选择却出现 projection，或 portable_backup selection 却配 review_bundle_r6 projection，都必须在任何 reread 前拒绝；pins 完整也不能弥补关系错误。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §13a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "PLAN4-REL-02",
+      "scenario": {
+        "en": "View result/layout/scope relation",
+        "zh": "View result、layout 与 scope 关系"
+      },
+      "positive": {
+        "en": "contentSelection.viewInput, viewRenderBinding.resultInput and projection.view.resultInput select the same query_result; renderer.layout equals ViewSpec.layout; binding/projection outputScope are both complete_data and the accessible table has that same scope.",
+        "zh": "contentSelection.viewInput、viewRenderBinding.resultInput 与 projection.view.resultInput 必须选择同一个 query_result；renderer.layout 等于 ViewSpec.layout；binding/projection 的 outputScope 都是 complete_data，accessible table 也使用同一 scope。"
+      },
+      "negative": {
+        "en": "Different indices, layout mismatch, current_display/local legend state, partial-series scope, or a second D8 presentation decision for View data rejects without requery or projection rewrite.",
+        "zh": "三个 index 不一致、layout 不匹配、使用 current_display/本地 legend 状态、只导出部分 series，或把第二个 D8 presentation decision 当作 View data scope，都必须拒绝，不能靠 requery 或改写 projection 修复。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "PLAN4-REL-03",
+      "scenario": {
+        "en": "View target, destination and receipt compatibility",
+        "zh": "View target、destination 与 receipt 兼容"
+      },
+      "positive": {
+        "en": "For a six-chart View target, renderer.targetKind/profileId equal the outer target; print uses print destination and D9PrintReceipt1, external_bundle uses PublicationReceipt4, Resource handoff uses only the separate D7/D3 author result, and server_download uses its delivery state.",
+        "zh": "六图表 View target 中，renderer.targetKind/profileId 必须等于外层 target；print 使用 print destination 与 D9PrintReceipt1，external_bundle 使用 PublicationReceipt4，Resource handoff 只使用独立 D7/D3 author result，server_download 使用自身 delivery state。"
+      },
+      "negative": {
+        "en": "Target/profile mismatch, print with non-print destination, non-print with print destination, PublicationReceipt4 for Resource/print, or a View receipt carrying D8 document presentation rejects mechanically.",
+        "zh": "target/profile 不匹配、print 配非 print destination、非 print 配 print destination、Resource/print 路径生成 PublicationReceipt4，或 View receipt 携带 D8 文档 presentation，都必须机械拒绝。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1; D9 Interfaces §§7–8",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "PLAN4-CAN-01",
+      "scenario": {
+        "en": "Annotation selection/projection canonical arrays",
+        "zh": "Annotation selection/projection canonical array"
+      },
+      "positive": {
+        "en": "annotationInputs and projection.annotations are set-like arrays keyed by inputIndex, sorted by ascending Counter, unique and byte-stable across legal input permutations; portable_backup requires both context flags false.",
+        "zh": "annotationInputs 与 projection.annotations 都是以 inputIndex 为 key 的 set-like array，按 Counter 递增排序且唯一；合法输入 permutation 必须得到相同 bytes；portable_backup 的两个 context flag 都必须为 false。"
+      },
+      "negative": {
+        "en": "Duplicate/conflicting index, noncanonical frozen order, true backup context flag, or read-time sorting/flag dropping rejects; it is never silently normalized.",
+        "zh": "重复或冲突 index、冻结后顺序非 canonical、backup context flag=true，或试图读取时排序/丢 flag，都必须拒绝，不能静默 normalize。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "PLAN4-CAN-02",
+      "scenario": {
+        "en": "Renderer asset and evidence-pin canonical sets",
+        "zh": "Renderer asset 与 evidence-pin canonical set"
+      },
+      "positive": {
+        "en": "renderer.assets follows the closed role/id/version/pin comparator and renderer.evidencePins is pinToken-sorted/unique; the set contains exactly the assets/evidence actually consumed by the accepted renderer profile.",
+        "zh": "renderer.assets 使用封闭的 role/id/version/pin comparator；renderer.evidencePins 按 pinToken 排序且唯一；集合只包含 accepted renderer profile 实际消费的 asset/evidence。"
+      },
+      "negative": {
+        "en": "Same role+assetId with conflicting version/pin, duplicate evidence pin, unrelated evidence, missing consumed asset, or noncanonical frozen order rejects before staging.",
+        "zh": "同一 role+assetId 出现冲突 version/pin、重复 evidence pin、无关 evidence、遗漏实际消费 asset，或冻结顺序非 canonical，都必须在 staging 前拒绝。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1; D9 Impact §8a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "PLAN4-CAN-03",
+      "scenario": {
+        "en": "Ordered sequences stay ordered",
+        "zh": "有语义顺序的 sequence 保持原序"
+      },
+      "positive": {
+        "en": "Annotation disclosure fragments preserve authorized producer/context order and D7 query rows preserve their original result order; only each fragment's origins set is canonicalized by its closed comparator.",
+        "zh": "Annotation disclosure fragment 保留获权 producer/context 的原顺序，D7 query row 保留原 result order；只有每个 fragment 的 origins set 按封闭 comparator canonicalize。"
+      },
+      "negative": {
+        "en": "Globally sorting fragments, query rows or any other owner-defined ordered sequence to stabilize Plan bytes is semantic mutation and rejects.",
+        "zh": "为了稳定 Plan bytes 而全局排序 fragment、query row 或其它 owner-defined ordered sequence 属于语义改写，必须拒绝。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1; D9 Impact §8a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
+      },
+      "status": "author-resolved-pending-independent-review"
+    },
+    {
+      "id": "VIEW-SCOPE-01",
+      "scenario": {
+        "en": "Complete-data View export ignores local legend hiding",
+        "zh": "complete-data View export 不受本地 legend 隐藏影响"
+      },
+      "positive": {
+        "en": "With the same complete ResultPin/ViewSpec/renderer, a two-series bar exports both series to PDF/SVG and the same-data accessible table even if one device locally hides one legend series.",
+        "zh": "同一个完整 ResultPin/ViewSpec/renderer 下，两系列 bar 即使某设备本地隐藏一个 legend series，PDF/SVG 与同数据 accessible table 仍必须导出两条 series。"
+      },
+      "negative": {
+        "en": "Local legend state cannot remove a series, change outputScope, alter stable palette/order, or create current_display semantics. Such a scope needs a future versioned successor with qualified local-state evidence.",
+        "zh": "本地 legend 状态不得移除 series、改变 outputScope、改写 stable palette/order 或生成 current_display 语义。若未来需要这种 scope，必须使用具名 versioned successor 并绑定合格 local-state evidence。"
+      },
+      "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §12a",
+      "evidence": {
+        "en": "design oracle; product execution UNRUN; independent review pending",
+        "zh": "设计判据；产品执行未运行；等待独立复核"
       },
       "status": "author-resolved-pending-independent-review"
     },
