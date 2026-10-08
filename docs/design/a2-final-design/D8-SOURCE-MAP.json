@@ -3439,7 +3439,7 @@
   },
   "currentAcceptanceInventory": {
     "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-    "blob": "6e17cbf194cd69466b7965d5bbb4abf5e4066be1",
+    "blob": "c3022df8c823454310fe73645084630481b1c8d1",
     "rowCount": 760,
     "rows": [
       {
@@ -14094,6 +14094,21 @@
       },
       "rowCount": 760,
       "originalSourcePreserved": true
+    },
+    "blobRole": "current-consumer-document-at-8b6-baseline",
+    "rowSourceBasis": {
+      "role": "retained-original-760-row-inventory",
+      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "blob": "f5f5b9b212b281838aabc281171217623285820e",
+      "rule": "Per-row sourcePath/sourceBlob/sourceSection/line/text preserve the fixed original 760-row source inventory. They are provenance, not rewritten to the later current consumer blob. The top-level path/blob pair identifies the actual current FC ACCEPTANCE.md consumer document only."
+    },
+    "mappingCorrection": {
+      "finding": "ROOT-8B6-MAP-P2-01",
+      "status": "author-resolved-pending-independent-review",
+      "priorError": "top-level path named final-FC ACCEPTANCE.md while blob incorrectly named D8-ACCEPTANCE.json",
+      "correctedPath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "correctedBlob": "c3022df8c823454310fe73645084630481b1c8d1",
+      "preservedPerRowSourceBlob": "f5f5b9b212b281838aabc281171217623285820e"
     }
   },
   "currentVersionInventory": [
