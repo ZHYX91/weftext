@@ -9,6 +9,7 @@ translation_status: source
 
 唯一结构权威：`D10-ACCEPTANCE.json`。这里逐字投影全部 125 条稳定 ID 的场景、来源、候选结果、禁止条件和回归 oracle，全部属于设计义务，产品 UNRUN，不是独立 PASS。
 本表的历史坐标与源时代用词逐项取自未改动的 docs/design/d10/SCENARIO-DISPOSITIONS.zh-CN.md，绝不拿现任 D10-SCENARIOS.zh-CN.md 冒充历史字节；现任改名只存于 `D10-ACCEPTANCE.json.currentOverlay.sourceEraToCurrent` 与 A2 投影。
+现任*未编号*作者修补门（并非新增场景行）：P1-02 将真实 Automation Link2/ApprovalUse2 与 interactive D3/D6 作者责任明确分开，交互必须完成 D7/D8 全量 preview、明确确认和原 planned 恢复；P2-01 以历史 D6 planned 实际保存的 PAB3/Manifest2/EffectBytes2 自身完整 decoder、digest、pins 和不变的 D7 preview transport 重开，不允许 PAB4-only 门。两者仅 author-resolved-pending-independent、产品 UNRUN；原 125 条 source-era 正反/oracle 单元格完全不动。
 
 | ID | 来源 | 处置 | 执行 | 正向规则 | 反向风险 | 验收证据义务 |
 | --- | --- | --- | --- | --- | --- | --- |

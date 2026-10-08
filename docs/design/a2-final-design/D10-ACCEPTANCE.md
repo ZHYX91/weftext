@@ -10,6 +10,7 @@ translation_status: synced
 
 Sole structural authority: `D10-ACCEPTANCE.json`. This projects all 125 stable IDs, source locations, complete expected rule, prohibited scenario, and validation obligations. Product UNRUN and independent D10/global verdict pending.
 Historical coordinates and source-era vocabulary in this table come from unchanged docs/design/d10/SCENARIO-DISPOSITIONS.md, not the renamed A2 D10-SCENARIOS.md. Current renamings live in `D10-ACCEPTANCE.json.currentOverlay.sourceEraToCurrent` and that A2 projection.
+Current *unnumbered* author-repair gates (not additional scenario rows): P1-02 disjoins real Automation Link2/ApprovalUse2 from interactive D3/D6 author responsibility with D7/D8 full-preview explicit confirmation and original planned recovery; P2-01 reopens a genuine historical D6 planned PAB3/Manifest2/EffectBytes2 using its own complete decoder, digest, pins and the unchanged D7 preview transport, never a PAB4-only gate. Both are author-resolved-pending-independent, product UNRUN; the original 125 source-era positive/negative/oracle cells remain intact.
 
 | ID | Source | Disposition | Mode | Positive/expected | Negative/risk | Validation oracle |
 | --- | --- | --- | --- | --- | --- | --- |

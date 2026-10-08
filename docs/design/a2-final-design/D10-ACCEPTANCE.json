@@ -6163,16 +6163,16 @@
       "id": "D10-1CA-P1-02",
       "status": "author-resolved-pending-independent",
       "product": "UNRUN",
-      "scope": "interactiveFirstProducer",
+      "scope": "attendedStartAndOriginalInteractiveAuthorArm",
       "positive": {
-        "en": "An attended authenticated user without Automation creates one Run/targeted finite Lease/Stop atomically, maxRuns1 admits once, and second step/lost reply/planned restart reuse original.",
-        "zh": "本人到场无 Automation 同库原子创建 Run/targeted Lease/Stop，maxRuns1 首次准入一次，同 Run 第二步、失答、原 planned restart 均复用。"
+        "en": "A trusted no-Automation Run gets one Run-targeted Lease/Stop and first LeaseRunUse. Its real interactive Step2 uses original D3 Request13 or D6 request2, D7 PAB4 or D8 EditBinding3, all prepared pins/full preview and explicit human confirmation, including same-Run second step/original planned cold recovery with maxRuns1. Only actual Automation core_field_member consumes Link2/ApprovalUse2/Standing Approval.",
+        "zh": "可信无 Automation Run 获唯一 Run-targeted Lease/Stop 与首次 LeaseRunUse；真实 interactive Step2 使用原 D3 Request13 或 D6 request2、D7 PAB4 或 D8 EditBinding3、全部 prepared pins/完整 preview 及本人明确确认，同 Run 第二步/原 planned 冷恢复在 maxRuns1 下不重扣。只有真实 Automation core_field_member 消费 Link2/ApprovalUse2/Standing Approval。"
       },
       "negative": {
-        "en": "Forged principal/event, widened scope/grant/budget, same-key different intent, wrong store, stop/capacity/revoke/clock races leave no partial records or second author P.",
-        "zh": "伪 principal/事件、扩权 scope/grant/budget、同 key 异 intent、错 store、stop/容量/撤权/时钟竞态不得留下半态或第二作者 P。"
+        "en": "Forged Automation/Link2, implicit approval or no full preview/confirmation, wrong preparedFormat/pins/digest/store, revocation, Stop, untrusted clock, insufficient grant/budget, duplicate Run use or a second author P all fail by original owner/disclosure priority.",
+        "zh": "伪 Automation/Link2、隐式批准或缺全量 preview/确认、preparedFormat/pins/digest/store 错、撤权、Stop、时钟未知、grant/预算不足、重复扣 Run 次数或第二作者 P 均依原 owner/披露优先级拒绝。"
       },
-      "consumer": "D10-CONTROL §7.1; D6-CONTROL §21.4; D7 qualification B05/B09; D10-IMPACT §6/§15"
+      "consumer": "D10-CONTROL §0.2/§0.3/§7.1; D6-SCHEMAS §10.2; D6-CONTROL §21.4; D7 qualification B05/B09/B13; D10-IMPACT §6/§15"
     },
     {
       "id": "D10-1CA-P1-03",
@@ -6193,16 +6193,16 @@
       "id": "D10-1CA-P2-01",
       "status": "author-resolved-pending-independent",
       "product": "UNRUN",
-      "scope": "freshHistoricalVersionDispatch",
+      "scope": "realVersionHistoricalPlannedPreviewDispatch",
       "positive": {
-        "en": "Fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2/ControlPrepareBinding3 and genuine saved PAB3/Manifest2/Link1/ApprovalUse1/Binding2 each recover their own original requests/pins.",
-        "zh": "fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2/ControlPrepareBinding3 与真实保存 PAB3/Manifest2/Link1/ApprovalUse1/Binding2 各按原请求/pins 恢复。"
+        "en": "Original planned D6 PAB3/Manifest2/EffectBytes2 with expired old token reopens under the unchanged d7_planned_preview_open/opened after current audience/ObservationScope/permission checks, by its own closed decoder/full bytes/preview digest/EffectBytes and all original pins, without reprepare. Current PAB4/Manifest3/EffectBytes3 takes only its own decoder.",
+        "zh": "原 planned D6 PAB3/Manifest2/EffectBytes2 即使旧 token 过期也在当前 audience/ObservationScope/权限通过后，以自身 closed decoder/完整字节/preview digest/EffectBytes/全部原 pins 通过不变 d7_planned_preview_open/opened 重开，不重新 prepare；现任 PAB4/Manifest3/EffectBytes3 只走自身 decoder。"
       },
       "negative": {
-        "en": "Historical bytes under fresh tags, current preview through historic pins, new author OperationId on restart and a second D7 registry are rejected.",
-        "zh": "旧字节冒充现任 tag、经历史 pins 读取新 preview、重启新造 OperationId、第二 D7 registry 均禁止。"
+        "en": "Wrong version/domain, lost pin, wrong preview digest or request, non-planned record, revoked disclosure or expired new delivery epoch fail original D7 ordered errors; no PAB3->PAB4 rehash, old-token renewal, migration or second preview owner.",
+        "zh": "版本/domain 错、pin 缺失、preview digest/request 错、非 planned、撤销披露权或新 delivery epoch 过期按 D7 原错误次序拒绝；禁止 PAB3→PAB4 重哈希、旧 token 续期、migration 或第二 preview owner。"
       },
-      "consumer": "D10-LEXICON §§3/13/14; D7 B09; D10-IMPACT §15"
+      "consumer": "D10 §15.2; D10-UPSTREAM §5.1; D7 qualification B13; D10-IMPACT §7/§15; D10-LEXICON §§3/8"
     },
     {
       "id": "D10-1CA-P2-02",
