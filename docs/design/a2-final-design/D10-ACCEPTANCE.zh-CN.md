@@ -137,4 +137,6 @@ translation_status: source
 | D10-D07 | D10 Candidate §22 | defer-with-owner | unsupported | owner 为 D1 + D8 + D10 联合边界 | Mobile 上提供 Agent、connector 或 approval | 必须重开 D1，并提供真实 Mobile 平台、交互和权限证据 |
 | D10-D08 | D10-TASK/A2 | defer-with-owner | deferred | A2 | A2 系统级验收 | D10 independent acceptance/activation 后才开始 |
 
+**现任 D08 裁决（原来源行仍保留）：**先进行 D10 非作者独立设计复核，再进行全新 Pro 完整 A2 非作者设计终审；全部门满足后才可明确 acceptedDesignSha 并同 SHA 冻结。真正的 activation/实施是后续工作。旧 D08 的 activation 字样和绿色文档 CI 均不能倒置设计接受的顺序。
+
 **读数/证据边界：** U27/F37/A14/T10/E10/P19/D08=125/125；实际产品与外部发包/OS/AT/并发/恢复全部 UNRUN。旧 U12 三分支和 P19 current 版本的单独 currentOverlay 在唯一 JSON 中详列，原场景不删不改；完整原表见 [D10 场景](D10-SCENARIOS.zh-CN.md)。

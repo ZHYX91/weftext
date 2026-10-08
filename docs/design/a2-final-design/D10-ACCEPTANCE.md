@@ -138,4 +138,6 @@ Sole structural authority: `D10-ACCEPTANCE.json`. This projects all 125 stable I
 | D10-D07 | D10 Candidate §22 | defer-with-owner | unsupported | joint D1 + D8 + D10 | Mobile Agent/connector/approval | reopen D1 plus real Mobile evidence |
 | D10-D08 | D10-TASK/A2 | defer-with-owner | deferred | A2 | A2 system-level acceptance | start only after D10 independent acceptance/activation |
 
+**Current D08 disposition overlay (historical source row retained):** First independent D10 design review, then fresh Pro full A2 design review; only afterward, if all gates pass, name an acceptedDesignSha and same-SHA freeze. Actual activation/implementation is later. Green documentation or the old D08 word “activation” does not make runtime a prerequisite to full design review.
+
 **Evidence boundary:** U27/F37/A14/T10/E10/P19/D08=125/125; product/OS/AT/external sends/races/recovery UNRUN. U12 three branches and P19 current owner overlays are separately recorded in the sole JSON, never replacing source rows. Full source table: [D10 Scenarios](D10-SCENARIOS.md).

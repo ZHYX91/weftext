@@ -5698,7 +5698,16 @@
       "owner": [
         "D10 exact owner"
       ],
-      "currentOverlay": null,
+      "currentOverlay": {
+        "owner": [
+          "D10 independent design reviewer",
+          "A2 fresh Pro global independent reviewer",
+          "D1 implementation/activation after freeze"
+        ],
+        "positive": "Run the fixed-SHA D10 independent design review first. Then a fresh Pro complete A2 review checks P0/P1=0, all P2 dispositions and required read gaps=0; only after that can an explicit acceptedDesignSha and same-SHA freeze/implementation-start package be considered. Actual runtime activation, product implementation and release remain separate later gates.",
+        "negative": "Do not require product runtime activation before independent design acceptance, infer acceptance from the old D08 source-era slash wording or green docs, or convert author candidate into an acceptedDesignSha.",
+        "historicalSourceRetained": true
+      },
       "status": "design-oracle-product-UNRUN;author-candidate-pending-independent-review"
     }
   ],

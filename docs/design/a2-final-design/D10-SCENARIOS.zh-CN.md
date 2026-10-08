@@ -9,7 +9,7 @@ translation_status: source
 
 ## A2 D10 全部125条场景现任裁决说明
 
-原七组 U27/F37/A14/T10/E10/P19/D08 的全部原始 ID、完整场景及双语正反条件保留在下方。各 source location 指向真实历史来源，新增当前解析由实际 A2 D1–D9 owner、D10-CONTROL §0、D10-UPSTREAM §8.2 定义。**U12 三分支必须同时生效：**ICS conversion 仍 unsupported（不得产生作者效果）；普通无绑定支持文件两次显式 import 各有 fresh identity，但同一 request retry 只恢复；D3 已绑定语义按 never_bound（显式 initial_import 或 Adopt 一次 Node+OriginBinding）、active_live、active_non_live、retired、conflict、miss 独立分派，不能按 UID 猜。P19 中旧 17 public kind/36+1 概念库存是历史名号审计，不限制 D9 Plan4/Annotation/View 的当前 typed helper。所有 defer-with-owner D01–D08 保留原否定与再开放条件，不能声称运行通过。
+原七组 U27/F37/A14/T10/E10/P19/D08 的全部原始 ID、完整场景及双语正反条件保留在下方。各 source location 指向真实历史来源，新增当前解析由实际 A2 D1–D9 owner、D10-CONTROL §0、D10-UPSTREAM §8.2 定义。**U12 三分支必须同时生效：**ICS conversion 仍 unsupported（不得产生作者效果）；普通无绑定支持文件两次显式 import 各有 fresh identity，但同一 request retry 只恢复；D3 已绑定语义按 never_bound（显式 initial_import 或 Adopt 一次 Node+OriginBinding）、active_live、active_non_live、retired、conflict、miss 独立分派，不能按 UID 猜。P19 中旧 17 public kind/36+1 概念库存是历史名号审计，不限制 D9 Plan4/Annotation/View 的当前 typed helper。所有 defer-with-owner D01–D08 保留原否定与再开放条件，不能声称运行通过。**现任 A2 D08 顺序：**先完成 D10 独立设计复核，再做全新 Pro 完整 A2 非作者终审；只有 A2 最终门满足后才可能明确 acceptedDesignSha 与同 SHA 冻结。真正 runtime activation 与实施是后续独立决策，绝非独立全局设计审查的先决条件。下方 D08 旧行只保留来源当时表述，不能要求先激活软件再接受设计。
 
 ---
 
