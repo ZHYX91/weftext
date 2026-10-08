@@ -469,7 +469,7 @@ D10 管理/control 入口的错误对象为：
         "cancelled" | "external_outcome_unknown"
     }
 
-`D10ControlError/1` 只用于 `d10_control_prepare`、`d10_host_control_commit`、`d10_control_result`、`d10_control_read`、`d10_secret_stage`、`d10_emergency_stop` 和 `d10_emergency_stop_result`。`D10RunStepError/1` 只用于尚未进入其它 protocol owner 的 D10 Run/step：Run admission、ContextBundle/model/tool/connector 执行、D6 前 approval/delegation 检查以及 external-effect 执行/恢复。
+`D10ControlError/1` 只用于 `d10_control_prepare`、`d10_host_control_commit`、`d10_control_result`、`d10_control_read`、`d10_interactive_run_start`、`d10_interactive_run_result`、`d10_secret_stage`、`d10_emergency_stop` 和 `d10_emergency_stop_result`。`D10RunStepError/1` 只用于尚未进入其它 protocol owner 的 D10 Run/step：Run admission、ContextBundle/model/tool/connector 执行、D6 前 approval/delegation 检查以及 external-effect 执行/恢复。
 
 一旦进入 D3、D6、D7、D8 或 D9 入口，就逐字返回该 owner 原 closed error/envelope。D10 不包装 D6 `not_visible`、`approval_unavailable`、`execution_stopped`、`transaction_aborted`，不包装 D7 action/effects 错误，也不改名 D3/D8/D9 错误。诊断 UI 可在 owner error 后另做当前受权的 `d10_control_read`，但该读取不得改变正式结果。
 
@@ -1308,7 +1308,7 @@ current state 使用另一个入口：
       view:ControlCurrentView<K>/1
     }
 
-`scope` 必须等于该 record 的真实 exact scope；没有 name lookup、wildcard、list 或 display-label lookup。当前披露授权早于 existence/state。missing、wrong scope/audience、hidden 全部 `not_visible`；visible record 的受保护连续性暂不可证明为 `state_unavailable`；兼容版本中出现 unknown closed state/member 是 integrity/version failure，绝不返回 `state:"unknown"`。
+非 Stop 的 K 永远严格要求 `scope == record.scope`；没有 wildcard、list、name 或 display lookup。**仅 Stop 的双资格 relation：**严格解码、D1 `automation.stop` 后先确认**当前真实认证** W 用户或 H operator，完整 target/StopOwner/latch 及嵌套 Run/Automation 披露权**先于** existence。W 请求 scope 必须为 target 真实 `{kind:"workspace",workspaceRef}`；H 必须为 `{kind:"deployment",storeIncarnation:<实际打开 control store>}`，且当前 DeploymentControlPolicy 授予针对准确 target **及其 Workspace** 的 stop/read 权，不是 H 连接即可。通过真实 authority/fence/custody 后，以**唯一一份**受保护 `StopOwner/1` 核实实际 target 完整 Ref、真实 Workspace、唯一 stop latch Ref、target/latch/owner/storeIncarnation 全等、`requestId==target.id`，以及持久真实 scope 为 **Workspace** 的唯一 Stop Image1。H scope 仅是读取资格，绝非第二份持久 Stop 身份/image。`D10ControlCurrent.scope` 投影已验证 W/H 请求，但 `binding`、`usageRevision=none`、`stop_state`、状态及 revision 全来自**同一读取 cut 的唯一受保护 Stop record**。`d10_emergency_stop_result` 复用完全一致 target/StopOwner/latch relation 与原存 receipt/not-applied cut；target r5→r6 不修改它。隐藏/不存在、跨 Workspace、错 store、嵌套无授权 → `not_visible`；authority/fence/custody 暂不可证 → `authority_unavailable`；已证 owner/store/target 矛盾 → `integrity_conflict`；latch/result 连续性暂失 → `state_unavailable`，保持原优先级。即使存在成功历史，结果交付前仍重查当前披露。绝不能为 H 复制 Stop fact、audit、安全容量、revision 或结果。非 Stop 的 visible record 连续性未知仍为 `state_unavailable`，兼容 state/member 未知是 integrity/version 失败，不能猜测状态。
 
 首版 19 类 current projection 闭集如下：
 
@@ -1322,6 +1322,51 @@ current state 使用另一个入口：
 `RunOrigin/1` 是 Core 创建且不可变的来源事实，由受保护 Run 记录、`LeaseRunUse/1.origin` 和公共 `run_state.origin` 投影共同使用。interactive 分支仅有 `kind`，不要求 Automation、definition revision、occurrence claim，也不填占位值或 null。automation 分支绑定实际创建此 Run 的 Automation、不可变 definition 和完整 occurrence claim；key 内的完整 Automation Ref 必须等于 origin 的 automation.ref，原 claim 的 definitionRevision 必须等于 origin 的 definitionRevision；key 自身不包含 definitionRevision。调用方或模型不能选择或更换既有 Run 的 origin。当前 control revision 可以改变，但不能改写历史 origin binding；新的执行仍须通过当前门禁。Run 不能切换分支以逃离已有 occurrence claim 或预算谱系。
 
 交互 Run 的 Lease target 必须准确指向该 Run 的完整 ControlRef；Automation Run 则准确指向 origin 的 Automation ControlRef。两支同样受真实认证主体、Workspace、activation、准确已准入 Lease revision、有限上限、stop latch 及全部既有准入/恢复规则约束。只有 automation 分支读写 occurrence claim。受保护 Run、准入记录及实际 claim/Lease 之间存在已证明矛盾时，control read 返回 `integrity_conflict`，Run 执行前返回 `control_conflict`；连续性不可证明为 `state_unavailable`。Run 本身可见但嵌套 origin/Lease/stop binding 不可披露时，整体返回 `not_visible`；隐藏 Automation 不能投影成 interactive。此处修订尚未激活的候选类型，不授权实际历史记录的 decoder 猜测 origin。
+
+### 7.1 可信 interactive-start 生产者（并非第八个 ControlBody）
+
+首代**新 interactive Run 及其 Run-targeted Lease**只由以下有限 Core runtime 入口生产，另一路为既有 Automation occurrence 生产者。本路径**不是** `automation_configure`、第八个 `ControlBody`、公开作者请求、泛 callback 或 Agent 自报的 `approved` 布尔值。D1 `automation.manage` 必须真正通过 release/contract-major/surface/version/health 门；当前 D6 Policy/3 还须独立允许实际认证用户的 workspace `d10_control_self`。Field 权限、issuer、policy_admin、工具描述和 H 登录均不蕴含二者。
+
+```text
+D10InteractiveRunStartRequest/1 = {
+  kind:"d10_interactive_run_start",wireVersion:1,
+  requestId:Uuid,
+  scope:{kind:"workspace",workspaceRef:D3.WorkspaceRef},
+  activationBinding:ActivationBinding/1,
+  delegation:LeaseSpec/1
+}
+
+D10InteractiveRunResultRequest/1 = {
+  kind:"d10_interactive_run_result",wireVersion:1,
+  requestId:Uuid,
+  scope:{kind:"workspace",workspaceRef:D3.WorkspaceRef}
+}
+
+D10InteractiveRunStarted/1 = {
+  kind:"d10_interactive_run_started",wireVersion:1,
+  requestId:Uuid,
+  scope:{kind:"workspace",workspaceRef:D3.WorkspaceRef},
+  run:Binding<run>/1,
+  lease:Binding<lease>/1,
+  activationBinding:ActivationBinding/1,
+  origin:{kind:"interactive"},
+  admission:{kind:"not_admitted"}
+}
+```
+
+调用方仅能选择首次发出前持久保存的 `requestId`；请求没有 `principal`、Run/Lease Ref、Automation、occurrence、target、authorRequest、`approved` 或创建授权 token。`delegation` 是**完整有限** LeaseSpec/1，不是任意描述：其 activationBinding 必须与外层完全一致；`notBefore < notAfter`、正且有限 maxRuns、D1 allowlist、准确 D6 LeaseReadGrant scope/Field set、H 已发的 ResourceUseGrant binding 和每个 BudgetCaps 均闭合解码。Core 逐一验证与真实当前 Policy/3 allow/deny、主体/Workspace/audience、active selector、实际 Contribution/H grant 授权、owner/account/currency、spent/held ceiling 和可信时钟的**交集/收窄**。无适用费用 grant 不意味着免费账务；Lease 或用户不创建部署 grant、读写、secret、egress、账户或 Field 权限。固定 Run budget 准确取已接受 LeaseSpec.budgets，不能靠后续修改其他预算层提高。
+
+Core 只在有**内部可信到场用户启动事件**时接受首次请求。该事件由受信 Desktop、已认证 Server attended UI（WebUI 经 Server Broker）或真正到场 CLI adapter 产生，绑定 D6 实际认证自然人/会话、准确 Workspace、**完整 canonical start 请求摘要**、可信 clock epoch、完整 Lease/activation 展示和新鲜显式 Start 动作。Core 必须校验事件和真实请求字节/主体/audience/时间。事件不是公开 JSON、caller 布尔值、Agent bearer token、模型/tool callback、无人值守 CLI flag 或脚本可访问的通道。Mobile/不受信 worker 不得伪造。Adapter 不提供或修改 principal；Core 从 D1/D6 既有认证边界取得真实主体。不能完整展示请求和证明真实本人动作的 surface 不提供此路径。
+
+**首次启动与结果唯一顺序：**(1) 严格闭合 decode/界限和实际 D1 可用性；(2) 认证用户、到场事件、准确 W scope、Policy/3 self capability、全部建议权限与嵌套资源披露，均须**先于**受保护 existence lookup；hidden/wrong Workspace/principal/scope → `not_visible`，授权解码后畸形或缺少有效到场事件 → `invalid_request`；(3) D6 真实 custody/fence/authority、**同一**实际打开的 control-store incarnation 与可信 clock 连续性（分别 `authority_unavailable`、`state_unavailable`）；(4) stable key 使用实际 scope incarnation、认证主体和 requestId，并比较**完整 D10-Interactive-Start/1 canonical 请求字节**，同 key 异 intent 为 `control_conflict`，不得只比摘要；(5) 已证明 applied 则经当前披露门重放原 Started 结果，不因当前版本变化拒绝；应用/未应用关联未知为 `state_unavailable`，已证矛盾为 `integrity_conflict`；(6) 仅证明 unseen 时验证 active selector、完整 Policy/Lease/grants/clock `notBefore <= now < notAfter`、预算、stop 及完整负向 record/range/capacity proof（已变更 binding 为 `control_conflict`，容量/溢出 `budget_exceeded`，连续性未知 `state_unavailable`）；(7) 在**唯一真实 Authority Store**控制 CAS/写序列化中重检 before/range/授权/stop/容量并原子保存；(8) 发送前重过完整结果披露门。start/result 使用原 D10ControlError/1；开始受保护执行后按 D10RunStepError/1 或下游 D3/D6/D7/D8/D9 owner 原错误返回。
+
+第一次获胜 CAS 由 Core 在真实 storeIncarnation 分配恰一组新鲜不复用完整 `ControlRef<run>`、`ControlRef<lease>`、`ControlRef<stop>`，均属于真实 Workspace scope。Run/Lease 配置 Binding 初始 revision1。Lease Image1 为 active，principal 来自**受信 D6**，target 是新 Run 完整 Ref，spec 为已验证 LeaseSpec，`runsConsumed=0`、`usageRevision=some(0)`。Run Image2 包含 `run_state {lifecycle:"active",executionState:"queued",origin:{kind:"interactive"},lease:<Lease Binding>,admission:{kind:"not_admitted"},stop:<Stop Binding>}`，`usageRevision=none`；其受保护 supplement 为 `createdBinding=<原 Run revision1>,principal=<实际用户>,fixedBudget=<已验证 LeaseSpec.budgets>,invocation:none,admission:none,authorSteps:[]`。另建**唯一** W-scope Image1 `stop_state`、revision1/open latch 与准确关联 Run、Workspace、storeIncarnation 的 `StopOwner/1`。在 Run 可管理前必须预留 §11 唯一 latch、不可变结果/audit slot 与 safety sequence 单位；StopCapacity 不依赖普通管理配额。**同一**既有 control-store 事务原子写入原 key/完整字节、不可变 start 结果、三份 record/关联、原 owner/range fence/pins、预留安全容量、保留及 audit。并发 start/撤权/激活/stop/容量由**同一** store 序列化；失败/崩溃/输家不得留下部分 Run/Lease/Stop、已应用假象、丢失的 safety slot 或可使用 Run。这不是 D6 OperationId、作者 DecisionKey/P、第八个 ControlBody、Automation/occurrence claim、Standing Approval 或第二决议账本。
+
+创建**不消耗 maxRuns**。首个受保护 step 前，原 §8.2 `LeaseRunUse/1` CAS 检查 Lease target 等于**完整 Run Ref**、不变的 interactive origin、真实主体/Workspace/activation、未 stop、可信时钟、当前 grant/Policy 与全部有限预算；仅此 CAS 将累计 lease use 加**一次**并保存准确 admitted lease revision/时间。`maxRuns=1` 的同一已准入 Run 可执行第二受保护 step，或崩溃/失答后恢复**原** planned D6 请求，不再消耗，也不捏造 Automation claim。后续每步仍复核当前授权、准确已准入 Lease revision、时间、activation、stop、approval、预算；过期/撤权/stop/连续性未知禁止新执行，不撤销已提交工作。第二个 Run 不得使用这份 Run-targeted Lease。执行失败/取消/重启不退第一次用量。saved/planned/unknown 作者工作只按**原** request/DecisionKey/PAB4/Link2/pins 恢复，不生成新 OperationId。
+
+`d10_interactive_run_result` 只有在原 principal/scope、authority/fence/custody 与完整嵌套 Run/Lease/Stop 结果披露通过时才返回原存的准确 `D10InteractiveRunStarted/1` 或原 control error。证明 unseen/hidden → `not_visible`；原结果或三份关联任何一处暂不可证 → `state_unavailable`，不新建 Run。初次响应丢失、同请求并发或之后 Run/Lease r5→r6 均恢复不可变原 revision1 结果；同 key 异 intent → `control_conflict`。错误 store/scope 不能别名为本地 Ref；交付前必须重新过披露门。
+
+**产品尚未执行的验收义务：**认证到场用户无 Automation 获新 Run 和 Run-targeted `maxRuns=1` Lease，一次首次准入、同 Run 第二步、剩余量零时重启恢复原 planned work。反例：伪造 principal/事件、未授权 D6 Field/read/resource、扩权账户/预算、同 key 异字节、错 store、缺 owner pins、StopCapacity 耗尽/stop 竞争、撤销/过期 lease/activation、clock epoch 丢失和费用溢出。必须按原错误域拒绝并证明零半态、无重复 lease use、无 D6 作者决议副作用。
 
 ### 7. 十九种可读的封闭 current projection
 
@@ -2019,7 +2064,7 @@ Public stop 是独立于普通 control prepare 的专用 safety transaction：
 
 受保护 stop stable key 是 `("D10-Emergency-Stop/1",target.storeIncarnation,target.kind,requestId)`。`requestId==target.id`，target/latch 的 storeIncarnation 都等于 StopOwner.storeIncarnation，而且一个 exact target 恰有一个 latch。workspaceRef 来自受保护控制状态中的真实 target Workspace。D10 storeIncarnation 是绑定实际打开 D6 authority-store backend 的内部持久控制域 incarnation；它不是已冻结 D6 public API 名称、WorkspaceId、filesystem path 或 authority token。
 
-W 使用准确 Workspace scope，H 使用准确 deployment storeIncarnation。两者只有各自当前 authority gate 通过后才能访问同一 latch。scope 只是访问资格，不产生第二份 stop fact。
+W 以 target 的准确 Workspace scope、H 以真实 deployment storeIncarnation 和 target-specific 当前 host 权限，遵 §7 严格 Stop-only 映射，从**唯一**持久 W-scoped latch/StopOwner image 读出一份结果，不创建第二份 Stop record/result。首次 stop、失答查询及 r5→r6 保持相同不可逆状态、回执与预留容量。
 
 在首次 enable/admission 前，对象创建必须原子预留一个 durable latch、一份 StopOwner 关联、一个 audit/result slot 和一个 safety-sequence capacity 单位。若无法预留，该 executable object 就不能进入可管理/可运行状态。普通 control prepare、配置 Counter 空间、budget、approval/lease count、cost 和 executor quota 都不能消费这些容量。stop 不要求 target configuration revision，也不要求先执行普通 management write。
 
@@ -2077,17 +2122,17 @@ stop/result 固定顺序：closed decode 与 D1 automation.stop gate → 当前 
 
 stop safety transaction 是同一 managed Authority Store 内的专用 closed write，不是 D10ControlPrepare，也不是 D6 author transaction。配套 D6 amendment 只定义 D6 final/planned author work 怎样消费 latch，并返回 `execution_stopped/preflight` 或原 authoritative-abort 结果。stop 不伪造普通 control history，不回滚 committed 作者事实或已经发送的 external effect，也不会仅因停止执行就释放费用。
 
-## 12. 当前 Policy/3 与 bootstrap profile/3 协调
+## 12. 当前 D6 Policy3/Profile4/Plan4/Genesis2 的唯一消费
 
-当前 D6 Control 拥有 Policy/3。本联合候选只在该当前版本显式加入 workspace scope 的闭合无参数 capability d10_control_self。固定 S 的 Policy/1/2 decoder、能力、scope 含义及真实已保存 policy/decision 保持原样。新能力不由任何 Field/source/policy_admin 能力蕴含，也不蕴含这些能力。
+**当前唯一 owner** 是 D6 Control §§10.2/20.2 与 FC SCHEMAS §9：fresh `WorkspaceBootstrapProfile/4`（`d6_bootstrap_profile`,wireVersion=4）、`WorkspaceBootstrapPlan/4`（`d6_workspace_bootstrap_plan`,wireVersion=4）、`WorkspaceTrustGenesis/2`（version=2）、Policy/3 与 D8 必需的 `D8PresentationPolicyBootstrapInit/1`。D7-REGISTRY-QUALIFICATION B13 消费同一真实版本。D10 只向**经 issuer 正式准入的新 family** 的初始 Policy/3 增加 workspace-scope 无参数 `d10_control_self`，不是第二 bootstrap 生产者，也不改 Profile4 的六成员 wire。
 
-固定 S profile/2 的“全部非 Field capability”继续准确等于 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。以后新增能力不自动进入既有 profile/1 或 profile/2。
+固定 profile/2 非 Field 集合保留 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。新签发 Profile4 初始 creator 的 Policy/3 grant 为上述集合，加 D6 的 `replica_register, replica_retire, conflict_read, conflict_resolve, execution_custody_admin, structure_state, portable_frontier_state`、D10 `d10_control_self` 与原完整目标 Registry Field read/write grant 派生，deny 为空。各能力按 D6 真实 scope，包括 CommitDomain 限制的 commit_sequence_state；新 Field/未来 capability 不自动授予。只有当前 `administer_issuer` 才能显式更新 issuer profile 供**此后新 family**使用，分配仍独立要求 `allocate_workspace`。既有 Workspace 只能由原当前 `policy_admin` 走完整 Policy/3 事务取得 d10_control_self；Field-only 不能自授，resume/login 不恢复创建者权限。
 
-当前新增 d6_bootstrap_profile wireVersion=3 保留原成员名 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope，明确生成 initialPolicy.version=3。creator 的初始 Workspace grant 为上述固定 profile/2 集合、当前 D6 新增的 `replica_register, replica_retire, conflict_read, conflict_resolve, execution_custody_admin, structure_state, portable_frontier_state`、d10_control_self，再加原完整目标 Registry 的 Field read/write 规则。deny 为空；以后新增 Registry Field 不自动获得 grant。每个能力的实际 scope/含义继续归当前 D6，包括 Policy/3 中按 CommitDomain 披露的 commit_sequence_state。
+**未见过的 fresh** create_workspace/fork_workspace 仍由 D3 拥有原真实认证 proposal、issuer 与目标 custody/allocation；实际 Registry/Policy3 和 fork 完整源历史先于唯一 D3 planning CAS 全量准入。create 用 issuer 证明的真实空目标与固定合格 Registry seed；fork 携带并映射完整源 Registry evolution/retirement、配置、来源与源权威，不可冒充 create。只用一份原 OperationId、DecisionKey、final P。受信宿主暂存 root keypair 和两个 server DomainSealKeyHandle/2，caller 不提供。`WorkspaceTrustGenesis/2` 有**且只有两条**同一 DecisionKey 与最终 activation ChangeId 的签名 `WorkspaceTrustDeclaration/2` authorize：revision-token profile revision1，然后 source-transform profile revision2；第二条 predecessor 哈希完整第一条字节，各有 PoP/root signature。WorkspaceAuthorizationBundle/2 的 authorizationRevision1/trustRevision2；不能从单 profile prefix 激活。
 
-只有当前 administer_issuer 的显式 issuer-profile 更新才能为以后新签发的 family 选择 profile/3。既有 family/profile 副本、replacement、已保存决议、replay/continue/failover 均保留真实原 decoder，不重算 grant 或恢复创建者权限。既有 Workspace 只能由当前 policy_admin 显式提交完整有效 Policy/3，才能取得新增能力。只有 Field 权限的主体不能自授。
+Plan4 **必须**携带 D8 owner `D8PresentationPolicyBootstrapInit/1` 形式的 `initialPresentationPolicy`，其 before 来自原 issuer/custody 证明的**真实空历史**，不是缺少文件；受保护 head stamp 初始 revision1，proposal `parents=[]`、`revision=1`、`defaultPresentation="separate"`，typed `presentation_policy_change` preview 的 `committed=null`。planning/staging 固定原 plan/init 字节、两个 staged handles、root/PoP、Registry/series/period/source/Policy pins；**P 前不**产生 ChangeId 相关 D8 /2 record/hash/pin/address/effect/receipt/outbox/head 或可用密钥。只有**唯一原 final P** 重查 issuer/target custody、原 source/Registry/Policy/trust/CP4 依赖，分配原 ChangeId，原子发布 D8 /2 record 及准确 hash/pin/address、committed effect、原 receipt/Notice3/CP4/ChangeRecord1 关联、outbox、one-head transition、Workspace 激活及**两** staged→usable handles。输家/abort 不留半态；不存在第二 CAS、第二 P/ledger、事后 SetRequest 或修复窗口。
 
-D6 Control §10.2 现已定义完整 WorkspaceBootstrapPlan/3 生产者，在原成员职责上增加 WorkspaceTrustGenesis/1，显式使用 wireVersion=3、profile/3 与 Policy/3；D7 完整符号/当前 bootstrap 投影消费该真实 owner 版本。Plan/2 是未激活候选前身，不新增兼容/迁移层；真实历史 Plan/1 若可证明存在，仍保留原 decoder/recovery。本节仍只是有界协调要求，不表示产品已可用。
+真实 saved/planned/unknown Plan4 只恢复**同一** D3 plan/OperationId/DecisionKey、冻结 init、staged handles、source pins 与原 P，不重选最新 seed 或重建 root keys。真实历史 Profile1–3、已记录 Plan1/Plan3/Genesis1、真正旧 decoder 保留准确字节、pins、issuer grants 和恢复；未部署候选前身命名不授权迁移层。ordinary managed copy **不是** bootstrap。continue/failover/restore/committed replay 保留真实已保存/当前 policy、presentation heads、trust 与原回执，不恢复 creator 权限。产品/runtime 全 UNRUN。
 
 ## 13. Public capability 与首版 D6 错误兼容
 
