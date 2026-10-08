@@ -65,7 +65,7 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 
 ## D9 复核目标
 
-下一位非作者 reviewer 必须固定 PR #5 的实际最终 SHA，仅增量复核 D9-BAF-P1-01、D9-BAF-P1-02 与 D9-4DA7-MAP-P2-01；D9-8B6-P2-01/P2-02 已在 fixed4da7 的有界范围独立 CLOSED。只核新映射 的全部现任 blob 别名；ROOT-8B6-MAP-P2-01 已独立 CLOSED，不再重开。D9-BAF-P2-02 在 fixed8b6 已 CLOSED，ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED；本次只核新改的中英文、跨域选择、mode/target/receipt 关系，不重开已接受 D8 范围或历史 Plan/Receipt decoder。绿色 docs 与数量不等于语义接受。
+下一位非作者 reviewer 必须固定 PR #5 的实际最终 SHA，仅增量复核 D9-BAF-P1-01、D9-BAF-P1-02 与 D9-4DA7-MAP-P2-01；D9-8B6-P2-01/P2-02 已在 fixed4da7 的有界范围独立 CLOSED。同时检查该映射的全部现任 blob 别名；ROOT-8B6-MAP-P2-01 已独立 CLOSED，不再重开。D9-BAF-P2-02 在 fixed8b6 已 CLOSED，ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED；本次只核新改的中英文、跨域选择、mode/target/receipt 关系，不重开已接受 D8 范围或历史 Plan/Receipt decoder。绿色 docs 与数量不等于语义接受。
 
 必须核验：
 
