@@ -738,24 +738,24 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "4fea409faf33456d2b8155af7a08dbcea2bce1ba",
+        "blob": "135ca122c42003b8ecb6bddf31960326ca887af8",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2225",
           "§6.5.1 L2226–2262",
-          "§6.6 L2263–2612",
-          "§6.6.1 L2559–2612"
+          "§6.6 L2263–2614",
+          "§6.6.1 L2559–2614"
         ]
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "567f6cef36e0257d9192448eedb83f64b1c89bff",
+        "blob": "27a889838924fbf8c32188ebebea0a9e558bbc7e",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
           "§6.5.1 L2337–2375",
-          "§6.6 L2376–2725",
-          "§6.6.1 L2672–2725"
+          "§6.6 L2376–2727",
+          "§6.6.1 L2672–2727"
         ]
       }
     ],
@@ -803,7 +803,8 @@
       "status": "author-resolved-pending-independent-review",
       "schemas": "§6.5 freezes recorded Plan3 predecessor/shared rules; §6.6 is fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4 plus Annotation carrier and finite View renderer",
       "spec": "§8.3 shared exact-source/resource/query_json, controlled-name/canonical-pin/unknown-publication rules now bind fresh Plan4; §16a behavior closure; §17 unseen-current dispatch and §18 inventory name /4",
-      "historical": "Plan/Receipt1-3 and predecessor closed families retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery; no migration"
+      "historical": "Plan/Receipt1-3 and predecessor closed families retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery; no migration",
+      "admission": "§6.6.1 cross-domain selection/projection exclusion and Annotation body/bibliography null, mode-target compatibility, one-to-one projections, fixed complete_data View output scope, target/destination/receipt and canonical arrays; strict rejection before data preparation"
     },
     "annotationCurrent": {
       "spec": [
@@ -831,21 +832,21 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "4fea409faf33456d2b8155af7a08dbcea2bce1ba",
+          "blob": "135ca122c42003b8ecb6bddf31960326ca887af8",
           "ranges": [
-            "§6.6 L2263–2612",
-            "§6.6.1 L2559–2612",
-            "§7 L2613–2773"
+            "§6.6 L2263–2614",
+            "§6.6.1 L2559–2614",
+            "§7 L2615–2775"
           ],
           "read": "FULL-direct-current-consumer"
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "567f6cef36e0257d9192448eedb83f64b1c89bff",
+          "blob": "27a889838924fbf8c32188ebebea0a9e558bbc7e",
           "ranges": [
-            "§6.6 L2376–2725",
-            "§6.6.1 L2672–2725",
-            "§7 L2726–2889"
+            "§6.6 L2376–2727",
+            "§6.6.1 L2672–2727",
+            "§7 L2728–2891"
           ],
           "read": "FULL-direct-current-consumer"
         }
@@ -999,7 +1000,7 @@
   },
   "acceptanceAuthority": {
     "json": "D9-ACCEPTANCE.json",
-    "blob": "a0fabac164841198106de601449377747ded2f0f7c",
+    "blob": "4a54d5f63bce3a0f00ae73f2de548573241afe99",
     "rows": 104,
     "uniqueIds": 104
   },
@@ -1028,7 +1029,7 @@
     "mandatory15D9Applicable": "FULL",
     "finalFCExportSuccessorENZH": "FULL-current-successor"
   },
-  "evidenceBoundary": "author design/source mapping only; D9-BAF-P1-01 and D9-BAF-P1-02 plus D9-8B6-P2-01/P2-02 are author-resolved-pending-independent-review; D9-BAF-P2-02 is independently CLOSED at fixed8b6; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10; D8-C98B-P1-03 is independently CLOSED at fixed8b6; product/worker/Office/OS/runtime/crash/performance/deployment UNRUN",
+  "evidenceBoundary": "fixed8b6 independently CLOSED D8-C98B-P1-03 and D9-BAF-P2-02; remaining D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 independently CLOSED at ff10; separate ROOT-8B6-MAP-P2-01 current-consumer/source-inventory mapping was author-repaired; source coverage/checks are not product acceptance; product/Office/OS/runtime/performance/deployment UNRUN.",
   "mandatory15": {
     "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
     "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
@@ -1039,7 +1040,7 @@
     "target": "D9.md§12a; D9-SCHEMAS.md§10/§16b; D9-IMPACT.md§8a; D9-ACCEPTANCE M15-01..10"
   },
   "reviewFindings": {
-    "D9-BAF-P1-01": "author-resolved-pending-independent-review: carrier path retained and fixed8b6 residual cross-field one-to-one/canonical admission repaired; no author-side closure claimed",
+    "D9-BAF-P1-01": "author-resolved-pending-independent-review: exact current Annotation carrier, cross-domain exclusion, strict one-to-one selection/projection and mode/target admission, and canonical arrays; pending independent verdict",
     "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite six-chart route now uses fixed complete_data scope and closed target/destination/receipt relations; no author-side closure claimed",
     "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
     "D9-8B6-P2-01": "author-resolved-pending-independent-review: new Plan4 arrays classified as set-like versus ordered with canonical comparators/cardinality/conflict rules",
