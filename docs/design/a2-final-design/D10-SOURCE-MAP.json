@@ -1772,7 +1772,7 @@
     "sourceEN": "f7bd02712e17f39eb5d09038a7b565d42ad70dae",
     "sourceZH": "21d318c1ad7a34852163bb0967f820ae84b74a4d",
     "currentAuthorityPath": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
-    "authorityBlob": "ff3f015afe175ce30aaf9f4ceb2b578b27b7e5af",
+    "authorityBlob": "daf5b93c8a41dabd826058af3f2e84448066398a",
     "stableIds": 125,
     "byGroup": {
       "U": 27,
@@ -1947,7 +1947,7 @@
   "currentD10Acceptance": {
     "authority": {
       "path": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
-      "blob": "ff3f015afe175ce30aaf9f4ceb2b578b27b7e5af",
+      "blob": "daf5b93c8a41dabd826058af3f2e84448066398a",
       "stableIds": 125
     },
     "projections": [
