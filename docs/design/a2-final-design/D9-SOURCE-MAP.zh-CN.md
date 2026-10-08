@@ -23,7 +23,7 @@ translation_status: source
 
 受保护 S49 与 docs/design/inputs.json blob 787d03c31a55496f81ed03fd54a6fdfff50a2ad4 保持 immutable。historical 有界 evidence set 57/63/59/82/90/130/12 分开记账。source coverage、count、hash 与绿色 docs check 都不是语义接受。
 
-范围修正继续固定在已复核的 ff10 前身：当时 final-FC SCHEMAS §6.5.1 精确为 EN L2224–2260 / ZH L2328–2364，后续 §7 单独保留；SPEC §16 精确为 EN L940–949 / ZH L1002–1011，后续 §17 单独保留。current successor 映射现在指向本批真实 blob：SCHEMAS EN §6.5 L1997–2225、§6.5.1 L2226–2262、§6.6 L2263–2574；ZH §6.5 L2101–2329、§6.5.1 L2330–2366、§6.6 L2367–2678。SPEC 的 §8.3/§8.4、§16/§16a、§17、§18 也分别按当前中英文 blob 登记。
+范围修正继续固定在已复核的 ff10 前身：当时 final-FC SCHEMAS §6.5.1 精确为 EN L2224–2260 / ZH L2328–2364，后续 §7 单独保留；SPEC §16 精确为 EN L940–949 / ZH L1002–1011，后续 §17 单独保留。current successor 映射现在指向实际最终 blob：SCHEMAS EN §6.5 L1997–2225、§6.5.1 L2226–2262、§6.6 L2263–2574；ZH §6.5 L2101–2336、§6.5.1 L2337–2375、§6.6 L2376–2687。SPEC EN §8.3 L439–463、§8.4 L464–471、§16 L946–955、§16a L956–972、§17 L973–980、§18 L981–995；ZH §8.3 L449–483、§8.4 L484–491、§16 L1012–1021、§16a L1022–1038、§17 L1039–1046、§18 L1047–1153。
 
 协调者发现的版本预检已经在原 D9 三修 scope 内协调，不新增 finding 计数：FC §8.3 继续保留 exact Source/Resource/query_json 的 generationPolicy=none、受控名称与 canonical ordering、template/route/style、递归 pin 和 unknown-publication 义务，但 fresh unseen work 统一使用 Plan4/Receipt4 或 PrintReceipt1。SPEC §17 的 unseen-current 分派、§18 类型清单、SCHEMAS §§6.5–6.6、terminology registry、FC acceptance 与 replacement router 已一致。真实记录的 Plan/Receipt1–3 保留精确 decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery，绝不迁移。
 
