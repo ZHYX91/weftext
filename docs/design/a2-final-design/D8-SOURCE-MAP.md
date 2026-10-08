@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D8 Source Map
 
-Status: five c98b D8 findings author-repaired; `author-resolved-pending-independent-review`. No P1/P2 or D8/global acceptance is self-closed.
+Status: fixed5eca independently CLOSED D8-C98B-P1-01/P1-02/P2-02; ff10 independently CLOSED D8-C98B-P2-01 and D8-5ECA-P2-01. The sole remaining D8-C98B-P1-03 is now author-repaired at this candidate and remains `author-resolved-pending-independent-review`; no D8/global acceptance is self-closed.
 
 This file is provenance, not an alternate specification. `D8-SOURCE-MAP.json` remains the machine inventory. This c98b repair does not regenerate the fixed eight sources, 160 fixed cases, FA17 inheritance, Mandatory/RTL/SEARCH inventories, replacement routers, or protected inputs; it repairs their D8 current routing and applicability where the independent review found it incomplete.
 
@@ -28,7 +28,7 @@ A fixed-SHA non-author reviewer must verify or revise this authored classificati
 
 ## 3. What this narrow repair changes
 
-This repair synchronizes the D8 bilingual main, interfaces, schemas, direction/accessibility, lexicon, impact and acceptance documents; repairs the View builder/legacy-entry contract and acceptance identity/polarity; updates the machine map target blobs; and records the five finding repairs without self-closing review.
+The earlier c98b/fixed5eca/ff10 repairs remain frozen history. This final narrow repair changes only the last P1 family: `VIEW-BLD-03` clarifies legal pie zero-total; `VIEW-BLD-04..06`, Main §11.2, Interfaces §13, Schemas §12 and Impact §11 now bind deferred tree/treemap/sunburst, Gantt and boxplot/quantile to current static `unsupported_layout` rather than a legal current advanced save. `advanced_required` is limited to members already accepted by the current D7 decoder. Raw Source and genuine historical/future bytes remain preservable under their real owner/decoder. The machine map target blobs are updated without changing fixed source bytes.
 
 The fixedProseSections source path, blob, section, disposition, owner, and existing currentTargets are otherwise preserved. No second source catalog or replacement inventory is created.
 
@@ -40,4 +40,4 @@ FULL read coverage previously recorded for the fixed eight D8 inputs, D6-FA D8 a
 
 D9 and D10 remain PARTIAL only at named direct D8 producer/consumer boundaries. Their complete A2 modules are UNREAD for acceptance here. Global A2 final review is also UNREAD. Product GUI, IME, AT, OS, multi-replica, and performance evidence remains UNRUN.
 
-At fixed5eca (`5eca16c40cdf2e1892f6930d51c632ea720a460c`), the non-author review had already CLOSED D8-C98B-P1-01, D8-C98B-P1-02 and D8-C98B-P2-02, while D8-C98B-P1-03 and D8-C98B-P2-01 remained OPEN and D8-5ECA-P2-01 was added OPEN. This later author repair addresses only those three residual objects and does not self-close them.
+At fixed5eca (`5eca16c40cdf2e1892f6930d51c632ea720a460c`), the non-author review CLOSED D8-C98B-P1-01, D8-C98B-P1-02 and D8-C98B-P2-02. The later ff10 review independently CLOSED D8-C98B-P2-01 and D8-5ECA-P2-01, leaving only D8-C98B-P1-03 OPEN. This candidate authors that final narrow P1 correction but does not self-close it; a new exact-final-SHA non-author review must decide it.

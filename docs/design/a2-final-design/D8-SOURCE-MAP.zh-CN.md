@@ -7,7 +7,7 @@ translation_status: source
 
 # A2 D8 来源映射
 
-状态：c98b 的五项 D8 finding 已由作者修订；仅为 `author-resolved-pending-independent-review`。作者不自行关闭 P1/P2，也不接受 D8/global A2。
+状态：fixed5eca 已独立 CLOSED D8-C98B-P1-01/P1-02/P2-02；ff10 又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01。唯一剩余的 D8-C98B-P1-03 已由本候选完成作者修订，但仍只是 `author-resolved-pending-independent-review`；作者不自行接受 D8/global A2。
 
 本文件只记录 provenance，不建立第二规范。机器库存继续由 `D8-SOURCE-MAP.json` 承担。本 c98b 修订不重新生成 fixed 八源、160 个 fixed case、FA17 继承、Mandatory/RTL/SEARCH 库存、replacement router 或受保护 inputs；只修复独立复核指出的不完整 D8 current routing/applicability。
 
@@ -27,7 +27,7 @@ translation_status: source
 
 ## 3. 本窄修复实际改变的内容
 
-本修订同步 D8 main、interfaces、schemas、direction/accessibility、lexicon、impact 与 acceptance 中英文；同时修复 View builder/旧入口合同、验收 ID/极性、机器 map target blob，并记录五项 finding 的作者修订状态，但不自行关闭复核。
+此前 c98b/fixed5eca/ff10 修复全部保留为固定历史。本次最终窄修只改最后一个 P1 同族：`VIEW-BLD-03` 澄清饼图 zero-total 是合法 empty-total；`VIEW-BLD-04..06`、Main §11.2、Interfaces §13、Schemas §12 与 Impact §11 把延期的 tree/treemap/sunburst、Gantt、boxplot/quantile 绑定为现任静态 `unsupported_layout`，不再描述成“合法 current 定义仅缺 renderer”。`advanced_required` 只适用于现任 D7 decoder 已接受的 member。raw Source 与真正 historical/future bytes 继续由真实 owner/decoder 保全。机器 map 只更新 current target blob，不改 fixed source bytes。
 
 fixedProseSections 的 source path、blob、section、disposition、owner 与现有 currentTargets 其余内容保持原样。不建立第二份 source catalog 或 replacement inventory。
 
@@ -39,4 +39,4 @@ fixedProseSections 的 source path、blob、section、disposition、owner 与现
 
 D9 与 D10 只在具名 D8 direct producer/consumer 边界记为 PARTIAL；其完整 A2 模块在本轮接受范围仍为 UNREAD。global A2 终审同样 UNREAD。产品 GUI、IME、AT、OS、多副本与性能证据继续 UNRUN。
 
-在 fixed5eca（`5eca16c40cdf2e1892f6930d51c632ea720a460c`）的非作者复审中，D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02 已独立 CLOSED；D8-C98B-P1-03 与 D8-C98B-P2-01 仍 OPEN，并新增 D8-5ECA-P2-01 为 OPEN。本轮作者修订只处理这三个残余对象，不自行把任何一个改成 CLOSED。
+在 fixed5eca（`5eca16c40cdf2e1892f6930d51c632ea720a460c`）的非作者复审中，D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02 已独立 CLOSED。后续 ff10 又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01，只留下 D8-C98B-P1-03 OPEN。本候选完成这一个最终窄 P1 的作者修订，但不自行 CLOSED；必须由新的 exact-final-SHA 非作者复核裁决。
