@@ -260,7 +260,7 @@ Core 必须拥有 StandingApprovalEnvelope validator、ApprovalUse builder、pla
 - D6 permission 失效仍为原 `not_visible`；
 - dependency/semantic/budget 冲突仍为原 owner code，不能被 approval error 遮蔽。
 
-planned-preview recovery 对 fresh 采用 PAB4、对真实 historical 保存采用 PAB3，必须从各自原始 protected record、preview semantic record 与 pins 打开新有限 epoch。测试要证明旧 preview token 已过期也能在 current audience/ObservationScope/permission/continuity 下读原语义，同时 current Query/definition/target 漂移不会改变恢复内容。recovery token 过期不修改原 planned，也不复活旧 token。
+planned-preview recovery 必须按实际受保护保存的类型分派：fresh PAB4/Manifest3/EffectBytes3 或真实历史 PAB3/Manifest2/EffectBytes2，在建立只读有限新 epoch 前逐项严格解码完整原 prepared bytes、相同 request/OperationId/DecisionKey、semantic preview digest、pin directory/EffectBytes 和全部 owner pins。版本 tag/digest/pin 错、非 planned 都不能重新 prepare 或用现任字节替代；current authorization/audience/ObservationScope/disclosure/custody 与原错误优先级先行。测试要证明旧 preview token 已过期也能在 current audience/ObservationScope/permission/continuity 下读原语义，同时 current Query/definition/target 漂移不会改变恢复内容。recovery token 过期不修改原 planned，也不复活旧 token。
 
 核心竞争与恢复测试至少包括：
 
@@ -479,14 +479,14 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 43. U12 分支模式：当前 ICS production profile unsupported 且零作者效果；无 D3 binding 的 ordinary-file profile 两次独立显式 import 各 fresh、同 canonical request recovery 重放；D3-bound 路径覆盖 never_bound/active_live/active_non_live/retired/conflict/miss，retired 只有显式 Adopt 才 fresh，UID 不能单独决策。
 44. T02 discovery 记录/复用 pending admission，不让未接纳 tool callable；current Catalog bytes 不变，已有 prepared invocation 的 restart/uncertainty 只恢复原 admitted descriptor/request，不生成 replacement request。
 45. E05 eventual-consistency readback miss 对同一 immutable effect/target/request bytes/原 key 保持 `outcome_unknown`；后续 readback 可以解析结果，但不能创建新 effectId/target/payload/key，proof 过期也不授权 resend。
-46. fresh D7 PAB4/EffectManifest3/EffectBytes3 冷启动恢复 `D10AuthorPreparationLink/2`、`ApprovalUse/2` 与原 D6 request/pins；真实历史 Link1/PAB3/ApprovalUse1 只用原 decoder/字节；link 连续性未知为 `state_unavailable`，证明从未保存才可重新准备。
+46. 自动 core_field_member fresh D7 PAB4/Manifest3/EffectBytes3 冷启动恢复真实 Automation、`D10AuthorPreparationLink/2`、`ApprovalUse/2`、Standing Approval 与原 D6 request/pins；interactive D3 Request13 或 D6 request2 则用真实 D7 PAB4 或 D8 PreparedEditBinding3、准确 preparedFormat/preparedRecordPin/recoveryPins 与完整 preview 后的本人明确确认恢复，不能生成 Link2/ApprovalUse2；真实历史 Link1/PAB3/ApprovalUse1 或 interactive 旧 prepared binding 用原 decoder/字节；link 连续性未知为 `state_unavailable`，证明从未保存才可重新准备。
 47. external consent 绑定 effect Ref + requestDigest，因此合法 prepared→submitting lifecycle revision 不会使自身失效；任何 frozen request semantic 变化都要求新 effect/consent；sendAttemptId 与每个 billableAttemptId 始终分域。
 48. 首代尚未为补充的已规划批准与外部批准提供独立的提前撤销状态操作；当前时间、绑定、资源授权、实际权限及停止门均可阻断后续使用，但绝不能虚构通用的已撤销状态。
 49. `activation.current` 由同 cut selector 派生；stale selector CAS 失败，successor switch 原子完成，历史 ActivationBinding generation/revision 不因变成 non-current 而改变。
 
-50. 认证本人无 Automation 的 interactive-start 同库原子 Run/Lease/Stop、maxRuns1 只准入一次、同 Run 第二步与原 planned restart；伪本人/事件、错 store、预算/StopCapacity/clock/撤权竞态全部零半态；
+50. 认证本人无 Automation 的 interactive-start 同库原子 Run/Lease/Stop、maxRuns1 只准入一次，再对真实 D3 identity/D6 author/D8 EditBinding3 step 进行 D7 完整 preview 与本人明确确认；同 Run 第二步/原 planned 冷恢复不额外扣用量。伪 Automation/Link2、缺确认、preparedFormat/pins/digest 错配、跨 store、Stop/grants/budget/StopCapacity/clock/撤权竞态拒绝且零半态，不生成隐式 Standing Approval 或第二 D6 成功；
 51. 新建与派生 Workspace 采用现任 Profile4/Plan4/Genesis2：两条 Declaration2 按 revision-token 修订1→source-transform 修订2 签署，并于唯一最终 P 同时启用双密钥；必需 D8 初始策略规定空 parents、修订1、separate、且提交前预览 committed=null。唯有最终 P 物化完整策略记录、字节哈希、固定 pin、地址、effect、回执、outbox 与 head；历史 Plan1/Plan3、普通副本及继续恢复均保留原记录；
-52. fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2 与真实历史 PAB3/Manifest2/Link1/ApprovalUse1 各具正例和错 version/pins/preview digest 反例，原请求重启不重造；
+52. fresh PAB4/Manifest3/EffectBytes3 与真实历史 PAB3/Manifest2/EffectBytes2 在旧 token 过期后仍可按原 request/OperationId、完整原 pins/digest 与当前授权重新打开同一 planned preview；版本/pins/digest 错、非 planned、撤权或**新** recovery epoch 过期按 D7 原错误次序拒绝。自动 Link2/ApprovalUse2 与真实 interactive 责任分支必须分开，不新增 prepare、migration、重哈希、第二 delivery owner 或作者决议；
 53. Stop W 与 H 经一份 W-scoped Stop Image1/StopOwner 读到相同 revision/result；cross-Workspace、错 store、hidden/无 H target 权、continuity 断链均按原错误次序，丢响应和目标 r5→r6 不改变原 stop，预留容量与 D6 final P/外部 handoff 线性化。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。

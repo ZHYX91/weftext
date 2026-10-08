@@ -68,7 +68,7 @@ revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未�
 
 其他未变 D10 受控名称：`ActivationBinding/1`、`DelegationLease/1`、`LeaseRunUse/1`、`StandingApprovalEnvelope/1`、`PlannedDecisionApproval/1`、`ToolValueProfile/1`、`ToolType/1`、`ToolValue/1`、`InputSlot`、`AutomationOccurrenceKey/1`、`ExternalEffectIntent/1`、`Money/1`、`CostBudgetAttribution/1`、`CostBudgetLayer/1`。未变 D3/D4/D6 继承名称：`RegistrySnapshot/1`、`RegistryBinding/1`、`PrincipalContext`、`ObservationScope`、`PreparedIntent`、`ActionSpec`、`SourceBinding`、`OriginBinding`、`Provenance`、`SourceVersion`、`OperationId`。D10 不定义 alias。
 
-**双分支证据：**新 core_field_member D7 PAB4 + Manifest3/EffectBytes3 与 Link2/ApprovalUse2 按原作者恢复绑定/pin；真实保存 Link1/PAB3/ApprovalUse1 重放原 request/preview/pins，不归一化到新版本。Link1 冒名 Link2、PAB3 当作 PAB4 解码、Manifest2 以 Manifest3 域重新哈希或 Link2 指向 PAB3-only pin，均按原披露/custody/version 错误次序拒绝。新 Run 仅来自可信到场 Core §7.1；历史 origin 不从显示文字猜测。
+**责任分支与版本证据：**新自动 core_field_member D7 PAB4 + Manifest3/EffectBytes3 必须绑定/pin 真实 Automation 的 Link2/ApprovalUse2/Standing Approval 并按原作者恢复；fresh interactive step 则按 `preparedFormat` 使用 D3 Request13 或 D6 request2、D7 PAB4 或 D8 PreparedEditBinding3、受保护 preparedRecordPin/recoveryPins 和逐次全量 preview 后本人认证明确确认，不需要 Link2/ApprovalUse2。真实记录的 Link1/PAB3/ApprovalUse1 或历史 interactive prepared binding 只按自身 request/semantic preview/pins/decoder 重放，不归一化为新版本。Link1 冒名 Link2、PAB3 当作 PAB4 解码、Manifest2 以 Manifest3 域重新哈希或 Link2 指向 PAB3-only pin，均按原披露/custody/version 错误次序拒绝。新 Run 仅来自可信到场 Core §7.1；历史 origin 不从显示文字猜测。
 
 ## 4. Package、module、pack 与 plugin
 
@@ -129,7 +129,7 @@ D3 Provenance 只是来源证据，不授予 authority。D10 package/provider or
 
 **ApprovalUse**：一份已准备 request 实际消费 Standing Approval 的受管绑定；不能由客户端自报。其次数 reservation 在 D6 planned 时才成为 reserved，commit 后 consumed，只有 authoritative terminal_failed 才能原子转为 released_terminal。
 
-**Planned Decision Approval**：原 D6 decision 已经 planned、旧 preview transport 已过期或 Standing Approval 不再可用时，用户通过新的只读 planned-preview recovery epoch 完整查阅原保存语义后，对 exact 原 request 给出的有限一次性交互授权。它不改变 request、OperationId、PreparedActionBinding 或 target，也不能使已经发生确定 dependency conflict 的 plan 复活。
+**Planned Decision Approval**：原 D6 decision 已经 planned、旧 preview transport 已过期或 Standing Approval 不再可用时，用户通过新的只读 planned-preview recovery epoch 完整查阅原保存语义后，对 exact 原 request 给出的有限一次性交互授权。D7 owner 按原实际保存的 prepared version 分派：现任 PAB4/Manifest3/EffectBytes3 或真实历史 PAB3/Manifest2/EffectBytes2，分别用自身 closed decoder、完整原 bytes/preview digest 与 pins；外层 planned-preview wire 不变。它不改变 request、OperationId、PreparedActionBinding 或 target，也不能使已经发生确定 dependency conflict 的 plan 复活。
 
 **approval-required / approval-expired**：只属于进入正式 D6 请求之前的 D10 控制结果。若 D10 自动路径已经进入 D6 后 approval 发生竞争失效，配套修订使用 D6 approval_unavailable/preflight，不能再伪装成 D10 前置错误。
 ## 9. Secret、context、egress 与 external effect
