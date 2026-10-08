@@ -19,7 +19,7 @@ translation_status: source
 
 ## 2. c98b 来源映射/applicability 作者修订
 
-54 个 `fixedProseSections` 全部保留原 source path/blob/section/line range，并改为 section-level current target；宽泛整文件 target 现为 0/54。current AsciiDoc/Annotation FC 库存仍严格是 760 条原 source row；每条现在都记录原 source path/blob/section/line、current owner、D8 applicability、适用时的 section-level D8 target、disposition 与逐行 audit basis。
+54 个 `fixedProseSections` 全部保留原 source path/blob/section/line range，并改为 section-level current target；宽泛整文件 target 现为 0/54。current AsciiDoc/Annotation FC 库存仍严格是 760 条原 source row；每条继续记录原 source path/blob/section/line、current owner、D8 applicability、适用时的 section-level D8 target、disposition 与逐行 audit basis。该库存的顶层 currentAcceptanceInventory path/blob 现在正确指向实际 current final-FC ACCEPTANCE.md 及 blob c3022df8…；每个 row 的 sourceBlob 则有意继续保留 fixed original f5f5b9b2… 与原 text/line/section 作为 provenance。两种 blob 角色不得混为同一 authority。
 
 作者按完整 obligation 文本重新核了 760/760 行；本次残余修订后，共有 114 行 applicability 与原分类相比被调整。当前作者计数为 direct/immediate D8 consumer 167、upstream current prerequisite 146、保留在真实 non-D8 current owner 447。本轮把 T3-XF-17、T3-XF-35、X34-06、FC34-ST-19 调整为与 FC34-ST-02 相同的 upstream-current-prerequisite save/prepare/recovery 边界；其 SourceTransform producer 语义仍归 final AsciiDoc/Annotation SPEC 所有。这些全部只是**作者修订结果**：每个变更行仍是 `author-resolved-pending-independent-review`；section 存在、数量、hash 与 docs CI 只提供机械证据，不等于独立语义接受。
 
