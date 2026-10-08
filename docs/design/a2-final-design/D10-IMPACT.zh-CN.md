@@ -481,7 +481,7 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 45. E05 eventual-consistency readback miss 对同一 immutable effect/target/request bytes/原 key 保持 `outcome_unknown`；后续 readback 可以解析结果，但不能创建新 effectId/target/payload/key，proof 过期也不授权 resend。
 46. fresh D7 PAB4/EffectManifest3/EffectBytes3 冷启动恢复 `D10AuthorPreparationLink/2`、`ApprovalUse/2` 与原 D6 request/pins；真实历史 Link1/PAB3/ApprovalUse1 只用原 decoder/字节；link 连续性未知为 `state_unavailable`，证明从未保存才可重新准备。
 47. external consent 绑定 effect Ref + requestDigest，因此合法 prepared→submitting lifecycle revision 不会使自身失效；任何 frozen request semantic 变化都要求新 effect/consent；sendAttemptId 与每个 billableAttemptId 始终分域。
-48. 首代 supplemental planned/external approval 没有独立提前 revoke state action；time/binding/grant/authorization/stop gate 可阻断使用，但不伪造 generic revoked state。
+48. 首代尚未为补充的已规划批准与外部批准提供独立的提前撤销状态操作；当前时间、绑定、资源授权、实际权限及停止门均可阻断后续使用，但绝不能虚构通用的已撤销状态。
 49. `activation.current` 由同 cut selector 派生；stale selector CAS 失败，successor switch 原子完成，历史 ActivationBinding generation/revision 不因变成 non-current 而改变。
 
 50. 认证本人无 Automation 的 interactive-start 同库原子 Run/Lease/Stop、maxRuns1 只准入一次、同 Run 第二步与原 planned restart；伪本人/事件、错 store、预算/StopCapacity/clock/撤权竞态全部零半态；
