@@ -2619,12 +2619,12 @@
         "zh": "Annotation selection/projection 一一对应"
       },
       "positive": {
-        "en": "Two authorized annotation_content inputs selected once each as inputIndex 0 then 1 produce exactly two same-index/same-mode projections in canonical order; hidden target context may remain unavailable without suppressing readable R6 body/attribution. All unrelated document/View selection and projection slots are empty/null in this Annotation Plan.",
-        "zh": "两个已获权 annotation_content input 分别以 inputIndex 0、1 各选择一次时，必须按 canonical 顺序产生恰好两个同 index、同 mode 的 projection；target context 隐藏时仍可保持 unavailable，而不压掉可读 R6 body/attribution。 该 Annotation Plan 中无关的 Document/View selection 与 projection 字段必须为空或 null。"
+        "en": "Two authorized annotation_content items A and B selected once in canonical order bind one same-index/same-mode projection each. In portable_backup, A's projection PA has recordPin byte-equal to inputCatalog.items[contentSelection.annotationInputs[i].inputIndex].payload.recordPin and that pin selects A's exact canonical PortableAnnotationRecord/4; hidden target context does not suppress readable R6 body/attribution. All unrelated Document/View slots are empty/null.",
+        "zh": "两个已获权 annotation_content 条目 A、B 按规范顺序各选一次，必须分别对应相同 index/mode 的唯一投影。portable_backup 的 A 投影 PA，其 recordPin 必须逐字等于 inputCatalog.items[contentSelection.annotationInputs[i].inputIndex].payload.recordPin，且该 pin 选择 A 的精确 canonical PortableAnnotationRecord/4；target context 隐藏不影响可读 R6 正文与署名。无关 Document/View 槽位必须为空或 null。"
       },
       "negative": {
-        "en": "Sequence [0,1,0], duplicate inputIndex, mixed modes in one Plan, selected-without-projection, unselected projection, or portable_backup selection paired with review_bundle_r6 projection rejects before any reread; complete pins cannot cure it. Annotation selections/projections in another inputDomain, a nonnull document body/bibliography selection in the Annotation domain, or review_bundle_r6 paired with an annotation_backup target are likewise rejected.",
-        "zh": "序列 [0,1,0]、重复 inputIndex、同一 Plan 混用 mode、选择后缺 projection、未选择却出现 projection，或 portable_backup selection 却配 review_bundle_r6 projection，都必须在任何 reread 前拒绝；pins 完整也不能弥补关系错误。 在其它 inputDomain 偷带 Annotation selection/projection、Annotation 域选择普通 Document body/bibliography，或 review_bundle_r6 配 annotation_backup 目标，也都必须拒绝。"
+        "en": "Select A at the correct index but substitute B's independently authorized PB recordPin: reject even when both pins appear in the complete recursive union. Reject [0,1,0], duplicates, cross-mode/mixed modes, missing/extra projection, backup flags true, unauthorized domain/body selections and review_bundle_r6 with annotation_backup target. No pin-union substitution, supplemental read or projection repair.",
+        "zh": "选择 A 的正确 index 却把投影 recordPin 换成独立获权的 B/PB：即使两份 pin 都存在于完整递归并集也必须拒绝。还须拒绝 [0,1,0]、重复 index、mode 不配或混用、缺失/多余投影、backup context flag=true、跨域或普通正文选择及 review_bundle_r6 配 annotation_backup；不能用 pin 并集、补读或改写投影来补救。"
       },
       "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §13a",
       "evidence": {
@@ -2640,12 +2640,12 @@
         "zh": "View result、layout 与 scope 关系"
       },
       "positive": {
-        "en": "contentSelection.viewInput, viewRenderBinding.resultInput and projection.view.resultInput select the same query_result; renderer.layout equals ViewSpec.layout; binding/projection outputScope are both complete_data and the accessible table has that same scope.",
-        "zh": "contentSelection.viewInput、viewRenderBinding.resultInput 与 projection.view.resultInput 必须选择同一个 query_result；renderer.layout 等于 ViewSpec.layout；binding/projection 的 outputScope 都是 complete_data，accessible table 也使用同一 scope。"
+        "en": "Authorized View Plan has three matching resultInput fields for one query_result, renderer.layout=ViewSpec.layout, complete_data scope in both binding/projection, and projection.view.viewSpecSha256=viewRenderBinding.viewSpecSha256=SHA-256(D3-CJ/3(exact ViewSpec/1)). D7 View §7 retains decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery; the same-data table covers full scope.",
+        "zh": "获权 View Plan 的三个 resultInput 均指向同一 query_result，renderer.layout=ViewSpec.layout，binding/projection 都是 complete_data，且 projection.view.viewSpecSha256=viewRenderBinding.viewSpecSha256=SHA-256(D3-CJ/3(精确 ViewSpec/1))。D7 View §7 保留封闭解码→result 授权/epoch→完整性→schema→layout/binding→结构/顺序→domain/numbers→budget→交付；同数据表覆盖全部范围。"
       },
       "negative": {
-        "en": "Different indices, layout mismatch, current_display/local legend state, partial-series scope, or a second D8 presentation decision for View data rejects without requery or projection rewrite.",
-        "zh": "三个 index 不一致、layout 不匹配、使用 current_display/本地 legend 状态、只导出部分 series，或把第二个 D8 presentation decision 当作 View data scope，都必须拒绝，不能靠 requery 或改写 projection 修复。"
+        "en": "A projection hash from a second valid ViewSpec rejects even when resultInput/layout/scope agree; mismatched index/layout, current_display/local legend subset, or a D8 document presentation substitution rejects. With lost current entry authorization plus bad index/layout, return original non-disclosing not_visible/reset before any catalog/profile/detail; the authorized equivalent mismatch still rejects after owner qualification. No requery, hash replacement or projection rewrite.",
+        "zh": "即使 resultInput/layout/scope 一致，来自第二份合法 ViewSpec 的投影 hash 仍须拒绝；index/layout 不配、current_display/本地 legend 子集或以 D8 文档 presentation 替代同样拒绝。若现任入口失权还叠加坏 index/layout，必须在披露 catalog/profile 等细节前返回原不泄露的 not_visible/reset；获权后的同类失配仍经原 owner 门禁拒绝。不得重跑查询、替换 hash 或改写投影。"
       },
       "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §12a",
       "evidence": {
@@ -2661,12 +2661,12 @@
         "zh": "View target、destination 与 receipt 兼容"
       },
       "positive": {
-        "en": "For a six-chart View target, renderer.targetKind/profileId equal the outer target; print uses print destination and D9PrintReceipt1, external_bundle uses PublicationReceipt4, Resource handoff uses only the separate D7/D3 author result, and server_download uses its delivery state.",
-        "zh": "六图表 View target 中，renderer.targetKind/profileId 必须等于外层 target；print 使用 print destination 与 D9PrintReceipt1，external_bundle 使用 PublicationReceipt4，Resource handoff 只使用独立 D7/D3 author result，server_download 使用自身 delivery state。"
+        "en": "For six-chart View, renderer targetKind/profileId equal the outer Plan target. Print uses a protected confirmed Plan resolved by receipt.planToken with Plan.target.kind=print and Plan.destination.kind=print, and D9PrintReceipt/1 repeats byte-equal View binding, actual staged print output and confirmed loss; its wire has no target field. External bundle uses PublicationReceipt/4, Resource uses only D7/D3 author result, server download uses delivery state.",
+        "zh": "六图表 View 的 renderer targetKind/profileId 等于外层 Plan target。打印回执的 planToken 解析到原受保护且已确认的 Plan，该 Plan.target.kind=print、Plan.destination.kind=print；D9PrintReceipt/1 的 View binding 逐字相等，实际 staged print output 与已确认 loss 均对应，回执 wire 不含 target 字段。外部 bundle 使用 PublicationReceipt/4，Resource 只产生 D7/D3 author result，server download 保留交付状态。"
       },
       "negative": {
-        "en": "Target/profile mismatch, print with non-print destination, non-print with print destination, PublicationReceipt4 for Resource/print, or a View receipt carrying D8 document presentation rejects mechanically.",
-        "zh": "target/profile 不匹配、print 配非 print destination、非 print 配 print destination、Resource/print 路径生成 PublicationReceipt4，或 View receipt 携带 D8 文档 presentation，都必须机械拒绝。"
+        "en": "Reject wrong Plan association found only by matching token text, non-print Plan target/destination, wrong print receipt binding/output/digest/loss, mismatched renderer target/profile, print/non-print destination contradiction, or PublicationReceipt/4 substituted for print/Resource. Never compare a nonexistent receipt.target or add a duplicate target field; a View receipt cannot carry D8 document presentation.",
+        "zh": "仅凭 token 文本关联另一份 Plan、Plan 的 target/destination 不是 print、print receipt 的 binding/output/digest/loss 不对应、renderer target/profile 不同、print 与非 print destination 混配、用 PublicationReceipt/4 替代 print/Resource，均必须拒绝。不得比较不存在的 receipt.target 或增添重复 target 字段；View receipt 也不能携带 D8 文档 presentation。"
       },
       "contract": "final FC SCHEMAS §6.6.1; D9 Interfaces §§7–8",
       "evidence": {
