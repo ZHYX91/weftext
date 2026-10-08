@@ -62,7 +62,7 @@ pause/cancel 只阻止尚未 planned 的后续 batch，不回滚 committed batch
 
 D9 冻结 semantic flow `prepare→inspect→publish/state/cancel`；本 A2 候选**不虚构额外 public export wire envelope**。各 surface host route 可以不同，但 fresh unseen export 必须消费相同现任 `ExportPlan/4`、`D9ExportConfirmation/2`、staged-byte 与 publication-intent 语义。已记录的 Plan/Confirmation1-/3 family 继续作为精确 recovery input。
 
-prepare 先执行 final-FC §6.6.1 的严格关系与 canonical admission：验证 catalog index/payload kind、Annotation selection↔projection 一一对应、View 的 resultInput/layout/complete_data scope、target/profile/destination/receipt 兼容关系，以及 set-like array 的 canonical 顺序；全部通过后才完成 input/catalog/projection/loss/staged bytes。Annotation 内容只来自精确现任 annotation_content carrier；View export 必须先通过原 D7 runtime gate，并冻结唯一精确 renderer/profile/assets binding。inspect 只读，重验 current disclosure 与原关系字节，绝不能对 protected mismatch 排序、补读或修复。confirmation 绑定 exact Plan/loss choices。publish create-only 并绑定原 destination intent。print 只生成 `D9PrintReceipt/1`。state/cancel 只操作原 delivery responsibility，不成为 author commit。
+prepare 先执行 final-FC §6.6.1 的严格关系与 canonical admission：验证 catalog index/payload kind、跨输入域 selection/projection 的排他关系、Annotation selection↔projection 一一对应及 mode/target 兼容、View 的 resultInput/layout/complete_data scope、target/profile/destination/receipt 兼容关系，以及 set-like array 的 canonical 顺序；全部通过后才完成 input/catalog/projection/loss/staged bytes。Annotation 内容只来自精确现任 annotation_content carrier；View export 必须先通过原 D7 runtime gate，并冻结唯一精确 renderer/profile/assets binding。inspect 只读，重验 current disclosure 与原关系字节，绝不能对 protected mismatch 排序、补读或修复。confirmation 绑定 exact Plan/loss choices。publish create-only 并绑定原 destination intent。print 只生成 `D9PrintReceipt/1`。state/cancel 只操作原 delivery responsibility，不成为 author commit。
 
 ## 8. Export to Resource
 
