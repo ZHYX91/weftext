@@ -1858,7 +1858,7 @@
       "status": "current",
       "replaces": "ExportContentSelection/1",
       "section": "SCHEMAS §6.6",
-      "notes": "Fresh-current explicit document/Annotation/View selection; selection is not permission."
+      "notes": "Fresh-current explicit document/Annotation/View selection; §6.6.1 requires canonical unique Annotation inputIndex/mode selection and exact View input relation; selection is not permission."
     },
     {
       "name": "ExportProjection/2",
@@ -1866,7 +1866,7 @@
       "status": "current",
       "replaces": "ExportProjection/1",
       "section": "SCHEMAS §6.6",
-      "notes": "Fresh-current bounded bindings/datasets plus closed Annotation and View projections with typed origins."
+      "notes": "Fresh-current bounded bindings/datasets plus closed Annotation and View projections with typed origins; §6.6.1 binds Annotation projections one-to-one to selections and View projection to complete_data result/scope."
     },
     {
       "name": "ExportLossReport/2",
@@ -1906,7 +1906,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.6; SPEC §16a",
-      "notes": "Sole fresh-current Annotation content carrier from one exact D8AnnotationReadResponse/1 with complete PortableAnnotationRecord/4 pin, body result and targetResolution."
+      "notes": "Sole fresh-current Annotation content carrier from one exact D8AnnotationReadResponse/1 with complete PortableAnnotationRecord/4 pin, body result and targetResolution; §6.6.1 forbids duplicate/cross-mode selection."
     },
     {
       "name": "D9ViewRenderBinding/1",
@@ -1914,7 +1914,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.6; SPEC §16a",
-      "notes": "Finite fresh-current renderer/profile/assets binding over one complete D7ResultPin and exact ViewSpec/1; not View authority or Query transformation."
+      "notes": "Finite fresh-current six-layout renderer/profile/assets binding over one complete D7ResultPin and exact ViewSpec/1 with outputScope=complete_data; local legend visibility is excluded, document presentation stays on D9DocumentRenderBinding/1, and network requires a future versioned successor."
     },
     {
       "name": "ExportPlan/4",
@@ -1922,7 +1922,7 @@
       "status": "current",
       "replaces": "ExportPlan/3",
       "section": "SCHEMAS §6.6; SPEC §§8.3,16a",
-      "notes": "Fresh-current immutable export preparation using Catalog3/Selection2/Projection2/Loss2/Confirmation2, one recursive evidence-pin union, exact staged bytes and versioned Annotation/View carriers."
+      "notes": "Fresh-current immutable export preparation using Catalog3/Selection2/Projection2/Loss2/Confirmation2, one recursive evidence-pin union, exact staged bytes, versioned Annotation/View carriers and the §6.6.1 relational/canonical admission rules."
     },
     {
       "name": "PublicationReceipt/4",
@@ -1939,6 +1939,14 @@
       "replaces": null,
       "section": "SCHEMAS §6.6; SPEC §16a",
       "notes": "Fresh-current print-only delivery result bound to the confirmed Plan4/View binding; not an external-publication or author receipt."
+    },
+    {
+      "name": "D9ViewOutputScope/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.6–6.6.1; SPEC §16a",
+      "notes": "Closed first-generation View export scope with sole value complete_data. Device-local legend hide/show is not authority; any later current_display or other scope requires a versioned successor after acceptance/deployment."
     }
   ]
 }
