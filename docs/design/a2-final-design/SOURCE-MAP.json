@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. fixed8b6 independently CLOSED D8-C98B-P1-03 and D9-BAF-P2-02; earlier fixed5eca/ff10 D8 and ROOT-D9-ZH closures remain. D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 are author-resolved-pending-independent-review; ROOT-8B6-MAP-P2-01 is a separately author-repaired mapping concern awaiting independent confirmation. D10/global remain pending.",
+  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS stays bounded; earlier fixed5eca/ff10 and fixed8b6 D8/D9 bounded closures stay CLOSED. At fixed4da7 the D9-8B6-P2-01/P2-02 and ROOT-8B6-MAP-P2-01 are also independently CLOSED. The only present D9 incremental author repairs are D9-BAF-P1-01/P1-02 and D9-4DA7-MAP-P2-01, author-resolved-pending-independent-review; no self-PASS. Product behavior UNRUN; full D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2460,8 +2460,7 @@
     }
   },
   "pending_scope": [
-    "Non-author exact-final-SHA review of D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 plus their actual bilingual/relational regression",
-    "Independent confirmation of ROOT-8B6-MAP-P2-01; do not reopen independently CLOSED D8-C98B-P1-03 or D9-BAF-P2-02",
+    "Non-author exact-final-SHA incremental review of the two D9-BAF-P1-01/P1-02 residuals and D9-4DA7-MAP-P2-01 current/final mapping aliases; do not relitigate fixed4da7 bounded D9-8B6-P2-01/02 or ROOT-8B6-MAP-P2-01",
     "D10 complete A2 owner-module integration",
     "Fresh Pro/global full A2 non-author review, one accepted-design SHA and same-SHA freeze/implementation-start materials",
     "D9 implementation gates I01-I12, Core/GUI/Office/OS/runtime/crash/multi-replica/performance/migration/activation/deployment UNRUN"
@@ -2684,7 +2683,7 @@
       "D9-SOURCE-MAP.md",
       "D9-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "complete D9 author integration preserved. D9-BAF-P2-02 independently CLOSED at fixed8b6; D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 only author-resolved-pending-independent-review. ROOT-D9-ZH-P2-01 independently CLOSED at ff10. Product behavior UNRUN.",
+    "status": "complete D9 author integration preserved. At fixed4da7 D9-8B6-P2-01/P2-02, ROOT-8B6-MAP-P2-01 and earlier D9-BAF-P2-02 were independently CLOSED within their bounded scopes. The two residual D9-BAF-P1-01/P1-02 and newly named D9-4DA7-MAP-P2-01 are author-resolved-pending-independent-review only. Product execution UNRUN; D10/global not accepted.",
     "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "FULL",
@@ -2707,7 +2706,7 @@
     "sourceMap": {
       "structuralAuthority": "D9-SOURCE-MAP.json",
       "necessaryD9ReadGaps": 0,
-      "blob": "758ad5ae4a0ba75031a6445e7faa13e92ea3aff2"
+      "blob": "fadf3039aae9f59a20a3b605e61ca7ceb31c5510"
     },
     "namedRevision": {
       "topic": "Mandatory §14 native-table Office authoring",
@@ -2731,17 +2730,18 @@
     "mandatory15": "FULL D9-applicable §15.5–15.8 lines 1042-1141, including all ten chart/View fixtures",
     "registryConcepts": 41,
     "reviewFindings": {
-      "D9-BAF-P1-01": "author-resolved-pending-independent-review: single exact Annotation content carrier, strict one-to-one index/mode/projection, cross-domain exclusion and canonicality",
-      "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite six-chart complete_data View export with renderer/target/destination/receipt relations and accessible complete-data table",
+      "D9-BAF-P1-01": "author-resolved-pending-independent-review: projection portable_backup recordPin matches selected annotation_content payload recordPin for same inputIndex and canonical Value4 record, not merely complete pin union",
+      "D9-BAF-P1-02": "author-resolved-pending-independent-review: exact ViewSpec hash relation, D9 public authorization before protected plan business diagnostics without changing original View owner order, original authenticated print Plan/receipt matching without nonexistent target field",
       "D9-BAF-P2-02": "independently CLOSED at fixed8b6; exact predecessor ranges and current successor scopes retained",
-      "D9-8B6-P2-01": "author-resolved-pending-independent-review: Annotation and renderer collection comparator/cardinality/conflict rules, ordered fragments and D7 rows preserved",
-      "D9-8B6-P2-02": "author-resolved-pending-independent-review: D7 network is legal current View but renderer_unavailable in closed D9 six-layout route until versioned successor",
-      "ROOT-8B6-MAP-P2-01": "separate author-repaired mapping: current FC ACCEPTANCE.md path/blob versus retained original 760-row source path/blob explicitly distinguished; awaiting independent confirmation",
+      "D9-8B6-P2-01": "independently CLOSED at fixed4da7: canonical arrays/semantic order, bounded D9 scope",
+      "D9-8B6-P2-02": "independently CLOSED at fixed4da7: closed six-layout D9 renderer, legal D7 network unavailable on this D9 route",
+      "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7: D8 current acceptance pointer and preserved 760 source-row provenance",
       "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
-      "versionCoordination": "direct current Plan4 versus recorded Plan1-3 coordination retained; not an additional independent finding count"
+      "versionCoordination": "direct current Plan4 versus recorded Plan1-3 coordination retained; not an additional independent finding count",
+      "D9-4DA7-MAP-P2-01": "author-resolved-pending-independent-review: all current/final repeated FC SPEC/SCHEMAS aliases point at actual new Git blobs; historical predecessor and source inventories remain unchanged"
     },
     "versionCoordination": {
-      "status": "author-resolved-pending-independent-review; coordinator precheck, not a new independent finding count",
+      "status": "author-resolved-pending-independent-review for D9 residual P1/P1 and new mapping P2 only; previously independently CLOSED D9-8B6-P2-01/P2-02 and ROOT-8B6-MAP-P2-01 remain closed",
       "current": "fresh unseen export consistently uses ExportPlan/4, PublicationReceipt/4 or D9PrintReceipt/1 while inheriting exact Source/Resource/query_json generationPolicy=none, controlled names/canonical ordering, template/route/style, recursive pins and unknown-publication obligations",
       "retained": "recorded Plan/Receipt1-3 and predecessor token/confirmation/bundle families retain exact decoder/token/bytes/pins/saved-planned-unknown recovery; no migration",
       "currentSurfaces": [
@@ -2755,10 +2755,10 @@
         "A2 D9 main/version references"
       ],
       "finalMappedBlobs": {
-        "specEN": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
-        "specZH": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
-        "schemasEN": "135ca122c42003b8ecb6bddf31960326ca887af8",
-        "schemasZH": "b41e6d383fc553d7adf14f2a8f05a5c2788467d6",
+        "specEN": "e3f53e8b860e8414e4257732165ced84a4bb67f1",
+        "specZH": "5dbf6685f2c6814decc9d5b68766083bb5bca423",
+        "schemasEN": "d23e255e0054e71f4192fac00b295753c8916e05",
+        "schemasZH": "831b4342db5f94bb469c5443052e662c7416ce7b",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
