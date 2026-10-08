@@ -6142,5 +6142,82 @@
     "actualIndependentD10": "PENDING",
     "globalPro": "PENDING",
     "fixedD9": "ACCEPT bounded fixed8d7 only"
-  }
+  },
+  "authorRepairGates": [
+    {
+      "id": "D10-1CA-P1-01",
+      "status": "author-resolved-pending-independent",
+      "product": "UNRUN",
+      "scope": "sourceTupleAndProjection",
+      "positive": {
+        "en": "All 125 EN/ZH original row path/blob/line/raw/location/positive/negative/oracle values are exact historic D10 bytes, with only current renaming in currentOverlay.",
+        "zh": "125条中英历史 path/blob/line/raw/location/positive/negative/oracle 全匹配未改原 D10；只有现任改名进入 currentOverlay。"
+      },
+      "negative": {
+        "en": "Current A2 projection line or renamed D10 name masquerading as historical tuple is rejected; no new source inventory.",
+        "zh": "禁止拿 A2 当前行号或重命名伪装历史 tuple；不建第二来源库存。"
+      },
+      "consumer": "D10-ACCEPTANCE.json + paired projections + focused source test"
+    },
+    {
+      "id": "D10-1CA-P1-02",
+      "status": "author-resolved-pending-independent",
+      "product": "UNRUN",
+      "scope": "interactiveFirstProducer",
+      "positive": {
+        "en": "An attended authenticated user without Automation creates one Run/targeted finite Lease/Stop atomically, maxRuns1 admits once, and second step/lost reply/planned restart reuse original.",
+        "zh": "本人到场无 Automation 同库原子创建 Run/targeted Lease/Stop，maxRuns1 首次准入一次，同 Run 第二步、失答、原 planned restart 均复用。"
+      },
+      "negative": {
+        "en": "Forged principal/event, widened scope/grant/budget, same-key different intent, wrong store, stop/capacity/revoke/clock races leave no partial records or second author P.",
+        "zh": "伪 principal/事件、扩权 scope/grant/budget、同 key 异 intent、错 store、stop/容量/撤权/时钟竞态不得留下半态或第二作者 P。"
+      },
+      "consumer": "D10-CONTROL §7.1; D6-CONTROL §21.4; D7 qualification B05/B09; D10-IMPACT §6/§15"
+    },
+    {
+      "id": "D10-1CA-P1-03",
+      "status": "author-resolved-pending-independent",
+      "product": "UNRUN",
+      "scope": "freshBootstrapConsumer",
+      "positive": {
+        "en": "Current Profile4/Plan4/Genesis2 create/fork retains original D3 issuer/custody, single P, two signed sequential Declaration2 and mandatory empty-history D8 init, only final P materializes full policy/trust/record/head/outbox.",
+        "zh": "现任 Profile4/Plan4/Genesis2 create/fork 保留原 D3 issuer/custody/唯一 P、顺序双 Declaration2、必需 D8 空历史 init，仅最终 P 生成完整 policy/trust/record/head/outbox。"
+      },
+      "negative": {
+        "en": "Profile3/Plan3 as fresh, one-key prefix, premature D8 record, replay-injected grant, managed copy as bootstrap are forbidden.",
+        "zh": "禁止 Profile3/Plan3 当 fresh、单 key prefix、P 前造 D8 record、replay 补 grant、ordinary copy 冒充 bootstrap。"
+      },
+      "consumer": "D6-CONTROL §§10.2/20.2; FC SCHEMAS §9; D10-CONTROL §12; D7 B13"
+    },
+    {
+      "id": "D10-1CA-P2-01",
+      "status": "author-resolved-pending-independent",
+      "product": "UNRUN",
+      "scope": "freshHistoricalVersionDispatch",
+      "positive": {
+        "en": "Fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2/ControlPrepareBinding3 and genuine saved PAB3/Manifest2/Link1/ApprovalUse1/Binding2 each recover their own original requests/pins.",
+        "zh": "fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2/ControlPrepareBinding3 与真实保存 PAB3/Manifest2/Link1/ApprovalUse1/Binding2 各按原请求/pins 恢复。"
+      },
+      "negative": {
+        "en": "Historical bytes under fresh tags, current preview through historic pins, new author OperationId on restart and a second D7 registry are rejected.",
+        "zh": "旧字节冒充现任 tag、经历史 pins 读取新 preview、重启新造 OperationId、第二 D7 registry 均禁止。"
+      },
+      "consumer": "D10-LEXICON §§3/13/14; D7 B09; D10-IMPACT §15"
+    },
+    {
+      "id": "D10-1CA-P2-02",
+      "status": "author-resolved-pending-independent",
+      "product": "UNRUN",
+      "scope": "stopScopeRelation",
+      "positive": {
+        "en": "Authorized W and H read one W-scoped StopOwner/Image1/latch and same original revision/result across lost reply and target r5→r6.",
+        "zh": "获权 W 与 H 通过唯一 W-scoped StopOwner/Image1/latch 读取同原 revision/result，失答和目标 r5→r6 不改变。"
+      },
+      "negative": {
+        "en": "Nonstop scope alias, cross workspace/store, hidden/unauthorized H target, continuity corruption and stop racing final P/external handoff cannot duplicate Stop or leak facts.",
+        "zh": "禁止非 Stop scope alias、跨 Workspace/store、隐藏/H 无 target 权、连续性损坏及 stop 与 final P/外部 handoff 竞争中复制 Stop 或泄密。"
+      },
+      "consumer": "D10-CONTROL §§7/11; D6-CONTROL §21.4; D10-IMPACT §15"
+    }
+  ]
 }
