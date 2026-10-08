@@ -749,7 +749,7 @@
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "0f60fa63b4e4f5a6c268b37153f30be7609ee712",
+        "blob": "567f6cef36e0257d9192448eedb83f64b1c89bff",
         "ranges": [
           "§6.1 L1680–1776",
           "§6.5 L2101–2336",
@@ -841,7 +841,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "0f60fa63b4e4f5a6c268b37153f30be7609ee712",
+          "blob": "567f6cef36e0257d9192448eedb83f64b1c89bff",
           "ranges": [
             "§6.6 L2376–2725",
             "§6.6.1 L2672–2725",
@@ -916,8 +916,8 @@
     },
     "terminology": {
       "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
-      "blob": "8a1525a7422b025050c90efaaf176a0e076fd527",
-      "rule": "ExportPlan/3, PublicationReceipt/3 and /3 tokens are retained recorded predecessors; Plan4/Receipt4/PrintReceipt1 and their successor closed families are current"
+      "blob": "0ec5e444e1c2474bdc52db111191e2cbae235a00",
+      "rule": "Recorded Plan/Receipt3 and /3 tokens remain retained predecessors; fresh Plan4/Receipt4/PrintReceipt1 are current, D9ViewRenderBinding/1 has fixed complete_data scope, and later View scope/layout expansion requires a versioned successor."
     },
     "replacementRouter": {
       "path": "docs/design/asciidoc-annotation-final-design/replacements.json",
@@ -939,10 +939,10 @@
         "A2 D9 main/version references"
       ],
       "currentBlobs": {
-        "specEN": "d6281234a7b6e5e16649ebf098ce23c0a41dddc1",
-        "specZH": "e16d5b084122dfb5f8b7fec4dd56c09dfa0c9bed",
-        "schemasEN": "f125d384f1d1f0c06c94e80ef955a42c522eb82d",
-        "schemasZH": "9e0bd3c434924df76ee0bf30bf4b66d073ffbd74",
+        "specEN": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
+        "specZH": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
+        "schemasEN": "4fea409faf33456d2b8155af7a08dbcea2bce1ba",
+        "schemasZH": "567f6cef36e0257d9192448eedb83f64b1c89bff",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
