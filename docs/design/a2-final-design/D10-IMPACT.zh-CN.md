@@ -64,7 +64,7 @@ Broker 不读写 authority DB 表，不解释 D2/D4 source，也不接受自由 
 - `ControlPrepareBinding/3` 使用 `(scope incarnation, principal, requestId)` 稳定键和完整规范意图字节。恢复顺序固定为：先验证当前可见性/权限，再比较同键完整输入，再重放已保存决议；只有尚无决议时才检查当前 expected revision 和执行资格。
 - configuration revision 与 usageRevision 分离；control ID/incarnation 永不复用。retire/archive 不能删掉 planned、unknown、uncertain、evidence 或 dedup 仍引用的记录。
 - `ResourceUseGrant/1` 的 cost/secret/egress/external-effect 四类分别实现；grant renew/revision 不清零 spent/held/attempt/use，换 grant 也不清除旧 reservation 和实际 account liability。
-- fixed S profile/2 的旧非 Field 集合必须由测试常量逐字固定；profile/3 才增加 `d10_control_self`。升级、replay、replacement、continue/failover 不能改既有 family profile。
+- fixed S profile/2 的旧非 Field 集合必须由测试常量逐字固定；由 issuer 显式选择的新 Profile4/Plan4 才带 `d10_control_self`。升级、replay、replacement、continue/failover 不能改既有 family profile。
 - PackageManifest dependency 在具体 dependent Contribution 内解析。Contribution availability 单独计算，connector unavailable 不得级联停用同包 schema/template/pack。
 
 这些是合同实现义务，不表示本作者阶段已经运行真实 Core/OS/provider 实现测试。
@@ -207,6 +207,8 @@ Windows、macOS、Linux 分开验收；存在 container/sandbox 名称不算通�
 
 必要正反例：不创建 Automation，直接创建交互 Run、读取准确 origin，以 Run-targeted `maxRuns=1` Lease 首次准入，然后在 remaining=0 时继续及重启同一 Run；新 Run、虚构 Automation、origin 变化、错误 Lease target、准入连续性丢失、嵌套 binding 不可披露必须进入具名拒绝且不二次准入。另验 Automation occurrence 重启后保留真实不可变 origin 及唯一原 claim/Run，不能改为 interactive 重跑 terminal occurrence。这些是实施验收义务，不是已执行测试结果。
 
+**直接 interactive Run 生产不是留待产品设计的缺口：**D10-CONTROL §7.1 规定可信到场认证本人意图与 D1 `automation.manage`、现任 Policy/3 self grant、完整有限收窄 LeaseSpec、active binding/clock/resource/budget，以及带安全 stop 容量预留、stable key/原结果的同一 Authority Store Run(Image2)+Run-targeted Lease(Image1)+StopOwner/latch(Image1) 原子事务。首次创建不消费 maxRuns；原 LeaseRunUse admission CAS 仅消费一次。第二步、准确原 planned D6 recovery 与失答 Run result 即使 maxRuns1 也重用此事实；现任撤权/过期/stop/未知阻止新执行。反例须覆盖伪到场事件/principal、超 Field/grant、同 key 异 intent、错 store、StopCapacity/预算溢出、time continuity 丢失、重启未知且**零部分记录**。D6 §21/D7 限定是具名 consumer；禁止第二作者账本或第八 ControlBody。
+
 Scheduler 必须持久化 definition revision、有限调度 horizon、sourceOccurrenceKey、claim owner、Run identity、LeaseRunUse 关联，以及真实的 skipped/started/terminal outcome。首版采用 serial 语义：
 
 - 同一个 `AutomationOccurrenceKey/1` 至多有一个 Run identity 和一个 durable claim；
@@ -258,7 +260,7 @@ Core 必须拥有 StandingApprovalEnvelope validator、ApprovalUse builder、pla
 - D6 permission 失效仍为原 `not_visible`；
 - dependency/semantic/budget 冲突仍为原 owner code，不能被 approval error 遮蔽。
 
-planned-preview recovery 必须从真实 planned 保存的 PreparedActionBinding/3、preview semantic record 与 pins 打开新有限 epoch。测试要证明旧 preview token 已过期也能在 current audience/ObservationScope/permission/continuity 下读原语义，同时 current Query/definition/target 漂移不会改变恢复内容。recovery token 过期不修改原 planned，也不复活旧 token。
+planned-preview recovery 对 fresh 采用 PAB4、对真实 historical 保存采用 PAB3，必须从各自原始 protected record、preview semantic record 与 pins 打开新有限 epoch。测试要证明旧 preview token 已过期也能在 current audience/ObservationScope/permission/continuity 下读原语义，同时 current Query/definition/target 漂移不会改变恢复内容。recovery token 过期不修改原 planned，也不复活旧 token。
 
 核心竞争与恢复测试至少包括：
 
@@ -468,7 +470,7 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 34. stable-key r5 成功/丢响应、随后 r6 更新：受保护完整 B 决定 equality；public historical r5 只给七-kind summary/receipt/deltas 且无 A/B/M，current read 另返回 r6；same key different complete B 返回 `control_conflict`；
 35. 授权续期、revision 更新或新 grant 与旧 `uncertain` reservation 并存时，证明已消费、已占用、attempt 次数和账户义务都不会清零；
 36. exact-target stop（`requestId==target.id`）分别与运行准入、D6 最终作者提交和外部发送竞争；同时覆盖首次 receipt、目标配置 r5→r6 后的丢响应查询、隐藏目标/连续性错误顺序、预留 MAX 边界，并证明 stop 不阻断费用结算、权威 abort 或证据清理；
-37. profile/2 family 升级不获得 `d10_control_self`；profile/3 只作用 explicit issuer update 后新 family；
+37. profile/2 family 升级不获得 `d10_control_self`；现任 Profile4/Plan4 只作用 explicit issuer update 后新 family；
 38. per-Contribution dependency：connector unavailable 时同包 schema/template/pack 不受牵连；
 39. Calendar、Library、People、Organizations 的 D10 PackageId→module→schema 映射与 D4 namespace owner/Facet 保持类型分离，并验证第三方同名包不能冒充第一方 owner；
 40. design accepted 但 release/surface/policy/version/health 任一门不满足时仍返回真实 D1 unavailable reason；
@@ -477,10 +479,15 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 43. U12 分支模式：当前 ICS production profile unsupported 且零作者效果；无 D3 binding 的 ordinary-file profile 两次独立显式 import 各 fresh、同 canonical request recovery 重放；D3-bound 路径覆盖 never_bound/active_live/active_non_live/retired/conflict/miss，retired 只有显式 Adopt 才 fresh，UID 不能单独决策。
 44. T02 discovery 记录/复用 pending admission，不让未接纳 tool callable；current Catalog bytes 不变，已有 prepared invocation 的 restart/uncertainty 只恢复原 admitted descriptor/request，不生成 replacement request。
 45. E05 eventual-consistency readback miss 对同一 immutable effect/target/request bytes/原 key 保持 `outcome_unknown`；后续 readback 可以解析结果，但不能创建新 effectId/target/payload/key，proof 过期也不授权 resend。
-46. D7 prepare 后冷启动恢复准确 `D10AuthorPreparationLink/1` 与原 D6 request；link continuity unknown 为 `state_unavailable`，只有证明从未保存的 prepare 才可重建。
+46. fresh D7 PAB4/EffectManifest3/EffectBytes3 冷启动恢复 `D10AuthorPreparationLink/2`、`ApprovalUse/2` 与原 D6 request/pins；真实历史 Link1/PAB3/ApprovalUse1 只用原 decoder/字节；link 连续性未知为 `state_unavailable`，证明从未保存才可重新准备。
 47. external consent 绑定 effect Ref + requestDigest，因此合法 prepared→submitting lifecycle revision 不会使自身失效；任何 frozen request semantic 变化都要求新 effect/consent；sendAttemptId 与每个 billableAttemptId 始终分域。
 48. 首代 supplemental planned/external approval 没有独立提前 revoke state action；time/binding/grant/authorization/stop gate 可阻断使用，但不伪造 generic revoked state。
 49. `activation.current` 由同 cut selector 派生；stale selector CAS 失败，successor switch 原子完成，历史 ActivationBinding generation/revision 不因变成 non-current 而改变。
+
+50. 认证本人无 Automation 的 interactive-start 同库原子 Run/Lease/Stop、maxRuns1 只准入一次、同 Run 第二步与原 planned restart；伪本人/事件、错 store、预算/StopCapacity/clock/撤权竞态全部零半态；
+51. fresh Profile4/Plan4/Genesis2 的 create/fork 双 Declaration2 按 revision-token rev1→source-transform rev2、同唯一 P 双 key 同时可用，必需 D8 parents[]/revision1/separate 在 P 前 committed=null、P 后 materialize 完整 /2 record/hash/pin/effect/outbox/head；历史 Plan1/Plan3/ordinary copy/continue 保持原记录；
+52. fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2 与真实历史 PAB3/Manifest2/Link1/ApprovalUse1 各具正例和错 version/pins/preview digest 反例，原请求重启不重造；
+53. Stop W 与 H 经一份 W-scoped Stop Image1/StopOwner 读到相同 revision/result；cross-Workspace、错 store、hidden/无 H target 权、continuity 断链均按原错误次序，丢响应和目标 r5→r6 不改变原 stop，预留容量与 D6 final P/外部 handoff 线性化。
 
 每个 case 同时给正例和 mutant/negative，不能只比较字符串日志。任何未实际运行的 case 在 evidence 表中保持 pending。
 ## 16. 完成门
