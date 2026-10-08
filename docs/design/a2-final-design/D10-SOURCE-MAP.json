@@ -35,7 +35,7 @@
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
       "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
       "currentA2Path": "docs/design/a2-final-design/D10-CONTROL.md",
-      "currentBlob": "48bc2094b2e17eecd54413017709b177c1b7b32b",
+      "currentBlob": "1615052d3cd87460c4c2f4f47a2d030b53812d3c",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-CONTROL"
@@ -44,7 +44,7 @@
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
       "sourceBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
       "currentA2Path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
-      "currentBlob": "c9091704eb80282274e2a3d7944d36db9343df24",
+      "currentBlob": "c47c850a7214930e3c276f4f7eb55fb3909fd385",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-CONTROL"
@@ -62,7 +62,7 @@
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
       "sourceBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
       "currentA2Path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-      "currentBlob": "81a531c88e3c8f8a85d138cd2ce68e09ed46159c",
+      "currentBlob": "c22611468c1da9998a5d16d035d9c7b14203b0c9",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-IMPACT"
@@ -1817,7 +1817,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-CONTROL.md",
-      "blob": "48bc2094b2e17eecd54413017709b177c1b7b32b",
+      "blob": "1615052d3cd87460c4c2f4f47a2d030b53812d3c",
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
       "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
       "read": "FULL",
@@ -1825,7 +1825,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
-      "blob": "c9091704eb80282274e2a3d7944d36db9343df24",
+      "blob": "c47c850a7214930e3c276f4f7eb55fb3909fd385",
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
       "sourceBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
       "read": "FULL",
@@ -1841,7 +1841,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-      "blob": "81a531c88e3c8f8a85d138cd2ce68e09ed46159c",
+      "blob": "c22611468c1da9998a5d16d035d9c7b14203b0c9",
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
       "sourceBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
       "read": "FULL",
@@ -1953,11 +1953,11 @@
     "projections": [
       {
         "path": "docs/design/a2-final-design/D10-ACCEPTANCE.md",
-        "blob": "a8059fd72bb298c5b1517a4bb7ac6de5572f40c3"
+        "blob": "53711d1ef198627e85a3e401d17d6faf2d51ace0"
       },
       {
         "path": "docs/design/a2-final-design/D10-ACCEPTANCE.zh-CN.md",
-        "blob": "0f85009dbcc818e396e1259fa3f96a9be5399e2d"
+        "blob": "bee907042f48ca818a712878109e7204f83d59fc"
       }
     ],
     "sourceQualifiedOriginal": {
