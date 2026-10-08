@@ -2515,6 +2515,8 @@ D9ViewRendererBinding/1 = {
   evidencePins:[PinRef/2...]
 }
 
+D9ViewOutputScope/1 := "complete_data"
+
 D9ViewRenderBinding/1 = {
   resultInput:Counter,
   querySemanticSha256:"sha256:<64 lowercase hex>",
@@ -2524,12 +2526,13 @@ D9ViewRenderBinding/1 = {
   viewSpec:ViewSpec/1,
   viewSpecSha256:"sha256:<64 lowercase hex>",
   renderer:D9ViewRendererBinding/1,
-  presentation:D8PresentationDecision/1
+  outputScope:D9ViewOutputScope/1
 }
 
 D9ViewExportProjection/1 = {
   resultInput:Counter,
   viewSpecSha256:"sha256:<64 lowercase hex>",
+  outputScope:D9ViewOutputScope/1,
   accessibility:"same_data_table_required"
 }
 
@@ -2666,6 +2669,41 @@ D9PrintReceipt/1 = {
 }
 ~~~
 
+### 6.6.1 Plan/4 跨字段准入与 canonical collection
+
+上面的 /4 JSON shape 都是封闭类型，但以下跨字段关系同样属于严格准入。即使 evidencePins 完整，也不能替代这些关系约束。
+
+固定准入顺序为：（1）严格检查 closed/version/union/member/null；（2）验证已经冻结的 set-like array 本来就处于 canonical 顺序且没有 duplicate/conflict；（3）验证 catalog index 与 payload kind；（4）验证 selection 与 projection 的基数和 mode 对应；（5）验证 View 的 result、ViewSpec、renderer、target、destination 与 receipt 关系；（6）验证现任 authorization、Observation/revision/result epoch 与 typed pins/proofs；（7）按 owner 原顺序执行 Annotation 或 D7 View 的语义与现任性门；（8）验证 route/profile/assets、budget 与 loss；全部通过后才能冻结 staged bytes。关系不一致时直接拒绝，不能通过补读、重跑 Query、静默删除 union arm、重排 protected bytes、renderer fallback 或改写 projection 来修复。
+
+当 inputDomain=annotation：
+- annotationInputs 必须非空；viewInput=null、viewRenderBinding=null、projection.view=null、documentRenderBinding=null。
+- annotationInputs 是以 inputIndex 为 key 的 set-like array，按 Counter 递增排序且唯一。同一个 catalog input 在一个 Plan 中最多出现一次，因此只能选择一个 mode。同一 Plan 混用 portable_backup 与 review_bundle_r6 必须拒绝；需要两种输出时使用两个 Plan。
+- 每个选中的 inputIndex 必须精确指向一个 inputCatalog.items[index]，且 payload 必须是 annotation_content。
+- projection.annotations 与 annotationInputs 的基数和递增 inputIndex 顺序完全一致。每个位置上，portable_backup selection 只能对应 portable_backup projection，并且 inputIndex 与 recordPin 逐字相等；review_bundle_r6 只能对应同一 inputIndex 的 review_bundle_r6 projection。选中后缺 projection、未选却出现 projection、重复 index、跨 mode 对应，或 [0,1,0] 这类序列，即使各 catalog item 单独都已获权，也必须拒绝。
+- portable_backup selection 要求 includeSourceHistory=false 且 includeTargetContext=false；两个 flag 对 backup 不适用，true 必须拒绝，不能静默忽略。此模式还要求 target.kind=annotation_backup 且 generationPolicy.kind=none。
+- 对 review_bundle_r6，includeSourceHistory=false 必须对应 sourceHistory.state=not_requested；为 true 时只能是 disclosed 或 unavailable。includeTargetContext 与 targetContext 独立应用同一规则。已经请求但被 deny 的 context 是 unavailable，不能伪装成 not_requested 或空事实。
+- D9AnnotationDisclosureProjection/1.fragments 是有顺序的 sequence，保持获权 producer/context 的原顺序，不能排序。state=disclosed 时至少一个 fragment。每个 fragment 的 origins 是非空 set-like array，按 canonical D3-CJ/3(ExportInputLocation/2) bytes 排序并去重；重复 origin 必须拒绝。
+
+当 inputDomain=view：
+- bodyInput=null、bibliographyInput=null、annotationInputs=[]；viewInput 非 null，documentRenderBinding=null、viewRenderBinding 非 null、projection.view 非 null。Document export 仍是独立 input-domain 路径，可继续使用 D9DocumentRenderBinding/1.presentation；D8 文档 presentation 不是 View 数据 scope。
+- contentSelection.viewInput、viewRenderBinding.resultInput、projection.view.resultInput 必须逐字相等，并精确选择一个 query_result catalog item。binding 中全部 hash/epoch/auth 字段都必须从这一个选中的 D7ResultPin 推导。
+- viewRenderBinding.renderer.layout 必须逐字等于 viewRenderBinding.viewSpec.layout。
+- viewRenderBinding.outputScope 与 projection.view.outputScope 都只能是 complete_data。首批 profile 导出完整获权 D7 result 与 ViewSpec 中的全部 series、panel、item；设备本地 legend hide/show 状态不是 author data，不能改变 export scope。same-data accessible table 使用完全相同的 complete-data scope。未来若支持 current_display，必须增加 versioned successor，并冻结 stable hidden-series keys 与合格 local-state source，不能用 Boolean 或字段缺失来猜。
+- 外层 target.kind 必须是 docx|xlsx|pdf|svg|png|print 之一，且逐字等于 renderer.targetKind；target.profileId 必须逐字等于 renderer.profileId。当且仅当 target.kind=print 时 destination.kind=print；非 print View target 一律拒绝 print destination。
+- renderer.assets 是 set-like array，按 (role rank font<color_profile<page_profile<accessibility_profile, UTF8(assetId), UTF8(assetVersion), pin.pinToken) 排序且唯一。同一 (role,assetId) 若出现不同 version/pin 就是 conflict；不同 assetId 的多个 font/color asset 合法。只有 accepted renderer/profile 明确证明不消费这些外部 asset 时，该数组才可为空。
+- renderer.evidencePins 是按 pinToken 排序且唯一的 set-like array，只含该 renderer route 实际要求的 installation/profile evidence，不得加入无关 pin。
+- 现任 D9ViewRendererBinding/1.layout 仍只有六个 closed member。合法 D7 network View 在当前 D9 route 上固定返回 renderer_unavailable；仅安装 named profile 不能扩展 closed union，network graphics 必须等待真实 future versioned renderer/schema successor。
+
+delivery/receipt 兼容关系也封闭：
+- destination.kind=external_bundle 才可生成 PublicationReceipt/4；所有重复 Plan member（包括 viewRenderBinding）必须逐字相等。PublicationReceipt/4.presentation 只有在 documentRenderBinding 非 null 时才逐字等于该 document binding 的 presentation，否则必须为 null；它绝不承载 View output scope。
+- destination.kind=print 只生成 D9PrintReceipt/1；其中 viewRenderBinding 与 Plan 逐字相等，target 必须是 Plan 的 print target。
+- destination.kind=resource_handoff 只产生既有独立 D7/D3 author result，消费 exact staged bytes；不得伪造 PublicationReceipt/4 或 D9PrintReceipt/1。
+- destination.kind=server_download 使用既有 delivery/state result，不生成 portable publication receipt 或 print receipt。
+
+canonicalization 只允许在 Plan/4 freeze 前执行一次。已经 frozen、received、inspect、confirmation、saved/planned/unknown 或 recovery 的 record 必须本来就满足这些顺序与关系；noncanonical array 或关系不匹配直接拒绝，不能读取时排序或修复。既有 D7 row order、Annotation disclosure fragment order 与其它 owner-defined ordered sequence 必须保留，不能全局排序。
+
+D9ViewRenderBinding/1 与 Plan/4 仍是设计候选，产品执行 UNRUN；本次修正不迁移任何已部署或已记录的 View-binding bytes。将来一旦 /4 family 真正 accepted/deployed，若要增加新的 View output scope 或 renderer layout member，必须新增 versioned successor，不能原地扩宽 /1。
+
 ExportInputCatalog/3 逐字保留 /2 的全部 arm，只新增 annotation_content。该 arm 必须从一次真实现任 D8AnnotationReadResponse/1 构造：annotationRef、sourceObservation、annotationRevisionToken、value、body 与 targetResolution 都与该 read 逐字相等。record 精确为对应 PortableAnnotationRecord/4；recordPin 在既有 PinRef/2 完整性规则下选择 D3-CJ/3(record) 的精确字节。Plan 的 dependencyProof 与 observationProof 覆盖同一 cut 的 Annotation read，以及任何独立获权的 context read。最终 export barrier 同时复验 sourceObservation 与 annotationRevisionToken；正文文本相同不能替代已经变化的 revision。
 
 annotation_index 继续只作为 omission-directory evidence，绝不能填充 annotation_content、annotationInputs 或 Annotation 正文/context projection。portable backup 要求 inputDomain=annotation、target.kind=annotation_backup、一个或多个 mode=portable_backup selection、generationPolicy=none，并生成精确 D9AnnotationBackupFile/1：records 按完整 canonical AnnotationRef bytes 排序且唯一，每个 record 必须逐字等于对应已选 recordPin 的 D3-CJ/3 解码值；整个 backup file 使用 D3-CJ/3(D9AnnotationBackupFile/1) 的 canonical UTF-8 bytes。它不序列化当前 permission、SourceObservation capability、revision-signing capability、PAB 或 ActionEvidence。Review Bundle 要求 mode=review_bundle_r6，且只消费已经由 D8AnnotationBodyRead/1 产生的结果：valid 使用其 R6 semantic text，absent 使用 null，invalid 则 renderer unavailable，绝不再选第二 parser。purpose、appearance、labels、reviewState、suggestion、reply 与 attribution 都来自同一完整 Value/4。
@@ -2676,7 +2714,7 @@ View export 要求 inputDomain=view、恰一个 viewInput 指向 query_result ca
 
 querySemanticSha256 是 D3-CJ/3(该 D7ResultPin 保留的精确 D7 SemanticStateKey) 的 SHA-256；snapshotResultSha256 是 D3-CJ/3(该 pin 保留的精确 D7 SnapshotResultKey) 的 SHA-256。resultEpoch 与 authorizationGeneration 必须与同一 result evidence 逐字相等；viewSpecSha256 是 D3-CJ/3(精确 ViewSpec/1) 的 SHA-256。这些 hash 只做冻结交叉校验，不是 identity，也不形成第二 cache authority；完整 result/cut/dependency authority 仍是所选 D7ResultPin。
 
-View renderer binding 只能绑定一个具名已安装 renderer/profile/version 与一个精确 target kind。asset binding 必须列出实际消费的全部 font、color、page 与 accessibility profile pin；evidencePins 只能放该 route 所需的 renderer/profile installation evidence。固定 accessibility profile 要求同一完整数据表、title/description alt-text 语义、Query/panel 顺序、CJK/RTL 保全与非纯颜色编码。PDF、SVG、PNG 与 print profile 可以直接渲染这六个 layout；DOCX/XLSX 只有在其具名 profile 能证明同一 View 语义时才可用。若 Office route 使用 template，§6.5.1 的可见模板 authority 与全部 §14 规则仍然适用。backend/profile/layout 组合不支持时稳定 unavailable，绝不能静默替换为 data table。
+View renderer binding 只能绑定一个具名已安装 renderer/profile/version 与一个精确 target kind；canonical asset/evidence collection 与 target/profile 关系由 §6.6.1 定义。固定 complete_data scope 要求同一完整数据表、title/description alt-text 语义、Query/panel 顺序、CJK/RTL 保全与非纯颜色编码。PDF、SVG、PNG 与 print profile 可以直接渲染这六个 layout；DOCX/XLSX 只有在其具名 profile 能证明同一 View 语义时才可用。若 Office route 使用 template，§6.5.1 的可见模板 authority 与全部 §14 规则仍然适用。backend/profile/layout 组合不支持时稳定 unavailable，绝不能静默替换为 data table。
 
 Plan/4 的 `evidencePins` 必须精确等于 `Pins(inputCatalog)`、`Pins(projection)`、`Pins(documentRenderBinding)`、`Pins(viewRenderBinding)`、`Pins(templateBinding)`、`Pins(routeBinding)`、`Pins(styleBundles)`、`Pins(dependencyProof)`、`Pins(observationProof)`、`Pins(stagedOutputs)` 与 `recoveryPins` 的 pinToken 排序唯一递归并集，并且不得递归 Plan 自己的 `evidencePins` 成员。因此，实际消费的 Annotation record/context pin，以及 View 的 renderer、asset 与 result dependency，仍全部进入这一份唯一 pin 并集。
 
