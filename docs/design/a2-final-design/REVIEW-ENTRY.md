@@ -55,18 +55,18 @@ Historical chronology is fixed829 origin → fixed01cc → fixed32cf/d1ab → fi
 
 FULL for this repair is limited to the D6 source-map semantic disposition/navigation surfaces and the already-recorded fixed/current owner evidence needed to judge them. Fixed-S snapshots and `docs/design/inputs.json` are protected and unchanged.
 
-D7 is independently PASS at fixed26be. D8 fixed5eca closures remain, and ff10 independently CLOSED D8-C98B-P2-01 plus D8-5ECA-P2-01; only narrowed D8-C98B-P1-03 remains OPEN and is outside this D9 repair. D9 is a complete author candidate from exact 5eca; Mandatory §14 and D9-applicable Mandatory §15 are read, current D7 D9-binding/PAB/View consumers are covered, and final-FC Plan4/Annotation/View successors are integrated. D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 are author-resolved-pending-independent-review. ROOT-D9-ZH-P2-01 is independently CLOSED at ff10 and is not reopened. Complete D10 remains later.
+D7 is independently PASS at fixed26be. D8 fixed5eca/ff10 closures remain; the sole D8-C98B-P1-03 narrowed deferred-layout conflict is author-repaired-pending-independent-review at this candidate. D9 is a complete author candidate from exact 5eca; Mandatory §14 and D9-applicable Mandatory §15 are read, current D7 D9-binding/PAB/View consumers are covered, and final-FC Plan4/Annotation/View successors are integrated. D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 plus their direct /3→/4 version-family regression are author-resolved-pending-independent-review. ROOT-D9-ZH-P2-01 is independently CLOSED at ff10 and is not reopened. Complete D10 remains later.
 
 Product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment behavioral evidence is UNRUN. Documentation/machine/CI checks establish repository consistency only, not semantic acceptance. Final A2 still requires later complete integration, a fresh Pro/global non-author review, one explicit accepted-design SHA, and freeze/implementation-start material on that accepted SHA.
 
 
 ## D8 review target
 
-D8 is not part of this D9 author batch. fixed5eca and ff10 closures remain fixed. The only OPEN D8 object is D8-C98B-P1-03, narrowed to VIEW-BLD-04/05/06 and Main §11.2 deferred-layout legal-save wording. It requires a separate narrow author repair and subsequent non-author review; do not treat the current D9 head as that repair.
+Bind the exact final stop SHA for a non-author review of the sole D8-C98B-P1-03 repair. Verify VIEW-BLD-03 zero-total, VIEW-BLD-04/05/06, Main §11.2, Interfaces §13, Schemas §12 and Impact §11: deferred tree/treemap/sunburst, Gantt and boxplot/quantile must fail current static decoding with unsupported_layout; advanced_required applies only to current-decoder-legal members; raw Source and genuine historical/future bytes remain under their real owner; network/timeline/table keep their actual current semantics. Do not reopen fixed5eca/ff10 closures.
 
 ## D9 review target
 
-Bind the exact final stop SHA from PR #5 for a non-author incremental repair review of D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 only. D9 remains an author candidate; source coverage, machine maps, counts, hashes and green documentation CI are not acceptance. ROOT-D9-ZH-P2-01 is already independently CLOSED at ff10 and must not be reopened; however, Chinese prose newly changed by this three-finding repair is part of the current incremental review. This D9 review does not accept the separate narrowed D8 remainder.
+Bind the exact final stop SHA from PR #5 for a non-author incremental repair review of D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 plus the directly coordinated Plan3→Plan4 current-version regression. D9 remains an author candidate; source coverage, machine maps, counts, hashes and green documentation CI are not acceptance. ROOT-D9-ZH-P2-01 is independently CLOSED at ff10 and must not be reopened; Chinese prose newly changed by this repair remains in scope. This D9 review does not accept or replace the separate D8 P1 review.
 
 The reviewer must verify:
 
@@ -77,7 +77,7 @@ The reviewer must verify:
 - the single Core parser/identity/authorization boundary, ImportIR/Mapping/Loss/ConversionInput/ImportJob closure, D4 Registry/Field admission and no second identity/ledger/patch authority;
 - Node Template Recipe/ConstructionInput, sourceSubjectBindings to original-receipt join, PAB4/MinimumMapping/current wire13 and saved/planned/unknown recovery;
 - ordinary Office token/style/repeat rules plus the visible qualified native-table selector grammar: template bytes self-contained, internal nt_/nc_ Plan keys only, shortest-unique suffix/title/occurrence, same-rowset repeat and Unicode escaping;
-- fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 closed families plus exact Plan/Receipt1–3 recovery; generationPolicy=none exact paths, D2Snapshot3/D8 presentation rendering, output-name canonicalization, immutable confirmation, create-only publication and separate Resource author receipt;
+- fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 closed families plus exact Plan/Receipt1–3 recovery; FC SPEC §8.3 exact Source/Resource/query_json generationPolicy=none, controlled-name/canonical ordering, template/route/style, recursive evidencePins and unknown-publication rules are inherited by /4; SPEC §17 unseen-current dispatch, §18 inventory, SCHEMAS §§6.5–6.6, terminology, acceptance and replacement router must all agree that recorded /3 stays recovery-only; D2Snapshot3/D8 presentation rendering, immutable confirmation, create-only publication and separate Resource author receipt remain intact;
 - current PortableAnnotationRecord/4 / Value4 / sole R6 AnnotationInlineProfile consumer boundary remains intact; annotation_index never substitutes for the new content carrier;
 - workers/routes/sandbox, D9 no-network, image/region policy, Mobile negative conversion surface and direct-but-not-full D10 intersections;
 - historical 57/63/59/82/90/130/12 evidence sets remain separate, while I01–I12 and all product/runtime/GUI/Office/OS/performance/deployment evidence remain UNRUN.

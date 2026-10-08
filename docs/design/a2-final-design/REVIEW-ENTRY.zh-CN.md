@@ -54,18 +54,18 @@ fixed1068244 后续独立 CLOSED A2-D7-2F89-P2-02，同时保留 P1-01、P1-02�
 
 本修订 FULL 仅限 D6 source-map 语义 disposition/navigation surface，以及判断它们所需、已经登记的 fixed/current owner evidence。fixed-S snapshots 与 `docs/design/inputs.json` 受保护且保持不变。
 
-D7 已在 fixed26be 独立 PASS。D8 的 fixed5eca closure 保持，ff10 又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01；只剩收窄后的 D8-C98B-P1-03 OPEN，且不属于本 D9 修复。D9 从 exact 5eca 形成完整作者候选；Mandatory §14 与 D9 适用 Mandatory §15 均已读取，现任 D7 D9-binding/PAB/View consumer 已覆盖，final-FC Plan4/Annotation/View successor 已整合。D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 都只是 author-resolved-pending-independent-review。ROOT-D9-ZH-P2-01 已在 ff10 独立 CLOSED，不重开。完整 D10 仍留后续。
+D7 已在 fixed26be 独立 PASS。D8 的 fixed5eca/ff10 closure 保持；唯一的 D8-C98B-P1-03 收窄延期布局冲突已在本候选完成作者修订，仍待独立复核。D9 从 exact 5eca 形成完整作者候选；Mandatory §14 与 D9 适用 Mandatory §15 均已读取，现任 D7 D9-binding/PAB/View consumer 已覆盖，final-FC Plan4/Annotation/View successor 已整合。D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 以及直接的 /3→/4 版本族回归都只是 author-resolved-pending-independent-review。ROOT-D9-ZH-P2-01 已在 ff10 独立 CLOSED，不重开。完整 D10 仍留后续。
 
 产品/runtime/OS/GUI/crypto/真实 replica/crash/provider/performance/migration/activation/deployment 行为证据全部 UNRUN。文档、机器与 CI 检查只证明仓库一致性，不替代语义接受。最终 A2 仍需后续完整整合、fresh Pro/global 非作者终审、一个 explicit accepted-design SHA，以及同一 accepted SHA 上的 freeze/implementation-start 材料。
 
 
 ## D8 复核目标
 
-D8 不属于本 D9 作者批。fixed5eca 与 ff10 的 closure 都保持固定。唯一仍 OPEN 的 D8 对象是 D8-C98B-P1-03，范围已收窄到 VIEW-BLD-04/05/06 与 Main §11.2 的延期布局合法保存措辞。它需要另开最窄作者修复，再交非作者复审；不得把当前 D9 head 当作这项修复。
+下一位非作者必须绑定实际 final stop SHA，复核唯一 D8-C98B-P1-03 作者修复。重点核 VIEW-BLD-03 zero-total、VIEW-BLD-04/05/06、Main §11.2、Interfaces §13、Schemas §12 与 Impact §11：延期的 tree/treemap/sunburst、Gantt、boxplot/quantile 必须在 current 静态解码返回 unsupported_layout；advanced_required 只适用于现任 decoder 已接受的合法 member；raw Source 与真正 historical/future bytes 继续归真实 owner；network/timeline/table 保持各自实际现任语义。不得重开 fixed5eca/ff10 已 CLOSED 范围。
 
 ## D9 复核目标
 
-下一位非作者 reviewer 只绑定 PR #5 的 exact final stop SHA，对 D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 做增量修复复审。D9 仍只是作者候选；source coverage、machine map、count、hash 与绿色文档 CI 都不是 acceptance。ROOT-D9-ZH-P2-01 已在 ff10 独立 CLOSED，不得重开；但本三修批新修改的中文属于当前增量复审范围。该 D9 复审不接受单独的 D8 窄残余。
+下一位非作者 reviewer 绑定 PR #5 的 exact final stop SHA，对 D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 以及直接协调的 Plan3→Plan4 current-version 回归做增量复审。D9 仍只是作者候选；source coverage、machine map、count、hash 与绿色文档 CI 都不是 acceptance。ROOT-D9-ZH-P2-01 已在 ff10 独立 CLOSED，不得重开；本批新修改的中文仍属于当前增量复审范围。该 D9 复审不接受或替代单独的 D8 P1 复核。
 
 必须核验：
 
@@ -76,7 +76,7 @@ D8 不属于本 D9 作者批。fixed5eca 与 ff10 的 closure 都保持固定。
 - 单一 Core 解析器/身份/授权边界、ImportIR/Mapping/Loss/ConversionInput/ImportJob 闭合、D4 Registry/Field admission，以及禁止建立第二套 identity/ledger/patch authority；
 - Node Template Recipe/ConstructionInput、sourceSubjectBindings 与原 receipt 的关联、PAB4/MinimumMapping/现任 wire13，以及 saved/planned/unknown 的恢复规则；
 - 普通 Office token/style/repeat 规则，以及可见的 qualified native-table selector grammar：template bytes 必须自包含，nt_/nc_ 只作内部 Plan key，并采用最短唯一 suffix/title/occurrence、同一 rowset 的 repeat 与 Unicode escape；
-- fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 封闭 family，并精确恢复 Plan/Receipt1–3；generationPolicy=none 精确路径、D2Snapshot3/D8 呈现渲染、output-name 规范化、confirmation 不可变、create-only 发布，以及独立 Resource author receipt；
+- fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 封闭 family，并精确恢复 Plan/Receipt1–3；FC SPEC §8.3 的 exact Source/Resource/query_json generationPolicy=none、受控名称与 canonical ordering、template/route/style、递归 evidencePins、unknown-publication 规则都必须由 /4 继承；SPEC §17 unseen-current 分派、§18 inventory、SCHEMAS §§6.5–6.6、terminology、acceptance 与 replacement router 必须一致说明真实 /3 只作 recovery；D2Snapshot3/D8 呈现、confirmation 不可变、create-only 发布与独立 Resource author receipt 保持不变；
 - current PortableAnnotationRecord/4 / Value4 / 唯一 R6 AnnotationInlineProfile consumer 边界保持不变；annotation_index 绝不能替代新的内容 carrier；
 - worker/route/sandbox、D9 默认不联网、image/region、Mobile negative conversion surface，以及与 D10 直接相交但不等于完整 D10 的边界。
 - historical 57/63/59/82/90/130/12 evidence set 分开记账；I01–I12 及产品/runtime/GUI/Office/OS/performance/deployment 全部继续 UNRUN。

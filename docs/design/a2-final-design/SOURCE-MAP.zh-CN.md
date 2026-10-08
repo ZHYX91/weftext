@@ -161,7 +161,7 @@ D8 已保全候选首次真实推送在 7e3f；本五项修订精确从 c98b（`
 
 本修订把 `D8-ACCEPTANCE.json` 设为六字段唯一结构源，恢复 ANNOT-01 与 WRITE-08 的完整正反极性，把 current View overlay 改到 `VIEW-CUR-*`，增加十个 `VIEW-BLD-01..10` Mandatory §15.7 oracle，得到 213/213 唯一 current obligation。本继任 delta 为 JSON/中英文投影加入确定性结构 guard，并把静态定义保存门与保持不变的 D7 §7 完整结果运行期 View 门明确分离，不建立第二 View/Query schema/store。54/54 fixed prose row 继续使用 section-level target；760/760 FC 逐行 applicability/current-owner 作者库存更新为 direct 167、upstream 146、保留 non-D8 owner 447，共 114 行 applicability 改动。
 
-fixed5eca 非作者复审已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02。后续 ff10 非作者复审又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01。现在只剩 D8-C98B-P1-03 OPEN，并已收窄到 VIEW-BLD-04/05/06 与 Main §11.2 中“延期或不支持的现任布局是否可合法保存”的措辞冲突。本 D9 修复批不修改、也不自行关闭这个 D8 残余。数量、结构检查和 docs CI 只提供机械证据，不代表语义接受。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D10 与 global A2 留后续。
+fixed5eca 非作者复审已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02。后续 ff10 非作者复审又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01。唯一的 D8-C98B-P1-03 已在本候选完成作者修订：VIEW-BLD-04/05/06 与 Main §11.2 不再把延期的 tree/treemap/sunburst、Gantt、boxplot/quantile 当成合法 current save；现任静态解码直接返回 unsupported_layout，advanced route 只适用于现任 decoder 已接受的合法 member，raw/historical/future bytes 继续由真实 owner 保全。VIEW-BLD-03 也已澄清 pie zero-total 是合法 empty-total。P1-03 仍只是 author-resolved-pending-independent-review；数量、结构检查和 docs CI 只提供机械证据，不代表语义接受。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D10 与 global A2 留后续。
 
 ## 17. D9 完整作者整合
 
@@ -175,4 +175,4 @@ current Annotation 整合也已明确：Node Template omission 只局限 constru
 
 `D9-ACCEPTANCE.json` 现是 97 条结构权威，D9 Registry/Terms 为 41 个 concept；`D9-SOURCE-MAP.json` 保存 fixed/current/successor provenance 以及修正后的 predecessor/current range。D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 仍都只是 `author-resolved-pending-independent-review`。historical finite evidence 57/63/59/82/90/130/12 分开记账、不可相加。I01–I12 与全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN；docs/JSON 绿色检查不能接受 D9。
 
-较早的 ROOT-D9-ZH-P2-01 修复已在 ff10 独立 CLOSED，本批不重开该 closure。本三修批新修改的中文仍随当前精确最终 SHA 一起做 D9 增量复核，并与三个仍待复核的 D9-BAF finding 一并核验。
+较早的 ROOT-D9-ZH-P2-01 修复已在 ff10 独立 CLOSED，本批不重开。三个 D9-BAF finding 继续是 author-resolved-pending-independent-review；其直接版本族回归也已协调：fresh unseen export 在 FC SPEC §8.3/§17/§18、SCHEMAS §§6.5–6.6、terminology、acceptance 与 replacement router 中统一使用 ExportPlan/4，并按交付使用 PublicationReceipt/4 或 D9PrintReceipt/1；真实记录的 Plan/Receipt1–3 保留精确 decoder/token/bytes/pins/recovery。该协调不新增 finding 计数。本批新修改的中文仍随当前 exact-final-SHA D9 增量复核一并核验。
