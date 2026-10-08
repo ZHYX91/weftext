@@ -2685,7 +2685,7 @@ D9PrintReceipt/1 = {
 - D9AnnotationDisclosureProjection/1.fragments 是有顺序的 sequence，保持获权 producer/context 的原顺序，不能排序。state=disclosed 时至少一个 fragment。每个 fragment 的 origins 是非空 set-like array，按 canonical D3-CJ/3(ExportInputLocation/2) bytes 排序并去重；重复 origin 必须拒绝。
 
 当 inputDomain=view：
-- bodyInput=null、bibliographyInput=null、annotationInputs=[]；viewInput 非 null，documentRenderBinding=null、viewRenderBinding 非 null、projection.view 非 null。Document export 仍是独立 input-domain 路径，可继续使用 D9DocumentRenderBinding/1.presentation；D8 文档 presentation 不是 View 数据 scope。
+- View 输入不得选择文档正文或参考文献，因此 bodyInput=null、bibliographyInput=null、annotationInputs=[]；viewInput 必须非 null，documentRenderBinding=null，viewRenderBinding 与 projection.view 均必须非 null。文档导出仍走独立 inputDomain，并继续由 D9DocumentRenderBinding/1.presentation 决定文档呈现；D8 的文档呈现决定不能拿来表示 View 的数据范围。
 - contentSelection.viewInput、viewRenderBinding.resultInput、projection.view.resultInput 必须逐字相等，并精确选择一个 query_result catalog item。binding 中全部 hash/epoch/auth 字段都必须从这一个选中的 D7ResultPin 推导。
 - viewRenderBinding.renderer.layout 必须逐字等于 viewRenderBinding.viewSpec.layout。
 - viewRenderBinding.outputScope 与 projection.view.outputScope 都只能是 complete_data。首批 profile 导出完整获权 D7 result 与 ViewSpec 中的全部 series、panel、item；设备本地 legend hide/show 状态不是 author data，不能改变 export scope。same-data accessible table 使用完全相同的 complete-data scope。未来若支持 current_display，必须增加 versioned successor，并冻结 stable hidden-series keys 与合格 local-state source，不能用 Boolean 或字段缺失来猜。
@@ -2698,7 +2698,7 @@ D9PrintReceipt/1 = {
 - destination.kind=external_bundle 才可生成 PublicationReceipt/4；所有重复 Plan member（包括 viewRenderBinding）必须逐字相等。PublicationReceipt/4.presentation 只有在 documentRenderBinding 非 null 时才逐字等于该 document binding 的 presentation，否则必须为 null；它绝不承载 View output scope。
 - destination.kind=print 只生成 D9PrintReceipt/1；其中 viewRenderBinding 与 Plan 逐字相等，target 必须是 Plan 的 print target。
 - destination.kind=resource_handoff 只产生既有独立 D7/D3 author result，消费 exact staged bytes；不得伪造 PublicationReceipt/4 或 D9PrintReceipt/1。
-- destination.kind=server_download 使用既有 delivery/state result，不生成 portable publication receipt 或 print receipt。
+- destination.kind=server_download 只走既有服务器下载交付与状态查询路径；它不产生可携带的外部发布回执，也不产生打印回执。
 
 canonicalization 只允许在 Plan/4 freeze 前执行一次。已经 frozen、received、inspect、confirmation、saved/planned/unknown 或 recovery 的 record 必须本来就满足这些顺序与关系；noncanonical array 或关系不匹配直接拒绝，不能读取时排序或修复。既有 D7 row order、Annotation disclosure fragment order 与其它 owner-defined ordered sequence 必须保留，不能全局排序。
 
