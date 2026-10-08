@@ -369,8 +369,8 @@
       "en": "Annotation Content Carrier",
       "owner": "D9",
       "canonical": "D9AnnotationContentInput/1",
-      "meaning": "one exact current Annotation read frozen into export Plan",
-      "excludes": "annotation_index/semantic string/permission capability"
+      "meaning": "one exact current Annotation read frozen into Plan4 with one-to-one canonical selection/projection admission",
+      "excludes": "annotation_index/semantic string/permission capability/duplicate or cross-mode selection"
     },
     {
       "id": "weftext.term.view-render-binding",
@@ -378,8 +378,8 @@
       "en": "View Render Binding",
       "owner": "D9",
       "canonical": "D9ViewRenderBinding/1",
-      "meaning": "finite renderer/profile/assets binding over complete D7 result and ViewSpec",
-      "excludes": "View authority/Query transform/free chart config"
+      "meaning": "finite six-layout renderer/profile/assets binding over one complete D7 result + ViewSpec with fixed complete_data output scope",
+      "excludes": "View authority/Query transform/free chart config/current_display/local legend visibility"
     },
     {
       "id": "weftext.term.print-receipt",
@@ -565,7 +565,9 @@
       "svg",
       "png",
       "print"
-    ]
+    ],
+    "viewOutputScope": "complete_data",
+    "plan4Admission": "final-fc-schemas-6.6.1"
   },
   "namedSupersede": {
     "target": "final FC SCHEMAS §6.5.1 fresh qualified native-table authoring token spelling",
@@ -576,6 +578,11 @@
       "target": "final FC SCHEMAS §6.6 fresh-current export family",
       "currentRule": "fresh unseen export uses Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4; Annotation content and finite View rendering are closed members",
       "historical": "Plan/Receipt1-3, Catalog2, Selection1, Projection1, Loss1, Confirmation1 and bundle1 retain exact decoder/bytes/recovery"
+    },
+    "plan4RelationalAdmission": {
+      "target": "final FC SCHEMAS §6.6.1",
+      "currentRule": "Plan4 strict admission includes Annotation selection/projection one-to-one matching, complete_data View scope, target/destination/receipt compatibility and canonical new arrays; relation mismatch rejects without repair",
+      "versioning": "D9ViewRenderBinding/1 and Plan4 remain candidate-only/UNRUN; future new output scopes or renderer layout members require a versioned successor after acceptance/deployment"
     }
   },
   "evidence": "design registry only; product/runtime UNRUN; independent review pending"
