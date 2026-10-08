@@ -2388,12 +2388,12 @@
         "zh": "exact-source/resource/query-json 正向路径"
       },
       "positive": {
-        "en": "generationPolicy=none remains uniquely available independent of renderer/template/provider registries when source qualification itself is valid.",
-        "zh": "source qualification 本身合法时，generationPolicy=none 不依赖 renderer/template/provider registry，保持唯一正向路径。"
+        "en": "Fresh unseen exact AsciiDoc Source, exact Resource and complete graph query_json (nodes/edges/nodeDetails, plus rows/scalar variants) each construct and atomically store their own Plan4 without a pre-existing Plan; generationPolicy=none needs no renderer/template/provider installation, provided current source/result authorization is real and complete.",
+        "zh": "首次 unseen 的精确 AsciiDoc Source、精确 Resource、完整 graph query_json（nodes/edges/nodeDetails，及 rows/scalar 分支）各自可在没有预存 Plan 时构造并原子保存 Plan4；只要真实 source/result 已获权且完整，generationPolicy=none 不依赖 renderer/template/provider 安装。"
       },
       "negative": {
-        "en": "Provider unavailability cannot invalidate source bytes or block these policy-independent targets.",
-        "zh": "provider unavailable 不得让 source bytes invalid 或阻断这些 policy-independent target。"
+        "en": "Unavailable renderer/provider or an absent earlier ExportPlan must not block these policy-independent fresh targets. This does not waive original source/result authorization, completeness, exact pins or graph query_json structure.",
+        "zh": "不能因 renderer/provider 不可用或没有上一份 ExportPlan 阻断这些独立正向路径；但不得免除原 source/result 授权、完整性、精确 pin 或 graph query_json 结构。"
       },
       "contract": "D9 Main §12; FC4R-EXP-01/02",
       "evidence": {
@@ -2514,12 +2514,12 @@
         "zh": "Portable Annotation backup 精确记录"
       },
       "positive": {
-        "en": "annotation_backup emits canonical D9AnnotationBackupFile/1 over exact selected PortableAnnotationRecord/4 values including exact inline source, reply and attribution.",
-        "zh": "annotation_backup 以精确选中的 PortableAnnotationRecord/4 value 生成 canonical D9AnnotationBackupFile/1，包含 exact inline source、reply 与 attribution。"
+        "en": "A first unseen backup of complete *Alice* Annotation Value/4 succeeds with a current authorized D8AnnotationReadResponse/1 even without an existing ExportPlan/4: Core builds the catalog/PA projection, selects the exact payload.recordPin and canonical PortableAnnotationRecord/4 (inline source, reply, attribution), allocates a non-public token before referenced report/manifest/Plan, and atomically saves the complete Plan. The canonical D9AnnotationBackupFile/1 carries no capability.",
+        "zh": "首次 unseen 备份完整 *Alice* Annotation Value/4 时，只要有当前获权的 D8AnnotationReadResponse/1，即使没有预存 ExportPlan/4 也成功：Core 构造目录与 PA 投影，选中精确 payload.recordPin 和 canonical PortableAnnotationRecord/4（inline source、reply、attribution），在引用 token 的 report/manifest/Plan 之前分配不公开 token，再原子保存完整 Plan。canonical D9AnnotationBackupFile/1 不携带能力。"
       },
       "negative": {
-        "en": "Backup serializes no current permission/capability, Observation token, PAB, ActionEvidence, guessed locator or authenticated-origin upgrade.",
-        "zh": "backup 不序列化当前 permission/capability、Observation token、PAB、ActionEvidence、猜测 locator 或 authenticated-origin 升级。"
+        "en": "Reject replacing Alice's selected PA pin, leaking hidden target context, serializing permission/Observation/PAB/ActionEvidence or reusing a different authorized record. The absence of a prior Plan is not an error; a failed fresh preparation never exposes its provisional token.",
+        "zh": "换用其它 recordPin、泄露隐藏 target context、序列化 permission/Observation/PAB/ActionEvidence 或套用另一份获权记录均拒绝。缺少上一份 Plan 不是错误；首次 prepare 失败也不得披露临时 token。"
       },
       "contract": "final FC SCHEMAS §6.6; D9 Main §13a",
       "evidence": {
@@ -2640,12 +2640,12 @@
         "zh": "View result、layout 与 scope 关系"
       },
       "positive": {
-        "en": "Authorized View Plan has three matching resultInput fields for one query_result, renderer.layout=ViewSpec.layout, complete_data scope in both binding/projection, and projection.view.viewSpecSha256=viewRenderBinding.viewSpecSha256=SHA-256(D3-CJ/3(exact ViewSpec/1)). D7 View §7 retains decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery; the same-data table covers full scope.",
-        "zh": "获权 View Plan 的三个 resultInput 均指向同一 query_result，renderer.layout=ViewSpec.layout，binding/projection 都是 complete_data，且 projection.view.viewSpecSha256=viewRenderBinding.viewSpecSha256=SHA-256(D3-CJ/3(精确 ViewSpec/1))。D7 View §7 保留封闭解码→result 授权/epoch→完整性→schema→layout/binding→结构/顺序→domain/numbers→budget→交付；同数据表覆盖全部范围。"
+        "en": "A first authorized bar(state,task_count) → PDF uses no prior Plan: minimal typed catalog routing selects a real query_result D7ResultPin, then the D7 §7 decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery gate runs unchanged before D9 business. The complete result is rendered only after all Plan4 relations hold: three matching resultInput fields, renderer.layout=ViewSpec.layout, projection.view.viewSpecSha256=viewRenderBinding.viewSpecSha256=SHA-256(D3-CJ/3(exact ViewSpec/1)), complete_data binding/projection and same-data accessible table; the resulting Plan is atomically saved.",
+        "zh": "首次获权的 bar(state,task_count) → PDF 不需要预存 Plan：最小目录结构定位选中真实 query_result D7ResultPin，接着 D7 §7 原顺序执行封闭解码→result 授权/epoch→完整→schema→layout/binding→结构/顺序→domain/numbers→budget→交付，之后才运行 D9 业务。必须满足全部 Plan4 关系：三个 resultInput 对应、renderer.layout=ViewSpec.layout、projection.view.viewSpecSha256=viewRenderBinding.viewSpecSha256=SHA-256(D3-CJ/3(精确 ViewSpec/1))、binding/projection 的 complete_data 与同数据 accessible table，最终原子保存 Plan。"
       },
       "negative": {
-        "en": "A projection hash from a second valid ViewSpec rejects even when resultInput/layout/scope agree; mismatched index/layout, current_display/local legend subset, or a D8 document presentation substitution rejects. With lost current entry authorization plus bad index/layout, return original non-disclosing not_visible/reset before any catalog/profile/detail; the authorized equivalent mismatch still rejects after owner qualification. No requery, hash replacement or projection rewrite.",
-        "zh": "即使 resultInput/layout/scope 一致，来自第二份合法 ViewSpec 的投影 hash 仍须拒绝；index/layout 不配、current_display/本地 legend 子集或以 D8 文档 presentation 替代同样拒绝。若现任入口失权还叠加坏 index/layout，必须在披露 catalog/profile 等细节前返回原不泄露的 not_visible/reset；获权后的同类失配仍经原 owner 门禁拒绝。不得重跑查询、替换 hash 或改写投影。"
+        "en": "After entry authorization, viewInput=99 when the catalog has no such item, or a selected payload of kind field/annotation_content rather than query_result, rejects as a routing error BEFORE D7 because no selected ResultPin exists. With a valid result, D7 auth/epoch/incomplete errors keep priority over D9 renderer/profile business; another valid ViewSpec hash, changed index/layout, local-legend partial scope or D8 presentation substitution rejects. Lost entry authorization plus bad index/layout returns non-disclosing not_visible/reset BEFORE routing errors. Never requery or rewrite projection.",
+        "zh": "入口获权后，若 viewInput=99 而目录无该条目，或选中的 payload.kind 是 field/annotation_content 而非 query_result，则因没有真实所选 ResultPin，必须在进入 D7 前以内部路由错误拒绝。合法 result 的 D7 授权/epoch/不完整错误优先于 D9 renderer/profile 业务；另一个合法 ViewSpec hash、index/layout 不配、局部 legend 子集或 D8 presentation 替代仍拒绝。入口失权并携坏 index/layout 时先返回不披露的 not_visible/reset，不得泄露路由错误，更不能 requery 或改写 projection。"
       },
       "contract": "final FC SCHEMAS §6.6.1; SPEC §16a; D9 Main §12a",
       "evidence": {
@@ -2766,12 +2766,12 @@
         "zh": "fresh export /4 与历史 /1-/3 分派"
       },
       "positive": {
-        "en": "Unseen current export uses Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2 and Receipt4 or PrintReceipt1 with the single recursive pin union.",
-        "zh": "unseen current export 使用 Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2，以及 Receipt4 或 PrintReceipt1，并继续使用唯一递归 pin union。"
+        "en": "Existing saved/planned/unknown or inspect/confirm/publish/print-receipt work locates the original authenticated protected Plan by recorded token tag/version and current disclosure, preserving exact pins/confirmation/unknown responsibilities; its D9PrintReceipt/1 must match the original confirmed Plan print target/destination, View binding, actual output and loss without an invented receipt target. Fresh unseen work instead builds Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2 without a pre-existing Plan, after authorized owner inputs and all applicable owner/relational gates. After full output-name preflight Core privately allocates a random unique d9_export_plan/4 token BEFORE constructing the report/manifest/Plan referencing it, freezes exact staged bytes/pins and atomically saves before exposing the token.",
+        "zh": "已有 saved/planned/unknown 或 inspect/confirm/publish/print-receipt 必须按记录的 token tag/version 与当前披露找到原始经认证的受保护 Plan，保留精确 pin、confirmation 与 unknown 责任；D9PrintReceipt/1 对应原确认 Plan 的 print target/destination、View binding、真实 output 和 loss，不新增 receipt target。fresh unseen 则在原 owner/关系门禁及获权输入基础上，无需预存 Plan 就构造 Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2。完成全部输出名称预检后，Core 私下随机分配唯一 d9_export_plan/4 token，必须早于引用它的 report/manifest/Plan 构造，冻结 staged bytes/pin 并原子保存后才披露。"
       },
       "negative": {
-        "en": "Plan/Receipt1-3, Catalog2, Selection1, Projection1, Loss1, Confirmation1 and bundle1 are never repinned, re-encoded, sorted, renamed or upgraded into /4.",
-        "zh": "Plan/Receipt1-3、Catalog2、Selection1、Projection1、Loss1、Confirmation1 与 bundle1 绝不 repin、re-encode、排序、改名或升级成 /4。"
+        "en": "Reject a circular fresh-prepare precondition requiring an already stored ExportPlan, token disclosure before full atomic save, use of a second Plan store/CAS, skipped relational/pin/loss checks, or read-time repair/re-encoding. Original Plan/Receipt1–3, Catalog2, Selection1, Projection1, Loss1, Confirmation1, bundle1, token/OperationId/pins/saved/planned/unknown bytes remain exact historical recovery inputs, never auto-upgraded into /4.",
+        "zh": "必须拒绝首次 prepare 以已有 ExportPlan 为前提的循环、完整原子保存前披露 token、第二 Plan store/CAS、跳过关系/pin/loss 检查或读取时修补/重编码。原 Plan/Receipt1–3、Catalog2、Selection1、Projection1、Loss1、Confirmation1、bundle1、token/OperationId/pin/saved/planned/unknown 字节均保留精确历史恢复语义，不自动升级为 /4。"
       },
       "contract": "D9 Main §12; D9 Schemas §§9–13; final FC SCHEMAS §6.6",
       "evidence": {
