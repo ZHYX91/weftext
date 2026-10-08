@@ -1759,6 +1759,12 @@ Inventory2.stopCapacity 必须是在同一 barrier 从 authoritative safety stor
 
 Record2、Proof1、Inventory1 保留其历史 decoder 与 payload domain。Record3 只在真实 responsibility mutation、checkpoint 或 custody handoff 时形成。该 transition 必须 strict-decode 每项 retained historical responsibility，在一个 barrier 捕获完整 mixed Inventory2，只 pin 一次，建立 Proof2，在适用时 checked-increment record revision，并保持 executionDomainId。不得 mint 替代 ControlRef、request、approval、reservation、claim，也不得创建第二 execution ledger。
 
+### 21.4 D10 interactive-start 与 Stop 在真实 D6 边界的消费者
+
+唯一 fresh interactive Run/Run-targeted Lease 生产者是现任 D10-CONTROL §7.1 闭合可信到场 Core runtime `d10_interactive_run_start`：真实 D1 `automation.manage`、D6 认证本人 Workspace principal、当前 Policy/3 `d10_control_self`、完整有限 LeaseSpec、当前 activation/clock/deployment grants/budget，以及在同一 Authority Store 原子写 Run Image2+Lease Image1+唯一 StopOwner/latch Image1、预留安全容量、audit 与 dedup result。它**不是** D6 `PreparedIntent`、新作者操作、D10 第八个 ControlBody、Automation/occurrence 或第二 D6 ledger。D6 只消费之后原作者 step：原 D7 PAB4/Manifest3/EffectBytes3、现任 D10 Link2/ApprovalUse2、原 `d6_commit_request`、DecisionKey 与 final P。真实历史 Link1/PAB3/ApprovalUse1 独立解码。首个受保护 step 使用原 `LeaseRunUse/1` CAS；同 Run 后续与 saved/planned 恢复不二次消费 `maxRuns`，仍须重核当前授权、lease revision、clock、stop、activation、预算。启动、准入与 stop 关联必须指向 D6 final P/安全 latch 的**同一实际打开 Authority Store incarnation**。未知或跨 store 拒绝；绝不产生 Run/Lease/Stop 半态、替代作者请求或 ledger 假成功。
+
+D10 Control `stop` 读取中，现任有权 W Workspace scope 与具名 target 获权 H deployment scope 按 D10-CONTROL §7 的准确 target/Workspace/store-incarnation relation 解析**唯一 W-scoped** Image1/StopOwner/latch/首个结果；H 读取资格不产生另一持久 Stop scope。非 Stop 仍严格 `scope == record.scope`。原 D6 final P 与原首次 external handoff 均和此不可逆 latch 在同一 store 线性化。向 W/H 交付相同结果前须过当前 target/嵌套披露；错 Workspace/store、hidden target、H 无 target 权按原 `not_visible`，authority/continuity/custody 未知依原错误次序。D6 新 bootstrap owner 仍准确 Profile4/Plan4/Genesis2/initialPresentationPolicy 和唯一原 P，不引入 Plan3。
+
 ## 22. Historical replay 与候选边界
 
 任何真实 saved/planned/unknown record 都先按 recorded outer carrier、owner descriptor、preview、pins、token/handle association、OperationId、authorization/custody/TTL 与原 error order 分派。current successor 绝不重编码 historical bytes。尚未部署的 predecessor candidate 不会仅因名称出现在设计 prose 中就凭空产生 migration duty。
