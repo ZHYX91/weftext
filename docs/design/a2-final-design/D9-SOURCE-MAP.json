@@ -19,8 +19,8 @@
     },
     {
       "path": "docs/design/asciidoc-annotation-final-design/replacements.json",
-      "role": "D6-FA -> final FC successors where named; current D9 Export successor includes §6.6/§16a",
-      "blob": "3f62b1a496d51f3942f3c073806c0d0f3e0fa596"
+      "role": "D6-FA -> final FC successors where named; fresh D9 export uses §6.6/§16a Plan4 family, while recorded Plan/Receipt1-3 retain exact recovery",
+      "blob": "69248159127bb106181bee01cf6b0db0fa1e4304"
     }
   ],
   "fixedSources": [
@@ -738,56 +738,59 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "eaa9a4d2e1e1e6fb6244c1a6a6ad56245674288f",
+        "blob": "f125d384f1d1f0c06c94e80ef955a42c522eb82d",
         "ranges": [
           "§6.1 L1589–1677",
-          "§6.5 L1997–2223",
-          "§6.5.1 L2224–2260",
-          "§6.6 L2261–2572"
+          "§6.5 L1997–2225",
+          "§6.5.1 L2226–2262",
+          "§6.6 L2263–2574"
         ]
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-        "blob": "3eec4a89ea0eb14d593d5dadb27de6198cc121e6",
+        "blob": "3d03076811990d2cf9f53a0b892c13da56f5532b",
         "ranges": [
           "§6.1 L1680–1776",
-          "§6.5 L2101–2327",
-          "§6.5.1 L2328–2364",
-          "§6.6 L2365–2676"
+          "§6.5 L2101–2329",
+          "§6.5.1 L2330–2366",
+          "§6.6 L2367–2678"
         ]
       }
     ],
     "spec": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-        "blob": "12d748ee58581813af6422ce9be11b65d655382c",
+        "blob": "f5bdb6af80639b92cf0e0450d7aaef3580da60b9",
         "ranges": [
           "§8.3 L439–463",
           "§8.4 L464–471",
           "§16 L940–949",
           "§16a L950–966",
-          "§17 L967–974"
+          "§17 L967–974",
+          "§18 L975–989"
         ]
       },
       {
         "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-        "blob": "4d8170069d13354215845ee05046e5826c9b74f6",
+        "blob": "f5c5068c0214a04391a6c88c704f4eb850ffaf13",
         "ranges": [
           "§8.3 L449–473",
           "§8.4 L474–481",
           "§16 L1002–1011",
           "§16a L1012–1028",
-          "§17 L1029–1036"
+          "§17 L1029–1036",
+          "§18 L1037–1143"
         ]
       }
     ],
     "acceptance": {
       "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
-      "blob": "f5f5b9b212b281838aabc281171217623285820e",
+      "blob": "c3022df8c823454310fe73645084630481b1c8d1",
       "ranges": [
-        "D9 direct/upstream current rows including FC4R-EXP/TABLE/WIRE, FC4A-EXP/ROUTE, FC4D-EXP, FC4F-EXP, FC4G-NAME and named prerequisites"
+        "D9 direct/upstream current rows including FC4R-EXP/TABLE/WIRE, FC4A-EXP/ROUTE, FC4D-EXP, FC4F-EXP, FC4G-NAME and named prerequisites; fresh-current rows use Plan4/Receipt4 while recorded Plan3/Receipt3 recovery stays explicit"
       ],
-      "zhPath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md"
+      "zhPath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "zhBlob": "d41fa1e9dcf9334ce234e08669b2ad3d3993c047"
     },
     "namedRevision": {
       "supersedes": "fresh qualified/non-ASCII hash-token authoring sentence in predecessor §6.5.1",
@@ -796,17 +799,17 @@
     },
     "exportSuccessor": {
       "status": "author-resolved-pending-independent-review",
-      "schemas": "§6.6 fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4 plus Annotation carrier and finite View renderer",
-      "spec": "§16a behavior closure",
-      "historical": "Plan/Receipt1-3 and Catalog2/Selection1/Projection1/Loss1/Confirmation1/bundle1 retain exact decoder/bytes/pins/recovery; no migration"
+      "schemas": "§6.5 freezes recorded Plan3 predecessor/shared rules; §6.6 is fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4 plus Annotation carrier and finite View renderer",
+      "spec": "§8.3 shared exact-source/resource/query_json, controlled-name/canonical-pin/unknown-publication rules now bind fresh Plan4; §16a behavior closure; §17 unseen-current dispatch and §18 inventory name /4",
+      "historical": "Plan/Receipt1-3 and predecessor closed families retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery; no migration"
     },
     "annotationCurrent": {
       "spec": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
-          "blob": "12d748ee58581813af6422ce9be11b65d655382c",
+          "blob": "f5bdb6af80639b92cf0e0450d7aaef3580da60b9",
           "ranges": [
-            "§9.1–9.12 L476–674",
+            "§9.1–9.12 L476–669",
             "§16 L940–949",
             "§16a L950–966"
           ],
@@ -814,7 +817,7 @@
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
-          "blob": "4d8170069d13354215845ee05046e5826c9b74f6",
+          "blob": "f5c5068c0214a04391a6c88c704f4eb850ffaf13",
           "ranges": [
             "§9.1–9.12 L486–695",
             "§16 L1002–1011",
@@ -826,19 +829,19 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "eaa9a4d2e1e1e6fb6244c1a6a6ad56245674288f",
+          "blob": "f125d384f1d1f0c06c94e80ef955a42c522eb82d",
           "ranges": [
-            "§6.6 L2261–2572",
-            "§7 L2573–2733"
+            "§6.6 L2263–2574",
+            "§7 L2575–2735"
           ],
           "read": "FULL-direct-current-consumer"
         },
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
-          "blob": "3eec4a89ea0eb14d593d5dadb27de6198cc121e6",
+          "blob": "3d03076811990d2cf9f53a0b892c13da56f5532b",
           "ranges": [
-            "§6.6 L2365–2676",
-            "§7 L2677–2840"
+            "§6.6 L2367–2678",
+            "§7 L2679–2842"
           ],
           "read": "FULL-direct-current-consumer"
         }
@@ -906,6 +909,31 @@
         }
       ],
       "disposition": "correct old section boundaries without dropping the §7 Annotation owner or §17 recovery clauses that the former over-broad ranges accidentally included"
+    },
+    "terminology": {
+      "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "blob": "8a1525a7422b025050c90efaaf176a0e076fd527",
+      "rule": "ExportPlan/3, PublicationReceipt/3 and /3 tokens are retained recorded predecessors; Plan4/Receipt4/PrintReceipt1 and their successor closed families are current"
+    },
+    "replacementRouter": {
+      "path": "docs/design/asciidoc-annotation-final-design/replacements.json",
+      "blob": "69248159127bb106181bee01cf6b0db0fa1e4304",
+      "rule": "D9-Export/D9-Impact/D9-Lexicon/D9-Acceptance current routes name Plan4 successors and exact recorded Plan3 recovery"
+    },
+    "versionCoordination": {
+      "status": "author-resolved-pending-independent-review; coordinator precheck, not a separate finding count",
+      "current": "fresh unseen export uses ExportPlan/4, PublicationReceipt/4 or D9PrintReceipt/1 and inherits §6.5 exact-source/resource/query_json, controlled-name/canonical ordering, template/route/style, recursive pins and unknown-publication rules",
+      "retained": "recorded ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3 and token/confirmation/bundle predecessors retain exact decoder/bytes/pins/recovery and are never repinned/re-encoded into /4",
+      "currentizedLocations": [
+        "FC SPEC §8.3",
+        "FC SPEC §17",
+        "FC SPEC §18",
+        "FC SCHEMAS §§6.5–6.6",
+        "FC terminology registry",
+        "FC acceptance oracles",
+        "final FC replacement router",
+        "A2 D9 main/version references"
+      ]
     }
   },
   "d10Direct": {
@@ -979,7 +1007,7 @@
     "mandatory15D9Applicable": "FULL",
     "finalFCExportSuccessorENZH": "FULL-current-successor"
   },
-  "evidenceBoundary": "author design/source mapping only; D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10; product/worker/Office/OS/performance/deployment UNRUN",
+  "evidenceBoundary": "author design/source mapping only; D9-BAF-P1-01, D9-BAF-P1-02 and D9-BAF-P2-02 plus the directly coordinated /3→/4 current-version wording are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 is independently CLOSED at ff10; D8-C98B-P1-03 is separately author-resolved-pending-independent-review; product/worker/Office/OS/runtime/crash/performance/deployment UNRUN",
   "mandatory15": {
     "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
     "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
