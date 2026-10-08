@@ -2673,7 +2673,9 @@ D9PrintReceipt/1 = {
 
 上面的 /4 JSON shape 都是封闭类型，但以下跨字段关系同样属于严格准入。即使 evidencePins 完整，也不能替代这些关系约束。
 
-固定准入顺序为：（1）严格检查 closed/version/union/member/null；（2）验证已经冻结的 set-like array 本来就处于 canonical 顺序且没有 duplicate/conflict；（3）验证 catalog index 与 payload kind；（4）验证 selection 与 projection 的基数和 mode 对应；（5）验证 View 的 result、ViewSpec、renderer、target、destination 与 receipt 关系；（6）验证现任 authorization、Observation/revision/result epoch 与 typed pins/proofs；（7）按 owner 原顺序执行 Annotation 或 D7 View 的语义与现任性门；（8）验证 route/profile/assets、budget 与 loss；全部通过后才能冻结 staged bytes。关系不一致时直接拒绝，不能通过补读、重跑 Query、静默删除 union arm、重排 protected bytes、renderer fallback 或改写 projection 来修复。
+公共入口门禁与受保护 Plan 的内部准入是两个有先后关系的层次。公共入口先后执行：（1）对 wire/tag/version/union/member/null 作严格封闭解码，授权前只返回不披露受保护信息的错误；（2）D1 静态 surface/release capability；（3）现任 audience/entry authorization，未获权前不得诊断受保护 Plan/catalog/projection、format 或 profile；（4）现任 Workspace/domain/P 连续性，按原始 token 查找真实受保护 Plan 及其 saved/planned/unknown 责任；（5）精确 pin、dependency、currentness 和原 D3/D6/D7/D8 owner 门禁；（6）仅对已经获权且通过原 owner 检验的 Plan，检查下述 D9 catalog index/payload、canonical collection、selection/projection、View hash/renderer/target/destination/receipt 等 format/business 关系；（7）budget 与 loss；（8）才可冻结已验证的 staged bytes。若调用者已经失权，即使同时传入坏 index 或坏 layout，也必须优先得到原先不泄露信息的 not_visible/reset，不能返回受保护的 index/layout/profile 细节。封闭版本拒绝和 D1 静态能力门禁仍在当前授权之前。
+
+进入原 owner 后，其错误与顺序完全不变：D7 View §7 依次执行 ViewSpec 封闭解码 → 现任 result 授权/epoch → 完整 result → 精确 schema → layout/binding → 全量结构/顺序 → domain/numbers → budget → 当前交付门禁。D9 不得用 catalog、profile 或 renderer 诊断抢在原 owner 门禁之前。通过门禁后，下述每条 D9 关系都必须校验；矛盾直接拒绝，不能补读、重跑 Query、丢弃隐藏 arm、排序或重编码已冻结字节、回退 renderer，或改写 projection。
 
 跨输入域的排他关系同样强制执行：inputDomain 不是 annotation 时，contentSelection.annotationInputs 和 projection.annotations 都必须为空；inputDomain 不是 view 时，contentSelection.viewInput、viewRenderBinding 与 projection.view 都必须为 null。catalog 中存在某个 input，并不代表可在未选择、未授权的情况下消费它，也不得通过无关 projection 偷带内容。这些关系必须在输出准备前的严格准入阶段检查。
 
@@ -2681,7 +2683,7 @@ D9PrintReceipt/1 = {
 - 必须至少选中一个 Annotation 内容输入（annotationInputs 非空）。普通文档正文与参考文献的选择均必须为空，即 bodyInput=null 和 bibliographyInput=null；同时不得选中 View（viewInput=null），不得附带 View 渲染绑定（viewRenderBinding=null）、View 投影（projection.view=null）或文档渲染绑定（documentRenderBinding=null）。
 - annotationInputs 是以 inputIndex 为 key 的 set-like array，按 Counter 递增排序且唯一。同一个 catalog input 在一个 Plan 中最多出现一次，因此只能选择一个 mode。同一 Plan 混用 portable_backup 与 review_bundle_r6 必须拒绝；需要两种输出时使用两个 Plan。
 - 每个选中的 inputIndex 必须精确指向一个 inputCatalog.items[index]，且 payload 必须是 annotation_content。
-- `projection.annotations` 的元素数目必须与 `annotationInputs` 完全相同，二者都按 `inputIndex` 严格递增。同一位置的 `portable_backup` 选择只能对应备份投影，且 `inputIndex` 与 `recordPin` 必须逐字相等；`review_bundle_r6` 选择只能对应相同索引的审阅投影。选中后缺少投影、未经选择却出现投影、索引重复、两种模式错误配对，或者出现 `[0,1,0]` 这样的乱序，即使每个目录输入单独均已获得授权，也必须拒绝。
+- `projection.annotations` 的数量与 `annotationInputs` 完全一致，且 `inputIndex` 均按严格递增顺序对应。每个位置 i 的选择 mode 必须与 projection mode 相同。对于 portable_backup，`projection.annotations[i].recordPin` 必须与 `inputCatalog.items[contentSelection.annotationInputs[i].inputIndex].payload.recordPin` 逐字相等；被选中条目的 payload 必须恰好是 annotation_content，D9AnnotationSelection/1 自身没有 recordPin 成员。payload.record 必须是由同一次合法 D8 read 中的 AnnotationRef、revision token 与完整 Value/4 构成的精确 PortableAnnotationRecord/4，原有 PinRef/2 必须校验 D3-CJ/3(record) 字节。获权 A/PA 且选择 A、投影 PA 时通过；若 A 的同一 index 却投影 PB，即使 B/PB 也单独获权、PA 和 PB 的 pin 都在递归证据并集中，仍必须拒绝。review_bundle_r6 只能匹配相同 index 的审阅投影。缺失或额外 projection、重复 index、跨 mode 配对或 `[0,1,0]` 均拒绝；pin 并集完整不能代替逐 index 的对应关系。
 - portable_backup selection 要求 includeSourceHistory=false 且 includeTargetContext=false；两个 flag 对 backup 不适用，true 必须拒绝，不能静默忽略。此模式还要求 target.kind=annotation_backup 且 generationPolicy.kind=none。反过来，review_bundle_r6 不得选择 annotation_backup 目标；必须使用具名且已接受的 Review Bundle 渲染目标与 profile，不能以 review 语义写入备份文件。
 - 对 review_bundle_r6：未请求 source history 时，includeSourceHistory=false 且 sourceHistory.state=not_requested；请求时 includeSourceHistory=true，结果只能是 disclosed 或 unavailable。target context 独立遵循同一规则。已经请求但无权披露时必须记录 unavailable，不能伪装成 not_requested 或空事实。
 - D9AnnotationDisclosureProjection/1.fragments 是有顺序的 sequence，保持获权 producer/context 的原顺序，不能排序。state=disclosed 时至少一个 fragment。每个 fragment 的 origins 是非空 set-like array，按 canonical D3-CJ/3(ExportInputLocation/2) bytes 排序并去重；重复 origin 必须拒绝。
@@ -2689,6 +2691,7 @@ D9PrintReceipt/1 = {
 当 inputDomain=view：
 - View 输入不得选择文档正文或参考文献，因此 bodyInput=null、bibliographyInput=null、annotationInputs=[]；viewInput 必须非 null，documentRenderBinding=null，viewRenderBinding 与 projection.view 均必须非 null。文档导出仍走独立 inputDomain，并继续由 D9DocumentRenderBinding/1.presentation 决定文档呈现；D8 的文档呈现决定不能拿来表示 View 的数据范围。
 - contentSelection.viewInput、viewRenderBinding.resultInput、projection.view.resultInput 必须逐字相等，并精确选择一个 query_result catalog item。binding 中全部 hash/epoch/auth 字段都必须从这一个选中的 D7ResultPin 推导。
+- `projection.view.viewSpecSha256` 必须与 `viewRenderBinding.viewSpecSha256` 逐字相等，而且两者都必须等于由精确 `viewRenderBinding.viewSpec`（ViewSpec/1）按 D3-CJ/3 编码后计算的 SHA-256。这里只复验已有的真实 ViewSpec，不新增 hash authority。即使三个 resultInput、layout 与 complete_data scope 全都一致，只要 projection 的 hash 来自另一个合法 ViewSpec，也必须拒绝。
 - viewRenderBinding.renderer.layout 必须逐字等于 viewRenderBinding.viewSpec.layout。
 - viewRenderBinding.outputScope 与 projection.view.outputScope 都只能是 complete_data。首批 profile 导出完整获权 D7 result 与 ViewSpec 中的全部 series、panel、item；设备本地 legend hide/show 状态不是 author data，不能改变 export scope。same-data accessible table 使用完全相同的 complete-data scope。未来若支持 current_display，必须增加 versioned successor，并冻结 stable hidden-series keys 与合格 local-state source，不能用 Boolean 或字段缺失来猜。
 - 外层 target.kind 必须是 docx|xlsx|pdf|svg|png|print 之一，且逐字等于 renderer.targetKind；target.profileId 必须逐字等于 renderer.profileId。当且仅当 target.kind=print 时 destination.kind=print；非 print View target 一律拒绝 print destination。
@@ -2698,7 +2701,7 @@ D9PrintReceipt/1 = {
 
 交付与回执的兼容关系同样是封闭集合：
 - destination.kind=external_bundle 才可生成 PublicationReceipt/4；所有重复 Plan member（包括 viewRenderBinding）必须逐字相等。PublicationReceipt/4.presentation 只有在 documentRenderBinding 非 null 时才逐字等于该 document binding 的 presentation，否则必须为 null；它绝不承载 View output scope。
-- destination.kind=print 只生成 D9PrintReceipt/1；其中 viewRenderBinding 与 Plan 逐字相等，target 必须是 Plan 的 print target。
+- destination.kind=print 只生成 D9PrintReceipt/1。回执的 `planToken` 必须在原 Workspace/domain、现任 audience disclosure 和已确认的交付责任下解析到同一份原始、经认证的受保护 ExportPlan/4 记录，绝不能只凭 token 文本匹配另一份任意 Plan。该 Plan 的 target.kind=print 且 destination.kind=print。回执 viewRenderBinding 必须与 Plan 逐字相等；output 必须来自该 Plan 已冻结且验证过的 staged bytes 的真实受控 print 输出，name/digest/size 与经确认的 lossReport/lossChoices 都要对应，不能换 output 或 renderer。D9PrintReceipt/1 没有 target 成员：不得比较不存在的 receipt.target，也不得新增 wire 成员。Plan 关联、binding、output 或 loss 错配时，即使回执自身结构合法也必须拒绝。
 - destination.kind=resource_handoff 只产生既有独立 D7/D3 author result，消费 exact staged bytes；不得伪造 PublicationReceipt/4 或 D9PrintReceipt/1。
 - destination.kind=server_download 只走既有服务器下载交付与状态查询路径；它不产生可携带的外部发布回执，也不产生打印回执。
 
