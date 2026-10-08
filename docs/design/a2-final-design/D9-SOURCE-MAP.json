@@ -738,7 +738,7 @@
     "schemas": [
       {
         "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-        "blob": "135ca122c42003b8ecb6bddf31960326ca887af8",
+        "blob": "0aa1caa055742c7122d560fc1f4ecbf005f5daba",
         "ranges": [
           "§6.1 L1589–1677",
           "§6.5 L1997–2225",
@@ -832,7 +832,7 @@
       "schemas": [
         {
           "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
-          "blob": "135ca122c42003b8ecb6bddf31960326ca887af8",
+          "blob": "0aa1caa055742c7122d560fc1f4ecbf005f5daba",
           "ranges": [
             "§6.6 L2263–2614",
             "§6.6.1 L2559–2614",
