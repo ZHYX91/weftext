@@ -142,3 +142,15 @@ Historical coordinates and source-era vocabulary in this table come from unchang
 **Current D08 disposition overlay (historical source row retained):** First independent D10 design review, then fresh Pro full A2 design review; only afterward, if all gates pass, name an acceptedDesignSha and same-SHA freeze. Actual activation/implementation is later. Green documentation or the old D08 word “activation” does not make runtime a prerequisite to full design review.
 
 **Evidence boundary:** U27/F37/A14/T10/E10/P19/D08=125/125; product/OS/AT/external sends/races/recovery UNRUN. U12 three branches and P19 current owner overlays are separately recorded in the sole JSON, never replacing source rows. Full source table: [D10 Scenarios](D10-SCENARIOS.md).
+
+## fixed1ca author repair gates (not independent acceptance)
+
+The **sole machine acceptance authority** remains `D10-ACCEPTANCE.json`: exactly 125 original stable scenario IDs, EN/ZH historical source tuples checked against unchanged original blobs, and the five separately typed `authorRepairGates`. Those repair IDs are findings, **not 5 newly invented D10 scenario IDs**. Every product execution remains **UNRUN** and each gate is `author-resolved-pending-independent`.
+
+- `D10-1CA-P1-01`: historical source path/blob/line/raw, original location/positive and current A2 renaming overlays are disjoint; a current line cannot masquerade as original.
+- `D10-1CA-P1-02`: authenticated attended interactive Run creates one Run-targeted finite Lease/Stop atomically in the real control store; `maxRuns=1` first execution consumes once, same Run later steps/planned recovery do not; forged or widened principal/scope/store and races leave no half-state.
+- `D10-1CA-P1-03`: fresh D6 Profile4/Plan4/Genesis2 carries both ordered signed trust declarations and mandatory D8 empty-history policy init at the **one original final P**; genuine history/ordinary copy/continue are never bootstrapped again.
+- `D10-1CA-P2-01`: fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2 and saved historical PAB3/Manifest2/Link1/ApprovalUse1 route by **real recorded version** and retain original request/pins.
+- `D10-1CA-P2-02`: W/H independently authorized Stop reads project **one** W-scoped StopOwner/latch/revision/result; cross-workspace/store, hidden H access and Stop/final-P/external races retain original gates.
+
+None of the source-era original `docs/design/d10/` documents, S49 snapshots or frozen inputs is rewritten.
