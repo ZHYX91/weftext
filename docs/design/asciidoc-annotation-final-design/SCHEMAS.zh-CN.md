@@ -2681,7 +2681,7 @@ D9PrintReceipt/1 = {
 - 每个选中的 inputIndex 必须精确指向一个 inputCatalog.items[index]，且 payload 必须是 annotation_content。
 - projection.annotations 与 annotationInputs 的基数和递增 inputIndex 顺序完全一致。每个位置上，portable_backup selection 只能对应 portable_backup projection，并且 inputIndex 与 recordPin 逐字相等；review_bundle_r6 只能对应同一 inputIndex 的 review_bundle_r6 projection。选中后缺 projection、未选却出现 projection、重复 index、跨 mode 对应，或 [0,1,0] 这类序列，即使各 catalog item 单独都已获权，也必须拒绝。
 - portable_backup selection 要求 includeSourceHistory=false 且 includeTargetContext=false；两个 flag 对 backup 不适用，true 必须拒绝，不能静默忽略。此模式还要求 target.kind=annotation_backup 且 generationPolicy.kind=none。
-- 对 review_bundle_r6，includeSourceHistory=false 必须对应 sourceHistory.state=not_requested；为 true 时只能是 disclosed 或 unavailable。includeTargetContext 与 targetContext 独立应用同一规则。已经请求但被 deny 的 context 是 unavailable，不能伪装成 not_requested 或空事实。
+- 对 review_bundle_r6：未请求 source history 时，includeSourceHistory=false 且 sourceHistory.state=not_requested；请求时 includeSourceHistory=true，结果只能是 disclosed 或 unavailable。target context 独立遵循同一规则。已经请求但无权披露时必须记录 unavailable，不能伪装成 not_requested 或空事实。
 - D9AnnotationDisclosureProjection/1.fragments 是有顺序的 sequence，保持获权 producer/context 的原顺序，不能排序。state=disclosed 时至少一个 fragment。每个 fragment 的 origins 是非空 set-like array，按 canonical D3-CJ/3(ExportInputLocation/2) bytes 排序并去重；重复 origin 必须拒绝。
 
 当 inputDomain=view：
@@ -2694,7 +2694,7 @@ D9PrintReceipt/1 = {
 - renderer.evidencePins 是按 pinToken 排序且唯一的 set-like array，只含该 renderer route 实际要求的 installation/profile evidence，不得加入无关 pin。
 - 现任 D9ViewRendererBinding/1.layout 仍只有六个 closed member。合法 D7 network View 在当前 D9 route 上固定返回 renderer_unavailable；仅安装 named profile 不能扩展 closed union，network graphics 必须等待真实 future versioned renderer/schema successor。
 
-delivery/receipt 兼容关系也封闭：
+交付与回执的兼容关系同样是封闭集合：
 - destination.kind=external_bundle 才可生成 PublicationReceipt/4；所有重复 Plan member（包括 viewRenderBinding）必须逐字相等。PublicationReceipt/4.presentation 只有在 documentRenderBinding 非 null 时才逐字等于该 document binding 的 presentation，否则必须为 null；它绝不承载 View output scope。
 - destination.kind=print 只生成 D9PrintReceipt/1；其中 viewRenderBinding 与 Plan 逐字相等，target 必须是 Plan 的 print target。
 - destination.kind=resource_handoff 只产生既有独立 D7/D3 author result，消费 exact staged bytes；不得伪造 PublicationReceipt/4 或 D9PrintReceipt/1。
