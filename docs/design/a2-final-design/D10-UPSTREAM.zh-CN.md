@@ -190,9 +190,7 @@ Workspace D10 control adapter 是受管 PreparedIntent producer，但只接受 D
 
 固定 S profile/2 的“全部非 Field capability”在本 amendment 中冻结为 S 当时的受控集合 `workspace_state, entity_state, locator_state, source_read, source_write, body_write, node_control, node_create, resource_read, resource_write, annotation_read, annotation_write, lifecycle, registry_admin, binding_admin, policy_admin, export, repair, audit, source_envelope_state, commit_sequence_state`。以后新增 capability 不自动进入 profile/2。
 
-新增 d6_bootstrap_profile wireVersion=3；成员仍为 kind,wireVersion,profileRevision,registrySeedBinding,newSeriesMultiplicity,initialPeriodScope。profile/3 明确生成 initialPolicy.version=3；creator 初始 Workspace grant 为上述固定 profile/2 非 Field 集合、当前 D6 的 replica_register/replica_retire/conflict_read/conflict_resolve/execution_custody_admin/structure_state/portable_frontier_state、d10_control_self，以及 S 原规则从 target Registry 生成的全部 Field read/write，deny 为空。实际新 WorkspaceBootstrapPlan/3 增加 WorkspaceTrustGenesis/1，并与 D7 bootstrap 投影按 D10-CONTROL §12 及真实 D6 owner 协调。Plan/2 是未激活候选前身，不给它新增迁移 decoder；真实 Plan/1 历史不扩形。
-
-只有当前 administer_issuer 的显式 issuer-profile 管理操作才能把以后新 family 切换为 profile/3。既有 family 保存的 profile/1/2 副本、replacement、WorkspaceBootstrapPlan、saved decisions、replay/continue/failover 不重算、不补 grant。既有 Workspace 取得 d10_control_self 只能由当前 policy_admin 走原 Policy 修改事务显式安装；Field 权限主体不能自授。
+Fresh bootstrap 准确使用上述及 D10-CONTROL §12 的当前 D6 Profile4/Plan4/Genesis2 与必需 D8 initial presentation-policy helper。D10 不再定义新的 Profile3 bootstrap 生产者。真实历史 Profile1–3 与已记录 Plan1/Plan3 依版本保留原字节；未部署候选不生成迁移。
 
 d6_error.code 的第一份共同公开 closed set 同时增加 execution_stopped，只允许 disposition=preflight。对尚未 planned 的 D10-bound author request：先通过 current authorization/ObservationScope，再检查受保护 RunBinding 对应不可逆 stop latch；stop 已线性化时返回 execution_stopped/preflight，不写 author decision。
 
@@ -471,7 +469,7 @@ D9 owner lexicon 还为17个 public kind 逐项记录唯一 technical interface 
 
 运行时发布前，所有 D7/D8 author proposal 仍使用当前逐次确认，planned-preview recovery 新入口和 unattended author submit 均保持真实 D1 unavailable。实现可以独立推进不涉及无人值守作者提交的 Broker、Agent proposal、Tool/MCP、Connector read 和 external-effect control，但每项仍须自己的 D1 capability 和真实实现证据。
 
-历史 committed D3/D6 decision 继续按原 decoder/bytes 重放，不回填 ApprovalUse、stop 或 d10_control_self。已有 family 保留其固定 bootstrap profile；没有任何升级路径把 profile/2 静默解释为 profile/3。
+历史 committed D3/D6 decision 继续按原 decoder/bytes 重放，不回填 ApprovalUse、stop 或 d10_control_self。已有 family 保留其固定 bootstrap profile；没有任何升级路径把历史 Profile1–3/Plan1/Plan3 静默解释为当前 Profile4/Plan4。
 
 ## 10. 独立复审必须攻击的联合反例
 
@@ -493,7 +491,7 @@ D9 owner lexicon 还为17个 public kind 逐项记录唯一 technical interface 
 16. D10 control error 不能包装或泄漏原 D6 `not_visible` 与隐藏事实。
 17. `maxRuns=1` 且同 Run 已有 LeaseRunUse 时，第二个受保护步骤和原 planned 恢复不能因 remaining=0 返回 `delegation_exhausted`；新 Run 才应被拒绝。
 18. Adopt 正向代码只保留 `adopt_*`，关联绑定只使用 `OriginBinding` / `origin_binding`；`adoption_binding` 在正向术语/代码面必须不存在，也不能作为 alias。
-19. profile/2 family 在软件升级后不得自动获得 d10_control_self；profile/3 只影响显式 issuer update 后的新 family，既有 Workspace 只能由当前 policy_admin 显式授予。
+19. 真实历史 Profile1–3 family 不因软件升级获得 d10_control_self；当前 Profile4 只影响显式 issuer update 后的新 family，既有 Workspace 只能由当前 policy_admin 显式授予。
 20. stop 与新 Run admission、D6 final author commit 的两种先后都必须只有一个线性化结果；stop 后仍允许受权 authoritative abort、cost settlement 和 evidence retention。
 21. same stable Workspace-control request 已成功但响应丢失，随后对象 revision 改变；当前披露授权通过后必须重放旧结果，不能重复 mutation，也不能因 current revision 改变误拒绝历史成功。
 22. D8 九个 concept ID 保持各自独立；十三个 kind 在 owner lexicon 中必须各有且仅有一个 technical interface owner，多个 kind 可以共享 owner，包括 d8_draft_project/d8_draft_projection。领域数据所有权另列，不要求反向唯一。任何 unlisted CLI/locale/wire alias 失败，且不得因此改变 IME/Write/Read/confirm/Undo。
