@@ -1,0 +1,180 @@
+{
+  "format": "weftext.a2-d8-terms",
+  "version": 1,
+  "status": "author-resolved-pending-independent-review",
+  "concepts": [
+    {
+      "conceptId": "weftext.term.edit_session",
+      "zhName": "编辑会话",
+      "enName": "Edit Session",
+      "owner": "D8",
+      "currentType": "EditSession"
+    },
+    {
+      "conceptId": "weftext.term.edit_draft",
+      "zhName": "编辑草稿",
+      "enName": "Edit Draft",
+      "owner": "D8",
+      "currentType": "Draft"
+    },
+    {
+      "conceptId": "weftext.term.draft_projection",
+      "zhName": "草稿投影",
+      "enName": "Draft Projection",
+      "owner": "D8",
+      "currentType": "d8_draft_projection"
+    },
+    {
+      "conceptId": "weftext.term.draft_edit_map",
+      "zhName": "草稿编辑映射",
+      "enName": "Draft Edit Map",
+      "owner": "D8",
+      "currentType": "DraftEditMap"
+    },
+    {
+      "conceptId": "weftext.term.prepared_edit_binding",
+      "zhName": "编辑准备绑定",
+      "enName": "Prepared Edit Binding",
+      "owner": "D8",
+      "currentType": "PreparedEditBinding/3"
+    },
+    {
+      "conceptId": "weftext.term.composition_transaction",
+      "zhName": "组合输入事务",
+      "enName": "Composition Transaction",
+      "owner": "D8",
+      "currentType": "CompositionTransaction"
+    },
+    {
+      "conceptId": "weftext.term.caret_affinity",
+      "zhName": "光标亲和位置",
+      "enName": "Caret Affinity",
+      "owner": "D8",
+      "currentType": "CaretAffinity"
+    },
+    {
+      "conceptId": "weftext.term.layout_epoch",
+      "zhName": "布局代",
+      "enName": "Layout Epoch",
+      "owner": "D8",
+      "currentType": "LayoutEpoch"
+    },
+    {
+      "conceptId": "weftext.term.direction_preference",
+      "zhName": "方向偏好",
+      "enName": "Direction Preference",
+      "owner": "D8",
+      "currentType": "DirectionPreference"
+    }
+  ],
+  "technicalInterfaces": [
+    {
+      "kind": "d8_document_read",
+      "owner": "D8 Document Read Interface"
+    },
+    {
+      "kind": "d8_document",
+      "owner": "D8 Document Read Interface"
+    },
+    {
+      "kind": "d8_draft_project",
+      "owner": "D8 Draft Projection Interface"
+    },
+    {
+      "kind": "d8_draft_projection",
+      "owner": "D8 Draft Projection Interface"
+    },
+    {
+      "kind": "d8_draft_text_replace",
+      "owner": "D8 Draft Text Replace Interface"
+    },
+    {
+      "kind": "d8_draft_text_replaced",
+      "owner": "D8 Draft Text Replace Interface"
+    },
+    {
+      "kind": "d8_draft_write",
+      "owner": "D8 Draft Write Interface"
+    },
+    {
+      "kind": "d8_draft_written",
+      "owner": "D8 Draft Write Interface"
+    },
+    {
+      "kind": "d8_edit_prepare",
+      "owner": "D8 Edit Prepare Interface"
+    },
+    {
+      "kind": "d8_edit_prepared",
+      "owner": "D8 Edit Prepare Interface"
+    },
+    {
+      "kind": "d8_undo_prepare",
+      "owner": "D8 Undo Prepare Interface"
+    },
+    {
+      "kind": "d8_editor_error",
+      "owner": "D8 Error Interface"
+    },
+    {
+      "kind": "d8_prepared_edit_binding",
+      "owner": "D8 Prepared Edit Binding Internal Interface"
+    }
+  ],
+  "successorKinds": {
+    "annotation": [
+      "d8_annotation_read",
+      "d8_annotation_draft_open"
+    ],
+    "presentationPolicy": [
+      "d8_presentation_policy_set",
+      "d8_presentation_policy_no_change",
+      "d8_presentation_policy_prepared"
+    ]
+  },
+  "consumedOwners": {
+    "D2": [
+      "D2DocumentSnapshot/3",
+      "sourceOrigins",
+      "Asciidoctor Ruby 2.0.26"
+    ],
+    "D3": [
+      "EntityRef",
+      "Locator",
+      "PortableAnnotationRecord/4",
+      "D3-Annotation-Value/4"
+    ],
+    "D6": [
+      "SourceObservation/1",
+      "SourceVersion/2",
+      "PreparedIntent/3",
+      "DependencyProof/3",
+      "d6_commit_request/2"
+    ],
+    "D7": [
+      "QuerySpec/2",
+      "ViewSpec/1",
+      "EffectManifest/3",
+      "EffectBytes/3",
+      "SavedQueryDefinition",
+      "DynamicBlock/1"
+    ]
+  },
+  "forbiddenAliases": [
+    "EditorSession wire",
+    "author_draft",
+    "source_draft",
+    "DraftProjection=document_snapshot",
+    "DraftEditMap=Locator",
+    "PreparedEditBinding=PreparedActionBinding",
+    "sourceAffinity",
+    "sourceSide",
+    "LayoutEpoch=ResultEpoch",
+    "localeDirection",
+    "RecordRef",
+    "TableRowId",
+    "CollectionRef",
+    "D8SearchEngine",
+    "D8QuerySpec"
+  ]
+}

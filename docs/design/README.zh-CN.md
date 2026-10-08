@@ -86,3 +86,7 @@ translation_status: source
 当前作者候选位于 [asciidoc-annotation-final-design/README.zh-CN.md](asciidoc-annotation-final-design/README.zh-CN.md)，固定父提交 `e8aa0b341630a57c786c0891d4bbd1620247441d`。它以 [replacements.json](asciidoc-annotation-final-design/replacements.json) 对 fixed-parent actual-owner sections 做显式替换，S49 snapshots 与本目录 `inputs.json` 保持不变。
 
 该候选包含完整 AsciiDoc/必要扩展、独立 portable JSON Annotation、managed document format、SourceTransform/trust 及 D2–D10 actual-owner coordination；行为/算法见双语 SPEC，closed current schema 与历史分派见双语 SCHEMAS。双语 ACCEPTANCE 现含 438 条 core design oracle 与 322 条 coordination fixture，共 760 条，均未运行。状态仍是 design candidate，等待 exact-head 非作者独立复核；不是实现、A2/global 或发布接受。
+
+## A2 最终设计整合候选
+
+fixed PR4 design head 之上的 A2 candidate 包含自包含 D1–D6 作者候选、source/disposition tracking 与[复核入口](a2-final-design/REVIEW-ENTRY.zh-CN.md)。fixed-a62 已独立 CLOSED 有界 D3 P1；fixed4282 仅独立 CLOSED D4/D5 P2-02 的“六份 D10 真实来源资格”有界范围。fixed32cf 随后独立 CLOSED P2-01 R2，并通过 188/202 条 R1 映射；14 条 R1 残余已在当前作者候选修订，仍待新的 exact-stop 复核。D6 中 fixed829 只保留为 finding-origin provenance，后续独立对象为 fixed01cc：P1-01 与 P2-03 已独立 CLOSED，P1-02/P2-01/P2-02 加导航 P2 在 D6 残余修订后仍待 exact-stop 复核。D6/global A2 未 accepted。D7–D10 完整模块、Mandatory 925–1141 与 fresh global review 仍 pending。该候选未独立接受、未实现、未合并、未发布。

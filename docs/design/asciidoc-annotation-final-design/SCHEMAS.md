@@ -1996,6 +1996,8 @@ D8 cache identity contains the complete D8DocumentRenderBinding/1. A policy chan
 
 ## 6.5 ExportPlan/3 / PublicationReceipt/3
 
+This section freezes the recorded /3 predecessor shape and the shared export-member rules that remain applicable to corresponding members of the §6.6 /4 successor. Fresh unseen current export uses /4. The /3 decoder, token tags, bytes, pins, confirmation and saved/planned/unknown recovery remain exact and are never widened in place. Unless §6.6 explicitly extends a closed member set, /4 inherits the §6.5 generation-policy, controlled-name, canonical-ordering, template/route/style/document-render, proof/pin and publication-durability rules.
+
 The current /3 family keeps the fixed-parent ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1 and ExportLossReport/1. Per-plan generation choices are finite and belong in the immutable Plan; there is no separate generation-policy registry or hash-only descriptor authority.
 
 ```text
@@ -2189,15 +2191,15 @@ PortableAlias(name) is derived solely for conflict rejection. Split the already-
 
 Within one fresh-current bundle, exact duplicate names are invalid. Two distinct names with equal PortableAlias are aliases and are invalid. Treat each PortableAlias as a component vector: if one member's vector is a proper prefix of another, the set has a file/directory conflict and is invalid. The root names loss-report.json and manifest.json are reserved system members; Core supplies them exactly, and every dataFile is checked against their exact names, aliases and prefix relation. Therefore Report.txt/report.txt and canonically equivalent NFC/NFD spellings conflict; dir/file is a valid nested shape while a name containing dir\\file is invalid. A host-specific filesystem may detect additional collisions and reject the destination, but it may not alter this portable relation.
 
-Fresh ExportPlan/3.stagedOutputs is the canonical complete staged member set: all validated dataFiles plus exact loss-report.json and manifest.json, each with its actual bytes/pin. PublicationReceipt/3.outputs is the same complete name/digest set for the bytes actually published. The external manifest's reportFile names exact loss-report.json and its recorded length/digest must equal that staged/published member; manifest.json remains non-self-hashing as inherited. Server-download and Resource-handoff paths select original staged dataFile bytes by this exact controlled name and cannot synthesize a replacement name. Safety/alias/prefix/reserved failure is invalid preparation, never an ExportLossChoice.
+For recorded ExportPlan/3, stagedOutputs is the canonical complete staged member set: all validated dataFiles plus exact loss-report.json and manifest.json, each with its actual bytes/pin. PublicationReceipt/3.outputs remains the same complete name/digest set for bytes actually published under a recorded /3 plan. Fresh ExportPlan/4 inherits this same complete staged-member rule, and PublicationReceipt/4 plus D9PrintReceipt/1 use the corresponding controlled output members from the /4 plan. The external manifest's reportFile names exact loss-report.json and its recorded length/digest must equal that staged/published member; manifest.json remains non-self-hashing as inherited. Server-download and Resource-handoff paths select original staged dataFile bytes by this exact controlled name and cannot synthesize a replacement name. Safety/alias/prefix/reserved failure is invalid preparation, never an ExportLossChoice.
 
 Exact-source/resource-exact/query-json plans require generationPolicy={kind:"none"}, templateBinding=null, routeBinding=null and documentRenderBinding=null; their projection contains no renderer-derived values. They remain preparable when template/provider/generation registries are unavailable because this contract requires none of them. Rendered HTML/PDF/DOCX/ODT and finite table outputs use generationPolicy.render; each array may be empty when that policy class is not used.
 
 D9TemplateBindingChoice/1 is required only for an actually ambiguous binding that the authorized template/profile permits the user to resolve; inputIndex selects the exact frozen catalog item and cannot grant an unselected read. D9MissingPolicyChoice/1 may name only an existing exact template path whose authorized projection value is none; action=empty cannot hide an unknown path, unreadable input, type error or unavailable schema. imageSizes are ResourceRef-key sorted/unique, dimensions are positive, and every resource equals an authorized resource catalog input. layoutChoices are ResourceRef-key sorted/unique, require the same resource in imageSizes, and are present exactly when the fixed Templates rule requires an explicit layout choice. preserve_aspect_within_box deterministically scales to the largest same-ratio size not exceeding both chosen dimensions; use_exact_dimensions uses both chosen dimensions and records the required layout loss.
 
-Every set-like array in current ExportPlan/3 has one closed comparator contract. routeBinding.steps uses array position i with step=i, therefore exactly 0..N-1; each step.evidencePins is sorted/unique by pinToken. styleBundles is sorted/unique by UTF-8 bytes of styleBundleId; the same ID with a different version/pin is a conflict. stagedOutputs and PublicationReceipt/3.outputs first satisfy D9ControlledRelativeOutputName/1 and the complete exact-name/PortableAlias/file-directory-prefix/reserved-system-name conflict rules above, then sort/unique by the exact stored protocol name string's unsigned UTF-8 octets lexicographically: no Unicode normalization, case folding, locale collation, host/path-library collation, or separator rewriting participates in this ordering, and the shorter exact byte prefix sorts first. Any duplicate exact name is invalid, any portable alias/prefix/reserved conflict is invalid, and the same exact name with different byteLength/sha256/pin is an explicit integrity conflict, never LWW. generationPolicy.render.bindingChoices and missingPolicy use one shared templatePath Unicode-scalar lexicographic comparator: compare the exact decoded Unicode scalar sequence by scalar value, normalization=none and case-sensitive, with no locale/case folding; the shorter exact scalar prefix sorts first. Canonically equivalent but differently encoded scalar sequences remain distinct template keys unless another existing Templates rule rejects them; this template comparator is deliberately separate from the output-name alias relation. Each array is sorted/unique by its comparator, one exact templatePath cannot select two inputIndex/action bodies, and the same exact path cannot simultaneously appear as both a bindingChoice and missingPolicy. nativeTableBindings is sorted/unique by the controlled ASCII (setName,columnName) tuple; the same key with a different token/selector fails. Existing ResourceRef sorting/uniqueness for imageSizes/layoutChoices, lossKey for lossChoices, and pinToken for plan evidencePins/recoveryPins remain unchanged; implementations do not choose an alternate order.
+The /3 predecessor defines one closed comparator contract for every set-like array, and fresh ExportPlan/4 inherits those comparators for every unchanged corresponding member. routeBinding.steps uses array position i with step=i, therefore exactly 0..N-1; each step.evidencePins is sorted/unique by pinToken. styleBundles is sorted/unique by UTF-8 bytes of styleBundleId; the same ID with a different version/pin is a conflict. stagedOutputs and PublicationReceipt/3-/4 outputs first satisfy D9ControlledRelativeOutputName/1 and the complete exact-name/PortableAlias/file-directory-prefix/reserved-system-name conflict rules above, then sort/unique by the exact stored protocol name string's unsigned UTF-8 octets lexicographically: no Unicode normalization, case folding, locale collation, host/path-library collation, or separator rewriting participates in this ordering, and the shorter exact byte prefix sorts first. Any duplicate exact name is invalid, any portable alias/prefix/reserved conflict is invalid, and the same exact name with different byteLength/sha256/pin is an explicit integrity conflict, never LWW. generationPolicy.render.bindingChoices and missingPolicy use one shared templatePath Unicode-scalar lexicographic comparator: compare the exact decoded Unicode scalar sequence by scalar value, normalization=none and case-sensitive, with no locale/case folding; the shorter exact scalar prefix sorts first. Canonically equivalent but differently encoded scalar sequences remain distinct template keys unless another existing Templates rule rejects them; this template comparator is deliberately separate from the output-name alias relation. Each array is sorted/unique by its comparator, one exact templatePath cannot select two inputIndex/action bodies, and the same exact path cannot simultaneously appear as both a bindingChoice and missingPolicy. nativeTableBindings is sorted/unique by the controlled ASCII (setName,columnName) tuple; the same key with a different token/selector fails. Existing ResourceRef sorting/uniqueness for imageSizes/layoutChoices, lossKey for lossChoices, and pinToken for plan evidencePins/recoveryPins remain unchanged; implementations do not choose an alternate order.
 
-D9 prepare strict-decodes all choices, validates the complete current output-name domain and bundle conflict set, detects duplicate/conflicting keys, and performs the one canonical sort above before freezing any ExportPlan/3 bytes, plan token, protected pin, staged manifest, or confirmation basis. Thus permutations of the same legal set produce byte-for-byte identical Plans. A duplicate key is rejected even when its body is byte-equal because the collection is unique; an unequal body is additionally an integrity conflict. A frozen current ExportPlan/3, PublicationReceipt/3, recovery record, or received record must already be canonical and all of its current output names must already satisfy D9ControlledRelativeOutputName/1; admission rejects disorder, duplicate/alias/prefix/reserved conflicts, or key/body conflicts and never 'repairs' protected bytes by sorting, normalization, renaming, repinning or re-encoding. Genuine historical ExportPlan/1-/2 and PublicationReceipt/1-/2 remain on their original decoder/bytes/name rules and are not retroactively subjected to this current predicate. Receipt route/style/generation-policy selections remain byte-equal to the protected Plan, while outputs use the independent raw-name comparator above.
+D9 fresh prepare strict-decodes all choices, validates the complete current output-name domain and bundle conflict set, detects duplicate/conflicting keys, and performs the one canonical sort above before freezing any ExportPlan/4 bytes, /4 plan token, protected pin, staged manifest, or confirmation basis. Thus permutations of the same legal set produce byte-for-byte identical Plans. A duplicate key is rejected even when its body is byte-equal because the collection is unique; an unequal body is additionally an integrity conflict. A frozen fresh ExportPlan/4 or PublicationReceipt/4 must already be canonical and all current output names must satisfy D9ControlledRelativeOutputName/1. A recorded ExportPlan/3, PublicationReceipt/3, recovery record, or received /3 record remains on its exact /3 decoder and protected bytes; admission never sorts, normalizes, renames, repins or re-encodes it into /4. Genuine ExportPlan/1-/2 and PublicationReceipt/1-/2 likewise remain on their original decoder/bytes/name rules. No recorded /1-/3 value is retroactively migrated by the fresh-current predicate. Receipt route/style/generation-policy selections remain byte-equal to the protected Plan, while outputs use the independent raw-name comparator above.
 
 D9ExportTemplateBinding/1.inputIndex selects exactly one inputCatalog.items[index] whose payload.kind=template; pin is byte-equal to that item's pin. profileId/profileVersion select the accepted decoder that successfully parsed those exact bytes; profile mismatch or an unavailable decoder is template unavailable, never a fallback. No second template registry or filename lookup participates.
 
@@ -2205,7 +2207,7 @@ For a nonnull route, steps are nonempty and numbered continuously from zero. Eve
 
 For document rendering, documentSnapshotPin selects exact D2-Document-Snapshot/3 bytes for ownerNodeRef and sourceObservation. The snapshot evaluation root SourceObservation and ManagedDocumentSemanticQualification.sourceObservation are byte-equal to sourceObservation, document_format is current, and every snapshot include/environment/dependency is validated under §4.4 at the final export read barrier. presentation is the exact D8PresentationDecision/1 used to stage output. An explicit/no-body/conflict-fallback decision contains no Workspace policy pin; workspace_default contains the exact current D8 policy binding consumed. Later source/include/policy changes never mutate or rerender an already prepared plan; a fresh prepare uses fresh current bindings.
 
-Define Pins(X) as the recursively reached PinRef/2 members of the closed typed value X, following only members whose schema is PinRef/2 (or a closed type containing such members), never text/digests/handles. While deriving ExportPlan/3.evidencePins, do not traverse the plan's evidencePins member itself. Then evidencePins is exactly the pinToken-sorted/unique union of:
+Define Pins(X) as the recursively reached PinRef/2 members of the closed typed value X, following only members whose schema is PinRef/2 (or a closed type containing such members), never text/digests/handles. For a recorded ExportPlan/3, do not traverse the plan's evidencePins member itself while deriving its exact /3 evidencePins. The recorded /3 evidencePins remains exactly the pinToken-sorted/unique union of the following predecessor members. Fresh ExportPlan/4 inherits the same recursive PinRef rule but extends the union only through the explicitly typed projection and viewRenderBinding members listed in §6.6:
 
 ```text
 Pins(inputCatalog) +
@@ -2253,9 +2255,381 @@ Adding a later same-name column/table can make an earlier short selector non-uni
 
 ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1, and ExportLossReport/1 retain their fixed-parent closed shapes and semantics. D9NativeTableTokenBinding/1 records how the existing dataset SET/COLUMN names were derived; it does not add a second dataset schema. Projection origins for every native-table dataset column/cell must point to the same inputIndex/tableLocator selected by its binding, with table grid facts taken from D2TableCell/3.
 
-D9ExportConfirmation/1 never changes catalog, projection, route, target, destination, generation policy, report, budget, presentation or staged bytes. lossChoices sort by lossKey, are unique, and exactly cover requires_choice/blocking items; a reject cancels and blocking cannot be accepted. PublicationReceipt/3 byte-matches the protected Plan and confirmation for every repeated member and records actual published output digests.
+D9ExportConfirmation/1 remains the exact confirmation for a recorded ExportPlan/3: it never changes catalog, projection, route, target, destination, generation policy, report, budget, presentation or staged bytes. Fresh ExportPlan/4 uses D9ExportConfirmation/2 from §6.6, which inherits that immutability and additionally freezes the new Annotation/View selection and renderer members. lossChoices keep the same lossKey sort/uniqueness and complete requires_choice/blocking coverage. PublicationReceipt/3 byte-matches its protected /3 Plan and confirmation; PublicationReceipt/4 byte-matches the protected /4 Plan and Confirmation/2 and records actual published output digests.
 
-Current plan tokens are only d9_export_plan/3 and current publication tokens only d9_publication/3. Lookup/inspect/confirmation/unknown recovery dispatches token tag before strict record.version decoding. Historical ExportPlan/1-/2 and PublicationReceipt/1-/2 keep their original token tags, exact bytes, pins, permissions, confirmation, unknown-publication state and recovery; no old token is repinned/reencoded as /3.
+Recorded ExportPlan/3 uses only d9_export_plan/3 tokens and recorded PublicationReceipt/3 uses d9_publication/3. Fresh unseen ExportPlan/4 uses d9_export_plan/4, fresh external publication uses d9_publication/4, and print-only delivery uses d9_print/1. Lookup/inspect/confirmation/unknown recovery dispatches token tag before strict record.version decoding. ExportPlan/1-/2-/3 and PublicationReceipt/1-/2-/3 keep their recorded tags, exact bytes, pins, permissions, confirmation, unknown-publication state and recovery; no recorded token is repinned or re-encoded into /4.
+
+
+## 6.6 Fresh-current D9 export successor /4
+
+The /3 export family above is frozen historical/current-recovery input after this successor is introduced; it is never widened in place. Fresh unseen export uses the following /4 family. All unchanged nested types keep their existing decoder; the new versions exist only where the closed member/union set changes.
+
+~~~text
+D9ExportPlanToken/4 := D6 Token tagged "d9_export_plan/4"
+D9PublicationToken/4 := D6 Token tagged "d9_publication/4"
+D9PrintToken/1 := D6 Token tagged "d9_print/1"
+
+D9ExportInputDomain/2 =
+  "document"|"native_table"|"node_collection"|"query_rows"|"query_json"|"resource"
+  | "annotation"|"view"
+
+D9AnnotationContentInput/1 = {
+  kind:"annotation_content",
+  annotationRef:AnnotationRef,
+  sourceObservation:SourceObservation/1,
+  annotationRevisionToken:AnnotationRevisionToken/1,
+  record:PortableAnnotationRecord/4,
+  recordPin:PinRef/2,
+  body:D8AnnotationBodyRead/1,
+  targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable"
+}
+
+ExportInputCatalog/3 = {
+  version:3,
+  items:[{index:Counter,label:text,payload:D9ExportCatalogPayload/3}...]
+}
+
+D9ExportCatalogPayload/3 =
+    {kind:"document",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
+  | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1,pin:PinRef/2}
+  | {kind:"field",ownerVersion:SourceVersion/2,ownerObservation:SourceObservation/1,
+     fieldId:FieldId,entries:[Entry/1...]}
+  | {kind:"annotation_index",ownerVersion:SourceVersion/2,
+     targets:[D9EntityVersionAddress/2...]}
+  | D9AnnotationContentInput/1
+  | {kind:"template",origin:D9ExportTemplateOrigin/1,pin:PinRef/2}
+  | {kind:"query_result",result:D7ResultPin}
+
+
+D9EntityVersionAddress/2 = {
+  ref:EntityRef,
+  sourceVersion:SourceVersion/2
+}
+
+D9ExportTemplateOrigin/1 =
+    {kind:"artifact",source:SourceArtifact}
+  | {kind:"resource",sourceVersion:SourceVersion/2,observation:SourceObservation/1}
+  | {kind:"route_asset",routeRevision:Token,assetId:text,assetVersion:text}
+
+D9ExportBindingProjection/1 = {
+  path:text,
+  value:RenderSnapshot,
+  origins:[ExportInputLocation/2...]
+}
+
+D9ExportCellProjection/1 = {
+  value:RenderSnapshot|null,
+  origins:[ExportInputLocation/2...]
+}
+
+D9ExportColumnProjection/1 = {
+  name:text,
+  valueKind:text,
+  nullable:Boolean
+}
+
+D9ExportRowProjection/1 = {
+  cells:[D9ExportCellProjection/1...]
+}
+
+D9ExportDatasetProjection/1 = {
+  name:text,
+  columns:[D9ExportColumnProjection/1...],
+  rows:[D9ExportRowProjection/1...]
+}
+
+D9AnnotationBackupFile/1 = {
+  format:"weftext.annotation-backup",
+  version:1,
+  records:[PortableAnnotationRecord/4...]
+}
+
+D9AnnotationSelection/1 = {
+  inputIndex:Counter,
+  mode:"portable_backup"|"review_bundle_r6",
+  includeSourceHistory:Boolean,
+  includeTargetContext:Boolean
+}
+
+ExportContentSelection/2 = {
+  version:2,
+  bodyInput:Counter|null,
+  bibliographyInput:Counter|null,
+  annotationInputs:[D9AnnotationSelection/1...],
+  viewInput:Counter|null
+}
+
+D9AnnotationDisclosureProjection/1 =
+    {state:"not_requested"}
+  | {state:"unavailable"}
+  | {state:"disclosed",
+     fragments:[{value:RenderSnapshot,origins:[ExportInputLocation/2...]}...]}
+
+D9AnnotationExportProjection/1 =
+    {kind:"portable_backup",inputIndex:Counter,recordPin:PinRef/2}
+  | {kind:"review_bundle_r6",inputIndex:Counter,
+     purpose:"comment"|"mark"|"suggestion",
+     semanticBody:text|null,
+     appearance:AnnotationAppearance/1|null,
+     labels:[text...],
+     reviewState:"open"|"resolved"|"not_applicable",
+     suggestion:Suggestion/3|null,
+     replyTo:AnnotationRef|null,
+     creator:AnnotationActorSnapshot/1,
+     authoredAt:AnnotationTimeSnapshot/2,
+     lastEditor:AnnotationActorSnapshot/1,
+     editedAt:AnnotationTimeSnapshot/2,
+     targetResolution:"exact"|"mapped"|"candidate"|"ambiguous"|"orphaned"|"unavailable",
+     sourceHistory:D9AnnotationDisclosureProjection/1,
+     targetContext:D9AnnotationDisclosureProjection/1}
+
+D9ViewAssetBinding/1 = {
+  role:"font"|"color_profile"|"page_profile"|"accessibility_profile",
+  assetId:text,
+  assetVersion:text,
+  pin:PinRef/2
+}
+
+D9ViewRendererBinding/1 = {
+  rendererId:text,
+  rendererVersion:text,
+  profileId:text,
+  profileVersion:text,
+  layout:"metric"|"bar"|"line"|"scatter"|"pie"|"heatmap",
+  targetKind:"docx"|"xlsx"|"pdf"|"svg"|"png"|"print",
+  accessibilityProfile:"same-data-table-alt-text/1",
+  assets:[D9ViewAssetBinding/1...],
+  evidencePins:[PinRef/2...]
+}
+
+D9ViewOutputScope/1 := "complete_data"
+
+D9ViewRenderBinding/1 = {
+  resultInput:Counter,
+  querySemanticSha256:"sha256:<64 lowercase hex>",
+  snapshotResultSha256:"sha256:<64 lowercase hex>",
+  resultEpoch:Token,
+  authorizationGeneration:Token,
+  viewSpec:ViewSpec/1,
+  viewSpecSha256:"sha256:<64 lowercase hex>",
+  renderer:D9ViewRendererBinding/1,
+  outputScope:D9ViewOutputScope/1
+}
+
+D9ViewExportProjection/1 = {
+  resultInput:Counter,
+  viewSpecSha256:"sha256:<64 lowercase hex>",
+  outputScope:D9ViewOutputScope/1,
+  accessibility:"same_data_table_required"
+}
+
+ExportProjection/2 = {
+  version:2,
+  bindings:[D9ExportBindingProjection/1...],
+  datasets:[D9ExportDatasetProjection/1...],
+  annotations:[D9AnnotationExportProjection/1...],
+  view:D9ViewExportProjection/1|null
+}
+
+ExportInputLocation/2 =
+    {kind:"input",inputIndex:Counter}
+  | {kind:"source_range",inputIndex:Counter,start:Counter,end:Counter}
+  | {kind:"annotation",inputIndex:Counter,targetIndex:Counter}
+  | {kind:"annotation_record",inputIndex:Counter}
+  | {kind:"annotation_body",inputIndex:Counter}
+  | {kind:"annotation_disclosure",inputIndex:Counter,
+     scope:"source_history"|"target_context",fragment:Counter}
+  | {kind:"query_cell",inputIndex:Counter,table:"rows"|"nodes"|"edges",
+     row:Counter,column:Counter}
+  | {kind:"query_scalar",inputIndex:Counter}
+  | {kind:"template_range",inputIndex:Counter,part:text,
+     elementPath:[Counter...],start:Counter,end:Counter}
+  | {kind:"view",inputIndex:Counter,
+     aspect:"chart"|"accessible_table"|"font"|"color"|"page"|"alt_text"}
+
+ExportLossLocation/2 =
+    ExportInputLocation/2
+  | {kind:"binding",path:text}
+  | {kind:"dataset_cell",set:text,row:Counter,column:Counter}
+  | {kind:"block",path:text,blockIndex:Counter}
+
+ExportLossReport/2 = {
+  format:"weftext.export-loss",version:2,
+  planToken:D9ExportPlanToken/4,
+  inputs:[{index:Counter,label:text,kind:text}...],
+  items:[{lossKey:Counter,feature:text,locations:[ExportLossLocation/2...],
+          effect:text,severity:"notice"|"requires_choice"|"blocking",
+          allowedChoices:["accept_loss"|"reject"...]}...]
+}
+
+D9ExportConfirmation/2 = {
+  version:2,
+  planToken:D9ExportPlanToken/4,
+  lossChoices:[D9ExportLossChoice/1...]
+}
+
+D9ExportTarget/2 =
+    {kind:"asciidoc_source"}
+  | {kind:"resource_exact"}
+  | {kind:"annotation_backup"}
+  | {kind:"html",profileId:text}
+  | {kind:"pdf",profileId:text}
+  | {kind:"docx",profileId:text}
+  | {kind:"odt",profileId:text}
+  | {kind:"csv_utf8"}
+  | {kind:"tsv_utf8"}
+  | {kind:"xlsx",profileId:text}
+  | {kind:"ods",profileId:text}
+  | {kind:"query_json"}
+  | {kind:"svg",profileId:text}
+  | {kind:"png",profileId:text}
+  | {kind:"print",profileId:text}
+
+D9ExportDestinationIntent/2 =
+    {kind:"external_bundle",destinationHandle:Token,basename:text,createOnly:true}
+  | {kind:"server_download",downloadToken:Token,basename:text}
+  | {kind:"resource_handoff",ownerNodeRef:NodeRef,resourceName:text}
+  | {kind:"print",printIntentToken:Token}
+
+D9ExportBundleManifest/2 = {
+  format:"weftext.export-bundle",version:2,
+  planToken:D9ExportPlanToken/4,
+  dataFiles:[D9PublishedOutput/1...],
+  reportFile:D9PublishedOutput/1
+}
+
+ExportPlan/4 = {
+  kind:"d9_export_plan",version:4,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  principalAudienceToken:Token,authorizationGeneration:Token,
+  inputDomain:D9ExportInputDomain/2,
+  inputCatalog:ExportInputCatalog/3,
+  contentSelection:ExportContentSelection/2,
+  projection:ExportProjection/2,
+  documentRenderBinding:D9DocumentRenderBinding/1|null,
+  viewRenderBinding:D9ViewRenderBinding/1|null,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicy/1,
+  target:D9ExportTarget/2,
+  initialLossReport:ExportLossReport/2,
+  outputBudget:BudgetBinding/1,
+  destination:D9ExportDestinationIntent/2,
+  observationScope:ObservationScope/2,
+  dependencyProof:DependencyProof/3,
+  observationProof:ObservationProof,
+  recoveryPins:[PinRef/2...],
+  evidencePins:[PinRef/2...],
+  stagedOutputs:[D9ExportStagedOutput/1...]
+}
+
+PublicationReceipt/4 = {
+  kind:"d9_publication_receipt",version:4,
+  publicationToken:D9PublicationToken/4,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  outputs:[D9PublishedOutput/1...],
+  lossReport:ExportLossReport/2,
+  lossChoices:[D9ExportLossChoice/1...],
+  target:D9ExportTarget/2,
+  templateBinding:D9ExportTemplateBinding/1|null,
+  routeBinding:D9ExportRouteBinding/1|null,
+  styleBundles:[D9ExportStyleBundleBinding/1...],
+  generationPolicy:D9ExportGenerationPolicy/1,
+  viewRenderBinding:D9ViewRenderBinding/1|null,
+  presentation:D8PresentationDecision/1|null,
+  destinationDisplay:text
+}
+
+D9PrintReceipt/1 = {
+  kind:"d9_print_receipt",version:1,
+  printToken:D9PrintToken/1,
+  planToken:D9ExportPlanToken/4,
+  workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,
+  output:D9PublishedOutput/1,
+  lossReport:ExportLossReport/2,
+  lossChoices:[D9ExportLossChoice/1...],
+  viewRenderBinding:D9ViewRenderBinding/1,
+  destinationDisplay:text
+}
+~~~
+
+### 6.6.1 Plan/4 relational admission and canonical collections
+
+The /4 JSON shapes above are closed, and the following cross-field relations are also part of strict admission. Complete evidencePins coverage cannot substitute for these relations.
+
+The shared public entry prefix for every export path is: (1) strict closed wire/tag/version/union/member/null decode with non-disclosing errors; (2) D1 static surface/release capability; (3) current audience/entry authorization; (4) applicable Workspace/domain/P continuity. Only after this prefix does Core dispatch according to the actual original operation state. For an existing saved/planned/unknown responsibility or inspect/confirmation/publish/state/receipt, retrieve the original authenticated protected ExportPlan record by its real token tag, record version, original control storage and current disclosure; then check exact original pins/dependencies/currentness, confirmation and owner-specific recovery without rewriting recorded bytes. For fresh unseen prepare there is no pre-existing ExportPlan/4: the caller's current authority qualifies the private producer to build a candidate, and lookup of a protected Plan is NOT a prerequisite. After qualification each path still enforces all applicable D9 closed relations, canonical collections, route, loss and budget gates before returning any protected output. Lost authorization plus a bad index/layout must return the original non-disclosing not_visible/reset outcome rather than catalog/layout/profile or hidden-dependency details; closed/version and D1 static failures remain earlier.
+
+For fresh unseen prepare, the shared authorized prefix fixes D9ExportInputDomain/2 and its original potential ObservationScope before any sensitive catalog/source read. Core constructs only the real same-cut inputs consumed by that selected domain, never an unconditional D8 Annotation or D7 Query dependency. The following is the complete current eight-domain producer dispatch (not another public wire or catalog authority):
+
+| inputDomain | Required original producer and consumed catalog arm | Query, renderer and least-scope condition | Required minimal rejection |
+| --- | --- | --- | --- |
+| document | Original D6/D2 Document source_read, complete SourceVersion/2 and matching current SourceObservation/1 with exact source-document PinRef/2; actual D2 snapshot and D8 presentation only for a rendered document | Query and Annotation are not prerequisites to asciidoc_source; generationPolicy=none needs no template/route/renderer; explicit body/bibliography selection still requires its original qualification | Missing source_read, stale observation or invalid source pin rejects; do not manufacture Query, empty body or unrelated whole-Workspace reads |
+| native_table | Actual authorized D2TableBlock/3 and D2TableCell/3 through their qualified Document source/pin and exact table range; only selected D4 narrow field/resource inputs when consumed | Original D2 table/Field rules, not an implicit whole-Workspace Query; named Office template/route only when actually selected | Unproved table geometry, hidden Document body smuggled by narrow Field, or unqualified source/Field rejects |
+| node_collection | The real qualified complete collection/Query result and, as actually selected, original narrow D4 field entries or other qualified inputs; Query-backed collection freezes the full D7ResultPin | When consuming Query, preserve complete positive/negative query_scan, schema/bag/order/epoch/auth/cut and dependencies; no partial cursor or unrelated whole-body read | Missing/partial Query, an unqualified Field or fabricated empty collection rejects; a Field alone does not widen to Document source_read |
+| query_rows | A genuine complete D7 Query result carried as query_result with all source/dependency proof | Complete Query and actual output target qualification; renderer/template only if the chosen output consumes one | First page, incomplete result, stale authorization or cursor-only evidence cannot stand for complete rows |
+| query_json | One genuine complete D7ResultPin, dispatched by original TerminalSchema.kind: rows retains all declared columns/types and every row of typed V; scalar retains exactly one typed V including none; graph retains the complete nodes and edges RowsSchema, nodeRef/sourceRef/targetRef/relationColumn/derivationColumn bindings, and data EXACTLY {nodes:[[V...],...],edges:[[V...],...]}. Preserve all actual columns (including a real nodes.displayName column if present), typed V, bag occurrences and D7-defined row/table order. | Full original Query/result/cut and positive/negative dependencies are required; generationPolicy=none needs no renderer/template/provider, no ViewSpec and no optional network ViewSpec.nodeDetails binding. | A currently authorized graph with an isolated node, complete legal endpoint/relation schema and zero edges passes even without ViewSpec/nodeDetails; reject omission of any actual node/edge column or V, dropped occurrences, truncated pages, changed order or a missing actual nodes/edges table. Never demand an extra nodeDetails query-data member or force rows/chart conversion. |
+| resource | Original Resource resource_read, complete SourceVersion/2/current SourceObservation/1 and exact resource_bytes PinRef/2 | resource_exact with generationPolicy=none requires no Query, Annotation, document render or unrelated renderer/provider | No resource_read, missing bytes, wrong version/observation/pin rejects without a fabricated Query |
+| annotation | One actual current D8AnnotationReadResponse/1 carried by annotation_content, with exact AnnotationRef, Observation, revision, Value/4, R6 body and canonical PortableAnnotationRecord/4 pin | D8 current Annotation qualification and separately authorized optional history/target context; backup uses generationPolicy=none and needs no D7 Query | annotation_index is omission-only; hidden context, stale revision or mismatched recordPin never becomes readable content or a second parse |
+| view | One real selected query_result D7ResultPin and exact ViewSpec/1, followed by the original D7 View §7 and a named accepted D9 six-chart renderer/profile for a supported target | Complete Query, original result auth/epoch/completeness and complete_data same-data accessible table; no D8 Annotation or D8 document-presentation shortcut | Authorized missing viewInput=99 or non-query_result selection has no D7 result to enter; actual D7 errors cannot be replaced by early renderer diagnostics |
+
+The seven and only seven ExportInputCatalog/3 payload arms are document, resource, field, annotation_index, annotation_content, template, and query_result. field retains its original narrow D4 Field production-version/ownerObservation/complete entries profile and is NOT a ninth public inputDomain or permission to read hidden Document body; annotation_index is only a separately qualified complete omission directory. template is required only if actually consumed: artifact must retain its original lease/bytes, resource origin must pass independent resource_read/SourceVersion/Observation and exact bytes/pin, and route_asset must match the original reviewed installation revision/profile. Likewise route/style/asset/ForeignBinding/Resource dependencies are individually authorized and pinned only when consumed. Catalog kinds/labels, template presence, pin union and an unrelated provider installation cannot enlarge the selected domain's original potential scope. Source/Resource/Field paths without Query use their original current reads, not an invented full-Workspace Query; Query/Collection consumers retain the complete positive/negative D7 proof when Query is actually consumed.
+
+After this authorized domain routing, only the minimal View selector existence, exact payload.kind=query_result and genuine selected D7ResultPin check may precede entering the D7 View owner. For a caller-selected invalid viewInput=99 or a caller-selected field/annotation_content payload instead of query_result, the D9-owned *current Workspace* error is the existing wire2 d9_error {wireVersion:2,kind:"d9_error",code:"invalid_request"}; no D7 result exists, so no fabricated D7 error or worker invalid_output is allowed. This invalid_request is for the authorized caller's invalid selection, NOT for a damaged authenticated protected Plan or unproved producer. If a saved/frozen authenticated Plan's actual reachable retained record and pins prove a contradictory index/kind/value, use the existing wire2 integrity_conflict only with current disclosure and authorized reachable proved contradictory evidence; do not blame the requester. If an original source/observation is unavailable, use the original source_unavailable path; absent or unprovable proof/pins use proof_unavailable, and missing continuity uses the applicable domain_unavailable or original owner availability/reset, not definite integrity_conflict or a synthetic empty catalog. The caller-selected View catalog index/kind error above is invalid_request, NOT invalid_output. This restriction is ONLY for that selector failure; it does not narrow the original D9 invalid_output duties. Original D9 Import IR §2 independently requires format-coverage validation by Host/Core in addition to IR schema validation and worker status; a worker may succeed and produce schema-valid IR while the independent coverage check finds an omitted selected XLSX sheet or hidden object: the original invalid_output disposition still applies (D9 Acceptance S33), with actual unsupported objects reported as issues/loss. The original D9 Resource Region §8 new-issuance format/geometry validation may likewise use its pre-existing invalid_output or unsupported_profile under its own qualification and envelope. Host, Core and worker output validators keep their original applicability; not every producer/format/Region failure becomes invalid_output. The named current Workspace D9/2 dispositions remain in its existing §4a wire2 d9_error code set; historical D9/1 and entered original D1/D3/D6/D7/D8 error envelopes and ordering are never remapped. Current entry denial wins before protected routing details (not_visible or inherited reset), while an actual selected D7 result runs unchanged View §7 closed decode → result authorization/epoch → complete result → schema → layout/binding → whole-data structure/order → domain/numbers → budget → delivery. After the actual owner gate, all original D9 selection/projection/recordPin/ViewSpec hash/target/receipt/canonical/budget/loss checks still reject and cannot be bypassed by this minimal routing.
+
+In fresh prepare, §6.5 and original D9 workers/export owner §3a still demand full candidate dataFile and reserved report/manifest name conflict checks before ordering/token allocation; Core then randomly allocates the unique non-public d9_export_plan/4 planToken before building report/manifest/Plan bytes referencing it, validates complete dataFiles, freezes exact loss/staged bytes/pins and atomically saves the complete original Plan before disclosure. A failed prepare exposes no token and acquires no second store/CAS/authority. Existing saved/planned/unknown/inspect/receipt always dispatch the actual original token/version/Plan and preserve exact recovery.
+
+Cross-domain exclusion is mandatory: when inputDomain is not annotation, contentSelection.annotationInputs and projection.annotations must both be empty; when inputDomain is not view, contentSelection.viewInput, viewRenderBinding and projection.view must all be null. A catalog item does not itself grant permission to select or export it, and no unused arm may be consumed via an unrelated projection. These exclusions are checked at relational admission before any output preparation.
+
+For inputDomain=annotation:
+- annotationInputs is nonempty, bodyInput=null, bibliographyInput=null, viewInput=null, viewRenderBinding=null, projection.view=null, and documentRenderBinding=null.
+- annotationInputs is a set-like array keyed by inputIndex, sorted by ascending Counter and unique. One catalog input may appear at most once in the Plan and therefore has exactly one mode. Mixed portable_backup and review_bundle_r6 modes in one Plan are rejected; use separate Plans.
+- Each selected inputIndex names exactly one inputCatalog.items[index] whose payload is annotation_content.
+- `projection.annotations` has exactly the same cardinality and ascending `inputIndex` sequence as `annotationInputs`. At each position i, the selected mode and projection mode must agree. For portable_backup, `projection.annotations[i].recordPin` must be byte-equal to `inputCatalog.items[contentSelection.annotationInputs[i].inputIndex].payload.recordPin` (the selected payload is exactly annotation_content); D9AnnotationSelection/1 has no recordPin member. That payload's record is the exact PortableAnnotationRecord/4 of the same authorized D8 read's AnnotationRef, revision token and complete Value/4, and the original PinRef/2 validates its D3-CJ/3(record) bytes. Authorized A/PA with A selected and PA projected succeeds; projecting PB for A's same index rejects even if B/PB is independently authorized and both PA and PB pins appear in the recursive evidence union. review_bundle_r6 matches only its same-index review projection. A missing/extra projection, duplicate index, cross-mode match or `[0,1,0]` rejects; pin-union completeness cannot replace the per-index relation.
+- A portable_backup selection requires includeSourceHistory=false and includeTargetContext=false; both flags are inapplicable and true is rejected rather than ignored. target.kind must be annotation_backup and generationPolicy.kind must be none. Conversely, a review_bundle_r6 selection cannot use annotation_backup as its target; it requires a named, accepted rendered Review Bundle target/profile and cannot write a backup file under review semantics.
+- For review_bundle_r6, includeSourceHistory=false requires sourceHistory.state=not_requested and true requires disclosed or unavailable; the same rule applies independently to includeTargetContext and targetContext. Requested-but-denied context is unavailable, never not_requested or empty facts.
+- D9AnnotationDisclosureProjection/1.fragments is an ordered sequence preserving the authorized producer/context order. state=disclosed has one or more fragments. Fragment order is never sorted. Each fragment origins array is a nonempty set-like array sorted/unique by canonical D3-CJ/3(ExportInputLocation/2) bytes; duplicate origins reject.
+
+For inputDomain=view:
+- bodyInput=null, bibliographyInput=null, annotationInputs=[], viewInput is nonnull, documentRenderBinding=null, viewRenderBinding is nonnull, and projection.view is nonnull. Document export remains a separate input-domain path and may continue to use D9DocumentRenderBinding/1.presentation; D8 document presentation is not a View data-scope control.
+- contentSelection.viewInput, viewRenderBinding.resultInput, and projection.view.resultInput are byte-equal and select exactly one query_result catalog item. All hash/epoch/auth fields in the binding derive from that exact selected D7ResultPin.
+- `projection.view.viewSpecSha256` must be byte-equal to `viewRenderBinding.viewSpecSha256`, and both must equal SHA-256(D3-CJ/3(the exact `viewRenderBinding.viewSpec` of ViewSpec/1)). These are checks against the existing exact ViewSpec, not a new hash authority. A projection hash taken from another valid ViewSpec is invalid even if the three resultInput values, layout and complete_data scope still agree.
+- viewRenderBinding.renderer.layout is byte-equal to viewRenderBinding.viewSpec.layout.
+- viewRenderBinding.outputScope and projection.view.outputScope are both exactly complete_data. This first profile exports every series/panel/item represented by the complete authorized D7 result and ViewSpec. Device-local legend hide/show state is not author data and cannot change export scope. The same-data accessible table covers the identical complete-data scope. Supporting current_display later requires a versioned successor with stable hidden-series keys and a qualified local-state source; it cannot be added as a Boolean or inferred from absence.
+- The outer target.kind is exactly one of docx|xlsx|pdf|svg|png|print, equals renderer.targetKind, and its profileId is byte-equal to renderer.profileId. target.kind=print iff destination.kind=print; every non-print View target rejects a print destination.
+- renderer.assets is a set-like array sorted by (role rank font<color_profile<page_profile<accessibility_profile, UTF8(assetId), UTF8(assetVersion), pin.pinToken) and unique. The same (role,assetId) with non-byte-equal version/pin is a conflict. Multiple font/color assets with different assetId are allowed. The array may be empty only when the accepted renderer/profile proves it consumes no external asset of these roles.
+- renderer.evidencePins is a set-like array sorted/unique by pinToken; it contains exactly the installation/profile evidence required by that renderer route and no unrelated pin.
+- Current `D9ViewRendererBinding/1.layout` remains the closed six-member union. A valid D7 `network` View therefore always returns `renderer_unavailable` on this current D9 route. Installing a profile cannot expand the union; network graphics require an actual future versioned renderer/schema successor.
+
+Delivery/receipt compatibility is also closed:
+- destination.kind=external_bundle may produce PublicationReceipt/4; repeated Plan members, including viewRenderBinding, are byte-equal. PublicationReceipt/4.presentation is byte-equal to documentRenderBinding.presentation when that document binding exists, otherwise it is null; it never carries View output scope.
+- destination.kind=print produces only D9PrintReceipt/1. Its `planToken` must resolve the same original authenticated protected ExportPlan/4 record under the original workspace/domain, current audience disclosure and confirmed delivery responsibility—not an arbitrary Plan found by equal token text. That Plan must have target.kind=print and destination.kind=print. The receipt's viewRenderBinding is byte-equal to the Plan's; its output must be the actual controlled print output of that Plan's frozen validated staged bytes, with corresponding name/digest/size and confirmed lossReport/lossChoices, not a different output or renderer. D9PrintReceipt/1 has no target member: no receipt.target comparison or extra wire member is permitted. Wrong Plan association, binding, output or loss rejects even when the receipt is structurally valid.
+- destination.kind=resource_handoff produces only the existing separate D7/D3 author result over exact staged bytes; no PublicationReceipt/4 or D9PrintReceipt/1 is fabricated.
+- destination.kind=server_download uses the existing delivery/state result and produces neither portable publication nor print receipt.
+
+Canonicalization happens exactly once before Plan/4 freeze. A frozen, received, inspect, confirmation, saved/planned/unknown or recovery record must already satisfy these orders and relations; noncanonical arrays or relational mismatch reject without read-time sorting/repair. Existing D7 row order, Annotation disclosure-fragment order and other owner-defined ordered sequences are preserved and are not globally sorted.
+
+D9ViewRenderBinding/1 and Plan/4 remain design-candidate types with product execution UNRUN; this correction changes no deployed/recorded View-binding bytes. Once a /4 family is actually accepted/deployed, adding another View output scope or renderer-layout member requires a versioned successor rather than widening /1 in place.
+
+ExportInputCatalog/3 keeps every /2 arm byte-for-byte and adds only annotation_content. That arm is formed from one actual current D8AnnotationReadResponse/1: annotationRef, sourceObservation, annotationRevisionToken, value, body, and targetResolution are byte-equal to that read. record is exactly the PortableAnnotationRecord/4 formed from those fields and recordPin selects exactly D3-CJ/3(record) bytes under the existing PinRef/2 integrity rules. The Plan dependencyProof and observationProof cover the same-cut Annotation read and any separately authorized context reads. The final export barrier rechecks both sourceObservation and annotationRevisionToken; equal body text cannot substitute for a changed revision.
+
+annotation_index remains omission-directory evidence only and can never populate annotation_content, annotationInputs, or an Annotation body/context projection. Portable backup requires inputDomain=annotation, target.kind=annotation_backup, one or more mode=portable_backup selections, generationPolicy=none, and generates exactly D9AnnotationBackupFile/1: records are sorted/unique by complete canonical AnnotationRef bytes, every record is byte-equal to the D3-CJ/3 value selected by its chosen recordPin, and the backup file is the canonical UTF-8 D3-CJ/3(D9AnnotationBackupFile/1) bytes. It serializes no current permission, SourceObservation capability, revision-signing capability, PAB, or ActionEvidence. Review Bundle requires mode=review_bundle_r6 and uses only the already-produced D8AnnotationBodyRead/1: valid uses its R6 semantic text, absent uses null, and invalid is renderer unavailable rather than a second parse. Purpose, appearance, labels, reviewState, suggestion, reply and attribution come from the same complete Value/4.
+
+Annotation body/attribution and target/source context are independently qualified. includeSourceHistory and includeTargetContext select an attempt, not permission. A hidden/unavailable target yields targetContext.state=unavailable without suppressing an otherwise legal Review Bundle body, attribution or reply. A disclosed fragment must derive from separately authorized catalog inputs in the same cut and carry nonempty ExportInputLocation/2 origins. Missing context is represented by the corresponding projection state and complete loss item; it is never replaced by display labels, annotation_index, or guessed target bytes.
+
+A View export has inputDomain=view, exactly one viewInput selecting a query_result catalog item, no Annotation selections, and one nonnull viewRenderBinding. Only after public entry authorization and private candidate catalog routing prove a real selected query_result D7ResultPin does Core enter the original D7 View §7 order over that exact complete result, beginning with closed/static ViewSpec decode. If the selected index is missing or has a non-query_result payload, D7 is not entered; reject that authorized structural mismatch without a fabricated D7 error. Layouts outside the current D7 ViewSpec/1 closed set, including deferred tree/treemap/sunburst, Gantt and boxplot/quantile, fail with unsupported_layout before D9 renderer selection. For a valid current D7 layout, this first closed D9 chart profile renders only metric|bar|line|scatter|pie|heatmap; another valid D7 layout such as network, or a six-chart layout whose named backend/profile is unavailable, returns renderer_unavailable for this route. Neither case converts rows into a chart substitute. The renderer never re-queries, enriches, sorts, aggregates, bins, samples or changes ViewSpec semantics.
+
+querySemanticSha256 is SHA-256 of D3-CJ/3(the exact D7 SemanticStateKey) and snapshotResultSha256 is SHA-256 of D3-CJ/3(the exact D7 SnapshotResultKey) retained by the selected D7ResultPin. resultEpoch and authorizationGeneration are byte-equal to that same result evidence; viewSpecSha256 is SHA-256 of D3-CJ/3(the exact ViewSpec/1). These hashes are frozen cross-checks, not identities or new cache authorities. The selected D7ResultPin remains the complete result/cut/dependency authority.
+
+A View renderer binding is valid only for one named installed renderer/profile/version and one exact target kind. Its canonical asset/evidence collections and target/profile relation are defined by §6.6.1. The fixed complete_data scope requires the same complete data table plus title/description alt-text semantics, query/panel order, CJK/RTL preservation and non-color-only meaning. PDF, SVG, PNG and print profiles may render the six layouts directly. DOCX/XLSX profiles may do so only when their named profile proves the same View semantics; if an Office template is used, §6.5.1 visible-template authority and all §14 rules still apply. Unsupported backend/profile/layout combinations are stable unavailable results, never silent data-table substitution.
+
+For Plan/4, `evidencePins` is exactly the pinToken-sorted/unique recursive union of `Pins(inputCatalog)`, `Pins(projection)`, `Pins(documentRenderBinding)`, `Pins(viewRenderBinding)`, `Pins(templateBinding)`, `Pins(routeBinding)`, `Pins(styleBundles)`, `Pins(dependencyProof)`, `Pins(observationProof)`, `Pins(stagedOutputs)`, and `recoveryPins`, excluding the Plan's own `evidencePins` member. Thus Annotation record/context pins and every View renderer/asset/result dependency actually consumed are covered by the existing one-union rule.
+
+D9ExportConfirmation/2 cannot alter the catalog, Annotation/View selection, projection, ViewSpec, renderer/profile/assets, route/template, target, destination, loss report or staged bytes. External publication remains create-only and produces PublicationReceipt/4; Resource handoff remains the separate original D7/D3 author path over exact staged bytes. A print destination uses the same frozen/staged/confirmed Plan and produces only D9PrintReceipt/1; it grants no author capability and cannot claim external publication. Current Plan/4 bundles use D9ExportBundleManifest/2.
+
+Real ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3, their plan/publication token tags, ExportInputCatalog/2, ExportContentSelection/1, ExportProjection/1, ExportLossReport/1, D9ExportConfirmation/1, bundle manifest/1, pins, confirmation bytes and saved/planned/unknown recovery remain exact historical decoders. No /3 record is repinned, re-encoded, sorted, renamed or upgraded into /4.
 
 
 # 7. Annotation closed values

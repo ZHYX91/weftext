@@ -591,18 +591,18 @@
     {
       "name": "ExportPlan/3",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": "ExportPlan/2",
       "section": "SPEC §8",
-      "notes": "Current closed export preparation with /3 token, exact input/projection/render/template/route/style/generation/presentation selection and typed pins; fresh output names use D9ControlledRelativeOutputName/1, output ordering remains exact unsigned UTF-8 after deterministic portable validity/alias/prefix/reserved checks, and canonicalization precedes freeze."
+      "notes": "Recorded /3 predecessor and recovery shape with d9_export_plan/3 token, exact bytes, pins, canonical ordering and saved/planned/unknown responsibility. Fresh unseen current export uses ExportPlan/4; /3 is never widened or migrated in place."
     },
     {
       "name": "PublicationReceipt/3",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": "PublicationReceipt/2",
       "section": "SPEC §8",
-      "notes": "Current d9_publication/3 receipt byte-bound to ExportPlan/3 and confirmation, repeating exact selection and the complete actual outputs; names use D9ControlledRelativeOutputName/1 and the same validated raw-name unsigned UTF-8 comparator as stagedOutputs."
+      "notes": "Recorded d9_publication/3 external-publication receipt byte-bound to its ExportPlan/3 and confirmation. It retains exact names, digests, bytes and unknown-publication recovery; fresh unseen current publication uses PublicationReceipt/4."
     },
     {
       "name": "D9ControlledRelativeOutputName/1",
@@ -1303,10 +1303,10 @@
     {
       "name": "D9ExportTarget/1",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Closed current export target union including exact source/resource, HTML/PDF/Office/tabular and query JSON."
+      "notes": "Recorded Plan/3 export target union. Fresh Plan/4 uses D9ExportTarget/2; /1 retains its exact decoder for recorded recovery."
     },
     {
       "name": "D9ExportTemplateBinding/1",
@@ -1314,7 +1314,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Exact template input/profile/version/pin binding for ExportPlan/3."
+      "notes": "Exact template input/profile/version/pin binding shared by fresh ExportPlan/4 and recorded ExportPlan/3 recovery."
     },
     {
       "name": "D9ExportRouteStepBinding/1",
@@ -1338,7 +1338,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Exact style-bundle version/pin frozen by ExportPlan/3."
+      "notes": "Exact style-bundle version/pin shared by fresh ExportPlan/4 and recorded ExportPlan/3 recovery."
     },
     {
       "name": "D9DocumentRenderBinding/1",
@@ -1351,10 +1351,10 @@
     {
       "name": "D9ExportDestinationIntent/1",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Protected external-bundle/server-download/resource-handoff destination intent; not permission."
+      "notes": "Recorded Plan/3 external-bundle/server-download/resource-handoff destination intent; not permission. Fresh Plan/4 uses D9ExportDestinationIntent/2."
     },
     {
       "name": "D9ExportLossChoice/1",
@@ -1367,10 +1367,10 @@
     {
       "name": "D9ExportConfirmation/1",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Immutable planToken plus complete sorted loss choices; cannot rewrite plan/staged bytes."
+      "notes": "Recorded Plan/3 confirmation with exact planToken and sorted loss choices. Fresh Plan/4 uses D9ExportConfirmation/2; /1 never rewrites recorded /3 bytes."
     },
     {
       "name": "D9ExportStagedOutput/1",
@@ -1386,7 +1386,7 @@
       "status": "current",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Exact D9ControlledRelativeOutputName/1, byte length and digest for one actual PublicationReceipt/3 member; current receipts preserve the Plan's exact names and portable conflict domain."
+      "notes": "Exact D9ControlledRelativeOutputName/1, byte length and digest for one actual published/printed member. Fresh PublicationReceipt/4 and D9PrintReceipt/1 preserve Plan4 names; recorded PublicationReceipt/3 preserves its original Plan3 names."
     },
     {
       "name": "AnnotationRevisionToken/1",
@@ -1615,18 +1615,18 @@
     {
       "name": "D9ExportPlanToken/3",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Protected current export plan token tagged d9_export_plan/3; historical token tags dispatch separately."
+      "notes": "Recorded export plan token tagged d9_export_plan/3. Fresh current uses D9ExportPlanToken/4; token tag dispatch precedes record version."
     },
     {
       "name": "D9PublicationToken/3",
       "owner": "D9",
-      "status": "current",
+      "status": "retained",
       "replaces": null,
       "section": "SCHEMAS §6.5",
-      "notes": "Protected current publication token tagged d9_publication/3."
+      "notes": "Recorded publication token tagged d9_publication/3. Fresh current external publication uses D9PublicationToken/4."
     },
     {
       "name": "D9ExportGenerationPolicy/1",
@@ -1819,6 +1819,134 @@
       "replaces": null,
       "section": "SCHEMAS §6.4, §9; SPEC §§8.2,13.2",
       "notes": "Fresh unseen WorkspaceBootstrapPlan/4-only helper freezing a custody-proved empty D8 head set plus parents=[]/revision1/separate proposal before the original bootstrap final P; it carries no pre-P activation ChangeId, committed record, pin or outbox."
+    },
+    {
+      "name": "D9ExportPlanToken/4",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "D9ExportPlanToken/3",
+      "section": "SCHEMAS §6.6",
+      "notes": "Protected fresh-current export plan token tagged d9_export_plan/4; recorded /3 and earlier token tags dispatch separately."
+    },
+    {
+      "name": "D9PublicationToken/4",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "D9PublicationToken/3",
+      "section": "SCHEMAS §6.6",
+      "notes": "Protected fresh-current external-publication token tagged d9_publication/4."
+    },
+    {
+      "name": "D9PrintToken/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.6",
+      "notes": "Protected print-only delivery token tagged d9_print/1; it is not an author receipt or external-publication token."
+    },
+    {
+      "name": "ExportInputCatalog/3",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportInputCatalog/2",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current closed export catalog retaining predecessor arms and adding the sole annotation_content carrier."
+    },
+    {
+      "name": "ExportContentSelection/2",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportContentSelection/1",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current explicit document/Annotation/View selection; §6.6.1 requires canonical unique Annotation inputIndex/mode selection and exact View input relation; selection is not permission."
+    },
+    {
+      "name": "ExportProjection/2",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportProjection/1",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current bounded bindings/datasets plus closed Annotation and View projections with typed origins; §6.6.1 binds Annotation projections one-to-one to selections and View projection to complete_data result/scope."
+    },
+    {
+      "name": "ExportLossReport/2",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportLossReport/1",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current fixed export-loss proposal bound to D9ExportPlanToken/4."
+    },
+    {
+      "name": "D9ExportConfirmation/2",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "D9ExportConfirmation/1",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current immutable confirmation for Plan4; freezes loss choices plus Annotation/View selections, ViewSpec and renderer/profile/assets without rewriting staged bytes."
+    },
+    {
+      "name": "D9ExportTarget/2",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "D9ExportTarget/1",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current closed target union adding annotation_backup, SVG, PNG and print while retaining predecessor target semantics."
+    },
+    {
+      "name": "D9ExportDestinationIntent/2",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "D9ExportDestinationIntent/1",
+      "section": "SCHEMAS §6.6",
+      "notes": "Fresh-current external-bundle/server-download/resource-handoff/print destination intent; never permission."
+    },
+    {
+      "name": "D9AnnotationContentInput/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.6; SPEC §16a",
+      "notes": "Sole fresh-current Annotation content carrier from one exact D8AnnotationReadResponse/1 with complete PortableAnnotationRecord/4 pin, body result and targetResolution; §6.6.1 forbids duplicate/cross-mode selection."
+    },
+    {
+      "name": "D9ViewRenderBinding/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.6; SPEC §16a",
+      "notes": "Finite fresh-current six-layout renderer/profile/assets binding over one complete D7ResultPin and exact ViewSpec/1 with outputScope=complete_data; local legend visibility is excluded, document presentation stays on D9DocumentRenderBinding/1, and network requires a future versioned successor."
+    },
+    {
+      "name": "ExportPlan/4",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "ExportPlan/3",
+      "section": "SCHEMAS §6.6; SPEC §§8.3,16a",
+      "notes": "Fresh-current immutable export preparation using Catalog3/Selection2/Projection2/Loss2/Confirmation2, one recursive evidence-pin union, exact staged bytes, versioned Annotation/View carriers and the §6.6.1 relational/canonical admission rules."
+    },
+    {
+      "name": "PublicationReceipt/4",
+      "owner": "D9",
+      "status": "current",
+      "replaces": "PublicationReceipt/3",
+      "section": "SCHEMAS §6.6; SPEC §§8.3,16a",
+      "notes": "Fresh-current external-publication fact byte-bound to ExportPlan/4 and Confirmation2; not a D3/D6 author receipt."
+    },
+    {
+      "name": "D9PrintReceipt/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.6; SPEC §16a",
+      "notes": "Fresh-current print-only delivery result bound to the confirmed Plan4/View binding; not an external-publication or author receipt."
+    },
+    {
+      "name": "D9ViewOutputScope/1",
+      "owner": "D9",
+      "status": "current",
+      "replaces": null,
+      "section": "SCHEMAS §6.6–6.6.1; SPEC §16a",
+      "notes": "Closed first-generation View export scope with sole value complete_data. Device-local legend hide/show is not authority; any later current_display or other scope requires a versioned successor after acceptance/deployment."
     }
   ]
 }

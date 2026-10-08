@@ -1,0 +1,3102 @@
+{
+  "schema_version": 1,
+  "status": "A2 D1–D10 full author candidates present at actual PR #5 head; D9 independent ACCEPT only at fixed8d7; complete D10 author candidate awaits full non-author review, then separate fresh Pro global A2 review; no acceptedDesignSha/freeze/implementation, all runtime UNRUN.",
+  "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
+  "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+  "protected_inputs_expected_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+  "source_inventory": [
+    {
+      "path": "docs/design/snapshots/d4-reference-catalog-registry/source.json",
+      "title": "D4 Reference Catalog Registry v1",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": false,
+      "bytes": 102856,
+      "lines": 3685,
+      "blobAtFixedS": "ca6ed9232864ba1bbc49e9aaa81f9290a78fe6cb",
+      "readStatus": "full_recursive_pointer_inventory_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "title": "D1 Product Surface and Capability Boundary",
+      "role": "accepted-design-input",
+      "topic": "D1",
+      "main": true,
+      "bytes": 49189,
+      "lines": 510,
+      "blobAtFixedS": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D1"
+    },
+    {
+      "path": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "title": "D2 Document Content and Domain Objects",
+      "role": "accepted-design-input",
+      "topic": "D2",
+      "main": true,
+      "bytes": 98763,
+      "lines": 1188,
+      "blobAtFixedS": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D2"
+    },
+    {
+      "path": "docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md",
+      "title": "D3 Identity References Ownership and Lifecycle",
+      "role": "accepted-design-input",
+      "topic": "D3",
+      "main": true,
+      "bytes": 351167,
+      "lines": 2037,
+      "blobAtFixedS": "bc23922ae2de4c80dadc7b91e945c87ce154b55a",
+      "readStatus": "full_read_D3_batch",
+      "a2Disposition": "integrated_D3_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
+      "title": "D3 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D3",
+      "main": false,
+      "bytes": 74040,
+      "lines": 702,
+      "blobAtFixedS": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344",
+      "readStatus": "full_read_D3_batch",
+      "a2Disposition": "integrated_D3_lexicon_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d4-attribute-types-schema-and-relations/source.md",
+      "title": "D4 Attribute Types Schema and Relations",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": true,
+      "bytes": 173344,
+      "lines": 888,
+      "blobAtFixedS": "2c03f2050dc523ccd8ffd3696f89f91a3b9c3c07",
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d4-terminology-and-naming-lexicon/source.md",
+      "title": "D4 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D4",
+      "main": false,
+      "bytes": 31552,
+      "lines": 160,
+      "blobAtFixedS": "f3a2bfc10a62c62e5138598b6f96591a95963001",
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d5-tables-and-node-collections/source.md",
+      "title": "D5 Tables and Node Collections",
+      "role": "accepted-design-input",
+      "topic": "D5",
+      "main": true,
+      "bytes": 28034,
+      "lines": 150,
+      "blobAtFixedS": "166b1aebd43c00bb9c1152c567efbd46c7b5ffb8",
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D5_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d5-terminology-and-naming-lexicon/source.md",
+      "title": "D5 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D5",
+      "main": false,
+      "bytes": 8169,
+      "lines": 51,
+      "blobAtFixedS": "5fb74df2d79350ae98fe0a267f994983b609de19",
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D5_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d6-control-interfaces/source.md",
+      "title": "D6 Control Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 83610,
+      "lines": 324,
+      "blobAtFixedS": "32a8a863d1a86bb3f3dbaedc4e4eebf005c3f8a4",
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d6-storage-transactions-permissions-and-sync/source.md",
+      "title": "D6 Storage Transactions Permissions and Sync",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": true,
+      "bytes": 49757,
+      "lines": 231,
+      "blobAtFixedS": "c2673e1e72b8a2cb96f0e6cae5f4f2035cf12c6b",
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d6-terminology-and-naming-lexicon/source.md",
+      "title": "D6 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 25128,
+      "lines": 81,
+      "blobAtFixedS": "6a9038fd6e70b2be3760811d73d2e5077c0ab5a2",
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d6-terminology-registry/source.json",
+      "title": "D6 Terminology Registry",
+      "role": "accepted-design-input",
+      "topic": "D6",
+      "main": false,
+      "bytes": 57101,
+      "lines": 991,
+      "blobAtFixedS": "5f4b28d9cf8a237cfa7e7ed8e41143571e5731a6",
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d7-definition-transfer/source.md",
+      "title": "D7 Definition Transfer",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 11815,
+      "lines": 59,
+      "blobAtFixedS": "4adeac0b31bd16cd2d8fce5ada35e30f0e15353c",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-execution-and-action-interfaces/source.md",
+      "title": "D7 Execution and Action Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 33878,
+      "lines": 159,
+      "blobAtFixedS": "b163966f42efb875907a734e611122f304a5d55f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-narrow-field-qualification/source.md",
+      "title": "D7 Narrow Field Qualification",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 10577,
+      "lines": 48,
+      "blobAtFixedS": "624ef9921a818014ef041a3db65960d3c4d22d4f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-prepared-action-binding/source.md",
+      "title": "D7 Prepared Action Binding",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 11363,
+      "lines": 57,
+      "blobAtFixedS": "af7c1231b4937e15ca2527336abf72bb3f05c977",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-preview-and-effects-transport/source.md",
+      "title": "D7 Preview and Effects Transport",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 25222,
+      "lines": 123,
+      "blobAtFixedS": "0677a2cf98def5fc61f43c66197716f18fc51cd1",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-query-algebra/source.md",
+      "title": "D7 Query Algebra",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 42472,
+      "lines": 231,
+      "blobAtFixedS": "bd5f861cf0d207edb6be43acfedbd7481f05c092",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-query-view-action/source.md",
+      "title": "D7 Query View Action",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": true,
+      "bytes": 12702,
+      "lines": 79,
+      "blobAtFixedS": "feddfc703e9dc63c7606d1ed4a872a6124b33a94",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-scenario-dispositions/source.md",
+      "title": "D7 Scenario Dispositions",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 23171,
+      "lines": 220,
+      "blobAtFixedS": "857aab2a4a16820fd2b479ef505ae43899dbca34",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-terminology-and-naming-lexicon/source.md",
+      "title": "D7 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 58480,
+      "lines": 845,
+      "blobAtFixedS": "51996db30be35c029851aac856e806d4dad9d9c6",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-terminology-registry/source.json",
+      "title": "D7 Terminology Registry",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 61730,
+      "lines": 1012,
+      "blobAtFixedS": "4615d8c03df22ba9630728f946715de8e4308438",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-value-and-cel-profile/source.md",
+      "title": "D7 Value and CEL Profile",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 27655,
+      "lines": 147,
+      "blobAtFixedS": "a9afa8c8c916918497126f04577b7d7f23c2adf7",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d7-view-contract/source.md",
+      "title": "D7 View Contract",
+      "role": "accepted-design-input",
+      "topic": "D7",
+      "main": false,
+      "bytes": 21581,
+      "lines": 119,
+      "blobAtFixedS": "fccf7c99b7ca3125d4001fe58db36c5dae36835f",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-acceptance-matrix/source.json",
+      "title": "D8 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 78383,
+      "lines": 1287,
+      "blobAtFixedS": "ff8b4e9b65d35c91862e02dc4160dbae51f8b5ea",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-acceptance-matrix/source.md",
+      "title": "D8 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 60887,
+      "lines": 177,
+      "blobAtFixedS": "549e6cfb0f8f4b840f99c64545d3f6b91fabc782",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-direction-and-accessibility/source.md",
+      "title": "D8 Direction and Accessibility",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 16615,
+      "lines": 120,
+      "blobAtFixedS": "30a2f69fe3e2e314618da6649dd81b699405269e",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-editor-and-cross-surface-interaction/source.md",
+      "title": "D8 Editor and Cross-Surface Interaction",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": true,
+      "bytes": 28744,
+      "lines": 192,
+      "blobAtFixedS": "8bef38395d3debb82b2b3ffa2461825b270cf742",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-editor-interfaces/source.md",
+      "title": "D8 Editor Interfaces",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 40338,
+      "lines": 226,
+      "blobAtFixedS": "25cc65e63ad15211024f76053ae9eb335bd5de2f",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-terminology-and-naming-lexicon/source.md",
+      "title": "D8 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D8",
+      "main": false,
+      "bytes": 4614,
+      "lines": 34,
+      "blobAtFixedS": "a0478a53a7ba191c068610a51c526e64841aad66",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-acceptance-matrix/source.md",
+      "title": "D9 Acceptance Matrix",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 13182,
+      "lines": 88,
+      "blobAtFixedS": "433872d86808debd6ac05bafe1b7c2b10cde14dc",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-conversion-templates-and-workers/source.md",
+      "title": "D9 Conversion Templates and Workers",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": true,
+      "bytes": 25714,
+      "lines": 129,
+      "blobAtFixedS": "09ae93591c8394c9ca01f4972a052713e08eaa05",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "title": "D9 Coordinated D3 D7 Binding Amendment",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 14894,
+      "lines": 85,
+      "blobAtFixedS": "01efb97587a33670f4a63783015843070a3099db",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-import-ir-and-mapping/source.md",
+      "title": "D9 Import IR and Mapping",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 26824,
+      "lines": 153,
+      "blobAtFixedS": "05ea6c59b0687062765e3cfb5ef29e2741ef0764",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-templates/source.md",
+      "title": "D9 Templates",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 35053,
+      "lines": 171,
+      "blobAtFixedS": "f3318ee0f8de190b95758898a434ec4c17c0f61c",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md",
+      "title": "D9 Terminology and Naming Lexicon",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 6168,
+      "lines": 47,
+      "blobAtFixedS": "9dd39f6fe1e8d6924ca492ec596f902b158eb32b",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-workers-and-export/source.md",
+      "title": "D9 Workers and Export",
+      "role": "accepted-design-input",
+      "topic": "D9",
+      "main": false,
+      "bytes": 32593,
+      "lines": 149,
+      "blobAtFixedS": "e0698ccab275b02681ece827c79d982001a987a4",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "title": "D1 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D1",
+      "main": false,
+      "bytes": 7522,
+      "lines": 95,
+      "blobAtFixedS": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D1_acceptance"
+    },
+    {
+      "path": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "title": "D2 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D2",
+      "main": false,
+      "bytes": 8050,
+      "lines": 101,
+      "blobAtFixedS": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "readStatus": "full_read_this_batch",
+      "a2Disposition": "integrated_D2_acceptance"
+    },
+    {
+      "path": "docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md",
+      "title": "D3 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D3",
+      "main": false,
+      "bytes": 19979,
+      "lines": 171,
+      "blobAtFixedS": "357fa155b7ab97f4220055148ba8de1b8f4c14ca",
+      "readStatus": "full_read_D3_batch",
+      "a2Disposition": "integrated_D3_impact_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d4-implementation-impact-and-test-outline/source.md",
+      "title": "D4 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D4",
+      "main": false,
+      "bytes": 44559,
+      "lines": 310,
+      "blobAtFixedS": "3933f08f915bcb14f630ca8459dc7c7c4043eb69",
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D4_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d5-implementation-impact-and-test-outline/source.md",
+      "title": "D5 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D5",
+      "main": false,
+      "bytes": 8048,
+      "lines": 57,
+      "blobAtFixedS": "c44a98baf72cd8a42f1f7e5d2819cbca9d9c7e96",
+      "readStatus": "full_read_D4D5_batch",
+      "a2Disposition": "integrated_D5_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d6-implementation-impact-and-test-outline/source.md",
+      "title": "D6 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D6",
+      "main": false,
+      "bytes": 10713,
+      "lines": 74,
+      "blobAtFixedS": "35cf68fd6986d812d7f812180d7bb396d2a4f4e1",
+      "readStatus": "full_read_D6_batch",
+      "a2Disposition": "integrated_D6_candidate"
+    },
+    {
+      "path": "docs/design/snapshots/d7-implementation-impact-and-test-outline/source.md",
+      "title": "D7 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D7",
+      "main": false,
+      "bytes": 14074,
+      "lines": 77,
+      "blobAtFixedS": "d4528248f0d1a3e9c47dd5e3b7a06005969061a7",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d8-implementation-impact-and-test-outline/source.md",
+      "title": "D8 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D8",
+      "main": false,
+      "bytes": 7640,
+      "lines": 66,
+      "blobAtFixedS": "9856514edfe5f843566a7b5c1f79642683391a39",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md",
+      "title": "D9 Implementation Impact and Test Outline",
+      "role": "implementation-obligations",
+      "topic": "D9",
+      "main": false,
+      "bytes": 9931,
+      "lines": 64,
+      "blobAtFixedS": "cbf53ac8b0a4096ea16705bcd06894db597fd9bf",
+      "readStatus": "todo_unread_this_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    },
+    {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "title": "D4-D10-A2 Mandatory Scenario Inputs 2026-08-28",
+      "role": "scenario-intake",
+      "topic": "D4-D10-A2",
+      "main": false,
+      "bytes": 179938,
+      "lines": 1141,
+      "blobAtFixedS": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "readStatus": "full_read_D4D5_applicable_sections_1_14_lines_1_924; lines_925_1141_not_read_this_batch",
+      "a2Disposition": "integrated_D4_D5_applicable_pressure_inputs; later_D6_D10_only_scope_pending"
+    },
+    {
+      "path": "docs/design/snapshots/d8-rtl-and-bidirectional-interaction-mandatory-review-intake-2026-09-01/source.md",
+      "title": "D8 RTL and Bidirectional Interaction Mandatory Review Intake 2026-09-01",
+      "role": "scenario-intake",
+      "topic": "D8",
+      "main": false,
+      "bytes": 7259,
+      "lines": 69,
+      "blobAtFixedS": "a7c1984777307d3a1945e2cd373f98be7bf1ad44",
+      "readStatus": "fully_read_and_mapped_d8_batch",
+      "a2Disposition": "defer_to_later_A2_batch"
+    }
+  ],
+  "current_read_evidence": [
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.md",
+      "blob": "1bdf16ea6c5f7deddd7d5e06dce0cddb7be28cbb",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "blob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-implementation-impact-and-test-outline/source.md",
+      "blob": "ad122240e58c288ff9cb4ee408eb81ccfa81243b",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d1-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "ad79351e2435401414704ea6ae34117e6903eb75",
+      "read": "full"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "blob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d10/TASK.md",
+      "blob": "52b51f14cbca8107fdf13ddf29fab6d9cd04bb5b",
+      "read": "task/navigation; D10 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.zh-CN.md",
+      "blob": "100a15785e55f7b9c229a4a9110bfae763ad6c67",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
+      "blob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "5652ccdba806ebd891e4c6708f5621c915b408ae",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
+      "blob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.zh-CN.md",
+      "blob": "b0103ec01f5d1f393c88f727820922d22ad2b309",
+      "read": "full D3 batch"
+    },
+    {
+      "path": "docs/design/d10/CANDIDATE.zh-CN.md",
+      "blob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
+      "blob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
+      "blob": "6806d31107036e75147cd6213129c59e3f8819b6",
+      "read": "full; D3 direct-consumer only, owning full A2 module not integrated"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.md",
+      "blob": "42f3e6015ad7986eb285f4c2c8dd67b842608ab3",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-attribute-types-schema-and-relations/source.zh-CN.md",
+      "blob": "a35a732786a27424366c83dfa1e6eac799282cd3",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.md",
+      "blob": "534fd5c65ffaf6da37a59b66d4ff385a43be7285",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "506ca343883a22c86c93bd980a7f119c065f8fcb",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.md",
+      "blob": "b7bb81f5f191774bc0f694cfc16944c7b2b414df",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d4-terminology-and-naming-lexicon/source.zh-CN.md",
+      "blob": "db70c4c6d92105b84275a9c373f5a2301a6ee17a",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md",
+      "blob": "5ebd6aa535bfed698f5a1031060ec729864829e6",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.zh-CN.md",
+      "blob": "b691987c4537da74645cd8ceee774637544d29a4",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.md",
+      "blob": "2f45513d35e444c7c852c4238a091227e8e40e42",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-implementation-impact-and-test-outline/source.zh-CN.md",
+      "blob": "a21df9e25ee084de5cf5f684afa59a153fc1a8fd",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.md",
+      "blob": "6187958f97d8791b7d58df4cc0f48bf1ced70b18",
+      "read": "full_file_consumed_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d5-terminology-and-naming-lexicon/source.zh-CN.md",
+      "blob": "b83d772758ba6b75b2236b782168eca65ddee888",
+      "read": "full_file_consumed_and_bilingual_paired_D4D5_batch"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md",
+      "blob": "e69c34e74aa8fbca00f77c89ac52778186630032",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "blob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-query-view-action/source.md",
+      "blob": "6d75b79fa3173772d5cb996c264c41c06c6a4315",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-prepared-action-binding/source.md",
+      "blob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d7-preview-and-effects-transport/source.md",
+      "blob": "32e9a5f889a6627e05a397d9738ff171982f0838",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-and-cross-surface-interaction/source.md",
+      "blob": "3fdf8a8279752818af2c0adc21d2d070eea1ea39",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "blob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.md",
+      "blob": "b9ff7da0ab0bcce23fe3f4b6510a8743b6138f8f",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.md",
+      "blob": "d9eb42eef8537b7b7fe5f3d60819c3ed3403c1d8",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.md",
+      "blob": "bc79681ffdb05b59869f558c958a9a606cb98a5f",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+      "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+      "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
+      "read": "D4D5_direct_intersection_partial_not_full_owner_module"
+    }
+  ],
+  "obligation_groups": [
+    {
+      "id": "D1-fixed-core",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§§1-9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§1-6"
+      },
+      "disposition": "retain_with_named_afterimage",
+      "basis": "five surfaces/Core authority retained; global single-device interpretation replaced by per-physical-replica/hosted-backend holder",
+      "oracles": []
+    },
+    {
+      "id": "D1-capability",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§7"
+      },
+      "disposition": "retain",
+      "basis": "ten reasons/order/masking and stable semantics copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D1-release",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§§11-12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§8"
+      },
+      "disposition": "retain",
+      "basis": "G1/G1.1/G2 artifacts/evidence/signing/parallel dependencies copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S1",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S1"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S2",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S2"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S3",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S3"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S4",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S4"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S5",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S5"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S6",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S6"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S7",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S7"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S8",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S8"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S9",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S9"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-fixed-S-S10",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§15 S10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.1 fixed-S:S10"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "same textual ID as later owner does not merge or replace this scenario",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-01",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 1"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-02",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 2"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-03",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 3"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-04",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 4"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-05",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 5"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-06",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 6"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-07",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 7"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-08",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 8"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-09",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 9"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-10",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 10"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-11",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 11"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-12",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 12"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-impact-test-13",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "test outline item 13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1 item 13"
+      },
+      "disposition": "retain",
+      "basis": "original implementation-impact condition preserved explicitly",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-afterimage",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§§1-10,16-18",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§1-6,9-10,12.2"
+      },
+      "disposition": "retain_and_integrate",
+      "basis": "registered replicas/per-backend holder/multi-session/execution responsibility/large-workspace state are current",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S1",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S1"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S2",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S2"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S3",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S3"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S4",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S4"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S5",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S5"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S6",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S6"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S7",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S7"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S8",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S8"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S9",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S9"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D1-current-owner-S10",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d1-product-surface-and-capability-boundary/source.zh-CN.md",
+      "sourceBlob": "ce276dbf0e23b55cf127b688d5be446a9bcfec11",
+      "sourceSection": "§15 S10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§11.2 current-owner:S10"
+      },
+      "disposition": "retain_source_qualified",
+      "basis": "different source-qualified scenario set from fixed-S S1-S10",
+      "oracles": []
+    },
+    {
+      "id": "D2-domain",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§§1-3,7-10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,7-9"
+      },
+      "disposition": "retain_with_current_D5_record_supersession",
+      "basis": "Node/Document/order/Task facet/Template/owner-local Resource+Annotation/occurrence-only View remain current. The fixed-S option for a separate durable Record domain is historical only: current D5 owner §§1-2 defines no persistent Record/RecordCollection domain and reserves no RecordRef; D4 facts/value occurrences, native Document rows/cells, derived NodeCollection rows, and external/IR rows retain their real domains and gain no new durable identity or NodeRef coercion.",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-profile",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§4 Weftext AsciiDoc Profile v2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§10"
+      },
+      "disposition": "supersede_fresh_current_retain_historical",
+      "basis": "closed subset is not current language ceiling; genuine historical wire/profile tests remain",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-wire",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§5 wire v2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,14"
+      },
+      "disposition": "historical_only",
+      "basis": "fresh product uses /3; historical decoder/bytes recovery retained",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-title",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§3.2 title admission + §4.2 explicit title grammar",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§4"
+      },
+      "disposition": "supersede_fresh_current",
+      "basis": "current native-valid titleless source is positive; no synthesized authored title",
+      "oracles": []
+    },
+    {
+      "id": "D2-old-annotation",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§5.10 Annotation snapshots",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§8"
+      },
+      "disposition": "supersede_fresh_current_retain_historical",
+      "basis": "current portable Value/4+R6+aggregate CAS; old Value3/plain paths historical",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-01",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-02",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-03",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-04",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-05",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-06",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-07",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-08",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-09",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-10",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-11",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "profile-specific cases split between historical and current native semantics",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-12",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "profile-specific cases split between historical and current native semantics",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-13",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-14",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 14",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-15",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 15",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-main-test-16",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§12 test group 16",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition group retained or mapped by named supersession",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-01",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-02",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "historical Profile-v2/plain-Annotation expectations versioned; remaining condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-03",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-04",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-05",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-06",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "historical Profile-v2/plain-Annotation expectations versioned; remaining condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-07",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-08",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-09",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-10",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-11",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-test-12",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4 test group 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "mapped_source_qualified",
+      "basis": "condition retained under current model",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-01",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-02",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-03",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-04",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-05",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-06",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-07",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 7",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-08",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 8",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-09",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 9",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-10",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 10",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-11",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-impact-retirement-12",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3 retirement item 12",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede",
+      "basis": "retirement remains except open-AsciiDoc/Annotation targets are reclassified according to current complete native model rather than deleted as current capability",
+      "oracles": []
+    },
+    {
+      "id": "D2-current-spec",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "sourceBlob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+      "sourceSection": "§§1-5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§2-3,6-7,11"
+      },
+      "disposition": "retain_copy_into_A2",
+      "basis": "complete fixed-2.0.26 language, environment, Witness/CSP/product/provider/managed-format semantics copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D2-current-schema",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+      "sourceBlob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
+      "sourceSection": "§§1-4.4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§12"
+      },
+      "disposition": "retain_copy_into_A2",
+      "basis": "current processor/oracle/Witness/product closed schemas copied into A2",
+      "oracles": []
+    },
+    {
+      "id": "D2-title-D3-consumer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "sourceSection": "§8.1 create_node",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§4"
+      },
+      "disposition": "consumer_evidence",
+      "basis": "create_node requires D2-valid source and adds no title gate",
+      "oracles": []
+    },
+    {
+      "id": "D2-read-D8-consumer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d8-editor-interfaces/source.md",
+      "sourceBlob": "25b2a404e2e613fb80adcc2b8d9557e90cc1adda",
+      "sourceSection": "§§2-5,9 relevant",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§4-5,9,14"
+      },
+      "disposition": "consumer_evidence_partial",
+      "basis": "current read/Draft/source prepare/recovery uses exact source and D2 snapshot; current overlay supplies /3 product",
+      "oracles": []
+    },
+    {
+      "id": "D2-save-D6-consumer",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-storage-transactions-permissions-and-sync/source.md",
+      "sourceBlob": "21c0c45dbda8249880a5a66abc75aba50515c4e5",
+      "sourceSection": "§§5-8 relevant",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§5,9,14"
+      },
+      "disposition": "consumer_evidence_partial",
+      "basis": "ordinary save/strict-observed distinction/SourceRevisionPlan/seal/recovery intersect D2 exact source",
+      "oracles": []
+    },
+    {
+      "id": "D2-D7D9-consumers",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+      "sourceBlob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+      "sourceSection": "§§8.1-8.4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§9"
+      },
+      "disposition": "retain_copy_semantics",
+      "basis": "D7 consumes product projection; D9 exact source/resource/query_json generationPolicy none; historical direct holders remain versioned",
+      "oracles": []
+    },
+    {
+      "id": "D2-current-acceptance",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "sourceBlob": "466f3b2d7ee4e735cddc3ee4a466dcb45e065571",
+      "sourceSection": "AD2/O34/P35/N36/M37/M38/M39/FC4A-PROD/FC4F-PROD rows",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "current rows copied as unexecuted design obligations; prior limited review is not global acceptance",
+      "oracles": []
+    },
+    {
+      "id": "D5-current-record-boundary",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d5-tables-and-node-collections/source.md",
+      "sourceBlob": "5ebd6aa535bfed698f5a1031060ec729864829e6",
+      "sourceSection": "§§1-2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,10"
+      },
+      "disposition": "supersede_historical_record_option_for_current_generation",
+      "basis": "Current D5 rejects a persistent Record/RecordCollection domain for this generation and reserves no RecordRef. D4 facts/value occurrences, native Document row/cell occurrences, derived NodeCollection rows, and external/IR rows remain distinct without new durable identity; no NodeRef coercion or ad-hoc discriminator is introduced.",
+      "oracles": []
+    },
+    {
+      "id": "D1-main-nongoals",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§1-3,13"
+      },
+      "disposition": "retain_boundary",
+      "basis": "D1 current authority/global invariants keep the five-surface/Core-authority exclusions; batch/history section keeps implementation/release non-claims. No D2-D10 semantics are re-owned."
+    },
+    {
+      "id": "D1-main-alternatives",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§14",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§2-6,10,13"
+      },
+      "disposition": "retain_rationales",
+      "basis": "Rejected second-authority, browser-local-Workspace, server-only-authority, sync-as-collaboration, direct worker/Agent write and overclaim alternatives remain prohibited; later afterimages only refine concurrency/evidence."
+    },
+    {
+      "id": "D1-main-downstream-constraints",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§16",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§2-7,10,12.2"
+      },
+      "disposition": "retain_and_integrate",
+      "basis": "D2-D10 constraints remain the D1 boundary; current per-replica/server-holder and execution-responsibility afterimages are the named current refinement, not a new owner."
+    },
+    {
+      "id": "D1-main-implementation-graph",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§17",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12"
+      },
+      "disposition": "retain_unimplemented",
+      "basis": "Implementation graph remains a future implementation obligation; A2 design author changes no product code and grants no implementation evidence."
+    },
+    {
+      "id": "D1-main-test-outline",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§18",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§11-12"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "Static/call-boundary/parity/mode/capability/security/release/copy/retirement obligations remain; scenario IDs are source-qualified separately and none is claimed run."
+    },
+    {
+      "id": "D1-main-freeze-status",
+      "sourcePath": "docs/design/snapshots/d1-product-surface-and-capability-boundary/source.md",
+      "sourceBlob": "38a763cd2b0d7c1c1260f3bdad6787b5ac565798",
+      "sourceSection": "§19",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§13-14"
+      },
+      "disposition": "retain_as_provenance_supersede_old_next_topic",
+      "basis": "Historical freeze/review evidence is provenance. Its then-next-topic D2 sequencing is historical; A2 batch progression is controlled by the current A2 author/coordinator and is not product activation."
+    },
+    {
+      "id": "D2-main-diagnostics-repair-commit",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10-13"
+      },
+      "disposition": "retain_with_named_current_language_supersession",
+      "basis": "Exact span/primary selection, no-auto-repair and D2∧downstream commit composition remain load-bearing. Profile-v2-only diagnostic families/Annotation assumptions are historical where fixed97 current native/Product/Value4 contracts explicitly supersede them."
+    },
+    {
+      "id": "D2-main-implementation-retirement",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§11",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede_unimplemented",
+      "basis": "Retirement/deletion proof remains an implementation obligation. Open-AsciiDoc/plain-Annotation/D5-Record-option rows are source-qualified historical where current native AsciiDoc, Value4 and current D5 no-Record selection supersede them; no product retirement is claimed executed."
+    },
+    {
+      "id": "D2-main-freeze-activation",
+      "sourcePath": "docs/design/snapshots/d2-document-content-and-domain-objects/source.md",
+      "sourceBlob": "9fd7218408b0aa438109c8ff5ca24dd408840b1a",
+      "sourceSection": "§13",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§14-15"
+      },
+      "disposition": "retain_as_historical_activation_provenance",
+      "basis": "Old D2-v2 atomic D2/D3 generation gate and no-implementation claim remain provenance. Current A2 integrates later actual owner generations; no fictional migration, implementation or activation is inferred."
+    },
+    {
+      "id": "D1-impact-sec1",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12"
+      },
+      "disposition": "retain_unimplemented",
+      "basis": "Implementation graph is retained as future implementation scope; no code evidence claimed."
+    },
+    {
+      "id": "D1-impact-sec2",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12"
+      },
+      "disposition": "retain_unimplemented",
+      "basis": "Component/second-authority prohibitions remain and are reflected by current A2 surface/Core ownership."
+    },
+    {
+      "id": "D1-impact-sec3",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§8"
+      },
+      "disposition": "retain_release_slice",
+      "basis": "G1/G1.1/G2 and D9/D10 dependency slicing remains source-qualified release provenance; current support still needs real evidence."
+    },
+    {
+      "id": "D1-impact-sec4",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§12-13"
+      },
+      "disposition": "retain_unimplemented_retirement",
+      "basis": "Deletion/replacement targets remain implementation retirement obligations; no compatibility bridge is authorized."
+    },
+    {
+      "id": "D1-impact-sec5",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§12.1"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "All thirteen original test items are mapped individually and remain unexecuted."
+    },
+    {
+      "id": "D1-impact-sec6",
+      "sourcePath": "docs/design/snapshots/d1-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6e1112457e1cfe61c53ed5a25fc46696722ac186",
+      "sourceSection": "§6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D1.md",
+        "section": "§§12-14"
+      },
+      "disposition": "retain_acceptance_boundary",
+      "basis": "Freeze proves design implementability only, not repository conformance or Supported claims."
+    },
+    {
+      "id": "D2-impact-sec1",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§1",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,7-10,13"
+      },
+      "disposition": "retain_with_named_supersession",
+      "basis": "Domain/implementation graph remains source history; current native AsciiDoc, Value4 and current D5 no-Record selection supersede its Profile-v2/plain-Annotation/optional-Record current assumptions."
+    },
+    {
+      "id": "D2-impact-sec2",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§2",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§1,7-10,13"
+      },
+      "disposition": "retain_with_named_supersession",
+      "basis": "Component second-authority prohibitions remain; historical parser/Annotation/D5-option details dispatch by source generation."
+    },
+    {
+      "id": "D2-impact-sec3",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§3",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,13"
+      },
+      "disposition": "retain_or_named_supersede_unimplemented",
+      "basis": "All twelve retirement targets are mapped individually; current language/Annotation/D5 decisions are named supersessions, and no product deletion is claimed."
+    },
+    {
+      "id": "D2-impact-sec4",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§4",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§13"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "All twelve test groups remain source-qualified design obligations; incompatible Profile-v2/plain-Annotation expectations are historical only."
+    },
+    {
+      "id": "D2-impact-sec5",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§5",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§§10,14"
+      },
+      "disposition": "retain_as_historical_generation_boundary",
+      "basis": "D2-v2/D3-wire9 atomic-switch text is historical generation provenance; exact-source/non-durable carrier negatives remain principles, while current generations dispatch by actual recorded/current types."
+    },
+    {
+      "id": "D2-impact-sec6",
+      "sourcePath": "docs/design/snapshots/d2-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "956b3b768b97704c2e95dd8242b69507698ad3a7",
+      "sourceSection": "§6",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D2.md",
+        "section": "§15"
+      },
+      "disposition": "retain_acceptance_boundary",
+      "basis": "D2 impact freeze never proves repo implementation; later implementation still needs Core/surface/fixture/test/public-doc evidence."
+    },
+    {
+      "id": "D3-fixed-S-main",
+      "sourcePath": "docs/design/snapshots/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "bc23922ae2de4c80dadc7b91e945c87ce154b55a",
+      "sourceSection": "entire source; §14 cases 1-51; §18 outlines 1-138",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3.md",
+        "section": "entire current D3 body; case map in D3-SOURCE-MAP.json"
+      },
+      "disposition": "retain_with_named_current_successors",
+      "basis": "Identity/stage/error/auth/lifecycle/Trash/copy/fork/import/continue/Result9/DefinitionTransfer obligations retained; only exact current producer versions are named successors.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed_s_main_14"
+        },
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed_s_main_18"
+        }
+      ]
+    },
+    {
+      "id": "D3-fixed-S-impact",
+      "sourcePath": "docs/design/snapshots/d3-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "357fa155b7ab97f4220055148ba8de1b8f4c14ca",
+      "sourceSection": "entire source",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-IMPACT.md",
+        "section": "entire companion"
+      },
+      "disposition": "retain_unexecuted",
+      "basis": "Implementation/test obligations retained; no runtime execution claimed.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed_s_main_18"
+        }
+      ]
+    },
+    {
+      "id": "D3-fixed-S-lexicon",
+      "sourcePath": "docs/design/snapshots/d3-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "f2ce910cd2cfbd9dcfb1e65a4c010e42c64d0344",
+      "sourceSection": "all ordinary sections; all 42 concepts; global retired registry; gates/examples",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-LEXICON.md",
+        "section": "entire companion; controlled projection in D3-TERMS.json"
+      },
+      "disposition": "retain_names_and_gates_with_named_definition_successors",
+      "basis": "All concept IDs, owned names, semantic non-aliases and fixed-S firstFreeze are retained. Annotation plain-text definition is the named Value4/R6 supersession.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "lexicon"
+        }
+      ]
+    },
+    {
+      "id": "D3-current-parent-main",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-identity-references-ownership-and-lifecycle/source.md",
+      "sourceBlob": "d27f3b77f41803ce05d2ff700c65cfdd3f8c618e",
+      "sourceSection": "entire bilingual current parent; §19 cases 1-79",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3.md",
+        "section": "entire file"
+      },
+      "disposition": "integrate_parent_with_fixed97_current_successors",
+      "basis": "Parent semantic detail retained; fresh-current versions updated only where fixed97 defines exact successors, historical records remain historical.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "current_parent_main_19"
+        }
+      ]
+    },
+    {
+      "id": "D3-current-parent-impact",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-implementation-impact-and-test-outline/source.md",
+      "sourceBlob": "6aa10c866cac94a31278947fc082ce5d6f5996d5",
+      "sourceSection": "entire bilingual current parent; §20 cases 56-79",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-IMPACT.md",
+        "section": "entire file"
+      },
+      "disposition": "integrate_unexecuted",
+      "basis": "All implementation/test conditions remain design obligations; current carriers updated without product-run claim.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "current_parent_impact_20"
+        }
+      ]
+    },
+    {
+      "id": "D3-current-parent-lexicon",
+      "sourcePath": "docs/design/d6-file-authority-reopen/owners/d3-terminology-and-naming-lexicon/source.md",
+      "sourceBlob": "98a87613d34854e8e27143928fab79f9c0a8a62f",
+      "sourceSection": "entire bilingual current parent",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-LEXICON.md",
+        "section": "entire file"
+      },
+      "disposition": "integrate_current_definitions_preserve_controlled_sets",
+      "basis": "Current producer wording and Annotation definition coordinated while fixed-S controlled naming sets remain authoritative.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "lexicon"
+        }
+      ]
+    },
+    {
+      "id": "D3-fixed97-direct-acceptance",
+      "sourcePath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "sourceBlob": "f5f5b9b212b281838aabc281171217623285820e",
+      "sourceSection": "73 D3-direct rows selected from complete 760-row bilingual inventory",
+      "a2Target": {
+        "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+        "section": "fixed97_d3_direct_acceptance"
+      },
+      "disposition": "retain_unexecuted_current_coordination",
+      "basis": "D3-direct rows preserved verbatim in both languages; no count substitutes for row conditions.",
+      "oracles": [
+        {
+          "file": "docs/design/a2-final-design/D3-SOURCE-MAP.json",
+          "set": "fixed97_d3_direct_acceptance"
+        }
+      ]
+    }
+  ],
+  "next_batch": "Independent non-author full D10 fixed-actual-HEAD reading of source 18, S49, all 125 cases, actual current owners/mixed versions and final D10 delta; then a separate fresh Pro full A2 fixed-SHA independent review. Neither author nor historical D9 acceptance may declare D10/global PASS; acceptedDesignSha and same-SHA freeze/implementation start are later.",
+  "global_acceptance": "not_performed: D10 full non-author and fresh Pro all-A2 both pending; D9 only ACCEPT bounded fixed8d7",
+  "d4d5_integration": {
+    "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
+    "d4": {
+      "main": "D4.md",
+      "impact": "D4-IMPACT.md",
+      "lexicon": "D4-LEXICON.md",
+      "sourceMap": "D4-SOURCE-MAP.json",
+      "catalogMap": "D4-CATALOG-MAP.json",
+      "fixedSourceCount": 4,
+      "catalogNamedRecords": 95,
+      "catalogGlobalLimits": 7,
+      "catalogJsonPointers": 2854
+    },
+    "d5": {
+      "main": "D5.md",
+      "impact": "D5-IMPACT.md",
+      "lexicon": "D5-LEXICON.md",
+      "sourceMap": "D5-SOURCE-MAP.json",
+      "fixedSourceCount": 3,
+      "rowDomains": 6,
+      "persistentRecordDomain": false
+    },
+    "mandatory": {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "readLines": "1-924",
+      "unreadLines": "925-1141",
+      "nonblankMapped": 716
+    },
+    "review": {
+      "d1d2": "fixed-446 independent CLOSED retained",
+      "d3": "fixed-a62 independent narrow CLOSED D3:P1-01 and D3:P1-02",
+      "fixed_a62": "Historical fixed-object verdict only: a62aa7d4eaf56113cd1e9e32336ae8814f83589b: P0=0/P1=0/P2=2; D4/D5 semantic LIMITED PASS, audit package REVISE",
+      "review_request": "7b6e1f16-fa41-499c-b078-647f1942e94e",
+      "p2_01": "bounded independent CLOSED at fixed1fc4: prior R2 closure and 188/202 R1 pass plus all 14 residuals passed",
+      "p2_02": "bounded independent CLOSED at fixed4282",
+      "independentClose": true,
+      "fixed_4282": "4282d416e6a1ea4a344a2647d9a2feb82e3ba15a follow-up independent review completed",
+      "fixed_32cf": "Historical fixed-object verdict only: 32cfb9c387deddb12fb021a44147df0d7ffab322 independent review object: R2 CLOSED; R1 188/202 passed with 14 residuals",
+      "r1_followup": "all 14 residual mappings independently passed at 1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc",
+      "r2": "independent CLOSED at fixed32cf",
+      "latestReviewSha": "1fc4a3937bbc06b4785d39f1eaf498f3c9c39abc"
+    },
+    "runtime": "UNRUN",
+    "auditCoverage": {
+      "d4FixedSNonblank": "906/906",
+      "d5FixedSNonblank": "170/170",
+      "mandatoryNonblankLines1_924": "716/716",
+      "catalogPointers": "2854/2854",
+      "catalogNamedRecords": 95,
+      "catalogGlobalLimits": 7,
+      "fixed97D4BilingualRows": "72/72",
+      "fixed97D5BilingualRows": "130/130",
+      "d10DirectBilingualFiles": "6 exact blobs",
+      "catalogJsonPointerRoot": "RFC 6901 root is \"\"; \"/\" is not used as the document-root pointer"
+    }
+  },
+  "d6_integration": {
+    "files": [
+      "D6.md",
+      "D6.zh-CN.md",
+      "D6-CONTROL.md",
+      "D6-CONTROL.zh-CN.md",
+      "D6-SCHEMAS.md",
+      "D6-SCHEMAS.zh-CN.md",
+      "D6-IMPACT.md",
+      "D6-IMPACT.zh-CN.md",
+      "D6-LEXICON.md",
+      "D6-LEXICON.zh-CN.md",
+      "D6-REGISTRY.json",
+      "D6-SOURCE-MAP.json",
+      "D6-SOURCE-MAP.md",
+      "D6-SOURCE-MAP.zh-CN.md"
+    ],
+    "status": "fixed2f89 independently closed A2-D6-01CC-P2-01 and A2-NAV-454E-P2-01 in bounded navigation scope; prior D6 semantic closures remain limited to recorded scopes.",
+    "reviewFixedSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
+    "repairStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
+    "findings": {
+      "A2-D6-829-P1-01": "independent-CLOSED-at-fixed01cc",
+      "A2-D6-829-P1-02": "independent-CLOSED-at-fixed1fc4",
+      "A2-D6-829-P2-01": "independent-CLOSED-at-fixed5e21",
+      "A2-D6-829-P2-02": "independent-CLOSED-at-fixed1fc4",
+      "A2-D6-829-P2-03": "independent-CLOSED-at-fixed01cc",
+      "A2-D6-01CC-P2-01": "independent-CLOSED-at-fixed2f89"
+    },
+    "runtime": "UNRUN: product/runtime/OS/GUI/crypto/real-replica/crash/provider/performance/migration/activation/deployment",
+    "findingOriginReviewSha": "829efce6aacbe944714e093c98065b01d50b2593",
+    "review": {
+      "verdict": "bounded-closed-navigation-at-fixed2f89",
+      "reviewSha": "2f89a55cb1f924a47281f59e6419fff7c0c206ed",
+      "residuals": {
+        "P1": 0,
+        "P2": 0
+      },
+      "independentlyClosed": [
+        "A2-D6-01CC-P2-01",
+        "A2-NAV-454E-P2-01"
+      ]
+    },
+    "auditCoverage": {
+      "sectionMappings": "299/299 concrete current targets; original 23 fixed-S Control precise placements retained",
+      "fixed97Rows": "760/760 source rows retained",
+      "fixed97D6Intersections": "115/115 complete bilingual rows; five existing precise targets retained; other 110 generic anchors repaired",
+      "registryPointers": "767 fixed-S / 1246 parent-current; exactly four new parent-current named successors, parent named-successor total 24",
+      "registryShape": "52 concepts / 17 cross-stage bindings",
+      "parentImpact": "89 records / 85 unique case IDs / 4 intentional repeats or range-metadata records",
+      "currentMainBlobs": [
+        "50632ba345aeab1e28970e219ec53a7fceea5a3e",
+        "3a4bceae305d30f72b42866f468d4a911dae7f0a"
+      ]
+    },
+    "nextGate": "No D6 navigation repair is pending from fixed454e; D7 fixed2f89 findings proceed separately.",
+    "closureReviewRef": {
+      "path": "D7-SOURCE-MAP.json",
+      "pointer": "/navigation_findings/A2-D6-01CC-P2-01"
+    }
+  },
+  "pending_scope": [
+    "Full D10 independent non-author fixed-final-HEAD review: original 18 EN/ZH files, real nine current pairs, S49 and Mandatory §§1–15/unnumbered, original 125 IDs/positive-negative oracles, current D3–D9/D10 owner versions, exact grants/ToolValue/approval/schedule/stop/Money/recovery/egress and historical distinctions",
+    "Separate fresh Pro complete A2 D1–D10 non-author review with P0/P1=0, all P2 adjudicated and necessary reading gap=0 before acceptedDesignSha can be assigned",
+    "Exact acceptedDesignSha, same-SHA design freeze and implementation-start material must each be separately completed after independent acceptance; none exists now",
+    "D1–D10 product/Core/GUI/OS/IME/AT/Office/real network/external effects/crypto/runtime CAS/races/crash/performance/migration/activation/deployment UNRUN"
+  ],
+  "d7_integration": {
+    "files": [
+      "D7.md",
+      "D7.zh-CN.md",
+      "D7-SCHEMAS.md",
+      "D7-SCHEMAS.zh-CN.md",
+      "D7-SEARCH.md",
+      "D7-SEARCH.zh-CN.md",
+      "D7-IMPACT.md",
+      "D7-IMPACT.zh-CN.md",
+      "D7-REGISTRY.json",
+      "D7-SOURCE-MAP.json",
+      "D7-SOURCE-MAP.md",
+      "D7-SOURCE-MAP.zh-CN.md",
+      "d7/owners/**",
+      "d7/coordination/d9-binding/**",
+      "D7-QUERY-V2.md",
+      "D7-QUERY-V2.zh-CN.md",
+      "D7-REGISTRY-QUALIFICATION.md",
+      "D7-REGISTRY-QUALIFICATION.zh-CN.md",
+      "D7-SEARCH-FIXTURES.json"
+    ],
+    "status": "fixed26be non-author review PASS P0=0/P1=0/P2=0; final A2-D7-2F89-P2-01 CLOSED",
+    "authorStartSha": "454eaa7ff51b820fc47dfd4735a7c2ac830b1bee",
+    "fixedS13": "FULL",
+    "currentOwnerBilingual": "FULL",
+    "registry": {
+      "fixedSConcepts": 34,
+      "fixedSBindings": 8,
+      "parentCurrentConcepts": 34,
+      "parentCurrentBindings": 13,
+      "blob": "3cab5124f46822729093d5d955908b05eb65bb87",
+      "qualification": "D7-REGISTRY-QUALIFICATION.md"
+    },
+    "search": "SEARCH-01-08 accepted in D7 design scope at fixed26be; D8 runtime/platform interaction evidence remains separate",
+    "sourceMap": "D7-SOURCE-MAP.json",
+    "runtime": "UNRUN",
+    "reviewFixedSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
+    "review": {
+      "verdict": "PASS",
+      "severity": {
+        "P0": 0,
+        "P1": 0,
+        "P2": 0
+      },
+      "independentlyClosedPrior": [
+        "A2-D6-01CC-P2-01",
+        "A2-NAV-454E-P2-01",
+        "COORD-D7-DOC-QUALITY-01",
+        "A2-D7-2F89-P2-02",
+        "A2-D7-2F89-P1-01",
+        "A2-D7-2F89-P1-02",
+        "A2-D7-1068244-P2-01",
+        "A2-D7-2F89-P2-01"
+      ],
+      "openPendingIndependent": []
+    },
+    "repairFiles": [
+      "D7-SEARCH.md",
+      "D7-SEARCH.zh-CN.md",
+      "D7-SEARCH-FIXTURES.json",
+      "D7-IMPACT.md",
+      "D7-IMPACT.zh-CN.md",
+      "D7-SOURCE-MAP.json",
+      "D7-SOURCE-MAP.md",
+      "D7-SOURCE-MAP.zh-CN.md",
+      "SOURCE-MAP.md",
+      "SOURCE-MAP.zh-CN.md",
+      "SOURCE-MAP.json",
+      "README.md",
+      "README.zh-CN.md",
+      "REVIEW-ENTRY.md",
+      "REVIEW-ENTRY.zh-CN.md"
+    ],
+    "repairStartSha": "85bdadf448e0475715b62debe215fa4d04e30ab2",
+    "directCoordination": {
+      "d6Metadata": "D6-owned FileBinding metadata projection under existing entity_state+locator_state",
+      "d9QueryJson": "terminal result export only; saved Query definitions remain D7 Definition Transfer/D3 author path"
+    }
+  },
+  "d8_integration": {
+    "files": [
+      "D8.md",
+      "D8.zh-CN.md",
+      "D8-INTERFACES.md",
+      "D8-INTERFACES.zh-CN.md",
+      "D8-SCHEMAS.md",
+      "D8-SCHEMAS.zh-CN.md",
+      "D8-DIRECTION.md",
+      "D8-DIRECTION.zh-CN.md",
+      "D8-ACCEPTANCE.md",
+      "D8-ACCEPTANCE.zh-CN.md",
+      "D8-ACCEPTANCE.json",
+      "D8-LEXICON.md",
+      "D8-LEXICON.zh-CN.md",
+      "D8-TERMS.json",
+      "D8-REGISTRY.json",
+      "D8-IMPACT.md",
+      "D8-IMPACT.zh-CN.md",
+      "D8-SOURCE-MAP.json",
+      "D8-SOURCE-MAP.md",
+      "D8-SOURCE-MAP.zh-CN.md"
+    ],
+    "status": "D8-C98B-P1-03 independently CLOSED at fixed8b6; fixed5eca/ff10 bounded closures remain; no current D8 open finding is asserted by this author batch",
+    "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
+    "fixedS8": "FULL",
+    "currentOwnerBilingual": "final P1 deferred-layout repair synchronized affected EN/ZH Main/Interfaces/Schemas/Impact/Acceptance; pending exact-final-SHA independent verification",
+    "acceptance": {
+      "fixedCases": 160,
+      "inheritedD6FaCases": 177,
+      "currentOverlay": 36,
+      "totalCurrentObligations": 213,
+      "uniqueIds": 213,
+      "currentAsciiDocAnnotationObligationsMapped": 760,
+      "projectionRoundTrip": "213/213 EN+ZH row IDs in JSON order; six columns per row; ANNOT-01/WRITE-08 polarity repaired"
+    },
+    "search": "SEARCH-01-08 interaction consumes accepted D7 semantics and all 27 current fixtures",
+    "view": "D7 Query/Definition/ViewSpec/1 owner retained; D8 definition-save consumes no ResultHandle. Deferred tree/treemap/sunburst, Gantt and boxplot/quantile fail current static decoding with unsupported_layout; advanced_required applies only to current-decoder-legal members. network/timeline/table retain their real contracts; raw/historical/future bytes remain under their real owner.",
+    "sourceMap": {
+      "structuralAuthority": "D8-SOURCE-MAP.json",
+      "blob": "a4cbcb78b6ede473795be128d67f60db89b1a822"
+    },
+    "runtime": "UNRUN",
+    "review": "fixed8b6 independent verdict CLOSED sole D8-C98B-P1-03; do not reopen that fixed-SHA scope for the D9 author repair. Product execution still UNRUN.",
+    "semanticAudit": {
+      "fixedProseSections": 54,
+      "broadWholeFileTargets": 0,
+      "mappingNavigation": "author-resolved-pending-independent-review",
+      "fcApplicability": "760/760 full-row audit; exact current SPEC section owner on every row; 167 direct + 146 upstream bind concrete D8 section/validator; 447 remain at source owner; 114 authored applicability changes; residual changes pending independent review",
+      "fcApplicabilityChanges": 114,
+      "historicalToCurrentDisposition": "author-resolved-pending-independent-review; historical decoders/bytes retained, no migration fabricated",
+      "perObligationVerification": "author-resolved-pending-independent-review"
+    },
+    "bilingualSyncRepair": {
+      "startSha": "7e3f0272f112cf0b8e61ab14fb9eaf72917e754b",
+      "scope": "main/interfaces/schemas/direction/lexicon/impact/acceptance + entry/status docs",
+      "status": "author-repaired-pending-independent",
+      "sourceInventoryRegenerated": false,
+      "historical": true,
+      "followedBy": "c98b five-finding repair"
+    },
+    "fiveFindingRepair": {
+      "startSha": "c98b1b161751c5a01220da37568c78b5cef13841",
+      "findings": [
+        "D8-C98B-P1-01",
+        "D8-C98B-P1-02",
+        "D8-C98B-P1-03",
+        "D8-C98B-P2-01",
+        "D8-C98B-P2-02"
+      ],
+      "sourceMapBlob": "a4cbcb78b6ede473795be128d67f60db89b1a822",
+      "status": "fixed5eca and ff10 earlier bounded closures retained; sole D8-C98B-P1-03 independently CLOSED at fixed8b6; no D8/global acceptance inferred",
+      "productRuntime": "UNRUN",
+      "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged",
+      "fixed5ecaReview": {
+        "reviewSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+        "independentlyClosed": [
+          "D8-C98B-P1-01",
+          "D8-C98B-P1-02",
+          "D8-C98B-P2-02"
+        ],
+        "residualOpen": [
+          "D8-C98B-P1-03",
+          "D8-C98B-P2-01"
+        ],
+        "addedOpen": [
+          "D8-5ECA-P2-01"
+        ]
+      },
+      "ff10Review": {
+        "reviewSha": "ff10b800165a3fed610ccab3d30c25c1a1624a89",
+        "independentlyClosed": [
+          "D8-C98B-P2-01",
+          "D8-5ECA-P2-01"
+        ],
+        "remainingOpen": [
+          "D8-C98B-P1-03"
+        ],
+        "remainingScope": "VIEW-BLD-04/05/06 and D8 Main §11.2 wording that could treat deferred/unsupported current layout as legally savable",
+        "currentAuthorState": "D8-C98B-P1-03 author-resolved-pending-independent-review at current candidate; no author-side closure"
+      },
+      "currentRepair": {
+        "finding": "D8-C98B-P1-03",
+        "status": "independently CLOSED at fixed8b6",
+        "scope": "VIEW-BLD-04/05/06 plus D8 Main §11.2 and same-family Interfaces/Schemas/Impact wording",
+        "rule": "current ViewSpec/1 deferred layouts fail static unsupported_layout; advanced route cannot widen current union; raw/historical/future bytes remain under real owner; VIEW-BLD-03 zero-total clarified as legal empty-total"
+      },
+      "fixed8b6IndependentReview": {
+        "reviewSha": "8b6a540daba9344694bf32e839ed3d1169e50a51",
+        "independentlyClosed": [
+          "D8-C98B-P1-03"
+        ],
+        "readGaps": 0,
+        "scope": "VIEW-BLD-04/05/06 and D8 Main §11.2 deferred-layout static unsupported_layout plus legal pie zero-total; earlier D8 closures retained"
+      }
+    }
+  },
+  "d9_integration": {
+    "files": [
+      "D9.md",
+      "D9.zh-CN.md",
+      "D9-INTERFACES.md",
+      "D9-INTERFACES.zh-CN.md",
+      "D9-SCHEMAS.md",
+      "D9-SCHEMAS.zh-CN.md",
+      "D9-ACCEPTANCE.md",
+      "D9-ACCEPTANCE.zh-CN.md",
+      "D9-ACCEPTANCE.json",
+      "D9-IMPACT.md",
+      "D9-IMPACT.zh-CN.md",
+      "D9-LEXICON.md",
+      "D9-LEXICON.zh-CN.md",
+      "D9-TERMS.json",
+      "D9-REGISTRY.json",
+      "D9-SOURCE-MAP.json",
+      "D9-SOURCE-MAP.md",
+      "D9-SOURCE-MAP.zh-CN.md"
+    ],
+    "status": "Complete D9 accepted **only in fixed8d7 independent bounded D9 review**, 0P0/0P1/0P2 and gap0; D9-6012-P1-01/P2-01 and prior registered D9 findings CLOSED at respective SHAs. D10 full/global acceptance NOT inferred; D9 implementation I01–I12 UNRUN.",
+    "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+    "fixedS8": "FULL",
+    "currentOwnerBilingual": "FULL",
+    "mandatory14": "FULL lines 884-924",
+    "d7CurrentConsumers": "FULL D9-binding + PAB + current View owner EN/ZH; deferred-layout versus renderer-unavailable boundary preserved",
+    "finalFCSuccessors": "Current final FC §6.6.1 eight-domain/seven-catalog Plan4 unchanged; original D7 TerminalSchema.kind graph preserves exact nodes/edges RowsSchema, all real typed columns/V/bag/order, and static query_json data={nodes,edges}, no nodeDetails member or mandatory ViewSpec. Actual independent original D9 Host/Core IR format-coverage validator preserves S33 invalid_output for missing XLSX sheet/hidden object after worker OK/schema-valid IR; D9 Region new-issuance format/geometry and worker validation retain their own original codes, caller View catalog invalid selector remains wire2 invalid_request. All Annotation/print/View/Source/Resource and historical Plan1–3 contracts retained.",
+    "d10Direct": "PARTIAL-direct-D9-only; complete D10 UNREAD/later",
+    "currentVersions": {
+      "author": "D3IdentityOperationRequest/13 + PreparedActionBinding/4 + DependencyProof/3 + EffectManifest/3/EffectBytes/3",
+      "conversion": "D9/1 artifact wire + D9/2 Workspace orchestration + ConversionInput/2 + TemplateRecipe/2 + TemplateConstructionInput/2",
+      "export": "ExportPlan/4 + ExportInputCatalog/3 + ExportContentSelection/2 + ExportProjection/2 + ExportLossReport/2 + D9ExportConfirmation/2 + PublicationReceipt/4 + D9PrintReceipt/1; Plan/Receipt1-3 and predecessor closed families remain exact recovery",
+      "document": "D2DocumentSnapshot/3",
+      "annotation": "PortableAnnotationRecord/4 + D3-Annotation-Value/4 + sole R6 AnnotationInlineProfile/1"
+    },
+    "acceptance": {
+      "structuralAuthority": "D9-ACCEPTANCE.json",
+      "uniqueRows": 104,
+      "status": "104 stable D9 acceptance IDs, only original CUR-05/M15-04/PLAN4-REL-02 bilingual positive/negative current oracles updated; S33 original source-qualified row unchanged. New D9-6012-P1-01/P2-01 are author-resolved-pending-independent-review; old fixed6012/older findings independently CLOSED. Design only, product execution UNRUN."
+    },
+    "sourceMap": {
+      "structuralAuthority": "D9-SOURCE-MAP.json",
+      "necessaryD9ReadGaps": 0,
+      "blob": "9e8b679e65b8cbed9f117a9f84528c46f7cb0164"
+    },
+    "namedRevision": {
+      "topic": "Mandatory §14 native-table Office authoring",
+      "current": "unique simple lowercase-ASCII leaf keeps data.native_table.COLUMN; qualified/non-ASCII fresh authoring uses visible native.table[...]::column[...] selector",
+      "internal": "nt_/nc_ remain compiled Plan keys only",
+      "historical": "genuine frozen hash-authored records retain exact decoder"
+    },
+    "protected": {
+      "snapshots": 49,
+      "inputsBlob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4"
+    },
+    "evidenceBoundary": "design/source consistency only; I01-I12 and product/runtime/GUI/Office/OS/performance/deployment UNRUN",
+    "chineseQualityRepair": {
+      "finding": "ROOT-D9-ZH-P2-01",
+      "status": "independently CLOSED at ff10",
+      "affectedPublicChineseFiles": 10,
+      "fillerOccurrencesRemoved": 108,
+      "semanticEnglishChanges": 0,
+      "scope": "original ROOT-D9-ZH-P2-01 ten-file repair is independently CLOSED at ff10; Chinese text newly changed by D9-BAF repairs remains in the current D9 incremental review scope without reopening the ROOT finding"
+    },
+    "mandatory15": "FULL D9-applicable §15.5–15.8 lines 1042-1141, including all ten chart/View fixtures",
+    "registryConcepts": 41,
+    "reviewFindings": {
+      "D9-BAF-P1-01": "independently CLOSED at fixed79026 (alias D9-8B6-P1-01): exact selected annotation_content payload.recordPin relation/Value4 carrier and independent visibility preserved",
+      "D9-BAF-P1-02": "independently CLOSED at fixed6012 (alias D9-466B-P1-01): eight-domain producer dispatch, seven catalog arms and original per-owner authorization accepted in bounded scope",
+      "D9-BAF-P2-02": "independently CLOSED at fixed8b6; exact predecessor ranges and current successor scopes retained",
+      "D9-8B6-P2-01": "independently CLOSED at fixed4da7: canonical arrays/semantic order, bounded D9 scope",
+      "D9-8B6-P2-02": "independently CLOSED at fixed4da7: closed six-layout D9 renderer, legal D7 network unavailable on this D9 route",
+      "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7: D8 current acceptance pointer and preserved 760 source-row provenance",
+      "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
+      "versionCoordination": "direct current Plan4 versus recorded Plan1-3 coordination retained; not an additional independent finding count",
+      "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current final FC SPEC aliases and historical predecessorRangeCorrection/direct-reads/760 provenance accepted; new current blob pointers refreshed without reopening the bounded finding",
+      "D9-466B-P2-01": "independently CLOSED at fixed6012: authorized caller View selector invalid_request, original protected corruption integrity_conflict, proof/source/domain availability and entered D7 precedence accepted within bounded scope",
+      "D9-6012-P1-01": "independently CLOSED at fixed8d7 in complete D9-only independent ACCEPT 0P0/0P1/0P2; original Query graph static {nodes,edges} without required ViewSpec.nodeDetails, typed V/columns/order preserved",
+      "D9-6012-P2-01": "independently CLOSED at fixed8d7 D9-only independent ACCEPT; original Host/Core S33 output-coverage invalid_output and Region issuance retained, caller View selector invalid_request"
+    },
+    "versionCoordination": {
+      "status": "D9 fixed8d7 independent ACCEPT bounded D9 alone; D10 current author integration separate, no D9 current version remapping",
+      "current": "Fresh ExportPlan4 uses same eight original owner domains and seven catalog arms; original §3a hidden random token before report/manifest/Plan and single atomic storage before exposure. Query_json uses D7 TerminalSchema.kind rows/scalar/graph exactly, including full graph nodes/edges V/columns with optional ViewSpec.nodeDetails not required. D9 current caller View invalid selector still wire2 invalid_request, separate original Host/Core S33 coverage and D9 Region issuance can produce their originally applicable invalid_output. Recorded Plan/Receipt1–3, Annotation recordPin, View hash/complete_data, print and Resource paths preserved.",
+      "retained": "recorded Plan/Receipt1-3 and predecessor token/confirmation/bundle families retain exact decoder/token/bytes/pins/saved-planned-unknown recovery; no migration",
+      "currentSurfaces": [
+        "FC SPEC §8.3",
+        "FC SPEC §17",
+        "FC SPEC §18",
+        "FC SCHEMAS §§6.5–6.6",
+        "FC terminology registry",
+        "FC acceptance",
+        "final-FC replacement router",
+        "A2 D9 main/version references"
+      ],
+      "finalMappedBlobs": {
+        "specEN": "d5c43f060c04069905bf084c916637d49a6f319a",
+        "specZH": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
+        "schemasEN": "6f502263994bd04a0653d2054ac603517697ece0",
+        "schemasZH": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
+        "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
+        "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
+      }
+    }
+  },
+  "d10_integration": {
+    "status": "complete D10 author candidate, fixed7390 independent REVISE 0P0/1P1/1P2; three independently CLOSED at7390, two remaining author-resolved-pending-independent; fixed8d7 D9 bounded ACCEPT only, no D10/global A2 acceptance",
+    "fixedStartSha": "8d7f165ace4f8c72305d2e7b21a12b3c4e5fbe56",
+    "sourceMap": {
+      "path": "docs/design/a2-final-design/D10-SOURCE-MAP.json",
+      "blob": "60d2287ded1b24d237a41674591df5d4442361e2"
+    },
+    "acceptance": {
+      "path": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
+      "blob": "daf5b93c8a41dabd826058af3f2e84448066398a",
+      "stableIDs": 125,
+      "groupCounts": {
+        "U": 27,
+        "F": 37,
+        "A": 14,
+        "T": 10,
+        "E": 10,
+        "P": 19,
+        "D": 8
+      },
+      "projections": [
+        {
+          "path": "docs/design/a2-final-design/D10-ACCEPTANCE.md",
+          "blob": "80dadfe01c43d003756372fe60e7754755ff8dd9"
+        },
+        {
+          "path": "docs/design/a2-final-design/D10-ACCEPTANCE.zh-CN.md",
+          "blob": "94c76489aac5211d6ef87a1de8c197f900b234bc"
+        }
+      ]
+    },
+    "currentD10": [
+      {
+        "path": "docs/design/a2-final-design/D10.md",
+        "blob": "fdf1dd623f4de568e3e37c56da28c84bf8a13992",
+        "originalPath": "docs/design/d10/CANDIDATE.md",
+        "originalBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10.zh-CN.md",
+        "blob": "69671a226f2a3d9bfc6abd6308e742012d005c72",
+        "originalPath": "docs/design/d10/CANDIDATE.zh-CN.md",
+        "originalBlob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-CONTROL.md",
+        "blob": "7026470286f64a7402d144c92a5fa10e2d4137a8",
+        "originalPath": "docs/design/d10/CONTROL-CONTRACT.md",
+        "originalBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
+        "blob": "39ea2077e1c8a89182e6646ad23c859347c1fae9",
+        "originalPath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
+        "originalBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-IMPACT.md",
+        "blob": "a5516c2f7884c8b20846e73f470d7434c12d1a4a",
+        "originalPath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
+        "originalBlob": "50031c9db36232ec439aa2c96d312465250dab04",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
+        "blob": "c15b4a179cab0a24af0d526f553079a8b8c7a19f",
+        "originalPath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
+        "originalBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-REVIEW.md",
+        "blob": "270dbb6d6573c1c945de8da16fa9c0638b4f8d07",
+        "originalPath": "docs/design/d10/REVIEW-DISPOSITIONS.md",
+        "originalBlob": "d7d42442a42d0aa87d97085036883a3922dda781",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-REVIEW.zh-CN.md",
+        "blob": "0af6e4f900ee746aee23f4e97974db86c353575a",
+        "originalPath": "docs/design/d10/REVIEW-DISPOSITIONS.zh-CN.md",
+        "originalBlob": "7dca44178d0c5f5eddf50e4a74f0990d3d440151",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-SCENARIOS.md",
+        "blob": "f57ca9c1d14053e1e274b9cdc03bb974e7aecacc",
+        "originalPath": "docs/design/d10/SCENARIO-DISPOSITIONS.md",
+        "originalBlob": "f7bd02712e17f39eb5d09038a7b565d42ad70dae",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-SCENARIOS.zh-CN.md",
+        "blob": "4f27f9188e0903e1885166077f51b5ad9208cbd7",
+        "originalPath": "docs/design/d10/SCENARIO-DISPOSITIONS.zh-CN.md",
+        "originalBlob": "21d318c1ad7a34852163bb0967f820ae84b74a4d",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-READING.md",
+        "blob": "ea16153bc4d17a294a91f95530e4e68c13f97ae4",
+        "originalPath": "docs/design/d10/START.md",
+        "originalBlob": "000d0864830069319d785d09a58ff9f7bf835d14",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-READING.zh-CN.md",
+        "blob": "e0424f757226ef3f2322cc9d3dd1edcf14dd641e",
+        "originalPath": "docs/design/d10/START.zh-CN.md",
+        "originalBlob": "a8de81ec81333073578e7fe4c43153836eb585a6",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-TASK.md",
+        "blob": "84378aecdcbb5f07813e627122d69df250543d9c",
+        "originalPath": "docs/design/d10/TASK.md",
+        "originalBlob": "52b51f14cbca8107fdf13ddf29fab6d9cd04bb5b",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-TASK.zh-CN.md",
+        "blob": "fae1ce7d56695294ff967c490359745c39afe25d",
+        "originalPath": "docs/design/d10/TASK.zh-CN.md",
+        "originalBlob": "759a3c5b5ba066de53e5c04838d15acd05ed4692",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-LEXICON.md",
+        "blob": "38d1e94a50a49371757342a9d3a0adaa201528ab",
+        "originalPath": "docs/design/d10/TERMINOLOGY.md",
+        "originalBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-LEXICON.zh-CN.md",
+        "blob": "c8d98139ff02e3f2fa6b86616dbed0faa4379363",
+        "originalPath": "docs/design/d10/TERMINOLOGY.zh-CN.md",
+        "originalBlob": "fa364f50e80a5c7e15a61286d6cc9be54d597a51",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-UPSTREAM.md",
+        "blob": "f6ea67b0f834968cc3cdb92a33910e47134d6510",
+        "originalPath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
+        "originalBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-UPSTREAM.zh-CN.md",
+        "blob": "912a1d50b79c16b5d06ce502ab338ac336587380",
+        "originalPath": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
+        "originalBlob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
+        "authorRead": "FULL"
+      }
+    ],
+    "readCoverage": {
+      "originalD10": "18/18 FULL",
+      "fixedS": "49/49 FULL",
+      "currentA2D1D9": "86/86 FULL",
+      "currentD7Direct": "26/26 FULL",
+      "currentFC": "7/7 FULL",
+      "directD6D9Afterimage": "12/12 FULL",
+      "knownNecessaryAuthorGap": 0,
+      "independentReading": "fixed7390 full D10 non-author completed, necessary D10 semantic read gap0; author subsequent two-delta repair unreviewed"
+    },
+    "mandatory": {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sections": [
+        {
+          "section": 1,
+          "startLine": 6,
+          "endLine": 22,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D1/D10 authority",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 2,
+          "startLine": 23,
+          "endLine": 101,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D2/D3/D4/D10 Package semantics",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 3,
+          "startLine": 102,
+          "endLine": 153,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 People/D10 module",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 4,
+          "startLine": 154,
+          "endLine": 191,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 Organizations/D10 module",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 5,
+          "startLine": 192,
+          "endLine": 214,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4/D7 relation/graph and D10 read qualification",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 6,
+          "startLine": 215,
+          "endLine": 278,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 temporal and D10 recurrence/Pack",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 7,
+          "startLine": 279,
+          "endLine": 323,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D9 import and D10 Connector/Automation",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 8,
+          "startLine": 324,
+          "endLine": 485,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D1–D10 exact stage routing",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 9,
+          "startLine": 486,
+          "endLine": 545,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D1–D10 hostile counterexamples",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 10,
+          "startLine": 546,
+          "endLine": 569,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "A2 design freeze vs runtime acceptance",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 11,
+          "startLine": 570,
+          "endLine": 637,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D10 queue/approval/responsibility",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 12,
+          "startLine": 638,
+          "endLine": 713,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D2/D4 native author envelope and D6 authority",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 13,
+          "startLine": 714,
+          "endLine": 883,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 Task/People/Calendar/Library and D10 scheduling",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 14,
+          "startLine": 884,
+          "endLine": 924,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D9 Office native-table template and ordinary Node no export config",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 15,
+          "startLine": 925,
+          "endLine": 1141,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D7 Query/View graph and D8/D9 current export",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        }
+      ],
+      "originalSource": "all numbered and unnumbered conditions unchanged"
+    },
+    "actualCurrentOwner": "D3 fresh Request13, D6 Input3/Proof3/Key3 (15 kinds), D7 PAB4/Effect3, D8 Edit3/Value4, D10 ControlBinding3/Deps3/Input2/mixed Image2+Image1/Schedule2/Inventory2/ResponsibilityRecord3/ApprovalUse2, D9 distinct ExportPlan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/PublicationReceipt4/PrintReceipt1 and genuine historical decoders",
+    "independent": {
+      "D9": "fixed8d7 D9-only ACCEPT 0P0/0P1/0P2; required gap 0 and all D9 registered findings CLOSED",
+      "D10": "fixed7390 complete D10 non-author REVISE 0P0/1P1/1P2, 0 new, necessary D10 gap0; P1-01/P1-03/P2-02 independently CLOSED at that SHA only; P1-02/P2-01 newly author-resolved pending 6ac774ab non-author delta review, NOT independent PASS",
+      "fullProA2": "PENDING separate fresh full A2 review",
+      "acceptedDesignSha": null
+    },
+    "runtime": "UNRUN (Core, real authorization CAS, OS/GUI/IME/AT, Office, provider/external effects, concurrency/crash, migration/performance/activation/deployment)",
+    "historical": "Old PR2 R08 11 findings, original 17-kind D9 public mapping/36+1, fixed S source rows and all Plan/Receipt old records remain provenance/recovery only; no new Resolver12 or second current owner",
+    "residualD10Repair": {
+      "fixedIndependentHead": "7390de028fc27abc842467b05c4e5b22ada941ba",
+      "status": "author-resolved-pending-independent",
+      "ids": [
+        "D10-1CA-P1-02",
+        "D10-1CA-P2-01"
+      ],
+      "newIndependentFindings": 0,
+      "necessaryReadGap": 0,
+      "followUp": "6ac774ab must review actual 7390->final delta; separate fresh Pro full-A2 required"
+    }
+  }
+}

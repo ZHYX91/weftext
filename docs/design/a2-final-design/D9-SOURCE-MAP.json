@@ -1,0 +1,1055 @@
+{
+  "format": "weftext.a2-d9-source-map",
+  "version": 1,
+  "status": "D9-only independently ACCEPT at actual fixed8d7 non-author 0P0/0P1/0P2, necessary gap0; D9-6012-P1-01/P2-01 independently CLOSED. All fixed6012/fixed466b/fixed79026 and older bounded closures retained. Full D10 and global A2 are separate, product D9 I01–I12 UNRUN.",
+  "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
+  "baseSha": "97f4734f82a760cb6716c8122b84494da2b61164",
+  "fixedS": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
+  "protected": {
+    "snapshots": 49,
+    "inputsPath": "docs/design/inputs.json",
+    "inputsBlob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
+    "rule": "byte-identical; absent from D9 delta"
+  },
+  "replacementChain": [
+    {
+      "path": "docs/design/d6-file-authority-reopen/replacements.json",
+      "blob": "2b4983a9c4deb058a12ef1ebf315bae67b27617d",
+      "role": "fixed S -> D6-FA D9 owner afterimages"
+    },
+    {
+      "path": "docs/design/asciidoc-annotation-final-design/replacements.json",
+      "role": "D6-FA -> final FC successors where named; fresh D9 export uses §6.6/§16a Plan4 family, while recorded Plan/Receipt1-3 retain exact recovery",
+      "blob": "69248159127bb106181bee01cf6b0db0fa1e4304"
+    }
+  ],
+  "fixedSources": [
+    {
+      "topic": "d9-conversion-templates-and-workers",
+      "path": "docs/design/snapshots/d9-conversion-templates-and-workers/source.md",
+      "blob": "09ae93591c8394c9ca01f4972a052713e08eaa05",
+      "lineCount": 130,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 转换、模板与 Worker",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 22,
+          "section": "## 1. 产品选择与范围",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 23,
+          "endLine": 41,
+          "section": "## 2. 不变量与上游承接",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 42,
+          "endLine": 63,
+          "section": "## 3. 状态所有者及执行链",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 64,
+          "endLine": 84,
+          "section": "## 4. 新接口与原提交边界",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 85,
+          "endLine": 100,
+          "section": "## 5. 准备证据如何绑定原 D3/D6",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 101,
+          "endLine": 110,
+          "section": "## 6. 有界导入 Job",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 111,
+          "endLine": 122,
+          "section": "## 7. D8 后续边界的逐项归属",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 123,
+          "endLine": 130,
+          "section": "## 8. 完整替代与接受条件",
+          "currentTarget": "D9.md§1–5; D9-INTERFACES.md§1–6; D9-SCHEMAS.md§1–5",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-import-ir-and-mapping",
+      "path": "docs/design/snapshots/d9-import-ir-and-mapping/source.md",
+      "blob": "05ea6c59b0687062765e3cfb5ef29e2741ef0764",
+      "lineCount": 154,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 Import IR 与映射",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 30,
+          "section": "## 1. 冻结与可扩展边界",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 31,
+          "endLine": 43,
+          "section": "## 2. 来源、置信度与完整性",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 44,
+          "endLine": 51,
+          "section": "## 3. Page 分支",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 52,
+          "endLine": 65,
+          "section": "### 图片物理尺寸 profile（image_physical_size/1）",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 66,
+          "endLine": 83,
+          "section": "## 4. Flow 分支",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 84,
+          "endLine": 95,
+          "section": "## 5. Workbook 分支及 CellValue",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 96,
+          "endLine": 124,
+          "section": "## 6. ImportMapping/1",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 125,
+          "endLine": 138,
+          "section": "## 7. LossReport/1",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 139,
+          "endLine": 150,
+          "section": "## 8. Resource Region Profile/1",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 151,
+          "endLine": 154,
+          "section": "## 9. 第二结构验证的判定",
+          "currentTarget": "D9.md§3–5; D9-SCHEMAS.md§3–5; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-templates",
+      "path": "docs/design/snapshots/d9-templates/source.md",
+      "blob": "f3318ee0f8de190b95758898a434ec4c17c0f61c",
+      "lineCount": 172,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 模板",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 32,
+          "section": "## 1. 普通文本占位符的唯一语法",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 33,
+          "endLine": 63,
+          "section": "## 2. 绑定域、值与缺失",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 64,
+          "endLine": 78,
+          "section": "## 3. 逻辑容器与格式继承",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 79,
+          "endLine": 101,
+          "section": "## 4. body、bibliography 与标题样式",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 102,
+          "endLine": 113,
+          "section": "## 5. 重复区、方向与碰撞",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 114,
+          "endLine": 135,
+          "section": "## 6. Node Template 的一次性构造",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 136,
+          "endLine": 158,
+          "section": "## 6a. 精确构造请求、准备绑定与原回执",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 159,
+          "endLine": 164,
+          "section": "## 7. 首代限制与实施门",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 165,
+          "endLine": 172,
+          "section": "## 8. 最小完整Office例子",
+          "currentTarget": "D9.md§6–9; D9-SCHEMAS.md§6–8; D9-ACCEPTANCE",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-workers-and-export",
+      "path": "docs/design/snapshots/d9-workers-and-export/source.md",
+      "blob": "e0698ccab275b02681ece827c79d982001a987a4",
+      "lineCount": 150,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 Worker 与导出",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 31,
+          "section": "## 1. Provider、Route 与 capability",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 32,
+          "endLine": 47,
+          "section": "## 2. 隔离执行与输入不可信",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 48,
+          "endLine": 80,
+          "section": "## 3. 导出域和精确快照",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 81,
+          "endLine": 132,
+          "section": "## 3a. 导出来源、投影、损失与确认的闭合域",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 133,
+          "endLine": 146,
+          "section": "## 4. 生成、确认和外部发布",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 147,
+          "endLine": 150,
+          "section": "## 5. 有界证据与完整验收",
+          "currentTarget": "D9.md§10–13; D9-SCHEMAS.md§9–17; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-coordinated-d3-d7-binding-amendment",
+      "path": "docs/design/snapshots/d9-coordinated-d3-d7-binding-amendment/source.md",
+      "blob": "01efb97587a33670f4a63783015843070a3099db",
+      "lineCount": 86,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 配套 D3/D7 准备绑定修订",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 20,
+          "section": "## 1. D3下游模板承接条款的精确替换",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 21,
+          "endLine": 24,
+          "section": "## 2. D7 Prepared Action Binding 完整规范 replacement",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 25,
+          "endLine": 39,
+          "section": "## 1. 一份不可变准备记录",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 40,
+          "endLine": 51,
+          "section": "## 2. D3显式wire11承接",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 52,
+          "endLine": 61,
+          "section": "## 3. D6承接与寿命",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 62,
+          "endLine": 68,
+          "section": "## 4. 版本及历史",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 69,
+          "endLine": 72,
+          "section": "## 3. 必须同批生效的镜像及版本消费",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 73,
+          "endLine": 78,
+          "section": "### 02 Decisions\\D6 Storage Transactions Permissions and Sync\\D6 Control Interfaces.md",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 79,
+          "endLine": 86,
+          "section": "### 02 Decisions\\D7 Query View Action\\D7 Preview and Effects Transport.md",
+          "currentTarget": "D9.md§9; D9-INTERFACES.md§3; D9-SCHEMAS.md§7",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-acceptance-matrix",
+      "path": "docs/design/snapshots/d9-acceptance-matrix/source.md",
+      "blob": "433872d86808debd6ac05bafe1b7c2b10cde14dc",
+      "lineCount": 89,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 20,
+          "section": "# D9 接受矩阵与场景裁决",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 21,
+          "endLine": 59,
+          "section": "## 完整压力场景",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 60,
+          "endLine": 65,
+          "section": "## 证据归属",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 66,
+          "endLine": 75,
+          "section": "## r02 必须联合核对的反例与证据边界",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 76,
+          "endLine": 81,
+          "section": "## r03 导出组合与单位检查",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 82,
+          "endLine": 89,
+          "section": "## r04 消费适用条件与完整有限链",
+          "currentTarget": "D9-ACCEPTANCE; D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-implementation-impact-and-test-outline",
+      "path": "docs/design/snapshots/d9-implementation-impact-and-test-outline/source.md",
+      "blob": "cbf53ac8b0a4096ea16705bcd06894db597fd9bf",
+      "lineCount": 65,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 12,
+          "section": "# D9 实现影响与测试轮廓",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 13,
+          "endLine": 22,
+          "section": "## 影响与替换顺序",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 23,
+          "endLine": 41,
+          "section": "## 实施验收门（本轮均未关闭）",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 42,
+          "endLine": 51,
+          "section": "## r02 必须联合核对的反例与证据边界",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 52,
+          "endLine": 57,
+          "section": "## r03 导出组合与单位检查",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 58,
+          "endLine": 65,
+          "section": "## r04 消费适用条件与完整有限链",
+          "currentTarget": "D9-IMPACT",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    },
+    {
+      "topic": "d9-terminology-and-naming-lexicon",
+      "path": "docs/design/snapshots/d9-terminology-and-naming-lexicon/source.md",
+      "blob": "9dd39f6fe1e8d6924ca492ec596f902b158eb32b",
+      "lineCount": 48,
+      "read": "FULL",
+      "continuousCoverage": true,
+      "ranges": [
+        {
+          "startLine": 1,
+          "endLine": 5,
+          "section": "preamble",
+          "currentTarget": "D9-LEXICON; D9-TERMS.json; D9-REGISTRY.json",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        },
+        {
+          "startLine": 6,
+          "endLine": 48,
+          "section": "# D9 术语与命名门",
+          "currentTarget": "D9-LEXICON; D9-TERMS.json; D9-REGISTRY.json",
+          "disposition": "retain-source-qualified; current successors overlay below"
+        }
+      ]
+    }
+  ],
+  "currentOwnerSources": [
+    {
+      "topic": "d9-conversion-templates-and-workers",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.md",
+        "blob": "b9ff7da0ab0bcce23fe3f4b6510a8743b6138f8f",
+        "lineCount": 155,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-conversion-templates-and-workers/source.zh-CN.md",
+        "blob": "5a22f08fc86492bfc32f860af8872b1797879c87",
+        "lineCount": 152,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-import-ir-and-mapping",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.md",
+        "blob": "d9eb42eef8537b7b7fe5f3d60819c3ed3403c1d8",
+        "lineCount": 166,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-import-ir-and-mapping/source.zh-CN.md",
+        "blob": "cba3b0acf3817c115b4486082fd1c91800b1f9fd",
+        "lineCount": 167,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-templates",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.md",
+        "blob": "bc79681ffdb05b59869f558c958a9a606cb98a5f",
+        "lineCount": 194,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-templates/source.zh-CN.md",
+        "blob": "5f8cfdf1854a0da3fd71e1da04b438e07cad7ec6",
+        "lineCount": 193,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-workers-and-export",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-workers-and-export/source.md",
+        "blob": "24f561ba98f78d0a54290f3e338987fbfae66228",
+        "lineCount": 173,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-workers-and-export/source.zh-CN.md",
+        "blob": "bcb9b2100e1c67caab89a4459ba2f8798f8c5990",
+        "lineCount": 173,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-coordinated-d3-d7-binding-amendment",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.md",
+        "blob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+        "lineCount": 66,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-coordinated-d3-d7-binding-amendment/source.zh-CN.md",
+        "blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
+        "lineCount": 65,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-acceptance-matrix",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.md",
+        "blob": "128a84aa9b9b7c49d197a96304b93921956ceb65",
+        "lineCount": 118,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-acceptance-matrix/source.zh-CN.md",
+        "blob": "b2856a856aecc8e10e569d9ce10925d48e88de4a",
+        "lineCount": 115,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-implementation-impact-and-test-outline",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-implementation-impact-and-test-outline/source.md",
+        "blob": "5c1cf0f02114df93d6e4a69e9c715f0d48559551",
+        "lineCount": 83,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-implementation-impact-and-test-outline/source.zh-CN.md",
+        "blob": "7dc441e74ecf726bf589b8907759c02a369ad110",
+        "lineCount": 82,
+        "read": "FULL"
+      }
+    },
+    {
+      "topic": "d9-terminology-and-naming-lexicon",
+      "en": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-terminology-and-naming-lexicon/source.md",
+        "blob": "077d3d9c7d6b3203318d2b31edec5d5e7983a8ff",
+        "lineCount": 71,
+        "read": "FULL"
+      },
+      "zh": {
+        "path": "docs/design/d6-file-authority-reopen/owners/d9-terminology-and-naming-lexicon/source.zh-CN.md",
+        "blob": "24c3fbd44487160af071a9c99cf30dcb76eda3b3",
+        "lineCount": 70,
+        "read": "FULL"
+      }
+    }
+  ],
+  "mandatory14": {
+    "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+    "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+    "startLine": 884,
+    "endLine": 924,
+    "read": "FULL",
+    "target": "D9.md§7–12; D9-SCHEMAS.md§8–13; D9-ACCEPTANCE M14-01..10"
+  },
+  "d7Current": [
+    {
+      "path": "docs/design/a2-final-design/d7/coordination/d9-binding/source.md",
+      "blob": "04f980ba46364a62086337ae6c3ac6c7f2dae94c",
+      "read": "FULL"
+    },
+    {
+      "path": "docs/design/a2-final-design/d7/coordination/d9-binding/source.zh-CN.md",
+      "blob": "06229be34d3ba4c529338a842898d38c6c4bb1b0",
+      "read": "FULL"
+    },
+    {
+      "path": "docs/design/a2-final-design/d7/owners/prepared-action-binding/source.md",
+      "blob": "91a699117e97c561cc2482c68a1a645b8f621f5a",
+      "read": "FULL"
+    },
+    {
+      "path": "docs/design/a2-final-design/d7/owners/prepared-action-binding/source.zh-CN.md",
+      "blob": "35f2dcb22c321552984bf996e5d8a6e6d6b85275",
+      "read": "FULL"
+    }
+  ],
+  "finalFC": {
+    "read": "FULL for D9-relevant current predecessors and successors",
+    "schemas": [
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+        "blob": "6f502263994bd04a0653d2054ac603517697ece0",
+        "ranges": [
+          "§6.1 L1589–1677",
+          "§6.5 L1997–2225",
+          "§6.5.1 L2226–2262",
+          "§6.6 L2263–2634",
+          "§6.6.1 L2559–2634"
+        ]
+      },
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+        "blob": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
+        "ranges": [
+          "§6.1 L1680–1776",
+          "§6.5 L2101–2336",
+          "§6.5.1 L2337–2375",
+          "§6.6 L2376–2747",
+          "§6.6.1 L2672–2747"
+        ]
+      }
+    ],
+    "spec": [
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+        "blob": "d5c43f060c04069905bf084c916637d49a6f319a",
+        "ranges": [
+          "§8.3 L439–463",
+          "§8.4 L464–471",
+          "§16 L946–955",
+          "§16a L956–972",
+          "§17 L973–980",
+          "§18 L981–995"
+        ]
+      },
+      {
+        "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+        "blob": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
+        "ranges": [
+          "§8.3 L449–483",
+          "§8.4 L484–491",
+          "§16 L1012–1021",
+          "§16a L1022–1038",
+          "§17 L1039–1046",
+          "§18 L1047–1153"
+        ]
+      }
+    ],
+    "acceptance": {
+      "path": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.md",
+      "blob": "c3022df8c823454310fe73645084630481b1c8d1",
+      "ranges": [
+        "D9 direct/upstream current rows including FC4R-EXP/TABLE/WIRE, FC4A-EXP/ROUTE, FC4D-EXP, FC4F-EXP, FC4G-NAME and named prerequisites; fresh-current rows use Plan4/Receipt4 while recorded Plan3/Receipt3 recovery stays explicit"
+      ],
+      "zhPath": "docs/design/asciidoc-annotation-final-design/ACCEPTANCE.zh-CN.md",
+      "zhBlob": "5320c4917742c4599fd6327a4a646993c76e2520"
+    },
+    "namedRevision": {
+      "supersedes": "fresh qualified/non-ASCII hash-token authoring sentence in predecessor §6.5.1",
+      "current": "visible native.table[...]::column[...] Office bytes; nt_/nc_ internal compiled keys only; Plan4 preserves the same authority",
+      "preserves": "simple unique ASCII leaf positive path and all genuine historical frozen bytes"
+    },
+    "exportSuccessor": {
+      "status": "author-resolved-pending-independent-review",
+      "schemas": "§6.5 freezes recorded Plan3 predecessor/shared rules; §6.6 is fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4 plus Annotation carrier and finite View renderer",
+      "spec": "§8.3 shared exact-source/resource/query_json, controlled-name/canonical-pin/unknown-publication rules now bind fresh Plan4; §16a behavior closure; §17 unseen-current dispatch and §18 inventory name /4",
+      "historical": "Plan/Receipt1-3 and predecessor closed families retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery; no migration",
+      "admission": "The final FC SCHEMAS §6.6.1 still owns all eight D9ExportInputDomain/2 producer branches and seven catalog arms, original D1/current audience/Workspace gates, exact Plan4 selection/owner/pin/recordPin/View hash/loss/budget and unchanged §3a private-token→referencing report/manifest→atomic-save. D7 original TerminalSchema.kind selects rows (all typed columns and rows), scalar (one V, including none), or graph (exact complete nodes/edges RowsSchema with nodeRef/sourceRef/targetRef/relationColumn/derivationColumn bindings and static query_json data={nodes,edges}); no extra nodeDetails query member or ViewSpec is required, isolated nodes with zero edges are legal. Preserve all actual node columns/V and D7 bag/order; a present displayName column may not disappear. D9/2 authorized caller View selector invalid index/kind remains invalid_request, only proved authenticated protected Plan contradiction integrity_conflict, missing proof/source/domain original availability; original independent D9 Host/Core IR format-coverage S33 can still return invalid_output after worker OK + schema-valid IR missing an XLSX sheet/hidden object, and D9 Region new-issuance format/geometry and actual worker output validators retain their original applicable invalid_output. Only the caller selector is excluded."
+    },
+    "annotationCurrent": {
+      "spec": [
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+          "blob": "d5c43f060c04069905bf084c916637d49a6f319a",
+          "ranges": [
+            "§9.1–9.12 L476–669",
+            "§16 L946–955",
+            "§16a L956–972"
+          ],
+          "read": "FULL-direct-current-consumer"
+        },
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+          "blob": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
+          "ranges": [
+            "§9.1–9.12 L496–705",
+            "§16 L1012–1021",
+            "§16a L1022–1038"
+          ],
+          "read": "FULL-direct-current-consumer"
+        }
+      ],
+      "schemas": [
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+          "blob": "6f502263994bd04a0653d2054ac603517697ece0",
+          "ranges": [
+            "§6.6 L2263–2634",
+            "§6.6.1 L2559–2634",
+            "§7 L2635–2795"
+          ],
+          "read": "FULL-direct-current-consumer"
+        },
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+          "blob": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
+          "ranges": [
+            "§6.6 L2376–2747",
+            "§6.6.1 L2672–2747",
+            "§7 L2748–2911"
+          ],
+          "read": "FULL-direct-current-consumer"
+        }
+      ],
+      "acceptanceIds": [
+        "AN2-39",
+        "FC4B-D8-03",
+        "FC4B-LIFE-03",
+        "FC4C-READ-02",
+        "FC4C-READ-06",
+        "FC4C-SUG-10",
+        "FC4C-STORE-08",
+        "FC4C-STORE-12"
+      ],
+      "target": "D9.md §13a; D9-SCHEMAS.md §16a; D9-ACCEPTANCE CUR-09 + ANNEXP-01..06 + PLAN4-REL-01 + PLAN4-CAN-01/03",
+      "rule": "Annotation is ONE of eight exact D9ExportInputDomain/2 cases, not a global producer precondition. annotation_content consumes one actual current D8AnnotationReadResponse/1; annotation_index remains omission-only. The independently CLOSED fixed79026 recordPin selection/projection relation, complete Value4/R6 body/attribution/reply independent from hidden context, frozen revision/Observation and portable backup no-capability constraints are retained. No default Annotation read on Source/Resource/Field/Query/Collection/View."
+    },
+    "viewCurrent": {
+      "d7Owner": "docs/design/a2-final-design/d7/owners/view/source.md",
+      "read": "FULL current View owner; runtime §7 and supported/deferred layouts preserved",
+      "mandatory15": "FULL-D9-applicable L1042–1141",
+      "currentCarrier": "final FC SCHEMAS §6.6 D9ViewRenderBinding/1",
+      "target": "D9.md §12a; D9-SCHEMAS.md §16b; D9-IMPACT.md §8a; D9-ACCEPTANCE M15-01..10 + PLAN4-REL-02/03 + PLAN4-CAN-02/03 + VIEW-SCOPE-01",
+      "rule": "A selected real D7ResultPin enters the unchanged original D7 View §7 closed decode→result auth/epoch→complete→schema→layout/binding→structure/order→domain/numbers→budget→delivery after current entry authorization. ViewSpec network.nodeDetails? is only an optional presentation binding; graph query_json is a separate generationPolicy=none static result with exact D7 TerminalSchema/data={nodes,edges}, all real columns/V and original order, legal isolated nodes/zero edges without ViewSpec. D9 renderer export remains six metric/bar/line/scatter/pie/heatmap charts with complete_data/same-data accessible table and exact hash/target/receipt; D7 legal network graphics stay renderer_unavailable on this D9 route. Caller-selected View index=99/wrong payload is D9/2 wire2 invalid_request, not any output validator's invalid_output; real covered D7 errors, original Host/Core format coverage and D9 Region issuance retain their separate existing gates."
+    },
+    "predecessorRangeCorrection": {
+      "finding": "D9-BAF-P2-02",
+      "reviewedHead": "ff10b800165a3fed610ccab3d30c25c1a1624a89",
+      "schemas": [
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.md",
+          "blob": "de03b6ba073b00bfb851fbe15a6eaf51fc9f7c56",
+          "ranges": [
+            "§6.5 L1997–2223",
+            "§6.5.1 L2224–2260",
+            "§7 L2261–2421"
+          ]
+        },
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SCHEMAS.zh-CN.md",
+          "blob": "6f8340dc31da9829888a7bfd2f8be36598bec66a",
+          "ranges": [
+            "§6.5 L2101–2327",
+            "§6.5.1 L2328–2364",
+            "§7 L2365–2528"
+          ]
+        }
+      ],
+      "spec": [
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
+          "blob": "8de513b6031d37af894756a422df85f1a3d96f8d",
+          "ranges": [
+            "§16 L940–949",
+            "§17 L950–957"
+          ]
+        },
+        {
+          "path": "docs/design/asciidoc-annotation-final-design/SPEC.zh-CN.md",
+          "blob": "20907167b6e4e968e431be2489f8e61d70722fa1",
+          "ranges": [
+            "§16 L1002–1011",
+            "§17 L1012–1019"
+          ]
+        }
+      ],
+      "disposition": "correct old section boundaries without dropping the §7 Annotation owner or §17 recovery clauses that the former over-broad ranges accidentally included"
+    },
+    "terminology": {
+      "path": "docs/design/asciidoc-annotation-final-design/terminology-registry.json",
+      "blob": "0ec5e444e1c2474bdc52db111191e2cbae235a00",
+      "rule": "Recorded Plan/Receipt3 and /3 tokens remain retained predecessors; fresh Plan4/Receipt4/PrintReceipt1 are current, D9ViewRenderBinding/1 has fixed complete_data scope, and later View scope/layout expansion requires a versioned successor."
+    },
+    "replacementRouter": {
+      "path": "docs/design/asciidoc-annotation-final-design/replacements.json",
+      "blob": "69248159127bb106181bee01cf6b0db0fa1e4304",
+      "rule": "D9-Export/D9-Impact/D9-Lexicon/D9-Acceptance current routes name Plan4 successors and exact recorded Plan3 recovery"
+    },
+    "versionCoordination": {
+      "status": "D9-only independent ACCEPT at fixed8d7 for current Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 and protected historical Plan/Receipt1–3. All registered D9 findings CLOSED at their fixed scope, no D10/global acceptance.",
+      "current": "Fresh unseen actual selected eight-domain owner inputs produce ExportPlan/4 under original §3a random non-public token before referenced report/manifest and one atomic complete Plan storage; Query-free exact Source/Resource/Field, full D7 Query/Collection/graph typed V and ordered result, D8 Annotation and D7 View qualification stay intact. Query_json graph only has D7 schema and static data={nodes,edges}; optional network ViewSpec.nodeDetails does not create data authority. The D9/2 selector error is invalid_request, not invalid_output, but original Host/Core coverage S33 and Region issuance retain their own output-validation codes. Recorded Plan/Receipt1–3/pins/confirmation/recovery and original D1/entered owner errors remain exactly historical.",
+      "retained": "recorded ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3 and token/confirmation/bundle predecessors retain exact decoder/bytes/pins/recovery and are never repinned/re-encoded into /4",
+      "currentizedLocations": [
+        "FC SPEC §8.3",
+        "FC SPEC §17",
+        "FC SPEC §18",
+        "FC SCHEMAS §§6.5–6.6",
+        "FC terminology registry",
+        "FC acceptance oracles",
+        "final FC replacement router",
+        "A2 D9 main/version references"
+      ],
+      "currentBlobs": {
+        "specEN": "d5c43f060c04069905bf084c916637d49a6f319a",
+        "specZH": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
+        "schemasEN": "6f502263994bd04a0653d2054ac603517697ece0",
+        "schemasZH": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
+        "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
+        "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
+      }
+    },
+    "plan4Relations": {
+      "status": "author-resolved-pending-independent-review",
+      "owner": "final FC SCHEMAS §6.6.1 / SPEC §16a",
+      "annotation": "annotationInputs and projection.annotations are one-to-one by unique ascending inputIndex and one mode; portable_backup context flags false; ordered disclosure fragments preserved",
+      "view": "viewInput=resultInput=projection.resultInput; renderer.layout=ViewSpec.layout; binding/projection outputScope=complete_data; dedicated View route has documentRenderBinding=null",
+      "delivery": "target/profile/destination/receipt compatibility is closed; external_bundle→Receipt4, print→PrintReceipt1, resource_handoff→separate D7/D3 author result, server_download→delivery state",
+      "canonical": "annotation selection/projection, renderer assets and renderer evidencePins canonicalize once before freeze; frozen/recovery noncanonical records reject; D7 rows and disclosure fragments preserve semantic order",
+      "versioning": "D9ViewRenderBinding/1 and Plan4 remain candidate/UNRUN with no deployed recorded View-binding bytes; any post-acceptance scope/layout expansion requires a versioned successor"
+    }
+  },
+  "d10Direct": {
+    "read": "PARTIAL-direct-D9-only",
+    "completeModule": "UNREAD; later D10 integration",
+    "sources": [
+      {
+        "path": "docs/design/d10/CANDIDATE.md",
+        "blob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+        "ranges": [
+          "§1–2 L13–27",
+          "§11 L205–218",
+          "§17 L369–381",
+          "§22–23 L455–472"
+        ]
+      },
+      {
+        "path": "docs/design/d10/CANDIDATE.zh-CN.md",
+        "blob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
+        "ranges": [
+          "§1–2 L13–27",
+          "§11 L204–217",
+          "§17 L368–380",
+          "§22–23 L454–471"
+        ]
+      },
+      {
+        "path": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
+        "blob": "097b58db2418dd2e425114d78b5977edb22edcb3",
+        "ranges": [
+          "§8.2 L351–429"
+        ]
+      },
+      {
+        "path": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
+        "blob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
+        "ranges": [
+          "§8.2 L350–428"
+        ]
+      }
+    ]
+  },
+  "acceptanceAuthority": {
+    "json": "D9-ACCEPTANCE.json",
+    "blob": "80091c51372d6badc04cc53216bb8c5ebac24e80",
+    "rows": 104,
+    "uniqueIds": 104
+  },
+  "historicalEvidence": {
+    "sets": [
+      57,
+      63,
+      59,
+      82,
+      90,
+      130,
+      12
+    ],
+    "rule": "separate bounded evidence; not additive product acceptance"
+  },
+  "readCoverage": {
+    "fixedS8": "FULL",
+    "currentD9OwnerENZH": "FULL",
+    "mandatory14": "FULL",
+    "d7CoordinationPABENZH": "FULL",
+    "finalFCD9RelevantENZH": "FULL",
+    "d10Direct": "PARTIAL",
+    "d10Complete": "UNREAD",
+    "d9NecessaryGaps": 0,
+    "finalFCAnnotationCurrentENZH": "FULL-direct-current-consumer",
+    "mandatory15D9Applicable": "FULL",
+    "finalFCExportSuccessorENZH": "FULL-current-successor"
+  },
+  "evidenceBoundary": "fixed8b6 independently CLOSED D8-C98B-P1-03 and D9-BAF-P2-02; remaining D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 independently CLOSED at ff10; separate ROOT-8B6-MAP-P2-01 current-consumer/source-inventory mapping was author-repaired; source coverage/checks are not product acceptance; product/Office/OS/runtime/performance/deployment UNRUN.",
+  "mandatory15": {
+    "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+    "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+    "startLine": 1042,
+    "endLine": 1141,
+    "read": "FULL-D9-applicable",
+    "scope": "§15.5 export binding; §15.6 D9 chart export ownership; §15.7 ten fixtures; §15.8 cross-chart constraints as D9 consumer cross-check without approving deferred layouts",
+    "target": "D9.md§12a; D9-SCHEMAS.md§10/§16b; D9-IMPACT.md§8a; D9-ACCEPTANCE M15-01..10"
+  },
+  "reviewFindings": {
+    "D9-BAF-P1-01": "independently CLOSED at fixed79026 (alias D9-8B6-P1-01): exact selection↔payload.recordPin↔projection and canonical PortableAnnotationRecord4, original independent Annotation permissions/hidden context retained",
+    "D9-BAF-P1-02": "independently CLOSED at fixed6012 (alias D9-466B-P1-01): all eight selected input domains, seven closed catalog payloads, Query-free Source/Resource/Field, native_table/narrow D4, complete D7 Query/Collection/graph, D8 Annotation and D7 View, conditional template/route/asset/read scopes accepted within this fixed scope",
+    "D9-BAF-P2-02": "independently CLOSED at fixed8b6; predecessor/current FC source ranges remain preserved and are not reopened",
+    "D9-8B6-P2-01": "independently CLOSED at fixed4da7 in bounded D9 canonical-array scope; current canonical comparator/order/origins rules preserved, no reopening",
+    "D9-8B6-P2-02": "independently CLOSED at fixed4da7 in bounded D9 renderer scope: current network remains renderer_unavailable for closed six-layout D9 route, no reopening",
+    "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
+    "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7 in bounded mapping scope: D8-SOURCE-MAP current consumer pointer corrected, retained 760 row-source provenance unchanged",
+    "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current/final FC SPEC/SCHEMAS blob aliases and ff10 predecessorRangeCorrection + D4/D5 direct-read + 760-row provenance were checked and accepted within that fixed scope; this batch refreshes only legitimate new current consumers",
+    "D9-466B-P2-01": "independently CLOSED at fixed6012: authorized caller-selected View index=99/wrong payload dispatches existing D9/2 wire2 invalid_request, original proved authenticated protected contradiction integrity_conflict, unavailable proof/source/domain and auth/entered D7 error order accepted within fixed scope",
+    "D9-6012-P1-01": "independently CLOSED at fixed8d7 D9-only ACCEPT 0P0/0P1/0P2 gap0; original fixed6012 author repair evidence: graph TerminalSchema has nodes/edges RowsSchema and five binding IDs only; static query_json data={nodes,edges} retains all original typed V/actual columns/bag/order, legal isolated node and zero edges with no ViewSpec.nodeDetails, rejects omitted present displayName/column or truncated/reordered values; no new D7/query_json wire",
+    "D9-6012-P2-01": "independently CLOSED at fixed8d7 D9-only ACCEPT 0P0/0P1/0P2 gap0; original fixed6012 author repair evidence: original invalid_output remains applicable to separate D9 Host/Core IR format coverage S33 (worker success + schema-valid IR but omitted XLSX sheet/hidden object) and D9 Region issuance format/geometry as well as real worker validation; ONLY authorized caller View catalog selector uses original invalid_request, kept protected integrity_conflict/proof/source/auth precedence and original envelopes"
+  }
+}
