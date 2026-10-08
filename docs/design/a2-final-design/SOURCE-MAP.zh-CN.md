@@ -69,7 +69,7 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D7–D10。
 
-D3、D4、D5 都是作者候选并有模块级 source map。D7 已在 fixed26be 的 D7 范围独立 PASS。D8 在 fixed5eca 已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02；本继任作者只修 D8-C98B-P1-03、D8-C98B-P2-01 与 D8-5ECA-P2-01，三项仍是 `author-resolved-pending-independent-review`。D9 已是完整作者候选，其中文质量修订仍待独立复核；D10 完整模块仍 TODO。direct producer/consumer 阅读不能把 D10 标成完成。
+D3/D4/D5 继续是作者候选并有模块级来源映射；D7 仅在 fixed26be 的 D7 范围独立 PASS。fixed5eca/ff10 的 D8 关闭结果保持，最后一个 D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED。D9-BAF-P2-02 也已在 fixed8b6 独立 CLOSED；D9-BAF-P1-01/P1-02 与 D9-8B6-P2-01/P2-02 仍只是作者修复、待独立复核，ROOT-8B6-MAP-P2-01 是另外一项待核销的来源映射修复。ROOT-D9-ZH-P2-01 继续保持 ff10 独立 CLOSED。D10 全文与全局接受仍待后续；直接交叉阅读不能替代完整 D10 整合。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -161,7 +161,7 @@ D8 已保全候选首次真实推送在 7e3f；本五项修订精确从 c98b（`
 
 本修订把 `D8-ACCEPTANCE.json` 设为六字段唯一结构源，恢复 ANNOT-01 与 WRITE-08 的完整正反极性，把 current View overlay 改到 `VIEW-CUR-*`，增加十个 `VIEW-BLD-01..10` Mandatory §15.7 oracle，得到 213/213 唯一 current obligation。本继任 delta 为 JSON/中英文投影加入确定性结构 guard，并把静态定义保存门与保持不变的 D7 §7 完整结果运行期 View 门明确分离，不建立第二 View/Query schema/store。54/54 fixed prose row 继续使用 section-level target；760/760 FC 逐行 applicability/current-owner 作者库存更新为 direct 167、upstream 146、保留 non-D8 owner 447，共 114 行 applicability 改动。
 
-fixed5eca 非作者复审已独立 CLOSED D8-C98B-P1-01、D8-C98B-P1-02、D8-C98B-P2-02。后续 ff10 非作者复审又独立 CLOSED D8-C98B-P2-01 与 D8-5ECA-P2-01。唯一的 D8-C98B-P1-03 已在本候选完成作者修订：VIEW-BLD-04/05/06 与 Main §11.2 不再把延期的 tree/treemap/sunburst、Gantt、boxplot/quantile 当成合法 current save；现任静态解码直接返回 unsupported_layout，advanced route 只适用于现任 decoder 已接受的合法 member，raw/historical/future bytes 继续由真实 owner 保全。VIEW-BLD-03 也已澄清 pie zero-total 是合法 empty-total。P1-03 仍只是 author-resolved-pending-independent-review；数量、结构检查和 docs CI 只提供机械证据，不代表语义接受。产品/runtime/GUI/IME/AT/Office/OS/多副本/性能/migration/activation/deployment 全部 UNRUN。D10 与 global A2 留后续。
+fixed5eca 与 ff10 的 D8 关闭结果保持。fixed8b6 已独立 CLOSED 唯一残余 D8-C98B-P1-03：现任 ViewSpec/1 的 tree/treemap/sunburst、Gantt 与 boxplot/quantile 等延期布局在静态门返回 unsupported_layout；只有现任 decoder 已接受的合法成员才能进入高级编辑；真正 raw/historical/future bytes 保留在原 owner；饼图 zero-total 是合法 empty-total。D9-BAF-P2-02 也在 fixed8b6 单独 CLOSED。当前 D9 两个 P1 与两个 P2 只有作者修复，尚未经新的独立核销。数量与文档 CI 不代表语义接受；产品/runtime/GUI/Office/OS/多副本/性能/deployment 均 UNRUN。
 
 ## 17. D9 完整作者整合
 
@@ -173,6 +173,6 @@ Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：�
 
 current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正的内容导出使用一次精确现任 read 形成的唯一封闭 annotation_content carrier；portable backup 保留 canonical PortableAnnotationRecord/4，Review Bundle 分别校验 body/attribution 与 target/source context。current View export 也只有一个基于完整 D7 result/ViewSpec 的有限 binding：tree/treemap/sunburst、Gantt、boxplot/quantile 等延期布局在封闭解码阶段返回 unsupported_layout；合法现任布局若缺少有限 D9 chart profile/backend，才返回 renderer_unavailable。
 
-`D9-ACCEPTANCE.json` 现是 97 条结构权威，D9 Registry/Terms 为 41 个 concept；`D9-SOURCE-MAP.json` 保存 fixed/current/successor provenance 以及修正后的 predecessor/current range。D9-BAF-P1-01、D9-BAF-P1-02、D9-BAF-P2-02 仍都只是 `author-resolved-pending-independent-review`。historical finite evidence 57/63/59/82/90/130/12 分开记账、不可相加。I01–I12 与全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN；docs/JSON 绿色检查不能接受 D9。
+`D9-ACCEPTANCE.json` 现在是唯一的 104 条结构验收权威，D9 Registry/Terms 仍有 41 个概念；`D9-SOURCE-MAP.json` 绑定现任 final-FC blob 与保留的旧范围。D8 来源映射将顶层 current consumer blob 与原始 760 条来源行的 blob 分别标记。fixed8b6 已独立 CLOSED D9-BAF-P2-02；D9-BAF-P1-01/P1-02 与 D9-8B6-P2-01/P2-02 只是作者已修、待独立复核，ROOT-8B6-MAP-P2-01 另待来源映射核销。历史有限证据 57/63/59/82/90/130/12 分开记账，不能相加。I01–I12 和全部产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 证据继续 UNRUN；绿色文档检查不能代替独立接受。
 
 较早的 ROOT-D9-ZH-P2-01 修复已在 ff10 独立 CLOSED，本批不重开。三个 D9-BAF finding 继续是 author-resolved-pending-independent-review；其直接版本族回归也已协调：fresh unseen export 在 FC SPEC §8.3/§17/§18、SCHEMAS §§6.5–6.6、terminology、acceptance 与 replacement router 中统一使用 ExportPlan/4，并按交付使用 PublicationReceipt/4 或 D9PrintReceipt/1；真实记录的 Plan/Receipt1–3 保留精确 decoder/token/bytes/pins/recovery。该协调不新增 finding 计数。本批新修改的中文仍随当前 exact-final-SHA D9 增量复核一并核验。
