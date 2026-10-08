@@ -62,7 +62,7 @@
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
       "sourceBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
       "currentA2Path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-      "currentBlob": "c22611468c1da9998a5d16d035d9c7b14203b0c9",
+      "currentBlob": "7867a9d4bb7c99871cad9b691d65de5b82013c24",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-IMPACT"
@@ -1841,7 +1841,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-      "blob": "c22611468c1da9998a5d16d035d9c7b14203b0c9",
+      "blob": "7867a9d4bb7c99871cad9b691d65de5b82013c24",
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
       "sourceBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
       "read": "FULL",
