@@ -14,7 +14,7 @@ This file is provenance, not an alternate specification. `D8-SOURCE-MAP.json` re
 
 ## 1. Preserved inventory and current scope
 
-The existing machine map still contains 54 fixed-S D8 prose-section entries, all 160 fixed cases, the nine RTL questions and seven scenario groups, all 19 Mandatory §15 headings, SEARCH-01-08, all 27 current D7 Search fixtures, both replacement routers, and the current AsciiDoc/Annotation acceptance inventory.
+The existing machine map still contains 54 fixed-S D8 prose-section entries, all 160 fixed cases, the nine RTL questions and seven scenario groups, all 19 Mandatory §15 headings, SEARCH-01-08, all 27 current D7 Search fixtures, both replacement routers, and the current AsciiDoc/Annotation acceptance inventory. For that 760-row inventory, the top-level currentAcceptanceInventory path/blob now correctly identifies the actual current final-FC ACCEPTANCE.md at blob c3022df8…, while each row deliberately retains its fixed original sourceBlob f5f5b9b2… and original text/line/section as provenance. The two blob roles must not be conflated.
 
 This count is inventory only. It does not establish that every source obligation has been semantically mapped or independently accepted.
 
