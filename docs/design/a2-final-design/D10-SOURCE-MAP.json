@@ -17,7 +17,7 @@
       "sourcePath": "docs/design/d10/CANDIDATE.md",
       "sourceBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
       "currentA2Path": "docs/design/a2-final-design/D10.md",
-      "currentBlob": "e38d85c6a1b06bbd8cd6299fdc22593a3bc60845",
+      "currentBlob": "fdf1dd623f4de568e3e37c56da28c84bf8a13992",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10"
@@ -26,7 +26,7 @@
       "sourcePath": "docs/design/d10/CANDIDATE.zh-CN.md",
       "sourceBlob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
       "currentA2Path": "docs/design/a2-final-design/D10.zh-CN.md",
-      "currentBlob": "7218397a3d234f47efeb742409e03220a02fec60",
+      "currentBlob": "69671a226f2a3d9bfc6abd6308e742012d005c72",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10"
@@ -35,7 +35,7 @@
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
       "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
       "currentA2Path": "docs/design/a2-final-design/D10-CONTROL.md",
-      "currentBlob": "1615052d3cd87460c4c2f4f47a2d030b53812d3c",
+      "currentBlob": "7026470286f64a7402d144c92a5fa10e2d4137a8",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-CONTROL"
@@ -44,7 +44,7 @@
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
       "sourceBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
       "currentA2Path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
-      "currentBlob": "c47c850a7214930e3c276f4f7eb55fb3909fd385",
+      "currentBlob": "39ea2077e1c8a89182e6646ad23c859347c1fae9",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-CONTROL"
@@ -53,7 +53,7 @@
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
       "sourceBlob": "50031c9db36232ec439aa2c96d312465250dab04",
       "currentA2Path": "docs/design/a2-final-design/D10-IMPACT.md",
-      "currentBlob": "12cdd7319c486979df1ad28a27b14eb602d010c0",
+      "currentBlob": "a5516c2f7884c8b20846e73f470d7434c12d1a4a",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-IMPACT"
@@ -62,7 +62,7 @@
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
       "sourceBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
       "currentA2Path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-      "currentBlob": "7867a9d4bb7c99871cad9b691d65de5b82013c24",
+      "currentBlob": "c15b4a179cab0a24af0d526f553079a8b8c7a19f",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-IMPACT"
@@ -143,7 +143,7 @@
       "sourcePath": "docs/design/d10/TERMINOLOGY.md",
       "sourceBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
       "currentA2Path": "docs/design/a2-final-design/D10-LEXICON.md",
-      "currentBlob": "8ad3c5470958b07f086d3bc42c74ee0de95885b6",
+      "currentBlob": "38d1e94a50a49371757342a9d3a0adaa201528ab",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-LEXICON"
@@ -152,7 +152,7 @@
       "sourcePath": "docs/design/d10/TERMINOLOGY.zh-CN.md",
       "sourceBlob": "fa364f50e80a5c7e15a61286d6cc9be54d597a51",
       "currentA2Path": "docs/design/a2-final-design/D10-LEXICON.zh-CN.md",
-      "currentBlob": "c5be34ae45e95734a86c7336df9fc117e207f467",
+      "currentBlob": "c8d98139ff02e3f2fa6b86616dbed0faa4379363",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-LEXICON"
@@ -161,7 +161,7 @@
       "sourcePath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
       "sourceBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
       "currentA2Path": "docs/design/a2-final-design/D10-UPSTREAM.md",
-      "currentBlob": "9f331e6bd499f9271d667d82ebb077f9b0be8053",
+      "currentBlob": "f6ea67b0f834968cc3cdb92a33910e47134d6510",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-UPSTREAM"
@@ -170,7 +170,7 @@
       "sourcePath": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
       "sourceBlob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
       "currentA2Path": "docs/design/a2-final-design/D10-UPSTREAM.zh-CN.md",
-      "currentBlob": "ebae90aed00351573e297203086772360439feed",
+      "currentBlob": "912a1d50b79c16b5d06ce502ab338ac336587380",
       "disposition": "original complete historical source preserved; current A2 successor has explicit versions, author-resolved-pending-independent-review",
       "read": "FULL",
       "owner": "D10-UPSTREAM"
@@ -1014,13 +1014,13 @@
     },
     {
       "path": "docs/design/a2-final-design/D6-CONTROL.md",
-      "blob": "34a0ab4418cad8c449b8f36a4f4f27e3f31113a3",
+      "blob": "acf63f972b4ac28b408e1e602b7cdc51b92691c0",
       "read": "FULL",
       "mode": "actual current A2 owner content, no inferred global acceptance"
     },
     {
       "path": "docs/design/a2-final-design/D6-CONTROL.zh-CN.md",
-      "blob": "309990dd0069b5bc6d1602ad0d4ae7e6bb5b8f2a",
+      "blob": "6f0e3be23a1b9581ca0d5307b17067be5a4b1f2d",
       "read": "FULL",
       "mode": "actual current A2 owner content, no inferred global acceptance"
     },
@@ -1050,13 +1050,13 @@
     },
     {
       "path": "docs/design/a2-final-design/D6-SCHEMAS.md",
-      "blob": "ed5d85de922f61758180168515db4a99783da812",
+      "blob": "4ef91537883549bfb78131a700a0fd2f4fcb69d9",
       "read": "FULL",
       "mode": "actual current A2 owner content, no inferred global acceptance"
     },
     {
       "path": "docs/design/a2-final-design/D6-SCHEMAS.zh-CN.md",
-      "blob": "9a074868e5e8987f88d861300e06d661f9cd0335",
+      "blob": "a780365a7622cf34d98c5cc376fbd3af96ef95aa",
       "read": "FULL",
       "mode": "actual current A2 owner content, no inferred global acceptance"
     },
@@ -1110,13 +1110,13 @@
     },
     {
       "path": "docs/design/a2-final-design/D7-REGISTRY-QUALIFICATION.md",
-      "blob": "740d8fe2f0087b66b73ca98f534a465510574855",
+      "blob": "f50253b4f6f0e122f4acba08789b4a7dae59459c",
       "read": "FULL",
       "mode": "actual current A2 owner content, no inferred global acceptance"
     },
     {
       "path": "docs/design/a2-final-design/D7-REGISTRY-QUALIFICATION.zh-CN.md",
-      "blob": "10d3022ead7629e3a9ad26400b585ba483052cc4",
+      "blob": "f43b16c6738b90e2ea4ed0e64fb6db366a89269b",
       "read": "FULL",
       "mode": "actual current A2 owner content, no inferred global acceptance"
     },
@@ -1772,7 +1772,7 @@
     "sourceEN": "f7bd02712e17f39eb5d09038a7b565d42ad70dae",
     "sourceZH": "21d318c1ad7a34852163bb0967f820ae84b74a4d",
     "currentAuthorityPath": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
-    "authorityBlob": "ea758c2b61228c24fd8100cfd1716a71897b3092",
+    "authorityBlob": "ff3f015afe175ce30aaf9f4ceb2b578b27b7e5af",
     "stableIds": 125,
     "byGroup": {
       "U": 27,
@@ -1786,7 +1786,7 @@
   },
   "independent": {
     "D9": "fixed8d7 non-author ACCEPT 0P0/0P1/0P2, necessary gap 0, D9 only (all registered D9 findings bounded CLOSED)",
-    "D10": "fixed1ca non-author full report REVISE 0P0/3P1/2P2; these five are now author-resolved pending independent delta re-review; non-author remaining mandatory/S49/A2 semantics reading was ongoing; no independent PASS or global acceptance claimed",
+    "D10": "Fixed7390=7390de028fc27abc842467b05c4e5b22ada941ba full non-author D10 review REVISE 0P0/1P1/1P2 (new 0); P1-01 source, P1-03 bootstrap and P2-02 Stop independently CLOSED only at that fixed SHA; residual P1-02 interactive responsibility and P2-01 historical planned preview remain OPEN at fixed7390. This next author-only candidate repairs those two, both author-resolved-pending-independent and require same non-author 6ac774ab fresh fixed-delta review. Necessary D10 semantic read gap0 at fixed7390; not an independent acceptance of repairs or global A2.",
     "globalPro": "PENDING separate fresh Pro full A2 independent review; acceptedDesignSha not yet assigned"
   },
   "execution": {
@@ -1801,7 +1801,7 @@
   "currentD10Bilingual": [
     {
       "path": "docs/design/a2-final-design/D10.md",
-      "blob": "e38d85c6a1b06bbd8cd6299fdc22593a3bc60845",
+      "blob": "fdf1dd623f4de568e3e37c56da28c84bf8a13992",
       "sourcePath": "docs/design/d10/CANDIDATE.md",
       "sourceBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
       "read": "FULL",
@@ -1809,7 +1809,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10.zh-CN.md",
-      "blob": "7218397a3d234f47efeb742409e03220a02fec60",
+      "blob": "69671a226f2a3d9bfc6abd6308e742012d005c72",
       "sourcePath": "docs/design/d10/CANDIDATE.zh-CN.md",
       "sourceBlob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
       "read": "FULL",
@@ -1817,7 +1817,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-CONTROL.md",
-      "blob": "1615052d3cd87460c4c2f4f47a2d030b53812d3c",
+      "blob": "7026470286f64a7402d144c92a5fa10e2d4137a8",
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.md",
       "sourceBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
       "read": "FULL",
@@ -1825,7 +1825,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
-      "blob": "c47c850a7214930e3c276f4f7eb55fb3909fd385",
+      "blob": "39ea2077e1c8a89182e6646ad23c859347c1fae9",
       "sourcePath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
       "sourceBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
       "read": "FULL",
@@ -1833,7 +1833,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-IMPACT.md",
-      "blob": "12cdd7319c486979df1ad28a27b14eb602d010c0",
+      "blob": "a5516c2f7884c8b20846e73f470d7434c12d1a4a",
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
       "sourceBlob": "50031c9db36232ec439aa2c96d312465250dab04",
       "read": "FULL",
@@ -1841,7 +1841,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
-      "blob": "7867a9d4bb7c99871cad9b691d65de5b82013c24",
+      "blob": "c15b4a179cab0a24af0d526f553079a8b8c7a19f",
       "sourcePath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
       "sourceBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
       "read": "FULL",
@@ -1913,7 +1913,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-LEXICON.md",
-      "blob": "8ad3c5470958b07f086d3bc42c74ee0de95885b6",
+      "blob": "38d1e94a50a49371757342a9d3a0adaa201528ab",
       "sourcePath": "docs/design/d10/TERMINOLOGY.md",
       "sourceBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
       "read": "FULL",
@@ -1921,7 +1921,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-LEXICON.zh-CN.md",
-      "blob": "c5be34ae45e95734a86c7336df9fc117e207f467",
+      "blob": "c8d98139ff02e3f2fa6b86616dbed0faa4379363",
       "sourcePath": "docs/design/d10/TERMINOLOGY.zh-CN.md",
       "sourceBlob": "fa364f50e80a5c7e15a61286d6cc9be54d597a51",
       "read": "FULL",
@@ -1929,7 +1929,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-UPSTREAM.md",
-      "blob": "9f331e6bd499f9271d667d82ebb077f9b0be8053",
+      "blob": "f6ea67b0f834968cc3cdb92a33910e47134d6510",
       "sourcePath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
       "sourceBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
       "read": "FULL",
@@ -1937,7 +1937,7 @@
     },
     {
       "path": "docs/design/a2-final-design/D10-UPSTREAM.zh-CN.md",
-      "blob": "ebae90aed00351573e297203086772360439feed",
+      "blob": "912a1d50b79c16b5d06ce502ab338ac336587380",
       "sourcePath": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
       "sourceBlob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
       "read": "FULL",
@@ -1947,17 +1947,17 @@
   "currentD10Acceptance": {
     "authority": {
       "path": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
-      "blob": "ea758c2b61228c24fd8100cfd1716a71897b3092",
+      "blob": "ff3f015afe175ce30aaf9f4ceb2b578b27b7e5af",
       "stableIds": 125
     },
     "projections": [
       {
         "path": "docs/design/a2-final-design/D10-ACCEPTANCE.md",
-        "blob": "53711d1ef198627e85a3e401d17d6faf2d51ace0"
+        "blob": "80dadfe01c43d003756372fe60e7754755ff8dd9"
       },
       {
         "path": "docs/design/a2-final-design/D10-ACCEPTANCE.zh-CN.md",
-        "blob": "bee907042f48ca818a712878109e7204f83d59fc"
+        "blob": "94c76489aac5211d6ef87a1de8c197f900b234bc"
       }
     ],
     "sourceQualifiedOriginal": {
@@ -1998,12 +1998,26 @@
     "p0": 0,
     "p1": 3,
     "p2": 2,
-    "disposition": "author-resolved-pending-independent",
+    "disposition": "three findings independent CLOSED only at fixed7390; two residual author-resolved-pending-independent at next actual SHA; no D10 independent PASS",
     "product": "UNRUN",
     "protectedD10History": "unchanged",
     "fixedS49": "unchanged",
     "base": "97f4734f82a760cb6716c8122b84494da2b61164",
-    "scope": "Five fixed1ca findings plus direct D6/D7/FC source maps/acceptance, no global design acceptance",
-    "readBoundary": "Original fixed1ca independent report relied on; author read directly the affected current D10 owners, D6 §10.2/§20.2, FC SCHEMAS §9, D7 B05/B09/B13, original bilingual scenario rows and consumers. Not an independent full Mandatory/S49/current A2 semantic rescan."
+    "scope": "Only residual P1-02 and P2-01 bilingual normative direct consumers plus current source map/acceptance synchronization; three fixed7390 CLOSED ranges unchanged",
+    "readBoundary": "Author checked actual root/design AGENTS and replacement routing, source authority/current owner D10-CONTROL §0/§7.1, D10 §15.2, D10-UPSTREAM §5.1, D6 SCHEMAS/CONTROL, D7 SCHEMAS/qualifications, D8 SCHEMAS/INTERFACES, D10 LEXICON/IMPACT/acceptance and mappings. Inherits fixed7390 non-author semantic reading gap0 without claiming author full independent audit.",
+    "latestIndependentFixedSha": "7390de028fc27abc842467b05c4e5b22ada941ba",
+    "latestIndependent": "REVISE 0P0/1P1/1P2, 0 new; necessary D10 semantic gap0; independent CLOSED at fixed7390: D10-1CA-P1-01, D10-1CA-P1-03, D10-1CA-P2-02. At fixed7390 P1-02 and P2-01 remained OPEN.",
+    "residual": [
+      {
+        "id": "D10-1CA-P1-02",
+        "status": "author-resolved-pending-independent",
+        "scope": "Real automatic core_field_member Link2/ApprovalUse2 versus genuine attended interactive D3/D6 D7/D8 owner and original Run/Lease admission"
+      },
+      {
+        "id": "D10-1CA-P2-01",
+        "status": "author-resolved-pending-independent",
+        "scope": "Original saved D6 planned PAB3/Manifest2/EffectBytes2 versus current PAB4/Manifest3/EffectBytes3 decoder for unchanged D7 read-only planned-preview"
+      }
+    ]
   }
 }
