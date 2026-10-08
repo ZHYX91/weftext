@@ -81,7 +81,7 @@ D8-C98B-P1-03 已在 fixed8b6 独立 CLOSED，其静态解码、高级路径与 
 - worker/route/sandbox、D9 默认不联网、image/region、Mobile negative conversion surface，以及与 D10 直接相交但不等于完整 D10 的边界。
 - historical 57/63/59/82/90/130/12 evidence set 分开记账；I01–I12 及产品/runtime/GUI/Office/OS/performance/deployment 全部继续 UNRUN。
 
-独立复核必须报告 P0/P1/P2 disposition 与任何必要 read gap。完成前 D9 不能超出 author-resolved-pending-independent-review。之后仍必须完整整合 D10，并做全新非作者 Pro/global A2 终审。
+历史 D9 独立复核必须报告 P0/P1/P2 与必要读取 gap；此前 D9 作者待审条件已仅在 D9 范围由 fixed8d7 非作者 ACCEPT 0P0/0P1/0P2、必要 gap=0 满足。当前 D10 全文已整合为作者候选，但完整 D10 非作者复核及另一轮全新 Pro/global 完整 A2 总审仍必须另行执行；D9 verdict 和绿色 docs 均不构成全局接受。
 
 ## 6. 现任 D10 完整非作者审查交接
 

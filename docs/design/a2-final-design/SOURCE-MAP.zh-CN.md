@@ -69,7 +69,7 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D7–D10。
 
-D3/D4/D5 仍是模块作者候选，D7 fixed26be PASS 只覆盖 D7。更早 fixed5eca/ff10、fixed8b6、fixed4da7、fixed79026、fixed466b，以及 fixed6012 的 D9-BAF-P1-02/D9-466B-P2-01 均在原范围独立 CLOSED。只修两项 fixed6012 新回归且仅作者已修待独审：D9-6012-P1-01（graph query_json 精确保留 nodes/edges 及真实列/V/顺序，不要求 ViewSpec.nodeDetails）与 D9-6012-P2-01（Host/Core/Region/worker 原 invalid_output 保留，不用于请求方 View selector）。D10/global 尚未接受，产品 UNRUN。
+D3/D4/D5 保留原模块映射，D7 fixed26be 独立 PASS 仅限 D7。fixed5eca/ff10、fixed8b6、fixed4da7、fixed79026、fixed466b 及 fixed6012 的 D9-BAF-P1-02/D9-466B-P2-01 均在精确范围独立 CLOSED；新增两项 D9-6012-P1-01/P2-01 随后也在 fixed8d7 由 D9-only ACCEPT 0P0/0P1/0P2、必要 gap=0 独立 CLOSED。完整 D10 当前已整合为作者候选、仍待独立复核；global A2 和所有产品行为仍 PENDING/UNRUN。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -114,7 +114,7 @@ D5 fixed-S 主文、Impact、Lexicon 已逐非空行映射。当前候选没有�
 
 历史 Inline-only、单逻辑行、禁止 span/块 cell 的 native-table 限制被显式 supersede；当前 D2 接纳完整合法 Asciidoctor 2.0.26 table surface。合法 shape 可以没有 structured control，但 Source 不能因此 invalid。合格的 titleless native create/save 继续合法；filename/path/placeholder 不能伪造 title。
 
-D6–D9 producer/consumer 交叉继续记录为 direct partial。D10 现也通过真实 CONTROL-CONTRACT、CANDIDATE、UPSTREAM-AMENDMENTS 中英文文件按精确 blob 做 direct qualification；这些读取均为 direct_partial_not_full_D10，不等于 D10 完整模块完成。
+本段记录的是旧 D6/D9-only 阶段的有限直接读取：当时仅按范围读取 D10 CONTROL-CONTRACT、CANDIDATE、UPSTREAM-AMENDMENTS 的双语直接交叉，不能视为完整 D10；这一真实历史资格不覆盖后续作者批。现任 A2 D10 批已逐份全文读取原 18 份 D10、固定 S49 与必要 D1–D9/FC 真实后像，完成 D10 作者候选整合，但未获得独立接受。
 
 ## D6 整合更新
 
@@ -137,7 +137,7 @@ D7 现已整合为完整作者候选。fixed-S 的十三份 D7 来源以及额�
 
 D7-SEARCH.md 已整合 SEARCH-01 至 SEARCH-08，但没有建立第二个搜索执行器或持久权威。普通文本与可视化筛选是默认路径；可选快捷模式必须显式进入，并使用带 @ 前缀的操作符，因此普通冒号文字、URL、Windows 盘符和 title: 不会被静默解析。保存时只保存 canonical Query 语义，不保存设备侧解析器状态。当前匹配保留 exact 与显式 `nfc-for-compare` 两种比较 basis，substring/equality 均区分大小写，并且不声称已经提供自动模糊、拼音或分词能力。
 
-D7-SOURCE-MAP.json 记录完整 D7 provenance 与 fixed26be accepted scope。D8-SOURCE-MAP.json 保留 fixed D8 prose/case、Mandatory §15/RTL、SEARCH-01–08、current View/FC 协调与 direct producer/consumer 库存。导航继续保持 54/54 section-level target，宽泛整文件为 0。本轮 SourceTransform 残余修订把四行改为 upstream-current-prerequisite，因此 760 行作者库存现为 direct 167、upstream 146、保留 non-D8 owner 447，共 114 行作者 applicability 改动；这些残余变化仍待绑定最终 SHA 的独立复核。D9 是完整作者候选；D10 只在具名交叉上保持 PARTIAL。
+D7-SOURCE-MAP.json 保留完整 D7 来源及有界 fixed26be PASS；D8-SOURCE-MAP.json 保留 D8 固定场景、Mandatory §15/RTL、SEARCH-01–08、当前 View/FC 与直接消费者。历史导航计为 54/54 个 section-level、宽泛整文件为零；SourceTransform 旧四行 residual 的 167 direct、146 upstream、447 非 D8 owner 与 114 条 applicability 更改继续仅是该固定历史证据。旧 D8-only 阶段只知 D10 部分交叉，现任 A2 已整合 D10 全文作者候选，完整独立 D10 复核仍 PENDING。
 
 fixed2f89 独立关闭两项 navigation finding 与 COORD-D7-DOC-QUALITY-01；fixed1068244 关闭 A2-D7-2F89-P2-02；fixed85bdadf 关闭两个 P1 与 Impact-sync P2；后续 fixed26be 非作者复核关闭最终 A2-D7-2F89-P2-01，并给出 PASS 0/0/0。
 
@@ -165,7 +165,7 @@ fixed5eca 与 ff10 的 D8 关闭结果保持。fixed8b6 已独立 CLOSED 唯一�
 
 ## 17. D9 完整作者整合
 
-D9 从 exact `5eca16c40cdf2e1892f6930d51c632ea720a460c` 开始，继续是完整作者候选，不再是 TODO module。八份 fixed-S D9 source 为 FULL；八组 current D9 owner 中英为 FULL；Mandatory §14 的 884–924 行与 D9 适用 Mandatory §15.5–15.8 的 1042–1141 行均为 FULL；current D7 D9-binding/PAB/View owner 已读取；D9 适用 final AsciiDoc/Annotation successor FULL。D9 必要 read gap 为 0。D10 仍只在具名 D9 direct intersection 上 PARTIAL，不构成完整 D10 整合。
+原 D9-only 作者阶段从 5eca16c40cdf2e1892f6930d51c632ea720a460c 起，八份固定 S D9 来源、八组当前 D9 EN/ZH owner、Mandatory §14 第 884–924 行与适用 §15.5–15.8 第 1042–1141 行、D7 binding/PAB/View 和最终 FC 后像均已全文读取，D9 必要 gap=0；但当时 D10 只读具名直接交叉。当前后续 A2 已完成 D10 全文作者整合，不自行声称 D10/global 独立接受。
 
 fresh current 的作者工作使用 D3 wire13、D7 PAB4、DependencyProof3 与 Effect3。fresh export 使用封闭的 Plan4 successor：Catalog3/Selection2/Projection2/Loss2/Confirmation2，并按交付类型生成 PublicationReceipt4 或 PrintReceipt1；适用时继续绑定现任 D2Snapshot3/D8 presentation。Plan/Receipt1–3 与其它前身封闭 family 只按原 decoder、bytes、pins 以及原 saved/planned/unknown 责任恢复，不虚构迁移。
 
@@ -173,7 +173,7 @@ Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：�
 
 current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正的内容导出使用一次精确现任 read 形成的唯一封闭 annotation_content carrier；portable backup 保留 canonical PortableAnnotationRecord/4，Review Bundle 分别校验 body/attribution 与 target/source context。current View export 也只有一个基于完整 D7 result/ViewSpec 的有限 binding：tree/treemap/sunburst、Gantt、boxplot/quantile 等延期布局在封闭解码阶段返回 unsupported_layout；合法现任布局若缺少有限 D9 chart profile/backend，才返回 renderer_unavailable。
 
-D9-ACCEPTANCE.json 仍是 104 个 ID 的唯一结构验收权威，中英只是投影，D9 Registry/Terms 保留 41 概念。D9-SOURCE-MAP.json 现任指针均对应最新 FC graph 与输出校验条款；原 ff10 predecessorRangeCorrection、D4/D5 direct-read、S49 与 760 条来源行仍为历史。S33 独立 Host/Core IR 覆盖必须对 worker 成功/IR schema 合格但漏 XLSX sheet 或隐藏对象返回 invalid_output，原 D9 Region 新签发不变。fixed6012 已独立 CLOSED 旧 D9 生产者与 selector 问题；只余新 D9-6012-P1-01/P2-01 作者已修待审。产品 I01–I12、GUI/Office/OS/runtime/performance/activation/deployment UNRUN；文档映射检查不是独立 PASS。
+D9-ACCEPTANCE.json 保留 104 个稳定 D9 ID（EN/ZH 投影、41 个 Registry/Terms 概念），真实 graph 与原 Host/Core S33 IR coverage、D9 Region 验证均保留。D9-SOURCE-MAP 的 ff10 predecessorRangeCorrection、D4/D5 旧 direct-read、S49 与原 760 来源行仍是历史。fixed6012 独立 CLOSED 原 D9 生产者/selector，fixed8d7 又在 D9-only ACCEPT 中独立 CLOSED D9-6012-P1-01/P2-01。完整 D10 当前作者候选尚待独立复核；I01–I12、GUI/Office/OS/runtime/performance/activation/deployment 全部 UNRUN。
 
 ROOT-D9-ZH-P2-01 在 ff10 独立 CLOSED。原 D9-BAF-P1-01/02 与 D9-466B-P2-01 已在后续各自固定复核中独立 CLOSED，不是现任 OPEN finding。新 D9-6012-P1-01/P2-01 保留 fresh ExportPlan/4、PublicationReceipt/4 或 D9PrintReceipt/1、原 FC §8.3/§17/§18 及 §§6.5–6.6、随机 token 私下分配→report/manifest→Plan 完整原子保存，以及真实 Plan/Receipt1–3 的原 decoder。不能新增 token/wire/author 权威。
 

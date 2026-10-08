@@ -82,7 +82,7 @@ The reviewer must verify:
 - workers/routes/sandbox, D9 no-network, image/region policy, Mobile negative conversion surface and direct-but-not-full D10 intersections;
 - historical 57/63/59/82/90/130/12 evidence sets remain separate, while I01–I12 and all product/runtime/GUI/Office/OS/performance/deployment evidence remain UNRUN.
 
-Independent review must report P0/P1/P2 dispositions and any necessary read gaps. D9 cannot move beyond author-resolved-pending-independent-review until that review is complete. Complete D10 integration and a fresh non-author Pro/global A2 review remain mandatory afterwards.
+Historical D9 independent review must report P0/P1/P2 dispositions and necessary read gaps. That earlier D9 author-pending condition has now been satisfied only for D9, by the fixed8d7 non-author ACCEPT 0P0/0P1/0P2 with required gap zero. The full D10 design is integrated as an author candidate; its complete non-author review and a different fresh Pro/global full-A2 review remain mandatory. Neither D9 verdict nor green docs grants global acceptance.
 
 ## 6. Active D10 full-module non-author review handoff
 
