@@ -485,7 +485,7 @@ D9 保持 36 个 D9-owned naming row + 1 个继承 D6 ImportJob。17 个 public 
 49. `activation.current` 由同 cut selector 派生；stale selector CAS 失败，successor switch 原子完成，历史 ActivationBinding generation/revision 不因变成 non-current 而改变。
 
 50. 认证本人无 Automation 的 interactive-start 同库原子 Run/Lease/Stop、maxRuns1 只准入一次、同 Run 第二步与原 planned restart；伪本人/事件、错 store、预算/StopCapacity/clock/撤权竞态全部零半态；
-51. fresh Profile4/Plan4/Genesis2 的 create/fork 双 Declaration2 按 revision-token rev1→source-transform rev2、同唯一 P 双 key 同时可用，必需 D8 parents[]/revision1/separate 在 P 前 committed=null、P 后 materialize 完整 /2 record/hash/pin/effect/outbox/head；历史 Plan1/Plan3/ordinary copy/continue 保持原记录；
+51. 新建与派生 Workspace 采用现任 Profile4/Plan4/Genesis2：两条 Declaration2 按 revision-token 修订1→source-transform 修订2 签署，并于唯一最终 P 同时启用双密钥；必需 D8 初始策略规定空 parents、修订1、separate、且提交前预览 committed=null。唯有最终 P 物化完整策略记录、字节哈希、固定 pin、地址、effect、回执、outbox 与 head；历史 Plan1/Plan3、普通副本及继续恢复均保留原记录；
 52. fresh PAB4/Manifest3/EffectBytes3/Link2/ApprovalUse2 与真实历史 PAB3/Manifest2/Link1/ApprovalUse1 各具正例和错 version/pins/preview digest 反例，原请求重启不重造；
 53. Stop W 与 H 经一份 W-scoped Stop Image1/StopOwner 读到相同 revision/result；cross-Workspace、错 store、hidden/无 H target 权、continuity 断链均按原错误次序，丢响应和目标 r5→r6 不改变原 stop，预留容量与 D6 final P/外部 handoff 线性化。
 
