@@ -14,7 +14,7 @@ translation_status: source
 
 对已经在本目录整合的模块，本目录是唯一 A2 候选正文。早期 snapshots、D6 file-authority owner afterimage 和 AsciiDoc/Annotation final-design candidate 继续作为来源与历史 decoder 证据，但不与 A2 形成第二套 current definition。
 
-当前候选保留 D1–D8 与完整 D9 整合，不进入 D10。D7 fixed26be PASS 只覆盖 D7；fixed5eca/ff10 的 D8、fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02、fixed4da7 的 D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01、fixed79026 的 D9-BAF-P1-01、fixed466b 的 D9-4DA7-MAP-P2-01 均按原范围独立 CLOSED。只有原 D9-BAF-P1-02（别名 D9-466B-P1-01）和新 D9-466B-P2-01 仍为 author-resolved-pending-independent-review。不宣告 D9/global PASS；产品行为 UNRUN；ROOT-D9-ZH-P2-01 在 ff10 已 CLOSED。
+当前 A2 保留 D1–D9，尚未进入 D10 全文。D7 fixed26be PASS 只覆盖 D7；fixed5eca/ff10 D8、fixed8b6 D8/D9、fixed4da7 D9 canonical/renderer/root mapping、fixed79026 Annotation、fixed466b FC 映射及 fixed6012 的 D9-BAF-P1-02/D9-466B-P2-01 均按原有界范围独立 CLOSED。只有新 D9-6012-P1-01（graph 无强制 nodeDetails）与 D9-6012-P2-01（保留 Host/Core/Region 原 invalid_output，不能限 worker）仍是 author-resolved-pending-independent-review。产品 UNRUN，不是 D9/global PASS。
 
 ## 2. 本批进度
 
@@ -60,4 +60,4 @@ D10 目前还没有完整 A2 current definition。D9 只读取 D10 的具名直�
 
 后续非作者复核绑定 fixed26be（`26be071d4c2075343d9ebf272e00f23769ce0d64`），结论 PASS：P0=0 / P1=0 / P2=0，并 CLOSED 最终 `A2-D7-2F89-P2-01`。此前有界 closure 继续绑定各自原 SHA。D7 因而在 D7 范围 accepted；这不接受 D8 或 global A2。
 
-D8-C98B-P1-03/D9-BAF-P2-02 在 fixed8b6，D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01 在 fixed4da7，D9-BAF-P1-01 在 fixed79026，D9-4DA7-MAP-P2-01 在 fixed466b，ROOT-D9-ZH-P2-01 在 ff10 均独立 CLOSED。下一位独立审查者必须固定 PR #5 最终真实 SHA，只核 fixed466b→最终的原 D9-BAF-P1-02 八域/七 catalog producer 分派（Query-free Source/Resource/窄 Field，以及真实完整 Query/Collection/Annotation/View），与新 D9-466B-P2-01 原 wire2 invalid_request/integrity_conflict/证明、来源、域不可得错误。规范入口：FC SCHEMAS §6.6.1、FC SPEC §§8.3/16a/17、D9 Interfaces §§4/7、原 Workers/Export §3a/3b 和 Conversion/Templates/Workers §4a。D10 全文、fresh Pro/global A2 与 accepted-design SHA/启动留后续；产品/runtime UNRUN。
+更早独立 CLOSED：D8-C98B-P1-03/D9-BAF-P2-02 fixed8b6、D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01 fixed4da7、D9-BAF-P1-01 fixed79026、D9-4DA7-MAP-P2-01 fixed466b、D9-BAF-P1-02/D9-466B-P2-01 fixed6012、ROOT-D9-ZH-P2-01 ff10。新非作者固定 PR #5 最终真实 SHA，仅审 fixed6012→最终：D9-6012-P1-01 的原 TerminalSchema/静态 query_json nodes/edges、可选 ViewSpec.nodeDetails 与丢实际列的反例，以及 D9-6012-P2-01 的 Host/Core/S33 原覆盖 invalid_output、D9 Region 签发、请求方 selector invalid_request 和原 owner 优先级。规范入口 FC SCHEMAS §6.6.1、FC SPEC §§8.3/16a、D9 Interfaces §7、原 D7 execution §1、D9 workers/export §3、Import IR §2/§8。完整 D10 与 fresh Pro/global A2 留后续，产品 UNRUN。

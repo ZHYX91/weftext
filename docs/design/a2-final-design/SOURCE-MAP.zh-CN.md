@@ -69,7 +69,7 @@ SOURCE-MAP.json 记录机器可读的 obligation group 与 disposition，并逐�
 
 本批所需 fixed-S D4/D5 来源现已全文读取并映射：D4 主文/Impact/Lexicon 与不可变 catalog，以及 D5 主文/Impact/Lexicon。Mandatory scenario input §1–§14（1–924 行）已按 D4/D5 读取；925–1141 行留给后续 D7–D10。
 
-D3/D4/D5 仍是模块作者候选，D7 fixed26be 的 PASS 只覆盖 D7。fixed5eca/ff10 的 D8、fixed8b6 的 D8-C98B-P1-03/D9-BAF-P2-02、fixed4da7 的 D9-8B6-P2-01/02 与 ROOT-8B6-MAP-P2-01、fixed79026 的 D9-BAF-P1-01、fixed466b 的 D9-4DA7-MAP-P2-01 都已在各自固定范围独立 CLOSED。只剩 D9-BAF-P1-02（别名 D9-466B-P1-01：八域/七 payload 生产者完整分派）和新增 D9-466B-P2-01（原 D9/2 wire2 错误精确分派）为 author-resolved-pending-independent-review，不自判 PASS；D10/global 尚未接受，产品执行 UNRUN。
+D3/D4/D5 仍是模块作者候选，D7 fixed26be PASS 只覆盖 D7。更早 fixed5eca/ff10、fixed8b6、fixed4da7、fixed79026、fixed466b，以及 fixed6012 的 D9-BAF-P1-02/D9-466B-P2-01 均在原范围独立 CLOSED。只修两项 fixed6012 新回归且仅作者已修待独审：D9-6012-P1-01（graph query_json 精确保留 nodes/edges 及真实列/V/顺序，不要求 ViewSpec.nodeDetails）与 D9-6012-P2-01（Host/Core/Region/worker 原 invalid_output 保留，不用于请求方 View selector）。D10/global 尚未接受，产品 UNRUN。
 
 ## 8. D1/D2 source-map 完整性窄修
 
@@ -173,6 +173,6 @@ Mandatory §14 在作者设计层闭合，并有一项具名 selector 修订：�
 
 current Annotation 整合也已明确：Node Template omission 只局限 construction；`annotation_index` 只作 omission-directory evidence。真正的内容导出使用一次精确现任 read 形成的唯一封闭 annotation_content carrier；portable backup 保留 canonical PortableAnnotationRecord/4，Review Bundle 分别校验 body/attribution 与 target/source context。current View export 也只有一个基于完整 D7 result/ViewSpec 的有限 binding：tree/treemap/sunburst、Gantt、boxplot/quantile 等延期布局在封闭解码阶段返回 unsupported_layout；合法现任布局若缺少有限 D9 chart profile/backend，才返回 renderer_unavailable。
 
-D9-ACCEPTANCE.json 保留 104 个稳定 ID 的唯一结构权威，中英文仅为投影，D9 Registry/Terms 仍有 41 概念。D9-SOURCE-MAP.json 绑定现任 FC SPEC/SCHEMAS §6.6.1 八域分派；旧 ff10 predecessorRangeCorrection、D4/D5 直接读取及原 760 来源行仍是历史资格。fixed466b 已独立 CLOSED 旧 D9-4DA7-MAP-P2-01，fixed79026 已 CLOSED D9-BAF-P1-01。只有 D9-BAF-P1-02 与新 D9-466B-P2-01 待精确最终 SHA 的独立增量复核。D9/2 wire2 错误闭集与原 D7 owner 返回不变。I01–I12 及产品/runtime/GUI/Office/OS/performance/migration/activation/deployment 仍 UNRUN；映射与绿色 CI 不能代替设计/global PASS。
+D9-ACCEPTANCE.json 仍是 104 个 ID 的唯一结构验收权威，中英只是投影，D9 Registry/Terms 保留 41 概念。D9-SOURCE-MAP.json 现任指针均对应最新 FC graph 与输出校验条款；原 ff10 predecessorRangeCorrection、D4/D5 direct-read、S49 与 760 条来源行仍为历史。S33 独立 Host/Core IR 覆盖必须对 worker 成功/IR schema 合格但漏 XLSX sheet 或隐藏对象返回 invalid_output，原 D9 Region 新签发不变。fixed6012 已独立 CLOSED 旧 D9 生产者与 selector 问题；只余新 D9-6012-P1-01/P2-01 作者已修待审。产品 I01–I12、GUI/Office/OS/runtime/performance/activation/deployment UNRUN；文档映射检查不是独立 PASS。
 
-较早的 ROOT-D9-ZH-P2-01 修复已在 ff10 独立 CLOSED，本批不重开。三个 D9-BAF finding 继续是 author-resolved-pending-independent-review；其直接版本族回归也已协调：fresh unseen export 在 FC SPEC §8.3/§17/§18、SCHEMAS §§6.5–6.6、terminology、acceptance 与 replacement router 中统一使用 ExportPlan/4，并按交付使用 PublicationReceipt/4 或 D9PrintReceipt/1；真实记录的 Plan/Receipt1–3 保留精确 decoder/token/bytes/pins/recovery。该协调不新增 finding 计数。本批新修改的中文仍随当前 exact-final-SHA D9 增量复核一并核验。
+ROOT-D9-ZH-P2-01 在 ff10 独立 CLOSED。原 D9-BAF-P1-01/02 与 D9-466B-P2-01 已在后续各自固定复核中独立 CLOSED，不是现任 OPEN finding。新 D9-6012-P1-01/P2-01 保留 fresh ExportPlan/4、PublicationReceipt/4 或 D9PrintReceipt/1、原 FC §8.3/§17/§18 及 §§6.5–6.6、随机 token 私下分配→report/manifest→Plan 完整原子保存，以及真实 Plan/Receipt1–3 的原 decoder。不能新增 token/wire/author 权威。
