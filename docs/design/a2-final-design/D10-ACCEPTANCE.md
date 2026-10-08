@@ -9,7 +9,7 @@ translation_status: synced
 # D10 125 stable scenario acceptance projection
 
 Sole structural authority: `D10-ACCEPTANCE.json`. This projects all 125 stable IDs, source locations, complete expected rule, prohibited scenario, and validation obligations. Product UNRUN and independent D10/global verdict pending.
-Historical coordinates and source-era vocabulary in this table come from unchanged `docs/design/d10/SCENARIO-DISPOSITIONS.md`, not the renamed A2 `D10-SCENARIOS.md`. Current renamings live in `D10-ACCEPTANCE.json.currentOverlay.sourceEraToCurrent` and that A2 projection.
+Historical coordinates and source-era vocabulary in this table come from unchanged docs/design/d10/SCENARIO-DISPOSITIONS.md, not the renamed A2 D10-SCENARIOS.md. Current renamings live in `D10-ACCEPTANCE.json.currentOverlay.sourceEraToCurrent` and that A2 projection.
 
 | ID | Source | Disposition | Mode | Positive/expected | Negative/risk | Validation oracle |
 | --- | --- | --- | --- | --- | --- | --- |
