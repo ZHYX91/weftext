@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. D8 fixed5eca and ff10 closures remain; the sole D8-C98B-P1-03 is now author-resolved-pending-independent-review at the current candidate. ROOT-D9-ZH-P2-01 is independently CLOSED at ff10. D9-BAF-P1-01/P1-02/P2-02 plus the direct /3→/4 version-family coordination remain author-resolved-pending-independent-review. D10/global remain pending.",
+  "status": "D1-D9 author candidates preserved. D7 fixed26be non-author PASS remains. fixed8b6 independently CLOSED D8-C98B-P1-03 and D9-BAF-P2-02; earlier fixed5eca/ff10 D8 and ROOT-D9-ZH closures remain. D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 are author-resolved-pending-independent-review; ROOT-8B6-MAP-P2-01 is a separately author-repaired mapping concern awaiting independent confirmation. D10/global remain pending.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,7 +2341,7 @@
       ]
     }
   ],
-  "next_batch": "Bind the exact final SHA for a new non-author review of the sole D8-C98B-P1-03 repair and, separately, the D9-BAF-P1-01/P1-02/P2-02 repair plus its necessary /3→/4 version-family and bilingual regression. Do not reopen fixed5eca/ff10 closures or ROOT-D9-ZH. Then complete D10 full owner integration followed by a fresh Pro/global A2 review and one accepted-design SHA before freeze/implementation start.",
+  "next_batch": "Bind the new final SHA for a non-author incremental review of D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 plus bilingual current/recorded Plan4 and mapping regression; independently confirm ROOT-8B6-MAP-P2-01 without reopening fixed8b6 D8-C98B-P1-03 or D9-BAF-P2-02. Only afterward complete D10 full module and a fresh Pro/global A2 review, accepted-design SHA and same-SHA freeze/implementation start.",
   "global_acceptance": "not_performed",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
@@ -2460,15 +2460,11 @@
     }
   },
   "pending_scope": [
-    "D8 fixed-stop independent full review",
-    "D8 source-map navigation audit: 50/54 fixedProseSections still use broad whole-file targets",
-    "D8 FC applicability, historical-to-current disposition and per-obligation semantic audit",
-    "D8/Search runtime/platform/AT/performance evidence",
-    "fresh Pro/global review",
-    "runtime/OS/GUI/real-replica/migration/activation evidence",
-    "D9 fixed-final-SHA independent full review",
-    "D10 full A2 owner module",
-    "D9 implementation gates I01-I12 and product/Office/OS/runtime evidence"
+    "Non-author exact-final-SHA review of D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 plus their actual bilingual/relational regression",
+    "Independent confirmation of ROOT-8B6-MAP-P2-01; do not reopen independently CLOSED D8-C98B-P1-03 or D9-BAF-P2-02",
+    "D10 complete A2 owner-module integration",
+    "Fresh Pro/global full A2 non-author review, one accepted-design SHA and same-SHA freeze/implementation-start materials",
+    "D9 implementation gates I01-I12, Core/GUI/Office/OS/runtime/crash/multi-replica/performance/migration/activation/deployment UNRUN"
   ],
   "d7_integration": {
     "files": [
@@ -2573,7 +2569,7 @@
       "D8-SOURCE-MAP.md",
       "D8-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "fixed5eca independently CLOSED D8-C98B-P1-01/P1-02/P2-02; ff10 independently CLOSED D8-C98B-P2-01 and D8-5ECA-P2-01; sole D8-C98B-P1-03 is author-resolved-pending-independent-review at current candidate",
+    "status": "D8-C98B-P1-03 independently CLOSED at fixed8b6; fixed5eca/ff10 bounded closures remain; no current D8 open finding is asserted by this author batch",
     "authorStartSha": "26be071d4c2075343d9ebf272e00f23769ce0d64",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "final P1 deferred-layout repair synchronized affected EN/ZH Main/Interfaces/Schemas/Impact/Acceptance; pending exact-final-SHA independent verification",
@@ -2590,10 +2586,10 @@
     "view": "D7 Query/Definition/ViewSpec/1 owner retained; D8 definition-save consumes no ResultHandle. Deferred tree/treemap/sunburst, Gantt and boxplot/quantile fail current static decoding with unsupported_layout; advanced_required applies only to current-decoder-legal members. network/timeline/table retain their real contracts; raw/historical/future bytes remain under their real owner.",
     "sourceMap": {
       "structuralAuthority": "D8-SOURCE-MAP.json",
-      "blob": "989e4530931f00ff1aa315588ba2a1eec59ccf66"
+      "blob": "a4cbcb78b6ede473795be128d67f60db89b1a822"
     },
     "runtime": "UNRUN",
-    "review": "author repair is complete for the sole D8-C98B-P1-03. Next D8 work is non-author review of this exact-final-SHA repair only; prior fixed5eca/ff10 closures and unchanged accepted scopes remain closed.",
+    "review": "fixed8b6 independent verdict CLOSED sole D8-C98B-P1-03; do not reopen that fixed-SHA scope for the D9 author repair. Product execution still UNRUN.",
     "semanticAudit": {
       "fixedProseSections": 54,
       "broadWholeFileTargets": 0,
@@ -2620,8 +2616,8 @@
         "D8-C98B-P2-01",
         "D8-C98B-P2-02"
       ],
-      "sourceMapBlob": "989e4530931f00ff1aa315588ba2a1eec59ccf66",
-      "status": "fixed5eca independently CLOSED P1-01/P1-02/P2-02; ff10 independently CLOSED P2-01 and D8-5ECA-P2-01; sole P1-03 author-resolved-pending-independent-review at current candidate",
+      "sourceMapBlob": "a4cbcb78b6ede473795be128d67f60db89b1a822",
+      "status": "fixed5eca and ff10 earlier bounded closures retained; sole D8-C98B-P1-03 independently CLOSED at fixed8b6; no D8/global acceptance inferred",
       "productRuntime": "UNRUN",
       "bilingual": "Chinese acceptance projection passes repository language/terminology checks; semantics unchanged",
       "fixed5ecaReview": {
@@ -2653,9 +2649,17 @@
       },
       "currentRepair": {
         "finding": "D8-C98B-P1-03",
-        "status": "author-resolved-pending-independent-review",
+        "status": "independently CLOSED at fixed8b6",
         "scope": "VIEW-BLD-04/05/06 plus D8 Main §11.2 and same-family Interfaces/Schemas/Impact wording",
         "rule": "current ViewSpec/1 deferred layouts fail static unsupported_layout; advanced route cannot widen current union; raw/historical/future bytes remain under real owner; VIEW-BLD-03 zero-total clarified as legal empty-total"
+      },
+      "fixed8b6IndependentReview": {
+        "reviewSha": "8b6a540daba9344694bf32e839ed3d1169e50a51",
+        "independentlyClosed": [
+          "D8-C98B-P1-03"
+        ],
+        "readGaps": 0,
+        "scope": "VIEW-BLD-04/05/06 and D8 Main §11.2 deferred-layout static unsupported_layout plus legal pie zero-total; earlier D8 closures retained"
       }
     }
   },
@@ -2680,13 +2684,13 @@
       "D9-SOURCE-MAP.md",
       "D9-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "complete D9 author integration preserved; D9-BAF-P1-01/P1-02/P2-02 plus direct /3→/4 current-version coordination are author-resolved-pending-independent-review; ROOT-D9-ZH-P2-01 remains independently CLOSED at ff10",
+    "status": "complete D9 author integration preserved. D9-BAF-P2-02 independently CLOSED at fixed8b6; D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 only author-resolved-pending-independent-review. ROOT-D9-ZH-P2-01 independently CLOSED at ff10. Product behavior UNRUN.",
     "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "FULL",
     "mandatory14": "FULL lines 884-924",
     "d7CurrentConsumers": "FULL D9-binding + PAB + current View owner EN/ZH; deferred-layout versus renderer-unavailable boundary preserved",
-    "finalFCSuccessors": "FULL for D9-relevant current SPEC/SCHEMAS/ACCEPTANCE at final mapped blobs, including §8.3 shared fresh-current rules, §6.5 recorded predecessor/shared rules, §6.6 Plan4 successor, §16a behavior closure, §17 unseen-current dispatch, §18 inventory, terminology registry and replacement router",
+    "finalFCSuccessors": "final FC §§6.6/6.6.1 and §16a: fresh Plan4 Annotation/View carriers, complete_data scope, closed target/receipt and cross-domain selection relations, canonical arrays, recorded Plan1-3 recovery",
     "d10Direct": "PARTIAL-direct-D9-only; complete D10 UNREAD/later",
     "currentVersions": {
       "author": "D3IdentityOperationRequest/13 + PreparedActionBinding/4 + DependencyProof/3 + EffectManifest/3/EffectBytes/3",
@@ -2697,13 +2701,13 @@
     },
     "acceptance": {
       "structuralAuthority": "D9-ACCEPTANCE.json",
-      "uniqueRows": 97,
-      "status": "97 author design oracles; D9-BAF findings pending exact-final-SHA independent review"
+      "uniqueRows": 104,
+      "status": "104 uniquely identified author design oracles; two P1 and two P2 residual D9 objects await new exact-final-SHA independent review"
     },
     "sourceMap": {
       "structuralAuthority": "D9-SOURCE-MAP.json",
       "necessaryD9ReadGaps": 0,
-      "blob": "4c0e3e7a9e8c72116f48ee134fd59caa552579a9"
+      "blob": "1c8314ede1fc46c80531a492a78596e5a56c8956"
     },
     "namedRevision": {
       "topic": "Mandatory §14 native-table Office authoring",
@@ -2727,11 +2731,14 @@
     "mandatory15": "FULL D9-applicable §15.5–15.8 lines 1042-1141, including all ten chart/View fixtures",
     "registryConcepts": 41,
     "reviewFindings": {
-      "D9-BAF-P1-01": "author-resolved-pending-independent-review: closed Annotation content carrier / backup / Review Bundle route added",
-      "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite current View export route, Mandatory15 consumers and correct unsupported_layout versus renderer_unavailable layering added",
-      "D9-BAF-P2-02": "author-resolved-pending-independent-review: predecessor/current final-FC source ranges corrected and split",
+      "D9-BAF-P1-01": "author-resolved-pending-independent-review: single exact Annotation content carrier, strict one-to-one index/mode/projection, cross-domain exclusion and canonicality",
+      "D9-BAF-P1-02": "author-resolved-pending-independent-review: finite six-chart complete_data View export with renderer/target/destination/receipt relations and accessible complete-data table",
+      "D9-BAF-P2-02": "independently CLOSED at fixed8b6; exact predecessor ranges and current successor scopes retained",
+      "D9-8B6-P2-01": "author-resolved-pending-independent-review: Annotation and renderer collection comparator/cardinality/conflict rules, ordered fragments and D7 rows preserved",
+      "D9-8B6-P2-02": "author-resolved-pending-independent-review: D7 network is legal current View but renderer_unavailable in closed D9 six-layout route until versioned successor",
+      "ROOT-8B6-MAP-P2-01": "separate author-repaired mapping: current FC ACCEPTANCE.md path/blob versus retained original 760-row source path/blob explicitly distinguished; awaiting independent confirmation",
       "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
-      "versionCoordination": "direct consumer coordination for the three-finding repair; author-resolved-pending-independent-review; not a separate finding count"
+      "versionCoordination": "direct current Plan4 versus recorded Plan1-3 coordination retained; not an additional independent finding count"
     },
     "versionCoordination": {
       "status": "author-resolved-pending-independent-review; coordinator precheck, not a new independent finding count",
@@ -2748,10 +2755,10 @@
         "A2 D9 main/version references"
       ],
       "finalMappedBlobs": {
-        "specEN": "d6281234a7b6e5e16649ebf098ce23c0a41dddc1",
-        "specZH": "e16d5b084122dfb5f8b7fec4dd56c09dfa0c9bed",
-        "schemasEN": "f125d384f1d1f0c06c94e80ef955a42c522eb82d",
-        "schemasZH": "9e0bd3c434924df76ee0bf30bf4b66d073ffbd74",
+        "specEN": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
+        "specZH": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
+        "schemasEN": "135ca122c42003b8ecb6bddf31960326ca887af8",
+        "schemasZH": "27a889838924fbf8c32188ebebea0a9e558bbc7e",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
