@@ -2707,7 +2707,7 @@
     "sourceMap": {
       "structuralAuthority": "D9-SOURCE-MAP.json",
       "necessaryD9ReadGaps": 0,
-      "blob": "1c8314ede1fc46c80531a492a78596e5a56c8956"
+      "blob": "758ad5ae4a0ba75031a6445e7faa13e92ea3aff2"
     },
     "namedRevision": {
       "topic": "Mandatory §14 native-table Office authoring",
@@ -2758,7 +2758,7 @@
         "specEN": "807a0891b8a0c6db3396a5ef4451325f0cac2552",
         "specZH": "794dcbff15b67409a1ebab7b96c9632d16b8f33c",
         "schemasEN": "135ca122c42003b8ecb6bddf31960326ca887af8",
-        "schemasZH": "27a889838924fbf8c32188ebebea0a9e558bbc7e",
+        "schemasZH": "b41e6d383fc553d7adf14f2a8f05a5c2788467d6",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
