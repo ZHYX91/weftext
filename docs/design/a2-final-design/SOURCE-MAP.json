@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1-D9 author candidates retained; D7 fixed26be independent PASS is D7-bounded. Earlier fixed5eca/ff10, fixed8b6, fixed4da7, fixed79026 and fixed466b D9-4DA7-MAP-P2-01 independent CLOSED scopes remain unchanged. Only D9-BAF-P1-02 (alias D9-466B-P1-01) and new D9-466B-P2-01 are author-resolved-pending-independent-review, not self-PASS. Full D10/global and product execution remain pending/UNRUN.",
+  "status": "D1–D9 candidates preserved. Previous fixed5eca/ff10/fixed8b6/fixed4da7/fixed79026/fixed466b and fixed6012 D9-BAF-P1-02/D9-466B-P2-01 independently CLOSED results retained at original scope. Only new D9-6012-P1-01 and D9-6012-P2-01 are author-resolved-pending-independent-review. No self-PASS, D10/full global acceptance or product execution.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2460,7 +2460,7 @@
     }
   },
   "pending_scope": [
-    "Fresh non-author exact-final-SHA delta review only of D9-BAF-P1-02/D9-466B-P1-01 complete eight-domain seven-catalog original producer dispatch (Query-free exact Source/Resource/Field, D2 table, complete D7 Query/Collection/graph, D8 Annotation, D7 View, conditional template/route/assets) and new D9-466B-P2-01 original D9/2 wire2 invalid_request vs protected integrity_conflict vs proof/source/domain unavailable precedence. fixed466b mapping P2 and all older bounded CLOSED claims are not reopened; no complete D10/global review.",
+    "Independent non-author exact-final-SHA incremental review ONLY of fixed6012→new head for D9-6012-P1-01 original D7 graph TerminalSchema and D9 static query_json {nodes,edges} all actual columns/V/bag/order, isolated node/empty edges without ViewSpec.nodeDetails, negative omitted displayName/column; and D9-6012-P2-01 original D9 Host/Core S33 XLSX missing-sheet invalid_output plus D9 Region new issuance and actual worker output, never conflated with authorized caller View selector wire2 invalid_request. Old D9-BAF-P1-02/D9-466B-P2-01 independently CLOSED at fixed6012 and older bounded CLOSED findings not reopened. No complete D10 or global A2 review.",
     "D10 complete A2 owner-module integration",
     "Fresh Pro/global full A2 non-author review, one accepted-design SHA and same-SHA freeze/implementation-start materials",
     "D9 implementation gates I01-I12, Core/GUI/Office/OS/runtime/crash/multi-replica/performance/migration/activation/deployment UNRUN"
@@ -2683,13 +2683,13 @@
       "D9-SOURCE-MAP.md",
       "D9-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "Complete D9 author integration retained. Independently CLOSED fixed466b D9-4DA7-MAP-P2-01, fixed79026 D9-BAF-P1-01, fixed4da7 D9-8B6-P2-01/02 and ROOT-8B6-MAP-P2-01, fixed8b6 D9-BAF-P2-02 plus older bounded findings stay CLOSED. Only D9-BAF-P1-02 (alias D9-466B-P1-01) full eight-domain/seven-payload original producer dispatch and new D9-466B-P2-01 deterministic existing wire2 error disposition are author-resolved-pending-independent-review. Product execution UNRUN, D10/global not accepted.",
+    "status": "Complete D9 design author integration retained. fixed6012 independently CLOSED D9-BAF-P1-02 and D9-466B-P2-01; fixed466b closed mapping D9-4DA7-MAP-P2-01 and all older fixed-SHA independently CLOSED scopes retained. Only new D9-6012-P1-01 (graph query_json exact original nodes/edges, no required optional ViewSpec.nodeDetails) and D9-6012-P2-01 (Host/Core IR coverage and Region issuance original invalid_output not worker-only) are author-resolved-pending-independent-review. No D10/global PASS, product execution UNRUN.",
     "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "FULL",
     "mandatory14": "FULL lines 884-924",
     "d7CurrentConsumers": "FULL D9-binding + PAB + current View owner EN/ZH; deferred-layout versus renderer-unavailable boundary preserved",
-    "finalFCSuccessors": "FC SCHEMAS §6.6.1 all eight original D9ExportInputDomain/2 producers, seven catalog arms with Field narrow/not a domain, Query-free Source/Resource/Field actual original reads, complete D7 Query/Collection/graph, D8 Annotation and D7 View as actually consumed, conditional template/route/assets, and original current D9/2 wire2 error code distinctions. Existing Plan4 token/all staged pins/loss/receipt and recorded Plan1–3 recovery remain unchanged.",
+    "finalFCSuccessors": "Current final FC §6.6.1 eight-domain/seven-catalog Plan4 unchanged; original D7 TerminalSchema.kind graph preserves exact nodes/edges RowsSchema, all real typed columns/V/bag/order, and static query_json data={nodes,edges}, no nodeDetails member or mandatory ViewSpec. Actual independent original D9 Host/Core IR format-coverage validator preserves S33 invalid_output for missing XLSX sheet/hidden object after worker OK/schema-valid IR; D9 Region new-issuance format/geometry and worker validation retain their own original codes, caller View catalog invalid selector remains wire2 invalid_request. All Annotation/print/View/Source/Resource and historical Plan1–3 contracts retained.",
     "d10Direct": "PARTIAL-direct-D9-only; complete D10 UNREAD/later",
     "currentVersions": {
       "author": "D3IdentityOperationRequest/13 + PreparedActionBinding/4 + DependencyProof/3 + EffectManifest/3/EffectBytes/3",
@@ -2701,12 +2701,12 @@
     "acceptance": {
       "structuralAuthority": "D9-ACCEPTANCE.json",
       "uniqueRows": 104,
-      "status": "104 stable unique D9 acceptance oracles, three existing IDs CUR-05/CUR-10/PLAN4-REL-02 updated for eight-domain producer and wire2 deterministic caller/retained/unprovable error distinctions; author-resolved-pending-independent-review for only 1 original residual P1 and 1 new P2, not global PASS"
+      "status": "104 stable D9 acceptance IDs, only original CUR-05/M15-04/PLAN4-REL-02 bilingual positive/negative current oracles updated; S33 original source-qualified row unchanged. New D9-6012-P1-01/P2-01 are author-resolved-pending-independent-review; old fixed6012/older findings independently CLOSED. Design only, product execution UNRUN."
     },
     "sourceMap": {
       "structuralAuthority": "D9-SOURCE-MAP.json",
       "necessaryD9ReadGaps": 0,
-      "blob": "6ceed6ec58c304e4c3b9b224ffc5dca5d8fbf71c"
+      "blob": "9e8b679e65b8cbed9f117a9f84528c46f7cb0164"
     },
     "namedRevision": {
       "topic": "Mandatory §14 native-table Office authoring",
@@ -2731,7 +2731,7 @@
     "registryConcepts": 41,
     "reviewFindings": {
       "D9-BAF-P1-01": "independently CLOSED at fixed79026 (alias D9-8B6-P1-01): exact selected annotation_content payload.recordPin relation/Value4 carrier and independent visibility preserved",
-      "D9-BAF-P1-02": "author-resolved-pending-independent-review (alias D9-466B-P1-01): complete eight selected inputDomain cases and seven catalog payload arms, Query-free source_read/resource_read/Field, table original D2/narrow D4, complete D7 Query/Collection/graph, D8 Annotation and D7 View; conditional template/route/asset/resource; no unconditional D8/D7 source dependency",
+      "D9-BAF-P1-02": "independently CLOSED at fixed6012 (alias D9-466B-P1-01): eight-domain producer dispatch, seven catalog arms and original per-owner authorization accepted in bounded scope",
       "D9-BAF-P2-02": "independently CLOSED at fixed8b6; exact predecessor ranges and current successor scopes retained",
       "D9-8B6-P2-01": "independently CLOSED at fixed4da7: canonical arrays/semantic order, bounded D9 scope",
       "D9-8B6-P2-02": "independently CLOSED at fixed4da7: closed six-layout D9 renderer, legal D7 network unavailable on this D9 route",
@@ -2739,11 +2739,13 @@
       "ROOT-D9-ZH-P2-01": "independently CLOSED at ff10; not reopened",
       "versionCoordination": "direct current Plan4 versus recorded Plan1-3 coordination retained; not an additional independent finding count",
       "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current final FC SPEC aliases and historical predecessorRangeCorrection/direct-reads/760 provenance accepted; new current blob pointers refreshed without reopening the bounded finding",
-      "D9-466B-P2-01": "author-resolved-pending-independent-review: original D9/2 wire2 d9_error.invalid_request for authorized caller-selected missing index/wrong payload, integrity_conflict only for reachable authorized proved saved Plan contradiction; proof_unavailable/source_unavailable/domain_unavailable for actual absence, original D1/auth/D7 priority, invalid_output worker-only"
+      "D9-466B-P2-01": "independently CLOSED at fixed6012: authorized caller View selector invalid_request, original protected corruption integrity_conflict, proof/source/domain availability and entered D7 precedence accepted within bounded scope",
+      "D9-6012-P1-01": "author-resolved-pending-independent-review: exact D7 graph nodes/edges TerminalSchema and static query_json without mandatory nodeDetails/ViewSpec, isolated node with zero edges allowed, real columns/V/order preserved, actual omitted displayName/column/truncation rejected",
+      "D9-6012-P2-01": "author-resolved-pending-independent-review: original D9 Host/Core independent format-coverage validator and D9 Region new issuance retain invalid_output on their true original pathways alongside worker output validation; only authorized caller View catalog selector excludes invalid_output and keeps wire2 invalid_request"
     },
     "versionCoordination": {
-      "status": "Only D9-BAF-P1-02 (alias D9-466B-P1-01) and new D9-466B-P2-01 are author-resolved-pending-independent-review; fixed466b D9-4DA7-MAP-P2-01 remains independently CLOSED along with older bounded findings.",
-      "current": "Fresh ExportPlan4 selects one of eight original input domains and corresponding actual D6/D2 Resource/D4 Field/table, complete D7 Query/Collection, D8 Annotation or D7 View producer, with least-scope authorization and no unconditional Query/Annotation. D9/2 wire2 error disposition only within original closed family; §3a private token before report/manifest, full Plan atomic save before disclosure, and original Plan1–3/print/Resource/server paths preserved.",
+      "status": "Only two NEW fixed6012 D9 regressions D9-6012-P1-01/P2-01 author-resolved-pending-independent-review; old D9-BAF-P1-02/D9-466B-P2-01 independently CLOSED at fixed6012 plus prior bounded closures kept",
+      "current": "Fresh ExportPlan4 uses same eight original owner domains and seven catalog arms; original §3a hidden random token before report/manifest/Plan and single atomic storage before exposure. Query_json uses D7 TerminalSchema.kind rows/scalar/graph exactly, including full graph nodes/edges V/columns with optional ViewSpec.nodeDetails not required. D9 current caller View invalid selector still wire2 invalid_request, separate original Host/Core S33 coverage and D9 Region issuance can produce their originally applicable invalid_output. Recorded Plan/Receipt1–3, Annotation recordPin, View hash/complete_data, print and Resource paths preserved.",
       "retained": "recorded Plan/Receipt1-3 and predecessor token/confirmation/bundle families retain exact decoder/token/bytes/pins/saved-planned-unknown recovery; no migration",
       "currentSurfaces": [
         "FC SPEC §8.3",
@@ -2756,10 +2758,10 @@
         "A2 D9 main/version references"
       ],
       "finalMappedBlobs": {
-        "specEN": "420639250fc14b1e01632cb634523f87f1fafb2e",
-        "specZH": "bb9d7d18e7c9e346d56242b67410a0e94f8477b3",
-        "schemasEN": "8814cbaad045582271421e15dcd7ddf8770de44c",
-        "schemasZH": "313bd948ca06dd9b4e444381cf0c275ed02c8b25",
+        "specEN": "d5c43f060c04069905bf084c916637d49a6f319a",
+        "specZH": "b2072c4f4e4827676bd24b6146e61e47b5170fda",
+        "schemasEN": "6f502263994bd04a0653d2054ac603517697ece0",
+        "schemasZH": "fd897e9fb73bce38fbdeac61b4260d447a6b2325",
         "acceptanceEN": "c3022df8c823454310fe73645084630481b1c8d1",
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
