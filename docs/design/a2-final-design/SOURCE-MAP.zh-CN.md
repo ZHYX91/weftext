@@ -176,3 +176,13 @@ current Annotation 整合也已明确：Node Template omission 只局限 constru
 D9-ACCEPTANCE.json 仍是 104 个 ID 的唯一结构验收权威，中英只是投影，D9 Registry/Terms 保留 41 概念。D9-SOURCE-MAP.json 现任指针均对应最新 FC graph 与输出校验条款；原 ff10 predecessorRangeCorrection、D4/D5 direct-read、S49 与 760 条来源行仍为历史。S33 独立 Host/Core IR 覆盖必须对 worker 成功/IR schema 合格但漏 XLSX sheet 或隐藏对象返回 invalid_output，原 D9 Region 新签发不变。fixed6012 已独立 CLOSED 旧 D9 生产者与 selector 问题；只余新 D9-6012-P1-01/P2-01 作者已修待审。产品 I01–I12、GUI/Office/OS/runtime/performance/activation/deployment UNRUN；文档映射检查不是独立 PASS。
 
 ROOT-D9-ZH-P2-01 在 ff10 独立 CLOSED。原 D9-BAF-P1-01/02 与 D9-466B-P2-01 已在后续各自固定复核中独立 CLOSED，不是现任 OPEN finding。新 D9-6012-P1-01/P2-01 保留 fresh ExportPlan/4、PublicationReceipt/4 或 D9PrintReceipt/1、原 FC §8.3/§17/§18 及 §§6.5–6.6、随机 token 私下分配→report/manifest→Plan 完整原子保存，以及真实 Plan/Receipt1–3 的原 decoder。不能新增 token/wire/author 权威。
+
+## 18. D10 全文作者整合与真实现任全链
+
+实际固定起点 8d7f165ace4f8c72305d2e7b21a12b3c4e5fbe56 的 fixed8d7 非作者 D9 裁决为 ACCEPT 0P0/0P1/0P2，必要阅读 gap=0；D9-6012-P1-01/P2-01 与全部更早有界问题在各自范围独立 CLOSED。**这只接受 D9，不接受 D10/global。** 上方 §17 所留两项 D9 新问题 OPEN 的旧作者时点叙述，已由这份后续独立裁决明确替代。
+
+本次作者从真实 GitHub 固定源完整读取原 docs/design/d10/ 九组双语 18 份、固定 S49 全部文件（包含 D4 61 Field/7 Facet/22 alias/四 qualifier set/Calendar policy）、Mandatory §§1–15、A2 D1–D9 当前 86 份 Markdown 直接来源、26 份 D7 直接 owner、七份 FC 直接文件及十二份 D6/D9 直接后像。实际读取的是每份完整内容，机器映射逐 blob 记账，不从历史计数推断全球接受。当前作者不存在已知必要阅读 gap；但全新 D10 非作者实际阅读及裁决仍未执行。
+
+现任九组完整中英 D10 文件为 [D10](D10.zh-CN.md)、D10-CONTROL、D10-UPSTREAM、D10-SCENARIOS、D10-LEXICON、D10-IMPACT、D10-REVIEW、D10-TASK、D10-READING，原全部章节保持。D10-CONTROL 完整包含真实 D6-SCHEMAS §10/10.1 mixed current，十九种旧 inline-pipe Control projection 逐个转为可读的完整闭合集。D10-UPSTREAM §8.2 现按唯一 D9 owner 当前版本：D9 工件1/编排2/Worker1，fresh Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2，PublicationReceipt4 **或** PrintReceipt1，以及原 Plan/Receipt1–3 恢复；D7/D8/D6 保留自己的原历史 decoder。旧 public kind 数量不是永久上限，不能虚构 Resolver12。
+
+[D10 验收](D10-ACCEPTANCE.zh-CN.md) 由唯一 D10-ACCEPTANCE.json 投影 **125 个稳定原场景 ID**（U27/F37/A14/T10/E10/P19/D08），保留 U12 ICS/普通独立文件/D3 SourceBinding+Adopt 三支、P19 D9 当前 owner/namespace 归属，以及 D08 的正确独立设计审查顺序（不要求产品先 runtime 激活）。D10-SOURCE-MAP.json 只是历史来源/导航，不增新 Registry。固定 S49 字节、replacements 和旧各 owner 原来源 blob 均保持。D10 仅为 **author-resolved-pending-independent-review**。下一步是独立 D10 全文/现任增量复核，之后另作**全新 Pro 完整 A2** 固定 SHA 审查；两者都尚未完成，也没有 acceptedDesignSha/冻结/实施启动包。产品/Core/GUI/OS/AT/MCP/真实 provider/Office/授权 CAS/性能/race/故障/迁移/激活/部署全部 UNRUN。
