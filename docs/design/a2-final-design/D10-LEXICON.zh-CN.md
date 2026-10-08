@@ -62,44 +62,13 @@ revision: D10-FA-r01-2026-10-02；状态：协调作者候选，未接受、未�
 | weftext.term.audit-started | 审计开始记录 / Audit Started Record | D10 | protected step 真正执行前耐久写入的最小安全审计事实 | 不代表 step 已成功 |
 | weftext.term.money | 费用值 / Money | D10 | currency + Counter microUnits 的 exact cost 表示 | 不做隐式 FX，不使用 binary float |
 
-## 3. 精确受控名称
+## 3. 现任 fresh 名称与真实已记录历史
 
-下列类型/记录名由 D10 候选冻结为受控名称。D10-CONTROL 明确规定每个闭合公共值、请求/响应载体、公共投影及内部受保护记录；没有独立 RPC 不表示已经冻结的公共值仍是未定接口。同一概念不得同时创造近义类型：
+现任 A2 D10 fresh 名称：`D10AuthorPreparationLink/2`、`ApprovalUse/2`、`ControlPrepareBinding/3`、`D10InteractiveRunStartRequest/1`、`D10InteractiveRunResultRequest/1`、`D10InteractiveRunStarted/1`。原 D7 fresh 拥有 `PreparedActionBinding/4`、`EffectManifest/3`、`EffectBytes/3`；D8 拥有 `PreparedEditBinding/3`；D6 拥有 `WorkspaceBootstrapProfile/4`、`WorkspaceBootstrapPlan/4`、`WorkspaceTrustGenesis/2`。这是**现任首次生产**类型，并非真实历史 `D10AuthorPreparationLink/1`、`ApprovalUse/1`、`ControlPrepareBinding/2`、`PreparedActionBinding/3`、`EffectManifest/2`、`EffectBytes/2`、`PreparedEditBinding/2`、Profile1–3/Plan1/Plan3 的 alias。真实历史记录保留原 request/OperationId、decoder、完整 pin 字节、preview proof 与错误次序。唯一 D7 Registry 负责按版本分派二者。
 
-- `ActivationBinding/1`
-- `DelegationLease/1`
-- `LeaseRunUse/1`
-- `StandingApprovalEnvelope/1`
-- `ApprovalUse/1`
-- `PlannedDecisionApproval/1`
-- `ToolValueProfile/1`
-- `ToolType/1`
-- `ToolValue/1`
-- `InputSlot`
-- `AutomationOccurrenceKey/1`
-- `ExternalEffectIntent/1`
-- `Money/1`
-- `CostBudgetAttribution/1`
-- `CostBudgetLayer/1`
+其他未变 D10 受控名称：`ActivationBinding/1`、`DelegationLease/1`、`LeaseRunUse/1`、`StandingApprovalEnvelope/1`、`PlannedDecisionApproval/1`、`ToolValueProfile/1`、`ToolType/1`、`ToolValue/1`、`InputSlot`、`AutomationOccurrenceKey/1`、`ExternalEffectIntent/1`、`Money/1`、`CostBudgetAttribution/1`、`CostBudgetLayer/1`。未变 D3/D4/D6 继承名称：`RegistrySnapshot/1`、`RegistryBinding/1`、`PrincipalContext`、`ObservationScope`、`PreparedIntent`、`ActionSpec`、`SourceBinding`、`OriginBinding`、`Provenance`、`SourceVersion`、`OperationId`。D10 不定义 alias。
 
-现有上游名称按原 owner 原样消费：
-
-- `RegistrySnapshot/1`
-- `RegistryBinding/1`
-- `PrincipalContext`
-- `ObservationScope`
-- `PreparedIntent`
-- `ActionSpec`
-- `PreparedActionBinding/3`
-- `EffectManifest/2`
-- `PreparedEditBinding/2`
-- `SourceBinding`
-- `OriginBinding`
-- `Provenance`
-- `SourceVersion`
-- `OperationId`
-
-D10 不定义 alias 去替代这些名称。
+**双分支证据：**新 core_field_member D7 PAB4 + Manifest3/EffectBytes3 与 Link2/ApprovalUse2 按原作者恢复绑定/pin；真实保存 Link1/PAB3/ApprovalUse1 重放原 request/preview/pins，不归一化到新版本。Link1 冒名 Link2、PAB3 当作 PAB4 解码、Manifest2 以 Manifest3 域重新哈希或 Link2 指向 PAB3-only pin，均按原披露/custody/version 错误次序拒绝。新 Run 仅来自可信到场 Core §7.1；历史 origin 不从显示文字猜测。
 
 ## 4. Package、module、pack 与 plugin
 
@@ -227,7 +196,7 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | weftext.term.delegation-lease | 委托租约 | Delegation Lease | 进一步收窄 D6 principal 的有限任务/Run 授权，含寿命、scope、maxRuns 与预算账户 | D10 delegation control | 不是 D6 Policy，不可增加权限或多级转授 | 受保护 `DelegationLease/1`；公共创建/更新由 `automation_configure` 中的 `LeaseSpec/1` 承载，公共查阅使用 `lease_state`；无独立 lease RPC | type `DelegationLease`; variable `delegation_lease` | UI“委托”; locale `term.delegationLease` | Lease（D10 限定） | 禁止 permanent grant/session-wide allow 作为同义词 | 正：maxRuns=1 同 Run 多步；反：新 Run 在耗尽后继续 | `D10-r01`; `r02/r04` 收敛 maxRuns；无 legacy alias |
 | weftext.term.lease-run-use | 运行准入消费 | Lease Run Use | Run 第一次进入受保护执行时对 leaseId 谱系消费一次 maxRuns 的耐久防重事实 | D10 run admission control | 不是 occurrence claim、作者 ledger 或每-step 计数 | 受保护 `LeaseRunUse/1`；公共 `run_state.admission` 与 `lease_state` 累计计数仅投影准入事实，不返回完整保护记录；无独立 RPC | type `LeaseRunUse`; variable `lease_run_use` | 无直接 UI；诊断“运行准入”; locale `term.leaseRunUse` | 无 | 禁止 run counter/step counter 混称 | 正：同 Run planned 恢复复用；反：remaining=0 再消费一次 | 首次冻结 `D10-r02`; `r04` 明确 same-Run continuation；无旧 alias |
 | weftext.term.standing-approval | 持续批准 | Standing Approval | 对有限可机械判定的未来操作集合给予期限/次数/预算上限的预授权 | D10 approval control + proposed D6 consumption | 不是永久同意、Policy 或自然语言目标 | 受保护 `StandingApprovalEnvelope/1`；公共 `StandingApprovalSpec/1` 由 `automation_configure.standing` 承载，`approval_state` 投影当前状态；无独立 approval RPC | type `StandingApprovalEnvelope`; variable `standing_approval` | UI“持续批准”; locale `term.standingApproval` | 无 | 禁止 always allow/remember forever | 正：single_field_member envelope；反：整源自由写 | `D10-r01`; `r02` 收窄并配套 D6/D7；未激活 |
-| weftext.term.approval-use | 批准使用记录 | Approval Use | 把准备请求、完整 preview、footprint 与一次批准 reservation/consumption 绑定 | D10 control + proposed D6 amendment | 不是 author plan、receipt 或第三 ledger | 受控内部类型 `ApprovalUse/1`; 公共 IPC 未冻结 | type `ApprovalUse`; variable `approval_use` | 无直接 UI；可显示“本次使用持续批准”; locale `term.approvalUse` | 无 | 禁止 approved=true 客户端字段 | 正：reserved→consumed；反：TTL 自动释放 | 首次冻结 `D10-r01`; `r02` 增 released_terminal；未激活 |
+| weftext.term.approval-use | 批准使用记录 | Approval Use | 把准备请求、完整 preview、footprint 与一次批准 reservation/consumption 绑定 | D10 control + proposed D6 amendment | 不是 author plan、receipt 或第三 ledger | 现任内部类型 `ApprovalUse/2`（真实历史 /1 保留）；公共 IPC 未冻结 | type `ApprovalUse`; variable `approval_use` | 无直接 UI；可显示“本次使用持续批准”; locale `term.approvalUse` | 无 | 禁止 approved=true 客户端字段 | 正：reserved→consumed；反：TTL 自动释放 | 首次冻结 `D10-r01`; `r02` 增 released_terminal；未激活 |
 | weftext.term.planned-decision-approval | 已计划决议交互批准 | Planned Decision Approval | 用户完整重读原 planned 保存 preview 后，对 exact 原 request 给出的有限一次性交互授权 | D10 control + proposed D6/D7 amendment | 不 reprepare、不换 OperationId、不复活冲突 plan | 受保护 `PlannedDecisionApproval/1`；公共 `ConsentSpec/1` 的 planned 分支承载原 request 与完整 preview 确认绑定；`planned_approval_state` 是受权脱敏当前投影；planned-preview 恢复运输归 D7 | type `PlannedDecisionApproval`; variable `planned_decision_approval` | UI“确认原计划”; locale `term.plannedDecisionApproval` | 无 | 禁止把 fresh prepare 当恢复 | 正：旧 token 过期后查原 preview；反：重新 Query 换 target | 首次冻结 `D10-r02`; 未激活，无 legacy alias |
 | weftext.term.automation-definition | 自动化定义 | Automation Definition | 版本化的单 invocation 调度定义 | D10 scheduler control | 不是通用 DAG、脚本或作者 Document | `AutomationSpec/1` 是 `automation_configure` 的 closed public value；`core_field_member` arm 只承载 `FieldMemberTask/1` | type `AutomationDefinition`; variable `automation_definition` | UI“自动化” | Automation | 禁止 workflow/script/free callback | 正：具名 field-member task；反：ToolValue text 当 NodeRef | `D10-r01`; R08 冻结专用作者 invocation arm |
 | weftext.term.automation-occurrence | 自动化发生项 | Automation Occurrence | 由 Automation 订阅代际与精确原发生 UTC 坐标确定的调度机会 | D10 scheduler control | 不是作者 recurrence identity 或新 Node | 公共 `run_state.origin` 承载闭合 `AutomationOccurrenceKey/1`；`automation_state` 显示订阅代际/原发生下界；`automation_configure` 使用 `AutomationScheduleUpdate/1`，准确 shape 归 D10-CONTROL §16 | type `AutomationOccurrenceKey`; variable `automation_occurrence_key` | 通常无独立 label；诊断“发生项”; locale `term.automationOccurrence` | occurrence（限定 Automation） | 禁止 recurrence Node/Run 同义 | 正：terminal K 重扫仍原 Run；反：enable 重建第二 Run | `D10-r01`; `r02` 补 terminal dedup |
@@ -258,7 +227,7 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 | `RegistrySnapshot/1`、`RegistryBinding/1`、Field/Facet | D4 | 逐字复用；D10 只认证来源并提供完整 binding | Capability Catalog 不得改名为 Registry，不保存第二份 FieldDefinition |
 | `EntityRef`、`NodeRef`、`SourceBinding`、`OriginBinding`、`Provenance` | D3 | 逐字复用；控制 ID/provider ID 不进入这些类型 | `adoption_binding` 不得成为 OriginBinding alias；B10-01 见 amendment |
 | `PrincipalContext`、`ObservationScope`、D6 Policy/error | D6 | D10 delegation 只收窄，不替换 | Agent permission / approval 不得覆盖 D6 deny |
-| `ActionSpec`、`PreparedActionBinding/3`、`EffectManifest/2` | D7 | 工作区 Action 仍走原 prepare/preview/commit | tool plan / AgentPlan 不得成为第二 Action wire |
+| `ActionSpec`、fresh `PreparedActionBinding/4`、`EffectManifest/3`、`EffectBytes/3`（真实历史 PAB3/Manifest2/EffectBytes2 保留） | D7 | 原 prepare/preview/commit 依实际版本 | tool plan/AgentPlan 不是第二 Action wire |
 | Draft / `PreparedEditBinding/2` | D8 | 人工编辑仍走 Draft/confirmation | model proposal 不得叫 Draft，除非真实进入 D8 Draft |
 | Conversion Provider / Route / PublicationReceipt | D9 | 继续限定为 conversion/publication owner | D10 裸 Provider 不得覆盖 D9 Provider |
 | author source / Provenance | D2/D3 | source 是作者 payload，Provenance 是非授权来源证据 | external input/provider state/tool result 不得叫 author source |
@@ -280,7 +249,8 @@ Audit Started Record 只证明 protected step 已进入执行边界，不证明�
 
 | stable concept ID | 中文正式名 | English formal name | 精确定义 | owner/layer | 排除边界 | canonical wire/API/manifest/schema | code symbol convention | CLI/UI label + locale | 允许简称 | 禁止/历史 alias | 正例 / 反例 | 首次冻结、状态、迁移 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| weftext.term.control-prepare-binding | 控制准备绑定 | Control Prepare Binding | stable key 到完整 canonical intent、分配 ID、原 commit request、preview 和 dependency pins 的耐久准备绑定 | D10 control | 不是 author decision、receipt 或授权 token | internal ControlPrepareBinding/2；public prepare/result 由 D10-CONTROL §7–§8 | type ControlPrepareBinding；variable control_prepare_binding；namespace d10::control | 无普通 CLI；诊断“控制准备”；candidate locale term.controlPrepareBinding，未实现 | 无 | 禁止 request cache、second ledger | 正：响应丢失后取回同 prepare；反：同 key 新分配 OperationId | R05 candidate；无 legacy alias |
+| weftext.term.control-prepare-binding | 控制准备绑定 | Control Prepare Binding | stable key 到完整 canonical intent、分配 ID、原 commit request、preview 和 dependency pins 的耐久准备绑定 | D10 control | 不是 author decision、receipt 或授权 token | fresh internal ControlPrepareBinding/3（历史 /2 原 decoder）；public prepare/result 由 D10-CONTROL §7–§8 | type ControlPrepareBinding；variable control_prepare_binding；namespace d10::control | 无普通 CLI；诊断“控制准备”；candidate locale term.controlPrepareBinding，未实现 | 无 | 禁止 request cache、second ledger | 正：响应丢失后取回同 prepare；反：同 key 新分配 OperationId | R05 candidate；无 legacy alias |
+| weftext.term.interactive-run-start | 交互运行启动 | Interactive Run Start | 认证本人到场 Core 原子创建 Run/Run-target Lease/Stop | D10 Core runtime | 非第八 ControlBody/作者 P | `d10_interactive_run_start`、`d10_interactive_run_result`、`D10InteractiveRunStarted/1` | D10InteractiveRunStartRequest / interactive_run_start | attended Desktop/CLI/Server；locale `term.interactiveRunStart` 待实现 | 无 | 禁止 trusted_creator/approved=true | maxRuns1 无 Automation 原结果恢复；伪 principal 拒绝 | 当前 A2 候选；产品 UNRUN |
 | weftext.term.deployment-control-policy | 部署控制策略 | Deployment Control Policy | 一个 store incarnation 的 H 管理员和具名 cost reconciler 权威 | D10 host control | 不是 D6 Workspace Policy、IssuerControlPolicy 或 Workspace grant | DeploymentControlPolicy/1；无作者 wire | type DeploymentControlPolicy；variable deployment_control_policy；namespace d10::control | 管理诊断“部署控制策略”；candidate locale term.deploymentControlPolicy，未实现 | 无 | 禁止 first-login-admin、workspace-admin alias | 正：部署 operator 显式建立；反：首个 HTTP 抢占 | R05 candidate；无 legacy alias |
 | weftext.term.resource-use-grant | 资源使用授权 | Resource Use Grant | 对 cost/secret/egress/external-effect 之一的有限使用授权及累计 usage | D10 host/control | 不是资源管理权、作者权限或预付余额 | ResourceUseGrant/1 + ResourcePermission/1；D10-CONTROL §6 | type ResourceUseGrant；variable resource_use_grant；namespace d10::control | UI“资源使用授权”；candidate locale term.resourceUseGrant，未实现 | grant（D10 限定） | 禁止 whole-package grant、grant renewal resets quota | 正：用户可用 D 的有限费用份额；反：grant holder 改 D ceiling | R05 candidate；无 legacy alias |
 | weftext.term.deployment-control-decision | 部署控制决议 | Deployment Control Decision | 同一 host control stable key 的不可变 applied outcome | D10 host control | 不是 D6 author receipt 或第二 author ledger | internal DeploymentControlDecision/1；由 host commit/result 消费 | type DeploymentControlDecision；variable deployment_control_decision；namespace d10::control | 无普通 UI；诊断“部署控制决议”；candidate locale term.deploymentControlDecision，未实现 | 无 | 禁止 author receipt | 正：lost response 重放；反：重放再次改账户 | R05 candidate；无 legacy alias |
@@ -370,6 +340,6 @@ weftext.term.image-size-selection
 weftext.term.region-body
 ```
 
-其中 D7 TerminalSchema/V、`PreparedActionBinding/3`，D3 `SourceBinding`/`ForeignIdentityKey`/`OriginBinding`/`ResourceRegionLocator/l1`，D2 Template meta-kind 以及 D3/D6 author receipt 都继续由原 owner 冻结。特别是 `weftext.term.publication-receipt` 只表示 D9 外部发布事实，绝不成为作者回执别名；`weftext.term.d7-result-pin` 只固定 D7 已有结果，不取得其 schema/value owner。
+其中 D7 TerminalSchema/V、现任 `PreparedActionBinding/4`（实际历史 /3 保留），D3 `SourceBinding`/`ForeignIdentityKey`/`OriginBinding`/`ResourceRegionLocator/l1`，D2 Template meta-kind 以及 D3/D6 author receipt 都继续由原 owner 冻结。特别是 `weftext.term.publication-receipt` 只表示 D9 外部发布事实，绝不成为作者回执别名；`weftext.term.d7-result-pin` 只固定 D7 已有结果，不取得其 schema/value owner。
 
 调度辅助类型归既有自动化发生项/定义概念：SourceOccurrenceKey/1、AutomationScheduleUpdate/1、ScheduleSelection/1 是 §16 明确公共 carrier 使用的闭合值；ScheduleSubscription/1、ScheduleSourceBinding/1、ScheduleRecurrenceEvidence/1、ScheduleOccurrenceProof/1、AutomationOccurrenceRecord/1 和 AutomationOccurrenceDisposition/1 是受保护内部类型，不新增用户控制项、CLI 或 locale。subscriptionGeneration 是同一 Automation 内的正 Counter；definitionRevision 只选择不可变执行定义，两者不能混称，horizon/Query K/source token 均非业务身份。armed 是未产生 Run/LeaseRunUse 的耐久前态，不是 queued Run；claimed/skipped 是不可逆已处理责任。真实旧记录保持原 decoder，不把候选旧 tuple 伪造为已部署兼容格式。
