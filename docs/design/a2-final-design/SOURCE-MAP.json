@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "D1–D9 candidates preserved. Previous fixed5eca/ff10/fixed8b6/fixed4da7/fixed79026/fixed466b and fixed6012 D9-BAF-P1-02/D9-466B-P2-01 independently CLOSED results retained at original scope. Only new D9-6012-P1-01 and D9-6012-P2-01 are author-resolved-pending-independent-review. No self-PASS, D10/full global acceptance or product execution.",
+  "status": "A2 D1–D10 full author candidates present at actual PR #5 head; D9 independent ACCEPT only at fixed8d7; complete D10 author candidate awaits full non-author review, then separate fresh Pro global A2 review; no acceptedDesignSha/freeze/implementation, all runtime UNRUN.",
   "fixed_parent_sha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixed_s_sha": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
   "inputs_blob": "787d03c31a55496f81ed03fd54a6fdfff50a2ad4",
@@ -2341,8 +2341,8 @@
       ]
     }
   ],
-  "next_batch": "Bind the new final SHA for a non-author incremental review of D9-BAF-P1-01/P1-02 and D9-8B6-P2-01/P2-02 plus bilingual current/recorded Plan4 and mapping regression; independently confirm ROOT-8B6-MAP-P2-01 without reopening fixed8b6 D8-C98B-P1-03 or D9-BAF-P2-02. Only afterward complete D10 full module and a fresh Pro/global A2 review, accepted-design SHA and same-SHA freeze/implementation start.",
-  "global_acceptance": "not_performed",
+  "next_batch": "Independent non-author full D10 fixed-actual-HEAD reading of source 18, S49, all 125 cases, actual current owners/mixed versions and final D10 delta; then a separate fresh Pro full A2 fixed-SHA independent review. Neither author nor historical D9 acceptance may declare D10/global PASS; acceptedDesignSha and same-SHA freeze/implementation start are later.",
+  "global_acceptance": "not_performed: D10 full non-author and fresh Pro all-A2 both pending; D9 only ACCEPT bounded fixed8d7",
   "d4d5_integration": {
     "status": "P2-01 bounded independently CLOSED at fixed1fc4; P2-02 bounded independently CLOSED at fixed4282; no whole-module/global acceptance",
     "d4": {
@@ -2460,10 +2460,10 @@
     }
   },
   "pending_scope": [
-    "Independent non-author exact-final-SHA incremental review ONLY of fixed6012→new head for D9-6012-P1-01 original D7 graph TerminalSchema and D9 static query_json {nodes,edges} all actual columns/V/bag/order, isolated node/empty edges without ViewSpec.nodeDetails, negative omitted displayName/column; and D9-6012-P2-01 original D9 Host/Core S33 XLSX missing-sheet invalid_output plus D9 Region new issuance and actual worker output, never conflated with authorized caller View selector wire2 invalid_request. Old D9-BAF-P1-02/D9-466B-P2-01 independently CLOSED at fixed6012 and older bounded CLOSED findings not reopened. No complete D10 or global A2 review.",
-    "D10 complete A2 owner-module integration",
-    "Fresh Pro/global full A2 non-author review, one accepted-design SHA and same-SHA freeze/implementation-start materials",
-    "D9 implementation gates I01-I12, Core/GUI/Office/OS/runtime/crash/multi-replica/performance/migration/activation/deployment UNRUN"
+    "Full D10 independent non-author fixed-final-HEAD review: original 18 EN/ZH files, real nine current pairs, S49 and Mandatory §§1–15/unnumbered, original 125 IDs/positive-negative oracles, current D3–D9/D10 owner versions, exact grants/ToolValue/approval/schedule/stop/Money/recovery/egress and historical distinctions",
+    "Separate fresh Pro complete A2 D1–D10 non-author review with P0/P1=0, all P2 adjudicated and necessary reading gap=0 before acceptedDesignSha can be assigned",
+    "Exact acceptedDesignSha, same-SHA design freeze and implementation-start material must each be separately completed after independent acceptance; none exists now",
+    "D1–D10 product/Core/GUI/OS/IME/AT/Office/real network/external effects/crypto/runtime CAS/races/crash/performance/migration/activation/deployment UNRUN"
   ],
   "d7_integration": {
     "files": [
@@ -2683,7 +2683,7 @@
       "D9-SOURCE-MAP.md",
       "D9-SOURCE-MAP.zh-CN.md"
     ],
-    "status": "Complete D9 design author integration retained. fixed6012 independently CLOSED D9-BAF-P1-02 and D9-466B-P2-01; fixed466b closed mapping D9-4DA7-MAP-P2-01 and all older fixed-SHA independently CLOSED scopes retained. Only new D9-6012-P1-01 (graph query_json exact original nodes/edges, no required optional ViewSpec.nodeDetails) and D9-6012-P2-01 (Host/Core IR coverage and Region issuance original invalid_output not worker-only) are author-resolved-pending-independent-review. No D10/global PASS, product execution UNRUN.",
+    "status": "Complete D9 accepted **only in fixed8d7 independent bounded D9 review**, 0P0/0P1/0P2 and gap0; D9-6012-P1-01/P2-01 and prior registered D9 findings CLOSED at respective SHAs. D10 full/global acceptance NOT inferred; D9 implementation I01–I12 UNRUN.",
     "authorStartSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
     "fixedS8": "FULL",
     "currentOwnerBilingual": "FULL",
@@ -2740,11 +2740,11 @@
       "versionCoordination": "direct current Plan4 versus recorded Plan1-3 coordination retained; not an additional independent finding count",
       "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current final FC SPEC aliases and historical predecessorRangeCorrection/direct-reads/760 provenance accepted; new current blob pointers refreshed without reopening the bounded finding",
       "D9-466B-P2-01": "independently CLOSED at fixed6012: authorized caller View selector invalid_request, original protected corruption integrity_conflict, proof/source/domain availability and entered D7 precedence accepted within bounded scope",
-      "D9-6012-P1-01": "author-resolved-pending-independent-review: exact D7 graph nodes/edges TerminalSchema and static query_json without mandatory nodeDetails/ViewSpec, isolated node with zero edges allowed, real columns/V/order preserved, actual omitted displayName/column/truncation rejected",
-      "D9-6012-P2-01": "author-resolved-pending-independent-review: original D9 Host/Core independent format-coverage validator and D9 Region new issuance retain invalid_output on their true original pathways alongside worker output validation; only authorized caller View catalog selector excludes invalid_output and keeps wire2 invalid_request"
+      "D9-6012-P1-01": "independently CLOSED at fixed8d7 in complete D9-only independent ACCEPT 0P0/0P1/0P2; original Query graph static {nodes,edges} without required ViewSpec.nodeDetails, typed V/columns/order preserved",
+      "D9-6012-P2-01": "independently CLOSED at fixed8d7 D9-only independent ACCEPT; original Host/Core S33 output-coverage invalid_output and Region issuance retained, caller View selector invalid_request"
     },
     "versionCoordination": {
-      "status": "Only two NEW fixed6012 D9 regressions D9-6012-P1-01/P2-01 author-resolved-pending-independent-review; old D9-BAF-P1-02/D9-466B-P2-01 independently CLOSED at fixed6012 plus prior bounded closures kept",
+      "status": "D9 fixed8d7 independent ACCEPT bounded D9 alone; D10 current author integration separate, no D9 current version remapping",
       "current": "Fresh ExportPlan4 uses same eight original owner domains and seven catalog arms; original §3a hidden random token before report/manifest/Plan and single atomic storage before exposure. Query_json uses D7 TerminalSchema.kind rows/scalar/graph exactly, including full graph nodes/edges V/columns with optional ViewSpec.nodeDetails not required. D9 current caller View invalid selector still wire2 invalid_request, separate original Host/Core S33 coverage and D9 Region issuance can produce their originally applicable invalid_output. Recorded Plan/Receipt1–3, Annotation recordPin, View hash/complete_data, print and Resource paths preserved.",
       "retained": "recorded Plan/Receipt1-3 and predecessor token/confirmation/bundle families retain exact decoder/token/bytes/pins/saved-planned-unknown recovery; no migration",
       "currentSurfaces": [
@@ -2766,5 +2766,326 @@
         "acceptanceZH": "5320c4917742c4599fd6327a4a646993c76e2520"
       }
     }
+  },
+  "d10_integration": {
+    "status": "complete D10 author candidate, author-resolved-pending-independent-review; fixed8d7 D9 bounded ACCEPT only, neither D10 nor global A2 independently accepted",
+    "fixedStartSha": "8d7f165ace4f8c72305d2e7b21a12b3c4e5fbe56",
+    "sourceMap": {
+      "path": "docs/design/a2-final-design/D10-SOURCE-MAP.json",
+      "blob": "c3add7afb14bb5cb1b46aef2de53f412e56c8c1a"
+    },
+    "acceptance": {
+      "path": "docs/design/a2-final-design/D10-ACCEPTANCE.json",
+      "blob": "897397be55c4c80dcde5b21be7b52f191ea0bde5",
+      "stableIDs": 125,
+      "groupCounts": {
+        "U": 27,
+        "F": 37,
+        "A": 14,
+        "T": 10,
+        "E": 10,
+        "P": 19,
+        "D": 8
+      },
+      "projections": [
+        {
+          "path": "docs/design/a2-final-design/D10-ACCEPTANCE.md",
+          "blob": "f28e7de07d053326bc87f4b23e04a6bcdf56222e"
+        },
+        {
+          "path": "docs/design/a2-final-design/D10-ACCEPTANCE.zh-CN.md",
+          "blob": "96262972d7a9100165e171c1ee58063c32718291"
+        }
+      ]
+    },
+    "currentD10": [
+      {
+        "path": "docs/design/a2-final-design/D10.md",
+        "blob": "8819a728742f73e0a334d9ab2d1f629893d37973",
+        "originalPath": "docs/design/d10/CANDIDATE.md",
+        "originalBlob": "f1fbffece2dda3ebe331f14b6cbc71e873e50185",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10.zh-CN.md",
+        "blob": "9d7867d0a1936f7cc12e1f9729e0b0aec22ece12",
+        "originalPath": "docs/design/d10/CANDIDATE.zh-CN.md",
+        "originalBlob": "ea620222cce22d6ebcf81f30e11336c7fe8e9f43",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-CONTROL.md",
+        "blob": "62a948893f1072d9bb1b0294f0ae66e8db02a56a",
+        "originalPath": "docs/design/d10/CONTROL-CONTRACT.md",
+        "originalBlob": "b98bff5f00b9a387d86428b9218f5c03465f95f8",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
+        "blob": "88279c66fa8c9238f0bf74137420f9130e5305e8",
+        "originalPath": "docs/design/d10/CONTROL-CONTRACT.zh-CN.md",
+        "originalBlob": "6806d31107036e75147cd6213129c59e3f8819b6",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-IMPACT.md",
+        "blob": "d202e3dbf5d55c7e8d0e15dba772b51aee561e74",
+        "originalPath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.md",
+        "originalBlob": "50031c9db36232ec439aa2c96d312465250dab04",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-IMPACT.zh-CN.md",
+        "blob": "2d9a222b66987289e2223220021db15912157fac",
+        "originalPath": "docs/design/d10/IMPLEMENTATION-IMPACT-AND-TEST-OUTLINE.zh-CN.md",
+        "originalBlob": "fd084e562f267bec8a6bb522daaf8f379a1cbacf",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-REVIEW.md",
+        "blob": "270dbb6d6573c1c945de8da16fa9c0638b4f8d07",
+        "originalPath": "docs/design/d10/REVIEW-DISPOSITIONS.md",
+        "originalBlob": "d7d42442a42d0aa87d97085036883a3922dda781",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-REVIEW.zh-CN.md",
+        "blob": "0af6e4f900ee746aee23f4e97974db86c353575a",
+        "originalPath": "docs/design/d10/REVIEW-DISPOSITIONS.zh-CN.md",
+        "originalBlob": "7dca44178d0c5f5eddf50e4a74f0990d3d440151",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-SCENARIOS.md",
+        "blob": "f57ca9c1d14053e1e274b9cdc03bb974e7aecacc",
+        "originalPath": "docs/design/d10/SCENARIO-DISPOSITIONS.md",
+        "originalBlob": "f7bd02712e17f39eb5d09038a7b565d42ad70dae",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-SCENARIOS.zh-CN.md",
+        "blob": "4f27f9188e0903e1885166077f51b5ad9208cbd7",
+        "originalPath": "docs/design/d10/SCENARIO-DISPOSITIONS.zh-CN.md",
+        "originalBlob": "21d318c1ad7a34852163bb0967f820ae84b74a4d",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-READING.md",
+        "blob": "ea16153bc4d17a294a91f95530e4e68c13f97ae4",
+        "originalPath": "docs/design/d10/START.md",
+        "originalBlob": "000d0864830069319d785d09a58ff9f7bf835d14",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-READING.zh-CN.md",
+        "blob": "e0424f757226ef3f2322cc9d3dd1edcf14dd641e",
+        "originalPath": "docs/design/d10/START.zh-CN.md",
+        "originalBlob": "a8de81ec81333073578e7fe4c43153836eb585a6",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-TASK.md",
+        "blob": "84378aecdcbb5f07813e627122d69df250543d9c",
+        "originalPath": "docs/design/d10/TASK.md",
+        "originalBlob": "52b51f14cbca8107fdf13ddf29fab6d9cd04bb5b",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-TASK.zh-CN.md",
+        "blob": "fae1ce7d56695294ff967c490359745c39afe25d",
+        "originalPath": "docs/design/d10/TASK.zh-CN.md",
+        "originalBlob": "759a3c5b5ba066de53e5c04838d15acd05ed4692",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-LEXICON.md",
+        "blob": "e5f51d38a41c78a25d674065ceb509a3fac6ec32",
+        "originalPath": "docs/design/d10/TERMINOLOGY.md",
+        "originalBlob": "bba9992ce97063b56b7733adebcc5d2f9f4dde4d",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-LEXICON.zh-CN.md",
+        "blob": "7c863b4bd1160c9aadee95272387c0aa2c5903c1",
+        "originalPath": "docs/design/d10/TERMINOLOGY.zh-CN.md",
+        "originalBlob": "fa364f50e80a5c7e15a61286d6cc9be54d597a51",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-UPSTREAM.md",
+        "blob": "75a571e839befe5dd84ed0b318b330dde89d39aa",
+        "originalPath": "docs/design/d10/UPSTREAM-AMENDMENTS.md",
+        "originalBlob": "097b58db2418dd2e425114d78b5977edb22edcb3",
+        "authorRead": "FULL"
+      },
+      {
+        "path": "docs/design/a2-final-design/D10-UPSTREAM.zh-CN.md",
+        "blob": "678da2864eb5651b5999074efa99f7420bb90ff8",
+        "originalPath": "docs/design/d10/UPSTREAM-AMENDMENTS.zh-CN.md",
+        "originalBlob": "3caa7783800d490181fb23e9a24fb84ca21ff63e",
+        "authorRead": "FULL"
+      }
+    ],
+    "readCoverage": {
+      "originalD10": "18/18 FULL",
+      "fixedS": "49/49 FULL",
+      "currentA2D1D9": "86/86 FULL",
+      "currentD7Direct": "26/26 FULL",
+      "currentFC": "7/7 FULL",
+      "directD6D9Afterimage": "12/12 FULL",
+      "knownNecessaryAuthorGap": 0,
+      "independentReading": "PENDING"
+    },
+    "mandatory": {
+      "path": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+      "blob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+      "sections": [
+        {
+          "section": 1,
+          "startLine": 6,
+          "endLine": 22,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D1/D10 authority",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 2,
+          "startLine": 23,
+          "endLine": 101,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D2/D3/D4/D10 Package semantics",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 3,
+          "startLine": 102,
+          "endLine": 153,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 People/D10 module",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 4,
+          "startLine": 154,
+          "endLine": 191,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 Organizations/D10 module",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 5,
+          "startLine": 192,
+          "endLine": 214,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4/D7 relation/graph and D10 read qualification",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 6,
+          "startLine": 215,
+          "endLine": 278,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 temporal and D10 recurrence/Pack",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 7,
+          "startLine": 279,
+          "endLine": 323,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D9 import and D10 Connector/Automation",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 8,
+          "startLine": 324,
+          "endLine": 485,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D1–D10 exact stage routing",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 9,
+          "startLine": 486,
+          "endLine": 545,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D1–D10 hostile counterexamples",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 10,
+          "startLine": 546,
+          "endLine": 569,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "A2 design freeze vs runtime acceptance",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 11,
+          "startLine": 570,
+          "endLine": 637,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D10 queue/approval/responsibility",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 12,
+          "startLine": 638,
+          "endLine": 713,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D2/D4 native author envelope and D6 authority",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 13,
+          "startLine": 714,
+          "endLine": 883,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D4 Task/People/Calendar/Library and D10 scheduling",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 14,
+          "startLine": 884,
+          "endLine": 924,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D9 Office native-table template and ordinary Node no export config",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        },
+        {
+          "section": 15,
+          "startLine": 925,
+          "endLine": 1141,
+          "sourcePath": "docs/design/snapshots/d4-d10-a2-mandatory-scenario-inputs-2026-08-28/source.md",
+          "sourceBlob": "91a457d77d40a10abc7997c19171e7adac43d1b9",
+          "currentOwner": "D7 Query/View graph and D8/D9 current export",
+          "disposition": "source-qualified current A2 owner retains all positive, negative and unnumbered obligations, not product-executed"
+        }
+      ],
+      "originalSource": "all numbered and unnumbered conditions unchanged"
+    },
+    "actualCurrentOwner": "D3 fresh Request13, D6 Input3/Proof3/Key3 (15 kinds), D7 PAB4/Effect3, D8 Edit3/Value4, D10 ControlBinding3/Deps3/Input2/mixed Image2+Image1/Schedule2/Inventory2/ResponsibilityRecord3/ApprovalUse2, D9 distinct ExportPlan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/PublicationReceipt4/PrintReceipt1 and genuine historical decoders",
+    "independent": {
+      "D9": "fixed8d7 D9-only ACCEPT 0P0/0P1/0P2; required gap 0 and all D9 registered findings CLOSED",
+      "D10": "PENDING full original/current non-author",
+      "fullProA2": "PENDING separate fresh full A2 review",
+      "acceptedDesignSha": null
+    },
+    "runtime": "UNRUN (Core, real authorization CAS, OS/GUI/IME/AT, Office, provider/external effects, concurrency/crash, migration/performance/activation/deployment)",
+    "historical": "Old PR2 R08 11 findings, original 17-kind D9 public mapping/36+1, fixed S source rows and all Plan/Receipt old records remain provenance/recovery only; no new Resolver12 or second current owner"
   }
 }
