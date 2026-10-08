@@ -1,7 +1,7 @@
 {
   "format": "weftext.a2-d9-source-map",
   "version": 1,
-  "status": "author-resolved-pending-independent-review for ONLY new D9-6012-P1-01 and D9-6012-P2-01; all prior fixed6012/fixed466b and older independently CLOSED finding scopes preserved; D9 product execution UNRUN, D10/full A2 pending",
+  "status": "D9-only independently ACCEPT at actual fixed8d7 non-author 0P0/0P1/0P2, necessary gap0; D9-6012-P1-01/P2-01 independently CLOSED. All fixed6012/fixed466b/fixed79026 and older bounded closures retained. Full D10 and global A2 are separate, product D9 I01–I12 UNRUN.",
   "startSha": "5eca16c40cdf2e1892f6930d51c632ea720a460c",
   "baseSha": "97f4734f82a760cb6716c8122b84494da2b61164",
   "fixedS": "7e18168dad3e6d120fce0dd607dc10fa7894e252",
@@ -926,7 +926,7 @@
       "rule": "D9-Export/D9-Impact/D9-Lexicon/D9-Acceptance current routes name Plan4 successors and exact recorded Plan3 recovery"
     },
     "versionCoordination": {
-      "status": "author-resolved-pending-independent-review; coordinator precheck, not a separate finding count",
+      "status": "D9-only independent ACCEPT at fixed8d7 for current Plan4/Catalog3/Selection2/Projection2/Loss2/Confirmation2/Receipt4/PrintReceipt1 and protected historical Plan/Receipt1–3. All registered D9 findings CLOSED at their fixed scope, no D10/global acceptance.",
       "current": "Fresh unseen actual selected eight-domain owner inputs produce ExportPlan/4 under original §3a random non-public token before referenced report/manifest and one atomic complete Plan storage; Query-free exact Source/Resource/Field, full D7 Query/Collection/graph typed V and ordered result, D8 Annotation and D7 View qualification stay intact. Query_json graph only has D7 schema and static data={nodes,edges}; optional network ViewSpec.nodeDetails does not create data authority. The D9/2 selector error is invalid_request, not invalid_output, but original Host/Core coverage S33 and Region issuance retain their own output-validation codes. Recorded Plan/Receipt1–3/pins/confirmation/recovery and original D1/entered owner errors remain exactly historical.",
       "retained": "recorded ExportPlan/1-/2-/3, PublicationReceipt/1-/2-/3 and token/confirmation/bundle predecessors retain exact decoder/bytes/pins/recovery and are never repinned/re-encoded into /4",
       "currentizedLocations": [
@@ -1049,7 +1049,7 @@
     "ROOT-8B6-MAP-P2-01": "independently CLOSED at fixed4da7 in bounded mapping scope: D8-SOURCE-MAP current consumer pointer corrected, retained 760 row-source provenance unchanged",
     "D9-4DA7-MAP-P2-01": "independently CLOSED at fixed466b: current/final FC SPEC/SCHEMAS blob aliases and ff10 predecessorRangeCorrection + D4/D5 direct-read + 760-row provenance were checked and accepted within that fixed scope; this batch refreshes only legitimate new current consumers",
     "D9-466B-P2-01": "independently CLOSED at fixed6012: authorized caller-selected View index=99/wrong payload dispatches existing D9/2 wire2 invalid_request, original proved authenticated protected contradiction integrity_conflict, unavailable proof/source/domain and auth/entered D7 error order accepted within fixed scope",
-    "D9-6012-P1-01": "author-resolved-pending-independent-review: graph TerminalSchema has nodes/edges RowsSchema and five binding IDs only; static query_json data={nodes,edges} retains all original typed V/actual columns/bag/order, legal isolated node and zero edges with no ViewSpec.nodeDetails, rejects omitted present displayName/column or truncated/reordered values; no new D7/query_json wire",
-    "D9-6012-P2-01": "author-resolved-pending-independent-review: original invalid_output remains applicable to separate D9 Host/Core IR format coverage S33 (worker success + schema-valid IR but omitted XLSX sheet/hidden object) and D9 Region issuance format/geometry as well as real worker validation; ONLY authorized caller View catalog selector uses original invalid_request, kept protected integrity_conflict/proof/source/auth precedence and original envelopes"
+    "D9-6012-P1-01": "independently CLOSED at fixed8d7 D9-only ACCEPT 0P0/0P1/0P2 gap0; original fixed6012 author repair evidence: graph TerminalSchema has nodes/edges RowsSchema and five binding IDs only; static query_json data={nodes,edges} retains all original typed V/actual columns/bag/order, legal isolated node and zero edges with no ViewSpec.nodeDetails, rejects omitted present displayName/column or truncated/reordered values; no new D7/query_json wire",
+    "D9-6012-P2-01": "independently CLOSED at fixed8d7 D9-only ACCEPT 0P0/0P1/0P2 gap0; original fixed6012 author repair evidence: original invalid_output remains applicable to separate D9 Host/Core IR format coverage S33 (worker success + schema-valid IR but omitted XLSX sheet/hidden object) and D9 Region issuance format/geometry as well as real worker validation; ONLY authorized caller View catalog selector uses original invalid_request, kept protected integrity_conflict/proof/source/auth precedence and original envelopes"
   }
 }

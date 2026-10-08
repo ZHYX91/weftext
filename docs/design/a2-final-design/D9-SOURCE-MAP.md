@@ -8,7 +8,7 @@ translation_status: synced
 
 # A2 D9 Source Map
 
-Status: **author-resolved-pending-independent-review**.
+Status: **independently ACCEPT at fixed8d7, D9-only 0P0/0P1/0P2 gap0**. This status supersedes this original D9 author-candidate source-map chronology; complete D10/global review is separate and product UNRUN.
 
 Machine authority is D9-SOURCE-MAP.json.
 
@@ -29,3 +29,5 @@ Range correction remains fixed to the reviewed ff10 predecessor and stays indepe
 The coordinator version precheck is resolved within the existing D9 repair scope, not counted as a new finding: FC §8.3 keeps exact Source/Resource/query_json generationPolicy=none, controlled-name/canonical-ordering, template/route/style, recursive pins and unknown-publication obligations, but fresh unseen work now consistently uses Plan4/Receipt4 or PrintReceipt1. SPEC §17 unseen-current dispatch, §18 inventory, SCHEMAS §§6.5–6.6, terminology registry, FC acceptance and replacement router agree. Recorded Plan/Receipt1–3 retain exact decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery and are never migrated.
 
 At fixed6012, the independent reviewer CLOSED D9-BAF-P1-02 (alias D9-466B-P1-01) for full eight-domain/selector dispatch and D9-466B-P2-01 for authorized caller-selector errors. fixed466b D9-4DA7-MAP-P2-01 and every older bounded CLOSED conclusion remain intact. Only two NEW findings are repaired here, both author-resolved-pending-independent-review: D9-6012-P1-01 removes the false graph nodeDetails requirement (original TerminalSchema and query_json require complete nodes/edges, all real V/columns/bag/order; ViewSpec.network.nodeDetails? is optional, and a complete isolated node with zero edges is legal); D9-6012-P2-01 limits invalid_output exclusion to the caller View selector, preserving the original Host/Core independent IR coverage error (S33, missing XLSX sheet/hidden object), worker validation and D9 Region new-issuance format/geometry validation. The original eight-domain/seven-catalog contract, §3a private token and atomic save, real historical Plan1–3 recovery, Annotation/print/View complete_data and network six-chart rules remain. Current map aliases are refreshed from actual new Git blobs; fixed ff10 predecessorRangeCorrection, D4/D5 old direct reads, S49 and 760 source rows remain historical provenance. Product UNRUN; full D10 and fresh Pro/global A2 remain later.
+
+**Subsequent independent final D9 disposition:** exact fixed8d7 independently CLOSED D9-6012-P1-01 and D9-6012-P2-01 with 0P0/0P1/0P2 and no necessary read gap. The fixed6012 author repair below is historical provenance only, not a present open finding. All original 104 cases, source-map current FC blobs and historical predecessor/source rows remain unchanged. Next independent review is full D10 at actual candidate SHA, followed by fresh Pro full A2.

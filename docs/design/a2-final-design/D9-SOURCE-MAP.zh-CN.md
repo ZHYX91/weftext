@@ -7,7 +7,7 @@ translation_status: source
 
 # A2 D9 来源映射
 
-状态：**author-resolved-pending-independent-review**。
+状态：**fixed8d7 非作者在 D9-only 范围独立 ACCEPT 0P0/0P1/0P2、必要 gap0**；此最终裁决替代本来源图原作者增量时点的待审字样，不代表完整 D10/global，产品 UNRUN。
 
 机器权威为 D9-SOURCE-MAP.json。
 
@@ -28,3 +28,5 @@ fixed8b6 独立复核已经 CLOSED D9-BAF-P2-02，但 D9-BAF-P1-01/P1-02 仍有�
 协调者发现的版本预检已经在原 D9 三修 scope 内协调，不新增 finding 计数：FC §8.3 继续保留 exact Source/Resource/query_json 的 generationPolicy=none、受控名称与 canonical ordering、template/route/style、递归 pin 和 unknown-publication 义务，但 fresh unseen work 统一使用 Plan4/Receipt4 或 PrintReceipt1。SPEC §17 的 unseen-current 分派、§18 类型清单、SCHEMAS §§6.5–6.6、terminology registry、FC acceptance 与 replacement router 已一致。真实记录的 Plan/Receipt1–3 保留精确 decoder/token/bytes/pins/confirmation/saved-planned-unknown recovery，绝不迁移。
 
 fixed6012 非作者已独立 CLOSED D9-BAF-P1-02（别名 D9-466B-P1-01）的完整八域/请求选择分派，以及 D9-466B-P2-01 的获权 selector 错误合同。fixed466b 的 D9-4DA7-MAP-P2-01 和全部旧有界 CLOSED 均保持。本批仅修两项新问题，状态均为 author-resolved-pending-independent-review：D9-6012-P1-01 撤销误加的 graph nodeDetails 强制字段（原 TerminalSchema 与 query_json 只要求完整 nodes/edges 和真实 V/列/bag/顺序；ViewSpec.network.nodeDetails? 是可选绑定，孤立 node 与零 edges 合法）；D9-6012-P2-01 只禁止请求方 View selector 借用 invalid_output，原 Host/Core 独立 IR coverage（S33，XLSX 漏 sheet/隐藏对象）、worker 输出验证、D9 Region 新签发格式/几何验证均保留原职责。八域/七 catalog、§3a 隐藏随机 token/原子保存、历史 Plan1–3 恢复、Annotation/print/View complete_data 与六图表 network 边界不变。现任映射按最终新 Git blob 刷新；ff10 predecessorRangeCorrection、D4/D5 旧 direct-read、S49 与 760 来源行只作历史资格。产品 UNRUN，完整 D10 与 fresh Pro/global A2 留后续。
+
+**后续 D9 独立最终裁决：**fixed8d7 实际非作者以 0P0/0P1/0P2、必要 gap0 独立 CLOSED D9-6012-P1-01 与 D9-6012-P2-01。下方 fixed6012 作者修订仍仅历史来源，不再是当前开放 finding。原 104 条验收、现任 FC blob 与 predecessor/source 行均不更动。下一审查是最终候选 SHA 的完整 D10，之后才是全新 Pro 完整 A2。
