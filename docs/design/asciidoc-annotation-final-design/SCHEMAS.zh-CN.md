@@ -2678,7 +2678,7 @@ D9PrintReceipt/1 = {
 跨输入域的排他关系同样强制执行：inputDomain 不是 annotation 时，contentSelection.annotationInputs 和 projection.annotations 都必须为空；inputDomain 不是 view 时，contentSelection.viewInput、viewRenderBinding 与 projection.view 都必须为 null。catalog 中存在某个 input，并不代表可在未选择、未授权的情况下消费它，也不得通过无关 projection 偷带内容。这些关系必须在输出准备前的严格准入阶段检查。
 
 当 inputDomain=annotation：
-- annotationInputs 必须非空；bodyInput=null、bibliographyInput=null、viewInput=null、viewRenderBinding=null、projection.view=null、documentRenderBinding=null。
+- 必须至少选中一个 Annotation 内容输入（annotationInputs 非空）。普通文档正文与参考文献的选择均必须为空，即 bodyInput=null 和 bibliographyInput=null；同时不得选中 View（viewInput=null），不得附带 View 渲染绑定（viewRenderBinding=null）、View 投影（projection.view=null）或文档渲染绑定（documentRenderBinding=null）。
 - annotationInputs 是以 inputIndex 为 key 的 set-like array，按 Counter 递增排序且唯一。同一个 catalog input 在一个 Plan 中最多出现一次，因此只能选择一个 mode。同一 Plan 混用 portable_backup 与 review_bundle_r6 必须拒绝；需要两种输出时使用两个 Plan。
 - 每个选中的 inputIndex 必须精确指向一个 inputCatalog.items[index]，且 payload 必须是 annotation_content。
 - projection.annotations 与 annotationInputs 的基数和递增 inputIndex 顺序完全一致。每个位置上，portable_backup selection 只能对应 portable_backup projection，并且 inputIndex 与 recordPin 逐字相等；review_bundle_r6 只能对应同一 inputIndex 的 review_bundle_r6 projection。选中后缺 projection、未选却出现 projection、重复 index、跨 mode 对应，或 [0,1,0] 这类序列，即使各 catalog item 单独都已获权，也必须拒绝。
