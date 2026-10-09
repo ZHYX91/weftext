@@ -29,7 +29,7 @@ jobs:
       - name: Install Node.js for the packaged desktop assets
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: 22.13.0
+          node-version: 22.23.3
           cache: npm
           cache-dependency-path: apps/desktop/package-lock.json
 
@@ -161,7 +161,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: 22.13.0
+          node-version: 22.23.3
           cache: npm
           cache-dependency-path: |
             apps/desktop/package-lock.json
