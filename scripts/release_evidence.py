@@ -1347,8 +1347,8 @@ def validate_versions_and_toolchains(repo: Path) -> dict[str, str]:
     for command in required_worker_materialization:
         if not re.search(rf"(?m)^\s*{re.escape(command)}\s*$", release_workflow):
             fail(f"release evidence workflow does not materialize the worker lock: {command}")
-    if len(re.findall(r"(?m)^\s*node-version:\s*22\.13\.0\s*$", workflow)) < 2:
-        fail("source gate must pin Node.js 22.13.0 for both npm jobs")
+    if len(re.findall(r"(?m)^\s*node-version:\s*22\.23\.3\s*$", workflow)) < 2:
+        fail("source gate must pin Node.js 22.23.3 for both npm jobs")
     if not re.search(
         r"(?m)^\s*python3 scripts/release_evidence\.py policy(?:\s|$)", workflow
     ):
@@ -1361,7 +1361,7 @@ def validate_versions_and_toolchains(repo: Path) -> dict[str, str]:
     return {
         "releaseVersion": release_version,
         "rust": pinned_rust,
-        "node": "22.13.0",
+        "node": "22.23.3",
     }
 
 
