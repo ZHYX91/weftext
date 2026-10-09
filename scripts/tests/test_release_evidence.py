@@ -701,7 +701,7 @@ class ReleaseEvidenceTests(unittest.TestCase):
                     return_value={
                         "releaseVersion": "0.1.0",
                         "rust": "1.98.0",
-                        "node": "22.13.0",
+                        "node": "22.23.3",
                     },
                 ),
                 mock.patch.object(
