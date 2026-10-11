@@ -77,6 +77,8 @@ D4SourceMaterializationEffects2 保留原 /1 的 kind、operationId、registryBi
 
 原 source_envelope_state 只披露列出的聚合有效性/容量，不自动授权 native 依赖拓扑。新增 Policy4，精确继承 D6-CONTROL §10/§10.1 Policy3 的 {version,revision,grants} 及 grant/deny/原 capability 语义，version=4，仅 capability union 增加 {kind:"native_dependency_state",fieldId:FieldId}。此能力只允许 workspace scope，FieldId 必须是当前 schema 的精确 ID，默认不授予，不由其它读写/管理员能力隐含；实际安装/修改仍要求原 policy_admin 管理路径。旧 Policy3 不补 grant。D6 policy decoder、policy key/pin、authorization DependencyKey3/proof 的对应 policy 槽按 policy.version=3或4精确分派，同一授权世代/原 seal 冻结完整对象；旧 recorded1/2/3 原恢复。既有 bootstrap 可以保留 Policy3；未显式安装此 grant 时新 native 窄路径不可用，全源编辑保留原授权路径。
 
+Policy4 的准确 current 消费槽包括 D3-SCHEMAS/D6-SCHEMAS 的 WorkspaceAuthorizationBundle2.policy、ConflictResolutionInput3.resolution.policy、ConflictResolutionPreview2.resolution.policy，以及 D6-CONTROL §10.1 管理入口的完整 proposed policy/结果 Bundle2.policy。它们严格按 policy.version 接收 Policy3|4；3→4 必须是经旧 policy_admin 授权的显式策略后继，按原规则 checked-increment Policy.revision、auth generation 和 bundle.authorizationRevision，完整保留原 trust histories，不能只改 version 或偷偷补 grant。conflict choice 与 resultBundle.policy 同样保持实际原版本或合法显式后继并逐字匹配；真实旧 Bundle1/recorded 域不扩大。当前 bootstrap.initialPolicy 仍可使用原 Policy3，不自动生成新能力；Bundle2、CP 与 pin prefix 不升版。
+
 该能力仅允许获知指定 Field 的聚合隔离资格和由它影响的选择/准备结果，不授权名字、数量、路径、位置、raw、其它 Field 值或正文。复用原 selectionToken/proof 与授权失效机制，不新增状态端点、token 类型或 proof。只读 typed Query 不需要此能力。wire3 Field selection 对 Registry 中存在 native binding 的目标 Field 必须在读取作者源/拓扑前检查该 grant；无 grant 统一 not_visible。显式 native selector/intent 同样先验检查；不是先扫描后根据“碰巧隔离”决定所需权限。Entry-only wire2 原合同不扩大，不能借旧入口取得 native selector。
 
 仅新增 set_field_source 的 native→native 直接字面改值（和同形 bulk replace_single 分解）进入此适配器。先按原条件1和完整 Registry 图建立潜在 Field/constraint 闭包，再核原 Field read/write、entity/state、source_envelope_state、commit_sequence_state、source_write deny 以及新增 capability。然后由同一 D2 evaluation 的完整 attribute-use/origin 证据证明：目标是唯一可写 root 直接 codec 字面，不含 substitution/import/generated 输入；其它 header 字段、正文、条件、macro/include 目标、URL、extension/provider 没有读取这个属性名。必须追踪完整实际原生读取与负范围，不能只搜索字面引用；不能完整追踪时不可用。外部读取非空或证明不可用一律仅报告聚合不合格，不能泄漏具体原因/拓扑。有正文依赖时本轮只允许独立完整 Source 授权；其它 Field 依赖也不由此适配器放行，须其完整扩大获权路径。
@@ -93,7 +95,7 @@ Snapshot2 按 AUTHORING §4 精确十八成员解码。RegistryEvolutionProof2 �
 
 | 实际 owner / 槽 | 新 current 类型与规则 |
 | --- | --- |
-| D4 §2.2 handshake、ValidatedCatalogContext、registry/temporal proof | Snapshot2 + 每个非 bootstrap 代必需的 EvolutionProof2；原已认证 bootstrap 无 predecessor/evolution；固定 catalog 保持。 |
+| D4 §2.2 handshake、ValidatedCatalogContext、registry/temporal proof | Snapshot2 + 每个非 bootstrap 代必需的 EvolutionProof2；原已认证 bootstrap 保留 predecessor 的 registry_bootstrap marker，没有 previousSnapshot/演进 proof；固定 catalog 保持。 |
 | D3-SCHEMAS WorkspaceBootstrapTargetRegistry1.snapshot 与 D6 bootstrap producer | Snapshot2；原目标信任/授权/安装边界保持，既有 Plan4/policy 不复制。 |
 | D3-SCHEMAS 与 D10-CONTROL §0 D10WorkspaceReadDependencies2.registryReads[].snapshot | Snapshot2；真实完整 binding/pin 同 cut；空数组不造读取。 |
 | D3-SCHEMAS 与 D10-CONTROL §0 D10ControlEffectPlan2.registryChange | before.snapshot 为真实1或2，after.snapshot 为2，evolution 为 Proof2；sourceChange/权限/排序规则保持。 |
