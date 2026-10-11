@@ -6,7 +6,7 @@
   "replacements": [
     {
       "sourcePath": "docs/design/a2-final-design/D2.zh-CN.md",
-      "concern": "root authored controls and YAML prohibition",
+      "concern": "root native identity/type controls; replaces undeployed YAML proposal",
       "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
       "targetEn": "docs/design/a2-final-design/AUTHORING.md",
       "sections": [
@@ -77,7 +77,7 @@
     },
     {
       "sourcePath": "docs/design/a2-final-design/D9.zh-CN.md",
-      "concern": "template/import/copy envelope production and export",
+      "concern": "template/import/copy native control production and export",
       "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
       "targetEn": "docs/design/a2-final-design/AUTHORING.md",
       "sections": [
@@ -252,6 +252,70 @@
         "3.1"
       ],
       "disposition": "explicit-opt-in-capability; no automatic grants or upgrade of recorded Policy3"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D2.zh-CN.md",
+      "concern": "native link/xref target codec and retained adapter identity boundary",
+      "targetZh": "docs/design/a2-final-design/LINKS.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/LINKS.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-link-form-coordination; preserve closed wire decoders and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D3.zh-CN.md",
+      "concern": "path locators, Workspace identity, qualified conversion and copy relocation",
+      "targetZh": "docs/design/a2-final-design/LINKS.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/LINKS.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-link-form-coordination; preserve closed wire decoders and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D8.zh-CN.md",
+      "concern": "link-form conversion/copy/defaults and exact Draft authorization",
+      "targetZh": "docs/design/a2-final-design/LINKS.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/LINKS.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-link-form-coordination; preserve closed wire decoders and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D9.zh-CN.md",
+      "concern": "copy/template path relocation and explicit offline routing capability boundary",
+      "targetZh": "docs/design/a2-final-design/LINKS.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/LINKS.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-link-form-coordination; preserve closed wire decoders and original recorded recovery"
     }
   ],
   "design_cases": {
@@ -265,7 +329,9 @@
       "SRC-07",
       "SRC-08",
       "SRC-09",
-      "SRC-10"
+      "SRC-10",
+      "SRC-11",
+      "SRC-12"
     ],
     "EXPERIENCE": [
       "UX-01",
@@ -283,7 +349,22 @@
       "UX-13",
       "UX-14",
       "UX-15",
-      "UX-16"
+      "UX-16",
+      "UX-17",
+      "UX-18"
+    ],
+    "LINKS": [
+      "LINK-01",
+      "LINK-02",
+      "LINK-03",
+      "LINK-04",
+      "LINK-05",
+      "LINK-06",
+      "LINK-07",
+      "LINK-08",
+      "LINK-09",
+      "LINK-10",
+      "LINK-11"
     ]
   },
   "existing_global_findings": {
@@ -301,6 +382,12 @@
     "INT-06"
   ],
   "open_integration_dependencies": [
-    "Existing global symbolic Document input framing P1: ManagedEnvelopeConstruction/1 is internal and is not admitted as Result/9; managed2 new-instance end-to-end remains open until that original finding is independently resolved."
+    "Existing global symbolic Document input framing P1: ManagedControlConstruction/1 is internal and is not admitted as Result/9; managed2 new-instance end-to-end remains open until that original finding is independently resolved."
+  ],
+  "increment_base_commit": "35cf55f95da45ccab910adb85c2e7276197b47f6",
+  "source_profile": "native-control-attributes; undeployed managed2 draft replacement",
+  "deferred_link_capabilities": [
+    "Stable Node+author-anchor target needs a named versioned adapter/reference/copy design; never drop a fragment during conversion.",
+    "General offline bundle routing needs a typed D9 render-binding/evidence/confirmation design; no free members or evidence pins are added to ExportPlan4."
   ]
 }

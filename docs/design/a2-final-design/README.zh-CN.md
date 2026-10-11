@@ -6,7 +6,7 @@ translation_status: source
 [English](README.md)
 # A2 最终设计整合候选
 
-本分支的新作者源与使用流程以 [修订入口](REVISION.zh-CN.md)、[AUTHORING](AUTHORING.zh-CN.md) 和 [EXPERIENCE](EXPERIENCE.zh-CN.md) 为准。其具名替代涉及 YAML 身份/类型、原生业务属性、RegistrySnapshot2、Profile2/Binding2 及直接消费者；其它条款保留。状态为等待独立审查的候选，原 21 项全局问题未关闭，未实现。
+本分支的新作者源与使用流程以 [修订入口](REVISION.zh-CN.md)、[AUTHORING](AUTHORING.zh-CN.md) 、[EXPERIENCE](EXPERIENCE.zh-CN.md) 和 [LINKS](LINKS.zh-CN.md) 为准。其具名替代涉及原生控制身份/类型、原生业务属性、RegistrySnapshot2、Profile2/Binding2、链接形式转换及直接消费者；其它条款保留。状态为等待独立审查的候选，原 21 项全局问题未关闭，未实现。
 
 状态：设计候选；未独立接受、未实现、未发布。
 

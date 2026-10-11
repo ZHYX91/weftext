@@ -63,7 +63,7 @@ Spec3 保留 Spec2 的全部未变 intent；replace_field/set_field_member 仍�
 
 native→native 通过已验证 codec 生成可逆原生字面，仅改最终有效值的准确 span，保留其它赋值、位置和 trivia；完整重解析证明新 typed 值及所有效果。header→Entry 删除完整同名集，完整 Entry 使用所选 derived UUIDv5 作为固定 occurrenceKey（D4 已允许 UUID1–5），不再把它视为 header 连续性。Entry→native 必须是唯一 occurrence、codec 可逆，且无不能保留的 qualifier/note/provenance/union 信息；否则拒绝并保留 Draft。Entry→Entry 保留 key。表示转换与删除必须完整证明其它属性/正文 native 引用的影响，无法在获权 Field 范围内证明时只可走独立完整 Source 授权或拒绝，不通过隐藏扫描的布尔承诺放行。具有全源权的用户可预览并显式展开相关 native 引用为等效文本后转换，不能建立 shadow 属性。
 
-新建/无值的 Field 由已获权 Source constructor 或 Template field_set 构造；不存在的 selector 不伪造。AssignFacet 原 initialEntries 仍精确 Entry 构造器，未填已有 native 必填字段时可保留它；若同时给同 Field 的 Entry 则冲突。RemoveFacet 只更新 YAML 的已声明类型并验证 closure，保留所有业务值。FacetOperationRequest2 的 cleanup 原 Entry-only 形状不扩宽：新 FacetOperationRequest3 保留其余成员，wireVersion=3，仅 cleanupSelectors 改为完整 Selector2 数组，其余 null/空数组及 operationKind 适用规则不变，Core 从真实选择构造并提交同一 D4 gate。
+新建/无值的 Field 由已获权 Source constructor 或 Template field_set 构造；不存在的 selector 不伪造。AssignFacet 原 initialEntries 仍精确 Entry 构造器，未填已有 native 必填字段时可保留它；若同时给同 Field 的 Entry 则冲突。RemoveFacet 只更新 原生 weftext-types 的已声明类型并验证 closure，保留所有业务值。FacetOperationRequest2 的 cleanup 原 Entry-only 形状不扩宽：新 FacetOperationRequest3 保留其余成员，wireVersion=3，仅 cleanupSelectors 改为完整 Selector2 数组，其余 null/空数组及 operationKind 适用规则不变，Core 从真实选择构造并提交同一 D4 gate。
 
 D7ActionPrepareRequest3.action、D7ActionInput3.action、PAB4.action 的新 current arm 精确为 Spec3；按 action.version 分派，Spec2 真实记录保持旧域。其 canonical descriptor 与 PAB 对应成员 byte-equal 规则不变。D8 属性面板/任务控件使用同一 Action；D10 core_field_member 的现有 object-member 动作仍 Entry-only，不能把 scalar status 冒充 object member。普通任务 status 修改用明确 Spec3 set_field_source；其它 Automation action 能力未因此扩张。
 
@@ -83,7 +83,7 @@ Policy4 的准确 current 消费槽包括 D3-SCHEMAS/D6-SCHEMAS 的 WorkspaceAut
 
 仅新增 set_field_source 的 native→native 直接字面改值（和同形 bulk replace_single 分解）进入此适配器。先按原条件1和完整 Registry 图建立潜在 Field/constraint 闭包，再核原 Field read/write、entity/state、source_envelope_state、commit_sequence_state、source_write deny 以及新增 capability。然后由同一 D2 evaluation 的完整 attribute-use/origin 证据证明：目标是唯一可写 root 直接 codec 字面，不含 substitution/import/generated 输入；其它 header 字段、正文、条件、macro/include 目标、URL、extension/provider 没有读取这个属性名。必须追踪完整实际原生读取与负范围，不能只搜索字面引用；不能完整追踪时不可用。外部读取非空或证明不可用一律仅报告聚合不合格，不能泄漏具体原因/拓扑。有正文依赖时本轮只允许独立完整 Source 授权；其它 Field 依赖也不由此适配器放行，须其完整扩大获权路径。
 
-对原条件2，读取完整 FieldSource3 及 codec/union/code/qualifier/provenance 相关贡献，证明原/拟议状态都是恰一个合法有效事实。对条件3，required_field 和 cardinality 由 present 数量不变保持，所有可能 Facet constraints 仍逐个静态证明；root union variant 必须不变，未知 constructor 或依赖未获权则拒绝，不看当前隐藏 membership 来放宽。对条件4，唯一允许变化是目标最终有效值的准确 byte span；其它 set/unset、YAML/types、namespace、trivia、header 其它字段和正文逐字不变。codec 必须生成合法安全的原生字面，完整重解析不得新增属性/控制行或改变 parse 结构。对条件5，原计划保存完整 FieldSource3 前后像、真实 byte patch、逐约束保持证明、实际 source/Registry/environment 与完整正负原生读取证据。内部全源仅用于保全和已获权聚合验证，公开只返回原 Field/元数据范围。
+对原条件2，读取完整 FieldSource3 及 codec/union/code/qualifier/provenance 相关贡献，证明原/拟议状态都是恰一个合法有效事实。对条件3，required_field 和 cardinality 由 present 数量不变保持，所有可能 Facet constraints 仍逐个静态证明；root union variant 必须不变，未知 constructor 或依赖未获权则拒绝，不看当前隐藏 membership 来放宽。对条件4，唯一允许变化是目标最终有效值的准确 byte span；其它 set/unset、weftext-id/weftext-types、namespace、trivia、header 其它字段和正文逐字不变。codec 必须生成合法安全的原生字面，完整重解析不得新增属性/控制行或改变 parse 结构。对条件5，原计划保存完整 FieldSource3 前后像、真实 byte patch、逐约束保持证明、实际 source/Registry/environment 与完整正负原生读取证据。内部全源仅用于保全和已获权聚合验证，公开只返回原 Field/元数据范围。
 
 该证明绑定 before 和拟议 after 的同一固定 processor 环境/源 pins，最终 read barrier 重验。unset/absence/非法值、remove、表示转换、多来源或新增字段没有自动窄资格，使用各自完整 Source 授权或拒绝保留 Draft。成功/失败的隔离差异是新增能力明确授权的聚合元数据，不伪称完全隐藏源活动。INT-01 正例明确授予 native_dependency_state(tasks/status)：先验图证明及权限→完整无外部读取证明→一个有效 status 的安全 open→done patch→同 cut FieldSource3 image→原 P seal；无此 grant 在读拓扑前拒绝，body 引用和未知 extension 分支聚合不合格，绝不自动授予。
 
@@ -109,30 +109,32 @@ Snapshot2 按 AUTHORING §4 精确十八成员解码。RegistryEvolutionProof2 �
 
 Profile2/Binding2 精确按 AUTHORING §7。AsciiDocProcessorEnvironment4 完整继承 D2 Environment3 的成员，version=4，documentProfile 增加 weftext_managed/2；其它 environment 成员不变。新 managed2 evaluation 必须等于已验证 Binding2.profile，包括原 languageBaseline。实际 render 例为 snapshot.evaluation.processorEnvironment.documentProfile 等于 semanticQualification.documentFormat.binding.profile.managedProfile，两处 languageBaseline 也相等。DocumentFormatCurrentQualification2 继承原 /1 全部成员，version=2，binding 为严格 Binding1|Binding2，componentImage.version 仍等于 bindingRevision，绝不能写入 decoder 的1/2。ManagedDocumentSemanticQualification2 保持原 sourceObservation/documentFormat 成员，documentFormat 使用 Qualification2。真实旧 Qualification1/Semantic1/Environment3 永远按原类型。
 
-D2 evaluation/snapshot 的 processor-environment 槽显式接受 Environment4，由内层 version 分派；旧环境 pin 不重编码。D3-SCHEMAS/D6-SCHEMAS 的 format qualification、D6-CONTROL §0.1.2 component decoder/§0.1.3 receiver admission 与 document_format dependency 都接上述精确类型。receiver 按实际 binding.version=1或2 选择闭合 decoder，未知版本/错误 profile 拒绝；portable_metadata pin 精确为 D3-CJ/3(binding)，原 CP4 component rank、Notice3、ChangeRecord1、P seal 与完整关联验证不变。managed2 缺 binding/registry 仍 incomplete，不能凭 YAML 可读自授 admission。
+D2 evaluation/snapshot 的 processor-environment 槽显式接受 Environment4，由内层 version 分派；旧环境 pin 不重编码。D3-SCHEMAS/D6-SCHEMAS 的 format qualification、D6-CONTROL §0.1.2 component decoder/§0.1.3 receiver admission 与 document_format dependency 都接上述精确类型。receiver 按实际 binding.version=1或2 选择闭合 decoder，未知版本/错误 profile 拒绝；portable_metadata pin 精确为 D3-CJ/3(binding)，原 CP4 component rank、Notice3、ChangeRecord1、P seal 与完整关联验证不变。managed2 缺 binding/registry 仍 incomplete，不能凭控制属性可读自授 admission。
 
 D9DocumentRenderBinding1 的新 current semanticQualification 槽采用 SemanticQualification2，准确 D2 snapshot pin 消费 Environment4；以其 semanticQualification.documentFormat.version=2 与 snapshot.evaluation.processorEnvironment.version=4 选择新 rendering profile，不篡改旧 ExportPlan4 中已冻结的 Semantic1/Environment3。新 Plan/confirmation 的输入并集与摘要完整覆盖新内层对象；prepared 以后不得转 profile。exact-source/resource/query-json 的 null render binding 路径不受影响，真实旧 Plan/receipt/recovery 保持。
 
-## 6. YAML ID 的构造与原 C/Q
+## 6. 原生 ID 和类型的构造与原 C/Q
 
-原 Result9/C/Q 闭集不接受额外 YAML tag。本候选新增 Core 内部 ManagedEnvelopeConstruction1，作为完整源构造的具名中间表示，不能直接作为原 Result9 字节提交，不能被 worker 或文件中的 UUID 自行认证。它不解决原全局“symbolic Document 输入”P1：接入其正式 D3 提交 framing 仍须和该问题联合完成独立验收。在该依赖完成前，新建/template/import 的 managed2 完整端到端状态明确为设计依赖未关闭，不因以下算法或空 C/Q 正例宣称可实现启动。已有身份的属性编辑不依赖新 ID 构造。
+原 Result9/C/Q 闭集不接受新的控制声明 tag。本候选使用 Core 内部 ManagedControlConstruction1 作为完整源构造的具名中间表示，不能直接作为原 Result9 字节提交，不能被 worker 或文件 UUID 自行认证。它不解决原全局“symbolic Document 输入”P1：正式 D3 提交 framing 仍须与该问题联合完成独立验收。在此之前，新建/template/import 的 managed2 端到端依赖仍未关闭，已有身份属性编辑不依赖新 ID 构造。
 
 ```text
-ManagedEnvelopeConstruction/1 = {
-  kind:"managed_envelope_construction",version:1,
+ManagedControlConstruction/1 = {
+  kind:"managed_control_construction",version:1,
   subject:PayloadSubjectKey,
   preimagePin:PinRef/2,
-  envelopeSite:{kind:"existing_id",range:D2SourceRange/2,rawScalar:text}
-              |{kind:"new_envelope",byteOffset:Counter,eol:"LF"|"CRLF"},
+  idSite:{kind:"existing_value",range:D2SourceRange/2,rawValue:text}
+        |{kind:"insert_header",byteOffset:Counter,eol:"LF"|"CRLF"},
   declaredTypes:[text...]
 }
 ```
 
-仅 Core 由真实输入构造：existing_id 用于已验证 copy/template 前像；new_envelope 在可选 BOM 后唯一插入，前像是准确 ID-free AsciiDoc constructor skeleton（尚不是合法 managed Document），或经其原格式完整验证的真实 managed1 源。subject 只允许 Node 的 existing/mapped/new arm，不接受 Resource/Annotation 或其它载体。declaredTypes 来自实际获权类型选择/Recipe，按 same-cut schema 校验；非法或含另一 envelope 的输入不能以 new_envelope 绕过验证。该中间表示及原 pin 受原 operation 预算/权限/保留约束，不产生公开预分配 UUID。
+仅 Core 由同次 D2 完整原生解析、header 边界和来源证据构造上述闭合中间表示。existing_value 指向已验证 copy/template 前像中的唯一直接 weftext-id value span；insert_header 只用于无该保留声明的准确 AsciiDoc skeleton 或真实 managed1 的显式格式转换。插入点固定为可选 BOM 后，插入完整控制行及冻结 EOL，但不添加会终止 header 的空行；原文若以空行/正文起始，仍必须完整重解析，证明原标题/正文/author/revision 语义不被重分类，否则要求明确的完整源修复预览而不盲插。原 types 若已存在则独立验证/patch，不能随新 ID 插入重复 types；异常、重复、unset、非直接控制或已有外来 envelope 不能靠此构造绕过验证。类型位置与准确原文来自 preimage 的同次解析，不信任调用方给的 offset。subject 仅 Node existing/mapped/new；declaredTypes 来自实际获权选择/Recipe，按 same-cut schema 展开验证。中间表示受原预算/权限/保留约束，不公开预分配 UUID。
 
-正式生产分两条身份路径：mapped/new Node subject 只从原 D3 stage12 私有 candidate map 解析 fresh NodeId；same-identity conversion 的 existing Node subject 只读取经保护的原 NodeRef 与 birth/file binding，保留其 NodeId，不分配也不要求 fresh-map 项。existing_id 的身份 patch 只替换确切 UUID scalar；类型由独立、明确的 source patch 处理：declaredTypes 与实际原 types 不同则准确替换 sequence（缺省时在 weftext mapping 中插入），相同则保持原字节。模板实例采用 Recipe 的目标类型，不能遗留 template；普通 copy 未选类型变化则保留原声明。两个 patch 一同进入完整预览/SourceTransform，保留所有未变引号、注释、BOM/EOL。new_envelope 使用确定的最小 envelope、每个 type 的安全引用编码及所冻结 EOL。完整重解析证明 id 等于该身份分支的唯一 NodeId 及 birth/file binding，types 解析后等于已验证目标声明集合，再由 D4 计算并验证 effective closure。先计算准确 envelope edit/displacement，再把原 C/Q pinned 前像范围按完整 SourceTransform 映射到中间/最终源；两遍 C/Q、同一 revision token 和 Q 最终位置验证保留。afterPin 覆盖0到EOF全部字节；新 format binding 与 source/metadata 在唯一 winning planning CAS/P seal 内一致冻结安装。任一步不一致整体失败；planned recovery 复用原 frozen bytes/map/UUID，不重抽或从当前源重算位置。
+mapped/new subject 只从原 D3 stage12 私有 candidate map 取得 fresh NodeId；existing same-identity conversion 只用受保护原 NodeRef 和 birth/file binding，不能新分配。已有 ID 仅 patch 准确字面；types 使用独立 patch，变更时以 AUTHORING §2 的逗号协议编码，相同展开集合时保留原短名/顺序/空白。新增生成器优先使用固定 task 短名，其它默认完整 facet ID；空 types 省略新增行，已有行清空值而不生成 unset。缺 types 时紧邻 ID 完整行之后插入；模板实例必须使用 Recipe 目标类型并去掉 template，模板自身仍保留其原身份。普通复制无类型变更时保留声明。原生 ID/type 不属于 Field，字段 materializer、MapAttribute、Recipe field_set、remove/bulk 都不能触碰它们；类型变更依原 Facet/Source gate，ID 外改不能成为身份转移。
 
-真实 managed1 的普通 copy/fork 保持 Profile1/Binding1 与无 YAML 的原源；显式 copy+format-conversion 预览才使用 fresh subject 及上述 envelope，Binding2.bindingRevision=1。相同身份转换 checked-increment 原 bindingRevision；源改变必须产生真实 sourceChanges。restore 始终按原历史版本。不得用 profile-only/sourceChanges 空数组掩盖插入 envelope。
+ID、types 与业务 patch 一同进入完整 preview/SourceTransform，保留所有无关字节、注释、BOM/EOL 与原生来源依赖。完整重解析证明 ID 与唯一分配/原身份、birth/file binding 一致，类型集与验证后的 declaredTypes 一致，再由 D4 求 effective closure。控制 patch 的真实位移先映射原 C/Q pinned 前像到中间/最终 source；C/Q 两遍复用同一 revision token，Q 验最终位置，afterPin 覆盖 bytes0..EOF。原唯一 planning CAS/P seal 同时冻结和安装 format/source/metadata；矛盾整体拒绝，planned recovery 复用原 bytes/map/UUID，不重抽或按 current 重算。
+
+真实 managed1 普通 copy/fork 保留 Profile1/Binding1 和原源码；显式 copy+format-conversion 才在 fresh subject 上生成新控制声明，Binding2.bindingRevision=1。same-identity conversion checked-increment bindingRevision；所有真实源变更产生 sourceChanges，不能用 profile-only 空变更掩盖。restore 保留原历史版本。未部署的 YAML 前稿无新增 runtime decoder 或迁移责任。
 
 ## 7. 集成验收与剩余边界
 
@@ -145,4 +147,4 @@ ManagedEnvelopeConstruction/1 = {
 | INT-03 | Recipe3 field_set native status 覆盖默认值；field_append 遇 header 冲突；新实例 ID 构造仍依 §6 未关闭的原全局 framing。 |
 | INT-04 | 真实 Snapshot1→2 明确演进，完整 bootstrap/activation/proof/recurrence 消费；缺 version/绑定表、混合新旧读取、错误 digest 拒绝。 |
 | INT-05 | Binding2 原 pin→seal→第二副本 admission→Qualification2/Environment4→D2/D9；unknown version拒绝，真 Binding1 原恢复和普通复制不偷偷转换。 |
-| INT-06 | envelope 改变全文 offset 后 C/Q 和最终 afterPin 一致；candidate/ID mismatch 或部分 metadata 不安装；真实 saved/planned/unknown 不重编码。 |
+| INT-06 | 控制声明 patch 改变全文 offset 后 C/Q 和最终 afterPin 一致；candidate/ID mismatch 或部分 metadata 不安装；真实 saved/planned/unknown 不重编码。 |

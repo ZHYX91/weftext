@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](REVIEW-ENTRY.zh-CN.md)
 # A2 D1–D10 author-candidate review entry — full D10 handoff
 
-The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md) and [EXPERIENCE](EXPERIENCE.zh-CN.md). Their named replacements cover YAML identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2 and direct consumers; other obligations remain. This is a candidate pending independent review; the original 21 global findings stay open, product not implemented.
+The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md). Their named replacements cover native control identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2, link-form conversion and direct consumers; other obligations remain. This is a candidate pending independent review; the original 21 global findings stay open, product not implemented.
 
 At fixed8d7 the independent non-author D9-only review was ACCEPT 0P0/0P1/0P2, necessary gap zero; it independently CLOSED D9-6012-P1-01/P2-01, retaining fixed6012/fixed466b and all older bounded CLOSED scopes. That **does not** accept D10 or global A2. The complete nine-pair D10 current author candidate is integrated, only author-resolved-pending-independent-review, product/runtime all UNRUN. Next are full D10 non-author review, then a different fresh Pro full-A2 independent review.
 

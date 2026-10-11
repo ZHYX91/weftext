@@ -51,7 +51,7 @@ Desktop、WebUI、CLI 与获准 Agent 使用同一 Core；WebUI 的写入和下�
 
 设置为设备级“显示潜在链接”，默认关闭，可随时开关；关闭不改源码。第一版候选词来自当前获权 live Node 的原标题与已由 schema 识别的显式别名，不能从任意同名属性、历史/Trash/隐藏节点猜词。别名来源不可用则明确只扫描可用来源，不能声称完整。候选词去重保留完整 NodeRef，不按标题合并不同对象；默认排除当前 Node 自身。
 
-匹配在 D2 具有准确 root-authored 可写来源的普通可见文本片段上进行，采用精确 Unicode scalar 字面匹配，不做模糊、大小写折叠或正规化。代码、公式、URL、现有链接、YAML/属性值、批注、generated/include/multi-origin/passthrough 和不能证明可写范围的内容不加可转换提示；不跨两个文本片段拼词。匹配器产生绑定同一 Draft serial/flow 的完整 `[start,end)` Unicode scalar 区间；示例中的数字不是 UTF-8 byte offset。转换须经 fresh Draft map 换算为准确 D2 完整文件 byte/EOL 范围，owner、Base、draftSerial 和 source 必须一致，两端均为原 D8 Unicode18 grapheme 边界且不拆 CRLF。只命中展开字符或 grapheme 的一部分、或无法逆映射时，只保留发现及不可转换原因，不扩大选区。软换行可在同一逻辑片段中画线，source join/EOL 或两个片段不拼词；这不限制 schema codec 的合法 Unicode scalar 值。
+匹配在 D2 具有准确 root-authored 可写来源的普通可见文本片段上进行，采用精确 Unicode scalar 字面匹配，不做模糊、大小写折叠或正规化。代码、公式、URL、现有链接、外来 front matter/属性值、批注、generated/include/multi-origin/passthrough 和不能证明可写范围的内容不加可转换提示；不跨两个文本片段拼词。匹配器产生绑定同一 Draft serial/flow 的完整 `[start,end)` Unicode scalar 区间；示例中的数字不是 UTF-8 byte offset。转换须经 fresh Draft map 换算为准确 D2 完整文件 byte/EOL 范围，owner、Base、draftSerial 和 source 必须一致，两端均为原 D8 Unicode18 grapheme 边界且不拆 CRLF。只命中展开字符或 grapheme 的一部分、或无法逆映射时，只保留发现及不可转换原因，不扩大选区。软换行可在同一逻辑片段中画线，source join/EOL 或两个片段不拼词；这不限制 schema codec 的合法 Unicode scalar 值。
 
 相同范围的多个目标聚为一个提示组；不同范围即使嵌套或交叉也保留。例如“白云山”的 `[0,3)` 可列“白云山”及以此为别名的“白云山2026”，`山` 的 `[2,3)` 单独保留；“白云山南路”的 `[0,3)` 与 `[2,5)` 同时保留。悬停/键盘聚焦显示匹配文字、完整候选标题、可获权的路径/上下文和匹配原因；多目标必须由用户选择，不默认第一个。
 
@@ -60,6 +60,10 @@ Desktop、WebUI、CLI 与获准 Agent 使用同一 Core；WebUI 的写入和下�
 普通点击打开候选选择/说明；明确“转换为链接”才修改 Draft，目标须再次通过当前授权和身份解析，原 source range 与文本必须仍准确。转换要求完整 Source 读写资格，不能把目标可读误当源可写；无此资格时明确不可用。UI 为同一 Draft 自动构造准确完整 proposed Source，使用 D2 原生 link/xref 与原 NodeRef 编码，经过同一 parser 完整重解析，证明新增 occurrence 指向所选完整 NodeRef 且可见文字、未选字节不变，然后进入原 Source 编辑的 prepare/save。D2 identity adapter 只验证解析投影，不是 writer；不得走禁止新 macro 的 d8_draft_text_replace/2 或 splice_plain 成功分支。包含方括号、逗号、引号或 role-like 内容的 label 必须按原生语法编码并重解析验证；不能证明等价时保留 Draft 并提供 Source 预览/修复，不声称转换成功。用户无需手写语法，也不生成第二种双链语法。弹层有明确的建议可访问名称，Escape 返回原选区，不抢键入焦点。一次转换是一个 Undo 单元；保存仍走原 D8/D6。ABA、输入变化、目标删除/改名、撤权、schema 改变使旧建议失效，重新计算而不自动换词；已有运行时 evidence 不复活。
 
 扫描按可见区域优先且可取消，受原文档/工作预算约束，不阻塞打字。每个弹层先展示最多 20 个目标，再按稳定 NodeRef 顺序分页；高密度文档可停止装饰并显示扫描未完。截断/预算不足必须可见，不能把已显示匹配当全集；没有完整扫描也可以显式转换一个已完整获权验证的具体候选，不进行全局负断言。可重建候选索引随授权和名称/schema 变化失效，不能作为新的事实存储。
+
+### 5.2 链接形式与转换
+
+完整行为由 [LINKS](LINKS.zh-CN.md) 唯一拥有。右键/长按/键盘命令提供稳定 ID、源相对路径、库内完整路径与本机绝对路径的转换、复制地址/完整链接和最短有效相对路径。设备默认 ID 不重写既有源；库根地址明示 Workspace，不与本机盘根或普通相对路径混用。转换是同一完整 Source Draft 的一次 Undo，复制不改稿；目标/fragment/原生属性必须可证明保全，路径披露、不同形式未来移动行为和稳定身份边变化均可见。无损表达不了 fragment 时禁用该形式，不删锚点；通用离线导出路由尚须 D9 具名后续设计。
 
 ## 6. 模板、表格与输出
 
@@ -77,6 +81,7 @@ Desktop、WebUI、CLI 与获准 Agent 使用同一 Core；WebUI 的写入和下�
 | 周期导航、规则预览 | 纳入 §4 | 沿用已冻结历法；送达/稍后/完成后重复另议。 |
 | 阅读批注、PDF 引用、出入链/链接健康 | 纳入 §5 | 复用 JSON Annotation/Region；跨权限完整性不可省。 |
 | 可选潜在链接与重叠 UI | 纳入 §5.1 | 可取消派生建议，显式转真链；不产生假图边。 |
+| 链接四形式、转换与复制 | 纳入 §5.2 / LINKS | 原生语法与同目标验证；新 ID+anchor、通用离线路由明确后置。 |
 | 本地命名布局 | 纳入 §2 | 不同步 Draft、结果或权限；共享布局另议。 |
 | 导出预览、错误定位、内网下载 | 纳入 §6 | 原 D9 Plan/delivery 与外部 publication/receipt 分域；不新增转换宿主依赖。 |
 | 表格基本操作与恢复 | 纳入 §6 | 高级范围/列粘贴另行定义转换与损失。 |
@@ -90,3 +95,5 @@ Desktop、WebUI、CLI 与获准 Agent 使用同一 Core；WebUI 的写入和下�
 ## 8. 设计验收
 
 所有 UX 案例均为设计要求，产品 UNRUN：UX-01 侧栏打开/返回保留 Draft，撤权不返旧内容；UX-02 IME/RTL/屏幕阅读器与聚焦/打字机共存；UX-03 unknown 保存后再次录入不重复创建；UX-04 属性转换无损并保留无关 source；UX-05 表/板/历编辑同一任务且只读/聚合行不误写；UX-06 不完整查询不冒全集；UX-07 周期点击不自动创建；UX-08 批注目标失效不丢讨论；UX-09 隐藏反链不泄漏；UX-10 同范围多目标、嵌套与交叉重叠均可选；UX-11 超两层和超 20 目标、键盘/触屏/RTL 仍完整可达；UX-12 stale/撤权/已有链接/生成文本不误转；UX-13 显式转换/撤销/保存只有一个原操作；UX-14 导出失败/unknown/过期下载不伪装成功；UX-15 合法复杂表格 Source 保全；UX-16 本地布局不覆盖 Draft/共享作者顺序或恢复旧权限。UX-03 还覆盖创建成功但不属于当前 Query 的准确定位；UX-08 覆盖普通正文批注及章节汇总失效不丢想法；UX-12 覆盖 e 加 combining mark、emoji ZWJ、中文 scalar 与 UTF-8/UTF-16 坐标差异；UX-13 覆盖全源资格、原生 label 编码与完整重解析，禁止借窄文本入口注入 macro；UX-14 覆盖没有外部发布目录/receipt 的纯下载及准确 dataFile 重试。
+
+UX-17 覆盖四种链接形式、库整体迁址、同名/跨库/本机与服务器边界、转换/复制/Undo 和准确 fragment；具体正反例为 LINK-01–11。UX-18 覆盖任务属性组来自 FacetSchema 而非源嵌套、共享 Field 不复制、默认链接设置和折叠偏好不改现有源。
