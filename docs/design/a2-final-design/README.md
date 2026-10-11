@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](README.zh-CN.md)
 # A2 Final Design Integration Candidate
 
-The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md). Their named replacements cover native control identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2, link-form conversion and direct consumers; other obligations remain. This is a candidate pending independent review; the original 21 global findings stay open, product not implemented.
+The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md). Their named replacements cover native control identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2, link-form conversion and direct consumers; other obligations remain. The revision entry owns the bounded review status of this revision and the original 21 findings. Full global review remains incomplete; this is an unimplemented design candidate.
 
 Status: candidate design, not independently accepted, not implemented, not released.
 

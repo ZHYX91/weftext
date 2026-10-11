@@ -43,6 +43,32 @@ translation_status: source
 
 先审 [AUTHORING §8](AUTHORING.zh-CN.md#8-验收要求) 的 SRC-01–12、[EXPERIENCE §8](EXPERIENCE.zh-CN.md#8-设计验收) 的 UX-01–18 和 [集成 §7](AUTHORING-INTEGRATION.zh-CN.md#7-集成验收与剩余边界) 的 INT-01–06，以及 [LINKS §7](LINKS.zh-CN.md#7-设计验收) 的 LINK-01–11，检查每条正常、错误、撤权/并发/恢复及真实原 source/producer/consumer。它们是设计案例，产品未运行；文档检查或 reviewer 数量不证明实现可用。
 
-原固定 6b13 全局审查的 6 项 P1 与 15 项 P2 已在实际 owner 中完成候选修复，涉及符号 Document framing/bootstrap、presentation 完成证据及效果排序、原生 heading/block/float 域、Trash/保存搜索、版本/来源/术语一致性和时间区间/隐藏目标批注读取。21 项仍等待固定候选的独立复核，须验证原反例及受影响正向/恢复路径后才能关闭。原未完成 D7–D10、全局与 Mandatory/来源阅读范围不自动获得完成信用。
+原固定 6b13 全局审查的 6 项 P1 与 15 项 P2，已连同新设计影响及修复中发现的交叉缺口完成修改和非作者有界复核：21 项 CLOSED，0 项待修。当前整合对象为 `50946b94749a020a08622f295188ab5a46605a40`。提交/恢复与符号转换两组在 `0b70df71b56042adeb677034cf51181e574a1f1a` 关闭；后续差量仅改原生标题扫描及消费入口，未改变这两组已关闭的合同，原生与 Query 两组另行独立复核了该差量。下表 ID 均带原前缀 A2-GLOBAL-6B13，原报告、反例和补证仍保留历史身份。
+
+| 原 ID | 已修复关切 | 当前 owner / 条款 |
+| --- | --- | --- |
+| P1-01 | 完整文档复制与原生身份物化 | [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) 6.1 |
+| P1-02 | 独立呈现策略的提交、同步与恢复证据 | [D6-CONTROL](D6-CONTROL.zh-CN.md) 0.1.4 |
+| P1-03 | 原生 book 正文零级章节 | [D2](D2.zh-CN.md) 12.1 |
+| P1-04 | 完整原生块定位器与无定位器标题查询 | [D2](D2.zh-CN.md) 12.1; D3 6.2; D7 23 |
+| P1-05 | 显式回收站搜索的只读资格 | [D7-SEARCH](D7-SEARCH.zh-CN.md) 11 |
+| P1-06 | 保存搜索的贡献绑定与重新打开 | [D7-SEARCH](D7-SEARCH.zh-CN.md) 11 |
+| P2-01 | 定义传递效果的当前版本一致性 | [D3](D3.zh-CN.md) 21.2 |
+| P2-02 | 真实历史版本与原子提交故障规则 | [D3-IMPACT](D3-IMPACT.zh-CN.md) 2; D6-CONTROL 5,17.8; D6-IMPACT FA06 |
+| P2-03 | 按 Frontier 真实嵌套路径校验 | [D3](D3.zh-CN.md) 11.1 |
+| P2-04 | 完整多行术语投影及回归检查 | [D3-LEXICON](D3-LEXICON.zh-CN.md) D3-TERMS.json; scripts/check_d3_terms.py |
+| P2-05 | 原生 Float 的唯一准确编码 | [D2](D2.zh-CN.md) 12.1 |
+| P2-06 | 表格完整原生语法与当前验收一致 | [D5](D5.zh-CN.md) 0,3.1,19.1; D5-LEXICON; D5-IMPACT |
+| P2-07 | 真实旧 CP2 的两种恢复分支 | [D6-CONTROL](D6-CONTROL.zh-CN.md) CP2; D6-IMPACT G21-07 |
+| P2-08 | 双信任配置的初始化与继续规则 | [D6-CONTROL](D6-CONTROL.zh-CN.md) 20.2; D6-IMPACT PL19,PL34,PL35 |
+| P2-09 | 混合信任声明的字段及签名域 | [D6-SCHEMAS](D6-SCHEMAS.zh-CN.md) 9; D6-REGISTRY.json |
+| P2-10 | 来源映射准确保留原条款的逐项义务 | [D6-SOURCE-MAP](D6-SOURCE-MAP.zh-CN.md) D6-SOURCE-MAP.json; D6-IMPACT G21-10A,G21-10B |
+| P2-11 | 音视频时间区间批注的签发和消费 | [D9-SCHEMAS](D9-SCHEMAS.zh-CN.md) 16 |
+| P2-12 | 根源绑定使用真实嵌套字段 | [D2](D2.zh-CN.md) 12.1 |
+| P2-13 | 隐藏目标与已存批注摘要的读取边界 | [D3](D3.zh-CN.md) Annotation Value4; D8-ACCEPTANCE READ-06 |
+| P2-14 | 完整符号初始化载荷和物化排序 | [d7/owners/effects/source](d7/owners/effects/source.zh-CN.md) 3 |
+| P2-15 | 呈现策略效果的唯一规范排序 | [d7/owners/effects/source](d7/owners/effects/source.zh-CN.md) 4 |
+
+该结论只关闭这 21 项及直接修复交叉；原未完成 D7–D10、全局与 Mandatory/来源阅读范围仍须按原记录接续。本次没有创建 acceptedDesignSha，也没有实施或发布接受。检查器通过 381 份公共文档、固定输入、42 个完整术语及 27 项相关检查器测试；这些机械结果不替代上述语义复核，产品测试仍未运行。
 
 固定 S 的 49 份 snapshots 和 `docs/design/inputs.json` 不得改变。中文/英文同步；无产品实现、运行时 migration、合并或部署声明。新独立审查先读修改及受影响依赖，再讨论分歧与修正；所有局部通过仍不能替代最终完整全局终审。

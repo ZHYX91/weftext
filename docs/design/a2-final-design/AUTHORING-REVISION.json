@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "status": "candidate-global21-repairs-pending-independent-review",
+  "status": "candidate-original21-independently-closed-global-review-incomplete",
   "bounded_review": {
     "fixed_commit": "e703f9e7bb9908d8b6a322620b59b184d0f7bb5f",
     "scope": "native-control attributes, schema grouping and link-form increment with affected consumers; not full A2 acceptance",
-    "result": "PASS within stated scope; original global findings remain open"
+    "result": "PASS within stated scope; original global findings remained open at that historical commit"
   },
   "base_commit": "6b13b03b8da3e9e3d14b8663e91442568c8917e0",
   "protected_inputs_unchanged": true,
@@ -375,7 +375,9 @@
   "existing_global_findings": {
     "P1": 6,
     "P2": 15,
-    "status": "21 original findings have candidate repairs; all remain open pending independent review of this exact repair candidate"
+    "status": "All original 6 P1 and 15 P2 findings independently closed within their assigned design scopes; global review is incomplete",
+    "closed": 21,
+    "open": 0
   },
   "product_tests": "UNRUN",
   "integration_cases": [
@@ -386,13 +388,65 @@
     "INT-05",
     "INT-06"
   ],
-  "open_integration_dependencies": [
-    "Global Document framing P1 has candidate Request14/Result10 H and current-wrapper repairs in AUTHORING-INTEGRATION §6.1; independent closure remains pending."
-  ],
+  "open_integration_dependencies": [],
   "increment_base_commit": "35cf55f95da45ccab910adb85c2e7276197b47f6",
   "source_profile": "native-control-attributes; undeployed managed2 draft replacement",
   "deferred_link_capabilities": [
     "Stable Node+author-anchor target needs a named versioned adapter/reference/copy design; never drop a fragment during conversion.",
     "General offline bundle routing needs a typed D9 render-binding/evidence/confirmation design; no free members or evidence pins are added to ExportPlan4."
-  ]
+  ],
+  "global21_review": {
+    "integrated_candidate": "50946b94749a020a08622f295188ab5a46605a40",
+    "finding_origin_commit": "6b13b03b8da3e9e3d14b8663e91442568c8917e0",
+    "groups": {
+      "native": {
+        "finding_ids": [
+          "A2-GLOBAL-6B13-P1-03",
+          "A2-GLOBAL-6B13-P1-04",
+          "A2-GLOBAL-6B13-P2-05",
+          "A2-GLOBAL-6B13-P2-06",
+          "A2-GLOBAL-6B13-P2-12"
+        ],
+        "fixed_commit": "50946b94749a020a08622f295188ab5a46605a40",
+        "result": "CLOSED"
+      },
+      "commit": {
+        "finding_ids": [
+          "A2-GLOBAL-6B13-P1-02",
+          "A2-GLOBAL-6B13-P2-02",
+          "A2-GLOBAL-6B13-P2-07",
+          "A2-GLOBAL-6B13-P2-08",
+          "A2-GLOBAL-6B13-P2-09",
+          "A2-GLOBAL-6B13-P2-10",
+          "A2-GLOBAL-6B13-P2-15"
+        ],
+        "fixed_commit": "0b70df71b56042adeb677034cf51181e574a1f1a",
+        "result": "CLOSED"
+      },
+      "symbolic": {
+        "finding_ids": [
+          "A2-GLOBAL-6B13-P1-01",
+          "A2-GLOBAL-6B13-P2-01",
+          "A2-GLOBAL-6B13-P2-03",
+          "A2-GLOBAL-6B13-P2-04",
+          "A2-GLOBAL-6B13-P2-14"
+        ],
+        "fixed_commit": "0b70df71b56042adeb677034cf51181e574a1f1a",
+        "result": "CLOSED"
+      },
+      "search-annotation": {
+        "finding_ids": [
+          "A2-GLOBAL-6B13-P1-05",
+          "A2-GLOBAL-6B13-P1-06",
+          "A2-GLOBAL-6B13-P2-11",
+          "A2-GLOBAL-6B13-P2-13"
+        ],
+        "fixed_commit": "50946b94749a020a08622f295188ab5a46605a40",
+        "result": "CLOSED"
+      }
+    },
+    "retained_group_evidence": "The final native-scan delta changes D2/D7 heading rules and routing pointers only; commit and symbolic closure contracts remain unchanged. Native and Query reviewers independently verify that delta.",
+    "regressions": "Corrected and independently closed: CP5 evidence slots, native Annotation projection mirrors, conditional Result10 preview, bootstrap array ordering, current Float oracle, native heading occurrence keys.",
+    "limits": "Design contracts and counterexamples only. Product tests UNRUN; unfinished global/Mandatory/source review retains its original boundaries."
+  }
 }
