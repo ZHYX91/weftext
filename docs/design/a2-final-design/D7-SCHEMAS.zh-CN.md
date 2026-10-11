@@ -8,6 +8,8 @@ translation_status: source
 新的 presentation-owner 可移植完成路径由 [D6-CONTROL §0.1.4](D6-CONTROL.zh-CN.md#014-可移植显示策略-owner-完成链notice4--cp5--changerecord2) 唯一拥有 Notice4/CP5/ChangeRecord2、单独与 mixed Plan4 生产、严格 receiver 接纳及具名 trust-evidence inner successor。仅其列出的 current 槽位替代下方普通纯 component3/4/1 条款；真实 recorded decoder 不变。current EffectItem3.presentation_policy_change 在原 D7 effects owner 中 rank13，rank0–12、phase/完整集合门及历史 Manifest1/2 保持。作者修复等待独立复核，产品 UNRUN。
 # A2 D7 当前 Schema 补充
 
+current D2DocumentSnapshot/3 headings scan 的内部 K、全部 typed heading occurrence 覆盖、结果/分页/订阅及独立 Action lineage 资格由 [D7](D7.zh-CN.md) §23 具名替代原 locator-required 分支；公开 Query/result/pin shape 不变，旧真实 handle 不迁移或复活。
+
 当前 QuerySpec/3 的八成员、生命周期只读 scope、SearchContribution 保存绑定、SavedQueryDefinition/1 与 DynamicBlock/1 嵌套分派、QueryRef、Transfer、错误顺序及 Registry qualification 由 [D7-SEARCH](D7-SEARCH.zh-CN.md) §11 唯一具名覆盖。以下 QuerySpec/2 条款继续作为真实历史 decoder；不得向旧记录注入新成员。
 
 本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。

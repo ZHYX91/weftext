@@ -8,6 +8,8 @@ translation_status: synced
 
 # A2 D6 Control Interfaces
 
+[D7](D7.md) §23 explicitly replaces the locator-required internal K branch for current D2DocumentSnapshot/3 heading scans, including complete typed occurrence coverage, result/paging/subscription and separate Action lineage qualification. Public Query/result/pin shapes are unchanged; genuine old handles are neither migrated nor revived.
+
 In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
 
 Status: A2 D6 current Control author candidate; not independently accepted, implemented, activated, merged, released, or deployed. Historical records always dispatch by the version actually recorded; SourceRevisionPlan /1,/2,/3 roles are not mechanically renumbered.

@@ -7,6 +7,8 @@ translation_status: source
 
 # A2 D6 控制接口
 
+current D2DocumentSnapshot/3 headings scan 的内部 K、全部 typed heading occurrence 覆盖、结果/分页/订阅及独立 Action lineage 资格由 [D7](D7.zh-CN.md) §23 具名替代原 locator-required 分支；公开 Query/result/pin shape 不变，旧真实 handle 不迁移或复活。
+
 本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
 
 状态：A2 D6 current Control 作者候选；未独立接受、未实现、未激活、未合并、未发布、未部署。historical record 始终按实际 recorded version 分派；SourceRevisionPlan /1、/2、/3 的真实角色不机械重编号。
