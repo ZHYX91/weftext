@@ -7,6 +7,8 @@ translation_status: source
 
 # D10 控制与管理合同
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 ## 0. A2 当前唯一 owner 及前身解码边界
 
 **作者候选，尚未独立接受或实施。**下面逐字纳入 A2 D6-SCHEMAS §10/§10.1 的现任混合 version 与直接类型。原 CONTROL §§1–16 的业务不变量继续继承，但 Image1/Dependencies2/Binding2/Schedule1/Link1/ApprovalUse1/Record2/Proof1 的旧「current」称谓是历史来源，首次产生必须按本节的真实现任类型，历史真实记录原样恢复且不重编码、不借 LWW、没有第二 store/CAS。

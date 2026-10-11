@@ -8,6 +8,8 @@ translation_status: synced
 
 # A2 D3 Current Closed Schemas
 
+In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
+
 Status: A2 D3 author candidate; not independent acceptance, implementation, activation, or migration. Fixed-446 D3 P1-01/P1-02 are resolved-pending-independent-review in this repair head only; the author does not self-close them.
 
 This companion is self-contained for the **changed current carriers** that D3 consumes. It copies the exact fixed97 closed schema text instead of restating it by version number. Stable D3 Ref/Locator/D3-CJ/Result9/receipt element schemas remain written in the A2 D3 main body and are not mechanically version-bumped.

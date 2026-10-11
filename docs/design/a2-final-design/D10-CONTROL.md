@@ -8,6 +8,8 @@ translation_status: synced
 
 # D10 Control and Management Contract
 
+In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
+
 ## 0. A2 current single-owner routing and predecessor decoders
 
 **Author candidate, not independently accepted/implemented.** The complete current D6-SCHEMAS §10/§10.1 exact mixed-version and direct types appear below, so no external patch reconstruction is needed. All original CONTROL §§1–16 business invariants survive; Image1/Dependencies2/Binding2/Schedule1/Link1/ApprovalUse1/Record2/Proof1 claiming to be current are historical source. Fresh production uses the exact successor below; genuine historical records retain original bytes, decoder and recovery, without LWW, second store or CAS.

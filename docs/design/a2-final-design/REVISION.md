@@ -8,7 +8,7 @@ translation_status: synced
 
 # Authoring and workflow revision entry
 
-Status: design candidate pending independent review, not global acceptance or implementation start. Revision base: `6b13b03b8da3e9e3d14b8663e91442568c8917e0`; author branch: `design/yaml-properties-ux-20261011`. [AUTHORING](AUTHORING.zh-CN.md) and [EXPERIENCE](EXPERIENCE.zh-CN.md) define the complete new rules. Other modules reference these sole owners rather than duplicating configuration/grammar.
+Status: design candidate pending independent review, not global acceptance or implementation start. Revision base: `6b13b03b8da3e9e3d14b8663e91442568c8917e0`; author branch: `design/yaml-properties-ux-20261011`. [AUTHORING](AUTHORING.zh-CN.md), [authoring integration](AUTHORING-INTEGRATION.zh-CN.md) and [EXPERIENCE](EXPERIENCE.zh-CN.md) define the new rules. Other modules reference these sole owners rather than duplicating configuration/grammar.
 
 ## 1. Changes
 
@@ -37,7 +37,7 @@ Machine entry [AUTHORING-REVISION.json](AUTHORING-REVISION.json) records these d
 
 ## 3. Verification and outstanding scope
 
-Review SRC-01–10 in [AUTHORING §8](AUTHORING.zh-CN.md#8-验收要求) and UX-01–16 in [EXPERIENCE §8](EXPERIENCE.zh-CN.md#8-设计验收), including positive, error, revocation/concurrency/recovery and real source/producer/consumer paths. These are design cases, product UNRUN; document checks and reviewer counts do not establish implementation.
+Review SRC-01–10 in [AUTHORING §8](AUTHORING.zh-CN.md#8-验收要求), UX-01–16 in [EXPERIENCE §8](EXPERIENCE.zh-CN.md#8-设计验收) and INT-01–06 in [integration §7](AUTHORING-INTEGRATION.zh-CN.md#7-集成验收与剩余边界), including positive, error, revocation/concurrency/recovery and real source/producer/consumer paths. These are design cases, product UNRUN; document checks and reviewer counts do not establish implementation.
 
 The fixed-6b13 global review's six P1 and fifteen P2 findings remain open: symbolic Document input, standalone presentation policy production, native heading/block product domains, Trash/saved search, versions/sources/decoders, annotation time/hidden digests and effect ordering. New interaction descriptions do not automatically fix them. Actual affected repairs need complete counterexamples and closure evidence. Outstanding D7–D10/global/Mandatory/source reading also receives no automatic completion credit.
 

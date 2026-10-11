@@ -7,6 +7,8 @@ translation_status: source
 
 # A2 D9 Schema
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 状态：**author-resolved-pending-independent-review**。本文把 D9 owner contract currentize 到 final FC，不复制 D3/D4/D6/D7 schema。
 
 ## 1. Decoder rules

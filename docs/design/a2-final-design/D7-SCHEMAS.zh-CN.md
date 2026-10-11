@@ -6,6 +6,8 @@ translation_status: source
 [English](D7-SCHEMAS.md)
 # A2 D7 当前 Schema 补充
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 状态：这是 D7 作者候选的当前 schema companion；不是实现，也不是独立接受。
 
 ## 1. 优先级

@@ -32,9 +32,9 @@ YAML 是有界的 Weftext 集成头，不声称它属于 AsciiDoc 原生语法�
 
 ## 2. 精简 YAML 与分类
 
-在可选 UTF-8 BOM 后，首行精确为 `---`，闭合行也为 `---`；仅一份 YAML document。唯一顶层键为 `weftext`，其闭合成员为必填 `id` 和可选 `types`。`id` 为 D3 lowercase UUIDv4 字符串；`types` 为不重复的非空字符串数组，缺省为空数组。普通笔记无须写空 `types`。注释、块/行内数组、单双引号及合法缩进允许且保留；键重复、merge key、tag、anchor/alias、复杂键、第二份 YAML、未知成员和错误值类型拒绝为 envelope 错误，不从其它位置猜测恢复。使用成熟 YAML 解析器的安全、无对象构造模式；不得另写正则 YAML 解析器。只有这两个字段，不把权限、父节点、排序、业务值或同步凭据搬进 YAML。
+在可选 UTF-8 BOM 后，首行精确为 `---`，闭合行也为 `---`；仅一份 YAML document。唯一顶层键为 `weftext`，其闭合成员为必填 `id` 和可选 `types`。`id` 为 D3 lowercase UUIDv4 字符串；`types` 为不重复的非空字符串数组，缺省为空数组。普通笔记无须写空 `types`。注释、块/行内数组、单双引号及合法缩进允许且保留；键重复、merge key、tag、anchor/alias、复杂键、第二份 YAML、未知成员和错误值类型拒绝为 envelope 错误，不从其它位置猜测恢复。固定使用 YAML 1.2.2 Core schema 的 scalar resolution，再执行上述字符串类型检查；不使用 YAML 1.1 的隐式布尔/日期规则。该 envelope 不接受版本或 tag 指令，不能由文件切换解析方言。因而 types 中未加引号的 on 是字符串，true 是布尔值并被类型检查拒绝。使用支持此 profile 的成熟 YAML 解析器的安全、无对象构造模式；不得另写正则 YAML 解析器。只有这两个字段，不把权限、父节点、排序、业务值或同步凭据搬进 YAML。
 
-`task` 是固定内置短名，唯一展开为 `tasks/task`。`template` 为 D2 既有 Core meta-kind，不能与任务等业务 facet 同列；其目标实例类型仍由 D9 template recipe 声明。其它内置或扩展短名来自 §4 的已验证表，完整 `namespace/name` 始终可用。短名与完整名展开到同一 facet 时视为重复；源顺序只影响无损编辑，不影响集合语义。Facet requires/conflicts/effective closure 仍由 D4 处理。示例中的多个类型不是多个 Node，也不产生 TaskRef。
+`task` 是固定内置短名，唯一展开为 `tasks/task`。`template` 是保留的 D2 Core meta-kind token，禁止任何 facet alias 使用或重绑定该短名；完整 facet ID 不会被截短为此 token。它不能与任务等业务 facet 同列；其目标实例类型仍由 D9 template recipe 声明。其它内置或扩展短名来自 §4 的已验证表，完整 `namespace/name` 始终可用。短名与完整名展开到同一 facet 时视为重复；源顺序只影响无损编辑，不影响集合语义。Facet requires/conflicts/effective closure 仍由 D4 处理。示例中的多个类型不是多个 Node，也不产生 TaskRef。
 
 未安装/未知的合法类型标识保留原文，并显示 schema 不可用；不得把它解释为空类型或自动改名。`task` 不能被扩展重绑定。完整 ID、显示名称、中文标签和短名不同；插件安装顺序、禁用状态与本地化不改变已存语义。普通 AsciiDoc 的 `wf-kind`/`wf-facets` 同名属性可以按原生规则存在，但在新作者源中没有身份/分类控制权，也不是 YAML 回退来源。
 
@@ -42,13 +42,13 @@ YAML 是有界的 Weftext 集成头，不声称它属于 AsciiDoc 原生语法�
 
 `weftext.id` 是笔记携带的 NodeId 声明；完整 NodeRef 仍为 WorkspaceId + NodeId。D3 分配、birth、tombstone、不复用、权限与生命周期事实仍由 D3/D6 的可移植元数据和原决议证明。文件中的字符串不是权限或出生证明，metadata 也不再另有可编辑的“文档 ID 值”。两者必须按同一次原操作一致安装；不一致是冲突/不完整，不选择一边覆盖另一边。
 
-创建由原 D3 计划预分配唯一 UUID，并把同一值写入 envelope、文件绑定与 birth；D9 template 不能提前填最终 ID。copy/fork/import 的真正新 Node 分配新 ID，按原 identity map 改写受管引用与 envelope，保留未知/不可证明内容及原 loss/确认规则；移动/改名保留 ID。原计划 restart/recovery 使用原冻结 UUID，不重新随机生成。外部编辑 ID 不构成 rename、身份转移或创建授权。
+创建由原 D3 计划预分配唯一 UUID，并把同一值写入 envelope、文件绑定与 birth；D9 template 不能提前填最终 ID。copy/fork/import 的真正新 Node 分配新 ID；managed2 源按原 identity map 改写受管引用与 envelope，保留未知/不可证明内容及原 loss/确认规则；移动/改名保留 ID。真实 managed1 的未见 copy/fork 默认保留其精确格式代际、不插入 YAML；只有显式选择并预览复制加格式转换才产生 managed2。restore 恢复真实历史绑定，不趁恢复转换。原计划 restart/recovery 使用原冻结 UUID，不重新随机生成。外部编辑 ID 不构成 rename、身份转移或创建授权。
 
 只复制一份 `.adoc` 可以携带原 ID 声明和类型，不能单凭它恢复 Workspace 关系、权限、批注或执行责任。完整备份仍包括 portable metadata、所需资源与独立 `weftext.annotations.json`。同库发现两个文件声明相同 ID 时报告碰撞，不能取第一个、静默合并或重签；用户显式“作为新笔记导入”才走 fresh allocation。metadata 缺失/部分同步时保留可授权的原文读取与修复，受管身份为不完整；不能在重建索引时重新分配身份。
 
 ## 4. Schema 对源码名称的绑定
 
-`RegistrySnapshot/2` 是本提案的唯一新注册表快照形状：完整继承 D4 §2.2 的 `RegistrySnapshot/1` 十六成员，并增加必填 `authoringBindings`；其 `kind` 保留原值。其余旧成员、所有者、排序、完整性、tombstone/migration 规则不变。`RegistryBinding/1` 仍同时冻结 generation 与覆盖完整新对象的 digest。真实旧 Snapshot1 只按原闭合形状解码，不忽略新成员或读时升级。D10 验证贡献所有者，D4 验证 schema 和绑定；缺失或未知版本不得认作空配置。
+`RegistrySnapshot/2` 是本提案的唯一新注册表快照形状：完整继承 D4 §2.2 的 `RegistrySnapshot/1` 十六成员，并增加必填 `version:2` 与 `authoringBindings`；其 `kind` 保留原值。version 是精确 JSON integer 2，Boolean 不合法。新生产/当前消费只接收这个显式版本，缺 version 不回退为 Snapshot1。原无 version 的 Snapshot1 仅在真实已记录的旧 typed/recovery 域，或明确的旧→新演进 before 槽中使用；after 必须是 Snapshot2。缺 authoringBindings 的 version2 是坏对象，未知版本拒绝，禁止按成员是否存在猜测降级。实际跨模块槽位见 [作者源集成](AUTHORING-INTEGRATION.zh-CN.md)。其余旧成员、所有者、排序、完整性、tombstone/migration 规则不变。`RegistryBinding/1` 仍同时冻结 generation 与覆盖完整新对象的 digest。真实旧 Snapshot1 只按原闭合形状解码，不忽略新成员或读时升级。D10 验证贡献所有者，D4 验证 schema 和绑定；缺失或未知版本不得认作空配置。
 
 ```text
 authoringBindings = {
@@ -89,7 +89,7 @@ native Field 的获权来源必须是 root-authored 文档头，不能由 API ha
 
 D8 属性面板、快捷录入和 Source 共享同一 Draft、Undo 与 Core prepare/commit。默认只 patch 选中值或 YAML 中确切 scalar/sequence，不格式化整个文档；注释、缩进、引号、换行、未知正文、属性在标题前后的位置保持。歧义/非法 YAML 保留原稿并支持修复，不自动生成第二个 ID。身份字段在常规属性面板只读；类型编辑仍须原类型约束和完整变化预览。
 
-D4 relation/materialization、D7 copy/Field Action、D8 structured edit 与 D9 import/template 构造都必须按 native/header 或 Entry 两分支读取准确原来源，并把新 envelope 与事实变化放入原计划的 C/Q 物化和唯一 D3/D6 提交。新来源形式不豁免 final read barrier、隐藏字段、完整负范围、Field-only 权限、source transform、反向关系或安装恢复。只有能够证明全部变化都在获权字段内时才允许 narrow Field；完整源编辑另走原全源授权。
+D4 relation/materialization、D7 copy/Field Action、D8 structured edit 与 D9 import/template 构造都必须按 native/header 或 Entry 两分支读取准确原来源，并把新 envelope 与事实变化放入原计划的 C/Q 物化和唯一 D3/D6 提交。具体 selector、效果、模板 slot 与 envelope 物化由 [作者源集成](AUTHORING-INTEGRATION.zh-CN.md) 定义；不得把 envelope 假称为旧 C/Q 语法的现成成员。新来源形式不豁免 final read barrier、隐藏字段、完整负范围、Field-only 权限、source transform、反向关系或安装恢复。只有能够证明全部变化都在获权字段内时才允许 narrow Field；完整源编辑另走原全源授权。
 
 新源配置称 `weftext_managed/2`，由 `ManagedDocumentFormatProfile/2` 承载：其两个成员仍为 languageBaseline（原固定值）和 managedProfile（精确新值）。`ManagedDocumentFormatBinding/2` 完整继承 Binding1 的成员，把 version 固定为 2、profile 改为 Profile2。D6 document_format 现有 key/component 承载其精确版本，原 authority/Notice/CP/CAS 不新增分支。current qualification 的 binding slot 具名接受 Binding2，已记录 Binding1 的 profile/decoder/bytes 保持；不读时升级。
 

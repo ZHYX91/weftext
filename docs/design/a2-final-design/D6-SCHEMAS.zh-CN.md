@@ -7,6 +7,8 @@ translation_status: source
 
 # A2 D6 当前闭合 Schema
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 状态：A2 D6 schema companion；current closed shapes 从 fixed97 owner replacement 精确承接。它不是第二语义 authority、实现、迁移或独立接受。historical decoder 继续由 D6-CONTROL 按 recorded bytes 分派，绝不原地扩展。
 
 # 5. Managed format 与 D6 current successor

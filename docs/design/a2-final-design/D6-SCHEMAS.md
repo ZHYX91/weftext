@@ -8,6 +8,8 @@ translation_status: synced
 
 # A2 D6 Current Closed Schemas
 
+In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
+
 Status: A2 D6 schema companion; current closed shapes copied from fixed97 owner replacements. It is not a second semantic authority, implementation, migration, or independent acceptance. Historical decoders remain in D6-CONTROL and their recorded bytes are never widened.
 
 # 5. Managed format and D6 successors

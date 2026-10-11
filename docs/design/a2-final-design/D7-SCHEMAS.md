@@ -7,6 +7,8 @@ translation_status: synced
 [简体中文](D7-SCHEMAS.zh-CN.md)
 # A2 D7 Current Schema Overlay
 
+In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
+
 Status: current-schema companion to the D7 author candidate; not implementation or independent acceptance.
 
 ## 1. Precedence

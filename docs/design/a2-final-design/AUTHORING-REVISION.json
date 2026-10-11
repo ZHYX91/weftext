@@ -112,6 +112,126 @@
         8
       ],
       "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D3-SCHEMAS.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D6-CONTROL.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D6-SCHEMAS.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D7-SCHEMAS.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D8-SCHEMAS.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D8-INTERFACES.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D9-SCHEMAS.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
+      "concern": "exact current source-selector, registry, format and construction typed slots in AUTHORING-INTEGRATION sections 1-6",
+      "targetZh": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING-INTEGRATION.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "disposition": "named-current-inner-version-dispatch; preserve exact original recorded decoders"
     }
   ],
   "design_cases": {
@@ -151,5 +271,16 @@
     "P2": 15,
     "status": "open; no automatic closure"
   },
-  "product_tests": "UNRUN"
+  "product_tests": "UNRUN",
+  "integration_cases": [
+    "INT-01",
+    "INT-02",
+    "INT-03",
+    "INT-04",
+    "INT-05",
+    "INT-06"
+  ],
+  "open_integration_dependencies": [
+    "Existing global symbolic Document input framing P1: ManagedEnvelopeConstruction/1 is internal and is not admitted as Result/9; managed2 new-instance end-to-end remains open until that original finding is independently resolved."
+  ]
 }

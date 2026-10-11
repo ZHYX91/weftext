@@ -8,6 +8,8 @@ translation_status: synced
 
 # A2 D8 Closed Schemas and Version Dispatch
 
+In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
+
 Status: author-resolved-pending-independent-review. This file closes current D8 schema/version routing without widening historical decoders. Full owner semantics are in D8 and D8-INTERFACES. Embedded types remain owned by D2/D3/D4/D6/D7.
 
 ## 1. Current family table

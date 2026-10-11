@@ -8,6 +8,8 @@ translation_status: synced
 
 # A2 D8 Current Interfaces and State Machines
 
+In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
+
 Status: author-resolved-pending-independent-review. This file is the current D8 interface owner. It supersedes former-current fixed-S / D6-FA versions only where a named successor exists; genuine historical decoders remain exact.
 
 ## 1. Common decode and owner boundary

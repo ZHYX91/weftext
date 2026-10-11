@@ -6,6 +6,8 @@ translation_status: source
 [English](D8-SCHEMAS.md)
 # A2 D8 Closed Schemas and Version Dispatch
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 状态：author-resolved-pending-independent-review。本文关闭 D8 current schema/version 路由，不扩大历史 decoder。完整 owner 语义见 D8 与 D8-INTERFACES；嵌入类型继续由 D2/D3/D4/D6/D7 owner 定义。
 
 ## 1. 当前 family 对照

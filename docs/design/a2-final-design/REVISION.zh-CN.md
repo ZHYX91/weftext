@@ -7,7 +7,7 @@ translation_status: source
 
 # 作者源与使用流程修订入口
 
-状态：设计候选，等待独立审查；不是全局接受或实施启动。修订起点为 `6b13b03b8da3e9e3d14b8663e91442568c8917e0`，作者分支 `design/yaml-properties-ux-20261011`。新规范由 [AUTHORING](AUTHORING.zh-CN.md) 和 [EXPERIENCE](EXPERIENCE.zh-CN.md) 自包含定义。其它模块只引用这些唯一 owner，不复制第二份配置/语法。
+状态：设计候选，等待独立审查；不是全局接受或实施启动。修订起点为 `6b13b03b8da3e9e3d14b8663e91442568c8917e0`，作者分支 `design/yaml-properties-ux-20261011`。新规范由 [AUTHORING](AUTHORING.zh-CN.md) 、[作者源集成](AUTHORING-INTEGRATION.zh-CN.md) 和 [EXPERIENCE](EXPERIENCE.zh-CN.md) 自包含定义。其它模块只引用这些唯一 owner，不复制第二份配置/语法。
 
 ## 1. 本次修改
 
@@ -36,7 +36,7 @@ translation_status: source
 
 ## 3. 验证和未解决范围
 
-先审 [AUTHORING §8](AUTHORING.zh-CN.md#8-验收要求) 的 SRC-01–10 与 [EXPERIENCE §8](EXPERIENCE.zh-CN.md#8-设计验收) 的 UX-01–16，检查每条正常、错误、撤权/并发/恢复及真实原 source/producer/consumer。它们是设计案例，产品未运行；文档检查或 reviewer 数量不证明实现可用。
+先审 [AUTHORING §8](AUTHORING.zh-CN.md#8-验收要求) 的 SRC-01–10、[EXPERIENCE §8](EXPERIENCE.zh-CN.md#8-设计验收) 的 UX-01–16 和 [集成 §7](AUTHORING-INTEGRATION.zh-CN.md#7-集成验收与剩余边界) 的 INT-01–06，检查每条正常、错误、撤权/并发/恢复及真实原 source/producer/consumer。它们是设计案例，产品未运行；文档检查或 reviewer 数量不证明实现可用。
 
 原固定 6b13 全局审查的 6 项 P1 与 15 项 P2 继续未关闭。这些涉及符号 Document 输入、独立 presentation policy 生产、原生 heading/block 产品域、Trash/保存搜索、版本/来源/解码、批注时间域/隐藏摘要及效果排序。本轮新交互不自动修复它们；确有影响的修订须单独给出完整新反例与关闭证据。原未完成 D7–D10、全局与 Mandatory/来源阅读范围也不自动获得完成信用。
 

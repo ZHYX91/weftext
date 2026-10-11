@@ -6,6 +6,8 @@ translation_status: source
 [English](D8-INTERFACES.md)
 # A2 D8 当前接口与状态机
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 状态：author-resolved-pending-independent-review。本文是 D8 当前接口 owner；只在具名 successor 上替代 fixed-S / D6-FA 旧 current 版本，真实历史 decoder 保持原样。
 
 ## 1. 公共 decoder 与 owner 边界

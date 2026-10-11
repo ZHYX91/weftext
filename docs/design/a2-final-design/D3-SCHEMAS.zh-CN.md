@@ -7,6 +7,8 @@ translation_status: source
 
 # A2 D3 current closed schema
 
+本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
+
 状态：A2 D3 作者候选；不是独立接受、实现、激活或 migration 证据。本 repair head 对 fixed-446 D3 P1-01/P1-02 仅标 resolved-pending-independent-review；作者不自称关闭。
 
 本 companion 对 **D3 直接消费且本代发生变化的 current carrier** 自包含。以下直接复制 fixed97 的 exact closed schema 正文，不用“版本号已升级”概述替代。稳定的 D3 Ref/Locator/D3-CJ/Result9/receipt element schema 仍完整写在 A2 D3 主文中，不机械升版。
