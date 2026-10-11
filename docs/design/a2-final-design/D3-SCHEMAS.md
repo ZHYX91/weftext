@@ -6,7 +6,11 @@ translation_status: synced
 
 [简体中文](D3-SCHEMAS.zh-CN.md)
 
+For the new presentation-owner portable completion path, [D6-CONTROL §0.1.4](D6-CONTROL.md#014-portable-presentation-owner-completion-notice4--cp5--changerecord2) solely owns Notice4/CP5/ChangeRecord2, standalone and mixed Plan4 production, strict receiver admission and named trust-evidence inner successors. Only its enumerated current slots supersede the ordinary component-only 3/4/1 clauses below; genuine recorded decoders remain exact. Current EffectItem3 presentation_policy_change has rank13 under the retained D7 effects owner; ranks0–12, phase/complete-set gates and historical Manifest1/2 remain unchanged. This is an author repair pending independent review, product UNRUN.
+
 # A2 D3 Current Closed Schemas
+
+AUTHORING-INTEGRATION section6.1 defines the formal current Document producer, Request14/Result10 H framing and exact Input3/action/PAB/EffectBytes3 slots, explicitly replacing current Request13-only/result9-only restrictions below. Request14 inherits Request13 members/matrices/stages without widening its framing decoder. Request14 identity input descriptors fingerprint the exact wire14 and Result10 bindings; primary receipt/error outer wireVersion is14 and decision records retain the actual14 decoder. Original metadata, authority and history rules remain. Genuine recorded Request13 and earlier requests/Result9, Input2/PAB3 retain their original decoders/bytes.
 
 In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
 
@@ -485,7 +489,7 @@ PortableAnnotationRecord/4 = {
 
 AnnotationEditableValue/1 = {
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,
@@ -497,7 +501,7 @@ AnnotationEditableValue/1 = {
 D3-Annotation-Value/4 = {
   kind:"d3_annotation_value",version:4,
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,
@@ -512,7 +516,14 @@ D3-Annotation-Value/4 = {
 
 D3-Annotation-Target-Projection/1 =
     {kind:"document",owner:NodeRef}
-  | {kind:"document_element",locator:DocumentElementLocator}
+  | {kind:"document_element",locator:DocumentElementLocator/1}
+  | {kind:"document_range",locator:DocumentRangeLocator}
+  | {kind:"resource",resourceRef:ResourceRef}
+  | {kind:"resource_region",locator:ResourceRegionLocator}
+
+D3-Annotation-Target-Projection/2 =
+    {kind:"document",owner:NodeRef}
+  | {kind:"document_element",locator:CurrentDocumentElementLocator}
   | {kind:"document_range",locator:DocumentRangeLocator}
   | {kind:"resource",resourceRef:ResourceRef}
   | {kind:"resource_region",locator:ResourceRegionLocator}
@@ -570,6 +581,8 @@ Suggestion/3 = {
 }
 ```
 
+Current complete Annotation read authority includes all stored Value4 members, including valid Suggestion3.expectedText={byteLength,sha256}, targetBasisSha256 and original attribution; it is not hidden-target plaintext/context authority. Hidden/unavailable targets still deliver exact complete Value/token with targetResolution=unavailable. Never remove/null summaries, fabricate complete Values, additionally read or recompute current/historical hidden targets. Replace/delete retain stored summaries; insert retains expectedText=null. Annotation-only Reject/readonly Draft remain, with independent apply/reconfirm target qualification unchanged. Missing Annotation disclosure/read returns not_visible first; delivery rechecks original record/aggregate/rights/final barrier. Current READ03/READ06 share the oracle forbidding extra targetbytes/context and newly computed summaries, not stored summaries inside completely authorized Annotations; fixed97 cases/sourceEvidence stay unchanged.
+
 `AnnotationInlineBody/1` is the sole current name and preserves the four-member data shape originally named `AsciiDocInlineBody/1`. `AsciiDocInlineBody/1` is a **schema alias only**: its canonical bytes are exactly those of `AnnotationInlineBody/1`; it creates no second wire/version and asserts no historical deployment. The body is portable source data, not a processor profile. Evaluation always uses the single `AnnotationInlineProfile/1` above. The body's `languageBaseline="asciidoctor-ruby/2.0.26"` must correspond to the 2.0.26 version fixed by the profile's commit-qualified baseline. The complete source must form exactly one paragraph, allowing soft wraps and trailing whitespace; a second paragraph, heading, list, delimited block, table, or block macro is `invalid_annotation_body` rather than silently ignored.
 
 Replies are same-owner, acyclic comments with suggestion=null and reviewState=not_applicable. Root reviewState is open|resolved. Pending suggestions use confirmed|needs_reconfirmation; accepted/rejected are terminal with confirmation=not_applicable.
@@ -592,7 +605,7 @@ SuggestionAuthorProposal/1 = {
 
 AnnotationEditableProposal/1 = {
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,

@@ -74,7 +74,9 @@ input pin 携带真实 `SourceVersion/2`、现任 `SourceObservation/1`、payloa
 
 D9 不定义 PAB。现任 D7 拥有 `PreparedActionBinding/4`，它绑定现任 action input、concrete proposed input、可选的内建 D9 construction evidence、`DependencyProof/3`、原 request、完整 preview/effect、pins、audience/budget/fingerprint/currentness。
 
-fresh D9 author submission 只使用 mode 合法的 `D3IdentityOperationRequest/13` 或既有 D6 request。historical PAB1/2/3 与 wire11/12 只按 decoder 选中的历史记录处理。
+fresh D9 author submission 只使用 mode 合法的 `D3IdentityOperationRequest/13|14` 或既有 D6 request。historical PAB1/2/3 与 wire11/12 只按 decoder 选中的历史记录处理。
+
+本候选 D9 TemplateConstructionInput2/ConversionInput、parent import 和 prepared author 的 payload dispatch 明确消费 AUTHORING-INTEGRATION §6.1：native H 路径用完整 Request14/Result10，非H保持原 Request13/Result9；同 Request14 可合法混合 Node Result10、原 profile Node Result9、Annotation Result9/Value4、Resource concrete。PAB4.request/action 的准确 current内层接受这份14 arm，proposedInputs按本候选Input3六pair完整选择；ConversionInput只提供准确artifact/skeleton，不自行生成UUID/H认证。原source_artifact/preimage/result与ImportJob、DefinitionTransfer/C/Q、format/Facet gates均保持。真实旧prepared/template/import/recovery记录保原decoder/pins，不在读取时改14。
 
 ## 8. Office token grammar
 
@@ -195,11 +197,39 @@ CSV 使用 RFC4180/CRLF 与 exact selected scalar projection。TSV 无 quote esc
 
 `WorkerInvocation/1` 精确为 `{version:1,jobToken,step,routeId,routeRevision,profileId,inputs,options,budget}`。input slot 由 host 分配。终态 worker result 是封闭的 ok/failed union；failed code 只能是 unsupported/encrypted/unsafe/malformed/budget/cancelled/internal。Worker 输出不能包含作者权限、receipt、identity 或 destination。
 
-## 16. Region
+## 16. Resource region：矩形与有限时间区间
 
-`RegionBody` 精确为 `{version:1,profile,page,rect}`；`d9rg1` 是该 body 的 canonical inner token。page/rect 使用现任 D9 geometry profile。它不是 Locator。D3 `ResourceRegionLocator/l1` 继续拥有外层 authoritative identity/revision binding。
+本节具名承接原SPEC §10.2/AN2-37，替代current D8/D9 resource_region仅d9rg1分派。旧RegionBody/1 exact {version:1,profile,page,rect}、pdf_display_rect/1与image_display_rect/1全部页框/方向/百万分比/归一规则、d9rg1及真实旧decoder完整保留。原token为d9rg1.加canonical unpadded base64url(ASCII "D9-Region/1" || NUL || D3-CJ/3(body))。D3 ResourceRegionLocator/l1的opaque regionToken、ResourceRef/生产revision与外层decoder不变；Annotation五臂/Value4/PortableAnnotationRecord4/node-local weftext.annotations.json/CAS不变。
+
+新增独立闭合TemporalRegionBody/1 exact {version:1,profile,timebase,startTick,endTick}；profile闭集audio_time_interval/1|video_time_interval/1；timebase exact {numerator:Counter,denominator:Counter}为秒每tick。所有Counter沿原非负canonical JSON integer，不接受Boolean/float/string；numerator/denominator均>0且gcd=1，0<=startTick<endTick，区间半开、不接纳零长时间点。新token精确d9rt1.加canonical unpadded base64url(ASCII "D9-TemporalRegion/1" || NUL || D3-CJ/3(body))。接收重编码必须字节相等；unknown/duplicate/missing成员、坏tag/version/profile拒绝。它不是签名/identity/authority，不把ticks装入rect，不在d9rg1失败时fallback。
+
+两个profile分别接纳准确audio/video bytes经原已验收provider/decoder证明的单一有限presentation timeline。解释器证明时间零点、container edit/preroll/delay后的可呈现端点及选中区间时间意义；multi-program/歧义timeline、未知duration、无法精确解释的discontinuity/未知decoder不能新建exact区间。选择显式给正约分timebase，不从UI毫秒/名义FPS猜测。decoder给出的duration为正约分有理秒；精确整数交叉乘比较endTick*numerator/denominator<=duration，端点等于duration合法，不四舍五入/浮点。运算受原Counter溢出/work/budget门。VFR按实际presentation timestamps而非frame/平均FPS。有限profile不限制独立whole Resource读取/播放/批注。
+
+真实D9几何owner的Core内部签发入口由D8调用，非新外部author RPC：
+D9TemporalRegionIssueInput/1 的完整闭合形状如下；所有成员必须存在，未知成员拒绝，成员类型分别沿用实际所属规范的解码器，不凭字段名称推断资格。
+
+```text
+{kind:"d9_temporal_region_issue",version:1,workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,resourceRef:ResourceRef,expectedSourceObservation:SourceObservation/1,selection:TemporalRegionBody/1,budget:BudgetBinding/1}
+```
+D9TemporalRegionIssued/1 exact {kind:"d9_temporal_region_issued",version:1,locator:ResourceRegionLocator}。
+budget逐字导入真实D6-CONTROL §17.2 BudgetBinding/1：exact version,maxInputBytes,maxSourceBytes,maxWriteBytes,maxDecodedBytes,maxWorkUnits,maxDependencies,maxNewEntities,maxTemporaryBytes,maxElapsedMillis,maxResultBytes,maxOutputBytes；version=1，各limit原Counter且0拒绝非unlimited。原D6 budget binder将request/Workspace/host逐项取最小值，execution-resource CAS累计计费、burnedwork/finiteattempt/不截断成功规则；本producer不新建opaque预算或额度，媒体decode与验证均扣同次预算。caller不给revision/token/duration/decoder evidence/actor/trust；resourceRef与expectedSourceObservation.entityRef和observerDomain须与同次上下文相符。闭decode后沿原D3/D6 state/Resource/locator disclosure、resource_read、生产seal/binding及完整current Observation门，才读取media/运行已批准decoder。Core验证选择、构造inner，由原D3 producer封装同ResourceRef和已认证精确生产版l1；交付前same-cut final barrier重验权限/Observation/provider依赖。缺provider/预算/取消零author effect，不能whole Resource fallback。签发失败沿原D9 unsupported_profile/invalid_output或更早D3/D6错误，不扩resolver family。
+
+已有Locator沿原D3身份/lifecycle/disclosure/exactFrontier/生产版本/current Observation后才按唯一prefix运行d9rg1矩形或d9rt1时间validator；已认证当前production版与stored版不同，或已识别且可用profile/decoder下证明stored区间/编码不合法，才按原stale/stale_locator。provider/decoder暂缺、Resource bytes或proof暂不可得、尚不识别的future inner prefix/profile均是资格/证据不可用，不是已证明错误；先依原owner availability门，D3 locator outcome使用原workspace_unavailable（已有更早incomplete/placeholder等则保持），操作传播原owner的proof_unavailable/source_unavailable/authority-unavailable错误，D8targetResolution=unavailable。未知inner不fallback/猜decoder，不把缺provider归stale/orphaned，也不为此修改原opaque l1闭decoder。在未授权时不解码temporal/读media/返回duration诊断。inner不独自授Locator或Action evidence；samebytes/ticks/hash不恢复stale revision。pure read/requalify不重发outer、不改target或Annotation token。
+
+D8精确时间选区→此真实producer→原D7 create_annotation同owner resource_region/comment|mark proposal→Core完整Value4/唯一D3/D6计划/aggregate CAS。D8 read/draft/manual_reattach消费同一dispatch；R6正文/标签/回复/讨论仍有正常路径。apply_suggestion仍仅document_range，不增加媒体剪辑。provider缺失保合法raw Annotation/独立可读body/whole Resource批注，targetResolution依原unavailable而不猜orphaned，不能用wholemedia替代时间区间。键盘/触屏可输入准确ticks/有理单位并导航/回放区间；显示秒非权威，屏幕阅读器可读start/end/timebase，RTL不交换logical端点。
+
+D9 annotation_content/portable backup逐字保完整Value4/opaque target，不因备份已存token强迫media decoder。Review Bundle额外获权exact target才取区间context/媒体采样，已存区间元数据与media bytes分开；不以R6/body/wholemedia代区间。原copy/fork/import先证明mapped owner/Resource/生产版，精确新content/profile经同一validator后原D3重发outer，inner只在时间意义相等时保留，不按新duration缩放。converted media是新Resource，须显式原reattach/新建，不自动转移。
+
+saved只交原结果；planned仅在原恢复门继续冻结bytes/pins/Resource版/profile/OperationId/计划，不用新decoder重prepare；unknown保原责任，零duplicate effect。实际d9rg1旧记录不迁移/repin/resign，d9rt1无假定旧部署责任；并发同aggregate恰一winner，原唯一logicaltoken/physicalCAS/P，非新sidecar/identity/ledger。
+
+设计验收，产品UNRUN：TEMP01 audio1/48000 ticks[48000,96000)准确R/V往返/R6保存/导航；TEMP02 VFR真实PTS/end=duration；TEMP03零分母/非约分/Boolean/float/负/零长/倒置/越界/unknownprofile/不可证timeline拒绝；TEMP04 hidden先非披露零decode，缺provider保raw/body/rect/wholeResource；TEMP05 samebytes新production版stale、撤权/ABA/finalbarrier零effect；TEMP06 copy/import准确outer重发、conversion不缩放、backup原token/Bundle独立context授权；TEMP07 saved/planned/unknown原family/bytes/CAS恰一winner。
+
 
 ## 16a. 继承的 current Annotation Value/4 / R6 types
+
+当前完整Annotation读取权覆盖全部已存Value4成员，包括合法Suggestion3.expectedText={byteLength,sha256}、targetBasisSha256与原attribution；不是隐藏target plaintext/context读取权。target hidden/unavailable仍交付准确完整Value/token与targetResolution=unavailable，不删除/null化摘要、不伪造完整Value、不额外读取或重算当前/历史隐藏target。replace/delete保已存摘要，insert保expectedText=null；Annotation-only Reject、readonly Draft保留，apply/reconfirm独立target资格不变。无Annotation disclosure/read先not_visible，交付前原record/aggregate/权限/finalbarrier重验。当前READ03/READ06统一判据禁止额外targetbytes/context及新算摘要，不禁止完整获权Annotation的已存摘要；固定97原case/sourceEvidence不改。
+
+D9 backup逐字保此已存摘要；Review Bundle的history/context projection另授权。
 
 D9 不拥有这些 schema；但任何实际消费 current Annotation content 的 D9 export/copy/import consumer 都必须精确消费：
 

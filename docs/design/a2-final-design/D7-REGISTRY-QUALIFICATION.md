@@ -7,6 +7,8 @@ translation_status: synced
 [简体中文](D7-REGISTRY-QUALIFICATION.zh-CN.md)
 # A2 D7 terminology Registry qualification
 
+The eight-member current QuerySpec/3, read-only lifecycle scope, saved SearchContribution bindings, SavedQueryDefinition/1 and DynamicBlock/1 nested dispatch, QueryRef, Transfer, error order and Registry qualification are uniquely overridden by [D7-SEARCH](D7-SEARCH.md) §11. QuerySpec/2 clauses below remain genuine historical decoding; no new members are injected into old records.
+
 Status: author repair for A2-D7-2F89-P1-01. D7-REGISTRY.json remains the exact parent-current machine Registry; this document is a qualification overlay, not a second Registry authority.
 
 ## 1. Three distinct layers

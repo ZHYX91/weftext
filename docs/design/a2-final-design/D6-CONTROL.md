@@ -68,6 +68,7 @@ CP4 changes only the component-key decoder to PortableComponentKey/2 and adds th
 
 For a fresh managed Document, the source-document component and its document_format component are produced by the same original plan, installed by the same portable decision, and become current only through the same P seal/CP4; there is no half-activated managed source. A format-only transition with unchanged source changes only document_format, has sourceChanges=[], creates no SourceRevisionPlan or managed SourceVersion, and does not advance H(D,E).
 
+
 ### 0.1.3 ChangeRecord/1
 
 The first normatively closed ChangeRecord family is:
@@ -90,13 +91,108 @@ frontierBefore is the actual validated Frontier immediately before seal. frontie
 
 Restored CP4 is legal only when every Notice3 component has been safely restored to its original before image without seal. Its closed restored arm contains only decisionKey, baseFrontier, and those component images; changeId, success guarantee/writeProtection/semanticState, frontierBefore/frontierAfter, sourceChanges, receiptDigest, and success semantics are forbidden.
 
-A receiver admits ChangeRecord1 only after strict-decoding the exact canonical Notice3 and CP4 bytes selected by the record digests, validating their versions and cross-fields, obtaining every listed component byte/metadata item, validating each owner decoder/version and ComponentImage against the actual bytes, validating complete production SourceVersion before/after evidence, and proving the continuous causal chain. A document_format component additionally strict-decodes its exact ManagedDocumentFormatBinding/1. Missing bytes, unknown decoder/version, incomplete chain, or Notice/CP mismatch is incomplete/proof_unavailable rather than success. These checks preserve the original authorization, recovery, and error ordering and add no second ledger, CAS, or commit point.
+A receiver admits ChangeRecord1 only after strict-decoding the exact canonical Notice3 and CP4 bytes selected by the record digests, validating their versions and cross-fields, obtaining every listed component byte/metadata item, validating each owner decoder/version and ComponentImage against the actual bytes, validating complete production SourceVersion before/after evidence, and proving the continuous causal chain. A `document_format` component additionally strict-decodes its exact ManagedDocumentFormatBinding/1. Missing bytes, unknown decoder/version, incomplete chain, or Notice/CP mismatch is incomplete/proof_unavailable rather than success. These checks preserve the original authorization, recovery, and error ordering and add no second ledger, CAS, or commit point.
 
 The exact current closed shapes are copied in D6-SCHEMAS. This Control file owns D6 behavior, authorization, ordering, planning/recovery and technical type meaning; D6-SCHEMAS is a schema companion, not a second ledger or semantic authority.
 
 This file owns D6-FA-r01 closed control types, D6 wireVersion2, PreparedIntent/3, Policy/3, SourceVersion/2, ordinary source save, decision/install state, portable installation/completion records, ConflictRecord, and error/authorization ordering. D3 continues to own identity/lifecycle. No generic D6 interface may create, move, Trash, restore, or purge an Entity.
 
 All JSON objects are closed. Unknown/missing/duplicate keys, illegal null, wrong union variants, and invalid Unicode scalars are rejected. A member may be absent only where this document explicitly marks it optional; null never stands for absent.
+
+### 0.1.4 Portable presentation-owner completion (Notice4 / CP5 / ChangeRecord2)
+
+This sole D6 owner section replaces Notice3/CP4-only production/admission only for new decisions with a real D8 presentation_policy_change. Ordinary component-only decisions retain Notice3/CP4/ChangeRecord1; recorded families remain exact. D8 owns policy record/head/proposal semantics. No PortableComponentKey, fake Policy component, author source, second ledger, planning CAS or P is added.
+
+All objects below are closed:
+```text
+D6PresentationOwnerPlan/1 = {
+ kind:"presentation_policy",workspaceRef:WorkspaceRef,
+ before:D8PresentationPolicyHeadSet/1,
+ proposal:D8PresentationPolicyProposal/1
+}
+D6PresentationOwnerCompletion/1 = {
+ kind:"presentation_policy",workspaceRef:WorkspaceRef,
+ record:D8WorkspacePresentationPolicy/2,
+ address:D8PresentationPolicyAddress/1
+}
+InstallationNotice/4 = {
+ format:"weftext.installation-notice",version:4,
+ decisionKey:DecisionKey/2,
+ guarantee:"replica_local"|"managed_atomic",
+ writeProtection:"strict"|"observed_only",
+ baseFrontier:Frontier/2,
+ components:[{key:PortableComponentKey/2,
+              before:ComponentImage/1,after:ComponentImage/1}...],
+ ownerEffects:[D6PresentationOwnerPlan/1...]
+}
+ContentCompletionProof/5 =
+ {format:"weftext.content-completion",version:5,outcome:"committed",
+  decisionKey:DecisionKey/2,changeId:ChangeId/1,
+  guarantee:"replica_local"|"managed_atomic",
+  writeProtection:"strict"|"observed_only",semanticState:SemanticState/1,
+  frontierBefore:Frontier/2,frontierAfter:Frontier/2,
+  components:[{key:PortableComponentKey/2,after:ComponentImage/1}...],
+  ownerEffects:[D6PresentationOwnerCompletion/1...],
+  sourceChanges:[{entityRef:EntityRef,before:SourceVersion/2|"absent",
+                 after:managed SourceVersion/2|"absent"}...],
+  receiptDigest:"sha256:64-lowercase-hex"}
+ |{format:"weftext.content-completion",version:5,outcome:"restored",
+   decisionKey:DecisionKey/2,baseFrontier:Frontier/2,
+   components:[{key:PortableComponentKey/2,after:ComponentImage/1}...],
+   ownerEffects:[{kind:"presentation_policy",workspaceRef:WorkspaceRef,
+                 before:D8PresentationPolicyHeadSet/1}...]}
+ChangeRecord/2 = {
+ format:"weftext.change-record",version:2,
+ decisionKey:DecisionKey/2,changeId:ChangeId/1,
+ installationNotice:{format:"weftext.installation-notice",version:4,
+                     byteLength:Counter,sha256:"64-lowercase-hex"},
+ completionProof:{format:"weftext.content-completion",version:5,
+                  byteLength:Counter,sha256:"64-lowercase-hex"},
+ frontierBefore:Frontier/2,frontierAfter:Frontier/2
+}
+```
+
+Notice4.ownerEffects has exactly one presentation entry for the original decision Workspace; before.workspaceRef and proposal.workspaceRef equal it. No empty ownerEffects selects this family and no foreign Workspace or second entry is allowed. Component arrays may be empty only in this family with that real entry. Components retain original key ranks, exact before/after images and strict installation/rollback; CP5 components equal Notice4 components' complete key set/order. Presentation paths require managed_atomic/strict and fully proved semanticState, including mixed bootstrap. sourceChanges remains the complete real source delta: standalone Set is [], bootstrap retains every actual source version; neither invents a source merely to satisfy completion.
+
+Notice4 carries precisely the frozen D8 effect.before/proposal from original prepared input, not the future record/hash/address/pin/ChangeId. Parent evidence, authorization, protected head-set stamp, original expected Frontier and budgets are retained in the original plan/proof. Notice is durable before any real component installation. Empty component work has no install/verify bytes but still verifies all owner-plan prerequisites and the final P checks. No owner record/head/outbox becomes current before P. Same-value no_change produces no Notice, CP, ChangeId or record; it cannot stand in for changing Set.
+
+At the one original final P, revalidate the original exact Frontier/domain fence, authorization, complete frozen owner heads/stamp/ancestry, actual component verification, dependencies and budgets; bootstrap uses its original fresh-target custody/activation gates rather than an already-active target policy_admin. Only then allocate C and materialize D8 record from proposal+C, its exact prefix hash/address/recovery pin, committed effect, CP5, ChangeRecord2, original receipt/companion/outbox, target activation when applicable and owner head transition in that same atomic P. All Workspace/DecisionKey/ChangeId/receipt/frontier associations agree. CP5 embeds the complete original D8 record, not a free owner JSON/pin or new authority. Its address is rederived from exact prefixed bytes; its record.workspaceRef/revision/parents/defaultPresentation match Notice4.proposal and activationChangeId=C. Sender head stamps never become receiver currentness proof.
+
+Failure inside P persists none of those committed objects and cannot leave a partial owner head or activation. Before seal, restored CP5 requires every real component restored to Notice4.before and proof that this decision performed no owner record/head/outbox mutation. Its ownerEffects.before equals Notice4.before as frozen input, not a claim that unrelated writers cannot advance current state. It has none of the committed-only fields or success semantics. Unproved restoration remains original planned/unknown recovery, not an invented terminal result. After seal, publication retry dereferences only retained Notice4/CP5/ChangeRecord2/D8 record/outbox bytes; it cannot replan, increment counters again, re-encode, change C or run another P.
+
+Receiver first applies original disclosure/authority/trust/decision gates, then exact ChangeRecord2->Notice4/committed CP5 canonical digest/version/length associations and original continuous causal chain. Validate every actual component and source version with its true owner decoder. Independently validate the complete D8 completion record/address against Notice4 before/proposal, parent records/ancestry, original receipt and complete committed presentation effect. Missing owner record/parent/effect/receipt, changed proposal, wrong C/hash, unknown decoder, truncated component or owner set, replay under another key, or gap is unavailable/integrity failure under original owner ordering, never successful admission. Receiving C atomically admits its real component images plus D8 immutable record into the original portable decision history; derive a receiver-local head observation thereafter. An already admitted exact decision is idempotent. Concurrent separately proved descendants remain multiple heads, never first-wins/LWW.
+
+Actual current slot overrides, by real inner discriminator:
+- D6/D3 schema Notice/CP/ChangeRecord production and receiver admission: containing-presentation plans select 4/5/2; recorded 3/4/1 remain original.
+- D8 Set prepared/plan/receipt/owner outbox admission and D3/D6 WorkspaceBootstrapPlan4.initialPresentationPolicy: freeze the same D6PresentationOwnerPlan; standalone has no components, bootstrap has all actual components plus the same owner entry. Plan4 shape/constructor, initial separate/parents=[] and same-C dual trust declarations do not change.
+- D3/D6 receipt-companion, portable chain/Frontier dependency proofs, conflict branch evidence and D10 custody/continuation consumers inspect the exact pinned ChangeRecord.version then its exact Notice/CP domains; they never replace a CP4 pin with CP5. This is a named inner union, not an expansion of the original record decoder.
+- PolicyBundleHeadEvidence/3, TrustConflictCarryValidationHop/2 and TrustConflictCarryValidationEvidence/2, defined below, are the exact current trust-evidence successors. Their explicitly enumerated completionProofVersion=5 arms bind CP5+ChangeRecord2+the actual Bundle2 after-image; the current headEvidence/carryEvidence/preview/protected-pin slots dispatch exactly as specified below. Original version-3/4 evidence and original hop domains stay exact; no generic pin guessing or automatic reinterpretation. Declaration2, Bundle2 and signature messages remain unchanged; their activation evidence verifies the same C across both trust profiles and this presentation completion.
+- D7/D8 complete effects transport retains actual Manifest3/EffectBytes3. presentation_policy_change keeps D8Effect1 but uses the exhaustive current rank below. Canonical semantic bytes, pins and preview digest include all source/series/bootstrap/authority/presentation effects.
+
+Acceptance requirements (design only, product UNRUN): PP-01 independent unique-head separate->run_in with components=[], owner entry, sourceChanges=[] produces one legal C/CP5/Record2; PP-02 same-value no_change produces none and multi-head same-value resolution still produces a lawful multi-parent successor; PP-03 mixed Plan4 with source, series, authority, initial presentation and dual trust profiles creates one same-P complete proof and no half-bootstrap; PP-04 injected pre-P/P-internal failure leaves no committed owner/activation, post-P transport failure republishes exact original bytes; PP-05 receiver rejects absent/extra owner entry, fake component, wrong key/C/proposal/address, missing ancestry/receipt/typed effect, unknown versions or causal gap; PP-06 saved/planned/unknown recorded1/3/4 and new2/4/5 recover their original bytes and owner obligations without resampling; PP-07 two offline successors and explicit complete-head resolution preserve conflict semantics. These proposed repairs remain author-resolved pending independent exact-head review.
+
+The trust-evidence successor shapes are closed, not extensions of historical decoders:
+```text
+PolicyBundleHeadEvidence/3 =
+ PolicyBundleHeadEvidence/2
+ | {head:ChangeId/1,completionProofVersion:5,bundleVersion:2}
+TrustConflictCarryValidationHop/2 =
+ TrustConflictCarryValidationHop/1
+ | {declarationVersion:2,declarationRevision:Counter,
+    declarationDigest:"sha256:<64 lowercase hex>",
+    activationChangeId:ChangeId/1,completionProofVersion:5,bundleVersion:2,
+    changeRecordPin:PinRef/2,completionProofPin:PinRef/2,policyBundlePin:PinRef/2}
+TrustConflictCarryValidationEvidence/2 = {
+ head:ChangeId/1,factId:"sha256:<64 lowercase hex>",
+ origin:TrustConflictCarryValidationHop/2,
+ carriers:[TrustConflictCarryValidationHop/2...]
+}
+```
+Each imported original arm is validated under its exact original decoder. A version-5 evidence/hop strictly decodes CP5 and ChangeRecord2 with Notice4, authenticates the exact declared Bundle2 component after-image and the same activation C, and checks all original trust ancestry/signature/carry rules. Missing CP5 owner completion makes bootstrap activation unproved even if Bundle2 bytes match. Mixed historical hop chains retain each real arm, order, original pin and direct origin cut. PolicyBundleHeadEvidence3 preserves complete head ordering/uniqueness; CarryEvidence2 preserves head/fact ordering and every traversed carrier.
+Current ConflictResolutionPolicyDerivedPlan2.headEvidence, ConflictResolutionInput3.carryEvidence, ConflictResolutionPreview2.resolution/carry-derived policy slots and their protected pin builders explicitly select these successor inner types only when a version-5 evidence marker is present at the named headEvidence[].completionProofVersion or origin/carriers[].completionProofVersion path. Their outer members and source-merge/choose-head branches do not change. No recursive field search, new grant, raw decoder fallback or history re-encoding is allowed. A policy resolution with no new presentation effect can itself still produce Notice3/CP4/ChangeRecord1 while its complete before evidence legitimately validates an original bootstrap under 4/5/2.
+Bootstrap Plan4/control/current Lexicon/Registry summaries naming the portable completion chain route to this section's applicable family rather than mechanically rewriting every ordinary CP4 mention. Genuine old activation records retain their original chain.
+
+A source-less presentation changing Set remains portable despite saveProfile=control_only: its publication state after seal is pending until this exact Notice4/CP5/ChangeRecord2/D8 outbox is delivered. The predecessor control_only->not_applicable shortcut applies only to genuinely nonportable control decisions. This exception changes no receipt members, sourceVersions (still empty), observation scope or write permission. Original continuous-chain unrelatedness checks enumerate both real component keys and the typed presentation-owner Workspace range; an empty components array is never evidence of an unrelated or empty portable change.
 
 ## 1. Common scalars and canonical encoding
 
@@ -585,6 +681,8 @@ The seven `series` members are the same canonical semantic values from the D4-va
 
 #### QueryScanSelector
 
+For current QuerySpec/3 non-live scans, D7QueryScanCoverage/1 is the exact protected portable_metadata/query_preview PinRef/2 payload decoder registered by [D7-SEARCH](D7-SEARCH.md) §11.3. It binds the original query_scan key/stamp, baseFrontier, scope, authorization and actual lifecycle/placement_range/owner inventory entries in the same Proof3; consumers validate each and compare complete enumeration. Old live proofs lacking that evidence cannot claim Trash coverage. Capability upgrades do not change original key/stamp continuity, epoch, H or ordinary live paths, and add no dependency family.
+
 QueryScanSelector has only:
 
 ~~~text
@@ -765,7 +863,7 @@ The following order explicitly separates saved, planned, and unseen. prepared/re
 10. after staging/pins are durable, install under the planned capability. strict uses a real strict FileInstallCapability. observed_only is only the step-7 path and performs the final trusted object/event-continuity check immediately before destructive installation. Its original plan durably retains actual read-before B and user input N. An unseen external C after the final check may be overwritten by N and may have no recoverable copy, and a later C may replace current file again, but durable B/N is not discarded. Any observed competition, stale Base, watcher gap, revocation, or third state is outside the weak relaxation and enters the original conflict/paused/reprepare path; unknown installation provenance is recovery_unknown.
 11. verify each written component against the **original planned after** with complete FileObjectBinding/bytes and continuous installation provenance. Core never requires its own written component to remain equal to before after installation. Every unwritten dependency is revalidated against its original before/cut expectation, including source/control/auth, Registry/rules, DependencyProof positive/negative ranges, and applicable Frontier policy. scope_dependencies admits only an unrelated extension proved and retained in P. Unknown provenance, third_state, late competition, revocation, or unproved continuity remains paused/conflict/recovery_unknown. There is still no ChangeId for this decision.
 12. seal is the only decision commit point. After written=planned after and original plan/deps/auth, domain fence, SourceRevisionPlan lastIssued/empty-history basis, and applicable installation proof all pass, one durable P transaction checked-allocates the single ChangeId for **this portable decision**. Only an actual source change whose after is managed combines its original SourceRevisionPlan.after SourceStamp with that ChangeId into the unique managed SourceVersion/2 and atomically advances H(D,E) for that production-domain entity. For each such managed after the same transaction selects the exact proposed RevisionTokenBinding/2 frozen by the winning plan as that SourceVersion's sole canonical binding, builds/signs the exact RevisionTokenSealArtifact/1 under §1.5.1, pins its canonical bytes, and writes its RevisionTokenSealOutboxItem/1; no Locator need already exist. Source deletion with after=absent remains a portable effect using this ChangeId but creates no managed SourceVersion, uses no deleted-after SourceRevisionPlan, and does not advance H. A source-unchanged portable structure/lifecycle effect likewise uses the portable ChangeId but creates no source version/H increment. P-only control_only and true raw no_op create no content ChangeId. The same P transaction performs the existing domainCommitSequence update and writes committed decision, original receipt, effects, ReliableSaveState, applicable charge, and outbox. Charges settle once for the original decision and replay/recovery never charges again. strict->reliable and observed_only->durable_observed_only.
-13. current portable publication derives ContentCompletionProof/4 plus ChangeRecord/1 only from the facts sealed in step 12 and advances Frontier/2. proof.frontierBefore/frontierAfter are the actual pre/post-seal Frontiers; notice.baseFrontier and InputDescriptor.expectedFrontier retain the original baseline. Under scope_dependencies, publication also validates the complete continuous ChangeRecord/portable-proof chain from the original base to actual frontierBefore, the unrelated-extension judgment retained in P, and continuing validity of original DependencyProof. Publication never reconstructs “unrelated” merely from larger vector numbers, provider state, or equal final hash. The proof transports actual production SourceVersion before/after rather than sender SourceObservation token. Separately, the original outbox publishes each sealed managed after's exact retained RevisionTokenSealArtifact/1 bytes selected by its RevisionTokenSealOutboxItem/1; current Notice3/CP4 receive no extra binding/artifact member beyond their closed current schemas. The receiver verifies the artifact's historical trust key, signature and complete association under §1.5.1 and §6.3 before storing any token→production-version mapping, then creates its own current Observation. ContentCompletionProof/2, /1, and other historical records remain under their original decoder/bytes/recovery and are never decoded as /3.
+13. current portable publication transports ContentCompletionProof/4 plus ChangeRecord/1 and Frontier/2 already constructed and durably retained in the atomic step 12 P. proof.frontierBefore/frontierAfter are the actual pre/post-seal Frontiers; notice.baseFrontier and InputDescriptor.expectedFrontier retain the original baseline. Under scope_dependencies, final P validates before commit, and the receiver verifies the complete continuous ChangeRecord/portable-proof chain from the original base to actual frontierBefore, the unrelated-extension judgment retained in P, and continuing validity of original DependencyProof. Publication never reconstructs “unrelated” merely from larger vector numbers, provider state, or equal final hash. The proof transports actual production SourceVersion before/after rather than sender SourceObservation token. Separately, the original outbox publishes each sealed managed after's exact retained RevisionTokenSealArtifact/1 bytes selected by its RevisionTokenSealOutboxItem/1; current Notice3/CP4 receive no extra binding/artifact member beyond their closed current schemas. The receiver verifies the artifact's historical trust key, signature and complete association under §1.5.1 and §6.3 before storing any token→production-version mapping, then creates its own current Observation. ContentCompletionProof/2, /1, and other historical records remain under their original decoder/bytes/recovery and are never decoded as /3. The applicable completion family is ordinary Notice3/CP4/ChangeRecord1, or the explicitly defined presentation family Notice4/CP5/ChangeRecord2; family selection is frozen by the exact plan, not chosen during recovery. Final atomic P constructs and durably retains the exact proof, ChangeRecord, actual before/after Frontier and publication outbox together with the original receipt, decision, effects, H/ChangeId, ReliableSaveState and charge. P-internal failure gives no committed-success receipt: actual prior installs and B/N/third-state remnants retain the original planned/unknown recovery obligations. Successful P followed by transport failure leaves successful save and publication=pending; replay sends only retained exact bytes, with no regeneration, re-signing, reinstallation, new OperationId, second H/ChangeId or charge. Genuine historical records retain their recorded family and original recovery.
 14. if seal succeeded but publication/outbox/delivery failed, decision, ChangeId, managed SourceVersion/H results, ReliableSaveState, receipt, and applicable charge are already fixed. Recovery only publishes the original proof and the exact already-pinned RevisionTokenSealArtifact/1/outbox bytes for that sealed decision, or delivers original bytes under current authorization. It never reinstalls N, changes OperationId, allocates another ChangeId, advances H again, reruns business selection, writes over a later current source, or charges again. delivery finally rechecks current authorization; revocation may hide delivery but never alters the historical decision.
 
 For observed_only, B is only the actually read/pinned before and never enumerates C unseen after the final check. Later current=C never rewrites the old receipt/Proof and never weakens durable B/N retention. Crash/unknown follows §8 and the client never guesses the outcome.
@@ -902,13 +1000,15 @@ restored forbids changeId, guarantee/writeProtection/semanticState, frontierBefo
 
 ContentCompletionProof/2 retains its historical closed definition, original decoder, and original bytes. Historical committed remains:
 ~~~json
-{"format":"weftext.content-completion","version":2,"outcome":"committed","decisionKey":<DecisionKey/2>,"changeId":<ChangeId/1>,"guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","semanticState":<SemanticState/1>,"frontierBefore":<Frontier/2>,"frontierAfter":<Frontier/2>,"components":[{"key":<PortableComponentKey/2>,"after":<ComponentImage/1>}...],"sourceChanges":[{"entityRef":<EntityRef>,"before":<SourceVersionRef/1|"absent">,"after":<SourceVersionRef/1|"absent">}...],"receiptDigest":"sha256:64-lowercase-hex"}
+{"format":"weftext.content-completion","version":2,"outcome":"committed","decisionKey":<DecisionKey/2>,"changeId":<ChangeId/1>,"guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","semanticState":<SemanticState/1>,"frontierBefore":<Frontier/2>,"frontierAfter":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...],"sourceChanges":[{"entityRef":<EntityRef>,"before":<SourceVersionRef/1|"absent">,"after":<SourceVersionRef/1|"absent">}...],"receiptDigest":"sha256:64-lowercase-hex"}
 ~~~
 Historical restored remains:
 ~~~json
-{"format":"weftext.content-completion","version":2,"outcome":"restored","decisionKey":<DecisionKey/2>,"baseFrontier":<Frontier/2>,"components":[{"key":<PortableComponentKey/2>,"after":<ComponentImage/1>}...]}
+{"format":"weftext.content-completion","version":2,"outcome":"restored","decisionKey":<DecisionKey/2>,"baseFrontier":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...]}
 ~~~
 /2 replays under original saved bytes, token bindings, admission and recovery gates. /3 proof never upgrades, re-encodes, or backfills an old r5, and /2 SourceVersionRef never implies a portable production-version field that was not present.
+
+Both historical CP2 arms import only §§6.1/6.3 of `docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md` at fixed `97f4734f82a760cb6716c8122b84494da2b61164` (blob `e69c34e74aa8fbca00f77c89ac52778186630032`): the original twelve-kind Key1 closed union, rank/key ordering, ComponentImage owner-version mapping, SourceVersionRef/1, Notice correspondence, authorization, pins and recovery remain intact. Historical committed/restored closed decode rejects document_format and unknown kinds; the current Notice3/CP4 Key2/document_format positive path remains intact. Do not upgrade an outer version or reencode/resign old bytes; design acceptance is in D6-IMPACT §16.
 ## 7. Commit receipt, D3 companion, decision state, and current source
 
 ### 7.1 d6_commit_receipt/2
@@ -1443,7 +1543,7 @@ Import fixed-S D3 identity source `docs/design/snapshots/d3-identity-references-
 
 ### 17.8 Current successor dispatch
 
-Fresh unseen D6 uses Key3/Proof3/Input3/Prepared3 with d6_plan/3. Portable current publication is PortableComponentKey/2 + Notice3 + one final P + CP4/ChangeRecord1. A managed-Document semantic consumer includes document_format; a format-only transition has sourceChanges=[] and no SourceRevisionPlan, managed SourceVersion or H advance. Genuine saved/planned/unknown Key2/Proof2/Descriptor2/Prepared2, Notice1/2 and CP1/2/3 retain original decoder, bytes, pins, OperationId, authorization, install/seal/receipt/retention/error order and recovery.
+Fresh unseen D6 uses Key3/Proof3/Input3/Prepared3 with d6_plan/3. Portable current publication uses PortableComponentKey/2 + Notice3; its one final atomic P constructs and durably retains exact CP4/ChangeRecord1, Frontier and publication outbox before success. Subsequent publication transports those retained bytes only; an explicitly applicable presentation successor uses its separately defined exact family. A managed-Document semantic consumer includes document_format; a format-only transition has sourceChanges=[] and no SourceRevisionPlan, managed SourceVersion or H advance. Genuine saved/planned/unknown Key2/Proof2/Descriptor2/Prepared2, Notice1/2 and CP1/2/3 retain original decoder, bytes, pins, OperationId, authorization, install/seal/receipt/retention/error order and recovery.
 
 
 ## 18. SourceTransform compiler and exact mapping

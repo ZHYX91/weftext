@@ -6,6 +6,8 @@ translation_status: source
 [English](D7-QUERY-V2.md)
 # A2 D7 QuerySpec/2 与当前元数据读取源
 
+当前 QuerySpec/3 的八成员、生命周期只读 scope、SearchContribution 保存绑定、SavedQueryDefinition/1 与 DynamicBlock/1 嵌套分派、QueryRef、Transfer、错误顺序及 Registry qualification 由 [D7-SEARCH](D7-SEARCH.zh-CN.md) §11 唯一具名覆盖。以下 QuerySpec/2 条款继续作为真实历史 decoder；不得向旧记录注入新成员。
+
 状态：这是 A2-D7-2F89-P1-02 的作者修订；属于当前 schema successor 候选，仍需独立复核。
 
 ## 1. 版本边界

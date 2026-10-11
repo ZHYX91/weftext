@@ -115,7 +115,9 @@ row→Node/import由D9负责mapping/loss，D3负责fresh identity。D5只提供 
 - 局部 structured row/column 操作不要求无关 Workspace 全集 Query，但 structured cell/row/column/reorder 仍使用 strict 保护，不能由局部性或 UI 形态推导 weak 保存；
 - 按 D6 规则恢复安装前后的崩溃。
 
-即使只用于展示、没有 schema 声明，table header option 也必须拒绝。普通首行单元格编辑仍可通过既有 cell 操作；Document 标题使用独立操作。本次不新增 header 语法或动作。
+原生 `options=header`、footer、span 和块级 cell 按 D2 完整语言接纳，不需要 D4 schema 声明；在原授权与来源资格齐全时，读取、渲染、导出与 exact-Source 保存必须保留这些语义。普通首行单元格编辑仍可通过既有 cell 操作；Document 标题使用独立操作。当前闭合 structured intent 未提供的专用“切换表头/表尾”动作不可用且零写入；这不是对合法 Source 语法的拒绝，也不要求新增全部 rich controls。
+
+本项设计验收分别覆盖：普通 inline cell、原生 block cell、header/footer 与 span 的准确 D2 投影和获权 Source 往返；合法但无 rich control 的表格仍可使用 Source；未定义的 structured header intent 被拒绝且零写入；相同显示文本不新增 cell identity 或 Field。D5-LEXICON §2 当前 cell 术语须与这些正例一致，其 §6 的固定来源快照保持原字节。以上为设计义务，产品测试未运行。
 
 ### 4.3 Field 出现项界面
 

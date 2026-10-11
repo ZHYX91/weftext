@@ -43,6 +43,8 @@ Desktop、WebUI、CLI 与获准 Agent 使用同一 Core；WebUI 的写入和下�
 
 ## 5. 批注、引用与链接
 
+音视频使用 D9-SCHEMAS §16 的准确有理 timebase/tick 半开区间签发，再按原 JSON Annotation 保存和导航；不是 wholemedia 替代。Annotation 读取包括已存摘要，不意味着可读隐藏目标媒体/正文；章节/Review Bundle context 仍独立授权。
+
 阅读面板把“原文”“我的批注”“引用来源”连接起来。批注正文仍在独立 `weftext.annotations.json`；讨论状态与目标是否可解析分开显示。选择 PDF/图片区域→批注→显式插入引用→返回原区域复用 D3/D8/D9 原 region/source/权限规则；provider 缺失或坐标不匹配时保留批注和状态，不根据截图相似度换锚点。普通正文同样支持选择准确 document_range→记录想法/标记→按原 JSON Annotation 保存→返回原文。按章节/来源汇总只是当前获权 Annotation 的派生分组，不复制批注正文；失效、不可解析或不可读目标留在明确的未归组状态，原作者可获权的想法仍保留，不能显示隐藏原文。显式插入引用采用 §5.1 的完整 Source Draft 结构编辑资格，不把读取 adapter 当 writer。未保存批注稿按原 Draft 生命周期保留。
 
 出链、入链、潜在提及三个集合分开。真正链接来自已解析的 source occurrence；潜在提及只是建议，不计入真实链接/图边/引用完整性。链接健康面板可诊断断目标、范围失效、无入链和孤立；“全库无入链”只能在获权且相关范围完整时成立，否则标明当前可见范围未找到，不泄漏隐藏节点数或自动清理所谓孤立对象。

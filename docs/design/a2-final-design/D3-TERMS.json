@@ -157,7 +157,7 @@
         "note"
       ],
       "firstFreeze": "`frozen:D2`",
-      "currentDefinition": "Document exact source 中的 heading、paragraph、",
+      "currentDefinition": "Document exact source 中的 heading、paragraph、 list/checklist item、table row/cell、citation、bibliography placement、 Saved Query/View definition、AttributeCarrierBlock与LexicalAttributeEntry等current-revision语法出现。",
       "currentOwnerLayer": "D2 Document content。",
       "disposition": "retain"
     },
@@ -219,7 +219,7 @@
       ],
       "firstFreeze": "`frozen:D2-v2`",
       "currentDefinition": "Node exact-source classification中的可组合capability membership；membership可出现在ordinary或template Node上且不创建新的entity、owner、identity、Document或lifecycle。exact tasks/task禁止出现在template上，并且只使ordinary Node满足Task predicate。",
-      "currentOwnerLayer": "D2 v2 lexical membership与built-in tasks/task marker；",
+      "currentOwnerLayer": "D2 v2 lexical membership与built-in tasks/task marker； D4/D10以后拥有registry、schema与anti-spoof规则。",
       "disposition": "retain"
     },
     {
@@ -279,7 +279,7 @@
         "payload authority"
       ],
       "firstFreeze": "`frozen:D2-v2`",
-      "currentDefinition": "D2 v2 exact source中的namespace-scoped protected lexical block occurrence；",
+      "currentDefinition": "D2 v2 exact source中的namespace-scoped protected lexical block occurrence； 只有owning Document与current-revision ranges，无durable identity或第二payload authority。",
       "currentOwnerLayer": "D2 v2 Document lexical projection；D3只冻结non-durable identity与artifact-binding边界。",
       "disposition": "retain"
     },
@@ -310,7 +310,7 @@
         "Annotation target"
       ],
       "firstFreeze": "`frozen:D2-v2`",
-      "currentDefinition": "Attribute Carrier Block中的opaque raw lexical entry occurrence；",
+      "currentDefinition": "Attribute Carrier Block中的opaque raw lexical entry occurrence； 只投影raw source与current-revision source range， 不解释FieldId、typed value、entry identity或provenance。",
       "currentOwnerLayer": "D2 v2 Document lexical projection；D4以后拥有inner payload semantics。",
       "disposition": "retain"
     },
@@ -410,7 +410,7 @@
         "symlink"
       ],
       "firstFreeze": "`frozen:D2`",
-      "currentDefinition": "Document 中 authored inline occurrence，",
+      "currentDefinition": "Document 中 authored inline occurrence， 其 target intent 是 same-Workspace Node；它是 reference slot，不是 relation entity。",
       "currentOwnerLayer": "D2 authored occurrence；D3 target NodeRef/resolution。",
       "disposition": "retain"
     },
@@ -438,8 +438,8 @@
         "library item"
       ],
       "firstFreeze": "`frozen:D2`",
-      "currentDefinition": "Document 中 authored citation occurrence，target intent 是 same-Workspace Node；",
-      "currentOwnerLayer": "D2 authored occurrence；D3只冻结 target ref/locator identity；",
+      "currentDefinition": "Document 中 authored citation occurrence，target intent 是 same-Workspace Node； bibliography placement/render numbering不产生 identity。",
+      "currentOwnerLayer": "D2 authored occurrence；D3只冻结 target ref/locator identity； Library citation schema/semantics路由D4/D7。",
       "disposition": "retain"
     },
     {
@@ -838,7 +838,7 @@
         "dedup key"
       ],
       "firstFreeze": "`candidate:D3`",
-      "currentDefinition": "SourceBinding + foreign component kind + foreign persistent",
+      "currentDefinition": "SourceBinding + foreign component kind + foreign persistent key (+ occurrence discriminator)形成的source-scoped lookup key； 不是Weftext content identity。",
       "currentOwnerLayer": "D3 foreign identity boundary。",
       "disposition": "retain"
     },
@@ -1067,7 +1067,7 @@
       ],
       "firstFreeze": "`frozen:D2` + `candidate:D3 identity effect`; D7定义payload，R0删除in-place occurrence ID升级。",
       "currentDefinition": "把受管内容中的无durable identity occurrence显式转为fresh ordinary Node，并原子更新原occurrence；checklist→Task promotion同时声明exact built-in tasks/task Facet，fresh NodeRef且无mirror。",
-      "currentOwnerLayer": "frozen:D2-v2 checklist→ordinary Node + tasks/task semantics；",
+      "currentOwnerLayer": "frozen:D2-v2 checklist→ordinary Node + tasks/task semantics； D3 fresh identity effect。",
       "disposition": "retain"
     },
     {
@@ -1165,7 +1165,7 @@
       },
       "semanticNonaliases": [],
       "firstFreeze": "D7联合revision03候选",
-      "currentDefinition": "wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；fresh-current wire13路径继续保留，真实historical wire11/12 records按recorded decoder/recovery保持。",
+      "currentDefinition": "wire11顶层可选token绑定D7完整不可变准备条件到原requestFingerprint；适用 fresh-current wire13 路径继续保留；真实 historical wire11/12 record 保持 recorded recovery。",
       "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
       "disposition": "retain"
     },
@@ -1187,7 +1187,7 @@
       },
       "semanticNonaliases": [],
       "firstFreeze": "D7联合revision03候选",
-      "currentDefinition": "wire11引入的第十数组精确绑定保存payload的源/结果occurrence和全部typed slots；fresh-current wire13继续保留，真实historical wire11/12 records按原decoder保持。",
+      "currentDefinition": "wire11 引入的第十数组精确绑定保存 payload 的源/结果 occurrence 与全部 typed slots；fresh-current wire13 继续保留，真实 historical wire11/12 record 保持原 decoder。",
       "currentOwnerLayer": "D3 operation/wire；D7仅拥有payload schema。",
       "disposition": "retain"
     },

@@ -43,6 +43,6 @@ translation_status: source
 
 先审 [AUTHORING §8](AUTHORING.zh-CN.md#8-验收要求) 的 SRC-01–12、[EXPERIENCE §8](EXPERIENCE.zh-CN.md#8-设计验收) 的 UX-01–18 和 [集成 §7](AUTHORING-INTEGRATION.zh-CN.md#7-集成验收与剩余边界) 的 INT-01–06，以及 [LINKS §7](LINKS.zh-CN.md#7-设计验收) 的 LINK-01–11，检查每条正常、错误、撤权/并发/恢复及真实原 source/producer/consumer。它们是设计案例，产品未运行；文档检查或 reviewer 数量不证明实现可用。
 
-原固定 6b13 全局审查的 6 项 P1 与 15 项 P2 继续未关闭。这些涉及符号 Document 输入、独立 presentation policy 生产、原生 heading/block 产品域、Trash/保存搜索、版本/来源/解码、批注时间域/隐藏摘要及效果排序。本轮新交互不自动修复它们；确有影响的修订须单独给出完整新反例与关闭证据。原未完成 D7–D10、全局与 Mandatory/来源阅读范围也不自动获得完成信用。
+原固定 6b13 全局审查的 6 项 P1 与 15 项 P2 已在实际 owner 中完成候选修复，涉及符号 Document framing/bootstrap、presentation 完成证据及效果排序、原生 heading/block/float 域、Trash/保存搜索、版本/来源/术语一致性和时间区间/隐藏目标批注读取。21 项仍等待固定候选的独立复核，须验证原反例及受影响正向/恢复路径后才能关闭。原未完成 D7–D10、全局与 Mandatory/来源阅读范围不自动获得完成信用。
 
 固定 S 的 49 份 snapshots 和 `docs/design/inputs.json` 不得改变。中文/英文同步；无产品实现、运行时 migration、合并或部署声明。新独立审查先读修改及受影响依赖，再讨论分歧与修正；所有局部通过仍不能替代最终完整全局终审。

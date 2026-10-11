@@ -5,7 +5,11 @@ translation_status: source
 
 [English](D3-SCHEMAS.md)
 
+新的 presentation-owner 可移植完成路径由 [D6-CONTROL §0.1.4](D6-CONTROL.zh-CN.md#014-可移植显示策略-owner-完成链notice4--cp5--changerecord2) 唯一拥有 Notice4/CP5/ChangeRecord2、单独与 mixed Plan4 生产、严格 receiver 接纳及具名 trust-evidence inner successor。仅其列出的 current 槽位替代下方普通纯 component3/4/1 条款；真实 recorded decoder 不变。current EffectItem3.presentation_policy_change 在原 D7 effects owner 中 rank13，rank0–12、phase/完整集合门及历史 Manifest1/2 保持。作者修复等待独立复核，产品 UNRUN。
+
 # A2 D3 current closed schema
+
+正式 current Document producer 与 Request14/Result10 H framing、准确 Input3/action/PAB/EffectBytes3 槽由 AUTHORING-INTEGRATION §6.1 定义，具名替代下文 current Request13-only/result9-only 限制；原 Request13 的成员/矩阵/stages只继承，不扩大其 framing decoder。Request14 identity input descriptor的 requestFingerprint 计算准确wire14及Result10绑定，primary receipt/error outer wireVersion=14，decision record持实际14 decoder；全部原 metadata、authority和history规则保持。真正 recorded Request13及更早请求/Result9和旧Input2/PAB3保持原decoder/bytes。
 
 本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
 
@@ -551,7 +555,7 @@ PortableAnnotationRecord/4 = {
 
 AnnotationEditableValue/1 = {
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,
@@ -564,7 +568,7 @@ D3-Annotation-Value/4 = {
   kind:"d3_annotation_value",
   version:4,
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,
@@ -579,7 +583,14 @@ D3-Annotation-Value/4 = {
 
 D3-Annotation-Target-Projection/1 =
     {kind:"document",owner:NodeRef}
-  | {kind:"document_element",locator:DocumentElementLocator}
+  | {kind:"document_element",locator:DocumentElementLocator/1}
+  | {kind:"document_range",locator:DocumentRangeLocator}
+  | {kind:"resource",resourceRef:ResourceRef}
+  | {kind:"resource_region",locator:ResourceRegionLocator}
+
+D3-Annotation-Target-Projection/2 =
+    {kind:"document",owner:NodeRef}
+  | {kind:"document_element",locator:CurrentDocumentElementLocator}
   | {kind:"document_range",locator:DocumentRangeLocator}
   | {kind:"resource",resourceRef:ResourceRef}
   | {kind:"resource_region",locator:ResourceRegionLocator}
@@ -639,6 +650,8 @@ Suggestion/3 = {
 }
 ```
 
+当前完整Annotation读取权覆盖全部已存Value4成员，包括合法Suggestion3.expectedText={byteLength,sha256}、targetBasisSha256与原attribution；不是隐藏target plaintext/context读取权。target hidden/unavailable仍交付准确完整Value/token与targetResolution=unavailable，不删除/null化摘要、不伪造完整Value、不额外读取或重算当前/历史隐藏target。replace/delete保已存摘要，insert保expectedText=null；Annotation-only Reject、readonly Draft保留，apply/reconfirm独立target资格不变。无Annotation disclosure/read先not_visible，交付前原record/aggregate/权限/finalbarrier重验。当前READ03/READ06统一判据禁止额外targetbytes/context及新算摘要，不禁止完整获权Annotation的已存摘要；固定97原case/sourceEvidence不改。
+
 `AnnotationInlineBody/1` 是current唯一名称并保留早期 `AsciiDocInlineBody/1` 的四成员数据shape；`AsciiDocInlineBody/1` 仅是**schema alias**，其 canonical bytes 与 `AnnotationInlineBody/1` 完全相同，不形成第二wire/version，也不声称历史部署。body只是portable source value，不能承载processor环境。求值必须使用同一节唯一 `AnnotationInlineProfile/1`；body的 `languageBaseline="asciidoctor-ruby/2.0.26"` 必须与profile所固定的2.0.26@commit版本一致。完整source必须只形成一个paragraph（允许soft wraps与trailing whitespace）；第二paragraph、heading、list、delimited block、table或block macro为 `invalid_annotation_body`，不能静默忽略。
 
 replyTo非null强制same-owner、acyclic、purpose=comment、suggestion=null、reviewState=not_applicable。root reviewState只能open|resolved。pending confirmation只能confirmed|needs_reconfirmation；accepted/rejected terminal且confirmation=not_applicable。；其中英文名称均为协议标识、字段名或固定字面量，不改变本句中文语义。
@@ -661,7 +674,7 @@ SuggestionAuthorProposal/1 = {
 
 AnnotationEditableProposal/1 = {
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,

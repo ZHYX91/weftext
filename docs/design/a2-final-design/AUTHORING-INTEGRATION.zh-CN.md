@@ -115,7 +115,7 @@ D9DocumentRenderBinding1 的新 current semanticQualification 槽采用 Semantic
 
 ## 6. 原生 ID 和类型的构造与原 C/Q
 
-原 Result9/C/Q 闭集不接受新的控制声明 tag。本候选使用 Core 内部 ManagedControlConstruction1 作为完整源构造的具名中间表示，不能直接作为原 Result9 字节提交，不能被 worker 或文件 UUID 自行认证。它不解决原全局“symbolic Document 输入”P1：正式 D3 提交 framing 仍须与该问题联合完成独立验收。在此之前，新建/template/import 的 managed2 端到端依赖仍未关闭，已有身份属性编辑不依赖新 ID 构造。
+正式原生控制声明采用下列 Result10 合同；内部 ManagedControlConstruction1 不再被冒充为 Result9。
 
 ```text
 ManagedControlConstruction/1 = {
@@ -136,6 +136,22 @@ ID、types 与业务 patch 一同进入完整 preview/SourceTransform，保留�
 
 真实 managed1 普通 copy/fork 保留 Profile1/Binding1 和原源码；显式 copy+format-conversion 才在 fresh subject 上生成新控制声明，Binding2.bindingRevision=1。same-identity conversion checked-increment bindingRevision；所有真实源变更产生 sourceChanges，不能用 profile-only 空变更掩盖。restore 保留原历史版本。未部署的 YAML 前稿无新增 runtime decoder 或迁移责任。
 
+### 6.1 正式 Document framing 与当前槽
+
+当前未激活候选的 D7ProposedInput/3 保持 outer 形状，encoding 加入 d3_symbolic_result10，合法 pairs 在原四项外增加 exact_source_document ↔ d3_symbolic_result9 与 exact_source_document ↔ d3_symbolic_result10。后两项仅适用于真正 D3 Node result，pin 必须绑定完整 effect_bytes artifact 和 payloadBindings.result 的准确 stream bytes；subject 为匹配 Node existing/mapped/new，不能是 Resource、Annotation 或 artifact part，不能用于 D6 source transform。Result9 保原 decoder；Result10 只用于以下新正式原生 header 生产者。Annotation Result9/Value4 与 Resource concrete 原规则不变。真实旧 Input2/PAB3/原请求与已保存决议保原字节、decoder 和责任；当前本地未部署 Input3/PAB4 等不被虚构成新的历史退役域。
+
+D3IdentityOperationRequest/14 继承 current /13 的所有成员、矩阵和 stage，只将 wireVersion 设为14并具名选择 Result10 Document；所有 fingerprint/input descriptor/receipt/error/retained decision 的外层 wireVersion 必须匹配14，Ref/Locator、subject、pin、SourceRevisionPlan、单 candidate map、planning CAS/P 均不改变。当前 ActionSpec3 的 d3_operation request、PrepareRequest3.action、ActionInput3.action/proposedInputs、PAB4.action/request/proposedInputs、D3-SCHEMAS 中同名 action/PAB/proposed-input/current request 槽和 D9 construction、D8 edit、D10 author preparation 的同名槽按完整 current 类型选择14/Result10；未激活 candidate 的这些 outer versions 不机械升级。D6 ownerInput 仍只接受具名 ActionInput3，不能因本条接受 D3 symbolic Document。真实旧 outer 按 recorded inner 选择，不补本候选字段或重签 digest。EffectBytes3 的 encoding 加 d3_symbolic_result10，并严格绑定 Result10 的完整原 stream；Manifest3/effect_bytes_read wire2 不改变。
+
+Request14 只由至少一个 native Document H result 触发；一次 mixed copy/fork/create/import 不要求每个 result 都是 Result10。同一个 Request14 的逐 payload 分派恰为：需原生控制构造的 Node exact_source_document→Result10；保原 profile且不需H的 Node→原 Result9（含适用C/Q）或原 concrete exact_source_utf8；Annotation→原 Result9 或完整 Value4；Resource→原 concrete resource_bytes。每项仍以原payloadKind/subject/payloadBindings准确绑定，Annotation/Resource不得用Result10。没有H的操作保持原合法Request13，不为此升wire。一个14操作仅有同一map/decision/CAS/P，混合payload不拆决议。
+
+Result/10 的 magic 恰为 ASCII D3-Symbolic-Result/10 + NUL。C<count>LF、L<baseLength>LF、共同 segment 前缀、D3Integer 最短十进制及原 B/M/N/E/S/C/Q body/语义保持，新增唯一 H。H body 恰为 D3-CJ/3 `{container,baseHeaderBytes,construction}`，container 为本 payload 的 Node subject，baseHeaderBytes 为 canonical 无 padding base64url 的准确 D2 header bytes（不含可选 BOM）；construction 严格解码 §6 ManagedControlConstruction1，subject 必须等于 container，preimagePin pin 整个准确 source skeleton，不是 header 摘要。H 的 start/end 是该 skeleton 唯一 D2 header 的完整 byte 范围：从 BOM 后到原 D2 header-end，包含 title/attributes/注释/EOL，baseHeaderBytes 长度恰 end-start。每个 Result10 恰一 H，原生 ID/types 不得另藏在 B 或第二 tag。其它 spans 与 H 不重叠；C/Q 仍限原完整 carrier/payload，不扩到 header。
+
+仅 H 允许 start=end，以表达真正空 header 的插入点；它必须在准确 BOM 后的 header 起点，禁止其它零宽 segment。baseLength 允许0仅当空 source 的唯一 segment 是 H@0:0。零宽 H 在同起点 B 前排序；所有 positive-width segments 仍连续覆盖0..baseLength，H 不占 base bytes，count 包含 H。除该精确例外外，原 count>0、start<end、B 禁空及相邻 B 合并等约束全部保持。完整 stream 和 H body 必须 strict decode/re-encode byte-equal；不能让元数据或文件名决定是否合法。
+
+Core producer 从同一准确 source pin/D2 trace 建立 H，prepare 不预分配 UUID，constructor 不接受 caller candidate。stage12 后 H 只消费同一个私有 candidate map，mapped/new ID取准确 NodeId；existing ID只取已认证原身份/birth/file binding。完整 H 输出由 §6 的 narrow ID/types/EOL 规则产生，声明类型只取同 cut 授权 Recipe/Facet gate；H 不给 Field、普通 Source 或控制属性额外权限。先物化 H 及全部非位置变换，按真实 byte displacement 映射原 C/Q span，并以同一个 SourceRevisionPlan/revision token 运行原 C 与 Q 两遍算法；C/Q 的 inputPayload/baseCarrierBytes 仍指准确原 pin 前像，不能被新位置冒充。最终完整 D2/D4/Registry/control parse 必须证明除完整正式 plan 已明示并验证的 M/N/E/S/C/Q、Recipe/body_text、Facet/type 等变换以外的内容与分类不变，且单独 H 不造成原标题/正文重分类；再证明唯一合法 ID/types 与分配/declaredTypes 相等、typed coverage完整，Q两遍最终span不等整体失败。afterPin 覆盖完整最终 bytes0..EOF。
+
+静态 shape/framing/subject 错走原 stage1；需 authoritative parse/pin/typed coverage 的失败走 stage14 identity_map_incomplete，先于 bound postconditions；availability、失权、预算、overflow 与 seal 失败保原错误和原读取顺序。唯一 planning CAS 冻结原 request14、Result10 pin、constructor/source provenance、同一 map/revision basis 与最终 bytes；唯一 P 安装完整源/format/metadata和原效果。saved/planned/unknown 只能复用 recorded framing/bytes/map/afterPin，不能重新采样或把旧 Result9 加 H。正向空 header、新建、模板、copy+conversion、含 slots=[] Q 的 copy/fork 均有准确路径；managed1 普通 copy/fork仍按原profile和Result9，不发生隐式转换。
+
 ## 7. 集成验收与剩余边界
 
 以下 INT-01–06 是待实施的设计案例，产品 UNRUN；每项正常、拒绝、旧记录恢复均需审查。
@@ -144,7 +160,7 @@ ID、types 与业务 patch 一同进入完整 preview/SourceTransform，保留�
 | --- | --- |
 | INT-01 | 已有合法 managed2 task，无 body read 的 Field-only status open→done：wire3 selection、Spec3、真实 image3、同一提交、D8读；隐藏 substitution/ABA/撤权拒绝。 |
 | INT-02 | 多个同名 set/unset 的 remove 不显露前值；无损两向转换；两个同值复杂事实不合并，无法保全 note/正文引用时拒绝。 |
-| INT-03 | Recipe3 field_set native status 覆盖默认值；field_append 遇 header 冲突；新实例 ID 构造仍依 §6 未关闭的原全局 framing。 |
+| INT-03 | Recipe3 field_set native status 覆盖默认值；field_append 遇 header 冲突；新实例 ID 构造依 §6.1 Request14/Result10 H、同一 map 与唯一 seal；混合原 profile Node/Annotation/Resource 保持各自准确合法 payload arm。 |
 | INT-04 | 真实 Snapshot1→2 明确演进，完整 bootstrap/activation/proof/recurrence 消费；缺 version/绑定表、混合新旧读取、错误 digest 拒绝。 |
 | INT-05 | Binding2 原 pin→seal→第二副本 admission→Qualification2/Environment4→D2/D9；unknown version拒绝，真 Binding1 原恢复和普通复制不偷偷转换。 |
 | INT-06 | 控制声明 patch 改变全文 offset 后 C/Q 和最终 afterPin 一致；candidate/ID mismatch 或部分 metadata 不安装；真实 saved/planned/unknown 不重编码。 |

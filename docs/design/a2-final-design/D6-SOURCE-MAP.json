@@ -972,7 +972,7 @@
         },
         {
           "id": "database-author-commit-point",
-          "sourceLineRange": "118",
+          "sourceLineRange": "116",
           "disposition": "named-supersede",
           "condition": "Unique author commit point was one final database transaction publishing current payload pointers plus control.",
           "currentTargets": [
@@ -982,13 +982,13 @@
             }
           ],
           "owner": "D6 current install/P-seal owner",
-          "oracle": "Current success is qualified author-file/portable-control installation plus original P seal; no body-SQLite pointer transaction is current authority."
+          "oracle": "Replace only the database/body-pointer physical carrier at S116 with qualified file/portable-control installation plus the original atomic P seal. Preserve one-decision source/effect/receipt atomicity and original immutable replay; S118 source-patch duties are not superseded."
         },
         {
           "id": "exact-patch-footprint",
-          "sourceLineRange": "120-123",
+          "sourceLineRange": "118-123",
           "disposition": "retain",
-          "condition": "Source edit binds exact before/proposed bytes, preserves untouched bytes, computes actual MutationFootprint, enforces typed semantics/auth, never auto-runs old proposal on new revision.",
+          "condition": "Exact source patch uses nonoverlapping UTF-8 spans or the admitted D4 selector, verifies expected raw span, constructs full proposed source and runs D2/D4 gates; untouched order/comments/EOL/unknown namespace remain byte-exact. A note/Entry edit never reencodes its namespace or merges same-value different-key facts. Same-owner relation replacement stays in place; canonical migration removes old/appends new in both owners under one decision, each advancing once. Copy effects independently prove actual source and D3 cut. Actual MutationFootprint and authorization cover all real changes; old-revision proposals require a new explicit preview/request and never execute automatically.",
           "currentTargets": [
             {
               "file": "D6.md",
@@ -996,7 +996,7 @@
             }
           ],
           "owner": "D2/D4/D6 source-edit owner",
-          "oracle": "Publish only frozen fully validated source; a narrow declared patch cannot hide a wider actual semantic mutation."
+          "oracle": "Trace S118/120/122 to D6 §5/§7 and the actual D2/D4 patch/selector owners; AUTHORING §§5-7 adds the native-header branch without removing retained Entry1 duties. Verify exact before/proposed/raw-span and untouched-byte equality, complete typed/authority footprint, two-owner relation atomicity and independent copy source/cut. Wrong adjacent source paragraph, broad namespace rewrite, value-based key merge, unauthorized extra mutation, single-owner migration or self-proving copy effect fails."
         }
       ]
     },
@@ -6824,8 +6824,8 @@
       "sourceSection": "### PL-IR-01 portable-location design acceptance matrix (L201-L263)",
       "target": "D6-IMPACT.md §5 PL-IR-01",
       "disposition": "retain-unexecuted",
-      "basis": "All parent test/impact conditions remain unexecuted obligations at the named current section; version changes are qualification, not executed evidence.",
-      "oracle": "### PL-IR-01 portable-location design acceptance matrix (L201-L263): preserve the complete source-section condition under D6-IMPACT; current targets above are the only named satisfaction/consumer locations, with genuine historical records dispatched by their recorded family.",
+      "basis": "Preserve every parent test obligation, with PL19/PL34/PL35 explicitly version-qualified to the unique current dual-profile producer and exact presentation-bearing bootstrap completion family. Genuine recorded single-profile cases retain only their original historical family; none of these oracles is executed evidence.",
+      "oracle": "Retain the complete fixed-parent source evidence. PL19/PL34/PL35 current outputs are the named successors in D6-IMPACT §5/§16 and CONTROL §20.2, with Plan4/Genesis2/Bundle2, complete two-profile registration and 2/3/4-declaration continuation under one original P. Single-profile output/count requirements apply only to genuine recorded historical cases, never fresh current operations. Other original test conditions remain under their actual owners.",
       "currentTargets": [
         {
           "file": "D6-IMPACT.md",
@@ -7712,17 +7712,21 @@
       "subObligations": [
         {
           "id": "legacy-decoder-recovery",
-          "sourceLineRange": "165-168",
+          "sourceLineRange": "165-168,173-174",
           "disposition": "retain-historical-dispatch",
-          "condition": "Actually existing legacy SourceVersion/Policy/wire/Prepared/Frontier/Notice/CP/Conflict/receipt/plan retain decoder/bytes/pins/auth/lifetime/no-duplicate-effect.",
+          "condition": "Actual predecessor records retain decoder/bytes/pins/auth/lifetime/no-duplicate-effect (S167); S173 concretely separates saved, planned and unknown. Saved replays original bytes/outbox under current original actual-effect/result-disclosure delivery authorization even after r5→r6; planned resumes only the original frozen plan/version basis/pins/budget/install state; unknown preserves pins/external/Approval/Money/execution-continuity responsibility.",
           "currentTargets": [
             {
               "file": "D6-LEXICON.md",
               "anchor": "§6"
+            },
+            {
+              "file": "D6-CONTROL.md",
+              "anchor": "§5, §8, §22"
             }
           ],
           "owner": "D6 historical recovery owner",
-          "oracle": "New contract or missing deployment evidence cannot erase duties for actual predecessor record."
+          "oracle": "S167 and S173 remain concrete business recovery obligations. Saved never re-runs business, overwrites r6 or charges again; planned never new-prepares another decision; unknown/P loss is never guessed away from I/current files/equal hash/reauthorization. Semantic source-to-owner checking rejects adjacent review-status attribution even when hashes/ranges/counts pass."
         },
         {
           "id": "old-current-producer-gate",
@@ -7744,7 +7748,7 @@
         },
         {
           "id": "review-open-status",
-          "sourceLineRange": "173-176",
+          "sourceLineRange": "175-176",
           "disposition": "historical-only",
           "condition": "Eleven OPEN/U6/U7/author-reading statements are predecessor review-scope provenance.",
           "currentTargets": [
@@ -9800,21 +9804,29 @@
     {
       "sourcePath": "docs/design/asciidoc-annotation-final-design/SPEC.md",
       "sourceSection": "### 10.2 Media target (L687-L690)",
-      "target": "D2.md §7 | D3.md §5.3",
-      "disposition": "source-qualified-cross-owner",
+      "target": "D9-SCHEMAS.md §16 | D9-INTERFACES.md §11 | D8.md §8 | D3.md §11.3",
+      "disposition": "named-current-temporal-and-rectangle-dispatch",
       "basis": "The complete fixed97 source section remains at its actual owner; D6 is listed only where it produces/consumes a load-bearing current proof, transaction, recovery, transform, trust or execution boundary.",
-      "oracle": "### 10.2 Media target (L687-L690): preserve the complete source-section condition under the actual fixed97 owner/consumer set; current targets above are the only named satisfaction/consumer locations, with genuine historical records dispatched by their recorded family.",
+      "oracle": "d9rt1 exact rational temporal issuance/validation under D9-SCHEMAS16; d9rg1 old rectangles preserved. Original D3 l1/rights/version/currentness/aggregate CAS/recovery; missing/future decoder is unavailable, proved invalid interval/version is stale; never whole-media substitution.",
       "currentTargets": [
         {
-          "file": "D2.md",
-          "anchor": "§7"
+          "file": "D9-SCHEMAS.md",
+          "anchor": "§16"
+        },
+        {
+          "file": "D9-INTERFACES.md",
+          "anchor": "§11"
+        },
+        {
+          "file": "D8.md",
+          "anchor": "§8"
         },
         {
           "file": "D3.md",
-          "anchor": "§5.3"
+          "anchor": "§11.3"
         }
       ],
-      "owner": "actual fixed97 non-D6 owner",
+      "owner": "D9 finite geometry; D3 opaque Locator; D8 Annotation consumer",
       "sourceEvidence": {
         "primary": {
           "path": "docs/design/asciidoc-annotation-final-design/SPEC.md",
@@ -20238,8 +20250,8 @@
         "sourcePointer": "/concepts/13/definition",
         "targetPath": "D6-REGISTRY.json",
         "targetPointer": "/concepts/13/definition",
-        "disposition": "retain-exact-public-registry-value",
-        "oracle": "Exact parent public registry value is retained."
+        "disposition": "named-current-successor",
+        "oracle": "Preserve fixed-parent source evidence, public concept identity/ownedNames/firstFreeze and genuine recorded recovery. Current target is version-qualified by D6-CONTROL §9.4 historical and §20-§20.2 current, D6-SCHEMAS §9 and D6-IMPACT §16: actual Declaration1/2 fields, Carry1/2 origins, Outcome1/2 PoP domains, complete dual-profile registration and one original P; no alias/fallback/resign/migration."
       },
       {
         "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
@@ -23998,8 +24010,8 @@
         "sourcePointer": "/concepts/34/definition",
         "targetPath": "D6-REGISTRY.json",
         "targetPointer": "/concepts/34/definition",
-        "disposition": "retain-exact-public-registry-value",
-        "oracle": "Exact parent public registry value is retained."
+        "disposition": "named-current-successor",
+        "oracle": "Preserve fixed-parent source evidence, public concept identity/ownedNames/firstFreeze and genuine recorded recovery. Current target is version-qualified by D6-CONTROL §9.4 historical and §20-§20.2 current, D6-SCHEMAS §9 and D6-IMPACT §16: actual Declaration1/2 fields, Carry1/2 origins, Outcome1/2 PoP domains, complete dual-profile registration and one original P; no alias/fallback/resign/migration."
       },
       {
         "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
@@ -25679,7 +25691,7 @@
         "targetPath": "D6-REGISTRY.json",
         "targetPointer": "/concepts/44/definition",
         "disposition": "named-current-successor",
-        "oracle": "Predecessor parent pointer value remains source evidence. Current successor: Conflict Record current outer family is InputDescriptor/3 + DependencyProof/3 + PreparedIntent/3; source_merge/choose_source_head retain inner Input2/Plan1/Preview1 ownerKind/2, policy_bundle_choice uses inner Input3/Plan2/Preview2 ownerKind/3; historical arms retain recorded bytes."
+        "oracle": "Preserve fixed-parent source evidence, public concept identity/ownedNames/firstFreeze and genuine recorded recovery. Current target is version-qualified by D6-CONTROL §9.4 historical and §20-§20.2 current, D6-SCHEMAS §9 and D6-IMPACT §16: actual Declaration1/2 fields, Carry1/2 origins, Outcome1/2 PoP domains, complete dual-profile registration and one original P; no alias/fallback/resign/migration."
       },
       {
         "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
@@ -25790,8 +25802,8 @@
         "sourcePointer": "/concepts/44/exampleAndCounterexample",
         "targetPath": "D6-REGISTRY.json",
         "targetPointer": "/concepts/44/exampleAndCounterexample",
-        "disposition": "retain-exact-public-registry-value",
-        "oracle": "Exact parent public registry value is retained."
+        "disposition": "named-current-successor",
+        "oracle": "Preserve fixed-parent source evidence, public concept identity/ownedNames/firstFreeze and genuine recorded recovery. Current target is version-qualified by D6-CONTROL §9.4 historical and §20-§20.2 current, D6-SCHEMAS §9 and D6-IMPACT §16: actual Declaration1/2 fields, Carry1/2 origins, Outcome1/2 PoP domains, complete dual-profile registration and one original P; no alias/fallback/resign/migration."
       },
       {
         "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
@@ -27150,8 +27162,8 @@
         "sourcePointer": "/crossStageBindings/1/contract",
         "targetPath": "D6-REGISTRY.json",
         "targetPointer": "/crossStageBindings/1/contract",
-        "disposition": "retain-exact-public-registry-value",
-        "oracle": "Exact parent public registry value is retained."
+        "disposition": "named-current-successor",
+        "oracle": "Preserve fixed-parent source evidence, public concept identity/ownedNames/firstFreeze and genuine recorded recovery. Current target is version-qualified by D6-CONTROL §9.4 historical and §20-§20.2 current, D6-SCHEMAS §9 and D6-IMPACT §16: actual Declaration1/2 fields, Carry1/2 origins, Outcome1/2 PoP domains, complete dual-profile registration and one original P; no alias/fallback/resign/migration."
       },
       {
         "sourcePath": "docs/design/d6-file-authority-reopen/owners/d6-terminology-registry/source.json",
@@ -27877,7 +27889,7 @@
     "current_candidate_blob": "678db2c6b0316d6c431bcfe494add46cfd2a6e11",
     "diff_summary": {
       "fixedSPointersChangedByNamedSuccessor": 33,
-      "parentPointersChangedByNamedSuccessor": 24
+      "parentPointersChangedByNamedSuccessor": 28
     }
   },
   "parent_impact_cases": {
@@ -28357,7 +28369,7 @@
         "text": "| PL19 | fresh Workspace create/fork reaches its first managed source seal | WorkspaceBootstrapPlan/3 carries WorkspaceTrustGenesis/1. Issuer/target custody establishes the protected root anchor; root self-signature, root-signed initial exact W/B domain declaration and PoP all validate. The same bootstrap P seal commits WorkspaceAuthorizationBundle/1 and the managed after, using only the narrow same-P genesis exception. No pre-existing target trust history is required |",
         "target": "D6-IMPACT.md PL-IR-01 portable-location design acceptance matrix",
         "disposition": "named-current-successor",
-        "oracle": "| PL19 | fresh Workspace create/fork reaches its first managed source seal | WorkspaceBootstrapPlan/4 carries WorkspaceTrustGenesis/2. Issuer/target custody establishes the protected root anchor; root self-signature, root-signed initial exact W/B domain declaration and PoP all validate. The same bootstrap P seal commits WorkspaceAuthorizationBundle/1 and the managed after, using only the narrow same-P genesis exception. No pre-existing target trust history is required |",
+        "oracle": "| PL19 | fresh Workspace create/fork reaches its first managed source seal | Current Plan4/Profile4 carries Genesis2 and produces Bundle2 with authorizationRevision=1, trustRevision=2 and exactly two Declaration2 authorizations in revision-token then source-transform order. Issuer/target custody, root anchor/self-signature, both root signatures and exact PoP2 bodies validate; rev2 predecessor hashes exact rev1 bytes. Mandatory initialPresentationPolicy plus complete Policy/Registry/Calendar, source and activation effects share the original DecisionKey, one planning CAS, final P and ChangeId; the presentation-bearing bootstrap uses the coordinated Notice4/CP5/ChangeRecord2 family. Both staged handles become usable together; no pre-existing target trust history or observable one-profile prefix. Missing second profile/policy, Bundle1 output, mismatched decision/activation, loser CAS or failed P cannot succeed; genuine historical Plan1/Plan3 retains exact recorded-family recovery |",
         "currentLine": 224
       },
       {
@@ -28491,8 +28503,8 @@
         "line": 242,
         "text": "| PL34 | continuation to fresh server B2 is attempted after the old authority is fenced | At continuationCut: current rotated K1b → same decision appends revoke(K1b)+authorize(B2); already-none after prior revoke(K1,loss) → same decision appends authorize(B2) only; conflicted/gapped/unproved → no activation. The one/two declarations share one DecisionKey/activation ChangeId with no current intermediate prefix, and prior loss/compromise facts remain public history |",
         "target": "D6-IMPACT.md PL-IR-01 portable-location design acceptance matrix",
-        "disposition": "retain",
-        "oracle": "| PL34 | continuation to fresh server B2 is attempted after the old authority is fenced | At continuationCut: current rotated K1b → same decision appends revoke(K1b)+authorize(B2); already-none after prior revoke(K1,loss) → same decision appends authorize(B2) only; conflicted/gapped/unproved → no activation. The one/two declarations share one DecisionKey/activation ChangeId with no current intermediate prefix, and prior loss/compromise facts remain public history |",
+        "disposition": "named-current-successor",
+        "oracle": "| PL34 | continuation to fresh server B2 after both P and author-file authority are fenced | Current continuation proves both old profile states independently as current(K) or none at continuationCut; any conflicted/gapped/unproved profile prevents all new-domain activation. Complete Declaration2 order is optional old revision revoke, optional old transform revoke, new revision authorize, new transform authorize: two none states yield 2 declarations, one current yields 3, both current yield 4. Every root/PoP/predecessor validates under one DecisionKey, activation ChangeId and ordinary Notice3/CP4/ChangeRecord1/final P; both handles become usable together with no intermediate prefix. Prior loss/compromise facts and original saved/planned/unknown responsibility remain. Genuine historical single-profile continuation retains its recorded one/two-declaration contract, bytes and pins, with no injected second key or resigning |",
         "currentLine": 240
       },
       {
@@ -28500,8 +28512,8 @@
         "line": 243,
         "text": "| PL35 | trust-only policy-component update, fresh replica registration, then replica retirement | trust-only update increments bundle.authorizationRevision and policy ComponentImage.version exactly once while Policy/3.revision is unchanged. replica_register can only mint its fresh ReplicaEpoch plus one same-decision fixed-profile authorize declaration; it cannot manage another domain/key. replica_retire only makes the record inactive, so authorize_new_sign fails the active-domain gate; no implicit revoke/history deletion occurs |",
         "target": "D6-IMPACT.md PL-IR-01 portable-location design acceptance matrix",
-        "disposition": "retain",
-        "oracle": "| PL35 | trust-only policy-component update, fresh replica registration, then replica retirement | trust-only update increments bundle.authorizationRevision and policy ComponentImage.version exactly once while Policy/3.revision is unchanged. replica_register can only mint its fresh ReplicaEpoch plus one same-decision fixed-profile authorize declaration; it cannot manage another domain/key. replica_retire only makes the record inactive, so authorize_new_sign fails the active-domain gate; no implicit revoke/history deletion occurs |",
+        "disposition": "named-current-successor",
+        "oracle": "| PL35 | trust-only policy-component update, fresh replica registration, then replica retirement | Trust-only update increments bundle.authorizationRevision and policy ComponentImage.version once while Policy/3.revision is unchanged. Current specialized replica_register mints one fresh ReplicaEpoch, exactly two staged Handle2 values and two Declaration2 authorizations in revision-token then source-transform order, under one DecisionKey, Notice3/CP4/ChangeRecord1/final P and ChangeId. The predecessor chain, both PoP2/root signatures, exact Bundle2 and replica_registry images validate before both handles become usable together. Single-profile/partial activation, wrong order or cross-decision evidence rejects. This grants no generic domain/key administration or execution custody. replica_retire makes the exact record inactive and blocks both profiles through active-domain/fence gates without implicit revoke/history deletion. Genuine historical registration restores its original recorded single-profile family without adding a key |",
         "currentLine": 241
       },
       {
@@ -29499,9 +29511,9 @@
         "id": "AN2-37",
         "line": 100,
         "text": "| AN2-37 | SPEC §§9–16 | Audio/video rational timebase/ticks and [start,end) round-trip exactly. |",
-        "target": "explicit-defer to the actual non-D6 owner; retained as fixed97 intake only",
-        "disposition": "explicit_defer_other_owner",
-        "oracle": "| AN2-37 | SPEC §§9–16 | Audio/video rational timebase/ticks and [start,end) round-trip exactly. |"
+        "target": "D9-SCHEMAS.md §16 TEMP01–07; D8.md §8",
+        "disposition": "named-current-owner-clarification",
+        "oracle": "Audio/video d9rt1 rational ticks half-open intervals roundtrip; preserve D3 l1, rectangle decoder, rights/currentness/aggregateCAS/body/raw backup. UNRUN."
       },
       {
         "id": "AN2-38",
@@ -36731,9 +36743,9 @@
         "id": "FC4C-READ-06",
         "line": 704,
         "text": "| FC4C-READ-06 | SPEC §9.11 | When the Annotation is readable but its target is hidden/unavailable, complete Annotation attribution/body remains readable; targetResolution=unavailable and no target-source bytes/expectedText are disclosed. |",
-        "target": "explicit-defer to the actual non-D6 owner; retained as fixed97 intake only",
-        "disposition": "explicit_defer_other_owner",
-        "oracle": "| FC4C-READ-06 | SPEC §9.11 | When the Annotation is readable but its target is hidden/unavailable, complete Annotation attribution/body remains readable; targetResolution=unavailable and no target-source bytes/expectedText are disclosed. |"
+        "target": "D3-SCHEMAS.md §7; D8-SCHEMAS.md §7; D9-SCHEMAS.md §16a",
+        "disposition": "named-current-owner-clarification",
+        "oracle": "Annotation read includes exact stored expectedText length/hash in complete Value4, never extra hidden targetbytes/context/recomputation. Unavailable target/readonlyDraft/Annotation-onlyReject remain; original fixed97 source row unchanged."
       },
       {
         "id": "FC4C-READ-07",

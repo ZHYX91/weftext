@@ -37,8 +37,8 @@ All fixed-S snapshots, design inputs, and catalog bytes are read-only. P2 synchr
 
 Implementation first routes by the actual stored-record version and wire version, preserving historical bytes/decoders from current-protocol reinterpretation:
 
-- v9/v10/v11: only actually existing saved/planned/unknown, receipt/error/effects, Preparation/Observation/token/pin records recover under the original decoder, bytes/fingerprint, original profile, authorization, custody, TTL/clock, retention, and no-duplicate-effect obligations. A decoder, fixture, draft, or candidate prose does not prove that the prototype was deployed or active.
-- v12: accept only real D6 owner-decoder outputs for `DecisionKey/2`, `CommitDomain/2`, `Frontier/2`, `ObservationScope/2`, `DependencyProof/3`, `OwnerInputBinding/2`, `InputDescriptor/3`, and applicable `SourceObservation/1`, then let D3 validate the closed owner request.
+- v9/v10/v11/v12: only actually existing saved/planned/unknown, receipt/error/effects, Preparation/Observation/token/pin records recover under the original decoder, bytes/fingerprint, original profile, authorization, custody, TTL/clock, retention, and no-duplicate-effect obligations. A decoder, fixture, draft, or candidate prose does not prove that the prototype was deployed or active.
+- v13: accept only real D6 owner-decoder outputs for `DecisionKey/2`, `CommitDomain/2`, `Frontier/2`, `ObservationScope/2`, `DependencyProof/3`, `OwnerInputBinding/2`, `InputDescriptor/3`, and applicable `SourceObservation/1`, then let D3 validate the closed owner request. This is the existing wire13 mutation family; separately specified native wire14/Result10 is dispatched only by its own exact producer contract. ResolverInput/12 remains its distinct typed read contract, not a mutation version.
 - any other version: unsupported; never guess compatibility, renumber old records, or bulk-migrate legacy bytes.
 
 Fault-injection and replay tests must prove the common ordering:
@@ -296,8 +296,8 @@ Every D3 identity/structure/lifecycle mode remains `WriteProtection=strict`. Fau
 6. observed competition;
 7. installed verification;
 8. before P seal;
-9. after seal before `ContentCompletionProof/4` generation/persistence;
-10. during current CP4 + ChangeRecord/1 generation/write/flush/transport;
+9. within final atomic P: completion proof, ChangeRecord, actual Frontier and publication outbox generation/write/flush before successful commit;
+10. after successful P: transport/delivery of the already durable exact proof/ChangeRecord/outbox bytes;
 11. lost response delivery.
 
 Each cell lands only in real exact-before, exact-after-with-provenance, third-state, unavailable/recovery_unknown plus D3 decision state. Equal hash with different `FileObjectBinding`/provenance never proves original-plan installation.
@@ -403,8 +403,8 @@ The old Impact pin-retention, budget, and resource obligations remain and synchr
 ## 16. wire13 current, historical corpus, and terminology gate
 
 The new corpus independently covers:
-- wire13 new-decision accept; 0..11/unknown rejected for new decision;
-- actual saved/planned/unknown v9/v10/v11 under original decoder/bytes/fingerprint/pins/custody/TTL/recovery;
+- wire13 new-decision accept; 0..12/unknown rejected for new decision; This rejection applies only to fresh mutation, never original recorded recovery or ResolverInput/12.
+- actual saved/planned/unknown v9/v10/v11/v12 under original decoder/bytes/fingerprint/pins/custody/TTL/recovery;
 - `DecisionKey/2`, `protocolOwner=D3`, same `OperationId` cross-domain independence, same-key fingerprint conflict;
 - replica/server `CommitDomain/2`;
 - `Frontier/2` exact and `scope_dependencies`;

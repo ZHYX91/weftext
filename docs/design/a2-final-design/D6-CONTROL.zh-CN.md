@@ -69,6 +69,7 @@ CP4 相比 CP3 只把 component-key decoder 升为 PortableComponentKey/2，并�
 
 fresh managed Document 的 source-document component 与 document_format component 必须由同一原始 plan 产生、由同一 portable decision 安装，并且只在同一个 P seal/CP4 中一起成为 current；不得出现半激活 managed source。format-only transition 若 source 不变，只改变 document_format，sourceChanges=[]，不产生 SourceRevisionPlan/managed SourceVersion，也不推进 H(D,E)。
 
+
 ### 0.1.3 ChangeRecord/1
 
 本设计首次规范闭合当前ChangeRecord；不宣称未知历史bytes属于该版本：
@@ -98,6 +99,101 @@ receiver 只有在 strict-decode ChangeRecord 所指 exact canonical Notice3/CP4
 本文件拥有 D6-FA-r01 的 closed control types、D6 wireVersion2、PreparedIntent/3、Policy/3、SourceVersion/2、普通 source save、decision/install state、portable installation/completion records、ConflictRecord 和错误/授权顺序。D3 identity/lifecycle 仍归 D3；本文件不得用通用 D6 入口创建/移动/Trash/purge Entity。
 
 全部 JSON object closed：unknown/missing/duplicate key、非法 null、wrong union、非法 Unicode scalar 拒绝。可选 member 只有本文明确标 optional 时可省略；不以 null 代替 absent。
+
+### 0.1.4 可移植显示策略 owner 完成链（Notice4 / CP5 / ChangeRecord2）
+
+本节是唯一 D6 owner，仅替代包含真实 D8 presentation_policy_change 的新决议的 Notice3/CP4-only 生产/接纳。普通纯 component 决议仍用 Notice3/CP4/ChangeRecord1；真实 recorded family 完全保持。D8 拥有 record/head/proposal 语义；不新增 PortableComponentKey、假 Policy component、作者源、第二账本、planning CAS 或 P。
+
+下列对象全部闭合：
+```text
+D6PresentationOwnerPlan/1 = {
+ kind:"presentation_policy",workspaceRef:WorkspaceRef,
+ before:D8PresentationPolicyHeadSet/1,
+ proposal:D8PresentationPolicyProposal/1
+}
+D6PresentationOwnerCompletion/1 = {
+ kind:"presentation_policy",workspaceRef:WorkspaceRef,
+ record:D8WorkspacePresentationPolicy/2,
+ address:D8PresentationPolicyAddress/1
+}
+InstallationNotice/4 = {
+ format:"weftext.installation-notice",version:4,
+ decisionKey:DecisionKey/2,
+ guarantee:"replica_local"|"managed_atomic",
+ writeProtection:"strict"|"observed_only",
+ baseFrontier:Frontier/2,
+ components:[{key:PortableComponentKey/2,
+              before:ComponentImage/1,after:ComponentImage/1}...],
+ ownerEffects:[D6PresentationOwnerPlan/1...]
+}
+ContentCompletionProof/5 =
+ {format:"weftext.content-completion",version:5,outcome:"committed",
+  decisionKey:DecisionKey/2,changeId:ChangeId/1,
+  guarantee:"replica_local"|"managed_atomic",
+  writeProtection:"strict"|"observed_only",semanticState:SemanticState/1,
+  frontierBefore:Frontier/2,frontierAfter:Frontier/2,
+  components:[{key:PortableComponentKey/2,after:ComponentImage/1}...],
+  ownerEffects:[D6PresentationOwnerCompletion/1...],
+  sourceChanges:[{entityRef:EntityRef,before:SourceVersion/2|"absent",
+                 after:managed SourceVersion/2|"absent"}...],
+  receiptDigest:"sha256:64-lowercase-hex"}
+ |{format:"weftext.content-completion",version:5,outcome:"restored",
+   decisionKey:DecisionKey/2,baseFrontier:Frontier/2,
+   components:[{key:PortableComponentKey/2,after:ComponentImage/1}...],
+   ownerEffects:[{kind:"presentation_policy",workspaceRef:WorkspaceRef,
+                 before:D8PresentationPolicyHeadSet/1}...]}
+ChangeRecord/2 = {
+ format:"weftext.change-record",version:2,
+ decisionKey:DecisionKey/2,changeId:ChangeId/1,
+ installationNotice:{format:"weftext.installation-notice",version:4,
+                     byteLength:Counter,sha256:"64-lowercase-hex"},
+ completionProof:{format:"weftext.content-completion",version:5,
+                  byteLength:Counter,sha256:"64-lowercase-hex"},
+ frontierBefore:Frontier/2,frontierAfter:Frontier/2
+}
+```
+
+Notice4.ownerEffects 恰一项 presentation entry，属于原决议 Workspace；before.workspaceRef 和 proposal.workspaceRef 逐字相等。空 ownerEffects 不能选择本 family，外 Workspace 或第二项拒绝。只有本 family 且存在这项真实效果才允许 components=[]。真实 component 保留原 rank、准确前后像及 strict 安装/回滚，CP5 component 的完整 key 集/顺序等于 Notice4。presentation 路径（含 mixed bootstrap）必须 managed_atomic/strict 且 semanticState 完整证明。sourceChanges 仍是真实完整 source delta：单独 Set 为 []，bootstrap 保留所有实际 source version；不得为凑证明虚构 source。
+
+Notice4 只携带原 prepared input 冻结的 D8 effect.before/proposal，不携带尚不存在的 record/hash/address/pin/ChangeId。原计划/proof 保留 parent evidence、权限、受保护 head-set stamp、原 expected Frontier 与预算。Notice 在任何实际 component 安装前耐久；零 component 没有安装/verify 字节工作，仍核完整 owner-plan 前提和 final P 门。owner record/head/outbox 在 P 前均不成为 current。同值 no_change 不产生 Notice/CP/ChangeId/record，不能代替真正 changing Set 正例。
+
+唯一原 final P 先复验 exact Frontier/domain fence、权限、完整冻结 owner heads/stamp/ancestry、真实 component verify、依赖及预算；bootstrap 使用原 fresh-target custody/activation 门，不要求已激活目标的 policy_admin。全部通过后才分配 C，在同一原子 P 内从 proposal+C 物化 D8 record、准确 prefix hash/address/recovery pin、committed effect、CP5、ChangeRecord2、原 receipt/companion/outbox、适用 target activation 与 owner head 转换。Workspace/DecisionKey/ChangeId/receipt/frontier 全部一致。CP5 内嵌完整 D8 record，不是自由 owner JSON/pin 或新权威；address 从准确 prefixed bytes 重算，record 的 workspaceRef/revision/parents/defaultPresentation 等于 Notice4.proposal，activationChangeId=C。发送方 head stamp 不作为接收方 currentness 证明。
+
+P 内失败不得留下任何上述 committed 对象、部分 owner head 或 activation。seal 前 restored CP5 需要全部真实 component 恢复 Notice4.before，且证明本决议未物化 owner record/head/outbox；ownerEffects.before 等于原冻结 Notice4.before，不声称无关写者不能推进 current state。restored 不含任何 committed-only 字段或成功语义；恢复不可证明仍原 planned/unknown 责任，不能伪造 terminal。seal 后发布只解引用原 Notice4/CP5/ChangeRecord2/D8 record/outbox 字节；不重新计划、二次推进计数、重编码、换 C 或再运行 P。
+
+receiver 先原 disclosure/authority/trust/decision 门，再核 exact ChangeRecord2->Notice4/committed CP5 的 canonical digest/version/length 及原连续因果链。每个真实 component/source version 按其真实 owner decoder 验证；另外完整验证 D8 completion record/address 与 Notice4 before/proposal、parents/ancestry、原 receipt 和完整 committed presentation effect 一致。缺 owner record/parent/effect/receipt、改 proposal、错 C/hash、unknown decoder、截断 component/owner 集、换 key 重放或 gap，沿原 owner 错误顺序 unavailable/integrity failure，不得成功。接收 C 将真实 component images 和 D8 immutable record 原子接纳到原 portable decision history，之后建立接收方本地 head observation；已接纳 exact decision 幂等。两个分别获证的并发后继保留多 head，不 first-wins/LWW。
+
+实际 current 槽位具名替代，按真实内层 discriminator 分派：
+- D6/D3 schema 的 Notice/CP/ChangeRecord 生产与 receiver：含 presentation 的新计划选 4/5/2；真实 recorded3/4/1 保持。
+- D8 Set prepared/plan/receipt/outbox admission 与 D3/D6 WorkspaceBootstrapPlan4.initialPresentationPolicy：冻结同一 D6PresentationOwnerPlan；单独 Set 零 component，bootstrap 全部真实 component 加同一 owner entry。Plan4 形状/constructor、初值 separate/parents=[]、同 C 双 trust declaration 不改。
+- D3/D6 receipt-companion、portable chain/Frontier dependency、conflict branch evidence、D10 custody/continuation 消费先读 exact pinned ChangeRecord.version，再按真实 Notice/CP domain 解码；不得用 CP5 替换旧 CP4 pin。这是具名内层 union，不扩原 record decoder。
+- 下文定义的 PolicyBundleHeadEvidence/3、TrustConflictCarryValidationHop/2 与 TrustConflictCarryValidationEvidence/2 是准确 current trust-evidence successor。其明确枚举的 completionProofVersion=5 arm 严格绑定 CP5+ChangeRecord2+真实 Bundle2 after；current headEvidence/carryEvidence/preview/protected-pin 槽严格按下文具名分派。原 version3/4 evidence/hop domain 保持；禁止 generic pin 猜测或读时改释。Declaration2、Bundle2 和签名 message 不改；activation evidence 验证两个 trust profile 与本 presentation completion 同一 C。
+- D7/D8 完整效果传输保留真实 Manifest3/EffectBytes3；presentation_policy_change 保持 D8Effect1，但采用下述穷尽的当前排序。完整源、序列、初始化、权限与显示策略效果都进入规范语义字节及其固定引用和预览摘要。
+
+设计验收（产品 UNRUN）：PP-01 独立唯一 head separate->run_in，components=[]、owner entry、sourceChanges=[] 合法产生一套 C/CP5/Record2；PP-02 同值 no_change 无生产，多 head 同值仍必须显式多 parent 后继；PP-03 含 source/series/authority/初始 presentation/双 trust 的 mixed Plan4 同 P 完成且不 half-bootstrap；PP-04 pre-P/P 内故障零 committed owner/activation，post-P transport failure 重发准确原 bytes；PP-05 缺/多 owner、假 component、错 key/C/proposal/address、缺 ancestry/receipt/typed effect、unknown version/gap 均拒绝；PP-06 saved/planned/unknown 的真实旧1/3/4与新2/4/5复用原 bytes/责任不重新采样；PP-07 offline 并发两后继和完整 head 显式 resolution 保留冲突语义。本作者修复仍等待非作者 exact-head 验收。
+
+trust-evidence 后继形状闭合，不扩历史 decoder：
+```text
+PolicyBundleHeadEvidence/3 =
+ PolicyBundleHeadEvidence/2
+ | {head:ChangeId/1,completionProofVersion:5,bundleVersion:2}
+TrustConflictCarryValidationHop/2 =
+ TrustConflictCarryValidationHop/1
+ | {declarationVersion:2,declarationRevision:Counter,
+    declarationDigest:"sha256:<64 lowercase hex>",
+    activationChangeId:ChangeId/1,completionProofVersion:5,bundleVersion:2,
+    changeRecordPin:PinRef/2,completionProofPin:PinRef/2,policyBundlePin:PinRef/2}
+TrustConflictCarryValidationEvidence/2 = {
+ head:ChangeId/1,factId:"sha256:<64 lowercase hex>",
+ origin:TrustConflictCarryValidationHop/2,
+ carriers:[TrustConflictCarryValidationHop/2...]
+}
+```
+每个导入的原 arm 严格走原 decoder；version5 evidence/hop 严格解码 CP5、ChangeRecord2/Notice4，验证真实 Bundle2 component after-image 和同一 activation C，再核原 trust ancestry/signature/carry 门。缺 CP5 owner completion 时 bootstrap activation 不获证，即使 Bundle2 字节相同。mixed 历史 hop chain 保留每个真实 arm、顺序、原 pin 与直接 origin cut；HeadEvidence3 保留完整 head 排序/唯一，CarryEvidence2 保留 head/fact 排序及每个真实 carrier。
+current ConflictResolutionPolicyDerivedPlan2.headEvidence、ConflictResolutionInput3.carryEvidence、ConflictResolutionPreview2 的 resolution/carry-derived policy 槽及 protected pin builder，仅在具名 headEvidence[].completionProofVersion 或 origin/carriers[].completionProofVersion 为5时选择上述新 inner type；outer 成员与 source-merge/choose-head 分支不改。禁止递归搜字段、新 grant、raw fallback 或历史重编码。不含新 presentation effect 的 policy resolution 本身仍可生产 Notice3/CP4/Record1，其完整 before evidence 可以验证原 bootstrap4/5/2。
+Bootstrap Plan4/control/current Lexicon/Registry 的 portable completion 摘要按本节适用 family 路由，不机械改写普通 CP4 叙述。真实旧 activation 保留原链。
+
+无 source 的 presentation changing Set 虽 saveProfile=control_only 仍是 portable：seal 后 publication 为 pending，直到准确 Notice4/CP5/ChangeRecord2/D8 outbox 交付。旧 control_only->not_applicable 捷径仅适用真实不可移植控制决议。本例外不改 receipt 成员、sourceVersions（仍空）、observation scope 或写权限。原连续链 unrelatedness 校验同时枚举真实 component keys 和 typed presentation-owner Workspace 范围；components 空不能证明 portable change 为空或无关。
 
 ## 1. 共同标量与规范编码
 
@@ -591,6 +687,8 @@ RegistryBinding/1:
 
 #### QueryScanSelector
 
+当前 QuerySpec/3 非 live scan 的 D7QueryScanCoverage/1 是 [D7-SEARCH](D7-SEARCH.zh-CN.md) §11.3 精确登记的受保护 portable_metadata/query_preview PinRef/2 payload decoder。它绑定原 query_scan key/stamp、baseFrontier、scope、authorization 及同 Proof3 的实际 lifecycle/placement_range/owner inventory entries；consumer 逐项校验并核对完整枚举。缺该证据的旧 live proof 不可解释为 Trash 全集。原 key、stamp 连续性、epoch、H 和普通 live 路径均不因能力升级改变，不新增 dependency family。
+
 QueryScanSelector 只有：
 
 ~~~text
@@ -773,7 +871,7 @@ D10 配置、用量、停止完整值及完整范围栅栏都属于此 InputDesc
 10. install 前保证 after staging/pins 已耐久。strict 只能使用真实 strict FileInstallCapability；observed_only 仅限步骤7资格并在破坏性安装前完成最后一次 trusted object/event continuity 检查。observed_only 的原 plan 已耐久保留实际 read-before B 与用户输入 N；未观察外部 C 可能在最后检查后被 N 覆盖且其 bytes 可能没有可恢复副本，后来另一个 C 也可能再次替换 current file，但这不允许丢弃已耐久的 B/N。任何已经观察到的 competition、stale Base、watcher gap、失权或第三种状态都不是 weak 豁免，进入原 conflict/paused/reprepare；安装归属未知固定 recovery_unknown。
 11. verify 时，每个 written component 以**原 planned after**作为 expected current，并要求完整 FileObjectBinding/bytes 与连续 installation provenance；不能在自己的安装完成后又要求该 component 仍等于 before。所有 unwritten dependency 继续按原 before/cut expectation 重验，包括原 source/control/auth、Registry/rules、DependencyProof 正负范围和适用 Frontier policy。scope_dependencies 只接受已在P中可证明无关的扩展；unknown provenance、third_state、late competition、撤权或无法证明连续性保持 paused/conflict/recovery_unknown。此时仍没有本 decision 的 ChangeId。
 12. seal 是唯一 decision commit point。written=planned after、原 plan/deps/auth、domain fence、SourceRevisionPlan lastIssued/empty-history依据及适用安装证明全部通过后，一个 P durable transaction 为**这个 portable decision** checked 分配唯一 ChangeId。只有实际 source change 且 after 是 managed source 的项目，才把原 SourceRevisionPlan.after SourceStamp 与该 ChangeId 合成为唯一 managed SourceVersion/2，并原子推进对应生产域实体的 H(D,E)。对每一个这样的 managed after，同一事务把 winning plan 冻结的 exact RevisionTokenBinding/2 选作该 SourceVersion 的唯一 canonical binding，按 §1.5.1 构造并签名 exact RevisionTokenSealArtifact/1，pin 其 canonical bytes，并写入 RevisionTokenSealOutboxItem/1；无需预先存在 Locator。source deletion 的 after=absent 仍是 portable effect 并使用这个 ChangeId，但不创建 managed SourceVersion、不使用删除后的 SourceRevisionPlan、也不推进 H；source 未变的 structure/lifecycle 等 portable effect同样有该 portable ChangeId而不造 source version/H。P-only control_only 与 true raw no_op 不产生 content ChangeId。该同一 P transaction 按既有 contract 写入/推进 domainCommitSequence、committed decision、原 receipt、effects、ReliableSaveState、适用 charge 与 outbox；费用只按原 decision 结算一次，重放/恢复不得重复收费。strict→reliable，observed_only→durable_observed_only。
-13. current portable publication 只从步骤12已经 sealed 的事实生成 ContentCompletionProof/4 + ChangeRecord/1 并推进 Frontier/2。proof.frontierBefore/frontierAfter 是实际 seal 前后 Frontier；notice.baseFrontier 与 InputDescriptor.expectedFrontier 保留原基线。scope_dependencies 下必须同时验证从原 base 到实际 frontierBefore 的完整连续 ChangeRecord/portable proof 链、P 中保存的无关扩展判断和原 DependencyProof仍有效；不能在 publication 时仅因向量数字增长、provider状态或最终hash相同补造“无关”。proof运输实际生产 SourceVersion before/after，不复制发送方 SourceObservation token。另由原 outbox 按 RevisionTokenSealOutboxItem/1 发布每个 sealed managed after 的 exact retained RevisionTokenSealArtifact/1 bytes；current Notice3/CP4 不增加其 closed current schema 之外的 binding/artifact member。接收端在保存任何 token→production-version mapping 前，先按 §1.5.1 与 §6.3 验证 artifact 的历史 trust key、signature 与完整 association，再建立自己的 current Observation。ContentCompletionProof/2、/1 及其它历史 records 继续原 decoder/bytes/recovery，绝不按/3字段混解。
+13. current portable publication 运输步骤12 atomic P 已构造并 durable 保存的 ContentCompletionProof/4 + ChangeRecord/1 与 Frontier/2。proof.frontierBefore/frontierAfter 是实际 seal 前后 Frontier；notice.baseFrontier 与 InputDescriptor.expectedFrontier 保留原基线。scope_dependencies 下 final P 在 commit 前必须验证，接收端也验证从原 base 到实际 frontierBefore 的完整连续 ChangeRecord/portable proof 链、P 中保存的无关扩展判断和原 DependencyProof仍有效；不能在 publication 时仅因向量数字增长、provider状态或最终hash相同补造“无关”。proof运输实际生产 SourceVersion before/after，不复制发送方 SourceObservation token。另由原 outbox 按 RevisionTokenSealOutboxItem/1 发布每个 sealed managed after 的 exact retained RevisionTokenSealArtifact/1 bytes；current Notice3/CP4 不增加其 closed current schema 之外的 binding/artifact member。接收端在保存任何 token→production-version mapping 前，先按 §1.5.1 与 §6.3 验证 artifact 的历史 trust key、signature 与完整 association，再建立自己的 current Observation。ContentCompletionProof/2、/1 及其它历史 records 继续原 decoder/bytes/recovery，绝不按/3字段混解。 适用 completion 族为普通 Notice3/CP4/ChangeRecord1，或具名 presentation 族 Notice4/CP5/ChangeRecord2；族由 exact plan 冻结，不在恢复时选择。final atomic P 与原 receipt、decision、effects、H/ChangeId、ReliableSaveState、charge 一起构造并 durable 保存 exact proof、ChangeRecord、实际 before/after Frontier 与 publication outbox。P 内失败不产生 committed-success receipt：实际先前安装与 B/N/third-state remnants 仍承担原 planned/unknown recovery 义务。P 成功后运输失败保持成功 save 与 publication=pending；只运输保留 exact bytes，不重新生成/签名/安装、换 OperationId、再次推进 H/ChangeId 或收费。真实历史 records 保留 recorded family 与原 recovery。
 14. 若 seal 已成功而 publication/outbox/delivery 失败，decision、ChangeId、managed SourceVersion/H、ReliableSaveState、receipt与适用charge已经确定。恢复只发布同一 sealed decision 的原 proof 以及已经 pin 的 exact RevisionTokenSealArtifact/1/outbox bytes，或在当前授权下交付原bytes；不得重新安装 N、换 OperationId、重新分配 ChangeId、再次推进 H、重跑业务选择、回写后来 current source或重复收费。delivery 最后重验当前授权；撤权可以遮蔽交付，但不改历史 decision。
 
 observed_only 的 B 只表示实际 read/pin 前像，绝不枚举最后检查后未读 C。later current=C 不改旧 receipt/Proof，也不削弱 B/N 的 durable retention。crash/unknown 按 §8 恢复，客户端不猜结果。
@@ -912,13 +1010,15 @@ restored 禁止 changeId、guarantee/writeProtection/semanticState、frontierBef
 
 ContentCompletionProof/2 保持历史 closed definition和原decoder/bytes，不把SourceVersionRef静默改成生产SourceVersion。历史 committed 仍是：
 ~~~json
-{"format":"weftext.content-completion","version":2,"outcome":"committed","decisionKey":<DecisionKey/2>,"changeId":<ChangeId/1>,"guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","semanticState":<SemanticState/1>,"frontierBefore":<Frontier/2>,"frontierAfter":<Frontier/2>,"components":[{"key":<PortableComponentKey/2>,"after":<ComponentImage/1>}...],"sourceChanges":[{"entityRef":<EntityRef>,"before":<SourceVersionRef/1|"absent">,"after":<SourceVersionRef/1|"absent">}...],"receiptDigest":"sha256:64-lowercase-hex"}
+{"format":"weftext.content-completion","version":2,"outcome":"committed","decisionKey":<DecisionKey/2>,"changeId":<ChangeId/1>,"guarantee":"replica_local|managed_atomic","writeProtection":"strict|observed_only","semanticState":<SemanticState/1>,"frontierBefore":<Frontier/2>,"frontierAfter":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...],"sourceChanges":[{"entityRef":<EntityRef>,"before":<SourceVersionRef/1|"absent">,"after":<SourceVersionRef/1|"absent">}...],"receiptDigest":"sha256:64-lowercase-hex"}
 ~~~
 历史 restored 仍是：
 ~~~json
-{"format":"weftext.content-completion","version":2,"outcome":"restored","decisionKey":<DecisionKey/2>,"baseFrontier":<Frontier/2>,"components":[{"key":<PortableComponentKey/2>,"after":<ComponentImage/1>}...]}
+{"format":"weftext.content-completion","version":2,"outcome":"restored","decisionKey":<DecisionKey/2>,"baseFrontier":<Frontier/2>,"components":[{"key":<PortableComponentKey/1>,"after":<ComponentImage/1>}...]}
 ~~~
 /2按原saved bytes、原token绑定、原接纳/恢复gate履约；不得用/3的新证明升级、重编码或补写旧r5，也不得从/2的SourceVersionRef反推一个不存在的portable生产版本字段。
+
+历史 CP2 的两个 arm 唯一导入固定 `97f4734f82a760cb6716c8122b84494da2b61164` 的 `docs/design/d6-file-authority-reopen/owners/d6-control-interfaces/source.md`（blob `e69c34e74aa8fbca00f77c89ac52778186630032`）§6.1/§6.3：Key1 的原十二-kind closed union、原 rank/key 排序、ComponentImage owner-version、SourceVersionRef/1、Notice 对应与原授权/pins/恢复都保持。`document_format` 和未知 kind 在 committed/restored 的历史 closed decode 阶段均拒绝；当前 Notice3/CP4 的 Key2/document_format 正向路径不变。不得升级外层版本或重编码、重签旧字节；设计验收见 D6-IMPACT §16。
 ## 7. commit receipt、D3 companion、decision state 与 current source
 
 ### 7.1 d6_commit_receipt/2
@@ -1487,7 +1587,7 @@ source 第 194–200 行继续精确保留 owner 边界：D3 拥有 cut/custody 
 
 ### 17.8 Current successor dispatch
 
-当前尚未见过的 D6 精确使用 Key3/Proof3/Input3/Prepared3 与 d6_plan/3。可移植当前发布使用 PortableComponentKey/2、Notice3、唯一 final P，再产生 CP4/ChangeRecord1。实际消费受管 Document 语义时必须包含 document_format；仅格式变化时 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion，也不推进 H。真实已保存、已计划或结果未知的 Key2/Proof2/Descriptor2/Prepared2、Notice1/2 与 CP1/2/3 保留原 decoder、bytes、pins、OperationId、授权、installation/seal/receipt/retention、错误顺序与恢复。
+当前尚未见过的 D6 精确使用 Key3/Proof3/Input3/Prepared3 与 d6_plan/3。可移植当前发布使用 PortableComponentKey/2、Notice3、唯一 final P，在该 P 内构造并 durable 保存 CP4/ChangeRecord1，之后仅运输。实际消费受管 Document 语义时必须包含 document_format；仅格式变化时 sourceChanges=[]，不产生 SourceRevisionPlan、managed SourceVersion，也不推进 H。真实已保存、已计划或结果未知的 Key2/Proof2/Descriptor2/Prepared2、Notice1/2 与 CP1/2/3 保留原 decoder、bytes、pins、OperationId、授权、installation/seal/receipt/retention、错误顺序与恢复。
 
 
 ## 18. SourceTransform compiler / exact mapping

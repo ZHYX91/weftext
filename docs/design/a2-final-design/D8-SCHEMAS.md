@@ -6,6 +6,8 @@ translation_status: synced
 
 [简体中文](D8-SCHEMAS.zh-CN.md)
 
+For the new presentation-owner portable completion path, [D6-CONTROL §0.1.4](D6-CONTROL.md#014-portable-presentation-owner-completion-notice4--cp5--changerecord2) solely owns Notice4/CP5/ChangeRecord2, standalone and mixed Plan4 production, strict receiver admission and named trust-evidence inner successors. Only its enumerated current slots supersede the ordinary component-only 3/4/1 clauses below; genuine recorded decoders remain exact. Current EffectItem3 presentation_policy_change has rank13 under the retained D7 effects owner; ranks0–12, phase/complete-set gates and historical Manifest1/2 remain unchanged. This is an author repair pending independent review, product UNRUN.
+
 # A2 D8 Closed Schemas and Version Dispatch
 
 In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
@@ -172,6 +174,8 @@ PreparedEditBinding/3 = {
 proposedInputs contains exactly one item. For Document intent the pin selects exact UTF-8 source. For Annotation intent the pin payloadKind is annotation_value and the bytes are D3-CJ/3 of the complete Core-constructed Value/4. sourceInputs is byte-equal to inputDescriptor.sourceInputs. OwnerInputBinding uses ownerKind/intentKind=d8_edit/3, and canonicalDescriptorBytes is the complete D8EditInput/3.
 
 ## 7. Current Annotation read/draft
+
+Current complete Annotation read authority includes all stored Value4 members, including valid Suggestion3.expectedText={byteLength,sha256}, targetBasisSha256 and original attribution; it is not hidden-target plaintext/context authority. Hidden/unavailable targets still deliver exact complete Value/token with targetResolution=unavailable. Never remove/null summaries, fabricate complete Values, additionally read or recompute current/historical hidden targets. Replace/delete retain stored summaries; insert retains expectedText=null. Annotation-only Reject/readonly Draft remain, with independent apply/reconfirm target qualification unchanged. Missing Annotation disclosure/read returns not_visible first; delivery rechecks original record/aggregate/rights/final barrier. Current READ03/READ06 share the oracle forbidding extra targetbytes/context and newly computed summaries, not stored summaries inside completely authorized Annotations; fixed97 cases/sourceEvidence stay unchanged.
 
 ~~~text
 D8AnnotationBodyRead/1 =

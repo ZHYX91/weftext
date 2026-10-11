@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "candidate-bounded-increment-reviewed-global-pending",
+  "status": "candidate-global21-repairs-pending-independent-review",
   "bounded_review": {
     "fixed_commit": "e703f9e7bb9908d8b6a322620b59b184d0f7bb5f",
     "scope": "native-control attributes, schema grouping and link-form increment with affected consumers; not full A2 acceptance",
@@ -375,7 +375,7 @@
   "existing_global_findings": {
     "P1": 6,
     "P2": 15,
-    "status": "open; no automatic closure"
+    "status": "21 original findings have candidate repairs; all remain open pending independent review of this exact repair candidate"
   },
   "product_tests": "UNRUN",
   "integration_cases": [
@@ -387,7 +387,7 @@
     "INT-06"
   ],
   "open_integration_dependencies": [
-    "Existing global symbolic Document input framing P1: ManagedControlConstruction/1 is internal and is not admitted as Result/9; managed2 new-instance end-to-end remains open until that original finding is independently resolved."
+    "Global Document framing P1 has candidate Request14/Result10 H and current-wrapper repairs in AUTHORING-INTEGRATION §6.1; independent closure remains pending."
   ],
   "increment_base_commit": "35cf55f95da45ccab910adb85c2e7276197b47f6",
   "source_profile": "native-control-attributes; undeployed managed2 draft replacement",

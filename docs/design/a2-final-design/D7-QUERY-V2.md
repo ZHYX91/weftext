@@ -7,6 +7,8 @@ translation_status: synced
 [简体中文](D7-QUERY-V2.zh-CN.md)
 # A2 D7 QuerySpec/2 and current metadata sources
 
+The eight-member current QuerySpec/3, read-only lifecycle scope, saved SearchContribution bindings, SavedQueryDefinition/1 and DynamicBlock/1 nested dispatch, QueryRef, Transfer, error order and Registry qualification are uniquely overridden by [D7-SEARCH](D7-SEARCH.md) §11. QuerySpec/2 clauses below remain genuine historical decoding; no new members are injected into old records.
+
 Status: author repair for A2-D7-2F89-P1-02. This is a candidate current-schema successor and still requires independent review.
 
 ## 1. Version boundary

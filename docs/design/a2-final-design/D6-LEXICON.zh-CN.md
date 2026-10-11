@@ -5,6 +5,8 @@ translation_status: source
 
 [English](D6-LEXICON.md)
 
+新的 presentation-owner 可移植完成路径由 [D6-CONTROL §0.1.4](D6-CONTROL.zh-CN.md#014-可移植显示策略-owner-完成链notice4--cp5--changerecord2) 唯一拥有 Notice4/CP5/ChangeRecord2、单独与 mixed Plan4 生产、严格 receiver 接纳及具名 trust-evidence inner successor。仅其列出的 current 槽位替代下方普通纯 component3/4/1 条款；真实 recorded decoder 不变。current EffectItem3.presentation_policy_change 在原 D7 effects owner 中 rank13，rank0–12、phase/完整集合门及历史 Manifest1/2 保持。作者修复等待独立复核，产品 UNRUN。
+
 # A2 D6 术语与命名词表
 
 状态：A2 D6 术语作者候选；除具名 current definition successor 外，public concept 的 exact ID/ownedNames/firstFreeze 全部保留。
@@ -43,7 +45,7 @@ translation_status: source
 | weftext.term.byte-read-protocol | 资源字节读取协议 | Resource Byte Read Protocol | \`ByteReadProtocol\`<br>\`readResourceBytes\`<br>\`d6_byte_read_request\`<br>\`d6_byte_chunk\`<br>\`d6_byte_error\` | 固定ByteHandle上的closed offset/maxBytes读取、完整chunk与准确EOF、当前授权和共享有界计费 | 不是D7 row协议、repair Document envelope、自由URL/路径读取或新增提交入口 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.observation-scope | 潜在约束观察范围 | Constraint Observation Scope | \`ObservationScope\`<br>\`observationScope\`<br>\`d6_observation_scope\` | 在作者/范围读取前固定的结果观察上界，覆盖空范围并按当前权限证明 | 不是实际写集或内部完整读取证明 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.issuer-control-policy | 签发域控制权限 | Issuer Control Policy | \`IssuerControlPolicy\`<br>\`issuerControlPolicy\`<br>\`d6_issuer_control_policy\` | issuer自身allocate/administer授权及当前revision | 不是身份认证或Workspace内容授权 | D6 revision05-observation-bootstrap candidate; not activated |
-| weftext.term.workspace-bootstrap-plan | 工作区初始控制计划 | Workspace Bootstrap Plan | \`WorkspaceBootstrapPlan\`<br>\`workspaceBootstrapPlan\`<br>\`d6_workspace_bootstrap_plan\` | 当前 Plan/3 在原 D3 计划内同时固定 WorkspaceTrustGenesis/1、首份 policy/Registry/Calendar 与主体映射，并与 activation 共用唯一原 P seal；Plan/2 是未激活候选前身 | 不是第二decision、可编辑请求、package trust 或永久管理员 | D6 revision05-observation-bootstrap candidate; not activated |
+| weftext.term.workspace-bootstrap-plan | 工作区初始控制计划 | Workspace Bootstrap Plan | \`WorkspaceBootstrapPlan\`<br>\`workspaceBootstrapPlan\`<br>\`d6_workspace_bootstrap_plan\` | 当前 Plan4/Profile4 在原 D3 计划内固定 Genesis2/Bundle2、恰两个 Declaration2 profile、必填 initialPresentationPolicy、完整 policy/Registry/Calendar 与主体映射，并与 activation 共用唯一原 planning CAS/P seal；实际带 presentation 的完成证据由 CONTROL §0.1.4/§20.2 唯一拥有。真实历史 Plan1/Plan3 按原 family、bytes/pins/授权恢复，旧名称与 firstFreeze 只保来源 | 不是第二decision、可编辑请求、package trust 或永久管理员 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.bootstrap-profile | 工作区初始控制配置 | Workspace Bootstrap Profile | \`WorkspaceBootstrapProfile\`<br>\`bootstrapProfile\`<br>\`d6_bootstrap_profile\` | family不可变的Registry种子和显式初始范围/multiplicity选择 | 不是D2 Profile或Facet，不是每次重试最新配置 | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.calendar-period-scope-binding | 历法周期范围绑定 | Calendar Period Scope Binding | \`CalendarPeriodScopeBinding\`<br>\`periodScopeBindings\`<br>\`d6_period_scope_intent\` | period Node到明确D4范围的必要控制选择及独立ABA版本 | 不是作者series/periodKey副本、Field或content identity | D6 revision05-observation-bootstrap candidate; not activated |
 | weftext.term.source-envelope-state-capability | 源包络状态能力 | Source Envelope State Capability | \`SourceEnvelopeStateCapability\`<br>\`source_envelope_state\` | Policy/3（及历史Policy/2原路径）显式授予指定源版本/容量/聚合有效性及编辑outcome观察 | 不授body/其它Field/decision内容读取；不由source或Field权限蕴含 | D7 coordinated revision02 candidate; not activated |

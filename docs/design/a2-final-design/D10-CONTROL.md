@@ -6,7 +6,11 @@ translation_status: synced
 
 [简体中文](D10-CONTROL.zh-CN.md)
 
+For the new presentation-owner portable completion path, [D6-CONTROL §0.1.4](D6-CONTROL.md#014-portable-presentation-owner-completion-notice4--cp5--changerecord2) solely owns Notice4/CP5/ChangeRecord2, standalone and mixed Plan4 production, strict receiver admission and named trust-evidence inner successors. Only its enumerated current slots supersede the ordinary component-only 3/4/1 clauses below; genuine recorded decoders remain exact. Current EffectItem3 presentation_policy_change has rank13 under the retained D7 effects owner; ranks0–12, phase/complete-set gates and historical Manifest1/2 remain unchanged. This is an author repair pending independent review, product UNRUN.
+
 # D10 Control and Management Contract
+
+D10D7SearchDescriptor/1 retains its exact shape. [D7-SEARCH](D7-SEARCH.md) §11.4–11.6 uniquely adds QuerySpec/3 pure author ID/version/full descriptor+namespaceOwner persistence, complete same-cut Catalog registration lookup, cold reopen and QueryRef/Transfer/error-order qualification. activationGeneration, capabilityCatalogDigest and registryBinding enter existing runtime proofs only, never author bindings.
 
 In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
 

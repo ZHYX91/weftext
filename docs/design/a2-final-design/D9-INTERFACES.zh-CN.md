@@ -33,7 +33,9 @@ WorkspaceRef 与 CommitDomain 必须 exact match。static potential scope/author
 
 ## 3. Current author handoff
 
-D9 自己永不提交 author change。current prepared author operation 通过 D7 current `PreparedActionBinding/4`、current `D3IdentityOperationRequest/13` 或既有 `d6_commit_request/2`、`DependencyProof/3`、current PIntent 与 `EffectManifest/3` / `EffectBytes/3` 交回原 owner。
+D9 自己永不提交 author change。current prepared author operation 通过 D7 current `PreparedActionBinding/4`、current `D3IdentityOperationRequest/13|14` 或既有 `d6_commit_request/2`、`DependencyProof/3`、current PIntent 与 `EffectManifest/3` / `EffectBytes/3` 交回原 owner。
+
+本候选 D9 TemplateConstructionInput2/ConversionInput、parent import 和 prepared author 的 payload dispatch 明确消费 AUTHORING-INTEGRATION §6.1：native H 路径用完整 Request14/Result10，非H保持原 Request13/Result9；同 Request14 可合法混合 Node Result10、原 profile Node Result9、Annotation Result9/Value4、Resource concrete。PAB4.request/action 的准确 current内层接受这份14 arm，proposedInputs按本候选Input3六pair完整选择；ConversionInput只提供准确artifact/skeleton，不自行生成UUID/H认证。原source_artifact/preimage/result与ImportJob、DefinitionTransfer/C/Q、format/Facet gates均保持。真实旧prepared/template/import/recovery记录保原decoder/pins，不在读取时改14。
 
 D3 先执行原 saved/planned/unseen request/input 查找，再执行 concrete payload/effects/currentness 的最终复验，最后只封存原 request。D6 planning CAS/P 仍唯一。D9 wrapper 不得添加 planToken、第二 DecisionKey、第二 receipt 或第二 CAS。
 
@@ -84,7 +86,9 @@ qualified native-table authoring 由 compiler 读取可见的 `native.table[...]
 
 ## 11. Region interface
 
-只有在原 D3 disclosure/currentness gate 允许后，D9 才验证/sign inner `RegionBody` geometry profile。outer `ResourceRegionLocator/l1` 继续归 D3。D9 不提供独立 durable region identity。
+新exact音视频签发与已有验证按D9-SCHEMAS §16闭合D9TemporalRegionIssueInput1→D9TemporalRegionIssued1及d9rg1/d9rt1分派；D8调用真实Core内部producer，outer l1/原错误顺序/唯一提交不变。
+
+只有在原 D3 disclosure/currentness gate 允许后，D9 才验证并构造 D9-SCHEMAS §16 矩形/时间 inner token；inner codec不是独立签名或授权。outer `ResourceRegionLocator/l1` 继续归 D3。D9 不提供独立 durable region identity。
 
 ## 12. Surfaces
 

@@ -36,8 +36,8 @@ translation_status: source
 
 实现必须先按真实记录版本和 wire 版本分流，并保持历史 bytes/decoder 不被当前协议重解释：
 
-- v9/v10/v11：仅对实际存在的 saved/planned/unknown、receipt/error/effects、Preparation/Observation/token/pin 记录按原 decoder、原 bytes/fingerprint、原 profile、授权、custody、TTL/clock、retention 与 no-duplicate-effect 责任恢复。存在 decoder、fixture、草稿或候选文字本身不证明该原型曾部署或 active。
-- v12：只接受真实 D6 owner decoder 成功解出的 `DecisionKey/2`、`CommitDomain/2`、`Frontier/2`、`ObservationScope/2`、`DependencyProof/3`、`OwnerInputBinding/2`、`InputDescriptor/3` 与适用 `SourceObservation/1`，再由 D3 检查闭合 owner request。
+- v9/v10/v11/v12：仅对实际存在的 saved/planned/unknown、receipt/error/effects、Preparation/Observation/token/pin 记录按原 decoder、原 bytes/fingerprint、原 profile、授权、custody、TTL/clock、retention 与 no-duplicate-effect 责任恢复。存在 decoder、fixture、草稿或候选文字本身不证明该原型曾部署或 active。
+- v13：只接受真实 D6 owner decoder 成功解出的 `DecisionKey/2`、`CommitDomain/2`、`Frontier/2`、`ObservationScope/2`、`DependencyProof/3`、`OwnerInputBinding/2`、`InputDescriptor/3` 与适用 `SourceObservation/1`，再由 D3 检查闭合 owner request。 此为既有 wire13 mutation 族；另行定义的 native wire14/Result10 只按自身 exact producer 合同分派。ResolverInput/12 仍为独立 typed read 合同，不是 mutation 版本。
 - 其它版本：unsupported；不得猜兼容、改版本号后重放或批量迁移旧字节。
 
 共同顺序必须可通过故障注入和重放测试证明：
@@ -295,8 +295,8 @@ resolver 继续覆盖：
 6. observed competition；
 7. installed verification；
 8. P seal 前；
-9. seal 后 `ContentCompletionProof/4` 生成/持久化前；
-10. current CP4 + ChangeRecord/1 generation/write/flush/transport 中；
+9. final atomic P 内：completion proof、ChangeRecord、实际 Frontier 与 publication outbox 的生成/写入/flush，在成功 commit 之前；
+10. P 成功后：已经 durable 的 exact proof/ChangeRecord/outbox bytes 的运输/交付；
 11. response delivery 丢失。
 
 每格只能落入真实 exact-before、exact-after-with-provenance、third-state、unavailable/recovery_unknown 与 D3 decision 组合。相同 hash 但不同 `FileObjectBinding`/provenance 不能证明原 plan 写入。
@@ -402,8 +402,8 @@ Server parallel prepare 不放宽 strong policy：所有 `managed_atomic` 仍 `f
 ## 16. wire13 current、historical corpus 与 terminology gate
 
 新 corpus 必须独立覆盖：
-- wire13 new decision accept；0..11/unknown 对新 decision 拒绝；
-- actual saved/planned/unknown v9/v10/v11 原 decoder/bytes/fingerprint/pins/custody/TTL/recovery；
+- wire13 new decision accept；0..12/unknown 对新 decision 拒绝； 此拒绝仅适用 fresh mutation，不适用原 recorded recovery 或 ResolverInput/12。
+- actual saved/planned/unknown v9/v10/v11/v12 原 decoder/bytes/fingerprint/pins/custody/TTL/recovery；
 - `DecisionKey/2`、`protocolOwner=D3`、same `OperationId` cross-domain independence、same-key fingerprint conflict；
 - replica/server `CommitDomain/2`；
 - `Frontier/2` exact 与 `scope_dependencies`；

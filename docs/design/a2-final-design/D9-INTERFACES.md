@@ -34,7 +34,9 @@ WorkspaceRef and CommitDomain must match exactly. Static potential scope/authori
 
 ## 3. Current author handoff
 
-D9 never submits author changes itself. A current prepared author operation is passed through D7 current `PreparedActionBinding/4`, current `D3IdentityOperationRequest/13` or the existing `d6_commit_request/2`, `DependencyProof/3`, current PIntent and `EffectManifest/3` / `EffectBytes/3`.
+D9 never submits author changes itself. A current prepared author operation is passed through D7 current `PreparedActionBinding/4`, current `D3IdentityOperationRequest/13|14` or the existing `d6_commit_request/2`, `DependencyProof/3`, current PIntent and `EffectManifest/3` / `EffectBytes/3`.
+
+Current D9 TemplateConstructionInput2/ConversionInput, parent import and prepared-author payload dispatch explicitly consumes AUTHORING-INTEGRATION section6.1: native H uses complete Request14/Result10; non-H retains original Request13/Result9. One Request14 may legally mix Node Result10, original-profile Node Result9, Annotation Result9/Value4 and concrete Resource. The exact current PAB4.request/action inner slots accept this14 arm; proposedInputs fully selects candidate Input3's six pairs. ConversionInput provides exact artifact/skeleton only, never independently generates UUIDs or authenticates H. Original source_artifact/preimage/result and ImportJob/DefinitionTransfer/C/Q/format/Facet gates remain. Genuine prepared/template/import/recovery records retain original decoders/pins without read-time wire14 upgrades.
 
 D3 first performs the original saved/planned/unseen request-and-input lookup, then the final concrete payload/effects/currentness revalidation, and finally seals only the original request. The D6 planning CAS/P remains single. A D9 wrapper cannot add planToken, a second DecisionKey, a second receipt or a second CAS.
 
@@ -85,7 +87,9 @@ The only worker-facing control object is `WorkerInvocation/1`. The host assigns 
 
 ## 11. Region interface
 
-D9 may validate/sign only the inner `RegionBody` geometry profile after the original D3 disclosure/currentness gates permit the operation. The outer `ResourceRegionLocator/l1` remains D3-owned. D9 exposes no separate durable region identity.
+New exact audio/video issuance and existing validation use D9-SCHEMAS §16 closed D9TemporalRegionIssueInput1→D9TemporalRegionIssued1 and d9rg1/d9rt1 dispatch. D8 calls the actual Core-internal producer; outer l1/original error order/single commit remain.
+
+D9 validates and constructs D9-SCHEMAS §16 rectangle/temporal inner tokens only after original D3 disclosure/currentness gates; the inner codec is not an independent signature or authority. The outer `ResourceRegionLocator/l1` remains D3-owned. D9 exposes no separate durable region identity.
 
 ## 12. Surfaces
 

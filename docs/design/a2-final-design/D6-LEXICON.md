@@ -6,6 +6,8 @@ translation_status: synced
 
 [简体中文](D6-LEXICON.zh-CN.md)
 
+For the new presentation-owner portable completion path, [D6-CONTROL §0.1.4](D6-CONTROL.md#014-portable-presentation-owner-completion-notice4--cp5--changerecord2) solely owns Notice4/CP5/ChangeRecord2, standalone and mixed Plan4 production, strict receiver admission and named trust-evidence inner successors. Only its enumerated current slots supersede the ordinary component-only 3/4/1 clauses below; genuine recorded decoders remain exact. Current EffectItem3 presentation_policy_change has rank13 under the retained D7 effects owner; ranks0–12, phase/complete-set gates and historical Manifest1/2 remain unchanged. This is an author repair pending independent review, product UNRUN.
+
 # A2 D6 Terminology and Naming Lexicon
 
 Status: A2 D6 terminology author candidate; public concepts retain their exact IDs/ownedNames/firstFreeze unless a named current definition successor says otherwise.

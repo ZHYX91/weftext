@@ -6,6 +6,8 @@ on:
       - 'docs/design/**'
       - 'scripts/check_docs.py'
       - 'scripts/check_design_inputs.py'
+      - 'scripts/check_d3_terms.py'
+      - 'scripts/tests/test_d3_terms.py'
       - 'scripts/tests/test_design_inputs.py'
       - 'scripts/tests/test_d8_acceptance.py'
       - '.github/workflows/design-docs.yml'
@@ -19,5 +21,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - run: python3 scripts/check_docs.py
       - run: python3 scripts/check_design_inputs.py
+      - run: python3 scripts/check_d3_terms.py
       - run: python3 -m unittest discover -s scripts/tests -p test_design_inputs.py
+      - run: python3 -m unittest discover -s scripts/tests -p test_d3_terms.py
       - run: python3 -m unittest discover -s scripts/tests -p test_d8_acceptance.py

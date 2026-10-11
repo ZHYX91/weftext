@@ -160,3 +160,113 @@ Definition Transfer 按对应版本的 Query schema 映射 typed Ref 与 Definit
 | SEARCH-08 | 打开 hit 时执行 fresh current authorized resolve；snippet offset 不是 Locator；相同 QuerySpec/2 语义跨 surface/device 保持一致，只允许明确标示的 unavailable capability 差异。 |
 
 以上都是设计义务。Product Search、GUI/IME/AT、provider、performance 与跨设备执行继续 UNRUN。
+
+## 11. QuerySpec/3：生命周期搜索与保存贡献绑定
+
+本节是新准备和新作者定义的唯一 current owner，具名替代上文 QuerySpec/2 保存/编译说明及 retained Query Algebra §§1–2 的 live-only scan/read，且只在 QuerySpec/3 invocation 中生效。原生身份/业务值仍遵守 AUTHORING/集成；typed Field 不退回 Entry-only。QuerySpec/1、/2 的真实作者字节、错误与记录恢复保持原解码域，不加默认成员，不读时升级。旧版本仍 live-only，不能用旧编译结果宣称完成 Trash 搜索。本修订是设计候选，所有运行测试 UNRUN。
+
+### 11.1 唯一闭合作者形状
+
+```text
+QuerySpec/3 = {
+  format:"weftext.query", version:3,
+  parameters:<原 ParameterSpec 数组>,
+  relations:<完整 QuerySpec/2 算子 DAG>,
+  scalars:<原 ScalarSpec 数组>, result:<原 result union>,
+  lifecycleScope:"live"|"trash"|"live_and_trash",
+  searchBindings:SearchBindingSet/1
+}
+SearchBindingSet/1 = {
+  version:1, mode:"none"|"explicit"|"all",
+  selections:[{
+    contribution:<完整 SearchContribution>,
+    namespaceOwner:{ownerKind:"core"|"first_party"|"publisher"|"workspace_user",ownerId:text}
+  }...]
+}
+```
+
+八个 Query 顶层成员全部必填，对象闭合。lifecycleScope 不可由参数、调用方、UI 或环境覆盖；一般新 Query 默认为作者显式保存的 live，searchBindings 为 `{version:1,mode:"none",selections:[]}`。none 恰要求空数组；explicit 要求1..256项；all 允许0..256项且代表作者保存时明确选择的完整可披露激活 SearchContribution 集，不代表将来任意新贡献自动加入。超限整体 budget_exceeded，不截断。每项 contribution 是原五成员闭合对象，正 Counter version、静态 textPath/role/FieldId与原规则不变。selections 按 contributionId 原UTF-8排序唯一，同ID不同version也拒绝重复；namespaceOwner采用D4精确所有者类别/ownerId，必须在同cut证明为该贡献ID命名空间的所有者，不能用Field的命名空间代替。
+
+绑定不创建另一份 FieldDefinition，也不是新的 SearchContribution 实例/注册表。保存的完整 descriptor 是语义约束；当前执行从 D10 重新取得其接纳真实性、版本及权限，不把保存对象当接纳证明。显式绑定须静态证明 contribution.fieldId/textPath 确实由本Query可达 read与匹配/rank表达式消费；Core的 CEL AST/类型路径证明失败则 invalid_request，不能用unused binding给普通 Query加 ambient package gate。无绑定的通用Field Query不依赖SearchContribution。编译器为明确选择的完整贡献产生对应绑定；all先冻结当时完整集合再编译同一DAG。是否搜索Trash只修改lifecycleScope；原AST/快捷词法不增加新executor。
+
+CanonicalGraph3 精确为 `{version:3,lifecycleScope,searchBindings,graph:CanonicalGraph}`，searchBindings使用上述规范数组及原D3-CJ/3值编码。Query语义identity、SemanticStateKey及完整definition闭包必须包含此完整对象，不只散列旧DAG；原逻辑operator ordinal/K和错误排序不改。历史CanonicalGraph1/2不重编码。
+
+### 11.2 生命周期范围与真实读取资格
+
+live只允许live；trash只允许trashed；live_and_trash允许两者，永不含tombstoned、never-known、冲突/placeholder或未完成状态。scope适用于本invocation的scan和read，不传播为QueryRef callee的默认值，也不影响definition lookup：DefinitionAddress仍要求其原获权live source/版本，不能为了读callee的scope先执行隐藏定义。输入/参数Ref的read同样检查本scope，不以“scan外来的Ref”绕过它。
+
+workspace在同一Workspace当前规范inventory与live/Trash forest中选择所需状态；entities按完整Ref去重，在最低state披露之前不查存在，无权/missing为零成员。subtree仍沿指定root的**当前**规范forest，不按原parent/restore-membership/路径重建历史树。root不在scope或不可披露统一not_visible；先structure_state及root披露，再读其准确live或Trash subtree。两态范围不将live root曾删除的后代重新接回；同时搜两forest可使用workspace或显式entities。headings以选中Node为source owner，仍须完整D2投影；Resource/Annotation按自身真实lifecycle选择，owner/关系披露独立验证，不因owner相等自动加入，独立Trash成员不变成restore成员。
+
+本scope不授任何权限。先trusted audience/Workspace→原entity_state/适用owner/state披露→结构或所选source的原准确source_read/field_read/resource_read/annotation_read与deny/最小闭包→可用性→读取。Trash只增加D7在已获权trashed对象上的只读source-adapter资格，D6同一个current SourceObservation/1/FileObjectBinding/源pin producer在该明确只读目的下可观察保留源；不创建managed版本，不选旧历史pin伪装current，不读完再授权。合法trashed Node正文非空needle正例复用同一D2 body_text；原生属性Field仍经当前FieldSource/Registry adapter。typed Ref/provenance按原value读规则，不隐式解析引用目标。权限不足not_visible；已获权但源/pin/完整性不可得source_unavailable或原owner unavailable，不变空。
+
+本增量不扩宽traverse/related/graph的live endpoint/关系门；它们在本scope中仍按原live资格，trashed起点无法取得原live关系资格则not_visible，不恢复已suspended边。普通已保存live Query、Calendar与NodeCollection含义不变。任何ActionEvidence、collection_create/remove、bulk/all_result或postQuery写入consumer必须先证明完整调用闭包全为live scope，真实/静态不能证明则原action_not_applicable，哪怕最后filter只剩live行；Trash只读结果绝不授写。显式restore/purge只接受原D3新prepare/完整确认及自己的owner proof，不把Query result当恢复闭包或写权。saved/unknown原动作恢复仍用其真实版本，不重新评估本scope。
+
+### 11.3 同一query_scan key的闭合覆盖证据
+
+保留D6-CONTROL §3.4的query_scan key成员、十五kind/rank、DependencyProof/3和PinRef/2，不新造DependencyKey。其domain/selector仍恰为原四domain及原三selector。D6-CONTROL的该key定义并未在成员中编码live；D7以前只签live枚举。本节用具名受保护证据区分新覆盖，不靠相同key或旧stamp猜测。
+
+```text
+D7QueryScanCoverage/1 = {
+  kind:"d7_query_scan_coverage",version:1,
+  key:<准确 DependencyKey/3.query_scan>,
+  stamp:{epoch:Token,revision:Counter}, baseFrontier:Frontier/2,
+  lifecycleScope:"trash"|"live_and_trash",
+  authorization:{key:<原 authorization DependencyKey>,stamp:{epoch:Token,revision:Counter}},
+  inventoryEvidencePins:[PinRef/2...],
+  members:[{ref:EntityRef,state:"live"|"trashed",lifecyclePin:PinRef/2}...]
+}
+```
+
+仅受信Core/D3/D6 producer可生成此闭合对象，以D3-CJ/3保存于原PinRef/2.payloadKind=portable_metadata、retentionClass=query_preview的受保护pin record；pin record内部kind分派到本version1 decoder，不新增公共pin member/tag/store。内部portable_metadata decoder只在该Query3 coverage consumer接受准确根kind/version的上述完整闭合对象，不扩宽任何旧metadata类型，不接受任意JSON。Core在原授权后的Query preparation中生成，pin不授公开元数据读取，不能经Resource ByteHandle打开；生命周期/成员详情不越过原D7诊断披露。每个member计maxRows/work，每个inventory/lifecycle pin计maxDependencies和实际bytes计maxTemporaryBytes/maxResultBytes；先checked预算再分配，超限整体budget_exceeded。pin保留不超原result的有限TTL/预算，query_preview释放/restart沿原受保护记录，保存author bytes不保存pin。key/ref域及Workspace一致，members按D3RefKey排序唯一，headings的ref是Node source owner；每项state须属于scope，lifecyclePin证明该同cut真实D3 birth/canonical/lifecycle及适用owner。members只列完整获权population，隐藏成员只在受保护真实inventory/authorization proof中核验，不交客户端。inventoryEvidencePins非空且排序唯一，逐pin为该key准确potential范围的D3当前完整identity/forest/owner目录与连续证据；缺负范围、gap或仅命中source pins不得生成Coverage。headings的全部实际source/D2依赖另外保留在原Proof与sourceInputs中，不因members列表而免除。
+
+对任何non-live scope的scan，consumer须在DependencyProof/3.entries对应**同key**的evidencePins找到唯一覆盖该key+stamp+scope+baseFrontier+当前authorization项的Coverage/1；相同key多个invocation/scope可共享一项Proof entry并含各scope各一枚准确Coverage pin。严格解码、摘要/长度、真实受保护pin身份、对应authorization key/stamp、所有inventory/lifecycle证据和当前连续性必须全部成立，再独立按同scope枚举比较members逐Ref/state相等，不能只信“complete=true”、count/digest或caller列表。缺失/旧live-only证据/错误scope失败原source_unavailable，不返回全集/ActionEvidence。静态entities=[]仍零QueryScan、零Coverage，不由它断言Workspace为空。
+
+不因启用Coverage decoder或软件升级创建新的continuity epoch，不改生产H或重签旧record。新producer在原D6真实同cut证明下保留合法key/stamp连续性；对Trash所需inventory/lifecycle/owner/forest负范围，必须把实际原D3 lifecycle、placement_range（trash_roots/trash_children/subtree/owner目录等适用项）及authorization的完整key/stamp/evidence加入同一Proof3，并要求inventoryEvidencePins是这些准确entry的真实证据pin并完整覆盖潜在范围。Coverage没有自身独立stamp，只重复父entry的真实值；consumer逐key重验这些原dependency，不能仅以query_scan stamp未变判current。Trash恢复/purge/两态转移/独立成员变化使相关真实依赖失效；无法证明连续性按原D6 gate，不让client制造新epoch绕过gap。QuerySpec3/live和真实QuerySpec1/2继续其原live证明规则，不强加Coverage或Trash目录门。缓存键包含CanonicalGraph3及scope；即使字节相同，也不得拿旧live Proof替代non-live Coverage。
+
+### 11.4 保存贡献的冷重开与当前D10查找
+
+保存Query只保存上述纯数据绑定，不保存activationGeneration、CapabilityCatalog digest、Registry pin、Token或Run身份。重开/inline/QueryRef每次先当前请求和定义披露，再按embedded query.version严格解码和静态图/类型，之后在同AuthorizedCut通过D10-CONTROL §4**现任完整Catalog**定位每个D7 contributionId，验证激活且version及完整五成员descriptor逐字相等、D4 namespace owner tuple与保存namespaceOwner相等、原immutable资产digest/trust及准确Registry文本路径合格。D10 package-local ID/contractVersion不是D7 ID/version，不按字段/名称猜同义项。
+
+explicit仅要求所选项；all还要求当前完整可披露SearchContribution集合与保存selections逐项相等，无新增/遗漏项。变更不自动重编译DAG或刷新author bytes：需要用户显式编辑再保存新definition revision。字段相同但C/v1停用、移除或升v2不能由C2代替。缺所选贡献/版本或语义改变走已披露后的definition_unavailable；权限不足先not_visible；坏已获权源走source_unavailable。不存在新error code或fallback。新语义错误在完整canonical闭包中按原阶段/ordinal次序；preexecution contribution错误按invocation路径及selections原ID顺序确定最小项，对外不输出隐藏ID/path/count。read-only定义不携保存者权。
+
+runtime依赖绑定D10当前activationGeneration+capabilityCatalogDigest+RegistryBinding和完整所选descriptor/owner真实性证据，沿原ResultHandle闭包留存；Catalog/授权/Registry变化先使旧result reset，冷重开重新取得资格。仅无关connector/包变更不能让新执行的explicit保存定义definition_unavailable；可能保守reset旧runtime，但不改已保存语义。mode none不引入D10 Catalog gate，普通Field Query继续独立，关闭UI不等于停用贡献。
+
+### 11.5 实际producer/consumer槽位与历史边界
+
+| 实际owner / 槽 | 精确current规则 |
+| --- | --- |
+| D7-SCHEMAS / Query author decoder，retained Query/View/Action §4 | current QuerySpec3八成员；原QuerySpec1/2严格原闭合对象。feature由Core推导query.lifecycle-scope.v1与query.search-bindings.v1，仅确实使用non-live或非none时加入，不由作者requires声明。 |
+| D7 d7_query_execute.call.query.inline.spec、SavedQueryDefinition/1.query、DynamicBlock/1.query.inline.spec、relation/scalar QueryRef解析出的query | 以嵌入query.version=1/2/3选择唯一完整decoder；外层Query wire2、SavedQueryDefinition1、DynamicBlock1的其余成员不变。记录recovery先按真实外层/嵌入版本，不把旧wrapper内query改成3。 |
+| D7 Compiler/Search/D8保存搜索与builder | 新建输出QuerySpec3完整scope/绑定；basic UI无法表示仍保留advanced source；保存定义走原D2/D3/D6，不保存AST/快捷文本。 |
+| D6 query_scan、Proof3.entries[].evidencePins、原ResultHandle依赖/缓存 | non-live只接受§11.3精确Coverage1 pin；source/lifecycle/结构/auth各真owner同cut证明，旧live-only proof不能替代；所有分页/订阅/导出先原audience/expiry/epoch/reset gate。 |
+| D3/D6只读trashed source producer，D7 read | §11.2明确只读qualification消费原Observation/pin，不能扩宽source_write或restore/purge；public source save普通live路径不受影响。 |
+| D10-CONTROL §4 Search descriptor lookup | 本节§11.4的精确D7 ID/version/descriptor/namespace owner当前查找及运行dependency；不改D10D7SearchDescriptor1或ContributionKind，保存bindings不是激活对象。 |
+| DefinitionTransfer、Result Q、copy/fork/import | 先完整按embeddedQuery.version解码，遍历原typed Ref/DefinitionAddress slots，scope与纯descriptor保持。mode/ID/version/FieldId/path/role非Ref文本不猜替换；publisher/core/first_party所有者在目标Registry/Catalog精确重新验证。workspace_user.ownerId须等于目标WorkspaceId，跨库不同不能静默改绑定：本版拒绝definition_unavailable，用户另显式编辑新definition；同库可保持。无typed Ref仍有原slots=[] transfer，不省Q。 |
+| D5 NodeCollection/Action、D9 Query结果导出、D10查询调用 | D5写入/Action全闭包只live；D9 query_json仍仅完整terminal result，不承载Query作者格式；D10只消费同Query和当前权限，无专用Search executor。 |
+
+本节是QuerySpec/3 successor本体与跨owner协调，不改变旧Registry术语ID或conceptId；D7现有query-spec/search-contribution概念足够，new controlled types D7QueryScanCoverage/1与SearchBindingSet/1属于D7该概念的闭合内部承载，非新持久实体。原34 concepts及13 bindings历史计数不被本节冒充新全局通过。原SavedDefinition wrapper明确是embedded-version dispatcher，不把允许的新嵌入版本解释为旧recorded decoder忽略未知member。
+
+### 11.6 可执行正例与拒绝/恢复oracle
+
+以下准确QuerySpec3 JSON可在同Workspace获权Trash Node正文needle正例执行：
+
+```json
+{"format":"weftext.query","version":3,"parameters":[],"lifecycleScope":"trash","searchBindings":{"version":1,"mode":"none","selections":[]},"relations":[{"id":"n","op":"scan","domain":"nodes","selector":{"kind":"workspace"},"as":"node"},{"id":"b","op":"read","input":"n","from":"row.node","bindings":[{"name":"body","source":{"kind":"body_text"}}]},{"id":"f","op":"filter","input":"b","predicate":"contains(row.body, 'needle')"},{"id":"p","op":"project","input":"f","fields":[{"name":"node","expr":"row.node"}]}],"scalars":[],"result":{"kind":"rows","relation":"p"}}
+```
+
+显式保存C/v1正例在同形Query中设置 searchBindings 为 `{version:1,mode:"explicit",selections:[{contribution:{contributionId:"people/search-name",version:1,fieldId:"people/name",textPath:["text"],role:"name"},namespaceOwner:{ownerKind:"first_party",ownerId:"weftext.people"}}]}`，read源为people/name values，filter明确使用 `row.names.exists(v, contains(v.text, 'needle'))`，同cut已接纳people/name object.text schema与全部静态路径匹配。这里snippet只是说明替换成员，不是另一wire；编译器必须产完整八成员Query，再原保存/执行。
+
+| Case | 正向与拒绝/恢复判据 |
+| --- | --- |
+| SR-01 | Trash T获权+保留源/格式完整+needle→scan/read命中；live Query不命中；非liveScope拒绝tombstone、placeholder，不用旧pin补值。 |
+| SR-02 | 无entity/state披露或source_read→读取前not_visible；Field-only不偷读body；hidden T不增count/rank/snippet/coverage公开成员。 |
+| SR-03 | 旧live-only proof具有同key但无Coverage、wrongScope、错误auth/key/stamp/cut、缺负inventory→无complete；准确覆盖空集成功，partial I不能当空。 |
+| SR-04 | Trash→restore/purge/source replacement/auth变化→旧Result/coverage reset；重新授权/字节ABA只允许新invocation，旧page/action不复活。 |
+| SR-05 | subtree选择真实forest；原parent不包含已移入Trash后代；entities[]零scan proof；独立Trash资源/批注不因owner恢复变live。 |
+| SR-06 | 保存C/v1→清I/D→冷重开/QueryRef/DynamicBlock保持八成员与C绑定；同Field/path的C2不能代替；C停用/删除/v2/owner变而Field完好→definition_unavailable。 |
+| SR-07 | 无关connector变更→旧runtime可reset但fresh explicit C/v1可执行；none的普通Field Query完全不需Catalog；all添加新贡献→不得自动扩大作者语义。 |
+| SR-08 | 同库copy/fork与跨库合法first_party定义transfer保留scope/绑定及typed Ref映射；目标缺C或user owner不相容→整体明确拒绝，不静默改名/丢条件；无Ref仍Q/slots=[]。 |
+| SR-09 | QueryRef各callee拥有自己的scope/绑定；caller live后续read不读取callee Trash Ref；whole closure非live的all_result/collection write拒绝，restore/purge另原prepare，不从scan授权。 |
+| SR-10 | QuerySpec1/2注入新成员、3缺成员/未知enum/duplicate binding/unknown member皆拒绝；旧saved/planned/unknown原bytes不升级，query_json不变Query carrier。 |
+
+这些是设计oracle，产品/GUI/Catalog/缓存/冷重开/Transfer/Trash/真实权限测试UNRUN；不因本文存在自行关闭任何global finding。

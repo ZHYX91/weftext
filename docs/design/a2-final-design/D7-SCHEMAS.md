@@ -5,7 +5,11 @@ translation_status: synced
 ---
 
 [简体中文](D7-SCHEMAS.zh-CN.md)
+
+For the new presentation-owner portable completion path, [D6-CONTROL §0.1.4](D6-CONTROL.md#014-portable-presentation-owner-completion-notice4--cp5--changerecord2) solely owns Notice4/CP5/ChangeRecord2, standalone and mixed Plan4 production, strict receiver admission and named trust-evidence inner successors. Only its enumerated current slots supersede the ordinary component-only 3/4/1 clauses below; genuine recorded decoders remain exact. Current EffectItem3 presentation_policy_change has rank13 under the retained D7 effects owner; ranks0–12, phase/complete-set gates and historical Manifest1/2 remain unchanged. This is an author repair pending independent review, product UNRUN.
 # A2 D7 Current Schema Overlay
+
+The eight-member current QuerySpec/3, read-only lifecycle scope, saved SearchContribution bindings, SavedQueryDefinition/1 and DynamicBlock/1 nested dispatch, QueryRef, Transfer, error order and Registry qualification are uniquely overridden by [D7-SEARCH](D7-SEARCH.md) §11. QuerySpec/2 clauses below remain genuine historical decoding; no new members are injected into old records.
 
 In this branch, [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 explicitly replaces this file’s corresponding current nested slots: Selector/Field effects, Registry read/evolution/bootstrap, document_format receiver/qualification, processor/render and Recipe. Older shapes below retain their true original-version decoding; new-current dispatch follows the precise owner table, never a current heading overriding recorded history.
 
@@ -19,8 +23,8 @@ The byte-complete retained D7 author schemas live under d7/owners. This companio
 
 ```text
 Query outer: wireVersion 2
-QuerySpec current: version 2
-QuerySpec retained decoder: version 1
+QuerySpec current: version 3 (D7-SEARCH §11)
+QuerySpec retained decoder: versions 1 and 2 (exact recorded shapes)
 ViewSpec: version 1
 Action prepare: D7ActionPrepareRequest/3
 Action author: D7ActionSpec/2
@@ -95,6 +99,8 @@ bindingToken is random protected association material. It is not derived from re
 
 ## 5. D7ProposedInput/3
 
+AUTHORING-INTEGRATION section6.1 completely replaces this unactivated candidate section's exact input pairs, Result10 encoding and matching current action/request slots. The six-pair table below is synchronized; symbolic branches still require full producer qualification. Genuine Input2/PAB3 retains original decoders.
+
 ```text
 D7ProposedInput/3 = {
   subject:PayloadSubjectKey,
@@ -102,12 +108,14 @@ D7ProposedInput/3 = {
     "exact_source_document"|"resource_bytes"|"annotation_value",
   encoding:
     "exact_source_utf8"|"resource_bytes"|
-    "d3_annotation_value4"|"d3_symbolic_result9",
+    "d3_annotation_value4"|"d3_symbolic_result9"|"d3_symbolic_result10",
   pin:PinRef/2
 }
 
 legal pairs:
   exact_source_document <-> exact_source_utf8
+  exact_source_document <-> d3_symbolic_result9
+  exact_source_document <-> d3_symbolic_result10
   resource_bytes        <-> resource_bytes
   annotation_value      <-> d3_annotation_value4
   annotation_value      <-> d3_symbolic_result9

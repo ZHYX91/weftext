@@ -4,6 +4,8 @@ translation_status: source
 ---
 
 [English](D8-SCHEMAS.md)
+
+新的 presentation-owner 可移植完成路径由 [D6-CONTROL §0.1.4](D6-CONTROL.zh-CN.md#014-可移植显示策略-owner-完成链notice4--cp5--changerecord2) 唯一拥有 Notice4/CP5/ChangeRecord2、单独与 mixed Plan4 生产、严格 receiver 接纳及具名 trust-evidence inner successor。仅其列出的 current 槽位替代下方普通纯 component3/4/1 条款；真实 recorded decoder 不变。current EffectItem3.presentation_policy_change 在原 D7 effects owner 中 rank13，rank0–12、phase/完整集合门及历史 Manifest1/2 保持。作者修复等待独立复核，产品 UNRUN。
 # A2 D8 Closed Schemas and Version Dispatch
 
 本分支的作者源集成由 [AUTHORING-INTEGRATION](AUTHORING-INTEGRATION.zh-CN.md) §§1–6 具名替代本文件对应的 current 嵌套槽：Selector/Field effects、Registry read/evolution/bootstrap、document_format receiver/qualification、processor/render 与 Recipe。下方旧形状保留其真实原版本解码；新 current 按新 owner 的准确表分派，不由“current”标题覆盖历史记录。
@@ -185,6 +187,8 @@ OwnerInputBinding ownerKind/intentKind=d8_edit/3，
 canonicalDescriptorBytes 是完整 D8EditInput/3。
 
 ## 7. Annotation 当前 read/draft
+
+当前完整Annotation读取权覆盖全部已存Value4成员，包括合法Suggestion3.expectedText={byteLength,sha256}、targetBasisSha256与原attribution；不是隐藏target plaintext/context读取权。target hidden/unavailable仍交付准确完整Value/token与targetResolution=unavailable，不删除/null化摘要、不伪造完整Value、不额外读取或重算当前/历史隐藏target。replace/delete保已存摘要，insert保expectedText=null；Annotation-only Reject、readonly Draft保留，apply/reconfirm独立target资格不变。无Annotation disclosure/read先not_visible，交付前原record/aggregate/权限/finalbarrier重验。当前READ03/READ06统一判据禁止额外targetbytes/context及新算摘要，不禁止完整获权Annotation的已存摘要；固定97原case/sourceEvidence不改。
 
 ~~~text
 D8AnnotationBodyRead/1 =
