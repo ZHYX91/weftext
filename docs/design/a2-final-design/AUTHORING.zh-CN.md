@@ -33,7 +33,7 @@ D2 把完整文件交给同一原生处理链，直接消费其 attribute events
 
 types 的一个字符串使用唯一列表约定：以 ASCII 逗号分隔 token，每项两端仅去除 SP/HTAB；整体为空或缺省表示空集合。非空列表不允许空项、尾逗号、引号、方括号或空白替代逗号。每项严格为既有 D4 单段短名或完整 namespace/name；不把显示名称猜成 token。该约定是 Weftext 的属性值协议，不是原生数组语法。原序列和空白保留，比较用展开后的集合；非法列表不得悄悄降为空分类。
 
-控制资格来自同次 D2 header-end evaluation 的准确 root 声明与完整来源证据，而非最后一张有效属性表。Core 验证声明未受 include、条件或外部 API/environment set/unset 控制，且 header-end 对应值与该直接声明相符；这些外部来源即使写相同值也不能认证声明，缺完整证据则不可用。未激活条件分支不产生控制声明；不能因换环境而采用另一分支的 ID。正文同名 set/unset 仍保留原生渲染行为，并提示它不控制笔记；它不能改变已取出的声明或实体身份。完整声明仍须通过 §3 的受保护 metadata 资格。
+控制资格来自同次 D2 header-end evaluation 的准确 root 声明与完整来源证据，而非最后一张有效属性表。Core 验证声明未受 include、条件或外部 API/environment set/unset 控制，且 header-end 对应值与该直接声明相符；这些外部来源即使写相同值也不能认证声明，缺完整证据则不可用。未激活条件分支不产生控制声明；不能因换环境而采用另一分支的 ID。正文同名 set/unset 仍保留原生渲染行为，并提示它不控制笔记；它不能改变已取出的声明或实体身份。完整声明仍须通过 §3 的受保护 metadata 资格。此验证在同一原生 evaluation 处理文档头期间完成；D2 headerAttributes 的 lexical 列表和最终 effectiveAttributes 均不能单独充当 header-end 证据。只有最终 map 而无必要 trace 的旧 snapshot 不补猜或升级认证；只能按原 pins/profile 完整重求值并取得本次实际资格，或报告不可用，不复活旧 selector。
 
 `task` 是固定内置短名，唯一展开为 `tasks/task`。`template` 是保留的 D2 Core meta-kind token，禁止任何 facet alias 使用或重绑定该短名；完整 facet ID 不会被截短为此 token。它不能与任务等业务 facet 同列；其目标实例类型仍由 D9 template recipe 声明。其它内置或扩展短名来自 §4 的已验证表，完整 `namespace/name` 始终可用。短名与完整名展开到同一 facet 时视为重复；源顺序只影响无损编辑，不影响集合语义。Facet requires/conflicts/effective closure 仍由 D4 处理。示例中的多个类型不是多个 Node，也不产生 TaskRef。
 

@@ -32,7 +32,7 @@ link:weftext-workspace://<WorkspaceId>/<encoded-path>[白云山]
 link:file:///D:/notes/report.pdf[报告]
 ```
 
-第二行是语法示意，尖括号占位不属于合法存储值。库根 URI 的唯一 codec 为：scheme 精确 weftext-workspace；authority 精确 D3 lowercase UUIDv4 的 WorkspaceId；不允许 userinfo、port、query、缺 authority 或空 path。path 由一个起始斜杠和非空分量组成，分量代表 Core 库存中的真实库内路径；可选 fragment 表示同一目标的文内锚点。它是 Weftext 地址语义，不声称普通 AsciiDoc 工具能独立解析库身份。
+第二行是语法示意，尖括号占位不属于合法存储值。库根 URI 的唯一 codec 为：scheme 精确 weftext-workspace；authority 精确 D3 lowercase UUIDv4 的 WorkspaceId；不允许 userinfo、port、query、缺 authority 或空 path。path 由一个起始斜杠和非空分量组成，分量代表 Core 库存中的真实库内路径；可选 fragment 表示同一目标的文内锚点。它是 Weftext 地址语义，不声称普通 AsciiDoc 工具能独立解析库身份。该新 codec 只在已验证 managed2 格式资格下启用；真实 managed1/BaselineOnly 仍保留普通 native link 及原文，不在读取旧记录时自动取得库根解释。启用需明确的格式转换与完整 Source 预览，原 saved/planned 记录按原 profile 恢复。跨 Workspace 的稳定 ID 仍须满足 D3 原引用/复制约束，URI 不扩张跨库写入或 identityMap 权限。
 
 生成器将每个路径分量的精确 UTF-8 字节按 URI unreserved 集保留，其余百分号编码为大写十六进制；分隔斜杠原样保留。接收时只在 URI 这一层解码一次，拒绝畸形转义、非 UTF-8、NUL/control、空分量、dot/dot-dot、反斜杠以及编码后的路径分隔符。不会继续解码百分号所得文本、正规化 Unicode、折叠大小写或把加号当空格；非规范存储 spelling 拒绝 codec，但 Source 原文保留可修复。先原生解析/替换得到 nativeTarget，再运行此 codec，不能对源码另做百分号或宏预处理。fragment 单独按同一 UTF-8/unreserved 规则编码、一次解码为准确 author-anchor 字符串，空 fragment 与无 fragment 不混同；生成器不生成空 fragment。点分量限制只针对 path，不把合法 anchor 名重新当文件路径。
 
@@ -58,7 +58,7 @@ D7 core/document-link 的 asserted edges、D3 durable inbound 与 identityMap �
 4. 在同一 Draft 构造完整 proposed Source，保留未选字节、显示文字、适用属性与锚点。完整重解析/原 SourceTransform 证明其效果，使用原 D8→D6 prepare/save；不得调用禁止新增宏的窄文本 patch 分支。转换是一个 Undo 单元，取消不写文件。
 5. 在最终读屏障重验源/目标/路径绑定/锚点/权限/格式/registry 与实际依赖；改名、替换同路径文件、ABA、撤权、同步缺口或 Draft 变动使准备失效。重新计算需要新准备，不能沿旧证据静默改指另一篇笔记。
 
-“复制为”只复制目标地址或完整 AsciiDoc 链接，菜单明确两者；完整链接沿同样的原生编码和 label 保全。它不要求 source 写权、不创建 Draft 变更/receipt、不发布分享，也不自动保存。仍须有 source/目标/地址的读取披露资格，并在剪贴板写入前重验实际资格。复制相对链接明确标注其基准，粘贴到其它文档不会自动获得原目标语义；在 Weftext 内有真实来源上下文的粘贴可走显式重定位预览，纯文本剪贴板不可推断隐含身份。
+“复制为”只复制目标地址或完整 AsciiDoc 链接，菜单明确两者；完整链接沿同样的原生编码和 label 保全。它不要求 source 写权、不创建 Draft 变更/receipt、不发布分享，也不自动保存。仍须有 source/目标/地址的读取披露资格，并在剪贴板写入前重验实际资格。复制相对链接明确标注其基准，粘贴到其它文档不会自动获得原目标语义；在 Weftext 内有真实来源上下文的粘贴可走显式重定位预览，纯文本剪贴板不可推断隐含身份。原样复制已获权的 source 字面是独立的普通复制动作：即使目标断开、缺失或不可读也可复制当前原文，但不附解析成功保证、不查询或追加隐藏目标信息。它不能被“转换后复制”的目标验证门误阻断。
 
 ## 5. 库与设备边界
 
@@ -86,7 +86,7 @@ copy/template/import 的新源不能盲复制相对目标并称保持引用。�
 | LINK-04 | 百分号/空格/Unicode/大小写/加号保持精确语义；重复解码、encoded slash/backslash、dot traversal、userinfo/port/query、alias/symlink 越界拒绝。 |
 | LINK-05 | 成功转换保留原准确 fragment；ID 无 anchor 槽、同名/缺失锚点、无逆映射时禁用，不丢锚点。 |
 | LINK-06 | 可读 Node 但不可披露位置时不输出路径；Server 不泄本机盘路径；未连接库不猜替代。 |
-| LINK-07 | 一次转换一次 Undo，取消/撤权/ABA/Draft 变化不提交；复制仅改剪贴板，不要求写权或发布分享。 |
+| LINK-07 | 一次转换一次 Undo，取消/撤权/ABA/Draft 变化不提交；复制仅改剪贴板，不要求写权或发布分享。原样复制断链字面仍可用；转换后复制仍须目标资格。 |
 | LINK-08 | 共享属性/include/生成来源保留原文并提供不可用原因；完整 Source 路径不借窄文本 writer 插宏。 |
 | LINK-09 | ID→路径说明稳定边语义变化；D7 asserted graph/Ref inbound 不把路径瞬时解析提升为身份。 |
 | LINK-10 | copy/template 新目录重定位、fresh map 与 C/Q 同决议；无证明按原 loss/拒绝，不悄悄变目标。 |
