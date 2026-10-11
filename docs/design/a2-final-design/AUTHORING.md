@@ -1,0 +1,114 @@
+---
+source_language: zh-CN
+translation_of: AUTHORING.zh-CN.md
+translation_status: synced
+---
+
+[简体中文](AUTHORING.zh-CN.md)
+
+# Note authoring: YAML identity, types and native business attributes
+
+Status: design revision from `6b13b03b8da3e9e3d14b8663e91442568c8917e0`, pending independent review, not implemented. Scope and predecessor dispositions are in the [revision entry](REVISION.zh-CN.md). This file solely owns the new source mapping; D3 identity, D4 value semantics, D6 commits and D8 editing qualifications retain their original owners.
+
+## 1. File shape and native language
+
+A managed note remains one `.adoc` file. Its small YAML front matter carries only note ID and types; business fields use native AsciiDoc header attributes and the body retains the full native language. Schema owns field data types, requiredness, enums, cardinality and relation constraints. Simple values do not require authored JSON constructors.
+
+```adoc
+---
+weftext:
+  id: 12d7c4f3-9ee6-4c36-920d-ec6af27bc654
+  types: [task]
+---
+:status: open
+:due: 2026-10-20
+= Prepare the project report
+
+Organize the research into a project report.
+```
+
+Business attributes may instead follow the title or appear on both sides; legal attributes must not be forcibly relocated. Attributes and title obey the native contiguous-header and blank-line termination rules. Titleless documents remain legal. Title, filename, directory and first paragraph do not create identity or types.
+
+YAML is a bounded Weftext integration envelope, not claimed as native AsciiDoc syntax. D2 recognizes the root envelope, then passes the exact remaining AsciiDoc to the original processing chain, retaining original envelope bytes and full-file coordinates rather than resetting body offsets. Native `skip-front-matter` is a conformance reference, not a YAML semantic decoder. Included envelopes cannot take over root identity/types; native include processing, origins and authorization remain governed by D2. See [native headers](https://docs.asciidoctor.org/asciidoc/latest/document/header/) and [front matter handling](https://docs.asciidoctor.org/asciidoctor/latest/html-backend/skip-front-matter/).
+
+## 2. Small YAML envelope and classification
+
+After an optional UTF-8 BOM, the first line is exactly `---` and the closing line is also `---`; exactly one YAML document is allowed. The sole top-level key is `weftext`, whose closed members are required `id` and optional `types`. `id` is a D3 lowercase UUIDv4 string; `types` is an array of unique nonempty strings, absent meaning an empty array. Ordinary notes need not write an empty `types` array. Comments, block/flow arrays, single/double quotes and legal indentation are supported and preserved. Duplicate keys, merge keys, tags, anchors/aliases, complex keys, another YAML document, unknown members and wrong value types produce an envelope error with no inferred fallback. Use a mature YAML parser in safe, non-object-construction mode, not a regex parser. Only these two fields belong here: no permissions, parent/order, business values or sync credentials.
+
+`task` is a fixed built-in shorthand for `tasks/task`. `template` denotes the existing D2 Core meta-kind and cannot coexist with business facets such as task; D9 template recipes still declare target instance types. Other built-in or extension shorthands come from the verified table in §4; full `namespace/name` remains available. A short and full name expanding to the same facet are duplicates. Source order matters only for lossless editing, not set meaning. D4 still owns requires/conflicts/effective closure. Multiple types do not create multiple Nodes or a TaskRef.
+
+An uninstalled/unknown legal type identifier retains its text and displays unavailable schema, never an empty type set or automatic rename. Extensions cannot rebind `task`. Full IDs, labels, translated names and shorthands differ; installation order, enablement and localization do not change stored meaning. Native attributes named `wf-kind`/`wf-facets` may still participate in native processing but have no identity/classification authority or YAML fallback role in the new source profile.
+
+## 3. Note identity and external metadata
+
+`weftext.id` is the note-carried NodeId declaration; a full NodeRef is still WorkspaceId + NodeId. D3 allocation, birth, tombstones, non-reuse, permissions and lifecycle remain proven by D3/D6 portable metadata and original decisions. A string in a file is not permission or birth evidence; metadata no longer provides another independently editable document-ID value. The original operation installs both consistently; disagreement is conflict/incomplete, never a choice to overwrite one from the other.
+
+Creation preallocates one UUID in the original D3 plan and writes that same value to envelope, file binding and birth. A D9 template cannot prefill a final ID. Truly new Nodes from copy/fork/import receive fresh IDs; the original identity map rewrites managed references and envelopes while preserving unknown/unprovable content and the original loss/confirmation rules. Move/rename preserves ID. Restart/recovery uses the original frozen UUID. Externally editing an ID is not a rename, identity transfer or creation authorization.
+
+Copying one `.adoc` carries its ID declaration and types, but cannot alone restore Workspace relations, permissions, annotations or execution responsibility. Complete backups still include portable metadata, required resources and independent `weftext.annotations.json`. Two files claiming one ID in a Workspace are a collision, never first-wins, silent merge or reissuance; an explicit import-as-new action performs fresh allocation. Missing metadata or partial sync preserves separately authorized source reading/repair with incomplete managed identity; rebuilding an index never allocates replacement identity.
+
+## 4. Schema bindings for source names
+
+`RegistrySnapshot/2` is this proposal's sole new registry snapshot shape: it inherits all sixteen members of D4 §2.2 `RegistrySnapshot/1` and adds required `authoringBindings`, retaining the original `kind`. Other members, ownership, ordering, completeness, tombstones and migrations are unchanged. `RegistryBinding/1` still freezes generation and the digest covering the complete new object. Actual old Snapshot1 uses its original closed decoder, without ignoring new members or upgrading on read. D10 authenticates contribution owners and D4 validates schemas/bindings; missing or unknown versions are not empty configuration.
+
+```text
+authoringBindings = {
+  version: 1,
+  typeAliases: [{name, facetId}...],
+  fields: [{attributeName, fieldId, codec, wrappers}...]
+}
+codec = "text" | "boolean" | "integer" | "decimal" | "semantic_code"
+      | {kind:"calendar_date", calendarId, calendarVersion, precision:"day"}
+wrappers = [{variant:<declared union variant>}...]
+```
+
+All objects are closed. Arrays must be actual arrays, sorted uniquely by unsigned UTF-8 `name` or `attributeName`. Shorthands are D4 single-segment tokens; attributeName is a native legal name in native canonical form and cannot occupy any fixed-baseline built-in attribute, `weftext`, or reserved `wf-` prefix. Each FieldId has at most one native binding; attributeName is also unique within the snapshot. Bindings do not duplicate FieldDefinition; fieldId resolves to the original verified definition. A type alias is declared by its verified facet owner; business-name bindings are authorized Workspace schema configuration, not injected by enabled plugins. Adding/removing/rebinding a name that affects existing sources requires a complete affected-source preview and the original schema-evolution rules, never silent reinterpretation.
+
+`wrappers` selects declared union variants from outer to inner; an empty array means a non-union. The innermost type must match codec and Field maximum cardinality must be 1; incompatibility rejects the binding. Calendar codecs freeze calendar, version and precision and validate the original comparator/lexeme; host locale/time zone is never inferred. Boolean accepts only `true`/`false`; integer/decimal use D4 canonical decimal strings; text retains the full string and semantic_code validates the target Field's closed code domain. Types and conversions are schema facts, without repeated per-value type tags.
+
+Initial task configuration contains `task→tasks/task`; `status→tasks/status` and `priority→tasks/priority` use semantic_code; `due→tasks/due` selects `wrappers=[{variant:"date"}]` and the selected registered Gregorian day-precision calendar codec. Its calendar ID/version must verify in the actual Workspace's same snapshot, not be guessed from an example. Task status remains required with the original catalog open/done/cancelled domain. Original priority codes, due's date/instant union and complex-value capability remain; instant values retain the §6 complex carrier. Immutable catalog bytes do not change.
+
+## 5. Native attributes as business values
+
+Only §4 bound attributes become D4 Fields; similar names do not claim ownership. D2 retains full native attribute events. D4 reads effective values and complete provenance at the end of the root document header in that same evaluation. Later body set/unset still affects native rendering but does not silently change a header Field. Repeated header assignments follow native redefinition, not array accumulation. Unset means absence; empty string differs from absence; invalid values produce explicit Field diagnostics rather than absence/zero/default. Field presence does not add a note type; facet requiredness and constraints are checked separately.
+
+Native Field authority must originate in the root-authored header, not API hard-set, environment or included sources. An effective value controlled by those sources is typed-unavailable while retaining native rendering/Source capability. Native substitutions remain supported with frozen dependencies, origins, environment and authorization; non-root dependencies, multiple origins or generated values do not obtain narrow Field write qualification. Unbound ordinary attributes remain native metadata, neither deleted nor envelope errors.
+
+The internal business projection preserves FieldId, TypedValue, permissions and relation/Calendar/Query meaning. A single header value uses a derived UUIDv5 occurrenceKey: the standard URL namespace, with the UTF-8 D3-CJ/3 encoding of `["weftext.header-entry/1",WorkspaceId,NodeId,FieldId]` as name. It is not persisted to source or a new EntityRef; use requires complete owner/Field/source-version/Observation/Registry qualification. Equal-value ABA, deletion/recreation and index rebuild never revive old selectors. The key is neither permission nor continuity evidence.
+
+`NativeFieldOrigin/1={kind:"native_header",attributeName,rawAttributeSource,sourceRange}` is a closed internal D4 materializer origin using the same evaluation's D2 root range. It does not widen the historic Entry1 JSON decoder: block bytes use that decoder and header bytes use this codec. D4→D7→D8 typed values agree, but raw header source is never disguised as JSON rawEntrySource or patched by a JSON-only materializer. Without a uniquely writable root span, use the complete Source Draft path instead of claiming narrow-write success.
+
+## 6. Multiple values, notes, provenance and complex fields
+
+Complex objects, relations/refs, repeated equal assertions, qualifiers, per-value notes/provenance and non-default union branches retain the existing precise `[weftext-attributes]` Entry1 representation and internal TypedValue. This revision removes JSON from common simple values; it does not claim a simpler equivalent text representation for every complex structure.
+
+One Node + FieldId has exactly one effective author carrier: native header or Entry stream. Both at once, even with equal values, are a carrier conflict, never precedence, merging or fallback. All complex occurrences of a Field share its Entry stream; an unbound similarly named native attribute does not impersonate that Field. Schema determines final meaning and untouched Fields retain exact bytes.
+
+Adding per-value notes/provenance or changing to a complex value requires an explicit representation-conversion preview: exact header span to complete Entry, allocated occurrenceKey, original value/type/dependencies, removal of every same-name header assignment/unset, and all affected native references. If the attributes are still referenced by body/other values, preserve equivalent native behavior or reject this conversion while retaining Draft; deleting an assignment must not silently change other content while reporting one Field change. Reverse conversion requires cardinality≤1, no extra information, an invertible codec and complete replacement-impact validation. Never discard notes/provenance, precision, relations or duplicates to obtain shorter source.
+
+## 7. Editing, copying and recovery
+
+D8 property panels, quick capture and Source share one Draft, Undo and Core prepare/commit. Patch only the selected value or exact YAML scalar/sequence by default, without whole-file formatting; preserve comments, indentation, quotes, line endings, unknown body and attribute placement around the title. Ambiguous/invalid YAML retains the draft and repair path, never automatic creation of a second ID. Identity is read-only in ordinary property panels; type changes still require original type constraints and full change preview.
+
+D4 relation/materialization, D7 copy/Field Action, D8 structured edits and D9 import/template constructors branch on actual native/header versus Entry origins and carry envelope/fact changes through original C/Q materialization and the single D3/D6 commit. New syntax does not waive final read barriers, hidden fields, complete negative ranges, Field-only permissions, source transforms, inverse relations or installation recovery. Narrow Field requires proof that every change lies within authorized Fields; whole-source editing independently uses full-source authorization.
+
+The new source profile is `weftext_managed/2`, carried by `ManagedDocumentFormatProfile/2`: languageBaseline retains its fixed value and managedProfile is exactly the new value. `ManagedDocumentFormatBinding/2` inherits Binding1's members, fixing version=2 and profile=Profile2. D6's existing document_format key/component carries the exact version without new authority/Notice/CP/CAS branches. The current qualification binding slot explicitly accepts Binding2; recorded Binding1 profile/decoder/bytes stay unchanged, without read-time upgrades.
+
+This revises an undeployed candidate, not an invented migration of deployed user libraries. If actual old managed1 content needs conversion, explicit format-conversion preview covers envelope/attribute rewrites and Binding2 together. Real source changes get a new source version and cannot use the old profile-only `sourceChanges=[]` shortcut. Original prepared/selector/preview objects are not upgraded; saved/planned/unknown recover their original versions, bytes/pins/UUID/OperationId. Missing schema still permits source reads, not empty schema substitution; bare files on a new device do not reconstruct permissions or execution responsibility.
+
+## 8. Acceptance obligations
+
+These are design requirements, not executed product tests. Each requires both positive and rejection/recovery paths:
+
+| ID | Requirement |
+| --- | --- |
+| SRC-01 | Attributes before/after/on both sides of title, and titleless source, are legal after YAML; blank lines and author/revision obey native rules; untouched bytes survive. |
+| SRC-02 | Preserve plain/quoted UUID, flow/block type arrays, comments and BOM; duplicate keys, alias, tag, missing ID and malformed arrays reject control projection while retaining repair Draft. |
+| SRC-03 | task and full name are equivalent; using both is duplicate; unknown types survive; plugin order and include/API cannot take over classification. |
+| SRC-04 | Create allocates ID once; copy allocates fresh; move/restore retain original semantics; crash/retry uses the original plan without half-installed ID/birth. |
+| SRC-05 | External ID edits, duplicate files, source arriving before metadata and missing-metadata index rebuild never silently merge/reissue/escalate. |
+| SRC-06 | Exact schema conversion for status/due; distinguish empty, unset, invalid, body/header redefinition, API hard-set and includes; no guessed date precision/calendar. |
+| SRC-07 | Reject same-generation changed digest, name collisions, built-in attributes, unknown members, incompatible codec/union and old Snapshot1 misdecoding. |
+| SRC-08 | Header+Entry conflict per Field; equal phone values with different provenance remain separate; representation round trips do not lose data or silently change references. |
+| SRC-09 | Query/View read the same typed value; narrow writes do not disclose whole source; revocation, ABA, gaps and format/schema changes do not revive selectors; ordinary Source saves retain their independent path. |
+| SRC-10 | Template/import/copy/inverse materialization cover both carriers; source/body/ID/Binding share the original commit; actual old saved/planned/unknown bytes are not re-encoded. |

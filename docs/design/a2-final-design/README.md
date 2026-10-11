@@ -7,6 +7,8 @@ translation_status: synced
 [简体中文](README.zh-CN.md)
 # A2 Final Design Integration Candidate
 
+The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md) and [EXPERIENCE](EXPERIENCE.zh-CN.md). Their named replacements cover YAML identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2 and direct consumers; other obligations remain. This is a candidate pending independent review; the original 21 global findings stay open, product not implemented.
+
 Status: candidate design, not independently accepted, not implemented, not released.
 
 ## 1. Fixed object and authorship

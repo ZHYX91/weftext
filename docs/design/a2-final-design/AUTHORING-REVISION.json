@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "status": "candidate-pending-independent-review",
+  "base_commit": "6b13b03b8da3e9e3d14b8663e91442568c8917e0",
+  "protected_inputs_unchanged": true,
+  "replacements": [
+    {
+      "sourcePath": "docs/design/a2-final-design/D2.zh-CN.md",
+      "concern": "root authored controls and YAML prohibition",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        1,
+        2
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D3.zh-CN.md",
+      "concern": "NodeId declaration and lifecycle qualification",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        3,
+        7
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D4.zh-CN.md",
+      "concern": "RegistrySnapshot1 successor, native field codec and Entry materializer",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D6.zh-CN.md",
+      "concern": "identity placement and managed document format binding",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        3,
+        7
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D7.zh-CN.md",
+      "concern": "typed Field read/write/copy and Query consumers",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D8.zh-CN.md",
+      "concern": "source mapping, Draft and source transforms",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        1,
+        5,
+        6,
+        7
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D9.zh-CN.md",
+      "concern": "template/import/copy envelope production and export",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        3,
+        7
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D10.zh-CN.md",
+      "concern": "authenticated RegistrySnapshot2 handshake",
+      "targetZh": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/AUTHORING.md",
+      "sections": [
+        4
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    },
+    {
+      "sourcePath": "docs/design/a2-final-design/D8.zh-CN.md",
+      "concern": "writing/capture/query/annotation/link/output workflows",
+      "targetZh": "docs/design/a2-final-design/EXPERIENCE.zh-CN.md",
+      "targetEn": "docs/design/a2-final-design/EXPERIENCE.md",
+      "sections": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "disposition": "named-supersede-for-new-authoring-profile; preserve all unlisted obligations and original recorded recovery"
+    }
+  ],
+  "design_cases": {
+    "AUTHORING": [
+      "SRC-01",
+      "SRC-02",
+      "SRC-03",
+      "SRC-04",
+      "SRC-05",
+      "SRC-06",
+      "SRC-07",
+      "SRC-08",
+      "SRC-09",
+      "SRC-10"
+    ],
+    "EXPERIENCE": [
+      "UX-01",
+      "UX-02",
+      "UX-03",
+      "UX-04",
+      "UX-05",
+      "UX-06",
+      "UX-07",
+      "UX-08",
+      "UX-09",
+      "UX-10",
+      "UX-11",
+      "UX-12",
+      "UX-13",
+      "UX-14",
+      "UX-15",
+      "UX-16"
+    ]
+  },
+  "existing_global_findings": {
+    "P1": 6,
+    "P2": 15,
+    "status": "open; no automatic closure"
+  },
+  "product_tests": "UNRUN"
+}
