@@ -8,7 +8,7 @@ translation_status: synced
 
 # Note authoring: native identity, types and business attributes
 
-Status: design revision from `6b13b03b8da3e9e3d14b8663e91442568c8917e0`, pending independent review, not implemented. Scope and predecessor dispositions are in the [revision entry](REVISION.zh-CN.md). This file solely owns the new source mapping; D3 identity, D4 value semantics, D6 commits and D8 editing qualifications retain their original owners.
+Status: design revision from `6b13b03b8da3e9e3d14b8663e91442568c8917e0`. Bounded independent review status, scope and predecessor dispositions are in the [revision entry](REVISION.zh-CN.md). It is not implemented and the original global review remains incomplete. This file solely owns the new source mapping; D3 identity, D4 value semantics, D6 commits and D8 editing qualifications retain their original owners.
 
 ## 1. File shape and native language
 

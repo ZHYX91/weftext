@@ -7,7 +7,7 @@ translation_status: source
 
 # 作者源与使用流程修订入口
 
-状态：设计候选，等待独立审查；不是全局接受或实施启动。修订起点为 `6b13b03b8da3e9e3d14b8663e91442568c8917e0`，作者分支 `design/yaml-properties-ux-20261011`。新规范由 [AUTHORING](AUTHORING.zh-CN.md) 、[作者源集成](AUTHORING-INTEGRATION.zh-CN.md) 、[EXPERIENCE](EXPERIENCE.zh-CN.md) 和 [LINKS](LINKS.zh-CN.md) 自包含定义。其它模块只引用这些唯一 owner，不复制第二份配置/语法。
+状态：设计候选；本轮原生属性与链接增量在 `e703f9e7bb9908d8b6a322620b59b184d0f7bb5f` 完成独立有界复核，原全局审查仍未完成，不构成全局接受或实施启动。修订起点为 `6b13b03b8da3e9e3d14b8663e91442568c8917e0`，作者分支 `design/yaml-properties-ux-20261011`。新规范由 [AUTHORING](AUTHORING.zh-CN.md) 、[作者源集成](AUTHORING-INTEGRATION.zh-CN.md) 、[EXPERIENCE](EXPERIENCE.zh-CN.md) 和 [LINKS](LINKS.zh-CN.md) 自包含定义。其它模块只引用这些唯一 owner，不复制第二份配置/语法。
 
 ## 1. 本次修改
 

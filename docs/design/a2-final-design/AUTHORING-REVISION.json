@@ -1,6 +1,11 @@
 {
   "schema_version": 1,
-  "status": "candidate-pending-independent-review",
+  "status": "candidate-bounded-increment-reviewed-global-pending",
+  "bounded_review": {
+    "fixed_commit": "e703f9e7bb9908d8b6a322620b59b184d0f7bb5f",
+    "scope": "native-control attributes, schema grouping and link-form increment with affected consumers; not full A2 acceptance",
+    "result": "PASS within stated scope; original global findings remain open"
+  },
   "base_commit": "6b13b03b8da3e9e3d14b8663e91442568c8917e0",
   "protected_inputs_unchanged": true,
   "replacements": [

@@ -8,7 +8,7 @@ translation_status: synced
 
 # Authoring and workflow revision entry
 
-Status: design candidate pending independent review, not global acceptance or implementation start. Revision base: `6b13b03b8da3e9e3d14b8663e91442568c8917e0`; author branch: `design/yaml-properties-ux-20261011`. [AUTHORING](AUTHORING.zh-CN.md), [authoring integration](AUTHORING-INTEGRATION.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md) define the new rules. Other modules reference these sole owners rather than duplicating configuration/grammar.
+Status: design candidate. The native-attribute/link increment completed bounded independent review at `e703f9e7bb9908d8b6a322620b59b184d0f7bb5f`; the original global review remains incomplete, without global acceptance or implementation start. Revision base: `6b13b03b8da3e9e3d14b8663e91442568c8917e0`; author branch: `design/yaml-properties-ux-20261011`. [AUTHORING](AUTHORING.zh-CN.md), [authoring integration](AUTHORING-INTEGRATION.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md) define the new rules. Other modules reference these sole owners rather than duplicating configuration/grammar.
 
 ## 1. Changes
 
