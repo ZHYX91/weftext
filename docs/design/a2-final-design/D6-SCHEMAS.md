@@ -174,7 +174,7 @@ SuggestionAuthorProposal/1 = {
 
 AnnotationEditableProposal/1 = {
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,
@@ -502,6 +502,8 @@ ConflictResolutionPreview/2 = {
 }
 ```
 
+Current presentation-evidence slots use ConflictResolutionPolicyDerivedPlan/2.headEvidence:[PolicyBundleHeadEvidence/3...] and .carryEvidence:[TrustConflictCarryValidationEvidence/2...]. Both ConflictResolutionInput/3.derivedPlan and ConflictResolutionPreview/2.derivedPlan carry this exact plan; neither outer object has a carryEvidence member. Per-item and per-hop dispatch, complete pin collection and exact recorded-history recovery follow the sole owner D6-CONTROL section0.1.4. The shapes below retain their original recorded decoders where applicable.
+
 FreshDomainAuthorizationSpec/2 has exactly the same two JSON members as historical /1 but profile is the full SealProfileId/1 union. The array is canonical D3-CJ/3 sorted/unique and contains no key material. Current ConflictResolutionInput/3 is a protected owner-descriptor successor only for policy_bundle_choice; it does not version the public request, add a submit path, or change conflict_resolve/policy_admin/disclosure/error order. A genuinely proven saved/planned old owner descriptor retains its recorded decoder, preview and pins.
 
 PolicyBundleHeadEvidence/2 is complete, ChangeId-sorted/unique and byte-equal in head set to expectedKey.heads. version=3 means branchEvidence.completionProofPin strict-decodes ContentCompletionProof/3 and the exact policy after-image strict-decodes WorkspaceAuthorizationBundle/1. version=4 means completionProofPin strict-decodes ContentCompletionProof/4, branchEvidence.changeRecordPin strict-decodes the matching ChangeRecord/1 and exact Notice3/CP4 chain, and the policy after-image strict-decodes the declared Bundle1 or Bundle2 version. In both arms policyBundlePin is present, pins the exact canonical bundle bytes, and WorkspaceAuthorizationBundleAddress/1 authorizationRevision/trustRevision/byteLength/sha256 matches them. For policy_bundle_choice every branchEvidence.sourcePins array is empty. CP3+Bundle2, unknown versions, a missing CP4 ChangeRecord, tag/byte mismatch, or decoder fallback is rejected.
@@ -587,6 +589,8 @@ WorkspaceBootstrapPlan/4 = {
 ```
 
 All UUID members use the canonical lowercase D3 UUID decoder. Genesis has exactly two declarations: revision 1 revision-token authorize and revision 2 source-transform authorize, same DecisionKey/activation ChangeId, with rev2 predecessor hashing exact rev1 canonical bytes. Series configurations are unique and sorted by canonical SeriesScope; period bindings are unique and sorted by full NodeRef with exactly one per valid prepared period. The helper members retain the fixed-parent Plan3 field semantics; Profile4 changes only the dual-profile genesis family.
+
+This is post-map actual Plan4 order. The complete effects owner section3 algorithm defines symbolic3 template order, slot paths and exact same-map post-substitution normalization. Fork rebinds node scopes through the original complete Node map before seriesScope canonical-byte sorting; fresh UUIDs need not preserve source order and actual decoding cannot precede normalization.
 
 Plan4 is only for unseen fresh create/fork and preserves the original D3 proposal/custody/CAS/P boundary. Ordinary copy is not Plan4. Saved/planned/unknown recovery keeps the actual recorded decoder and bytes; restore/continue/failover do not synthesize Genesis2. No deployment or migration from Plan3 is asserted.
 

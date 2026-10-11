@@ -27964,7 +27964,7 @@
         "text": "| FA06 | P seal succeeds; ContentCompletionProof/3 write fails | decision, real ChangeId, applicable managed SourceVersion/H, receipt/charge, and ReliableSaveState are already fixed: strict is reliable and qualified observed_only is durable_observed_only. publication is pending; retry only emits the same proof/outbox with no reinstall, recharge, or second H/ChangeId advance |",
         "target": "D6-IMPACT.md 5. Positive/negative acceptance matrix",
         "disposition": "named-current-successor",
-        "oracle": "| FA06 | P seal succeeds; ContentCompletionProof/4 write fails | decision, real ChangeId, applicable managed SourceVersion/H, receipt/charge, and ReliableSaveState are already fixed: strict is reliable and qualified observed_only is durable_observed_only. publication is pending; retry only emits the same proof/outbox with no reinstall, recharge, or second H/ChangeId advance |",
+        "oracle": "| FA06 | final P proof/ChangeRecord/outbox write or flush fails; separately, transport fails after successful P | First branch has no committed-success receipt and retains actual B/N/third-state installation remnants, frozen plan/pins and original planned/unknown recovery. Second branch has already durable decision, exact proof, ChangeRecord, actual Frontier, outbox, receipt, H/ChangeId, charge and ReliableSaveState: strict=reliable, qualified observed_only=durable_observed_only, publication=pending. Send retained exact bytes only; no regeneration, re-signing, reinstall, new OperationId, recharge or second H/ChangeId. Exercise both branches separately under the applicable exact recorded family. |",
         "currentLine": 173
       },
       {
@@ -38128,7 +38128,7 @@
         "D6-SCHEMAS §5, §9-§10",
         "D6-IMPACT §5, §7-§10"
       ],
-      "oracle": "Exactly one fresh current family: Key3/Proof3/Input3/Prepared3 -> PortableComponentKey2/Notice3 -> original final P -> CP4/ChangeRecord1; current policy/boot/replica/execution successors have positive paths. Genuine predecessor Notice/CP/trust/bootstrap/record/saved-planned-unknown bytes recover only through their recorded decoder, authority, pins, error order and responsibilities; no migration/second ledger/CAS.",
+      "oracle": "Ordinary fresh current family: Key3/Proof3/Input3/Prepared3 -> PortableComponentKey2/Notice3 -> original atomic final P constructing and durably retaining CP4/ChangeRecord1, actual Frontier and publication outbox before success; presentation-bearing decisions use their explicitly defined Notice4/CP5/ChangeRecord2 family in that same atomic P. Post-P publication transports the retained exact bytes only; current policy/boot/replica/execution successors have positive paths. Genuine predecessor Notice/CP/trust/bootstrap/record/saved-planned-unknown bytes recover only through their recorded decoder, authority, pins, error order and responsibilities; no migration/second ledger/CAS.",
       "independentClose": true,
       "closedAt": "01cc40b819df78fbe724f1c64c27284ad60fc6c8"
     },

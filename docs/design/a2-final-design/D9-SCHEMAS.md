@@ -245,7 +245,7 @@ PortableAnnotationRecord/4 = {
 D3-Annotation-Value/4 = {
   kind:"d3_annotation_value",version:4,
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,

@@ -329,7 +329,7 @@ EffectBytes/3 = {
   handleToken:Token,
   encoding:
     "exact_source_utf8"|"resource_bytes"|"d3_annotation_value4"|
-    "d3_symbolic_result9"|"d4_relation_copy_effects1"|
+    "d3_symbolic_result9"|"d3_symbolic_result10"|"d4_relation_copy_effects1"|
     "d4_source_materialization_effects1"|
     "d7_definition_transfer_effects2"|"d3_canonical_effects1"|
     "d6_workspace_bootstrap_plan1"|"d6_workspace_bootstrap_plan3"|

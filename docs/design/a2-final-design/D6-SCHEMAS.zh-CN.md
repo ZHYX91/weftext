@@ -225,7 +225,7 @@ SuggestionAuthorProposal/1 = {
 
 AnnotationEditableProposal/1 = {
   purpose:"comment"|"mark"|"suggestion",
-  target:D3-Annotation-Target-Projection/1,
+  target:D3-Annotation-Target-Projection/2,
   replyTo:AnnotationRef|null,
   body:AnnotationInlineBody/1|null,
   appearance:AnnotationAppearance/1|null,
@@ -600,6 +600,8 @@ ConflictResolutionPreview/2 = {
 }
 ```
 
+当前显示策略证据的真实槽为 ConflictResolutionPolicyDerivedPlan/2.headEvidence:[PolicyBundleHeadEvidence/3...] 与 .carryEvidence:[TrustConflictCarryValidationEvidence/2...]。ConflictResolutionInput/3.derivedPlan 和 ConflictResolutionPreview/2.derivedPlan 均承载此准确计划；两个外层对象都没有 carryEvidence 成员。逐项及逐跳分派、完整固定引用收集和真实旧记录恢复，均依唯一 owner D6-CONTROL §0.1.4。下列形状在适用时保留其原已记录解码器。
+
 FreshDomainAuthorizationSpec/2 的 JSON 成员仍只有原来的两个，但 profile 扩为完整 SealProfileId/1 union。数组按 D3-CJ/3 规范排序且唯一，不含任何 key material。current ConflictResolutionInput/3 只作为 policy_bundle_choice 的 protected owner-descriptor successor；它不提升公开 request 版本、不新增 submit path，也不改变 conflict_resolve、policy_admin、disclosure 或 error order。任何可证明真实 saved/planned 的旧 owner descriptor 都保留 recorded decoder、preview 与 pins。
 
 PolicyBundleHeadEvidence/2 必须完整、按 ChangeId 排序唯一，并与 expectedKey.heads 的集合逐项相等。version=3 表示 branchEvidence.completionProofPin 必须严格解码 ContentCompletionProof/3，且精确 policy after-image 必须严格解码 WorkspaceAuthorizationBundle/1。version=4 表示 completionProofPin 严格解码 ContentCompletionProof/4，branchEvidence.changeRecordPin 严格解码匹配的 ChangeRecord/1 与精确 Notice3/CP4 chain，policy after-image 再严格解码为声明的 Bundle1 或 Bundle2。两种 arm 都要求 policyBundlePin 存在并 pin 精确 canonical bundle bytes；WorkspaceAuthorizationBundleAddress/1 的 authorizationRevision、trustRevision、byteLength、sha256 必须匹配。policy_bundle_choice 的每个 branchEvidence.sourcePins 必须为空。CP3+Bundle2、未知版本、CP4 缺 ChangeRecord、tag/bytes 不一致或 decoder fallback 一律拒绝。
@@ -711,6 +713,8 @@ WorkspaceBootstrapPlan/4 = {
 
 全部 UUID 成员使用 D3 的 canonical lowercase UUID decoder。Genesis 恰两项：revision 1 是 revision-token authorize，revision 2 是 source-transform authorize；两者使用同一 DecisionKey/activation ChangeId，且 rev2 predecessor 必须哈希精确的 rev1 canonical bytes。
 series configuration 按 canonical SeriesScope 排序且唯一；period binding 按完整 NodeRef 排序且唯一，每个有效 prepared period 恰有一项。
+
+此处为post-map实际Plan4排序；symbolic3模板排序、slots路径与同map替换后准确归一化由effects owner §3完整算法定义。fork按原完整Node map重绑node scope后再排序seriesScope canonical bytes，不要求fresh UUID保持source顺序，不在归一化前误用actual decoder。
 这些 helper member 保留 fixed-parent Plan3 的字段语义；Profile4 只改变 dual-profile genesis family。
 
 Plan4 只用于 unseen fresh create/fork，并保留原 D3 proposal/custody/CAS/P boundary。普通 copy 不使用 Plan4。saved/planned/unknown recovery 保留实际 recorded decoder/bytes；restore/continue/failover 不合成 Genesis2。本候选不声称 Plan3 已部署，也不虚构 migration。
