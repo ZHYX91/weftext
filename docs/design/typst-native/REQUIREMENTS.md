@@ -128,6 +128,14 @@ Earlier statements that only simple common fields are retained or that removing 
 
 The rewrite must assign retention/redesign/deferral reasons and current owners to each capability class, covering historically selected capabilities without treating the entire old schema as the new implementation. At minimum, verify that equal contact values retain distinct labels/notes and order; employment and organization references preserve time and target meaning; ordered paper authors agree across forms, Query and export; task details remain body content with structured fields supporting views; and ordinary use does not require optional complex information. These are design checks, not executed product tests.
 
+### 5.3 Library defaults and native style overrides
+
+On 2026-10-12 the user confirmed library-wide default fonts, spacing, borders and other styles for body text, headings, lists, tables and other elements, with per-note and local overrides through native Typst. Ordinary use must not require handwritten style imports in every note. This outcome is U; style-file organization, compilation entry points, settings controls and dependency delivery are D.
+
+Library defaults and note/local rules follow actual Typst scope and composition, without another style language or a fictitious universal precedence order. Settings controls and source editing use one style authority. Unrecognized custom rules remain intact with a source entry point; controls cannot overwrite or discard them. Style changes invalidate affected previews without editing individual author bytes, identities or original annotation ranges.
+
+Personal dark mode, reading zoom and assistive display settings are distinct from document styles and do not alter source or export. Export distinguishes an exact original file from a reproducible style-dependency bundle. The latter includes the exact entry point, styles and deliverable fonts/resources, with explicit missing-dependency results. Verify library defaults, note/local overrides, style revisions and external opening; an application preview is not output verification.
+
 ## 6. Bringing the original 21 findings into the new design
 
 Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: **all still need validation against the new solution**, with no new closure claimed. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.

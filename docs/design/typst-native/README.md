@@ -8,6 +8,8 @@ translation_status: synced
 
 # Typst primary-format coordinated candidate
 
+The current technical rewrite is at the [new Typst architecture candidate](../typst-architecture/README.md). This directory's technical bodies, `replacements.json` and REVIEW retain the prior fixed candidate and its evidence; [REQUIREMENTS](REQUIREMENTS.md) remains the current requirements authority. Do not combine the prior technical dispatch below with the new architecture.
+
 Status: **requirements and technology are separated, navigation/list requirements are filled in, and technical rewriting can start; the new architecture is unaccepted, the product unimplemented and global final review incomplete**. Prior fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. Read [Requirements and technical choices](REQUIREMENTS.md) first: retain user requirements without making historical technical acceptance an inheritance obligation. The technical owners below still record the prior candidate and must be replaced through a coordinated rewrite. [REVIEW](REVIEW.md) records the prior bounded Sol review and validation, without accepting implementations of the added requirements.
 
 New Weftext notes use Typst as their sole primary format, reusing the official Rust parser/compiler, native syntax and standard library. Ordinary writing, flowing reading, rich editing, structured properties, Query, links, independent annotations, templates and intranet use remain requirements. Prior implementation or review investment does not constrain the choice, nor does the choice reduce the product to source plus PDF.

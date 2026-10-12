@@ -1,0 +1,46 @@
+{
+  "evidence": "Official CLI syntax experiment only; not schema, AST root authentication, authority, permissions, query product, visual QA or export validation.",
+  "tool_version": "typst 0.15.1 (9dfd3a08)",
+  "results": [
+    {
+      "sample": "person",
+      "compile_exit": 0,
+      "query_exit": 0,
+      "compile_stderr": "",
+      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\person.typ` instead\n\n",
+      "query_result_file": "person.query.json"
+    },
+    {
+      "sample": "organization",
+      "compile_exit": 0,
+      "query_exit": 0,
+      "compile_stderr": "",
+      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\organization.typ` instead\n\n",
+      "query_result_file": "organization.query.json"
+    },
+    {
+      "sample": "paper",
+      "compile_exit": 0,
+      "query_exit": 0,
+      "compile_stderr": "",
+      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\paper.typ` instead\n\n",
+      "query_result_file": "paper.query.json"
+    },
+    {
+      "sample": "task",
+      "compile_exit": 0,
+      "query_exit": 0,
+      "compile_stderr": "",
+      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\task.typ` instead\n\n",
+      "query_result_file": "task.query.json"
+    },
+    {
+      "sample": "numeric",
+      "compile_exit": 0,
+      "query_exit": 0,
+      "compile_stderr": "",
+      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\numeric.typ` instead\n\n",
+      "query_result_file": "numeric.query.json"
+    }
+  ]
+}

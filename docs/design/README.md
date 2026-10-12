@@ -8,7 +8,7 @@ translation_status: synced
 
 # Target design and collaboration entrypoint
 
-The latest target candidate is [Typst as primary format with native-first design](typst-native/README.md). The prior round completed bounded independent Sol review; technology is now being reassessed under [Requirements and technical choices](typst-native/REQUIREMENTS.md), with implementation and global final review incomplete. The AsciiDoc inputs/candidates and review states below retain their fixed scopes without accepting the new Typst design or requiring the new project to inherit old technology.
+The latest target candidate is the [new Typst architecture](typst-architecture/README.md), choosing technology anew under [Requirements and technical choices](typst-native/REQUIREMENTS.md) and restoring necessary structured capabilities for all note types. It is a coordinated candidate; the new entrypoint records independent review and actual evidence. Bounded Sol review of the [prior Typst candidate](typst-native/README.md) and the AsciiDoc inputs/reviews below retain their fixed scopes, without accepting the new solution, requiring technical inheritance or establishing completed product refactoring or global final review.
 
 ## Status and precedence
 

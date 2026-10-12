@@ -7,7 +7,7 @@ translation_status: source
 
 # 目标设计与协作入口
 
-最新目标候选见 [Typst 主格式与原生优先](typst-native/README.zh-CN.md)：前轮完成有界独立 Sol 复核，当前先按 [需求与技术方案的边界](typst-native/REQUIREMENTS.zh-CN.md) 重新审视技术，产品尚未实现、全局终审未完成。下列 AsciiDoc 输入/候选及其评审状态保留原固定范围，不自动接受新的 Typst 设计，也不强制新项目继承旧技术。
+最新目标候选见 [Typst 新架构](typst-architecture/README.zh-CN.md)：按 [需求与技术方案的边界](typst-native/REQUIREMENTS.zh-CN.md) 从新项目重新选择技术，恢复全类型必要结构化能力；当前为协调候选，独立审查和实际证据见新入口。前轮 [Typst 主格式候选](typst-native/README.zh-CN.md) 的有界 Sol 复核及下列 AsciiDoc 输入/评审保留原固定范围，不接受新方案、不强制技术继承，也不表示产品重构或全局终审已完成。
 
 ## 状态与优先级
 

@@ -1,0 +1,1344 @@
+{
+  "version": 1,
+  "definitions": {
+    "Target": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "ref": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "node_ref"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve"
+        },
+        {
+          "kind": "record",
+          "members": {
+            "text": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve"
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "ref",
+          "text"
+        ]
+      }
+    },
+    "SourceReference": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "ref": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "node_ref"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve"
+        },
+        {
+          "kind": "record",
+          "members": {
+            "url": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "url"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve"
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "ref",
+          "url"
+        ]
+      }
+    },
+    "DateOrInstant": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "scalar",
+          "semantic": "date"
+        },
+        {
+          "kind": "scalar",
+          "semantic": "instant"
+        }
+      ],
+      "discriminator": null
+    },
+    "PartialDate": {
+      "kind": "record",
+      "members": {
+        "calendar": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "gregorian"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "precision": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "year",
+              "month"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "year": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "month": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "name": "valid_gregorian_partial_date",
+          "reads": [
+            "precision",
+            "year",
+            "month"
+          ]
+        }
+      ]
+    },
+    "Issued": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "scalar",
+          "semantic": "date"
+        },
+        {
+          "kind": "scalar",
+          "semantic": "instant"
+        },
+        {
+          "kind": "use",
+          "name": "PartialDate"
+        }
+      ],
+      "discriminator": null
+    },
+    "MonthDay": {
+      "kind": "record",
+      "members": {
+        "month": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "day": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "name": "valid_month_day",
+          "reads": [
+            "month",
+            "day"
+          ]
+        }
+      ]
+    },
+    "Period": {
+      "kind": "record",
+      "members": {
+        "start": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "end": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "name": "same_temporal_domain",
+          "reads": [
+            "start",
+            "end"
+          ]
+        },
+        {
+          "name": "start_not_after_end",
+          "reads": [
+            "start",
+            "end"
+          ]
+        }
+      ]
+    },
+    "Range": {
+      "kind": "record",
+      "members": {
+        "start": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "end_exclusive": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "name": "bounded_half_open_range",
+          "reads": [
+            "start",
+            "end_exclusive"
+          ]
+        }
+      ]
+    },
+    "Source": {
+      "kind": "record",
+      "members": {
+        "reference": {
+          "shape": {
+            "kind": "use",
+            "name": "SourceReference"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "locator": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "accessed": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Name": {
+      "kind": "record",
+      "members": {
+        "text": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "role": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "preferred": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "language": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "language_tag"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "script": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "Period"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Phone": {
+      "kind": "record",
+      "members": {
+        "number": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "phone"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "label": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "Period"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Email": {
+      "kind": "record",
+      "members": {
+        "address": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "email"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "label": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "Period"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Engagement": {
+      "kind": "record",
+      "members": {
+        "employer": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "position": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "department": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "rank": {
+          "shape": {
+            "kind": "record",
+            "members": {
+              "system": {
+                "shape": {
+                  "kind": "scalar",
+                  "semantic": "nonempty_text"
+                },
+                "required": true,
+                "nullable": false
+              },
+              "level": {
+                "shape": {
+                  "kind": "scalar",
+                  "semantic": "nonempty_text"
+                },
+                "required": true,
+                "nullable": false
+              }
+            },
+            "unknown": "preserve"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "Period"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Contributor": {
+      "kind": "record",
+      "members": {
+        "agent": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "credited_as": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "family": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "given": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "roles": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "nonempty_text"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": true,
+          "nullable": false
+        },
+        "affiliations": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Target"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Identifier": {
+      "kind": "record",
+      "members": {
+        "scheme": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "identifier"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "value": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "identifier"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "PublicationState": {
+      "kind": "record",
+      "members": {
+        "state": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "draft",
+              "accepted",
+              "published"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "Period"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    },
+    "Publication": {
+      "kind": "record",
+      "members": {
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "article",
+              "book",
+              "chapter",
+              "thesis",
+              "report",
+              "web",
+              "standard",
+              "dataset"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "title": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "alternative_titles": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "record",
+              "members": {
+                "text": {
+                  "shape": {
+                    "kind": "scalar",
+                    "semantic": "nonempty_text"
+                  },
+                  "required": true,
+                  "nullable": false
+                },
+                "language": {
+                  "shape": {
+                    "kind": "scalar",
+                    "semantic": "language_tag"
+                  },
+                  "required": false,
+                  "nullable": false
+                }
+              },
+              "unknown": "preserve"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "identifiers": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Identifier"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "publication_history": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "PublicationState"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "resources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "resource_ref"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "venue": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "node_ref"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "version_of": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "node_ref"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "contributors": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Contributor"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "issued": {
+          "shape": {
+            "kind": "use",
+            "name": "Issued"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "container": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "volume": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "issue": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "pages": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "abstract": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "citation_key": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "url": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "url"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "language": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "language_tag"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "keywords": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "text"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve"
+    }
+  },
+  "fields": [
+    {
+      "id": "base/names",
+      "key": "names",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Name"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/phones",
+      "key": "phones",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Phone"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/emails",
+      "key": "emails",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Email"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/birthday",
+      "key": "birthday",
+      "shape": {
+        "kind": "union",
+        "variants": [
+          {
+            "kind": "scalar",
+            "semantic": "date"
+          },
+          {
+            "kind": "use",
+            "name": "MonthDay"
+          }
+        ],
+        "discriminator": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/engagements",
+      "key": "engagements",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Engagement"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/parent",
+      "key": "parent",
+      "shape": {
+        "kind": "use",
+        "name": "Target"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/established",
+      "key": "established",
+      "shape": {
+        "kind": "use",
+        "name": "DateOrInstant"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/publication",
+      "key": "publication",
+      "shape": {
+        "kind": "use",
+        "name": "Publication"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/status",
+      "key": "status",
+      "shape": {
+        "kind": "enum",
+        "values": [
+          "open",
+          "done",
+          "cancelled"
+        ],
+        "open": false
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/priority",
+      "key": "priority",
+      "shape": {
+        "kind": "enum",
+        "values": [
+          "low",
+          "normal",
+          "high",
+          "urgent"
+        ],
+        "open": false
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/due",
+      "key": "due",
+      "shape": {
+        "kind": "use",
+        "name": "DateOrInstant"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/start",
+      "key": "start",
+      "shape": {
+        "kind": "use",
+        "name": "DateOrInstant"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/project",
+      "key": "project",
+      "shape": {
+        "kind": "scalar",
+        "semantic": "node_ref"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/assignees",
+      "key": "assignees",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Target"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "base/dependencies",
+      "key": "dependencies",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "scalar",
+          "semantic": "node_ref"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    }
+  ],
+  "types": [
+    {
+      "id": "base/person",
+      "fields": [
+        {
+          "id": "base/names",
+          "required": false
+        },
+        {
+          "id": "base/phones",
+          "required": false
+        },
+        {
+          "id": "base/emails",
+          "required": false
+        },
+        {
+          "id": "base/birthday",
+          "required": false
+        },
+        {
+          "id": "base/engagements",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": []
+    },
+    {
+      "id": "base/organization",
+      "fields": [
+        {
+          "id": "base/names",
+          "required": false
+        },
+        {
+          "id": "base/phones",
+          "required": false
+        },
+        {
+          "id": "base/emails",
+          "required": false
+        },
+        {
+          "id": "base/parent",
+          "required": false
+        },
+        {
+          "id": "base/established",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": []
+    },
+    {
+      "id": "base/work",
+      "fields": [
+        {
+          "id": "base/publication",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": []
+    },
+    {
+      "id": "base/paper",
+      "fields": [
+        {
+          "id": "base/publication",
+          "required": false
+        }
+      ],
+      "requires": [
+        "base/work"
+      ],
+      "conflicts": []
+    },
+    {
+      "id": "base/task",
+      "fields": [
+        {
+          "id": "base/status",
+          "required": true
+        },
+        {
+          "id": "base/priority",
+          "required": false
+        },
+        {
+          "id": "base/due",
+          "required": false
+        },
+        {
+          "id": "base/start",
+          "required": false
+        },
+        {
+          "id": "base/project",
+          "required": false
+        },
+        {
+          "id": "base/assignees",
+          "required": false
+        },
+        {
+          "id": "base/dependencies",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": []
+    },
+    {
+      "id": "base/project",
+      "fields": [
+        {
+          "id": "base/names",
+          "required": false
+        },
+        {
+          "id": "base/start",
+          "required": false
+        },
+        {
+          "id": "base/due",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": []
+    }
+  ],
+  "aliases": {
+    "person": "base/person",
+    "organization": "base/organization",
+    "work": "base/work",
+    "paper": "base/paper",
+    "task": "base/task",
+    "project": "base/project"
+  }
+}
