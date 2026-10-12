@@ -7,7 +7,7 @@ translation_status: source
 
 # 验证与评审状态
 
-状态：作者候选，尚未独立接受，尚未启动产品重构。前轮有界通过不转移到本方案；本文记录实际证据及其适用范围，不能把未运行场景记为通过。
+状态：作者候选，尚未全局接受，尚未启动产品重构。前轮有界通过不转移到本方案；本文记录实际证据及其适用范围，不能把未运行场景记为通过。
 
 ## 1. 证据分层
 
@@ -71,13 +71,13 @@ translation_status: source
 
 | 新发现 | 协调修订 | 当前处置 |
 | --- | --- | --- |
-| P2-C53-REQ-01 | FEATURES 引用实际已登记 temporal/range，不增加虚构别名。 | 作者已修订，待固定差量独立复核 |
-| P2-C53-REQ-02 | 两版 paper 样例补 CalendarDate 必需 version。 | 作者已修订，待固定差量独立复核 |
-| P2-C53-REQ-03 | 保存 Query 的 select 对可选电话 label 加 guard；QOPT01 覆盖有/无 label 混合数据。 | 作者已修订，待固定差量独立复核 |
-| C53-FEATURES-P2-01 | SOURCE、FEATURES、schema 区分 During 缺端未知与原生 none 明示无界；DUR01–09 覆盖表单/provider/Query，保留 Range 独立规则。 | 作者已修订，待固定差量独立复核 |
+| P2-C53-REQ-01 | FEATURES 引用实际已登记 temporal/range，不增加虚构别名。 | d9e63fd 已在本差量范围内独立设计 CLOSED |
+| P2-C53-REQ-02 | 两版 paper 样例补 CalendarDate 必需 version。 | d9e63fd 已在本差量范围内独立设计 CLOSED |
+| P2-C53-REQ-03 | 保存 Query 的 select 对可选电话 label 加 guard；QOPT01 覆盖有/无 label 混合数据。 | d9e63fd 已在本差量范围内独立设计 CLOSED |
+| C53-FEATURES-P2-01 | SOURCE、FEATURES、schema 区分 During 缺端未知与原生 none 明示无界；DUR01–09 覆盖表单/provider/Query，保留 Range 独立规则。 | d9e63fd 已在本差量范围内独立设计 CLOSED |
 
 需求和编辑 reviewer 已在 c53 独立确认五档：纯源码、渲染并始终显示语法、按需显示语法、隐藏语法并通过界面编辑、只读阅读。共享 Draft/Undo、切换不改源、IME/焦点和不支持构造的明确源码入口均保留；此处接受需求的设计保全，不代表五档已实现。
 
-四项 P2 修订须绑定下一固定候选独立复核；未改 Core/编辑的有限关闭仍绑定 c53 及实际未受影响合同。完成处置后由新 Pro 对话全局审查，目前尚未派发该终审，没有全局接受或产品已实现声明。
+两位非作者 reviewer 已分别完整阅读 `d9e63fd12b0cc33786cccd568ac4729d50da506e` 对照 c53 的十文件差量，包括 schema、During/Range/provider/Cell 消费及编号设计 oracle，均关闭四项 P2，窄范围无新增发现。完整报告已收取阅读，未运行 provider/CEL/UI 产品行为。未改 Core/编辑的有限关闭仍绑定 c53 及实际未受影响合同。冻结重构基线前仍须新的 Pro 全局终审；没有全局接受或产品已实现声明。
 
 评审记录必须写明准确提交、实际阅读范围、发现与证据，不以作者自检、编译成功或旧 CLOSED 自动关闭。检查器检查文档配对、链接和保护输入，不替代语义评审。仅在重大设计缺口已解决、关键选型已有足够证据且独立接受后，才能冻结重构基线；具体顺序见 [INTEGRATION](INTEGRATION.zh-CN.md)。

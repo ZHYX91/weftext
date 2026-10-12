@@ -8,7 +8,7 @@ translation_status: synced
 
 # Validation and review status
 
-Status: author candidate, without independent acceptance or product refactoring. Earlier bounded passes do not transfer to this solution. This file records actual evidence and its limits; unrun scenarios are not passes.
+Status: author candidate, without global acceptance or product refactoring. Earlier bounded passes do not transfer to this solution. This file records actual evidence and its limits; unrun scenarios are not passes.
 
 ## 1. Evidence layers
 
@@ -72,13 +72,13 @@ All four follow-up independent reports bind `c53af36afc674b16dfcde1acbc95c839c37
 
 | New finding | Coordinated repair | Current disposition |
 | --- | --- | --- |
-| P2-C53-REQ-01 | FEATURES now names the installed temporal/range validator; no invented alias. | Author repaired; fixed delta independent review pending |
-| P2-C53-REQ-02 | Both paper examples include required CalendarDate version. | Author repaired; fixed delta independent review pending |
-| P2-C53-REQ-03 | Saved Query select guards optional phone labels; QOPT01 covers mixed labelled/unlabelled data. | Author repaired; fixed delta independent review pending |
-| C53-FEATURES-P2-01 | SOURCE, FEATURES and schema distinguish unknown absent During endpoints from explicit unbounded native none; DUR01–09 specify forms/providers/Query and preserve separate Range behavior. | Author repaired; fixed delta independent review pending |
+| P2-C53-REQ-01 | FEATURES now names the installed temporal/range validator; no invented alias. | Independently design CLOSED at d9e63fd within this delta |
+| P2-C53-REQ-02 | Both paper examples include required CalendarDate version. | Independently design CLOSED at d9e63fd within this delta |
+| P2-C53-REQ-03 | Saved Query select guards optional phone labels; QOPT01 covers mixed labelled/unlabelled data. | Independently design CLOSED at d9e63fd within this delta |
+| C53-FEATURES-P2-01 | SOURCE, FEATURES and schema distinguish unknown absent During endpoints from explicit unbounded native none; DUR01–09 specify forms/providers/Query and preserve separate Range behavior. | Independently design CLOSED at d9e63fd within this delta |
 
 Requirements and editor independently confirmed the five user-selected views at c53: source, rendered with all syntax, syntax on demand, syntax hidden with UI editing, and read-only reading. Shared Draft/Undo, source-preserving switches, IME/focus and explicit source access for unsupported constructs remain requirements. This accepts their design preservation, not five implemented views.
 
-The four P2 repairs require independent review at the next fixed candidate; unchanged Core/editor bounded closures remain tied to c53 and the actual unaffected contracts. A fresh Pro global review follows this disposition and has not yet been dispatched. There is no global acceptance or product implementation claim.
+Two non-author reviewers independently read the complete ten-file delta at `d9e63fd12b0cc33786cccd568ac4729d50da506e` against c53, including the schema, During/Range/provider/Cell consumers and numbered design oracles. Both close all four P2 findings with no new findings in that bounded scope. Complete reports were collected and read; provider/CEL/UI behavior was not executed. Unchanged Core/editor closures remain tied to c53 and their unaffected contracts. A fresh Pro global review is still required before freezing the refactoring baseline; there is no global acceptance or product implementation claim.
 
 Review records must identify the exact commit, actual reading scope, findings and evidence. Author checks, compilation or old CLOSED states do not close findings. Checkers validate documentation pairs, links and protected inputs, not semantics. Freeze the refactoring baseline only after major design gaps are resolved, material choices have sufficient evidence and independent acceptance is obtained. See [INTEGRATION](INTEGRATION.md) for sequencing.
