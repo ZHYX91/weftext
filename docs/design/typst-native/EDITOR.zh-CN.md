@@ -41,7 +41,9 @@ TypstSemanticProjection/1 = {
  ownerNodeRef:NodeRef,sourceObservation:SourceObservation/1,
  environmentPin:PinRef/2,worldProofPin:PinRef/2,
  originEvidencePin:PinRef/2,root:[SemanticNode/1...],
- introspection:[SemanticIntrospectionEntry/1...],navigation:[SemanticNavigationEntry/1...]
+ introspection:[SemanticIntrospectionEntry/1...],navigation:[SemanticNavigationEntry/1...],
+ links:[FEATURES.TypstCompiledLinkOccurrence/1...],
+ linkAssociations:[FEATURES.TypstLinkAssociation/1...]
 }
 SemanticNode/1 = {key:Counter,originIds:[Counter...],direction:"ltr"|"rtl",
  presentation:"block"|"inline",element:SemanticElement/1}
@@ -55,7 +57,8 @@ SemanticElement/1 =
  |{kind:"math",display:boolean,framePin:PinRef/2,semanticText:null|text}
  |{kind:"list",style:"bullet"|"numbered"|"terms",items:[SemanticListItem/1...]}
  |{kind:"table",columns:Counter,rows:[SemanticTableRow/1...]}
- |{kind:"link",destination:SemanticNativeDestination/1,children:[SemanticNode/1...]}
+ |{kind:"link",compiledIndex:Counter,destination:SemanticNativeDestination/1,
+   children:[SemanticNode/1...]}
  |{kind:"resource",resourceRef:ResourceRef,bytesPin:PinRef/2,alt:null|text,
     caption:[SemanticNode/1...]}
  |{kind:"raw",text:text,language:null|text,block:boolean}
@@ -93,6 +96,14 @@ SemanticNavigationEntry/1 = {key:Counter,readingNodeKey:null|Counter,
 
 navigation数组是最终trace的闭合可恢复投影，key唯一，page及点值与同次官方Frame相等；readingNodeKey只在确切节点对应时非null。finalLocationKey必须引用其实际entry；scope外、不完整或无法投影时导航不可用，不能搜索同名label/显示文字。两个数组和阅读树同一编译证据固定，读取artifact仍重新授权/验环境，不复活运行时地址。
 
+### 2.2 链接出现项的实际投影槽
+
+FEATURES §2.4唯一拥有TypstAuthoredLinkKey/1、TypstAuthoredLinkCatalog/1、TypstCompiledLinkOccurrence/1与TypstLinkAssociation/1闭合类型/键算法；本文不把SOURCE origin record或reading node key冒充link occurrence。Core官方AST/标准绑定读取生产root-authored catalog，未进入include/function/loop产生的输出；其准确源生产版本、Observation、pin和完整枚举独立验证。当前Draft写者另外重算§3地图和官方AST资格，不以committed catalog的旧key给新Draft源续权。
+
+Core最终收敛realization bridge生产Projection.links和linkAssociations：每个实际逻辑native link trace出现项一个连续index=0..N-1，包含全部布局碎片；重复include/show/函数输出即使相同physical origin也各有不同index。每个index恰一association，unique_root只在完整AST/trace证明真实同owner唯一rootkey时成立；include/generated/multi_origin/不可得保持其真实分类，不从文字或originIds数量猜。removed_by_show保移除状态，不画可点击link；unavailable不得冒active。每个SemanticElement.link的compiledIndex必须引用本Projection中active项，destination逐项相等、node key确实在readingNodeKeys中；navigationKeys绑定同次最终导航trace。缺完整链接trace时投影不标完整、链接导航/全覆盖导出unavailable，不补虚构空links数组。
+
+renderer、获权链接导航及FEATURES export route consumer都消费同一Projection和CORE编译证据的完整source/environment/World/当前授权basis；裸index不能跨compile使用。root writer/typed transfer只消费合格root catalog与EDITOR当前源写证明；compiled项只用于派生阅读/导航/输出，不授稳定作者edge或source write。Exporter按FEATURES唯一完整occurrence key和route覆盖规则复验全部links/关联，重复、遗漏、错basis或旧地图均失败，不以相同destination合并出现项。
+
 ## 3. 官方来源到可编辑区域
 
 SOURCE 产生官方 AST、BodyProjection 与 SourceMap；EDITOR 消费它们形成只在本 Draft 内存在的 EditMap。所有位置同时绑定 owner、Base Observation、carrier、draftSerial、exactSourceDigest；digest 是交叉检查，不替代 exact source/current Observation。字节、UTF-16、Unicode scalar、grapheme 和 visual glyph 坐标显式转换，源范围为 UTF-8 半开区间，CRLF 不可拆。导航 map 与写入 map 独立。
@@ -108,6 +119,26 @@ SOURCE 产生官方 AST、BodyProjection 与 SourceMap；EDITOR 消费它们形�
 即使有 Span 或 rootConstruct，重绑定的标准函数、复用变量、同一来源多次输出、不可逆 escape/智能引号/文本变换、show 删除/重排/拼接或隐藏来源都不自动取得 scalar write。显示文字相等没有任何资格作用。与此同时，文档包含一个宏不取消独立普通区域：adapter 按官方数据流和当前 show/set scope 建依赖闭包；受影响/不可证明的区域只读，未受影响且证明完整的段落仍可编辑。若全局规则作用全部正文且证明不可得，全正文 rich-readonly 是有理由的结果，Source 编辑仍可用；不能静态见到 import 就拒绝全文件。
 
 EditMap 中每个 flow 是一个逻辑 inline slot，有 `flowKey`（本次 projection 内唯一）、logicalText 和 source segments；segment 标记 `exactScalar|escaped|atom|generated`，只有 exactScalar 或具名可逆 codec 能直接写。每个 structural region 有 official AST path、准确范围、constructKind、operation capabilities 和原因；site 是 parser 证明的 sibling 插入边界。数组下标、table 行号、AST path、DOM key 都仅 revision/Draft scoped，不能持久作身份。reading selection 跨 island 时可读复制，但只有整段明确写资格才能转换成写选区。
+
+### 3.1 空内容与插入位置的实际生产者
+
+`TypstDraftProjection/1` 的Core适配器从当前完整官方AST而非语义树是否有text叶产生下列site。合法root声明后的空正文、blank-only正文、删除最后一段后的正文和准确root sibling boundary至少有一个root_body site；已经存在但body为空的合格native paragraph/list-item/content block有empty_inline site。元数据、标签、注释或代码表达式内部绝不借空白成为正文site。标准构造必须未重绑定，作用域、读写权限与源边界完整；错误可能吞掉边界时site不产生。sourceRange由官方AST导航和准确源字节证明为零宽位置，root_body只位于body的合法sibling边界，empty_inline位于准确空content slot；调用方不提供byte offset。即使metadata-only正文没有flow/region，UI也能显示绑定这个site的空编辑位置。
+
+```text
+TypstInsertionSite/1 = {
+ siteKey:Counter,kind:"root_body"|"empty_inline",
+ parentPath:[Counter...],slotPath:null|[Counter...],
+ sourceRange:SOURCE.TypstByteRange/1,
+ capabilities:["literal"|"inline_math"|"display_math"|"list"...],
+ binding:DraftMapBinding
+}
+TypstInsertionPosition/1 = {kind:"flow",flowKey:Counter,offsetScalar:Counter}
+ |{kind:"site",siteKey:Counter}
+TypstListCreationTarget/1 = {kind:"paragraph",regionKey:Counter}
+ |{kind:"site",siteKey:Counter}
+```
+
+DraftMapBinding恰为§7既有binding。siteKey仅在同projection唯一，sites按实际byte位置、kind固定顺序及AST path规范顺序生成；capabilities按literal/inline_math/display_math/list固定顺序唯一。root_body的slotPath为null，empty_inline必须指准确空slot。Core在接到操作时重算site并逐成员相等检查；消失、错kind/能力、owner/Base/carrier/serial/源码变化均失败，不接受“同一byte位置”续接。flow位置只在同map的唯一可逆segment/grapheme边界成立，不能落generated/atom内部。
 
 ## 4. 基本双向编辑与原字节保全
 
@@ -131,6 +162,14 @@ EditMap 中每个 flow 是一个逻辑 inline slot，有 `flowKey`（本次 proj
 表格重排先依据官方 AST 参数序列建立 row trivia：cell内部comment随cell；两个row间在前row末cell之后、后row首cell之前的comment/空白作为后row的leading trivia；尾row之后到closing delimiter的trivia固定table尾；table参数/columns/header/footer不随row移动。逗号及必要分隔由native codec最小生成，原comment内容/EOL逐字保全。存在跨row表达式、spread/生成cells、无法证明的参数归属或重排改变header/span语义时只拒绝该reorder，不以“有comment”笼统拒表。SOURCE属性数组与Document table分域；六row domain继续区分native table、Field occurrence、NodeCollection、derived Query、external/import IR、Resource preview，不引入RecordRef/行UUID。通用structured/table budget按FEATURES的D5接续，不能借source intent拆批绕过。
 
 矩形 text/plain TSV 粘贴只在简单网格、完整目标 cells 和全部 literal 可表示时提供显式“粘贴到表格”：一次解析为 cells，一次原子 Draft operation，预览维度/扩展，预算失败或任一 cell 无资格则整次不改，不静默只贴部分。普通粘贴仍是 literal 文本。列重排、公式列生成、自动 ragged repair、HTML/RTF 富粘贴不属基本矩阵；未来必须单独 mapping/loss 与验收。它们不是合法复杂表格读/保存的前提。
+
+创建命令为§7操作union的显式新臂：`insert_at_site{siteKey,text}`、`insert_math{position:TypstInsertionPosition/1,mathSource,display:boolean}`、`convert_to_list{target:TypstListCreationTarget/1,style:bullet|numbered|terms,termText:null|text}`。它们携同一TypstEditOperation.binding/source，不使用UI私有selection补坐标。insert_at_site对非空text作literal编码；含多段换行时产生准确普通段落，禁止借`#`、`=`、`-`或转义制造宏/标题/列表。Core对零宽site枚举0/1/2个prefix与suffix EOL的九种候选，按最少新增EOL、最少prefix选择完整官方重解析及目标结构证明成立的方案；原有EOL/注释/控制与site外bytes逐字保全。无候选成立则整个命令失败。
+
+insert_math在paragraph flow的准确scalar caret或合格site插入标准math构造：inline不分段，display显式将目标paragraph在caret分成保原文的前后两段（空边省略）并插display公式。mathSource仅在固定官方math语法中完整消费并由适配器包裹/编码，不能闭合定界符后附加代码。`甲乙` offsetScalar=1可产生`甲$x$乙`；display例在甲/乙之间最小生成paragraph边界，原甲乙字节不改，目标拓扑变化在预览中明确。已有公式仍由edit_math修改，不把它伪装为插入命令。
+
+convert_to_list的paragraph target表示转换整个准确普通段落为第一list item，正文及其inline leaves原字节保留，仅生成native marker或合格标准list/enum/terms构造及必需分隔；site target表示从空位置创建一个显式空item并返回该item的empty_inline site以继续键入。空项用官方支持的显式空content构造，不能靠未消费的裸marker冒称list；完整官方AST必须确有对应list/item。terms的termText必须非null且literal编码（可为空），bullet/numbered必须null，段落原文成为body而不猜term/body拆分。新site只对这个当前native item签发；reparse或求值不符合intent时保留before Draft。上述每次创建一个原子Undo；IME组合结束后才发送commit操作，旧site/flow/serial或任何部分失败都不落半个构造。
+
+空项标准生成候选分别为`#list([])`、`#enum([])`、`#terms(terms.item([], []))`，最后一例的term/body两个空content slot各有准确AST路径；paragraph转list用该相同构造包裹原准确content，terms的termText独立literal编码。source位置及标准binding在当前scope验证，随后官方重解析/编译证明确实是一个空item，不以候选字符串本身授资格。[List](https://typst.app/docs/reference/model/list/)、[Enum](https://typst.app/docs/reference/model/enum/)、[Terms](https://typst.app/docs/reference/model/terms/)。
 
 ## 5. 输入、剪贴板、Undo 和双向定位
 
@@ -164,7 +203,7 @@ prepare 冻结 complete proposed source/pins、Observation、carrier、typed/环
 
 `TypstEditInput/1` 恰为 `{kind:"typst_edit_input",version:1,invocationClass:"interactive_source_save"|"noninteractive",writeProtection:"strict"|"observed_only",intent:TypstPinnedEditIntent/1,origin:{kind:"direct"}|{kind:"undo",originalRequest:OriginalD6Request}}`。`TypstPinnedEditIntent/1`闭合为 `{kind:"document",target:{ref:NodeRef,expectedObservation:SourceObservation/1},proposedSource:PinRef/2}` 或 `{kind:"annotation",target:{ref:AnnotationRef,expectedObservation:SourceObservation/1},expectedAnnotationRevisionToken:AnnotationRevisionToken/1,proposedValue:PinRef/2,targetPolicy:"preserve"|"replace_current"}` 或 `{kind:"annotation_reconfirm_suggestion",target:{ref:AnnotationRef,expectedObservation:SourceObservation/1},expectedAnnotationRevisionToken:AnnotationRevisionToken/1,proposedValue:PinRef/2}`。annotation/reconfirm必须strict且origin=direct；Core操作gate展开complete Value后绑定proposedValue，caller不得提供它。Core生成/持久化的 `OwnerInputBinding/2.ownerKind=intentKind="typst_edit/1"`；canonicalDescriptorBytes是CORE定义的完整 `FormatAdapterEnvelope/1{kind:"weftext_format_adapter",version:1,role:"edit_input",profileCarrier,payload:TypstEditInput/1}`。profileCarrier相同、document pin是exact UTF-8完整源，annotation pin是完整D3-CJ/3(TypstAnnotationValue/1)，proposedInputs恰一相应entity项，sourceInputs与InputDescriptor逐字相同。generic PreviewBinding/SourceRevisionPlan/Frontier保持owner类型，InputDescriptor/DependencyProof/PreparedIntent统一CORE新增通用/4（含compile_world）而不是原/3扩union；Typst adapter只更换具名payload。
 
-`operation` 的 closed arm 是 `replace_literal{flowKey,startScalar,endScalar,text}`、`splice_blocks{regionKeys,startScalar,endScalar,text}`、`split_paragraph{regionKey,offsetScalar}`、`merge_paragraphs{leftKey,rightKey}`、`set_inline_style{regionKey,startScalar,endScalar,style:strong|emph|strike,enabled}`、`set_title{regionKey|null,text}`、`set_heading{regionKey,level:1..9}`、`edit_math{regionKey,mathSource,display}`、`edit_list{regionKey,action:insert|remove|split|merge|indent|outdent,itemIndex,text:null|text}`、`edit_table{regionKey,action:set_cell|insert_row|remove_row|reorder_rows|insert_column|remove_column|paste_rect,arguments}`、`convert_link{regionKey,startScalar,endScalar,address,visibleText}`。`arguments` 按 action 闭合：set_cell={row,column,text}；insert_row={at,cells:[text...]}；remove_row={at}；reorder_rows={order:[Counter...]}；insert_column={at,cells:[text...]}；remove_column={at}；paste_rect={row,column,cells:[[text...]],extend:boolean}。不存在任意 JSON/DOM patch arm。null 只在以上显式槽合法；itemIndex 对本次 list、indices 对本次 table；level、style、layout 不改变语言上限。SOURCE whole edit走 prepare，不冒充局部 operation。控制/属性专用操作仍由其 owner，不借本 union 改 id/types。
+`operation` 的闭合集合是§4定义的三项创建命令，加以下既有命令： `replace_literal{flowKey,startScalar,endScalar,text}`、`splice_blocks{regionKeys,startScalar,endScalar,text}`、`split_paragraph{regionKey,offsetScalar}`、`merge_paragraphs{leftKey,rightKey}`、`set_inline_style{regionKey,startScalar,endScalar,style:strong|emph|strike,enabled}`、`set_title{regionKey|null,text}`、`set_heading{regionKey,level:1..9}`、`edit_math{regionKey,mathSource,display}`、`edit_list{regionKey,action:insert|remove|split|merge|indent|outdent,itemIndex,text:null|text}`、`edit_table{regionKey,action:set_cell|insert_row|remove_row|reorder_rows|insert_column|remove_column|paste_rect,arguments}`、`convert_link{regionKey,startScalar,endScalar,address,visibleText}`。`arguments` 按 action 闭合：set_cell={row,column,text}；insert_row={at,cells:[text...]}；remove_row={at}；reorder_rows={order:[Counter...]}；insert_column={at,cells:[text...]}；remove_column={at}；paste_rect={row,column,cells:[[text...]],extend:boolean}。不存在任意 JSON/DOM patch arm。null 只在以上显式槽合法；itemIndex 对本次 list、indices 对本次 table；level、style、layout 不改变语言上限。SOURCE whole edit走 prepare，不冒充局部 operation。控制/属性专用操作仍由其 owner，不借本 union 改 id/types。
 
 SourceMap/结构 operation 是 proposal producer，不是保存认证。Core 再检 exact before、完整权限和所有 pins；Frontier/2 保留原因果含义，不是源范围完整证明。Agent 只能形成上述准确 proposal 或 Core 已有 Action，不能因会写 Typst 获取文件直写权限。print preview 和 flow 共享同一 EditMap资格；分页坐标另有布局 map，不签另一份作者身份。
 
@@ -219,7 +258,9 @@ quote与context读取必须重新target-source-read/Resource-read；用户拥有
 
 ### 8.1 批注提交的闭合入口
 
-`TypstAnnotationPrepare/1`恰为 `{kind:"typst_annotation_prepare",version:1,workspaceRef,commitDomain,profile:TypstProfileCarrier/1,saveProfile:"ordinary"|"complete",guarantee:"replica_local"|"managed_atomic",writeProtection:"strict",intent,budget}`。intent只有 `{kind:"annotation",target:{ref:AnnotationRef,expectedObservation:SourceObservation/1},expectedAnnotationRevisionToken,value:TypstAnnotationProposal/1,targetPolicy:"preserve"|"replace_current"}` 与 `{kind:"annotation_reconfirm_suggestion",target:{ref:AnnotationRef,expectedObservation:SourceObservation/1},expectedAnnotationRevisionToken}`。reconfirm不接受caller value；manual reattach是annotation+replace_current独立gate，不能同时更改purpose/suggestion类别。Core从before+proposal+operation-class展开完整Value，pin后构造§7 TypstPinnedEditIntent/1→TypstEditInput/1→同prepared_edit envelope与TypstPreparedEditBinding/1，不是把proposal当完整author value。
+所有新的批注编辑、manual reattach、reconfirm及annotation_action create/apply/reject均强制**complete + strict**适用资格；这不是ordinary Document保存的限制。AnnotationPrepare的saveProfile只能complete，普通批注请求ordinary在闭合解码时拒绝并保留Draft；不能先接受再把缺证明洗成pending。TypstPinnedEditIntent的annotation/reconfirm经Core gate展开后，TypstEditInput、InputDescriptor/4、DependencyProof/4、PreparedIntent/4、prepared_edit受保护backing、原commit2及完整preview均绑定同一complete/strict选择；持有者不能混用document ordinary规划。annotation_action经原D7 action_input/prepared_action也核完整操作适用闭包，create/apply/reject没有ordinary豁免。complete仍仅要求该操作真实消费的范围：不改变目标的comment编辑与hidden-target reject可正向执行，reject不读取目标或重算摘要。static decode→原entity/record披露→对应annotation读写/准确token→真实需要的target资格→完整依赖及before/after pins→完整preview→最终授权/CAS/P顺序保留；不因complete提前读取隐藏目标，不改原owner错误名。
+
+`TypstAnnotationPrepare/1`恰为 `{kind:"typst_annotation_prepare",version:1,workspaceRef,commitDomain,profile:TypstProfileCarrier/1,saveProfile:"complete",guarantee:"replica_local"|"managed_atomic",writeProtection:"strict",intent,budget}`。intent只有 `{kind:"annotation",target:{ref:AnnotationRef,expectedObservation:SourceObservation/1},expectedAnnotationRevisionToken,value:TypstAnnotationProposal/1,targetPolicy:"preserve"|"replace_current"}` 与 `{kind:"annotation_reconfirm_suggestion",target:{ref:AnnotationRef,expectedObservation:SourceObservation/1},expectedAnnotationRevisionToken}`。reconfirm不接受caller value；manual reattach是annotation+replace_current独立gate，不能同时更改purpose/suggestion类别。Core从before+proposal+operation-class展开完整Value，pin后构造§7 TypstPinnedEditIntent/1→TypstEditInput/1→同prepared_edit envelope与TypstPreparedEditBinding/1，不是把proposal当完整author value。
 
 `TypstAnnotationAction/1`是closed union `{kind:"create_annotation",destinationOwnerRef:NodeRef,value:TypstAnnotationProposal/1}`、`{kind:"apply_suggestion",annotation:AnnotationRef,expectedAnnotationRevisionToken:AnnotationRevisionToken/1}`、`{kind:"reject_suggestion",annotation:AnnotationRef,expectedAnnotationRevisionToken:AnnotationRevisionToken/1}`。FEATURES `TypstActionSpec/1.intent={kind:"annotation_action",action:TypstAnnotationAction/1}`唯一封装此union，CORE action_input/prepared_action沿原D7流程冻结dependencyProof4/sourceInputs/proposedInputs/完整effects。create通过D3原same-candidate-map身份分配和target资格；apply生成目标source与accepted Value两项原子effects，strict单决议/CAS/P，不能用单entity prepared_edit；reject只有annotation after。apply/reject caller不携replacement或targetLocator，而只消费准确token已保存Suggestion/3。before/after aggregate和所有变动annotation/source pins进入原完整pinDirectory/preview；undo annotation多entity decision不混入单source committed Undo。
 
@@ -284,3 +325,8 @@ quote与context读取必须重新target-source-read/Resource-read；用户拥有
 | ED-21 | default heading/strong final realization准确role/numbering/style；owned run-in有heading语义和inline placement | `show heading=>[X body]`保实际X但不伪role，`show strong=>body`不假粗体；未收敛轮不交付 |
 | ED-22 | 默认flow/print官方Paged target相同分支，实验Html不同分支各自资格 | 不新增semantic Typst Target，不以Html计算替换Paged后隐藏内容差异 |
 | ED-23 | 设备保存并恢复具名布局、几何和可重新解析目标；重新授权打开，当前Draft/Undo/选区保留 | 布局不保存权限、结果集或运行时地图；失权面板不返缓存，选择/删除布局不提交或丢稿 |
+| ED-24 | metadata-only→root_body site→literal首字，删除最后正文→新site→再输入；完整重解析一个Undo | 不需既有text flow；旧site/serial、控制/注释内部伪site或EOL候选失败整次不改，IME不被抢占 |
+| ED-25 | `甲乙` flow offsetScalar=1分别创建inline/display math；空正文site创建公式 | 现有edit_math不替代插入；不拆字素/atom，定界符逃逸/生成来源/旧map拒绝且外bytes保全 |
+| ED-26 | 普通paragraph转换bullet/numbered/terms；空site创建实际native空item并继续键入 | 不是已有list才可创建；裸marker不算成功，term槽错型/standard重绑定/部分失败不改Draft |
+| ED-27 | complete+strict comment编辑、reattach/reconfirm/create/apply与hidden-target reject同真实适用闭包 | ordinary Annotation解码拒绝且留Draft；document ordinary不受影响；reject零target-read，缺proof不降级 |
+| ED-28 | root直接link catalog及重复include/show各compiled index完整枚举，node/index/关联/route同basis | 相同origin不合并，originIds不当key；missing/duplicate/wrongcompile route拒绝，生成项不给source write |

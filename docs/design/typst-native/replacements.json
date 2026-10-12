@@ -84,7 +84,8 @@
         "6",
         "8",
         "7.1",
-        "7.2"
+        "7.2",
+        "6.1"
       ],
       "design_cases": [
         "S-08",
@@ -95,7 +96,8 @@
         "S-13",
         "S-14",
         "S-26",
-        "S-27"
+        "S-27",
+        "S-28"
       ],
       "exact_mapping_owner": "docs/design/typst-native/SOURCE.zh-CN.md",
       "source_clauses": [
@@ -363,14 +365,16 @@
         "5",
         "6",
         "7",
-        "8"
+        "8",
+        "4.3"
       ],
       "design_cases": [
         "TC-04",
         "TC-05",
         "TC-07",
         "TC-08",
-        "TC-09"
+        "TC-09",
+        "TC-10"
       ],
       "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
       "source_clauses": [
@@ -505,12 +509,14 @@
       "target_sections": [
         "4",
         "6",
-        "8"
+        "8",
+        "4.3"
       ],
       "design_cases": [
         "TC-07",
         "TC-08",
-        "TC-09"
+        "TC-09",
+        "TC-10"
       ],
       "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
       "source_clauses": [
@@ -549,7 +555,9 @@
         "6",
         "7",
         "9",
-        "10"
+        "10",
+        "2.2",
+        "3.1"
       ],
       "design_cases": [
         "ED-01",
@@ -569,7 +577,11 @@
         "ED-20",
         "ED-21",
         "ED-22",
-        "ED-23"
+        "ED-23",
+        "ED-24",
+        "ED-25",
+        "ED-26",
+        "ED-28"
       ],
       "exact_mapping_owner": "docs/design/typst-native/EDITOR.zh-CN.md",
       "source_clauses": [
@@ -651,13 +663,16 @@
       "target_en": "docs/design/typst-native/EDITOR.md",
       "target_sections": [
         "7",
-        "8"
+        "8",
+        "8.1"
       ],
       "design_cases": [
         "ED-13",
         "ED-14",
         "ED-15",
-        "TI-08"
+        "TI-08",
+        "ED-27",
+        "TC-11"
       ],
       "exact_mapping_owner": "docs/design/typst-native/EDITOR.zh-CN.md",
       "source_clauses": [
@@ -740,7 +755,8 @@
       "target_sections": [
         "2",
         "3",
-        "4"
+        "4",
+        "2.4"
       ],
       "design_cases": [
         "TF-01",
@@ -749,7 +765,9 @@
         "TF-04",
         "TF-05",
         "TF-06",
-        "TF-07"
+        "TF-07",
+        "ED-28",
+        "TF-22"
       ],
       "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
       "source_clauses": [
@@ -783,14 +801,19 @@
       "target_en": "docs/design/typst-native/FEATURES.md",
       "target_sections": [
         "5",
-        "6"
+        "6",
+        "5.4",
+        "5.5"
       ],
       "design_cases": [
         "TF-08",
         "TF-09",
         "TF-10",
         "TF-11",
-        "TF-12"
+        "TF-12",
+        "TF-19",
+        "TF-20",
+        "TF-21"
       ],
       "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
       "source_clauses": [
@@ -863,12 +886,15 @@
       "target_en": "docs/design/typst-native/FEATURES.md",
       "target_sections": [
         "6",
-        "7"
+        "7",
+        "7.1"
       ],
       "design_cases": [
         "TF-12",
         "TF-13",
-        "TI-11"
+        "TI-11",
+        "TF-24",
+        "TF-25"
       ],
       "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
       "source_clauses": [
@@ -907,7 +933,10 @@
       "target_en": "docs/design/typst-native/FEATURES.md",
       "target_sections": [
         "7",
-        "8"
+        "8",
+        "2.4",
+        "7.1",
+        "8.1"
       ],
       "design_cases": [
         "TF-13",
@@ -915,7 +944,10 @@
         "TF-15",
         "TF-16",
         "TF-17",
-        "TF-18"
+        "TF-18",
+        "TF-23",
+        "TF-24",
+        "TF-25"
       ],
       "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
       "source_clauses": [

@@ -55,11 +55,44 @@ translation_status: source
 
 ### 2.3 anchor、出链、入链与图
 
-`TypstLinkTarget/1` 是闭合应用投影：`{version:1,form:"node"|"relative"|"workspace"|"file"|"native",nativeDestination:<native destination>,nodeRef:NodeRef|null,authorLabel:text|null,sourceOccurrence:<SOURCE current origin>}`。nodeRef 只对严格节点 URI 由获权完整 identity resolver 生产；路径解析得到的 transient target 另留在运行时导航证据，不能填入此 asserted identity arm。nativeDestination 保留原生 string/label/location/page-coordinate 类型与实际来源，不用页面坐标补造 authorLabel。label/ref 是当前编译文档目标；URI fragment 必须在已获权目标的当前源/实际依赖中证明**准确唯一** label，重复、缺失、计算生成无法独立证明时导航报告范围不可用，无损转换禁用。
+`TypstLinkTarget/1` 是闭合应用投影：`{version:1,form:"node"|"relative"|"workspace"|"file"|"native",nativeDestination:EDITOR SemanticNativeDestination/1,nodeRef:NodeRef|null,authorLabel:text|null,sourceOccurrence:TypstAuthoredLinkKey/1|null,compiledOccurrence:TypstCompiledLinkKey/1|null}`；两个occurrence槽至少一个非null，两者非null时须§2.4准确关联。nodeRef 只对严格节点 URI 由获权完整 identity resolver 生产；路径解析得到的 transient target 另留在运行时导航证据，不能填入 asserted identity arm。nativeDestination 保留原生 string/label/location/page-coordinate 类型，不用页面坐标补造 authorLabel。label/ref 是当前编译文档目标；URI fragment 必须在获权目标的当前源/依赖中证明**准确唯一** label，重复、缺失、无法证明的生成label使范围不可用，无损转换禁用。compiled-only的nodeRef仅是派生导航投影，不因非null取得stable edge。
 
 节点身份加作者 label 已支持同目标 fragment 的本轮转换，但 label 是作者可改名字，**不是** revision-bound Locator；不宣称永久锚点或自动重锚。源内无 fragment 的 ID 导航不强加 target body read；证明 fragment 则须获准确目标来源/label 的读取资格。
 
 出链列原生真实 link/ref occurrence 与地址形式；稳定入链/asserted graph 只消费严格节点 URI 的完整 NodeRef 及 SOURCE 已验证根作者来源。generated/include/multi-origin 链接可显示获权的编译/导航结果，标为派生，不能作为稳定作者 edge 或 identityMap rewrite 槽。路径链接必须同样提供“当前解析入链”：在获权current cut按完整源occurrence/实际path resolver构建派生index并列于入链面板的独立分组，source/target改名、移动、替换、auth或负范围变化即失效，partial scope不冒完整无入链。当前path关联标transient，不升为durable identity inbound/asserted graph，但不取消其入链导航功能。潜在提及不进入真链/graph/reference integrity。标题与别名只供候选选择，重复标题不能合并对象。链接健康只在当前获权且相关范围完整时说“全库无入链”，否则说“当前可见范围未找到”；不泄隐藏数目，不自动删孤立笔记。
+
+### 2.4 作者链接与编译链接 occurrence
+
+下列closed类型由FEATURES唯一拥有，实际producer是Core官方AST/source资格与EDITOR §2.2 final realization bridge，不引用不存在的SOURCE link producer。Counter路径只在绑定源内有意义，PinRef/Observation/compiled index均不授权限。
+
+```text
+TypstAuthoredLinkKey/1={owner:NodeRef,sourceVersion:SourceVersion/2,astPath:[Counter...]}
+TypstAuthoredLinkCatalog/1={kind:"typst_authored_link_catalog",version:1,
+ profile:TypstProfileCarrier/1,owner:NodeRef,observation:SourceObservation/1,
+ sourcePin:PinRef/2,occurrences:[TypstAuthoredLinkOccurrence/1...],complete:true}
+TypstAuthoredLinkOccurrence/1={key:TypstAuthoredLinkKey/1,
+ range:SOURCE TypstByteRange/1,destinationRange:SOURCE TypstByteRange/1|null,
+ syntax:"native_link"|"auto_url"|"native_ref",
+ destination:EDITOR SemanticNativeDestination/1|null,
+ qualification:"root_literal"|"root_construct"|"nonliteral"}
+TypstCompiledLinkKey/1={owner:NodeRef,sourceVersion:SourceVersion/2,
+ compilationEvidencePin:PinRef/2,projectionPin:PinRef/2,index:Counter}
+TypstCompiledLinkOccurrence/1={kind:"typst_compiled_link_occurrence",version:1,
+ index:Counter,destination:EDITOR SemanticNativeDestination/1,
+ readingNodeKeys:[Counter...],navigationKeys:[Counter...],originIds:[Counter...],
+ disposition:"active"|"removed_by_show"|"unavailable"}
+TypstLinkAssociation/1={compiledIndex:Counter,
+ authoredKeys:[TypstAuthoredLinkKey/1...],
+ state:"unique_root"|"include"|"generated"|"multi_origin"|"unavailable"}
+```
+
+AuthoredCatalog观察/sourceVersion/pin逐项同源同cut；官方AST按root source order枚举直接markup的native link调用、自动URL与ref，astPath为官方完整根children索引路径，range为整个construct准确UTF-8范围，destinationRange是唯一目标literal/构造范围，无此资格则destinationRange=null、destination=null、qualification=nonliteral；不以compile后算得字符串伪造literal来源。裸link函数须静态standard binding，字符串/raw/code中相同拼写不算link；不把include、function/loop生成输出当新的根AST occurrence。不完整AST/binding枚举只能unavailable，不能complete=true。occurrences按range.start、range.end、astPath数值字典序排序唯一；每个key恰一次。include中的managed文件可独立取得自己的catalog，但不是当前root的catalog。直接native_ref的author label无编译位置时destination保label value/finalLocationKey=null；point/location未独立证明时不得造固定坐标。生成app-link无法证明typed改写闭包时copy/fork整体拒绝或走另一个显式loss提案，不靠source字符串扫描。
+
+Compiled occurrences只在同次成功compile的最终收敛trace枚举。EDITOR实际Projection.links使用上型，index按最终逻辑link occurrence顺序连续0..N-1；同include/show/function重复产生两个逻辑链接，即使physical span/destination相同也有两个index。同一逻辑链接的换行/分页/多个Frame碎片放在同项readingNodeKeys/navigationKeys，不按字符串或坐标合并不同occurrence。两个key数组排序唯一，逐项指同Projection真正的reading/native-link节点或navigation trace；active节点的SemanticElement.link.compiledIndex必须回指该项，所有实际active链接节点都被覆盖。removed_by_show保源意图诊断但不作为可点击输出；unavailable不可伪空。Origin IDs只能来自同origin pin，不能充当occurrence index。Projection/CompilationEvidence/world/source/授权均完整对应，无法完整枚举时拒绝“完整出链/路由”。
+
+每个compiled index恰一个association，按compiledIndex排序；authoredKeys按完整owner/ref、sourceVersion规范bytes、astPath数值排序唯一。unique_root恰一key且owner=current root，并由官方entry→return及完整catalog独立证明唯一对应；include须真实include trace（keys可为独立managed include catalog中的key，或无managed owner的空集）；generated记录真实生成trace，不能据一个template source span变root writer；multi_origin须多个准确source keys/来源记录；unavailable不用于关联写资格。消费者独立核索引、range、目标和origin关联，不能由相等文本/span猜配。
+
+根writer、stable asserted edge与typed source transfer只接已证明root_literal/root_construct的authored槽；compiled导航/导出按actual编译occurrence。Draft转换另用EDITOR当前mapBinding+完整Draft AST/selection资格，不能让旧committed AuthoredKey认证新draft字节。导出路由的occurrence精确为TypstCompiledLinkKey/1，冻结完整Projection后独立枚举全部active可路由app link：每项恰有一个成功route或该同key的明确loss/reject，非app/removed项不冒route。重复/缺项/额外项、错误compile pin、相同rootVersion但World变化均拒，目标/actual named destination另依§8验证；路由array按compiled index排序。源内/原字节导出不消费这份compiled路由。
 
 ## 3. 转换、复制、改名与复制实例
 
@@ -91,9 +124,9 @@ Typst `query` 是**编译文档内** introspection，不能查询跨库 ACL、�
 
 新保存视图在 `.typ` 中使用 root-authored、直接字面原生 metadata，标签 `weftext-view-<key>`；key 为 `[a-z][a-z0-9-]{0,63}`，该前缀由本文保留，禁止 include/generated/shadowed 声明取得应用定义资格。每个 label 在准确源中唯一；重复/缺失/未知版本保留合法源并使定义 unavailable，不取首项。carrier 是 `TypstFeatureDefinition/1`，准确四成员 `{format:"weftext.feature-definition",version:1,query:<TypstQueryValue/1>,views:(<TypstViewValue/1>,...)}`；views 非空且最多16，数组作者顺序保留。UI 生成并提供完整 Source 预览，普通作者通过筛选/列/布局编辑器创建，无需手写 DAG/JSON/DSL。
 
-`TypstQueryValue/1` 是现任 QuerySpec/3 的**逐成员原生表示**：全部八成员必需，format/version、lifecycleScope 和 searchBindings 闭集不变；dictionary→object、array→array、bool→bool、string→text，Counter 只接受精确有界 Typst integer；D7 arbitrary integer/decimal canonical text 仍为 string，不经 float。`(:)` 是空 dictionary，`()` 是空 array，单项数组需逗号。D7 本来不允许 null 的位置不接受 Typst none；Optional.none 仍使用 D7 已规定的显式 typed Optional arm。没有 expression eval、spread、循环、导入值或 JSON 字符串 fallback。schema 声明的 NodeRef typed 位置用§2无 fragment string解析完整 Ref，其它 Resource/Annotation Ref 仍按原 typed shape 的原生 dictionary映射；不能扫描普通字符串猜 Ref。未知成员/重复 key/不适用 type 拒绝应用投影，保留 source。
+`TypstQueryValue/1` 是现任 QuerySpec/3 的**逐成员原生表示**：全部八成员必需，format/version、lifecycleScope 和 searchBindings 闭集不变；dictionary→object、array→array、bool→bool、string→text，Counter 只接受精确有界 Typst integer；D7 arbitrary integer/decimal canonical text 仍为 string，不经 float。`(:)` 是空 dictionary，`()` 是空 array，单项数组需逗号。D7 本来不允许 null 的位置不接受 Typst none；Optional.none 仍使用 D7 已规定的显式 typed Optional arm。没有任意expression eval、spread、循环、导入值或JSON字符串fallback；仅§5.4具名typed叶子复用SOURCE受控标准constructor。schema 声明的 NodeRef typed 位置用§2无 fragment string解析完整 Ref，其它 Resource/Annotation Ref 仍按原 typed shape 的原生 dictionary映射；不能扫描普通字符串猜 Ref。未知成员/重复 key/不适用 type 拒绝应用投影，保留 source。
 
-现任QuerySpec3/ViewSpec1作者对象及TypedLiteral/V没有合法JSON null arm，所以此carrier内**所有**Typst `none` 都拒绝；Optional无值必须写`(state: "none")`。其它本文具名应用对象若明确有null arm（例如link的authorLabel），内部wire的null与原生参数none一一映射且仅在该槽合法；不把这条规则扩散到Query。下面是完整可编译的原生载体例，全部八Query成员和合法ViewSpec列类型/绑定齐全；实际运行仍需要Core获权cut，不以metadata编译成功代替Query执行。
+原旧QuerySpec3/ViewSpec1/TypedLiteral/V的null禁令只属于原decoder，不能覆盖新增profile。新feature carrier的唯一schema null槽是**每一个**`TypstQueryType/1`中`kind="typst_array"`的`maxItems`：null与原生`none`一一对应，包括Parameter.type/default.type、View.inputSchema、Domain TypedLiteral.type、递归array/dictionary/union/nullable中的同槽，保留准确无schema上限，不改成随意有限N。其余Query类型/值槽仍不接受raw null/none；Optional无值用`(state: "none")`，native_nullable作者空值也用明确state arm。缺optional成员是缺席，不以none占位。本文其它closed应用对象的已列null槽（link key/range、Recipe.parentIndex、SOURCE ValueType.maxItems）只在其自己的decoder中映射，不向Query开放。下面是完整可编译的原生载体例，全部八Query成员和合法View列绑定齐全；实际运行仍需Core获权cut，metadata编译不执行Query。
 
 ```typst
 #metadata((id: "12d7c4f3-9ee6-4c36-920d-ec6af27bc654", types: ())) <weftext>
@@ -162,7 +195,7 @@ feature声明有独立的binding资格，不机械套用SOURCE根声明的前缀
 
 required由SOURCE effective type闭包OR决定。非nullable且required直接T，缺失invalid；非nullable且optional使用原Optional<T>，missing为原`{state:"none"}`。nullable使用独立`{kind:"typst_nullable",item:TypstQueryType/1,optional:bool}`，V恰`{state:"absent"}`（仅optional）、`{state:"none"}`（作者显式none）或`{state:"value",value:<T V>}`。绝不nestedOptional或混missing/作者none。dictionary成员递归同规则。native sort key仅对该nullable type增加必填`nativeNullOrder:"absent_none_value"|"value_none_absent"`，nonnullable key禁止此成员，value内按T order；缺显式空值策略拒sort。所有Type/V都是Query内部/运输表示，不写回`.typ`。
 
-CEL profile仍唯一，现有text/bool/int/decimal操作精确保留。新增types支持同型`== != < <= > >=`（仅表中orderable），禁止float↔int↔decimal、time/date/local_datetime↔instant隐式coerce。float同型四则严格IEEE754 binary64 round-to-nearest-ties-even、每primitive单独舍入不FMA，divide-zero/nonfinite/overflow用原错误；duration同型加减checked i64，exact_seconds同型用原exact decimal规则。date/time/local_datetime/instant只提供精确比较与原显式temporal-provider函数，未定义运算type_mismatch/unsupported_feature；不能据此拒read/project/sort/exact export。复合类型按原明确CEL member/list规则作用于其typed值，unknown preserved只能显式取只读native值，不提供动态Field/Action。新counter/容器/每值bytes计原完整budget。
+新weftext.typst.cel/1仍以CEL为唯一表达式语言，现有text/bool/int/decimal操作精确保留。新增types支持同型`== != < <= > >=`（仅表中orderable），禁止float↔int↔decimal、time/date/local_datetime↔instant隐式coerce。float同型四则严格IEEE754 binary64 round-to-nearest-ties-even、每primitive单独舍入不FMA，divide-zero/nonfinite/overflow用原错误；duration同型加减checked i64，exact_seconds同型用原exact decimal规则。date/time/local_datetime/instant只提供精确比较与原显式temporal-provider函数，未定义运算type_mismatch/unsupported_feature；不能据此拒read/project/sort/exact export。复合类型按原明确CEL member/list规则作用于其typed值，unknown preserved只能显式取只读native值，不提供动态Field/Action。新counter/容器/每值bytes计原完整budget。
 
 `TypstQueryResult/1`精确`{kind:"typst_query_result",version:1,resultToken:Token,cursorToken:Token,schema:TypstTerminalSchema/1}`。泛型Core ResultHandle/cursor/epoch/auth/cut/TTL仍原权威；native page row/scalar/graph成员恰原D7运输成员，cells/value由该handle的TypstQueryV decoder按准确schema解码。旧d7_query_result/wire2的schema/V不能接新arm；新producer/消费者与native result export明确分派，不能旧页刷新成native权限。
 
@@ -188,13 +221,151 @@ ViewSpec/1仍只呈现同一完整 Query terminal，不fetch/filter/sort/聚合�
 
 快速录入复用parent/type/template/title（可无）/属性/正文面板；保存成功才能“再记一条”清空，unknown保留原request/Draft，不再create。由receipt实际resultAllocations打开真实Node；requireMembership提交前依D5验证，未要求时创建可成功。只有完整当前Query证明不包含时才显示“当前筛选之外”，partial/未完/stale只能显示membership unknown并可打开真实对象，不能重复创建或改Query。
 
+### 5.4 新参数、常量和调用的完整分派
+
+下列对象都由本profile选择，不给原D7 TypedLiteral/ParameterSpec/QueryCall decoder增加unknown type。未列optional成员一律必需，原参数name词法/unique、required/default错误顺序、invoker权限、完整callee闭包/调用预算和CEL scope限制保留。
+
+```text
+TypstTypedLiteral/1={type:TypstQueryType/1,value:TypstQueryV/1}
+TypstParameterSpec/1={name:text,type:TypstQueryType/1,required:boolean,
+ default?:TypstTypedLiteral/1}
+TypstQueryCall/1={query:{kind:"inline",spec:TypstQueryValue/1}
+ |{kind:"saved",definition:TypstDefinitionAddress/1},
+ arguments:{parameterName:TypstTypedLiteral/1...},context:TypstQueryContext/1}
+TypstQueryValueSource/1={kind:"literal",literal:TypstTypedLiteral/1}
+ |{kind:"parameter",name:text}
+TypstLexicalBinding/1={kind:"literal",literal:TypstTypedLiteral/1}
+ |{kind:"lexical",name:"this.node"|"this.heading_title"}
+TypstContextBinding/1={kind:"literal",literal:TypstTypedLiteral/1}
+ |{kind:"runtime",name:"now"|"timeZone"|"calendarVersion"|"tzdbVersion"}
+TypstDynamicBlock/1={format:"weftext.typst-dynamic-block",version:1,
+ query:{kind:"inline",spec:TypstQueryValue/1}
+ |{kind:"saved",definition:TypstDefinitionAddress/1},
+ view:{kind:"inline",spec:TypstViewValue/1}
+ |{kind:"saved",definition:TypstDefinitionAddress/1,viewIndex:Counter},
+ arguments:{parameterName:TypstLexicalBinding/1...},
+ contextBindings:{contextName:TypstContextBinding/1...}}
+TypstDefinitionPayload/1=TypstFeatureDefinition/1|TypstDynamicBlock/1
+```
+
+这两个name→value对象只准静态已声明parameter/context名字，不是开放map/任意Field访问。Parameter.required=true禁止default；false必须有完整同type的default，optional parameter未提供才用default，显式none/absent值不触发default。未知/重复参数、缺required、type不同均按原错误整调用拒绝。`TypstQueryContext/1`的成员集合仍由闭包静态推导，恰为所需now/timeZone/calendarVersion/tzdbVersion：now用新TypedLiteral decoder但type必须恰原zoned_instant，其他是nonempty text；无所需context为`{}`。不把typst_instant偷偷转zoned_instant，不从主机补timezone/now。lexical this.node生成完整NodeRef的新TypedLiteral，this.heading_title生成text，均先按实际owner/当前heading资格取得再匹配callee type；SavedQuery本身没有this。runtime binding只取明确调用context，同invocation now一次冻结。
+
+| 实际typed槽 | 唯一新producer→consumer |
+| --- | --- |
+| Query.parameters[].type/default、inline/saved/callee解码 | 新ParameterSpec/TypedLiteral；参数定义按name规范序，default.type与parameter.type完整相等。 |
+| QueryCall.arguments、PAB/action.canonicalCallInputs、CollectionCall.call | TypstQueryCall及新TypedLiteral逐成员解码；整个闭包的参数与context来自同cut，不把新arguments交旧decoder。 |
+| relation/scalar query_ref.arguments、selector literal、parameter defaults | ValueSource的literal走新TypedLiteral，parameter只映callee同型值；禁row/scalar/this相关值，保原调用隔离。 |
+| recurrence.horizon、View fixed Domain.minimum/maximum及其它typed constant | 每个原schema标为TypedLiteral的真实槽都换新TypedLiteral；原horizon/domain业务type要求仍验证，未知type不能蒙混。 |
+| DynamicBlock.arguments/contextBindings、saved view call | 上述Lexical/ContextBinding闭集；viewIndex仅选已认证Feature.views中的准确索引，不拿第一个猜。 |
+| DefinitionTransfer静态typed roots、Result schema/V、native export、ResultPin | 全部递归选择本Type/V；包含新default/argument/lexical literal/context literal的Ref，普通CEL/text不扫描身份。 |
+
+TypstDynamicBlock的原生作者carrier同样是合格`#metadata(...) <weftext-view-key>`，按format严格选择上述两臂；Feature.query可供saved QueryRef，DynamicBlock本身不可冒callee Query。TypstDefinitionInput.value改为TypstDefinitionPayload，typed transfer必须全枚举两臂。UI默认仍普通Query/视图builder，不要求作者手写这些内部typed对象。
+
+源码carrier的typed value位置按准确type复用官方原生值：float64的直接Float AST映为其准确finite bits；int64直接Int或SOURCE合格标准int(Str)构造映canonical i64 string（包含i64MIN）；decimal/duration/date/time/local_datetime的SOURCE受控标准构造按实际builtin binding映本V；array逐item、dictionary/union/nullable逐声明arm递归。无界integer/decimal_text仍可canonical string；node_ref仍无fragment URI。该源映射与runtime TypedLiteral wire区分，后者严格只接受§5.2的V编码。未声明位置不解释类型，不求任意表达式；metadata的“字面声明”仅在这些typed叶子准SOURCE已定义受控constructor，不能给Query图/ID/type/schema开放计算。
+
+新CEL profile为`weftext.typst.cel/1`，不是原weftext.cel/1的宽松模式。普通int literal仍int64、text/bool不变；仅本profile准官方CEL AST的finite double literal，合成typst_float64，保其源literal经正确IEEE754 ties-even解析的bits，-0.0保负零。不能因expected float把int literal变float，不能因expected decimal把double转decimal。具名`float64Bits("16hex")`、`durationSeconds("canonical i64")`只准literal合法payload，分别合成native float/duration；错误bits/NaN/Inf/overflow在静态阶段拒绝。expected Type只能来自准确参数/literal/已声明函数签名和父constructor规则，不来自首行数据/列label；非literal表达式须完整type相等。原optional/list/object/conditional双向规则递归换本type，native_array literal在expected完整min/max下校验，maxItems=null不偷变元素数；无expected非空array产生min=max=语法元素数，空array须expected。native dictionary/union/nullable只在完整expected type下检查closed value/state/variant，不能猜branch、flatten nullable或丢preserved值。canonical CEL AST含新literal的准确raw bits/type，调用/cache semantic identity保raw typed常量，不用下面eqKey代替其实际输入。
+
+**QP-01完整作者fixture。** 以下两份`.typ`是高级保存Query的review fixture，普通笔记/属性作者仍用UI而不手写wire。先提交第一份callee并由Core实际签发其production token，再由caller builder填入第二份地址；这里43个A只是词法示例，实际获权正向fixture必须换成第一份真实已认证token，不能把示例token当签名。source schema已获权安装`user/amount`为float，所选实体Fieldread静态型明确为Optional<float64>；callee读取/筛非空/比较参数、显式sort/project，并将准确无schema上限array参数原样投影。下面所有schema maxItems:none都只在合法null槽，default.value实际native float/array由typed源mapper转wire bits。
+
+```typst
+#metadata((id: "12d7c4f3-9ee6-4c36-920d-ec6af27bc654", types: ())) <weftext>
+#metadata((format: "weftext.feature-definition", version: 1,
+  query: (format: "weftext.query", version: 3,
+    parameters: (
+      (name: "samples", type: (kind: "typst_array", item: (kind: "typst_float64"),
+        minItems: 0, maxItems: none), required: false,
+        default: (type: (kind: "typst_array", item: (kind: "typst_float64"),
+          minItems: 0, maxItems: none), value: (0.5, -0.0))),
+      (name: "threshold", type: (kind: "typst_float64"), required: false,
+        default: (type: (kind: "typst_float64"), value: 0.5)),
+    ),
+    relations: (
+      (id: "n", op: "scan", domain: "nodes", selector: (kind: "workspace"), "as": "node"),
+      (id: "a", op: "read", input: "n", from: "row.node", bindings: (
+        (name: "amount", source: (kind: "field", fieldId: "user/amount", shape: "native_value")),)),
+      (id: "f", op: "filter", input: "a",
+        predicate: "row.amount.hasValue() && row.amount.value() >= param.threshold"),
+      (id: "s", op: "sort", input: "f", keys: (
+        (expr: "row.amount.value()", direction: "asc", "none": "first"),)),
+      (id: "p", op: "project", input: "s", fields: (
+        (name: "amount", expr: "row.amount.value()"),
+        (name: "samples", expr: "param.samples"),)),
+    ), scalars: (), result: (kind: "rows", relation: "p"), lifecycleScope: "live",
+    searchBindings: (version: 1, mode: "none", selections: ())),
+  views: ((format: "weftext.view", version: 1,
+    inputSchema: (kind: "rows", ordered: true, columns: (
+      (columnId: "amount", type: (kind: "typst_float64")),
+      (columnId: "samples", type: (kind: "typst_array", item: (kind: "typst_float64"),
+        minItems: 0, maxItems: none)),)),
+    layout: "table", bindings: (columns: ("amount", "samples")),
+    options: (title: "阈值查询", description: "准确浮点与数组", labels: (:),
+      textDirection: "auto", numberFormat: "canonical")),),
+)) <weftext-view-threshold>
+```
+
+```typst
+#metadata((id: "b7a36d54-52ec-4e63-9f0d-6579e2baee7f", types: ())) <weftext>
+#metadata((format: "weftext.feature-definition", version: 1,
+  query: (format: "weftext.query", version: 3,
+    parameters: (
+      (name: "limit", type: (kind: "typst_float64"), required: false,
+        default: (type: (kind: "typst_float64"), value: 0.5)),
+      (name: "samples", type: (kind: "typst_array", item: (kind: "typst_float64"),
+        minItems: 0, maxItems: none), required: false,
+        default: (type: (kind: "typst_array", item: (kind: "typst_float64"),
+          minItems: 0, maxItems: none), value: (0.5, -0.0))),),
+    relations: (
+      (id: "r", op: "query_ref", definition: (version: 1,
+        owner: "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/12d7c4f3-9ee6-4c36-920d-ec6af27bc654",
+        revisionToken: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        label: "weftext-view-threshold"), arguments: (
+        threshold: (kind: "parameter", name: "limit"),
+        samples: (kind: "parameter", name: "samples"))),
+      (id: "s", op: "sort", input: "r", keys: (
+        (expr: "row.amount", direction: "asc", "none": "first"),)),
+    ), scalars: (), result: (kind: "rows", relation: "s"), lifecycleScope: "live",
+    searchBindings: (version: 1, mode: "none", selections: ())),
+  views: ((format: "weftext.view", version: 1,
+    inputSchema: (kind: "rows", ordered: true, columns: (
+      (columnId: "amount", type: (kind: "typst_float64")),
+      (columnId: "samples", type: (kind: "typst_array", item: (kind: "typst_float64"),
+        minItems: 0, maxItems: none)),)),
+    layout: "table", bindings: (columns: ("amount", "samples")),
+    options: (title: "传递参数", description: "同型callee调用", labels: (:),
+      textDirection: "auto", numberFormat: "canonical")),),
+)) <weftext-view-caller>
+```
+
+调用fixture使用TypstQueryCall/1，arguments={}使limit/samples取上述真实default；显式threshold float argument可用runtime合法bits V而不是源码Float number。传到callee的有效TypedLiteral.type与参数Type逐字相同，QueryRef擦除ordered再由caller sort恢复；native result export保两个float列/array V完整schema与bits。caller改default不重写callee，换type/NaN/raw-null/旧TypedLiteral混域/unsealed token整体失败。
+
+### 5.5 唯一native EqualityCanonical和等价类消费者
+
+`TypstEqualityCanonical/1`精确根为`{format:"weftext.typst.equality",version:1,type:TypstQueryType/1,value:TypstEqualityTree/1}`。type使用已strict验证的完整规范type（含scope、bounds、nullable/member要求、union顺序），不只kind；原对象member按原规范序、新dictionary members按unsigned UTF-8 name、union保branch顺序。原和新profile根域不同，不跨域碰key。value树如下，全部closed；数组顺序有意义，数字以canonical文本而非host浮点表示。
+
+| T | EqualityTree精确形状 |
+| --- | --- |
+| 原D7非复合类型 | bool=`{kind:"bool",value:boolean}`；text=`{kind:"text",value:text}`（仅nfc type按固定Unicode15.1 NFC）；int64/integer/decimal=`{kind:"number",value:text}`（原canonical数学值）；code=`{kind:"code",value:text}`（完整scope在外type）；Ref=`{kind:"ref",value:EntityRef}`（完整D3 canonical tuple）；calendar_date=`{kind:"calendar_date",calendarId:text,calendarVersion:text,precision:text,value:text}`（原D4 comparator的准确canonical日期lexeme）；zoned_instant用下列instant tree；quantity=`{kind:"quantity",dimensionId:text,unitId:text,magnitude:text}`（同cut验证的完整basis与canonical exact magnitude）。每臂严格由外type选，不能接受自由leaf或原raw值冒规范值。 |
+| typst_float64 | `{kind:"float64",bits:text}`，合法finite非零bits原样，两个zero bits都恰写`0000000000000000`；V不改。 |
+| typst_duration/typst_exact_seconds | `{kind:"duration",seconds:text}`或`{kind:"exact_seconds",seconds:text}`；i64准确文本或去末尾零/负零的exact canonical decimal。两type不混。 |
+| typst_date/time/local_datetime | `{kind:"date",parts:[year,month,day]}`、`{kind:"time",parts:[hour,minute,second]}`、`{kind:"local_datetime",parts:[year,month,day,hour,minute,second]}`；分量canonical整数，保类型，无zone。 |
+| typst_instant | `{kind:"instant",utcDay:text,secondOfDay:Counter,fraction:text}`；Gregorian 0001-01-01的ordinal为0，exact offset移到UTC后day可负或越原展示年；second=0..86399，fraction为0或`0.`加无尾零的任意精度digits；拒leap second，不截断小数。 |
+| 原optional / native nullable | `{kind:"optional",state:"none"}`或`{kind:"optional",state:"some",value:tree}`；native为`{kind:"nullable",state:"absent"|"none"}`或`{kind:"nullable",state:"value",value:tree}`，absent仅optional许可，三个state分域。 |
+| 原list/object/union及native array/union | list/array为`{kind:"sequence",values:[tree...]}`；object为`{kind:"object",members:[{name:text,value:tree}...]}`按schema序；union为`{kind:"union",variant:text,value:tree}`，native variant按冻结ordinal。外层完整type分域。 |
+| typst_dictionary | `{kind:"dictionary",members:[{name:text,value:tree}...],preserved:[{key:text,value:TypstPreservedEqualityTree/1}...]}`；known按schema序，preserved按准确key unsigned UTF-8排序，**preserved原字典键顺序不参与相等**但raw V保源顺序；重复key拒绝。 |
+
+`TypstPreservedEqualityTree/1`只递归SOURCE NativeValue：string/bool/int用对应原生kind+准确value；none为`{kind:"none"}`；float用上述float64 tree；decimal将coefficient/scale/negative精确转canonical decimal并写`{kind:"decimal",value:text}`（同值不同scale/-0同key）；duration/date/time/local_datetime用上表tree；array用sequence tree保重复/顺序；dictionary用`{kind:"dictionary",entries:[{key:text,value:TypstPreservedEqualityTree/1}...]}`按key排序。unknown preserved的string不做NFC、URI/Field/Ref推断。两字典只有键顺序不同可同eqKey，值或array顺序改变不同；raw表示始终保留。
+
+EqKey恰D3-CJ/3 UTF-8完整根字节；byte comparator为unsigned lexicographic。hash只用`SHA-256(UTF8("weftext.typst.equality/1")||NUL||eqKey)`加速，collision仍比完整type/tree字节。新`==`、hash/contains、group/distinct/count_distinct、min/max等值代表及聚合/去重K全部调用这一唯一函数，不直接用raw bits/offset/key数组。排序的数值/时间order仍§5.2，不以CJ字节给值造自然序；相等必须与同type比较一致。raw代表在已形成的等价类中取完整raw V或整key tuple的CJ3 bytes最小者，不按第一行/拼成员；两种zero一类而通常选正零raw代表，两个offset的同UTC instant一类但保所选完整原offset。
+
+group K只含base与按作者keys顺序的完整eqKey数组；global keys=[]；distinct K含完整column序的eqKeys；两者不含输入parent或代表行writer。输入顺序/分区/worker/页界变化不得改类数、代表或K；所有递归节点/bytes/hash/排序计原预算，预算失败不能截树/抽样。Equality树不能替代参数/raw literal、实际输出pin或SemanticStateKey中的真实值：signed zero可有同equality但不同输出bits，cache仍绑定准确raw输入/完整依赖。
+
 ## 6. 新 feature holders 与 typed transfer
 
 native Query入口是独立`TypstQueryExecute/1={kind:"typst_query_execute",version:1,workspaceRef:WorkspaceRef,commitDomain:CommitDomain/2,expectedFrontier:Frontier/2,call:<native QueryCall>,budget:<original D7 Query budget>}`，返回上述TypstQueryResult1。旧d7_query_execute/wire2不在原JSON闭集中猜native source或加新arm。Core保护的native result profile标记决定Type/V/schema page消费；所有入口同原授权/错误顺序，不增第二执行器。新nullable值的CEL具名函数`nativePresent(x)`、`nativeIsAbsent(x)`、`nativeIsNone(x)`分别读精确state；`nativeValue(x)`只在value态返回T，否则原none_value。`nativeVariant(x)`返回冻结variant名，`nativeCase(x,"variantN")`要求literal合法name、匹配才返回该branch T，否则原type_mismatch。函数不coerce、都计原预算，前三state测试total，其它可error；unknown preserved访问只读，不创造Field身份。
 
 以下是 CORE `FormatAdapterEnvelope/1` 的具名角色payload，不是给旧PAB4、Result9/10、ExportPlan4或closed union加未知kind。generic D6 SourceVersion/Observation、Frontier、InputDescriptor4/Proof4/PIntent4、唯一CAS/P/receipt按CORE保留，document_format携准确Typst profile pin；所有saved/planned/unknown predecessor先原record查找/恢复，不重pin/换版本。
 
-`TypstDefinitionInput/1` 准确 `{version:1,address:TypstDefinitionAddress/1,observation:SourceObservation/1,sourcePin:PinRef/2,value:TypstFeatureDefinition/1}`，受保护record完整绑定准确occurrence、作者值和实际SOURCE环境；address/value不是caller认证。action_input/prepared_action payload逐槽采用CORE §4表：action消费下列新Spec，definitionInputs消费本Input，registryInputs消费SOURCE `TypstSchemaSnapshot/1` qualification，proposedInputs消费CORE proposed_input envelope，constructionInput消费新template role。request/proof/sourceInputs/preview/audience/expiry/budget与冻结输入逐项相等；不另建binding store/ledger，不再声明一份同形TypstActionInput。native QueryCall准确沿原 `{query,arguments,context}`，仅inline.spec变本profile `TypstQueryValue/1`、saved.definition变本`TypstDefinitionAddress/1`，参数/上下文严格原D7 decoder，不加字段。
+`TypstDefinitionInput/1` 准确 `{version:1,address:TypstDefinitionAddress/1,observation:SourceObservation/1,sourcePin:PinRef/2,value:TypstDefinitionPayload/1}`，受保护record完整绑定准确occurrence、作者值和实际SOURCE环境；address/value不是caller认证。action_input/prepared_action payload逐槽采用CORE §4表：action消费下列新Spec，definitionInputs消费本Input，registryInputs消费SOURCE `TypstSchemaSnapshot/1` qualification，proposedInputs消费CORE proposed_input envelope，constructionInput消费新template role。request/proof/sourceInputs/preview/audience/expiry/budget与冻结输入逐项相等；不另建binding store/ledger，不再声明一份同形TypstActionInput。native调用槽全部选择§5.4的 `TypstQueryCall/1`：inline/saved、Parameter/default、arguments/context typed literals、QueryRef与DynamicBlock逐槽使用本新decoder；外层 `{query,arguments,context}` 成员不变，绝不让新值进入旧D7 arguments decoder。
 
 `TypstActionSpec/1` 准确 `{format:"weftext.typst-action",version:1,intent}`，仅下面闭合集合。`TypstActionTarget/1={ref:NodeRef,observation:SourceObservation/1}`；观察必须与完整preimage/source pin、当前cut相等，不用单一revision号码。`TypstActionFieldSelector/1={target:TypstActionTarget/1,fieldId:FieldId,valuePath:[text|Counter...],preimagePin:PinRef/2}`；path从SOURCE准确Field值根出发，member按schema解码、index只针对array且当前有界，完整AST/origin/字节由Core重新核对，不接受caller的可信path。value下列均为schema准确`TypstNativeValue/1`，native Ref依typed位置处理，不能额外JSON Entry。可选成员仅表中`?`，其他缺/多成员拒绝。
 
@@ -216,11 +387,27 @@ native Query入口是独立`TypstQueryExecute/1={kind:"typst_query_execute",vers
 
 除native values/source/definition/selector替换外，原Action target-set全量/去重、whole-call live scope、潜在dependency闭包、owner_fields窄资格、关系/类型requiredness、budget/审批/完整preview/唯一D3|D6提交语义保留。普通native checklist没有稳定Task身份；其生成/升级任务须explicit source/D3创建，不自动看文本找Task。旧promote/checklist/Entry/初始复杂provenance的wire动作不能放进新Spec；需要的native表格/列表基础操作由EDITOR矩阵承担，未选复杂事实与旧来源动作保留历史decoder/显式导入处置。Annotation建议动作仍沿EDITOR拥有的闭合annotation adapter，不借本Spec补任意intent。
 
-`TypstDefinitionTransfer/1` 精确 `{version:1,sourceAddress:TypstDefinitionAddress/1,resultOwnerSubject:<CORE subject>,resultLabel:text,slots:[{path:<schema member/index array>,before:<complete typed Ref or TypstDefinitionAddress/1>,after:<closed map/preserve/reissue_definition choice>}...]}`。producer从完整前像官方AST/native decoder枚举**所有**typed槽，consumer独立重枚举比较；无Ref定义也须slots=[]证明。path按member unsigned UTF-8/index数值排序，unique且无祖先重叠。labels、CEL strings和free text不扫描。map/preserve沿Core原identity/locality，reissue_definition只选真实同map目标definition label；最终地址用同一新owner/冻结revisionToken，不保留旧地址。
+`TypstDefinitionTransfer/1` 精确 `{version:1,sourceAddress:TypstDefinitionAddress/1,resultOwnerSubject:PayloadSubjectKey,resultLabel:text,slots:[{path:[TypstTransferPathSegment/1...],before:TypstTransferActualValue/1,after:<closed map/preserve/reissue_definition choice>}...]}`。producer从完整前像官方AST/native decoder枚举**所有**typed槽，consumer独立重枚举比较；无Ref定义也须slots=[]证明。path按member unsigned UTF-8/index数值排序，unique且无祖先重叠。labels、CEL strings和free text不扫描。map/preserve沿Core原identity/locality，reissue_definition只选真实同map目标definition label；最终地址用同一新owner/冻结revisionToken，不保留旧地址。
 
 `TypstDefinitionTransferPlan/1` 精确 `{version:1,sourcePins:[{owner:NodeRef,observation:SourceObservation/1,pin:PinRef/2}...],transfers:[TypstDefinitionTransfer/1...]}`，pins按完整Ref排序唯一，transfers按source owner/ref+label排序唯一，所有sourceAddress恰被准确sourcePin覆盖；same source可多次显式实例化但resultOwnerSubject+resultLabel唯一。after选择精确为`{kind:"map",subject:PayloadSubjectKey}`、`{kind:"preserve"}`或`{kind:"reissue_definition",ownerSubject:PayloadSubjectKey,targetLabel:text}`；最后一臂要求真实映射的完整原definition address及新唯一label，不能改为别的同名定义。CORE construction的transferPlanPin绑定此准确完整对象及同source版本，不是自由JSON或另一个候选map。
 
-`TypstDefinitionTransferEffects/1` 准确 `{version:1,decisionKey:DecisionKey/2,transfers:[{sourceAddress,resultAddress,beforeSource:text,afterSource:text,slots:<actual before/after values array>}...]}`；这是新role内typed效果，原D7Effects2字节只留原恢复，不换tag。前后完整源与实际覆盖槽独立验证，结果数组按source owner/ref+label规范排序，**普通Query/View作者数组仍保留作者顺序**。
+`TypstDefinitionTransferEffects/1`及每slot不再使用未定型数组，完整closed结构如下；源/结果地址按真实记录版本解码，Node/Resource/Annotation Ref按原完整D3 decoder，不能把同名字段拼成Ref。
+
+```text
+TypstTransferPathSegment/1={kind:"member",name:text}|{kind:"index",index:Counter}
+TypstTransferActualValue/1={kind:"node_ref",value:NodeRef}
+ |{kind:"resource_ref",value:ResourceRef}|{kind:"annotation_ref",value:AnnotationRef}
+ |{kind:"definition_address",value:TypstDefinitionAddress/1}
+TypstTransferEffectSlot/1={path:[TypstTransferPathSegment/1...],
+ before:TypstTransferActualValue/1,after:TypstTransferActualValue/1}
+TypstDefinitionTransferEffectItem/1={sourceAddress:TypstDefinitionAddress/1,
+ resultAddress:TypstDefinitionAddress/1,beforeSource:text,afterSource:text,
+ slots:[TypstTransferEffectSlot/1...]}
+TypstDefinitionTransferEffects/1={version:1,decisionKey:DecisionKey/2,
+ transfers:[TypstDefinitionTransferEffectItem/1...]}
+```
+
+每path非空且为本profile静态schema真实typed root，按member unsigned UTF-8/index数值比较、短prefix先，unique且无祖先重叠。Transfer/TransferPlan的request path也统一该Segment，不一方用字符串/另一方用object；before改为ActualValue，after仍原map/preserve/reissue闭集。效果before/after kind必须同型，definition_address整根包括owner不另列嵌套owner；不能出现new_result_subject或caller伪分配。source/result两完整source必须逐字对应真实前像/最终after pin且包含唯一准确label，slots恰等于独立AST/type遍历所得全部槽（包括parameter/default/DynamicBlock literals）。Ref-free item仍slots=[]。effects item与计划transfer逐项一一绑定，按source owner/ref+label、再完整result owner/ref+label排序，允许同source的显式多实例但result唯一；**作者Query/View/array顺序保留**。preview是同一计划私有candidate物化的完整值/源，不授公开birth；committed逐字等唯一winning map/token/afterPin及receipt分配，seal前后不能换map/source或按receipt位置猜。原D7Effects2仍只原历史恢复，CORE rank4只引用这份新type。
 
 Core materialization固定同一private candidate map、revision plan/token和新定义标签；第一遍写全部typed Ref与待重发定义地址的固定内部占位版本，官方重解析确定真实定义集合；第二遍填同一拟议revisionToken字符串/owner/label（不把seal后才产生的ChangeId嵌进源），官方重解析验证全部地址、SOURCE根声明和typed值。地址不含byte坐标，故不沿旧JSON一行Q假设；任何定义不唯一/占位残留/前后slot覆盖不等/版本改变整体拒绝，内部候选不交付。Field/link/definition/Annotation重写共享同一map与最终source，winning CAS/P才形成生产版本、ChangeId、token的真实seal artifact与有效receipt；seal不再次改写after source；loser不借另一map/seal。未知feature可源读/保存，但copy/fork的typed transfer不能默默跳过。
 
@@ -230,11 +417,69 @@ Core materialization固定同一private candidate map、revision plan/token和�
 
 排版模板用普通Typst module/import、函数参数与set/show。用户可复用成熟模板而非只能固定title/body slot；World只供应获准冻结的包/字体/资源和只读输入，函数不能读取ambient Workspace、创建Node、生成可信id/birth、授权限、写sidecar或调用Action。普通作者metadata在root独立，不由模板返回的同标签metadata认证。
 
-应用创建模板使用 `TypstRecipe/1` 精确 `{format:"weftext.typst-recipe",version:1,template:<authorized Node production address>,parameters:<SOURCE schema parameter definitions>,nodes:[{source:<authorized Node production address>,parentIndex:<earlier index or none for root>,types:<explicit type array>,bindings:[{parameter:text,slot:"title"|"body"|"field",fieldId?:<SOURCE FieldId>}...]}]}`；仅slot=field要求fieldId，其余禁止。nodes source唯一、一个根、父先子后，参数具名unique且全部bindings类型匹配；body参数为内容数据，不能插入任意代码。函数/import参与**呈现**，应用recipe负责哪些获权source/资源实例化，不把Typst执行当Core动作。
+应用创建模板使用下列完整native Recipe/参数定义，替代原来不存在的“SOURCE schema parameter definitions”。这是独立普通Resource的内部配方与受保护构造，不搬进普通笔记业务字段；UI参数表生成原生值，排版源码仍用普通import/函数。
+
+```text
+TypstTemplateSourceAddress/1={version:1,owner:NodeRef,revisionToken:Token}
+TypstRecipeParameterDefinition/1={name:text,valueType:SOURCE TypstValueType/1,
+ required:boolean,nullable:boolean,
+ default:{kind:"absent"}|{kind:"literal",value:SOURCE TypstNativeValue/1}}
+TypstRecipeParameterValue/1={name:text,value:SOURCE TypstNativeValue/1}
+TypstRecipeBinding/1={parameter:text,slot:{kind:"title"}
+ |{kind:"body",locator:SOURCE TypstRangeLocator/1,expectedText:text}
+ |{kind:"field",fieldId:FieldId}}
+TypstRecipeNode/1={source:TypstTemplateSourceAddress/1,
+ parentIndex:Counter|null,types:[text...],bindings:[TypstRecipeBinding/1...]}
+TypstRecipe/1={format:"weftext.typst-recipe",version:1,
+ template:TypstTemplateSourceAddress/1,
+ parameters:[TypstRecipeParameterDefinition/1...],nodes:[TypstRecipeNode/1...]}
+TypstTemplateDestination/1={kind:"parent",parent:NodeRef,ordinal:Counter}
+ |{kind:"collection",collection:TypstCollectionCall/1,parentPolicy:<D7 ParentPolicy>,
+ ordinal:Counter,requireMembership:boolean}
+TypstTemplateConstruct/1={version:1,template:SourceVersionRef/1,
+ recipe:SourceVersionRef/1,parameters:[TypstRecipeParameterValue/1...],
+ resources:[SourceVersionRef/1...],destination:TypstTemplateDestination/1,
+ externalNodePolicy:"reject"|"preserve_current"}
+```
+
+所有member固定且无额外optional/null；name沿原`[a-z][a-z0-9_]{0,63}`，参数定义/值按name排序唯一，unknown/duplicate/缺required拒绝。required=true的default固定absent；false可absent（未提供只保原模板值）或经过valueType+nullable验证的literal（未提供才用default，实际写入必须进入完整source预览）。显式none仅nullable=true且合格，不能触发default；literal default保SOURCE native decimal scale/negative、float bits、duration exact seconds等完整表示，不用Query canonical值冒NativeValue。参数类型不等、Field enum/requiredness不合均拒，不能loss接受掉。
+
+nodes[0].source与recipe.template/请求template的已认证完整生产版本同一对象，parentIndex=null；其它父index须早于子，source owner唯一、源为所选live template subtree，禁止多root/cycle/同Node不同revision重复。types是SOURCE短名/全名合法type集，由当前schema完整扩展，ID/types不是Field参数。bindings按parameter、slot rank(title/body/field)、准确locator/FieldId规范序唯一；同node title最多一个，FieldId只准一次，body ranges不重叠，不与control/Field/title区域混写。
+
+title/body参数必须nonnullable string，无代码/content值。title对唯一native title作安全文字编码；body locator必须同source owner/token的唯一准确inert文本范围，官方AST当前Source读取证明expectedText、完整byte slice与paragraph/content边界；替换只作literal codec，`#link`/`#metadata`文字不执行、不生真链。跨结构/无唯一范围/readonly生成来源拒绝此binding，不全文件字符串替换。field参数以真实installed FieldId匹配完整valueType/nullable/enum，按SOURCE全Field原生容器writer设值，数组保序/重复，不旧field_append/Entry UUID。函数/import负责呈现，Recipe不执行任意宏或赋权限。
 
 录入选择模板→参数/schema检查→获权读取完整source/resources与必要Annotation index→analysis/loss/真实Source预览→Core同一candidate map创建freshNode及必要Resource→最终验证并单一保存。只有Core分配id/出生/placement/权限；标题/文件名不猜分配。资源显式re-own；Annotation首代模板省略须获权完整index和明确omission，不扩为所有导出/复制丢Annotation。完整实例一个coupling group，不能拆绕1000 descendants/更窄预算。recipe/evidence放新template role，旧Recipe2与TemplateConstructionInput2保原历史，built-in adapter以外不生产授权construction。
 
-本节Node生产地址精确为`TypstTemplateSourceAddress/1={version:1,owner:NodeRef,revisionToken:Token}`，读取按§5生产版本认证/currentObservation/profile原则，完整源不是相同hash或filename推断。`TypstTemplateConstructionInput/1` 精确 `{version:1,recipe:TypstRecipe/1,parameters:<validated native dictionary>,inputPins:[{address:TypstTemplateSourceAddress/1,observation:SourceObservation/1,pin:PinRef/2}...],resources:<original explicit authorized Resource selections>,omittedAnnotations:<exact authorized version-address array>,lossReport:<original LossReport/1>,lossChoices:<complete original choices>,sourceSubjectBindings:<unique source-to-CORE-subject array>}`。集合规范排序/unique，sourceSubjectBindings与实际request fresh graph恰对应；instance展示只join该mapping与真实receipt allocation，不另造身份map。
+### 7.1 完整构造输入、Resource/loss与同map效果
+
+```text
+TypstTemplateInputPin/1={sourceVersion:SourceVersion/2,
+ observation:SourceObservation/1,
+ payloadKind:"exact_source_document"|"resource_bytes",pin:PinRef/2}
+TypstTemplateSubjectBinding/1={sourceRef:NodeRef|ResourceRef,
+ subject:<D3 new_result_subject>}
+TypstTemplateLossLocation/1={kind:"template_source",sourceVersion:SourceVersion/2}
+ |{kind:"template_annotation",target:D9EntityVersionAddress/2}
+TypstTemplateLossChoice/1={lossKey:Counter,choice:"accept_loss"|"reject"}
+TypstTemplateConstructionInput/1={version:1,
+ construction:TypstTemplateConstruct/1,recipe:TypstRecipe/1,
+ inputPins:[TypstTemplateInputPin/1...],
+ omittedAnnotations:[D9EntityVersionAddress/2...],lossReport:LossReport/1,
+ lossChoices:[TypstTemplateLossChoice/1...],
+ sourceSubjectBindings:[TypstTemplateSubjectBinding/1...]}
+```
+
+未变叶子精确复用原owner：SourceVersionRef/1是D6当前受保护观察引用（不是production token）；Resource/recipe选择、inputPins/sourceSubjectBindings及D9EntityVersionAddress/2来自`d6-file-authority-reopen/owners/d9-templates/source.zh-CN.md` §6a和workers-export §3b。construction.template必须Node，recipe必须由其owner拥有的Resource；recipe.pin独立strict解析与constructionInput.recipe逐字相等。resources按完整D3 RefKey排序唯一，全部Resource owner在recipe.nodes中，sourceToken须同cut当前获权观察，不能由路径/hash猜。父/集合destination沿原D7资格，TypstCollectionCall/1精确为`{call:TypstQueryCall/1,nodeColumn:text}`，沿原CollectionCall闭合成员只把其中call换§5.4新Call，不给collection或ParentPolicy开放新成员。
+
+inputPins按完整RefKey排序唯一，恰覆盖实际recipe bytes、所有Node源、所选Resource；sourceVersion=observation.sourceVersion、实体/domain/payloadKind/pin字节逐项一致，Document strict UTF-8原字节，不重排语义text，Resource bytes原样。Node地址通过同sealed managed token解析到该完整sourceVersion，内部inputPins可存真实版本，不在作者源embed ChangeId。每sourceSubjectBinding恰为所选Node/复制Resource，subject严格原D3 new_result_subject同kind，Resource owner机械指所选owner的fresh Node subject；源/目标各唯一且与request.freshSubjects、proposedInputs和同private map完全闭合，未复制recipe不入bindings。此map不对外造新identity；展示仅join它与真实receipt.resultAllocations，不用数组位置/标题。
+
+omittedAnnotations是同cut完整获权owner目录中的D9EntityVersionAddress/2按RefKey排序数组，首代template全部omit，不读body、不创建subject；无权/缺负范围不能当空。LossReport/1严格复用原Import IR/Mapping §7闭合`{version:1,items:[{lossKey,feature,locations,effect,severity,allowedChoices}...]}`，feature是原具名闭集，effect非空、locations非空且仅本TypstTemplateLossLocation：sourceVersion在inputPins中，Annotation地址在omittedAnnotations中，不混IR SourceLocation。lossKey连续，notice choices=[]，requires_choice=[accept_loss,reject]，blocking=[reject]。lossChoices按key排序唯一、恰覆盖requires_choice/blocking且不含notice；reject取消无author请求，blocking不能prepare，真正constructionInput保存无blocking的初始完整报告及所有requires_choice的accept_loss，仍保初始severity/allowedChoices。新输入/参数/资源/目录/schema/损失漂移重新analyze/confirm，不沿旧key接受。
+
+正向构造链以三fixture明确，不把普通用户笔记写成内部wire：**TP-01**获权单Node模板含一个唯一正文文本slot和已绑定`user/report-code`字符串Field，两个required nonnullable string参数`body`/`code`对应body locator与FieldId，资源/批注/loss/definitionTransfers为空；当前inputPins恰recipe+Node，sourceSubjectBindings一项source Node→new Node subject，Core同map设fresh控制ID/目标types并安全替换body/Field，两遍全parse后冻结source，完整effect/receipt恰该Node且无D7 transfer效果。body值包含`#metadata`只呈现文字。
+
+**TP-02**同一live template树两个Node A/B已有各一个已认证Feature定义，typed parameter/default Ref互指A/B；recipe.nodes两项父先子后，bindings可空，资源选择为空，inputPins恰recipe+A+B，sourceSubjectBindings对应两个new Node subjects；从真实before Feature payload枚举所有Ref slots，按同map变到A'/B'，production地址都用同plan各自冻结revisionToken，两遍source/Field/link/definition物化及新参数decoder验证；Effects两item的before/after slots完整为真实A/B→A'/B'，receipt实际分配一一join。模板已有互引是copy materialization正向，不能用尚不存在的caller UUID新增fresh互引；collection分支仍拒多Node/需fresh map引用。
+
+**TP-03**单Node含无Ref的合法Feature（如§5.1列表Query），仍产生一条TypstDefinitionTransferPlan.transfer和Effects item、slots=[]；before/after完整payload/source、result地址新token均核，不能当opaque跳过。所有fixture都在完整获权cut、strict/managed_atomic、实际source/recipe/Registry pins/预算之下才正向；错参数型、重复source/subject、资源owner不对应、body locator过期/跨结构、缺typed槽或假receipt令整构造拒绝且无分配，不拆批、不换map补救。
 
 导入以Weftext自有Rust基础设施为生产权威。原SourceArtifact/ImportIR coverage/mapping/loss/ImportJob保留；Office全sheet/hidden/formula-cache/part覆盖、精确数值与坐标、安全validator不能省。输出按目标Typst native AST构造并由官方parser/compiler及SOURCE/Registry/typed-ref完整验证；PDF能编译不等于业务metadata/Query/链接保真。旧AsciiDoc/YAML/Markdown/JSON Entry导入保留原文件，逐项映为root声明/native值/feature carrier/link，复杂事实模型不以新笔记JSON fallback恢复，必须显式loss/拒绝或作为普通附件保留。未知方言、LaTeX/Mermaid兼容只走具名成熟package/provider、支持范围和loss，不能声称native math等价任意LaTeX。
 
@@ -250,11 +495,11 @@ native Query结果的准确导出使用独立`{format:"weftext.typst-query-resul
 
 DOCX/ODT、XLSX/ODS、CSV/TSV是Weftext具名转换能力，不是Typst内建。Word需真实段落/style/table/资源、CJK/RTL/分页及loss检查；XLSX需真实workbook/cell typed值/顺序/公式文本安全/merge与Office/WPS/LibreOffice互操作，PDF表格不冒workbook。保留D9可见Office模板token/最短唯一native-table selector/样式/repeat准入，SOURCE新table producer替代AsciiDoc来源；无unique projection不可按标题/第一表猜。复杂合法Typst无对应转换时明确loss或route unavailable，仍可Source保存。
 
-`TypstExportBinding/1` 精确 `{version:1,sourceInputs:[{owner:NodeRef,sourceVersion:SourceVersion/2,observation:SourceObservation/1,sourcePin:PinRef/2,snapshotPin:PinRef/2}...],environment:CORE TypstProcessorEnvironment/1,worldProof:CORE TypstWorldProof/1,presentation:"flow"|"paged",resultPins:[CORE TypstResultPin/1...],viewSpecs:[TypstViewValue/1...],route:<original D9ExportRouteBinding/1 or null>,linkRoutes:[TypstExportLinkRoute/1...],outputs:<original D9ExportStagedOutput/1 array>,lossReport:<original ExportLossReport/2>}`。此binding仅用于真实渲染，exact-source无binding；flow使用EDITOR `flow-semantic/1`生产renderer：官方paged realization后的语义投影→受控DOM或native可访问节点；environment.target=paged，不以实验HTML作默认。paged预览同样用paged target。实验HTML只有显式选择且具名route可用时才environment.target=html，不创造独立shared policy。sourceInputs的snapshotPin逐个绑定CORE真实TypstSourceSnapshot/1/environment/world/profile；实际消费的来源、模板、字体、asset与resource各自先授权；不为纯Field/Query导出加whole-body读权。resultPins/viewSpecs按实际配对保留完整cut/auth/epoch/schema/order，renderer不重跑Query/补查/聚合/采样。semantic chart沿原六layout export route：metric/bar/line/scatter/pie/heatmap；network源View合法但该route unavailable，不能偷降data export。
+`TypstExportBinding/1` 精确 `{version:1,sourceInputs:[{owner:NodeRef,sourceVersion:SourceVersion/2,observation:SourceObservation/1,sourcePin:PinRef/2,snapshotPin:PinRef/2}...],environment:CORE TypstProcessorEnvironment/1,worldProof:CORE TypstWorldProof/1,presentation:"flow"|"paged",resultPins:[CORE TypstResultPin/1...],viewSpecs:[TypstViewValue/1...],route:<original D9ExportRouteBinding/1 or null>,linkRoutes:[TypstExportLinkRoute/1...],linkLosses:[TypstExportLinkLoss/1...],outputs:<original D9ExportStagedOutput/1 array>,lossReport:<original ExportLossReport/2>}`。此binding仅用于真实渲染，exact-source无binding；flow使用EDITOR `flow-semantic/1`生产renderer：官方paged realization后的语义投影→受控DOM或native可访问节点；environment.target=paged，不以实验HTML作默认。paged预览同样用paged target。实验HTML只有显式选择且具名route可用时才environment.target=html，不创造独立shared policy。sourceInputs的snapshotPin逐个绑定CORE真实TypstSourceSnapshot/1/environment/world/profile；实际消费的来源、模板、字体、asset与resource各自先授权；不为纯Field/Query导出加whole-body读权。resultPins/viewSpecs按实际配对保留完整cut/auth/epoch/schema/order，renderer不重跑Query/补查/聚合/采样。semantic chart沿原六layout export route：metric/bar/line/scatter/pie/heatmap；network源View合法但该route unavailable，不能偷降data export。
 
 该新export role与CORE冻结confirmed plan组合，保留D9 prepare→inspect→confirm→delivery/state/cancel、受控output name/alias/prefix/reserved冲突、完整staging/验证/预算与当前授权。它不是旧ExportPlan4/D9DocumentRenderBinding1的新unknown arm；历史Plan1–4/confirmation/receipt按记录原恢复。
 
-`TypstExportLinkRoute/1` 精确 `{version:1,sourceOwner:NodeRef,sourceVersion:SourceVersion/2,occurrence:<SOURCE deterministic occurrence key>,target:NodeRef,authorLabel:text|null,outputName:text,outputFragment:text|null}`。producer在冻结输出集合中逐occurrence证明获权目标、准确label及受控output destination；consumer验证target→唯一输出、fragment对应实际renderer named destination/HTML id，而非假定原label等于HTML id。官方可能改label为DOM id，必须验证实际映射。source occurrence/target proof/输出名冲突、漏route、重复label或未导出目标不能生成貌似可用的离线路径；明确保留应用URI或loss/拒绝选项。route不重写作者源，不用于runtime权限。输出可证明的闭合集合才获得跨文档离线链接承诺；SVG/PNG等目标无法表达的link损失逐项记录。
+`TypstExportLinkLoss/1={occurrence:TypstCompiledLinkKey/1,lossKey:Counter}`关联实际完整初始ExportLossReport/2的准确loss项，key真实存在且source范围/输出位置可复算，不另造loss权威。每个§2.4 active app occurrence恰在linkRoutes或linkLosses出现一次，二者不重叠；均按compiled index排序且owner/sourceVersion/compile/projection pins与绑定basis一致。loss也不能漏链接或越权披露隐藏目标。route及loss消费完整projection后才能confirm，旧Plan4未扩这种槽。`TypstExportLinkRoute/1` 精确 `{version:1,sourceOwner:NodeRef,sourceVersion:SourceVersion/2,occurrence:TypstCompiledLinkKey/1,target:NodeRef,authorLabel:text|null,outputName:text,outputFragment:text|null}`。producer在冻结输出集合中逐occurrence证明获权目标、准确label及受控output destination；consumer验证target→唯一输出、fragment对应实际renderer named destination/HTML id，而非假定原label等于HTML id。官方可能改label为DOM id，必须验证实际映射。source occurrence/target proof/输出名冲突、漏route、重复label或未导出目标不能生成貌似可用的离线路径；明确保留应用URI或loss/拒绝选项。route不重写作者源，不用于runtime权限。输出可证明的闭合集合才获得跨文档离线链接承诺；SVG/PNG等目标无法表达的link损失逐项记录。
 
 ### 8.2 内网工件下载与发布区别
 
@@ -305,5 +550,12 @@ WebUI内网下载不要求外部目录或PublicationReceipt。用户选择输入
 | TF-16 | export occurrence→target→actual输出label路由可回读；漏/重复/target不在集合明示loss或拒绝，不猜HTML id，不改source。 |
 | TF-17 | 内网无外部目录/receipt可交准确confirmed dataFile；逐chunk auth、同bytes resume、过期新confirm；坏token不泄存在/path，worker额外file不交付。 |
 | TF-18 | 下载、打印、资源创建和只新建发布各自展示真实结果；未知状态恢复原意图，导入任务保留已提交前缀，包和转换进程没有环境隐式权限。 |
+| TF-19 / TR-01 | QP-01两份源码在真实已封印被调定义与已安装字段方案下，浮点参数及默认值、QueryRef同型传递、空实参取默认、原生浮点转准确位串、排序/投影/准确导出正向；动态块的当前节点、标题和运行时上下文都走新字面值解码器。旧字面值混新类型、整数冒浮点、坏位串/非有限数、默认类型不符、缺必选或多余参数、QueryRef越用行/标量/当前节点绑定及假修订令牌均拒绝。 |
+| TF-20 / TR-02 | +0/-0同eqKey且两raw bits保留；Z与+08:00同UTC instant同key；exactseconds、native decimal不同scale、递归array/dictionary/nullable/union依定义相等/不等。distinct/group/count_distinct类数、raw最小代表与K不随输入序/分区/页界变；global K无parent。错误type、hash collision只比hash、截树、raw bits直接作EqKey、cache以eqKey替实际raw参数均拒。 |
+| TF-21 / TR-03 | QP-01 parameter.type/default.type/View.inputSchema任意深度typst_array.maxItems:none准确等null且不改有限N；none仅该schema槽。raw V.none/null、default:none、缺optional成员用none补、nullable absent与none混同、向unknown schema字段放null均拒。 |
+| TF-22 / TR-06 | 两个同字面root links各AuthoredKey；include/show重复同span产生两个compiled index，同一换行链接多个reading fragments仍一个index；完整AST/final trace/association重算一致。nonliteral目标可为catalog null但无writer，Draft新字节不能用旧catalog资格。 |
+| TF-23 / TR-06 | 每个active app compiled key恰route或同key loss，actual target/fragment/output逐项验证；缺/多/重复项、错误projection/compile/world cut、originId或DOM key冒occurrence、重复include合并/半coverage冒complete、removed_by_show冒可点击输出均拒。 |
+| TF-24 / TR-09 | TP-01 body+Field参数单Node安全物化，TP-02已存在两Node/definition typed Ref互指同map重发，TP-03无Ref transfer/effect仍slots=[]；完整pin→construction→两遍source/typed槽→Effects→唯一receipt逐项对应。 |
+| TF-25 / TR-09 | 参数default仅未提供时生效且保native scale/bits；资源当前Ref/owner、recipe pin、omitted Annotation目录、初始loss/accept选择全部正向匹配。body文字含执行语法仍literal；wrong parameter/valueType/nullable/FieldId、过期或跨结构body range、资源owner错、重复/缺subject、漏effect path、before/after错kind、伪candidate UUID、loss notice额外choice/blocking接受/报告漂移、receipt位置猜map均整操作拒绝。 |
 
 这些oracle尚未执行。研究只证明有限官方AST/value/编译/源splice可行，不证明ACL、全库性能、跨设备、IME、Office互操作、离线路由或生产HTML。实现时须将上述案例接入真实Core/Server与EDITOR测试，并保留原D9 I01–I12及对应安全/平台/无障碍门；设计文档不是产品通过证据。

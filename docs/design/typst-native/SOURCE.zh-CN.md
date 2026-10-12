@@ -165,9 +165,17 @@ nonEmpty仅string/instant/decimal_text/exact_seconds_text/node_ref可true，其�
 
 labels按language排序唯一，language必须显式语言tag，不将显示文字变alias；fields/types/aliases和嵌套成员按相应ID/key排序唯一；requires/conflicts为排序唯一集合。enum为null或非空、唯一且全部匹配完整Field语义(valueType+nullable)的原生值集合；nullable=true时none可作为enum/default值；dictionary成员同理按member valueType+nullable验证。default literal必须通过同一schema全验证。nullable Field的none只有在nullable=true且enum为null或含none时允许。union各分支不能重叠，unknown schema不先试某个分支。
 
-qualification绑定snapshot两项generation/digest；bootstrap generation=1且evolution=null，非bootstrap要求完整evolution的previousSnapshot精确等于predecessor.binding、currentSnapshot等于snapshot、generation checked +1。digest取D3-CJ/3对象除digest自身的SHA-256；旧snapshot原bytes不补字段。安装者须先有CORE真实registry配置/owner认证与管理授权，同cut dependencyProof的registry项必须完整覆盖已安装schema及绑定/evolution的真实pins，authorization项覆盖当前policy；proof不是客户端自报true，不能单凭一份自洽snapshot授予其定义权限。本文不扩D10签名或旧Registry decoder。
+qualification绑定snapshot两项generation/digest。先对完整snapshot及适用的完整previousSnapshot分别进行§6.1闭合解码、定义/别名/类型图验证和自身digest完整性验证；digest取D3-CJ/3对象除digest自身的SHA-256。只有验证成功后，Binding(S)才由已验证snapshot S的version=1、generation与digest构造为TypstSchemaBinding/1，不能从调用方另交的摘要、部分对象或缓存猜取。
+
+bootstrap的snapshot.predecessor必须为bootstrap，generation=1且evolution=null，并命中CORE实际获权初次安装证明。非bootstrap的snapshot.predecessor必须为previous且evolution非null：Binding(evolution.previousSnapshot)与snapshot.predecessor.binding逐项/规范字节相等；evolution.currentSnapshot与qualification.snapshot是完整规范对象相等；snapshot.generation等于checked(evolution.previousSnapshot.generation+1)，溢出拒绝。比较的是从完整前代派生的Binding，不是将previousSnapshot整对象与较小的binding对象比较。再验证§6.1允许的语义演进（包括只改labels的后继），不能因绑定相等而跳过不可变定义和alias规则。
+
+previousSnapshot必须确实是同一schema域已安装前代：完整前代bytes/pin、其真实绑定与已认证安装记录/原前驱链相互一致；新安装操作的before同时精确命中当前实际安装配置。读取已安装后代时仍沿CORE保留的真实安装链认证前代，不把一份自洽但未安装的伪snapshot当历史。安装者须先有CORE真实registry配置/owner认证与当前管理授权，同cut dependencyProof的registry项完整覆盖snapshot、Binding、evolution及实际前后安装链的真实pins，authorization项覆盖当前policy。证明不要求把qualification本体自包含进pin；proof不是客户端自报true，不单凭摘要自授定义权限。旧snapshot原bytes不补字段，不扩D10签名或旧Registry decoder。
+
+第一代→第二代正例：S1为§7.2生成且真实获权安装的完整seed；从S1复制全部定义，仅将people/contact-name的labels由空数组改为一个显式en/Name显示标签，设置generation=2、predecessor为previous且binding=Binding(S1)，按完整新对象重算S2.digest；evolution={version:1,previousSnapshot:S1,currentSnapshot:S2}，qualification.snapshot=S2、binding=Binding(S2)。在真实before安装S1、授权管理事务和同cut真实pins成立时该后继可安装；label不是语义FieldId/type/default变更。伪造未安装S1、改前代bytes却保旧digest、前代binding的generation/digest不符、S2漏重算digest、evolution.currentSnapshot不等S2、跳到generation=3或增量溢出均拒绝并零配置写入；此前真实记录和已冻结计划不重编码。
 
 同一新目标schema域保留ID定义不可变：Field的key/type/nullable/enum/default和Type的fields/requires/conflicts变更须新ID；显示labels可在明确配置演进预览中变，不改语义。删除可用定义在本版拒绝schema安装，先通过另行具名退役/迁移控制设计再做，不隐含缩短旧ledger或复活同ID。本版支持新增无冲突定义/alias，已有alias不改绑；新schema域初次建立是目标设计bootstrap，不把旧候选称为真实运行迁移。
+
+合法新ID后继正例：在另一条以真实已安装S1为before的操作中，新S2完整保留S1所有fields/types/aliases，加入获权user namespace的fresh FieldId=user/review-note、key=review_note、labels=[]、valueType={kind:scalar,name:string,nonEmpty:false}、nullable=false、enum=null、default={kind:absent}，按FieldId排序；不修改旧Type字段清单，不隐含新membership。generation=2、predecessor=previous/Binding(S1)、完整digest/evolution/qualification按上段构造，管理授权和user owner证明成立时可安装。它是另一个S1→S2候选，与labels-only例不是同一次安装的两个竞争后继同时成功。已有ID换valueType、缺predecessor、错完整原bytes/pin或跳过真实before安装资格均拒绝；允许新增不是放宽旧decoder。
 
 ### 6.2 各操作的不可用结果
 
@@ -390,6 +398,7 @@ TypstOriginEvidence/1由CORE同次官方求值/AST产生，record.id恰连续0..
 | S-25 | 任意官方合法正文与native计算保持Source入口；日期float补齐产品案例 | 研究静态allowlist不升级成语言限制；原32研究检查不算本产品验收 |
 | S-26 | §7.2完整seed确定性生成、管理员获权安装后task/default/project/aliases才供表单与Query；白云山2026的显式白云山别名 | alias不自动安装seed，缺schema不默认open，旧catalog同ID不改摘要 |
 | S-27 | int(Str)准确i64MIN；两个相邻大于2^53整秒duration保持不等；decimal精确构造 | 负数字面实际float不能当Int，.seconds()f64相等不证明duration相等；单位/中间累加超界拒静态Field |
+| S-28 | 已安装第一代seed→第二代仅labels改变，或另一获权后继只加fresh user/review-note；完整前代验证后Binding(S1)等于真实predecessor绑定，checked+1、真实安装链及currentSnapshot=S2均成立 | 未安装伪前代、缺predecessor、前代bytes/digest/pin或绑定不符、当前digest未重算、错currentSnapshot、旧ID语义改写、跳代/溢出拒绝；不比较snapshot整对象与binding，不扩旧decoder |
 
 ## 11. 官方依据与证据边界
 

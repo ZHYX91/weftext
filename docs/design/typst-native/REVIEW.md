@@ -8,7 +8,7 @@ translation_status: synced
 
 # Review and evidence for the Typst revision
 
-Status: **candidate preparation; independent verdict incomplete**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This document records actual status. The table is an author disposition requiring verification, not transferred acceptance or author self-approval.
+Status: **first independent review requires changes; delta review pending**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This document records actual status. The table is an author disposition requiring verification, not transferred acceptance or author self-approval.
 
 ## 1. Original-21 dispositions
 
@@ -42,7 +42,21 @@ All IDs have prefix `A2-GLOBAL-6B13-`. The 21 bounded CLOSED findings remain his
 
 After the four module authors produce specifications and challenge each other, non-authors separately inspect requirements/original-21, protocols/authorization, and language/interaction. Final verdicts bind a fixed commit; a changing checkout supports discussion, not a recorded pass. Repairs are rechecked against actual deltas and directly affected paths.
 
-No final fixed candidate or PASS is recorded yet. “The author says it is resolved” never substitutes for independent evidence. Unfinished scope from the original Pro global review remains; this revision creates no implementation or release acceptance.
+The first fixed candidate is `f404b914642048404d84846714552d1818a4196f`. The three independent scopes—requirements, protocols, and language/interaction—all require changes. Duplicate findings are merged by repair object at the highest reported severity into these nine items. These identifiers belong only to this revision; historical findings are not renumbered.
+
+| ID | Severity | Repair object and independent review requirement | Current status |
+| --- | --- | --- | --- |
+| TR-01 | P1 | New Query types reach parameters, defaults, arguments, definition references and actual CEL typed slots. | Author repair complete; independent check pending |
+| TR-02 | P1 | Native equality encoding reaches distinct, grouping and result keys, preserving signed-zero and offset-independent instant equivalence. | Author repair complete; independent check pending |
+| TR-03 | P2 | Native none expresses legitimate schema-null slots without widening ordinary-value or Optional closed sets. | Author repair complete; independent check pending |
+| TR-04 | P2 | Schema evolution compares the binding derived from the predecessor snapshot, not objects with different shapes. | Author repair complete; independent check pending |
+| TR-05 | P2 | Rich editing has actual empty-body, first-text, math insertion and list conversion entries bound to exact origins and one Undo. | Author repair complete; independent check pending |
+| TR-06 | P2 | Authored links and compiled occurrences have complete distinct keys, producers and mappings, enabling complete offline-route coverage checks. | Author repair complete; independent check pending |
+| TR-07 | P2 | Annotation entries retain mandatory complete saves and strict write protection without restricting ordinary Documents. | Author repair complete; independent check pending |
+| TR-08 | P2 | The actual recurrence dependencyProof slot and ancestor consumers select the current protocol; genuine old records retain their decoder. | Author repair complete; independent check pending |
+| TR-09 | P2 | Template parameters, source-to-subject bindings, resource/loss choices and definition-transfer effects have complete independently decodable types. | Author repair complete; independent check pending |
+
+No final PASS is recorded yet. “The author says it is resolved” never substitutes for independent evidence. Unfinished scope from the original Pro global review remains; this revision creates no implementation or release acceptance.
 
 ## 3. Validation levels
 
@@ -52,6 +66,8 @@ No final fixed candidate or PASS is recorded yet. “The author says it is resol
 | Official native examples | Record exact compiler, source and actual compile/evaluation results | The demonstrated author syntax and native values |
 | Design counterexamples and cross-checks | Independent verdicts cite owners and cases | Normative connections and requirement dispositions within scope |
 | Product acceptance | UNRUN | No complete editor, authorization, synchronization, fault or cross-platform evidence yet |
+
+Actual mechanical results for the first fixed candidate: `scripts/check_docs.py` passed 395 public Markdown files; `scripts/check_design_inputs.py` and Git diff checks passed; fixed snapshots and inputs were unchanged. Official Typst 0.15.1 compiled 14 documentation examples and successfully evaluated root metadata in 12. These results did not close the semantic findings above.
 
 The existing research probe's 32 Rust checks, six local body-edit compilations and small browser examples remain research evidence, not product acceptance for this design. Experimental HTML, rich-edit mapping and the production flowing renderer remain explicit implementation delivery conditions.
 

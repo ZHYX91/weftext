@@ -112,7 +112,7 @@ Payload(Role) 分两种明示定义：表列“原schema逐槽替代”的角色
 | identity_input / D3-SCHEMAS §6 D3IdentityInput14（AUTHORING-INTEGRATION §6.1） | 意图中的文档构造字节引用TypstDocumentConstruction1；其余原意图、模式及权威矩阵不变。ownerKind/intention精确为typst_identity/1，不能把作者构造误当旧文档字节载体。 |
 | identity_request / 同处 D3IdentityOperationRequest14 | inputDescriptor 为4；intent 同上；preparationBinding仍恰为原 `{kind:"d7_preparation_binding",bindingToken}`，只把token受保护backing选新prepared_action，不内嵌该对象或造成循环；完整outer envelope bytes构成fingerprint，receipt/error选择envelope domain，不冒充wire14。 |
 | proposed_input / D7ProposedInput3 | `{subject,payloadKind,encoding,pin}`；文档编码仅exact_source_utf8或typst_document_construction1；资源仅resource_bytes；批注仅typst_annotation_value1或typst_annotation_construction1。此为全部合法组合，新载体禁止全部旧Result9/10，批注新构造按§4.1通过同一身份映射产生完整结果，不能交给旧解码器。 |
-| action_input / D7ActionInput3；prepared_action / PAB4 | 动作为FEATURES新规范，action为TypstActionSpec1。canonicalCallInputs按FEATURES完整原query/arguments/context结构，仅inline.spec换TypstQueryValue1、saved.definition换TypstDefinitionAddress1；definitionInputs为TypstDefinitionInput1，registryInputs为SOURCE.TypstSchemaQualification1。constructionInput/proposedInputs分别选对应角色，request选新身份请求或原提交请求2，preview选新完整效果。依赖证明为4代，原观察、预算、期限槽保持。 |
+| action_input / D7ActionInput3；prepared_action / PAB4 | action为FEATURES.TypstActionSpec1，canonicalCallInputs逐项完整采用FEATURES.TypstQueryCall1，不保留旧TypedLiteral/参数域。QueryRef、inline/saved定义、参数类型/default、arguments及context.now等真实typed槽按FEATURES闭合TypedLiteral/ParameterSpec/native Query族选择，不是仅改两个地址槽。definitionInputs为TypstDefinitionInput1，registryInputs为SOURCE.TypstSchemaQualification1；构造、提议、请求、完整效果按相应角色选择。依赖证明4代，原观察/预算/期限保持。 |
 | effect_manifest / EffectManifest3；effect_bytes / EffectBytes3 | 精确采用§4.1闭合效果及编码矩阵；保留原完整集合、phase/披露门，不用摘要或construction前像冒充committed after。 |
 | edit_input / D8EditInput3；prepared_edit / PreparedEditBinding3 | 完整新payload分别为 EDITOR TypstEditInput1、TypstPreparedEditBinding1，不复制旧D8 member集合；其inputDescriptor/dependencyProof/preparedIntent为4，preview为effect_manifest envelope，sourceInputs原型不变。原request不假造preparedIntent的未知member：最终d6_commit_request2由其受保护planToken/operationId和current fence按原owner生成，受保护prepare record保存准确request bytes。禁止旧D8 map/locator判写资格。 |
 | recipe / Recipe3；construction_input / TemplateConstructionInput3（AUTHORING-INTEGRATION §2） | 完整新payload分别为FEATURES TypstRecipe1与TypstTemplateConstructionInput1；identity构造选本文对象；完整同cut schema/environment及原执行/冻结顺序保持。 |
@@ -120,10 +120,12 @@ Payload(Role) 分两种明示定义：表列“原schema逐槽替代”的角色
 | bootstrap_plan / WorkspaceBootstrapPlan4 | targetRegistry的snapshot/binding精确选SOURCE新快照/绑定；profile.registrySeedBinding也选TypstSchemaBinding1。完整获权seed及digest、目标标记/布局/源格式效果由原custody计划冻结。删除initialPresentationPolicy；双信任、初始权限、创建者与系列/时段规则保持§7。 |
 | workspace_reads / D10WorkspaceReadDependencies2 | registryReads[i]的snapshot/binding分别选SOURCE新快照/绑定，snapshotPin仍准确全量pin；sourceInputs原样，dependencyProof为4。 |
 | control_effect_plan / D10ControlEffectPlan2 | registryChange.before.snapshot 为真实 recorded schema，after.snapshot 为 TypstSchemaSnapshot1，evolution 为 SOURCE 定义完整显式演进；changes 仅 activation/author language 槽应用本表，其余 control images 原样。 |
-| recurrence_evidence / ScheduleRecurrenceEvidence2 | registrySnapshot/registryEvolution及选定作者定义、输入采用新来源/结构规范的具名槽；原连续性证人及步骤保持完整来源转换、证明、引用、容量、生产者世代和永久缺口语义。 |
+| recurrence_evidence / ScheduleRecurrenceEvidence2 | payload.dependencyProof精确为DependencyProof4；registrySnapshot/registryEvolution采用SOURCE新类型，其余observation/sourcePin/metadataPin/recurrenceContext逐成员保持原定义。当前生产、步骤前后证明及全部祖先的准确槽位、引用和历史分派见§4.3。 |
 | activation_image / D10ControlRecordImage1 activation arm；author_step / D10AuthorStepResponsibility2 | 补充资料的注册表/演进、请求、准备绑定、输入描述及呈现资格采用表中对应适配器。其他十九类控制投影、执行声明、费用、停止和外部同意保持原职责与权限。 |
 
 新 OwnerInputBinding/2.canonicalDescriptorBytes 精确为完整相应 envelope 的 D3-CJ/3；ownerKind=intentKind 分别为 typst_identity/1、typst_action/1、typst_edit/1、typst_bootstrap/1 或原 control intent（其 descriptor 包含具名 adapter 槽）。D6 处理 action/edit 的既有 protocolOwner=D7/D8，D3 identity 的既有 protocolOwner=D3，最终决议仍只有原 D3|D6 owner 互斥。pinRefs 为所有 proposed、schema、world、transfer、preview 与原必需证据 pins 的准确排序唯一 union；PreparedIntent4.pinDirectory 再包含 DependencyProof4/SourceObservation/installationPlan 全部真实 pins。preparation token 的受保护 backing record 类型由 envelope 选择，tag/audience/expiry 不给新权限。previewBinding 是原类型，但其 owner preview pin 现在绑定完整 envelope；after bytes/format/manifest/route/schema 不得另选 profile。
+
+CollectionCall的准确原形是原execution-action owner §7的call/nodeColumn二成员；本profile的action.collection.call（collection_create臂）及其他真实CollectionCall位置逐项选FEATURES.TypstQueryCall1，nodeColumn仍准确终端列名，ParentPolicy保持原闭合域。canonicalCallInputs、action内调用和prepared_action对应成员使用同一完整native调用，不能保留第二份旧arguments/context。Recipe/TemplateConstructionInput/DefinitionTransferPlan/DefinitionTransferEffects的参数、值、资源、损失、源subject和typed effect slot完整形状只由FEATURES §§6–7定义；本文引用其完整新payload，不以旧Recipe或SOURCE Field定义自行补出参数类型，也不复制第二份effect decoder。
 
 在本表和被引用的新 owner 完整 decoder 下，新实例有正向 prepare→原 planning CAS→原唯一 P→原 receipt/publication 路径；这不是 owner_update_required 的永久占位。未知 adapter role/新 owner version 或缺完整证据才 unavailable。确实未触及语言的 Resource、structure、trust、Money、stop 操作仍用原 generic current 类型，无需包装。
 
@@ -243,6 +245,46 @@ typst_symbolic_bootstrap1精确 `{kind:"typst_symbolic_bootstrap",version:1,temp
 typst_annotation_construction1精确解码 TypstAnnotationConstruction/1={kind:"typst_annotation_construction",version:1,profileCarrier,subject,template,refSlots,revisionSlots,bodyReferencePlanPin}。subject只Annotation existing/mapped/new；template为EDITOR完整TypstAnnotationValue1的nominal symbolic型：仅target/replyTo/locator中的真实typed Ref位置允许symbolic_subject，其余Value成员及actor/time冻结规则完全不变。refSlots恰每个替换的 {path,subject}；revisionSlots恰locator生产revisionToken位置的 {path,sourceSubject}，值是Core拟议token placeholder，不允许任意Literal改写。bodyReferencePlanPin可null，否则绑定同source typed inline link字符串的官方AST byte编辑计划：完整before body pin、每个准确string-token range/原decode address/targetSubject，禁止任意源码片段；Core同map编码整个安全原生string，保持其它body字节并完整inline重解析。typed path与subject entity kind必须匹配，sourceSubject有同plan SourceRevisionPlan/token，locator仍经SOURCE最终坐标验证。Core只从获权复制前像或已验证create/edit proposal与受信actor/time产生此对象；caller不能以模板赋予attribution。
 
 该constructor在同stage12 map改写新AnnotationRef、target/reply及inline typed链接，同一拟议token/两遍最终坐标验证后产完整Value1，最后同P保存aggregate/sourceVersion/token/receipt；现有edit无需symbolic即用准确concreteValue1。它给copy包含fresh target/reply正向路径而不扩大旧Result9的Value4 decoder；旧Result9仅真实记录恢复。
+
+### 4.3 当前调度证明的完整链（TR-08）
+
+下式是recurrence_evidence完整新名义payload，不再按旧ScheduleRecurrenceEvidence2的Proof3槽解码。外层是§4完整FormatAdapterEnvelope1，role=recurrence_evidence；inner kind/version只保留结构标识，由新外层decoder选择新payload。实际成员名是dependencyProof，没有proof别名。
+
+```text
+Payload(recurrence_evidence) = {
+ kind:"d10_schedule_recurrence_evidence",version:2,
+ observation:SourceObservation/1,sourcePin:PinRef/2,metadataPin:PinRef/2,
+ dependencyProof:DependencyProof/4,
+ registrySnapshot:SOURCE.TypstSchemaSnapshot/1,
+ registryEvolution:null|SOURCE.TypstSchemaEvolution/1,
+ recurrenceContext:RecurrenceReadContext/1
+}
+CurrentRecurrenceEvidence = FormatAdapterEnvelope/1(role=recurrence_evidence)
+S(ScheduleContinuityWitness/2).initial/checkpoint = CurrentRecurrenceEvidence
+S(ScheduleContinuityStep/2).before/after = CurrentRecurrenceEvidence
+S(ScheduleContinuityStep/2).dependencyBefore/dependencyAfter = DependencyProof/4
+S(ScheduleContinuityInvalidation/2).evidencePins = [PinRef/2...]
+```
+
+Invalidation保持原完整成员集合，没有dependencyProof/before/after，不为整齐而补造。其evidencePins保存导致binding_changed/gap的真实证据；引用新证据/步骤时按新域解码。Witness/Step其他字段、Step.portableChanges真实ChangeRecord1/Notice3/CP4三pin项、retainedInputs及原状态机不变。旧2代Witness/Step的Proof3 decoder不扩。
+
+| 当前实际producer/consumer槽 | 完整新类型与交叉验证 |
+| --- | --- |
+| 配置注册→ControlDependencies4.workspaceReads | workspace_reads的dependencyProof4与同次D10ControlInput3.dependencies、ControlPrepareBinding4.dependencyPins、InputDescriptor4/PreparedIntent4一致；实际源观察进入sourceInputs，proof条目/stamp与controlInputs对应。注册仍原配置事务，不凭文件缺失创建Witness。 |
+| ScheduleSubscription.source的recurrence臂 | initial/checkpoint均CurrentRecurrenceEvidence，订阅由carrier(subscription)保存。initial属注册真实cut，checkpoint属最后连续验证cut，不把两个历史cut重写相等。 |
+| carrier(schedule_witness).payload | initial/checkpoint选上述完整证据；首次revision1/transition0/fresh producerEpoch原样。只有原注册的source/control transition producer能更新checkpoint。 |
+| carrier(schedule_step).payload | before/after为新完整证据；dependencyBefore逐字等于before.payload.dependencyProof，dependencyAfter等于after.payload.dependencyProof。两者各绑定真实前后cut、Workspace/CommitDomain、源观察、metadata、schema/演进、规则/权限及完整正负范围，不重采样证明。 |
+| AutomationOccurrenceRecord.proof的recurrence臂 | evidence为CurrentRecurrenceEvidence；外层ScheduleOccurrenceProof不是DependencyProof。完整projection/originalStart/due/key保持原规范；carrier(occurrence)经§4.2包装进入ControlRange occurrences.records[]。 |
+| carrier(claims).payload | subscriptions/occurrenceRecords/ranges选择相应当前载体；保留全部连续性artifact和实际recordPin。automation.supplement.subscription、run.supplement.authorSteps及Inventory准确证据按§4.2，不在claims假造扁平dependencyProof。 |
+| D10ControlInput3→作者/控制prepare→唯一P | dependencies严格ControlDependencies4，effectPlan为本profile封装；descriptor、预览、protected backing、pinDirectory全链generic4。最终仍原commit2，注册、subscription/producer关联、retention和记录同一原事务，无调度专用ledger。 |
+
+每份sourcePin绑定observation的完整准确源字节，metadataPin绑定同源版本的实际受保护元数据；schema/evolution与真实registry依赖及完整pins相同。Proof4覆盖实际source、document_format、registry、规则和authorization读取；仅实际消费World才含compile_world。不含该项不能借环境资源支持编译，包含该项不能降Proof3通过旧槽。空/未知schema、partial metadata、gap或无权不是连续step。
+
+retainedInputs、invalidation evidencePins及consumer pinDirectory按完整PinRef排序去重收集：before/after sourcePin/metadataPin、Proof4全部evidencePin、schema及存在的evolution pin、实际规则/授权/格式/World证据、portableChanges三pin、原continuity/preview/proposal/recovery引用。去重不能丢artifact或只留摘要，更不能以current文件补原before。两个Proof4由准确完整canonical payload及protected pins保留，不另放自由对象。artifact按§4.2具名prefix+NUL+完整carrier核kind/role/profile/长度/摘要；假旧域或错误prefix拒绝。原4096pin/16MiB证据元数据、独立source PinBudget、checked推进和reference-safe保留不变；下一步无法保全时先同事务永久gap/invalidation，随后无关source工作才可继续。
+
+真实旧Subscription/Witness/Step/Invalidation（原1/2域、Proof2/3）先按recorded decoder/pins恢复，不装入CurrentRecurrenceEvidence或重编码4。原D6 §7.2.1及D10-CONTROL §0.2限定的Subscription1→2显式continue与mixed retained chain只保留其原producer、initial/checkpoint、continuityPins和原artifact domain；原条款要求完整retained history且无格式/规则/业务断裂，不能凭本文扩成新的3→4迁移桥。Typst格式/binding改变属于真实continuity断裂，原control transition必须拒绝同generation继续，或经原显式replace/new-generation路径重新注册当前4代证据。版本升级本身不修改真实旧chain，缺旧历史也不视为空。旧saved/planned/unknown与已实际存在的旧继续关联按原操作履约；本候选不创建新桥、重生producer或复活失效generation。
+
+TR-07批注完整保存资格由EDITOR §8.1唯一拥有。Core消费固定complete/strict，沿pinned intent→edit_input封装→InputDescriptor4.saveProfile、PreparedIntent4安装保护→原commit2重验。ordinary批注不进入新plan，Draft保留；Document普通保存保持原矩阵。
 
 ## 5. 准确 source、Frontier、map 和 pins
 
@@ -426,5 +468,7 @@ evaluationPin绑定完整 evaluation；exactSourcePin绑定qualification的准�
 | TC-07 | producer→consumer固定槽逐项carrier/pin/schema一致；false RootSource扁平字段、错版本、漏完整binding/digest、混old/newholder拒绝。 |
 | TC-08 | include/read/json/yaml/package/font/plugin、跨ACL及负依赖均有完整WorldProof；hidden存在探测、symlink/path逃逸、缓存另主体、包隐式下载、missing字体fallback、预算超限拒绝且Draft保留。 |
 | TC-09 | revoke与prepare/render/download/P竞速线性化，缓存与derived index重建不复活旧proof；合法body error仍读root静态Field，不能用旧预览作当前；隐藏quote/Trash写/重复执行拒绝。 |
+| TC-10（TR-08/PF-03） | 同次已获权配置注册的InputDescriptor4/Proof4/PreparedIntent4→subscription.initial/checkpoint→witness→准确step前后Proof4→occurrence.proof.evidence→claims→D10ControlInput3完整正例；缺source/schema/格式pin、envelope装Proof3、Step证明与before/after不等、遗漏continuity或portableChanges pin、错误artifact域、unknown/gap均拒绝。真实旧Proof3、原artifact及原已获证mixed链在saved/planned/unknown原样恢复；Typst格式断裂只走原控制transition拒绝continue或replace新generation，不发明3→4桥或洗成同generation。 |
+| TC-11（TR-07/PF-04） | EDITOR complete+strict批注正文编辑/重新挂接/重确认及hidden-target reject沿真实封装→generic4→原commit2/P，建议apply仍原双entity原子链；ordinary或observed_only批注在prepare前拒绝留Draft，不给caller's annotation flag降级；Document普通save路径仍可用。 |
 
 设计文档检查仅证明文档一致性；这些场景需要真实官方语言、条件安装、crash注入、两副本、Server ACL和硬资源隔离实现后才能产生产品证据。
