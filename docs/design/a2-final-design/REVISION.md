@@ -8,6 +8,8 @@ translation_status: synced
 
 # Authoring and workflow revision entry
 
+The subsequent primary-format candidate is now [native-first Typst](../typst-native/README.md), whose entry manages the coordinated specifications and this round's independent review status. This page and its referenced owners/machine entries continue to record the fixed AsciiDoc candidate below; they have not been fully rewritten for Typst and transfer no bounded pass or global acceptance to it. New-note authoring follows the new candidate's named rules, with product implementation and global final review retaining separate boundaries.
+
 Status: design candidate. The native-attribute/link increment completed bounded independent review at `e703f9e7bb9908d8b6a322620b59b184d0f7bb5f`; the original global review remains incomplete, without global acceptance or implementation start. Revision base: `6b13b03b8da3e9e3d14b8663e91442568c8917e0`; author branch: `design/yaml-properties-ux-20261011`. [AUTHORING](AUTHORING.zh-CN.md), [authoring integration](AUTHORING-INTEGRATION.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md) define the new rules. Other modules reference these sole owners rather than duplicating configuration/grammar.
 
 ## 1. Changes

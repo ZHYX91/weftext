@@ -7,6 +7,8 @@ translation_status: synced
 [简体中文](REVIEW-ENTRY.zh-CN.md)
 # A2 D1–D10 author-candidate review entry — full D10 handoff
 
+Current design work moves to the [Typst coordinated candidate](../typst-native/README.md), with independent review bound to the new candidate commit and impact scope. This page retains the predecessor review sequence; it is not an instruction to start a new Pro conversation. Neither prior passes nor unfinished scopes automatically transfer to the new format.
+
 The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md). Their named replacements cover native control identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2, link-form conversion and direct consumers; other obligations remain. The revision entry owns the bounded review status of this revision and the original 21 findings. Full global review remains incomplete; this is an unimplemented design candidate.
 
 At fixed8d7 the independent non-author D9-only review was ACCEPT 0P0/0P1/0P2, necessary gap zero; it independently CLOSED D9-6012-P1-01/P2-01, retaining fixed6012/fixed466b and all older bounded CLOSED scopes. That **does not** accept D10 or global A2. The complete nine-pair D10 current author candidate is integrated, only author-resolved-pending-independent-review, product/runtime all UNRUN. Next are full D10 non-author review, then a different fresh Pro full-A2 independent review.

@@ -7,6 +7,8 @@ translation_status: source
 
 # 目标设计与协作入口
 
+最新目标候选见 [Typst 主格式与原生优先](typst-native/README.zh-CN.md)：四个模块的协调规范与独立复核记录由该入口管理，产品尚未实现。下列 AsciiDoc 输入/候选及其评审状态保留原固定范围，不自动接受新的 Typst 设计。
+
 ## 状态与优先级
 
 状态：accepted-design-not-implemented。本区公开 D1–D9 的完整目标设计输入，最新协调代为 D9-r04-evidence05-2026-09-24；D10 候选尚未接受。当前主分支实现仍是早期原型，产品规范中的旧 Record、信封或语法不能覆盖这些目标设计，也不能反过来据目标文档宣称已实现。

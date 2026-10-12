@@ -1,0 +1,1217 @@
+{
+  "schema_version": 1,
+  "status": "candidate-independent-review-pending",
+  "input_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+  "target_profile": "weftext.typst.v1",
+  "protected_inputs": "unchanged",
+  "scope": "New Typst design and directly affected predecessor concerns; not implementation or global acceptance",
+  "navigation_rule": "source_clauses binds each file to its own actual section identifiers. concern narrows the affected obligation; no row silently replaces the whole file or unrelated obligations. The named target owner supplies the complete typed replacement/retention rules and acceptance cases.",
+  "owners": [
+    {
+      "id": "SOURCE",
+      "zh": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "en": "docs/design/typst-native/SOURCE.md"
+    },
+    {
+      "id": "CORE",
+      "zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "en": "docs/design/typst-native/CORE.md"
+    },
+    {
+      "id": "EDITOR",
+      "zh": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "en": "docs/design/typst-native/EDITOR.md"
+    },
+    {
+      "id": "FEATURES",
+      "zh": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "en": "docs/design/typst-native/FEATURES.md"
+    },
+    {
+      "id": "INTEGRATION",
+      "zh": "docs/design/typst-native/INTEGRATION.zh-CN.md",
+      "en": "docs/design/typst-native/INTEGRATION.md"
+    },
+    {
+      "id": "REVIEW",
+      "zh": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "en": "docs/design/typst-native/REVIEW.md"
+    }
+  ],
+  "replacements": [
+    {
+      "id": "T01",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "AsciiDoc root identity/type attributes and header layout",
+      "disposition": "named-supersede",
+      "target_zh": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "target_en": "docs/design/typst-native/SOURCE.md",
+      "target_sections": [
+        "1",
+        "2",
+        "3"
+      ],
+      "design_cases": [
+        "S-01",
+        "S-02",
+        "S-03",
+        "S-04",
+        "S-05",
+        "S-06"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T02",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Native field codecs, registry/schema binding and literal data projection",
+      "disposition": "named-supersede",
+      "target_zh": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "target_en": "docs/design/typst-native/SOURCE.md",
+      "target_sections": [
+        "4",
+        "5",
+        "6",
+        "8",
+        "7.1",
+        "7.2"
+      ],
+      "design_cases": [
+        "S-08",
+        "S-09",
+        "S-10",
+        "S-11",
+        "S-12",
+        "S-13",
+        "S-14",
+        "S-26",
+        "S-27"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+          "sections": [
+            "4",
+            "5"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D4.zh-CN.md",
+          "sections": [
+            "2.2",
+            "3",
+            "16.1",
+            "16.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T03",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Default complex People/Organizations facts, qualifiers and per-value identity",
+      "disposition": "explicit-simplification",
+      "target_zh": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "target_en": "docs/design/typst-native/SOURCE.md",
+      "target_sections": [
+        "7",
+        "9"
+      ],
+      "design_cases": [
+        "S-15",
+        "S-16",
+        "S-17",
+        "S-18"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/AUTHORING.zh-CN.md",
+          "sections": [
+            "6"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D4.zh-CN.md",
+          "sections": [
+            "4.2",
+            "8",
+            "10.1",
+            "10.2",
+            "16.2",
+            "16.4",
+            "17.1"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D4-IMPACT.zh-CN.md",
+          "sections": [
+            "9.3",
+            "9.5",
+            "9.6",
+            "9.8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T04",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Native temporal/decimal carriers with retained exact business semantics",
+      "disposition": "split-native-carrier-retain-domain",
+      "target_zh": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "target_en": "docs/design/typst-native/SOURCE.md",
+      "target_sections": [
+        "5",
+        "9"
+      ],
+      "design_cases": [
+        "S-12",
+        "S-19",
+        "S-27"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D4.zh-CN.md",
+          "sections": [
+            "4.1",
+            "9",
+            "10.3",
+            "16.6",
+            "17.5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T05",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Format, header/Entry and schema/Field consumer slots",
+      "disposition": "named-supersede",
+      "target_zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "target_en": "docs/design/typst-native/CORE.md",
+      "target_sections": [
+        "2",
+        "3",
+        "4",
+        "5"
+      ],
+      "design_cases": [
+        "TC-01",
+        "TC-02",
+        "TC-07"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/AUTHORING-INTEGRATION.zh-CN.md",
+          "sections": [
+            "2",
+            "3",
+            "3.1",
+            "4",
+            "5",
+            "6",
+            "6.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T06",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "AsciiDoc language/oracle/projection and native source consumers",
+      "disposition": "named-supersede",
+      "target_zh": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "target_en": "docs/design/typst-native/SOURCE.md",
+      "target_sections": [
+        "1",
+        "2",
+        "4",
+        "8",
+        "9"
+      ],
+      "design_cases": [
+        "S-22",
+        "S-24",
+        "S-25"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/SOURCE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D2.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "11",
+            "12",
+            "12.1"
+          ],
+          "numbering_scope": "Top-level sections 1-12 and their embedded normative transcripts; repeated embedded section numbers are not independent unqualified authorities."
+        }
+      ]
+    },
+    {
+      "id": "T07",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Surfaces, shared Core, modes, custody, capabilities and release evidence",
+      "disposition": "retain-generic-obligations",
+      "target_zh": "docs/design/typst-native/INTEGRATION.zh-CN.md",
+      "target_en": "docs/design/typst-native/INTEGRATION.md",
+      "target_sections": [
+        "2"
+      ],
+      "design_cases": [
+        "TI-01",
+        "TI-05",
+        "TI-10",
+        "TI-11"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/INTEGRATION.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D1.zh-CN.md",
+          "sections": [
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T08",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Identity/reference/lifecycle generic algorithms and format-coupled slots",
+      "disposition": "split-generic-retain-native-adapter",
+      "target_zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "target_en": "docs/design/typst-native/CORE.md",
+      "target_sections": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "8"
+      ],
+      "design_cases": [
+        "TC-01",
+        "TC-02",
+        "TC-04",
+        "TC-05"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D3.zh-CN.md",
+          "sections": [
+            "4.7",
+            "6",
+            "6.2",
+            "11.1",
+            "14",
+            "15",
+            "21.2"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D3-SCHEMAS.zh-CN.md",
+          "sections": [
+            "5.1",
+            "6.1",
+            "6.2",
+            "6.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T09",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "One transaction, dependencies, installation and exact recorded recovery",
+      "disposition": "split-generic-retain-native-adapter",
+      "target_zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "target_en": "docs/design/typst-native/CORE.md",
+      "target_sections": [
+        "4",
+        "5",
+        "6",
+        "7",
+        "8"
+      ],
+      "design_cases": [
+        "TC-04",
+        "TC-05",
+        "TC-07",
+        "TC-08",
+        "TC-09"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D6.zh-CN.md",
+          "sections": [
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "15",
+            "16",
+            "17"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D6-CONTROL.zh-CN.md",
+          "sections": [
+            "0.1",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "17.8"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D6-SCHEMAS.zh-CN.md",
+          "sections": [
+            "5.1",
+            "5.2",
+            "5.3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T10",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "New run-in presentation source and bootstrap/effect consumers",
+      "disposition": "retire-new-standalone-presentation-preserve-recorded-history",
+      "target_zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "target_en": "docs/design/typst-native/CORE.md",
+      "target_sections": [
+        "4",
+        "7",
+        "8",
+        "9"
+      ],
+      "design_cases": [
+        "TC-03",
+        "TI-12"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D6-CONTROL.zh-CN.md",
+          "sections": [
+            "0.1.4",
+            "10.2",
+            "20"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
+          "sections": [
+            "12"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T11",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Dual/mixed trust, signed transforms, source tokens and history",
+      "disposition": "retain-with-typed-format-coordination",
+      "target_zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "target_en": "docs/design/typst-native/CORE.md",
+      "target_sections": [
+        "5",
+        "7",
+        "8"
+      ],
+      "design_cases": [
+        "TC-05",
+        "TC-06"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D3-SCHEMAS.zh-CN.md",
+          "sections": [
+            "Part B"
+          ],
+          "heading": "Part B — Annotation、SourceTransform、trust/bootstrap 与 D10 mixed holder",
+          "scope": "Only source transforms, trust/bootstrap and mixed holders; Annotation is T14."
+        },
+        {
+          "path": "docs/design/a2-final-design/D6-CONTROL.zh-CN.md",
+          "sections": [
+            "1.5",
+            "8",
+            "9",
+            "18",
+            "19",
+            "20"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D6-SCHEMAS.zh-CN.md",
+          "sections": [
+            "5.2",
+            "5.3",
+            "10.1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T12",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Registry/workspace read/activation/recurrence/author-step language slots; external responsibility retained",
+      "disposition": "split-language-slots-retain-control-authority",
+      "target_zh": "docs/design/typst-native/CORE.zh-CN.md",
+      "target_en": "docs/design/typst-native/CORE.md",
+      "target_sections": [
+        "4",
+        "6",
+        "8"
+      ],
+      "design_cases": [
+        "TC-07",
+        "TC-08",
+        "TC-09"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/CORE.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D10-CONTROL.zh-CN.md",
+          "sections": [
+            "0.1",
+            "0.2",
+            "0.3",
+            "4",
+            "6",
+            "7",
+            "8",
+            "10",
+            "11",
+            "12",
+            "14",
+            "16"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T13",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Typst reading/editing source maps, source save, Draft, rich editing and accessibility",
+      "disposition": "named-supersede-language-retain-interaction",
+      "target_zh": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "target_en": "docs/design/typst-native/EDITOR.md",
+      "target_sections": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "9",
+        "10"
+      ],
+      "design_cases": [
+        "ED-01",
+        "ED-02",
+        "ED-03",
+        "ED-04",
+        "ED-05",
+        "ED-06",
+        "ED-07",
+        "ED-08",
+        "ED-09",
+        "ED-10",
+        "ED-11",
+        "ED-12",
+        "ED-18",
+        "ED-19",
+        "ED-20",
+        "ED-21",
+        "ED-22",
+        "ED-23"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D8.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "9",
+            "11",
+            "12",
+            "13",
+            "14"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D8-INTERFACES.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "8",
+            "9",
+            "11",
+            "12",
+            "13"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D8-SCHEMAS.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "9",
+            "11",
+            "12",
+            "13",
+            "14"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D8-DIRECTION.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T14",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Independent annotations, native inline body, document targets and permission boundaries",
+      "disposition": "named-supersede-carrier-retain-annotation-domain",
+      "target_zh": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "target_en": "docs/design/typst-native/EDITOR.md",
+      "target_sections": [
+        "7",
+        "8"
+      ],
+      "design_cases": [
+        "ED-13",
+        "ED-14",
+        "ED-15",
+        "TI-08"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D3.zh-CN.md",
+          "sections": [
+            "4.7",
+            "5.3.1",
+            "6",
+            "7",
+            "16.4"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D3-SCHEMAS.zh-CN.md",
+          "sections": [
+            "6.3",
+            "6.3.1",
+            "7.1"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D8.zh-CN.md",
+          "sections": [
+            "8"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D8-SCHEMAS.zh-CN.md",
+          "sections": [
+            "7",
+            "8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T15",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Native tables and six row domains without persistent table-row identity",
+      "disposition": "named-supersede-table-codec-retain-row-domains",
+      "target_zh": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "target_en": "docs/design/typst-native/EDITOR.md",
+      "target_sections": [
+        "2",
+        "3",
+        "4",
+        "11"
+      ],
+      "design_cases": [
+        "ED-08",
+        "TI-12"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/EDITOR.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D5.zh-CN.md",
+          "sections": [
+            "0",
+            "2",
+            "3",
+            "3.1",
+            "3.2",
+            "3.3",
+            "3.4",
+            "4",
+            "19.1",
+            "19.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T16",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Native link forms, conversion, path disclosure and potential links",
+      "disposition": "named-supersede-encoding-retain-experience",
+      "target_zh": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "target_en": "docs/design/typst-native/FEATURES.md",
+      "target_sections": [
+        "2",
+        "3",
+        "4"
+      ],
+      "design_cases": [
+        "TF-01",
+        "TF-02",
+        "TF-03",
+        "TF-04",
+        "TF-05",
+        "TF-06",
+        "TF-07"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/LINKS.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/EXPERIENCE.zh-CN.md",
+          "sections": [
+            "5",
+            "5.1",
+            "5.2"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T17",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Native saved definitions and Field/Query/View/Action consumers, cold reads and Trash scope",
+      "disposition": "named-supersede-language-retain-query-algebra",
+      "target_zh": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "target_en": "docs/design/typst-native/FEATURES.md",
+      "target_sections": [
+        "5",
+        "6"
+      ],
+      "design_cases": [
+        "TF-08",
+        "TF-09",
+        "TF-10",
+        "TF-11",
+        "TF-12"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D7.zh-CN.md",
+          "sections": [
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "18",
+            "23"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D7-SCHEMAS.zh-CN.md",
+          "sections": [
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D7-QUERY-V2.zh-CN.md",
+          "sections": [
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D7-SEARCH.zh-CN.md",
+          "sections": [
+            "2",
+            "5",
+            "6",
+            "7",
+            "8",
+            "11",
+            "11.5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T18",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Complete typed transfer, effects, same-map materialization and bootstrap sorting",
+      "disposition": "named-supersede-native-source-slots",
+      "target_zh": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "target_en": "docs/design/typst-native/FEATURES.md",
+      "target_sections": [
+        "6",
+        "7"
+      ],
+      "design_cases": [
+        "TF-12",
+        "TF-13",
+        "TI-11"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/d7/owners/definition-transfer/source.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/d7/owners/effects/source.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T19",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Templates/import/render/export native slots, Office conversion and intranet downloads",
+      "disposition": "named-supersede-language-retain-conversion-authority",
+      "target_zh": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "target_en": "docs/design/typst-native/FEATURES.md",
+      "target_sections": [
+        "7",
+        "8"
+      ],
+      "design_cases": [
+        "TF-13",
+        "TF-14",
+        "TF-15",
+        "TF-16",
+        "TF-17",
+        "TF-18"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/D9.zh-CN.md",
+          "sections": [
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "12a",
+            "13",
+            "13a",
+            "14",
+            "15"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D9-INTERFACES.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12"
+          ]
+        },
+        {
+          "path": "docs/design/a2-final-design/D9-SCHEMAS.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "10",
+            "11",
+            "12",
+            "13",
+            "14",
+            "15",
+            "16",
+            "17",
+            "16a",
+            "16b"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "T20",
+      "source_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
+      "concern": "Selected research workflows and named deferred features",
+      "disposition": "retain-selection-coordinate-native-carriers",
+      "target_zh": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "target_en": "docs/design/typst-native/FEATURES.md",
+      "target_sections": [
+        "4",
+        "5",
+        "7",
+        "8",
+        "9"
+      ],
+      "design_cases": [
+        "TI-01",
+        "TI-07",
+        "TI-09",
+        "TI-10",
+        "TI-12"
+      ],
+      "exact_mapping_owner": "docs/design/typst-native/FEATURES.zh-CN.md",
+      "source_clauses": [
+        {
+          "path": "docs/design/a2-final-design/EXPERIENCE.zh-CN.md",
+          "sections": [
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8"
+          ]
+        }
+      ]
+    }
+  ],
+  "original21": [
+    {
+      "id": "A2-GLOBAL-6B13-P1-01",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Whole-copy identity and Query materialization",
+      "candidate_oracle": "Native source construction replaces H/Q framing; retain one map, two-pass validation, complete preview and one commit.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P1-02",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Presentation commit, sync and recovery",
+      "candidate_oracle": "Run-in presentation uses native show source; retire the independent presentation-policy effect in the new candidate, retaining original-version recovery of genuine records.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P1-03",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Complete heading levels",
+      "candidate_oracle": "Native title/heading replaces AsciiDoc book/part0; retain deep headings and all direct consumers without a six-level clamp.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P1-04",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Complete projection and unaddressable heading queries",
+      "candidate_oracle": "Separate native evaluation occurrences from writable addresses; legal headings without locators still enter Query.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P1-05",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Explicit Trash search",
+      "candidate_oracle": "Retain authorized read-only qualification, coverage and fresh reads; no promotion into strong writable collections.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P1-06",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Saved-search contribution binding",
+      "candidate_oracle": "Native values carry exact contribution ID/version/path; reopening never substitutes the ambient latest version.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-01",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Definition-transfer effect consistency",
+      "candidate_oracle": "Replace language slots while actual effects, requests and previews use one exact version domain.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-02",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Genuine history and commit faults",
+      "candidate_oracle": "Retain same-P atomicity, frozen original-operation bytes and post-commit transport without invented migrations.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-03",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Exact nested Frontier fields",
+      "candidate_oracle": "Validate CommitDomain/Workspace inside actual heads; empty heads never erase outer qualification.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-04",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Complete terminology projection",
+      "candidate_oracle": "Old terms retain their fixed generation; new named definitions/navigation do not pretend to rewrite the old lexicon.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-05",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Exact native numeric representation",
+      "candidate_oracle": "Native int/float/decimal retain distinct domains; exact values and finite domains replace the Ruby Float oracle.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-06",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Complete legal tables",
+      "candidate_oracle": "Use full native table semantics; control eligibility does not decide legal-source reading, saving or output.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-07",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Both genuine old CP2 recovery arms",
+      "candidate_oracle": "Recover committed/restored with original closed fields/evidence, without inserting new document_format members.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-08",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Dual-trust bootstrap and continuation",
+      "candidate_oracle": "Retain both declarations/proofs, same-decision activation and fault responsibility; source metadata owns no trust.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-09",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Mixed declarations and signature domains",
+      "candidate_oracle": "Validate each recorded declaration in its own signature domain and retain actual evidence slots.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-10",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Source obligations and exact patches",
+      "candidate_oracle": "Explicitly remove complex contact facts while retaining comments, unknown members, unselected bytes, exact preimages and recovery.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-11",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Audio/video interval annotations",
+      "candidate_oracle": "Retain exact timebase/ticks/resource-region issuance, storage and consumption rather than whole-resource references.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-12",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Actual root-source fields",
+      "candidate_oracle": "All consumers use one qualification/sourceObservation without nonexistent flattened aliases.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-13",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Annotation digests and hidden-target boundaries",
+      "candidate_oracle": "A complete Annotation may expose its stored digest without extra hidden-target reads or recomputation.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-14",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "Complete symbolic initialization and sorting",
+      "candidate_oracle": "Retain actual plans and mandatory initialization; freeze slots, materialize with one map, then sort by actual canonical keys.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    },
+    {
+      "id": "A2-GLOBAL-6B13-P2-15",
+      "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
+      "typst_status": "pending-independent-review",
+      "concern": "One total order for effects",
+      "candidate_oracle": "New run-in source edits use source-effect ordering; no new independent presentation effects, and no historical reordering.",
+      "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+      "section": "1"
+    }
+  ],
+  "runtime_migration_claim": false,
+  "product_tests": "UNRUN"
+}

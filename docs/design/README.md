@@ -8,6 +8,8 @@ translation_status: synced
 
 # Target design and collaboration entrypoint
 
+The latest target candidate is [Typst as primary format with native-first design](typst-native/README.md): that entry manages the four coordinated module specifications and independent review records; the product remains unimplemented. The AsciiDoc inputs/candidates and review states below retain their fixed scopes and do not automatically accept the new Typst design.
+
 ## Status and precedence
 
 Status: accepted-design-not-implemented. This area publishes complete D1–D9 target-design inputs through coordinated generation D9-r04-evidence05-2026-09-24; a D10 candidate has not been accepted. Main still contains an early prototype. Old Record, envelope or syntax descriptions in product specifications do not override these target designs, and target documents do not establish implementation.

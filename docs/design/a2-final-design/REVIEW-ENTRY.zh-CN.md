@@ -6,6 +6,8 @@ translation_status: source
 [English](REVIEW-ENTRY.md)
 # A2 D1–D10 作者候选复核入口——完整 D10 交回
 
+最新设计工作转到 [Typst 协调候选](../typst-native/README.zh-CN.md)，按新候选的固定提交与影响范围安排独立复核。本页保留原对象的历史审查次序；它不是启动新 Pro 对话的指令，原有通过和未完成范围也不自动转移到新格式。
+
 本分支的新作者源与使用流程以 [修订入口](REVISION.zh-CN.md)、[AUTHORING](AUTHORING.zh-CN.md) 、[EXPERIENCE](EXPERIENCE.zh-CN.md) 和 [LINKS](LINKS.zh-CN.md) 为准。其具名替代涉及原生控制身份/类型、原生业务属性、RegistrySnapshot2、Profile2/Binding2、链接形式转换及直接消费者；其它条款保留。本修订及原 21 项问题的有界复核状态统一见修订入口；完整全局复核尚未结束，仍为未实现的设计候选。
 
 fixed8d7 非作者完整 D9 有界审查已 ACCEPT 0P0/0P1/0P2、必要阅读 gap=0，并独立 CLOSED D9-6012-P1-01/P2-01；更早 fixed6012/fixed466b 及其它所有 bounded CLOSED 维持。此结论绝不接受 D10 或全球 A2。完整 D10 九组双语作者候选已整合，状态仅 author-resolved-pending-independent-review，全部产品测试 UNRUN。下一步先完整 D10 非作者，再全新 Pro 完整 A2 独立审查。
