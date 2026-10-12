@@ -15,8 +15,8 @@ Weftext 的新笔记使用 Typst 作为唯一主格式，复用官方 Rust parse
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [REQUIREMENTS](REQUIREMENTS.zh-CN.md) | 25 组需求、五项导航/列表细化、原 21 项损害映射，以及可替换技术的边界 |
-| [SOURCE](SOURCE.zh-CN.md) | 原生元数据、身份/类型声明、简化字段与 schema |
+| [REQUIREMENTS](REQUIREMENTS.zh-CN.md) | 25 组需求、五项导航/列表细化、全类型结构化能力澄清、原 21 项损害映射，以及可替换技术的边界 |
+| [SOURCE](SOURCE.zh-CN.md) | 原生元数据、身份/类型声明、字段与 schema 的前轮候选；精简范围按 REQUIREMENTS §5.2 重审 |
 | [CORE](CORE.zh-CN.md) | `.typ` 存储、版本与环境、权限、同步、事务与恢复 |
 | [EDITOR](EDITOR.zh-CN.md) | 流式阅读、富编辑/源码、普通表格、映射、批注、无障碍 |
 | [FEATURES](FEATURES.zh-CN.md) | 链接各形式、潜在提示、Query/任务/视图、模板与输出 |
@@ -49,7 +49,7 @@ Weftext 的新笔记使用 Typst 作为唯一主格式，复用官方 Rust parse
 
 这是标准 Typst `metadata`、dictionary、array、label 与正文语法；`id`、`types` 和业务键是应用含义，不是另一门语法。完整根声明资格、位置、重复/遮蔽、错误修复及 schema 规则见 SOURCE。声明中的 UUID 仍不证明出生、权限或真实当前版本。
 
-人员/组织保留常见联系字段、多个号码/邮箱和可选备注；默认取消逐值事实 UUID、复杂限定信息、置信度与自动逆向关系体系。任务详情写正文，属性写原生值，表格/看板/日历共享同一任务。新笔记无需 YAML front matter、嵌入 JSON 属性块或私有双链标记。独立批注、配置与内部协议仍可使用 JSON。
+上述联系人是简单示例，不是人员或其他类型的字段上限。按 [REQUIREMENTS §5.2](REQUIREMENTS.zh-CN.md#52-所有笔记类型的结构化能力)，此前因 AsciiDoc 属性承载不便而删去的能力回到需求核对范围；人员、组织、任务、论文等均可按实际需求采用多值、嵌套和关系。常用界面保持简洁，必要机制重新论证，具体 schema 在技术重写中落实；SOURCE §7/§9 的旧精简处置不再限定产品范围。任务详情写正文，属性写原生值，表格/看板/日历共享同一任务。新笔记无需 YAML front matter、嵌入 JSON 属性块或私有双链标记。独立批注、配置与内部协议仍可使用 JSON。
 
 ## 3. 原生优先的边界
 

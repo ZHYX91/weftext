@@ -16,8 +16,8 @@ New Weftext notes use Typst as their sole primary format, reusing the official R
 
 | Document | Responsibility |
 | --- | --- |
-| [REQUIREMENTS](REQUIREMENTS.md) | 25 requirement groups, five navigation/list elaborations, original-21 harm mapping and the boundary of replaceable technology |
-| [SOURCE](SOURCE.md) | Native metadata, identity/type declarations, simplified fields and schema |
+| [REQUIREMENTS](REQUIREMENTS.md) | 25 requirement groups, five navigation/list elaborations, structured-capability clarification for all types, original-21 harm mapping and the boundary of replaceable technology |
+| [SOURCE](SOURCE.md) | Prior candidate for native metadata, identity/type declarations, fields and schema; reassess reduced scope under REQUIREMENTS §5.2 |
 | [CORE](CORE.md) | `.typ` storage, versions/environment, authorization, synchronization, transactions and recovery |
 | [EDITOR](EDITOR.md) | Flowing reading, rich/source editing, ordinary tables, maps, annotations and accessibility |
 | [FEATURES](FEATURES.md) | Link forms, potential suggestions, Query/tasks/views, templates and output |
@@ -50,7 +50,7 @@ Contact on weekdays. Write other details in the body.
 
 This is standard Typst `metadata`, dictionary, array, label and body syntax. The meanings of `id`, `types` and business keys are application semantics, not another grammar. SOURCE defines complete root qualification, placement, duplication/shadowing, repair and schema rules. A declared UUID still proves neither birth nor authorization nor a current version.
 
-People/Organizations retain ordinary contact fields, multiple phones/emails and optional notes; per-value fact UUIDs, elaborate qualifiers, confidence and automatic inverse-relation machinery leave default scope. Task details live in the body, properties use native values, and table/board/calendar views share one task. New notes require no YAML front matter, embedded JSON attribute blocks or private backlink notation. Independent annotations, configuration and internal protocols may still use JSON.
+The contact example is intentionally simple, not a field ceiling for people or other types. Under [REQUIREMENTS §5.2](REQUIREMENTS.md#52-structured-capabilities-for-all-note-types), capabilities removed because native AsciiDoc attributes were inconvenient return to requirements cross-checking. People, organizations, tasks, papers and other types may use multiple values, nesting and relations according to actual needs. Keep common interfaces simple, justify necessary mechanisms anew and complete schemas during the technical rewrite; SOURCE §7/§9's earlier reduction no longer limits product scope. Task details live in the body, properties use native values, and table/board/calendar views share one task. New notes require no YAML front matter, embedded JSON attribute blocks or private backlink notation. Independent annotations, configuration and internal protocols may still use JSON.
 
 ## 3. Native-first boundaries
 
