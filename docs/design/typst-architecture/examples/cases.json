@@ -28,5 +28,57 @@
   "query": "saved-query.typ carries one immutable schema baseline plus author text; cold symbol-binding checks are design-only and do not run CEL",
   "root": "root-dynamic-body.typ has a direct static root and legal dynamic body/generated metadata; only the direct root is application authority; official compile is not role checker implementation",
   "citations": "citation.typ explicit entries(key,work) plus native @/cite and supplied generated Bib compile; citation-label-collision.typ must fail ambiguity; heading-reference.typ is not a Work citation",
-  "remaining": "Actual schema installation, provider implementation, AST role qualification, Core authorization/fences and Query/Office consumers are not tested."
+  "remaining": "Actual schema installation, provider implementation, AST role qualification, Core authorization/fences and Query/Office consumers are not tested.",
+  "validity_and_optional_members": [
+    {
+      "id": "DUR01",
+      "input": "bounded ordered dates; before/start/inside/end/after",
+      "expected": "false/true/true/true/false"
+    },
+    {
+      "id": "DUR02",
+      "input": "only start, only end, empty record or absent whole During",
+      "expected": "unavailable"
+    },
+    {
+      "id": "DUR03",
+      "input": "start=date, end=none; point before/at/after start",
+      "expected": "false/true/true"
+    },
+    {
+      "id": "DUR04",
+      "input": "start=none, end=date; point before/at/after end",
+      "expected": "true/true/false"
+    },
+    {
+      "id": "DUR05",
+      "input": "start=none, end=none",
+      "expected": "true for valid date/instant point; invalid point stays invalid"
+    },
+    {
+      "id": "DUR06",
+      "input": "mixed domains, reversed bounds, wrong-domain point",
+      "expected": "invalid; equal bounded ends admit exact point"
+    },
+    {
+      "id": "DUR07",
+      "input": "unavailable/unauthorized input or required provider missing",
+      "expected": "unavailable without extra disclosure"
+    },
+    {
+      "id": "DUR08",
+      "input": "clear form input vs explicitly choose no starting bound/ongoing",
+      "expected": "absent vs native none, preserved on round-trip"
+    },
+    {
+      "id": "DUR09",
+      "input": "Range with one absent endpoint vs empty/none endpoint",
+      "expected": "valid open half-range vs invalid, separate from During"
+    },
+    {
+      "id": "QOPT01",
+      "input": "work-labelled plus unlabelled phone, then all-unlabelled/empty phones",
+      "expected": "guarded select only returns work item, no absent-label issue; all-unlabelled/empty do not match"
+    }
+  ]
 }

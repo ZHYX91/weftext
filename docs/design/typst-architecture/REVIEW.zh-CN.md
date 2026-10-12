@@ -54,21 +54,30 @@ translation_status: source
 
 | 独立发现 | 具体损害与修订责任 | 当前处置 |
 | --- | --- | --- |
-| C-P1-01 | 只保护 source 目录仍可把它移入被替换的 target parent；CORE 须给真实祖先/父对象保护闭包及 same-handle 操作 | 已整合作者修订，待独立复核 |
-| C-P1-02 | 同用户 private staging 不隔离外部 writer，已枚举集合不排除新 child；CORE 须给正常 copy/purge 的可落实算法并保未知新增 | 已整合作者修订，待独立复核 |
-| C-P1-03 | Field-only 资格缺生产算法，未改隐藏字段的合法性可能决定公开写结果；SOURCE/CORE 须明确静态依赖、公开资格和获权局部校验 | 已整合作者修订，待独立复核 |
-| P1-REQ-01 | 闭合 schema 无法登记声称已选的关系和 Event 跨字段规则；SOURCE 负责可安装定义、签名、目标域与各消费者 | 已整合作者修订，待独立复核 |
-| P1-REQ-02 | 保存 Query 只有短名/CEL，清索引后无法恢复原 Field/Type 绑定；SOURCE/FEATURES/CORE 负责持久解析基准与迁移 | 已整合作者修订，待独立复核 |
-| FRESH-FEATURES-P1-01 | 同事务 A10/B0→A0/B10 可混读成20，分页可能重漏；CORE/FEATURES 负责共同读取快照与冻结结果顺序 | 已整合作者修订，待独立复核 |
-| P1-EDITOR-01 | 稳定执行 trace 包含测量后丢弃内容及重复布局；EDITOR 负责最终消费选择机制和必要反例证据 | 最终 Html 路线及有限原型已整合，待独立复核 |
-| P2-REQ-01 | 原生 citation key 没有稳定论文 NodeRef 的可重建来源，改 key/碰撞后可漂移；SOURCE/FEATURES 负责持久引用输入 | 已整合作者修订，待独立复核 |
-| P2-REQ-02 | 独立可写 birthday 与带来源 birth event 形成两份事实；SOURCE/FEATURES 负责单一作者数据和简洁表单入口 | 已整合作者修订，待独立复核 |
-| FRESH-FEATURES-P2-01 | 先 EXDATE 再 replacement 可能吞掉已明确改期；SOURCE/FEATURES 负责逐原发生键决策与窗口一致性 | 已整合作者修订，待独立复核 |
-| FRESH-FEATURES-P2-02 / P2-EDITOR-03 | 英文普通批注读取误交 sourcePreimage，可能泄漏私有 URI；FEATURES 同步为获权 stored visibleExcerpt | 已整合作者修订，待独立复核 |
-| P2-EDITOR-02 | 原型 runner 只遍历带 elem 对象，深度截断哨兵漏检；诊断完整性须检查全部容器 | 已修 runner：原 11 份 trace 无截断，reviewer 的真实深层 trace 被新 oracle 拒绝；未重新编译，待独立复核 |
+| C-P1-01 | 只保护 source 目录仍可把它移入被替换的 target parent；CORE 须给真实祖先/父对象保护闭包及 same-handle 操作 | c53af36 已在该发现范围内独立设计 CLOSED |
+| C-P1-02 | 同用户 private staging 不隔离外部 writer，已枚举集合不排除新 child；CORE 须给正常 copy/purge 的可落实算法并保未知新增 | c53af36 已在该发现范围内独立设计 CLOSED |
+| C-P1-03 | Field-only 资格缺生产算法，未改隐藏字段的合法性可能决定公开写结果；SOURCE/CORE 须明确静态依赖、公开资格和获权局部校验 | c53af36 已在该发现范围内独立设计 CLOSED |
+| P1-REQ-01 | 闭合 schema 无法登记声称已选的关系和 Event 跨字段规则；SOURCE 负责可安装定义、签名、目标域与各消费者 | c53af36 已在该发现范围内独立设计 CLOSED |
+| P1-REQ-02 | 保存 Query 只有短名/CEL，清索引后无法恢复原 Field/Type 绑定；SOURCE/FEATURES/CORE 负责持久解析基准与迁移 | c53af36 已在该发现范围内独立设计 CLOSED |
+| FRESH-FEATURES-P1-01 | 同事务 A10/B0→A0/B10 可混读成20，分页可能重漏；CORE/FEATURES 负责共同读取快照与冻结结果顺序 | c53af36 已在该发现范围内独立设计 CLOSED |
+| P1-EDITOR-01 | 稳定执行 trace 包含测量后丢弃内容及重复布局；EDITOR 负责最终消费选择机制和必要反例证据 | c53af36 最终 Html 路线和有限证据已独立设计 CLOSED |
+| P2-REQ-01 | 原生 citation key 没有稳定论文 NodeRef 的可重建来源，改 key/碰撞后可漂移；SOURCE/FEATURES 负责持久引用输入 | c53af36 已在该发现范围内独立设计 CLOSED |
+| P2-REQ-02 | 独立可写 birthday 与带来源 birth event 形成两份事实；SOURCE/FEATURES 负责单一作者数据和简洁表单入口 | c53af36 已在该发现范围内独立设计 CLOSED |
+| FRESH-FEATURES-P2-01 | 先 EXDATE 再 replacement 可能吞掉已明确改期；SOURCE/FEATURES 负责逐原发生键决策与窗口一致性 | c53af36 已在该发现范围内独立设计 CLOSED |
+| FRESH-FEATURES-P2-02 / P2-EDITOR-03 | 英文普通批注读取误交 sourcePreimage，可能泄漏私有 URI；FEATURES 同步为获权 stored visibleExcerpt | c53af36 已在该发现范围内独立设计 CLOSED |
+| P2-EDITOR-02 | 原型 runner 只遍历带 elem 对象，深度截断哨兵漏检；诊断完整性须检查全部容器 | c53af36 已独立设计 CLOSED：原 11 份 trace 无截断，真实深层 trace 被新 oracle 拒绝 |
 
-编辑 reviewer 独立重跑原 11 例及 9 个新反例，保留无副作用的有限等值结果，同时真实复现 discarded measure、table 重复和深层截断漏检。其它报告的合同反例不冒称产品运行结果。修复将形成一个协调的新固定候选，按实际差分及受影响依赖独立复核，再由新的 Pro 对话全局审查；目前尚未派发该终审，也未接受修订。
+四份后续独立报告均绑定 `c53af36afc674b16dfcde1acbc95c839c37d1348`，对照前一候选，在实际审查范围内关闭上述 12 项去重后的原发现，不将通过外推到未审合同。Core 和编辑报告无新增问题；需求和功能报告合计 4 项新的 P2，无新增 P0/P1。完整报告已收取阅读。Core 独立重跑公开 namespace/common-cut 脚本；编辑独立重跑公开 16 例、额外 7 个输入及真实深层 trace 的 oracle。这些是有限可行性证据，不是产品验收。
 
-当前修订还纳入用户确认的需求 §5.4：纯源码、渲染并始终显示语法、按需显示语法、隐藏语法并通过界面编辑、只读阅读。原固定候选的评审未覆盖这次澄清；新候选须独立检查共享 Draft/Undo、切换不改源、IME/焦点及不支持构造的保源处理。五档不是字号预设，也不是五种持久格式。
+| 新发现 | 协调修订 | 当前处置 |
+| --- | --- | --- |
+| P2-C53-REQ-01 | FEATURES 引用实际已登记 temporal/range，不增加虚构别名。 | 作者已修订，待固定差量独立复核 |
+| P2-C53-REQ-02 | 两版 paper 样例补 CalendarDate 必需 version。 | 作者已修订，待固定差量独立复核 |
+| P2-C53-REQ-03 | 保存 Query 的 select 对可选电话 label 加 guard；QOPT01 覆盖有/无 label 混合数据。 | 作者已修订，待固定差量独立复核 |
+| C53-FEATURES-P2-01 | SOURCE、FEATURES、schema 区分 During 缺端未知与原生 none 明示无界；DUR01–09 覆盖表单/provider/Query，保留 Range 独立规则。 | 作者已修订，待固定差量独立复核 |
+
+需求和编辑 reviewer 已在 c53 独立确认五档：纯源码、渲染并始终显示语法、按需显示语法、隐藏语法并通过界面编辑、只读阅读。共享 Draft/Undo、切换不改源、IME/焦点和不支持构造的明确源码入口均保留；此处接受需求的设计保全，不代表五档已实现。
+
+四项 P2 修订须绑定下一固定候选独立复核；未改 Core/编辑的有限关闭仍绑定 c53 及实际未受影响合同。完成处置后由新 Pro 对话全局审查，目前尚未派发该终审，没有全局接受或产品已实现声明。
 
 评审记录必须写明准确提交、实际阅读范围、发现与证据，不以作者自检、编译成功或旧 CLOSED 自动关闭。检查器检查文档配对、链接和保护输入，不替代语义评审。仅在重大设计缺口已解决、关键选型已有足够证据且独立接受后，才能冻结重构基线；具体顺序见 [INTEGRATION](INTEGRATION.zh-CN.md)。

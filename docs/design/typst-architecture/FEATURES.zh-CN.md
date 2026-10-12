@@ -307,7 +307,7 @@ filter(phones,p => p.number == "13800138000")
 
 Calendar有三个已选资料类型：period-note、range-note、event；day/week/month/quarter/year是period种类，不是另五种身份。period字段明确series、calendar/rule、period key、zone及unique/many scope；路径/标题不定义key。period导航先以同一Query查准确 `(series,key,scope)`，partial不能宣布不存在；unique创建需Core同Plan验证完整负范围及并发约束，many允许多个独立笔记。
 
-range字段为 `(start,end_exclusive)`，date或instant半开区间，至少一端有界，开放端用明确缺端不填现在/最大日期。同型有界端点严格start<end；SOURCE的 `bounded_half_open_range` 具名约束负责本range准入。窗口重叠用 `start < window.end_exclusive && window.start < end_exclusive`，开放端按无界处理。`during(start,end)`是独立有效期间，不混作半开事件range；containsDate使用其明确闭合区间规则和未知状态。duration只派生，未定provider不伪造秒数；date单位/precision与instant精确elapsed seconds不同。event复用range，增加status、参与者及作者reminder-intent，不复制另一份时间事实；参与者Person/Org关系可反向派生，提醒意图资料保留而送达后置。
+range字段为 `(start,end_exclusive)`，date或instant半开区间，至少一端有界，开放端用明确缺端不填现在/最大日期。同型有界端点严格start<end；SOURCE的 `temporal/range` 具名约束负责本range准入。窗口重叠用 `start < window.end_exclusive && window.start < end_exclusive`，开放端按无界处理。`during(start,end)`是独立有效期间，不混作半开事件range；containsDate使用其明确闭合区间规则和未知状态。duration只派生，未定provider不伪造秒数；date单位/precision与instant精确elapsed seconds不同。event复用range，增加status、参与者及作者reminder-intent，不复制另一份时间事实；参与者Person/Org关系可反向派生，提醒意图资料保留而送达后置。
 
 recurrence按冻结calendar/zone/provider及source anchor的civil phase生成daily/weekly/monthly/yearly候选，应用interval与显式byMonth/byMonthDay/byWeekday/weekStart，count或inclusive until限制；不存在民用日期跳过，DST gap/fold按明确规则处理，不能host默认。定义B为合法base集合、R为rDates、E为exDates；先按精确原发生键对B∪R去重，然后对每键应用 **cancel > replace > EXDATE > template** 决策，绝不能先EXDATE删候选再试replace。replace可改range/title/status/note，不把改期时间变原发生身份。常规窗口与窗口外移入replacement使用下面同一决策函数，再按实际range过滤/排序；预算不足标partial，不漏移入却说complete。没有默认每次发生建Node；显式promote/adopt才创建。改series时预览已有exceptions的keep/remap/drop，不能静默丢旧例外。per-occurrence参与者/提醒覆盖若schema未选，保导入原件并报告unsupported，不冒全RFC兼容。
 
@@ -377,7 +377,7 @@ SOURCE修订schema包含七个已选base类型与paper扩展所需真实shape、
 
 | 函数/操作 | 必须完整实现的语义 |
 | --- | --- |
-| `containsDate(during,point)` | `during(start,end)`为闭合有效期间；point与已有端点同date或同instant。缺端为无界；未记录整个during是unknown，不变成永久有效。instant按精确UTC，date按明确calendar/precision；不补host zone。 |
+| `containsDate(during,point)` | 共用 SOURCE §5：during 两个成员都须存在，原生 none 明示该端无界，省略任一端/整个 during/空记录均为 unavailable。两界含端点且 start≤end，point 与非 none 端同 date 或同 instant；两端 none 也须验证 point。混域/倒序为 invalid，不可用值转 EvaluationIssue。instant 按精确 UTC，date 按明确 calendar/precision，不补 host zone；不借用 Range 的缺端规则。 |
 | `nextCivilDay(date)` | 指定calendar/provider的下一个民用日，溢出错误；只处理声明的完整day date，不将year/month/月日当已知年日。 |
 | `rangeOverlap(a,b)` / `rangeDuration(range)` | `range(start,end_exclusive)`半开且同域、至少一端有界；overlap使用§8.1；date duration是明确历法单位，instant用exact elapsed seconds。开放duration不可得，不填现在；缺calendar/provider停止，不产假值。 |
 | `periodBounds(period)` / `resolvePeriod(period,seriesPolicy,cut)` | 前者是installed calendar/temporal纯函数，检查kind/calendar/version/rule/key/zone/tzdb、ISO week-year，返回确定range。后者是Features/Core orchestration，用已获权slots的period结果+同cut Query查已有/negative range，不冒可以直接读库的pure provider。series/period/scope是实际唯一键，标题/目录不参与。 |
@@ -539,7 +539,7 @@ Typst不自动给每个块永久ID；可以给一个真实block加原生label，
       (agent: (text: "原生数据研究组"), roles: ("author",)),
     ),
     identifiers: ((scheme: "doi", value: "10.0000/example"),),
-    issued: (calendar: "gregorian", precision: "month", year: 2026, month: 9),
+    issued: (calendar: "gregorian", version: "proleptic-gregorian.v1", precision: "month", year: 2026, month: 9),
     publication_history: (
       (state: "accepted", during: (start: datetime(year: 2026, month: 7, day: 20))),
       (state: "published", during: (start: datetime(year: 2026, month: 9, day: 1))),

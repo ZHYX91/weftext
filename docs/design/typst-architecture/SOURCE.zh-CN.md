@@ -69,7 +69,7 @@ translation_status: source
 | quantity / money / range | 普通字典：精确 amount/value，显式 unit/currency 与可选精度/来源；不把无单位数字自动赋成本币。比较/换算须有具名单位服务，不隐式换算。 |
 | date / time / local_datetime | 官方 `datetime(...)` 对应日、时、民用本地日期时间；缺时区不补设备时区，不当 instant。实际日期经官方 constructor 校验。 |
 | instant | schema 声明 RFC3339 string，必须显式偏移或 Z，精确小数秒；禁止 unknown offset `-00:00`、闰秒和无偏移。保原偏移表达，排序归一到精确 UTC 值。 |
-| partial_date / temporal_range | 原生记录，显式 calendar/precision；年、年月、月日和起止范围不伪造缺失部分。birth事件未知年份用 `(month: 5, day: 12)`；范围省略端点表示未记载，none 只在显式 nullable 时代表未知。区间开闭、granularity 由 schema 声明。 |
+| partial_date / temporal_range | 原生记录，显式 calendar/precision；年、年月、月日和起止范围不伪造缺失部分。birth事件未知年份用 `(month: 5, day: 12)`；端点含义由具体类型声明：During 缺端为未知，显式 nullable 的 none 端为无界；Range 缺端为无界。不得用统一空值规则抹平这一区别。区间开闭、granularity 由 schema 声明。 |
 | zoned_civil / recurrence | 原生记录含 local_datetime、IANA zone、可选 disambiguation；时区数据库/版本、重复规则与 DST 歧义处理由时间服务提供。规则字典不是另一个可执行作者语言，不把月/年转换成整数秒。 |
 | node_ref / target_or_text | schema 指定的原生字符串或记录；只在该位置解码引用，不扫描像 URI 的普通文本。见 §4。 |
 | list / record / union | 原生数组和字典。union 必须原生域不相交，或有固定 discriminator 成员；禁止 first-match。未知字典成员保原文且单独标 unbound，不能假装已校验或使相邻已知成员消失。 |
@@ -134,7 +134,7 @@ Provider恰 `{id,family,implementation,data,exports,limits}`。implementation只
 | core/owned-resources | owner NodeRef、resource或列表/absent，以及Core已获权resource_metadata；参数owner_required为bool。avatar必须本owner，Work资源允许显式共享资源且不得冒其owner；缺当前获权资源证据unavailable。provider仅检已给Cell，不调用Core/文件IO。 |
 | temporal/month-day | MonthDay完整record；月1..12/真实月最大日，允许2月29日，无虚构年份。 |
 | temporal/calendar-date | CalendarDate完整record；精确选择已安装calendar key/version，对年/月/日精度检查实际成员与provider范围/闰月。缺低精度成员不补值。 |
-| temporal/during | start/end record；同date或同instant，已有两端start≤end；全缺允许存，但任何无法证明完整有效期间的当前性消费unavailable。 |
+| temporal/during | start/end 均可省略且 nullable；已填写的非 none 端必须同 date 或同 instant，有两界时 start≤end。允许保存未知端；none 明示该端无界，绝不把缺端补成 none。containsDate 按 §5 区分未知和无界。 |
 | temporal/range | start/end_exclusive record；至少一端有界，两端同域且start<end，半开。 |
 | temporal/period | period完整record；series_key命中冻结政策，calendar/zone版本、kind/rule与政策一致；provider解析key，合法性与界限由真实规则确认。 |
 | temporal/recurrence | recurrence完整record；frequency允许daily/weekly/monthly/yearly，interval≥1；weekStart已列码域；byMonth合法、byMonthDay为±1..±31且非0，Weekday ordinal±1..±5且非0；count≥1与until至多一项；rDates/exDates/exception onset不混date/instant，calendar/zone版本存在、fold earlier/later明确、gap=skip。selectors组合只选合法civil日期，不存在日期skip。 |
@@ -223,7 +223,7 @@ graph_projection只是呈现要求：parent/spouse/sibling为family，manager/me
 | Range | required range(start,end_exclusive)，date或instant、至少一端有界，两端同域且start<end | 开放端缺席，非none/现在/极值。半开overlap统一，duration派生。UI包含末日仅表示选择，写入准确exclusive端点。 |
 | Event | requires Range；event_status/recurrence/participants/reminders可选 | recurrence、range相关Type validator明示读两Field；不用同一个status key与Task冲突。participants使用RefTarget，目标Person/Org、不允许literal逃域。reminder是意图，不实现送达。 |
 
-每个记录仅按完整schema所列成员使用可选during/note/sources/selected，但不是另包Entry。avatar为可选Resource record(resource/role/note/sources/during)，Work publication.resources为同record有序数组，保逐资源来源与备注，不仅裸URI；资源元数据只由Core生产。Org sites为text记录，不偷换成address或website。during(start,end)是闭合有效期；至少一个端点未知或全缺仍表示范围未完全记载，containsDate返回unavailable，不能当永久有效。CalendarDate有calendar/version/precision/year及按精度的month/day、可选leap_month；精度年/月不补日。非Gregorian也用此shape，由批准calendar provider验证范围；未安装provider/data不可用而不是Gregorian回退。精确金额/量值优先native decimal，超范围exact_decimal文本；量纲不隐式换算。
+每个记录仅按完整schema所列成员使用可选during/note/sources/selected，但不是另包Entry。avatar为可选Resource record(resource/role/note/sources/during)，Work publication.resources为同record有序数组，保逐资源来源与备注，不仅裸URI；资源元数据只由Core生产。Org sites为text记录，不偷换成address或website。during(start,end) 对有界端使用闭合有效期。省略 start/end 成员表示未记载/未知；明确填写原生 none 才表示该端无界（start 为负无穷，end 为正无穷）。整个 during 缺失、空记录或任一端缺失时，containsDate 均返回 unavailable，不能当永久有效；该规则不以另一端可比较而猜 false。两端都存在且合法后，containsDate 以 `(start is none or start≤point) && (end is none or point≤end)` 判断。非 none 端点必须同 date 或同 instant，point 必须是同域合法值；两端都是 none 时仍须验证 point，再返回 true。非同域/倒序为 invalid，缺获权值或 provider 为 unavailable；不补当前时间、host zone 或极值。表单分别提供“未记载”“无起点/持续中”和具体日期/时刻，只有用户明确选择无界才写 none；清空输入恢复缺端。此语义供全部 During 消费者共用，不新加状态字段或包装层；半开 Range 仍按自身缺端为无界且至少一端有界的规则。CalendarDate有calendar/version/precision/year及按精度的month/day、可选leap_month；精度年/月不补日。非Gregorian也用此shape，由批准calendar provider验证范围；未安装provider/data不可用而不是Gregorian回退。精确金额/量值优先native decimal，超范围exact_decimal文本；量纲不隐式换算。
 
 简洁生日面板读取明确所选life_events中kind=birth项，修改就写这一真实项的event_time，不写birthday镜像。无项可明确添一项MonthDay；多项冲突必须选具体项/明确追加，不last-wins。只有年/月精度时显示该精度，不为日历虚造月日；来源、冲突与selected选择在同事件保留。names只用preferred按角色/语言作名称选择，通用selected不成为第二个preferred权威。
 
@@ -295,6 +295,25 @@ opaque FieldBasis的公开CAS比较获权Field前像、获权约束及已公开p
 | 精确值 | int/decimal/partial date/offset instant编辑查询导出一致 | bool≠int，float不冒金额，时间不补本机时区，none≠缺席 |
 | 安全写 | 当前一次性依据+唯一范围+回读+事务+同Draft/Undo | ABA/迟到/重排/撤权失效；不能隐藏body侧信道放行 |
 | 完整源 | import/function/computed/复杂表格保源，可读复杂只读内容 | 控件不足不拒完整语法，资源失败不伪装语言非法 |
+
+### 7.1 有效期间与可选成员设计验收
+
+以下编号是设计要求，未运行 provider/CEL/UI 产品测试。D 表示合法 date，I 表示精确 instant；除行内明确说明外，输入均已获权且所需 provider 存在。
+
+| ID | 输入/动作 | 必须结果 |
+| --- | --- | --- |
+| DUR01 | 两个有界且有序 D 端点；point 在起点前/起点/内部/终点/终点后 | false/true/true/true/false，两端均包含。 |
+| DUR02 | 仅 start、仅 end、空记录或整个 during 缺失 | 一律 unavailable，不推断当前有效或零匹配。 |
+| DUR03 | start=D、end=none；point 在 D 前/等于 D/之后 | false/true/true；明确持续中，不是结束时间未知。 |
+| DUR04 | start=none、end=D；point 在 D 前/等于 D/之后 | true/true/false。 |
+| DUR05 | 两端都是 none | 任意合法 D 或 I 返回 true；非法值/非 date/非 instant point 为 invalid。 |
+| DUR06 | D/I 混域、端点倒序或 point 域不符 | invalid；两个有界端点相等时仅包含该点。 |
+| DUR07 | 输入不可用/未获权或所需 provider 缺失 | unavailable，不变 false/true，不额外披露源。 |
+| DUR08 | 清空表单输入与明确选择无起点/持续中 | 清空省略成员，明确无界写 none，往返保留两者差异。 |
+| DUR09 | Range 省略一个端点；Range 为空或端点为 none | 前者是合法开放半区间；空记录/none 端点 invalid，不把 During 规则带入 Range。 |
+| QOPT01 | 一项 work 电话及一项无 label 电话运行保存的 Query | where 选中笔记，带 guard 的 select 按原序只保 work 项，不产生缺 label 的 EvaluationIssue；全部无 label 或空电话数组不匹配。 |
+
+原生 person/query 样例只验证相应源码写法。[cases.json](examples/cases.json) 记录语义 oracle，编译成功不证明这些语义已经实现。
 
 设计检查记录 [design-checks.json](examples/design-checks.json)，执行脚本 [validate_repair.py](examples/validate_repair.py) 只校验闭合/引用/路径/[builtin-abi.design.json](examples/builtin-abi.design.json)固定ABI设计参考（运行时必须核受信Rust registry，不能信配置自报）及有限业务oracle，不是Rust安装器。Query cold基准测试用人工symbol列表，不是CEL解析器；calendar测试仅Gregorian与有限synthetic pack。
 

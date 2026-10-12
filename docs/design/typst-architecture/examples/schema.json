@@ -321,7 +321,7 @@
             "name": "DateOrInstant"
           },
           "required": false,
-          "nullable": false
+          "nullable": true
         },
         "end": {
           "shape": {
@@ -329,7 +329,7 @@
             "name": "DateOrInstant"
           },
           "required": false,
-          "nullable": false
+          "nullable": true
         }
       },
       "unknown": "preserve",
