@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 链接、Query、模板与输出
 
-状态：**协调设计候选，未实现、未独立接受**。输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`，作者分支 `design/typst-native-20261012`。本文拥有新格式的链接地址与转换、潜在链接、Query 作者承载、模板及导入/导出消费边界；[SOURCE](SOURCE.zh-CN.md) 拥有语言/数据来源，[EDITOR](EDITOR.zh-CN.md) 拥有 Draft/交互，[CORE](CORE.zh-CN.md) 拥有身份、权限、事务、闭合适配与历史分派。所有验收均为设计 oracle，产品 UNRUN。
+状态：**本轮协调设计已完成独立 Sol 复核，未实现、未全局接受**。输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`，作者分支 `design/typst-native-20261012`。本文拥有新格式的链接地址与转换、潜在链接、Query 作者承载、模板及导入/导出消费边界；[SOURCE](SOURCE.zh-CN.md) 拥有语言/数据来源，[EDITOR](EDITOR.zh-CN.md) 拥有 Draft/交互，[CORE](CORE.zh-CN.md) 拥有身份、权限、事务、闭合适配与历史分派。所有验收均为设计 oracle，产品 UNRUN。
 
 ## 1. 一份作者源与应用职责
 

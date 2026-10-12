@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst links, Query, templates and output
 
-Status: **coordinated design candidate, not implemented or independently accepted**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. This document owns addresses and conversion, potential links, Query author carriers, templates and import/export consumption for the new format. [SOURCE](SOURCE.md) owns language/data origins, [EDITOR](EDITOR.md) owns Draft/interaction, and [CORE](CORE.md) owns identity, authorization, transactions, closed adapters and historical dispatch. All acceptance cases are design oracles; product execution is UNRUN.
+Status: **this coordinated design revision completed independent Sol review; neither implemented nor globally accepted**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. This document owns addresses and conversion, potential links, Query author carriers, templates and import/export consumption for the new format. [SOURCE](SOURCE.md) owns language/data origins, [EDITOR](EDITOR.md) owns Draft/interaction, and [CORE](CORE.md) owns identity, authorization, transactions, closed adapters and historical dispatch. All acceptance cases are design oracles; product execution is UNRUN.
 
 ## 1. One author source and application responsibilities
 

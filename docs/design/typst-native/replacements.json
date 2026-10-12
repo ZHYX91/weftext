@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "candidate-independent-review-pending",
+  "status": "typst-revision-independent-sol-review-complete",
   "input_commit": "af6737a057c7bb69763dfaad0a57da4652e085f3",
   "target_profile": "weftext.typst.v1",
   "protected_inputs": "unchanged",
@@ -1057,7 +1057,7 @@
     {
       "id": "A2-GLOBAL-6B13-P1-01",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Whole-copy identity and Query materialization",
       "candidate_oracle": "Native source construction replaces H/Q framing; retain one map, two-pass validation, complete preview and one commit.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1066,7 +1066,7 @@
     {
       "id": "A2-GLOBAL-6B13-P1-02",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Presentation commit, sync and recovery",
       "candidate_oracle": "Run-in presentation uses native show source; retire the independent presentation-policy effect in the new candidate, retaining original-version recovery of genuine records.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1075,7 +1075,7 @@
     {
       "id": "A2-GLOBAL-6B13-P1-03",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Complete heading levels",
       "candidate_oracle": "Native title/heading replaces AsciiDoc book/part0; retain deep headings and all direct consumers without a six-level clamp.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1084,7 +1084,7 @@
     {
       "id": "A2-GLOBAL-6B13-P1-04",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Complete projection and unaddressable heading queries",
       "candidate_oracle": "Separate native evaluation occurrences from writable addresses; legal headings without locators still enter Query.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1093,7 +1093,7 @@
     {
       "id": "A2-GLOBAL-6B13-P1-05",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Explicit Trash search",
       "candidate_oracle": "Retain authorized read-only qualification, coverage and fresh reads; no promotion into strong writable collections.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1102,7 +1102,7 @@
     {
       "id": "A2-GLOBAL-6B13-P1-06",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Saved-search contribution binding",
       "candidate_oracle": "Native values carry exact contribution ID/version/path; reopening never substitutes the ambient latest version.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1111,7 +1111,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-01",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Definition-transfer effect consistency",
       "candidate_oracle": "Replace language slots while actual effects, requests and previews use one exact version domain.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1120,7 +1120,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-02",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Genuine history and commit faults",
       "candidate_oracle": "Retain same-P atomicity, frozen original-operation bytes and post-commit transport without invented migrations.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1129,7 +1129,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-03",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Exact nested Frontier fields",
       "candidate_oracle": "Validate CommitDomain/Workspace inside actual heads; empty heads never erase outer qualification.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1138,7 +1138,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-04",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Complete terminology projection",
       "candidate_oracle": "Old terms retain their fixed generation; new named definitions/navigation do not pretend to rewrite the old lexicon.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1147,7 +1147,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-05",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Exact native numeric representation",
       "candidate_oracle": "Native int/float/decimal retain distinct domains; exact values and finite domains replace the Ruby Float oracle.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1156,7 +1156,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-06",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Complete legal tables",
       "candidate_oracle": "Use full native table semantics; control eligibility does not decide legal-source reading, saving or output.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1165,7 +1165,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-07",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Both genuine old CP2 recovery arms",
       "candidate_oracle": "Recover committed/restored with original closed fields/evidence, without inserting new document_format members.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1174,7 +1174,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-08",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Dual-trust bootstrap and continuation",
       "candidate_oracle": "Retain both declarations/proofs, same-decision activation and fault responsibility; source metadata owns no trust.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1183,7 +1183,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-09",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Mixed declarations and signature domains",
       "candidate_oracle": "Validate each recorded declaration in its own signature domain and retain actual evidence slots.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1192,7 +1192,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-10",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Source obligations and exact patches",
       "candidate_oracle": "Explicitly remove complex contact facts while retaining comments, unknown members, unselected bytes, exact preimages and recovery.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1201,7 +1201,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-11",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Audio/video interval annotations",
       "candidate_oracle": "Retain exact timebase/ticks/resource-region issuance, storage and consumption rather than whole-resource references.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1210,7 +1210,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-12",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Actual root-source fields",
       "candidate_oracle": "All consumers use one qualification/sourceObservation without nonexistent flattened aliases.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1219,7 +1219,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-13",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Annotation digests and hidden-target boundaries",
       "candidate_oracle": "A complete Annotation may expose its stored digest without extra hidden-target reads or recomputation.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1228,7 +1228,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-14",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "Complete symbolic initialization and sorting",
       "candidate_oracle": "Retain actual plans and mandatory initialization; freeze slots, materialize with one map, then sort by actual canonical keys.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1237,7 +1237,7 @@
     {
       "id": "A2-GLOBAL-6B13-P2-15",
       "predecessor_status": "CLOSED-in-fixed-predecessor-scope",
-      "typst_status": "pending-independent-review",
+      "typst_status": "disposition-independently-reviewed-in-this-revision",
       "concern": "One total order for effects",
       "candidate_oracle": "New run-in source edits use source-effect ordering; no new independent presentation effects, and no historical reordering.",
       "disposition_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
@@ -1245,5 +1245,21 @@
     }
   ],
   "runtime_migration_claim": false,
-  "product_tests": "UNRUN"
+  "product_tests": "UNRUN",
+  "review": {
+    "semantic_commit": "c6b9199de54178891ec2e9ff91616ff9fb0d0b59",
+    "scope": "This Typst revision and its direct consumers; not full historical global review or product acceptance",
+    "independent_scopes": [
+      "requirements",
+      "language-and-editor",
+      "protocols"
+    ],
+    "findings": {
+      "P1_closed": 2,
+      "P2_closed": 9,
+      "open_in_this_revision": 0
+    },
+    "evidence_owner": "docs/design/typst-native/REVIEW.zh-CN.md",
+    "product_tests": "UNRUN"
+  }
 }

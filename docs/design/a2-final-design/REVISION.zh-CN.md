@@ -7,7 +7,7 @@ translation_status: source
 
 # 作者源与使用流程修订入口
 
-后续主格式候选已改为 [Typst 原生优先](../typst-native/README.zh-CN.md)，协调规范及本轮独立复核状态由该入口管理。本页及所引 owner/机器登记继续记录下述固定 AsciiDoc 候选，未被整体改写为 Typst，也不向新方案转移有界通过或全局接受。后续新笔记作者设计以新候选的具名规则为准，产品实施与全局终审的边界另行保留。
+后续主格式候选已改为 [Typst 原生优先](../typst-native/README.zh-CN.md)，协调规范及本轮独立复核状态由该入口管理。本页及所引 owner/机器登记继续记录下述固定 AsciiDoc 候选，未被整体改写为 Typst，也不向新方案转移有界通过或全局接受。后续新笔记作者设计以新候选的具名规则为准，产品实施与全局终审的边界另行保留。 本轮 Typst 修订已完成独立 Sol 复核，准确范围与未完成的全局边界见新入口。
 
 状态：设计候选；本轮原生属性与链接增量在 `e703f9e7bb9908d8b6a322620b59b184d0f7bb5f` 完成独立有界复核，原全局审查仍未完成，不构成全局接受或实施启动。修订起点为 `6b13b03b8da3e9e3d14b8663e91442568c8917e0`，作者分支 `design/yaml-properties-ux-20261011`。新规范由 [AUTHORING](AUTHORING.zh-CN.md) 、[作者源集成](AUTHORING-INTEGRATION.zh-CN.md) 、[EXPERIENCE](EXPERIENCE.zh-CN.md) 和 [LINKS](LINKS.zh-CN.md) 自包含定义。其它模块只引用这些唯一 owner，不复制第二份配置/语法。
 

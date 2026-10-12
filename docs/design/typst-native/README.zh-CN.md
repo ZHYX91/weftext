@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 主格式协调设计候选
 
-状态：**设计修订与独立复核进行中，未实现，未全局接受**。固定输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支为 `design/typst-native-20261012`。当前审查与验证记录见 [REVIEW](REVIEW.zh-CN.md)。
+状态：**本轮 Typst 设计修订与独立 Sol 复核已完成；未实现，完整全局终审未完成**。固定输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支为 `design/typst-native-20261012`。当前审查与验证记录见 [REVIEW](REVIEW.zh-CN.md)。
 
 Weftext 的新笔记使用 Typst 作为唯一主格式，复用官方 Rust parser/compiler、原生语法和标准库。保留普通写作、流式阅读、富编辑、结构化属性、Query、链接、独立批注、模板及内网使用。选型不以旧实现或已有评审投入为约束，也不把产品缩减成源码加 PDF。
 

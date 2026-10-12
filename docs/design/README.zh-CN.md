@@ -7,7 +7,7 @@ translation_status: source
 
 # 目标设计与协作入口
 
-最新目标候选见 [Typst 主格式与原生优先](typst-native/README.zh-CN.md)：四个模块的协调规范与独立复核记录由该入口管理，产品尚未实现。下列 AsciiDoc 输入/候选及其评审状态保留原固定范围，不自动接受新的 Typst 设计。
+最新目标候选见 [Typst 主格式与原生优先](typst-native/README.zh-CN.md)：四个模块的协调规范与独立复核记录由该入口管理，产品尚未实现。下列 AsciiDoc 输入/候选及其评审状态保留原固定范围，不自动接受新的 Typst 设计。 本轮 Typst 修订已完成独立 Sol 复核，准确范围与未完成的全局边界见新入口。
 
 ## 状态与优先级
 

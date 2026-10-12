@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst primary-format coordinated candidate
 
-Status: **design revision and independent review in progress; unimplemented and not globally accepted**. Fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. [REVIEW](REVIEW.md) records current review and validation.
+Status: **this Typst design revision and independent Sol review are complete; unimplemented, with full global review incomplete**. Fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. [REVIEW](REVIEW.md) records current review and validation.
 
 New Weftext notes use Typst as their sole primary format, reusing the official Rust parser/compiler, native syntax and standard library. Ordinary writing, flowing reading, rich editing, structured properties, Query, links, independent annotations, templates and intranet use remain requirements. Prior implementation or review investment does not constrain the choice, nor does the choice reduce the product to source plus PDF.
 

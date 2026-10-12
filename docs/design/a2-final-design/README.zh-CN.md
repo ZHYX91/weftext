@@ -6,7 +6,7 @@ translation_status: source
 [English](README.md)
 # A2 最终设计整合候选
 
-后续主格式已改为 [Typst 协调候选](../typst-native/README.zh-CN.md)。本目录继续保留固定前代的正文、来源和审查记录；新候选明确替代的关切按新入口分派，其余通用义务按具名引用保留。下文“当前”均受此前代范围限定，不能据此恢复旧 AsciiDoc 作者格式或把旧通过状态转移给 Typst。
+后续主格式已改为 [Typst 协调候选](../typst-native/README.zh-CN.md)。本目录继续保留固定前代的正文、来源和审查记录；新候选明确替代的关切按新入口分派，其余通用义务按具名引用保留。下文“当前”均受此前代范围限定，不能据此恢复旧 AsciiDoc 作者格式或把旧通过状态转移给 Typst。 本轮 Typst 修订已完成独立 Sol 复核，准确范围与未完成的全局边界见新入口。
 
 本分支的新作者源与使用流程以 [修订入口](REVISION.zh-CN.md)、[AUTHORING](AUTHORING.zh-CN.md) 、[EXPERIENCE](EXPERIENCE.zh-CN.md) 和 [LINKS](LINKS.zh-CN.md) 为准。其具名替代涉及原生控制身份/类型、原生业务属性、RegistrySnapshot2、Profile2/Binding2、链接形式转换及直接消费者；其它条款保留。本修订及原 21 项问题的有界复核状态统一见修订入口；完整全局复核尚未结束，仍为未实现的设计候选。
 

@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 阅读、编辑与独立批注
 
-状态：**协调设计候选，未实现，未独立接受**。固定输入 `af6737a057c7bb69763dfaad0a57da4652e085f3`，作者分支 `design/typst-native-20261012`。本文拥有阅读/编辑行为、编辑资格及批注交互；[SOURCE](SOURCE.zh-CN.md) 拥有官方语义与来源投影，[CORE](CORE.zh-CN.md) 拥有闭合持有者、授权、事务及恢复，[FEATURES](FEATURES.zh-CN.md) §§2–4 唯一拥有地址、链接转换与潜在匹配算法。下列版本是新的 Typst family，不扩大旧 D8/AsciiDoc decoder。
+状态：**本轮协调设计已完成独立 Sol 复核，未实现、未全局接受**。固定输入 `af6737a057c7bb69763dfaad0a57da4652e085f3`，作者分支 `design/typst-native-20261012`。本文拥有阅读/编辑行为、编辑资格及批注交互；[SOURCE](SOURCE.zh-CN.md) 拥有官方语义与来源投影，[CORE](CORE.zh-CN.md) 拥有闭合持有者、授权、事务及恢复，[FEATURES](FEATURES.zh-CN.md) §§2–4 唯一拥有地址、链接转换与潜在匹配算法。下列版本是新的 Typst family，不扩大旧 D8/AsciiDoc decoder。
 
 ## 1. 作者源、工作面与状态
 

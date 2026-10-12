@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst Core: storage, identity, transactions and authorized compilation
 
-Status: coordinated author candidate; not independently accepted or implemented. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This defines a new target and does not claim that the old prototype has migrated. Product, conditional filesystem installation, synchronization, crash, cryptography, Server, performance, package isolation and UI acceptance are **UNRUN**. Protocol objects here are not objects authors must write manually.
+Status: this coordinated design revision completed independent Sol review; neither implemented nor globally accepted. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This defines a new target and does not claim that the old prototype has migrated. Product, conditional filesystem installation, synchronization, crash, cryptography, Server, performance, package isolation and UI acceptance are **UNRUN**. Protocol objects here are not objects authors must write manually.
 
 ## 1. One format and inventory
 

@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst author source and ordinary business properties
 
-Status: **coordinated design candidate; neither implemented nor independently accepted**. Fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. This document owns the root declaration, native values, schema and origin projection of `typst_source/1`. [CORE](CORE.md) owns storage/transactions; [EDITOR](EDITOR.md) owns presentation/editing; [FEATURES](FEATURES.md) owns links, Query, templates, annotations and outputs. These are named interfaces of one candidate, without combining old AsciiDoc decoders. Acceptance below describes design oracles, not passed product tests.
+Status: **this coordinated design revision completed independent Sol review; neither implemented nor globally accepted**. Fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; author branch: `design/typst-native-20261012`. This document owns the root declaration, native values, schema and origin projection of `typst_source/1`. [CORE](CORE.md) owns storage/transactions; [EDITOR](EDITOR.md) owns presentation/editing; [FEATURES](FEATURES.md) owns links, Query, templates, annotations and outputs. These are named interfaces of one candidate, without combining old AsciiDoc decoders. Acceptance below describes design oracles, not passed product tests.
 
 ## 1. One native source
 

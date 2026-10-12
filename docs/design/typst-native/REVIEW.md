@@ -8,7 +8,7 @@ translation_status: synced
 
 # Review and evidence for the Typst revision
 
-Status: **first independent review requires changes; delta review pending**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This document records actual status. The table is an author disposition requiring verification, not transferred acceptance or author self-approval.
+Status: **this Typst design revision and independent Sol review are complete**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. The reviewed design semantics are fixed at `c6b9199de54178891ec2e9ff91616ff9fb0d0b59`; subsequent changes only record status and evidence. Requirement review checked the original-finding dispositions individually, while corresponding non-authors checked directly affected protocols and interactions. Prior acceptance and product passes are not transferred.
 
 ## 1. Original-21 dispositions
 
@@ -42,21 +42,36 @@ All IDs have prefix `A2-GLOBAL-6B13-`. The 21 bounded CLOSED findings remain his
 
 After the four module authors produce specifications and challenge each other, non-authors separately inspect requirements/original-21, protocols/authorization, and language/interaction. Final verdicts bind a fixed commit; a changing checkout supports discussion, not a recorded pass. Repairs are rechecked against actual deltas and directly affected paths.
 
-The first fixed candidate is `f404b914642048404d84846714552d1818a4196f`. The three independent scopes—requirements, protocols, and language/interaction—all require changes. Duplicate findings are merged by repair object at the highest reported severity into these nine items. These identifiers belong only to this revision; historical findings are not renumbered.
+The first fixed candidate is `f404b914642048404d84846714552d1818a4196f`. The three independent scopes—requirements, protocols, and language/interaction—all required changes at that candidate. Duplicate findings are merged by repair object at the highest reported severity into these nine items. These identifiers belong only to this revision; historical findings are not renumbered.
 
 | ID | Severity | Repair object and independent review requirement | Current status |
 | --- | --- | --- | --- |
-| TR-01 | P1 | New Query types reach parameters, defaults, arguments, definition references and actual CEL typed slots. | Author repair complete; independent check pending |
-| TR-02 | P1 | Native equality encoding reaches distinct, grouping and result keys, preserving signed-zero and offset-independent instant equivalence. | Author repair complete; independent check pending |
-| TR-03 | P2 | Native none expresses legitimate schema-null slots without widening ordinary-value or Optional closed sets. | Author repair complete; independent check pending |
-| TR-04 | P2 | Schema evolution compares the binding derived from the predecessor snapshot, not objects with different shapes. | Author repair complete; independent check pending |
-| TR-05 | P2 | Rich editing has actual empty-body, first-text, math insertion and list conversion entries bound to exact origins and one Undo. | Author repair complete; independent check pending |
-| TR-06 | P2 | Authored links and compiled occurrences have complete distinct keys, producers and mappings, enabling complete offline-route coverage checks. | Author repair complete; independent check pending |
-| TR-07 | P2 | Annotation entries retain mandatory complete saves and strict write protection without restricting ordinary Documents. | Author repair complete; independent check pending |
-| TR-08 | P2 | The actual recurrence dependencyProof slot and ancestor consumers select the current protocol; genuine old records retain their decoder. | Author repair complete; independent check pending |
-| TR-09 | P2 | Template parameters, source-to-subject bindings, resource/loss choices and definition-transfer effects have complete independently decodable types. | Author repair complete; independent check pending |
+| TR-01 | P1 | New Query types reach parameters, defaults, arguments, definition references and actual CEL typed slots. | Independently CLOSED within this revision |
+| TR-02 | P1 | Native equality encoding reaches distinct, grouping and result keys, preserving signed-zero and offset-independent instant equivalence. | Independently CLOSED within this revision |
+| TR-03 | P2 | Native none expresses legitimate schema-null slots without widening ordinary-value or Optional closed sets. | Independently CLOSED within this revision |
+| TR-04 | P2 | Schema evolution compares the binding derived from the predecessor snapshot, not objects with different shapes. | Independently CLOSED within this revision |
+| TR-05 | P2 | Rich editing has actual empty-body, first-text, math insertion and list conversion entries bound to exact origins and one Undo. | Independently CLOSED within this revision |
+| TR-06 | P2 | Authored links and compiled occurrences have complete distinct keys, producers and mappings, enabling complete offline-route coverage checks. | Independently CLOSED within this revision |
+| TR-07 | P2 | Annotation entries retain mandatory complete saves and strict write protection without restricting ordinary Documents. | Independently CLOSED within this revision |
+| TR-08 | P2 | The actual recurrence dependencyProof slot and ancestor consumers select the current protocol; genuine old records retain their decoder. | Independently CLOSED within this revision |
+| TR-09 | P2 | Template parameters, source-to-subject bindings, resource/loss choices and definition-transfer effects have complete independently decodable types. | Independently CLOSED within this revision |
 
-No final PASS is recorded yet. “The author says it is resolved” never substitutes for independent evidence. Unfinished scope from the original Pro global review remains; this revision creates no implementation or release acceptance.
+The last protocol deltas found and repaired two further items, retaining their original identifiers and finding candidates:
+
+| ID | Severity | Repair object | Current status |
+| --- | --- | --- | --- |
+| PR618-01 | P2 | Complete request keys, unique results, post-materialization effect ordering and exact correspondence for repeated-source instances. | Independently CLOSED within this revision |
+| PRD5F-01 | P2 | New/mapped/existing Node results consume actual variant-specific receipt fields; preview versus commit and identity lookup versus change evidence remain separate. | Independently CLOSED within this revision |
+
+Four Sol module authors challenged each other, followed by three independent non-author reviewers and actual-delta rechecks. All 11 merged findings from this revision (2 P1, 9 P2) are independently closed. All three assigned scopes PASS, with no undisposed finding from this revision.
+
+| Independent scope | Fixed candidate and actual verdict |
+| --- | --- |
+| Requirements, original 21 findings and selected research capabilities | Requirement delta PASS at `618ae46d1aa30e1af89b0864d5eee79cde958fbf`; repeated-instance requirement impact PASS at `d5f154453dc01da22b111291f0eb23a3625bbc0a`. Protocol-variant residuals were closed in the scope below. |
+| Language, native values, rich editing and link occurrences | TR-01/02/03/05/06 and directly affected paths PASS at `618ae46d1aa30e1af89b0864d5eee79cde958fbf`; the final two deltas only changed template protocols and corresponding cases, not these paths. |
+| Types, authorization, sync/recovery and template protocols | Initial protocol gaps closed at `618ae46d1aa30e1af89b0864d5eee79cde958fbf`; PR618-01 closed at `d5f154453dc01da22b111291f0eb23a3625bbc0a`; PRD5F-01 closed at `c6b9199de54178891ec2e9ff91616ff9fb0d0b59`, with final protocol scope PASS. |
+
+This is bounded design acceptance for the Typst revision. Unchanged text retains earlier actual-reading evidence; the final two deltas checked only FEATURES §6, TF-24/25 and necessary original D3/Core consumers, without claiming repeated whole-repository reading. Unfinished original Pro global-review scope remains; no implementation or release acceptance is created.
 
 ## 3. Validation levels
 
@@ -67,10 +82,10 @@ No final PASS is recorded yet. “The author says it is resolved” never substi
 | Design counterexamples and cross-checks | Independent verdicts cite owners and cases | Normative connections and requirement dispositions within scope |
 | Product acceptance | UNRUN | No complete editor, authorization, synchronization, fault or cross-platform evidence yet |
 
-Actual mechanical results for the first fixed candidate: `scripts/check_docs.py` passed 395 public Markdown files; `scripts/check_design_inputs.py` and Git diff checks passed; fixed snapshots and inputs were unchanged. Official Typst 0.15.1 compiled 14 documentation examples and successfully evaluated root metadata in 12. These results did not close the semantic findings above.
+Actual mechanical results: `scripts/check_docs.py` passed 395 public Markdown files; `scripts/check_design_inputs.py` and Git diff checks passed; the fixed 49 snapshots and inputs were unchanged. Twenty per-file source-navigation groups and 104 design acceptance cases per language had no missing entries. Official Typst 0.15.1 compiled 18 documentation examples and successfully evaluated root metadata in 16 at `618ae46d1aa30e1af89b0864d5eee79cde958fbf`; the final two deltas did not change those examples. The initial 14 compilations/12 evaluations remain earlier evidence. Mechanical checks and native compilation did not replace independent semantic verdicts; all 104 product scenarios remain UNRUN.
 
 The existing research probe's 32 Rust checks, six local body-edit compilations and small browser examples remain research evidence, not product acceptance for this design. Experimental HTML, rich-edit mapping and the production flowing renderer remain explicit implementation delivery conditions.
 
 ## 4. Completion boundary
 
-This revision delivers coordinated native Typst design and independent Sol review. Fixed inputs remain unchanged; product implementation and Pro review do not restart automatically. Mark this revision complete only after all actual findings are disposed of and independently checked. This does not establish complete product delivery or all historical global-review scope.
+This revision delivers coordinated native Typst design and independent Sol review. Fixed inputs remain unchanged; product implementation and Pro review do not restart automatically. All actual findings from this revision have been disposed of and independently checked, so this design revision is complete. This does not establish complete product delivery or all historical global-review scope.

@@ -8,7 +8,7 @@ translation_status: synced
 
 # Integration and review of the Typst candidate
 
-Status: coordinated candidate under independent review; product unimplemented. Fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This document defines normative dispatch and cross-module acceptance without changing fixed sources, prior reports or actual historical records.
+Status: this coordinated design revision and independent Sol review are complete; product unimplemented and full global review incomplete. Fixed input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. This document defines normative dispatch and cross-module acceptance without changing fixed sources, prior reports or actual historical records.
 
 ## 1. One candidate with explicit ownership
 

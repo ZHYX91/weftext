@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst reading, editing and independent annotations
 
-Status: **coordinated design candidate; not implemented or independently accepted**. Fixed input `af6737a057c7bb69763dfaad0a57da4652e085f3`, author branch `design/typst-native-20261012`. This document owns reading/editing behavior, edit eligibility and annotation interaction. [SOURCE](SOURCE.md) owns official semantics and origin projections; [CORE](CORE.md) owns closed holders, authorization, transactions and recovery; [FEATURES](FEATURES.md) §§2–4 exclusively owns addresses, link conversion and potential-match algorithms. These versions are new Typst families, not extensions to old D8/AsciiDoc decoders.
+Status: **this coordinated design revision completed independent Sol review; neither implemented nor globally accepted**. Fixed input `af6737a057c7bb69763dfaad0a57da4652e085f3`, author branch `design/typst-native-20261012`. This document owns reading/editing behavior, edit eligibility and annotation interaction. [SOURCE](SOURCE.md) owns official semantics and origin projections; [CORE](CORE.md) owns closed holders, authorization, transactions and recovery; [FEATURES](FEATURES.md) §§2–4 exclusively owns addresses, link conversion and potential-match algorithms. These versions are new Typst families, not extensions to old D8/AsciiDoc decoders.
 
 ## 1. Author source, surfaces and state
 

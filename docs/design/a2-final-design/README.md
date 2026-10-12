@@ -7,7 +7,7 @@ translation_status: synced
 [简体中文](README.zh-CN.md)
 # A2 Final Design Integration Candidate
 
-The subsequent primary format is the [Typst coordinated candidate](../typst-native/README.md). This directory retains the fixed predecessor text, provenance and review records. Explicitly replaced concerns dispatch through the new entry; generic obligations are retained through named references. “Current” below is scoped to that predecessor and neither restores the old AsciiDoc author format nor transfers acceptance to Typst.
+The subsequent primary format is the [Typst coordinated candidate](../typst-native/README.md). This directory retains the fixed predecessor text, provenance and review records. Explicitly replaced concerns dispatch through the new entry; generic obligations are retained through named references. “Current” below is scoped to that predecessor and neither restores the old AsciiDoc author format nor transfers acceptance to Typst. This Typst revision completed independent Sol review; the new entry records its exact scope and unfinished global boundaries.
 
 The new authoring and workflow rules on this branch are owned by the [revision entry](REVISION.zh-CN.md), [AUTHORING](AUTHORING.zh-CN.md), [EXPERIENCE](EXPERIENCE.zh-CN.md) and [LINKS](LINKS.zh-CN.md). Their named replacements cover native control identity/types, native business attributes, RegistrySnapshot2, Profile2/Binding2, link-form conversion and direct consumers; other obligations remain. The revision entry owns the bounded review status of this revision and the original 21 findings. Full global review remains incomplete; this is an unimplemented design candidate.
 

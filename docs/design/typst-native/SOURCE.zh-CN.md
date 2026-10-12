@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 作者源与普通业务属性
 
-状态：**协调设计候选，未实现、未独立接受**。固定输入 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支 `design/typst-native-20261012`。本文拥有 `typst_source/1` 的根声明、原生值、schema 及来源投影。存储/事务由 [CORE](CORE.zh-CN.md) 拥有；显示/编辑由 [EDITOR](EDITOR.zh-CN.md) 拥有；链接、Query、模板、批注与输出由 [FEATURES](FEATURES.zh-CN.md) 拥有。它们是同一候选的具名接口，不拼接旧 AsciiDoc decoder。以下验收均为设计 oracle，不是产品测试通过。
+状态：**本轮协调设计已完成独立 Sol 复核，未实现、未全局接受**。固定输入 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支 `design/typst-native-20261012`。本文拥有 `typst_source/1` 的根声明、原生值、schema 及来源投影。存储/事务由 [CORE](CORE.zh-CN.md) 拥有；显示/编辑由 [EDITOR](EDITOR.zh-CN.md) 拥有；链接、Query、模板、批注与输出由 [FEATURES](FEATURES.zh-CN.md) 拥有。它们是同一候选的具名接口，不拼接旧 AsciiDoc decoder。以下验收均为设计 oracle，不是产品测试通过。
 
 ## 1. 一份原生源
 
