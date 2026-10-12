@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 主格式协调设计候选
 
-状态：**前轮 Typst 修订完成有界 Sol 复核；当前正按需求重新审视技术，未实现、未完成全局终审**。前轮固定输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支为 `design/typst-native-20261012`。先读 [需求与技术方案的边界](REQUIREMENTS.zh-CN.md)：用户需求保留，旧技术不因历史通过而必须继承。历史审查与验证记录见 [REVIEW](REVIEW.zh-CN.md)。
+状态：**需求与技术已分离，导航与列表需求已补齐，可开始技术重写；新架构未接受、产品未实现、全局终审未完成**。前轮固定输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支为 `design/typst-native-20261012`。先读 [需求与技术方案的边界](REQUIREMENTS.zh-CN.md)：用户需求保留，旧技术不因历史通过而必须继承。下列技术 owner 仍记录前轮候选，须在协调重写中替换；前轮有界 Sol 复核及验证见 [REVIEW](REVIEW.zh-CN.md)，不自动接受新增需求的实现。
 
 Weftext 的新笔记使用 Typst 作为唯一主格式，复用官方 Rust parser/compiler、原生语法和标准库。保留普通写作、流式阅读、富编辑、结构化属性、Query、链接、独立批注、模板及内网使用。选型不以旧实现或已有评审投入为约束，也不把产品缩减成源码加 PDF。
 
@@ -15,7 +15,7 @@ Weftext 的新笔记使用 Typst 作为唯一主格式，复用官方 Rust parse
 
 | 文档 | 负责内容 |
 | --- | --- |
-| [REQUIREMENTS](REQUIREMENTS.zh-CN.md) | 需求与可替换技术的边界、无历史技术负担的重新审视原则 |
+| [REQUIREMENTS](REQUIREMENTS.zh-CN.md) | 25 组需求、五项导航/列表细化、原 21 项损害映射，以及可替换技术的边界 |
 | [SOURCE](SOURCE.zh-CN.md) | 原生元数据、身份/类型声明、简化字段与 schema |
 | [CORE](CORE.zh-CN.md) | `.typ` 存储、版本与环境、权限、同步、事务与恢复 |
 | [EDITOR](EDITOR.zh-CN.md) | 流式阅读、富编辑/源码、普通表格、映射、批注、无障碍 |
