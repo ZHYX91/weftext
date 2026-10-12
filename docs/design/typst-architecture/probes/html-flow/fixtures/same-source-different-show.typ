@@ -1,0 +1,5 @@
+#let body = [sharedword]
+#block[#show "sharedword": [FirstShow]
+#body]
+#block[#show "sharedword": [SecondShow]
+#body]

@@ -24,7 +24,7 @@ These are design and implementation paths, **not executed product tests**. Origi
 
 | Requirements | Current owners | Required connected path |
 | --- | --- | --- |
-| RQ01–03 | SOURCE, EDITOR, CORE | Preserve full valid source → ordinary flowing reading → origin-qualified rich editing → one Draft/save; errors or ineligible controls do not discard source |
+| RQ01–03, §5.4 | SOURCE, EDITOR, CORE | Preserve full valid source → five presentation/editing views sharing Draft → ordinary flowing reading → origin-qualified rich editing → one Draft/save; errors or ineligible controls do not discard source |
 | RQ04–07 | EDITOR, FEATURES | Title/subtitle/section roles → same-level standalone/run-in numbering → outline/references → editable Word and accurate loss |
 | RQ08–10, §5.2 | SOURCE, FEATURES | Historically selected capabilities → native values/schema → forms/same-item Query → ordered, exact and explainable export |
 | RQ11 | SOURCE, EDITOR, CORE | Capture/properties → current draft → actual creation/update → Receipt; unknown does not create again |
@@ -37,7 +37,7 @@ These are design and implementation paths, **not executed product tests**. Origi
 
 Structured-capability checks cover the actual historical D4 types and selected behavior, not just three person/task examples. Richer bibliographic, calendar and task structures cannot be deleted because a table control is missing; real deferrals remain explicit. Common and optional advanced fields have layered UI rather than making every field mandatory.
 
-Library-style requirement §5.3 is owned by EDITOR §§8.1–8.5, CORE §9 and FEATURES §11: select an actual style resource, generate a transparent entry, preserve original note identity/source, follow native overrides and actual dependency invalidation, and distinguish an exact single file from an independent styled project. FEATURES §§9.1–9.6 define original annotation ranges, visible excerpts, paragraph labels and current/historical-reference boundaries.
+Library-style requirement §5.3 is owned by EDITOR §§8.1–8.5, CORE §9 and FEATURES §11: select an actual style resource, generate a transparent entry, preserve original note identity/source, follow native overrides and actual dependency invalidation, and distinguish an exact single file from an independent styled project. EDITOR §2.1 implements the five-view requirement in §5.4; three internal categories cannot replace five product experiences, and paged/continuous layout is separate. FEATURES §§9.1–9.6 define original annotation ranges, visible excerpts, paragraph labels and current/historical-reference boundaries.
 
 ## 3. Original 21 and later findings
 

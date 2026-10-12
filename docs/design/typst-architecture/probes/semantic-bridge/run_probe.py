@@ -18,6 +18,17 @@ def run(cmd,env=None):
  return p.stdout
 
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+def has_truncation(obj):
+ if isinstance(obj,dict):
+  return obj == {'truncated': True} or any(has_truncation(v) for v in obj.values())
+ if isinstance(obj,list):return any(has_truncation(v) for v in obj)
+ return False
+
+# The serializer emits a sentinel without an `elem` key. Check all containers,
+# including arrays and metadata, rather than only yielded content elements.
+assert has_truncation({'events':[{'payload':{'fields':[{'truncated':True}]}}]})
+assert not has_truncation({'events':[{'payload':{'elem':'text','fields':{'text':'complete'}}}]})
+
 def objects(obj):
  if isinstance(obj,dict):
   if 'elem' in obj:yield obj
@@ -69,7 +80,7 @@ for name in ['default','show-rewrite','show-remove','show-strip-strong','repeat-
  src=''.join(frame_text(frames['on']))
  result={'sample':name,'pdf_hashes':{m:digest(p) for m,p in paths.items()},'pdf_bytes_equal_all_three':len({digest(p) for p in paths.values()})==1,'world_requests_equal_ordered':resources['on']==resources['off'],'world_request_counts':{m:dict(collections.Counter(stage for stage,_ in v)) for m,v in resources.items()},'final_frames_equal':frames['on']==frames['off'],'frame_text_native_traversal':list(frame_text(frames['on'])),'heading_count':len(final['headings']),'heading_locations':[h['location'] for h in final['headings']],'metadata':final['metadata'],'rounds':[{'round':r['round'],'stable':r['stable'],'physical_counts':r['physical_counts'],'tracked_counts':dict(collections.Counter(e['stage'] for e in r['events']))} for r in rounds],'final_show_events':[e['payload'] for e in stable['events'] if e['stage']=='show_return' and e['payload']['input']['elem'] in ['heading','strong','context']],'evaluated_origin_counts':dict(collections.Counter(n['span'] for n in occurrences))}
  assert result['pdf_bytes_equal_all_three'],name
- assert not any(n.get('truncated') for n in objects(stable)),name
+ assert not has_truncation(stable),name
  assert result['world_requests_equal_ordered'],name
  assert result['final_frames_equal'],name
  counters=[row['number'] for m in final['metadata'] for row in m['fields'].get('value',[]) if isinstance(row,dict) and 'number' in row]

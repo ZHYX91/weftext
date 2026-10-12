@@ -136,6 +136,22 @@ Library defaults and note/local rules follow actual Typst scope and composition,
 
 Personal dark mode, reading zoom and assistive display settings are distinct from document styles and do not alter source or export. Export distinguishes an exact original file from a reproducible style-dependency bundle. The latter includes the exact entry point, styles and deliverable fonts/resources, with explicit missing-dependency results. Verify library defaults, note/local overrides, style revisions and external opening; an application preview is not output verification.
 
+### 5.4 Five views from source to reading
+
+On 2026-10-12 the user reconfirmed five views. The middle three render headings and similar constructs while displaying syntax, reveal syntax on demand, and hide syntax completely while allowing UI edits. Five views are a U requirement; controls and mapping mechanisms are D. They cannot be reduced to three product modes named source, write and read.
+
+| View | Required experience |
+| --- | --- |
+| V01 Source | Complete editable Typst source, with optional syntax highlighting; author markers remain visible. |
+| V02 Rendered with syntax | Recognizable rendered styling for headings, emphasis and similar constructs while author syntax stays visible and editable; more than colored plain text. |
+| V03 Syntax on demand | Normally show rendered content; reveal relevant source syntax when editing focus or an explicit action needs it. Other content stays rendered. Keyboard and touch can enter/leave without hover. |
+| V04 Syntax-hidden UI editing | Hide Typst syntax in the document surface; edit through input, menus, toolbars and structural controls. Constructs without reliable controls or origin maps remain intact and explicitly read-only, with an explicit switch to another view; never silently reveal code or damage complex source. |
+| V05 Read | Read-only body presentation without author syntax or body-editing controls; navigation, selection, copying and authorized independent annotations remain available. |
+
+All five share one author source, current Draft and undo history, not five documents. Switching neither saves nor changes source and creates no content-undo entry. Preserve recoverable caret, selection and reading position; distinguish Draft preview from committed content. Paged versus continuous layout is separate; PDF preview cannot stand in for one of the five views. Syntax visibility grants no permissions.
+
+Acceptance covers at least: the same heading/emphasis/link across all views; every author marker remaining visible in V02; keyboard/touch reveal and dismissal without lost input in V03; no syntax leakage and retained unsupported constructs in V04; no direct body editing in V05; transitions with unsaved Draft, selection, undo and IME; and invalid source or late projections never replacing newer input. These are requirements, not executed product tests.
+
 ## 6. Bringing the original 21 findings into the new design
 
 Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: **all still need validation against the new solution**, with no new closure claimed. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.

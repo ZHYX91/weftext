@@ -1,46 +1,108 @@
 {
-  "evidence": "Official CLI syntax experiment only; not schema, AST root authentication, authority, permissions, query product, visual QA or export validation.",
   "tool_version": "typst 0.15.1 (9dfd3a08)",
+  "evidence": "Official native-language compilation only. Semantic negatives intentionally compile. Node/config identities are fictitious and not Core-admitted. Citation Bib is supplied experiment output, not proof of Work lookup/resource generation.",
   "results": [
     {
-      "sample": "person",
-      "compile_exit": 0,
-      "query_exit": 0,
-      "compile_stderr": "",
-      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\person.typ` instead\n\n",
-      "query_result_file": "person.query.json"
+      "case": "person",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
     },
     {
-      "sample": "organization",
-      "compile_exit": 0,
-      "query_exit": 0,
-      "compile_stderr": "",
-      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\organization.typ` instead\n\n",
-      "query_result_file": "organization.query.json"
+      "case": "organization",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
     },
     {
-      "sample": "paper",
-      "compile_exit": 0,
-      "query_exit": 0,
-      "compile_stderr": "",
-      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\paper.typ` instead\n\n",
-      "query_result_file": "paper.query.json"
+      "case": "task",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
     },
     {
-      "sample": "task",
-      "compile_exit": 0,
-      "query_exit": 0,
-      "compile_stderr": "",
-      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\task.typ` instead\n\n",
-      "query_result_file": "task.query.json"
+      "case": "work",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
     },
     {
-      "sample": "numeric",
-      "compile_exit": 0,
-      "query_exit": 0,
-      "compile_stderr": "",
-      "query_stderr": "warning: the `typst query` subcommand is deprecated\n = hint: use `typst eval \"query(<weftext>).map(it => it.value)\" --in [examples]\\numeric.typ` instead\n\n",
-      "query_result_file": "numeric.query.json"
+      "case": "paper",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "period",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "range",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "event",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "numeric",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "root-dynamic-body",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "saved-query",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-range-empty",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-org-literal",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-person-two-branches",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "citation",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "heading-reference",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "citation-label-collision",
+      "exit": 1,
+      "expected_compile_failure": true,
+      "stderr": "error: label `<chen2026>` occurs both in the document and a bibliography\n  ┌─ \\\\?\\[native-cases]\\citation-label-collision.typ:5:0\n  │\n5 │ @chen2026. #cite(<chen2026>)\n  │ ^^^^^^^^^\n  │\n  = hint: change either the heading's label or the bibliography key to resolve the ambiguity\n\n"
     }
   ]
 }

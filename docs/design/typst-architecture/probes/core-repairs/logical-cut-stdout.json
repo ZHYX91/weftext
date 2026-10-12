@@ -1,0 +1,45 @@
+{
+  "naive_individual_reads": {
+    "A": 10,
+    "B": 10,
+    "sum": 20
+  },
+  "one_cut_reads_across_commit": {
+    "generation": 0,
+    "A": 10,
+    "B": 0,
+    "sum": 10,
+    "old_blobs_retained": true
+  },
+  "new_cut_sum": 10,
+  "frozen_pages": {
+    "first": {
+      "state": "ok",
+      "rows": [
+        [
+          "A",
+          10
+        ]
+      ],
+      "next": 1,
+      "terminal": false
+    },
+    "second_after_live_reorder": {
+      "state": "ok",
+      "rows": [
+        [
+          "B",
+          0
+        ]
+      ],
+      "next": 2,
+      "terminal": true
+    }
+  },
+  "revoked_page": {
+    "state": "invalidated",
+    "rows": null
+  },
+  "assertions_passed": true,
+  "evidence_limit": "Small in-memory model only; no physical installation, external cut, security, persistence or crash proof."
+}

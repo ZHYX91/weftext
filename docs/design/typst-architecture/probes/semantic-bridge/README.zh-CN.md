@@ -19,7 +19,11 @@ translation_status: source
 
 明确的来源反例：`left="FromA"; right="FromB"; text(left + right)` 得到 `FromAFromB`，Content/Frame 唯一 span 只指调用 `text(left + right)`。这层观察不能恢复两个字符串的值流来源。可保守标 generated/no writer；需要完整来源依赖时必须增加官方 eval 的构造/值流观察，并使事件同样随 memoized 结果重放。Span 唯一、字串相同或一次出现均不授写资格。
 
-此实验证明有限案例中，稳定 post-show 的原生阅读结构、样式、tag 与物理来源可以在保留官方编译结果和缓存的情况下观察。它不证明任意值流/多来源闭包、完整依赖与授权、表格全部拓扑/数学朗读、任意布局 reading order、透明自定义规则的语义恢复、富编辑逆映射、HTML/AT/320px renderer、IME/Undo、性能或跨版本维护成本。普通段落仍有原生 paragraph/ordered children 可供流式适配，不把 AST/query 或 PDF 抽文冒 post-show 阅读树；typed adapter 和局部 island 策略仍须实现与验收。
+此实验证明有限案例中，可以在保留官方编译结果和缓存的情况下观察 post-show 执行事件、样式、tag 与物理来源；它没有证明这些事件就是最终消费的阅读树。对固定 Weftext `b895b35` 的后续独立实验发现：`measure(link(...))` 的已丢弃文字和链接仍进入稳定 trace，基本表格的同一链接也因测量/布局重复出现；按 span、文字或目标去重又会吞真实重复。最终稳定轮不是最终消费选择依据，不能直接把 trace 当 RenderedLink、复制摘录或 Query 正文。
+
+原 11 例的 PDF/World/Frame 等值结果仍成立，不能由此推导完整流式路线。完整最终消费关系、值流/多来源闭包、授权、表格/数学可访问性、富编辑逆映射、HTML/AT/320px、IME/Undo、性能与跨版本维护仍未由本实验证明。后续路线及裁决以 [当前 REVIEW](../../REVIEW.zh-CN.md) 为准。
+
+独立复核另发现旧 runner 只遍历带 `elem` 的对象，漏检不带该键的深度截断哨兵。当前 runner 已改为遍历全部 JSON 容器，并加入嵌套哨兵自检；对原准确 LF 运行留下的 11 份稳定 trace 重新检查，均无截断。这是完整性检查修复，不是新增编译或最终消费证明。深度上限仍可用于诊断，但截断结果必须判不完整。
 
 可复现文件：observer.patch（仅 12 个官方文件/新增观察模块）、实际 Cargo.lock、fixtures/、纯 Python 标准库 run_probe.py、version.json、精简 `executed-summary.json`。不附官方 source tree、target、下载缓存或海量 trace。
 

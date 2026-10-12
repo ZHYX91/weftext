@@ -8,7 +8,7 @@ translation_status: synced
 
 # New Typst architecture candidate
 
-Status: **coordinated design rewrite, not independently accepted; product refactoring has not started**. Input: `d167ae8c1d0346faf62e8e0887cf789de0bf0b89`. [REQUIREMENTS](../typst-native/REQUIREMENTS.md) owns requirements, including the clarification of structured capabilities for all types and navigation additions. [REVIEW](REVIEW.md) records actual validation and remaining findings.
+Status: **coordinated design rewrite, not independently accepted; product refactoring has not started**. Input: `d167ae8c1d0346faf62e8e0887cf789de0bf0b89`. [REQUIREMENTS](../typst-native/REQUIREMENTS.md) owns requirements, including structured capabilities for all types, navigation, library styles and five-view clarification. [REVIEW](REVIEW.md) records actual validation and remaining findings.
 
 This directory replaces the prior `typst-native` technical solution as the current redesign candidate. Prior files and their fixed-scope reviews remain historical evidence, not algorithms to combine with this directory. The 49 inputs and `inputs.json` remain unchanged. Retain user outcomes while choosing technology anew, without normal-runtime compatibility layers for undeployed protocol families.
 

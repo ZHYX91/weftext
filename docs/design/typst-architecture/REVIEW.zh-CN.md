@@ -15,7 +15,7 @@ translation_status: source
 
 | 实际工作 | 结果与范围 | 不能据此声称 |
 | --- | --- | --- |
-| 原生结构化数据 | 官方 Typst 0.15.1 五个代表样例 compile/query 成功；见 [实验记录](examples/syntax-experiments.json) 与同目录 `.typ` 原源 | 完整七类 schema、产品 Query、权限、表单及导出已实现 |
+| 原生结构化数据 | 当前完整 [schema](examples/schema.json) 的 31 项有限 [设计检查](examples/design-checks.json) 通过；官方 Typst 0.15.1 运行 17 个 [编译用例](examples/syntax-experiments.json)，16 成功、heading/Bib 同键按预期失败。语义负例仍可编译 | Python 检查是实际 Rust 安装器、CEL parser、provider、权限、表单或导出；原生编译成功证明字段语义正确 |
 | 标题与混排 | 前轮七组有限实验验证同级独立/同行标题的编号、目录、引用及增删移动改级；副标题不进入 heading counter | 完整编辑器、深层/长文/所有自定义 show 通过 |
 | Word | 独立样例十项 OOXML 结构检查通过，包含整段 Heading N、正文有效字符格式重置和字段 | Word/WPS/LibreOffice 实机字段更新、目录、保存重开通过；参考图不是 Office 渲染 |
 | 来源反例 | 本轮七个官方 CLI 样例说明 query.body 与实际 post-show 输出不同；删除显示仍可能保留 heading introspection；重复 include 不能从根 AST 猜出现项 | AST 或 CLI query 足以生成完整流式阅读树 |
@@ -23,12 +23,15 @@ translation_status: source
 | 中断恢复 | 八个两文件进程中断场景检查 before/after、保留第三态和原 operationId 的零重复写 | 实际断电、日志撕裂或释放保护后同对象同字节的来源连续性 |
 | 目录反例 | 目录 share=0 不能排除新增/写子文件；子文件句柄可能阻止父 rename；no-replace 保留占用目标 | capture 是全目录 CAS，或开放目录可仅靠扫描证明完整负范围 |
 | 普通目录移动 | 同对象 no-replace 移动保持目录/子文件身份，晚加子项和外部新稿随树保留；已有 writer 导致 busy，关闭后重试成功；Node 双改名成功，竞争旧名称使回退拒绝并保两稿 | 对外部工具的多对象瞬时原子、跨卷同等原语、断电/祖先改动/完整故障恢复 |
+| 目录保护、创建与清理修订 | [独立可运行探针](probes/core-repairs/README.zh-CN.md) 在本机 NTFS 验证实际 LIST 访问保护祖先/目标父、持原句柄移动、NtCreateFile 返回原目录创建句柄、同名冲突、计划文件保护及非空目录保留未知新增 | 所有祖先链/别名/过滤器、目录项耐久、断电、多步骤恢复、Server 隔离或生产后端通过 |
+| Query 共同快照模型 | 同探针包的有限内存模型复现逐对象混读 sum20；共同快照得 sum10，冻结分页保持，模拟撤权停止后续交付 | 真实文件日志、完整库存、当前发布、权限、持久保留或性能已实现 |
 | 库级样式 | 五次官方编译核正文/列表字号、表格边框、局部恢复和真实相对资产；改模块不改 note bytes/AST；转换 show 内部 set 不可一般覆盖的反例成立 | 自动库设置 UI、Core 依赖/撤权/迟到失效、导出或富编辑已实现 |
 | 官方求值观察桥 | [可复核原型](probes/semantic-bridge/README.zh-CN.md)：11 例 observer on/off/官方发布 CLI 的 PDF 逐字节相同；on/off 的 World 请求序列与最终 Frame 相同；tracked Sink 随缓存重放最终稳定轮事件 | 完整来源值流、所有布局/表格/公式、renderer、逆向富编辑、AT、性能或全部 E1 通过 |
+| Html 最终消费与原生样式 | [16 例可复现探针](probes/html-flow/README.zh-CN.md)：关闭适配的 Html 与官方字节相同、开启适配串行/并行 Html 与最终树相同、三种 Paged PDF 相同；有界正文语义投影保持，World 顺序为 15/16 例相同 | 浏览器 renderer、所有样式/表格拓扑、生产来源/writer、局部 frame 的阅读/复制树、AT 或 E1 全部通过 |
 
 这些实验没有修改产品实现或真实资料。完整原始运行资料保留在私有工作区；公开观察桥附固定 patch、lock、11 例输入、runner 和精简实测结果，不含下载缓存、编译目录或私人聊天原文。
 
-观察桥最初的直接日志在缓存命中时丢失内层事件；实际改为官方 tracked Sink 的独立观察槽，在原顺序中合并并由缓存重放，未禁用缓存或额外执行 show。默认样例最终稳定轮由一次物理 realization 补齐为四项，重复 include 为七项，同行标题/列表/表格/公式组合为四十二项。此证据支持缓存感知的 post-show 观察路线；生产还需类型化适配器与来源资格。计算字符串 `text(left + right)` 只有调用 span，不能据此恢复两个输入的来源或授予 writer；这类内容必须保守标为生成/不可直接编辑，或增加经过验证的官方值流观察。不得据有限样例关闭完整 E1。
+观察桥最初的直接日志在缓存命中时丢失内层事件；实际改为官方 tracked Sink 的独立观察槽，在原顺序中合并并由缓存重放，未禁用缓存或额外执行 show。默认样例最终稳定轮由一次物理 realization 补齐为四项，重复 include 为七项，同行标题/列表/表格/公式组合为四十二项。独立反例随后证明稳定 trace 仍包含被丢弃的测量内容和重复布局，不能直接作为最终阅读树；这些计数只证明观察完整性，不证明可见出现项。当前路线改为 EDITOR §8 的官方 Html 最终消费树与 Paged 输出，样式/角色适配另行验证。计算字符串 `text(left + right)` 只有调用 span，不能据此恢复两个输入的来源或授予 writer；这类内容保留为生成/不可直接编辑，除非另有经过验证的来源证明。原 11 例等值证据继续有效，但不关闭 E1。
 
 ## 2. 设计风险与产品验收的区别
 
@@ -36,7 +39,7 @@ translation_status: source
 
 | 项目 | 当前必须核清的设计问题 | 后续真实实现验收 |
 | --- | --- | --- |
-| E1 官方语义桥 | 最终收敛轮、缓存重放、实际 show 输出/顺序/来源；观察不能改变求值；默认内容可流式，歧义不伪造 writer | 完整 renderer、全部编辑逆映射、AT/RTL、资源/预算、安全、升级回归 |
+| E1 官方语义桥 | 最终 Html 消费树排除测量/丢弃工作，保真实重复；有界原生样式/角色及来源适配，Html/Paged target 边界明确；默认内容可流式，歧义不伪造 writer | 完整 renderer、全部编辑逆映射、AT/RTL、资源/预算、安全、升级回归 |
 | C1 文件与结构 | 文件保护和对象移动各有明确操作边界；不能把普通 move 错当复制全树，不能暗称强 negative scope | 支持的文件系统、权限/rename 失败、断电、恢复、外部竞争和 reader barrier |
 | C2 权限与后台服务 | 字段窄读写静态隔离、真实文件 writer fencing、当前交付与缓存失效 | 隐藏值侧信道、双 holder、撤权/分块/提交竞争、进程隔离 |
 | S1 类型及查询 | 一套 Type/Value；所有已选能力有具体形状/消费者；缺值、同项集合和精度一致 | 完整 seed/provider、CEL profile、表单/Query/导入导出垂直验收 |
@@ -47,6 +50,25 @@ translation_status: source
 
 ## 3. 独立评审与准入
 
-当前阶段完成作者协调与风险实验，独立 Sol 评审尚未对本套固定候选给出结论。随后分别检查需求/类型、Core/文件/权限、语言/编辑/消费者，再集中处理实际发现。修复后复核相应差量，最终由新的 Pro 对话做全局审查。
+四份独立 Sol 报告均绑定 `b895b350d4b4ceda5f2317f2d4b1d8efb42bd11e`，结论均为 **REVISE**。范围分别为需求/类型、Core/文件/权限、编辑/语义消费、功能/Query；没有全量重读所有历史协议，也没有声称产品验收。去重后为 7 项 P1、5 项 P2，无已报 P0。批注英文披露差异由两个 reviewer 发现，只计一项。完整私有报告已收取阅读，以下保留独立可理解的发现及修订入口，不公开私人会话。
+
+| 独立发现 | 具体损害与修订责任 | 当前处置 |
+| --- | --- | --- |
+| C-P1-01 | 只保护 source 目录仍可把它移入被替换的 target parent；CORE 须给真实祖先/父对象保护闭包及 same-handle 操作 | 已整合作者修订，待独立复核 |
+| C-P1-02 | 同用户 private staging 不隔离外部 writer，已枚举集合不排除新 child；CORE 须给正常 copy/purge 的可落实算法并保未知新增 | 已整合作者修订，待独立复核 |
+| C-P1-03 | Field-only 资格缺生产算法，未改隐藏字段的合法性可能决定公开写结果；SOURCE/CORE 须明确静态依赖、公开资格和获权局部校验 | 已整合作者修订，待独立复核 |
+| P1-REQ-01 | 闭合 schema 无法登记声称已选的关系和 Event 跨字段规则；SOURCE 负责可安装定义、签名、目标域与各消费者 | 已整合作者修订，待独立复核 |
+| P1-REQ-02 | 保存 Query 只有短名/CEL，清索引后无法恢复原 Field/Type 绑定；SOURCE/FEATURES/CORE 负责持久解析基准与迁移 | 已整合作者修订，待独立复核 |
+| FRESH-FEATURES-P1-01 | 同事务 A10/B0→A0/B10 可混读成20，分页可能重漏；CORE/FEATURES 负责共同读取快照与冻结结果顺序 | 已整合作者修订，待独立复核 |
+| P1-EDITOR-01 | 稳定执行 trace 包含测量后丢弃内容及重复布局；EDITOR 负责最终消费选择机制和必要反例证据 | 最终 Html 路线及有限原型已整合，待独立复核 |
+| P2-REQ-01 | 原生 citation key 没有稳定论文 NodeRef 的可重建来源，改 key/碰撞后可漂移；SOURCE/FEATURES 负责持久引用输入 | 已整合作者修订，待独立复核 |
+| P2-REQ-02 | 独立可写 birthday 与带来源 birth event 形成两份事实；SOURCE/FEATURES 负责单一作者数据和简洁表单入口 | 已整合作者修订，待独立复核 |
+| FRESH-FEATURES-P2-01 | 先 EXDATE 再 replacement 可能吞掉已明确改期；SOURCE/FEATURES 负责逐原发生键决策与窗口一致性 | 已整合作者修订，待独立复核 |
+| FRESH-FEATURES-P2-02 / P2-EDITOR-03 | 英文普通批注读取误交 sourcePreimage，可能泄漏私有 URI；FEATURES 同步为获权 stored visibleExcerpt | 已整合作者修订，待独立复核 |
+| P2-EDITOR-02 | 原型 runner 只遍历带 elem 对象，深度截断哨兵漏检；诊断完整性须检查全部容器 | 已修 runner：原 11 份 trace 无截断，reviewer 的真实深层 trace 被新 oracle 拒绝；未重新编译，待独立复核 |
+
+编辑 reviewer 独立重跑原 11 例及 9 个新反例，保留无副作用的有限等值结果，同时真实复现 discarded measure、table 重复和深层截断漏检。其它报告的合同反例不冒称产品运行结果。修复将形成一个协调的新固定候选，按实际差分及受影响依赖独立复核，再由新的 Pro 对话全局审查；目前尚未派发该终审，也未接受修订。
+
+当前修订还纳入用户确认的需求 §5.4：纯源码、渲染并始终显示语法、按需显示语法、隐藏语法并通过界面编辑、只读阅读。原固定候选的评审未覆盖这次澄清；新候选须独立检查共享 Draft/Undo、切换不改源、IME/焦点及不支持构造的保源处理。五档不是字号预设，也不是五种持久格式。
 
 评审记录必须写明准确提交、实际阅读范围、发现与证据，不以作者自检、编译成功或旧 CLOSED 自动关闭。检查器检查文档配对、链接和保护输入，不替代语义评审。仅在重大设计缺口已解决、关键选型已有足够证据且独立接受后，才能冻结重构基线；具体顺序见 [INTEGRATION](INTEGRATION.zh-CN.md)。

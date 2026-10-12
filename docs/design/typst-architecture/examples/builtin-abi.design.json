@@ -1,0 +1,593 @@
+{
+  "version": 1,
+  "evidence": "Design ABI reference, not actual compiled Rust exports or authorization.",
+  "implementations": {
+    "weftext.core.rules.v1": {
+      "abi": 1,
+      "family": "validation",
+      "exports": [
+        {
+          "name": "int-range",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "decimal-range",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "custom-code",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "owned-resources",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        }
+      ]
+    },
+    "weftext.temporal.rules.v1": {
+      "abi": 1,
+      "family": "temporal",
+      "exports": [
+        {
+          "name": "month-day",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "calendar-date",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "during",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "range",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "period",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "recurrence",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "exception",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "event",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "containsDate",
+          "inputs": [
+            "during",
+            "date-or-instant"
+          ],
+          "result": "bool-cell",
+          "effect": "pure",
+          "query_name": "containsDate"
+        },
+        {
+          "name": "nextCivilDay",
+          "inputs": [
+            "date"
+          ],
+          "result": "date-cell",
+          "effect": "pure",
+          "query_name": "nextCivilDay"
+        },
+        {
+          "name": "rangeOverlap",
+          "inputs": [
+            "range",
+            "range"
+          ],
+          "result": "bool-cell",
+          "effect": "pure",
+          "query_name": "rangeOverlap"
+        },
+        {
+          "name": "rangeDuration",
+          "inputs": [
+            "range"
+          ],
+          "result": "exact-duration-cell",
+          "effect": "pure",
+          "query_name": "rangeDuration"
+        },
+        {
+          "name": "periodBounds",
+          "inputs": [
+            "period"
+          ],
+          "result": "range-cell",
+          "effect": "pure",
+          "query_name": "periodBounds"
+        },
+        {
+          "name": "expandRecurrence",
+          "inputs": [
+            "event",
+            "window",
+            "budget"
+          ],
+          "result": "ordered-occurrences-with-coverage",
+          "effect": "pure",
+          "query_name": "expandRecurrence"
+        }
+      ]
+    },
+    "weftext.units.rules.v1": {
+      "abi": 1,
+      "family": "quantity",
+      "exports": [
+        {
+          "name": "quantity",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "measurement",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        }
+      ]
+    },
+    "weftext.calendar.gregorian.v1": {
+      "abi": 1,
+      "family": "calendar",
+      "exports": [
+        {
+          "name": "validateDate",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "periodBounds",
+          "inputs": [
+            "period"
+          ],
+          "result": "range-cell",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "civilCandidates",
+          "inputs": [
+            "recurrence",
+            "range",
+            "budget"
+          ],
+          "result": "ordered-civil-candidates-with-coverage",
+          "effect": "pure",
+          "query_name": null
+        }
+      ]
+    },
+    "weftext.zone.table.v1": {
+      "abi": 1,
+      "family": "time-zone",
+      "exports": [
+        {
+          "name": "toCivil",
+          "inputs": [
+            "instant"
+          ],
+          "result": "local-datetime-cell",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "toInstant",
+          "inputs": [
+            "local-datetime",
+            "fold",
+            "gap"
+          ],
+          "result": "instant-cell",
+          "effect": "pure",
+          "query_name": null
+        }
+      ]
+    },
+    "weftext.calendar.table.v1": {
+      "abi": 1,
+      "family": "calendar",
+      "exports": [
+        {
+          "name": "validateDate",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "periodBounds",
+          "inputs": [
+            "period"
+          ],
+          "result": "range-cell",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "civilCandidates",
+          "inputs": [
+            "recurrence",
+            "range",
+            "budget"
+          ],
+          "result": "ordered-civil-candidates-with-coverage",
+          "effect": "pure",
+          "query_name": null
+        }
+      ]
+    }
+  },
+  "validators": {
+    "core/int-range": {
+      "provider": "core/rules",
+      "operation": "int-range",
+      "inputs": {
+        "value": "int-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "min": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "int"
+            },
+            "required": true,
+            "nullable": false
+          },
+          "max": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "int"
+            },
+            "required": true,
+            "nullable": false
+          },
+          "exclude": {
+            "shape": {
+              "kind": "list",
+              "items": {
+                "kind": "scalar",
+                "semantic": "int"
+              },
+              "min": 0,
+              "max": null
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "core/decimal-range": {
+      "provider": "core/rules",
+      "operation": "decimal-range",
+      "inputs": {
+        "value": "decimal-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "min": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "exact_decimal"
+            },
+            "required": true,
+            "nullable": false
+          },
+          "max": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "exact_decimal"
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "core/custom-code": {
+      "provider": "core/rules",
+      "operation": "custom-code",
+      "inputs": {
+        "code": "text",
+        "custom": "text-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "code": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "text"
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "core/owned-resources": {
+      "provider": "core/rules",
+      "operation": "owned-resources",
+      "inputs": {
+        "owner": "node_ref",
+        "values": "resource-or-list-or-absent",
+        "metadata": "resource-metadata-cells"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "owner_required": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "bool"
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/month-day": {
+      "provider": "temporal/rules",
+      "operation": "month-day",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/calendar-date": {
+      "provider": "temporal/rules",
+      "operation": "calendar-date",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/during": {
+      "provider": "temporal/rules",
+      "operation": "during",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/range": {
+      "provider": "temporal/rules",
+      "operation": "range",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/period": {
+      "provider": "temporal/rules",
+      "operation": "period",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/recurrence": {
+      "provider": "temporal/rules",
+      "operation": "recurrence",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/exception": {
+      "provider": "temporal/rules",
+      "operation": "exception",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "temporal/event": {
+      "provider": "temporal/rules",
+      "operation": "event",
+      "inputs": {
+        "range": "record",
+        "recurrence": "record-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "units/quantity": {
+      "provider": "units/rules",
+      "operation": "quantity",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    "units/measurement": {
+      "provider": "units/rules",
+      "operation": "measurement",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    }
+  }
+}

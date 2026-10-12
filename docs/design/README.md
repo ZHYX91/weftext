@@ -10,15 +10,17 @@ translation_status: synced
 
 The latest target candidate is the [new Typst architecture](typst-architecture/README.md), choosing technology anew under [Requirements and technical choices](typst-native/REQUIREMENTS.md) and restoring necessary structured capabilities for all note types. It is a coordinated candidate; the new entrypoint records independent review and actual evidence. Bounded Sol review of the [prior Typst candidate](typst-native/README.md) and the AsciiDoc inputs/reviews below retain their fixed scopes, without accepting the new solution, requiring technical inheritance or establishing completed product refactoring or global final review.
 
-## Status and precedence
+## Current solution and historical inputs
 
-Status: accepted-design-not-implemented. This area publishes complete D1–D9 target-design inputs through coordinated generation D9-r04-evidence05-2026-09-24; a D10 candidate has not been accepted. Main still contains an early prototype. Old Record, envelope or syntax descriptions in product specifications do not override these target designs, and target documents do not establish implementation.
+The current technical candidate is the new Typst architecture above, with REQUIREMENTS as the requirements authority. Only the new architecture REVIEW states its design acceptance. Main still contains an early prototype; target documents do not establish product implementation.
+
+The D1–D9 inputs below retain accepted-design-not-implemented status within their original fixed scope, coordinated generation D9-r04-evidence05-2026-09-24. That historical status does not make old Records, envelopes, storage formats, protocols or implementation order technical constraints on the Typst rewrite. Previously selected business behavior helps check requirements; discussed alternatives do not automatically become current features. REQUIREMENTS and explicit current-owner rules determine the choices.
 
 The inputs preserve normative bodies, activated coordinated amendments, terminology, scenarios and implementation gates. Dates, candidate/inactive labels and next-stage execution scopes inside source text are historical context; this index and the fixed commit identify the input generation. D9 amendments to D3/D6/D7 and the D8 amendment to D7 are included in their complete files. Acceptance covers design only; actual implementation gates such as D9 I01–I12 remain open.
 
 ## Reading and editing
 
-The complete inventory is `inputs.json`. Read main documents from D1 to D9, then every normative supplement, lexicon and implementation obligation for each topic. Mandatory scenario intake contains requirements and alternatives, not predetermined decisions. Search excerpts, titles or main documents alone do not establish complete reading. Read large files in line ranges through the end and record coverage and gaps.
+The complete historical inventory is `inputs.json`. Rewriting and review start with current REQUIREMENTS and the relevant new architecture owners, then revisit the historical main documents and necessary supplements that support the actual requirements. Each revision need not re-review every retired protocol. A claim to complete historical topic coverage must include its normative supplements, lexicon and implementation gates and state coverage and gaps. Mandatory scenario intake contains both requirements and alternatives, not only selected decisions; search excerpts, titles or main documents alone do not establish complete reading.
 
 Imported snapshots retain original language and normative prose. Only relative links to included files are remapped, and unpublished control records, private conversation addresses and local paths are removed. These transport changes are not normative amendments. Private acceptance links in the originals are not product-protocol dependencies. New candidates retain synchronized Chinese/English and use candidate → accepted-design-not-implemented → implemented or superseded status.
 
@@ -26,9 +28,9 @@ Bind candidates to a fixed Git commit, complete reading scope, assumptions and a
 
 Supplemental input: the first public inventory omitted the normative machine catalog referenced by the D4 main document. The byte-preserved [D4 reference catalog](snapshots/d4-reference-catalog-registry/source.json) brings the inventory to 49 files. It contains 4 qualifier sets, 22 type aliases, 61 field definitions, 7 facet schemas and 1 calendar series policy, matching the accepted upstream input copy. The original 48 snapshots remain unchanged. Reading records tied to the earlier fixed commit cover only the original inventory and must be supplemented with this catalog. This repairs the input omission; it neither changes D4 semantics nor accepts D10.
 
-## D10 and release
+## Historical order and current refactoring entry
 
-The next task is [Agent, automation and external capabilities](d10/TASK.md). D10 is followed by A2 global design review, then the G1 minimum usable product under the [roadmap](../../ROADMAP.md). Publishing design, accepting design and releasing runnable software are distinct events.
+[D10: Agent, automation and external capabilities](d10/TASK.md) and the original [roadmap](../../ROADMAP.md) retain their stage records, not current work instructions. [Typst INTEGRATION](typst-architecture/INTEGRATION.md) defines the current order: coordinated repair, independent review, global final review, a fixed refactoring baseline, then implementation in functional slices. Publishing design, accepting design and releasing runnable software are distinct events.
 
 ## Complete input inventory
 

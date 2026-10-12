@@ -15,7 +15,7 @@ translation_status: source
 
 选择官方 Typst 语法作为唯一正文源。普通写作、连续阅读、源码编辑、分页预览和属性编辑共享一个文档会话。编辑器不以 DOM 或自行定义的富文档 JSON 替代 `.typ`。合法复杂源保全；局部不可逆构造在该处提供明确源码入口和官方版式预览，不拉平、不删除，也不把普通文档全部退为源码与 PDF。
 
-建议生产路线为：官方 Rust parser → 官方求值/realization 的只观察桥 → Weftext 流式阅读树与源编辑适配器。官方编译输出承担分页。官方实验 HTML 可用来对照和研究，当前不担生产默认。这个选择是有风险的待验证路线；桥未成功实现以前，不宣称已经解决 RQ01–03。
+新的候选路线为：官方 Rust parser/compiler → 官方 HTML target 的最终消费树 → 有界样式/角色适配及来源资格；官方 Paged target 承担分页与打印。阅读和打印是明确的不同原生 target，不把“必须从同一 Paged 结果重建流式树”当用户需求。官方 HTML 尚属实验功能，当前工作是验证受控集成的可行性，不宣称 stock HTML 或产品阅读器已经就绪；验收范围见§8及 REVIEW。
 
 Core 继续唯一拥有结构、身份、读写授权、提交与恢复。本文只消费 Core 的获权源快照、ReadBasis、统一 Plan/Journal/Receipt 与 Job 抽象，不重新定义它们的持久格式。Core 对象变化必须协调本文的实际消费，不能只修接口名字。
 
@@ -28,6 +28,18 @@ Core 继续唯一拥有结构、身份、读写授权、提交与恢复。本文
 源修改产物始终是提案。保存向 Core `prepare(operationId,intent,draftBase,budget)` 交完整拟议源，消费实际计划检查后 `commit(operationId,planHandle)`；结果未知时保留稿件并查 `operationStatus(operationId)`。不换操作 ID 猜重试；终态冲突后新拟议内容重新准备是关联原 Draft 的新操作。外部修改/同步使用 Core 的 observeExternal/admitExternal/merge；编辑器显示当前冲突并保双方稿。当前版本变化不默默覆盖本地 Draft。
 
 提交成功只更新该操作的决议。重新获权读取 after 之后更新 Base；用户已继续键入时 Draft 不被 after 替换，只有 Draft 与 after 精确相等才 clean。已提交撤销是新事务：仅在当前版本及 bytes 仍精确等于自己的 after、仍获权且反转不包含他人/控制/多实体效果时反转自己的源变化。否则给出冲突和保留稿，不误撤他人。崩溃恢复稿由 Core 的恢复能力保护，明确不是已保存正文或跨设备权限。
+
+### 2.1 五档视图的共享实现边界
+
+按 REQUIREMENTS §5.4 提供 V01 纯源码、V02 渲染且显示语法、V03 按需显示语法、V04 隐藏语法的界面编辑、V05 阅读。它们共享会话、Draft、serial、selection 和 DraftUndo，视图仅是个人界面状态。V01–V04 的成功操作写同一 buffer；V05 禁用正文编辑命令路由，独立批注按自身权限执行。连续/分页是独立布局与 target 选择，不替代其中一档。
+
+V01 使用准确 source buffer 与官方 parser 的高亮。V02 仍按完整 source buffer/顺序绘制，保每个作者语法字符及准确选择位置，为已识别标题、强调、列表等应用可辨认样式，语法标记独立装饰且始终可见。编译语义样式须绑定当前 serial/来源；无效源仍可按 parser 显示并明确预览未就绪。不从 HTML 反序列化或重造 Typst 标记来拼 V02；生成结果可作明确辅助预览，不能替代、重复计入或删除作者表达式。
+
+V03/V04/V05 的渲染部分消费§8同一当前最终投影。V03 在§3已证明唯一来源的活动构造处显示关联源码编辑区，直接编辑同一 Draft 的准确范围；显示语法本身不改源。键盘命令和触屏按钮可显式进入/退出。生成、多源或 include 出现项没有本篇 writer 时保只读并提供真实来源导航，不用相同字符串猜源。投影失败/待定时保 Draft，给明确 V01/V02 入口，不把旧画面当当前可写。
+
+V04 使用相同写资格和§4具名操作，文档区不显示源码标记，也不因聚焦自动退为 V03。特殊构造由明确专用控件处理；缺控件则保留只读出现项，让用户主动切换可显示语法的视图，不能把隐藏语法解释成任意逆向编辑。V05 选区用于阅读/复制/批注，键入和粘贴不得开启正文写入。
+
+切换先按§5完成或保留 IME，再依当前源/投影关联转移选区；无唯一显示位置时保原源选区、恢复最近可证明容器/阅读位置，不改变源点来假装映射成功。同会话进入 V05 默认显示明确标记的当前 Draft 预览；用户显式选择已提交版本才另看它，不能替换未保存稿。返回编辑继续原 DraftUndo。个人视图偏好不写作者源；V02/V03 语法装饰不进入正文 Query、逻辑复制、批注可见摘录或导出，显式复制源码仍返回获权原字节。
 
 ## 3. 可写区域的实际产生方式
 
@@ -125,21 +137,23 @@ layoutEpoch 只描述当前几何，不改源 serial。当前草稿语义未验�
 
 增删/移动/改级保持选中 label 和原生 counter；不写固定数字。outline 用 heading body，不带同行正文；原生编号引用与链接分别处理。无编号 heading 的默认 @ref 不承诺自动可用：有限实验已见官方报错，提供明确 label #link 形式；不暗改作者引用。单段和同行混用统一编号是已执行有限证据；深层、长段落、孤行、非拉丁、分页及交互仍需验收。
 
-## 8. 流式语义桥：可以实现的路线与不可假设的能力
+## 8. 原生双目标：最终消费树、样式与来源
 
-Core `compile(sourceSnapshot,environment,target,budget)` 供应固定官方 Rust build、fonts/packages/assets 及已获权只读 World，返回 CompileSnapshot。默认使用官方 Paged target；流式是这个结果的阅读布局，不新增 Typst target。target() 分支与同环境 PDF 一致；实验 HTML 用独立实际 target 和依赖，不偷换结果。
+Core `compile(sourceSnapshot,environment,target,budget)` 供应固定官方 Rust build、fonts/packages/assets 及已获权只读 World，返回该次 CompileSnapshot。普通连续阅读选择官方 Html，分页预览/PDF/打印选择官方 Paged，不新增作者语言或伪 target。每份产物绑定准确 source、环境、target、依赖及权限；同源不意味着两个 target 有相同正文、计数器或读取集合。切换 target 是新编译，不拿另一份结果替换当前投影或恢复旧写资格。[官方 target](https://typst.app/docs/reference/foundations/target/)
 
-具体桥的候选实现位于官方 evaluate/realize 边界。现有公开 Content/Introspector 不被假定为完整可编辑阅读树；官方 visit_show_rules 是内部函数。Weftext 若需观察须维护一个有版本/digest 的小型只观察 patch：记录原元素、effective styles、show entry/return、实际 returned content、官方序列化顺序、最终 heading introspection 和导航位置；在最终收敛轮收集一次，不额外执行 show/query/state。由这份同次 trace 建阅读树、原生出现项和源归属。官方源码说明存在此处理边界，但不证明上述 hook 已完成。[固定 realization 源码](https://github.com/typst/typst/blob/v0.15.1/crates/typst-realize/src/lib.rs)
+**最终消费是唯一入口。** 从成功编译返回的官方 `HtmlDocument` 根开始，只遍历其实际 `HtmlNode` 子边，按原序给最终出现项分配本投影内的 key。不能遍历所有 evaluate/realization 事件、Tag 原始 body 或 Introspector 元素并假称这些都显示了。尺寸测量后丢弃的 link 不进入 RenderedLink；表格中只显示一次的 cell 不因测量产生多条；同源真正输出两次仍保两次。原生最终节点是阅读结构输入，序列化 HTML 是交付格式，两者都不是新的作者源。
 
-桥必须与无 hook 的同官方 build 比较输出 bytes/文本/最终 counter、Query、reading order、资源访问和诊断，证明观察无副作用，并防重复轮产生多份内容。默认 recipe 和明确透明适配规则可保 heading/title/strong/list 等语义；任意 show 的 entry role 不能直接冒 return role。show strong: it => it.body 不假画粗体；show heading: it => [X #it.body] 必须呈现真实 X 和 body，不能用 pre-show body 替实际输出。无法证明 return 的语义角色或 reading order时局部 island；官方 introspection 仍有的生成 heading 单独供大纲/Query，不能因 display island 漏掉。一个源产生多个 output 的每次出现分别存在，阅读出现项不授写地址。
+三个产品分域：AuthoredLink 来自可识别作者构造；RenderedLink、正文检索、逻辑复制、可见批注摘录和离线链接 route 来自所选 target 的最终消费投影；heading 产品来自该次最终 native Introspector，保真实 level/label/counter 及其显示对应或无显示状态。show 删除 heading 仍可能保 introspection，不能把它补成可见文字。原生 HTML 的 h2 等标签不能反推业务 heading level；由原元素的真实语义和实际消费关联取得。任意 show 输出只保实际 return，不把入口 strong/heading 的角色强加给返回的普通文字。
 
-可移植派生产物只需：同源快照/环境/授权 basis、最终状态、逻辑阅读节点、真实角色与 level、实际编号文字、表格网格/headers/span、链接实际目标、资源及其获权交付地址、可证明源范围与导航对应、局部 island 及原因。键只在该次 projection 唯一；不用它持久绑定源或身份。未知元素不作为空 text 丢弃，不从 PDF OCR/屏幕坐标反推逻辑顺序。实际链接数量与出现项完整性另供链接/导出 owner 核对。
+**有界原生样式适配。** stock HTML 主要输出语义结构，不能据它成功就声称原生字体、字号、列表 marker 或表格边框已保留。适配器在官方 HTML 元素实际生产点消费已有 effective StyleChain/已求值参数，把具名可表示属性转为受控 CSS/角色/来源旁信息，随所产生的节点进入最终树。不能扫描作者 set 文本重造优先级，不能为样式再执行 show/query/context，不以所有稳定日志做文字匹配回填。基础正文/列表/表格的库默认、note 和局部覆盖须实测；支持表随实现版本发布，未知单位/paint/自定义排版不静默忽略。此适配是内部目标转换，不要求作者写 CSS 或另一套样式配置。[官方 HTML 范围](https://typst.app/docs/reference/html/)
 
-最低 renderer 必须让中文/英文/RTL普通段落、title/subtitle、heading、strong/emph/strike、列表、raw/code、链接/引用、图像 alt/caption、普通及 header/span 表格连续滚动并随 320px 重排。宽二维内容局部横滚，正文继续流动；基本公式局部官方 SVG 与经过验证的可访问数学表示/文字替代并存，不能只有图片冒 AT 支持。页眉、绝对定位、浮动、页面计数与复杂图有边界的分页岛；缺阅读顺序/替代时显示准确不可用和分页入口。普通内容全篇 island、整篇 SVG/PNG、单一 PDF 查看器或实验 HTML 均不能通过 RQ03。[官方 HTML 的实验限制](https://typst.app/docs/reference/html/)
+最低 renderer 仍须让普通中英/RTL段落、title/subtitle、heading、strong/emph/strike、列表、raw/code、链接/引用、图像 alt/caption、普通及 header/span 表格连续滚动并随 320px 重排，宽二维内容仅局部横滚。基本公式优先消费官方 MathML，再验证实际 AT；必要原生 frame/SVG 带准确数学或文字替代，不以图片冒无障碍通过。HTML 标签/属性/样式/资源均经安全的 typed 转换；脚本、任意宿主文件/网络和不受控事件处理器不执行，受影响的合法原源保留并明确报告显示限制。只有 Core 获权资源句柄可被 renderer 读取，HTML URL 不能绕过 World/资源交付权限。
 
-必须先做桥原型再接受“生产默认流式路线可实施”。若官方内部树丢掉必要角色/顺序且小观察 patch 无法恢复，则当前路线阻断，需另选经过论证的语义桥或目标策略；不能通过降低产品需求自称完成。编译升级须重新验证桥，不让一个不受控 fork 成为长期另一套语言实现。
+**局部排版与 target 边界。** 页面计数、绝对定位、浮动和复杂图不保证与可重排流式布局等价。已明确的原生 `html.frame` 在同次 Html 编译内调用 Paged，其内部 `target()` 实际为 paged；记录这个边界并消费官方返回的 frame，不从另一份整篇 PDF 按坐标截出片段。能够在当前官方调用链中安全形成局部 frame 的内容可显示为带替代的版式岛；没有合法局部替代时明确该段或该文的 Flow 不可用，保 Source 和独立 Paged 预览。不得把一般段落、列表、表格都降成图片或整篇 PDF 来声称满足普通阅读。任意自由排版保源与可用的官方输出，并不等于所有原生效果都有无损重排。
 
-本轮隔离原型已验证缓存感知的观察方法：直接日志会遗漏缓存命中的内部事件，独立 tracked Sink 观察槽则随官方缓存重放，在最终稳定轮汇集实际 post-show Content/Style/Tag。11 个受控样例与官方发布 CLI 的 PDF 逐字节一致，on/off World 请求序列与最终 Frame 一致，详见 [原型与限制](probes/semantic-bridge/README.zh-CN.md)。生产不得直接照搬调试日志作为阅读协议；需类型化适配、预算与准确来源资格。计算字符串拼接仍可能只有调用 span，必须标生成/无 writer，不能捏造完整输入来源。本文采用这一可实施的有限原型路线，完整 E1 与产品验收仍未关闭。
+**来源与验证。** 最终节点携带可验证的 native source/construct 关联时，再与§3当前官方 AST、唯一作者槽和实际 show 作用域证明结合，产生富编辑能力。只有 span、相同字串、DOM位置或一次出现仍不够。计算字符串、多次输出、动态替换和 include 均保实际出现项，缺唯一逆映射只给来源入口；不从 PDF/截图反推源。透明库 entry 中的真实 note 与普通用户 include 区分，不能因宿主 wrapper 存在而取消所有普通正文编辑，也不能扩大 imported source 写权。
+
+旧 [11 例观察实验](probes/semantic-bridge/README.zh-CN.md) 仍证明其有限无副作用/缓存重放事实，但独立 measure/table 反例已否定“稳定事件合集就是阅读树”。后续 final PDF consumer 改善了选择，却仍缺可靠的布局前段落分隔关联，因此本候选撤回从 Paged trace 构造默认流式树的选择。新路线须对最终 HTML tree、同源重复、测量丢弃、表格、库样式覆盖、target/frame、counter/依赖及只读来源逐项做有界证据；不以 experimental 标签直接否决，也不以几例编译宣称全 E1。固定 compiler/适配版本，升级重跑必要回归，维护范围不得扩为另一套 Typst 求值和排版器。当前实验与独立裁决见 REVIEW。
 
 ### 8.1. 一个普通模块与一个自动编译入口
 
@@ -221,7 +235,7 @@ annotation 读取只交自己的已存摘要/正文/历史，不自动读取已�
 
 ## 12. 可编辑 Word 默认与已知边界
 
-DOCX 是 Weftext 自有转换器，不是 Typst 官方内建输出。输入为同一获权快照和已经验证的官方语义/标题角色/资源；不自己重跑 Query 或猜第一表。转换保真实段落、run、table、bookmarks 与可编辑资源；无法表达的复杂布局明确 loss/unavailable。标题映 Title、关联副标题映 Subtitle；不进 section counter。
+DOCX 是 Weftext 自有转换器，不是 Typst 官方内建输出。默认语义转换 profile 消费一次冻结 Html 编译的最终语义树、同 target 的标题/引用产品及准确来源关联、获权资源；不自己重跑 Query、猜第一表或混入另一份 Paged 输出。自定义 show 后未显示的 native heading 不能凭 introspection 补成幽灵段落。明确选择 Paged 语义转换时是另一个具名 profile，预览与输出均注明 target，支持范围单独验证。局部 html.frame 保同次 Html 编译的来源边界。转换保真实段落、run、table、bookmarks 与可编辑资源；无法表达的复杂布局明确 loss/unavailable。标题映 Title、关联副标题映 Subtitle；不进 section counter。此路线与 FEATURES §11 一致，最终语义生产者仍受 E1 验证门约束。
 
 1–9 级 section 映真实 Heading N、outlineLvl=N−1 与同一多级编号。独立 heading 和同行 heading 共用编号定义。同行默认是一整个 Heading N paragraph，前部 title runs，后部 body runs：这正是已认可方案。正文字符格式来自模板正文占位符/Normal 的**有效字符属性**，解析 docDefaults、theme、basedOn、字符样式与直接属性继承；显式复位 Heading 继承的 bold/italic 等，再叠加作者强调。不能 copy 空 raw rPr 就称复制了有效样式，也不硬编码字体/字号。段落级缩进、行距、keepNext 等仍是 Heading 段属性，预览须如实展示。[Microsoft 段落样式](https://learn.microsoft.com/en-us/office/open-xml/word/how-to-create-and-add-a-paragraph-style-to-a-word-processing-document)
 
@@ -235,20 +249,22 @@ Job 完整生成并验证准确文件与 loss，再显示结果；内网下载�
 
 有限实验：Typst 0.15.1 官方 compile/query 已验证单个 labelled 同行 heading 与同级独立 heading 共享 counter/outline/ref；增删、移动、提升/降低自动更新，size-free 样例无必填尺寸；subtitle block+label 可查且不入 heading。空段打断同行、无编号默认 ref 报错也有反例。独立 DOCX 有 10 项 OOXML 检查，保 Heading2、真实九层编号、正文字符复位/强调及 TOC/REF 字段，但只是受控样例。32 个旧有限 Rust 检查及少数源 splice 不覆盖完整 editor。新方案没有重跑这些实验，更没有生产通过。
 
-本轮另执行七个官方 CLI 样例与独立官方 AST 枚举：default、自定义 heading show、删除 heading show、剥离 strong 的 show、重复 include、loop 生成 heading、Paged/Html 分支。自定义 show 的 query.body 只有原标题，而 PDF 实际有 PREFIX/body/SUFFIX；删除 show 后 query 仍有 GoneHeading，PDF 无该标题；重复 include 有两个实际 heading/counter[1]/[2]，root AST 无 included text 槽。两次 query 相等只是有界可重复性，不证明内部收敛轮；剥离 strong 样例未测字体/role。CLI/AST 不产生流式桥通过。可独立执行的 E1 阶段、hook oracle 及未跑项详见 REVIEW；最小桥证据后续单独补入，不与产品验收混合。
+本轮另执行七个官方 CLI 样例与独立官方 AST 枚举：default、自定义 heading show、删除 heading show、剥离 strong 的 show、重复 include、loop 生成 heading、Paged/Html 分支。自定义 show 的 query.body 只有原标题，而 PDF 实际有 PREFIX/body/SUFFIX；删除 show 后 query 仍有 GoneHeading，PDF 无该标题；重复 include 有两个实际 heading/counter[1]/[2]，root AST 无 included text 槽。两次 query 相等只是有界可重复性，不证明内部收敛轮；剥离 strong 样例未测字体/role。CLI/AST 不产生流式桥通过。这些反例促成 §8 的最终消费树路线，当前有限证据与未跑范围见 REVIEW。
+
+本轮新增 [Html 最终树与样式探针](probes/html-flow/README.zh-CN.md)：16 例关闭适配与官方 Html 字节一致，开启适配的串行/并行最终树一致，三种 Paged PDF 字节一致；消除 discarded measure，保重复 include 和不同 show 的真实出现项。库→笔记→局部字号、字体候选、强调/斜体及简单单元格边框和对齐有实际值证据。它没有实现浏览器 renderer、逆向编辑、复杂表格拓扑或全部样式；动态 marker 反例增加一次诊断源读取，World 顺序只在 15/16 例一致。局部 html.frame 的原生 Paged 内容可见，不证明其流式复制或无障碍树。产品适配开关必须属于固定 worker/environment/cache profile，不能在同一缓存中改变进程环境开关；探针标记不是可信来源或写资格。
 
 规范 DOCX renderer 未找到 PATH 上 soffice，真实安装探测见 Office/LibreOffice；因此是“规范渲染不可用且实机未跑”，不是“机器无 Office”。ReportLab reference 图不是 Office renderer。真实 Word/WPS/LibreOffice 的字段更新、TOC 范围、导航、字体继承、style separator、保存再开和深级行为全部 UNRUN。
 
 | 门 / 对应需求 | 必须做的真实验证 | 通过前阻止什么 |
 | --- | --- | --- |
-| E1 / RQ01–03、06 | 编译桥原型：default/custom show、set、target、重复 include、generated heading、收敛轮、顺序/来源；与无 hook 官方对照 | 阻止生产流式路线可实施结论；不阻止保源/标题设计起草 |
-| E2 / RQ02、24 | 真输入 surface：空→输入→删空、任意 caret、跨格式/块、math/list、等值 table cell、IME/Undo/迟到响应及权限/ABA | 阻止普通编辑器完成声明 |
+| E1 / RQ01–03、06、§5.3 | 已有 16 例官方 Html 最终树及有界样式原型；独立核最终消费选择、原生语义、target 边界、保源降级与不可伪造来源方案 | 独立接受前不关闭桥设计问题；完整 renderer、编辑逆映射和样式支持仍须实现验收 |
+| E2 / RQ02、24、§5.4 | 五档之间共享源/Draft/Undo 与语法显示；真输入 surface：空→输入→删空、任意 caret、跨格式/块、math/list、等值 table cell、IME/Undo/迟到响应及权限/ABA | 阻止普通编辑器完成声明 |
 | E3 / RQ03、23 | 真 Desktop/WebUI/目标 Mobile 的 AT/RTL/zoom/320px、sanitizer/隔离/资源撤权、预算和性能 | 阻止该 surface 阅读与无障碍通过 |
 | E4 / RQ04–07 | 深度1–9与10+、titleless、副标题角色、逐标题同行、长段落/孤行/分页、counter/custom scope | 阻止全标题矩阵通过，有限原生证据仍成立 |
 | E5 / RQ07、20 | Word/WPS/LO 实机打开/更新字段→增删/移/改级→目录/导航/引用→再存/再开；不同模板、CJK/RTL与正文有效字符格式 | 阻止 DOCX 互操作支持声明；style separator 单独验 |
 | E6 / RQ18、23–24 | 精确批注映射、媒体区间、隐藏目标零额外读、建议多实体事务与崩溃/并发 | 阻止批注/建议应用完成声明 |
 
-可直接进入协调候选的决定：唯一 Typst 源；共享会话与一个 DraftUndo；basis 新鲜性与统一 Core 提交；局部保源/不捏造生成写地址；title 与 heading 分域、轻量副标题 label；逐标题原生 show 而非整级设置；普通用户无间距参数；Word 默认整段 Heading N 与有效正文字符格式，并明示目录范围。E1 是关键技术风险，应先用可运行桥样例关门；E5 是输出关键实施门，不能拿现有 OOXML 图替代。具体性能参数、样式分隔符可选路线与 hook 维护成本可随原型修订，需求本身不因此消失。
+可直接进入协调候选的决定：唯一 Typst 源；共享会话与一个 DraftUndo；basis 新鲜性与统一 Core 提交；局部保源/不捏造生成写地址；title 与 heading 分域、轻量副标题 label；逐标题原生 show 而非整级设置；普通用户无间距参数；Word 默认整段 Heading N 与有效正文字符格式，并明示目录范围。E1 已有可运行的有限桥样例，仍需独立确认可实施边界；E5 是输出关键实施门，不能拿现有 OOXML 图替代。具体性能参数、样式分隔符可选路线与 hook 维护成本可随原型修订，需求本身不因此消失。
 
 ## 14. 需求覆盖与替换范围
 

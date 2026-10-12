@@ -1,0 +1,32 @@
+{
+  "evidence": "Design oracles, not implementation tests. Typst compilation proves only legal language. Fixtures use fictitious Node/config IDs without Core admission; supplied bibliography is read-only experiment output.",
+  "positive_facets": [
+    "person",
+    "organization",
+    "task",
+    "work",
+    "period",
+    "range",
+    "event"
+  ],
+  "refinement": "paper.typ requires library/work through library/paper",
+  "native_values": "numeric.typ fields are undeclared syntax examples, not typed values",
+  "negative_semantics": [
+    {
+      "source": "negative-range-empty.typ",
+      "expected": "invalid range: at least one bound"
+    },
+    {
+      "source": "negative-org-literal.typ",
+      "expected": "invalid RefTarget: no literal branch"
+    },
+    {
+      "source": "negative-person-two-branches.typ",
+      "expected": "invalid Target: exactly one branch"
+    }
+  ],
+  "query": "saved-query.typ carries one immutable schema baseline plus author text; cold symbol-binding checks are design-only and do not run CEL",
+  "root": "root-dynamic-body.typ has a direct static root and legal dynamic body/generated metadata; only the direct root is application authority; official compile is not role checker implementation",
+  "citations": "citation.typ explicit entries(key,work) plus native @/cite and supplied generated Bib compile; citation-label-collision.typ must fail ambiguity; heading-reference.typ is not a Work citation",
+  "remaining": "Actual schema installation, provider implementation, AST role qualification, Core authorization/fences and Query/Office consumers are not tested."
+}

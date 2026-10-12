@@ -1,0 +1,199 @@
+{
+  "evidence": "Private Python design checks only; not product installer, official AST role authentication, Rust provider/CEL implementation, permissions or transactions. Query checks exercise schema identity resolution from caller-supplied symbol lists, not CEL parsing.",
+  "schema_counts": {
+    "fields": 55,
+    "types": 8,
+    "definitions": 43,
+    "relations": 28,
+    "validators": 14,
+    "providers": 6
+  },
+  "results": [
+    {
+      "case": "complete-schema-closes-and-paths-resolve",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "unknown-top-member",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "unregistered-validator",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "unknown-provider-implementation",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "forged-provider-export-signature",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "forged-validator-input-signature",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "relation-path-wrong-key",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "query-binding-unregistered-codec",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "missing-event-type",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "constraint-read-missing-member",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "unknown-rule-data-family",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "unregistered-series-rule",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "open-range",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "closed-half-open-range",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "empty-unbounded-range",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "equal-range-ends",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "mixed-date-instant-range",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "non-gregorian-finite-pack-day",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "non-gregorian-outside-pack-range",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "year-precision-does-not-fill-month",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "year-precision-rejects-extra-known-month",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "cold-query-shortname-uses-persisted-baseline",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "missing-baseline-cannot-fallback-current",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "incompatible-current-field-not-namesake",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "incompatible-nested-definition-not-same-use-name",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "duplicate-json-member-rejected",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "replacement-wins-original-exdate",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "duplicate-cancel-replace-invalid",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "nonmatching-exdate-retains-existing-template",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "same-instant-different-offset-key",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "copy-retains-exact-baseline-contract",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    }
+  ]
+}

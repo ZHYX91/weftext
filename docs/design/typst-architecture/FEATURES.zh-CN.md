@@ -7,7 +7,7 @@ translation_status: source
 
 # Features 全新候选：链接、查询、导航、批注与输出
 
-状态：协调后的设计候选，未接受、未实现。本文承接 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md) 的链接、Query、导航、业务类型、批注和输出结果，并保留 Agent、自动化、外部效果与费用的必要边界。验证状态见 [REVIEW](REVIEW.zh-CN.md)。
+状态：协调后的作者候选，等待固定提交的独立复核。本文承接 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md) 的链接、Query、导航、业务类型、批注和输出需求，并保留 Agent、自动化、外部效果与费用边界。共同快照、冻结分页、schema 基线、Calendar 优先级、批注投影、citation 和 Html/Paged 消费者与其它 owner 协调；修订与有限证据见 [REVIEW](REVIEW.zh-CN.md)。设计接受与产品验收分开，本文不宣称实现已完成。
 
 ## 1. 少数共用对象与分工
 
@@ -21,7 +21,7 @@ translation_status: source
 readEntity(ref, current|revision, purpose) / readScope(scope, purpose, completeness)
   -> SourceSnapshot | FieldProjection | unavailable
 compile(sourceSnapshot, environment, target, budget) -> CompileSnapshot
-evaluateQuery(definitionSelection, parameters, scope, budget) -> QueryResult
+evaluateQuery(definitionSelection, parameters, scope, budget, context) -> QueryResult
 readResultPage(handle, cursor) -> Page
 prepare(opId, intent, draftBase, budget) -> Plan{preview, changes, losses, dependencies}
 commit(opId, planHandle) -> Receipt | conflict | rejected | unknown
@@ -66,15 +66,25 @@ URI 分量按一次 UTF-8 编解码：斜杠是分隔符，`+` 是字面加号�
 
 ```text
 AuthoredLink = {sourceOwner, ReadBasis, astPath, byteRange, destinationSlot?}
-RenderedLink = {projectionGeneration, occurrenceOrdinal,
+RenderedLink = {compileIdentity, target, projectionGeneration, occurrenceOrdinal,
                 fragments[], destination, origin: unique_source | generated | multiple}
 LinkResolution = resolved(target, fragment?) | missing | fragment_missing
                  | ambiguous | unavailable
 ```
 
-AuthoredLink 由官方 AST 按源序枚举。RenderedLink 在最终语义投影中每个逻辑 link 一项，换行或分页碎片共一项；同一 include 运行两次即两项，即使 span 和文字相同。两者的关联必须由来源轨迹证明，不能用 span/字符串相等配对。生成项可以导航与导出，无唯一源不能写回或冒稳定作者边。
+AuthoredLink由官方AST按源序枚举，与展示target无关。默认流式阅读的RenderedLink必须来自同一次Html compile的final tree，每个逻辑link一项，碎片共一项；同一include运行两次即两项，即使span和文字相同。打印/PDF/显式Paged输出另用该次Paged compile的最终消费数据，不能以相同source RevisionId跨Html/Paged拼它们。关联必须由各自同compile origin producer证明；仅有Introspector/AST/span/string不能证明显示出现项。生成项可导航/导出，无唯一源不能写回或冒稳定作者边。Html/Paged真实producer仍待EDITOR独立验收，不以旧realization trace推断宣称成功。
 
 出链显示真实源与编译链接；入链提供 ID 指向和“当前路径解析”两个明确分组，后者同样可导航。typed 属性引用另列“属性引用”，不用正文假链接表达。路径索引是 current 范围内派生，源或目标移动、对象替换、权限/目录变化即失效并重算。潜在提及独立展示，不形成真链或引用完整性边。partial 不宣称全库没有入链；只有当前获权完整范围才能给完整零结果，不泄漏隐藏标题、路径或数量。没有自动孤立笔记删除，也没有默认全库改写路径链接。
+
+### 3.1 编译target的统一消费边界
+
+`CompileSnapshot`必须明确Html或Paged target、environment、准确source/cut/World依赖、final tree/实际输出以及该次origin map。默认flow正文/表格/文本copy/visibleExcerpt/潜在链接扫描只取同次Html final tree；用户显式print view选区/摘录取其同次Paged最终输出，两者都不能用另一次compile的map回写。原生 `target()` 可让正文、数字、heading或link不同，source版本相同不能消除此差异。
+
+官方Introspector的native heading产品单独存在：Query可读取该target同次compile中的全部native headings（含生成/深heading）；每行带 `displayAssociation: displayed(current final-tree occurrence)|not_displayed|unavailable`。native heading没有显示关联仍可只读查询，但不得被当作Html已显示正文或writer；Html final tree里的显示heading也不能靠字符串等同猜其native项。标准的“正文搜索”明确读displayed Html body，不偷偷换成Paged或把未显示introspection内容混入。
+
+Html frame内官方局部Paged renderer只是在该Html compile内的局部边界，frame的origin/输出仍属于这一compile，不是另开全篇Paged编译再将其任意内容冒Html tree。无合格映射的frame只读/明确能力状态，不能从其坐标造rootwriter。
+
+准确源copy/fork的身份/typed链接改写仍基于官方authored AST/schema，独立于展示target；若预览/复制显示文字或导出图像则声明消费target并锁同次结果。新Html style实验和桥当前未接受；消费者应报准确可用性，不把“同一快照”代替producer证据。
 
 ## 4. 潜在链接的完整匹配与重叠算法
 
@@ -106,22 +116,99 @@ RTL 用逻辑范围及当前排版映射绘线，不按 x 坐标排序语义。�
 
 Weftext Query 查询获权的库数据，Typst 官方 `query` 仍只做当前编译文档 introspection。普通搜索、导航条件、可视化筛选、保存 Query 和 API 均产生同一个 typed Query AST，交给同一执行器。结构用原生 dictionary/array 储存，表达式选择 CEL 语法的静态受限、确定、无副作用 profile，使用标准 `exists/all/filter/map` comprehension；不继承旧 DAG wire/八必填成员/贡献版本树。CEL parser 只处理表达式字符串，官方 Typst parser 处理原生承载，两者职责分开；无 eval/import/任意回调/网络。高级表达式须静态型检查并保留源，builder 不理解时提供只读高级条件/Source，不替作者删条件。
 
-基础节点为 `scan(scope,lifecycle)`、`read(fields/products)`、`filter(expr)`、`project(columns)`、`unnest(array,binding)`、`sort(keys)`、`take(limit)`、`union_all`、`distinct(keys)`、`group(keys,aggregates)`、`related(relation)` 与保存 Query 调用。正文/标题/表格/所有实际 heading（含生成 heading、任意深度）由同一官方语义投影读入；生成出现项以 run 内 occurrence 区分，无唯一源则纯只读。基础全文搜索生成显式 `textMatch` 节点，UI 显示是否查正文、目录/子目录/库范围及所有组合条件；本轮不另造查询 DSL。
+基础节点为 `scan(scope,lifecycle)`、`read(fields/products)`、`filter(expr)`、`project(columns)`、`unnest(array,binding)`、`sort(keys)`、`take(limit)`、`union_all`、`distinct(keys)`、`group(keys,aggregates)`、`related(relation)` 与保存 Query 调用。默认displayed body/title/table来自该次Html final tree，native heading产品及显示关联按§3.1单列；生成/任意深heading只读存在不等于已显示或可写。显式Paged产品读另一个具名target，同run中每个product带compileIdentity/target且不跨目标拼值或occurrence。基础全文搜索生成显式 `textMatch` 节点，UI 显示是否查正文、目录/子目录/库范围及所有组合条件；本轮不另造查询 DSL。
 
 Query 用 SOURCE 的唯一 Type/Value：text、bool、i64 int、exact decimal、显式 float、civil date/time/local datetime、带 offset instant、ref、array、record 和 schema判别union。money+currency、quantity+unit与精度日期都是该shape系统定义的业务record，不增加未注册scalar codec。数组保序及重复；record 成员按 schema 解释，未知原生成员仍保留为只读值，不猜类型。无隐式 float↔decimal、date↔instant、币种↔币种或单位换算。显式换算需指定准确 provider 与版本，并纳入依赖。电话始终 text。schema 冲突/缺失不能从第一行数据推断 type。
 
 ```text
 Cell<T> = value(T) | absent | null | invalid(diagnostics) | unavailable(reason)
-QueryResult = {handle, runId, definitionIdentity, inputBases, schema,
-            coverage: complete | partial(reasons),
-            freshness: current | stale(reasons), terminalKind, total?}
 ```
 
-absent 是作者没提供；null 是 schema 允许的显式 none；invalid 是已读作者值不合定义；unavailable 是 schema、产品或所需依赖不可得。公开 unavailable 原因不能泄漏隐藏对象存在；不可披露对象直接不入公开范围。空字符串、空数组、zero 不等于上述状态。谓词显式测试 `isAbsent/isNull/isInvalid/isUnavailable`，取非 value 的成员报类型/值错误；未知/不可得不能被当 false 偷偷筛掉。若因部分字段不可得不能判断成员资格，run 标 partial 并给已确定行及未决原因；整体语义不合法则返回错误，绝不包装成 complete empty。FieldProjection 只消费可静态隔离的获准声明与 schema，不编译隐藏正文；隐藏值不得影响公开结果的成功/失败/分支/计时诊断。需要隐藏动态计算才能确定字段时给统一不可用，不执行后再以秘密条件决定公开状态。
+QueryResult只有§5.2那一份定义；本节不另定义handle/schema的平行版本。total/aggregate属于该冻结terminal，不在分页transport中重算。
+
+absent 是作者没提供；null 是 schema 允许的显式 none；invalid 是已读作者值不合定义；unavailable 是 schema、产品或所需依赖不可得。公开 unavailable 原因不能泄漏隐藏对象存在；不可披露对象直接不入公开范围。空字符串、空数组、zero 不等于上述状态。谓词显式测试 `isAbsent/isNull/isInvalid/isUnavailable`，取非 value 的成员报类型/值错误；未知/不可得不能被当 false 偷偷筛掉。若因部分字段不可得不能判断成员资格，run 标 partial 并给已确定行及未决原因；整体语义不合法则返回错误，绝不包装成 complete empty。FieldProjection只消费SOURCE可验证的独立profile中获准声明/schema，不编译隐藏正文、不执行隐藏条件、不披露隐藏诊断；需要隐藏动态计算才能确定字段时在调用前给统一不可用，不执行后再以秘密条件决定公开状态。具体部署能力由SOURCE/Core profile决定，不由控件或reader自证。
 
 coverage 与 freshness 是正交的：完整旧投影也可 stale；partial current 可浏览已知行。截断页不是 partial 的代名词，page 带续 cursor；`take(200)` 是作者显式查询限制而非全库统计。complete + current + 无行才显示该范围完整零结果；partial 的 count 是已知下界，aggregate 若全输入未决标 partial/estimated，不冒精确全量。禁止取当前页画全库比例。权限变化使 run/cursor失效，清理缓存的受保护 cells/snippets/counts，再获权重跑；其他依赖变化可显示已标 stale 的仍可读结果，但它们不能写。
 
 结果行的 lineage 仅是来源说明，不是写权。直接 field 行可提出精确 intent，prepare 重新获当前 ReadBasis 和窄写资格；group/distinct/computed 值不继承代表行的 writer。跨已连接库可以 union 获权结果；定义与数据不跨授权域隐式读取；动作不因此获得跨库原子保证。回收站是显式 lifecycle 范围，获权只读，保 tombstone/不可用诊断；结果不授 restore/purge，任何经 trash 调用链输出的 view 动作禁写。
+
+### 5.1 Core LogicalCut：结果不能由逐对象 current 读取拼成
+
+反例：同一Core事务把 `A.amount=10,B.amount=0` 变成 `A.amount=0,B.amount=10`。先读A旧值再读B新值会算出sum20，这在任何已决状态都不存在；给两项各自ReadBasis或最后核“都曾读过”不能修复。因此Query不是循环调用 `readEntity(current)`。
+
+`LogicalCut` 由CORE产生，包含同一authority的已决journal generation、完整causal heads、entity→准确revision/blob/lifecycle映射、冻结结构事实、schema/rules/settings以及授权audience。Core在一次短commit/read barrier中取得这一已决视图，并与cutHandle同一受保护注册步骤保留必要历史blob/视图。只在注册成功后释放barrier；不能捕获半安装事务。它是本次历史读取快照，不建立第二份可独立更新的current正文/目录权威。
+
+执行算法：
+
+1. 对当前调用方获权，解析本次scope和定义选择，申请CORE cut；定义current版本、当前schema及实例scope在同cut冻结。pinned定义的历史版本单独固定，数据仍取本次cut。整个嵌套saved-query调用闭包共用适用authority的同cut；callee current定义也从该cut读取，不能递归各取新cut。静态检测定义调用环，冻结参数/默认值及now/timeZone等明确context一次；所需跨authority调用扩为显式federated向量，并受调用/展开预算。
+2. `scan` 只枚举cut的准确库存/结构/lifecycle及其完整正负范围。使用索引必须证明其每条结果属于此cut；缺构建范围时用cut blob重算或标partial，不拿旧索引负范围证明不存在。
+3. `readEntity(ref,at=cut,purpose)` 只取保留的cut blob，不重新读最新工作文件；字段/body/官方编译依赖均在同cut解析。World的受管include/resource/style/config读取亦取该cut；原生文内函数结果不能来自之后的latest附件。
+4. 对外部包、固定provider数据和其他非工作区inputs锁准确不可变版本；负依赖（未找到文件/成员）由cut库存或该固定输入集合证明，不能在求值中逐个查ambient文件系统。
+5. 计算到终点，封存结果/顺序及完整性说明，然后调用CORE `publishCurrentResult`，而非后台worker直接宣布current。publication barrier内同一受保护注册事务原子校验实际consumed正负依赖、完整scope、schema/settings、当前auth、observer连续性，并注册原run/retention和从捕获cut连续接续的change subscription。只有相关依赖仍与cut一致才标 `current_at(publicationCut)`；无关全库generation变化不必拒绝。验证与注册之间无空窗，不能先validate后另一次写handle。已经变更但未撤权可交封存complete/stale，或有限次新cut/newrun重算；不是“评估结束”本身授current。授权变化不发布原结果；watcher gap/raw external未知不得current。after-publication相关变化经同subscription标stale，授权变化整体invalidate，不能修改冻结行值。任意basis无法再证明不能把same bytes重装为新cut。
+
+上述例只可能得到旧10+0或新0+10，sum均10。读cut不会长期持有全库write lock；历史blob保留支撑执行，结构新事务仍可提交。Core未能保留所需cut视图时返回cut_unavailable或明确partial，绝不以current逐项fallback补齐后声称coherent complete。
+
+current的线性化点是publication事务的校验/注册决议，准确含义是“在本模式可证明的Core admitted事实下，该结果相关事实此刻仍适用”。它不宣称任意raw外部工具全库瞬时静止；external_pending/逐文件观察边界另显。出版过程中预算/取消/IO不足不给complete；如果已封存合法partial，可用同publication门发布partial/current或partial/stale，不能把混合txn读取的结果包装成partial补救。publication冲突只保原封存结果并报stale或重算，绝不修改其中一行后继续旧run。
+
+context闭合为明确now(冻结Instant或null)、timeZone(明确zone及规则版本或null)。选择workspace默认zone时Core从本cut settings解析并冻结真实zone/rules；选择“当前时间”须显式请求Core/Server clock provider一次生成now，整个callee闭包共享该值，不反复取host clock。client显式now可作为查询语义，但不是授权expiry/批准/audit时间证明。输入context及实际生成选择纳入结果；不静默用设备时区解释civil date。
+
+多个独立authority的union携 `logicalCuts:[...]`，一致性标为 `federated`（每authority内共同cut，authority间无共同瞬时承诺）。全局聚合可以显式表达这组固定cuts的结果，UI/导出说明其非单一全局时点；要求single_authority保证的query或跨域写入条件拒绝，不由“同一runId”伪造跨服务器原子快照。
+
+外部编辑边界：未admitted的普通文件观察不插入business LogicalCut。Core记录external_pending/不完整/冲突并使相关结果stale；文件仍是实际current源，保留旧cut只为显式历史结果，不声称它是当前工作文件。`observed_only` 浏览可以显示各对象准确external observations及coverage，UI明确“逐文件观察”；它没有全库瞬时cut，不给强aggregate、negative-range/absence、全集批量或查询后条件资格。若用户需要强查询，先通过admitExternal/merge把所需观察纳入正常决议；不得悄悄丢外部稿或按最后到达覆盖。响应未决恢复同cut/run或明确过期，不生成名字相同的新cut冒原请求。
+
+### 5.2 冻结结果与分页，不是回读 latest 的cursor
+
+`FrozenResult` 是一次求值的不可变terminal schema+数据+行顺序/occurrence keys+coverage+cut/定义/参数/provider依赖。可在受控内存或只读spool/chunks保存；这些是可清理投影，不是业务事实。只有完整终点评估完成并封存索引/顺序后才发布complete handle；partial也先封存一个明确的已确定subset及缺口，不把后续完成行暗加同handle。
+
+```text
+QueryResult = {
+  audienceHandle, runId, definitionSelection, schemaBinding, logicalCuts,
+  inputDependencies, invocationContext, terminalSchema, frozenResultRef, publicationBasis,
+  coverage: complete | partial(reasons), consistency: single_authority | federated,
+  freshness: current_at(publicationCut) | stale(reasons), expiresAt
+}
+Page = {runId, frozenResultIdentity, startOrdinal, rows, nextCursor?}
+Cursor = opaque Core record bound to
+         {runId,logicalCuts,frozenResultIdentity,orderDigest,nextOrdinal,audience,expiry}
+```
+
+以上是准确语义对象，不冻结transport wire。Core按自己的受保护记录签发handle/cursor，不接受caller自报ordinal/run作为权限。页算法：先核current audience及整个实际消费的授权依赖，再核原run/cut/结果保留及cursor，最后读取冻结序列的 `[nextOrdinal,nextOrdinal+pageSize)`。再次请求同cursor得到相同行、序号和nextCursor；页大小不能改变语义membership、排序或统计。不能为分页重新运行query/read latest；相同ID仍指原结果，而非一个新结果的页。
+
+显式sort用同SOURCE Type/Value比较器与声明missing/null顺序，tie用完整run内source/occurrence key稳定破同分；无sort保producer顺序，scan按cut库存完整实体key，unnest保parent order+item ordinal，union_all保声明输入序，group/distinct以规范完整typed equality key给新行，不借代表输入writer。相等hash碰撞比较完整值。全局sort/aggregate必须遍历完整逻辑输入并计预算；spool失败/预算失败不能截出第一页假complete。partial aggregate的已知subtotal不是完整值，signed金额subtotal也不能冒下界；不给未定义的“估计”算法以estimated标签。图表与导出引用同FrozenResult而非浏览页。列表晚到摘要/缩略图若附在原result row，必须从该row同cut source和独立获权资源生成；当前打开笔记可以重新read current，但展示新revision与原列表stale状态，不能把新缩略图伪成旧row同basis。
+
+相关授权变化整体invalidate原handle/cursor并停止交付，不能删去隐藏行后继续旧ordinal，泄漏原行数/空洞。重跑是新run/cut/result，UI明确替换，不能拼接旧第一页和新第二页。异步索引补全、source修改或subscription更新也只发布replacement handle；原partial仍保持原subset，不把coverage改成complete而不重封存结果。expired/cut unavailable返回状态，用户明确refresh创建新run，不透明换内容。引用结果作action只提供目标说明；prepare重新获当前basis/真实依赖，冻结目标集，commit不再跑query扩大它。
+
+### 5.3 保存定义的持久schema解析基线
+
+单有 `phones`、`person` 等短名和CEL源码无法持久绑定Field/Type ID。保存定义新增必填原生成员：
+
+```typst
+binding: (
+  schema: "weftext-config://58c47256-bfce-4d29-a037-b83a3a644fb0/schema",
+  revision: "8a81e35f-ad48-4c12-af4f-3d2607102fa9",
+  language: "weftext.query.cel.v1",
+)
+```
+
+示例ref/revision只说明形状，实际positive fixture必须由Core完成对应workspace初始化并取得准确已提交schema revision。SchemaRef是集中唯一schema的roleRef，内部为 `{workspaceId,kind:"schema"}`，作者字符串准确 `weftext-config://<lowercase-WorkspaceId>/schema`；不分配另一随机schema身份，不因字符串出现就创建role。schema baseline包含aliases、FieldId→作者key/shape、Type定义、Relation定义及provider/函数签名的完整配置；不是把这些定义再抄入Query。Query只保存表达式作者文本/原生结构和一个准确baseline选择，AST、name→ID map、typed plan均可重建，不持久另一份独立AST事实。
+
+生产：Query builder先在获权current schema下官方投影声明，再CEL parse/type-check。静态symbol table区分保留产品（self/title/body/headings等）、parameter、comprehension局部变量与字段；局部变量按lexical scope绑定，`p.number`从p的已绑定record shape解析，不按全库同名Field匹配。unqualified field key必须在baseline唯一且不冲突保留名；消歧入口为 `field("<permanent FieldId>")`，参数必须literal且存在于baseline，解析阶段即成为typed field-reference节点，不执行动态name lookup；普通UI可保短名，无需手写永久ID。禁止动态拼FieldId或动态函数名。types短名、related RelationId与所有provider函数一并从baseline解析。Core检查本次引用闭包与安装schema一致，保存binding同metadata入一个source Plan；schema在prepare/commit间变动则冲突重准备，不保存未安装caller schema字符串。
+
+冷重开：获权读定义及准确baseline配置revision → 选准确CEL语言profile/parser → 重新解析全部结构/表达式 → 由baseline生成唯一语义ID引用及Type/Value签名 → 验全部symbols/参数/函数/关系 → 取得本次LogicalCut的current schema → 按永久ID join当前定义，并由SOURCE的兼容规则验证每个真实消费定义。绑定闭包涵盖where/select/order、type/field读、parameter type/default、view列/表达式、export typed输入、related RelationId及definition-call参数/常量；callee定义消费自己的baseline，并共享适用data cut，不能以caller schema重新解释callee。copy/template/import必须枚举这些真实typed槽及其SchemaRef/revision依赖。绝不拿当前alias/key重解旧源码。baseline不可得/撤权、语言profile不可用、ID消失、语义/shape/direction变为不兼容时definition_unavailable，保源与迁移入口，不换最新schema补救。
+
+兼容增可选record member不使旧已绑定成员失效；field key改名、nested member含义变更、target方向/域、nullable/required/enum意义、provider函数语义变动不能只因为“同ID”就自动通过。SOURCE确定兼容性，若需要迁移，preview完整oldID/oldshape→newID/newshape/表达变化并由明确Plan更新binding。display alias重命名可以保持同ID，旧baseline仍认旧别名；新UI生成当前别名要做显式重bind/文本变更，但不能漂到新同名ID。
+
+普通编辑保存保原baseline；用户明确“重新绑定schema”才预览真正身份变化并更新它。current定义引用每次选当前source revision，该revision内自带自己的binding；pinned定义永用其原baseline，但数据取新cut。inline未保存查询在本次入口冻结current schema/profile，提升成saved时把该准确选择写入声明。保存scope里的 `library:"current"`准确指definition owner的library，不跟调用方ambient库漂移；改变scope必须明确改定义或已声明typed scope参数。复制/export声明保引用baseline配置revision依赖，或显式同map映射/迁移；丢baseline而仍称Query可运行不允许。Core `readConfigProjection(schemaRef,revision,authorized names/IDs,purpose)`只给最小获权引用定义投影，受保护服务可保完整baseline；不把全schema条目/隐字段名作为错误或预览交付。
+
+### 5.4 表达profile、schema与provider的闭合职责
+
+本候选选择单一 `weftext.query.cel.v1`：CEL语法/标准bool/string/list/map/comprehension、SOURCE Type/Value及具名纯函数签名，静态拒未知name、dynamic invocation、任意eval/IO。int严格i64 checked，不以CEL自动float提升金额；exact decimal/date/instant/ref/Cell通过明确typed adapter，只有本profile列明的同型比较/函数能使用。literal常量按SOURCE合法constructor/准确字符串规则生产，不能expected type偷偷把float变decimal。
+
+CEL AST只来自作者表达式parser；官方Typst AST只解metadata与native值，CLI metadata JSON不作精确值权威。builder、text search和导航产生同一normalized Query plan。自定义纯函数、relation scan和recurrence expansion来自SOURCE闭合安装descriptor，不能用“已注册”散文去解释unknown codec/constraint。执行前所有实际函数/provider选择纳入baseline、LogicalCut依赖及预算；具体业务接口见§8.2–8.3。
+
+Cell与CEL边界具体如下：字段root绑定携SOURCE T以及其Cell状态，state函数 `isValue/isAbsent/isNull/isInvalid/isUnavailable` 是此language profile的具名内建，直接检该Cell不先unwrap。普通值运算/record member/list comprehension只在value态取得T；在非value态使用产生明确 `cell_absent/null/invalid/unavailable` EvaluationIssue，绝不让状态tag作为CEL bool/string或自动false。可选record member保presence，标准 `has(p.label)` 检查对应已授权record键；`has`不读取无权字段。guard使用标准短路 `&&/||`，不会为了判断左侧false而访问右侧值。provider `bool-cell`在value态适配CEL bool，其它态转EvaluationIssue，不把整个Cell结构放进 `&&`。例如containsDate未记期间→unavailable，不意味着该员工永久有效。
+
+静态型检查记录declared T/成员presence/可能的read effect，禁止跨T coercion及非法member；运行时依准确Cell保持错误差别。filter产value(bool)才确定成员；unavailable/invalid依赖导致未决行和partial诊断，schema/表达式静态非法是整个query error。明确state test可选择“只看可得值”或诊断行，这是可见作者条件而非后台丢数据；数据库存未决仍不得complete。简单UI只为已知absent/可选member生成明确守卫，不默认把isValue=false的invalid/unavailable排除；用户明确“仅可得值”才生成并展示该状态条件。高级源码不替作者补false。select直接字段仍导出其原Cell状态，不先unwrap再丢状态；aggregate输入含非value必须有作者明确筛除/诊断策略，否则partial或error，不能补0。
 
 ## 6. 嵌套集合：同项绑定、保序与代表查询
 
@@ -140,18 +227,20 @@ filter(phones,p => p.number == "13800138000")
   -> 按作者顺序第1、第3项，各自label/note完整。
 ```
 
-建议保存定义是直接应用 metadata 的原生结构，下例是设计 schema 示例，未声称已由实现执行；字段名由 schema 安装后的准确绑定解释，用户可以使用短名，内部不能按显示标签找同名字段。
+建议保存定义是直接应用 metadata 的原生结构，下例是设计 schema 示例，未声称已由实现执行；binding中的schema revision必须换为实际Core已提交版本。字段名由§5.3准确baseline解释，用户可以使用短名，内部不能按显示标签或current新同名字段替换。
 
 ```typst
 #metadata((id: "f8597b15-6b7f-4a6a-9b52-c2732730fe41", types: ())) <weftext>
 #metadata((
   kind: "weftext.query", key: "6b2b9e19-5599-48c3-b27b-6b006ec9c397",
+  binding: (schema: "weftext-config://58c47256-bfce-4d29-a037-b83a3a644fb0/schema",
+    revision: "8a81e35f-ad48-4c12-af4f-3d2607102fa9", language: "weftext.query.cel.v1"),
   scope: (library: "current", lifecycle: "live"),
   types: ("person",),
-  where: "phones.exists(p, p.label == 'work' && p.number.startsWith('138'))",
+  where: "isAbsent(phones) ? false : phones.exists(p, has(p.label) && p.label == 'work' && p.number.startsWith('138'))",
   select: (
     (name: "person", expr: "self"),
-    (name: "contacts", expr: "phones.filter(p, p.label == 'work')"),
+    (name: "contacts", expr: "phones.filter(p, has(p.label) && p.label == 'work')"),
   ),
   order: ((expr: "title", direction: "asc", missing: "last"),),
 )) <weftext-query-work-phones>
@@ -172,7 +261,9 @@ filter(phones,p => p.number == "13800138000")
 | 深标题 | `read(headings); filter(level >= 6); project(level,text,occurrence)` 包含生成项；10+ 级仍按真实级别读。 |
 | 金额汇总 | `group(currency,sum(amount))` 每币种独立，不混币；无有效金额且有invalid者不能报零总额。 |
 
-相等用唯一递归 Type/Value 规则：text 精确；exact number 按数学值（保作者表示另存于源）；float 有限数且 signed zero 数值相等/原位值保全；instant 按精确 UTC 时刻；ref 完整身份；数组顺序敏感；record 键顺序无意义、数组内顺序有意义；tagged union 按分支+值。group/distinct 比完整相等键，hash 碰撞再比较完整值；选代表时用稳定完整值序，不按当前页第一行。它们产生新 group 行而不继承来源 writer。排序对复杂值必须显式投影 scalar，空值位置明确。
+相等用唯一递归 Type/Value 规则：text 精确；exact number 按数学值（保作者表示另存于源）；float 有限数且 signed zero 数值相等/原位值保全；instant 按精确 UTC 时刻；ref 完整身份；数组顺序敏感；record 键顺序无意义、数组内顺序有意义；tagged union 按分支+值。group/distinct 比完整相等键，hash 碰撞再比较完整值；选代表时用稳定完整值序，不按当前页第一行。它们产生新 group 行而不继承来源 writer。复杂排序仅按下面明确的SOURCE具名比较器/投影规则，空值位置明确。
+
+排序统一消费SOURCE比较器，不另开Value体系。默认record/union/list没有整体order。具名 `scalar` 比较器仅接受同型可排序标量：text精确Unicode scalar顺序（不locale折叠）、i64/finite float/exact decimal数学序、明确同域civil日期/时刻与精确UTC instant；`ref_identity`仅比较同种完整EntityRef的规范身份tuple，不按标题补序。显式 `sequence_lexicographic`仅接同型且items可用scalar比较器的数组：第一不等项决定，等前缀较短者先；值不被重排/去重。array<record>须先map已绑定标量member或明选min/max等标量投影，record/union不能默认lexicographic；quantity/money先声明单位/币种分组和准确magnitude，不跨域默比。missing/null顺序显式，invalid/unavailable走原状态处理，不按诊断文字排序。SOURCE和Query/参数/view/export均用这些同一规则。
 
 修改第二个重复电话：UI 发出当前 basis 和 item path，Core 在准确前像官方 AST 中重新定位第二项，仅修改目标 member，完整重解析及 schema 检查，一次 Undo/事务。若期间数组重排或源变化则 conflict，重新显示当前各项供选择，不按相同号码猜另一个项。所有保序操作和导出都不因为去重显示、分组或索引排序而回写数组。复杂关系或历史若真实需要跨版本项引用，可由 schema 显式引入该项 id；这属于需要论证的领域能力，不为每个电话默认分配 UUID。
 
@@ -218,11 +309,88 @@ Calendar有三个已选资料类型：period-note、range-note、event；day/wee
 
 range字段为 `(start,end_exclusive)`，date或instant半开区间，至少一端有界，开放端用明确缺端不填现在/最大日期。同型有界端点严格start<end；SOURCE的 `bounded_half_open_range` 具名约束负责本range准入。窗口重叠用 `start < window.end_exclusive && window.start < end_exclusive`，开放端按无界处理。`during(start,end)`是独立有效期间，不混作半开事件range；containsDate使用其明确闭合区间规则和未知状态。duration只派生，未定provider不伪造秒数；date单位/precision与instant精确elapsed seconds不同。event复用range，增加status、参与者及作者reminder-intent，不复制另一份时间事实；参与者Person/Org关系可反向派生，提醒意图资料保留而送达后置。
 
-recurrence按冻结calendar/zone/provider及source anchor的civil phase生成daily/weekly/monthly/yearly候选，应用interval与显式byMonth/byMonthDay/byWeekday/weekStart，count或inclusive until限制；不存在民用日期跳过，DST gap/fold按明确规则处理，不能host默认。合并rDates后按原发生键去重，排除exDates，应用同原发生键的cancel/replace；replace可改range/title/status/note，不把改期终点变原发生身份。计算窗口结果同时枚举正常窗口候选和全部可能从窗口外移入的有限explicit replacements，再按实际range过滤；预算不足标partial，不漏移入却说complete。没有默认每次发生建Node；显式promote/adopt才创建。改series时预览已有exceptions的keep/remap/drop，不能静默丢旧例外。per-occurrence参与者/提醒覆盖若schema未选，保导入原件并报告unsupported，不冒全RFC兼容。
+recurrence按冻结calendar/zone/provider及source anchor的civil phase生成daily/weekly/monthly/yearly候选，应用interval与显式byMonth/byMonthDay/byWeekday/weekStart，count或inclusive until限制；不存在民用日期跳过，DST gap/fold按明确规则处理，不能host默认。定义B为合法base集合、R为rDates、E为exDates；先按精确原发生键对B∪R去重，然后对每键应用 **cancel > replace > EXDATE > template** 决策，绝不能先EXDATE删候选再试replace。replace可改range/title/status/note，不把改期时间变原发生身份。常规窗口与窗口外移入replacement使用下面同一决策函数，再按实际range过滤/排序；预算不足标partial，不漏移入却说complete。没有默认每次发生建Node；显式promote/adopt才创建。改series时预览已有exceptions的keep/remap/drop，不能静默丢旧例外。per-occurrence参与者/提醒覆盖若schema未选，保导入原件并报告unsupported，不冒全RFC兼容。
+
+#### 8.1.1 原发生键的唯一决策与窗口流程
+
+原发生key取date完整民用起点或instant精确UTC起点，offset不同但同UTC为同键，不用replacement起点或数组ordinal。base count在EXDATE/exception前对准确base起点排序/去重后计，删除不补下一项；RDATE不消耗count且可早于anchor/超出count或until，只要同域。until是inclusive的base起点限制，不限制已合法明确RDATE。EXDATE没命中B∪R仍保作者意图，不产生发生项；每exception的onset必须可证明属于B∪R，缺membership证明不能把它当幽灵发生。
+
+在SOURCE完整typed准入已经证明每个原键最多一个exception之后，`decide(o)` 只用同cut的规则/集合：
+
+| 原键o的状态 | 唯一结果 |
+| --- | --- |
+| 有cancel exception（是否同时EXDATE不限） | 不产生发生项。 |
+| 有replace exception（是否同时EXDATE不限） | 产生完整replacement；未覆盖字段继承该次template，EXDATE不删除它。 |
+| 无exception且o∈E | 不产生发生项。 |
+| 无exception且o∉E | 产生该次template。 |
+| 同键有多个exception，包括cancel+replace或不同replacement | typed series invalid，保原件并诊断；不能利用cancel分支洗掉冲突。 |
+
+窗口算法：从B/R枚举可能与window重叠的原始template候选，同时枚举所有有限replacement onsets，逐一验证其B∪R membership；合并原keys并去重 → 每键只运行一次decide → 取实际range与window重叠者 → 按actual start、actual end、original key稳定排序。不能普通候选“先EXDATE”、移入候选“先replace”两套路径。有限替换枚举需完整coverage；不可完整证明时partial且不能给完整零结果/negative range。只改title/status/note的replace仍继承原range；移动到window外则不返回，原键仍保。
+
+| 设计oracle（产品未运行） | 期望结果 |
+| --- | --- |
+| O=2026-10-15，O∈E，replace仍在同窗口 | 返回replacement，不能因EXDATE消失。 |
+| O∈E，replace从window外移入window | 用同decide返回一次replacement，原key仍O，按actual时间重排。 |
+| O在window，replace移动到window外 | 原template与替换都不在该window结果中；不保留原位置的幽灵卡片。 |
+| O∈E且唯一cancel | 不返回；cancel胜EXDATE/template。 |
+| 同O的cancel和另一个冲突replace | SOURCE typed准入拒绝而保source；不是两个卡片，也不是silent cancel胜出假valid。 |
+| EXDATE不命中B∪R | 不新建/不删别的key，保EXDATE作者值；合法series其余发生不变。 |
+| 同UTC不同offset的RDATE/EXDATE/exception key | 按唯一精确key计；不能用raw拼法绕过重复例外检查。 |
+
+该决策保留历史已选改期结果，SOURCE/provider新schema与实现仍是本代的独立合同，不继承旧wire或版本包装。
 
 pack提供历法/节假日上下文，结果保pack/version/source/applicability，多pack并存，不写一个isHoliday权威。ICS UID/RECURRENCE-ID/SEQUENCE是来源标识不等EntityRef；VFREEBUSY/VTIMEZONE不自动Node，VTODO/VJOURNAL显式preview映射。Period、Range、Event完整native schema归SOURCE，以上算法是Features消费者实际义务，不能用“保留旧服务”替代。
 
 这里没有要求常用信息填所有复杂字段，也没有禁止确需的逐项身份。schema与关系迁移必须显式 preview 原件、受影响字段和未知值；未知字段保源并只读展现，不能先删除后称精简。
+
+### 8.2 可安装关系定义及唯一source的真实producer
+
+SOURCE修订的闭合schema增加 `relations`，不是第二关系数据库。每个Relation定义必须落到当前schema真实FieldId和展开后的准确typed target path，并声明source/target type域、方向、literal分支策略、来源基数、self规则及graph projection；inverse名只供派生呈现，不创建作者字段。安装器从完整schema展开验证path里的每个member/array-each与目标ref shape、Type membership、max/null等约束，不接受自由运行expression当target extractor。本节描述语义接口，准确JSON成员由SOURCE的 `schema.json` 唯一拥有。
+
+```text
+extractAssertions(sourceSnapshot, installedRelation, cut)
+  -> ordered [{sourceOwner,fieldId,itemPath,sourceBasis,
+               relationId,targetRef|literal,domainPayload}]
+validateRelationChange(relation,before,proposed,cut,authorizedScopes,budget)
+  -> complete dependency set + accepted semantic after | rejection/unavailable
+readRelations(relation,scope,cut,budget)
+  -> frozen source-assertion rows + coverage
+```
+
+extractor只读官方native字段投影，array ordinal仅在当前sourceBasis有效。沿Shape判别的ref/text union读取，ref路径在text分支缺席不是整个item absent：只在该关系明确允许literal时输出独立literal assertion，保文本但不lookup、无inverse/target-domain/graph、不会因同名目标存在而改变结果。ref+text双出现invalid不跳过；optional wholeField/member absent不造assertion。source基数统计真正作者records，包括许可literal，不先过滤ref漏计。ref-only关系若作者放text则保raw并typed invalid，不统一给literal豁免。People10与本轮unknown Work contributor可literal；Org12、Work venue/version_of、Task dependency、Event participant仍ref-only。
+
+ref arm由Core解析准确EntityRef/lifecycle、SOURCE验证目标类型：engagement→ordinary Node；Person人物关系→Person；Org12关系→Org；Task dependencies→显式Task；Work contributors→Person|Org；venue→Work|Org且不等publisher；version_of→Work；Event participants→Person|Org。安装path实际来源是SOURCE成员 `target_path` 的member/each steps：engagement经 `engagements[].employer.ref`，contributors经 `publication.contributors[].agent.ref`，venue/version_of经 `publication.venue.target.ref` / `publication.version_of.target.ref`，task.project是scalar ref的空path。field-only规则只读取声明范围及实际端点资格，不回读隐藏body。
+
+27种历史已选关系语义有可安装来源，而非散文枚举：Person10、Org12、Work3（contributors/venue/version_of）、Task dependency、Event participant。本轮task.project另装为第28项关系，不能将数量当已选证明。新文件必须把每种路径、域与方向实际装入schema；安装了其中一个不能宣称其它已有typed inverse。SOURCE Relation成员闭合集合为 `id/source_type/field/target_path/target_domain/target_types/direction/inverse/max_assertions/reject_self/graph_projection/cycle_policy/resolution/delete`，exact typed shape和constraints以其文件为准。Org parent、Work venue/version_of最大1按真实owning字段约束检查，其余按已选many；不能从显示图层合并边再计算作者基数。
+
+create/update先校验完整当前作者container及适用type，再提取拟议after assertions，检查存在/类型/lifecycle/self/基数等真实需要的范围，给准确窄变动和全部read依赖入Core Plan。新增ref需要可读live准确端点；既有目标回收/失效保事实但派生suspended，不自动删。移除/清理针对作者source，不为删除inverse写另端。membership改变必须重验其真正受影响relations，不能只改types而让旧typed边伪合法。
+
+每个symmetric assertion只一个作者owner，允许独立作者assertions各保其来源，graph按 `(fullEndpointPair,relationId)` 合并显示保完整assertion列表；写入必须选择准确assertion重新获权source。两条独立事实不是双写同一事实。完整列表不含隐藏source标题/数量；partial不说没有关系。copy同map重写真实target槽，并对新source after重新校验，不字符串扫描；外部target保留或显式损失，不伪造身份。
+
+`graphProjection=general/ranked/family` 是布局含义，不自动等于acyclic写约束。guardian是general，manager/mentor是ranked，parent/spouse/sibling带family角色；custom一般family/social/professional称谓不生成代际方向。循环事实未经明确业务禁止仍保留，rank布局歧义可改general/标ambiguous，不能删边或借布局新增规则。若明确安装的规则确实要求acyclic，用同cut完整可达闭包的DFS/SCC验证proposed graph，并把遍历范围/负范围入Plan；完整性不足不可声称accept。需要全局incidence/unique/cycle范围的写入要求预先声明且获准完整constraint scope，不按“隐藏边恰导致cycle”动态返回不同公开错误；缺完整scope授权统一unavailable。普通source-only关系不因此被迫读取全库。
+
+### 8.3 Calendar、量值与provider的闭合安装和调用
+
+SOURCE修订schema包含七个已选base类型与paper扩展所需真实shape、constraints、`providers` 和 `series_policies`。provider是固定准入的实现/数据/精度/时区规则选择与静态导出函数签名，不是schema里的可执行代码。配置恰使用SOURCE的 `id/family/implementation/data/exports/limits`，implementation恰builtin id+abi，exports恰name/inputs/result/effect:pure/query_name（唯一公开CEL名称或null）；不向这个closed对象散文加digest字段。Core把该配置revision、真正准入builtin ABI/build digest、完整数据内容与runtime profile绑定成受保护实际依赖。过期/缺版本不自动latest或转text。Query解析基线固定其语义函数签名，LogicalCut依赖固定本次执行真正的实现/数据；静态shape有效不证明provider存在，状态明确provider_unavailable。只有query_name非null的白名单服务export进入CEL，primitive periodBounds等内部export不因此公开；同名query_name拒安装，内部调用按provider id+export精确选择，不按provider数组第一项胜出。SOURCE `builtin-abi.design.json` 是设计签名证据，产品安装器必须与受信Rust builtin registry逐项核implementation/abi/signature，不能以配置自授函数能力。
+
+最小消费者签名与语义如下（使用SOURCE Type/Value，不另建日期/量值V）：
+
+| 函数/操作 | 必须完整实现的语义 |
+| --- | --- |
+| `containsDate(during,point)` | `during(start,end)`为闭合有效期间；point与已有端点同date或同instant。缺端为无界；未记录整个during是unknown，不变成永久有效。instant按精确UTC，date按明确calendar/precision；不补host zone。 |
+| `nextCivilDay(date)` | 指定calendar/provider的下一个民用日，溢出错误；只处理声明的完整day date，不将year/month/月日当已知年日。 |
+| `rangeOverlap(a,b)` / `rangeDuration(range)` | `range(start,end_exclusive)`半开且同域、至少一端有界；overlap使用§8.1；date duration是明确历法单位，instant用exact elapsed seconds。开放duration不可得，不填现在；缺calendar/provider停止，不产假值。 |
+| `periodBounds(period)` / `resolvePeriod(period,seriesPolicy,cut)` | 前者是installed calendar/temporal纯函数，检查kind/calendar/version/rule/key/zone/tzdb、ISO week-year，返回确定range。后者是Features/Core orchestration，用已获权slots的period结果+同cut Query查已有/negative range，不冒可以直接读库的pure provider。series/period/scope是实际唯一键，标题/目录不参与。 |
+| `expandRecurrence(event,window,providers,budget)` | §8.1完整候选/selector/count或until/rDates/exDates/cancel/replace及窗口外移入；原发生坐标和replacement时间分开。partial包含停止位置与缺口，不提供完整负范围。 |
+| `validateQuantity(kind,value,unit,precision)` | 此逻辑wrapper消费 `units/rules` 的 `measurement/quantity` 实际exports，不新增未安装同名export。height/weight分别length/mass、精确decimal，unit与kind/维度同provider；unknown unit保原件但typed业务不可用。不内建默许所有单位，也不自动跨币/跨制度换算。 |
+
+逐类归属：Period、Range、Event的记录shape和local约束由SOURCE安装；Field/Type IDs、relations和policies是真实config；Features提供以上具名纯validator/函数或有限只读expander；Core冻结provider与完整scope依赖并在prepare/commit重验。provider host只给已获权输入slots和budget，不能直接读库/文件/网络、写作者源或签授权。scalar provider失败报明确typed错误；需要全局事件窗口的expander可给partial；二者不洗成absent。
+
+recurrence的准入不得只检查字段是dictionary：source anchor由event唯一 `range.start` 与provider派生，作者recurrence不重复存另一anchor；其域与range一致、frequency/interval/selector域有效、count与until互斥、until域准确、rDates/exDates原发生域、exceptions key唯一与replacement range有效、zone/tzdb/规则完整，均要由SOURCE闭合具名constraint准确列reads，并调用对应固定profile。daily/weekly/monthly/yearly是civil phase；date range长度按民用日，instant模板长度按exact elapsed；不存在日期跳过，DST gap/fold策略由已安装profile明确给定（例如gap=skip、fold=earlier），不能host默认。profile换义需显式schema/规则迁移与exceptions keep/remap/drop preview。仍不宣称全部RFC recurrence/所有历法，不能表达的信息保原件和loss。
+
+period `unique/many`策略实际装在series_policies，明确series/scope及key producer；unique检查必须在授权完整scope同cut读取已有+负范围，prepare/commit把该约束保护到Core单决议。隐藏成员导致未获完整scope时操作统一unavailable，不依据它是否恰冲突泄漏存在；readable已有对象返回准确选择/打开入口，partial只报membership unknown。多个series同period、many同key各个笔记均可共存；policy变动与旧key迁移是显式config Plan，不靠文件名去重。
+
+本节的安装要求必须在SOURCE修订完整schema中实际闭合，未知约束名/函数/shape拒安装；缺少完整七类definitions时标具体不可用，不以“实施前再生成”宣称设计已可执行。当前为协调后的设计候选，安装器/validator/provider/Query/权限尚无产品实现证据；非作者报告与新准确候选复核前不自报关闭。
 
 ## 9. 独立 JSON 批注和原子建议
 
@@ -242,7 +410,7 @@ AnnotationTarget = whole_document(owner)
 
 targetResolution 与讨论状态分开：exact/mapped/stale/ambiguous/orphaned/unavailable。新源版本只在 Core 保存了连续、准确编辑映射且范围未被改变时自动迁移；外部变化无连续证明就 stale/orphaned，不能相似quote搜索自动重锚。人工重附显式选current目标，预览改动；已有建议必须重新确认。range/element失效仍出现在未定位讨论列表，可读回复、resolve/reopen；不能删除JSON、用新摘要替代原摘要或擅自重新挂到同名文件。
 
-读批注只披露已存内容（包括有权限的原 visibleExcerpt 摘录/归属）；不顺带读隐藏目标、新截屏或重新算context。当前目标context需独立 source/resource-read。引用只需来源可读和目的Draft可写，不要求来源可写；粘入引文是目的作者内容，不证明原目标仍current。
+读批注只披露已存内容（包括有权限的原 visibleExcerpt 摘录/归属）；不顺带读隐藏目标、新截屏或重新算context。内部sourcePreimage是定位/验证数据，不能随批注读取整体交付；annotation-read必须构造获权projection，不能序列化整个内部target/preimage记录。交付raw fragment另需独立的准确源范围披露资格；同样约束JSON导出/调试/批量/下载，不借批注权限绕过。当前目标context需独立 source/resource-read。引用只需来源可读和目的Draft可写，不要求来源可写；粘入引文是目的作者内容，不证明原目标仍current。
 
 建议有显式 replacement 与 target basis、pending/accepted/rejected状态。apply输入只指批注 id/current批注basis，不接受调用方偷偷替换已审建议。Core重新读取pending建议、目标当前basis及源读写资格，检查未改范围、准确 sourcePreimage 与已批准的文字变换，生成完整 source after + annotation accepted after 的同一 Plan。用户看准确双效果预览；commit一个opId，在一次逻辑决议中同时改变源与接受状态。任何冲突/撤权/故障未决保pending和稿；恢复依据OperationJournal，不能只成功一个文件就报accepted。并发apply/reject通过同一annotation before generation只有一个赢家；reject只改批注自身，不读隐藏目标。reconfirm重新检查/预览独立操作，模型不能伪造确认或作者时间。undo accepted建议是新的完整反向事务，当前源或批注已变则conflict，不单独回滚状态。
 
@@ -288,6 +456,10 @@ targetResolution 与讨论状态分开：exact/mapped/stale/ambiguous/orphaned/u
 ```
 
 sourcePreimage可采用Core保留的准确历史slice或足以准确读取它的历史版本引用；若采用摘要，只作为辅助校验，不能独立查找范围、授权或恢复写资格。visibleExcerpt保存在批注中后属于批注已有内容，是否可读由批注权限决定；读取它不重新读取目标正文，不新生成隐藏target的context。完整 raw source若包含不属于摘录的私有内容，也不能因“保存批注”随意扩大给调用方的披露范围。由Core在已获权的目标范围中构造，并遵守SOURCE字段/body隔离。
+
+上述JSON展示的是内部保存/验证数据分工，不是annotation-read响应模板。默认visibleExcerpt从同次Html final tree选区的逻辑文字取；显式print摘录取其Paged最终消费并记录该target/compile来源，原生source范围仍由各自真实map证明。保原摘录不等于缓存完整target原文或私有参数。
+
+私有URI反例（设计交付oracle，未执行产品）：目标source为 `#link("https://private.example/path?token=private")[公开文字]`；内部sourcePreimage包含这段raw，用户保存visibleExcerpt="公开文字"。调用方仅获annotation-read/已存excerpt，无target source或URI披露权。正确response只交获权body、visibleExcerpt及允许的归属/目标状态，不包含sourcePreimage、私有URL、token、raw源码长度/新context；不得把内部target对象整体JSON序列化出去。若用户另有准确raw范围读权，才可通过独立raw fragment操作取得原source，不能因已有excerpt而推该权限。
 
 ### 9.3. 跨格式、跨段与生成内容的定位边界
 
@@ -388,15 +560,43 @@ Typst不自动给每个块永久ID；可以给一个真实block加原生label，
 
 这是虚构例，DOI不是有效外部记录，真实positive fixture须换为获权可解析的Person、可选venue(Work|Org)和PDF ResourceRef及已安装paper schema。container文字不是venue ref，不自动建期刊。正式资料使用SOURCE唯一publication形状，正文生成title不可伪造writer；表单只改publication.title一次，EDITOR对generated title给真实字段编辑入口。agent恰(ref)或(text)分支，角色roles保数组；未知作者和组织作者不强建Person。示例作者顺序→表单同顺序→Query同项保序→CSL/Bib作者顺序→引用编号同一冻结数据库→DOCX bibliography各步一致。unknown日/月保precision，不能补1日；未知作者角色/provider字段保原件与诊断，不转缺值。
 
+### 10.1 原生citation key到稳定Work的作者绑定
+
+SOURCE拥有owner唯一的direct原生声明，与root相同官方AST/standard-binding资格，不新增独立citation key身份或另一套Bib事实：
+
+```typst
+#metadata((
+  kind: "weftext.citations",
+  entries: ((key: "chen2026", work: "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/8aa10c08-3e7d-4d10-9488-92bc7f393050"),),
+)) <weftext-citations>
+
+见 @chen2026；也可 #cite(<chen2026>)。
+#bibliography("weftext.citations.bib")
+```
+
+key→完整稳定Work NodeRef（含paper）的entries是作者源权威；每key唯一、固定role label在owner准确源中唯一，重复/计算/include/generated或不确定binding不拿首项。publication.citation_key只是新建entry时建议，不反查既有cite key，也不在publication字段变化后自动重绑另一Work。本轮原生citation采用current Work数据，在该次LogicalCut/compile snapshot冻结；不承诺pinned citation，普通key不代表固定历史数据。
+
+生产路径：官方AST资格读取declared entries → Core独立获权解析真实Work及所需publication FieldProjection → 锁同cut SOURCE Type/Value/schema与publication快照 → 校验引用所需title/kind/保序contributors等数据或给精确unknown/loss → 生成只读虚拟资源 `weftext.citations.bib` → 由当前target的官方bibliography/cite求值得到实际citation产品。虚拟资源属于本次World输入slots、无新ResourceRef/birth/作者write；真实同名作者资源与虚拟名冲突就明确报错/换明确选择，不覆盖它。生成物和input key/Work mapping纳入CompileSnapshot依赖/retention，不落第二手工Bib库。读取Work出版字段不要求读取其私人正文或write Work。
+
+原生 `@key` 可能是heading/其他ref，不能因为entries同名就当Paper citation。应用catalog只收已证明standard `cite` 的准确静态key，或官方ref→citation分类及同snapshot输出真正证明的 `@key`；普通@heading只保文内引用。heading label与bibliography key同名冲突按官方诊断不可误关联Work。生成citation可有同compile occurrence导航，但无唯一作者槽不伪writer/稳定author edge。缺/不可读声明或字段保合法native源与应用citation unavailable，不按DOI、标题、publication.citation_key或缓存猜目标。
+
+copy/fork枚举entries.work为typed ref槽，通过同一identity map改到真正复制Work或明确保外部Work；key在其owner内保留，若合并owner引发重复key，须显式新key及所有已证明native cite/ref槽的完整改写Plan，不全源字符串replace。未知生成/变量引用无法证明改写覆盖时明确拒绝/损失，不能漏转。export DOCX/CSL/Bib都消费同一Work快照/有序contributors及该compile真实citation-key mapping；精确源export不暗插Bib，独立Typst bundle需明确包含该次生成Bib/全部依赖或报告不能离线引用。
+
+SOURCE记录的有限0.15.1实验仅证明direct binding样例、`@key`/`#cite`和真实Bib可编译，以及heading/Bib同key官方报错；手供Bib不证明上述Core生成/权限/copy/target输出实现。新增设计oracle：两个Work具有同citation_key也不自动同一对象；只有声明entry选择目标；冷重建仍同Work，改论文citation_key不漂移；撤权不续交生成引用信息；有条件Html/Paged citation差异各target自证；未知@heading/冲突key不得冒Work边。
+
+citation绑定key按SOURCE明确ASCII全文 `[A-Za-z][A-Za-z0-9_-]*` 校验，不从publication.citation_key建议text静默删字/正规化；不合此profile的原生键保原source，可修绑定或明确不用应用桥，不能借清洗碰巧合并两个Work。
+
 ## 11. 可编辑输出与内网下载
 
 准确source导出只交原 `.typ` bytes，不依赖排版/模板；准确结构结果导出交完整schema、Cell和值/order，不交runtime句柄或writer。PDF/SVG/PNG走真实可用Typst输出，实验能力标实验；DOCX/XLSX是Weftext独立转换器和真实验证路线。
+
+DOCX具名默认profile消费一次冻结Html compile的final语义tree、同target产品及origin/source角色关联；不是从Paged realization推默认flow，也不把Html/Paged heading/link拼成一个“同一快照”。若用户明确选择另一个Paged语义转换profile，完整preview/输出注明target且仅用该次Paged最终数据，能力独立验收。native headings没有显示关联时不能默认插入DOCX幽灵段，需明确source结构输出路线或loss。HTML frame局部Paged内容保持同Html compile的局部来源边界；不能借它宣称整篇Paged语义一致。当前Html样式/桥未接受，转换profile因此仍有实际producer验收门。
 
 DOCX输出真实paragraph、run、style、table、image、关系和引用，不用整页图片冒可编辑。title/副标题保持SOURCE角色，无标题不添作者title。同段heading默认整段 `Heading N` 并参与编号，后部正文用模板正文character属性重置继承，同时保作者显式strong/emph等。DOCX Heading 1–9原生范围内保持层级；10+保源并报告目标不支持或明确loss，不压成9级。普通Word目录可收整段是明确默认；“只含标题文字”是单独可选路线。必须用真实Word/WPS/LibreOffice验证编号、目录和ref，并明确各应用实际支持，不以OOXML能打开代替交互验收。
 
 XLSX输出真实workbook/sheets/typed cells及明确选择的table/query顺序。电话/标识作text；精度超过目标数值能力以准确text或显式loss选择，不能先舍入；civil date/time/local datetime不用主机zone，instant含明确offset或精确text；nested数组/记录默认以可读结构文本和准确附表/结构导出保留，若用户选unnest则保源ordinal和重复。字符串以字符串cell写入，`=...`不会当公式执行；原导入公式只有明确允许的公式slot输出。merge/header/空值/null与缺值区别不能被平铺吞掉。PDF表格不是工作簿。
 
-跨文档离线链接按冻结语义投影每个RenderedLink occurrence作route：真实目标→唯一输出文件→renderer实际named destination。不猜原label就是Word bookmark/HTML id，不合并重复include项；每项恰一个route或明确loss，未导出目标不能声称离线可跳。route只改工件不改作者源；原生外部URL依目标格式能力保留，不授网络/资源读取权限。
+跨文档离线链接按该输出明确target同次compile的每个RenderedLink occurrence作route：真实目标→唯一输出文件→renderer实际named destination。默认DOCX用其Html语义profile，打印/PDF用其Paged profile；不能拿Html链接catalog验证Paged输出或反之。不猜原label就是Word bookmark/HTML id，不合并重复include项；每项恰一个route或明确loss，未导出目标不能声称离线可跳。route只改工件不改作者源；原生外部URL依目标格式能力保留，不授网络/资源读取权限。
 
 内网路径：选inputs/格式 → Job生成并验证准确工件 → inspect完整输出/loss → confirm同一冻结plan/bytes → download。无需外部发布目录或publish receipt。工件绑定inputs、环境、schema、当前可交付权限、digest/length与输出名；下载逐请求/块/resume重验资格，续下载只交同bytes不重新编译。撤权停止后续交付，过期明确需新生成/新确认，不自动换内容；授权检查先于存在性错误避免泄漏。文件名/ContentType来自受控输出，worker额外文件隔离。生成成功、已确认、已交付、打印成功、另存Resource、外部发布和unknown分别显示；download不写作者事实，Resource保存另走Core事务。
 

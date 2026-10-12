@@ -1,0 +1,54 @@
+{
+  "utc_time": "2026-10-12T13:44:57.094972+00:00",
+  "run_directory": "namespace-run-751eeeac27cb",
+  "source_ancestor_external_rename": {
+    "ok": false,
+    "winerror": 32
+  },
+  "target_parent_external_rename": {
+    "ok": false,
+    "winerror": 32
+  },
+  "new_sibling_not_excluded": {
+    "ok": true
+  },
+  "win32_absolute_move_with_parent_guards": {
+    "ok": true
+  },
+  "own_source_same_handle_move_with_parent_guards": {
+    "ok": true
+  },
+  "moved_original_preserved": true,
+  "directory_create_collision": "NtCreateFile status 0xc0000035",
+  "directory_creation_handle_retained": true,
+  "planned_created_file_external_write": {
+    "ok": false,
+    "winerror": 32
+  },
+  "copy_unknown_child_insert": {
+    "ok": true
+  },
+  "planned_created_file_exact": true,
+  "copy_root_external_rename": {
+    "ok": false,
+    "winerror": 32
+  },
+  "copy_unknown_preserved": true,
+  "purge_unknown_insert": {
+    "ok": true
+  },
+  "known_handle_dispose": {
+    "ok": true
+  },
+  "known_removed": true,
+  "root_delete_nonempty": {
+    "ok": false,
+    "winerror": 145
+  },
+  "unknown_preserved_after_nonempty_failure": true,
+  "empty_directory_handle_dispose": {
+    "ok": true
+  },
+  "empty_directory_removed": true,
+  "assertions_passed": true
+}
