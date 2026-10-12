@@ -589,6 +589,8 @@ SOURCE citation-binding keys match complete ASCII `[A-Za-z][A-Za-z0-9_-]*`. Neve
 
 ## 11. Editable output and intranet downloads
 
+Chinese defaults and font/language delivery follow [EDITOR](EDITOR.md) §8.6/CJK01–08. Templates, conversion and intranet workers use the same authorized frozen environment rather than public font CDNs or incidental system fallback. PDF, editable DOCX and standalone Typst projects separately verify font/language mappings, licenses and missing target-side dependencies. XLSX Chinese strings likewise preserve original values, with workbook fonts disclosed according to target capabilities. A correct browser preview does not prove a correct downloaded artifact.
+
 Exact-source export returns original `.typ` bytes without layout/templates. Exact structured-result export returns complete schema/Cell/value/order without runtime handles/writers. PDF/SVG/PNG use available real Typst outputs; experimental capabilities stay labeled experimental. DOCX/XLSX have separate Weftext converters and actual verification routes.
 
 The named default DOCX profile consumes one frozen Html compile's final semantic tree/same-target products/role-origin associations. It does not infer flow from Paged realization or mix Html/Paged headings/links as Same snapshot. An explicitly selected Paged conversion profile names target in preview/output and uses only that Paged final data with independent capability acceptance. Native headings without display associations do not automatically create ghost DOCX paragraphs; use explicit source-structure output/loss. Html-frame local Paged content retains its local same-Html-compile boundary without claiming whole-document Paged equivalence. New Html style/bridge remain unaccepted producer gates for conversion.

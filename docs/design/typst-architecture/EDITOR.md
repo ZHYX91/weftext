@@ -163,7 +163,7 @@ Selected route: ordinary `.typ` module bytes own library style; Core library set
 Core automatically constructs a viewable temporary entry for every compile, **without requiring imports in every note**. It imports the selected module, applies its standard content-wrapping function and includes authorized realnote. Entry is derived input, never written into the note, with no note identity or second body authority. Prevent implicit duplicate module application. Explicit authored imports retain their additional native scope with explanation; never guess deduplication by deleting author source.
 
 ```typst
-// library-style.typ: ordinary library style source
+// library-style.typ: module shape; distribution defaults also implement §8.6 fonts/language
 #let library-style(body) = {
   set text(font: "New Computer Modern", size: 11pt)
   set list(marker: [•])
@@ -211,6 +211,39 @@ Core acceptance must actually freeze v1 compile, commit v2 style, deliver late v
 Exact note `.typ` export returns originals and discloses absence of library style. A separate standalone Typst project bundle/entry includes authorized original notes, fixed style/imports/assets, viewable entry and required environment/package/font/license/loss information. Preserve source-relative paths or a fully validated mapping. Compile entry, never falsely present wrapper as original note. Deliver only authorized complete dependencies; unavailable distributable fonts/packages/incomplete closure need named loss/unavailable rather than claimed lossless independent reproducibility. A lone note cannot promise identical style.
 
 PDF/editable DOCX/other presentation outputs consume the same frozen style dependency. DOCX separately validates effective-style mapping: native defaults may map to template/paragraph/run/table properties, but arbitrary show is not universally representable. Job freezes staged bytes and loss. Style revision invalidates unfrozen preparation, whereas confirmed file resume still delivers original exact bytes under current authorization, without recompiling into different content. This creates no separate Word cascade protocol.
+
+### 8.6. Chinese defaults, fonts and language delivery
+
+The normal path for [REQUIREMENTS](../typst-native/REQUIREMENTS.md) §5.5 needs no per-note Chinese activation. Library initialization enables §8.1's ordinary default module, using native text/set/show-set for fonts, language and region; new notes need only content. Settings edit that same module without a Chinese switch, second configuration authority or new syntax. Explicit style opt-out follows §8.1 without silently re-enabling the module; Chinese source remains editable/saveable. Source controls also need Chinese fonts and IME, but their personal display font does not change author styles.
+
+Initialization uses the selected library language/region, or the UI language at initialization if not separately chosen, recording it in the module. Later UI-language changes do not silently change documents. Simplified Chinese for China uses `text(lang: "zh", region: "CN")`; other regions follow the actual choice rather than inferred nationality. Han display does not require lang=zh; language additionally affects language-aware glyphs, quotes and AT speech. Native note/local overrides remain available; undeclared passages inherit document language, without claiming automatic per-passage detection. [Typst text](https://typst.app/docs/reference/text/text/)
+
+| Content | Default font responsibility |
+| --- | --- |
+| Body, titles, lists, tables | Latin fonts plus explicit simplified/traditional CJK candidates. Initial Chinese styling uses regional Noto Serif CJK, with Noto Sans CJK available for sans-serif appearance; library settings can replace them. |
+| raw/code | Monospace code fonts plus CJK monospace candidates, such as DejaVu Sans Mono and Noto Sans Mono CJK. Verify Han/ASCII/punctuation/tab alignment without forcing every character to identical width or changing code strings/indentation. |
+| Equations | Retain a valid OpenType MATH font for mathematical structures, initially New Computer Modern Math. Chinese strings/text use Chinese-capable text fonts/fallback rather than replacing all math with an ordinary Chinese font. |
+
+`raw.lang` selects highlighting and is separate from `text.lang`; Chinese comments/strings need no extra tag. Equation text uses native expressions such as `$ "总价" = "单价" times "数量" $` or text content. Any equation-text control emits the same native expressions, not Chinese-specific commands. Verify raw/math glyph selection on the selected compiler; successful body font selection does not prove inheritance for both. [raw](https://typst.app/docs/reference/text/raw/), [math](https://typst.app/docs/reference/math/)
+
+**Font delivery.** Products/offline installers supply default fonts; distribution inventories identify actual files, versions, regional variants/weights, coverage and redistribution licenses. No user installation, public CDN or incidental host font is required. Core supplies a frozen font collection through the existing Environment. Browsers load actual authorized same-origin resources and separately map raw and MathML/math text; CSS family names alone do not establish delivery. Pending/failed font loading discloses presentation state while preserving editing/Draft; author font URLs grant no arbitrary network access.
+
+Cover basic simplified/traditional Han characters, common punctuation and mixed Chinese/Latin text. Explicit fonts, fallback:false and custom modules retain native behavior. Missing fonts, detected missing glyphs and out-of-coverage characters report their actual location/character and a repair entry, without replacing characters, losing source or silently overriding author choices. Diagnostics consume actual font/glyph results: exit0 or extractable text does not establish absence of tofu. Targets may have different layout metrics, without losing text, language or declared style mappings.
+
+PDF verifies actual fonts and text extraction. DOCX retains editable text/equations and expressible East Asian fonts, language and effective character styling. Embedding requires licensing and target support; otherwise disclose target-side dependencies or substitution/loss, without promising identical layout in every Office client. Standalone Typst projects follow §8.5 with redistributable fonts and exact entry/font-path instructions; note-only export does not automatically include library defaults. Font collection/version changes use existing Environment invalidation without changing note bytes, identities or annotation ranges.
+
+These E2/E3/E5 product cases are **unexecuted**; existing bounded style experiments do not close them:
+
+| ID | Scenario | Required observation |
+| --- | --- | --- |
+| CJK01 | Clean environment without system fonts/network; default library; simplified/traditional titles, body, lists and tables without Chinese declarations/imports | Delivered fonts render without missing-glyph boxes; selection/copy and save/reopen preserve source characters. |
+| CJK02 | Inline code and untagged/python/rust blocks; Chinese comments/strings, ASCII and tabs | Highlighting and Chinese support remain independent; actual alignment is usable and copied bytes/indentation stay unchanged. |
+| CJK03 | Inline/display equations with Chinese text, fractions, roots, scripts and extensible brackets | Readable Chinese with correct math structure and intact source, without reducing the whole equation to plain text or screenshots. |
+| CJK04 | English passages in Chinese libraries, Han in other-language libraries; note/local overrides followed by a UI-language-only change | Glyphs display and language attributes/AT follow actual inheritance/overrides; UI language does not change existing documents. |
+| CJK05 | Desktop, offline intranet WebUI/Server and CLI without system CJK fonts; delayed/failed browser font loading | Default delivery needs no network font fetch; disclose presentation state without losing input/Draft or installing falsely successful previews. |
+| CJK06 | Missing custom fonts, out-of-coverage characters and fallback:false; install admitted fonts/repair configuration | Diagnose actual gaps, preserve source, recompile on recovery and reject stale results; no universal Unicode claim. |
+| CJK07 | PDF, DOCX and font-bearing standalone projects opened/copied/edited in target environments | Verify actual fonts, punctuation, math text, language and editability; disclose dependency/embedding limitations and record Office testing separately. |
+| CJK08 | Chinese IME/unsaved Draft/equation editing across five views, plus library-font changes | Shared Draft/Undo and source ranges do not drift; invalidate actual consumers without minting note revisions. |
 
 ## 9. Rendering and authorization safety
 

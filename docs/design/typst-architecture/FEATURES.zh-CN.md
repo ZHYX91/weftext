@@ -588,6 +588,8 @@ citation绑定key按SOURCE明确ASCII全文 `[A-Za-z][A-Za-z0-9_-]*` 校验，�
 
 ## 11. 可编辑输出与内网下载
 
+中文默认、字体和语言交付遵循 [EDITOR](EDITOR.zh-CN.md) §8.6/CJK01–08：模板、转换和内网 worker 使用同一获权冻结环境，不依赖公共字体 CDN 或操作系统偶然回退。PDF、可编辑 DOCX 与独立 Typst 工程分别验证字体/语言映射、许可和目标端缺依赖；XLSX 中文字符串同样保原值，工作簿字体按目标能力披露。网页预览能显示中文不证明下载工件也正确。
+
 准确source导出只交原 `.typ` bytes，不依赖排版/模板；准确结构结果导出交完整schema、Cell和值/order，不交runtime句柄或writer。PDF/SVG/PNG走真实可用Typst输出，实验能力标实验；DOCX/XLSX是Weftext独立转换器和真实验证路线。
 
 DOCX具名默认profile消费一次冻结Html compile的final语义tree、同target产品及origin/source角色关联；不是从Paged realization推默认flow，也不把Html/Paged heading/link拼成一个“同一快照”。若用户明确选择另一个Paged语义转换profile，完整preview/输出注明target且仅用该次Paged最终数据，能力独立验收。native headings没有显示关联时不能默认插入DOCX幽灵段，需明确source结构输出路线或loss。HTML frame局部Paged内容保持同Html compile的局部来源边界；不能借它宣称整篇Paged语义一致。当前Html样式/桥未接受，转换profile因此仍有实际producer验收门。

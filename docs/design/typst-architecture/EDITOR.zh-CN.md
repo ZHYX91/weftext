@@ -162,7 +162,7 @@ Core `compile(sourceSnapshot,environment,target,budget)` 供应固定官方 Rust
 每次笔记编译由 Core 自动构造可查看的临时 entry，**用户不需每篇手工 import**。entry 导入选定 module，执行它的标准内容包装函数，再 include 获权 realnote。entry 是派生编译输入，不写进笔记、没有笔记身份，不成为第二正文权威。禁默认入口和笔记隐式重复应用同一 module；笔记显式引用相同 module 时说明其额外 native scope，不能猜测去重删除作者源码。
 
 ```typst
-// library-style.typ：普通库样式源
+// library-style.typ：模块结构示例；发行默认还须落实 §8.6 中文字体与语言
 #let library-style(body) = {
   set text(font: "New Computer Modern", size: 11pt)
   set list(marker: [•])
@@ -210,6 +210,39 @@ Core 产品验收应实际冻结 v1 compile→提交 v2 module→交迟到v1→�
 准确 note `.typ` bytes 导出仍交原件，明确它不单独携带库样式。另提供“含库样式的独立 Typst 工程”完整 bundle/entry：获权 note 原 bytes、固定 style module/实际import与assets、可查看 entry、所需环境/包/字体清单和许可/loss，保持相对 source 路径或完整可验证路径映射。编译默认入口为 entry，绝不将 wrapper伪作原 note。只能交获权完整依赖；不可分发字体/包或闭包不完整时具名 loss/route unavailable，不声称独立无损可复现。不能仅导单个note再承诺同样样式。
 
 PDF/可编辑 DOCX 和其他呈现输出消费同一冻结 style dependency；DOCX 必须另行验证 effective styles 映射，普通 native defaults 可转成 template/paragraph/run/table 样式，任意 show 不能当成全可表达。Job 固定 exact staged bytes 与 loss；style改版使未冻结预览/待准备内容失效，已确认文件下载续交仍是原 exact bytes并检查权限，不因全库样式变动重编译换内容。此处不扩为独立 Word 样式优先级协议。
+
+### 8.6. 中文默认、字体与语言交付
+
+[REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md) §5.5 的正常路径不要求逐篇“启用中文”。初始化库启用 §8.1 的普通默认样式模块，以原生 text/set/show-set 提供字体、语言和地区；新笔记只写内容即可。设置面板修改同一模块，不增加笔记级中文开关、第二配置权威或新语法。明确禁用库样式遵守 §8.1，不偷偷重启模块；中文源仍可编辑、保存。源码控件也须有中文字体和 IME，其个人显示字体不写入作者样式。
+
+初始化采用用户选定的库语言/地区；未另选时取初始化时界面语言并记录在模块，之后切换界面语言不暗改文档。简体中文中国地区示例是 `text(lang: "zh", region: "CN")`；其他地区依真实选择，不从汉字猜国别。汉字显示不依赖 lang=zh；语言设置还影响语言相关字形、引号和 AT 朗读。单篇/局部可原生覆盖；未声明片段继承文档语言，不声称自动识别每段语言。[Typst text](https://typst.app/docs/reference/text/text/)
+
+| 内容 | 默认字体职责 |
+| --- | --- |
+| 正文、标题、列表、表格 | 拉丁字体配明确的简繁 CJK 候选；初始中文方案采用相应地区的 Noto Serif CJK，无衬线外观可选 Noto Sans CJK，用户可在库设置替换。 |
+| raw/code | 等宽代码字体配 CJK 等宽候选，如 DejaVu Sans Mono 与 Noto Sans Mono CJK；实测汉字/ASCII/标点/tab 对齐，不把所有字硬压成同宽，不改代码字符串和缩进。 |
+| 公式 | 数学结构保有效 OpenType MATH 字体，默认 New Computer Modern Math；中文字符串/text 由可覆盖汉字的文字字体/回退呈现，不以普通中文字体替换全部数学字体。 |
+
+`raw.lang` 只选择高亮，与 `text.lang` 分开；中文注释/字符串不需额外标记。公式中文使用 `$ "总价" = "单价" times "数量" $` 等原生表达或 text 内容。公式文字控件若提供，生成同样原生表达；不增加中文专用命令。选定 compiler 版本必须实测 raw/math 的取字形路径，不能由正文字体成功推断它们也自动继承。[raw](https://typst.app/docs/reference/text/raw/)、[math](https://typst.app/docs/reference/math/)
+
+**字体交付。** 默认字体随产品/离线安装包提供，发行清单列实际字体文件、版本、地区/字重、覆盖范围及再分发许可。无需用户安装或公共 CDN，也不依赖宿主偶然存在的字体。Core 通过既有 Environment 提供固定字体集合；浏览器从获权同源资源加载实际字体，并分别落实 raw、MathML/数学文字的映射，不能只写 CSS family 名称就声称交付。字体未就绪/失败标明呈现状态，保编辑和草稿；作者字体 URL 不获任意网络访问。
+
+基本简繁汉字、常用标点和中英混排须覆盖。显式字体、fallback:false 和自定义模块仍遵循原生行为；缺字体、检测到缺字或覆盖外字符给出实际位置/字符与修复入口，不替换原字、不丢源、不偷偷覆盖作者选择。诊断使用实际字体/字形结果；编译 exit0 或文本可提取不证明没有方框。不同输出的布局度量可不同，文字、语言及声明的样式映射不能因此丢失。
+
+PDF 核实实际字体与文本提取；DOCX 保可编辑文字/公式及可表达的东亚字体、语言和有效字符样式。嵌入字体须具备许可和目标支持，否则明确目标端依赖或替代/loss，不承诺任意 Office 客户端同版式。独立 Typst 工程按 §8.5 交付允许分发的字体及准确入口/字体路径说明，单独 note 原件不自动包含库默认。字体集合/版本改变走既有 Environment 失效，不改 note bytes、身份或批注范围。
+
+以下为 E2/E3/E5 的产品验收要求，**尚未执行**；既有有限样式实验不自动关闭这些场景：
+
+| ID | 场景 | 必须观察的结果 |
+| --- | --- | --- |
+| CJK01 | 禁系统字体/外网的干净环境；默认库；无中文声明/import 的简繁标题、正文、列表、表格 | 交付字体正常呈现，无缺字方框；选择/复制、保存重开保源字符。 |
+| CJK02 | 行内代码、无标签/python/rust 代码块；中文注释/字符串、ASCII、tab | 高亮与中文支持独立，实际对齐可用，复制字节/缩进不变。 |
+| CJK03 | 行内/块公式含中文文字、分数、根号、上下标与伸缩括号 | 中文可读且数学结构正确；源保全，不把整式变普通文字或截图。 |
+| CJK04 | 中文库英文片段、非中文库汉字；单篇/局部覆盖，随后只改 UI 语言 | 字形可显示，语言属性/AT 按真实继承与覆盖；UI 语言不改变已有文档。 |
+| CJK05 | Desktop、离线内网 WebUI/Server、CLI 无系统 CJK 字体；浏览器字体加载延迟/失败 | 默认交付无需联网补字体；准确呈现状态，不丢输入/草稿，不安装伪成功预览。 |
+| CJK06 | 缺自定义字体、覆盖外字符、fallback:false；安装获准字体/修复配置 | 诊断真实缺口并保源，恢复重编译，迟到旧结果不能冒当前；不承诺全 Unicode。 |
+| CJK07 | PDF、DOCX、含字体的独立工程在目标环境打开/复制/再编辑 | 核实际字体、标点、数学文字、语言与可编辑性；缺依赖/嵌入限制明确，Office 实测单列。 |
+| CJK08 | 五档切换中文 IME/未保存稿/公式编辑，以及库字体更换 | 同一 Draft/Undo 与源范围不漂移；只失效真实消费者，不发笔记假修订。 |
 
 ## 9. 渲染与权限安全
 

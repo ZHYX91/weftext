@@ -185,6 +185,8 @@ Field-only API clients receive no complete-manifest or full-replica synchronizat
 
 `CompileSnapshot` retains exact SourceSnapshot, Environment, complete actual World dependencies, final official semantic projection/origin map, and output or diagnostics. Body compilation/projection failure preserves source, Draft and available static fields. Old preview is not current output. Workers have no ambient files/network/credentials/write authority and enforce terminable time/memory/output budgets. Incomplete tracing gives no strong qualification. Compilation does not create identity, save content or implicitly invoke business actions.
 
+Chinese defaults follow [EDITOR](EDITOR.md) §8.6. Font locks fix the available collection, exact file versions/licenses and fallback environment, not merely the fonts ultimately used: adding a candidate can change fallback selection. Desktop, Server/CLI and WebUI consume the same admitted collection. Host-system fonts participate only after explicit admission; workers do not scan ambient fonts. Authorized same-origin browser delivery follows resource authorization/revocation without granting external-network access. Collection, library language/style or actual dependency changes invalidate affected compilation/preview/Job preparation without changing static fields or original note bytes. Confirmed downloads retain original staged bytes; loss of current delivery qualification stops delivery rather than recompiling replacements.
+
 ### 9.1 Shared LogicalCut and current publication
 
 

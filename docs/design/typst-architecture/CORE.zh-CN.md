@@ -184,6 +184,8 @@ producer公布轻量FieldAccessProfile：内部绑定当前exact sourceRevision�
 
 `CompileSnapshot` 保存 exact SourceSnapshot、Environment、完整实际 World dependencies、最终官方 semantic projection/origin map、输出或诊断。合法源/body 编译或投影失败仍保原源、Draft 和可用静态 fields；旧预览不能冒当前。worker 无 ambient 文件/网络/凭据/写权，有可终止的时间/内存/输出预算；无完整追踪不给强资格。编译不会创建身份、保存或隐式调用业务动作。
 
+中文默认依 [EDITOR](EDITOR.zh-CN.md) §8.6 落实。字体锁固定可用字体集合及其准确文件版本/许可与回退环境，不能只记最终已用字体而忽略集合新增改变回退选择。Desktop、Server/CLI 和 WebUI 消费同一已准入集合；宿主系统字体只有显式准入后才能参加该环境，worker 不扫描 ambient 字体。浏览器获权同源交付遵守资源授权/撤权，不增加外网权限。字体集合、库语言/样式或实际依赖变化失效受影响 compile/preview/Job 准备；静态字段和 note 原字节不因字体变化而改动。已确认下载仍交原 staged bytes，缺当前交付资格则停止而不重编译替换。
+
 ### 9.1 共同LogicalCut及current发布
 
 

@@ -152,6 +152,16 @@ All five share one author source, current Draft and undo history, not five docum
 
 Acceptance covers at least: the same heading/emphasis/link across all views; every author marker remaining visible in V02; keyboard/touch reveal and dismissal without lost input in V03; no syntax leakage and retained unsupported constructs in V04; no direct body editing in V05; transitions with unsaved Draft, selection, undo and IME; and invalid source or late projections never replacing newer input. These are requirements, not executed product tests.
 
+### 5.5 Chinese support without per-note activation
+
+On 2026-10-13 the user confirmed out-of-the-box Chinese in body text, titles, lists, tables, inline code, code blocks and text within equations, without a Chinese declaration, package import or font configuration in every note. This is a U clarification of RQ01–03, RQ20–21 and §5.3. Default font selection, delivery and language-setting implementation are D, not another author language.
+
+Glyph display and language-aware layout/speech are separate obligations. Code language tags select syntax highlighting, not Chinese support. Text in equations uses native strings or text content, for example `$ "总价" = "单价" times "数量" $`. Quotes distinguish text from mathematical expressions; they are not a Chinese declaration, and the application must not silently rewrite valid math source.
+
+Library defaults supply Chinese-capable fonts and language/region settings, with native note/local overrides. Body, code and math have separate font responsibilities. Missing glyphs in default Latin fonts must not produce tofu boxes, and Chinese text must not be repaired by replacing the entire math font. Basic scope includes simplified/traditional Chinese and mixed Chinese/Latin text. Rare characters outside declared coverage, author-disabled fallback or explicitly missing fonts preserve the original content and report the issue; no arbitrary font is promised to cover all Unicode.
+
+Desktop, WebUI, Server/CLI compilation and offline intranets must not depend on incidental host Chinese fonts or public font CDNs. Preview, PDF, DOCX and standalone Typst projects validate their actual font/language delivery separately; editable output cannot replace Chinese text with paragraph images. The current [EDITOR](../typst-architecture/EDITOR.md) §8.6 owns the mechanism and CJK01–08 cases. These are design requirements, not executed product acceptance.
+
 ## 6. Bringing the original 21 findings into the new design
 
 Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: **all still need validation against the new solution**, with no new closure claimed. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.
