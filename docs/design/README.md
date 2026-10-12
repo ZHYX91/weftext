@@ -8,7 +8,7 @@ translation_status: synced
 
 # Target design and collaboration entrypoint
 
-The latest target candidate is [Typst as primary format with native-first design](typst-native/README.md): that entry manages the four coordinated module specifications and independent review records; the product remains unimplemented. The AsciiDoc inputs/candidates and review states below retain their fixed scopes and do not automatically accept the new Typst design. This Typst revision completed independent Sol review; the new entry records its exact scope and unfinished global boundaries.
+The latest target candidate is [Typst as primary format with native-first design](typst-native/README.md). The prior round completed bounded independent Sol review; technology is now being reassessed under [Requirements and technical choices](typst-native/REQUIREMENTS.md), with implementation and global final review incomplete. The AsciiDoc inputs/candidates and review states below retain their fixed scopes without accepting the new Typst design or requiring the new project to inherit old technology.
 
 ## Status and precedence
 

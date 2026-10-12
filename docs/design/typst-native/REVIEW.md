@@ -8,7 +8,7 @@ translation_status: synced
 
 # Review and evidence for the Typst revision
 
-Status: **this Typst design revision and independent Sol review are complete**. Input: `af6737a057c7bb69763dfaad0a57da4652e085f3`. The reviewed design semantics are fixed at `c6b9199de54178891ec2e9ff91616ff9fb0d0b59`; subsequent changes only record status and evidence. Requirement review checked the original-finding dispositions individually, while corresponding non-authors checked directly affected protocols and interactions. Prior acceptance and product passes are not transferred.
+Status: **the following records bounded independent Sol acceptance of the prior Typst revision; current requirements and technical reassessment are not accepted**. Prior input: `af6737a057c7bb69763dfaad0a57da4652e085f3`; accepted semantics: `c6b9199de54178891ec2e9ff91616ff9fb0d0b59`; status-record commit: `97eee15fc9a9a4dfe73feae95e22cc6389e443e4`. The new round distinguishes requirements from replaceable mechanisms under [REQUIREMENTS](REQUIREMENTS.md). Prior closure does not establish that retaining those mechanisms remains the best solution. Tables retain evidence at their original fixed scope without transferring acceptance or product passes.
 
 ## 1. Original-21 dispositions
 
