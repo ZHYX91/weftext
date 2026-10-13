@@ -1,0 +1,21 @@
+{
+  "evidence": "Official CLI compilation of hand-supplied generated-resource fixture only; not Paper lookup, metadata authentication, citation relation extraction or product resource generation. The bibliography is experiment output, not a second author authority.",
+  "tool_version": "typst 0.15.1 (9dfd3a08)",
+  "results": [
+    {
+      "case": "citation",
+      "exit": 0,
+      "stderr": ""
+    },
+    {
+      "case": "citation-label-collision",
+      "exit": 1,
+      "stderr": "error: label `<chen2026>` occurs both in the document and a bibliography\n  ┌─ \\\\?\\[native-cases]\\citation-label-collision.typ:5:0\n  │\n5 │ @chen2026. #cite(<chen2026>)\n  │ ^^^^^^^^^\n  │\n  = hint: change either the heading's label or the bibliography key to resolve the ambiguity\n\n"
+    },
+    {
+      "case": "heading-reference",
+      "exit": 0,
+      "stderr": ""
+    }
+  ]
+}

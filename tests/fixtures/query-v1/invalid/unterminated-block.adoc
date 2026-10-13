@@ -1,8 +1,0 @@
-[.weftext-query,version=1]
-....
-from tasks as task
-scope workspace
-where task.closed = false
-select task.id
-order by task.id asc
-limit 100

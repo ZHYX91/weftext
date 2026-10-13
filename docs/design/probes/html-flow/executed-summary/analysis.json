@@ -1,0 +1,418 @@
+{
+  "counts": {
+    "cases": 16,
+    "off_release_html_equal": 16,
+    "on_jobs4_html_and_tree_equal": 16,
+    "paged_pdf_equal_three": 16,
+    "body_semantic_projection_preserved": 16,
+    "world_order_equal": 15
+  },
+  "style_values": {
+    "plain-entry": {
+      "DefaultBody.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 16pt; font-style: normal; font-weight: 400",
+      "ListBody.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 9pt; font-style: normal; font-weight: 400"
+    },
+    "override-entry": {
+      "OverrideBody.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 12pt; font-style: normal; font-weight: 400",
+      "OverrideList.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 15pt; font-style: normal; font-weight: 400",
+      "LocalBody.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 18pt; font-style: normal; font-weight: 400",
+      "AfterLocal.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 12pt; font-style: normal; font-weight: 400"
+    },
+    "font-style-entry": {
+      "LibraryFontBody.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 14pt; font-style: normal; font-weight: 400",
+      "LibraryListFont.": "color: #000000; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 9pt; font-style: normal; font-weight: 400",
+      "NoteFontBody.": "color: #000000; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 12pt; font-style: normal; font-weight: 400",
+      "LocalFontBody.": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 18pt; font-style: normal; font-weight: 400"
+    },
+    "whitespace-strong": {
+      "Bold": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 14pt; font-style: normal; font-weight: 700",
+      "Emph": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 14pt; font-style: italic; font-weight: 400",
+      "Local": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 18pt; font-style: normal; font-weight: 400",
+      "DeltaZero": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 14pt; font-style: normal; font-weight: 400",
+      "Outer": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 14pt; font-style: italic; font-weight: 400",
+      "Inner": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 14pt; font-style: normal; font-weight: 400"
+    },
+    "show-context": {
+      "PREFIX": "color: #ff4136; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 20pt; font-style: normal; font-weight: 700",
+      "HOne": "color: #ff4136; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 20pt; font-style: normal; font-weight: 700",
+      "SUFFIX": "color: #ff4136; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 20pt; font-style: normal; font-weight: 700",
+      "StrongBody": "color: #0074d9; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 13pt; font-style: normal; font-weight: 400",
+      "Emphasized": "color: #0074d9; font-family: \"new computer modern\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 13pt; font-style: italic; font-weight: 400"
+    }
+  },
+  "table_css": {
+    "plain-entry": [
+      "border-bottom: 1.3pt solid #ff4136; border-left: 1.3pt solid #ff4136; border-right: 1.3pt solid #ff4136; border-top: 1.3pt solid #ff4136; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 16pt; font-style: normal; font-weight: 400",
+      "border-bottom: 1.3pt solid #ff4136; border-left: 1.3pt solid #ff4136; border-right: 1.3pt solid #ff4136; border-top: 1.3pt solid #ff4136; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 16pt; font-style: normal; font-weight: 400"
+    ],
+    "override-entry": [
+      "border-bottom: 2pt solid #2ecc40; border-left: 2pt solid #2ecc40; border-right: 2pt solid #2ecc40; border-top: 2pt solid #2ecc40; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 12pt; font-style: normal; font-weight: 400",
+      "border-bottom: 2pt solid #2ecc40; border-left: 2pt solid #2ecc40; border-right: 2pt solid #2ecc40; border-top: 2pt solid #2ecc40; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 12pt; font-style: normal; font-weight: 400"
+    ],
+    "simple-cell": [
+      "background-color: #ffdc00; border-bottom: 1.3pt solid #ff4136; border-left: 1.3pt solid #ff4136; border-right: 1.3pt solid #ff4136; border-top: 1.3pt solid #ff4136; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400; text-align: center; vertical-align: middle",
+      "background-color: #ffdc00; border-bottom: 2pt solid #2ecc40; border-left: 2pt solid #2ecc40; border-right: 2pt solid #2ecc40; border-top: 2pt solid #2ecc40; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400; text-align: right; vertical-align: bottom",
+      "background-color: #ffdc00; border-bottom: 1.3pt solid #ff4136; border-left: 1.3pt solid #ff4136; border-right: 1.3pt solid #ff4136; border-top: 1.3pt solid #ff4136; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400; text-align: center; vertical-align: middle",
+      "background-color: #ffdc00; border-bottom: 1.3pt solid #ff4136; border-left: 1.3pt solid #ff4136; border-right: 1.3pt solid #ff4136; border-top: 1.3pt solid #ff4136; color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400; text-align: center; vertical-align: middle"
+    ],
+    "unsupported": [
+      "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400",
+      "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400"
+    ]
+  },
+  "markers": {
+    "plain-entry": [
+      "LIB-V2"
+    ],
+    "override-entry": [
+      "NOTE-M"
+    ],
+    "whitespace-strong": [
+      "ONE",
+      "TWO"
+    ],
+    "unsupported": []
+  },
+  "heading_introspection": {
+    "runin-list-table-math": {
+      "headings": [
+        {
+          "elem": "heading",
+          "fields": {
+            "body": {
+              "elem": "text",
+              "fields": {
+                "text": "OrdinaryHeading"
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": null,
+              "span": "Span(311971321199690)"
+            },
+            "bookmarked": {
+              "repr": "Auto"
+            },
+            "depth": 1,
+            "hanging-indent": {
+              "repr": "Auto"
+            },
+            "level": 1,
+            "numbering": "1.1",
+            "offset": 0,
+            "outlined": true,
+            "supplement": {
+              "elem": "text",
+              "fields": {
+                "text": "Section"
+              },
+              "file": null,
+              "location": null,
+              "span": "Span(1)"
+            }
+          },
+          "file": "\"/runin-list-table-math.typ\"",
+          "location": "Location(37519)",
+          "span": "Span(311343028840964)"
+        },
+        {
+          "elem": "heading",
+          "fields": {
+            "body": {
+              "elem": "text",
+              "fields": {
+                "text": "RuninHeading"
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": null,
+              "span": "Span(315064452811890)"
+            },
+            "bookmarked": {
+              "repr": "Auto"
+            },
+            "depth": 2,
+            "hanging-indent": {
+              "repr": "Auto"
+            },
+            "label": {
+              "repr": "Label(\"runin\")"
+            },
+            "level": 2,
+            "numbering": "1.1",
+            "offset": 0,
+            "outlined": true,
+            "supplement": {
+              "elem": "text",
+              "fields": {
+                "text": "Section"
+              },
+              "file": null,
+              "location": null,
+              "span": "Span(1)"
+            }
+          },
+          "file": "\"/runin-list-table-math.typ\"",
+          "location": "Location(14109)",
+          "span": "Span(314436160453164)"
+        }
+      ],
+      "metadata": []
+    },
+    "show-context": {
+      "headings": [
+        {
+          "elem": "heading",
+          "fields": {
+            "body": {
+              "elem": "text",
+              "fields": {
+                "text": "HOne"
+              },
+              "file": "\"/show-context.typ\"",
+              "location": null,
+              "span": "Span(312816010857293)"
+            },
+            "bookmarked": {
+              "repr": "Auto"
+            },
+            "depth": 1,
+            "hanging-indent": {
+              "repr": "Auto"
+            },
+            "level": 1,
+            "numbering": "1.",
+            "offset": 0,
+            "outlined": true,
+            "supplement": {
+              "elem": "text",
+              "fields": {
+                "text": "Section"
+              },
+              "file": null,
+              "location": null,
+              "span": "Span(1)"
+            }
+          },
+          "file": "\"/show-context.typ\"",
+          "location": "Location(53963)",
+          "span": "Span(312300924328967)"
+        },
+        {
+          "elem": "heading",
+          "fields": {
+            "body": {
+              "elem": "text",
+              "fields": {
+                "text": "GoneHeading"
+              },
+              "file": "\"/show-context.typ\"",
+              "location": null,
+              "span": "Span(334982066218107)"
+            },
+            "bookmarked": {
+              "repr": "Auto"
+            },
+            "depth": 1,
+            "hanging-indent": {
+              "repr": "Auto"
+            },
+            "level": 1,
+            "numbering": "1.",
+            "offset": 0,
+            "outlined": true,
+            "supplement": {
+              "elem": "text",
+              "fields": {
+                "text": "Section"
+              },
+              "file": null,
+              "location": null,
+              "span": "Span(1)"
+            }
+          },
+          "file": "\"/show-context.typ\"",
+          "location": "Location(58455)",
+          "span": "Span(334949873310087)"
+        }
+      ],
+      "metadata": []
+    },
+    "repeat-include": {
+      "headings": [
+        {
+          "elem": "heading",
+          "fields": {
+            "body": {
+              "elem": "text",
+              "fields": {
+                "text": "IncludedHeading"
+              },
+              "file": "\"/included.typ\"",
+              "location": null,
+              "span": "Span(1148378811232709)"
+            },
+            "bookmarked": {
+              "repr": "Auto"
+            },
+            "depth": 1,
+            "hanging-indent": {
+              "repr": "Auto"
+            },
+            "level": 1,
+            "numbering": "1.1",
+            "offset": 0,
+            "outlined": true,
+            "supplement": {
+              "elem": "text",
+              "fields": {
+                "text": "Section"
+              },
+              "file": null,
+              "location": null,
+              "span": "Span(1)"
+            }
+          },
+          "file": "\"/included.typ\"",
+          "location": "Location(20367)",
+          "span": "Span(1135673343533967)"
+        },
+        {
+          "elem": "heading",
+          "fields": {
+            "body": {
+              "elem": "text",
+              "fields": {
+                "text": "IncludedHeading"
+              },
+              "file": "\"/included.typ\"",
+              "location": null,
+              "span": "Span(1148378811232709)"
+            },
+            "bookmarked": {
+              "repr": "Auto"
+            },
+            "depth": 1,
+            "hanging-indent": {
+              "repr": "Auto"
+            },
+            "level": 1,
+            "numbering": "1.1",
+            "offset": 0,
+            "outlined": true,
+            "supplement": {
+              "elem": "text",
+              "fields": {
+                "text": "Section"
+              },
+              "file": null,
+              "location": null,
+              "span": "Span(1)"
+            }
+          },
+          "file": "\"/included.typ\"",
+          "location": "Location(25337)",
+          "span": "Span(1135673343533967)"
+        }
+      ],
+      "metadata": [
+        {
+          "elem": "metadata",
+          "fields": {
+            "label": {
+              "repr": "Label(\"heading-check\")"
+            },
+            "value": [
+              {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "level": 1,
+                "number": [
+                  1
+                ]
+              },
+              {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "level": 1,
+                "number": [
+                  2
+                ]
+              }
+            ]
+          },
+          "file": "\"/repeat-include.typ\"",
+          "location": "Location(16342)",
+          "span": "Span(300166674382820)"
+        }
+      ]
+    }
+  },
+  "standard_table_links": [
+    {
+      "href": "https://example.org",
+      "style": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400"
+    },
+    {
+      "href": "https://example.org/table",
+      "style": "color: #000000; font-family: \"libertinus serif\", \"libertinus serif\", \"twitter color emoji\", \"noto color emoji\", \"apple color emoji\", \"segoe ui emoji\"; font-size: 11pt; font-style: normal; font-weight: 400"
+    }
+  ],
+  "breaks": {
+    "whitespace-break": 1,
+    "whitespace-strong": 1,
+    "measured-par-used": 1,
+    "show-context": 1
+  },
+  "frame_evidence": {
+    "frame-target": {
+      "target": "paged",
+      "text_items_in_native_order": [
+        "Inner=paged",
+        " ",
+        "FrameLink"
+      ],
+      "link_items": [
+        "Link(Url(Url(\"https://example.org/frame\")))"
+      ],
+      "dashed_shape_count": 0
+    },
+    "unsupported": {
+      "target": "paged",
+      "text_items_in_native_order": [
+        "FrameTarget=paged",
+        "FuncMarker0",
+        "FrameList",
+        "FrameDashedA",
+        "FrameDashedB"
+      ],
+      "link_items": [],
+      "dashed_shape_count": 5
+    }
+  },
+  "unsupported_world_call_exception": {
+    "off": {
+      "world_source": 2,
+      "world_font": 11
+    },
+    "on": {
+      "world_source": 3,
+      "world_font": 11
+    },
+    "jobs4": {
+      "world_source": 3,
+      "world_font": 11
+    }
+  }
+}

@@ -1,0 +1,768 @@
+[
+  {
+    "sample": "default",
+    "pdf_hashes": {
+      "on": "d4bf74fc80457b1c8f964c60ef798f836c56a12f2980f0a5a5e571ca4643785a",
+      "off": "d4bf74fc80457b1c8f964c60ef798f836c56a12f2980f0a5a5e571ca4643785a",
+      "official": "d4bf74fc80457b1c8f964c60ef798f836c56a12f2980f0a5a5e571ca4643785a"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 11
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 11
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "1",
+      "OriginalHeading",
+      "Ordinary ",
+      "StrongText",
+      "."
+    ],
+    "heading_count": 1,
+    "heading_locations": [
+      "Location(32151)"
+    ],
+    "final_counter_values": [
+      [
+        1
+      ]
+    ],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        },
+        "tracked_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 3,
+          "show_return": 5
+        },
+        "tracked_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 5,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(291624314813193)": 1,
+      "Span(294405985256110)": 1,
+      "Span(296135131747653)": 1,
+      "Span(298616081061606)": 1
+    }
+  },
+  {
+    "sample": "show-rewrite",
+    "pdf_hashes": {
+      "on": "a4b0ec9df558f7bd403570b64ddf496407ec847bdd95107d3c69043e004872fa",
+      "off": "a4b0ec9df558f7bd403570b64ddf496407ec847bdd95107d3c69043e004872fa",
+      "official": "a4b0ec9df558f7bd403570b64ddf496407ec847bdd95107d3c69043e004872fa"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 6
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 6
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "PREFIX OriginalHeading SUFFIX",
+      " Ordinary body."
+    ],
+    "heading_count": 1,
+    "heading_locations": [
+      "Location(59278)"
+    ],
+    "final_counter_values": [
+      [
+        1
+      ]
+    ],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(304010952263901)": 1,
+      "Span(306386539430483)": 1
+    }
+  },
+  {
+    "sample": "show-remove",
+    "pdf_hashes": {
+      "on": "c96f824eece01176a90c01ce38892214727fecf108ad5c3437955ce42550b0c3",
+      "off": "c96f824eece01176a90c01ce38892214727fecf108ad5c3437955ce42550b0c3",
+      "official": "c96f824eece01176a90c01ce38892214727fecf108ad5c3437955ce42550b0c3"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 2
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 2
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "SurvivingBody."
+    ],
+    "heading_count": 1,
+    "heading_locations": [
+      "Location(40243)"
+    ],
+    "final_counter_values": [
+      [
+        1
+      ]
+    ],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(300647710719964)": 1,
+      "Span(303190331359194)": 1
+    }
+  },
+  {
+    "sample": "show-strip-strong",
+    "pdf_hashes": {
+      "on": "baa3a43da1bae15e24684430e39744e4e938f73b8bb3e23e485ecd5ec7ce5b63",
+      "off": "baa3a43da1bae15e24684430e39744e4e938f73b8bb3e23e485ecd5ec7ce5b63",
+      "official": "baa3a43da1bae15e24684430e39744e4e938f73b8bb3e23e485ecd5ec7ce5b63"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 11
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 11
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "1",
+      "OriginalHeading",
+      "Ordinary ",
+      "StrongText",
+      "."
+    ],
+    "heading_count": 1,
+    "heading_locations": [
+      "Location(41246)"
+    ],
+    "final_counter_values": [
+      [
+        1
+      ]
+    ],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        },
+        "tracked_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 3,
+          "show_return": 5
+        },
+        "tracked_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 5,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "realize_result": 4,
+          "show_return": 5
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(299653568956531)": 1,
+      "Span(302064350007062)": 1,
+      "Span(303562943633064)": 1,
+      "Span(305713099705159)": 1
+    }
+  },
+  {
+    "sample": "repeat-include",
+    "pdf_hashes": {
+      "on": "915846493734d33bf71217f1f3b145818391963f7bff268c63185b07894341f2",
+      "off": "915846493734d33bf71217f1f3b145818391963f7bff268c63185b07894341f2",
+      "official": "915846493734d33bf71217f1f3b145818391963f7bff268c63185b07894341f2"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 3,
+        "world_font": 15
+      },
+      "off": {
+        "world_source": 3,
+        "world_font": 15
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "1",
+      "IncludedHeading",
+      "IncludedBody.",
+      "2",
+      "IncludedHeading",
+      "IncludedBody."
+    ],
+    "heading_count": 2,
+    "heading_locations": [
+      "Location(12213)",
+      "Location(32230)"
+    ],
+    "final_counter_values": [
+      [
+        1
+      ],
+      [
+        2
+      ]
+    ],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 6,
+          "show_return": 6
+        },
+        "tracked_counts": {
+          "realize_result": 7,
+          "show_return": 6
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 5,
+          "show_return": 6
+        },
+        "tracked_counts": {
+          "realize_result": 7,
+          "show_return": 6
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 6,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "realize_result": 7,
+          "show_return": 6
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(1148378811232709)": 2,
+      "Span(1184540526990673)": 2
+    }
+  },
+  {
+    "sample": "generated",
+    "pdf_hashes": {
+      "on": "63dedcdfa8a151c52043b5a46654d616a4640ead112f6a4aacbec09841909000",
+      "off": "63dedcdfa8a151c52043b5a46654d616a4640ead112f6a4aacbec09841909000",
+      "official": "63dedcdfa8a151c52043b5a46654d616a4640ead112f6a4aacbec09841909000"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 12
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 12
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "1",
+      "GeneratedHeading 0",
+      "2",
+      "GeneratedHeading 1"
+    ],
+    "heading_count": 2,
+    "heading_locations": [
+      "Location(5729)",
+      "Location(33100)"
+    ],
+    "final_counter_values": [
+      [
+        1
+      ],
+      [
+        2
+      ]
+    ],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 4,
+          "show_return": 4
+        },
+        "tracked_counts": {
+          "realize_result": 5,
+          "show_return": 4
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 5,
+          "show_return": 4
+        },
+        "tracked_counts": {
+          "realize_result": 5,
+          "show_return": 4
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "realize_result": 5,
+          "show_return": 4
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(293856520971610)": 2,
+      "Span(293868559420087)": 2
+    }
+  },
+  {
+    "sample": "runin-list-table-math",
+    "pdf_hashes": {
+      "on": "f33bfcedbdbe39e2f9395781cc0cf74381696a3810c672ce7daa7297076ac377",
+      "off": "f33bfcedbdbe39e2f9395781cc0cf74381696a3810c672ce7daa7297076ac377",
+      "official": "f33bfcedbdbe39e2f9395781cc0cf74381696a3810c672ce7daa7297076ac377"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 47
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 47
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "1",
+      "OrdinaryHeading",
+      "Plain body. ",
+      "1.1 RuninHeading",
+      " ",
+      " Adjacent body.",
+      "•",
+      "ItemOne",
+      "•",
+      "ItemTwo",
+      "CellOne",
+      "CellTwo",
+      "CellThree",
+      "CellFour",
+      "Inline ",
+      "𝑥",
+      "2",
+      " and display:",
+      "∑",
+      "𝑛",
+      "𝑖",
+      "=",
+      "1",
+      "𝑖"
+    ],
+    "heading_count": 2,
+    "heading_locations": [
+      "Location(57810)",
+      "Location(3921)"
+    ],
+    "final_counter_values": [],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 42,
+          "show_return": 42
+        },
+        "tracked_counts": {
+          "realize_result": 42,
+          "show_return": 42
+        }
+      },
+      {
+        "round": 2,
+        "stable": false,
+        "physical_counts": {
+          "realize_result": 4,
+          "show_return": 12
+        },
+        "tracked_counts": {
+          "realize_result": 42,
+          "show_return": 42
+        }
+      },
+      {
+        "round": 3,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 12,
+          "realize_result": 1
+        },
+        "tracked_counts": {
+          "realize_result": 42,
+          "show_return": 42
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(311971321199690)": 1,
+      "Span(313759537912995)": 1,
+      "Span(315064452811890)": 1,
+      "Span(317625952428245)": 1,
+      "Span(318930867327140)": 1,
+      "Span(321250716036290)": 1,
+      "Span(324621746191771)": 1,
+      "Span(325298368731938)": 1,
+      "Span(325974991272105)": 1,
+      "Span(326651613812272)": 1,
+      "Span(338504590810595)": 1,
+      "Span(339737010437328)": 1,
+      "Span(342757646777370)": 1,
+      "Span(343144288228895)": 1,
+      "Span(344636482580870)": 1
+    }
+  },
+  {
+    "sample": "duplicated-variable",
+    "pdf_hashes": {
+      "on": "19c55fac0f61050d35dc9a4e93059597dcf05779f97f1d44e34488f7b7d6dddd",
+      "off": "19c55fac0f61050d35dc9a4e93059597dcf05779f97f1d44e34488f7b7d6dddd",
+      "official": "19c55fac0f61050d35dc9a4e93059597dcf05779f97f1d44e34488f7b7d6dddd"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 1
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 1
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "LiteralText. SharedText SharedText"
+    ],
+    "heading_count": 0,
+    "heading_locations": [],
+    "final_counter_values": [],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 1,
+          "realize_result": 2
+        },
+        "tracked_counts": {
+          "show_return": 1,
+          "realize_result": 2
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(328897391265168)": 1,
+      "Span(300405698649756)": 2
+    }
+  },
+  {
+    "sample": "target-branch",
+    "pdf_hashes": {
+      "on": "15240894c943a4a5d55f5f8b105ef6e6fd3e2c2e7f4c07c5cdfb3c896c62c292",
+      "off": "15240894c943a4a5d55f5f8b105ef6e6fd3e2c2e7f4c07c5cdfb3c896c62c292",
+      "official": "15240894c943a4a5d55f5f8b105ef6e6fd3e2c2e7f4c07c5cdfb3c896c62c292"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 1
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 1
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "PAGEDBranch"
+    ],
+    "heading_count": 0,
+    "heading_locations": [],
+    "final_counter_values": [],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        },
+        "tracked_counts": {
+          "show_return": 4,
+          "realize_result": 2
+        }
+      }
+    ],
+    "evaluated_origin_counts": {}
+  },
+  {
+    "sample": "resource",
+    "pdf_hashes": {
+      "on": "0007b2292509b9d5052bfd4e329c41e87699f026367c4f5521120485da9dd9bf",
+      "off": "0007b2292509b9d5052bfd4e329c41e87699f026367c4f5521120485da9dd9bf",
+      "official": "0007b2292509b9d5052bfd4e329c41e87699f026367c4f5521120485da9dd9bf"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_file": 1,
+        "world_font": 2
+      },
+      "off": {
+        "world_source": 1,
+        "world_file": 1,
+        "world_font": 2
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "BeforeResource.",
+      "AfterResource."
+    ],
+    "heading_count": 0,
+    "heading_locations": [],
+    "final_counter_values": [],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 3,
+          "realize_result": 3
+        },
+        "tracked_counts": {
+          "show_return": 3,
+          "realize_result": 3
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(286752632523982)": 1,
+      "Span(346566065074993)": 1
+    }
+  },
+  {
+    "sample": "computed-join",
+    "pdf_hashes": {
+      "on": "22ea0ddc1e760d89ae798a224159548daaf174d58ab2dc79e12b72824a14fe83",
+      "off": "22ea0ddc1e760d89ae798a224159548daaf174d58ab2dc79e12b72824a14fe83",
+      "official": "22ea0ddc1e760d89ae798a224159548daaf174d58ab2dc79e12b72824a14fe83"
+    },
+    "pdf_bytes_equal_all_three": true,
+    "world_requests_equal_ordered": true,
+    "world_request_counts": {
+      "on": {
+        "world_source": 1,
+        "world_font": 1
+      },
+      "off": {
+        "world_source": 1,
+        "world_font": 1
+      }
+    },
+    "final_frames_equal": true,
+    "frame_text_native_traversal": [
+      "FromAFromB"
+    ],
+    "heading_count": 0,
+    "heading_locations": [],
+    "final_counter_values": [],
+    "rounds": [
+      {
+        "round": 1,
+        "stable": true,
+        "physical_counts": {
+          "show_return": 1,
+          "realize_result": 2
+        },
+        "tracked_counts": {
+          "show_return": 1,
+          "realize_result": 2
+        }
+      }
+    ],
+    "evaluated_origin_counts": {
+      "Span(327525110768080)": 1
+    }
+  }
+]

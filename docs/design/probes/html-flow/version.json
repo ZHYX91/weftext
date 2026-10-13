@@ -1,0 +1,23 @@
+{
+  "engine": "Typst v0.15.1",
+  "official_release": "typst 0.15.1 (9dfd3a08)",
+  "official_source_zip_sha256": "b82d324bb2bfa30cce0bc885903e9aaaca32107d383d2c834b4b25f621abad56",
+  "binary_sha256": "d9b3eb0358f86dc63460b661913117ee98bbdb9cff9a661197295526c9a14c5e",
+  "Cargo_lock_sha256": "4bfec8c0e7b4b4ec39933558f53276e6eca007138d00b71b36d2e0327876c7fb",
+  "adapter_patch_sha256": "614b4b34b15cd8041d34532bba646fb5c57fc6638c8203e6e17b2e0f30d8a929",
+  "changed_files": [
+    "crates/typst-cli/src/compile.rs",
+    "crates/typst-html/src/convert.rs",
+    "crates/typst-html/src/lib.rs",
+    "crates/typst-html/src/rules.rs",
+    "crates/typst-html/src/style_probe.rs",
+    "crates/typst-realize/src/probe.rs"
+  ],
+  "patch_check_and_apply_equal_executed_source": true,
+  "target_runtime_config": "feature html enabled both HTML and Paged; creation-timestamp 0; ignore-system-fonts; jobs1 and HTML jobs4; TYPST_HTML_STYLE_PROBE fixed for process lifetime",
+  "origin_bridge": "not implemented; final native Span exposed only; writer eligibility remains separate",
+  "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+  "rustc": "1.98.0 (88d9e12ae 2026-08-18)",
+  "build_command": "cargo build --manifest-path source/Cargo.toml --target-dir target -p typst-cli --locked --offline",
+  "portable_repro_assertions_passed": true
+}

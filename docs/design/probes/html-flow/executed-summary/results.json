@@ -1,0 +1,2734 @@
+[
+  {
+    "case": "plain-entry",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 3,
+        "world_file": 1
+      },
+      "on": {
+        "world_source": 3,
+        "world_file": 1
+      },
+      "jobs4": {
+        "world_source": 3,
+        "world_file": 1
+      }
+    },
+    "display_text": {
+      "off": "DefaultBody.ListBody.DefaultADefaultBNOTE-ASSET",
+      "on": "DefaultBody.LIB-V2ListBody.DefaultADefaultBNOTE-ASSET",
+      "jobs4": "DefaultBody.LIB-V2ListBody.DefaultADefaultBNOTE-ASSET"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "span": 7,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "span": 7,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "override-entry",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 3
+      },
+      "on": {
+        "world_source": 3
+      },
+      "jobs4": {
+        "world_source": 3
+      }
+    },
+    "display_text": {
+      "off": "OverrideBody.OverrideList.LocalBody.AfterLocal.ExplicitAExplicitB",
+      "on": "OverrideBody.NOTE-MOverrideList.LocalBody.AfterLocal.ExplicitAExplicitB",
+      "jobs4": "OverrideBody.NOTE-MOverrideList.LocalBody.AfterLocal.ExplicitAExplicitB"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 3,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 3,
+        "span": 8,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 3,
+        "span": 8,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "font-style-entry",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 2
+      },
+      "on": {
+        "world_source": 2
+      },
+      "jobs4": {
+        "world_source": 2
+      }
+    },
+    "display_text": {
+      "off": "LibraryFontBody.LibraryListFont.NoteFontBody.LocalFontBody.",
+      "on": "LibraryFontBody.•LibraryListFont.NoteFontBody.LocalFontBody.",
+      "jobs4": "LibraryFontBody.•LibraryListFont.NoteFontBody.LocalFontBody."
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 3,
+        "ul": 1,
+        "li": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 3,
+        "span": 6,
+        "ul": 1,
+        "li": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 3,
+        "span": 6,
+        "ul": 1,
+        "li": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "standard-matrix",
+    "introspection": {
+      "off": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "NativeHeading"
+                  },
+                  "file": "\"/standard-matrix.typ\"",
+                  "location": null,
+                  "span": "Span(283401739944090)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": null,
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/standard-matrix.typ\"",
+              "location": "Location(58514)",
+              "span": "Span(282312699855629)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "NativeHeading"
+                  },
+                  "file": "\"/standard-matrix.typ\"",
+                  "location": null,
+                  "span": "Span(283401739944090)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": null,
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/standard-matrix.typ\"",
+              "location": "Location(58514)",
+              "span": "Span(282312699855629)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "NativeHeading"
+                  },
+                  "file": "\"/standard-matrix.typ\"",
+                  "location": null,
+                  "span": "Span(283401739944090)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": null,
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/standard-matrix.typ\"",
+              "location": "Location(58514)",
+              "span": "Span(282312699855629)"
+            }
+          ],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "NativeHeadingParagraph strong and emph and link.HardBreakNext.FirstItemSecondItemTableLinkBCD",
+      "on": "NativeHeadingParagraph strong and emph and link.HardBreakNext.•FirstItem•SecondItemTableLinkBCD",
+      "jobs4": "NativeHeadingParagraph strong and emph and link.HardBreakNext.•FirstItem•SecondItemTableLinkBCD"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 1,
+        "p": 1,
+        "strong": 1,
+        "em": 1,
+        "a": 2,
+        "br": 1,
+        "ul": 1,
+        "li": 2,
+        "table": 1,
+        "tr": 2,
+        "td": 4
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 1,
+        "span": 19,
+        "p": 1,
+        "strong": 1,
+        "em": 1,
+        "a": 2,
+        "br": 1,
+        "ul": 1,
+        "li": 2,
+        "table": 1,
+        "tr": 2,
+        "td": 4
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 1,
+        "span": 19,
+        "p": 1,
+        "strong": 1,
+        "em": 1,
+        "a": 2,
+        "br": 1,
+        "ul": 1,
+        "li": 2,
+        "table": 1,
+        "tr": 2,
+        "td": 4
+      }
+    },
+    "links": {
+      "off": [
+        "https://example.org",
+        "https://example.org/table"
+      ],
+      "on": [
+        "https://example.org",
+        "https://example.org/table"
+      ],
+      "jobs4": [
+        "https://example.org",
+        "https://example.org/table"
+      ]
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "runin-list-table-math",
+    "introspection": {
+      "off": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "OrdinaryHeading"
+                  },
+                  "file": "\"/runin-list-table-math.typ\"",
+                  "location": null,
+                  "span": "Span(311971321199690)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": "Location(37519)",
+              "span": "Span(311343028840964)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "RuninHeading"
+                  },
+                  "file": "\"/runin-list-table-math.typ\"",
+                  "location": null,
+                  "span": "Span(315064452811890)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 2,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "label": {
+                  "repr": "Label(\"runin\")"
+                },
+                "level": 2,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": "Location(14109)",
+              "span": "Span(314436160453164)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "OrdinaryHeading"
+                  },
+                  "file": "\"/runin-list-table-math.typ\"",
+                  "location": null,
+                  "span": "Span(311971321199690)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": "Location(37519)",
+              "span": "Span(311343028840964)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "RuninHeading"
+                  },
+                  "file": "\"/runin-list-table-math.typ\"",
+                  "location": null,
+                  "span": "Span(315064452811890)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 2,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "label": {
+                  "repr": "Label(\"runin\")"
+                },
+                "level": 2,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": "Location(14109)",
+              "span": "Span(314436160453164)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "OrdinaryHeading"
+                  },
+                  "file": "\"/runin-list-table-math.typ\"",
+                  "location": null,
+                  "span": "Span(311971321199690)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": "Location(37519)",
+              "span": "Span(311343028840964)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "RuninHeading"
+                  },
+                  "file": "\"/runin-list-table-math.typ\"",
+                  "location": null,
+                  "span": "Span(315064452811890)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 2,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "label": {
+                  "repr": "Label(\"runin\")"
+                },
+                "level": 2,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/runin-list-table-math.typ\"",
+              "location": "Location(14109)",
+              "span": "Span(314436160453164)"
+            }
+          ],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "1 OrdinaryHeadingPlain body. 1.1 RuninHeading  Adjacent body.ItemOneItemTwoCellOneCellTwoCellThreeCellFourInline 𝑥2 and display:∑𝑖=1𝑛𝑖",
+      "on": "1 OrdinaryHeadingPlain body. 1.1 RuninHeading  Adjacent body.•ItemOne•ItemTwoCellOneCellTwoCellThreeCellFourInline 𝑥2 and display:∑𝑖=1𝑛𝑖",
+      "jobs4": "1 OrdinaryHeadingPlain body. 1.1 RuninHeading  Adjacent body.•ItemOne•ItemTwoCellOneCellTwoCellThreeCellFourInline 𝑥2 and display:∑𝑖=1𝑛𝑖"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "style": 1,
+        "body": 1,
+        "h2": 1,
+        "p": 2,
+        "strong": 1,
+        "span": 1,
+        "ul": 1,
+        "li": 2,
+        "table": 1,
+        "tr": 2,
+        "td": 4,
+        "math": 2,
+        "msup": 1,
+        "mi": 4,
+        "mn": 2,
+        "munderover": 1,
+        "mo": 2,
+        "mrow": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "style": 1,
+        "body": 1,
+        "h2": 1,
+        "span": 28,
+        "p": 2,
+        "strong": 1,
+        "ul": 1,
+        "li": 2,
+        "table": 1,
+        "tr": 2,
+        "td": 4,
+        "math": 2,
+        "msup": 1,
+        "mi": 4,
+        "mn": 2,
+        "munderover": 1,
+        "mo": 2,
+        "mrow": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "style": 1,
+        "body": 1,
+        "h2": 1,
+        "span": 28,
+        "p": 2,
+        "strong": 1,
+        "ul": 1,
+        "li": 2,
+        "table": 1,
+        "tr": 2,
+        "td": 4,
+        "math": 2,
+        "msup": 1,
+        "mi": 4,
+        "mn": 2,
+        "munderover": 1,
+        "mo": 2,
+        "mrow": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "whitespace-break",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 2
+      },
+      "on": {
+        "world_source": 2
+      },
+      "jobs4": {
+        "world_source": 2
+      }
+    },
+    "display_text": {
+      "off": "Alpha BetaGamma Delta",
+      "on": "Alpha BetaGamma Delta",
+      "jobs4": "Alpha BetaGamma Delta"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "br": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 4,
+        "br": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 4,
+        "br": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "whitespace-strong",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "Alpha Bold EmphGamma Local Delta DeltaZero Outer InnerOuterItemInnerItem",
+      "on": "Alpha Bold EmphGamma Local Delta DeltaZero Outer InnerONEOuterItemTWOInnerItem",
+      "jobs4": "Alpha Bold EmphGamma Local Delta DeltaZero Outer InnerONEOuterItemTWOInnerItem"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "strong": 2,
+        "em": 3,
+        "br": 1,
+        "ul": 2,
+        "li": 2
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "span": 15,
+        "strong": 2,
+        "em": 3,
+        "br": 1,
+        "ul": 2,
+        "li": 2
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "span": 15,
+        "strong": 2,
+        "em": 3,
+        "br": 1,
+        "ul": 2,
+        "li": 2
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "show-context",
+    "introspection": {
+      "off": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "HOne"
+                  },
+                  "file": "\"/show-context.typ\"",
+                  "location": null,
+                  "span": "Span(312816010857293)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/show-context.typ\"",
+              "location": "Location(53963)",
+              "span": "Span(312300924328967)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "GoneHeading"
+                  },
+                  "file": "\"/show-context.typ\"",
+                  "location": null,
+                  "span": "Span(334982066218107)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/show-context.typ\"",
+              "location": "Location(58455)",
+              "span": "Span(334949873310087)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "HOne"
+                  },
+                  "file": "\"/show-context.typ\"",
+                  "location": null,
+                  "span": "Span(312816010857293)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/show-context.typ\"",
+              "location": "Location(53963)",
+              "span": "Span(312300924328967)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "GoneHeading"
+                  },
+                  "file": "\"/show-context.typ\"",
+                  "location": null,
+                  "span": "Span(334982066218107)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/show-context.typ\"",
+              "location": "Location(58455)",
+              "span": "Span(334949873310087)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "HOne"
+                  },
+                  "file": "\"/show-context.typ\"",
+                  "location": null,
+                  "span": "Span(312816010857293)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/show-context.typ\"",
+              "location": "Location(53963)",
+              "span": "Span(312300924328967)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "GoneHeading"
+                  },
+                  "file": "\"/show-context.typ\"",
+                  "location": null,
+                  "span": "Span(334982066218107)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/show-context.typ\"",
+              "location": "Location(58455)",
+              "span": "Span(334949873310087)"
+            }
+          ],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "PREFIX HOne SUFFIX Counter=1. Stripped StrongBody and Emphasized.End.AfterGone=2.",
+      "on": "PREFIX HOne SUFFIX Counter=1. Stripped StrongBody and Emphasized.End.AfterGone=2.",
+      "jobs4": "PREFIX HOne SUFFIX Counter=1. Stripped StrongBody and Emphasized.End.AfterGone=2."
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "em": 1,
+        "br": 1,
+        "div": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "span": 13,
+        "em": 1,
+        "br": 1,
+        "div": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 2,
+        "span": 13,
+        "em": 1,
+        "br": 1,
+        "div": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "simple-cell",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "CenterARightBCD",
+      "on": "CenterARightBCD",
+      "jobs4": "CenterARightBCD"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "table": 1,
+        "tr": 2,
+        "td": 4
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "table": 1,
+        "tr": 2,
+        "td": 4,
+        "span": 4
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "table": 1,
+        "tr": 2,
+        "td": 4,
+        "span": 4
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "unsupported",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": false,
+    "world_counts": {
+      "off": {
+        "world_source": 2,
+        "world_font": 11
+      },
+      "on": {
+        "world_source": 3,
+        "world_font": 11
+      },
+      "jobs4": {
+        "world_source": 3,
+        "world_font": 11
+      }
+    },
+    "display_text": {
+      "off": "BodyDashedADashedBAlpha Beta",
+      "on": "BodyDashedADashedBAlpha Beta",
+      "jobs4": "BodyDashedADashedBAlpha Beta"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "ul": 1,
+        "li": 1,
+        "table": 1,
+        "tr": 1,
+        "td": 2,
+        "p": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "ul": 1,
+        "li": 1,
+        "span": 5,
+        "table": 1,
+        "tr": 1,
+        "td": 2,
+        "p": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "ul": 1,
+        "li": 1,
+        "span": 5,
+        "table": 1,
+        "tr": 1,
+        "td": 2,
+        "p": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 1,
+      "on": 1,
+      "jobs4": 1
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "target-branch",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": [
+            {
+              "elem": "metadata",
+              "fields": {
+                "label": {
+                  "repr": "Label(\"heading-check\")"
+                },
+                "value": []
+              },
+              "file": "\"/target-branch.typ\"",
+              "location": "Location(20315)",
+              "span": "Span(311493150329249)"
+            }
+          ]
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": [
+            {
+              "elem": "metadata",
+              "fields": {
+                "label": {
+                  "repr": "Label(\"heading-check\")"
+                },
+                "value": []
+              },
+              "file": "\"/target-branch.typ\"",
+              "location": "Location(20315)",
+              "span": "Span(311493150329249)"
+            }
+          ]
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": [
+            {
+              "elem": "metadata",
+              "fields": {
+                "label": {
+                  "repr": "Label(\"heading-check\")"
+                },
+                "value": []
+              },
+              "file": "\"/target-branch.typ\"",
+              "location": "Location(20315)",
+              "span": "Span(311493150329249)"
+            }
+          ]
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "HTMLBranch",
+      "on": "HTMLBranch",
+      "jobs4": "HTMLBranch"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "frame-target",
+    "introspection": {
+      "off": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "OuterHeading"
+                  },
+                  "file": "\"/frame-target.typ\"",
+                  "location": null,
+                  "span": "Span(293003836497040)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/frame-target.typ\"",
+              "location": "Location(41176)",
+              "span": "Span(291893649999094)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "OuterHeading"
+                  },
+                  "file": "\"/frame-target.typ\"",
+                  "location": null,
+                  "span": "Span(293003836497040)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/frame-target.typ\"",
+              "location": "Location(41176)",
+              "span": "Span(291893649999094)"
+            }
+          ],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "OuterHeading"
+                  },
+                  "file": "\"/frame-target.typ\"",
+                  "location": null,
+                  "span": "Span(293003836497040)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/frame-target.typ\"",
+              "location": "Location(41176)",
+              "span": "Span(291893649999094)"
+            }
+          ],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1,
+        "world_font": 4
+      },
+      "on": {
+        "world_source": 1,
+        "world_font": 4
+      },
+      "jobs4": {
+        "world_source": 1,
+        "world_font": 4
+      }
+    },
+    "display_text": {
+      "off": "1. OuterHeadingOuter=htmlAfter=1.",
+      "on": "1. OuterHeadingOuter=htmlAfter=1.",
+      "jobs4": "1. OuterHeadingOuter=htmlAfter=1."
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 1,
+        "p": 2
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 1,
+        "span": 6,
+        "p": 2
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 1,
+        "span": 6,
+        "p": 2
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 1,
+      "on": 1,
+      "jobs4": 1
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "measure-discard",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1,
+        "world_font": 1
+      },
+      "on": {
+        "world_source": 1,
+        "world_font": 1
+      },
+      "jobs4": {
+        "world_source": 1,
+        "world_font": 1
+      }
+    },
+    "display_text": {
+      "off": "VisibleOnly",
+      "on": "VisibleOnly",
+      "jobs4": "VisibleOnly"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "repeat-include",
+    "introspection": {
+      "off": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/included.typ\"",
+              "location": "Location(20367)",
+              "span": "Span(1135673343533967)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/included.typ\"",
+              "location": "Location(25337)",
+              "span": "Span(1135673343533967)"
+            }
+          ],
+          "metadata": [
+            {
+              "elem": "metadata",
+              "fields": {
+                "label": {
+                  "repr": "Label(\"heading-check\")"
+                },
+                "value": [
+                  {
+                    "body": {
+                      "elem": "text",
+                      "fields": {
+                        "text": "IncludedHeading"
+                      },
+                      "file": "\"/included.typ\"",
+                      "location": null,
+                      "span": "Span(1148378811232709)"
+                    },
+                    "level": 1,
+                    "number": [
+                      1
+                    ]
+                  },
+                  {
+                    "body": {
+                      "elem": "text",
+                      "fields": {
+                        "text": "IncludedHeading"
+                      },
+                      "file": "\"/included.typ\"",
+                      "location": null,
+                      "span": "Span(1148378811232709)"
+                    },
+                    "level": 1,
+                    "number": [
+                      2
+                    ]
+                  }
+                ]
+              },
+              "file": "\"/repeat-include.typ\"",
+              "location": "Location(16342)",
+              "span": "Span(300166674382820)"
+            }
+          ]
+        }
+      ],
+      "on": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/included.typ\"",
+              "location": "Location(20367)",
+              "span": "Span(1135673343533967)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/included.typ\"",
+              "location": "Location(25337)",
+              "span": "Span(1135673343533967)"
+            }
+          ],
+          "metadata": [
+            {
+              "elem": "metadata",
+              "fields": {
+                "label": {
+                  "repr": "Label(\"heading-check\")"
+                },
+                "value": [
+                  {
+                    "body": {
+                      "elem": "text",
+                      "fields": {
+                        "text": "IncludedHeading"
+                      },
+                      "file": "\"/included.typ\"",
+                      "location": null,
+                      "span": "Span(1148378811232709)"
+                    },
+                    "level": 1,
+                    "number": [
+                      1
+                    ]
+                  },
+                  {
+                    "body": {
+                      "elem": "text",
+                      "fields": {
+                        "text": "IncludedHeading"
+                      },
+                      "file": "\"/included.typ\"",
+                      "location": null,
+                      "span": "Span(1148378811232709)"
+                    },
+                    "level": 1,
+                    "number": [
+                      2
+                    ]
+                  }
+                ]
+              },
+              "file": "\"/repeat-include.typ\"",
+              "location": "Location(16342)",
+              "span": "Span(300166674382820)"
+            }
+          ]
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/included.typ\"",
+              "location": "Location(20367)",
+              "span": "Span(1135673343533967)"
+            },
+            {
+              "elem": "heading",
+              "fields": {
+                "body": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "IncludedHeading"
+                  },
+                  "file": "\"/included.typ\"",
+                  "location": null,
+                  "span": "Span(1148378811232709)"
+                },
+                "bookmarked": {
+                  "repr": "Auto"
+                },
+                "depth": 1,
+                "hanging-indent": {
+                  "repr": "Auto"
+                },
+                "level": 1,
+                "numbering": "1.1",
+                "offset": 0,
+                "outlined": true,
+                "supplement": {
+                  "elem": "text",
+                  "fields": {
+                    "text": "Section"
+                  },
+                  "file": null,
+                  "location": null,
+                  "span": "Span(1)"
+                }
+              },
+              "file": "\"/included.typ\"",
+              "location": "Location(25337)",
+              "span": "Span(1135673343533967)"
+            }
+          ],
+          "metadata": [
+            {
+              "elem": "metadata",
+              "fields": {
+                "label": {
+                  "repr": "Label(\"heading-check\")"
+                },
+                "value": [
+                  {
+                    "body": {
+                      "elem": "text",
+                      "fields": {
+                        "text": "IncludedHeading"
+                      },
+                      "file": "\"/included.typ\"",
+                      "location": null,
+                      "span": "Span(1148378811232709)"
+                    },
+                    "level": 1,
+                    "number": [
+                      1
+                    ]
+                  },
+                  {
+                    "body": {
+                      "elem": "text",
+                      "fields": {
+                        "text": "IncludedHeading"
+                      },
+                      "file": "\"/included.typ\"",
+                      "location": null,
+                      "span": "Span(1148378811232709)"
+                    },
+                    "level": 1,
+                    "number": [
+                      2
+                    ]
+                  }
+                ]
+              },
+              "file": "\"/repeat-include.typ\"",
+              "location": "Location(16342)",
+              "span": "Span(300166674382820)"
+            }
+          ]
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 3
+      },
+      "on": {
+        "world_source": 3
+      },
+      "jobs4": {
+        "world_source": 3
+      }
+    },
+    "display_text": {
+      "off": "1 IncludedHeadingIncludedBody.2 IncludedHeadingIncludedBody.",
+      "on": "1 IncludedHeadingIncludedBody.2 IncludedHeadingIncludedBody.",
+      "jobs4": "1 IncludedHeadingIncludedBody.2 IncludedHeadingIncludedBody."
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 2,
+        "p": 2
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 2,
+        "span": 6,
+        "p": 2
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "h2": 2,
+        "span": 6,
+        "p": 2
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "same-source-different-show",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1
+      },
+      "on": {
+        "world_source": 1
+      },
+      "jobs4": {
+        "world_source": 1
+      }
+    },
+    "display_text": {
+      "off": "FirstShowSecondShow",
+      "on": "FirstShowSecondShow",
+      "jobs4": "FirstShowSecondShow"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "div": 2
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "div": 2,
+        "span": 2
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "div": 2,
+        "span": 2
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  },
+  {
+    "case": "measured-par-used",
+    "introspection": {
+      "off": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "on": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ],
+      "jobs4": [
+        {
+          "headings": [],
+          "metadata": []
+        }
+      ]
+    },
+    "exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0,
+      "jobs4": 0
+    },
+    "off_matches_official_html_bytes": true,
+    "on_matches_jobs4_html_bytes": true,
+    "final_tree_on_matches_jobs4": true,
+    "world_on_off_equal_ordered": true,
+    "world_counts": {
+      "off": {
+        "world_source": 1,
+        "world_font": 2
+      },
+      "on": {
+        "world_source": 1,
+        "world_font": 2
+      },
+      "jobs4": {
+        "world_source": 1,
+        "world_font": 2
+      }
+    },
+    "display_text": {
+      "off": "MeasuredParagraphSecondLine",
+      "on": "MeasuredParagraphSecondLine",
+      "jobs4": "MeasuredParagraphSecondLine"
+    },
+    "elements": {
+      "off": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "br": 1
+      },
+      "on": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 2,
+        "br": 1
+      },
+      "jobs4": {
+        "html": 1,
+        "head": 1,
+        "meta": 2,
+        "body": 1,
+        "p": 1,
+        "span": 2,
+        "br": 1
+      }
+    },
+    "links": {
+      "off": [],
+      "on": [],
+      "jobs4": []
+    },
+    "frame_count": {
+      "off": 0,
+      "on": 0,
+      "jobs4": 0
+    },
+    "any_truncated": false,
+    "paged_exit_codes": {
+      "off": 0,
+      "on": 0,
+      "official": 0
+    },
+    "paged_pdf_bytes_equal_three": true
+  }
+]

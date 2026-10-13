@@ -1,0 +1,144 @@
+{
+  "tool_version": "typst 0.15.1 (9dfd3a08)",
+  "evidence": "Official native-language compilation only. Semantic negatives intentionally compile. Node/config identities are fictitious and not Core-admitted. Citation Bib is supplied experiment output, not proof of Work lookup/resource generation.",
+  "results": [
+    {
+      "case": "person",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "organization",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "task",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "work",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "paper",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "period",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "range",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "event",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "numeric",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "root-dynamic-body",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "saved-query",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-range-empty",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-org-literal",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-person-two-branches",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "citation",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "heading-reference",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "citation-label-collision",
+      "exit": 1,
+      "expected_compile_failure": true,
+      "stderr": "error: label `<chen2026>` occurs both in the document and a bibliography\n  ┌─ \\\\?\\[native-cases]\\citation-label-collision.typ:5:0\n  │\n5 │ @chen2026. #cite(<chen2026>)\n  │ ^^^^^^^^^\n  │\n  = hint: change either the heading's label or the bibliography key to resolve the ambiguity\n\n"
+    },
+    {
+      "case": "precision-periods",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "precision-range",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "precision-task",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "general-relations",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-precision-recurrence",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-general-relations",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "Self-contained bounded Core repair experiments; not product acceptance.",
+  "files": {
+    "namespace_probe.py": {
+      "bytes": 6285,
+      "sha256": "ba38107c99da8821814c8961d00197844a7343d2db934ec248128796f329d8a5"
+    },
+    "win32_probe.py": {
+      "bytes": 6435,
+      "sha256": "fea8909960c0bdf46bc8544587c1c62a310d5f4567da0a22b732dd6eeb8413b8"
+    },
+    "logical_cut_model.py": {
+      "bytes": 3338,
+      "sha256": "8de7e53e02544368203f0e8100b8d488b3aa89aee205f74b19bdd0c4d5a87fef"
+    },
+    "namespace-stdout.json": {
+      "bytes": 1248,
+      "sha256": "47ba0fd7f57781a50c4a8ebfe6b9e92e7fb1ad7937288f4a336035c9eee63b0b"
+    },
+    "logical-cut-stdout.json": {
+      "bytes": 815,
+      "sha256": "1110871968d3e860ff6e48ab0a178dbb643c8f3b91084dd64bbcb5369afc163d"
+    }
+  }
+}

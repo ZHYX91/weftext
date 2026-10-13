@@ -1,0 +1,249 @@
+--- a/crates/typst-cli/src/compile.rs
++++ b/crates/typst-cli/src/compile.rs
+@@ -327,6 +327,7 @@
+         }
+         OutputFormat::Html => {
+             let Warned { output, warnings } = typst::compile::<HtmlDocument>(world);
++            if let Ok(doc) = &output { typst::probe::emit("final_html_tree", html_probe_node(doc.root_node())); }
+             let result = output.and_then(|document| export_html(&document, config));
+             Warned {
+                 output: result.map(|()| vec![config.output.clone()]),
+@@ -756,3 +757,18 @@
+         }
+     }
+ }
++
++// Snapshot the actual one final HtmlDocument product, not realization events.
++fn html_probe_node(n: &typst_html::HtmlNode) -> serde_json::Value {
++    use serde_json::json;
++    use typst_html::HtmlNode;
++    match n {
++        HtmlNode::Text(t,s) => json!({"kind":"text","text":t.as_str(),"span":format!("{:?}",s)}),
++        HtmlNode::Element(e) => json!({"kind":"element","tag":e.tag.resolve().as_str(),"span":format!("{:?}",e.span),"css":e.css.to_inline().to_string(),"attrs":e.attrs.0.iter().map(|(k,v)|(k.resolve().as_str().to_string(), v.to_string())).collect::<Vec<_>>(),"children":e.children.iter().map(html_probe_node).collect::<Vec<_>>()}),
++        HtmlNode::Tag(t) => match t {
++            typst::introspection::Tag::Start(c,_) => json!({"kind":"tag-start","content":typst::probe::content(c),"location":format!("{:?}",t.location())}),
++            _ => json!({"kind":"tag-end","location":format!("{:?}",t.location())})
++        },
++        HtmlNode::Frame(f) => json!({"kind":"frame","target":"paged","span":format!("{:?}",f.span),"frame":typst::probe::frame(&f.inner)}),
++    }
++}
+--- a/crates/typst-html/src/convert.rs
++++ b/crates/typst-html/src/convert.rs
+@@ -75,6 +75,7 @@
+         whitespace,
+         output: EcoVec::new(),
+         trailing: None,
++        text_css: None,
+     };
+ 
+     for (child, styles) in children {
+@@ -107,7 +108,13 @@
+         } else {
+             elem.text.clone()
+         };
++        if crate::style_probe::enabled() {
++            // Original converter still owns spaces/quoting/break handling. Only
++            // non-whitespace literal text chunks gain an inline style carrier.
++            converter.text_css = Some(crate::style_probe::text_css(styles));
++        }
+         handle_text(converter, text, elem.span());
++        converter.text_css = None;
+     } else if let Some(elem) = child.to_packed::<HElem>()
+         && elem.amount.is_zero()
+     {
+@@ -237,7 +244,11 @@
+     converter.push(HtmlElement {
+         tag: elem.tag,
+         attrs,
+-        css: elem.css.get_cloned(styles),
++        css: if crate::style_probe::enabled() && !tag::mathml::is_mathml(elem.tag) {
++            let mut css = crate::style_probe::text_css(styles);
++            for p in elem.css.get_ref(styles).iter() { css.push(p.name, p.value.clone()); }
++            css
++        } else { elem.css.get_cloned(styles) },
+         children,
+         parent: elem.parent,
+         span: elem.span(),
+@@ -492,6 +503,10 @@
+ /// Whether, apart from tags, the nodes comprise a single element or frame.
+ fn to_lone_element(nodes: &mut EcoVec<HtmlNode>) -> Option<&mut HtmlNode> {
+     let (start, end) = nodes.split_prefix_suffix(|node| matches!(node, HtmlNode::Tag(_)));
++    // An adapter carrier is a text result, not the user's lone element.
++    // Keep the official surrounding block/box production decision unchanged.
++    if let [HtmlNode::Element(e)] = &nodes[start..end]
++        && e.attrs.get(crate::HtmlAttr::intern("data-probe-text").unwrap()).is_some() { return None; }
+     matches!(&nodes[start..end], [HtmlNode::Element(_) | HtmlNode::Frame(_)])
+         .then(|| &mut nodes.make_mut()[start])
+ }
+@@ -517,6 +532,7 @@
+     whitespace: Whitespace,
+     output: EcoVec<HtmlNode>,
+     trailing: Option<TrailingWhitespace>,
++    text_css: Option<css::Properties>,
+ }
+ 
+ /// Keeps track of a trailing whitespace in the output.
+@@ -565,7 +581,11 @@
+ 
+     /// Shorthand for pushing a text node.
+     fn push_text(&mut self, text: impl Into<EcoString>, span: Span) {
+-        self.push(HtmlNode::text(text.into(), span));
++        let text = text.into();
++        if let Some(css) = &self.text_css && text != " " && text != "\t" {
++            self.push(HtmlElement::new(tag::span).with_attr(crate::HtmlAttr::intern("data-probe-text").unwrap(), "true").with_css(css.clone())
++                .with_children(eco_vec![HtmlNode::text(text, span)]).spanned(span));
++        } else { self.push(HtmlNode::text(text, span)); }
+     }
+ 
+     /// If there is trailing whitespace in need of protection, protects it.
+--- a/crates/typst-html/src/lib.rs
++++ b/crates/typst-html/src/lib.rs
+@@ -140,3 +140,5 @@
+     #[required]
+     pub body: Content,
+ }
++
++mod style_probe;
+--- a/crates/typst-html/src/rules.rs
++++ b/crates/typst-html/src/rules.rs
+@@ -20,14 +20,14 @@
+     Attribution, BibliographyElem, CiteElem, CiteGroup, CslIndentElem, CslLightElem,
+     Destination, DirectLinkElem, DividerElem, EarlyLinkResolver, EmphElem, EnumElem,
+     FigureCaption, FigureElem, FootnoteContainer, FootnoteElem, FootnoteEntry,
+-    FootnoteMarker, HeadingElem, LinkElem, LinkTarget, ListElem, OutlineElem,
++    FootnoteMarker, HeadingElem, LinkElem, LinkTarget, ListElem, ListMarker, OutlineElem,
+     OutlineEntry, OutlineNode, ParElem, ParbreakElem, QuoteElem, RefElem, StrongElem,
+     TableCell, TableElem, TermsElem, TitleElem, Works,
+ };
+ use typst_library::routines::Arenas;
+ use typst_library::text::{
+     HighlightElem, LinebreakElem, OverlineElem, RawElem, RawLine, SmallcapsElem,
+-    SpaceElem, StrikeElem, SubElem, SuperElem, UnderlineElem,
++    SpaceElem, StrikeElem, SubElem, SuperElem, UnderlineElem, TextElem, WeightDelta, ItalicToggle,
+ };
+ use typst_library::visualize::{Color, ImageElem};
+ use typst_syntax::Span;
+@@ -94,20 +94,38 @@
+ const PAR_RULE: ShowFn<ParElem> =
+     |elem, _, _| Ok(HtmlElem::new(tag::p).with_body(Some(elem.body.clone())).pack());
+ 
+-const STRONG_RULE: ShowFn<StrongElem> =
+-    |elem, _, _| Ok(HtmlElem::new(tag::strong).with_body(Some(elem.body.clone())).pack());
+-
+-const EMPH_RULE: ShowFn<EmphElem> =
+-    |elem, _, _| Ok(HtmlElem::new(tag::em).with_body(Some(elem.body.clone())).pack());
+-
+-const LIST_RULE: ShowFn<ListElem> = |elem, _, styles| {
++const STRONG_RULE: ShowFn<StrongElem> = |elem, _, styles| {
++    let body = if crate::style_probe::enabled() { elem.body.clone().set(TextElem::delta, WeightDelta(elem.delta.get(styles))) } else { elem.body.clone() };
++    Ok(HtmlElem::new(tag::strong).with_body(Some(body)).pack())
++};
++
++const EMPH_RULE: ShowFn<EmphElem> = |elem, _, _| {
++    let body = if crate::style_probe::enabled() { elem.body.clone().set(TextElem::emph, ItalicToggle(true)) } else { elem.body.clone() };
++    Ok(HtmlElem::new(tag::em).with_body(Some(body)).pack())
++};
++
++const LIST_RULE: ShowFn<ListElem> = |elem, engine, styles| {
++    let marker = if crate::style_probe::enabled() {
++        match elem.marker.get_ref(styles) {
++            ListMarker::Content(markers) => markers.get(styles.get(ListElem::depth).0 % markers.len().max(1)).cloned(),
++            ListMarker::Func(_) => { engine.sink.warn(warning!(elem.span(), "style probe: dynamic list marker unsupported; choose native html.frame")); None },
++        }
++    } else { None };
+     Ok(BlockElem::packed(
+         HtmlElem::new(tag::ul)
++            .with_css(if marker.is_some() { css::Properties::new().with("list-style-type", "none") } else { css::Properties::new() })
+             .with_body(Some(Content::sequence(elem.children.iter().map(|item| {
+                 // Text in wide lists shall always turn into paragraphs.
+                 let mut body = item.body.clone();
++                if crate::style_probe::enabled() { body = body.set(ListElem::depth, typst_library::foundations::Depth(1)); }
+                 if !elem.tight.get(styles) {
+                     body += ParbreakElem::shared();
++                }
++                if let Some(marker) = &marker {
++                    body = HtmlElem::new(tag::span)
++                        .with_attr(HtmlAttr::intern("data-probe-marker").unwrap(), "true")
++                        .with_css(css::Properties::new().with("margin-inline-end", "0.5em"))
++                        .with_body(Some(marker.clone())).pack() + body;
+                 }
+                 HtmlElem::new(tag::li)
+                     .with_body(Some(body))
+@@ -667,6 +685,7 @@
+ }
+ 
+ fn show_cell(tag: HtmlTag, cell: &Cell, styles: StyleChain) -> Content {
++    let resolved = cell;
+     let cell = cell.body.clone();
+     let Some(cell) = cell.to_packed::<TableCell>() else { return cell };
+     let mut attrs = HtmlAttrs::new();
+@@ -677,7 +696,29 @@
+     if let Some(rowspan) = span(cell.rowspan.get(styles)) {
+         attrs.push(attr::rowspan, rowspan);
+     }
+-    HtmlElem::new(tag)
++    let mut css = css::Properties::new();
++    if crate::style_probe::enabled() {
++        for (name, stroke) in [("border-top", &resolved.stroke.top), ("border-right", &resolved.stroke.right), ("border-bottom", &resolved.stroke.bottom), ("border-left", &resolved.stroke.left)] {
++            if let Some(stroke) = stroke {
++                let fixed = stroke.as_ref().clone().unwrap_or_default();
++                if fixed.dash.is_none() && let typst_library::visualize::Paint::Solid(color) = fixed.paint {
++                    let parts = css::Properties::build(()).with("w", fixed.thickness).with("c", color).finish();
++                    let w = parts.iter().find(|p| p.name == "w").unwrap();
++                    let c = parts.iter().find(|p| p.name == "c").unwrap();
++                    css.push(name, eco_format!("{} solid {}", w.value, c.value));
++                }
++            } else { css.push(name, "none"); }
++        }
++        if let Some(typst_library::visualize::Paint::Solid(color)) = &resolved.fill {
++            let fill = css::Properties::build(()).with("background-color", color.clone()).finish();
++            for p in fill.iter() { css.push(p.name, p.value.clone()); }
++        }
++        if let Smart::Custom(align) = cell.align.get(styles) {
++            if let Some(x) = align.x() { css.push("text-align", match x { typst_library::layout::HAlignment::Start => "start", typst_library::layout::HAlignment::Left => "left", typst_library::layout::HAlignment::Center => "center", typst_library::layout::HAlignment::Right => "right", typst_library::layout::HAlignment::End => "end" }); }
++            if let Some(y) = align.y() { css.push("vertical-align", match y { typst_library::layout::VAlignment::Top => "top", typst_library::layout::VAlignment::Horizon => "middle", typst_library::layout::VAlignment::Bottom => "bottom" }); }
++        }
++    }
++    HtmlElem::new(tag).with_css(css)
+         .with_body(Some(cell.clone().pack()))
+         .with_attrs(attrs)
+         .pack()
+--- /dev/null
++++ b/crates/typst-html/src/style_probe.rs
+@@ -0,0 +1,25 @@
++// Isolated bounded style adapter. Never evaluates user content again.
++use ecow::eco_format;
++use typst_library::foundations::StyleChain;
++use typst_library::text::{self, TextElem, FontStyle};
++use typst_library::visualize::Paint;
++use crate::css;
++pub fn enabled() -> bool { std::env::var_os("TYPST_HTML_STYLE_PROBE").is_some() }
++pub fn text_css(styles: StyleChain) -> css::Properties {
++    let names = text::families(styles).map(|s| {
++        // CSS string escape every non-ASCII-safe character, including quotes.
++        let v: String = s.as_str().chars().map(|c| if c.is_ascii_alphanumeric() || c == ' ' || c == '-' { c.to_string() } else { format!("\\{:x} ", c as u32) }).collect();
++        format!("\"{v}\"")
++    }).collect::<Vec<_>>().join(", ");
++    let variant = text::variant(styles);
++    let mut css = css::Properties::build(())
++        .with("font-size", styles.resolve(TextElem::size)).finish();
++    css.push("font-family", names);
++    css.push("font-weight", eco_format!("{}", variant.weight.to_number()));
++    css.push("font-style", match variant.style { FontStyle::Normal => "normal", FontStyle::Italic => "italic", FontStyle::Oblique => "oblique" });
++    if let Paint::Solid(color) = styles.get_ref(TextElem::fill) {
++        let color = css::Properties::build(()).with("color", color.clone()).finish();
++        for p in color.iter() { css.push(p.name, p.value.clone()); }
++    }
++    css
++}
+--- a/crates/typst-realize/src/probe.rs
++++ b/crates/typst-realize/src/probe.rs
+@@ -9,7 +9,7 @@
+ static SEQ: AtomicU64 = AtomicU64::new(0);
+ pub fn emit(stage: &str, payload: Json) {
+     let Some(path) = PATH.as_ref() else {return};
+-    if std::env::var("WEFTEXT_PROBE_MODE").as_deref() == Ok("world-only") && !stage.starts_with("world_") && stage != "final_frames" {return;}
++    if std::env::var("WEFTEXT_PROBE_MODE").as_deref() == Ok("world-only") && !stage.starts_with("world_") && stage != "final_frames" && stage != "final_html_tree" && stage != "final_introspection" {return;}
+     let _lock = LOCK.lock().unwrap();
+     let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+     if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {

@@ -1,0 +1,331 @@
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,5 +1,5 @@
+ [workspace]
+-members = ["crates/*", "docs", "tests", "tests/fuzz", "tests/wrapper"]
++members = ["crates/*"]
+ default-members = ["crates/typst-cli"]
+ resolver = "2"
+ 
+--- a/crates/typst-cli/Cargo.toml
++++ b/crates/typst-cli/Cargo.toml
+@@ -71,7 +71,6 @@
+ ]
+ 
+ [dev-dependencies]
+-typst-dev-assets = { workspace = true }
+ memchr = { workspace = true }
+ tempfile = { workspace = true }
+ 
+--- a/crates/typst-library/Cargo.toml
++++ b/crates/typst-library/Cargo.toml
+@@ -74,7 +74,6 @@
+ xmlwriter = { workspace = true }
+ 
+ [dev-dependencies]
+-typst-dev-assets = { workspace = true }
+ 
+ [lints]
+ workspace = true
+--- a/crates/typst-ide/Cargo.toml
++++ b/crates/typst-ide/Cargo.toml
+@@ -27,7 +27,6 @@
+ 
+ [dev-dependencies]
+ typst-assets = { workspace = true, features = ["fonts"] }
+-typst-dev-assets = { workspace = true }
+ once_cell = { workspace = true }
+ 
+ [lints]
+--- a/crates/typst-realize/Cargo.toml
++++ b/crates/typst-realize/Cargo.toml
+@@ -13,6 +13,7 @@
+ readme = { workspace = true }
+ 
+ [dependencies]
++serde_json = { workspace = true }
+ typst-html = { workspace = true }
+ typst-library = { workspace = true }
+ typst-macros = { workspace = true }
+--- a/crates/typst/Cargo.toml
++++ b/crates/typst/Cargo.toml
+@@ -13,6 +13,7 @@
+ readme = { workspace = true }
+ 
+ [dependencies]
++serde_json = { workspace = true }
+ typst-eval = { workspace = true }
+ typst-html = { workspace = true }
+ typst-layout = { workspace = true }
+--- a/crates/typst-realize/src/lib.rs
++++ b/crates/typst-realize/src/lib.rs
+@@ -37,6 +37,7 @@
+ use typst_syntax::Span;
+ use typst_utils::{ListSet, SliceExt, SmallBitSet};
+ 
++pub mod probe;
+ mod spaces;
+ use spaces::{SpaceState, collapse_spaces, collapse_state_textual};
+ 
+@@ -72,6 +73,8 @@
+     visit(&mut s, content, styles)?;
+     finish(&mut s)?;
+ 
++    probe::observe(s.engine, "realize_result", serde_json::json!({"kind":match &s.kind {RealizationKind::Bundle=>"bundle", RealizationKind::Document{..}=>"document", RealizationKind::Fragment{..}=>"fragment",RealizationKind::Par=>"par",RealizationKind::Math=>"math"}, "items":s.sink.iter().map(|(c,st)|serde_json::json!({"content":probe::content(c),"effective":probe::effective(c,*st),"styles":format!("{:?}",st)})).collect::<Vec<_>>()}));
++    probe::emit("realize_result", serde_json::json!({"kind":match &s.kind {RealizationKind::Bundle=>"bundle", RealizationKind::Document{..}=>"document", RealizationKind::Fragment{..}=>"fragment",RealizationKind::Par=>"par",RealizationKind::Math=>"math"}, "items":s.sink.iter().map(|(c,st)|serde_json::json!({"content":probe::content(c),"effective":probe::effective(c,*st),"styles":format!("{:?}",st)})).collect::<Vec<_>>()}));
+     Ok(s.sink)
+ }
+ 
+@@ -363,6 +366,9 @@
+         return Ok(false);
+     };
+ 
++    let observed_input = probe::content(content);
++    let observed_step = match &step {Some(ShowStep::Recipe(_, _))=>"recipe",Some(ShowStep::Builtin(_))=>"builtin",None=>"prepare"};
++    let observed_recipe_span = match &step {Some(ShowStep::Recipe(recipe, _))=>Some(format!("{:?}",recipe.span())),_=>None};
+     // Create a fresh copy that we can mutate.
+     let mut output = Cow::Borrowed(content);
+ 
+@@ -373,6 +379,8 @@
+         tags = prepare(s.engine, s.locator, output.to_mut(), &mut map, styles)?;
+     }
+ 
++    let observed_prepared = probe::content(&output);
++    let observed_effective = probe::effective(&output, styles.chain(&map));
+     // Apply a show rule step, if there is one.
+     if let Some(step) = step {
+         let chained = styles.chain(&map);
+@@ -410,6 +418,8 @@
+         Cow::Owned(realized) => s.store(realized),
+     };
+ 
++    probe::observe(s.engine, "show_return", serde_json::json!({"step":observed_step,"recipe_span":observed_recipe_span,"prepared_input":observed_prepared,"effective":observed_effective,"input":observed_input,"output":probe::content(realized),"styles":format!("{:?}",styles),"map":format!("{:?}",map)}));
++    probe::emit("show_return", serde_json::json!({"step":observed_step,"recipe_span":observed_recipe_span,"prepared_input":observed_prepared,"effective":observed_effective,"input":observed_input,"output":probe::content(realized),"styles":format!("{:?}",styles),"map":format!("{:?}",map)}));
+     // Push start tag.
+     let (start, end) = tags.unzip();
+     if let Some(tag) = start {
+@@ -1532,3 +1542,4 @@
+ 
+     (Content::sequence(seq), trunk)
+ }
++
+--- /dev/null
++++ b/crates/typst-realize/src/probe.rs
+@@ -0,0 +1,83 @@
++//! Isolated research observer. No Content/style/engine mutation.
++use std::io::Write;
++use std::sync::{LazyLock, Mutex};
++use std::sync::atomic::{AtomicU64, Ordering};
++use serde_json::{Value as Json, json};
++use typst_library::foundations::{Content, Value};
++static PATH: LazyLock<Option<std::path::PathBuf>> = LazyLock::new(|| std::env::var_os("WEFTEXT_PROBE_LOG").map(Into::into));
++static LOCK: Mutex<()> = Mutex::new(());
++static SEQ: AtomicU64 = AtomicU64::new(0);
++pub fn emit(stage: &str, payload: Json) {
++    let Some(path) = PATH.as_ref() else {return};
++    if std::env::var("WEFTEXT_PROBE_MODE").as_deref() == Ok("world-only") && !stage.starts_with("world_") && stage != "final_frames" {return;}
++    let _lock = LOCK.lock().unwrap();
++    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
++    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
++        let _ = writeln!(f,"{}",json!({"seq":seq,"stage":stage,"payload":payload}));
++    }
++}
++pub fn content(c: &Content) -> Json { node(c,0) }
++fn node(c: &Content, depth: usize) -> Json {
++    if depth > 32 {return json!({"truncated":true})}
++    if let Some(t)=c.to_packed::<typst_library::introspection::TagElem>() { return json!({"elem":"tag","tag":tag(&t.tag,depth+1)}); }
++    let fields: serde_json::Map<String,Json> = c.fields().iter().map(|(k,v)|(k.to_string(),value(v,depth+1))).collect();
++    json!({"elem":c.elem().name(),"span":format!("{:?}",c.span()),"file":c.span().id().map(|id|format!("{:?}",id)),"location":c.location().map(|l|format!("{:?}",l)),"fields":fields})
++}
++fn value(v: &Value, depth: usize) -> Json {
++    if depth > 32 {return json!({"truncated":true})}
++    match v {
++        Value::Content(c)=>node(c,depth),
++        Value::Array(a)=>Json::Array(a.iter().map(|v|value(v,depth+1)).collect()),
++        Value::Dict(d)=>Json::Object(d.iter().map(|(k,v)|(k.to_string(),value(v,depth+1))).collect()),
++        Value::None=>Json::Null,
++        Value::Bool(b)=>json!(b),
++        Value::Int(n)=>json!(n),
++        Value::Float(n)=>json!(n),
++        Value::Str(s)=>json!(s.as_str()),
++        _=>json!({"repr":format!("{:?}",v)})
++    }
++}
++
++pub fn frame(f: &typst_library::layout::Frame) -> Json {
++    use typst_library::layout::FrameItem;
++    json!({"items":f.items().map(|(pos,item)|{
++        let entry = match item {
++            FrameItem::Group(g)=>json!({"kind":"group","parent":format!("{:?}",g.parent),"frame":frame(&g.frame)}),
++            FrameItem::Text(t)=>json!({"kind":"text","text":t.text.as_str(),"glyph_spans":t.glyphs.iter().map(|g|json!({"span":format!("{:?}",g.span.0),"offset":g.span.1,"range":[g.range.start,g.range.end]})).collect::<Vec<_>>() }),
++            FrameItem::Tag(t)=>json!({"kind":"tag","tag":tag(t,0)}),
++            _=>json!({"kind":"other","repr":format!("{:?}",item)})
++        };
++        json!({"position":format!("{:?}",pos),"item":entry})
++    }).collect::<Vec<_>>()})
++}
++
++pub fn observe(engine: &mut typst_library::engine::Engine, stage: &str, payload: Json) {
++    if PATH.is_some() && std::env::var("WEFTEXT_PROBE_MODE").as_deref() != Ok("world-only") {
++        engine.sink.probe(json!({"stage":stage,"payload":payload}).to_string().into());
++    }
++}
++pub fn source(source: &typst_syntax::Source) -> Json {
++    fn walk(n: &typst_syntax::SyntaxNode, source: &typst_syntax::Source, out: &mut Vec<Json>) {
++        let range = source.find(n.span()).map(|node|node.range());
++        out.push(json!({"span":format!("{:?}",n.span()),"kind":format!("{:?}",n.kind()),"range":range.clone(),"text":range.map(|r|source.text()[r].to_owned())}));
++        for child in n.children() {walk(child,source,out);}
++    }
++    let mut nodes=vec![];walk(source.root(),source,&mut nodes);
++    json!({"file":format!("{:?}",source.id()),"nodes":nodes})
++}
++
++
++fn tag(t: &typst_library::introspection::Tag, depth: usize) -> Json {
++    use typst_library::introspection::Tag;
++    match t {
++        Tag::Start(c,flags)=>json!({"kind":"start","content":node(c,depth),"flags":format!("{:?}",flags),"location":format!("{:?}",t.location())}),
++        Tag::End(loc,hash,flags)=>json!({"kind":"end","location":format!("{:?}",loc),"key_hash":format!("{:032x}",hash),"flags":format!("{:?}",flags)})
++    }
++}
++pub fn effective(c: &Content, st: typst_library::foundations::StyleChain) -> Json {
++    use typst_library::text::TextElem;
++    let fields: serde_json::Map<String,Json> = ["level","outlined","numbering","block","columns","dir","weight","style","lang"].into_iter().filter_map(|name|{
++        c.elem().field_id(name).and_then(|id|c.get(id,Some(st)).ok()).map(|v|(name.into(),value(&v,0)))
++    }).collect();
++    json!({"fields":fields,"text_direction":format!("{:?}",st.resolve(TextElem::dir)),"text_weight":format!("{:?}",st.get(TextElem::weight)),"text_style":format!("{:?}",st.get(TextElem::style))})
++}
+--- a/crates/typst/src/lib.rs
++++ b/crates/typst/src/lib.rs
+@@ -34,6 +34,7 @@
+ pub extern crate ecow;
+ 
+ pub use typst_library::*;
++pub use typst_realize::probe;
+ #[doc(inline)]
+ pub use typst_syntax as syntax;
+ #[doc(inline)]
+@@ -130,6 +131,7 @@
+     )?
+     .content();
+ 
++    probe::emit("evaluated", serde_json::json!({"content":probe::content(&content)}));
+     let mut history: ArrayVec<T, { MAX_ITERS - 1 }> = ArrayVec::new();
+     let mut document: T;
+ 
+@@ -153,9 +155,13 @@
+             route: Route::default(),
+         };
+ 
++        probe::emit("round_start", serde_json::json!({"round":history.len()+1}));
+         document = T::create(&mut engine, &content, styles)?;
+ 
+-        if timed!("check stabilized", constraint.validate(document.introspector())) {
++        let stable = timed!("check stabilized", constraint.validate(document.introspector()));
++        probe::emit("round_trace", serde_json::json!({"round":history.len()+1,"stable":stable,"events":subsink.probe_events().iter().map(|s|serde_json::from_str::<serde_json::Value>(s).unwrap()).collect::<Vec<_>>()}));
++        probe::emit("round_end", serde_json::json!({"round":history.len()+1,"stable":stable}));
++        if stable {
+             sink.extend_from_sink(subsink);
+             break;
+         }
+@@ -190,6 +196,7 @@
+         return Err(delayed);
+     }
+ 
++    probe::emit("final_introspection", serde_json::json!({"headings":document.introspector().query(&typst_library::foundations::Element::of::<typst_library::model::HeadingElem>().select()).iter().map(probe::content).collect::<Vec<_>>(),"metadata":document.introspector().query(&typst_library::foundations::Element::of::<typst_library::introspection::MetadataElem>().select()).iter().map(probe::content).collect::<Vec<_>>()}));
+     Ok(document)
+ }
+ 
+@@ -323,3 +330,4 @@
+     html_mathml_body: typst_html::html_mathml_body,
+     html_span_filled: typst_html::html_span_filled,
+ });
++
+--- a/crates/typst-library/src/engine.rs
++++ b/crates/typst-library/src/engine.rs
+@@ -95,6 +95,7 @@
+                 sink.delayed,
+                 sink.warnings,
+                 sink.values,
++                sink.probes,
+             );
+         }
+ 
+@@ -164,6 +165,8 @@
+     warnings_set: FxHashSet<u128>,
+     /// A sequence of traced values for a span.
+     values: EcoVec<(Value, Option<Styles>)>,
++    /// Research-only observation payload, replayed by tracked Sink calls.
++    probes: EcoVec<ecow::EcoString>,
+ }
+ 
+ impl Sink {
+@@ -175,6 +178,8 @@
+         Self::default()
+     }
+ 
++    pub fn probe_events(&self) -> &[ecow::EcoString] { &self.probes }
++
+     /// Get the introspections.
+     pub fn introspections(&self) -> &[Introspection] {
+         &self.introspections
+@@ -197,12 +202,15 @@
+ 
+     /// Extend from another sink.
+     pub fn extend_from_sink(&mut self, other: Sink) {
+-        self.extend(other.introspections, other.delayed, other.warnings, other.values);
++        self.extend(other.introspections, other.delayed, other.warnings, other.values, other.probes);
+     }
+ }
+ 
+ #[comemo::track]
+ impl Sink {
++    /// Observation effect only: no engine/content/style mutation or return value.
++    pub fn probe(&mut self, event: ecow::EcoString) { self.probes.push(event); }
++
+     /// Trace an introspection.
+     pub fn introspection(&mut self, introspection: Introspection) {
+         self.introspections.push(introspection);
+@@ -241,7 +249,9 @@
+         delayed: EcoVec<SourceDiagnostic>,
+         warnings: EcoVec<SourceDiagnostic>,
+         values: EcoVec<(Value, Option<Styles>)>,
++        probes: EcoVec<ecow::EcoString>,
+     ) {
++        self.probes.extend(probes);
+         self.introspections.extend(introspections);
+         self.delayed.extend(delayed);
+         for warning in warnings {
+--- a/crates/typst-cli/src/world.rs
++++ b/crates/typst-cli/src/world.rs
+@@ -128,14 +128,19 @@
+     }
+ 
+     fn source(&self, id: FileId) -> FileResult<Source> {
+-        self.files.source(id)
++        typst::probe::emit("world_source", serde_json::json!({"id":format!("{:?}",id)}));
++        let result = self.files.source(id);
++        if let Ok(source) = &result {typst::probe::emit("source_snapshot", typst::probe::source(source));}
++        result
+     }
+ 
+     fn file(&self, id: FileId) -> FileResult<Bytes> {
++        typst::probe::emit("world_file", serde_json::json!({"id":format!("{:?}",id)}));
+         self.files.file(id)
+     }
+ 
+     fn font(&self, index: usize) -> Option<Font> {
++        typst::probe::emit("world_font", serde_json::json!({"index":index}));
+         self.fonts.font(index)
+     }
+ 
+--- a/crates/typst-cli/src/compile.rs
++++ b/crates/typst-cli/src/compile.rs
+@@ -321,6 +321,7 @@
+     match config.output_format {
+         OutputFormat::Pdf | OutputFormat::Png | OutputFormat::Svg => {
+             let Warned { output, warnings } = typst::compile::<PagedDocument>(world);
++            if let Ok(doc) = &output {typst::probe::emit("final_frames", serde_json::json!({"pages":doc.pages().iter().map(|page|typst::probe::frame(&page.frame)).collect::<Vec<_>>()}));}
+             let result = output.and_then(|document| export_paged(&document, config));
+             Warned { output: result, warnings }
+         }

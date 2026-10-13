@@ -1,0 +1,148 @@
+{
+  "evidence": "Design oracles, not implementation tests. Typst compilation proves only legal language. Fixtures use fictitious Node/config IDs without Core admission; supplied bibliography is read-only experiment output.",
+  "positive_facets": [
+    "person",
+    "organization",
+    "task",
+    "work",
+    "period",
+    "range",
+    "event"
+  ],
+  "refinement": "paper.typ requires library/work through library/paper",
+  "native_values": "numeric.typ fields are undeclared syntax examples, not typed values",
+  "negative_semantics": [
+    {
+      "source": "negative-range-empty.typ",
+      "expected": "invalid range: at least one bound"
+    },
+    {
+      "source": "negative-org-literal.typ",
+      "expected": "invalid RefTarget: no literal branch"
+    },
+    {
+      "source": "negative-person-two-branches.typ",
+      "expected": "invalid Target: exactly one branch"
+    }
+  ],
+  "query": "saved-query.typ carries one immutable schema baseline plus author text; cold symbol-binding checks are design-only and do not run CEL",
+  "root": "root-dynamic-body.typ has a direct static root and legal dynamic body/generated metadata; only the direct root is application authority; official compile is not role checker implementation",
+  "citations": "citation.typ explicit entries(key,work) plus native @/cite and supplied generated Bib compile; citation-label-collision.typ must fail ambiguity; heading-reference.typ is not a Work citation",
+  "remaining": "Actual schema installation, provider implementation, AST role qualification, Core authorization/fences and Query/Office consumers are not tested.",
+  "validity_and_optional_members": [
+    {
+      "id": "DUR01",
+      "input": "bounded ordered dates; before/start/inside/end/after",
+      "expected": "false/true/true/true/false"
+    },
+    {
+      "id": "DUR02",
+      "input": "only start, only end, empty record or absent whole During",
+      "expected": "unavailable"
+    },
+    {
+      "id": "DUR03",
+      "input": "start=date, end=none; point before/at/after start",
+      "expected": "false/true/true"
+    },
+    {
+      "id": "DUR04",
+      "input": "start=none, end=date; point before/at/after end",
+      "expected": "true/true/false"
+    },
+    {
+      "id": "DUR05",
+      "input": "start=none, end=none",
+      "expected": "true for valid date/instant point; invalid point stays invalid"
+    },
+    {
+      "id": "DUR06",
+      "input": "mixed domains, reversed bounds, wrong-domain point",
+      "expected": "invalid; equal bounded ends admit exact point"
+    },
+    {
+      "id": "DUR07",
+      "input": "unavailable/unauthorized input or required provider missing",
+      "expected": "unavailable without extra disclosure"
+    },
+    {
+      "id": "DUR08",
+      "input": "clear form input vs explicitly choose no starting bound/ongoing",
+      "expected": "absent vs native none, preserved on round-trip"
+    },
+    {
+      "id": "DUR09",
+      "input": "Range with one absent endpoint vs empty/none endpoint",
+      "expected": "valid open half-range vs invalid, separate from During"
+    },
+    {
+      "id": "QOPT01",
+      "input": "work-labelled plus unlabelled phone, then all-unlabelled/empty phones",
+      "expected": "guarded select only returns work item, no absent-label issue; all-unlabelled/empty do not match"
+    }
+  ],
+  "global_cdb_repairs": {
+    "source_baseline": "c048626acb89654a4d6c986aa8bd798a3a3a3c53",
+    "precision_positive": [
+      "precision-periods.typ",
+      "precision-range.typ",
+      "precision-task.typ"
+    ],
+    "classification_positive": "general-relations.typ",
+    "semantic_negative": [
+      {
+        "source": "negative-precision-recurrence.typ",
+        "expected": "partial Range is valid as a note but not an exact recurring template"
+      },
+      {
+        "source": "negative-general-relations.typ",
+        "expected": "cross-domain preset, dual branch and missing classification are typed invalid"
+      }
+    ],
+    "checks": "precision_relation_model.py enters actual schema field paths; 69 bounded model checks, not AST/Rust/CEL/UI/Office",
+    "review": "Original Pro independently CLOSED both findings at fixed f456; historical 69-case evidence retained, not a global acceptance."
+  },
+  "global_f456_overlap_repair": {
+    "source_baseline": "f4560ddd4f93421db1f6c070889150cbc22e9bdb",
+    "finding": "TYPST-GLOBAL-F456-P2-01",
+    "oracles": [
+      {
+        "id": "RDOM01",
+        "input": "Two separately valid start-only date/instant Ranges, then end-only and swapped arguments",
+        "expected": "invalid in all four cases, before infinity shortcuts"
+      },
+      {
+        "id": "RDOM02",
+        "input": "Same-calendar/version month start-only or end-only Ranges; same-month month/day pairs",
+        "expected": "true on both sides, without requiring compareTemporal to order their finite endpoints"
+      },
+      {
+        "id": "RDOM03",
+        "input": "Same-domain opposite-side open Ranges: ordered, separated, adjacent",
+        "expected": "true/false/false under half-open boundaries"
+      },
+      {
+        "id": "RDOM04",
+        "input": "Native Gregorian date and CalendarDate(day); two supported calendars or frozen versions with full days",
+        "expected": "common civil-day basis; same-side open true, opposite-side adjacent false"
+      },
+      {
+        "id": "RDOM05",
+        "input": "Coarse endpoints across calendars or frozen versions, in future-open or past-open Ranges",
+        "expected": "unavailable, even if an inequality shortcut could otherwise yield true or false"
+      },
+      {
+        "id": "RDOM06",
+        "input": "A required calendar provider missing or a malformed bound in an open Range",
+        "expected": "unavailable or invalid respectively, never washed into a Boolean"
+      },
+      {
+        "id": "RDOM07",
+        "input": "containsDate across coarse calendar bases; civil/instant duration and recurring template",
+        "expected": "unavailable/invalid/invalid; wholly unbounded During still accepts a valid qualified point"
+      }
+    ],
+    "checks": "precision_relation_model.py: 96 actual-Field and shared temporal consumer model checks (69 original, 27 added). Original independent 70 cases author-rerun unchanged: 70 pass. Not AST/Rust/CEL/UI/Office.",
+    "review": "Independently design CLOSED at f9512f05f86311ea685d5e8d213784ac0d416324; global ACCEPT / accepted-design-not-implemented. See REVIEW section 7; product acceptance remains unrun."
+  }
+}

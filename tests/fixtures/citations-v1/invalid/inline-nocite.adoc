@@ -1,3 +1,0 @@
-= Invalid
-
-This is not a block nocite::[wang2024].

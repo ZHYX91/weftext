@@ -1,0 +1,6289 @@
+{
+  "version": 1,
+  "definitions": {
+    "Target": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "ref": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "node_ref"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "text": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "ref",
+          "text"
+        ]
+      }
+    },
+    "RefTarget": {
+      "kind": "record",
+      "members": {
+        "ref": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "node_ref"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "reject",
+      "constraints": []
+    },
+    "TagTarget": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "ref": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "tag_ref"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "text": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "ref",
+          "text"
+        ]
+      }
+    },
+    "SourceTarget": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "ref": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "node_ref"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "resource": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "resource_ref"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "url": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "url"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "preserve",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "ref",
+          "resource",
+          "url"
+        ]
+      }
+    },
+    "DateOrInstant": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "scalar",
+          "semantic": "date"
+        },
+        {
+          "kind": "scalar",
+          "semantic": "instant"
+        }
+      ],
+      "discriminator": null
+    },
+    "MonthDay": {
+      "kind": "record",
+      "members": {
+        "month": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "day": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/month-day",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "CalendarDate": {
+      "kind": "record",
+      "members": {
+        "calendar": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "version": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "precision": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "year",
+              "month",
+              "day"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "year": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "month": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "day": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "leap_month": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/calendar-date",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "EventTime": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "scalar",
+          "semantic": "date"
+        },
+        {
+          "kind": "scalar",
+          "semantic": "instant"
+        },
+        {
+          "kind": "use",
+          "name": "CalendarDate"
+        },
+        {
+          "kind": "use",
+          "name": "MonthDay"
+        }
+      ],
+      "discriminator": {
+        "kind": "record_presence",
+        "key": "calendar",
+        "present": 2,
+        "absent": 3
+      }
+    },
+    "During": {
+      "kind": "record",
+      "members": {
+        "start": {
+          "shape": {
+            "kind": "use",
+            "name": "TemporalEndpoint"
+          },
+          "required": false,
+          "nullable": true
+        },
+        "end": {
+          "shape": {
+            "kind": "use",
+            "name": "TemporalEndpoint"
+          },
+          "required": false,
+          "nullable": true
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/during",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Range": {
+      "kind": "record",
+      "members": {
+        "start": {
+          "shape": {
+            "kind": "use",
+            "name": "TemporalEndpoint"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "end_exclusive": {
+          "shape": {
+            "kind": "use",
+            "name": "TemporalEndpoint"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/range",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Source": {
+      "kind": "record",
+      "members": {
+        "reference": {
+          "shape": {
+            "kind": "use",
+            "name": "SourceTarget"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "locator": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "accessed": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Name": {
+      "kind": "record",
+      "members": {
+        "text": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "role": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "ordinary",
+              "legal",
+              "former",
+              "alias",
+              "transliteration"
+            ],
+            "open": true
+          },
+          "required": false,
+          "nullable": false
+        },
+        "language": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "language_tag"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "script": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "preferred": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Phone": {
+      "kind": "record",
+      "members": {
+        "number": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "phone"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "label": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Email": {
+      "kind": "record",
+      "members": {
+        "address": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "email"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "label": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Address": {
+      "kind": "record",
+      "members": {
+        "address": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "label": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Website": {
+      "kind": "record",
+      "members": {
+        "url": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "url"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "label": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Site": {
+      "kind": "record",
+      "members": {
+        "text": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Account": {
+      "kind": "record",
+      "members": {
+        "service": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "wechat",
+              "qq",
+              "x",
+              "facebook",
+              "custom"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "serviceKey": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "identifier": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "usage": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "personal",
+              "work",
+              "other"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "core/custom-code",
+          "inputs": {
+            "code": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "service"
+                }
+              ]
+            },
+            "custom": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "serviceKey"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "code": "custom"
+          }
+        }
+      ]
+    },
+    "State": {
+      "kind": "record",
+      "members": {
+        "value": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Identifier": {
+      "kind": "record",
+      "members": {
+        "scheme": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "value": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Classification": {
+      "kind": "record",
+      "members": {
+        "scheme": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "value": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Profession": {
+      "kind": "record",
+      "members": {
+        "text": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "context": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Rank": {
+      "kind": "record",
+      "members": {
+        "system": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "level": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Engagement": {
+      "kind": "record",
+      "members": {
+        "employer": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "department": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "position": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "rank": {
+          "shape": {
+            "kind": "use",
+            "name": "Rank"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Relation": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "role": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "customLabel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "RefRelation": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "use",
+            "name": "RefTarget"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Dependency": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "node_ref"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "LifeEvent": {
+      "kind": "record",
+      "members": {
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "birth",
+              "death",
+              "employment-start",
+              "graduation",
+              "marriage",
+              "custom"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "customKind": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "event_time": {
+          "shape": {
+            "kind": "use",
+            "name": "EventTime"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "description": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "confidence": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "decimal"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "core/custom-code",
+          "inputs": {
+            "code": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "kind"
+                }
+              ]
+            },
+            "custom": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "customKind"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "code": "custom"
+          }
+        },
+        {
+          "validator": "core/decimal-range",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "confidence"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "min": "0",
+            "max": "1"
+          }
+        }
+      ]
+    },
+    "Quantity": {
+      "kind": "record",
+      "members": {
+        "value": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "scalar",
+                "semantic": "decimal"
+              },
+              {
+                "kind": "scalar",
+                "semantic": "exact_decimal"
+              }
+            ],
+            "discriminator": null
+          },
+          "required": true,
+          "nullable": false
+        },
+        "unit": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "precision": {
+          "shape": {
+            "kind": "union",
+            "variants": [
+              {
+                "kind": "scalar",
+                "semantic": "decimal"
+              },
+              {
+                "kind": "scalar",
+                "semantic": "exact_decimal"
+              }
+            ],
+            "discriminator": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "units/quantity",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Measurement": {
+      "kind": "record",
+      "members": {
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "height",
+              "weight"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "quantity": {
+          "shape": {
+            "kind": "use",
+            "name": "Quantity"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "observed_at": {
+          "shape": {
+            "kind": "use",
+            "name": "EventTime"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "units/measurement",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Contributor": {
+      "kind": "record",
+      "members": {
+        "agent": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "credited_as": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "family": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "given": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "roles": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "nonempty_text"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "affiliations": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Target"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Resource": {
+      "kind": "record",
+      "members": {
+        "resource": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "resource_ref"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "role": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "PublicationState": {
+      "kind": "record",
+      "members": {
+        "state": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "draft",
+              "accepted",
+              "published"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Publication": {
+      "kind": "record",
+      "members": {
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "article",
+              "book",
+              "report",
+              "standard",
+              "dataset",
+              "chapter",
+              "thesis",
+              "web"
+            ],
+            "open": true
+          },
+          "required": false,
+          "nullable": false
+        },
+        "title": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "alternative_titles": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "record",
+              "members": {
+                "text": {
+                  "shape": {
+                    "kind": "scalar",
+                    "semantic": "nonempty_text"
+                  },
+                  "required": true,
+                  "nullable": false
+                },
+                "language": {
+                  "shape": {
+                    "kind": "scalar",
+                    "semantic": "language_tag"
+                  },
+                  "required": false,
+                  "nullable": false
+                }
+              },
+              "unknown": "preserve",
+              "constraints": []
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "identifiers": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Identifier"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "publication_history": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "PublicationState"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "resources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Resource"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "contributors": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Contributor"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "venue": {
+          "shape": {
+            "kind": "use",
+            "name": "RefRelation"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "version_of": {
+          "shape": {
+            "kind": "use",
+            "name": "RefRelation"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "issued": {
+          "shape": {
+            "kind": "use",
+            "name": "EventTime"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "container": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "volume": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "issue": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "pages": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "abstract": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "citation_key": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "url": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "url"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "keywords": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "text"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "language": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "language_tag"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Period": {
+      "kind": "record",
+      "members": {
+        "series_key": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "day",
+              "week",
+              "month",
+              "quarter",
+              "year"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "calendar": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "calendar_version": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "rule": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "key": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "zone": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "zone_version": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/period",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Weekday": {
+      "kind": "record",
+      "members": {
+        "day": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "MO",
+              "TU",
+              "WE",
+              "TH",
+              "FR",
+              "SA",
+              "SU"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "ordinal": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "core/int-range",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "ordinal"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "min": -5,
+            "max": 5,
+            "exclude": [
+              0
+            ]
+          }
+        }
+      ]
+    },
+    "Exception": {
+      "kind": "record",
+      "members": {
+        "onset": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "action": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "cancel",
+              "replace"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "range": {
+          "shape": {
+            "kind": "use",
+            "name": "ExactRange"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "title": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "tentative",
+              "confirmed",
+              "cancelled"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/exception",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Recurrence": {
+      "kind": "record",
+      "members": {
+        "frequency": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "interval": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "calendar": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "calendar_version": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "zone": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "zone_version": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "fold": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "earlier",
+              "later"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "gap": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "skip"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "weekStart": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "MO",
+              "TU",
+              "WE",
+              "TH",
+              "FR",
+              "SA",
+              "SU"
+            ],
+            "open": false
+          },
+          "required": false,
+          "nullable": false
+        },
+        "byMonth": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "int"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "byMonthDay": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "scalar",
+              "semantic": "int"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "byWeekday": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Weekday"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "count": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "until": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "rDates": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "DateOrInstant"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "exDates": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "DateOrInstant"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "exceptions": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Exception"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/recurrence",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "Participant": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "use",
+            "name": "RefTarget"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "role": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "Reminder": {
+      "kind": "record",
+      "members": {
+        "minutes_before": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "int"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "channel": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "nonempty_text"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "core/int-range",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "minutes_before"
+                }
+              ]
+            }
+          },
+          "parameters": {
+            "min": 0,
+            "max": 2147483647,
+            "exclude": []
+          }
+        }
+      ]
+    },
+    "QueryBinding": {
+      "kind": "record",
+      "members": {
+        "schema": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "schema_ref"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "revision": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "config_revision"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "language": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "weftext.query.cel.v1"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "reject",
+      "constraints": []
+    },
+    "CitationEntry": {
+      "kind": "record",
+      "members": {
+        "key": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "citation_key"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "work": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "node_ref"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "reject",
+      "constraints": []
+    },
+    "CitationBinding": {
+      "kind": "record",
+      "members": {
+        "kind": {
+          "shape": {
+            "kind": "enum",
+            "values": [
+              "weftext.citations"
+            ],
+            "open": false
+          },
+          "required": true,
+          "nullable": false
+        },
+        "entries": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "CitationEntry"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "reject",
+      "constraints": []
+    },
+    "TemporalEndpoint": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "scalar",
+          "semantic": "date"
+        },
+        {
+          "kind": "scalar",
+          "semantic": "instant"
+        },
+        {
+          "kind": "use",
+          "name": "CalendarDate"
+        }
+      ],
+      "discriminator": null
+    },
+    "ExactRange": {
+      "kind": "record",
+      "members": {
+        "start": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "end_exclusive": {
+          "shape": {
+            "kind": "use",
+            "name": "DateOrInstant"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": [
+        {
+          "validator": "temporal/range",
+          "inputs": {
+            "value": {
+              "kind": "local",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    "FamilyRelationship": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "preset": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "extended-relative"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "custom": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "preset",
+          "custom"
+        ]
+      }
+    },
+    "FamilyRelation": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "relationship": {
+          "shape": {
+            "kind": "use",
+            "name": "FamilyRelationship"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "SocialRelationship": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "preset": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "acquaintance",
+                  "classmate",
+                  "friend"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "custom": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "preset",
+          "custom"
+        ]
+      }
+    },
+    "SocialRelation": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "relationship": {
+          "shape": {
+            "kind": "use",
+            "name": "SocialRelationship"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    },
+    "ProfessionalRelationship": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "preset": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "colleague"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "custom": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "member",
+        "keys": [
+          "preset",
+          "custom"
+        ]
+      }
+    },
+    "ProfessionalRelation": {
+      "kind": "record",
+      "members": {
+        "target": {
+          "shape": {
+            "kind": "use",
+            "name": "Target"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "status": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "during": {
+          "shape": {
+            "kind": "use",
+            "name": "During"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "note": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "text"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "sources": {
+          "shape": {
+            "kind": "list",
+            "items": {
+              "kind": "use",
+              "name": "Source"
+            },
+            "min": 0,
+            "max": null
+          },
+          "required": false,
+          "nullable": false
+        },
+        "selected": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "bool"
+          },
+          "required": false,
+          "nullable": false
+        },
+        "relationship": {
+          "shape": {
+            "kind": "use",
+            "name": "ProfessionalRelationship"
+          },
+          "required": true,
+          "nullable": false
+        }
+      },
+      "unknown": "preserve",
+      "constraints": []
+    }
+  },
+  "fields": [
+    {
+      "id": "contacts/names",
+      "key": "names",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Name"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "contacts/phones",
+      "key": "phones",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Phone"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "contacts/emails",
+      "key": "emails",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Email"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "contacts/addresses",
+      "key": "addresses",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Address"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "contacts/websites",
+      "key": "websites",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Website"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "core/aliases",
+      "key": "aliases",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "scalar",
+          "semantic": "nonempty_text"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "core/tags",
+      "key": "tags",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "TagTarget"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/accounts",
+      "key": "accounts",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Account"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/nationality_states",
+      "key": "nationality_states",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "State"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/legal_sex_states",
+      "key": "legal_sex_states",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "State"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/gender_identity_states",
+      "key": "gender_identity_states",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "State"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/professions",
+      "key": "professions",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Profession"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/engagements",
+      "key": "engagements",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Engagement"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/life_events",
+      "key": "life_events",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "LifeEvent"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/measurements",
+      "key": "measurements",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Measurement"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/avatar",
+      "key": "avatar",
+      "shape": {
+        "kind": "use",
+        "name": "Resource"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/parents",
+      "key": "parents",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Relation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/spouses",
+      "key": "spouses",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Relation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/siblings",
+      "key": "siblings",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Relation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/guardians",
+      "key": "guardians",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Relation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/managers",
+      "key": "managers",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Relation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/mentors",
+      "key": "mentors",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Relation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/family_relations",
+      "key": "family_relations",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "FamilyRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/social_relations",
+      "key": "social_relations",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "SocialRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "people/professional_relations",
+      "key": "professional_relations",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "ProfessionalRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/organization_states",
+      "key": "organization_states",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "State"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/identifiers",
+      "key": "identifiers",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Identifier"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/classifications",
+      "key": "classifications",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Classification"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/sites",
+      "key": "sites",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Site"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/parent",
+      "key": "parent",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": 1
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/governs",
+      "key": "governs",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/owns",
+      "key": "owns",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/allied_with",
+      "key": "allied_with",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/related_organizations",
+      "key": "related_organizations",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/brand_of",
+      "key": "brand_of",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/business_guided_by",
+      "key": "business_guided_by",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/jointly_led_by",
+      "key": "jointly_led_by",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/member_of",
+      "key": "member_of",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/subsidiary_of",
+      "key": "subsidiary_of",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/supervised_by",
+      "key": "supervised_by",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "organizations/territorially_administered_by",
+      "key": "territorially_administered_by",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "RefRelation"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/status",
+      "key": "status",
+      "shape": {
+        "kind": "enum",
+        "values": [
+          "open",
+          "done",
+          "cancelled"
+        ],
+        "open": false
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/priority",
+      "key": "priority",
+      "shape": {
+        "kind": "enum",
+        "values": [
+          "low",
+          "normal",
+          "high",
+          "urgent"
+        ],
+        "open": false
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/start",
+      "key": "start",
+      "shape": {
+        "kind": "use",
+        "name": "TemporalEndpoint"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/due",
+      "key": "due",
+      "shape": {
+        "kind": "use",
+        "name": "TemporalEndpoint"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/completed_at",
+      "key": "completed_at",
+      "shape": {
+        "kind": "scalar",
+        "semantic": "instant"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/dependencies",
+      "key": "dependencies",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Dependency"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "tasks/project",
+      "key": "project",
+      "shape": {
+        "kind": "scalar",
+        "semantic": "node_ref"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "library/publication",
+      "key": "publication",
+      "shape": {
+        "kind": "use",
+        "name": "Publication"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "calendar/period",
+      "key": "period",
+      "shape": {
+        "kind": "use",
+        "name": "Period"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "calendar/range",
+      "key": "range",
+      "shape": {
+        "kind": "use",
+        "name": "Range"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "calendar/event_status",
+      "key": "event_status",
+      "shape": {
+        "kind": "enum",
+        "values": [
+          "tentative",
+          "confirmed",
+          "cancelled"
+        ],
+        "open": false
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "calendar/recurrence",
+      "key": "recurrence",
+      "shape": {
+        "kind": "use",
+        "name": "Recurrence"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "calendar/participants",
+      "key": "participants",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Participant"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    },
+    {
+      "id": "calendar/reminders",
+      "key": "reminders",
+      "shape": {
+        "kind": "list",
+        "items": {
+          "kind": "use",
+          "name": "Reminder"
+        },
+        "min": 0,
+        "max": null
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
+    }
+  ],
+  "types": [
+    {
+      "id": "people/person",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "contacts/names",
+          "required": false
+        },
+        {
+          "id": "contacts/phones",
+          "required": false
+        },
+        {
+          "id": "contacts/emails",
+          "required": false
+        },
+        {
+          "id": "contacts/addresses",
+          "required": false
+        },
+        {
+          "id": "contacts/websites",
+          "required": false
+        },
+        {
+          "id": "people/accounts",
+          "required": false
+        },
+        {
+          "id": "people/nationality_states",
+          "required": false
+        },
+        {
+          "id": "people/legal_sex_states",
+          "required": false
+        },
+        {
+          "id": "people/gender_identity_states",
+          "required": false
+        },
+        {
+          "id": "people/professions",
+          "required": false
+        },
+        {
+          "id": "people/engagements",
+          "required": false
+        },
+        {
+          "id": "people/life_events",
+          "required": false
+        },
+        {
+          "id": "people/measurements",
+          "required": false
+        },
+        {
+          "id": "people/avatar",
+          "required": false
+        },
+        {
+          "id": "people/parents",
+          "required": false
+        },
+        {
+          "id": "people/spouses",
+          "required": false
+        },
+        {
+          "id": "people/siblings",
+          "required": false
+        },
+        {
+          "id": "people/guardians",
+          "required": false
+        },
+        {
+          "id": "people/managers",
+          "required": false
+        },
+        {
+          "id": "people/mentors",
+          "required": false
+        },
+        {
+          "id": "people/family_relations",
+          "required": false
+        },
+        {
+          "id": "people/social_relations",
+          "required": false
+        },
+        {
+          "id": "people/professional_relations",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": [],
+      "constraints": [
+        {
+          "validator": "core/owned-resources",
+          "inputs": {
+            "owner": {
+              "kind": "context",
+              "name": "owner"
+            },
+            "values": {
+              "kind": "field",
+              "id": "people/avatar",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "resource"
+                }
+              ]
+            },
+            "metadata": {
+              "kind": "context",
+              "name": "resource_metadata"
+            }
+          },
+          "parameters": {
+            "owner_required": true
+          }
+        }
+      ]
+    },
+    {
+      "id": "organizations/organization",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "contacts/names",
+          "required": false
+        },
+        {
+          "id": "contacts/phones",
+          "required": false
+        },
+        {
+          "id": "contacts/emails",
+          "required": false
+        },
+        {
+          "id": "contacts/addresses",
+          "required": false
+        },
+        {
+          "id": "contacts/websites",
+          "required": false
+        },
+        {
+          "id": "organizations/organization_states",
+          "required": false
+        },
+        {
+          "id": "organizations/identifiers",
+          "required": false
+        },
+        {
+          "id": "organizations/classifications",
+          "required": false
+        },
+        {
+          "id": "organizations/sites",
+          "required": false
+        },
+        {
+          "id": "organizations/parent",
+          "required": false
+        },
+        {
+          "id": "organizations/governs",
+          "required": false
+        },
+        {
+          "id": "organizations/owns",
+          "required": false
+        },
+        {
+          "id": "organizations/allied_with",
+          "required": false
+        },
+        {
+          "id": "organizations/related_organizations",
+          "required": false
+        },
+        {
+          "id": "organizations/brand_of",
+          "required": false
+        },
+        {
+          "id": "organizations/business_guided_by",
+          "required": false
+        },
+        {
+          "id": "organizations/jointly_led_by",
+          "required": false
+        },
+        {
+          "id": "organizations/member_of",
+          "required": false
+        },
+        {
+          "id": "organizations/subsidiary_of",
+          "required": false
+        },
+        {
+          "id": "organizations/supervised_by",
+          "required": false
+        },
+        {
+          "id": "organizations/territorially_administered_by",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": [],
+      "constraints": []
+    },
+    {
+      "id": "tasks/task",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "tasks/status",
+          "required": true
+        },
+        {
+          "id": "tasks/priority",
+          "required": false
+        },
+        {
+          "id": "tasks/start",
+          "required": false
+        },
+        {
+          "id": "tasks/due",
+          "required": false
+        },
+        {
+          "id": "tasks/completed_at",
+          "required": false
+        },
+        {
+          "id": "tasks/dependencies",
+          "required": false
+        },
+        {
+          "id": "tasks/project",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": [],
+      "constraints": []
+    },
+    {
+      "id": "library/work",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "library/publication",
+          "required": false
+        }
+      ],
+      "requires": [],
+      "conflicts": [],
+      "constraints": [
+        {
+          "validator": "core/owned-resources",
+          "inputs": {
+            "owner": {
+              "kind": "context",
+              "name": "owner"
+            },
+            "values": {
+              "kind": "field",
+              "id": "library/publication",
+              "path": [
+                {
+                  "kind": "member",
+                  "key": "resources"
+                },
+                {
+                  "kind": "each"
+                },
+                {
+                  "kind": "member",
+                  "key": "resource"
+                }
+              ]
+            },
+            "metadata": {
+              "kind": "context",
+              "name": "resource_metadata"
+            }
+          },
+          "parameters": {
+            "owner_required": false
+          }
+        }
+      ]
+    },
+    {
+      "id": "calendar/period-note",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "calendar/period",
+          "required": true
+        }
+      ],
+      "requires": [],
+      "conflicts": [],
+      "constraints": []
+    },
+    {
+      "id": "calendar/range-note",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "calendar/range",
+          "required": true
+        }
+      ],
+      "requires": [],
+      "conflicts": [],
+      "constraints": []
+    },
+    {
+      "id": "calendar/event",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        },
+        {
+          "id": "calendar/event_status",
+          "required": false
+        },
+        {
+          "id": "calendar/recurrence",
+          "required": false
+        },
+        {
+          "id": "calendar/participants",
+          "required": false
+        },
+        {
+          "id": "calendar/reminders",
+          "required": false
+        }
+      ],
+      "requires": [
+        "calendar/range-note"
+      ],
+      "conflicts": [],
+      "constraints": [
+        {
+          "validator": "temporal/event",
+          "inputs": {
+            "range": {
+              "kind": "field",
+              "id": "calendar/range",
+              "path": []
+            },
+            "recurrence": {
+              "kind": "field",
+              "id": "calendar/recurrence",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
+    },
+    {
+      "id": "library/paper",
+      "fields": [
+        {
+          "id": "core/aliases",
+          "required": false
+        },
+        {
+          "id": "core/tags",
+          "required": false
+        }
+      ],
+      "requires": [
+        "library/work"
+      ],
+      "conflicts": [],
+      "constraints": []
+    }
+  ],
+  "aliases": {
+    "person": "people/person",
+    "organization": "organizations/organization",
+    "task": "tasks/task",
+    "work": "library/work",
+    "paper": "library/paper",
+    "period-note": "calendar/period-note",
+    "range-note": "calendar/range-note",
+    "event": "calendar/event"
+  },
+  "relations": [
+    {
+      "id": "people/parent",
+      "source_type": "people/person",
+      "field": "people/parents",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "child",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "family",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/guardian",
+      "source_type": "people/person",
+      "field": "people/guardians",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "ward",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/manager",
+      "source_type": "people/person",
+      "field": "people/managers",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "direct-report",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "ranked",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/mentor",
+      "source_type": "people/person",
+      "field": "people/mentors",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "mentee",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "ranked",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/spouse",
+      "source_type": "people/person",
+      "field": "people/spouses",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "family",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/sibling",
+      "source_type": "people/person",
+      "field": "people/siblings",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "family",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/family-related",
+      "source_type": "people/person",
+      "field": "people/family_relations",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/social-related",
+      "source_type": "people/person",
+      "field": "people/social_relations",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/professional-relation",
+      "source_type": "people/person",
+      "field": "people/professional_relations",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "people/engagement",
+      "source_type": "people/person",
+      "field": "people/engagements",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "employer"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "ordinary"
+      },
+      "direction": "directed",
+      "inverse": "has-engagement",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "ranked",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/parent",
+      "source_type": "organizations/organization",
+      "field": "organizations/parent",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-parent",
+      "max_assertions": 1,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/governs",
+      "source_type": "organizations/organization",
+      "field": "organizations/governs",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-governs",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/owns",
+      "source_type": "organizations/organization",
+      "field": "organizations/owns",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-owns",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/allied-with",
+      "source_type": "organizations/organization",
+      "field": "organizations/allied_with",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/related-organizations",
+      "source_type": "organizations/organization",
+      "field": "organizations/related_organizations",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "symmetric",
+      "inverse": null,
+      "max_assertions": null,
+      "reject_self": true,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/brand-of",
+      "source_type": "organizations/organization",
+      "field": "organizations/brand_of",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-brand_of",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/business-guided-by",
+      "source_type": "organizations/organization",
+      "field": "organizations/business_guided_by",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-business_guided_by",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/jointly-led-by",
+      "source_type": "organizations/organization",
+      "field": "organizations/jointly_led_by",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-jointly_led_by",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/member-of",
+      "source_type": "organizations/organization",
+      "field": "organizations/member_of",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-member_of",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/subsidiary-of",
+      "source_type": "organizations/organization",
+      "field": "organizations/subsidiary_of",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-subsidiary_of",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/supervised-by",
+      "source_type": "organizations/organization",
+      "field": "organizations/supervised_by",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-supervised_by",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "organizations/territorially-administered-by",
+      "source_type": "organizations/organization",
+      "field": "organizations/territorially_administered_by",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "inverse-territorially_administered_by",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "tasks/dependency",
+      "source_type": "tasks/task",
+      "field": "tasks/dependencies",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "tasks/task"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "dependent",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "library/creator",
+      "source_type": "library/work",
+      "field": "library/publication",
+      "target_path": [
+        {
+          "kind": "member",
+          "key": "contributors"
+        },
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "agent"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person",
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "created-work",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "library/venue",
+      "source_type": "library/work",
+      "field": "library/publication",
+      "target_path": [
+        {
+          "kind": "member",
+          "key": "venue"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "library/work",
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "hosts-work",
+      "max_assertions": 1,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "library/version-of",
+      "source_type": "library/work",
+      "field": "library/publication",
+      "target_path": [
+        {
+          "kind": "member",
+          "key": "version_of"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "library/work"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "has-version",
+      "max_assertions": 1,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "calendar/participant",
+      "source_type": "calendar/event",
+      "field": "calendar/participants",
+      "target_path": [
+        {
+          "kind": "each"
+        },
+        {
+          "kind": "member",
+          "key": "target"
+        },
+        {
+          "kind": "member",
+          "key": "ref"
+        }
+      ],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "any_of",
+        "ids": [
+          "people/person",
+          "organizations/organization"
+        ]
+      },
+      "direction": "directed",
+      "inverse": "participates-in",
+      "max_assertions": null,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    },
+    {
+      "id": "tasks/project",
+      "source_type": "tasks/task",
+      "field": "tasks/project",
+      "target_path": [],
+      "target_domain": "node_ref",
+      "target_types": {
+        "kind": "ordinary"
+      },
+      "direction": "directed",
+      "inverse": "project-tasks",
+      "max_assertions": 1,
+      "reject_self": false,
+      "graph_projection": "general",
+      "cycle_policy": "allow",
+      "resolution": "live_on_typed_create_retain_dangling",
+      "delete": "retain_explicit_cleanup"
+    }
+  ],
+  "validators": [
+    {
+      "id": "core/int-range",
+      "provider": "core/rules",
+      "operation": "int-range",
+      "inputs": {
+        "value": "int-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "min": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "int"
+            },
+            "required": true,
+            "nullable": false
+          },
+          "max": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "int"
+            },
+            "required": true,
+            "nullable": false
+          },
+          "exclude": {
+            "shape": {
+              "kind": "list",
+              "items": {
+                "kind": "scalar",
+                "semantic": "int"
+              },
+              "min": 0,
+              "max": null
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "core/decimal-range",
+      "provider": "core/rules",
+      "operation": "decimal-range",
+      "inputs": {
+        "value": "decimal-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "min": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "exact_decimal"
+            },
+            "required": true,
+            "nullable": false
+          },
+          "max": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "exact_decimal"
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "core/custom-code",
+      "provider": "core/rules",
+      "operation": "custom-code",
+      "inputs": {
+        "code": "text",
+        "custom": "text-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "code": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "text"
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "core/owned-resources",
+      "provider": "core/rules",
+      "operation": "owned-resources",
+      "inputs": {
+        "owner": "node_ref",
+        "values": "resource-or-list-or-absent",
+        "metadata": "resource-metadata-cells"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {
+          "owner_required": {
+            "shape": {
+              "kind": "scalar",
+              "semantic": "bool"
+            },
+            "required": true,
+            "nullable": false
+          }
+        },
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/month-day",
+      "provider": "temporal/rules",
+      "operation": "month-day",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/calendar-date",
+      "provider": "temporal/rules",
+      "operation": "calendar-date",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/during",
+      "provider": "temporal/rules",
+      "operation": "during",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/range",
+      "provider": "temporal/rules",
+      "operation": "range",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/period",
+      "provider": "temporal/rules",
+      "operation": "period",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/recurrence",
+      "provider": "temporal/rules",
+      "operation": "recurrence",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/exception",
+      "provider": "temporal/rules",
+      "operation": "exception",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/event",
+      "provider": "temporal/rules",
+      "operation": "event",
+      "inputs": {
+        "range": "record",
+        "recurrence": "record-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "units/quantity",
+      "provider": "units/rules",
+      "operation": "quantity",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "units/measurement",
+      "provider": "units/rules",
+      "operation": "measurement",
+      "inputs": {
+        "value": "record"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
+    }
+  ],
+  "providers": [
+    {
+      "id": "core/rules",
+      "family": "validation",
+      "implementation": {
+        "kind": "builtin",
+        "id": "weftext.core.rules.v1",
+        "abi": 1
+      },
+      "data": {
+        "kind": "none"
+      },
+      "exports": [
+        {
+          "name": "int-range",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "decimal-range",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "custom-code",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "owned-resources",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        }
+      ],
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      }
+    },
+    {
+      "id": "temporal/rules",
+      "family": "temporal",
+      "implementation": {
+        "kind": "builtin",
+        "id": "weftext.temporal.rules.v2",
+        "abi": 2
+      },
+      "data": {
+        "kind": "none"
+      },
+      "exports": [
+        {
+          "name": "month-day",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "calendar-date",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "during",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "range",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "period",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "recurrence",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "exception",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "event",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "containsDate",
+          "inputs": [
+            "during",
+            "temporal-endpoint"
+          ],
+          "result": "bool-cell",
+          "effect": "pure",
+          "query_name": "containsDate"
+        },
+        {
+          "name": "nextCivilDay",
+          "inputs": [
+            "date"
+          ],
+          "result": "date-cell",
+          "effect": "pure",
+          "query_name": "nextCivilDay"
+        },
+        {
+          "name": "rangeOverlap",
+          "inputs": [
+            "range",
+            "range"
+          ],
+          "result": "bool-cell",
+          "effect": "pure",
+          "query_name": "rangeOverlap"
+        },
+        {
+          "name": "rangeDuration",
+          "inputs": [
+            "range"
+          ],
+          "result": "exact-duration-cell",
+          "effect": "pure",
+          "query_name": "rangeDuration"
+        },
+        {
+          "name": "periodBounds",
+          "inputs": [
+            "period"
+          ],
+          "result": "range-cell",
+          "effect": "pure",
+          "query_name": "periodBounds"
+        },
+        {
+          "name": "expandRecurrence",
+          "inputs": [
+            "event",
+            "window",
+            "budget"
+          ],
+          "result": "ordered-occurrences-with-coverage",
+          "effect": "pure",
+          "query_name": "expandRecurrence"
+        },
+        {
+          "name": "compareTemporal",
+          "inputs": [
+            "temporal-endpoint",
+            "temporal-endpoint"
+          ],
+          "result": "order-cell",
+          "effect": "pure",
+          "query_name": "compareTemporal"
+        },
+        {
+          "name": "duringDuration",
+          "inputs": [
+            "during"
+          ],
+          "result": "exact-duration-cell",
+          "effect": "pure",
+          "query_name": "duringDuration"
+        }
+      ],
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      }
+    },
+    {
+      "id": "units/rules",
+      "family": "quantity",
+      "implementation": {
+        "kind": "builtin",
+        "id": "weftext.units.rules.v1",
+        "abi": 1
+      },
+      "data": {
+        "kind": "unit-table",
+        "version": "si-basic.v1",
+        "units": [
+          {
+            "key": "m",
+            "dimension": "length"
+          },
+          {
+            "key": "cm",
+            "dimension": "length"
+          },
+          {
+            "key": "kg",
+            "dimension": "mass"
+          },
+          {
+            "key": "g",
+            "dimension": "mass"
+          }
+        ]
+      },
+      "exports": [
+        {
+          "name": "quantity",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "measurement",
+          "inputs": [
+            "cells",
+            "parameters"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        }
+      ],
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      }
+    },
+    {
+      "id": "calendars/gregorian",
+      "family": "calendar",
+      "implementation": {
+        "kind": "builtin",
+        "id": "weftext.calendar.gregorian.v2",
+        "abi": 2
+      },
+      "data": {
+        "kind": "gregorian",
+        "key": "gregorian",
+        "version": "proleptic-gregorian.v1",
+        "min_year": 1,
+        "max_year": 9999
+      },
+      "exports": [
+        {
+          "name": "validateDate",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "periodBounds",
+          "inputs": [
+            "period"
+          ],
+          "result": "range-cell",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "civilCandidates",
+          "inputs": [
+            "recurrence",
+            "range",
+            "budget"
+          ],
+          "result": "ordered-civil-candidates-with-coverage",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "dateBounds",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "calendar-bucket-cell",
+          "effect": "pure",
+          "query_name": null
+        }
+      ],
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      }
+    },
+    {
+      "id": "zones/utc",
+      "family": "time-zone",
+      "implementation": {
+        "kind": "builtin",
+        "id": "weftext.zone.table.v1",
+        "abi": 1
+      },
+      "data": {
+        "kind": "zone-table",
+        "key": "UTC",
+        "version": "fixed-utc.v1",
+        "from": "0001-01-01T00:00:00Z",
+        "until": "9999-12-31T23:59:59Z",
+        "initial_offset_seconds": 0,
+        "transitions": []
+      },
+      "exports": [
+        {
+          "name": "toCivil",
+          "inputs": [
+            "instant"
+          ],
+          "result": "local-datetime-cell",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "toInstant",
+          "inputs": [
+            "local-datetime",
+            "fold",
+            "gap"
+          ],
+          "result": "instant-cell",
+          "effect": "pure",
+          "query_name": null
+        }
+      ],
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      }
+    },
+    {
+      "id": "calendars/test",
+      "family": "calendar",
+      "implementation": {
+        "kind": "builtin",
+        "id": "weftext.calendar.table.v2",
+        "abi": 2
+      },
+      "data": {
+        "kind": "calendar-table",
+        "key": "test-calendar",
+        "version": "test-calendar.v1",
+        "epoch_date": "2026-01-01",
+        "years": [
+          {
+            "year": 1,
+            "months": [
+              {
+                "number": 1,
+                "leap": false,
+                "days": 30
+              },
+              {
+                "number": 2,
+                "leap": false,
+                "days": 30
+              }
+            ]
+          }
+        ]
+      },
+      "exports": [
+        {
+          "name": "validateDate",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "periodBounds",
+          "inputs": [
+            "period"
+          ],
+          "result": "range-cell",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "civilCandidates",
+          "inputs": [
+            "recurrence",
+            "range",
+            "budget"
+          ],
+          "result": "ordered-civil-candidates-with-coverage",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "dateBounds",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "calendar-bucket-cell",
+          "effect": "pure",
+          "query_name": null
+        }
+      ],
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      }
+    }
+  ],
+  "series_policies": [
+    {
+      "id": "calendar/main",
+      "key": "main",
+      "calendar": "calendars/gregorian",
+      "zone": "zones/utc",
+      "kinds": [
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year"
+      ],
+      "rule": "iso8601",
+      "scope": {
+        "kind": "library"
+      },
+      "multiplicity": "many"
+    },
+    {
+      "id": "calendar/work-log",
+      "key": "work-log",
+      "calendar": "calendars/gregorian",
+      "zone": "zones/utc",
+      "kinds": [
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year"
+      ],
+      "rule": "iso8601",
+      "scope": {
+        "kind": "library"
+      },
+      "multiplicity": "unique"
+    }
+  ]
+}

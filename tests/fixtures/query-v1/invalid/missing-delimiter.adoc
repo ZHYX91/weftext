@@ -1,2 +1,0 @@
-[.weftext-query,version=1]
-This is not a query delimiter.

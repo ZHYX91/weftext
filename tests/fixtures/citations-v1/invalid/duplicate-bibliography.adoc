@@ -1,5 +1,0 @@
-= Invalid
-
-bibliography::[]
-
-bibliography::[include=all]

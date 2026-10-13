@@ -1,5 +1,0 @@
-{
-  "$schema": "../../../schemas/task-node-v1.schema.json",
-  "valid": ["valid/all-fields.adoc"],
-  "invalid": ["invalid/reserved-residue.adoc"]
-}

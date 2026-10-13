@@ -6,66 +6,24 @@ translation_status: synced
 
 [简体中文](README.zh-CN.md)
 
-# Weftext / 文缕
+# Weftext
 
-> [!WARNING]
-> **This is a personal toy project for learning and experimentation.** It has not reached a standard suitable for practical use. Do not use it for real work, important data, or production environments. Assume that it may corrupt or lose data. The project makes no commitment to stability, security, compatibility, continued maintenance, or support.
+A file-based knowledge and writing tool built around native Typst. Current state: **accepted design, product not implemented**. This is the refactoring baseline; archived prototypes are not an installable product release.
 
-Weftext is an experimental knowledge-workspace codebase written primarily in Rust and designed around local file storage. Its design includes directory nodes, exact source text, a shared Core, Windows Desktop, a Server with browser WebUI, a CLI, and a standalone editor for explicitly opened external AsciiDoc files.
+- [Requirements](docs/REQUIREMENTS.md): the single current inventory, including navigation, rich types, library styles, five views and Chinese defaults.
+- [Technical design](docs/design/README.md): authoring, Core, editor and features, with necessary schemas, examples and bounded experiments.
+- [Implementation order](docs/design/INTEGRATION.md): begin with a vertical local open/edit/save/recover slice.
+- [Final design acceptance](docs/design/REVIEW.md): fixed technical baseline, disposition and evidence limits.
+- [Acceptance and release](docs/WORKFLOW.md): concise development entry points separating design checks from product tests.
 
-## Format and authority
+## Local check
 
-Every managed node is a directory containing a same-named AsciiDoc document:
-
-```text
-Project/
-├─ Project.adoc
-├─ image.png
-└─ Child/
-   └─ Child.adoc
-```
-
-The root `.weftext-format` contains exactly `weftext.asciidoc.v1\n`. A missing, unknown, or malformed marker fails closed or enters an explicit adoption/import flow. File extensions never select workspace authority.
-
-Each node has a persistent UUID in `weftext.id`. Paths are locators, not identity. Portable non-authorial comments, highlights, review marks, and suggestions live in the optional node-local `weftext.annotations.json` sidecar. Search indexes, backlinks, graphs, thumbnails, boards, collections, and statistics are derived and rebuildable; no synchronized database is content authority.
-
-Native AsciiDoc checklist items are lightweight, identity-free occurrences. An item that needs durable identity or typed fields is explicitly promoted into an ordinary managed task node; the node's existing UUID is the task identity and the original position becomes a stable `node:` link.
-
-Markdown is supported as explicit import/export input, visible unmanaged content, or an ordinary node-owned attachment. It is not a managed-node language or a standalone editor mode. Markdown import supports baseline syntax and may recognize selected extensions through bounded, explicitly versioned compatibility profiles.
-
-## Product surfaces
-
-- `crates/weftext-core`: node, identity, content, transaction, recovery, search, annotation, Chrono, Query, and derived-projection authority.
-- `apps/desktop`: Windows Desktop application, shared React UI, native workspace selection, device-local draft recovery, Safe Mode, and direct Core commands.
-- `crates/weftext-server`: hosted-workspace and authenticated API foundation with a same-origin browser client; it is not yet deployment-ready multi-user software.
-- `crates/weftext-cli`: headless access to the same Core actions.
-- `crates/weftext-agent*`: supervised, capability-bounded agent integration; agents never receive direct workspace write authority.
-- `docs/specifications`: normative public format and product contracts.
-- `docs/architecture`: current public architecture decisions.
-- `docs/guides`: task-oriented reader guides that distinguish current foundations from designs still being implemented.
-- [Public documentation terminology](docs/TERMINOLOGY.md): shared terminology and writing rules.
-- `ROADMAP.md`: concise public status and release direction.
-
-Managed-node editing provides source-preserving visual commands, a ribbon organized by task, contextual Table and Image tabs, a contextual Inspector, format painter, structural table operations, templates, Query-backed collections, tasks, boards, multidimensional tables, history, comparison, and backup entry points as their underlying Core capabilities become available. Standalone AsciiDoc mode reuses safe single-file editing and rendering, but disables workspace-only identity, navigation, Query, Template Library, durable-task, citation-resolution, history, and backup authority.
-
-## Current status
-
-The implemented foundation provides exact revisions, recoverable workspace transactions, lossless document edits, storage classification, search, structured document models, node resources, annotations, Chrono actions, shared navigation, a Windows Desktop alpha, and a loopback Server foundation. The complete editor, hosted authorization model, import/export pipeline, collaboration system, packaged accessibility matrix, and public release gates are not complete. See the [public roadmap](ROADMAP.md).
-
-## Build and local development
+Python 3.11 or newer; no additional Python packages:
 
 ```text
-cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings
-cargo fmt --all -- --check
+python scripts/check.py --models
 ```
 
-On Windows, `apps/desktop/build-windows.cmd` builds the local UI and NSIS installer after the Microsoft C++ Build Tools are available.
+The default checks local file links, bilingual pairs, JSON and requirement inventory. `--models` runs bounded models in temporary copies without changing recorded evidence. Reproduce official Typst compilation and platform probes using their READMEs when relevant; do not rebuild them for every prose change.
 
-The development Server may be run only on loopback:
-
-```text
-cargo run -p weftext-server -- <workspace> --bind 127.0.0.1:8787
-```
-
-It reports `deploymentReady=false`; do not reverse proxy or expose it as an intranet service.
+Historical prototypes, designs and full reviews remain recoverable but are not build dependencies. Contract changes update affected consumers and both languages. Passing documentation checks does not establish product availability.

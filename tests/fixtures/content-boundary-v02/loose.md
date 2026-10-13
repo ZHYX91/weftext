@@ -1,3 +1,0 @@
-# Loose Markdown
-
-UnmanagedSearchToken

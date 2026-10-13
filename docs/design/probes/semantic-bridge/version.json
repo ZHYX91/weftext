@@ -1,0 +1,12 @@
+{
+  "official_source_url": "https://github.com/typst/typst/archive/refs/tags/v0.15.1.zip",
+  "official_source_archive_sha256": "b82d324bb2bfa30cce0bc885903e9aaaca32107d383d2c834b4b25f621abad56",
+  "official_release_version": "typst 0.15.1 (9dfd3a08)",
+  "cargo": "1.98.0 (797e8a9bc 2026-08-05)",
+  "rustc": "1.98.0 (88d9e12ae 2026-08-18)",
+  "build_options": "--no-default-features --features embedded-fonts --jobs 6 --config profile.dev.package.*.opt-level=0 --config profile.dev.debug=0",
+  "patch_sha256": "f9ab624092b62ea373b7d0575e6b4454ca277db9456f35aa333c572528ba444b",
+  "dependency_lock_sha256": "4bfec8c0e7b4b4ec39933558f53276e6eca007138d00b71b36d2e0327876c7fb",
+  "no_product_repository_changes": true,
+  "scope": "11 research fixtures; neither product acceptance nor complete origin/renderer proof"
+}
