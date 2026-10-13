@@ -8,7 +8,7 @@ translation_status: synced
 
 # A new-project design for Typst editing, reading, titles and Word
 
-Status: design candidate, neither accepted nor implemented. This file defines shared editing, flow reading, title and Word-output rules. [REVIEW](REVIEW.md) records experiments and actual evidence limits.
+Status: **accepted-design-not-implemented**; see [REVIEW](REVIEW.md) §7 for independent global acceptance of the fixed technical baseline. This file defines shared editing, flow reading, title and Word-output rules. [REVIEW](REVIEW.md) records experiments and actual evidence limits.
 
 [SOURCE](SOURCE.md) owns source/type/origin interpretation, [CORE](CORE.md) identity/basis/authorization/unified transactions, and [FEATURES](FEATURES.md) links/Query/templates/conversion. Current outcome requirements come from [REQUIREMENTS](../typst-native/REQUIREMENTS.md). These new owners coordinate with this proposal; prior-round mechanisms are not normative dependencies.
 

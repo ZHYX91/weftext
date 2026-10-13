@@ -6,9 +6,9 @@ translation_status: synced
 
 [简体中文](SOURCE.zh-CN.md)
 
-# Typst author source and centralized schema: redesign candidate
+# Typst author source and centralized schema
 
-Status: design candidate, neither implemented nor accepted. [REQUIREMENTS](../typst-native/REQUIREMENTS.md) defines outcomes and [REVIEW](REVIEW.md) records validation. This file owns author source, application roles and the single field type system. Representative schemas and examples are not a ceiling on business capabilities.
+Status: **accepted-design-not-implemented**; see [REVIEW](REVIEW.md) §7 for independent global acceptance of the fixed technical baseline. [REQUIREMENTS](../typst-native/REQUIREMENTS.md) defines outcomes and [REVIEW](REVIEW.md) records validation. This file owns author source, application roles and the single field type system. Representative schemas and examples are not a ceiling on business capabilities.
 
 ## 1. Author source and application roles
 
@@ -387,7 +387,7 @@ These design oracles cover provider calls after actual Range Field decoding. Two
 | RDOM06 | Missing provider or malformed finite bound in an open range | unavailable/invalid respectively, never converted to a Boolean. |
 | RDOM07 | Coarse cross-calendar containsDate; civil/instant duration and recurring template | unavailable/invalid/invalid; During with both ends none still derives its basis from a valid authorized point, preserving existing semantics. |
 
-The current model, author rerun of all original independent 70 cases without changed expectations, and eight additional family cases are repair-candidate evidence only. The finding remains repaired-pending-independent. Schema Shapes and builtin ABI gain no parameters: common-basis preflight is the mandatory trusted fixed implementation algorithm in §3.1.1, not a configurable self-certification. [cases.json](examples/cases.json) preserves numbered oracles and evidence boundaries.
+The current model, author rerun of all original independent 70 cases without changed expectations, and eight additional family cases retain their original author-evidence attribution. The finding was subsequently independently design CLOSED at the fixed technical baseline; REVIEW §7 records the final disposition and non-author checks. Schema Shapes and builtin ABI gain no parameters: common-basis preflight is the mandatory trusted fixed implementation algorithm in §3.1.1, not a configurable self-certification. [cases.json](examples/cases.json) preserves numbered oracles and evidence boundaries.
 
 Design checks are recorded in [design-checks.json](examples/design-checks.json). [validate_repair.py](examples/validate_repair.py) checks closure/references/paths against the fixed [design ABI reference](examples/builtin-abi.design.json), which cannot replace the trusted runtime Rust registry and limited business oracles; it is not the Rust installer. Cold-baseline tests use supplied symbol lists rather than a CEL parser. Calendar checks cover Gregorian and a finite synthetic pack only.
 

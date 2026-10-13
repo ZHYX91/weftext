@@ -5,9 +5,9 @@ translation_status: source
 
 [English](SOURCE.md)
 
-# Typst 作者源与集中 schema：重设计候选
+# Typst 作者源与集中 schema
 
-状态：设计候选，未实现、未接受。需求依据为 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md)，验证状态见 [REVIEW](REVIEW.zh-CN.md)。本文定义作者源、应用角色与唯一字段类型体系；代表 schema 和样例不是全部业务能力的上限。
+状态：**accepted-design-not-implemented**；固定技术基线的独立全局接受见 [REVIEW](REVIEW.zh-CN.md) §7。需求依据为 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md)，验证状态见 [REVIEW](REVIEW.zh-CN.md)。本文定义作者源、应用角色与唯一字段类型体系；代表 schema 和样例不是全部业务能力的上限。
 
 ## 1. 作者源与角色
 
@@ -384,7 +384,7 @@ opaque FieldBasis的公开CAS比较获权Field前像、获权约束及已公开p
 | RDOM06 | 开放范围有限端缺provider或日期非法 | 分别unavailable/invalid，不能转换成布尔值。 |
 | RDOM07 | containsDate粗精度跨历法；duration与recurrence模板混civil/instant | unavailable/invalid/invalid；During两端none仍由有效获权point给基准，不改变既有语义。 |
 
-当前模型、原独立70组不改期望的作者复跑和额外8组同族复跑均是修复候选证据；发现仅为repaired-pending-independent。schema形状与builtin ABI不新增参数：共同基准预检是§3.1.1受信固定实现的必需算法，配置不能自行宣称满足它。[cases.json](examples/cases.json)保留编号及证据边界。
+当前模型、原独立70组不改期望的作者复跑和额外8组同族复跑保留原作者证据身份；该发现随后在固定技术基线上独立设计CLOSED，最终处置与非作者检查见REVIEW §7。schema形状与builtin ABI不新增参数：共同基准预检是§3.1.1受信固定实现的必需算法，配置不能自行宣称满足它。[cases.json](examples/cases.json)保留编号及证据边界。
 
 设计检查记录 [design-checks.json](examples/design-checks.json)，执行脚本 [validate_repair.py](examples/validate_repair.py) 只校验闭合/引用/路径/[builtin-abi.design.json](examples/builtin-abi.design.json)固定ABI设计参考（运行时必须核受信Rust registry，不能信配置自报）及有限业务oracle，不是Rust安装器。Query cold基准测试用人工symbol列表，不是CEL解析器；calendar测试仅Gregorian与有限synthetic pack。
 

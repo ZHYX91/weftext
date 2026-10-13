@@ -8,11 +8,11 @@ translation_status: synced
 
 # Target design and collaboration entrypoint
 
-The latest target candidate is the [new Typst architecture](typst-architecture/README.md), choosing technology anew under [Requirements and technical choices](typst-native/REQUIREMENTS.md) and restoring necessary structured capabilities for all note types. It is a coordinated candidate; the new entrypoint records independent review and actual evidence. Bounded Sol review of the [prior Typst candidate](typst-native/README.md) and the AsciiDoc inputs/reviews below retain their fixed scopes, without accepting the new solution, requiring technical inheritance or establishing completed product refactoring or global final review.
+The accepted target design is the [new Typst architecture](typst-architecture/README.md), choosing technology anew under [Requirements and technical choices](typst-native/REQUIREMENTS.md), restoring necessary structured capabilities for all note types and retaining five views and Chinese defaults. Its status is **accepted-design-not-implemented**; [REVIEW](typst-architecture/REVIEW.md) §7 records the 2026-10-13 independent global final review, fixed technical baseline and evidence limits. The [prior Typst proposal](typst-native/README.md) and the AsciiDoc inputs/reviews below retain their historical scopes without requiring technical inheritance. Product refactoring has not started.
 
 ## Current solution and historical inputs
 
-The current technical candidate is the new Typst architecture above, with REQUIREMENTS as the requirements authority. Only the new architecture REVIEW states its design acceptance. Main still contains an early prototype; target documents do not establish product implementation.
+The current accepted technical design is the new Typst architecture above, with REQUIREMENTS as the requirements authority. Only the new architecture REVIEW states its design acceptance. Main still contains an early prototype; target documents do not establish product implementation.
 
 The D1–D9 inputs below retain accepted-design-not-implemented status within their original fixed scope, coordinated generation D9-r04-evidence05-2026-09-24. That historical status does not make old Records, envelopes, storage formats, protocols or implementation order technical constraints on the Typst rewrite. Previously selected business behavior helps check requirements; discussed alternatives do not automatically become current features. REQUIREMENTS and explicit current-owner rules determine the choices.
 

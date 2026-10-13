@@ -7,9 +7,9 @@ translation_status: source
 
 # Typst 主格式协调设计候选
 
-当前技术重写已转至 [Typst 新架构候选](../typst-architecture/README.zh-CN.md)。本目录的技术正文、`replacements.json` 和 REVIEW 保留前轮固定候选及其证据；[REQUIREMENTS](REQUIREMENTS.zh-CN.md) 继续作为当前需求权威。下述旧技术分派不与新架构拼接。
+当前技术设计已由 [Typst 新架构](../typst-architecture/README.zh-CN.md) 替代。本目录的技术正文、`replacements.json` 和 REVIEW 保留前轮固定候选及其证据；[REQUIREMENTS](REQUIREMENTS.zh-CN.md) 继续作为当前需求权威。下述历史技术分派不与新架构拼接。
 
-状态：**需求与技术已分离，导航与列表需求已补齐，可开始技术重写；新架构未接受、产品未实现、全局终审未完成**。前轮固定输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支为 `design/typst-native-20261012`。先读 [需求与技术方案的边界](REQUIREMENTS.zh-CN.md)：用户需求保留，旧技术不因历史通过而必须继承。下列技术 owner 仍记录前轮候选，须在协调重写中替换；前轮有界 Sol 复核及验证见 [REVIEW](REVIEW.zh-CN.md)，不自动接受新增需求的实现。
+状态：**本目录技术方案为历史方案（superseded）；当前新架构为 accepted-design-not-implemented**，独立全局终审与固定技术基线见 [新架构 REVIEW](../typst-architecture/REVIEW.zh-CN.md) §7。前轮固定输入为 `af6737a057c7bb69763dfaad0a57da4652e085f3`；作者分支为 `design/typst-native-20261012`。先读 [需求与技术方案的边界](REQUIREMENTS.zh-CN.md)：用户需求保留，旧技术不因历史通过而必须继承。下列技术 owner 和本目录 [REVIEW](REVIEW.zh-CN.md) 只记录前轮候选及有界验证，不表示产品已实现。
 
 Weftext 的新笔记使用 Typst 作为唯一主格式，复用官方 Rust parser/compiler、原生语法和标准库。保留普通写作、流式阅读、富编辑、结构化属性、Query、链接、独立批注、模板及内网使用。选型不以旧实现或已有评审投入为约束，也不把产品缩减成源码加 PDF。
 

@@ -7,11 +7,11 @@ translation_status: source
 
 # 目标设计与协作入口
 
-最新目标候选见 [Typst 新架构](typst-architecture/README.zh-CN.md)：按 [需求与技术方案的边界](typst-native/REQUIREMENTS.zh-CN.md) 从新项目重新选择技术，恢复全类型必要结构化能力；当前为协调候选，独立审查和实际证据见新入口。前轮 [Typst 主格式候选](typst-native/README.zh-CN.md) 的有界 Sol 复核及下列 AsciiDoc 输入/评审保留原固定范围，不接受新方案、不强制技术继承，也不表示产品重构或全局终审已完成。
+当前已接受的目标设计见 [Typst 新架构](typst-architecture/README.zh-CN.md)：按 [需求与技术方案的边界](typst-native/REQUIREMENTS.zh-CN.md) 从新项目重新选择技术，恢复全类型必要结构化能力，并保留五档视图与中文默认支持。状态为 **accepted-design-not-implemented**；2026-10-13 独立全局终审、固定技术基线与证据边界见 [REVIEW](typst-architecture/REVIEW.zh-CN.md) §7。前轮 [Typst 方案](typst-native/README.zh-CN.md) 和下列 AsciiDoc 输入/评审保持原历史范围，不强制新方案继承其技术；产品重构尚未开始。
 
 ## 当前方案与历史输入
 
-当前技术候选为上述 Typst 新架构，需求权威为 REQUIREMENTS；其设计接受状态只由新架构 REVIEW 说明。主分支仍是早期原型，不能据目标文档宣称产品已实现。
+当前已接受的技术设计为上述 Typst 新架构，需求权威为 REQUIREMENTS；其设计接受状态只由新架构 REVIEW 说明。主分支仍是早期原型，不能据目标文档宣称产品已实现。
 
 下列 D1–D9 输入在其原固定范围的状态为 accepted-design-not-implemented，原协调代为 D9-r04-evidence05-2026-09-24。该历史状态不使旧 Record、信封、存储格式、协议或实施顺序成为 Typst 重写的技术约束。历史已选业务用于核对需求，曾讨论的替代方案不自动成为当前功能；取舍以 REQUIREMENTS 与当前 owner 的具名规则为准。
 

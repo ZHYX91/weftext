@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst 编辑、阅读、标题与 Word 的新项目方案
 
-状态：设计候选，未接受、未实现。本文定义编辑、流式阅读、标题与 Word 输出的共同规则；实验与实际支持范围见 [REVIEW](REVIEW.zh-CN.md)。
+状态：**accepted-design-not-implemented**；固定技术基线的独立全局接受见 [REVIEW](REVIEW.zh-CN.md) §7。本文定义编辑、流式阅读、标题与 Word 输出的共同规则；实验与实际支持范围见 [REVIEW](REVIEW.zh-CN.md)。
 
 [SOURCE](SOURCE.zh-CN.md) 拥有作者源与类型/来源解释，[CORE](CORE.zh-CN.md) 拥有身份、依据、授权与统一事务，[FEATURES](FEATURES.zh-CN.md) 拥有链接、Query、模板及转换。当前结果要求来自 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md)，这些 owner 的新候选与本文一起协调，前轮技术不成为新的规范依赖。
 

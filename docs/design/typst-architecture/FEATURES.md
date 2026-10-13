@@ -6,9 +6,9 @@ translation_status: synced
 
 [简体中文](FEATURES.zh-CN.md)
 
-# New Features candidate: links, queries, navigation, annotations and output
+# Features: links, queries, navigation, annotations and output
 
-Status: coordinated author candidate awaiting independent review of a fixed commit. This document implements the link, Query, navigation, domain-type, annotation and output requirements in [REQUIREMENTS](../typst-native/REQUIREMENTS.md), preserving Agent, automation, external-effect and cost boundaries. Shared cuts, frozen pages, schema baselines, Calendar precedence, annotation projections, citations and Html/Paged consumers are coordinated with the other owners; [REVIEW](REVIEW.md) records repairs and bounded evidence. Design acceptance is separate from product acceptance; implementation is not claimed complete.
+Status: **accepted-design-not-implemented**; see [REVIEW](REVIEW.md) §7 for independent global acceptance of the fixed technical baseline. This document implements the link, Query, navigation, domain-type, annotation and output requirements in [REQUIREMENTS](../typst-native/REQUIREMENTS.md), preserving Agent, automation, external-effect and cost boundaries. Shared cuts, frozen pages, schema baselines, Calendar precedence, annotation projections, citations and Html/Paged consumers are coordinated with the other owners; [REVIEW](REVIEW.md) records repairs and bounded evidence. Design acceptance is separate from product acceptance; implementation is not claimed complete.
 
 ## 1. A few shared objects and ownership
 
@@ -85,7 +85,7 @@ Official Introspector native headings are a separate product. Query can read all
 
 An official local Paged renderer inside an Html frame is a local boundary of that Html compile, with that compile's output/origin; it is not a separate whole-document Paged compile mixed into Html. Unmapped frames stay read-only/explicitly limited, without coordinate-derived root writers.
 
-Exact-source copy/fork identity/typed links remain official authored AST/schema operations independent of display target. Displayed-text/image previews/copies/exports name and freeze the consumed target. New Html style/bridge experiments are unaccepted; report actual capabilities rather than treating Same snapshot as producer proof.
+Exact-source copy/fork identity/typed links remain official authored AST/schema operations independent of display target. Displayed-text/image previews/copies/exports name and freeze the consumed target. The Html style/bridge choice and design contract are accepted (REVIEW §7); product producer and renderer acceptance remains incomplete. Report actual capabilities rather than treating Same snapshot as producer proof.
 
 ## 4. Complete potential matching and overlap algorithm
 
@@ -596,7 +596,7 @@ Chinese defaults and font/language delivery follow [EDITOR](EDITOR.md) §8.6/CJK
 
 Exact-source export returns original `.typ` bytes without layout/templates. Exact structured-result export returns complete schema/Cell/value/order without runtime handles/writers. PDF/SVG/PNG use available real Typst outputs; experimental capabilities stay labeled experimental. DOCX/XLSX have separate Weftext converters and actual verification routes.
 
-The named default DOCX profile consumes one frozen Html compile's final semantic tree/same-target products/role-origin associations. It does not infer flow from Paged realization or mix Html/Paged headings/links as Same snapshot. An explicitly selected Paged conversion profile names target in preview/output and uses only that Paged final data with independent capability acceptance. Native headings without display associations do not automatically create ghost DOCX paragraphs; use explicit source-structure output/loss. Html-frame local Paged content retains its local same-Html-compile boundary without claiming whole-document Paged equivalence. New Html style/bridge remain unaccepted producer gates for conversion.
+The named default DOCX profile consumes one frozen Html compile's final semantic tree/same-target products/role-origin associations. It does not infer flow from Paged realization or mix Html/Paged headings/links as Same snapshot. An explicitly selected Paged conversion profile names target in preview/output and uses only that Paged final data with independent capability acceptance. Native headings without display associations do not automatically create ghost DOCX paragraphs; use explicit source-structure output/loss. Html-frame local Paged content retains its local same-Html-compile boundary without claiming whole-document Paged equivalence. The Html style/bridge design is accepted; conversion profiles still require actual product producer acceptance.
 
 DOCX contains real paragraphs/runs/styles/tables/images/relationships/refs, not page images posing as editable text. Title/subtitle retain SOURCE roles; titleless notes gain no author title. A run-in heading defaults to the whole paragraph in `Heading N`, participating in numbering. Body runs reset inherited character properties to template body formatting while retaining explicit authored strong/emph. Preserve DOCX Heading 1–9 within the native target range; 10+ preserves source and reports unsupported/loss without collapsing to 9. A normal Word TOC may contain the whole paragraph as the stated default; title-only TOC is separately optional. Verify numbering/TOC/refs in actual Word/WPS/LibreOffice and state each application's support rather than treating valid OOXML as interaction proof.
 

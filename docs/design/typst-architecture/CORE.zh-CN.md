@@ -7,7 +7,7 @@ translation_status: source
 
 # Typst Core：文件、提交与运行边界
 
-状态：基于独立审查固定输入 `b895b350d4b4ceda5f2317f2d4b1d8efb42bd11e` 的完整作者修订，未独立接受、未实现；需求权威为[需求清单](../typst-native/REQUIREMENTS.zh-CN.md)，本套 [SOURCE](SOURCE.zh-CN.md)、[EDITOR](EDITOR.zh-CN.md)、[FEATURES](FEATURES.zh-CN.md) 与本文共同定义一套新设计。前轮的协议和有界复核保留为历史证据，不成为本套协议依赖。产品、崩溃、断电、同步、Server、安全与性能验收尚未通过。
+状态：**accepted-design-not-implemented**，独立全局接受及固定技术基线见 [REVIEW](REVIEW.zh-CN.md) §7；需求权威为[需求清单](../typst-native/REQUIREMENTS.zh-CN.md)，本套 [SOURCE](SOURCE.zh-CN.md)、[EDITOR](EDITOR.zh-CN.md)、[FEATURES](FEATURES.zh-CN.md) 与本文共同定义一套新设计。前轮的协议和有界复核保留为历史证据，不成为本套协议依赖。产品、崩溃、断电、同步、Server、安全与性能验收尚未通过。
 
 ## 1. 一个文件工作区与一条作者提交路径
 

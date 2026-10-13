@@ -8,7 +8,7 @@ translation_status: synced
 
 # Contract integration and refactoring order
 
-Status: author candidate; see [REVIEW](REVIEW.md) for validation. This file connects requirements to the current solution without creating another transaction or field authority.
+Status: **accepted-design-not-implemented**; [REVIEW](REVIEW.md) §7 records independent global acceptance of the fixed technical baseline and implementation boundaries. This file connects requirements to the current solution without creating another transaction or field authority.
 
 ## 1. One solution
 
@@ -41,7 +41,7 @@ Library-style requirement §5.3 is owned by EDITOR §§8.1–8.5, CORE §9 and F
 
 ## 3. Original 21 and later findings
 
-The original prefix is `A2-GLOBAL-6B13-`; old CLOSED states do not transfer. Every check below still needs independent review and implementation verification. When a removed mechanism makes its exact counterexample inapplicable, retain the general harm check without implementing nonexistent protocol branches.
+The original prefix is `A2-GLOBAL-6B13-`; old CLOSED states do not transfer. The harm checks below were included in the independent global design review recorded in REVIEW §7; each still requires product implementation verification. When a removed mechanism makes its exact counterexample inapplicable, retain the general harm check without implementing nonexistent protocol branches.
 
 | Original ID | Outcome this candidate must establish | Owner |
 | --- | --- | --- |

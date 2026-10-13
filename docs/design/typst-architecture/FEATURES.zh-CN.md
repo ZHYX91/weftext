@@ -5,9 +5,9 @@ translation_status: source
 
 [English](FEATURES.md)
 
-# Features 全新候选：链接、查询、导航、批注与输出
+# Features：链接、查询、导航、批注与输出
 
-状态：协调后的作者候选，等待固定提交的独立复核。本文承接 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md) 的链接、Query、导航、业务类型、批注和输出需求，并保留 Agent、自动化、外部效果与费用边界。共同快照、冻结分页、schema 基线、Calendar 优先级、批注投影、citation 和 Html/Paged 消费者与其它 owner 协调；修订与有限证据见 [REVIEW](REVIEW.zh-CN.md)。设计接受与产品验收分开，本文不宣称实现已完成。
+状态：**accepted-design-not-implemented**；固定技术基线的独立全局接受见 [REVIEW](REVIEW.zh-CN.md) §7。本文承接 [REQUIREMENTS](../typst-native/REQUIREMENTS.zh-CN.md) 的链接、Query、导航、业务类型、批注和输出需求，并保留 Agent、自动化、外部效果与费用边界。共同快照、冻结分页、schema 基线、Calendar 优先级、批注投影、citation 和 Html/Paged 消费者与其它 owner 协调；修订与有限证据见 [REVIEW](REVIEW.zh-CN.md)。设计接受与产品验收分开，本文不宣称实现已完成。
 
 ## 1. 少数共用对象与分工
 
@@ -84,7 +84,7 @@ AuthoredLink由官方AST按源序枚举，与展示target无关。默认流式�
 
 Html frame内官方局部Paged renderer只是在该Html compile内的局部边界，frame的origin/输出仍属于这一compile，不是另开全篇Paged编译再将其任意内容冒Html tree。无合格映射的frame只读/明确能力状态，不能从其坐标造rootwriter。
 
-准确源copy/fork的身份/typed链接改写仍基于官方authored AST/schema，独立于展示target；若预览/复制显示文字或导出图像则声明消费target并锁同次结果。新Html style实验和桥当前未接受；消费者应报准确可用性，不把“同一快照”代替producer证据。
+准确源copy/fork的身份/typed链接改写仍基于官方authored AST/schema，独立于展示target；若预览/复制显示文字或导出图像则声明消费target并锁同次结果。Html style/桥的选型与设计合同已接受（REVIEW §7），产品producer与renderer验收仍未完成；消费者应报准确可用性，不把“同一快照”代替producer证据。
 
 ## 4. 潜在链接的完整匹配与重叠算法
 
@@ -595,7 +595,7 @@ citation绑定key按SOURCE明确ASCII全文 `[A-Za-z][A-Za-z0-9_-]*` 校验，�
 
 准确source导出只交原 `.typ` bytes，不依赖排版/模板；准确结构结果导出交完整schema、Cell和值/order，不交runtime句柄或writer。PDF/SVG/PNG走真实可用Typst输出，实验能力标实验；DOCX/XLSX是Weftext独立转换器和真实验证路线。
 
-DOCX具名默认profile消费一次冻结Html compile的final语义tree、同target产品及origin/source角色关联；不是从Paged realization推默认flow，也不把Html/Paged heading/link拼成一个“同一快照”。若用户明确选择另一个Paged语义转换profile，完整preview/输出注明target且仅用该次Paged最终数据，能力独立验收。native headings没有显示关联时不能默认插入DOCX幽灵段，需明确source结构输出路线或loss。HTML frame局部Paged内容保持同Html compile的局部来源边界；不能借它宣称整篇Paged语义一致。当前Html样式/桥未接受，转换profile因此仍有实际producer验收门。
+DOCX具名默认profile消费一次冻结Html compile的final语义tree、同target产品及origin/source角色关联；不是从Paged realization推默认flow，也不把Html/Paged heading/link拼成一个“同一快照”。若用户明确选择另一个Paged语义转换profile，完整preview/输出注明target且仅用该次Paged最终数据，能力独立验收。native headings没有显示关联时不能默认插入DOCX幽灵段，需明确source结构输出路线或loss。HTML frame局部Paged内容保持同Html compile的局部来源边界；不能借它宣称整篇Paged语义一致。Html样式/桥的设计已接受；转换profile仍须通过实际产品producer验收门。
 
 DOCX输出真实paragraph、run、style、table、image、关系和引用，不用整页图片冒可编辑。title/副标题保持SOURCE角色，无标题不添作者title。同段heading默认整段 `Heading N` 并参与编号，后部正文用模板正文character属性重置继承，同时保作者显式strong/emph等。DOCX Heading 1–9原生范围内保持层级；10+保源并报告目标不支持或明确loss，不压成9级。普通Word目录可收整段是明确默认；“只含标题文字”是单独可选路线。必须用真实Word/WPS/LibreOffice验证编号、目录和ref，并明确各应用实际支持，不以OOXML能打开代替交互验收。
 

@@ -8,7 +8,7 @@ translation_status: synced
 
 # Requirements and technical choices
 
-Status: requirements and mechanisms have been separated for the scope identified in this pass; the technical solution still needs reselection and review. The inventory covers the current target design and explicit additions in this round, without claiming a word-for-word audit of all historical discussions or a completed architecture rewrite. Independent review of the prior Typst revision retains its fixed scope and cannot become a reason to retain old technology.
+Status: requirements and mechanisms have been separated for the scope identified in this pass. The coordinated new technical design has independent global acceptance; [new architecture REVIEW](../typst-architecture/REVIEW.md) §7 records the fixed baseline and boundaries. This inventory covers the current target design and explicit additions in this round, without claiming a word-for-word audit of every historical discussion or completed product refactoring. Prior Typst reviews retain their fixed scopes and do not require inheriting old technology.
 
 ## 1. Design basis
 
@@ -164,7 +164,7 @@ Desktop, WebUI, Server/CLI compilation and offline intranets must not depend on 
 
 ## 6. Bringing the original 21 findings into the new design
 
-Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: **all still need validation against the new solution**, with no new closure claimed. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.
+Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: the current independent design disposition is in [new architecture REVIEW](../typst-architecture/REVIEW.md) §7, and **each still requires product implementation verification**; this table does not automatically transfer historical closures. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.
 
 | Original ID | Problem the new solution must still prevent / requirements | Old means that need not be inherited mechanically |
 | --- | --- | --- |

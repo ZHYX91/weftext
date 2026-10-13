@@ -8,7 +8,7 @@ translation_status: synced
 
 # Typst Core: files, commits and operating boundaries
 
-Status: a complete author repair against independent-review input `b895b350d4b4ceda5f2317f2d4b1d8efb42bd11e`; not independently accepted or implemented. The [requirements](../typst-native/REQUIREMENTS.md) are authoritative; this document and this set's [SOURCE](SOURCE.md), [EDITOR](EDITOR.md) and [FEATURES](FEATURES.md) define one new design. Earlier protocols and bounded reviews remain historical evidence, not dependencies of this contract. Product, crash, power-loss, synchronization, Server, security and performance acceptance have not passed.
+Status: **accepted-design-not-implemented**; [REVIEW](REVIEW.md) §7 records independent global acceptance and the fixed technical baseline. The [requirements](../typst-native/REQUIREMENTS.md) are authoritative; this document and this set's [SOURCE](SOURCE.md), [EDITOR](EDITOR.md) and [FEATURES](FEATURES.md) define one new design. Earlier protocols and bounded reviews remain historical evidence, not dependencies of this contract. Product, crash, power-loss, synchronization, Server, security and performance acceptance have not passed.
 
 ## 1. One file workspace and one author commit path
 
