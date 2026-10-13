@@ -96,8 +96,8 @@ translation_status: source
 
 | 原Pro发现 | 自足问题与本轮修复候选 | 评审状态 |
 | --- | --- | --- |
-| TYPST-GLOBAL-CDB-P2-01 | During/Range实际仅DateOrInstant，2020年3月开始任职不能保未知日；SOURCE §3.1.1与实际TemporalEndpoint复用CalendarDate，并贯通Task.start/due既有date精度、provider/Query、UI/导出。相同粒度比较与years/months时长可用，混精度有据判断或unavailable，缺端/none差别保留，recurrence精确域不放宽。 | 固定7dcff6c已由非作者独立设计CLOSED；待原Pro核对最终差量。 |
-| TYPST-GLOBAL-CDB-P2-02 | 一般人物关系role/customLabel未给分类判别/码域，同名friend可漂移；SOURCE §4.1与三真实Field专用Shape明确required relationship的preset/custom分支及各Field闭合集合，守方向/单源，消费者往返保分支，不猜分类。 | 固定7dcff6c已由非作者独立设计CLOSED；待原Pro核对最终差量。 |
+| TYPST-GLOBAL-CDB-P2-01 | During/Range实际仅DateOrInstant，2020年3月开始任职不能保未知日；SOURCE §3.1.1与实际TemporalEndpoint复用CalendarDate，并贯通Task.start/due既有date精度、provider/Query、UI/导出。相同粒度比较与years/months时长可用，混精度有据判断或unavailable，缺端/none差别保留，recurrence精确域不放宽。 | 固定7dcff6c有界CLOSED；原Pro在固定f456独立确认CLOSED（见§6）。 |
+| TYPST-GLOBAL-CDB-P2-02 | 一般人物关系role/customLabel未给分类判别/码域，同名friend可漂移；SOURCE §4.1与三真实Field专用Shape明确required relationship的preset/custom分支及各Field闭合集合，守方向/单源，消费者往返保分支，不猜分类。 | 固定7dcff6c有界CLOSED；原Pro在固定f456独立确认CLOSED（见§6）。 |
 
 本轮从干净 `c048626acb89654a4d6c986aa8bd798a3a3a3c53` 作成组候选；没有改snapshots/inputs或撤销中文默认补充。CORE“授权未变化、仅相关数据变化”与FEATURES“venue/container及未定义独立publisher”同步澄清，不自动扩大文献模型。
 
@@ -106,3 +106,15 @@ translation_status: source
 非作者需求 reviewer 已完整核查固定 `7dcff6cdd1c0dcb49576fa5d7977e0a100fe7f9d` 对照 c048 的23文件差量及受影响的真实Field、期间/分类、Query、Task和精确recurrence合同，结合原Pro全文与必要历史业务来源，结论为有界PASS：原两个P2及Task.start/due同族影响面设计CLOSED，无新增P0/P1/P2。完整报告已收取阅读；在私有固定副本独立复跑31配置、69实际Field模型及另23个边界/分类反例均通过，不等同于真实provider/CEL/Office或全局接受。官方Typst编译结果仅按既有实际版本化记录引用，未由该reviewer重跑。
 
 该复核另建议澄清FEATURES的colleague旧句。本次双语明确：任职重叠计算的视图按需派生，显式professional_relations断言独立保留；无engagement不妨碍按真实Field记录，不自动双写或合并来源。此句与既有SOURCE §4.1及原生正例一致，不增加第二权威。最新差量与§4中文默认补充一并交原Pro，不以本有界关闭替代最终裁决。
+
+## 6. f456 全局终审与共同时间基准修复候选
+
+原非作者Pro已完整复核固定 `f4560ddd4f93421db1f6c070889150cbc22e9bdb`，结论 **REVISE**：原两项TYPST-GLOBAL-CDB-P2均独立CLOSED，中文默认补充在设计层接受；无P0/P1，只有新增 **TYPST-GLOBAL-F456-P2-01 OPEN**。报告及证据已完整收取阅读。这不等于全局接受或CJK/Office产品通过。
+
+新增问题是SOURCE §3.1.1、FEATURES §8.3与有限模型只各自验证Range，两个only-start或only-end的civil/instant Range分别有效，却在没有有限跨参数比较时返回overlap=true；交换参数同样错误。原独立70组检查66通过、4失败。粗精度跨历法/版本同侧开放范围也可被洗成true，属于同一根因。
+
+从上述干净基线修订的候选在SOURCE/FEATURES双语与实际模型中先核完整获权输入、有限端点、provider覆盖及共同时间基准，再处理无界和三值合取。共同域不要求端点可证明先后：同历法/版本month/day同侧开放仍true；native date与CalendarDate(day)、受支持的跨历法完整日仍可用。civil/instant混域invalid，粗精度跨历法/版本或缺provider unavailable；不补时区、日期或改变During缺端/none与精确recurrence。schema/ABI形状、签名不变，受信builtin合同的调用级预检落实到算法。
+
+实际有限检查：31配置/路径/设计ABI检查通过；[96项模型](examples/precision-relation-checks.json)通过（原69加27，含SOURCE RDOM01–07）；作者用原独立70组脚本及不改的期望在新候选复跑，70通过；额外8组同族原期望复跑均通过。后两项是作者复跑，不伪称固定f456已通过或独立接受。没有重跑未改的23个原生编译例、Html/Core平台探针；完整Rust provider/CEL、权限/事务/UI、CJK/字体/Office仍UNRUN。
+
+当前新增项仅 **repaired-pending-independent**，由非作者对最终固定差量复核后才能关闭；原两项CLOSED和中文设计接受不重开，不由作者自行宣布全局ACCEPT。

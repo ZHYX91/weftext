@@ -404,6 +404,168 @@
       "passed": true
     },
     {
+      "case": "joint-open-civil-instant-start",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "joint-open-civil-instant-start-reversed",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "joint-open-civil-instant-end_exclusive",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "joint-open-civil-instant-end_exclusive-reversed",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "joint-open-same-calendar-month-starts",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-same-calendar-month-ends",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-opposite-sides-overlap",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-opposite-sides-separated",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "joint-open-opposite-sides-adjacent",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "joint-open-basis-does-not-require-order-proof",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-past-basis-does-not-require-order-proof",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-native-record-day",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-cross-calendar-full-days",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-past-cross-calendar-full-days",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-cross-calendar-day-opposite-adjacent",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "joint-open-instant-domain",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "joint-open-coarse-mixed-calendar-start",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "joint-open-coarse-mixed-calendar-end_exclusive",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "joint-open-coarse-mixed-calendar-not-masked-by-false",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "joint-open-missing-provider-not-true",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "joint-open-invalid-bound-not-true",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "joint-open-coarse-mixed-frozen-version",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "joint-open-past-coarse-mixed-frozen-version",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "joint-open-full-day-mixed-frozen-version",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "contains-joint-coarse-mixed-calendar-not-false",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "duration-joint-civil-instant-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "exact-event-joint-civil-instant-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
       "case": "engagements-exact-structure-roundtrip",
       "expected": true,
       "actual": true,

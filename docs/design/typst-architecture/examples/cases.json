@@ -100,6 +100,49 @@
       }
     ],
     "checks": "precision_relation_model.py enters actual schema field paths; 69 bounded model checks, not AST/Rust/CEL/UI/Office",
-    "review": "pending independent; no author closure"
+    "review": "Original Pro independently CLOSED both findings at fixed f456; historical 69-case evidence retained, not a global acceptance."
+  },
+  "global_f456_overlap_repair": {
+    "source_baseline": "f4560ddd4f93421db1f6c070889150cbc22e9bdb",
+    "finding": "TYPST-GLOBAL-F456-P2-01",
+    "oracles": [
+      {
+        "id": "RDOM01",
+        "input": "Two separately valid start-only date/instant Ranges, then end-only and swapped arguments",
+        "expected": "invalid in all four cases, before infinity shortcuts"
+      },
+      {
+        "id": "RDOM02",
+        "input": "Same-calendar/version month start-only or end-only Ranges; same-month month/day pairs",
+        "expected": "true on both sides, without requiring compareTemporal to order their finite endpoints"
+      },
+      {
+        "id": "RDOM03",
+        "input": "Same-domain opposite-side open Ranges: ordered, separated, adjacent",
+        "expected": "true/false/false under half-open boundaries"
+      },
+      {
+        "id": "RDOM04",
+        "input": "Native Gregorian date and CalendarDate(day); two supported calendars or frozen versions with full days",
+        "expected": "common civil-day basis; same-side open true, opposite-side adjacent false"
+      },
+      {
+        "id": "RDOM05",
+        "input": "Coarse endpoints across calendars or frozen versions, in future-open or past-open Ranges",
+        "expected": "unavailable, even if an inequality shortcut could otherwise yield true or false"
+      },
+      {
+        "id": "RDOM06",
+        "input": "A required calendar provider missing or a malformed bound in an open Range",
+        "expected": "unavailable or invalid respectively, never washed into a Boolean"
+      },
+      {
+        "id": "RDOM07",
+        "input": "containsDate across coarse calendar bases; civil/instant duration and recurring template",
+        "expected": "unavailable/invalid/invalid; wholly unbounded During still accepts a valid qualified point"
+      }
+    ],
+    "checks": "precision_relation_model.py: 96 actual-Field and shared temporal consumer model checks (69 original, 27 added). Original independent 70 cases author-rerun unchanged: 70 pass. Not AST/Rust/CEL/UI/Office.",
+    "review": "repaired-pending-independent; no author closure or global acceptance"
   }
 }

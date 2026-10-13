@@ -307,7 +307,7 @@ filter(phones,p => p.number == "13800138000")
 
 Calendar有三个已选资料类型：period-note、range-note、event；day/week/month/quarter/year是period种类，不是另五种身份。period字段明确series、calendar/rule、period key、zone及unique/many scope；路径/标题不定义key。period导航先以同一Query查准确 `(series,key,scope)`，partial不能宣布不存在；unique创建需Core同Plan验证完整负范围及并发约束，many允许多个独立笔记。
 
-Range用SOURCE.TemporalEndpoint保年/月/完整日或instant；半开缺端无界/none非法/至少一端有界仍保留。During独立闭合，缺端未知/none无界。准入、同粒度/混精度包含、重叠及粒度单位时长统一调用SOURCE §3.1.1 fixed provider，不补具体日/host zone。near-boundary unavailable不是false；明确远前/远后或内部证据可确定。Event复用Range，但present recurrence要求原精确DateOrInstant bounded模板及ExactRange替换，不将部分精度直接转成发生锚点。participants/reminders等不变。
+Range用SOURCE.TemporalEndpoint保年/月/完整日或instant；半开缺端无界/none非法/至少一端有界仍保留。During独立闭合，缺端未知/none无界。准入、同粒度/混精度包含、重叠及粒度单位时长统一调用SOURCE §3.1.1 fixed provider，**先完成整个调用的获权输入/provider和跨实参共同时间域资格，再处理无界和三值合取**；单项Range有效不等于两个实参共域，不补具体日/host zone。near-boundary unavailable不是false；明确远前/远后或内部证据可确定。Event复用Range，但present recurrence要求原精确DateOrInstant bounded模板及ExactRange替换，不将部分精度直接转成发生锚点。participants/reminders等不变。
 
 recurrence按冻结calendar/zone/provider及source anchor的civil phase生成daily/weekly/monthly/yearly候选，应用interval与显式byMonth/byMonthDay/byWeekday/weekStart，count或inclusive until限制；不存在民用日期跳过，DST gap/fold按明确规则处理，不能host默认。定义B为合法base集合、R为rDates、E为exDates；先按精确原发生键对B∪R去重，然后对每键应用 **cancel > replace > EXDATE > template** 决策，绝不能先EXDATE删候选再试replace。replace可改range/title/status/note，不把改期时间变原发生身份。常规窗口与窗口外移入replacement使用下面同一决策函数，再按实际range过滤/排序；预算不足标partial，不漏移入却说complete。没有默认每次发生建Node；显式promote/adopt才创建。改series时预览已有exceptions的keep/remap/drop，不能静默丢旧例外。per-occurrence参与者/提醒覆盖若schema未选，保导入原件并报告unsupported，不冒全RFC兼容。
 
@@ -377,10 +377,10 @@ SOURCE修订schema包含七个已选base类型与paper扩展所需真实shape、
 
 | 函数/操作 | 必须完整实现的语义 |
 | --- | --- |
-| `containsDate(during,point)` | 共用 SOURCE §5：during 两个成员都须存在，原生 none 明示该端无界，省略任一端/整个 during/空记录均为 unavailable。两界含端点且 start≤end，point为TemporalEndpoint；同精度年/月可用，混精度按SOURCE §3.1.1证明。两端none也验证point，混civil/instant或已证倒序invalid，不可判断/缺provider为unavailable，不可用值转 EvaluationIssue。instant 按精确 UTC，date 按明确 calendar/precision，不补 host zone；不借用 Range 的缺端规则。 |
+| `containsDate(during,point)` | 共用 SOURCE §5：during 两个成员都须存在，原生 none 明示该端无界，省略任一端/整个 during/空记录均为 unavailable。两界含端点且 start≤end，point为TemporalEndpoint；同精度年/月可用，混精度按SOURCE §3.1.1证明。先对point及全部有限端执行SOURCE调用级共同基准资格，两端none也验证point；混civil/instant或已证倒序invalid，不可判断/缺provider为unavailable，不可用值转 EvaluationIssue。instant 按精确 UTC，date 按明确 calendar/precision，不补 host zone；不借用 Range 的缺端规则。 |
 | `compareTemporal(a,b)` / `duringDuration(during)` | 固定v2导出与SOURCE §3.1.1相同：前者给有据时间顺序或unavailable，后者给闭合粒度计数/精确instant差。Query显式调用，不给所有record默认order。 |
 | `nextCivilDay(date)` | 指定calendar/provider的下一个民用日，溢出错误；只处理声明的完整day date，不将year/month/月日当已知年日。 |
-| `rangeOverlap(a,b)` / `rangeDuration(range)` | `range(start,end_exclusive)`半开且同域、至少一端有界；overlap使用§8.1；year/month/day同精度duration是years/months/days单位差，不冒精确天数；instant用exact elapsed seconds。开放duration不可得，不填现在；缺calendar/provider停止，不产假值。 |
+| `rangeOverlap(a,b)` / `rangeDuration(range)` | `range(start,end_exclusive)`半开且同域、至少一端有界；overlap先完成SOURCE §3.1.1的全部有限端/provider/共同civil或UTC基准资格，随后才用§8.1无界/三值公式；同civil calendar/version可混precision而不需先后证明，跨calendar/version仅全day可用，否则unavailable；civil/instant混域invalid，不允许true/false洗掉资格失败。duration也先资格再处理无界/单位；year/month/day同精度duration是years/months/days单位差，不冒精确天数；instant用exact elapsed seconds。开放duration不可得，不填现在；缺calendar/provider停止，不产假值。 |
 | `periodBounds(period)` / `resolvePeriod(period,seriesPolicy,cut)` | 前者是installed calendar/temporal纯函数，检查kind/calendar/version/rule/key/zone/tzdb、ISO week-year，返回确定range。后者是Features/Core orchestration，用已获权slots的period结果+同cut Query查已有/negative range，不冒可以直接读库的pure provider。series/period/scope是实际唯一键，标题/目录不参与。 |
 | `expandRecurrence(event,window,providers,budget)` | §8.1完整候选/selector/count或until/rDates/exDates/cancel/replace及窗口外移入；原发生坐标和replacement时间分开。partial包含停止位置与缺口，不提供完整负范围。 |
 | `validateQuantity(kind,value,unit,precision)` | 此逻辑wrapper消费 `units/rules` 的 `measurement/quantity` 实际exports，不新增未安装同名export。height/weight分别length/mass、精确decimal，unit与kind/维度同provider；unknown unit保原件但typed业务不可用。不内建默许所有单位，也不自动跨币/跨制度换算。 |

@@ -173,13 +173,17 @@ instant base候选经冻结zone解fold/gap后准确UTC去重升序再计count；
 
 同历法/版本混精度端点采用计算区间[Alo,Ahi]与[Blo,Bhi]：若Ahi<Blo则-1，若Alo>Bhi则1，否则unavailable。不得因两个bucket重叠就当相等。内部含端点比较≤在Ahi≤Blo时证明true，在Alo>Bhi时证明false，其余unavailable；严格<在Ahi<Blo时true，在Alo≥Bhi时false，其余unavailable。同精度直接用ordinal关系（这是所记录粒度的比较，不是声称具体边界日相同）。Query普通结构相等仍保calendar/version/precision及分支，不将year/month去重成某个day；需要时间顺序/跨表示日等价时显式用此函数，不给任意record新增默认order。
 
-During有界端闭合：同粒度start≤end；混精度用上述≤证明，倒序invalid，无法证明有序unavailable且保原源/修复入口。端点缺席允许保稿但消费未知；两个成员都存在后，none分别为负/正无穷，绝不从缺端补none。containsDate先验证point及整个期间/端点存在，再作 `start≤point && point≤end`；none的比较为true。混精度合法期间在远前/远后可确定false、明确内部可确定true，边界bucket无法判定就unavailable。已验证完整输入的两个比较用确定性三值合取：任一false给false，两true给true，其余unavailable；缺成员/非法/未获权输入不能靠false洗掉。
+调用级共同基准资格先于无界替换与三值合取。Core先为整个调用所需Field/point及准确冻结provider数据完成授权，任一输入Cell不是value或依赖不可得就走原invalid/unavailable/EvaluationIssue，不读取未授权内容。固定temporal builtin收集**所有实参实际存在且非none的有限端点**（containsDate另含point），完整解码并验证每个端点/provider/coverage，不能只验证随后某条不等式恰会访问的端点。全部为instant才能在准确UTC域计算；civil与instant任何混用invalid，不补host zone。全部civil且calendar/version相同可共基准，**无需同precision，也无需任意两个端点可证明先后**；不同历法/版本只有全部为完整day且各冻结provider支持时才能共Gregorian日ordinal，任一粗精度跨基准unavailable。native date按上述固定Gregorian day规则参加。资格只决定能否比较；混精度比较本身仍按bucket证明返回true/false/unavailable。
 
-Range仍半开[start,end_exclusive)，缺端无界、none非法、至少一端有界；有两端须严格start<end。同粒度按ordinal准入；混精度依<证明，确知倒序/空范围invalid，不能证明非空unavailable。rangeOverlap先验证两range，然后判 `a.start<b.end_exclusive && b.start<a.end_exclusive`，无界比较为true；同一三值合取，邻接不重叠，边界不确定不当false。
+每个Range必须至少有一个有限端，所以rangeOverlap可从双方全部有限端确定共同域，起点/终点在同侧也要检查。只有这个前置资格成立后，缺端才成为该共同域内的无界。During的缺端仍unknown；两端none时containsDate从已验证point取得域，不要求增加作者domain字段。单个Range的shape/local准入仅证明该项有效，**不证明两个range实参共域**。`schema.json`与ABI的`rangeOverlap.inputs=["range","range"]`签名保持；这个跨参数资格是受信固定builtin的必执行合同，不是配置自报已检查、额外作者属性或另一套schema。compareTemporal/内部关系、containsDate、duration及recurrence模板/窗口/替换使用同一资格步骤；各自原粒度、presence及精确要求不改变。
 
-有界同calendar/version/precision的rangeDuration返回 `{value,unit,calendar,version}`，year/month/day的value为endOrdinal-startOrdinal，unit恰years/months/days；During的duringDuration为闭合粒度计数endOrdinal-startOrdinal+1。它们是所记录粒度的单位差/计数，**不是精确持续天数或秒数**。instant二者返回 `{value:exact_seconds,unit:"seconds"}` 的end-start（连续时间闭端不加epsilon）。native date与Gregorian CalendarDate(day)兼容；两个完整日的不同历法由此函数明确采用共同Gregorian日ordinal返回days（输出calendar/version为Gregorian），不是比较数字年份；原作者历法保留。开放/未知端、混精度、非日混历法或缺provider时长unavailable，不填now、不换算month/year成固定日数。
+During有界端闭合：同粒度start≤end；混精度用上述≤证明，倒序invalid，无法证明有序unavailable且保原源/修复入口。端点缺席允许保稿但消费未知；两个成员都存在后，none分别为负/正无穷，绝不从缺端补none。containsDate先验证point、整个期间/端点存在及跨输入共同基准，再作 `start≤point && point≤end`；none的比较为true。混精度合法期间在远前/远后可确定false、明确内部可确定true，边界bucket无法判定就unavailable。已验证完整输入的两个比较用确定性三值合取：任一false给false，两true给true，其余unavailable；缺成员/非法/未获权输入不能靠false洗掉。
 
-精确recurrence保持独立：DateOrInstant不扩大，until/rDates/exDates/exception.onset仍只完整date或instant；Exception.range使用ExactRange，端点仍DateOrInstant并调用同半开range约束。temporal/event在recurrence存在时另要求原range两端都是完整date或同域instant、bounded且有序；CalendarDate即使day精度也须显式经获权provider转换/预览为精确模板值，不能自动物化。年/月模板、partial replacement或混域原发生坐标typed invalid，原合法Typst保稿，不产生虚构首日发生项。
+Range仍半开[start,end_exclusive)，缺端无界、none非法、至少一端有界；有两端须严格start<end。同粒度按ordinal准入；混精度依<证明，确知倒序/空范围invalid，不能证明非空unavailable。rangeOverlap先验证双方完整获权输入、各自Range有效性及上述跨参数共同基准，再判 `a.start<b.end_exclusive && b.start<a.end_exclusive`；**仅在已共同定域后**才将无界比较视为true并做三值合取。单侧开放civil/instant不能因两个无界分支而true；粗精度跨calendar/version不能被true或false洗掉。同基准的month/day两个only-start仍可true，不要求它们的起点可排先后。邻接不重叠，已合格基准上的边界不确定不当false。
+
+duration先完整验证所有实际有限端/provider及共同基准，再处理无界/未知和单位选择；有界同calendar/version/precision的rangeDuration返回 `{value,unit,calendar,version}`，year/month/day的value为endOrdinal-startOrdinal，unit恰years/months/days；During的duringDuration为闭合粒度计数endOrdinal-startOrdinal+1。它们是所记录粒度的单位差/计数，**不是精确持续天数或秒数**。instant二者返回 `{value:exact_seconds,unit:"seconds"}` 的end-start（连续时间闭端不加epsilon）。native date与Gregorian CalendarDate(day)兼容；两个完整日的不同历法由此函数明确采用共同Gregorian日ordinal返回days（输出calendar/version为Gregorian），不是比较数字年份；原作者历法保留。开放/未知端、混精度、非日混历法或缺provider时长unavailable，不填now、不换算month/year成固定日数。
+
+精确recurrence保持独立：模板、window及replacement在rangeOverlap前也需共同基准，不以单项ExactRange有效或开放window跳过；DateOrInstant不扩大，until/rDates/exDates/exception.onset仍只完整date或instant；Exception.range使用ExactRange，端点仍DateOrInstant并调用同半开range约束。temporal/event在recurrence存在时另要求原range两端都是完整date或同域instant、bounded且有序；CalendarDate即使day精度也须显式经获权provider转换/预览为精确模板值，不能自动物化。年/月模板、partial replacement或混域原发生坐标typed invalid，原合法Typst保稿，不产生虚构首日发生项。
 
 temporal/rules与Gregorian/table calendar builtin选择明确v2/abi2，新增固定dateBounds primitive、compareTemporal及duringDuration签名在schema与ABI参考均已定义；其它本配置实现仍使用其准确v1/abi1；v2仅标本候选签名，不要求运行兼容未部署v1。配置不据数字选latest。保存定义/源原基准不能假作兼容升级，按§3.2–3.3显式核真实shape/函数合同，缺旧配置不重绑；不存在真实用户数据时不编造迁移已完成。
 
@@ -365,6 +369,22 @@ opaque FieldBasis的公开CAS比较获权Field前像、获权约束及已公开p
 | REL04 | custom大小写/空白/Unicode及年月期间跨表单/结构导入导出 | 保原成员与branch/精度；DOCX/XLSX真实往返仍UNRUN。 |
 
 三份精度正例（含任职/状态、Range、Task）与一般关系正例、两份语义负例均在 [native-cases](examples/native-cases/)；官方编译只验证源码合法，负例不会因此取得typed资格。
+
+### 7.3 跨参数共同时间基准验收
+
+这些设计 oracle 针对实际 Range 字段解码后调用 provider 的共同基准，不以两个字段分别有效代替调用资格。完整获权输入及所需冻结 provider 先就绪；未知/不可得/invalid 不被无界或布尔短路洗掉。有限模型当前共96项（原69项加27项），不代表真实provider/CEL或权限验收。
+
+| ID | 输入/动作 | 必须结果 |
+| --- | --- | --- |
+| RDOM01 | 两个分别有效的only-start date/instant Range；only-end及交换参数 | 四例均invalid，在无界快捷分支前拒绝混域。 |
+| RDOM02 | 同历法/版本month的两条未来/过去开放范围；同月month/day两条同侧范围 | 均true；共同域成立不要求compareTemporal能对两有限端点排序。 |
+| RDOM03 | 同域不同侧开放范围：有交集、分离、邻接 | 半开规则分别true/false/false。 |
+| RDOM04 | native Gregorian date与CalendarDate(day)；受支持的跨历法/冻结版本完整日 | 同一civil日基准；同侧开放true，不同侧邻接false。 |
+| RDOM05 | 粗精度跨历法/冻结版本的未来/过去开放范围 | unavailable，即使单个不等式或无界快捷分支本可给true/false。 |
+| RDOM06 | 开放范围有限端缺provider或日期非法 | 分别unavailable/invalid，不能转换成布尔值。 |
+| RDOM07 | containsDate粗精度跨历法；duration与recurrence模板混civil/instant | unavailable/invalid/invalid；During两端none仍由有效获权point给基准，不改变既有语义。 |
+
+当前模型、原独立70组不改期望的作者复跑和额外8组同族复跑均是修复候选证据；发现仅为repaired-pending-independent。schema形状与builtin ABI不新增参数：共同基准预检是§3.1.1受信固定实现的必需算法，配置不能自行宣称满足它。[cases.json](examples/cases.json)保留编号及证据边界。
 
 设计检查记录 [design-checks.json](examples/design-checks.json)，执行脚本 [validate_repair.py](examples/validate_repair.py) 只校验闭合/引用/路径/[builtin-abi.design.json](examples/builtin-abi.design.json)固定ABI设计参考（运行时必须核受信Rust registry，不能信配置自报）及有限业务oracle，不是Rust安装器。Query cold基准测试用人工symbol列表，不是CEL解析器；calendar测试仅Gregorian与有限synthetic pack。
 

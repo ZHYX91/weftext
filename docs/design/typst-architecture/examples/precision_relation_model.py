@@ -60,12 +60,18 @@ class Model:
     if not 1<=day<=months[i]['days']:raise Invalid('calendar day')
     lo=hi=lo+day-1;rank=lo
   return ('civil',c,v,g,rank,lo,hi)
+ def common_basis(self,values):
+  """Call-level qualification, independent of whether finite values can be ordered."""
+  points=[self.endpoint(x) for x in values]
+  if not points:return points
+  if len({p[0] for p in points})!=1:raise Invalid('civil/instant mixed')
+  if points[0][0]=='civil' and len({p[1:3] for p in points})>1 and any(p[3]!='day' for p in points):
+   raise Unavailable('coarse mixed calendar')
+  return points
  def relation(self,a,b,strict=False):
-  a,b=self.endpoint(a),self.endpoint(b)
-  if a[0]!=b[0]:raise Invalid('civil/instant mixed')
+  a,b=self.common_basis([a,b])
   same=a[1:4]==b[1:4]
   if same:return a[4]<b[4] if strict else a[4]<=b[4]
-  if a[0]=='civil' and a[1:3]!=b[1:3] and (a[3]!='day' or b[3]!='day'):raise Unavailable('coarse mixed calendar')
   if strict:
    if a[6]<b[5]:return True
    if a[5]>=b[6]:return False
@@ -74,10 +80,8 @@ class Model:
    if a[5]>b[6]:return False
   return None
  def compare(self,a,b):
-  av,bv=self.endpoint(a),self.endpoint(b)
-  if av[0]!=bv[0]:raise Invalid('civil/instant mixed')
+  av,bv=self.common_basis([a,b])
   if av[1:4]==bv[1:4]:return (av[4]>bv[4])-(av[4]<bv[4])
-  if av[0]=='civil' and av[1:3]!=bv[1:3] and (av[3]!='day' or bv[3]!='day'):raise Unavailable('coarse mixed calendar')
   if av[6]<bv[5]:return -1
   if av[5]>bv[6]:return 1
   if av[3]==bv[3]=='day' and av[5]==bv[5]:return 0
@@ -92,6 +96,7 @@ class Model:
      if not during:raise Invalid('Range none')
     else:bounds.append(x[k]);self.endpoint(x[k])
   if not during and not bounds:raise Invalid('Range no bound')
+  self.common_basis(bounds)
   if len(bounds)==2:
    ordered=self.relation(bounds[0],bounds[1],strict=not during)
    if ordered is False:raise Invalid('interval order')
@@ -105,18 +110,20 @@ class Model:
  def contains(self,x,p):
   self.endpoint(p);self.interval(x,True)
   if not all(k in x for k in ['start','end']):raise Unavailable('unknown endpoint')
+  self.common_basis([x[k] for k in ['start','end'] if x[k] is not None]+[p])
   a=True if x['start'] is None else self.relation(x['start'],p)
   b=True if x['end'] is None else self.relation(p,x['end'])
   return self.conjunction(a,b)
  def overlap(self,a,b):
   self.interval(a);self.interval(b)
+  self.common_basis([x[k] for x in [a,b] for k in ['start','end_exclusive'] if k in x])
   v=True if 'start' not in a or 'end_exclusive' not in b else self.relation(a['start'],b['end_exclusive'],True)
   w=True if 'start' not in b or 'end_exclusive' not in a else self.relation(b['start'],a['end_exclusive'],True)
   return self.conjunction(v,w)
  def duration(self,x,during=False):
   self.interval(x,during);end='end' if during else 'end_exclusive'
   if any(k not in x or x[k] is None for k in ['start',end]):raise Unavailable('unbounded/unknown duration')
-  a,b=self.endpoint(x['start']),self.endpoint(x[end])
+  a,b=self.common_basis([x['start'],x[end]])
   if a[0]=='instant':return {'value':b[4]-a[4],'unit':'seconds'}
   if a[1:4]!=b[1:4]:
    if a[3]!='day' or b[3]!='day':raise Unavailable('mixed duration')
@@ -256,6 +263,43 @@ def run(schema):
  check('professional-cross-domain-friend-invalid',lambda:m.field('professional_relations',[{'target':{'text':'甲'},'relationship':{'preset':'friend'}}]),'invalid')
  check('social-unknown-preset-invalid',lambda:m.field('social_relations',[{'target':{'text':'甲'},'relationship':{'preset':'new-friend'}}]),'invalid')
  check('legacy-role-customLabel-not-classification',lambda:m.field('social_relations',[{'target':{'text':'甲'},'role':'friend','customLabel':'friend'}]),'invalid')
+ # Joint qualification covers all parameters before any infinity/Boolean shortcut.
+ def actual_overlap(a,b,model=m):
+  model.field('range',a);model.field('range',b)
+  return model.overlap(a,b)
+ for key in ['start','end_exclusive']:
+  for reverse in [False,True]:
+   a={key:dt.date(2020,1,1)};b={key:'2020-01-01T00:00:00Z'}
+   if reverse:a,b=b,a
+   check('joint-open-civil-instant-'+key+('-reversed' if reverse else ''),lambda a=a,b=b:actual_overlap(a,b),'invalid')
+ check('joint-open-same-calendar-month-starts',lambda:actual_overlap(dict(start=c(2020,3)),dict(start=c(2021,2))),True)
+ check('joint-open-same-calendar-month-ends',lambda:actual_overlap(dict(end_exclusive=c(2020,3)),dict(end_exclusive=c(2021,2))),True)
+ check('joint-open-opposite-sides-overlap',lambda:actual_overlap(dict(start=c(2020,3)),dict(end_exclusive=c(2021,2))),True)
+ check('joint-open-opposite-sides-separated',lambda:actual_overlap(dict(start=c(2021,2)),dict(end_exclusive=c(2020,3))),False)
+ check('joint-open-opposite-sides-adjacent',lambda:actual_overlap(dict(start=c(2020,3)),dict(end_exclusive=c(2020,3))),False)
+ check('joint-open-basis-does-not-require-order-proof',lambda:actual_overlap(dict(start=c(2020,3)),dict(start=dt.date(2020,3,15))),True)
+ check('joint-open-past-basis-does-not-require-order-proof',lambda:actual_overlap(dict(end_exclusive=c(2020,3)),dict(end_exclusive=dt.date(2020,3,15))),True)
+ check('joint-open-native-record-day',lambda:actual_overlap(dict(start=dt.date(2020,3,1)),dict(start=c(2020,3,1))),True)
+ check('joint-open-cross-calendar-full-days',lambda:actual_overlap(dict(start=c(1,1,1,cal='test-calendar',version='test-calendar.v1')),dict(start=dt.date(2026,1,1))),True)
+ check('joint-open-past-cross-calendar-full-days',lambda:actual_overlap(dict(end_exclusive=c(1,1,1,cal='test-calendar',version='test-calendar.v1')),dict(end_exclusive=dt.date(2026,1,1))),True)
+ check('joint-open-cross-calendar-day-opposite-adjacent',lambda:actual_overlap(dict(start=c(1,1,1,cal='test-calendar',version='test-calendar.v1')),dict(end_exclusive=dt.date(2026,1,1))),False)
+ check('joint-open-instant-domain',lambda:actual_overlap(dict(start='2020-01-01T00:00:00Z'),dict(start='2021-01-01T00:00:00Z')),True)
+ for key in ['start','end_exclusive']:
+  check('joint-open-coarse-mixed-calendar-'+key,lambda key=key:actual_overlap({key:non},{key:c(2026,1)}),'unavailable')
+ check('joint-open-coarse-mixed-calendar-not-masked-by-false',lambda:actual_overlap(dict(start=non),dict(end_exclusive=c(2000,1))),'unavailable')
+ check('joint-open-missing-provider-not-true',lambda:actual_overlap(dict(start=c(2020,3,cal='missing')),dict(start=c(2021,1))),'unavailable')
+ check('joint-open-invalid-bound-not-true',lambda:actual_overlap(dict(end_exclusive=c(2021,2,29)),dict(end_exclusive=c(2021,1))),'invalid')
+ # Version fixtures are temporary frozen configuration data, not new installed schemas.
+ alternate=copy.deepcopy(schema)
+ p=copy.deepcopy(next(p for p in alternate['providers'] if p['id']=='calendars/gregorian'))
+ p['id']='calendars/model-version-fixture';p['data']['version']='model-version.v1';alternate['providers'].append(p)
+ version_model=Model(alternate)
+ check('joint-open-coarse-mixed-frozen-version',lambda:actual_overlap(dict(start=c(2020,3)),dict(start=c(2020,3,version='model-version.v1')),version_model),'unavailable')
+ check('joint-open-past-coarse-mixed-frozen-version',lambda:actual_overlap(dict(end_exclusive=c(2020,3)),dict(end_exclusive=c(2020,3,version='model-version.v1')),version_model),'unavailable')
+ check('joint-open-full-day-mixed-frozen-version',lambda:actual_overlap(dict(start=c(2020,3,1)),dict(start=c(2020,3,1,version='model-version.v1')),version_model),True)
+ check('contains-joint-coarse-mixed-calendar-not-false',lambda:m.contains(dict(start=non,end=None),c(2000,1)),'unavailable')
+ check('duration-joint-civil-instant-invalid',lambda:m.duration(dict(start=dt.date(2020,1,1),end_exclusive='2020-01-02T00:00:00Z')),'invalid')
+ check('exact-event-joint-civil-instant-invalid',lambda:m.exact_event(dict(start=dt.date(2020,1,1),end_exclusive='2020-01-02T00:00:00Z')),'invalid')
  for key,value in [('engagements',[{'employer':{'text':'X'},'during':month}]),('social_relations',[{'target':{'text':'甲'},'relationship':{'custom':' friend '}}])]:
   transported=json.loads(json.dumps(value,ensure_ascii=False))
   check(key+'-exact-structure-roundtrip',lambda key=key,transported=transported,value=value:m.field(key,transported)==value,True)
