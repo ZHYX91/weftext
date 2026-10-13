@@ -96,9 +96,13 @@ translation_status: source
 
 | 原Pro发现 | 自足问题与本轮修复候选 | 评审状态 |
 | --- | --- | --- |
-| TYPST-GLOBAL-CDB-P2-01 | During/Range实际仅DateOrInstant，2020年3月开始任职不能保未知日；SOURCE §3.1.1与实际TemporalEndpoint复用CalendarDate，并贯通Task.start/due既有date精度、provider/Query、UI/导出。相同粒度比较与years/months时长可用，混精度有据判断或unavailable，缺端/none差别保留，recurrence精确域不放宽。 | 作者修复候选；pending independent，不自报CLOSED。 |
-| TYPST-GLOBAL-CDB-P2-02 | 一般人物关系role/customLabel未给分类判别/码域，同名friend可漂移；SOURCE §4.1与三真实Field专用Shape明确required relationship的preset/custom分支及各Field闭合集合，守方向/单源，消费者往返保分支，不猜分类。 | 作者修复候选；pending independent，不自报CLOSED。 |
+| TYPST-GLOBAL-CDB-P2-01 | During/Range实际仅DateOrInstant，2020年3月开始任职不能保未知日；SOURCE §3.1.1与实际TemporalEndpoint复用CalendarDate，并贯通Task.start/due既有date精度、provider/Query、UI/导出。相同粒度比较与years/months时长可用，混精度有据判断或unavailable，缺端/none差别保留，recurrence精确域不放宽。 | 固定7dcff6c已由非作者独立设计CLOSED；待原Pro核对最终差量。 |
+| TYPST-GLOBAL-CDB-P2-02 | 一般人物关系role/customLabel未给分类判别/码域，同名friend可漂移；SOURCE §4.1与三真实Field专用Shape明确required relationship的preset/custom分支及各Field闭合集合，守方向/单源，消费者往返保分支，不猜分类。 | 固定7dcff6c已由非作者独立设计CLOSED；待原Pro核对最终差量。 |
 
 本轮从干净 `c048626acb89654a4d6c986aa8bd798a3a3a3c53` 作成组候选；没有改snapshots/inputs或撤销中文默认补充。CORE“授权未变化、仅相关数据变化”与FEATURES“venue/container及未定义独立publisher”同步澄清，不自动扩大文献模型。
 
-实际运行：原闭合/路径/ABI参考31检查通过；新增实际Field路径的69个 [有限模型检查](examples/precision-relation-checks.json) 通过；官方0.15.1共23个 [编译例](examples/syntax-experiments.json)，22成功、heading/Bib同键按预期失败，新增两个语义负例仍合法Typst。模型结构往返不是Office，签名参考不是受信Rust安装器；没有运行完整provider/CEL、UI/权限/事务、字体/CJK/Office产品验收，也没有重跑未修改的Html/Core平台探针。全局接受和两个P2处置须由新的固定候选独立复核裁定。
+实际运行：原闭合/路径/ABI参考31检查通过；新增实际Field路径的69个 [有限模型检查](examples/precision-relation-checks.json) 通过；官方0.15.1共23个 [编译例](examples/syntax-experiments.json)，22成功、heading/Bib同键按预期失败，新增两个语义负例仍合法Typst。模型结构往返不是Office，签名参考不是受信Rust安装器；没有运行完整provider/CEL、UI/权限/事务、字体/CJK/Office产品验收，也没有重跑未修改的Html/Core平台探针。全局接受仍须由原Pro核对最终固定候选的修复和中文补充后裁定。
+
+非作者需求 reviewer 已完整核查固定 `7dcff6cdd1c0dcb49576fa5d7977e0a100fe7f9d` 对照 c048 的23文件差量及受影响的真实Field、期间/分类、Query、Task和精确recurrence合同，结合原Pro全文与必要历史业务来源，结论为有界PASS：原两个P2及Task.start/due同族影响面设计CLOSED，无新增P0/P1/P2。完整报告已收取阅读；在私有固定副本独立复跑31配置、69实际Field模型及另23个边界/分类反例均通过，不等同于真实provider/CEL/Office或全局接受。官方Typst编译结果仅按既有实际版本化记录引用，未由该reviewer重跑。
+
+该复核另建议澄清FEATURES的colleague旧句。本次双语明确：任职重叠计算的视图按需派生，显式professional_relations断言独立保留；无engagement不妨碍按真实Field记录，不自动双写或合并来源。此句与既有SOURCE §4.1及原生正例一致，不增加第二权威。最新差量与§4中文默认补充一并交原Pro，不以本有界关闭替代最终裁决。
