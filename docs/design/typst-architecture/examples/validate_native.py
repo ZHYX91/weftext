@@ -7,6 +7,7 @@ parser.add_argument('--typst',required=True)
 args=parser.parse_args()
 results=[]
 names=['person','organization','task','work','paper','period','range','event','numeric','root-dynamic-body','saved-query','negative-range-empty','negative-org-literal','negative-person-two-branches','citation','heading-reference','citation-label-collision']
+names += ['precision-periods','precision-range','precision-task','general-relations','negative-precision-recurrence','negative-general-relations']
 with tempfile.TemporaryDirectory() as tmp:
  for name in names:
   p=subprocess.run([args.typst,'compile',str(ROOT/'native-cases'/f'{name}.typ'),str(Path(tmp)/f'{name}.pdf')],capture_output=True,text=True,encoding='utf-8')

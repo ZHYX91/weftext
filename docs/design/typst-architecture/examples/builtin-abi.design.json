@@ -48,8 +48,8 @@
         }
       ]
     },
-    "weftext.temporal.rules.v1": {
-      "abi": 1,
+    "weftext.temporal.rules.v2": {
+      "abi": 2,
       "family": "temporal",
       "exports": [
         {
@@ -144,7 +144,7 @@
           "name": "containsDate",
           "inputs": [
             "during",
-            "date-or-instant"
+            "temporal-endpoint"
           ],
           "result": "bool-cell",
           "effect": "pure",
@@ -197,6 +197,25 @@
           "result": "ordered-occurrences-with-coverage",
           "effect": "pure",
           "query_name": "expandRecurrence"
+        },
+        {
+          "name": "compareTemporal",
+          "inputs": [
+            "temporal-endpoint",
+            "temporal-endpoint"
+          ],
+          "result": "order-cell",
+          "effect": "pure",
+          "query_name": "compareTemporal"
+        },
+        {
+          "name": "duringDuration",
+          "inputs": [
+            "during"
+          ],
+          "result": "exact-duration-cell",
+          "effect": "pure",
+          "query_name": "duringDuration"
         }
       ]
     },
@@ -226,8 +245,8 @@
         }
       ]
     },
-    "weftext.calendar.gregorian.v1": {
-      "abi": 1,
+    "weftext.calendar.gregorian.v2": {
+      "abi": 2,
       "family": "calendar",
       "exports": [
         {
@@ -256,6 +275,15 @@
             "budget"
           ],
           "result": "ordered-civil-candidates-with-coverage",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "dateBounds",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "calendar-bucket-cell",
           "effect": "pure",
           "query_name": null
         }
@@ -287,8 +315,8 @@
         }
       ]
     },
-    "weftext.calendar.table.v1": {
-      "abi": 1,
+    "weftext.calendar.table.v2": {
+      "abi": 2,
       "family": "calendar",
       "exports": [
         {
@@ -317,6 +345,15 @@
             "budget"
           ],
           "result": "ordered-civil-candidates-with-coverage",
+          "effect": "pure",
+          "query_name": null
+        },
+        {
+          "name": "dateBounds",
+          "inputs": [
+            "calendar-date"
+          ],
+          "result": "calendar-bucket-cell",
           "effect": "pure",
           "query_name": null
         }

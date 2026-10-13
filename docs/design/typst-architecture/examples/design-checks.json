@@ -1,9 +1,9 @@
 {
-  "evidence": "Private Python design checks only; not product installer, official AST role authentication, Rust provider/CEL implementation, permissions or transactions. Query checks exercise schema identity resolution from caller-supplied symbol lists, not CEL parsing.",
+  "evidence": "Bounded Python design checks only; not product installer, official AST role authentication, Rust provider/CEL implementation, permissions or transactions. Query checks exercise schema identity resolution from caller-supplied symbol lists, not CEL parsing.",
   "schema_counts": {
     "fields": 55,
     "types": 8,
-    "definitions": 43,
+    "definitions": 51,
     "relations": 28,
     "validators": 14,
     "providers": 6

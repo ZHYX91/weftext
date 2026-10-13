@@ -103,6 +103,42 @@
       "exit": 1,
       "expected_compile_failure": true,
       "stderr": "error: label `<chen2026>` occurs both in the document and a bibliography\n  ┌─ \\\\?\\[native-cases]\\citation-label-collision.typ:5:0\n  │\n5 │ @chen2026. #cite(<chen2026>)\n  │ ^^^^^^^^^\n  │\n  = hint: change either the heading's label or the bibliography key to resolve the ambiguity\n\n"
+    },
+    {
+      "case": "precision-periods",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "precision-range",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "precision-task",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "general-relations",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-precision-recurrence",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
+    },
+    {
+      "case": "negative-general-relations",
+      "exit": 0,
+      "expected_compile_failure": false,
+      "stderr": ""
     }
   ]
 }

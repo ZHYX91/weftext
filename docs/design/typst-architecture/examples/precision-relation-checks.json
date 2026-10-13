@@ -1,0 +1,419 @@
+{
+  "evidence": "Bounded Python design model using actual During/Range and person relation schema paths; not official AST parsing, Rust providers/CEL, Core authorization, forms or DOCX/XLSX reimport. Exact JSON roundtrips prove model transport only.",
+  "results": [
+    {
+      "case": "actual-engagement-month-start-ongoing",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "actual-state-year-history",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "actual-task-start-year",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "actual-task-due-month",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "completed-at-stays-exact",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "proof-bucket-does-not-fill-author-day",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "instant-duration-preserves-nanosecond",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "compare-year-usual-order",
+      "expected": -1,
+      "actual": -1,
+      "passed": true
+    },
+    {
+      "case": "compare-month-usual-order",
+      "expected": -1,
+      "actual": -1,
+      "passed": true
+    },
+    {
+      "case": "compare-native-date-compatible-record-day",
+      "expected": 0,
+      "actual": 0,
+      "passed": true
+    },
+    {
+      "case": "compare-mixed-precision-disjoint",
+      "expected": -1,
+      "actual": -1,
+      "passed": true
+    },
+    {
+      "case": "compare-mixed-precision-overlapping",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "during-same-month-contained",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "during-full-day-inside-later-month",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "during-full-day-near-unknown-start",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "during-full-day-definitely-before",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "during-year-closed-duration",
+      "expected": 3,
+      "actual": 3,
+      "passed": true
+    },
+    {
+      "case": "during-month-closed-duration",
+      "expected": 3,
+      "actual": 3,
+      "passed": true
+    },
+    {
+      "case": "actual-range-year",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "range-year-duration",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "case": "range-year-adjacent-no-overlap",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "actual-range-month",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "range-month-duration",
+      "expected": 2,
+      "actual": 2,
+      "passed": true
+    },
+    {
+      "case": "range-month-adjacent-no-overlap",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "range-month-day-interior-overlap",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "range-month-boundary-overlap-unproved",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "range-month-far-after-no-overlap",
+      "expected": false,
+      "actual": false,
+      "passed": true
+    },
+    {
+      "case": "range-month-reversed",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "range-month-equal-empty",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "range-mixed-valid-disjoint-years",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "range-mixed-order-unproved",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "mixed-precision-duration-unavailable",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "during-absent-end-unknown",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "during-explicit-unbounded-year-point",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "range-none-still-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "native-Gregorian-date-and-record-day",
+      "expected": 1,
+      "actual": 1,
+      "passed": true
+    },
+    {
+      "case": "civil-instant-remains-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "missing-calendar-provider-in-during",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "different-calendar-full-day-same-ordinal",
+      "expected": 0,
+      "actual": 0,
+      "passed": true
+    },
+    {
+      "case": "actual-non-Gregorian-month-range",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "non-Gregorian-month-duration-unit",
+      "expected": "months",
+      "actual": "months",
+      "passed": true
+    },
+    {
+      "case": "mixed-calendar-coarse-unavailable",
+      "expected": "unavailable",
+      "actual": "unavailable",
+      "passed": true
+    },
+    {
+      "case": "recurrence-month-anchor-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "recurrence-exact-native-date-valid",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "replacement-partial-range-rejected-by-actual-shape",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "family_relations-preset-extended-relative",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "family_relations-same-text-stays-custom",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "family_relations-two-branches-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "family_relations-classification-required",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "family_relations-empty-custom-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "social_relations-preset-acquaintance",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "social_relations-preset-classmate",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "social_relations-preset-friend",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "social_relations-same-text-stays-custom",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "social_relations-two-branches-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "social_relations-classification-required",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "social_relations-empty-custom-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "professional_relations-preset-colleague",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "professional_relations-same-text-stays-custom",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "professional_relations-two-branches-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "professional_relations-classification-required",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "professional_relations-empty-custom-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "family-cross-domain-friend-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "social-cross-domain-colleague-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "professional-cross-domain-friend-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "social-unknown-preset-invalid",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "legacy-role-customLabel-not-classification",
+      "expected": "invalid",
+      "actual": "invalid",
+      "passed": true
+    },
+    {
+      "case": "engagements-exact-structure-roundtrip",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    },
+    {
+      "case": "social_relations-exact-structure-roundtrip",
+      "expected": true,
+      "actual": true,
+      "passed": true
+    }
+  ]
+}

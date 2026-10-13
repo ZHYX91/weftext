@@ -15,7 +15,7 @@ translation_status: source
 
 | 实际工作 | 结果与范围 | 不能据此声称 |
 | --- | --- | --- |
-| 原生结构化数据 | 当前完整 [schema](examples/schema.json) 的 31 项有限 [设计检查](examples/design-checks.json) 通过；官方 Typst 0.15.1 运行 17 个 [编译用例](examples/syntax-experiments.json)，16 成功、heading/Bib 同键按预期失败。语义负例仍可编译 | Python 检查是实际 Rust 安装器、CEL parser、provider、权限、表单或导出；原生编译成功证明字段语义正确 |
+| 原生结构化数据 | 当前完整 [schema](examples/schema.json) 的 31 项有限 [设计检查](examples/design-checks.json) 通过；官方 Typst 0.15.1 运行 23 个 [编译用例](examples/syntax-experiments.json)，22 成功、heading/Bib 同键按预期失败。语义负例仍可编译 | Python 检查是实际 Rust 安装器、CEL parser、provider、权限、表单或导出；原生编译成功证明字段语义正确 |
 | 标题与混排 | 前轮七组有限实验验证同级独立/同行标题的编号、目录、引用及增删移动改级；副标题不进入 heading counter | 完整编辑器、深层/长文/所有自定义 show 通过 |
 | Word | 独立样例十项 OOXML 结构检查通过，包含整段 Heading N、正文有效字符格式重置和字段 | Word/WPS/LibreOffice 实机字段更新、目录、保存重开通过；参考图不是 Office 渲染 |
 | 来源反例 | 本轮七个官方 CLI 样例说明 query.body 与实际 post-show 输出不同；删除显示仍可能保留 heading introspection；重复 include 不能从根 AST 猜出现项 | AST 或 CLI query 足以生成完整流式阅读树 |
@@ -88,4 +88,17 @@ translation_status: source
 
 未参与作者的编辑 reviewer 已完整核查固定 `c4a37874114b333442a9fd531e4aff824097061b` 对照 cdb 的十文件双语差量及受影响的五档、模块覆盖/退出、Html/Paged/DOCX、Environment 和资源交付合同，结论为有界 PASS，无新增 P0/P1/P2。完整报告已收取阅读；这只接受该补充的需求保全与接口自洽，不接受 CJK01–08 产品行为。
 
-正在进行的全局终审固定于 `cdb05a3f7c5fe74fe147f34d6f91f7ee0eda0a0d`，不包含本补充；其结论不能自动接受后续差量。本次有界结论仍须与全局裁决合并形成完整设计接受判断，不要求重开已完成且未受影响的阅读。
+已完成的全局终审（REVISE、两个OPEN P2，见§5）固定于 `cdb05a3f7c5fe74fe147f34d6f91f7ee0eda0a0d`，不包含本补充；其结论不能自动接受后续差量。本次有界结论仍须与全局裁决合并形成完整设计接受判断，不要求重开已完成且未受影响的阅读。
+
+## 5. cdb 全局终审与成组修复候选
+
+非作者 Pro 全局终审固定对象为 `cdb05a3f7c5fe74fe147f34d6f91f7ee0eda0a0d`，结论 **REVISE**：实际完整当前架构/需求/配置与所列相关历史业务范围内未发现P0/P1，确认以下两个OPEN P2。协调者已收取全文报告；这里保留自足损害、修复入口和证据边界，不公开私人会话或把原报告结论改成作者ACCEPT。中文默认补充的c4a有界PASS仍仅覆盖§4范围。
+
+| 原Pro发现 | 自足问题与本轮修复候选 | 评审状态 |
+| --- | --- | --- |
+| TYPST-GLOBAL-CDB-P2-01 | During/Range实际仅DateOrInstant，2020年3月开始任职不能保未知日；SOURCE §3.1.1与实际TemporalEndpoint复用CalendarDate，并贯通Task.start/due既有date精度、provider/Query、UI/导出。相同粒度比较与years/months时长可用，混精度有据判断或unavailable，缺端/none差别保留，recurrence精确域不放宽。 | 作者修复候选；pending independent，不自报CLOSED。 |
+| TYPST-GLOBAL-CDB-P2-02 | 一般人物关系role/customLabel未给分类判别/码域，同名friend可漂移；SOURCE §4.1与三真实Field专用Shape明确required relationship的preset/custom分支及各Field闭合集合，守方向/单源，消费者往返保分支，不猜分类。 | 作者修复候选；pending independent，不自报CLOSED。 |
+
+本轮从干净 `c048626acb89654a4d6c986aa8bd798a3a3a3c53` 作成组候选；没有改snapshots/inputs或撤销中文默认补充。CORE“授权未变化、仅相关数据变化”与FEATURES“venue/container及未定义独立publisher”同步澄清，不自动扩大文献模型。
+
+实际运行：原闭合/路径/ABI参考31检查通过；新增实际Field路径的69个 [有限模型检查](examples/precision-relation-checks.json) 通过；官方0.15.1共23个 [编译例](examples/syntax-experiments.json)，22成功、heading/Bib同键按预期失败，新增两个语义负例仍合法Typst。模型结构往返不是Office，签名参考不是受信Rust安装器；没有运行完整provider/CEL、UI/权限/事务、字体/CJK/Office产品验收，也没有重跑未修改的Html/Core平台探针。全局接受和两个P2处置须由新的固定候选独立复核裁定。

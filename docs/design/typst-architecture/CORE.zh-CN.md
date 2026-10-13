@@ -217,7 +217,7 @@ FEATURES求值只读取上述cut。发布run时把定义/参数/语义语言/sch
 cursor引用run/cut/audience/排序版本与exact ordinal（或受保护continuation record），不只传offset到latest Query。每页当前auth/fence/TTL/retention重验；撤权整run/cursor失效并清旧缓存，不通过过滤隐藏行后继续旧ordinal泄漏数量。其它数据变化可把该run标stale但仍获权只读固定数据；需要当前结果则重跑新cut/run。complete与partial都可分页浏览，只有complete/current/获权完整scope才支持相应全集强语义。
 
 
-冻结结果计算后，Core取得短publication barrier，在同journal事务重验实际consumed依赖、scope正负范围、schema/settings、当前auth和observer连续性，并登记run/retention及从cut接续的连续change订阅。只相关依赖要求不变，不以无关全库generation增长拒绝。无auth但数据变动可发布sealed stale只读handle或有限重算新cut/newrun；auth变化不交付。observer gap/external unknown不能current。验证与登记同事务，不能validate→publish留窗口。发布后相关变化标stale，auth变化使整个run/cursor失效。`current_at(publicationCut)`是本模式可证明的已接纳事实，不称任意raw全库即时原子。
+冻结结果计算后，Core取得短publication barrier，在同journal事务重验实际consumed依赖、scope正负范围、schema/settings、当前auth和observer连续性，并登记run/retention及从cut接续的连续change订阅。只相关依赖要求不变，不以无关全库generation增长拒绝。授权未变化、仅相关数据变动时可发布sealed stale只读handle或有限重算新cut/newrun；auth变化不交付。observer gap/external unknown不能current。验证与登记同事务，不能validate→publish留窗口。发布后相关变化标stale，auth变化使整个run/cursor失效。`current_at(publicationCut)`是本模式可证明的已接纳事实，不称任意raw全库即时原子。
 
 ### 9.2 Query语义、上下文与schema绑定
 

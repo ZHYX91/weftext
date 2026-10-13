@@ -206,7 +206,7 @@ binding: (
 
 CEL AST只来自作者表达式parser；官方Typst AST只解metadata与native值，CLI metadata JSON不作精确值权威。builder、text search和导航产生同一normalized Query plan。自定义纯函数、relation scan和recurrence expansion来自SOURCE闭合安装descriptor，不能用“已注册”散文去解释unknown codec/constraint。执行前所有实际函数/provider选择纳入baseline、LogicalCut依赖及预算；具体业务接口见§8.2–8.3。
 
-Cell与CEL边界具体如下：字段root绑定携SOURCE T以及其Cell状态，state函数 `isValue/isAbsent/isNull/isInvalid/isUnavailable` 是此language profile的具名内建，直接检该Cell不先unwrap。普通值运算/record member/list comprehension只在value态取得T；在非value态使用产生明确 `cell_absent/null/invalid/unavailable` EvaluationIssue，绝不让状态tag作为CEL bool/string或自动false。可选record member保presence，标准 `has(p.label)` 检查对应已授权record键；`has`不读取无权字段。guard使用标准短路 `&&/||`，不会为了判断左侧false而访问右侧值。provider `bool-cell`在value态适配CEL bool，其它态转EvaluationIssue，不把整个Cell结构放进 `&&`。例如containsDate未记期间→unavailable，不意味着该员工永久有效。
+Cell与CEL边界具体如下：字段root绑定携SOURCE T以及其Cell状态，state函数 `isValue/isAbsent/isNull/isInvalid/isUnavailable` 是此language profile的具名内建，直接检该Cell不先unwrap。普通值运算/record member/list comprehension只在value态取得T；在非value态使用产生明确 `cell_absent/null/invalid/unavailable` EvaluationIssue，绝不让状态tag作为CEL bool/string或自动false。可选record member保presence，标准 `has(p.label)` 检查对应已授权record键；`has`不读取无权字段。guard使用标准短路 `&&/||`，不会为了判断左侧false而访问右侧值。provider `bool-cell`在value态适配CEL bool，compareTemporal的order-cell在value态适配i64(-1/0/1)，duration-cell按固定record签名适配，其它态转EvaluationIssue，不把整个Cell结构放进 `&&`。例如containsDate未记期间→unavailable，不意味着该员工永久有效。
 
 静态型检查记录declared T/成员presence/可能的read effect，禁止跨T coercion及非法member；运行时依准确Cell保持错误差别。filter产value(bool)才确定成员；unavailable/invalid依赖导致未决行和partial诊断，schema/表达式静态非法是整个query error。明确state test可选择“只看可得值”或诊断行，这是可见作者条件而非后台丢数据；数据库存未决仍不得complete。简单UI只为已知absent/可选member生成明确守卫，不默认把isValue=false的invalid/unavailable排除；用户明确“仅可得值”才生成并展示该状态条件。高级源码不替作者补false。select直接字段仍导出其原Cell状态，不先unwrap再丢状态；aggregate输入含非value必须有作者明确筛除/诊断策略，否则partial或error，不能补0。
 
@@ -255,8 +255,8 @@ filter(phones,p => p.number == "13800138000")
 | 职级筛选 | 同一 engagement 的 `rank.system == param.system && rank.level == param.level`；不跨制度排序职级文字。 |
 | 有序作者 | `publication.contributors.map(a,a)` 保 agent(ref或text)、family/given/credited_as、roles/affiliations各项完整和顺序，text分支不自动建人。 |
 | 联系方式表 | `unnest(phones,p)` 投影 `self,p.number,p.label,p.note,p.ordinal`，重复号码仍各一行。 |
-| 未完成任务 | `types has task && status == 'open' && project == param.project`；civil due 排序不补本机时区。 |
-| 日历任务 | due is date 时显式投影 `[due,nextCivilDay(due))` 表示截止日卡片；不是新增事件事实或提醒。instant due 不猜结束时间。 |
+| 未完成任务 | `types has task && status == 'open' && project == param.project`；TemporalEndpoint due比较保精度，不补本机时区。 |
+| 日历任务 | due为完整native date时才投影 `[due,nextCivilDay(due))` 截止日卡片；CalendarDate(day)需明确provider日域转换。year/month due显示对应年/月精度标记或时间带，明确具体日未知，不放到虚构首日，不造event/reminder。比较/过滤用compareTemporal，同精度年月可用，跨精度边界未决则partial。instant due不猜结束。 |
 | 稿件阶段历史 | `publication.publication_history.filter(s,containsDate(s.during,param.day))` 可返回多个冲突断言；不默认最后一条胜出。 |
 | 深标题 | `read(headings); filter(level >= 6); project(level,text,occurrence)` 包含生成项；10+ 级仍按真实级别读。 |
 | 金额汇总 | `group(currency,sum(amount))` 每币种独立，不混币；无有效金额且有invalid者不能报零总额。 |
@@ -296,18 +296,18 @@ filter(phones,p => p.number == "13800138000")
 | Person | 有序 names（角色/语言/文字系统/期间）；重复 phone/email/address/website/account（preset/custom服务、usage、label、note）；profession与制度限定rank、任职（目标普通笔记或显式文本fallback、岗位/部门/期间/状态）；测量（量纲/时间）、国籍/法律性别/性别认同的独立期间断言；生命事件/重要日期与来源/冲突/显式选择；头像资源。parent/guardian/manager/mentor方向明确，spouse/sibling/一般family/social/professional关联保留独立历史和角色。不从姓名/自定义称谓推断方向、血缘或当前有效性。 |
 | Organization | 多名称、标识、分类、状态历史、site/address/contact；业务指导/属地管理/共同领导/监管/母子公司/品牌/组织成员、parent/governs/owns及一般关联分别定义，不按目录推组织关系。人员名册派生任职，不双写。 |
 | Project/Task | 项目是任务指向的普通笔记，完整Project领域schema仍属候选，不凭名称新增必填字段。task status为required，start/due/priority/project/completed-at/dependency保已选含义；详情正文，完成时间是明确动作产生，不因手改status虚构历史。完整任务状态历史尚非已选，不能自动加入。周期索引/已有对象导航继续保留，复杂HR/提醒不是自动前置。 |
-| Work/Paper | 多种作品类型、标识、保序作者/机构与角色、publication状态历史、venue/publisher分别表达、版本关系、引用键及owner-local附件；paper subtype有实际论文所需卷期页码/日期/摘要/主题等。版本取得独立可引用身份时显式新笔记，不按同DOI覆盖。 |
+| Work/Paper | 多种作品类型、标识、保序作者/机构与角色、publication状态历史、venue为Work/Org引用、container为独立作者文字；版本关系、引用键及owner-local附件保留。当前未定义独立publisher字段，venue不冒publisher；paper subtype有实际论文所需卷期页码/日期/摘要/主题等。版本取得独立可引用身份时显式新笔记，不按同DOI覆盖。 |
 | Calendar | 已选事件区间、来源、参与关系、系列规则/例外/改期/取消和已有周期笔记定位的资料能力保留；日期/时刻、precision/calendar/timezone清楚。提醒执行服务后置不删除已保存作者提醒资料。完整规则schema与provider由SOURCE/协调 owner定义，本文件不把任务截止日自动变事件。 |
 
 每条历史记录可选 validity、status/selection、note 和 source 信息，按领域放在同一原生记录；不另包一份通用事实信封。来源既可为原始附件定位也可为引用，不授其读取权。重复相同值/重叠期间允许保留，查询的“当前”必须显式期间/选择规则，不默认为最新写入。多个 preferred 造成歧义，界面显示并要求选择，不最大置信度猜胜出。
 
-关系是 schema明确 typed ref槽与方向，事实只在一个声明所有者存一次，反向视图派生。symmetric关联也从一个明确作者所有者存储，不自动改另一个端点；从任一端打开编辑先获权定位该作者源，不持有源写权则只读。反向行保准确 `(sourceOwner,field,itemPath,ReadBasis)`，准备时重验，不直接写显示端点。已有另一独立断言保留其来源，不静默归并成同一事实；graph可合为一条显示边但展示多个assertion来源，不能拿边去写未知来源。人物text fallback无真实ref则不lookup/inverse/自动建人；目标删除后保作者事实并标suspended/dangling，cleanup须显式获权Plan，不自动跨源删关系。人员任职允许普通目标，不强迫先升级组织；Org其余typed关系按schema验证域。parent→child、guardian→ward、manager→direct-report、mentor→mentee和engagement→has-engagement逆向明确；general family/social/professional关系的preset码域及custom原文保持，custom不猜方向。colleague只按需从重叠engagement派生，不存O(n²)副本。业务图的cycle/rank约束仅在schema确有规定时验证，不为自由关联统一造家谱/组织树。
+关系是 schema明确 typed ref槽与方向，事实只在一个声明所有者存一次，反向视图派生。symmetric关联也从一个明确作者所有者存储，不自动改另一个端点；从任一端打开编辑先获权定位该作者源，不持有源写权则只读。反向行保准确 `(sourceOwner,field,itemPath,ReadBasis)`，准备时重验，不直接写显示端点。已有另一独立断言保留其来源，不静默归并成同一事实；graph可合为一条显示边但展示多个assertion来源，不能拿边去写未知来源。人物text fallback无真实ref则不lookup/inverse/自动建人；目标删除后保作者事实并标suspended/dangling，cleanup须显式获权Plan，不自动跨源删关系。人员任职允许普通目标，不强迫先升级组织；Org其余typed关系按schema验证域。parent→child、guardian→ward、manager→direct-report、mentor→mentee和engagement→has-engagement逆向明确；general family/social/professional关系按SOURCE §4.1真实Family/Social/ProfessionalRelation读取required relationship.preset或relationship.custom；码域分别extended-relative / acquaintance,classmate,friend / colleague，同名custom保独立分支；跨域/双分支/未分类invalid，raw保稿，custom不猜方向。colleague只按需从重叠engagement派生，不存O(n²)副本。业务图的cycle/rank约束仅在schema确有规定时验证，不为自由关联统一造家谱/组织树。
 
 ### 8.1 周期、区间与事件的真实消费者算法
 
 Calendar有三个已选资料类型：period-note、range-note、event；day/week/month/quarter/year是period种类，不是另五种身份。period字段明确series、calendar/rule、period key、zone及unique/many scope；路径/标题不定义key。period导航先以同一Query查准确 `(series,key,scope)`，partial不能宣布不存在；unique创建需Core同Plan验证完整负范围及并发约束，many允许多个独立笔记。
 
-range字段为 `(start,end_exclusive)`，date或instant半开区间，至少一端有界，开放端用明确缺端不填现在/最大日期。同型有界端点严格start<end；SOURCE的 `temporal/range` 具名约束负责本range准入。窗口重叠用 `start < window.end_exclusive && window.start < end_exclusive`，开放端按无界处理。`during(start,end)`是独立有效期间，不混作半开事件range；containsDate使用其明确闭合区间规则和未知状态。duration只派生，未定provider不伪造秒数；date单位/precision与instant精确elapsed seconds不同。event复用range，增加status、参与者及作者reminder-intent，不复制另一份时间事实；参与者Person/Org关系可反向派生，提醒意图资料保留而送达后置。
+Range用SOURCE.TemporalEndpoint保年/月/完整日或instant；半开缺端无界/none非法/至少一端有界仍保留。During独立闭合，缺端未知/none无界。准入、同粒度/混精度包含、重叠及粒度单位时长统一调用SOURCE §3.1.1 fixed provider，不补具体日/host zone。near-boundary unavailable不是false；明确远前/远后或内部证据可确定。Event复用Range，但present recurrence要求原精确DateOrInstant bounded模板及ExactRange替换，不将部分精度直接转成发生锚点。participants/reminders等不变。
 
 recurrence按冻结calendar/zone/provider及source anchor的civil phase生成daily/weekly/monthly/yearly候选，应用interval与显式byMonth/byMonthDay/byWeekday/weekStart，count或inclusive until限制；不存在民用日期跳过，DST gap/fold按明确规则处理，不能host默认。定义B为合法base集合、R为rDates、E为exDates；先按精确原发生键对B∪R去重，然后对每键应用 **cancel > replace > EXDATE > template** 决策，绝不能先EXDATE删候选再试replace。replace可改range/title/status/note，不把改期时间变原发生身份。常规窗口与窗口外移入replacement使用下面同一决策函数，再按实际range过滤/排序；预算不足标partial，不漏移入却说complete。没有默认每次发生建Node；显式promote/adopt才创建。改series时预览已有exceptions的keep/remap/drop，不能静默丢旧例外。per-occurrence参与者/提醒覆盖若schema未选，保导入原件并报告unsupported，不冒全RFC兼容。
 
@@ -377,16 +377,17 @@ SOURCE修订schema包含七个已选base类型与paper扩展所需真实shape、
 
 | 函数/操作 | 必须完整实现的语义 |
 | --- | --- |
-| `containsDate(during,point)` | 共用 SOURCE §5：during 两个成员都须存在，原生 none 明示该端无界，省略任一端/整个 during/空记录均为 unavailable。两界含端点且 start≤end，point 与非 none 端同 date 或同 instant；两端 none 也须验证 point。混域/倒序为 invalid，不可用值转 EvaluationIssue。instant 按精确 UTC，date 按明确 calendar/precision，不补 host zone；不借用 Range 的缺端规则。 |
+| `containsDate(during,point)` | 共用 SOURCE §5：during 两个成员都须存在，原生 none 明示该端无界，省略任一端/整个 during/空记录均为 unavailable。两界含端点且 start≤end，point为TemporalEndpoint；同精度年/月可用，混精度按SOURCE §3.1.1证明。两端none也验证point，混civil/instant或已证倒序invalid，不可判断/缺provider为unavailable，不可用值转 EvaluationIssue。instant 按精确 UTC，date 按明确 calendar/precision，不补 host zone；不借用 Range 的缺端规则。 |
+| `compareTemporal(a,b)` / `duringDuration(during)` | 固定v2导出与SOURCE §3.1.1相同：前者给有据时间顺序或unavailable，后者给闭合粒度计数/精确instant差。Query显式调用，不给所有record默认order。 |
 | `nextCivilDay(date)` | 指定calendar/provider的下一个民用日，溢出错误；只处理声明的完整day date，不将year/month/月日当已知年日。 |
-| `rangeOverlap(a,b)` / `rangeDuration(range)` | `range(start,end_exclusive)`半开且同域、至少一端有界；overlap使用§8.1；date duration是明确历法单位，instant用exact elapsed seconds。开放duration不可得，不填现在；缺calendar/provider停止，不产假值。 |
+| `rangeOverlap(a,b)` / `rangeDuration(range)` | `range(start,end_exclusive)`半开且同域、至少一端有界；overlap使用§8.1；year/month/day同精度duration是years/months/days单位差，不冒精确天数；instant用exact elapsed seconds。开放duration不可得，不填现在；缺calendar/provider停止，不产假值。 |
 | `periodBounds(period)` / `resolvePeriod(period,seriesPolicy,cut)` | 前者是installed calendar/temporal纯函数，检查kind/calendar/version/rule/key/zone/tzdb、ISO week-year，返回确定range。后者是Features/Core orchestration，用已获权slots的period结果+同cut Query查已有/negative range，不冒可以直接读库的pure provider。series/period/scope是实际唯一键，标题/目录不参与。 |
 | `expandRecurrence(event,window,providers,budget)` | §8.1完整候选/selector/count或until/rDates/exDates/cancel/replace及窗口外移入；原发生坐标和replacement时间分开。partial包含停止位置与缺口，不提供完整负范围。 |
 | `validateQuantity(kind,value,unit,precision)` | 此逻辑wrapper消费 `units/rules` 的 `measurement/quantity` 实际exports，不新增未安装同名export。height/weight分别length/mass、精确decimal，unit与kind/维度同provider；unknown unit保原件但typed业务不可用。不内建默许所有单位，也不自动跨币/跨制度换算。 |
 
 逐类归属：Period、Range、Event的记录shape和local约束由SOURCE安装；Field/Type IDs、relations和policies是真实config；Features提供以上具名纯validator/函数或有限只读expander；Core冻结provider与完整scope依赖并在prepare/commit重验。provider host只给已获权输入slots和budget，不能直接读库/文件/网络、写作者源或签授权。scalar provider失败报明确typed错误；需要全局事件窗口的expander可给partial；二者不洗成absent。
 
-recurrence的准入不得只检查字段是dictionary：source anchor由event唯一 `range.start` 与provider派生，作者recurrence不重复存另一anchor；其域与range一致、frequency/interval/selector域有效、count与until互斥、until域准确、rDates/exDates原发生域、exceptions key唯一与replacement range有效、zone/tzdb/规则完整，均要由SOURCE闭合具名constraint准确列reads，并调用对应固定profile。daily/weekly/monthly/yearly是civil phase；date range长度按民用日，instant模板长度按exact elapsed；不存在日期跳过，DST gap/fold策略由已安装profile明确给定（例如gap=skip、fold=earlier），不能host默认。profile换义需显式schema/规则迁移与exceptions keep/remap/drop preview。仍不宣称全部RFC recurrence/所有历法，不能表达的信息保原件和loss。
+recurrence的准入不得只检查字段是dictionary：source anchor由event唯一完整date/instant `range.start` 与provider派生（CalendarDate转换是显式预览，年月不能补首日），作者recurrence不重复存另一anchor；其域与range一致、frequency/interval/selector域有效、count与until互斥、until域准确、rDates/exDates原发生域、exceptions key唯一与replacement range有效、zone/tzdb/规则完整，均要由SOURCE闭合具名constraint准确列reads，并调用对应固定profile。daily/weekly/monthly/yearly是civil phase；date range长度按民用日，instant模板长度按exact elapsed；不存在日期跳过，DST gap/fold策略由已安装profile明确给定（例如gap=skip、fold=earlier），不能host默认。profile换义需显式schema/规则迁移与exceptions keep/remap/drop preview。仍不宣称全部RFC recurrence/所有历法，不能表达的信息保原件和loss。
 
 period `unique/many`策略实际装在series_policies，明确series/scope及key producer；unique检查必须在授权完整scope同cut读取已有+负范围，prepare/commit把该约束保护到Core单决议。隐藏成员导致未获完整scope时操作统一unavailable，不依据它是否恰冲突泄漏存在；readable已有对象返回准确选择/打开入口，partial只报membership unknown。多个series同period、many同key各个笔记均可共存；policy变动与旧key迁移是显式config Plan，不靠文件名去重。
 
@@ -585,6 +586,8 @@ copy/fork枚举entries.work为typed ref槽，通过同一identity map改到真�
 SOURCE记录的有限0.15.1实验仅证明direct binding样例、`@key`/`#cite`和真实Bib可编译，以及heading/Bib同key官方报错；手供Bib不证明上述Core生成/权限/copy/target输出实现。新增设计oracle：两个Work具有同citation_key也不自动同一对象；只有声明entry选择目标；冷重建仍同Work，改论文citation_key不漂移；撤权不续交生成引用信息；有条件Html/Paged citation差异各target自证；未知@heading/冲突key不得冒Work边。
 
 citation绑定key按SOURCE明确ASCII全文 `[A-Za-z][A-Za-z0-9_-]*` 校验，不从publication.citation_key建议text静默删字/正规化；不合此profile的原生键保原source，可修绑定或明确不用应用桥，不能借清洗碰巧合并两个Work。
+
+期间表单、Query参数、导入、DOCX/XLSX共用SOURCE §3.1.1的原生precision记录和presence/none差别；附表必须保原成员，年/月不自动变日期cell。关系分类同SOURCE §4.1保Field+branch+code/custom原文；换显示语言不改code，导入无码证明不按同名文字猜，不能把preset/custom两项合并。准确结构输出与有序附表支撑往返，只有显示文字的外部文件需用户确认映射并报loss。
 
 ## 11. 可编辑输出与内网下载
 

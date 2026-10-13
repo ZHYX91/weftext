@@ -80,5 +80,26 @@
       "input": "work-labelled plus unlabelled phone, then all-unlabelled/empty phones",
       "expected": "guarded select only returns work item, no absent-label issue; all-unlabelled/empty do not match"
     }
-  ]
+  ],
+  "global_cdb_repairs": {
+    "source_baseline": "c048626acb89654a4d6c986aa8bd798a3a3a3c53",
+    "precision_positive": [
+      "precision-periods.typ",
+      "precision-range.typ",
+      "precision-task.typ"
+    ],
+    "classification_positive": "general-relations.typ",
+    "semantic_negative": [
+      {
+        "source": "negative-precision-recurrence.typ",
+        "expected": "partial Range is valid as a note but not an exact recurring template"
+      },
+      {
+        "source": "negative-general-relations.typ",
+        "expected": "cross-domain preset, dual branch and missing classification are typed invalid"
+      }
+    ],
+    "checks": "precision_relation_model.py enters actual schema field paths; 69 bounded model checks, not AST/Rust/CEL/UI/Office",
+    "review": "pending independent; no author closure"
+  }
 }

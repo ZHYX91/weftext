@@ -14,7 +14,7 @@ def strict_json(text):
 schema=strict_json(schema_file.read_text(encoding='utf-8'))
 abi=json.loads((ROOT/'builtin-abi.design.json').read_text(encoding='utf-8'))
 CODECS=set('text nonempty_text phone email identifier doi url language_tag citation_key node_ref resource_ref tag_ref schema_ref config_revision bool int float decimal exact_decimal duration exact_seconds date time local_datetime instant'.split())
-BUILTINS={'weftext.core.rules.v1','weftext.temporal.rules.v1','weftext.units.rules.v1','weftext.calendar.gregorian.v1','weftext.calendar.table.v1','weftext.zone.table.v1'}
+BUILTINS={'weftext.core.rules.v1':1,'weftext.temporal.rules.v2':2,'weftext.units.rules.v1':1,'weftext.calendar.gregorian.v2':2,'weftext.calendar.table.v2':2,'weftext.zone.table.v1':1}
 COUNTS=[]
 def exact(x,keys):
  assert isinstance(x,dict) and set(x)==set(keys),f'closed members {set(x)} != {set(keys)}'
@@ -77,10 +77,10 @@ def install(s):
     else:exact(d,['kind','key','present','absent']);assert d['kind']=='record_presence' and d['present']!=d['absent'];assert all(deref(x['variants'][d[y]])['kind']=='record' for y in ['present','absent'])
   else:raise AssertionError('unknown shape')
  for p in providers.values():
-  exact(p,['id','family','implementation','data','exports','limits']);exact(p['implementation'],['kind','id','abi']);assert p['implementation']['kind']=='builtin' and p['implementation']['id'] in BUILTINS and p['implementation']['abi']==1
+  exact(p,['id','family','implementation','data','exports','limits']);exact(p['implementation'],['kind','id','abi']);assert p['implementation']['kind']=='builtin' and p['implementation']['id'] in BUILTINS and p['implementation']['abi']==BUILTINS[p['implementation']['id']]
   assert p['exports']==abi['implementations'][p['implementation']['id']]['exports']
   exact(p['limits'],['max_steps','max_bytes','max_expansion']);assert all(isinstance(x,int) and x>0 for x in p['limits'].values());unique([x['name'] for x in p['exports']])
-  for e in p['exports']:exact(e,['name','inputs','result','effect','query_name']);assert e['effect']=='pure';assert e['query_name'] is None or e['query_name'] in ['containsDate','nextCivilDay','rangeOverlap','rangeDuration','periodBounds','expandRecurrence']
+  for e in p['exports']:exact(e,['name','inputs','result','effect','query_name']);assert e['effect']=='pure';assert e['query_name'] is None or e['query_name'] in ['compareTemporal','duringDuration','containsDate','nextCivilDay','rangeOverlap','rangeDuration','periodBounds','expandRecurrence']
   d=p['data'];kind=d['kind']
   if kind=='none':exact(d,['kind'])
   elif kind=='unit-table':
@@ -214,5 +214,5 @@ test('nonmatching-exdate-retains-existing-template',lambda:decision('2026-10-12'
 test('same-instant-different-offset-key',lambda:datetime.datetime.fromisoformat('2026-10-12T08:00:00+08:00')==datetime.datetime.fromisoformat('2026-10-12T00:00:00+00:00'))
 test('copy-retains-exact-baseline-contract',lambda:resolve_bound_symbols(copy.deepcopy(binding),archive,['phones'],['person'],current)['types']['person']=='people/person')
 COUNTS={'fields':len(schema['fields']),'types':len(schema['types']),'definitions':len(schema['definitions']),'relations':len(schema['relations']),'validators':len(schema['validators']),'providers':len(schema['providers'])}
-(ROOT/'design-checks.json').write_text(json.dumps({'evidence':'Private Python design checks only; not product installer, official AST role authentication, Rust provider/CEL implementation, permissions or transactions. Query checks exercise schema identity resolution from caller-supplied symbol lists, not CEL parsing.','schema_counts':COUNTS,'results':results},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+(ROOT/'design-checks.json').write_text(json.dumps({'evidence':'Bounded Python design checks only; not product installer, official AST role authentication, Rust provider/CEL implementation, permissions or transactions. Query checks exercise schema identity resolution from caller-supplied symbol lists, not CEL parsing.','schema_counts':COUNTS,'results':results},ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 print(json.dumps({'passed':len(results),'counts':COUNTS}))
