@@ -879,7 +879,7 @@ impl Core {
             };
         let operation_id = activation["operationId"].as_str().unwrap_or("");
         let owned = self.operations.get(operation_id).is_some_and(|p| {
-            p.kind == "createLibrary"
+            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
                 && p.path == display(root)
                 && p.workspace_id.as_ref() == Some(&config.workspace_id)
                 && self.committed(operation_id)

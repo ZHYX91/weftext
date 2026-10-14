@@ -9,6 +9,9 @@ const MAX_COMMITS: usize = 2_000;
 const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 mod store;
 pub use store::{SyncBundle, SyncIdentity, SyncStatus};
+mod install;
+pub(crate) mod replica;
+pub use replica::SyncBindingInfo;
 const MAX_CHANGES: usize = 5_000;
 const MAX_FILES: usize = 5_000;
 const MAX_BLOB_BYTES: usize = 64 * 1024 * 1024;
@@ -27,6 +30,7 @@ const MAX_BLOBS: usize = 20_000;
 pub enum ObjectKey {
     Node(String),
     Directory(String),
+    RootDirectory(String),
     Schema,
     Settings,
     Tags,
@@ -38,7 +42,7 @@ pub enum ObjectKey {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ObjectState {
-    pub parent: Option<String>,
+    pub parent: Option<ObjectKey>,
     pub name: String,
     pub retired: bool,
     pub files: BTreeMap<String, String>,
@@ -121,7 +125,12 @@ impl Manifest {
                 uuid(before)?;
             }
             if let Some(parent) = &change.after.parent {
-                uuid(parent)?;
+                key(parent)?;
+                if !matches!(parent, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
+                    return Err(invalid(
+                        "Placement parent must be a typed Node or Directory",
+                    ));
+                }
             }
             component(&change.after.name)?;
             count += change.after.files.len();
@@ -144,6 +153,7 @@ impl Manifest {
                 ObjectKey::Schema => Some(".weftext-schema.json"),
                 ObjectKey::Settings => Some(".weftext-settings.json"),
                 ObjectKey::Tags => Some(".weftext-tags.json"),
+                ObjectKey::RootDirectory(_) => Some("weftext.directory.json"),
                 _ => None,
             };
             if let Some(path) = config_file
@@ -570,7 +580,7 @@ fn digest(id: &str) -> Result<()> {
 }
 fn key(key: &ObjectKey) -> Result<()> {
     match key {
-        ObjectKey::Node(id) | ObjectKey::Directory(id) => uuid(id),
+        ObjectKey::Node(id) | ObjectKey::Directory(id) | ObjectKey::RootDirectory(id) => uuid(id),
         _ => Ok(()),
     }
 }

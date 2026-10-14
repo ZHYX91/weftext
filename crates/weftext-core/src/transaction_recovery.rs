@@ -122,17 +122,34 @@ impl Core {
                     "The original plan has unavailable, changed or incoherent members; preserve current and original before/after images for explicit repair",
                 ));
             }
-            let workspace = self.workspace(Path::new(&t.request.root))?.ok_or_else(|| {
-                CoreError::new(
-                    "recoveryConflict",
-                    "The original committed workspace binding is unavailable",
-                )
-            })?;
-            if plan.workspace_id.as_ref() != Some(&workspace.workspace_id) {
-                return Err(CoreError::new(
-                    "recoveryConflict",
-                    "The original workspace identity changed",
-                ));
+            if matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
+                // The create-only replica has no committed workspace until
+                // this original transaction commits. Complete exact files and
+                // materialized identities above are its activation proof.
+                self.sync_local_owner()?;
+                if plan
+                    .sync_setup
+                    .as_ref()
+                    .is_none_or(|s| Some(&s.identity.workspace_id) != plan.workspace_id.as_ref())
+                {
+                    return Err(CoreError::new(
+                        "recoveryConflict",
+                        "Replica setup binding is unavailable",
+                    ));
+                }
+            } else {
+                let workspace = self.workspace(Path::new(&t.request.root))?.ok_or_else(|| {
+                    CoreError::new(
+                        "recoveryConflict",
+                        "The original committed workspace binding is unavailable",
+                    )
+                })?;
+                if plan.workspace_id.as_ref() != Some(&workspace.workspace_id) {
+                    return Err(CoreError::new(
+                        "recoveryConflict",
+                        "The original workspace identity changed",
+                    ));
+                }
             }
             if action == "resumeOriginalPlan" {
                 // The read set and every existing write member are protected

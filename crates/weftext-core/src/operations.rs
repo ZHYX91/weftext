@@ -23,6 +23,10 @@ pub struct OperationRequest {
     deny_unknown_fields
 )]
 pub enum OperationIntent {
+    CloneSync {
+        identity: crate::sync::SyncIdentity,
+        objects: BTreeSet<crate::sync::ObjectKey>,
+    },
     RenameNode {
         source: String,
         name: String,
@@ -431,6 +435,7 @@ impl Core {
         root: &Path,
         workspace_id: &str,
         files: &mut Vec<CapturedFile>,
+        directories: &mut Vec<CapturedDirectory>,
     ) -> Result<()> {
         let selected = self
             .operations
@@ -524,6 +529,10 @@ impl Core {
                     ));
                 }
             }
+        }
+        let sync = self.data_dir.join("sync").join(workspace_id);
+        if sync.exists() {
+            snapshot_tree(&sync, files, directories, false)?;
         }
         Ok(())
     }
@@ -2020,6 +2029,9 @@ impl Core {
         })
     }
     pub fn prepare_operation(&mut self, request: OperationRequest) -> Result<OperationPreview> {
+        if matches!(request.intent, OperationIntent::CloneSync { .. }) {
+            return self.prepare_sync_clone(request);
+        }
         self.prepare_internal(request, None, None, &[])
     }
     /// Freeze the finite admitted source set and all bounded native filesystem
@@ -2383,6 +2395,12 @@ impl Core {
             }
         }
         let mutation = match &request.intent {
+            OperationIntent::CloneSync { .. } => {
+                return Err(CoreError::new(
+                    "invalidIntent",
+                    "Replica creation has its own create-only planner",
+                ));
+            }
             OperationIntent::ImportDocx {
                 parent,
                 name,
@@ -2746,7 +2764,12 @@ impl Core {
                 snapshot_tree(&root, &mut files, &mut directories, false)?;
                 let library_count = files.len();
                 let library_dirs = directories.len();
-                self.snapshot_library_private(&root, &workspace.workspace_id, &mut files)?;
+                self.snapshot_library_private(
+                    &root,
+                    &workspace.workspace_id,
+                    &mut files,
+                    &mut directories,
+                )?;
                 let mut output = Vec::new();
                 let mut dirs = vec![
                     "library".into(),
@@ -2782,6 +2805,16 @@ impl Core {
                         before: None,
                         after: f.bytes.clone(),
                     });
+                }
+                // Selected private sync content has deeper directories than
+                // journal/drafts. Include every actual output parent, without
+                // enumerating other workspaces' private transport histories.
+                for file in &output {
+                    let mut parent = Path::new(&file.path).parent().unwrap();
+                    while parent != target {
+                        dirs.push(display(parent.strip_prefix(&target).unwrap()));
+                        parent = parent.parent().unwrap();
+                    }
                 }
                 let manifest = serde_json::to_vec_pretty(
                     &serde_json::json!({"version":1,"kind":"weftext.local-backup.v1","workspaceId":workspace.workspace_id,"sourceRoot":display(&root),"privateDataRoot":display(&self.data_dir),"operationId":request.operation_id,"storageProfile":STORAGE_PROFILE,"files":output.iter().map(|f| serde_json::json!({"path":Path::new(&f.path).strip_prefix(&target).unwrap().to_string_lossy(),"sha256":hash(&f.after),"bytes":f.after.len()})).collect::<Vec<_>>(),"restore":"Preserve originals. Physical object bindings require explicit restore/re-admission; do not reset private state or replace a live library."}),
@@ -3155,6 +3188,9 @@ impl Core {
         let t = plan.transaction.as_ref().ok_or_else(|| {
             CoreError::new("operationConflict", "This ID belongs to a legacy operation")
         })?;
+        if matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
+            self.sync_local_owner()?;
+        }
         if t.preview.plan_id != plan_id {
             return Err(CoreError::new(
                 "planConflict",
@@ -3171,7 +3207,20 @@ impl Core {
             ));
         }
         let root = Path::new(&t.request.root);
-        self.require_workspace(root)?;
+        if let OperationIntent::CloneSync { identity, .. } = &t.request.intent
+            && self
+                .sync_setups()
+                .iter()
+                .any(|s| s.identity.workspace_id == identity.workspace_id)
+        {
+            return Err(CoreError::new(
+                "syncReplicaExists",
+                "Another replica of this workspace was committed in this private state",
+            ));
+        }
+        if !matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
+            self.require_workspace(root)?;
+        }
         if let Some(expected) = &t.expected_membership {
             let current = self.admitted_snapshot(root)?;
             if !current.complete
@@ -3436,7 +3485,10 @@ impl Core {
                 births,
                 updates,
             } => {
-                if !matches!(t.request.intent, OperationIntent::BackupLibrary { .. }) {
+                if !matches!(
+                    t.request.intent,
+                    OperationIntent::BackupLibrary { .. } | OperationIntent::CloneSync { .. }
+                ) {
                     self.owned_parent(root, Path::new(target).parent().unwrap())?;
                 }
                 let guard = ParentGuard::acquire(Path::new(target))?;
@@ -3452,7 +3504,12 @@ impl Core {
                 self.record_materialized(operation_id, Path::new(target), &directory)?;
                 let mut dir_handles = BTreeMap::from([(PathBuf::new(), directory)]);
                 let mut dirs = directories.iter().map(PathBuf::from).collect::<Vec<_>>();
-                dirs.sort_by_key(|p| p.components().count());
+                dirs.sort_by(|a, b| {
+                    a.components()
+                        .count()
+                        .cmp(&b.components().count())
+                        .then_with(|| a.cmp(b))
+                });
                 dirs.dedup();
                 for relative in dirs {
                     let parent = relative.parent().unwrap_or_else(|| Path::new(""));
@@ -4218,6 +4275,7 @@ impl Core {
 }
 fn intent_kind(intent: &OperationIntent) -> &'static str {
     match intent {
+        OperationIntent::CloneSync { .. } => "cloneSync",
         OperationIntent::RenameNode { .. } => "renameNode",
         OperationIntent::MoveNode { .. } => "moveNode",
         OperationIntent::CopyNode { .. } => "copyNode",

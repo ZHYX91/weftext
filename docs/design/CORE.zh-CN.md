@@ -166,7 +166,11 @@ Core reader获得多对象逻辑提交原子可见性；普通外部工具可看
 
 ## 7. 同所有者同步与冲突
 
-实现进度（2026-10-14，alpha.1 之后的开发代码）：Core 已加入有界的 manifest/blob 因果验证与私有持久暂存。配对固定 WorkspaceId 和准确 genesis；摘要覆盖完整严格解析的 manifest。笔记源、批注、所属资源与位置组成同一冲突单元，schema/settings/tags 和目录分别有内容角色；任何角色均不承载权限或作业执行资格。接收端检查完整 parents、before revisions 和语义依赖，缺内容不接纳为 head；并发同对象保各版本与共同 base。按选中对象导出完整因果／事务闭包，保冲突双方，不要求无关对象的内容；producer 应按真实依赖选择 parents，不能让每次编辑都依赖全库 frontier。当前硬上限为 2,000 commits、每 manifest 4 MiB／5,000 文件、单 blob 64 MiB、每 store 元数据与 blob 合计 256 MiB，超限明确失败，不截成“完整”。已做内核乱序、冲突、部分选择、损坏、原请求重试和重启测试；尚未接通作者提交的 publication、Core 安装／新副本身份建立及用户同步入口，因此不宣称托管同步或离线产品闭环已交付。
+实现进度（2026-10-14，alpha.1 之后的开发代码）：Core 已加入有界的 manifest/blob 因果验证与私有持久暂存。配对固定 WorkspaceId 和准确 genesis；摘要覆盖完整严格解析的 manifest。笔记源、批注、所属资源与位置组成同一冲突单元，schema/settings/tags 和目录分别有内容角色；任何角色均不承载权限或作业执行资格。接收端检查完整 parents、before revisions 和语义依赖，缺内容不接纳为 head；并发同对象保各版本与共同 base。按选中对象导出完整因果／事务闭包，保冲突双方，不要求无关对象的内容；producer 应按真实依赖选择 parents，不能让每次编辑都依赖全库 frontier。当前硬上限为 2,000 commits、每 manifest 4 MiB／5,000 文件、单 blob 64 MiB、每 store 元数据与 blob 合计 256 MiB，超限明确失败，不截成“完整”。已做内核乱序、冲突、部分选择、损坏、原请求重试和重启测试。
+
+作者提交的待发布 manifest 与准确 blobs 现存入原 Core Plan，由原 commit marker 决定可否传输；传输失败不撤销 saved，恢复后发布原操作，不读取后来的文件冒充旧提交。初始绑定记录准确观察基线；当前已接源保存、新建、源／批注事务及已有位置改动的有界路径。新副本通过同一 CreateTree 事务只创建不存在的目标，保 WorkspaceId／NodeId／ResourceId，重新登记接收端实际文件、目录与标签资格；独立私有状态、replicaId 和草稿不从发送端复制。结构 parent 使用带类型的 Node／Directory 引用，库根书签有明确的 RootDirectory 角色。已测两个实际工作目录的独立离线保存、双方冲突保留、资源／书签／标签登记、准确计划重试、提交 marker 缺失后的原对象接纳，以及备份保留同步历史和待发布记录。
+
+这仍是未接用户入口的 Core 开发切片：现有副本的更新／显式冲突解决、回收对象安装、未登记容器的建立、外部修改的显式收编和目录传输入口继续实施。已同步对象的外部改动目前拒绝静默发布，保现文件与草稿。新副本明确为选定对象及完整事务／依赖闭包的部分副本；不能把少量源码的闭包说成整库已同步。上述测试不等同于 HTTP、浏览器、多用户全消费者或完整 v0.6 验收。
 
 managed 同步传输一个 immutable `CommitManifest + exact blobs` bundle：WorkspaceId、事务、因果 parents、writer replica、所有真实出生/改动/退休、before/after RevisionId、结构/schema 改变与准确 transform。同一 manifest 的校验摘要覆盖整个对象；校验失败/缺 blob/placeholder/父历史缺失只进入 staging，不成为新 head。
 

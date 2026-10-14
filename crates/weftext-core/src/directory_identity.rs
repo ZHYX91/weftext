@@ -122,6 +122,10 @@ fn tag_document(bytes: Option<&[u8]>) -> Result<TagDocument> {
     Ok(doc)
 }
 
+pub(crate) fn validate_sync_tags(bytes: &[u8]) -> Result<()> {
+    tag_document(Some(bytes)).map(|_| ())
+}
+
 fn validate_tag_name(name: &str) -> Result<()> {
     if name.trim().is_empty() || name.chars().count() > 256 || name.contains('\0') {
         return Err(CoreError::new(
@@ -315,7 +319,9 @@ impl Core {
                 && let Some(transaction) = plan.transaction.as_ref()
                 && matches!(
                     transaction.request.intent,
-                    OperationIntent::CopyNode { .. } | OperationIntent::TemplateNode { .. }
+                    OperationIntent::CopyNode { .. }
+                        | OperationIntent::TemplateNode { .. }
+                        | OperationIntent::CloneSync { .. }
                 )
                 && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
             {
@@ -382,6 +388,28 @@ impl Core {
             .values()
             .filter(|plan| self.committed(&plan.operation_id))
         {
+            if plan.workspace_id.as_deref() == Some(workspace)
+                && let Some(transaction) = &plan.transaction
+                && matches!(
+                    transaction.request.intent,
+                    OperationIntent::CloneSync { .. }
+                )
+                && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
+            {
+                let registry = root.join(TAG_REGISTRY);
+                if self
+                    .materialized_identity(&plan.operation_id, &registry)?
+                    .as_ref()
+                    == Some(identity)
+                    && files.iter().any(|f| {
+                        f.path == display(&registry)
+                            && tag_document(Some(&f.after))
+                                .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))
+                    })
+                {
+                    return Ok(true);
+                }
+            }
             let Some(reservation) = self
                 .read_navigation_record::<TagReservation>(&plan.operation_id, "tag-reservation")?
             else {

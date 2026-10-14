@@ -18,6 +18,10 @@ pub(crate) struct Plan {
     pub transaction: Option<operations::FrozenOperation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_restore: Option<history::RestoreBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_setup: Option<sync::replica::SyncSetup>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_publication: Option<sync::replica::SyncPublication>,
 }
 impl Plan {
     pub fn file(
@@ -43,6 +47,8 @@ impl Plan {
             workspace_id: None,
             transaction: None,
             history_restore: None,
+            sync_setup: None,
+            sync_publication: None,
         }
     }
 }
@@ -172,7 +178,8 @@ impl Core {
         }
         Ok(())
     }
-    pub(crate) fn stage(&mut self, plan: Plan) -> Result<()> {
+    pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
+        self.freeze_sync_publication(&mut plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.
         private_create(
             &self.journal_path(&plan.operation_id, "plan"),

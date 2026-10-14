@@ -211,7 +211,7 @@ fn move_edit_and_retire_edit_conflict_and_keep_original_content() {
         structural.revision = fresh();
         structural.after.retired = retire;
         if !retire {
-            structural.after.parent = Some(fresh());
+            structural.after.parent = Some(ObjectKey::Directory(fresh()));
         }
         let edit = f.change(f.node.clone(), &[&base.revision], "new draft");
         f.offer(&mut graph, &f.manifest(&[&root], vec![structural.clone()]));
