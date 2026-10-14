@@ -84,8 +84,11 @@ export interface EmbeddedQueryHost {
   reveal(occurrence: EmbeddedQueryOccurrence, host: HTMLElement): boolean;
   closeReveal(): void;
   openRow(row: QueryRow, plan: QueryPlan | null): Promise<void>;
+  /** Hosted targets carry independent navigation authority, without local paths. */
+  canOpenRow?(row: QueryRow, plan: QueryPlan | null): boolean;
   openOwner(origin: Origin): Promise<void>;
-  output?(query: FrozenQuery): void | Promise<void>;
+  canOpenOwner?(origin: Origin): boolean;
+  output?(query: FrozenQuery, result: QueryResult): void | Promise<void>;
   notify(message: string, error?: boolean): void;
 }
 
@@ -104,6 +107,10 @@ export class EmbeddedQueryController {
   private dialog: HTMLDialogElement | null = null;
   private associations = new Map<string, EmbeddedQueryAssociation>();
   constructor(private readonly host: EmbeddedQueryHost) {}
+  dispose(): void {
+    this.invalidate(); this.dialog?.close(); this.dialog?.remove(); this.dialog = null;
+    this.discovery = null; this.discoveryBasis = null; this.states.clear(); this.mounts.clear(); this.associations.clear();
+  }
   get hasQueries(): boolean { return !!this.discovery?.occurrences.length; }
   get occurrences(): readonly EmbeddedQueryOccurrence[] { return this.discovery?.occurrences ?? []; }
   outputSelections(): EmbeddedQuerySelection[] {
@@ -162,7 +169,10 @@ export class EmbeddedQueryController {
   private render(mount: HTMLElement, association: EmbeddedQueryAssociation): void {
     mount.replaceChildren(); const item = association.occurrence;
     const heading = element("div", "embedded-query-heading"); heading.append(element("strong", "", association.label.replace(/^weftext-query-/, ""))); mount.append(heading, element("p", "embedded-query-basis", this.statusText(association)));
-    if (!item) { if (association.origin && !association.origin.isMain) heading.append(action("查看来源笔记", () => this.host.openOwner(association.origin!), this.host)); return; }
+    if (!item) { if (association.origin && !association.origin.isMain) {
+      if (this.host.canOpenOwner?.(association.origin) !== false) heading.append(action("查看来源笔记", () => this.host.openOwner(association.origin!), this.host));
+      else mount.append(element("p", "embedded-query-help", "来源导航没有独立获权对象，保留原生显示，不猜路径打开。"));
+    } return; }
     const state = this.state(item), mode = this.host.mode();
     const policy = embeddedQueryPolicy(mode, this.current(association), this.canWrite(association), item.builderSupported && !!item.plan);
     const run = action(state.loading ? "正在运行…" : state.result ? "刷新结果" : "运行草稿查询", () => this.run(association), this.host); run.dataset.queryRun = "run"; run.disabled = state.loading || !this.current(association) || !item.runnable; heading.append(run);
@@ -191,7 +201,7 @@ export class EmbeddedQueryController {
     if (state.error) area.append(element("p", "embedded-query-warning", state.error));
     if (state.result) this.renderResult(area, state.result, state.resultPlan ?? null, sameQueryBasis(state.resultBasis ?? null, this.host.basis()));
     else area.append(element("p", "embedded-query-help", state.loading ? "正在计算此草稿定义…" : "此草稿定义尚未取得结果。"));
-    if (state.result?.queryId && this.host.output) { const result = state.result; const output = action("输出本次查询结果", () => { if (!sameQueryBasis(state.resultBasis ?? null, this.host.basis()) || result.superseded) throw new Error("此结果对应旧定义 / 参数，请运行当前草稿后再输出。"); return this.host.output!({ queryId: result.queryId!, label: item.label, rowCount: result.rows.length, coverage: result.coverage, freshness: result.freshness, limited: result.limited }); }, this.host); output.dataset.queryOutput = "output"; output.disabled = state.loading || !!result.superseded || !sameQueryBasis(state.resultBasis ?? null, this.host.basis()); area.append(output); }
+    if (state.result?.queryId && this.host.output) { const result = state.result; const output = action("输出本次查询结果", () => { if (!sameQueryBasis(state.resultBasis ?? null, this.host.basis()) || result.superseded) throw new Error("此结果对应旧定义 / 参数，请运行当前草稿后再输出。"); return this.host.output!({ queryId: result.queryId!, label: item.label, rowCount: result.rows.length, coverage: result.coverage, freshness: result.freshness, limited: result.limited }, result); }, this.host); output.dataset.queryOutput = "output"; output.disabled = state.loading || !!result.superseded || !sameQueryBasis(state.resultBasis ?? null, this.host.basis()); area.append(output); }
   }
   private async run(association: EmbeddedQueryAssociation): Promise<void> {
     const item = association.occurrence; if (!item || !this.current(association) || !item.runnable) return;
@@ -211,12 +221,12 @@ export class EmbeddedQueryController {
     if (result.cutId) mount.append(element("p", "embedded-query-help", `读取版本：${result.cutId}`));
     if (result.aggregateExact === false) mount.append(element("p", "embedded-query-warning", "汇总仅对应已知输入，不代表完整总数。"));
     for (const diagnostic of result.diagnostics) mount.append(element("p", "embedded-query-warning", diagnosticText(diagnostic)));
-    if (!result.rows.length) { mount.append(element("p", "embedded-query-empty", definitionCurrent && result.coverage === "complete" && result.freshness === "current" && !result.superseded ? "本次已说明范围内的完整空结果。" : "已知范围没有结果；不能据此断言全库为空。")); return; }
+    if (!result.rows.length) mount.append(element("p", "embedded-query-empty", definitionCurrent && result.coverage === "complete" && result.freshness === "current" && !result.superseded ? "本次已说明范围内的完整空结果。" : "已知范围没有结果；不能据此断言全库为空。"));
     const tableHost = element("div", "embedded-query-table-host"), table = element("table", "embedded-query-table"), header = element("tr");
     const columns = result.columns ?? [...new Set(result.rows.flatMap(row => Object.keys(row.cells)))];
     header.append(element("th", "", "笔记")); for (const column of columns) header.append(element("th", "", fieldNames[column] ?? column)); const thead = element("thead"); thead.append(header); table.append(thead); const tbody = element("tbody");
-    for (const row of result.rows) { const tr = element("tr"), target = element("td"); const title = row.cells.title?.state === "value" ? formatNativeValue(row.cells.title.value) : row.path?.replaceAll("\\", "/").split("/").at(-1) ?? "汇总 / 生成行";
-      if (row.path && queryRowLifecycle(row, plan)) target.append(action(title, () => this.host.openRow(row, plan), this.host)); else target.textContent = title; tr.append(target); for (const column of columns) tr.append(element("td", `cell-${row.cells[column]?.state ?? "unprojected"}`, row.cells[column] ? cellText(row.cells[column]) : "未投影")); tbody.append(tr);
+    for (const row of result.rows) { const tr = element("tr"), target = element("td"); const title = row.cells.title?.state === "value" ? formatNativeValue(row.cells.title.value) : row.path?.replaceAll("\\", "/").split("/").at(-1) ?? (row as { resource?: string }).resource ?? "汇总 / 生成行";
+      if (this.host.canOpenRow ? this.host.canOpenRow(row, plan) : row.path && queryRowLifecycle(row, plan)) target.append(action(title, () => this.host.openRow(row, plan), this.host)); else target.textContent = title; tr.append(target); for (const column of columns) tr.append(element("td", `cell-${row.cells[column]?.state ?? "unprojected"}`, row.cells[column] ? cellText(row.cells[column]) : "未投影")); tbody.append(tr);
     }
     table.append(tbody); tableHost.append(table); mount.append(tableHost);
   }

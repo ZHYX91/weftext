@@ -101,3 +101,11 @@ test("discovery installs only its actual draft; invalid intermediate source rema
   assert.equal(await pending, false); assert.equal(controller.hasQueries, false); assert.equal(current.source, source + "#(");
   assert.equal(sameQueryBasis(current, basis), false);
 });
+
+test("disposing an actor/query session clears discovered writers and rejects late rediscovery", async () => {
+  let finish!: (value: unknown) => void;
+  const controller = new EmbeddedQueryController({ basis: () => basis, mode: () => "write", editable: () => true, request: async <T>() => await new Promise<unknown>(resolve => { finish = resolve; }) as T, prepareEdit: async () => {}, apply: async () => { throw new Error("no edits expected"); }, reveal: () => false, closeReveal: () => {}, openRow: async () => {}, openOwner: async () => {}, notify: () => {} });
+  const initial = controller.discover(basis); finish({ serial: basis.serial, sourceHash: "original", syntaxValid: true, occurrences: [occurrence()] }); assert.equal(await initial, true); assert.equal(controller.hasQueries, true);
+  const late = controller.discover(basis); controller.dispose(); assert.equal(controller.hasQueries, false); assert.deepEqual(controller.outputSelections(), []);
+  finish({ serial: basis.serial, sourceHash: "original", syntaxValid: true, occurrences: [occurrence()] }); assert.equal(await late, false); assert.equal(controller.hasQueries, false);
+});

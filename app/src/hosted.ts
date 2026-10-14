@@ -3,7 +3,9 @@ import { HostedFields } from "./hosted-fields";
 import { HostedReview } from "./hosted-review";
 import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
-import { draftDisposition, applySaveResult, type HostedDraft } from "./hosted-state";
+import { HostedQuery } from "./hosted-query";
+import type { HostedQueryRow } from "./hosted-query-state";
+import { draftDisposition, applySaveResult, hostedCachePrefix, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
 type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
@@ -20,12 +22,18 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="comparison" hidden><h2>核对并保留双方稿</h2><p>上方是你的草稿，下方是当前服务端稿。编辑上方内容，确认合并依据后再保存；确认本身不会改正文。</p><pre id="current"></pre><button id="rebase">已核对，以当前稿作为保存依据</button></section>
 <section id="history-list" hidden><h2>保留的保存版本</h2><div id="versions"></div><pre id="historical"></pre></section>
 <section id="fields" aria-label="获权字段与查询" hidden></section>
+<section id="query" aria-label="托管高级查询" hidden></section>
 <section id="review" aria-label="托管批注与校对" hidden></section>
 <section id="office" aria-label="Office 导入与输出" hidden></section>
 <iframe id="render" title="获权内容预览" sandbox="" hidden></iframe></article></section>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata));
-const source = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message));
+const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message), {
+  canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
+  openRow: row => { const target = row as HostedQueryRow; if (target.canOpen !== true || !target.resource) return Promise.reject(new Error("此查询行没有独立正文读取资格。")); return openQueryResource(target.resource); },
+  openOwner: async () => { throw new Error("此查询来源没有独立获权导航对象，未按路径猜打开。"); },
+  output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
+});
 const review = new HostedReview(el("review"), request, () => doc ? {
   resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
   serial: source.serial, baseId: doc.baseId, dirty: source.value !== doc.source || compareRequired,
@@ -43,21 +51,30 @@ let requestEpoch = 0;
 let compareRequired = false;
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
 const status = (message: string) => { el("status").textContent = message; };
-const office = new HostedOffice(el("office"), request, () => doc ? {
+const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ? {
   resource: doc.resource, source: source.value, dirty: source.value !== doc.source || compareRequired, pending: !!draft?.pending,
 } : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? e.message : "刷新文档列表失败，请重试")); });
+const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => office.setQuery(id, metadata));
+async function openQueryResource(resource: string) { const epoch = requestEpoch; await source.flush(); if (epoch !== requestEpoch) return; await run(() => open(resource)); }
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
-  requestEpoch++; doc = undefined; draft = undefined; compareRequired = false;
-  source.clear(); fields.clear(); review.clear(); office.clear(); el("documents").replaceChildren();
+  requestEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = "";
+  const clearErrors: unknown[] = [];
+  // A blocked storage provider must never stop the remaining protected views
+  // from disposing their in-memory capabilities and visible content.
+  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear()]) {
+    try { clear(); } catch (error) { clearErrors.push(error); }
+  }
+  el("documents").replaceChildren();
   el("title").textContent = "选择文档"; el("current").textContent = "";
   el("versions").replaceChildren(); el("historical").textContent = "";
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   el("comparison").hidden = true; el("history-list").hidden = true;
-  for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-draft:")) sessionStorage.removeItem(key);
-  if (clearToken) { token = ""; identity = undefined; sessionStorage.removeItem("weftext-hosted-token"); el("workspace").hidden = true; el("login").hidden = false; el("logout").hidden = true; }
-  controls(); status(message);
+  const remove = (key: string) => { try { sessionStorage.removeItem(key); } catch (error) { clearErrors.push(error); } };
+  try { for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-draft:")) remove(key); } catch (error) { clearErrors.push(error); }
+  if (clearToken) { token = ""; identity = undefined; remove("weftext-hosted-token"); remove("weftext-hosted-identity"); el("workspace").hidden = true; el("login").hidden = false; el("logout").hidden = true; }
+  controls(); status(clearErrors.length ? `${message.split(/[，。]/)[0]}。受保护展示已清除；浏览器拒绝删除部分恢复缓存，请在浏览器中清除此站点数据。` : message);
 }
 async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0): Promise<T> {
   const epoch = requestEpoch, credential = token;
@@ -99,11 +116,11 @@ async function connect() {
   const previous = identity ?? JSON.parse(sessionStorage.getItem("weftext-hosted-identity") ?? "null") as Me | undefined;
   const next = await request<Me>("me");
   if (previous && (next.actor !== previous.actor || next.deployment !== previous.deployment || next.generation !== previous.generation)) clearDisplay("授权策略已更新，请重新打开文档。");
-  identity = next; cachePrefix = `weftext-hosted-draft:${next.deployment}:${next.actor}:`;
+  identity = next; cachePrefix = hostedCachePrefix("draft", next.deployment, next.actor, next.generation);
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor); await review.connect(next.deployment, next.actor); await office.connect(next.deployment, next.actor);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -121,6 +138,7 @@ async function open(resource: string) {
   if (identity && currentIdentity.generation !== identity.generation) {
     clearDisplay("授权策略已更新，旧展示与缓存已清除。请重新选择文档。"); identity = currentIdentity; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(identity)); await list(); return;
   }
+  cachePrefix = hostedCachePrefix("draft", currentIdentity.deployment, currentIdentity.actor, currentIdentity.generation);
   const prior = doc;
   const local = cached(resource);
   if (prior) {
@@ -192,7 +210,12 @@ function sourceChanged() {
 }
 el<HTMLFormElement>("login").onsubmit = e => {e.preventDefault(); token = el<HTMLInputElement>("token").value.trim(); void run(connect);};
 el("logout").onclick = () => { clearDisplay("已退出。",true); el<HTMLInputElement>("token").value = ""; };
-el("refresh").onclick = () => void run(async () => { await list(); if (identity) { await fields.connect(identity.deployment, identity.actor); await review.connect(identity.deployment, identity.actor); await office.connect(identity.deployment, identity.actor); } });
+el("refresh").onclick = () => void run(async () => {
+  const epoch = requestEpoch, current = await request<Me>("me"); if (epoch !== requestEpoch) return;
+  if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment) clearDisplay("授权策略已更新，旧展示与缓存已清除。");
+  identity = current; cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation); sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
+  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation);
+});
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
 el("reopen").onclick = () => void run(() => open(doc!.resource));

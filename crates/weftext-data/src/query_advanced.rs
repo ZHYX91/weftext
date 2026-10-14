@@ -1,6 +1,10 @@
 //! Query producer nodes over one immutable input. CEL and typed equality remain
 //! owned by `query`; this module performs no IO or ambient definition lookup.
 use crate::{query::*, *};
+use cel::{
+    Program,
+    common::ast::{Expr, IdedExpr},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -236,17 +240,10 @@ fn parameter_bindings(
                 "Parameter name collides or is not a CEL identifier".into(),
             ));
         }
-        // Reuse installation validation so invalid/unknown `use` never reaches
-        // shape resolution. This creates no author schema or second authority.
-        let mut checked = schema.clone();
-        checked.fields.push(Field {
-            id: format!("query-parameter/{}", p.name),
-            key: p.name.clone(),
-            shape: p.shape.clone(),
-            nullable: p.nullable,
-            default: Some(serde_json::json!({"kind":"absent"})),
-        });
-        Schema::from_author_json(&serde_json::to_string(&checked)?)?;
+        // Reuse the installed native Shape validator, without pretending this
+        // minimum Query projection is a complete schema to reinstall. Unknown
+        // `use` must still fail before any adapter resolves its shape.
+        schema.check_query_shape(&p.shape)?;
         if let Some(default) = &p.default {
             validate_parameter(schema, p, default)?;
         }
@@ -407,6 +404,7 @@ fn validate_plan_static(
                 &parameters,
                 &shapes,
                 &mut remaining,
+                &BTreeMap::new(),
             );
         }
         if !a.union_all.is_empty() {
@@ -443,7 +441,7 @@ fn validate_plan_static(
         }
         let mut leaf = plan.clone();
         leaf.advanced = None;
-        if leaf.group.is_some() {
+        if leaf.group.is_some() || a.distinct.is_some() {
             leaf.order.clear();
         }
         let mut result = execute_query_leaf(
@@ -454,6 +452,7 @@ fn validate_plan_static(
             &parameters,
             &shapes,
             &mut remaining,
+            &BTreeMap::new(),
         )?;
         if plan.group.is_some() {
             sort_terminal(
@@ -663,6 +662,252 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
     visit(plan, owners, &mut out, &mut 0, 0)?;
     Ok(out.into_iter().collect())
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct QueryReadRequirements {
+    pub fields: BTreeSet<String>,
+    pub products: BTreeSet<String>,
+    pub relations: BTreeSet<String>,
+    pub types: BTreeSet<String>,
+    pub type_filter: bool,
+}
+
+pub fn query_output_columns(
+    plan: &QueryPlan,
+    owners: &[FrozenDefinitionOwner],
+) -> Result<Vec<String>> {
+    fn visit(
+        plan: &QueryPlan,
+        owners: &[FrozenDefinitionOwner],
+        depth: usize,
+    ) -> Result<Vec<String>> {
+        if depth > MAX_CALL_DEPTH {
+            return Err(DataError("Query column expansion budget".into()));
+        }
+        if let Some(group) = &plan.group {
+            return Ok(group
+                .keys
+                .iter()
+                .map(|k| k.name.clone())
+                .chain(group.aggregates.iter().map(|a| a.name.clone()))
+                .collect());
+        }
+        if !plan.select.is_empty() {
+            return Ok(plan.select.iter().map(|c| c.name.clone()).collect());
+        }
+        if let Some(a) = &plan.advanced {
+            if let Some(call) = &a.call {
+                let (_, definition) = selected(call, owners)?;
+                return visit(&definition.plan, owners, depth + 1);
+            }
+            if let Some(branch) = a.union_all.first() {
+                return visit(branch, owners, depth + 1);
+            }
+        }
+        Ok(vec!["title".into(), "types".into()])
+    }
+    definition_dependencies(plan, owners)?;
+    visit(plan, owners, 0)
+}
+
+/// Static read effects use the same parsed CEL AST and each callee's exact
+/// baseline. Local variables, parameters and terminal column names do not
+/// acquire a field/product authority by resembling an author key.
+pub fn query_read_requirements(
+    plan: &QueryPlan,
+    schema: &Schema,
+    context: &FrozenAdvancedInput,
+) -> Result<QueryReadRequirements> {
+    fn expression(
+        source: &str,
+        schema: &Schema,
+        bound: &BTreeSet<String>,
+        out: &mut QueryReadRequirements,
+    ) -> Result<()> {
+        fn walk(
+            ast: &IdedExpr,
+            schema: &Schema,
+            bound: &BTreeSet<String>,
+            out: &mut QueryReadRequirements,
+        ) -> Result<()> {
+            match &ast.expr {
+                Expr::Ident(n) if !bound.contains(n) => {
+                    if matches!(n.as_str(), "title" | "body" | "headings" | "self" | "types") {
+                        out.products.insert(n.clone());
+                    } else if let Some(f) = schema.fields.iter().find(|f| &f.key == n) {
+                        out.fields.insert(f.id.clone());
+                    }
+                }
+                Expr::Call(c) if c.func_name == "field" => {
+                    let id = c
+                        .args
+                        .first()
+                        .and_then(literal_text)
+                        .ok_or_else(|| DataError("Literal FieldId required".into()))?;
+                    if c.args.len() != 1
+                        || c.target.is_some()
+                        || !schema.fields.iter().any(|f| f.id == id)
+                    {
+                        return Err(DataError("Unknown canonical FieldId".into()));
+                    }
+                    out.fields.insert(id);
+                }
+                Expr::Comprehension(c) => {
+                    walk(&c.iter_range, schema, bound, out)?;
+                    walk(&c.accu_init, schema, bound, out)?;
+                    let mut locals = bound.clone();
+                    locals.insert(c.iter_var.clone());
+                    locals.insert(c.accu_var.clone());
+                    if let Some(n) = &c.iter_var2 {
+                        locals.insert(n.clone());
+                    }
+                    for e in [&c.loop_cond, &c.loop_step, &c.result] {
+                        walk(e, schema, &locals, out)?;
+                    }
+                }
+                _ => {
+                    let mut child = ast.clone();
+                    visit_children_mut(&mut child, |e| walk(e, schema, bound, out))?;
+                }
+            }
+            Ok(())
+        }
+        if source.len() > 16384 {
+            return Err(DataError("CEL source exceeds profile budget".into()));
+        }
+        let program = Program::compile(source).map_err(|e| DataError(e.to_string()))?;
+        walk(program.expression(), schema, bound, out)
+    }
+    fn visit(
+        plan: &QueryPlan,
+        schema: &Schema,
+        context: &FrozenAdvancedInput,
+        out: &mut QueryReadRequirements,
+        nodes: &mut usize,
+        depth: usize,
+    ) -> Result<()> {
+        *nodes += 1;
+        if depth > MAX_CALL_DEPTH || *nodes > MAX_PLAN_NODES {
+            return Err(DataError("Query read closure budget".into()));
+        }
+        let a = plan.advanced.clone().unwrap_or_default();
+        let mut bound = a
+            .parameters
+            .iter()
+            .map(|p| p.name.clone())
+            .collect::<BTreeSet<_>>();
+        let terminal = !a.union_all.is_empty() || a.call.is_some();
+        if terminal {
+            if let Some(branch) = a.union_all.first() {
+                bound.extend(query_output_columns(branch, &context.definitions)?);
+            }
+            if let Some(call) = &a.call {
+                let (_, definition) = selected(call, &context.definitions)?;
+                bound.extend(query_output_columns(
+                    &definition.plan,
+                    &context.definitions,
+                )?);
+            }
+        }
+        if let Some(u) = &plan.unnest {
+            expression(&u.array, schema, &bound, out)?;
+            bound.insert(u.binding.clone());
+        }
+        for e in plan
+            .r#where
+            .iter()
+            .chain(plan.select.iter().map(|c| &c.expr))
+        {
+            expression(e, schema, &bound, out)?;
+        }
+        if let Some(g) = &plan.group {
+            for e in g
+                .keys
+                .iter()
+                .map(|c| &c.expr)
+                .chain(g.aggregates.iter().filter_map(|a| a.expr.as_ref()))
+            {
+                expression(e, schema, &bound, out)?;
+            }
+        }
+        let mut order_bound = bound.clone();
+        if let Some(g) = &plan.group {
+            order_bound.extend(g.keys.iter().map(|c| c.name.clone()));
+            order_bound.extend(g.aggregates.iter().map(|a| a.name.clone()));
+        }
+        if a.distinct.is_some() {
+            order_bound.extend(query_output_columns(plan, &context.definitions)?);
+        }
+        for order in &plan.order {
+            expression(&order.expr, schema, &order_bound, out)?;
+        }
+        if let Some(keys) = &a.distinct {
+            let mut terminal_bound = bound.clone();
+            terminal_bound.extend(query_output_columns(plan, &context.definitions)?);
+            for k in keys {
+                expression(&k.expr, schema, &terminal_bound, out)?;
+            }
+        }
+        if plan.select.is_empty() && !terminal && plan.group.is_none() {
+            out.products.extend(["title".into(), "types".into()]);
+        }
+        for t in &plan.types {
+            out.type_filter = true;
+            out.types.insert(
+                schema
+                    .type_id(t)
+                    .ok_or_else(|| DataError("Unknown Query type".into()))?
+                    .into(),
+            );
+            out.products.insert("types".into());
+        }
+        for child in &a.union_all {
+            visit(child, schema, context, out, nodes, depth + 1)?;
+        }
+        if let Some(r) = &a.related {
+            let relation = schema
+                .relations
+                .iter()
+                .find(|d| d.id == r.relation)
+                .ok_or_else(|| DataError("Unknown RelationId".into()))?;
+            out.relations.insert(relation.id.clone());
+            out.fields.insert(relation.field.clone());
+            out.types.insert(relation.source_type.clone());
+            if let Some(ids) = relation.target_types["ids"].as_array() {
+                out.types
+                    .extend(ids.iter().filter_map(|id| id.as_str().map(str::to_owned)));
+            }
+            visit(&r.from, schema, context, out, nodes, depth + 1)?;
+        }
+        if let Some(call) = &a.call {
+            for e in call.arguments.values() {
+                expression(e, schema, &bound, out)?;
+            }
+            let (_, definition) = selected(call, &context.definitions)?;
+            let baseline = context
+                .schemas
+                .iter()
+                .find(|s| {
+                    s.schema == definition.binding.schema
+                        && s.revision == definition.binding.revision
+                })
+                .ok_or_else(|| DataError("Missing exact definition baseline".into()))?;
+            visit(
+                &definition.plan,
+                &baseline.projection,
+                context,
+                out,
+                nodes,
+                depth + 1,
+            )?;
+        }
+        Ok(())
+    }
+    definition_dependencies(plan, &context.definitions)?;
+    let mut result = QueryReadRequirements::default();
+    visit(plan, schema, context, &mut result, &mut 0, 0)?;
+    Ok(result)
+}
 fn validate_parameter(
     schema: &Schema,
     parameter: &QueryParameter,
@@ -719,6 +964,7 @@ pub(crate) fn execute_advanced_query(
     plan: &QueryPlan,
     schema: &Schema,
     limits: &QueryBudget,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
 ) -> Result<QueryResult> {
     let empty = FrozenAdvancedInput::default();
     let context = input.advanced.as_ref().unwrap_or(&empty);
@@ -739,6 +985,7 @@ pub(crate) fn execute_advanced_query(
         remaining: limits.max_steps,
         nodes: 0,
         source_bytes: definition_bytes,
+        metadata,
     };
     runner.run(plan, schema, &context.parameters, 0)
 }
@@ -749,6 +996,7 @@ struct Runner<'a> {
     remaining: u64,
     nodes: usize,
     source_bytes: usize,
+    metadata: &'a BTreeMap<String, AuthorizedQueryMetadata>,
 }
 impl Runner<'_> {
     fn run(
@@ -859,6 +1107,7 @@ impl Runner<'_> {
                 schema,
                 &mut self.remaining,
                 available,
+                self.metadata,
             )?;
             self.source_bytes = self.source_bytes.saturating_add(consumed);
             let mut filtered = self.input.clone();
@@ -870,6 +1119,7 @@ impl Runner<'_> {
             leaf.advanced = None;
             if advanced.distinct.is_some() {
                 leaf.take = None;
+                leaf.order.clear();
             }
             let mut result = self.leaf(&filtered, &leaf, schema, &parameters, &shapes)?;
             result.diagnostics.extend(origin.diagnostics);
@@ -893,6 +1143,7 @@ impl Runner<'_> {
         leaf.advanced = None;
         if advanced.distinct.is_some() {
             leaf.take = None;
+            leaf.order.clear();
         }
         let mut result = self.leaf(self.input, &leaf, schema, &parameters, &shapes)?;
         if advanced.distinct.is_some() {
@@ -916,7 +1167,9 @@ impl Runner<'_> {
         parameters: &BTreeMap<String, Cell>,
         shapes: &BTreeMap<String, Shape>,
     ) -> Result<QueryResult> {
-        let bytes = input.notes.iter().map(|n| n.source.len()).sum::<usize>();
+        let bytes = input.notes.iter().try_fold(0usize, |bytes, n| {
+            Ok::<_, DataError>(bytes.saturating_add(query_note_bytes(n, self.metadata)?))
+        })?;
         let available = self
             .limits
             .max_source_bytes
@@ -949,6 +1202,7 @@ impl Runner<'_> {
             parameters,
             shapes,
             &mut self.remaining,
+            self.metadata,
         )?;
         if grouped {
             sort_terminal(
@@ -1009,6 +1263,7 @@ fn related_notes(
     schema: &Schema,
     remaining: &mut u64,
     max_source_bytes: usize,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
 ) -> Result<(Vec<FrozenNote>, Vec<String>, usize)> {
     if !matches!(related.direction.as_str(), "forward" | "inverse") {
         return Err(DataError(
@@ -1077,13 +1332,14 @@ fn related_notes(
         {
             continue;
         }
-        if *remaining == 0 || consumed.saturating_add(note.source.len()) > max_source_bytes {
+        let note_bytes = query_note_bytes(note, metadata)?;
+        if *remaining == 0 || consumed.saturating_add(note_bytes) > max_source_bytes {
             gaps.push("host-budget-exhausted".into());
             break;
         }
         *remaining -= 1;
-        consumed += note.source.len();
-        let p = project(&note.source, schema);
+        consumed += note_bytes;
+        let p = query_projection(note, schema, metadata);
         if p.qualification != "qualified" {
             gaps.push("related source projection unavailable".into());
             continue;
@@ -1110,15 +1366,16 @@ fn related_notes(
                         let qualified = if let Some(target) =
                             input.notes.iter().find(|n| n.entity_key == endpoint)
                         {
+                            let target_bytes = query_note_bytes(target, metadata)?;
                             if *remaining == 0
-                                || consumed.saturating_add(target.source.len()) > max_source_bytes
+                                || consumed.saturating_add(target_bytes) > max_source_bytes
                             {
                                 gaps.push("host-budget-exhausted".into());
                                 break 'scan;
                             }
                             *remaining -= 1;
-                            consumed += target.source.len();
-                            let projection = project(&target.source, schema);
+                            consumed += target_bytes;
+                            let projection = query_projection(target, schema, metadata);
                             projection.qualification == "qualified"
                                 && (relation.target_types["kind"].as_str() != Some("any_of")
                                     || relation.target_types["ids"].as_array().is_some_and(|ids| {

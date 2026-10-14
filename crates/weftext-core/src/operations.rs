@@ -290,6 +290,11 @@ pub(crate) struct SnapshotBinding {
     pub(crate) captured: Option<CapturedFile>,
     pub(crate) parent: FileIdentity,
 }
+/// An owned read witness. It cannot be deserialized or used as a write basis;
+/// dropping it releases the captured bytes without retaining them in Core.
+pub struct SnapshotWitness {
+    binding: SnapshotBinding,
+}
 #[derive(Clone)]
 pub(crate) struct AdmittedBasis {
     root: String,
@@ -1086,7 +1091,7 @@ impl Core {
         revision: &str,
     ) -> Result<Vec<u8>> {
         let root = absolute_path(root.as_ref())?;
-        self.require_workspace(&root)?;
+        let workspace = self.require_workspace(&root)?;
         let inventory = self.inventory(&root)?;
         let current = inventory
             .entries
@@ -1099,11 +1104,60 @@ impl Core {
                 "Current owner is missing, duplicated or unqualified",
             ));
         }
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
+        self.retained_source_revision(&workspace.workspace_id, owner_id, revision)
+    }
+
+    /// Read one configured owner's exact retained revision without enumerating
+    /// the library. Hosted callers supply the operator-bound canonical path and
+    /// authorize definition/history access before calling this method.
+    pub fn read_source_revision_at(
+        &self,
+        root: impl AsRef<Path>,
+        path: impl AsRef<Path>,
+        owner_id: &str,
+        revision: &str,
+    ) -> Result<Vec<u8>> {
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(path.as_ref())?;
+        let workspace = self.require_workspace(&root)?;
+        let current = self.managed_node(
+            &root,
+            path.parent().ok_or_else(|| {
+                CoreError::new("revisionUnavailable", "The configured owner has no parent")
+            })?,
+            false,
+        )?;
+        if Path::new(&current.path) != path
+            || self
+                .admitted_binding(&current.stamp.identity)
+                .is_none_or(|birth| birth.node_id != owner_id)
+            || self.accepted_revision(&current).is_none()
         {
+            return Err(CoreError::new(
+                "revisionUnavailable",
+                "The exact configured owner is not currently admitted",
+            ));
+        }
+        self.retained_source_revision(&workspace.workspace_id, owner_id, revision)
+    }
+
+    fn retained_source_revision(
+        &self,
+        workspace_id: &str,
+        owner_id: &str,
+        revision: &str,
+    ) -> Result<Vec<u8>> {
+        for p in self.operations.values().filter(|p| {
+            self.committed(&p.operation_id)
+                && (p.workspace_id.as_deref() == Some(workspace_id)
+                    || (p.kind == "save"
+                        && p.identity
+                            .as_ref()
+                            .and_then(|id| self.admitted_binding(id))
+                            .is_some_and(|birth| {
+                                birth.workspace_id == workspace_id && birth.node_id == owner_id
+                            })))
+        }) {
             if let Ok(bytes) = self.revision_payload(p, revision)
                 && weftext_engine::inspect_metadata(&decode(&bytes)?)
                     .id
@@ -1402,6 +1456,30 @@ impl Core {
         }
         self.check_pending(&path)?;
         self.verify_snapshot(&path, base_id, capture_optional(&path)?.as_ref())
+    }
+    pub fn take_snapshot_witness(&mut self, base_id: &str) -> Result<SnapshotWitness> {
+        self.snapshots
+            .remove(base_id)
+            .map(|binding| SnapshotWitness { binding })
+            .ok_or_else(|| CoreError::new("basisRequired", "The original snapshot is unavailable"))
+    }
+    pub fn validate_snapshot_witness(
+        &self,
+        root: impl AsRef<Path>,
+        path: impl AsRef<Path>,
+        witness: &SnapshotWitness,
+    ) -> Result<()> {
+        let root = absolute_path(root.as_ref())?;
+        let path = absolute_path(path.as_ref())?;
+        self.require_workspace(&root)?;
+        if !path.starts_with(&root) {
+            return Err(CoreError::new(
+                "outsideRoot",
+                "Snapshot belongs outside the library",
+            ));
+        }
+        self.check_pending(&path)?;
+        self.verify_snapshot_binding(&path, &witness.binding, capture_optional(&path)?.as_ref())
     }
     pub fn validate_library_style(&self, root: impl AsRef<Path>, base_id: &str) -> Result<()> {
         let root = absolute_path(root.as_ref())?;
@@ -1741,6 +1819,14 @@ impl Core {
                 "Read an exact Core snapshot before preparing updates",
             )
         })?;
+        self.verify_snapshot_binding(path, basis, current)
+    }
+    fn verify_snapshot_binding(
+        &self,
+        path: &Path,
+        basis: &SnapshotBinding,
+        current: Option<&CapturedFile>,
+    ) -> Result<()> {
         let parent_guard = ParentGuard::acquire(path)?;
         if basis.path != display(path)
             || basis.parent != parent_guard.directory_identity()?
@@ -1862,6 +1948,7 @@ impl Core {
             handles.push(handle);
         }
         let mut output = Vec::new();
+        let mut bindings = Vec::new();
         let mut total = 0usize;
         for ((path, guard), handle) in guards.iter().zip(&mut handles) {
             let captured = match handle {
@@ -1898,15 +1985,16 @@ impl Core {
                 .into(),
                 revision,
             });
-            self.snapshots.insert(
+            bindings.push((
                 base_id,
                 SnapshotBinding {
                     path: display(path),
                     captured,
                     parent: guard.directory_identity()?,
                 },
-            );
+            ));
         }
+        self.snapshots.extend(bindings);
         Ok(SnapshotSet {
             files: output,
             complete: true,

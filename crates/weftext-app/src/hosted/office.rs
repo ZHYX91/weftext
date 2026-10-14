@@ -29,6 +29,7 @@ pub(super) struct Store {
 struct Needs {
     sources: BTreeSet<String>,
     fields: BTreeMap<String, BTreeSet<String>>,
+    query_authority: Option<query::Authority>,
     review: Option<String>,
     resources: BTreeSet<String>,
     binding: String,
@@ -159,6 +160,9 @@ fn scope(inner: &HostedInner, actor: &str) -> String {
     format!("{}:office-output", inner.actor_scope(actor))
 }
 fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Result<(), ApiError> {
+    if let Some(authority) = &needs.query_authority {
+        query::authorize_authority(inner, actor, authority)?;
+    }
     let user = inner
         .policy
         .users
@@ -322,6 +326,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
         resources,
         sources,
         fields,
+        query_authority: query.as_ref().map(|q| q.query_authority.clone()),
         review: (req.review_mode != "none").then(|| req.resource.clone().unwrap()),
     };
     access(inner, actor, &needs, false)?;

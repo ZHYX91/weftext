@@ -153,10 +153,20 @@ fn scrub_tree(tree: &mut Value, resource: &str, writable: bool) {
         tree["origin"] = Value::Null;
         tree["writable"] = json!(false);
     }
-    // Metadata is interpreted by separate authorized consumers, not copied
-    // through a presentation result as ambient application data.
+    // Only the native Query carrier's presentation identifiers may cross this
+    // boundary. Its AST occurrence and independently authorized execution are
+    // checked by the Query consumer; arbitrary metadata is never forwarded.
     if tree["kind"] == "tag" {
-        tree["attrs"] = json!({});
+        tree["attrs"] = Value::Object(
+            ["data-weftext-query-label", "data-weftext-query-occurrence"]
+                .into_iter()
+                .filter_map(|key| {
+                    tree["attrs"][key]
+                        .as_str()
+                        .map(|value| (key.to_string(), json!(value)))
+                })
+                .collect(),
+        );
     }
     if let Some(children) = tree["children"].as_array_mut() {
         for child in children {

@@ -2,9 +2,11 @@
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
 mod editor;
+mod embedded_query;
 mod fields;
 mod office;
 mod office_import;
+mod query;
 mod review;
 mod sync_transport;
 use axum::Extension;
@@ -45,6 +47,8 @@ struct Rights {
     annotations: review::ReviewRights,
     #[serde(default)]
     office: office::OfficeRights,
+    #[serde(default)]
+    query: query::QueryRights,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -222,6 +226,11 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
             return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
         }
         for (resource, rights) in &user.grants {
+            if !query::valid_rights(&rights.query) {
+                return Err(ApiError::bad(
+                    "查询定义历史须具备定义读取权；语义产品及关系须明确授权",
+                ));
+            }
             if rights.office.r#import
                 && (!rights.read
                     || !rights.write
@@ -1036,6 +1045,8 @@ pub(super) async fn serve(
         .merge(sync_transport::router())
         .merge(editor::router())
         .merge(fields::router())
+        .merge(query::router())
+        .merge(embedded_query::router())
         .merge(review::router())
         .merge(office::router())
         .merge(office_import::router())

@@ -18,29 +18,35 @@ pub(super) struct FrozenQuery {
     pub(super) result: weftext_data::QueryResult,
     pub(super) columns: Vec<String>,
     pub(super) schema: Schema,
+    pub(super) query_authority: query::Authority,
+    size_bytes: usize,
     expires: Instant,
 }
-pub(super) fn frozen_query(
-    inner: &HostedInner,
+fn retained_query<'a>(
+    store: &'a Store,
     actor: &str,
+    epoch: u64,
     id: &str,
-) -> Result<FrozenQuery, ApiError> {
-    let query = inner
-        .fields
+) -> Result<&'a FrozenQuery, ApiError> {
+    store
         .queries
         .get(id)
-        .filter(|q| {
-            q.actor == actor
-                && q.epoch == inner.actor_generation(actor)
-                && q.expires > Instant::now()
-        })
+        .filter(|q| q.actor == actor && q.epoch == epoch && q.expires > Instant::now())
         .ok_or_else(|| {
             ApiError::new(
                 StatusCode::GONE,
                 "queryExpired",
                 "原查询结果已失效，请明确重新执行查询",
             )
-        })?;
+        })
+}
+pub(super) fn frozen_query(
+    inner: &HostedInner,
+    actor: &str,
+    id: &str,
+) -> Result<FrozenQuery, ApiError> {
+    let query = retained_query(&inner.fields, actor, inner.actor_generation(actor), id)?;
+    query::authorize_authority(inner, actor, &query.query_authority)?;
     for (resource, fields) in &query.authorities {
         for field in fields {
             rights(inner, actor, resource, field, false)?;
@@ -53,6 +59,90 @@ pub(super) fn frozen_query(
 }
 pub(super) fn query_catalog(inner: &HostedInner, actor: &str) -> Vec<Value> {
     inner.fields.queries.iter().filter_map(|(id,q)|frozen_query(inner,actor,id).ok().map(|_|json!({"queryId":id,"columns":q.columns,"rowCount":q.result.rows.len(),"coverage":q.result.coverage}))).collect()
+}
+
+pub(super) fn retain_query(
+    inner: &mut HostedInner,
+    actor: &str,
+    result: weftext_data::QueryResult,
+    columns: Vec<String>,
+    schema: Schema,
+    authority: query::Authority,
+) -> Result<String, ApiError> {
+    query::authorize_authority(inner, actor, &authority)?;
+    expire_revoked(inner);
+    let mut authorities = authority.fields.clone();
+    for resource in authority
+        .products
+        .keys()
+        .chain(authority.definitions.keys())
+        .chain(authority.relations.keys())
+        .chain(&authority.inputs)
+    {
+        authorities.entry(resource.clone()).or_default();
+    }
+    let resources = authorities.keys().cloned().collect();
+    let size_bytes = query::serialized_query_bytes(&(&result, &schema))?;
+    let retained = FrozenQuery {
+        actor: actor.into(),
+        epoch: inner.actor_generation(actor),
+        config_hash: office::binding_hash(inner, &resources)?,
+        resources,
+        authorities,
+        result,
+        columns,
+        schema,
+        query_authority: authority,
+        size_bytes,
+        expires: Instant::now() + Duration::from_secs(900),
+    };
+    retain_in_store(&mut inner.fields, retained)
+}
+fn cache_evictions(store: &Store, actor: &str, new_bytes: usize) -> Result<Vec<String>, ApiError> {
+    const MAX_BYTES: usize = 32 * 1024 * 1024;
+    let full = || ApiError::bad("冻结查询结果超出缓存容量，请缩小范围或稍后再试");
+    if new_bytes > MAX_BYTES {
+        return Err(full());
+    }
+    let mut bytes = store
+        .queries
+        .values()
+        .try_fold(new_bytes, |n, q| n.checked_add(q.size_bytes))
+        .ok_or_else(full)?;
+    let mut count = store.queries.len() + 1;
+    let mut own = store
+        .queries
+        .iter()
+        .filter(|(_, q)| q.actor == actor)
+        .collect::<Vec<_>>();
+    own.sort_by(|(aid, a), (bid, b)| a.expires.cmp(&b.expires).then(aid.cmp(bid)));
+    let mut actor_count = own.len() + 1;
+    let mut removed = vec![];
+    for (id, q) in own {
+        if count <= 32 && actor_count <= 8 && bytes <= MAX_BYTES {
+            return Ok(removed);
+        }
+        removed.push(id.clone());
+        count -= 1;
+        actor_count -= 1;
+        bytes -= q.size_bytes;
+    }
+    if count <= 32 && actor_count <= 8 && bytes <= MAX_BYTES {
+        Ok(removed)
+    } else {
+        Err(full())
+    }
+}
+fn retain_in_store(store: &mut Store, retained: FrozenQuery) -> Result<String, ApiError> {
+    // Plan the complete eviction before mutating. Other actors' cached results
+    // cannot be displaced, and an unretainable new result preserves old IDs.
+    let evictions = cache_evictions(store, &retained.actor, retained.size_bytes)?;
+    for id in evictions {
+        store.queries.remove(&id);
+    }
+    let id = uuid::Uuid::new_v4().to_string();
+    store.queries.insert(id.clone(), retained);
+    Ok(id)
 }
 #[derive(Clone)]
 struct Basis {
@@ -87,13 +177,6 @@ struct Operation {
     field_id: String,
     operation_id: String,
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct Query {
-    fields: BTreeSet<String>,
-    resources: Option<BTreeSet<String>>,
-    plan: weftext_data::QueryPlan,
-}
 pub(super) fn router() -> Router<HostedState> {
     Router::new()
         .route("/api/hosted/fields", get(list))
@@ -101,162 +184,8 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/fields/write", post(write))
         .route("/api/hosted/fields/operation", post(operation))
         .route("/api/hosted/fields/settle", post(settle))
-        .route("/api/hosted/query", post(query))
 }
 
-async fn query(
-    State(state): State<HostedState>,
-    Extension(auth): Extension<Auth>,
-    Json(mut req): Json<Query>,
-) -> ApiResult {
-    Ok(Json(
-        locked(&state, move |inner| {
-            let actor = inner.actor(&auth)?;
-            if req.fields.is_empty()
-                || req.fields.len() > 32
-                || req.plan.advanced.is_some()
-                || req.plan.scope.directory.is_some()
-                || !matches!(req.plan.scope.lifecycle.as_str(), "" | "live")
-                || !req.plan.types.is_empty()
-                || req.plan.take.is_some_and(|n| n > 500)
-            {
-                return Err(ApiError::bad(
-                    "请选择至多 32 个获权字段；当前托管查询支持当前范围及至多 500 行",
-                ));
-            }
-            // Even an empty row scope must not turn the shared schema into an
-            // oracle for ungranted field definitions or existence.
-            for field in &req.fields {
-                if !inner.policy.users[&actor]
-                    .grants
-                    .keys()
-                    .any(|resource| rights(inner, &actor, resource, field, false).is_ok())
-                {
-                    return Err(unavailable());
-                }
-            }
-            let resources = match req.resources {
-                Some(resources) => resources,
-                None => inner.policy.users[&actor]
-                    .grants
-                    .keys()
-                    .filter(|r| {
-                        req.fields
-                            .iter()
-                            .all(|f| rights(inner, &actor, r, f, false).is_ok())
-                    })
-                    .cloned()
-                    .collect(),
-            };
-            if resources.len() > 64 {
-                return Err(ApiError::bad("查询范围上限为 64 个获权对象"));
-            }
-            for resource in &resources {
-                for field in &req.fields {
-                    rights(inner, &actor, resource, field, false)?;
-                }
-            }
-            let schema = data_api::hosted_schema(&mut inner.core, &inner.config.root)
-                .map_err(|_| unavailable())?;
-            let restricted = weftext_data::narrow_query_schema(&schema, &req.fields)
-                .map_err(|_| unavailable())?;
-            if req.plan.select.is_empty() {
-                req.plan.select = restricted
-                    .fields
-                    .iter()
-                    .map(|f| weftext_data::QueryColumn {
-                        name: f.key.clone(),
-                        expr: format!("field({})", serde_json::to_string(&f.id).unwrap()),
-                    })
-                    .collect();
-            }
-            req.plan.take.get_or_insert(500);
-            let cut = uuid::Uuid::new_v4().to_string();
-            let mut notes = vec![];
-            let mut witnesses = BTreeMap::new();
-            let mut complete = true;
-            for resource in &resources {
-                let profile = with_source(
-                    inner,
-                    &actor,
-                    resource,
-                    None,
-                    |_, doc, current_schema, history, _| {
-                        let current_shape =
-                            weftext_data::narrow_query_schema(current_schema, &req.fields)
-                                .map_err(|_| conflict())?;
-                        if value(&current_shape)? != value(&restricted)? {
-                            return Err(conflict());
-                        }
-                        let p = narrow_profile(&doc.source, current_schema, &req.fields, None)
-                            .map_err(|_| unavailable())?;
-                        if p.node_id != history.node_id {
-                            return Err(unavailable());
-                        }
-                        Ok(p)
-                    },
-                );
-                let Ok(profile) = profile else {
-                    complete = false;
-                    continue;
-                };
-                witnesses.insert(resource.clone(), profile.witness);
-                notes.push(weftext_data::FrozenNote {
-                    entity_key: resource.clone(),
-                    path: format!("resource:{resource}"),
-                    source: String::new(),
-                    revision: cut.clone(),
-                    lifecycle: "live".into(),
-                    title: None,
-                    body: None,
-                    products: None,
-                    authorized_fields: Some(
-                        profile
-                            .fields
-                            .into_iter()
-                            .map(|f| (f.field_id, f.cell))
-                            .collect(),
-                    ),
-                });
-            }
-            let input = weftext_data::FrozenQueryInput {
-                cut_id: cut.clone(),
-                schema_revision: cut,
-                coverage: if complete { "complete" } else { "partial" }.into(),
-                freshness: "current".into(),
-                notes,
-                advanced: None,
-            };
-            let result = weftext_data::execute_query(&input, &req.plan, &restricted)
-                .map_err(|_| ApiError::bad("查询不可用：请检查获权字段、CEL 表达式和预算"))?;
-            // Current policy is serialized by this lock; external source/config
-            // changes still need requalification before the result is delivered.
-            for (resource, witness) in witnesses {
-                with_source(inner, &actor, &resource, None, |_, doc, schema, _, _| {
-                    let current = narrow_profile(&doc.source, schema, &req.fields, None)
-                        .map_err(|_| conflict())?;
-                    if current.witness != witness {
-                        return Err(conflict());
-                    }
-                    Ok(())
-                })?;
-            }
-            expire_revoked(inner);
-            let size = |q:&FrozenQuery| serde_json::to_vec(&(&q.result,&q.schema)).map_or(32*1024*1024,|b|b.len());
-            let mut authorities:BTreeMap<String,BTreeSet<String>>=resources.iter().map(|r|(r.clone(),req.fields.clone())).collect();
-            if authorities.is_empty() { for field in &req.fields { let resource=inner.policy.users[&actor].grants.keys().find(|r|rights(inner,&actor,r,field,false).is_ok()).ok_or_else(unavailable)?;authorities.entry(resource.clone()).or_default().insert(field.clone()); } }
-            let qualified_resources=authorities.keys().cloned().collect();
-            let query=FrozenQuery { actor:actor.clone(), epoch:inner.actor_generation(&actor),config_hash:office::binding_hash(inner,&qualified_resources)?,resources:qualified_resources,authorities,result:result.clone(),columns:req.plan.select.iter().map(|c|c.name.clone()).collect(),schema:restricted,expires:Instant::now()+Duration::from_secs(900) };
-            if inner.fields.queries.len() >= 32 || inner.fields.queries.values().filter(|q|q.actor==actor).count() >= 8 || inner.fields.queries.values().map(size).sum::<usize>().saturating_add(size(&query)) > 32*1024*1024 {
-                return Err(ApiError::bad("冻结查询结果缓存已满，请稍后再试"));
-            }
-            let query_id=uuid::Uuid::new_v4().to_string();
-            inner.fields.queries.insert(query_id.clone(),query);
-            Ok(json!({"result":result,"queryId":query_id,"columns":req.plan.select.iter().map(|c|&c.name).collect::<Vec<_>>(),"scope":"authorizedFieldIntersection","readOnly":true}))
-        })
-        .await?,
-    ))
-}
 pub(super) fn expire_revoked(inner: &mut HostedInner) {
     inner.fields.queries.retain(|_, q| {
         q.expires > Instant::now()
@@ -611,4 +540,130 @@ async fn settle(
         })
         .await?,
     ))
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    fn sample(actor: &str, order: u64) -> FrozenQuery {
+        let result = weftext_data::QueryResult {
+            cut_id: format!("cut:{order}"),
+            schema_revision: "schema".into(),
+            rows: vec![weftext_data::QueryRow {
+                key: "row".into(),
+                entity_key: Some("one".into()),
+                path: Some("resource:one".into()),
+                revision: Some("cut".into()),
+                cells: BTreeMap::from([(
+                    "text".into(),
+                    weftext_data::Cell::value(NativeValue::Text(format!("original:{order}"))),
+                )]),
+                read_only: true,
+                lifecycle: Some("live".into()),
+            }],
+            coverage: "complete".into(),
+            freshness: "current".into(),
+            diagnostics: vec![],
+            total_known: 1,
+            limited: false,
+            aggregate_exact: true,
+            runtime: "native".into(),
+            terminal_schema: BTreeMap::new(),
+        };
+        let schema = Schema::bundled().unwrap();
+        let size_bytes = query::serialized_query_bytes(&(&result, &schema)).unwrap();
+        FrozenQuery {
+            actor: actor.into(),
+            epoch: 1,
+            resources: BTreeSet::new(),
+            authorities: BTreeMap::new(),
+            config_hash: "binding".into(),
+            result,
+            columns: vec!["text".into()],
+            schema,
+            query_authority: query::Authority::default(),
+            size_bytes,
+            expires: Instant::now() + Duration::from_secs(900 + order),
+        }
+    }
+
+    #[test]
+    fn ninth_result_expires_only_oldest_own_id_and_preserves_office_snapshot() {
+        let mut store = Store::default();
+        let old = retain_in_store(&mut store, sample("alice", 0)).unwrap();
+        // Office prepare owns a clone rather than resolving the ID again.
+        let office_snapshot = retained_query(&store, "alice", 1, &old).unwrap().clone();
+        let other = retain_in_store(&mut store, sample("bob", 0)).unwrap();
+        for n in 1..=8 {
+            retain_in_store(&mut store, sample("alice", n)).unwrap();
+        }
+        let error = retained_query(&store, "alice", 1, &old).err().unwrap();
+        assert_eq!(error.status, StatusCode::GONE);
+        assert_eq!(error.code, "queryExpired");
+        assert!(retained_query(&store, "bob", 1, &other).is_ok());
+        assert_eq!(
+            store
+                .queries
+                .values()
+                .filter(|q| q.actor == "alice")
+                .count(),
+            8
+        );
+        assert_eq!(
+            office_snapshot.result.rows[0].cells["text"].native(),
+            Some(&NativeValue::Text("original:0".into()))
+        );
+    }
+
+    #[test]
+    fn global_count_pressure_evicts_only_requesting_actor() {
+        let mut store = Store::default();
+        let own = retain_in_store(&mut store, sample("alice", 0)).unwrap();
+        let mut other_ids = vec![];
+        for n in 0..31 {
+            other_ids.push(retain_in_store(&mut store, sample(&format!("actor:{n}"), 0)).unwrap());
+        }
+        retain_in_store(&mut store, sample("alice", 1)).unwrap();
+        assert!(!store.queries.contains_key(&own));
+        assert!(other_ids.iter().all(|id| store.queries.contains_key(id)));
+        assert_eq!(store.queries.len(), 32);
+    }
+
+    #[test]
+    fn unretainable_result_does_not_remove_existing_ids() {
+        let mut store = Store::default();
+        let own = retain_in_store(&mut store, sample("alice", 0)).unwrap();
+        let mut other = sample("bob", 0);
+        // Simulate a measured retained result occupying nearly all bytes.
+        other.size_bytes = 32 * 1024 * 1024 - store.queries[&own].size_bytes;
+        let other = retain_in_store(&mut store, other).unwrap();
+        let keys = store.queries.keys().cloned().collect::<BTreeSet<_>>();
+        let mut replacement = sample("alice", 1);
+        replacement.size_bytes = store.queries[&own].size_bytes + 1;
+        assert!(retain_in_store(&mut store, replacement).is_err());
+        assert_eq!(store.queries.keys().cloned().collect::<BTreeSet<_>>(), keys);
+        assert!(retained_query(&store, "alice", 1, &own).is_ok());
+        assert!(retained_query(&store, "bob", 1, &other).is_ok());
+        let mut oversized = sample("alice", 2);
+        oversized.size_bytes = 32 * 1024 * 1024 + 1;
+        assert!(retain_in_store(&mut store, oversized).is_err());
+        assert_eq!(store.queries.keys().cloned().collect::<BTreeSet<_>>(), keys);
+    }
+
+    #[test]
+    fn byte_pressure_plans_multiple_oldest_evictions() {
+        let mut store = Store::default();
+        let mut ids = vec![];
+        for n in 0..8 {
+            let mut q = sample("alice", n);
+            q.size_bytes = 4 * 1024 * 1024;
+            ids.push(retain_in_store(&mut store, q).unwrap());
+        }
+        let mut replacement = sample("alice", 9);
+        replacement.size_bytes = 9 * 1024 * 1024;
+        retain_in_store(&mut store, replacement).unwrap();
+        assert!(ids[..3].iter().all(|id| !store.queries.contains_key(id)));
+        assert!(ids[3..].iter().all(|id| store.queries.contains_key(id)));
+    }
 }

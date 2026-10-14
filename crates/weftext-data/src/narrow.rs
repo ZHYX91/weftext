@@ -23,6 +23,21 @@ pub struct NarrowProfile {
     keys: BTreeSet<String>,
 }
 
+/// Direct control metadata only. Never decode unknown authored field values or
+/// compile a body to qualify the separately granted types/relation products.
+pub fn narrow_query_metadata(
+    source: &str,
+    schema: &Schema,
+) -> Result<(String, Vec<String>, Vec<String>)> {
+    let control = declaration_selected(source, "weftext", Some(&BTreeSet::new()))?;
+    let (id, types) = controls(&control)?;
+    let (resolved, validation) = schema.expand_types(&types);
+    if !validation.is_valid() {
+        return Err(unavailable());
+    }
+    Ok((id, types, resolved.into_iter().collect()))
+}
+
 fn unavailable() -> DataError {
     DataError("Narrow field profile unavailable".into())
 }

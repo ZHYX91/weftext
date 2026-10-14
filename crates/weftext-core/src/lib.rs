@@ -32,7 +32,7 @@ pub use operations::{
     AdmittedCompileSnapshot, AdmittedSnapshot, ConfigDocument, ConfigRole, FileChange,
     LibraryStyleDocument, ManagedResource, OperationChange, OperationIntent, OperationPreview,
     OperationReceipt, OperationRequest, SavedOperationSource, SnapshotFile, SnapshotSet,
-    TrashEntry,
+    SnapshotWitness, TrashEntry,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

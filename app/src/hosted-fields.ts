@@ -1,4 +1,5 @@
 import { action, emptyNativeValue, formatNativeValue, ui, valueEditor, type Cell, type DataSchema, type NativeValue, type Shape } from "./data-panel";
+import { hostedCachePrefix } from "./hosted-state";
 
 type Grant = { resource: string; fieldId: string; write: boolean };
 type Profile = { resource: string; basis: string | null; field: { fieldId: string; key: string; shape: Shape; nullable: boolean; required: boolean; cell: Cell; writable: boolean } };
@@ -28,15 +29,15 @@ export class HostedFields {
   clear(removeCache = true) {
     this.epoch++; this.profile = undefined; this.selected = undefined; this.draft = undefined;
     this.grants = []; this.busy = false; this.form = undefined; this.formDraft = undefined; this.unreadableDraft = undefined; this.picker.replaceChildren(); this.editor.replaceChildren(); this.results.replaceChildren();
-    this.host.replaceChildren(); this.host.hidden = true;
+    this.host.replaceChildren(); this.host.hidden = true; this.prefix = "";
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-field:")) sessionStorage.removeItem(key);
   }
-  async connect(deployment: string, actor: string) {
+  async connect(deployment: string, actor: string, generation: number) {
     this.clear(false);
     const epoch = this.epoch;
     const { fields } = await this.request<{ fields: Grant[] }>("fields");
     if (epoch !== this.epoch) return;
-    this.prefix = `weftext-hosted-field:${deployment}:${actor}:`;
+    this.prefix = hostedCachePrefix("field", deployment, actor, generation);
     this.grants = fields; this.host.hidden = !fields.length;
     this.host.replaceChildren(ui("h2", "", "获权字段与查询"), ui("p", "hint", "字段输入单独保存；查询仅使用当前获权字段。"));
     this.picker.setAttribute("aria-label", "选择获权字段");

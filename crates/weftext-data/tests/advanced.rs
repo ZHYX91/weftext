@@ -9,6 +9,326 @@ const REV: &str = "8a81e35f-ad48-4c12-af4f-3d2607102fa9";
 fn reference(id: &str) -> String {
     format!("weftext-node://{WS}/{id}")
 }
+
+#[test]
+fn projected_schema_parameters_validate_the_declared_shape_without_reinstallation() {
+    let schema = narrow_query_schema(
+        &Schema::bundled().unwrap(),
+        &std::collections::BTreeSet::from(["tasks/status".into()]),
+    )
+    .unwrap();
+    assert!(schema.fields[0].default.is_none());
+    let plan = QueryPlan {
+        r#where: Some("status == wanted".into()),
+        select: vec![column("status", "status")],
+        advanced: Some(QueryAdvanced {
+            parameters: vec![QueryParameter {
+                name: "wanted".into(),
+                shape: Shape::Scalar {
+                    semantic: "text".into(),
+                },
+                nullable: false,
+                default: None,
+            }],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut frozen = input(vec![FrozenNote {
+        entity_key: reference(A),
+        path: "resource:one".into(),
+        source: String::new(),
+        revision: REV.into(),
+        lifecycle: "live".into(),
+        title: None,
+        body: None,
+        products: None,
+        authorized_fields: Some(BTreeMap::from([(
+            "tasks/status".into(),
+            Cell::value(NativeValue::Text("open".into())),
+        )])),
+    }]);
+    frozen.advanced = Some(FrozenAdvancedInput {
+        parameters: BTreeMap::from([("wanted".into(), NativeValue::Text("open".into()))]),
+        ..Default::default()
+    });
+    validate_query_plan_with_context(&plan, &schema, frozen.advanced.as_ref().unwrap()).unwrap();
+    let result = execute_query(&frozen, &plan, &schema).unwrap();
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(
+        result.rows[0].cells["status"].native().unwrap().text(),
+        Some("open")
+    );
+    frozen
+        .advanced
+        .as_mut()
+        .unwrap()
+        .parameters
+        .insert("wanted".into(), NativeValue::Int("1".into()));
+    assert!(execute_query(&frozen, &plan, &schema).is_err());
+    frozen.advanced.as_mut().unwrap().parameters.clear();
+    assert!(execute_query(&frozen, &plan, &schema).is_err());
+    let mut unknown = plan;
+    unknown.advanced.as_mut().unwrap().parameters[0].shape = Shape::Use {
+        name: "unregistered_shape".into(),
+    };
+    assert!(
+        validate_query_plan_with_context(&unknown, &schema, &FrozenAdvancedInput::default())
+            .is_err()
+    );
+}
+
+#[test]
+fn read_effects_bind_terminal_columns_and_lexical_locals_before_products_or_fields() {
+    let schema = Schema::bundled().unwrap();
+    let context = FrozenAdvancedInput::default();
+    let branch = QueryPlan {
+        select: vec![column("body", "1")],
+        ..Default::default()
+    };
+    let terminal = QueryPlan {
+        r#where: Some("body > 0".into()),
+        advanced: Some(QueryAdvanced {
+            union_all: vec![branch.clone(), branch],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let demands = query_read_requirements(&terminal, &schema, &context).unwrap();
+    assert!(demands.products.is_empty());
+    assert!(demands.fields.is_empty());
+    assert_eq!(query_output_columns(&terminal, &[]).unwrap(), vec!["body"]);
+    let branch = QueryPlan {
+        select: vec![column("status", "1")],
+        ..Default::default()
+    };
+    let terminal = QueryPlan {
+        select: vec![column("renamed", "status")],
+        advanced: Some(QueryAdvanced {
+            union_all: vec![branch],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let demands = query_read_requirements(&terminal, &schema, &context).unwrap();
+    assert!(demands.fields.is_empty());
+    assert!(demands.products.is_empty());
+    for expr in [
+        "[1, 2].map(status, status + 1)",
+        "[\"x\"].map(body, body)",
+        "[\"x\"].exists(title, title == \"x\")",
+    ] {
+        let demands = query_read_requirements(&project(expr), &schema, &context).unwrap();
+        assert!(demands.products.is_empty(), "{expr}");
+        assert!(demands.fields.is_empty(), "{expr}");
+    }
+    let grouped = QueryPlan {
+        group: Some(QueryGroup {
+            keys: vec![column("body", "status")],
+            aggregates: vec![],
+        }),
+        order: vec![QueryOrder {
+            expr: "body".into(),
+            descending: false,
+            nulls: "last".into(),
+        }],
+        ..Default::default()
+    };
+    let demands = query_read_requirements(&grouped, &schema, &context).unwrap();
+    assert_eq!(
+        demands.fields,
+        std::collections::BTreeSet::from(["tasks/status".into()])
+    );
+    assert!(demands.products.is_empty());
+    let distinct = QueryPlan {
+        select: vec![column("body", "1")],
+        order: vec![QueryOrder {
+            expr: "body".into(),
+            descending: false,
+            nulls: "last".into(),
+        }],
+        advanced: Some(QueryAdvanced {
+            distinct: Some(vec![column("k", "body")]),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let demands = query_read_requirements(&distinct, &schema, &context).unwrap();
+    assert!(demands.products.is_empty());
+    assert!(demands.fields.is_empty());
+    let result = execute_query(
+        &input(vec![note(A, "task", ", status: \"open\"")]),
+        &distinct,
+        &schema,
+    )
+    .unwrap();
+    assert_eq!(
+        result.rows[0].cells["body"].native(),
+        Some(&NativeValue::Int("1".into()))
+    );
+}
+
+#[test]
+fn trusted_query_metadata_grants_identity_and_types_without_any_source_payload() {
+    let schema = narrow_query_schema(
+        &Schema::bundled().unwrap(),
+        &std::collections::BTreeSet::from(["tasks/status".into()]),
+    )
+    .unwrap();
+    let frozen = input(vec![FrozenNote {
+        entity_key: reference(A),
+        path: "resource:one".into(),
+        source: String::new(),
+        revision: REV.into(),
+        lifecycle: "live".into(),
+        title: None,
+        body: None,
+        products: None,
+        authorized_fields: Some(BTreeMap::from([(
+            "tasks/status".into(),
+            Cell::value(NativeValue::Text("open".into())),
+        )])),
+    }]);
+    let plan = QueryPlan {
+        select: vec![
+            column("self", "self"),
+            column("types", "types"),
+            column("body", "body"),
+        ],
+        ..Default::default()
+    };
+    let denied = execute_query(&frozen, &plan, &schema).unwrap();
+    assert_eq!(denied.rows[0].cells["self"].state(), "unavailable");
+    assert_eq!(denied.rows[0].cells["types"].state(), "unavailable");
+    let metadata = BTreeMap::from([(
+        reference(A),
+        AuthorizedQueryMetadata {
+            identity: Some(reference(A)),
+            types: Some(vec!["task".into()]),
+            resolved_types: vec!["tasks/task".into()],
+        },
+    )]);
+    let result =
+        execute_authorized_query(&frozen, &plan, &schema, &QueryBudget::default(), &metadata)
+            .unwrap();
+    assert_eq!(
+        result.rows[0].cells["self"].native().unwrap().text(),
+        Some(reference(A).as_str())
+    );
+    assert_eq!(result.rows[0].cells["types"].state(), "value");
+    assert_eq!(result.rows[0].cells["body"].state(), "unavailable");
+    assert!(frozen.notes[0].source.is_empty());
+}
+
+#[test]
+fn related_consumes_authorized_field_cells_and_control_types_without_parsing_a_body() {
+    let full = Schema::bundled().unwrap();
+    let fields = std::collections::BTreeSet::from(["people/parents".into()]);
+    let relation = full
+        .relations
+        .iter()
+        .find(|r| r.field == "people/parents")
+        .unwrap()
+        .clone();
+    let mut schema = narrow_query_schema(&full, &fields).unwrap();
+    schema.types = full.types.clone();
+    schema.aliases = full.aliases.clone();
+    schema.relations = vec![relation.clone()];
+    let mut notes = vec![];
+    let mut metadata = BTreeMap::new();
+    for (id, parents) in [
+        (
+            A,
+            format!(", parents: ((target: (ref: \"{}\"),),)", reference(B)),
+        ),
+        (B, String::new()),
+    ] {
+        let raw = format!(
+            "#metadata((id: \"{id}\", types: (\"person\",){parents})) <weftext>\nPRIVATE_BODY_DO_NOT_EXECUTE"
+        );
+        let profile = narrow_profile(&raw, &full, &fields, None).unwrap();
+        let (_, types, resolved) = narrow_query_metadata(&raw, &full).unwrap();
+        metadata.insert(
+            reference(id),
+            AuthorizedQueryMetadata {
+                identity: Some(reference(id)),
+                types: Some(types),
+                resolved_types: resolved,
+            },
+        );
+        notes.push(FrozenNote {
+            entity_key: reference(id),
+            path: format!("resource:{id}"),
+            source: String::new(),
+            revision: REV.into(),
+            lifecycle: "live".into(),
+            title: None,
+            body: None,
+            products: None,
+            authorized_fields: Some(
+                profile
+                    .fields
+                    .into_iter()
+                    .map(|f| (f.field_id, f.cell))
+                    .collect(),
+            ),
+        });
+    }
+    let seed = QueryPlan {
+        r#where: Some("self == origin".into()),
+        select: vec![column("self", "self")],
+        advanced: Some(QueryAdvanced {
+            parameters: vec![QueryParameter {
+                name: "origin".into(),
+                shape: Shape::Scalar {
+                    semantic: "node_ref".into(),
+                },
+                nullable: false,
+                default: Some(NativeValue::Text(reference(A))),
+            }],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut plan = QueryPlan {
+        select: vec![column("self", "self")],
+        advanced: Some(QueryAdvanced {
+            related: Some(QueryRelated {
+                relation: relation.id,
+                from: Box::new(seed),
+                direction: "forward".into(),
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let frozen = input(notes);
+    let forward =
+        execute_authorized_query(&frozen, &plan, &schema, &QueryBudget::default(), &metadata)
+            .unwrap();
+    assert_eq!(forward.rows.len(), 1);
+    assert_eq!(
+        forward.rows[0].entity_key.as_deref(),
+        Some(reference(B).as_str())
+    );
+    assert!(
+        !serde_json::to_string(&forward)
+            .unwrap()
+            .contains("PRIVATE_BODY")
+    );
+    let related = plan.advanced.as_mut().unwrap().related.as_mut().unwrap();
+    related.direction = "inverse".into();
+    related.from.advanced.as_mut().unwrap().parameters[0].default =
+        Some(NativeValue::Text(reference(B)));
+    let inverse =
+        execute_authorized_query(&frozen, &plan, &schema, &QueryBudget::default(), &metadata)
+            .unwrap();
+    assert_eq!(inverse.rows.len(), 1);
+    assert_eq!(
+        inverse.rows[0].entity_key.as_deref(),
+        Some(reference(A).as_str())
+    );
+}
 fn note(id: &str, kind: &str, fields: &str) -> FrozenNote {
     FrozenNote {
         entity_key: reference(id),

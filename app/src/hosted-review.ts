@@ -2,6 +2,7 @@ import { action, ui } from "./data-panel";
 import { ProofreadingPanel, type ProofreadResult } from "./proofreading-panel";
 import type { KnowledgeAnnotation, KnowledgeContext, KnowledgeIntent } from "./knowledge-panel";
 import { canApplySuggestion } from "./knowledge-state";
+import { hostedCachePrefix } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; target: boolean; accept: boolean; proofread: boolean; sourceRead: boolean; sourceWrite: boolean };
 type Catalog = { resource: string; rights: Rights };
@@ -33,14 +34,14 @@ export class HostedReview {
   constructor(private host: HTMLElement, private request: Request, private context: () => SourceContext | null, private flush: () => Promise<void>, private select: (from: number, to: number) => void, private changed: (resource: string, sourceChanged: boolean) => void) { this.clear(false); }
   clear(remove = true) {
     this.epoch++; this.panel?.dispose(); this.panel = undefined; this.catalog = []; this.resource = undefined; this.profile = undefined; this.draft = undefined; this.unreadable = undefined; this.busy = false;
-    this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.proofread.replaceChildren(); this.message.textContent = "";
+    this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.proofread.replaceChildren(); this.message.textContent = ""; this.prefix = "";
     if (remove) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-review:")) sessionStorage.removeItem(key);
   }
-  async connect(deployment: string, actor: string) {
+  async connect(deployment: string, actor: string, generation: number) {
     this.clear(false); const epoch = this.epoch;
     const result = await this.request<{ resources: Catalog[] }>("review");
     if (epoch !== this.epoch) return;
-    this.prefix = `weftext-hosted-review:${deployment}:${actor}:`; this.catalog = result.resources;
+    this.prefix = hostedCachePrefix("review", deployment, actor, generation); this.catalog = result.resources;
     this.host.hidden = !this.catalog.length;
     this.picker.setAttribute("aria-label", "选择批注对象");
     this.picker.replaceChildren(...this.catalog.map(item => { const option = ui("option", "", item.resource); option.value = item.resource; return option; }));

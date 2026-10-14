@@ -34,6 +34,74 @@ fn request(doc: &OpenedDocument, source: &str) -> SaveRequest {
     }
 }
 
+#[test]
+fn owned_read_witness_releases_core_storage_but_keeps_exact_validation() {
+    let mut f = Fixture::new("plain");
+    let root = f.temp.path().join("library");
+    f.core.create_library(&root).unwrap();
+    let doc = f.core.create_note(&root, &root, "Note").unwrap();
+    let baseline = f.core.snapshots.len();
+    let mut last = None;
+    for _ in 0..40 {
+        let snapshot = f
+            .core
+            .read_snapshot(&root, std::slice::from_ref(&doc.path))
+            .unwrap()
+            .files
+            .remove(0);
+        let witness = f.core.take_snapshot_witness(&snapshot.base_id).unwrap();
+        assert_eq!(f.core.snapshots.len(), baseline);
+        assert!(f.core.take_snapshot_witness(&snapshot.base_id).is_err());
+        assert!(
+            f.core
+                .validate_snapshot(&root, &snapshot.path, &snapshot.base_id)
+                .is_err()
+        );
+        f.core
+            .validate_snapshot_witness(&root, &snapshot.path, &witness)
+            .unwrap();
+        last = Some(witness);
+    }
+    let witness = last.unwrap();
+    assert!(
+        f.core
+            .validate_snapshot_witness(&root, &f.path, &witness)
+            .is_err()
+    );
+    f.core
+        .save(request(&doc, &(doc.source.clone() + "\nnew save")))
+        .unwrap();
+    assert!(
+        f.core
+            .validate_snapshot_witness(&root, &doc.path, &witness)
+            .is_err()
+    );
+    drop(witness);
+    assert_eq!(f.core.snapshots.len(), baseline);
+}
+
+#[test]
+fn failed_bounded_read_does_not_register_partial_snapshot_bytes() {
+    let mut f = Fixture::new("plain");
+    let root = f.temp.path().join("library");
+    f.core.create_library(&root).unwrap();
+    let doc = f.core.create_note(&root, &root, "Note").unwrap();
+    let huge = root.join("large-owned-fixture.bin");
+    fs::File::create(&huge)
+        .unwrap()
+        .set_len(64 * 1024 * 1024)
+        .unwrap();
+    let baseline = f.core.snapshots.len();
+    let error = f
+        .core
+        .read_snapshot(&root, &[doc.path.clone(), display(&huge)])
+        .err()
+        .unwrap();
+    assert_eq!(error.code, "budget");
+    assert_eq!(f.core.snapshots.len(), baseline);
+    assert_eq!(fs::read_to_string(&doc.path).unwrap(), doc.source);
+}
+
 fn operation(core: &mut Core, root: &Path, intent: OperationIntent) -> OperationReceipt {
     let p = core
         .prepare_operation(OperationRequest {

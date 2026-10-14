@@ -1,6 +1,7 @@
 import { action, formatNativeValue, ui, type Cell } from "./data-panel";
 import { OutputReadGate, type OutputFile, type TemplateInspection } from "./export-state";
 import { importReceipt, officeChunk, outputReceipt, type OfficeBinding, type OfficeDraft, type OfficeImportReceipt, type OfficeImportRequest, type OfficeOutputReceipt, type OfficeOutputRequest } from "./hosted-office-state";
+import { hostedCachePrefix } from "./hosted-state";
 
 export type HostedOfficeContext = { resource: string; source: string; sourceHash?: string; dirty: boolean; pending: boolean };
 export type HostedOfficeQuery = { queryId: string; columns: string[]; rowCount: number; coverage: string };
@@ -75,12 +76,12 @@ export class HostedOffice {
   clear(removeCache = true) {
     this.epoch++; this.templateGate.invalidate(); this.importGate.invalidate(); this.busy = false; this.cache = initial(); this.resources = []; this.queries = []; this.targets = []; this.original = undefined; this.unreadable = undefined;
     if (this.activeUrl) URL.revokeObjectURL(this.activeUrl); this.activeUrl = undefined;
-    this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.message.textContent = "";
+    this.host.replaceChildren(); this.host.hidden = true; this.editor.replaceChildren(); this.message.textContent = ""; this.key = "";
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-office:")) sessionStorage.removeItem(key);
     this.key = "";
   }
-  async connect(deployment: string, actor: string) {
-    this.clear(false); const epoch = this.epoch; this.key = `weftext-hosted-office:${deployment}:${actor}`;
+  async connect(deployment: string, actor: string, generation: number) {
+    this.clear(false); const epoch = this.epoch; this.key = hostedCachePrefix("office", deployment, actor, generation) + "state";
     let raw: string | null = null;
     try {
       raw = sessionStorage.getItem(this.key);

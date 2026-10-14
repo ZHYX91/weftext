@@ -365,6 +365,13 @@ impl Schema {
         }
         self.validate_at(shape, value, "$")
     }
+
+    /// Validate a declared input shape against this exact projected baseline.
+    /// Query projections intentionally omit author creation defaults and
+    /// unrelated installation entries, so they are not schemas to reinstall.
+    pub fn check_query_shape(&self, shape: &Shape) -> Result<()> {
+        self.check_shape(shape, &mut vec![])
+    }
     fn validate_at(&self, shape: &Shape, value: &NativeValue, path: &str) -> Validation {
         let shape = self.resolve(shape);
         let mut out = Validation::valid();

@@ -126,6 +126,78 @@ pub struct NoteProducts {
     pub body: Cell,
     pub headings: Cell,
 }
+
+/// Trusted producer metadata. Wire JSON cannot install this capability; the
+/// hosted adapter authorizes identity/types products and relation read effects.
+#[derive(Debug, Clone, Default)]
+pub struct AuthorizedQueryMetadata {
+    pub identity: Option<String>,
+    pub types: Option<Vec<String>>,
+    pub resolved_types: Vec<String>,
+}
+
+pub(crate) fn query_projection(
+    note: &FrozenNote,
+    schema: &Schema,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+) -> NoteProjection {
+    let Some(fields) = &note.authorized_fields else {
+        return project(&note.source, schema);
+    };
+    let qualified = metadata.get(&note.entity_key);
+    NoteProjection {
+        qualification: "qualified".into(),
+        id: None,
+        types: qualified.and_then(|m| m.types.clone()).unwrap_or_default(),
+        resolved_types: qualified
+            .map(|m| m.resolved_types.clone())
+            .unwrap_or_default(),
+        fields: schema
+            .fields
+            .iter()
+            .map(|f| FieldProjection {
+                field_id: f.id.clone(),
+                key: f.key.clone(),
+                cell: fields.get(&f.id).cloned().unwrap_or(Cell::Unavailable {
+                    reason: "authorized-field-unavailable".into(),
+                }),
+                source_range: None,
+                raw: None,
+                writable: false,
+                required: false,
+                unbound: vec![],
+            })
+            .collect(),
+        unknown_fields: vec![],
+        diagnostics: vec![],
+    }
+}
+
+pub(crate) fn query_note_bytes(
+    note: &FrozenNote,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+) -> Result<usize> {
+    let mut bytes = if let Some(fields) = &note.authorized_fields {
+        serde_json::to_vec(fields)?.len()
+    } else {
+        note.source.len()
+    };
+    if let Some(products) = &note.products {
+        bytes = bytes.saturating_add(serde_json::to_vec(products)?.len());
+    }
+    if let Some(metadata) = metadata.get(&note.entity_key) {
+        bytes = bytes.saturating_add(metadata.identity.as_ref().map_or(0, String::len));
+        for name in metadata
+            .types
+            .iter()
+            .flatten()
+            .chain(&metadata.resolved_types)
+        {
+            bytes = bytes.saturating_add(name.len());
+        }
+    }
+    Ok(bytes)
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FrozenQueryInput {
@@ -255,7 +327,7 @@ pub(crate) fn symbols(schema: &Schema) -> Result<BTreeMap<String, QType>> {
     }
     Ok(map)
 }
-fn literal_text(e: &IdedExpr) -> Option<String> {
+pub(crate) fn literal_text(e: &IdedExpr) -> Option<String> {
     match &e.expr {
         Expr::Literal(LiteralValue::String(s)) => Some(s.inner().to_string()),
         _ => None,
@@ -1478,8 +1550,18 @@ pub fn execute_query_with_budget(
     schema: &Schema,
     limits: &QueryBudget,
 ) -> Result<QueryResult> {
-    crate::query_advanced::execute_advanced_query(input, plan, schema, limits)
+    execute_authorized_query(input, plan, schema, limits, &BTreeMap::new())
 }
+pub fn execute_authorized_query(
+    input: &FrozenQueryInput,
+    plan: &QueryPlan,
+    schema: &Schema,
+    limits: &QueryBudget,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+) -> Result<QueryResult> {
+    crate::query_advanced::execute_advanced_query(input, plan, schema, limits, metadata)
+}
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_query_leaf(
     input: &FrozenQueryInput,
     plan: &QueryPlan,
@@ -1488,6 +1570,7 @@ pub(crate) fn execute_query_leaf(
     parameters: &BTreeMap<String, Cell>,
     parameter_shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
 ) -> Result<QueryResult> {
     if !matches!(input.coverage.as_str(), "complete" | "partial")
         || !matches!(input.freshness.as_str(), "current" | "stale")
@@ -1623,50 +1706,19 @@ pub(crate) fn execute_query_leaf(
     let mut partial = input.coverage == "partial";
     let mut env = query_env(schema)?;
     env.parameter_shapes = parameter_shapes.clone();
-    let mut bytes = 0;
+    let mut bytes = 0usize;
     let mut data_rows = vec![];
     'notes: for note in notes {
         if note.lifecycle != lifecycle || !in_directory(&note.path, &plan.scope) {
             continue;
         }
-        bytes += if let Some(fields) = &note.authorized_fields {
-            serde_json::to_vec(fields)?.len()
-        } else {
-            note.source.len()
-        };
+        bytes = bytes.saturating_add(query_note_bytes(note, metadata)?);
         if bytes > limits.max_source_bytes || data_rows.len() >= limits.max_rows {
             partial = true;
             diagnostics.push("host-budget-exhausted".into());
             break;
         }
-        let projection = if let Some(fields) = &note.authorized_fields {
-            NoteProjection {
-                qualification: "qualified".into(),
-                id: None,
-                types: vec![],
-                resolved_types: vec![],
-                fields: schema
-                    .fields
-                    .iter()
-                    .map(|f| FieldProjection {
-                        field_id: f.id.clone(),
-                        key: f.key.clone(),
-                        cell: fields.get(&f.id).cloned().unwrap_or(Cell::Unavailable {
-                            reason: "authorized-field-unavailable".into(),
-                        }),
-                        source_range: None,
-                        raw: None,
-                        writable: false,
-                        required: false,
-                        unbound: vec![],
-                    })
-                    .collect(),
-                unknown_fields: vec![],
-                diagnostics: vec![],
-            }
-        } else {
-            project(&note.source, schema)
-        };
+        let projection = query_projection(note, schema, metadata);
         if projection.qualification != "qualified" {
             partial = true;
             diagnostics.push(format!(
@@ -1720,15 +1772,28 @@ pub(crate) fn execute_query_leaf(
         if note.authorized_fields.is_some() {
             cells.insert(
                 "self".into(),
-                Cell::Unavailable {
-                    reason: "identity-not-authorized".into(),
-                },
+                metadata
+                    .get(&note.entity_key)
+                    .and_then(|m| m.identity.clone())
+                    .map(NativeValue::Text)
+                    .map(Cell::value)
+                    .unwrap_or(Cell::Unavailable {
+                        reason: "identity-not-authorized".into(),
+                    }),
             );
             cells.insert(
                 "types".into(),
-                Cell::Unavailable {
-                    reason: "types-not-authorized".into(),
-                },
+                metadata
+                    .get(&note.entity_key)
+                    .and_then(|m| m.types.clone())
+                    .map(|types| {
+                        Cell::value(NativeValue::Array(
+                            types.into_iter().map(NativeValue::Text).collect(),
+                        ))
+                    })
+                    .unwrap_or(Cell::Unavailable {
+                        reason: "types-not-authorized".into(),
+                    }),
             );
         }
         cells.insert(

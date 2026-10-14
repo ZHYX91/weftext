@@ -1,0 +1,1471 @@
+//! Query over explicit hosted resources, independently granted native products
+//! and exact saved-definition revisions. No local inventory routes are reused.
+use super::*;
+use weftext_core::{ConfigRole, SnapshotFile, SnapshotWitness};
+use weftext_data::{DefinitionSelection, NativeValue, QueryPlan, SavedQueryBinding, Schema};
+
+const PRODUCTS: [&str; 5] = ["title", "body", "headings", "types", "self"];
+const QUERY_BYTES: usize = 32 * 1024 * 1024;
+
+fn budget_exceeded() -> ApiError {
+    ApiError::new(
+        StatusCode::BAD_REQUEST,
+        "queryBudget",
+        "查询的累计冻结输入或原生产物超过 32 MiB 预算，请缩小范围后明确重新执行。",
+    )
+}
+fn charge_bytes(used: &mut usize, bytes: usize) -> Result<(), ApiError> {
+    let next = used.checked_add(bytes).ok_or_else(budget_exceeded)?;
+    if next > QUERY_BYTES {
+        return Err(budget_exceeded());
+    }
+    *used = next;
+    Ok(())
+}
+struct BudgetWriter<'a>(&'a mut usize);
+impl std::io::Write for BudgetWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        charge_bytes(self.0, bytes.len())
+            .map_err(|_| std::io::Error::other("query byte budget exceeded"))?;
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+fn charge_serialized(used: &mut usize, value: &impl Serialize) -> Result<(), ApiError> {
+    // Count into a bounded sink rather than allocate a second large JSON copy.
+    serde_json::to_writer(BudgetWriter(used), value).map_err(|_| budget_exceeded())
+}
+pub(super) fn serialized_query_bytes(value: &impl Serialize) -> Result<usize, ApiError> {
+    let mut bytes = 0;
+    charge_serialized(&mut bytes, value)?;
+    Ok(bytes)
+}
+fn base64_bytes(bytes: usize) -> Result<usize, ApiError> {
+    bytes
+        .checked_add(2)
+        .and_then(|n| (n / 3).checked_mul(4))
+        .ok_or_else(budget_exceeded)
+}
+fn worker_capture_bytes(
+    source_bytes: usize,
+    path_bytes: usize,
+    root_bytes: usize,
+    inputs: impl IntoIterator<Item = (usize, usize)>,
+) -> Result<usize, ApiError> {
+    let mut used = 0;
+    // The raw source and its frozen base64 copy coexist. Allow for the request,
+    // owned paths and map entries, and charge shared inputs once per worker.
+    for bytes in [
+        4096,
+        source_bytes,
+        base64_bytes(source_bytes)?,
+        path_bytes,
+        path_bytes,
+        root_bytes,
+    ] {
+        charge_bytes(&mut used, bytes)?;
+    }
+    for (path_bytes, bytes) in inputs {
+        for bytes in [256, path_bytes, base64_bytes(bytes)?] {
+            charge_bytes(&mut used, bytes)?;
+        }
+    }
+    Ok(used)
+}
+fn frozen_input_bytes(
+    input: &weftext_data::FrozenQueryInput,
+    metadata: &BTreeMap<String, weftext_data::AuthorizedQueryMetadata>,
+    schema: &Schema,
+    plan: &QueryPlan,
+) -> Result<usize, ApiError> {
+    let mut used = 0;
+    charge_serialized(&mut used, &(input, schema, plan))?;
+    for note in &input.notes {
+        // The trusted field capability is deliberately skipped by wire serde.
+        // It still owns memory and must participate in the execution budget.
+        charge_serialized(&mut used, &note.authorized_fields)?;
+    }
+    for (key, m) in metadata {
+        charge_serialized(&mut used, &(key, &m.identity, &m.types, &m.resolved_types))?;
+    }
+    Ok(used)
+}
+fn take_witnesses(
+    inner: &mut HostedInner,
+    files: &[SnapshotFile],
+) -> Result<Vec<(String, SnapshotWitness)>, ApiError> {
+    let mut witnesses = vec![];
+    let mut failed = false;
+    for file in files {
+        match inner.core.take_snapshot_witness(&file.base_id) {
+            Ok(witness) => witnesses.push((file.path.clone(), witness)),
+            Err(_) => failed = true,
+        }
+    }
+    if failed {
+        return Err(changed());
+    }
+    Ok(witnesses)
+}
+
+#[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct QueryRights {
+    #[serde(default)]
+    pub(super) definitions: bool,
+    #[serde(default)]
+    pub(super) definition_history: bool,
+    #[serde(default)]
+    pub(super) products: BTreeMap<String, bool>,
+    #[serde(default)]
+    pub(super) relations: BTreeSet<String>,
+}
+#[derive(Clone, Default)]
+pub(super) struct Authority {
+    pub(super) fields: BTreeMap<String, BTreeSet<String>>,
+    pub(super) products: BTreeMap<String, BTreeSet<String>>,
+    pub(super) definitions: BTreeMap<String, bool>,
+    pub(super) relations: BTreeMap<String, BTreeSet<String>>,
+    pub(super) inputs: BTreeSet<String>,
+}
+pub(super) fn authorize_authority(
+    inner: &HostedInner,
+    actor: &str,
+    authority: &Authority,
+) -> Result<(), ApiError> {
+    let user = inner
+        .policy
+        .users
+        .get(actor)
+        .filter(|u| u.enabled)
+        .ok_or_else(expired)?;
+    let access = |resource: &str| {
+        user.grants
+            .get(resource)
+            .filter(|_| inner.config.files.contains_key(resource))
+            .ok_or_else(unavailable)
+    };
+    for (resource, fields) in &authority.fields {
+        let rights = access(resource)?;
+        if fields
+            .iter()
+            .any(|f| !rights.fields.get(f).is_some_and(|r| r.read))
+        {
+            return Err(unavailable());
+        }
+    }
+    for (resource, products) in &authority.products {
+        let rights = access(resource)?;
+        if products
+            .iter()
+            .any(|p| !rights.query.products.get(p).copied().unwrap_or(false))
+        {
+            return Err(unavailable());
+        }
+    }
+    for (resource, history) in &authority.definitions {
+        let rights = access(resource)?;
+        if !rights.query.definitions || *history && !rights.query.definition_history {
+            return Err(unavailable());
+        }
+    }
+    for (resource, relations) in &authority.relations {
+        let rights = access(resource)?;
+        if !relations.is_subset(&rights.query.relations) {
+            return Err(unavailable());
+        }
+    }
+    for resource in &authority.inputs {
+        if !access(resource)?.read {
+            return Err(unavailable());
+        }
+    }
+    Ok(())
+}
+pub(super) fn valid_rights(rights: &QueryRights) -> bool {
+    (!rights.definition_history || rights.definitions)
+        && rights
+            .products
+            .keys()
+            .all(|p| PRODUCTS.contains(&p.as_str()))
+        && rights.relations.len() <= 64
+        && rights
+            .relations
+            .iter()
+            .all(|r| !r.is_empty() && r.len() <= 256)
+}
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct QueryRequest {
+    #[serde(default)]
+    pub(super) fields: BTreeSet<String>,
+    pub(super) resources: Option<BTreeSet<String>>,
+    #[serde(default)]
+    pub(super) products: BTreeSet<String>,
+    #[serde(default)]
+    pub(super) relations: BTreeSet<String>,
+    #[serde(default, deserialize_with = "data_api::unique_fields")]
+    pub(super) parameters: BTreeMap<String, NativeValue>,
+    pub(super) plan: QueryPlan,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Definitions {
+    resource: String,
+    selection: Option<DefinitionSelection>,
+}
+pub(super) fn router() -> Router<HostedState> {
+    Router::new()
+        .route("/api/hosted/query/catalog", get(catalog))
+        .route("/api/hosted/query/definitions", post(definitions))
+        .route("/api/hosted/query", post(run))
+}
+fn changed() -> ApiError {
+    ApiError::new(
+        StatusCode::CONFLICT,
+        "queryUnavailable",
+        "查询的准确定义、版本或获权依据已变化，请保留输入并明确重新执行。",
+    )
+}
+fn invalid() -> ApiError {
+    ApiError::bad("查询不可用：请检查获权字段、参数、表达式及预算")
+}
+fn source(file: &SnapshotFile) -> Result<String, ApiError> {
+    if file.kind != "managed"
+        || file.currentness != "accepted"
+        || file.node_id.is_none()
+        || file.revision.is_none()
+    {
+        return Err(changed());
+    }
+    String::from_utf8(file.bytes.clone().ok_or_else(changed)?).map_err(|_| changed())
+}
+fn definitions_access(
+    inner: &HostedInner,
+    actor: &str,
+    resource: &str,
+    history: bool,
+) -> Result<(), ApiError> {
+    let authority = Authority {
+        definitions: BTreeMap::from([(resource.into(), history)]),
+        ..Default::default()
+    };
+    authorize_authority(inner, actor, &authority)?;
+    if !inner.config.files.get(resource).is_some_and(|f| f.editable) {
+        return Err(unavailable());
+    }
+    Ok(())
+}
+fn read_definitions(
+    inner: &mut HostedInner,
+    actor: &str,
+    resource: &str,
+    selection: Option<&DefinitionSelection>,
+) -> Result<Value, ApiError> {
+    let pinned = matches!(selection, Some(DefinitionSelection::Pinned { .. }));
+    definitions_access(inner, actor, resource, pinned)?;
+    let path = inner.config.root.join(&inner.config.files[resource].path);
+    let root = inner.config.root.clone();
+    let snapshot = inner
+        .core
+        .read_snapshot(&root, &[path.to_string_lossy().into_owned()])
+        .map_err(|_| changed())?
+        .files
+        .remove(0);
+    let witnesses = take_witnesses(inner, std::slice::from_ref(&snapshot))?;
+    let current = source(&snapshot)?;
+    let owner = snapshot.node_id.as_ref().unwrap();
+    let content = match selection {
+        Some(DefinitionSelection::Pinned { revision, .. }) => String::from_utf8(
+            inner
+                .core
+                .read_source_revision_at(&root, &path, owner, revision)
+                .map_err(|_| changed())?,
+        )
+        .map_err(|_| changed())?,
+        _ => current,
+    };
+    let definitions = weftext_data::saved_queries(&content)
+        .map_err(|_| changed())?
+        .into_iter()
+        .filter(|d| {
+            selection.is_none_or(|s| match s {
+                DefinitionSelection::Current { key } | DefinitionSelection::Pinned { key, .. } => {
+                    &d.key == key
+                }
+            })
+        })
+        .collect::<Vec<_>>();
+    if selection.is_some() && definitions.len() != 1 {
+        return Err(changed());
+    }
+    for definition in &definitions {
+        if !inner
+            .core
+            .is_definition_key_admitted(&root, owner, &definition.key)
+            .map_err(|_| changed())?
+        {
+            return Err(changed());
+        }
+    }
+    inner
+        .core
+        .validate_snapshot_witness(&root, &snapshot.path, &witnesses[0].1)
+        .map_err(|_| changed())?;
+    let revision = match selection {
+        Some(DefinitionSelection::Pinned { revision, .. }) => Some(revision.clone()),
+        _ => snapshot.revision,
+    };
+    Ok(
+        json!({"resource":resource,"ownerRevision":revision,"definitions":definitions,"selection":selection}),
+    )
+}
+async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
+    locked(&state,move|inner| {
+        let actor=inner.actor(&auth)?;let grants=inner.policy.users[&actor].grants.clone();let mut resources=vec![];let mut definitions=vec![];let mut unavailable_definitions=vec![];
+        for (resource,rights) in grants {let Some(file)=inner.config.files.get(&resource).filter(|f|f.editable)else{continue;};let fields=rights.fields.iter().filter(|(_,r)|r.read).map(|(id,_)|id.clone()).collect::<Vec<_>>();
+            if fields.is_empty()&&!rights.query.definitions&&!rights.query.products.values().any(|p|*p)&&rights.query.relations.is_empty(){continue;}
+            resources.push(json!({"resource":resource,"title":file.title,"fields":fields,"products":PRODUCTS.iter().map(|p|(*p,rights.query.products.get(*p).copied().unwrap_or(false))).collect::<BTreeMap<_,_>>(),"relations":rights.query.relations,"definitions":rights.query.definitions,"definitionHistory":rights.query.definition_history}));
+            if rights.query.definitions {match read_definitions(inner,&actor,&resource,None){Ok(result)=>{for definition in result["definitions"].as_array().ok_or_else(changed)?{let mut d=definition.clone();d["resource"]=json!(resource);d["revision"]=result["ownerRevision"].clone();definitions.push(d);}},Err(_)=>unavailable_definitions.push(json!({"resource":resource,"status":"unavailable"}))}}
+        }
+        Ok(Json(json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty(){"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions})))
+    }).await
+}
+async fn definitions(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Definitions>,
+) -> ApiResult {
+    locked(&state, move |inner| {
+        let actor = inner.actor(&auth)?;
+        Ok(Json(read_definitions(
+            inner,
+            &actor,
+            &req.resource,
+            req.selection.as_ref(),
+        )?))
+    })
+    .await
+}
+async fn run(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<QueryRequest>,
+) -> ApiResult {
+    Ok(Json(execute(&state, &auth, req).await?))
+}
+#[derive(Clone)]
+struct Draft {
+    resource: String,
+    source: String,
+    binding: SavedQueryBinding,
+    session_id: Option<String>,
+    serial: Option<u64>,
+}
+struct Capture {
+    actor: String,
+    epoch: u64,
+    authority: Authority,
+    config_hash: String,
+    witnesses: Vec<(String, SnapshotWitness)>,
+    input: weftext_data::FrozenQueryInput,
+    schema: Schema,
+    plan: QueryPlan,
+    metadata: BTreeMap<String, weftext_data::AuthorizedQueryMetadata>,
+    columns: Vec<String>,
+    workers: Vec<(String, WorkerRequest)>,
+    products: BTreeSet<String>,
+    resource_map: BTreeMap<String, String>,
+    draft: Option<Draft>,
+}
+fn all_resources(authority: &Authority) -> BTreeSet<String> {
+    authority
+        .fields
+        .keys()
+        .chain(authority.products.keys())
+        .chain(authority.definitions.keys())
+        .chain(authority.relations.keys())
+        .chain(&authority.inputs)
+        .cloned()
+        .collect()
+}
+fn row_access(
+    inner: &HostedInner,
+    actor: &str,
+    resource: &str,
+    req: &QueryRequest,
+) -> Result<(), ApiError> {
+    let authority = Authority {
+        fields: BTreeMap::from([(resource.into(), req.fields.clone())]),
+        products: BTreeMap::from([(resource.into(), req.products.clone())]),
+        relations: BTreeMap::from([(resource.into(), req.relations.clone())]),
+        ..Default::default()
+    };
+    authorize_authority(inner, actor, &authority)?;
+    let rights = inner.policy.users[actor]
+        .grants
+        .get(resource)
+        .ok_or_else(unavailable)?;
+    if !inner.config.files.get(resource).is_some_and(|f| f.editable)
+        || (!rights.fields.values().any(|f| f.read)
+            && !rights.query.products.values().any(|p| *p)
+            && !rights.query.definitions
+            && rights.query.relations.is_empty())
+    {
+        return Err(unavailable());
+    }
+    Ok(())
+}
+fn request_budget(req: &QueryRequest) -> Result<(), ApiError> {
+    if req.fields.len() > 64
+        || req.products.iter().any(|p| !PRODUCTS.contains(&p.as_str()))
+        || req.relations.len() > 64
+        || req.resources.as_ref().is_some_and(|r| r.len() > 64)
+        || req.parameters.len() > 64
+        || serde_json::to_vec(&req.plan).map_err(|_| invalid())?.len() > 256 * 1024
+    {
+        return Err(invalid());
+    }
+    fn visit(plan: &QueryPlan, nodes: &mut usize, depth: usize) -> Result<(), ApiError> {
+        *nodes += 1;
+        if *nodes > 1024
+            || depth > 64
+            || plan.scope.directory.is_some()
+            || !matches!(plan.scope.lifecycle.as_str(), "" | "live")
+            || plan.take.is_some_and(|n| n > 500)
+        {
+            return Err(invalid());
+        }
+        if let Some(a) = &plan.advanced {
+            for p in &a.union_all {
+                visit(p, nodes, depth + 1)?;
+            }
+            if let Some(r) = &a.related {
+                visit(&r.from, nodes, depth + 1)?;
+            }
+        }
+        Ok(())
+    }
+    visit(&req.plan, &mut 0, 0)
+}
+fn selected_key(selection: &DefinitionSelection) -> &str {
+    match selection {
+        DefinitionSelection::Current { key } | DefinitionSelection::Pinned { key, .. } => key,
+    }
+}
+fn schema_from(file: &SnapshotFile) -> Result<Schema, ApiError> {
+    match file.bytes.as_ref() {
+        Some(bytes) if file.revision.is_some() => {
+            Schema::from_author_json(std::str::from_utf8(bytes).map_err(|_| changed())?)
+                .map_err(|_| changed())
+        }
+        Some(_) => Err(changed()),
+        None => Schema::bundled().map_err(|_| changed()),
+    }
+}
+fn restricted_schema(
+    schema: &Schema,
+    fields: &BTreeSet<String>,
+    types: &BTreeSet<String>,
+    relations: &BTreeSet<String>,
+) -> Result<Schema, ApiError> {
+    let mut result = if fields.is_empty() {
+        let mut result = schema.clone();
+        result.fields.clear();
+        result.definitions.clear();
+        result.types.clear();
+        result.aliases.clear();
+        result.relations.clear();
+        result.providers.clear();
+        result.validators.clear();
+        result.series_policies.clear();
+        result
+    } else {
+        weftext_data::narrow_query_schema(schema, fields).map_err(|_| invalid())?
+    };
+    result.types = schema
+        .types
+        .iter()
+        .filter(|t| types.contains(&t.id))
+        .cloned()
+        .map(|mut t| {
+            t.fields.retain(|f| fields.contains(&f.id));
+            t.requires.retain(|id| types.contains(id));
+            t.conflicts.retain(|id| types.contains(id));
+            t.constraints.clear();
+            t
+        })
+        .collect();
+    result.aliases = schema
+        .aliases
+        .iter()
+        .filter(|(_, id)| types.contains(*id))
+        .map(|(alias, id)| (alias.clone(), id.clone()))
+        .collect();
+    result.relations = schema
+        .relations
+        .iter()
+        .filter(|r| relations.contains(&r.id))
+        .cloned()
+        .collect();
+    Ok(result)
+}
+fn owner_resource(
+    inner: &mut HostedInner,
+    actor: &str,
+    owner: &str,
+    workspace: &str,
+) -> Result<String, ApiError> {
+    if inner.config.files.contains_key(owner) {
+        definitions_access(inner, actor, owner, false)?;
+        return Ok(owner.into());
+    }
+    if !owner.starts_with(&format!("weftext-node://{workspace}/")) {
+        return Err(unavailable());
+    }
+    // Native definition calls retain NodeRefs. Search only explicitly permitted
+    // configured definition owners, never a library inventory or ambient path.
+    let candidates = inner.policy.users[actor]
+        .grants
+        .iter()
+        .filter(|(r, g)| {
+            g.query.definitions && inner.config.files.get(*r).is_some_and(|f| f.editable)
+        })
+        .map(|(r, _)| r.clone())
+        .collect::<Vec<_>>();
+    let mut found = vec![];
+    for batch in candidates.chunks(64) {
+        if batch.is_empty() {
+            continue;
+        }
+        let paths = batch
+            .iter()
+            .map(|r| {
+                inner
+                    .config
+                    .root
+                    .join(&inner.config.files[r].path)
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        let files = inner
+            .core
+            .read_snapshot(&inner.config.root, &paths)
+            .map_err(|_| changed())?
+            .files;
+        let _witnesses = take_witnesses(inner, &files)?;
+        for (resource, file) in batch.iter().zip(files) {
+            if file.kind == "managed"
+                && file.currentness == "accepted"
+                && file
+                    .node_id
+                    .as_ref()
+                    .is_some_and(|id| owner == format!("weftext-node://{workspace}/{id}"))
+            {
+                found.push(resource.clone());
+            }
+        }
+    }
+    if found.len() != 1 {
+        return Err(unavailable());
+    }
+    Ok(found.remove(0))
+}
+struct DefinitionContext<'a> {
+    workspace: &'a str,
+    role: &'a str,
+    draft: Option<&'a Draft>,
+}
+fn freeze_definitions(
+    inner: &mut HostedInner,
+    actor: &str,
+    plan: &QueryPlan,
+    snapshots: &BTreeMap<String, SnapshotFile>,
+    selected: DefinitionContext<'_>,
+    owners: &mut BTreeMap<String, String>,
+    authority: &mut Authority,
+) -> Result<(weftext_data::FrozenAdvancedInput, bool), ApiError> {
+    let DefinitionContext {
+        workspace,
+        role,
+        draft,
+    } = selected;
+    let mut context = weftext_data::FrozenAdvancedInput::default();
+    let mut baselines = BTreeMap::new();
+    for _ in 0..64 {
+        let dependencies = weftext_data::definition_dependencies(plan, &context.definitions)
+            .map_err(|_| invalid())?;
+        let mut progressed = false;
+        for dependency in dependencies {
+            let resource = match owners.get(&dependency.owner) {
+                Some(resource) => resource.clone(),
+                None => {
+                    let resource = owner_resource(inner, actor, &dependency.owner, workspace)?;
+                    owners.insert(dependency.owner.clone(), resource);
+                    return Ok((context, true));
+                }
+            };
+            let pinned = matches!(dependency.selection, DefinitionSelection::Pinned { .. });
+            definitions_access(inner, actor, &resource, pinned)?;
+            authority
+                .definitions
+                .entry(resource.clone())
+                .and_modify(|h| *h |= pinned)
+                .or_insert(pinned);
+            let current = snapshots.get(&resource).ok_or_else(changed)?;
+            let content = source(current)?;
+            let owner_id = current.node_id.as_ref().unwrap();
+            let key = selected_key(&dependency.selection);
+            let local = draft.filter(|d| d.resource == resource && !pinned);
+            if local.is_none()
+                && !inner
+                    .core
+                    .is_definition_key_admitted(&inner.config.root, owner_id, key)
+                    .map_err(|_| changed())?
+            {
+                return Err(changed());
+            }
+            let index = match context
+                .definitions
+                .iter()
+                .position(|o| o.owner == dependency.owner)
+            {
+                Some(i) => i,
+                None => {
+                    context
+                        .definitions
+                        .push(weftext_data::FrozenDefinitionOwner {
+                            owner: dependency.owner.clone(),
+                            history: vec![weftext_data::DefinitionRevision {
+                                revision: local.map_or_else(
+                                    || current.revision.clone().unwrap(),
+                                    |d| format!("draft-source:{}", digest(d.source.as_bytes())),
+                                ),
+                                source: local.map_or(content, |d| d.source.clone()),
+                                current: true,
+                            }],
+                        });
+                    progressed = true;
+                    context.definitions.len() - 1
+                }
+            };
+            if let DefinitionSelection::Pinned { revision, .. } = &dependency.selection
+                && !context.definitions[index]
+                    .history
+                    .iter()
+                    .any(|h| &h.revision == revision)
+            {
+                let path = inner.config.root.join(&inner.config.files[&resource].path);
+                let bytes = inner
+                    .core
+                    .read_source_revision_at(&inner.config.root, &path, owner_id, revision)
+                    .map_err(|_| changed())?;
+                context.definitions[index]
+                    .history
+                    .push(weftext_data::DefinitionRevision {
+                        revision: revision.clone(),
+                        source: String::from_utf8(bytes).map_err(|_| changed())?,
+                        current: false,
+                    });
+                progressed = true;
+            }
+            let definition = weftext_data::select_definition(
+                &dependency.selection,
+                &context.definitions[index].history,
+            )
+            .map_err(|_| changed())?;
+            request_budget(&QueryRequest {
+                fields: BTreeSet::new(),
+                resources: None,
+                products: BTreeSet::new(),
+                relations: BTreeSet::new(),
+                parameters: BTreeMap::new(),
+                plan: definition.plan.clone(),
+            })?;
+            if definition.binding.schema != role
+                || definition.binding.language != "weftext.query.cel.v1"
+            {
+                return Err(changed());
+            }
+            let identity = (
+                definition.binding.schema.clone(),
+                definition.binding.revision.clone(),
+            );
+            if let std::collections::btree_map::Entry::Vacant(entry) = baselines.entry(identity) {
+                let bytes = inner
+                    .core
+                    .read_config_revision(
+                        &inner.config.root,
+                        ConfigRole::Schema,
+                        &definition.binding.revision,
+                    )
+                    .map_err(|_| changed())?;
+                entry.insert(
+                    Schema::from_author_json(std::str::from_utf8(&bytes).map_err(|_| changed())?)
+                        .map_err(|_| changed())?,
+                );
+            }
+        }
+        if !progressed {
+            context.schemas = baselines
+                .into_iter()
+                .map(
+                    |((schema, revision), projection)| weftext_data::FrozenDefinitionSchema {
+                        schema,
+                        revision,
+                        projection,
+                    },
+                )
+                .collect();
+            return Ok((context, false));
+        }
+    }
+    Err(invalid())
+}
+fn capture(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    mut req: QueryRequest,
+    draft: Option<Draft>,
+    validate_only: bool,
+) -> Result<Capture, ApiError> {
+    let actor = inner.actor(auth)?;
+    request_budget(&req)?;
+    req.plan.take.get_or_insert(500);
+    let grants = inner.policy.users[&actor].grants.clone();
+    for field in &req.fields {
+        if !grants.iter().any(|(r, g)| {
+            inner.config.files.contains_key(r) && g.fields.get(field).is_some_and(|f| f.read)
+        }) {
+            return Err(unavailable());
+        }
+    }
+    for product in &req.products {
+        if !grants.iter().any(|(r, g)| {
+            inner.config.files.contains_key(r)
+                && g.query.products.get(product).copied().unwrap_or(false)
+        }) {
+            return Err(unavailable());
+        }
+    }
+    for relation in &req.relations {
+        if !grants.iter().any(|(r, g)| {
+            inner.config.files.contains_key(r) && g.query.relations.contains(relation)
+        }) {
+            return Err(unavailable());
+        }
+    }
+    if let Some(d) = &draft {
+        definitions_access(inner, &actor, &d.resource, false)?;
+        inner.rights(&actor, &d.resource)?;
+        writing_api::validate_source(&d.source, None)?;
+    }
+    let mut resources = match req.resources.clone() {
+        Some(resources) => resources,
+        None => grants
+            .keys()
+            .filter(|r| row_access(inner, &actor, r, &req).is_ok())
+            .cloned()
+            .collect(),
+    };
+    for resource in &resources {
+        row_access(inner, &actor, resource, &req)?;
+    }
+    let config = inner
+        .core
+        .read_config(&inner.config.root, ConfigRole::Schema)
+        .map_err(|_| changed())?;
+    // This preliminary role lookup is re-read as part of the final cut.
+    drop(
+        inner
+            .core
+            .take_snapshot_witness(&config.base_id)
+            .map_err(|_| changed())?,
+    );
+    let workspace = config
+        .role_ref
+        .strip_prefix("weftext-config://")
+        .and_then(|s| s.strip_suffix("/schema"))
+        .ok_or_else(changed)?
+        .to_owned();
+    let mut owners = BTreeMap::new();
+    let mut inputs = BTreeSet::new();
+    for _ in 0..64 {
+        let mut authority = Authority::default();
+        for r in &resources {
+            authority.fields.insert(r.clone(), req.fields.clone());
+            authority.products.insert(r.clone(), req.products.clone());
+            authority.relations.insert(r.clone(), req.relations.clone());
+        }
+        if let Some(d) = &draft {
+            authority.definitions.insert(d.resource.clone(), false);
+            authority.inputs.insert(d.resource.clone());
+        }
+        let mut file_resources = resources
+            .iter()
+            .chain(owners.values())
+            .chain(&inputs)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if let Some(d) = &draft {
+            file_resources.insert(d.resource.clone());
+        }
+        let mut paths = vec![config.path.clone()];
+        paths.extend(file_resources.iter().map(|r| {
+            inner
+                .config
+                .root
+                .join(&inner.config.files[r].path)
+                .to_string_lossy()
+                .into_owned()
+        }));
+        if paths.len() > 64 {
+            return Err(invalid());
+        }
+        let mut cut = inner
+            .core
+            .read_snapshot(&inner.config.root, &paths)
+            .map_err(|_| changed())?
+            .files;
+        let witnesses = take_witnesses(inner, &cut)?;
+        let schema_file = cut.remove(0);
+        let full_schema = schema_from(&schema_file)?;
+        let snapshots = file_resources
+            .iter()
+            .cloned()
+            .zip(cut)
+            .collect::<BTreeMap<_, _>>();
+        let (mut context, expanded) = freeze_definitions(
+            inner,
+            &actor,
+            &req.plan,
+            &snapshots,
+            DefinitionContext {
+                workspace: &workspace,
+                role: &config.role_ref,
+                draft: draft.as_ref(),
+            },
+            &mut owners,
+            &mut authority,
+        )?;
+        if expanded {
+            continue;
+        }
+        let mut root_schema = full_schema.clone();
+        if let Some(d) = &draft {
+            if d.binding.schema != config.role_ref || d.binding.language != "weftext.query.cel.v1" {
+                return Err(changed());
+            }
+            let bytes = inner
+                .core
+                .read_config_revision(&inner.config.root, ConfigRole::Schema, &d.binding.revision)
+                .map_err(|_| changed())?;
+            root_schema =
+                Schema::from_author_json(std::str::from_utf8(&bytes).map_err(|_| changed())?)
+                    .map_err(|_| changed())?;
+            let saved = source(snapshots.get(&d.resource).ok_or_else(changed)?)?;
+            let current_id = weftext_data::narrow_query_metadata(&saved, &full_schema)
+                .map_err(|_| changed())?
+                .0;
+            let draft_id = weftext_data::narrow_query_metadata(&d.source, &full_schema)
+                .map_err(|_| changed())?
+                .0;
+            if current_id != draft_id || snapshots[&d.resource].node_id.as_ref() != Some(&draft_id)
+            {
+                return Err(changed());
+            }
+        }
+        // Preserve legacy default field projection only at a direct root scan.
+        // Union/call terminal columns belong to their actual producer.
+        if req.plan.select.is_empty()
+            && req.plan.group.is_none()
+            && req
+                .plan
+                .advanced
+                .as_ref()
+                .is_none_or(|a| a.union_all.is_empty() && a.call.is_none())
+            && !req.fields.is_empty()
+        {
+            req.plan.select = req
+                .fields
+                .iter()
+                .map(|id| weftext_data::QueryColumn {
+                    name: root_schema
+                        .fields
+                        .iter()
+                        .find(|f| &f.id == id)
+                        .map(|f| f.key.clone())
+                        .unwrap_or_else(|| id.clone()),
+                    expr: format!("field({})", serde_json::to_string(id).unwrap()),
+                })
+                .collect();
+        }
+        let demands = weftext_data::query_read_requirements(&req.plan, &root_schema, &context)
+            .map_err(|_| invalid())?;
+        if draft.is_some() {
+            req.fields = demands.fields.clone();
+            req.products = demands.products.clone();
+            req.relations = demands.relations.clone();
+            resources = grants
+                .keys()
+                .filter(|r| row_access(inner, &actor, r, &req).is_ok())
+                .cloned()
+                .collect();
+            if resources
+                != file_resources
+                    .iter()
+                    .filter(|r| !owners.values().any(|o| o == *r) && !inputs.contains(*r))
+                    .cloned()
+                    .collect()
+            {
+                // Re-capture after the true draft dependency selection is known.
+                for resource in &resources {
+                    row_access(inner, &actor, resource, &req)?;
+                }
+                if !resources.iter().all(|r| snapshots.contains_key(r)) {
+                    continue;
+                }
+            }
+            authority.fields.clear();
+            authority.products.clear();
+            authority.relations.clear();
+            for r in &resources {
+                authority.fields.insert(r.clone(), req.fields.clone());
+                authority.products.insert(r.clone(), req.products.clone());
+                authority.relations.insert(r.clone(), req.relations.clone());
+            }
+        }
+        if !demands.fields.is_subset(&req.fields) || !demands.relations.is_subset(&req.relations) {
+            return Err(invalid());
+        }
+        if demands.type_filter && !req.products.contains("types") {
+            return Err(unavailable());
+        }
+        for r in &resources {
+            row_access(inner, &actor, r, &req)?;
+        }
+        // Even resources=[] uses a real explicit authorized object as evidence
+        // for every requested field/product/relation, never schema discovery.
+        if resources.is_empty() {
+            for field in &req.fields {
+                let r = grants
+                    .iter()
+                    .find(|(r, g)| {
+                        inner.config.files.contains_key(*r)
+                            && g.fields.get(field).is_some_and(|f| f.read)
+                    })
+                    .ok_or_else(unavailable)?
+                    .0;
+                authority
+                    .fields
+                    .entry(r.clone())
+                    .or_default()
+                    .insert(field.clone());
+            }
+            for p in &req.products {
+                let r = grants
+                    .iter()
+                    .find(|(r, g)| {
+                        inner.config.files.contains_key(*r)
+                            && g.query.products.get(p).copied().unwrap_or(false)
+                    })
+                    .ok_or_else(unavailable)?
+                    .0;
+                authority
+                    .products
+                    .entry(r.clone())
+                    .or_default()
+                    .insert(p.clone());
+            }
+            for relation in &req.relations {
+                let r = grants
+                    .iter()
+                    .find(|(r, g)| {
+                        inner.config.files.contains_key(*r) && g.query.relations.contains(relation)
+                    })
+                    .ok_or_else(unavailable)?
+                    .0;
+                authority
+                    .relations
+                    .entry(r.clone())
+                    .or_default()
+                    .insert(relation.clone());
+            }
+        }
+        let mut needed_inputs = BTreeSet::new();
+        if req
+            .products
+            .iter()
+            .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
+        {
+            for r in &resources {
+                needed_inputs.extend(inner.config.files[r].inputs.iter().cloned());
+            }
+        }
+        for r in &needed_inputs {
+            inner.rights(&actor, r)?;
+        }
+        authority.inputs.extend(needed_inputs.clone());
+        if needed_inputs != inputs {
+            inputs = needed_inputs;
+            continue;
+        }
+        authorize_authority(inner, &actor, &authority)?;
+        let schema = restricted_schema(&root_schema, &req.fields, &demands.types, &req.relations)?;
+        let current_restricted =
+            restricted_schema(&full_schema, &req.fields, &demands.types, &req.relations)?;
+        if !weftext_data::baseline_contract_compatible(&schema, &current_restricted)
+            .map_err(|_| changed())?
+        {
+            return Err(changed());
+        }
+        for baseline in &mut context.schemas {
+            baseline.projection = restricted_schema(
+                &baseline.projection,
+                &req.fields,
+                &demands.types,
+                &req.relations,
+            )?;
+        }
+        context.parameters = req.parameters.clone();
+        weftext_data::validate_query_plan_with_context(&req.plan, &schema, &context)
+            .map_err(|_| invalid())?;
+        let cut_id = uuid::Uuid::new_v4().to_string();
+        let mut notes = vec![];
+        let mut metadata = BTreeMap::new();
+        let mut workers = vec![];
+        let mut worker_bytes = 0;
+        let mut resource_map = BTreeMap::new();
+        let mut complete = true;
+        if !validate_only {
+            for r in &resources {
+                let Some(file) = snapshots.get(r) else {
+                    return Err(changed());
+                };
+                let Ok(saved) = source(file) else {
+                    complete = false;
+                    continue;
+                };
+                let source = draft
+                    .as_ref()
+                    .filter(|d| &d.resource == r)
+                    .map_or(saved.as_str(), |d| d.source.as_str());
+                let Ok((id, types, resolved)) =
+                    weftext_data::narrow_query_metadata(source, &full_schema)
+                else {
+                    complete = false;
+                    continue;
+                };
+                if file.node_id.as_deref() != Some(&id) {
+                    return Err(changed());
+                }
+                let entity = format!("weftext-node://{workspace}/{id}");
+                resource_map.insert(entity.clone(), r.clone());
+                let fields = if req.fields.is_empty() {
+                    BTreeMap::new()
+                } else {
+                    let Ok(profile) =
+                        weftext_data::narrow_profile(source, &full_schema, &req.fields, None)
+                    else {
+                        complete = false;
+                        continue;
+                    };
+                    if profile.node_id != id {
+                        return Err(changed());
+                    }
+                    profile
+                        .fields
+                        .into_iter()
+                        .map(|f| (f.field_id, f.cell))
+                        .collect()
+                };
+                metadata.insert(
+                    entity.clone(),
+                    weftext_data::AuthorizedQueryMetadata {
+                        identity: req.products.contains("self").then(|| entity.clone()),
+                        types: req.products.contains("types").then_some(types),
+                        resolved_types: resolved,
+                    },
+                );
+                notes.push(weftext_data::FrozenNote {
+                    entity_key: entity.clone(),
+                    path: format!("resource:{r}"),
+                    source: String::new(),
+                    revision: cut_id.clone(),
+                    lifecycle: "live".into(),
+                    title: None,
+                    body: None,
+                    products: None,
+                    authorized_fields: Some(fields),
+                });
+                if req
+                    .products
+                    .iter()
+                    .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
+                {
+                    let config_file = &inner.config.files[r];
+                    let input_sizes = config_file
+                        .inputs
+                        .iter()
+                        .map(|input| {
+                            let config = &inner.config.files[input];
+                            let file = snapshots.get(input).ok_or_else(changed)?;
+                            if file.currentness != "accepted" {
+                                return Err(changed());
+                            }
+                            Ok((
+                                config.path.len(),
+                                file.bytes.as_ref().ok_or_else(changed)?.len(),
+                            ))
+                        })
+                        .collect::<Result<Vec<_>, ApiError>>()?;
+                    charge_bytes(
+                        &mut worker_bytes,
+                        worker_capture_bytes(
+                            source.len(),
+                            config_file.path.len(),
+                            inner.config.root.as_os_str().len(),
+                            input_sizes,
+                        )?,
+                    )?;
+                    let mut frozen_files = config_file
+                        .inputs
+                        .iter()
+                        .map(|input| {
+                            let config = &inner.config.files[input];
+                            let file = snapshots.get(input).ok_or_else(changed)?;
+                            let bytes = file.bytes.as_ref().ok_or_else(changed)?;
+                            if file.currentness != "accepted" {
+                                return Err(changed());
+                            }
+                            Ok((
+                                config.path.clone(),
+                                base64::engine::general_purpose::STANDARD.encode(bytes),
+                            ))
+                        })
+                        .collect::<Result<BTreeMap<_, _>, ApiError>>()?;
+                    frozen_files.insert(
+                        config_file.path.clone(),
+                        base64::engine::general_purpose::STANDARD.encode(source.as_bytes()),
+                    );
+                    workers.push((
+                        entity,
+                        WorkerRequest {
+                            source: source.into(),
+                            path: config_file.path.clone().into(),
+                            root: inner.config.root.clone(),
+                            paged: false,
+                            style: None,
+                            frozen_files: Some(frozen_files),
+                        },
+                    ));
+                }
+            }
+        }
+        let columns = weftext_data::query_output_columns(&req.plan, &context.definitions)
+            .map_err(|_| invalid())?;
+        let config_hash = office::binding_hash(inner, &all_resources(&authority))?;
+        return Ok(Capture {
+            actor: actor.clone(),
+            epoch: inner.actor_generation(&actor),
+            authority,
+            config_hash,
+            witnesses,
+            input: weftext_data::FrozenQueryInput {
+                cut_id: cut_id.clone(),
+                schema_revision: cut_id,
+                coverage: if complete { "complete" } else { "partial" }.into(),
+                freshness: "current".into(),
+                notes,
+                advanced: Some(context),
+            },
+            schema,
+            plan: req.plan,
+            metadata,
+            columns,
+            workers,
+            products: req.products,
+            resource_map,
+            draft,
+        });
+    }
+    Err(invalid())
+}
+async fn execute_captured(
+    state: &HostedState,
+    auth: &Auth,
+    mut captured: Capture,
+) -> Result<Value, ApiError> {
+    let mut execution_bytes = frozen_input_bytes(
+        &captured.input,
+        &captured.metadata,
+        &captured.schema,
+        &captured.plan,
+    )?;
+    for (entity, worker) in std::mem::take(&mut captured.workers) {
+        let output = editor::compile_frozen(state, worker).await?;
+        let products = if output["ok"] == true {
+            serde_json::from_value::<weftext_engine::RenderProducts>(output["products"].clone())
+                .ok()
+                .map(|p| {
+                    data_api::native_query_products(
+                        format!("{}:{entity}", captured.input.cut_id),
+                        p,
+                    )
+                })
+        } else {
+            None
+        };
+        if let Some(note) = captured
+            .input
+            .notes
+            .iter_mut()
+            .find(|n| n.entity_key == entity)
+        {
+            let mut products = products.unwrap_or_else(|| weftext_data::NoteProducts {
+                compile_identity: captured.input.cut_id.clone(),
+                target: "html".into(),
+                title: weftext_data::Cell::Unavailable {
+                    reason: "native-product-unavailable".into(),
+                },
+                body: weftext_data::Cell::Unavailable {
+                    reason: "native-product-unavailable".into(),
+                },
+                headings: weftext_data::Cell::Unavailable {
+                    reason: "native-product-unavailable".into(),
+                },
+            });
+            for (name, cell) in [
+                ("title", &mut products.title),
+                ("body", &mut products.body),
+                ("headings", &mut products.headings),
+            ] {
+                if !captured.products.contains(name) {
+                    *cell = weftext_data::Cell::Unavailable {
+                        reason: "product-not-authorized".into(),
+                    };
+                }
+            }
+            charge_serialized(&mut execution_bytes, &products)?;
+            note.products = Some(products);
+        }
+    }
+    let mut result = weftext_data::execute_authorized_query(
+        &captured.input,
+        &captured.plan,
+        &captured.schema,
+        &weftext_data::QueryBudget {
+            max_rows: 5000,
+            ..Default::default()
+        },
+        &captured.metadata,
+    )
+    .map_err(|_| invalid())?;
+    if result.rows.len() > 500 {
+        return Err(invalid());
+    }
+    let auth = auth.clone();
+    locked(state,move|inner|{
+        let actor=inner.actor(&auth)?;if actor!=captured.actor||inner.actor_generation(&actor)!=captured.epoch{return Err(expired());}authorize_authority(inner,&actor,&captured.authority)?;
+        if office::binding_hash(inner,&all_resources(&captured.authority))?!=captured.config_hash{return Err(changed());}
+        for (path,witness) in &captured.witnesses{inner.core.validate_snapshot_witness(&inner.config.root,path,witness).map_err(|_|changed())?;}
+        if let Some(d)=&captured.draft && let (Some(id),Some(serial))=(&d.session_id,d.serial){let (_,session,_)=inner.session(&auth,id)?;if session.resource!=d.resource{return Err(unavailable());}writing_api::exact_version(&inner.editor_versions,id,&d.source,serial)?;}
+        for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
+        result.diagnostics=result.diagnostics.into_iter().map(|_|"获权投影或表达式有未决结果；请核对Cell状态与覆盖范围。".into()).collect::<BTreeSet<_>>().into_iter().collect();
+        let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
+        for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.rights(&actor,&resource).is_ok());}}
+        let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority)?;
+        Ok(json!({"result":public,"queryId":id,"columns":captured.columns,"scope":"authorizedProjection","readOnly":true}))
+    }).await
+}
+pub(super) async fn execute(
+    state: &HostedState,
+    auth: &Auth,
+    req: QueryRequest,
+) -> Result<Value, ApiError> {
+    let auth_for_capture = auth.clone();
+    let captured = locked(state, move |inner| {
+        capture(inner, &auth_for_capture, req, None, false)
+    })
+    .await?;
+    execute_captured(state, auth, captured).await
+}
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn run_embedded(
+    state: &HostedState,
+    auth: &Auth,
+    resource: String,
+    source: String,
+    plan: QueryPlan,
+    binding: SavedQueryBinding,
+    parameters: BTreeMap<String, NativeValue>,
+    session_id: String,
+    serial: u64,
+) -> Result<Value, ApiError> {
+    let check = auth.clone();
+    let req = QueryRequest {
+        fields: BTreeSet::new(),
+        resources: None,
+        products: BTreeSet::new(),
+        relations: BTreeSet::new(),
+        parameters,
+        plan,
+    };
+    let draft = Draft {
+        resource,
+        source,
+        binding,
+        session_id: Some(session_id),
+        serial: Some(serial),
+    };
+    let captured = locked(state, move |inner| {
+        capture(inner, &check, req, Some(draft), false)
+    })
+    .await?;
+    execute_captured(state, auth, captured).await
+}
+pub(super) async fn validate_embedded(
+    state: &HostedState,
+    auth: &Auth,
+    resource: String,
+    source: String,
+    plan: QueryPlan,
+    binding: SavedQueryBinding,
+) -> Result<(), ApiError> {
+    let check = auth.clone();
+    let req = QueryRequest {
+        fields: BTreeSet::new(),
+        resources: None,
+        products: BTreeSet::new(),
+        relations: BTreeSet::new(),
+        parameters: BTreeMap::new(),
+        plan,
+    };
+    let draft = Draft {
+        resource,
+        source,
+        binding,
+        session_id: None,
+        serial: None,
+    };
+    locked(state, move |inner| {
+        capture(inner, &check, req, Some(draft), true).map(|_| ())
+    })
+    .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn input() -> weftext_data::FrozenQueryInput {
+        weftext_data::FrozenQueryInput {
+            cut_id: "cut".into(),
+            schema_revision: "schema".into(),
+            coverage: "complete".into(),
+            freshness: "current".into(),
+            notes: vec![],
+            advanced: None,
+        }
+    }
+
+    #[test]
+    fn shared_inputs_are_charged_again_for_each_worker() {
+        // Each request fits the native worker's 24 MiB bound. Reusing twenty
+        // input files for another document must not multiply capture memory.
+        let worker = worker_capture_bytes(1024 * 1024, 40, 80, vec![(40, 700 * 1024); 20]).unwrap();
+        assert!(worker < 24 * 1024 * 1024);
+        let mut total = 0;
+        charge_bytes(&mut total, worker).unwrap();
+        let prior = total;
+        assert_eq!(
+            charge_bytes(&mut total, worker).unwrap_err().code,
+            "queryBudget"
+        );
+        assert_eq!(total, prior);
+    }
+
+    #[test]
+    fn capture_budget_accepts_exact_limit_and_rejects_overflow() {
+        let mut used = QUERY_BYTES - 1;
+        charge_bytes(&mut used, 1).unwrap();
+        assert_eq!(used, QUERY_BYTES);
+        assert!(charge_bytes(&mut used, 1).is_err());
+        assert!(base64_bytes(usize::MAX).is_err());
+        assert!(worker_capture_bytes(usize::MAX, 0, 0, []).is_err());
+    }
+
+    #[test]
+    fn execution_charges_trusted_fields_and_products_as_they_arrive() {
+        let mut input = input();
+        input.notes.push(weftext_data::FrozenNote {
+            entity_key: "node".into(),
+            path: "resource:one".into(),
+            source: String::new(),
+            revision: "cut".into(),
+            lifecycle: "live".into(),
+            title: None,
+            body: None,
+            products: None,
+            authorized_fields: Some(BTreeMap::from([(
+                "text".into(),
+                weftext_data::Cell::value(NativeValue::Text("x".repeat(1024 * 1024))),
+            )])),
+        });
+        assert!(serde_json::to_vec(&input).unwrap().len() < 1024);
+        let mut used = frozen_input_bytes(
+            &input,
+            &BTreeMap::new(),
+            &Schema::bundled().unwrap(),
+            &QueryPlan::default(),
+        )
+        .unwrap();
+        assert!(used > 1024 * 1024);
+        let products = weftext_data::NoteProducts {
+            compile_identity: "cut:node".into(),
+            target: "html".into(),
+            title: weftext_data::Cell::Absent,
+            body: weftext_data::Cell::value(NativeValue::Text("x".repeat(8 * 1024 * 1024))),
+            headings: weftext_data::Cell::Absent,
+        };
+        for _ in 0..3 {
+            charge_serialized(&mut used, &products).unwrap();
+        }
+        assert_eq!(
+            charge_serialized(&mut used, &products).unwrap_err().code,
+            "queryBudget"
+        );
+    }
+
+    #[test]
+    fn definition_history_is_part_of_initial_execution_budget() {
+        let mut input = input();
+        input.advanced = Some(weftext_data::FrozenAdvancedInput {
+            definitions: (0..17)
+                .map(|n| weftext_data::FrozenDefinitionOwner {
+                    owner: format!("resource:{n}"),
+                    history: vec![weftext_data::DefinitionRevision {
+                        revision: "accepted".into(),
+                        source: "x".repeat(2 * 1024 * 1024),
+                        current: true,
+                    }],
+                })
+                .collect(),
+            ..Default::default()
+        });
+        assert_eq!(
+            frozen_input_bytes(
+                &input,
+                &BTreeMap::new(),
+                &Schema::bundled().unwrap(),
+                &QueryPlan::default()
+            )
+            .unwrap_err()
+            .code,
+            "queryBudget"
+        );
+    }
+}

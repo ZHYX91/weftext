@@ -259,10 +259,6 @@ fn resolved_schema(core: &mut Core, root: &Path) -> Result<(SchemaSource, Schema
     Ok((config, schema))
 }
 
-pub(crate) fn hosted_schema(core: &mut Core, root: &Path) -> Result<Schema, CoreError> {
-    resolved_schema(core, root).map(|(_, schema)| schema)
-}
-
 pub(crate) async fn knowledge_schema(
     state: &AppState,
     root: PathBuf,
@@ -1799,7 +1795,7 @@ fn unavailable_products(identity: String, reason: &str) -> weftext_data::NotePro
     }
 }
 
-fn native_query_products(
+pub(crate) fn native_query_products(
     identity: String,
     products: weftext_engine::RenderProducts,
 ) -> weftext_data::NoteProducts {

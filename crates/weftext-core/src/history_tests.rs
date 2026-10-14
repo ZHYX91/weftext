@@ -139,6 +139,89 @@ fn history_lists_real_commits_and_read_compare_preserve_saved_and_draft_bytes() 
 }
 
 #[test]
+fn configured_owner_history_reads_exact_admitted_revision_without_other_sources() {
+    let mut f = HistoryFixture::new();
+    let initial = f.initial_version();
+    let old = f.core.read_history(&f.doc.session_id, &initial).unwrap();
+    let revision = old.version.revision_id.as_ref().unwrap();
+    let owner = f.doc.node_id.as_ref().unwrap().clone();
+    let (middle, middle_source) = f.save("saved revision is retained");
+    let middle_revision = f
+        .core
+        .read_history(&f.doc.session_id, &middle)
+        .unwrap()
+        .version
+        .revision_id
+        .unwrap();
+    let (_, saved) = f.save("latest is different");
+    assert_eq!(
+        f.core
+            .read_source_revision(&f.root, &owner, &middle_revision)
+            .unwrap(),
+        middle_source.as_bytes()
+    );
+    drop(f.core);
+    f.core = Core::new(&f.data).unwrap();
+    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let guard = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&other.path)
+        .unwrap();
+    assert_eq!(
+        f.core
+            .read_source_revision_at(&f.root, &f.doc.path, &owner, revision)
+            .unwrap(),
+        old.source.as_bytes()
+    );
+    assert_eq!(
+        f.core
+            .read_source_revision_at(&f.root, &f.doc.path, &owner, &middle_revision)
+            .unwrap(),
+        middle_source.as_bytes()
+    );
+    let configured = f.root.join("Note/Note.typ");
+    assert_eq!(
+        f.core
+            .read_source_revision_at(&f.root, &configured, &owner, &middle_revision)
+            .unwrap(),
+        middle_source.as_bytes()
+    );
+    assert!(
+        f.core
+            .read_source_revision_at(&f.root, &f.doc.path, &owner, &fresh())
+            .is_err()
+    );
+    assert!(
+        f.core
+            .read_source_revision_at(
+                &f.root,
+                &f.doc.path,
+                other.node_id.as_ref().unwrap(),
+                revision,
+            )
+            .is_err()
+    );
+    drop(guard);
+    assert!(
+        f.core
+            .read_source_revision_at(&f.root, &other.path, &owner, revision)
+            .is_err()
+    );
+    fs::write(&f.doc.path, format!("{saved}\nnot admitted")).unwrap();
+    assert!(
+        f.core
+            .read_source_revision_at(&f.root, &f.doc.path, &owner, revision)
+            .is_err()
+    );
+    assert!(
+        fs::read_to_string(&f.doc.path)
+            .unwrap()
+            .ends_with("not admitted")
+    );
+}
+
+#[test]
 fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
