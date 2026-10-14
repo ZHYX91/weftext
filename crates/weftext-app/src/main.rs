@@ -35,7 +35,9 @@ mod hosted;
 mod knowledge_api;
 mod media_api;
 mod navigation_api;
+mod remote_sync;
 mod sync_api;
+mod sync_wire;
 mod writing_api;
 
 static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");
@@ -74,6 +76,7 @@ struct AppState {
     editor_versions: Arc<Mutex<HashMap<String, writing_api::EditorVersion>>>,
     exports: Arc<Mutex<export_api::ExportStore>>,
     render_gate: Arc<tokio::sync::Semaphore>,
+    sync_remote: Arc<Mutex<remote_sync::Store>>,
     initial: Option<Value>,
 }
 
@@ -914,6 +917,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         editor_versions: Arc::new(Mutex::new(HashMap::new())),
         exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
         render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
+        sync_remote: Arc::new(Mutex::new(remote_sync::Store::default())),
         initial,
     };
     if let Some(doc) = state.initial.as_ref() {
@@ -928,6 +932,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(media_api::router())
         .merge(navigation_api::router())
         .merge(sync_api::router())
+        .merge(remote_sync::router())
         .merge(export_api::router())
         .route("/api/bootstrap", get(bootstrap))
         .route("/api/open", post(open))

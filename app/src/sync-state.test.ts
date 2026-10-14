@@ -1,8 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { SyncFlow, type SyncPending, type SyncRequest, type SyncPlan } from "./sync-state";
+import { SyncFlow, sameSyncIdentity, type SyncPending, type SyncRequest, type SyncPlan } from "./sync-state";
 const request: SyncRequest = { operationId: "original", root: "R", intent: { kind: "applySync", identity: { workspaceId: "W", genesis: "G" }, objects: [{ kind: "node", id: "N" }] } };
 const plan: SyncPlan = { operationId: "original", planId: "frozen", status: "prepared", changes: [], losses: [] };
+test("pairing compares identity fields, independently of wire member order", () => {
+  assert.ok(sameSyncIdentity({ workspaceId: "W", genesis: "G" }, JSON.parse('{"genesis":"G","workspaceId":"W"}')));
+  assert.equal(sameSyncIdentity({ workspaceId: "W", genesis: "G" }, { workspaceId: "W", genesis: "other" }), false);
+});
 test("lost execute response survives reload; inspection never executes again", async () => {
   let stored: SyncPending | null = null; let calls: string[] = [];
   const host = { store: (p: SyncPending | null) => { stored = structuredClone(p); }, request: async <T>(path: string): Promise<T> => {

@@ -139,5 +139,6 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_review_interchange.py', exe)
         run(sys.executable, 'scripts/test_hosted.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)
+        run(sys.executable, 'scripts/test_remote_sync.py', exe)
     if args.action == 'package':
         package(exe)

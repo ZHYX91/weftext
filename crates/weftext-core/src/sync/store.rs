@@ -48,6 +48,89 @@ pub struct ObjectStatus {
 }
 
 impl Core {
+    /// Full owner transport includes staged records too. Admission and local
+    /// installation remain separate; a relay is not another current-file owner.
+    pub fn export_sync_history(&self, identity: &SyncIdentity) -> Result<SyncBundle> {
+        let graph = self.read_sync_history(identity)?;
+        Ok(SyncBundle {
+            manifests: graph.manifests,
+            blobs: graph.blobs,
+        })
+    }
+
+    /// Inspect one immutable portable record without filesystem paths from a
+    /// client. A completed record can be reused after a transfer restart.
+    pub fn sync_record(
+        &self,
+        identity: &SyncIdentity,
+        manifest: bool,
+        id: &str,
+    ) -> Result<Option<Vec<u8>>> {
+        self.check_sync_owner(identity)?;
+        digest(id)?;
+        let (path, _guards) = self.sync_store(identity, false)?;
+        let path = path
+            .join(if manifest { "manifests" } else { "blobs" })
+            .join(format!("{id}.{}", if manifest { "json" } else { "blob" }));
+        match read_record(
+            &path,
+            if manifest {
+                MAX_MANIFEST_BYTES
+            } else {
+                MAX_BLOB_BYTES
+            },
+        ) {
+            Ok(bytes) => {
+                if hash(&bytes) != id {
+                    return Err(invalid("Stored portable record digest mismatch"));
+                }
+                if manifest {
+                    let value: Manifest = serde_json::from_slice(&bytes)?;
+                    if value.id()? != id {
+                        return Err(invalid("Stored manifest is not canonical"));
+                    }
+                }
+                Ok(Some(bytes))
+            }
+            Err(error) => match std::fs::symlink_metadata(&path) {
+                Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                _ => Err(error),
+            },
+        }
+    }
+
+    pub fn receive_sync_record(
+        &self,
+        identity: &SyncIdentity,
+        manifest: bool,
+        id: &str,
+        bytes: Vec<u8>,
+    ) -> Result<()> {
+        self.check_sync_owner(identity)?;
+        digest(id)?;
+        if hash(&bytes) != id {
+            return Err(invalid("Portable record digest mismatch"));
+        }
+        let mut bundle = SyncBundle::default();
+        if manifest {
+            if bytes.len() > MAX_MANIFEST_BYTES {
+                return Err(invalid("Manifest record exceeds budget"));
+            }
+            let value: Manifest = serde_json::from_slice(&bytes)?;
+            if value.id()? != id {
+                return Err(invalid("Manifest is not canonical"));
+            }
+            bundle.manifests.insert(id.into(), value);
+        } else {
+            if bytes.len() > MAX_BLOB_BYTES {
+                return Err(invalid("Blob record exceeds budget"));
+            }
+            bundle.blobs.insert(id.into(), bytes);
+        }
+        self.receive_sync(identity, bundle)?;
+        Ok(())
+    }
+
     /// A read does not drain the outbox or install a received version.
     pub fn sync_status(&self, identity: &SyncIdentity) -> Result<SyncStatus> {
         status(&self.read_sync_history(identity)?, identity)

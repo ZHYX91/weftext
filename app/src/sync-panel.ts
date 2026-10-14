@@ -1,6 +1,7 @@
 import { api, operationId } from "./api";
-import { SyncFlow, objectKey, type SyncBinding, type SyncIdentity, type SyncObject, type SyncPending, type SyncStatus, type SyncVersion } from "./sync-state";
+import { SyncFlow, objectKey, sameSyncIdentity, type SyncBinding, type SyncIdentity, type SyncObject, type SyncPending, type SyncStatus, type SyncVersion } from "./sync-state";
 import "./sync-panel.css";
+import { mountRemoteSync } from "./sync-remote";
 
 interface SyncHost { beforeAction(): Promise<void>; applied(root: string): Promise<void> }
 const savedKey = "weftext-sync-operation-v1";
@@ -23,6 +24,7 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
   const info = el("p"), objectsHost = el("section"), pendingHost = el("section"), controls = el("div"), inspectHost = el("section");
   let binding: SyncBinding | null = null, status: SyncStatus | null = null, busy = false;
   const selected = new Set<string>(); let selectedInitialized = false;
+  let remoteControls: ReturnType<typeof mountRemoteSync> | undefined;
   const identity = (): SyncIdentity => {
     const value = JSON.parse(pair.value) as SyncIdentity;
     if (!value || typeof value.workspaceId !== "string" || typeof value.genesis !== "string") throw new Error("请输入原副本的完整配对身份。");
@@ -129,15 +131,26 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     }
     if (flow.pending) inspectHost.querySelectorAll("button").forEach(e => { if (e.textContent === "预览采用此完整分支") e.disabled = true; });
     if (busy) lock();
+    remoteControls?.render();
   }
-  const close = el("button", "关闭同步"); close.type = "button"; close.onclick = () => { dialog.close(); dialog.remove(); };
-  dialog.oncancel = event => { if (busy) event.preventDefault(); else dialog.remove(); };
+  const close = el("button", "关闭同步"); close.type = "button"; close.onclick = () => { remoteControls?.dispose(); dialog.close(); dialog.remove(); };
+  dialog.oncancel = event => { if (busy) event.preventDefault(); else { remoteControls?.dispose(); dialog.remove(); } };
   rootField.input.oninput = () => { binding = null; status = null; inspectHost.replaceChildren(); render(); };
   pair.oninput = () => { status = null; inspectHost.replaceChildren(); render(); };
   dialog.append(el("h2", "资料库同步"), el("p", "每个副本有独立工作目录和私有状态。复制配对身份后，通过交换目录传递已保存版本；编辑器里的未保存草稿会保留。"), rootField.label, pairLabel, transport.label, info, controls, statusLine, pendingHost, objectsHost, inspectHost, original.label, button("读取原同步操作", async () => {
     await flow.recover(original.input.value.trim());
     const p = flow.pending!; rootField.input.value = p.request.root; pair.value = JSON.stringify(p.request.intent.identity); inspectHost.replaceChildren(); await load(); await refreshCommitted();
   }), close);
+  const remoteHost = el("section"); dialog.insertBefore(remoteHost, original.label);
+  remoteControls = mountRemoteSync(remoteHost, {
+    identity, root: targetRoot, objects: () => picked().map(o => o.object), blocked: () => busy || !!flow.pending,
+    received: async paired => {
+      if (binding && !sameSyncIdentity(binding.identity, paired)) return;
+      if (pair.value) { try { if (!sameSyncIdentity(identity(), paired)) return; } catch { return; } }
+      pair.value = JSON.stringify(paired); status = await api<SyncStatus>("/api/sync/status", { identity: paired }); selectedInitialized = false;
+      if (binding) binding = await api<SyncBinding>("/api/sync/binding", { root: targetRoot() }); render();
+    },
+  });
   document.body.append(dialog); dialog.showModal(); render();
   if (rootField.input.value) await run(load);
 }

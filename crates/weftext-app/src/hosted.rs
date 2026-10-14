@@ -1,6 +1,7 @@
 //! A separate hosted boundary. Local path, library, recovery and feature APIs
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
+mod sync_transport;
 use axum::Extension;
 use base64::Engine as _;
 use sha2::{Digest, Sha256};
@@ -40,6 +41,8 @@ struct User {
     token_sha256: String,
     enabled: bool,
     grants: BTreeMap<String, Rights>,
+    #[serde(default)]
+    sync_owner: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -47,6 +50,8 @@ struct Policy {
     deployment: String,
     generation: u64,
     users: BTreeMap<String, User>,
+    #[serde(default)]
+    sync_identity: Option<weftext_core::sync::SyncIdentity>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -60,6 +65,8 @@ struct Config {
     admin_token_sha256: String,
     files: BTreeMap<String, FileEntry>,
     users: BTreeMap<String, User>,
+    #[serde(default)]
+    sync_identity: Option<weftext_core::sync::SyncIdentity>,
 }
 #[derive(Clone)]
 struct HostedState {
@@ -74,6 +81,7 @@ struct HostedInner {
     policy: Policy,
     sessions: HashMap<String, HostedSession>,
     downloads: HashMap<String, Download>,
+    sync: sync_transport::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -179,6 +187,9 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if user.sync_owner && config.sync_identity.is_none() {
+            return Err(ApiError::bad("完整同步授权须先在部署配置中明确配对身份"));
+        }
         if !valid_id(id)
             || !valid_digest(&user.token_sha256)
             || !tokens.insert(user.token_sha256.clone())
@@ -389,7 +400,7 @@ async fn me(State(state): State<HostedState>, Extension(auth): Extension<Auth>) 
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
         Ok(json!({"actor":actor,"deployment":inner.config.deployment,"generation":inner.actor_generation(&actor),
-            "version":env!("CARGO_PKG_VERSION"),"mode":"hosted","managedSync":false}))
+            "version":env!("CARGO_PKG_VERSION"),"mode":"hosted","managedSync":inner.policy.users[&actor].sync_owner && inner.config.sync_identity.is_some()}))
     }).await?))
 }
 async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
@@ -740,6 +751,7 @@ async fn update_policy(
             validate_users(&inner.config, &req.users)?;
             let mut next = Policy {
                 deployment: inner.policy.deployment.clone(),
+                sync_identity: inner.policy.sync_identity.clone(),
                 generation: inner
                     .policy
                     .generation
@@ -756,6 +768,7 @@ async fn update_policy(
                         old.enabled == user.enabled
                             && old.token_sha256 == user.token_sha256
                             && old.grants == user.grants
+                            && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);
             }
@@ -787,6 +800,7 @@ async fn update_policy(
                     .get(&d.actor)
                     .is_some_and(|u| u.epoch == d.generation)
             });
+            sync_transport::expire_revoked(inner);
             Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
         })
         .await?,
@@ -858,14 +872,40 @@ pub(super) async fn serve(
         }
     }
     validate_users(&config, &config.users).map_err(|e| e.message)?;
+    if let Some(identity) = &config.sync_identity {
+        match core.sync_binding_info(&config.root) {
+            Ok(binding) if binding.identity != *identity => {
+                return Err("Configured sync pairing differs from the served replica".into());
+            }
+            Err(error) if error.code != "syncNotEnabled" => return Err(error.into()),
+            _ => {}
+        }
+        core.receive_sync(identity, weftext_core::sync::SyncBundle::default())?;
+    }
     for user in config.users.values_mut() {
         user.epoch = 1;
     }
     let policy = match core.hosted_policy()? {
         Some(bytes) => {
-            let policy: Policy = serde_json::from_slice(&bytes)?;
+            let mut policy: Policy = serde_json::from_slice(&bytes)?;
             if policy.deployment != config.deployment {
                 return Err("Private server state belongs to another deployment".into());
+            }
+            if policy.sync_identity != config.sync_identity {
+                if policy.sync_identity.is_none()
+                    && config.sync_identity.is_some()
+                    && policy.users.values().all(|u| !u.sync_owner)
+                {
+                    // Adding a transport does not reapply bootstrap grants.
+                    policy.sync_identity = config.sync_identity.clone();
+                    policy.generation = policy
+                        .generation
+                        .checked_add(1)
+                        .ok_or("Policy generation exhausted")?;
+                    core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
+                } else {
+                    return Err("Persisted sync pairing differs from configuration; existing grants cannot silently move to another family".into());
+                }
             }
             validate_users(&config, &policy.users).map_err(|e| e.message)?;
             policy
@@ -875,6 +915,7 @@ pub(super) async fn serve(
                 deployment: config.deployment.clone(),
                 generation: 1,
                 users: config.users.clone(),
+                sync_identity: config.sync_identity.clone(),
             };
             core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
             policy
@@ -906,12 +947,14 @@ pub(super) async fn serve(
             policy,
             sessions: HashMap::new(),
             downloads: HashMap::new(),
+            sync: sync_transport::Store::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
         render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
     };
     let app = Router::new()
+        .merge(sync_transport::router())
         .route("/api/hosted/me", get(me))
         .route("/api/hosted/documents", get(list))
         .route("/api/hosted/open", post(open))

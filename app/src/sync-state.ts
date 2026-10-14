@@ -1,5 +1,6 @@
 export interface ObjectKey { kind: "node" | "directory" | "rootDirectory" | "schema" | "settings" | "tags"; id?: string }
 export interface SyncIdentity { workspaceId: string; genesis: string }
+export const sameSyncIdentity = (a: SyncIdentity, b: SyncIdentity): boolean => a.workspaceId === b.workspaceId && a.genesis === b.genesis;
 export interface ObjectState { parent: ObjectKey | null; name: string; retired: boolean; files: Record<string, string>; fileRevisions: Record<string, string> }
 export interface SyncVersion { commit: string; revision: string; state: ObjectState }
 export interface SyncObject { object: ObjectKey; view: { versions: SyncVersion[]; commonBases: SyncVersion[] } }
