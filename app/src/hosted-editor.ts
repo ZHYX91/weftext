@@ -1,4 +1,4 @@
-import { SourceEditor, type SourcePatch } from "./editor";
+import { SourceEditor, sourceBoundary, type SourcePatch } from "./editor";
 import { EmbeddedQueryController, sameQueryBasis, type EmbeddedQueryBasis } from "./embedded-query";
 import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
@@ -57,6 +57,11 @@ export class HostedEditor {
   get viewMode(): ViewMode { return this.mode; }
   get selection(): { from: number; to: number } | undefined { return this.editor?.selection; }
   select(from: number, to: number): void { this.editor?.select(from, to); }
+  locateNodeFragment(origin: Origin, basis: EmbeddedQueryBasis): void {
+    if (!this.editor || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis) || origin.isMain !== true || origin.path !== `resource:${this.resource}` || !sourceBoundary(basis.source, origin.utf16From) || !sourceBoundary(basis.source, origin.utf16To) || basis.source.slice(origin.utf16From, origin.utf16To) !== origin.raw) throw new Error("定位期间目标草稿已变化，未采用旧标签范围。");
+    // Selecting the actual native author range changes neither source nor Undo.
+    this.mode = "source"; this.editor.clearReveal(); this.editor.readOnly(this.blocked); this.paint(true); this.editor.select(origin.utf16From, origin.utf16To); this.queryHost?.modeChanged?.();
+  }
   set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read"); if (this.blocked === value) return; this.blocked = value; this.paint(); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
   async historyBasis(settle = false): Promise<EmbeddedQueryBasis> {

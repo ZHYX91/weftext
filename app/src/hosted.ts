@@ -7,6 +7,7 @@ import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
 import { HostedLibrary } from "./hosted-library";
 import { HostedMedia } from "./hosted-media";
+import { nodeFragmentOrigin, nodeReferenceParts, nodeSourceHash, nodeTargetDraft, sameHostedNodeAudience, type HostedNodeAudience, type HostedNodeBasis, type HostedNodeFragmentResult, type HostedNodeResolution } from "./hosted-navigation-state";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
@@ -24,6 +25,7 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <article><h1 id="title">选择文档</h1><p class="hint">五档共用同一份 Typst 草稿与撤销历史；断线输入保留，重新连接后核对原保存结果。</p>
 <div class="actions"><button id="save" disabled>保存</button><button id="preview" disabled>预览</button><button id="download" disabled>下载已保存源码</button><button id="history" disabled>保存历史</button><button id="reopen" disabled>重新读取与核对</button></div>
 <p id="stable-link" hidden><label>当前获权稳定笔记链接<input id="node-reference" aria-label="当前获权稳定笔记链接" readonly></label><button id="copy-reference" disabled>复制稳定笔记链接</button></p>
+<section id="node-navigation" aria-label="稳定笔记片段导航" hidden></section>
 <section id="source" aria-label="托管文档编辑器"></section>
 <section id="comparison" hidden><h2>核对并保留双方稿</h2><p>上方是你的草稿，下方是当前服务端稿。编辑上方内容，确认合并依据后再保存；确认本身不会改正文。</p><pre id="current"></pre><button id="rebase">已核对，以当前稿作为保存依据</button></section>
 <section id="history-list" aria-label="托管笔记时间线" hidden></section>
@@ -88,18 +90,65 @@ const library = new HostedLibrary(el("library"), request, async role => {
 });
 const media: HostedMedia = new HostedMedia(el("media"), (path, body, signal) => request(path, body, false, 0, signal), context => review.mediaChanged(context), context => review.openMedia(context));
 let stableReference: { resource: string; sessionId: string; reference: string } | undefined;
+let nodeNavigationVersion = 0;
+function clearNodeNavigation() { nodeNavigationVersion++; el("node-navigation").replaceChildren(); el("node-navigation").hidden = true; }
+function nodeAudience(): HostedNodeAudience { return { epoch: requestEpoch, authorization: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, source: source.value, serial: source.serial, navigation: nodeNavigationVersion }; }
+function nodeNavigationMessage(reference: string, message: string, onlyOpen = false) {
+  const host = el("node-navigation"); host.hidden = false; host.replaceChildren();
+  const original = document.createElement("input"); original.readOnly = true; original.value = reference; original.setAttribute("aria-label", "原稳定笔记片段链接");
+  const text = document.createElement("p"); text.textContent = message; text.setAttribute("role", "status"); text.setAttribute("aria-label", "稳定笔记片段定位结果"); host.append(original, text);
+  if (onlyOpen) { const base = reference.split("#", 1)[0], button = document.createElement("button"); button.textContent = "仅打开笔记，不定位原片段"; button.type = "button"; button.onclick = () => { void navigateReference(base).catch(error => status(error instanceof Error ? error.message : "目标当前不可用。")); }; host.append(button); }
+}
 async function navigateResource(reference: string) {
   const epoch = authorizationEpoch;
   if (doc) { await source.flush(); if (epoch !== authorizationEpoch) return; retain(); }
   if (epoch === authorizationEpoch) await media.openReference(reference);
 }
 async function navigateReference(reference: string) {
-  const epoch = requestEpoch; await source.flush(); retain();
-  if (epoch !== requestEpoch) return;
-  const resolved = await request<{ resource: string; canOpen: boolean; reference: string }>("navigation/resolve", { reference });
-  if (epoch !== requestEpoch) return;
-  if (!resolved.resource || resolved.canOpen !== true) throw new Error("稳定链接目标当前不可用，个人草稿保持保留。");
-  await run(() => open(resolved.resource));
+  if (busy) throw new Error("当前操作仍在核对，请保留原链接与正文草稿。");
+  const epoch = requestEpoch; await source.flush(); retain(); if (epoch !== requestEpoch) return;
+  clearNodeNavigation(); const captured = nodeAudience(); let staged: Doc | undefined, adopted = false;
+  nodeNavigationMessage(reference, "正在获权解析原链接；标签准确定位前保留当前正文。");
+  try {
+      const parts = nodeReferenceParts(reference), resolved = await request<HostedNodeResolution>("navigation/resolve", { reference });
+      if (!sameHostedNodeAudience(captured, nodeAudience())) return;
+      if (!resolved.resource || resolved.reference !== reference) throw new Error("稳定链接回执与原地址不符，未打开其他对象。");
+      if (parts.fragment === undefined) { if (resolved.canOpen !== true) throw new Error("稳定链接目标当前不可用，个人草稿保持保留。"); await run(() => open(resolved.resource)); return; }
+      // The saved label result cannot qualify an actor's recovered or local Draft.
+      const currentTarget = doc?.resource === resolved.resource;
+      if (currentTarget && draft?.pending) throw new Error("当前目标的原保存操作尚未核对，请先按原编号恢复，未定位旧范围。");
+      const prior = doc;
+      let target: Doc, targetDraft: HostedDraft;
+      if (currentTarget) { target = doc!; targetDraft = draft!; }
+      else {
+        staged = await request<Doc>("open", { resource: resolved.resource }); target = staged;
+        if (!sameHostedNodeAudience(captured, nodeAudience())) return;
+        if (target.resource !== resolved.resource) throw new Error("暂存目标与获权对象不符，未安装正文。");
+        const raw = sessionStorage.getItem(cachePrefix + target.resource); let local: HostedDraft | undefined;
+        try { local = raw === null ? undefined : JSON.parse(raw) as HostedDraft; } catch { throw new Error("目标的本页恢复稿无法解析；原记录保留，未安装另一份正文。"); }
+        targetDraft = nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, local);
+      }
+      const basis: HostedNodeBasis = { sessionId: target.sessionId, source: currentTarget ? source.value : targetDraft.source, serial: currentTarget ? source.serial : 0, sourceHash: await nodeSourceHash(currentTarget ? source.value : targetDraft.source) };
+      if (!sameHostedNodeAudience(captured, nodeAudience())) return;
+      await request("editor/map", basis); if (!sameHostedNodeAudience(captured, nodeAudience())) return;
+      const result = await request<HostedNodeFragmentResult>("navigation/fragment", { ...basis, reference });
+      if (!sameHostedNodeAudience(captured, nodeAudience())) return;
+      const origin = nodeFragmentOrigin(result, target.resource, reference, basis);
+      if (!origin) { const reason = { missing: "目标当前个人草稿中缺少此标签", ambiguous: "目标当前个人草稿中标签有歧义", unavailable: "目标当前个人草稿无法准确定位此标签", found: "标签没有准确范围" }[result.fragment.status]; nodeNavigationMessage(reference, `${reason}；当前正文与 Undo 保留，未丢弃片段打开整篇。`, true); return; }
+      if (busy) { nodeNavigationMessage(reference, "当前操作仍在核对，未采用迟到的片段范围；请操作完成后重新点击原链接。", true); return; }
+      if (!currentTarget) {
+        requestEpoch++; installDocument(target, targetDraft); adopted = true;
+        if (prior) void request("close", { sessionId: prior.sessionId }).catch(() => {});
+      }
+      source.locateNodeFragment(origin, { sessionId: target.sessionId, source: basis.source, serial: basis.serial });
+      nodeNavigationMessage(reference, `已按目标当前个人草稿唯一定位标签「${result.fragment.label}」的准确源码范围；正文与 Undo 未修改。`);
+      status("已准确定位原片段，未保存正文。");
+  } catch (error) {
+      if (sameHostedNodeAudience(captured, nodeAudience())) { const message = `${error instanceof Error ? error.message : "片段定位未完成"} 当前正文保留。`; nodeNavigationMessage(reference, message, reference.includes("#")); status(message); }
+  } finally {
+      // Never send an old actor's temporary session to the newly connected actor.
+      if (staged && !adopted && captured.credential === token && captured.actor === identity?.actor && captured.deployment === identity?.deployment && captured.generation === identity?.generation) { try { await request("close", { sessionId: staged.sessionId }); } catch { /* No result or target Draft is installed when cleanup fails. */ } }
+  }
 }
 async function readReference(selected: Doc, epoch: number) {
   stableReference = undefined; el("stable-link").hidden = true; el<HTMLInputElement>("node-reference").value = "";
@@ -149,6 +198,7 @@ async function openQueryResource(resource: string) { const epoch = requestEpoch;
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
+  clearNodeNavigation();
   requestEpoch++; authorizationEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = ""; stableReference = undefined;
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
@@ -186,6 +236,8 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
       // A hidden/unknown asset is not a revocation of the independently open
       // note. Only a current identity's changed actor epoch clears all views.
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧媒体与缓存已清除，请刷新目录。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Caller stops this resource delivery; personal source remains protected. */ }
+    } else if ([404, 409, 410].includes(response.status) && path.startsWith("navigation/") && sameHostedQueryIdentity(captured, audience())) {
+      try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧链接定位与缓存已清除，请刷新列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Stop this link delivery without treating a hidden same-epoch target as source revocation. */ }
     } else if (response.status === 404 && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
     throw new HostedError(result.error?.code ?? "request", result.error?.code === "basisRequired" && path.startsWith("query/") ? "保存带范围的定义需要已安装的规则基线；请由管理员明确安装库规则后重试，原草稿与提案保留，未自动创建规则。" : result.error?.message ?? "请求失败", response.status);
   }
@@ -228,6 +280,7 @@ async function list(term?: string) {
   if (rows) status(rows.complete ? `在可访问范围找到 ${items.length} 项` : `搜索未完整，仅显示已取得的 ${items.length} 项`);
 }
 async function open(resource: string) {
+  clearNodeNavigation();
   await source.flush(); retain();
   source.disabled = true;
   status("正在重新读取；现有草稿已保留。");
@@ -256,6 +309,10 @@ async function open(resource: string) {
     else if (["cancelled","resolved"].includes(outcome.status)) { delete draft.pending; }
     else status("原保存尚需恢复，请保留草稿并联系管理员；不会重复提交。");
   }
+  installDocument(opened, draft, recoveredSave);
+}
+function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave = false) {
+  clearNodeNavigation(); doc = opened; draft = retainedDraft; const epoch = requestEpoch;
   if (!draft.pending && draftDisposition(opened.source,draft) === "current") draft = { ...draft, source:opened.source, baseSource:opened.source };
   source.open(opened.sessionId, opened.resource, draft.source); source.disabled = !opened.rights.write;
   el("title").textContent = opened.title;
@@ -301,6 +358,7 @@ async function run(action: () => Promise<void>) {
   finally { busy = false; source.disabled = !doc?.rights.write; controls(); }
 }
 function sourceChanged() {
+  clearNodeNavigation();
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   try { retain(); status(navigator.onLine ? "个人草稿，尚未保存正文。" : "连接中断，本页草稿仍保留。"); } catch { status("浏览器无法保留恢复稿，请先复制你的输入。"); }
   queries.authorChanged();

@@ -148,6 +148,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_hosted_resource_collections.py', exe)
         run(sys.executable, 'scripts/test_hosted_definition.py', exe)
         run(sys.executable, 'scripts/test_hosted_history.py', exe)
+        run(sys.executable, 'scripts/test_hosted_navigation_fragments.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)
         run(sys.executable, 'scripts/test_remote_sync.py', exe)
     if args.action == 'package':
