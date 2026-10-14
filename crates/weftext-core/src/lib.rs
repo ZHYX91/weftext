@@ -5,6 +5,8 @@ mod draft_recovery;
 mod exchange;
 mod export_read;
 mod history;
+mod hosted;
+pub use hosted::{ActorSaveStatus, HostedSaveRequest};
 #[cfg(all(test, windows))]
 mod history_tests;
 mod inventory;
@@ -146,6 +148,7 @@ pub struct LibraryInfo {
 
 #[derive(Clone)]
 struct Session {
+    actor: Option<String>,
     path: PathBuf,
     base_id: String,
     bytes: Vec<u8>,
@@ -184,6 +187,7 @@ struct Birth {
 }
 
 pub struct Core {
+    actor: Option<String>,
     _instance_lock: File,
     _data_guard: ParentGuard,
     _private_guards: Vec<ParentGuard>,
@@ -196,6 +200,7 @@ pub struct Core {
 }
 impl Core {
     pub fn check_session_base(&self, session_id: &str, base_id: &str) -> Result<()> {
+        self.check_actor_session(session_id)?;
         let session = self
             .sessions
             .get(session_id)
@@ -230,6 +235,7 @@ impl Core {
             .map(|name| ParentGuard::acquire(&data_dir.join(name).join(".private-prospective")))
             .collect::<Result<Vec<_>>>()?;
         let mut core = Self {
+            actor: None,
             _instance_lock: instance_lock,
             _data_guard: data_guard,
             _private_guards: private_guards,
@@ -307,7 +313,13 @@ impl Core {
         let base_id = fresh();
         let draft = self
             .read_relocated_draft_with_identity(&path, &observed.identity, &source)?
-            .filter(|d| d.source != source || !d.alternatives.is_empty());
+            .filter(|d| d.source != source || !d.alternatives.is_empty())
+            .filter(|d| {
+                !(self.actor.is_some()
+                    && d.base_known
+                    && d.source == d.base_source
+                    && d.alternatives.is_empty())
+            });
         let recovered_draft_conflict = draft.as_ref().is_some_and(|d| {
             !d.base_known || d.base_source != source || !d.alternatives.is_empty()
         });
@@ -320,6 +332,7 @@ impl Core {
         self.sessions.insert(
             session_id.clone(),
             Session {
+                actor: self.actor.clone(),
                 path: path.clone(),
                 base_id: base_id.clone(),
                 bytes,
@@ -348,6 +361,7 @@ impl Core {
         })
     }
     pub fn persist_draft(&mut self, session_id: &str, source: &str) -> Result<()> {
+        self.check_actor_session(session_id)?;
         check_size(source.as_bytes())?;
         let session = self.sessions.get(session_id).ok_or_else(|| {
             CoreError::new(
@@ -383,6 +397,7 @@ impl Core {
         action: &str,
         source: Option<&str>,
     ) -> Result<()> {
+        self.check_actor_session(session_id)?;
         if !matches!(action, "discardRecovered" | "mergeRecovered") {
             return Err(CoreError::new(
                 "invalidDraftAction",
@@ -403,8 +418,7 @@ impl Core {
         if let Some(draft) = &session.conflicting_draft {
             private_replace(
                 &self
-                    .data_dir
-                    .join("draft-history")
+                    .draft_directory("draft-history")
                     .join(format!("{}.json", fresh())),
                 &serde_json::to_vec(draft)?,
             )?;
@@ -413,8 +427,7 @@ impl Core {
             {
                 private_replace(
                     &self
-                        .data_dir
-                        .join("draft-history")
+                        .draft_directory("draft-history")
                         .join(format!("{}.json", fresh())),
                     &serde_json::to_vec(&latest)?,
                 )?;
@@ -431,8 +444,7 @@ impl Core {
             };
             private_replace(
                 &self
-                    .data_dir
-                    .join("draft-history")
+                    .draft_directory("draft-history")
                     .join(format!("{}.json", fresh())),
                 &serde_json::to_vec(&reviewed)?,
             )?;
@@ -456,6 +468,7 @@ impl Core {
         request: SaveRequest,
         restore: Option<history::RestoreBinding>,
     ) -> Result<Receipt> {
+        self.check_actor_session(&request.session_id)?;
         valid_operation_id(&request.operation_id)?;
         check_size(request.source.as_bytes())?;
         let session = self
@@ -586,6 +599,7 @@ impl Core {
         Ok(receipt)
     }
     pub fn save_as(&mut self, request: SaveAsRequest) -> Result<Receipt> {
+        self.check_actor_session(&request.session_id)?;
         valid_operation_id(&request.operation_id)?;
         check_size(request.source.as_bytes())?;
         let session = self
@@ -896,7 +910,7 @@ impl Core {
             })
     }
     fn draft_path(&self, path: &Path) -> PathBuf {
-        self.data_dir.join("drafts").join(format!(
+        self.draft_directory("drafts").join(format!(
             "{}.json",
             hash(display(path).replace('/', "\\").to_lowercase().as_bytes())
         ))

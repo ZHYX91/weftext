@@ -120,6 +120,7 @@ struct HistoryRecord {
 
 impl Core {
     fn history_context(&self, session_id: &str) -> Result<HistoryContext> {
+        self.check_actor_session(session_id)?;
         let session = self
             .sessions
             .get(session_id)
@@ -542,7 +543,7 @@ impl Core {
     fn history_protected_drafts(&self, identity: &FileIdentity) -> Result<Vec<DraftAlternative>> {
         let mut drafts = Vec::new();
         let mut total = 0usize;
-        for entry in fs::read_dir(self.data_dir.join("draft-history"))? {
+        for entry in fs::read_dir(self.draft_directory("draft-history"))? {
             let path = entry?.path();
             if path.extension().is_none_or(|e| e != "json") {
                 continue;
@@ -583,8 +584,7 @@ impl Core {
         for name in &binding.draft_records {
             valid_operation_id(name)?;
             let draft: Draft = serde_json::from_slice(&fs::read(
-                self.data_dir
-                    .join("draft-history")
+                self.draft_directory("draft-history")
                     .join(format!("{name}.json")),
             )?)?;
             append_draft_alternatives(&mut protected_drafts, &draft);
@@ -767,8 +767,7 @@ impl Core {
                 let name = fresh();
                 journal::private_create(
                     &self
-                        .data_dir
-                        .join("draft-history")
+                        .draft_directory("draft-history")
                         .join(format!("{name}.json")),
                     &serde_json::to_vec(&draft)?,
                 )?;

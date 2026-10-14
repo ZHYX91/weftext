@@ -31,6 +31,7 @@ mod embedded_query_api;
 mod export_api;
 mod export_conversions;
 mod history_api;
+mod hosted;
 mod knowledge_api;
 mod media_api;
 mod navigation_api;
@@ -45,6 +46,9 @@ static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");
     about = "Weftext local Typst writing and knowledge tools"
 )]
 struct Args {
+    /// Run the bounded hosted service with an operator-owned configuration.
+    #[arg(long, conflicts_with_all = ["open", "root", "port"])]
+    server_config: Option<PathBuf>,
     #[arg(long, default_value_t = 0)]
     port: u16,
     #[arg(long)]
@@ -881,6 +885,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .join("Weftext-MVP")
     });
     let mut core = Core::new(std::path::absolute(data)?)?;
+    if let Some(config) = args.server_config {
+        return hosted::serve(core, config).await;
+    }
     let initial = if let Some(path) = args.open {
         Some(serde_json::to_value(core.open(
             std::path::absolute(path)?,

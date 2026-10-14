@@ -1,0 +1,948 @@
+//! A separate hosted boundary. Local path, library, recovery and feature APIs
+//! are deliberately not mounted here. Every resource comes from operator config.
+use super::*;
+use axum::Extension;
+use base64::Engine as _;
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    net::SocketAddr,
+    time::{Duration, Instant},
+};
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FileEntry {
+    path: String,
+    title: String,
+    #[serde(default)]
+    editable: bool,
+    #[serde(default)]
+    inputs: Vec<String>,
+}
+#[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Rights {
+    #[serde(default)]
+    read: bool,
+    #[serde(default)]
+    write: bool,
+    #[serde(default)]
+    history: bool,
+    #[serde(default)]
+    download: bool,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct User {
+    #[serde(default)]
+    epoch: u64,
+    token_sha256: String,
+    enabled: bool,
+    grants: BTreeMap<String, Rights>,
+}
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Policy {
+    deployment: String,
+    generation: u64,
+    users: BTreeMap<String, User>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Config {
+    deployment: String,
+    bind: SocketAddr,
+    origin: Option<String>,
+    #[serde(default)]
+    allow_insecure_http: bool,
+    root: PathBuf,
+    admin_token_sha256: String,
+    files: BTreeMap<String, FileEntry>,
+    users: BTreeMap<String, User>,
+}
+#[derive(Clone)]
+struct HostedState {
+    inner: Arc<Mutex<HostedInner>>,
+    origin: Arc<str>,
+    host: Arc<str>,
+    render_gate: Arc<tokio::sync::Semaphore>,
+}
+struct HostedInner {
+    core: Core,
+    config: Config,
+    policy: Policy,
+    sessions: HashMap<String, HostedSession>,
+    downloads: HashMap<String, Download>,
+}
+#[derive(Clone)]
+struct HostedSession {
+    actor: String,
+    generation: u64,
+    resource: String,
+}
+struct Download {
+    actor: String,
+    generation: u64,
+    resource: String,
+    bytes: Vec<u8>,
+    expires: Instant,
+}
+#[derive(Clone)]
+struct Auth {
+    digest: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Open {
+    resource: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SessionRequest {
+    session_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SourceRequest {
+    session_id: String,
+    source: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OperationStatus {
+    operation_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Settle {
+    resource: String,
+    operation_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct HistoryRequest {
+    session_id: String,
+    version_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Search {
+    text: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Chunk {
+    ticket: String,
+    offset: usize,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PolicyUpdate {
+    expected_generation: u64,
+    users: BTreeMap<String, User>,
+}
+
+fn unavailable() -> ApiError {
+    ApiError::new(
+        StatusCode::NOT_FOUND,
+        "unavailable",
+        "内容不可用或当前无权访问，请重新连接",
+    )
+}
+fn expired() -> ApiError {
+    ApiError::new(
+        StatusCode::UNAUTHORIZED,
+        "authentication",
+        "访问凭据已失效，请重新连接",
+    )
+}
+fn digest(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+fn valid_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+}
+fn valid_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 100
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || b"_-".contains(&c))
+}
+fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(), ApiError> {
+    let mut tokens = BTreeSet::from([config.admin_token_sha256.clone()]);
+    if users.len() > 128 {
+        return Err(ApiError::bad("用户上限为 128"));
+    }
+    for (id, user) in users {
+        if !valid_id(id)
+            || !valid_digest(&user.token_sha256)
+            || !tokens.insert(user.token_sha256.clone())
+        {
+            return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
+        }
+        for (resource, rights) in &user.grants {
+            if !config.files.contains_key(resource)
+                || (!rights.read && (rights.write || rights.history || rights.download))
+                || (rights.write && !config.files[resource].editable)
+            {
+                return Err(ApiError::bad(
+                    "授权须引用已配置对象，写入、历史、下载还须具备读取权",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+impl HostedInner {
+    fn actor(&self, auth: &Auth) -> Result<String, ApiError> {
+        self.policy
+            .users
+            .iter()
+            .find(|(_, user)| user.enabled && user.token_sha256 == auth.digest)
+            .map(|(id, _)| id.clone())
+            .ok_or_else(expired)
+    }
+    fn rights(&self, actor: &str, resource: &str) -> Result<Rights, ApiError> {
+        self.policy
+            .users
+            .get(actor)
+            .filter(|u| u.enabled)
+            .and_then(|u| u.grants.get(resource))
+            .filter(|r| r.read)
+            .cloned()
+            .ok_or_else(unavailable)
+    }
+    fn actor_generation(&self, actor: &str) -> u64 {
+        self.policy.users.get(actor).map_or(0, |u| u.epoch)
+    }
+    fn session(&self, auth: &Auth, id: &str) -> Result<(String, HostedSession, Rights), ApiError> {
+        let actor = self.actor(auth)?;
+        let session = self
+            .sessions
+            .get(id)
+            .filter(|s| s.actor == actor && s.generation == self.actor_generation(&actor))
+            .cloned()
+            .ok_or_else(|| {
+                ApiError::new(
+                    StatusCode::GONE,
+                    "sessionExpired",
+                    "会话已失效，请重新读取并核对草稿",
+                )
+            })?;
+        let rights = self.rights(&actor, &session.resource)?;
+        Ok((actor, session, rights))
+    }
+    fn core_error(error: CoreError) -> ApiError {
+        // OS errors and recovery paths can contain absolute server locations.
+        let message = match error.code.as_str() {
+            "conflict" | "staleBase" | "draftConflict" => {
+                "当前稿或原保存依据已变化。双方稿已保留，请重新打开并明确合并。"
+            }
+            "operationConflict" => "同一操作编号不能用于不同内容。",
+            "identityConflict" => "须保留笔记的稳定身份声明。",
+            "historyUnavailable" => "所选历史版本不可用，未替换为当前版本。",
+            _ => "文件操作未完成，草稿仍可保留；请查看服务端恢复状态。",
+        };
+        ApiError {
+            status: StatusCode::CONFLICT,
+            code: error.code,
+            message: message.into(),
+            details: error
+                .current_source
+                .map(|s| Box::new(json!({"currentSource":s}))),
+        }
+    }
+    fn actor_scope(&self, actor: &str) -> String {
+        format!("{}:{actor}", self.config.deployment)
+    }
+    fn open(&mut self, actor: &str, resource: &str) -> Result<Value, ApiError> {
+        let rights = self.rights(actor, resource)?;
+        let file = self
+            .config
+            .files
+            .get(resource)
+            .filter(|f| f.editable)
+            .cloned()
+            .ok_or_else(unavailable)?;
+        if self.sessions.len() >= 128
+            || self.sessions.values().filter(|s| s.actor == actor).count() >= 32
+        {
+            return Err(ApiError::bad("打开会话已达 32 个，请关闭不使用的文档"));
+        }
+        let path = self.config.root.join(&file.path);
+        let root = self.config.root.clone();
+        let scope = self.actor_scope(actor);
+        let opened = self
+            .core
+            .with_actor(&scope, |c| c.open(path, Some(root)))
+            .map_err(Self::core_error)?;
+        self.sessions.insert(
+            opened.session_id.clone(),
+            HostedSession {
+                actor: actor.into(),
+                generation: self.actor_generation(actor),
+                resource: resource.into(),
+            },
+        );
+        Ok(
+            json!({"resource":resource,"title":file.title,"sessionId":opened.session_id,"baseId":opened.base_id,
+            "source":opened.source,"recoveredDraft":opened.recovered_draft,"recoveredDraftBaseSource":opened.recovered_draft_base_source,
+            "recoveredDraftConflict":opened.recovered_draft_conflict,"rights":rights}),
+        )
+    }
+    fn files(
+        &self,
+        actor: &str,
+        resources: &[String],
+    ) -> Result<BTreeMap<String, Vec<u8>>, ApiError> {
+        let mut paths = BTreeSet::new();
+        for resource in resources {
+            self.rights(actor, resource)?;
+            paths.insert(
+                self.config
+                    .files
+                    .get(resource)
+                    .ok_or_else(unavailable)?
+                    .path
+                    .clone(),
+            );
+        }
+        self.core
+            .hosted_files(&self.config.root, &paths.into_iter().collect::<Vec<_>>())
+            .map_err(|_| unavailable())
+    }
+}
+
+async fn locked<T: Send + 'static>(
+    state: &HostedState,
+    f: impl FnOnce(&mut HostedInner) -> Result<T, ApiError> + Send + 'static,
+) -> Result<T, ApiError> {
+    let inner = state.inner.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut guard = inner.lock().map_err(|_| ApiError::internal("服务不可用"))?;
+        f(&mut guard)
+    })
+    .await
+    .map_err(|_| ApiError::internal("服务未完成"))?
+}
+async fn boundary(State(state): State<HostedState>, mut request: Request, next: Next) -> Response {
+    let headers = request.headers();
+    if headers.get(header::HOST).and_then(|v| v.to_str().ok()) != Some(&state.host)
+        || headers
+            .get(header::ORIGIN)
+            .is_some_and(|v| v.to_str().ok() != Some(&state.origin))
+    {
+        return protected_response(
+            ApiError::new(StatusCode::FORBIDDEN, "origin", "不允许的访问来源").into_response(),
+        );
+    }
+    if request.uri().path().starts_with("/api/") {
+        let token = headers
+            .get(header::AUTHORIZATION)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .unwrap_or("");
+        if token.len() < 32 || token.len() > 512 {
+            return protected_response(expired().into_response());
+        }
+        let auth = Auth {
+            digest: digest(token.as_bytes()),
+        };
+        let check = auth.clone();
+        let admin = request.uri().path().starts_with("/api/hosted/admin/");
+        if let Err(error) = locked(&state, move |inner| {
+            if admin {
+                if check.digest != inner.config.admin_token_sha256 {
+                    return Err(expired());
+                }
+            } else {
+                inner.actor(&check)?;
+            }
+            Ok(())
+        })
+        .await
+        {
+            return protected_response(error.into_response());
+        }
+        request.extensions_mut().insert(auth);
+    }
+    protected_response(next.run(request).await)
+}
+fn protected_response(mut response: Response) -> Response {
+    let headers = response.headers_mut();
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    headers.insert(
+        "x-content-type-options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
+    headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"));
+    response
+}
+
+async fn me(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
+    Ok(Json(locked(&state, move |inner| {
+        let actor = inner.actor(&auth)?;
+        Ok(json!({"actor":actor,"deployment":inner.config.deployment,"generation":inner.actor_generation(&actor),
+            "version":env!("CARGO_PKG_VERSION"),"mode":"hosted","managedSync":false}))
+    }).await?))
+}
+async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            let files = inner
+                .config
+                .files
+                .iter()
+                .filter_map(|(id, f)| {
+                    inner
+                        .rights(&actor, id)
+                        .ok()
+                        .filter(|_| f.editable)
+                        .map(|rights| json!({"resource":id,"title":f.title,"rights":rights}))
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({"documents":files,"coverage":"configuredAuthorizedSources"}))
+        })
+        .await?,
+    ))
+}
+async fn open(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Open>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            inner.open(&actor, &req.resource)
+        })
+        .await?,
+    ))
+}
+async fn close(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<SessionRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let (actor, _, _) = inner.session(&auth, &req.session_id)?;
+            inner
+                .core
+                .with_actor(&inner.actor_scope(&actor), |c| {
+                    c.close_session(&req.session_id)
+                })
+                .map_err(HostedInner::core_error)?;
+            inner.sessions.remove(&req.session_id);
+            Ok(json!({"closed":true}))
+        })
+        .await?,
+    ))
+}
+async fn draft(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<SourceRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
+            if !rights.write {
+                return Err(unavailable());
+            }
+            inner
+                .core
+                .with_actor(&inner.actor_scope(&actor), |c| {
+                    c.persist_draft(&req.session_id, &req.source)
+                })
+                .map_err(HostedInner::core_error)?;
+            Ok(json!({"status":"draftRetained"}))
+        })
+        .await?,
+    ))
+}
+async fn save(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<weftext_core::HostedSaveRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let (actor, session, rights) = inner.session(&auth, &req.session_id)?;
+            if !rights.write {
+                return Err(unavailable());
+            }
+            let status = inner
+                .core
+                .with_actor(&inner.actor_scope(&actor), |c| {
+                    c.actor_save(&session.resource, req)
+                })
+                .map_err(HostedInner::core_error)?;
+            value(status)
+        })
+        .await?,
+    ))
+}
+async fn resolve_draft(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<SourceRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
+            if !rights.write {
+                return Err(unavailable());
+            }
+            inner
+                .core
+                .with_actor(&inner.actor_scope(&actor), |c| {
+                    c.resolve_draft(&req.session_id, "mergeRecovered", Some(&req.source))
+                })
+                .map_err(HostedInner::core_error)?;
+            Ok(json!({"status":"draftRebased","message":"原草稿已保留；尚未保存正文"}))
+        })
+        .await?,
+    ))
+}
+async fn status(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<OperationStatus>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            let status = inner
+                .core
+                .with_actor(&inner.actor_scope(&actor), |c| {
+                    c.actor_save_status(&req.operation_id)
+                })
+                .map_err(HostedInner::core_error)?;
+            if let Some(status) = status {
+                inner.rights(&actor, &status.resource)?;
+                value(status)
+            } else {
+                Ok(json!({"operationId":req.operation_id,"status":"notRegistered"}))
+            }
+        })
+        .await?,
+    ))
+}
+async fn settle(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Settle>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            if !inner.rights(&actor, &req.resource)?.write {
+                return Err(unavailable());
+            }
+            value(
+                inner
+                    .core
+                    .with_actor(&inner.actor_scope(&actor), |c| {
+                        c.actor_settle(&req.resource, &req.operation_id)
+                    })
+                    .map_err(HostedInner::core_error)?,
+            )
+        })
+        .await?,
+    ))
+}
+async fn history(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<SessionRequest>,
+) -> ApiResult {
+    Ok(Json(locked(&state, move |inner| {
+        let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
+        if !rights.history { return Err(unavailable()); }
+        let timeline = inner.core.with_actor(&inner.actor_scope(&actor), |c| c.list_history(&req.session_id)).map_err(HostedInner::core_error)?;
+        Ok(json!({"versions":timeline.versions,"retention":timeline.retention,"currentness":timeline.currentness}))
+    }).await?))
+}
+async fn history_read(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<HistoryRequest>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
+            if !rights.history {
+                return Err(unavailable());
+            }
+            value(
+                inner
+                    .core
+                    .with_actor(&inner.actor_scope(&actor), |c| {
+                        c.read_history(&req.session_id, &req.version_id)
+                    })
+                    .map_err(HostedInner::core_error)?,
+            )
+        })
+        .await?,
+    ))
+}
+async fn search(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Search>,
+) -> ApiResult {
+    Ok(Json(locked(&state, move |inner| {
+        let actor = inner.actor(&auth)?;
+        if req.text.is_empty() || req.text.len() > 256 { return Err(ApiError::bad("搜索词须为 1–256 字节")); }
+        let mut rows = Vec::new(); let mut complete = true;
+        let docs = inner.config.files.iter().filter(|(id, f)| f.editable && inner.rights(&actor, id).is_ok()).map(|(id,f)| (id.clone(),f.clone())).collect::<Vec<_>>();
+        let mut total = 0;
+        for (id, file) in docs {
+            match inner.files(&actor, std::slice::from_ref(&id)) {
+                Ok(files) => {
+                    let bytes = &files[&file.path]; total += bytes.len();
+                    if total > 16 * 1024 * 1024 { complete = false; break; }
+                    let text = std::str::from_utf8(bytes).map_err(|_| unavailable())?;
+                    if text.contains(&req.text) || file.title.contains(&req.text) { rows.push(json!({"resource":id,"title":file.title})); }
+                }
+                Err(_) => complete = false,
+            }
+        }
+        Ok(json!({"rows":rows,"complete":complete,"coverage":"configuredAuthorizedSources","queryKind":"literalSourceText"}))
+    }).await?))
+}
+async fn preview(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<SourceRequest>,
+) -> ApiResult {
+    if req.source.len() > weftext_core::MAX_SOURCE_BYTES {
+        return Err(ApiError::bad("预览上限为 2 MiB"));
+    }
+    let sid = req.session_id.clone();
+    let check = auth.clone();
+    let source = req.source;
+    let (input, generation) = locked(&state, move |inner| {
+        let (actor, session, _) = inner.session(&check, &sid)?;
+        let file = &inner.config.files[&session.resource];
+        let mut files = inner.files(&actor, &file.inputs)?;
+        files.insert(file.path.clone(), source.as_bytes().to_vec());
+        Ok((
+            WorkerRequest {
+                source,
+                path: file.path.clone().into(),
+                root: inner.config.root.clone(),
+                paged: false,
+                style: None,
+                frozen_files: Some(
+                    files
+                        .into_iter()
+                        .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
+                        .collect(),
+                ),
+            },
+            inner.actor_generation(&actor),
+        ))
+    })
+    .await?;
+    // Queue capacity is bounded; await does not hold the authorization/writer lock.
+    let _permit = state.render_gate.try_acquire().map_err(|_| {
+        ApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "busy",
+            "预览正在运行，请稍后再试",
+        )
+    })?;
+    let output = render_worker(input).await;
+    locked(&state, move |inner| {
+        let (actor, _, _) = inner.session(&auth, &req.session_id)?;
+        if inner.actor_generation(&actor) != generation { return Err(unavailable()); }
+        let output = output.map_err(|_| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "previewUnavailable", "预览未完成，源码与草稿仍保留。"))?;
+        // Return rendered content only. Compiler paths, origins and ambient
+        // metadata are not part of this bounded hosted presentation API.
+        Ok(Json(json!({"ok":output["ok"],"html":output["html"],
+            "message":if output["ok"] == true { "" } else { "无法在当前获权依赖内预览；源码和草稿仍保留。" }})))
+    }).await
+}
+async fn prepare_download(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Open>,
+) -> ApiResult {
+    Ok(Json(locked(&state, move |inner| {
+        let actor = inner.actor(&auth)?;
+        if !inner.rights(&actor, &req.resource)?.download { return Err(unavailable()); }
+        inner.downloads.retain(|_, d| d.expires > Instant::now());
+        if inner.downloads.len() >= 32 { return Err(ApiError::bad("暂存下载已达上限，请稍后重试")); }
+        let files = inner.files(&actor, std::slice::from_ref(&req.resource))?;
+        let bytes = files[&inner.config.files[&req.resource].path].clone();
+        let ticket = uuid::Uuid::new_v4().to_string();
+        let result = json!({"ticket":ticket,"length":bytes.len(),"sha256":digest(&bytes),"chunkSize":65536,"status":"frozen"});
+        if inner.downloads.values().map(|d| d.bytes.len()).sum::<usize>() + bytes.len() > 64*1024*1024 { return Err(ApiError::bad("下载暂存总量已达 64 MiB")); }
+        inner.downloads.insert(ticket, Download {generation:inner.actor_generation(&actor),actor,resource:req.resource,bytes,expires:Instant::now()+Duration::from_secs(900)});
+        Ok(result)
+    }).await?))
+}
+async fn chunk(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Chunk>,
+) -> Result<Response, ApiError> {
+    locked(&state, move |inner| {
+        let actor = inner.actor(&auth)?;
+        let download = inner
+            .downloads
+            .get(&req.ticket)
+            .filter(|d| {
+                d.actor == actor
+                    && d.generation == inner.actor_generation(&actor)
+                    && d.expires > Instant::now()
+            })
+            .ok_or_else(unavailable)?;
+        if !inner.rights(&actor, &download.resource)?.download || req.offset > download.bytes.len()
+        {
+            return Err(unavailable());
+        }
+        let end = (req.offset + 65536).min(download.bytes.len());
+        Ok((
+            [(header::CONTENT_TYPE, "application/octet-stream")],
+            download.bytes[req.offset..end].to_vec(),
+        )
+            .into_response())
+    })
+    .await
+}
+async fn update_policy(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<PolicyUpdate>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            if auth.digest != inner.config.admin_token_sha256 {
+                return Err(expired());
+            }
+            if req.expected_generation != inner.policy.generation {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "policyConflict",
+                    "授权策略已变化，请读取当前代次",
+                ));
+            }
+            validate_users(&inner.config, &req.users)?;
+            let mut next = Policy {
+                deployment: inner.policy.deployment.clone(),
+                generation: inner
+                    .policy
+                    .generation
+                    .checked_add(1)
+                    .ok_or_else(|| ApiError::internal("授权代次耗尽"))?,
+                users: req.users,
+            };
+            for (actor, user) in &mut next.users {
+                user.epoch = inner
+                    .policy
+                    .users
+                    .get(actor)
+                    .filter(|old| {
+                        old.enabled == user.enabled
+                            && old.token_sha256 == user.token_sha256
+                            && old.grants == user.grants
+                    })
+                    .map_or(next.generation, |old| old.epoch);
+            }
+            inner
+                .core
+                .store_hosted_policy(
+                    &serde_json::to_vec(&next).map_err(|_| ApiError::internal("策略编码失败"))?,
+                )
+                .map_err(HostedInner::core_error)?;
+            inner.policy = next;
+            let expired_sessions = inner
+                .sessions
+                .iter()
+                .filter(|(_, s)| s.generation != inner.actor_generation(&s.actor))
+                .map(|(id, s)| (id.clone(), s.clone()))
+                .collect::<Vec<_>>();
+            for (id, session) in expired_sessions {
+                inner.sessions.remove(&id);
+                let scope = format!("{}:{}", inner.config.deployment, session.actor);
+                inner
+                    .core
+                    .with_actor(&scope, |c| c.close_session(&id))
+                    .map_err(HostedInner::core_error)?;
+            }
+            inner.downloads.retain(|_, d| {
+                inner
+                    .policy
+                    .users
+                    .get(&d.actor)
+                    .is_some_and(|u| u.epoch == d.generation)
+            });
+            Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
+        })
+        .await?,
+    ))
+}
+async fn policy_read(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            if auth.digest != inner.config.admin_token_sha256 {
+                return Err(expired());
+            }
+            value(&inner.policy)
+        })
+        .await?,
+    ))
+}
+async fn hosted_assets(request: Request) -> Response {
+    let path = request.uri().path();
+    if path == "/" || path == "/hosted.html" {
+        return (
+            [(header::CONTENT_TYPE, "text/html; charset=utf-8")],
+            ASSETS
+                .get_file("hosted.html")
+                .map_or(&[][..], |f| f.contents()),
+        )
+            .into_response();
+    }
+    if path.starts_with("/assets/") || path.starts_with("/fonts/") {
+        return super::assets(request).await;
+    }
+    StatusCode::NOT_FOUND.into_response()
+}
+pub(super) async fn serve(
+    core: Core,
+    config_path: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut config: Config = serde_json::from_slice(&std::fs::read(&config_path)?)?;
+    config.root = std::path::absolute(&config.root)?;
+    if !valid_id(&config.deployment)
+        || !valid_digest(&config.admin_token_sha256)
+        || config.files.len() > 256
+    {
+        return Err("Invalid deployment, administrator digest or resource budget".into());
+    }
+    let mut paths = BTreeSet::new();
+    for (id, file) in &config.files {
+        let p = std::path::Path::new(&file.path);
+        if !valid_id(id)
+            || file.path.is_empty()
+            || p.components()
+                .any(|c| !matches!(c, std::path::Component::Normal(_)))
+            || file.path.contains(':')
+            || !paths.insert(file.path.replace('\\', "/").to_lowercase())
+            || (file.editable && p.extension().is_none_or(|e| e != "typ"))
+            || file.title.len() > 500
+            || file.inputs.len() > 64
+        {
+            return Err("Invalid configured resource".into());
+        }
+        if file
+            .inputs
+            .iter()
+            .any(|i| !config.files.contains_key(i) || i == id)
+        {
+            return Err("Invalid configured dependency".into());
+        }
+    }
+    validate_users(&config, &config.users).map_err(|e| e.message)?;
+    for user in config.users.values_mut() {
+        user.epoch = 1;
+    }
+    let policy = match core.hosted_policy()? {
+        Some(bytes) => {
+            let policy: Policy = serde_json::from_slice(&bytes)?;
+            if policy.deployment != config.deployment {
+                return Err("Private server state belongs to another deployment".into());
+            }
+            validate_users(&config, &policy.users).map_err(|e| e.message)?;
+            policy
+        }
+        None => {
+            let policy = Policy {
+                deployment: config.deployment.clone(),
+                generation: 1,
+                users: config.users.clone(),
+            };
+            core.store_hosted_policy(&serde_json::to_vec(&policy)?)?;
+            policy
+        }
+    };
+    let listener = tokio::net::TcpListener::bind(config.bind).await?;
+    let address = listener.local_addr()?;
+    let origin = match config.origin.clone() {
+        Some(origin) => origin,
+        None if address.ip().is_loopback() => format!("http://{address}"),
+        None => return Err("Non-loopback binding requires an explicit origin".into()),
+    };
+    let parsed = url::Url::parse(&origin)?;
+    if parsed.origin().ascii_serialization() != origin
+        || !matches!(parsed.scheme(), "http" | "https")
+        || (!address.ip().is_loopback() && parsed.scheme() == "http" && !config.allow_insecure_http)
+    {
+        return Err("Use an exact HTTPS origin, or explicitly allow insecure HTTP for a controlled test network".into());
+    }
+    let host = origin
+        .split_once("://")
+        .ok_or("Invalid origin")?
+        .1
+        .to_owned();
+    let state = HostedState {
+        inner: Arc::new(Mutex::new(HostedInner {
+            core,
+            config,
+            policy,
+            sessions: HashMap::new(),
+            downloads: HashMap::new(),
+        })),
+        origin: origin.clone().into(),
+        host: host.into(),
+        render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
+    };
+    let app = Router::new()
+        .route("/api/hosted/me", get(me))
+        .route("/api/hosted/documents", get(list))
+        .route("/api/hosted/open", post(open))
+        .route("/api/hosted/close", post(close))
+        .route("/api/hosted/save", post(save))
+        .route("/api/hosted/draft", post(draft))
+        .route("/api/hosted/draft/resolve", post(resolve_draft))
+        .route("/api/hosted/operation", post(status))
+        .route("/api/hosted/operation/settle", post(settle))
+        .route("/api/hosted/search", post(search))
+        .route("/api/hosted/history", post(history))
+        .route("/api/hosted/history/read", post(history_read))
+        .route("/api/hosted/preview", post(preview))
+        .route("/api/hosted/download/prepare", post(prepare_download))
+        .route("/api/hosted/download/chunk", post(chunk))
+        .route(
+            "/api/hosted/admin/policy",
+            get(policy_read).post(update_policy),
+        )
+        .fallback(hosted_assets)
+        .layer(DefaultBodyLimit::max(3 * 1024 * 1024))
+        .layer(middleware::from_fn_with_state(state.clone(), boundary))
+        .with_state(state);
+    println!(
+        "Weftext {} hosted\n{origin}/\nBound to {address}; operator-managed resources only.",
+        env!("CARGO_PKG_VERSION")
+    );
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await?;
+    Ok(())
+}

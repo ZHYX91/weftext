@@ -158,8 +158,7 @@ impl Core {
                     // Exact old path-hash records remain readable while new
                     // records use normalized Windows spellings.
                     let legacy = self
-                        .data_dir
-                        .join("drafts")
+                        .draft_directory("drafts")
                         .join(format!("{}.json", hash(prior.as_bytes())));
                     match fs::read(legacy) {
                         Ok(bytes) => bytes,
@@ -235,8 +234,7 @@ impl Core {
             if let Some(bytes) = displaced_record {
                 journal::private_create(
                     &self
-                        .data_dir
-                        .join("draft-history")
+                        .draft_directory("draft-history")
                         .join(format!("{}.json", fresh())),
                     &bytes,
                 )?;
