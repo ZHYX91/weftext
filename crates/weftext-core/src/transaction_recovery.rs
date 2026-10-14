@@ -492,7 +492,18 @@ impl Core {
         };
         match ParentGuard::acquire(Path::new(path)) {
             Ok(guard) => {
-                match guard.open_file(write, false) {
+                let opened = if !write
+                    && plan.transaction.as_ref().is_some_and(|t| {
+                        crate::operations::operation_read_control(
+                            Path::new(&t.request.root),
+                            Path::new(path),
+                        )
+                    }) {
+                    guard.open_read_guard_file()
+                } else {
+                    guard.open_file(write, false)
+                };
+                match opened {
                     Ok(mut file) => {
                         let observed: Result<(FileIdentity, Vec<u8>)> =
                             (|| Ok((stamp(&file)?.identity, read_blob(&mut file)?)))();

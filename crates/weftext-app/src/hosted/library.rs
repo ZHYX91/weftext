@@ -143,7 +143,12 @@ fn rights<'a>(inner: &'a HostedInner, actor: &str) -> Result<&'a Rights, ApiErro
         .map(|u| &u.library)
         .ok_or_else(unavailable)
 }
-fn access(inner: &HostedInner, actor: &str, role: &str, write: bool) -> Result<(), ApiError> {
+pub(super) fn access(
+    inner: &HostedInner,
+    actor: &str,
+    role: &str,
+    write: bool,
+) -> Result<(), ApiError> {
     rights(inner, actor)?
         .role(role)
         .filter(|r| r.read && (!write || r.write))

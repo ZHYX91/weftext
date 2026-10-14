@@ -2,6 +2,9 @@
 //! The host authorizes participants and filters this trusted result for delivery.
 use super::*;
 use std::collections::BTreeMap;
+#[path = "hosted_structure.rs"]
+mod structure;
+pub use structure::{ActorStructureNode, ActorStructureReceipt, FeatureTreeWitness};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -15,6 +18,8 @@ pub struct ActorFeatureStatus {
     pub intent_kind: String,
     /// Stable refs allocated by the original Core plan, never filesystem paths.
     pub resource_refs: Vec<String>,
+    /// Original allocated or continued identities, never guessed from a title.
+    pub node_refs: Vec<weftext_knowledge::NodeRef>,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -24,6 +29,13 @@ enum FeatureIntentKind {
     ImportDocx,
     ConfigureStyle,
     ImportResource,
+    NewNode,
+    RenameNode,
+    MoveNode,
+    CopyNode,
+    TemplateNode,
+    TrashNode,
+    RestoreNode,
 }
 impl FeatureIntentKind {
     fn from_intent(intent: &OperationIntent) -> Result<Self> {
@@ -32,9 +44,16 @@ impl FeatureIntentKind {
             OperationIntent::ImportDocx { .. } => Ok(Self::ImportDocx),
             OperationIntent::ConfigureStyle { .. } => Ok(Self::ConfigureStyle),
             OperationIntent::ImportResource { .. } => Ok(Self::ImportResource),
+            OperationIntent::NewNode { .. } => Ok(Self::NewNode),
+            OperationIntent::RenameNode { .. } => Ok(Self::RenameNode),
+            OperationIntent::MoveNode { .. } => Ok(Self::MoveNode),
+            OperationIntent::CopyNode { .. } => Ok(Self::CopyNode),
+            OperationIntent::TemplateNode { .. } => Ok(Self::TemplateNode),
+            OperationIntent::TrashNode { .. } => Ok(Self::TrashNode),
+            OperationIntent::RestoreNode { .. } => Ok(Self::RestoreNode),
             _ => Err(CoreError::new(
                 "unsupportedIntent",
-                "Hosted reviewed features permit only UpdateFiles, ImportDocx, ConfigureStyle or ImportResource",
+                "Hosted reviewed features require a supported author or structure intent",
             )),
         }
     }
@@ -44,7 +63,17 @@ impl FeatureIntentKind {
             Self::ImportDocx => "importDocx",
             Self::ConfigureStyle => "configureStyle",
             Self::ImportResource => "importResource",
+            Self::NewNode => "newNode",
+            Self::RenameNode => "renameNode",
+            Self::MoveNode => "moveNode",
+            Self::CopyNode => "copyNode",
+            Self::TemplateNode => "templateNode",
+            Self::TrashNode => "trashNode",
+            Self::RestoreNode => "restoreNode",
         }
+    }
+    fn has_losses(self) -> bool {
+        matches!(self, Self::ImportDocx | Self::CopyNode | Self::TemplateNode)
     }
 }
 
@@ -58,6 +87,8 @@ pub(super) struct FeatureOperation {
     import_losses: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     intent_kind: Option<FeatureIntentKind>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    destination_slot: Option<String>,
 }
 impl FeatureOperation {
     fn kind(&self) -> FeatureIntentKind {
@@ -112,6 +143,18 @@ fn import_losses(preview: &OperationPreview) -> serde_json::Value {
             .map(|(code, message)| serde_json::json!({"code":code,"message":message}))
             .collect(),
     )
+}
+fn feature_losses(preview: &OperationPreview, kind: FeatureIntentKind) -> serde_json::Value {
+    if kind == FeatureIntentKind::ImportDocx {
+        return import_losses(preview);
+    }
+    if preview.losses.is_empty() {
+        serde_json::json!([])
+    } else {
+        // No source path, schema detail, target title or producer message is
+        // disclosed. The exact original losses remain in the private Plan.
+        serde_json::json!([{"code":"structure-copy-loss","message":"部分引用或批注不能完整迁移；原值已保留，请明确接受原计划中的复制限制。"}])
+    }
 }
 
 fn conflict() -> CoreError {
@@ -266,7 +309,9 @@ impl Core {
                     .as_ref()
                     .unwrap();
                 let valid_intent = FeatureIntentKind::from_intent(&transaction.request.intent)
-                    .is_ok_and(|kind| kind == record.feature.as_ref().unwrap().kind());
+                    .is_ok_and(|kind| kind == record.feature.as_ref().unwrap().kind())
+                    && transaction.hosted_destination
+                        == record.feature.as_ref().unwrap().destination_slot;
                 if !valid_intent {
                     return Err(conflict());
                 }
@@ -306,14 +351,15 @@ impl Core {
                 ));
             }
         };
-        if record.feature.as_ref().unwrap().docx_import
+        if record.feature.as_ref().unwrap().kind().has_losses()
             && record.feature.as_ref().unwrap().import_losses.is_none()
             && let Some(detail) = &detail
         {
             // Freeze the safe author-visible wording before its first delivery,
             // including recovery of a crash between Core prepare and this write.
             // Later binaries must retain the already-reviewed preview verbatim.
-            record.feature.as_mut().unwrap().import_losses = Some(import_losses(detail));
+            let kind = record.feature.as_ref().unwrap().kind();
+            record.feature.as_mut().unwrap().import_losses = Some(feature_losses(detail, kind));
             private_replace(
                 &self.actor_record(operation)?,
                 &serde_json::to_vec(&record)?,
@@ -341,7 +387,7 @@ impl Core {
             vec![]
         };
         let mut preview = feature.preview;
-        if feature.docx_import {
+        if kind.has_losses() {
             let object = preview.as_object_mut().ok_or_else(conflict)?;
             object.insert(
                 "losses".into(),
@@ -350,6 +396,28 @@ impl Core {
                     .unwrap_or_else(|| serde_json::json!([])),
             );
         }
+        let node_refs = detail
+            .as_ref()
+            .and_then(|p| {
+                self.operations
+                    .get(&record.core_operation_id)?
+                    .workspace_id
+                    .as_ref()
+                    .map(|workspace| {
+                        p.node_map
+                            .values()
+                            .chain(p.new_node_id.iter())
+                            .cloned()
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
+                            .map(|node_id| weftext_knowledge::NodeRef {
+                                workspace_id: workspace.clone(),
+                                node_id,
+                            })
+                            .collect()
+                    })
+            })
+            .unwrap_or_default();
         Ok(Some(ActorFeatureStatus {
             operation_id: operation.into(),
             resource: resource.into(),
@@ -362,6 +430,7 @@ impl Core {
                 kind.name().into()
             },
             resource_refs,
+            node_refs,
         }))
     }
 
@@ -415,15 +484,126 @@ impl Core {
         resource: &str,
         external_operation_id: &str,
         fingerprint: &str,
-        mut request: OperationRequest,
+        request: OperationRequest,
         preview: serde_json::Value,
         dependencies: &[String],
         witnesses: &[&SnapshotWitness],
     ) -> Result<ActorFeatureStatus> {
+        self.actor_feature_prepare_inner(
+            resource,
+            external_operation_id,
+            fingerprint,
+            request,
+            preview,
+            dependencies,
+            witnesses,
+            &[],
+            None,
+            None,
+        )
+    }
+    /// A complete source-tree read capability is separate from source read and
+    /// a copy action. The host must authorize it before capture_feature_tree.
+    #[allow(clippy::too_many_arguments)]
+    pub fn actor_feature_prepare_with_tree_witness(
+        &mut self,
+        resource: &str,
+        external_operation_id: &str,
+        fingerprint: &str,
+        request: OperationRequest,
+        preview: serde_json::Value,
+        dependencies: &[String],
+        witnesses: &[&SnapshotWitness],
+        tree: &FeatureTreeWitness,
+    ) -> Result<ActorFeatureStatus> {
+        self.actor_feature_prepare_inner(
+            resource,
+            external_operation_id,
+            fingerprint,
+            request,
+            preview,
+            dependencies,
+            witnesses,
+            &[],
+            Some(tree),
+            None,
+        )
+    }
+    /// Bind the separately approved destination slot to the original actor
+    /// intent and Plan. Source operation anchor and destination are independent.
+    /// transfer_witnesses carry explicitly authorized source inputs; namespace
+    /// witnesses protect the decision but never grant transfer target reading.
+    #[allow(clippy::too_many_arguments)]
+    pub fn actor_feature_prepare_structure(
+        &mut self,
+        resource: &str,
+        external_operation_id: &str,
+        fingerprint: &str,
+        request: OperationRequest,
+        preview: serde_json::Value,
+        dependencies: &[String],
+        witnesses: &[&SnapshotWitness],
+        transfer_witnesses: &[&SnapshotWitness],
+        destination_slot: Option<&str>,
+        tree: Option<&FeatureTreeWitness>,
+    ) -> Result<ActorFeatureStatus> {
+        let kind = FeatureIntentKind::from_intent(&request.intent)?;
+        if !matches!(
+            kind,
+            FeatureIntentKind::NewNode
+                | FeatureIntentKind::RenameNode
+                | FeatureIntentKind::MoveNode
+                | FeatureIntentKind::CopyNode
+                | FeatureIntentKind::TemplateNode
+                | FeatureIntentKind::TrashNode
+                | FeatureIntentKind::RestoreNode
+        ) {
+            return Err(CoreError::new(
+                "unsupportedIntent",
+                "Only structural intents bind a destination slot",
+            ));
+        }
+        if (kind == FeatureIntentKind::TrashNode) != destination_slot.is_none() {
+            return Err(CoreError::new(
+                "invalidIntent",
+                "Live structural output requires its independently approved destination slot",
+            ));
+        }
+        if let Some(destination) = destination_slot {
+            valid_resource(destination)?;
+        }
+        self.actor_feature_prepare_inner(
+            resource,
+            external_operation_id,
+            fingerprint,
+            request,
+            preview,
+            dependencies,
+            witnesses,
+            transfer_witnesses,
+            tree,
+            destination_slot,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn actor_feature_prepare_inner(
+        &mut self,
+        resource: &str,
+        external_operation_id: &str,
+        fingerprint: &str,
+        mut request: OperationRequest,
+        preview: serde_json::Value,
+        dependencies: &[String],
+        witnesses: &[&SnapshotWitness],
+        transfer_witnesses: &[&SnapshotWitness],
+        tree: Option<&FeatureTreeWitness>,
+        destination_slot: Option<&str>,
+    ) -> Result<ActorFeatureStatus> {
         let intent_kind = FeatureIntentKind::from_intent(&request.intent)?;
         if let Some(record) = self.actor_feature_record(resource, external_operation_id)?
             && !(record.cancelled && record.fingerprint.is_empty())
-            && record.feature.as_ref().unwrap().kind() != intent_kind
+            && (record.feature.as_ref().unwrap().kind() != intent_kind
+                || record.feature.as_ref().unwrap().destination_slot.as_deref() != destination_slot)
         {
             return Err(conflict());
         }
@@ -431,6 +611,33 @@ impl Core {
             self.actor_feature_retry(resource, external_operation_id, fingerprint)?
         {
             return Ok(status);
+        }
+        if matches!(
+            intent_kind,
+            FeatureIntentKind::CopyNode | FeatureIntentKind::TemplateNode
+        ) && tree.is_none()
+        {
+            return Err(CoreError::new(
+                "basisRequired",
+                "Hosted copy and template require an explicitly authorized complete tree witness",
+            ));
+        }
+        if tree.is_some()
+            && !matches!(
+                intent_kind,
+                FeatureIntentKind::CopyNode | FeatureIntentKind::TemplateNode
+            )
+        {
+            return Err(CoreError::new(
+                "operationConflict",
+                "A tree witness belongs only to copy or template",
+            ));
+        }
+        if !transfer_witnesses.is_empty() && tree.is_none() {
+            return Err(CoreError::new(
+                "operationConflict",
+                "Transfer source capabilities belong only to copy or template",
+            ));
         }
         let docx_import = matches!(request.intent, OperationIntent::ImportDocx { .. });
         let over_budget = match &mut request.intent {
@@ -483,6 +690,55 @@ impl Core {
                 valid_operation_id(resource_base_id)?;
                 node.len() > 64 * 1024 || bytes.len() > 32 * 1024 * 1024
             }
+            OperationIntent::NewNode {
+                parent,
+                name,
+                source,
+            } => {
+                valid_name(name)?;
+                parent.len() > 64 * 1024
+                    || source.as_ref().is_some_and(|s| s.len() > MAX_SOURCE_BYTES)
+            }
+            OperationIntent::RenameNode { source, name } => {
+                valid_name(name)?;
+                source.len() > 64 * 1024
+            }
+            OperationIntent::MoveNode { source, parent } => {
+                source.len() > 64 * 1024 || parent.len() > 64 * 1024
+            }
+            OperationIntent::CopyNode {
+                source,
+                parent,
+                name,
+                allow_losses,
+            } => {
+                valid_name(name)?;
+                *allow_losses = true;
+                source.len() > 64 * 1024 || parent.len() > 64 * 1024
+            }
+            OperationIntent::TemplateNode {
+                source,
+                parent,
+                name,
+                instantiated_source,
+                source_base_id,
+            } => {
+                valid_name(name)?;
+                valid_operation_id(source_base_id)?;
+                source.len() > 64 * 1024
+                    || parent.len() > 64 * 1024
+                    || instantiated_source.len() > MAX_SOURCE_BYTES
+            }
+            OperationIntent::TrashNode { source } => source.len() > 64 * 1024,
+            OperationIntent::RestoreNode {
+                trash_operation_id,
+                parent,
+                name,
+            } => {
+                valid_name(name)?;
+                valid_operation_id(trash_operation_id)?;
+                parent.len() > 64 * 1024
+            }
             _ => {
                 return Err(CoreError::new(
                     "unsupportedIntent",
@@ -493,6 +749,7 @@ impl Core {
         if over_budget
             || dependencies.len() > 64
             || witnesses.len() > 2048
+            || transfer_witnesses.len() > 64
             || request.root.len() > 64 * 1024
         {
             return Err(CoreError::new(
@@ -502,6 +759,12 @@ impl Core {
         }
         for dependency in dependencies {
             valid_operation_id(dependency)?;
+        }
+        if intent_kind.has_losses() && !preview.is_object() {
+            return Err(CoreError::new(
+                "invalidIntent",
+                "Loss-bearing preview must be an object",
+            ));
         }
         check_size(&serde_json::to_vec(&preview)?)?;
         let record = ActorOperation {
@@ -516,6 +779,7 @@ impl Core {
                 docx_import,
                 import_losses: None,
                 intent_kind: Some(intent_kind),
+                destination_slot: destination_slot.map(str::to_owned),
             }),
             definition: None,
             save_definition_reservations: vec![],
@@ -526,9 +790,30 @@ impl Core {
             &serde_json::to_vec(&record)?,
         )?;
         request.operation_id = record.core_operation_id.clone();
-        self.prepare_dependent_feature_operation_with_witnesses(request, &serde_json::json!({
+        let mut canonical = serde_json::json!({
             "kind":"hostedReviewedFeature","actor":record.actor,"resource":record.resource,"fingerprint":record.fingerprint,
-        }), dependencies,witnesses)?;
+        });
+        if let Some(destination) = destination_slot {
+            canonical["destinationSlot"] = destination.into();
+        }
+        if tree.is_none() && destination_slot.is_none() {
+            self.prepare_dependent_feature_operation_with_witnesses(
+                request,
+                &canonical,
+                dependencies,
+                witnesses,
+            )?;
+        } else {
+            self.prepare_dependent_feature_operation_with_tree(
+                request,
+                &canonical,
+                dependencies,
+                witnesses,
+                tree,
+                transfer_witnesses,
+                destination_slot,
+            )?;
+        }
         self.actor_feature_status(resource, external_operation_id)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing original feature operation"))
     }
@@ -572,7 +857,7 @@ impl Core {
         if status.status != "prepared" {
             return Ok(status);
         }
-        if record.feature.as_ref().unwrap().docx_import
+        if record.feature.as_ref().unwrap().kind().has_losses()
             && !accept_losses
             && status.preview["losses"]
                 .as_array()
@@ -611,6 +896,7 @@ impl Core {
                     docx_import: false,
                     import_losses: None,
                     intent_kind: None,
+                    destination_slot: None,
                 }),
                 definition: None,
                 save_definition_reservations: vec![],

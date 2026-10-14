@@ -269,6 +269,7 @@ fn with_source<T>(
         bool,
     ) -> Result<T, ApiError>,
 ) -> Result<T, ApiError> {
+    structure::guard_slot(inner, resource)?;
     let file = inner
         .config
         .files

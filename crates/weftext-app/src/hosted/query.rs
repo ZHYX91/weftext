@@ -275,6 +275,7 @@ fn definitions_access(
     if !inner.config.files.get(resource).is_some_and(|f| f.editable) {
         return Err(unavailable());
     }
+    structure::guard_slot(inner, resource)?;
     Ok(())
 }
 fn read_definitions(

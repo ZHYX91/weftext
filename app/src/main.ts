@@ -126,17 +126,38 @@ const workspaceTools = new WorkspaceTools({
   syncApplied: async root => {
     if (inventory && normalize(inventory.root) === normalize(root)) await refreshInventory();
     for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
-      doc.queries.invalidate(); doc.session.projection = null;
-      if (!doc.session.opened.nodeId || !doc.session.opened.workspaceId) continue;
+      const originalSession = doc.session.opened.sessionId;
+      const stillOpen = (): boolean => documents.includes(doc) && doc.session.opened.sessionId === originalSession;
+      // A committed sync can arrive during later preedit. Settle/checkpoint that
+      // input before replacing any surface, retaining the shared editor/Undo.
+      await doc.writing.settleForSessionChange();
+      if (!stillOpen()) continue;
+      if (!readOnlySource(doc)) await persistDraft(doc);
+      if (!stillOpen()) continue;
+      let fresh: OpenedDocument | undefined, unavailable = false;
       try {
-        const fresh = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` });
-        if (fresh.source !== doc.session.baseSource || normalize(fresh.path) !== normalize(doc.session.path)) {
+        if (doc.session.opened.nodeId && doc.session.opened.workspaceId) fresh = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` });
+      } catch { unavailable = true; }
+      await doc.writing.deferUntilCompositionEnds(() => {
+        if (!stillOpen()) return;
+        if (fresh && (fresh.source !== doc.session.baseSource || normalize(fresh.path) !== normalize(doc.session.path))) {
           doc.externalSource = fresh.source; doc.comparisonTarget = fresh;
           doc.session.error = "同步已改变磁盘版本。当前草稿与撤销记录保留，请比较草稿与磁盘内容后继续。";
-        }
-      } catch { doc.session.error = "同步后当前笔记暂不可读取。草稿保留，请检查资料库或回收站。"; }
+        } else if (unavailable) doc.session.error = "同步后当前笔记暂不可读取。草稿保留，请检查资料库或回收站。";
+        // Source equality does not prove unchanged sidecars, Schema, style or
+        // compile inputs. Cancel old generations and compile the actual cut.
+        doc.queries.invalidate(); doc.session.projection = null; scheduleRender(doc, 0);
+      });
     }
-    pagedPreview?.invalidate(); workspaceTools.documentChanged(); renderContent(); renderSidebar();
+    const displayed = current;
+    if (displayed && normalize(displayed.session.opened.root) === normalize(root)) {
+      await displayed.writing.deferUntilCompositionEnds(() => {
+        if (current !== displayed) return;
+        pagedPreview?.invalidate();
+        if (!displayed.writing.retainInput) renderContent(); else refreshChrome();
+      });
+    }
+    await workspaceTools.refreshAfterSync(root); renderSidebar();
   },
   canEditSource: () => !!current && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
   savedDefinition: async (result, basis) => {

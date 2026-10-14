@@ -272,6 +272,7 @@ fn access(inner: &HostedInner, actor: &str, resource: &str) -> Result<Rights, Ap
     {
         return Err(unavailable());
     }
+    structure::guard_slot(inner, resource)?;
     Ok(rights)
 }
 fn authorize(rights: &Rights, n: &Needs) -> Result<(), ApiError> {

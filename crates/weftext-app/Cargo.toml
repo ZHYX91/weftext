@@ -14,6 +14,7 @@ weftext-engine = { path = "../weftext-engine" }
 weftext-data = { path = "../weftext-data" }
 weftext-knowledge = { path = "../weftext-knowledge" }
 weftext-export = { path = "../weftext-export" }
+typst-syntax = "=0.15.1"
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

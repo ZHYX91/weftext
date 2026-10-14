@@ -1,12 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
+import { bindHostedDraftReference, applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
 test("offline source compares its original base and preserves newer input after a receipt", () => {
   assert.equal(draftDisposition("base", {source:"offline",baseSource:"base"}), "restore");
   assert.equal(draftDisposition("someone else", {source:"offline",baseSource:"base"}), "compare");
   assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "current");
   assert.equal(draftDisposition("sent", {source:"new typing",baseSource:"old",pending:{operationId:"one",source:"sent"}}), "unknown");
   assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent"), {source:"new typing",baseSource:"sent"});
+});
+test("a qualified stable Node binds an unbound personal Draft without changing its original basis or operation, while a different Node never borrows the old Draft", () => {
+  const original: HostedDraft = { source: "later actor input", baseSource: "original saved", pending: { operationId: "original-save", source: "sent" }, definitionReservations: ["reserved-key"] };
+  const reference = "weftext-node://workspace/original", bound = bindHostedDraftReference(original, reference);
+  assert.deepEqual(bound, { ...original, reference }); assert.equal(original.reference, undefined); assert.deepEqual(bindHostedDraftReference(bound, reference), bound);
+  assert.throws(() => bindHostedDraftReference(bound, "weftext-node://workspace/another"), /身份与原草稿不同/); assert.equal(bound.reference, reference); assert.equal(bound.source, original.source); assert.equal(bound.baseSource, original.baseSource);
 });
 test("an asynchronous query denial may affect only its original actor, epoch, document session and input revision", () => {
   const captured = { epoch: 3, credential: "original", actor: "alice", deployment: "space", generation: 5, sessionId: "original-note", queryVersion: 8 };

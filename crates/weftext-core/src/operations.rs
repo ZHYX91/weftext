@@ -465,6 +465,8 @@ pub(crate) struct FrozenOperation {
     pub(crate) directories: Vec<CapturedDirectory>,
     pub(crate) mutation: Mutation,
     pub(crate) receipt: OperationReceipt,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) hosted_destination: Option<String>,
     #[serde(default)]
     pub(crate) expected_membership: Option<BTreeSet<String>>,
     #[serde(default)]
@@ -2722,7 +2724,7 @@ impl Core {
         if matches!(request.intent, OperationIntent::CloneSync { .. }) {
             return self.prepare_sync_clone(request);
         }
-        self.prepare_internal(request, None, None, &[], &[])
+        self.prepare_internal(request, None, None, &[], &[], None, &[], None)
     }
     /// Freeze the finite admitted source set and all bounded native filesystem
     /// inputs together. The engine may only read this map; absent inputs remain
@@ -2959,6 +2961,9 @@ impl Core {
             Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
             &[],
             &[],
+            None,
+            &[],
+            None,
         )
     }
     pub fn prepare_dependent_feature_operation(
@@ -2973,6 +2978,9 @@ impl Core {
             Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
             base_ids,
             &[],
+            None,
+            &[],
+            None,
         )
     }
     pub(crate) fn prepare_dependent_feature_operation_with_witnesses(
@@ -2982,12 +2990,36 @@ impl Core {
         base_ids: &[String],
         witnesses: &[&SnapshotWitness],
     ) -> Result<OperationPreview> {
+        self.prepare_dependent_feature_operation_with_tree(
+            request,
+            canonical_author_intent,
+            base_ids,
+            witnesses,
+            None,
+            &[],
+            None,
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn prepare_dependent_feature_operation_with_tree(
+        &mut self,
+        request: OperationRequest,
+        canonical_author_intent: &serde_json::Value,
+        base_ids: &[String],
+        witnesses: &[&SnapshotWitness],
+        tree: Option<&FeatureTreeWitness>,
+        transfer_witnesses: &[&SnapshotWitness],
+        destination_slot: Option<&str>,
+    ) -> Result<OperationPreview> {
         self.prepare_internal(
             request,
             None,
             Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
             base_ids,
             witnesses,
+            tree,
+            transfer_witnesses,
+            destination_slot,
         )
     }
     /// Strong product actions freeze the complete admitted-set membership and
@@ -3009,8 +3041,9 @@ impl Core {
                 "Strong action requires its complete admitted set cut",
             ));
         }
-        self.prepare_internal(request, Some(cut), None, &[], &[])
+        self.prepare_internal(request, Some(cut), None, &[], &[], None, &[], None)
     }
+    #[allow(clippy::too_many_arguments)]
     fn prepare_internal(
         &mut self,
         request: OperationRequest,
@@ -3018,6 +3051,9 @@ impl Core {
         author_fingerprint: Option<String>,
         dependencies: &[String],
         witnesses: &[&SnapshotWitness],
+        tree: Option<&FeatureTreeWitness>,
+        transfer_witnesses: &[&SnapshotWitness],
+        destination_slot: Option<&str>,
     ) -> Result<OperationPreview> {
         valid_operation_id(&request.operation_id)?;
         let fingerprint = author_fingerprint.unwrap_or(hash(&serde_json::to_vec(&request)?));
@@ -3063,6 +3099,23 @@ impl Core {
             witnesses.iter().map(|w| (*w).clone()).collect(),
             true,
         )?;
+        Self::merge_dependency_witnesses(
+            &mut dependency_pool,
+            transfer_witnesses.iter().map(|w| (*w).clone()).collect(),
+            true,
+        )?;
+        if let Some(tree) = tree {
+            self.validate_feature_tree_witness(&root, tree)?;
+            Self::merge_dependency_witnesses(
+                &mut dependency_pool,
+                tree.dependencies
+                    .iter()
+                    .chain(std::iter::once(&tree.schema))
+                    .cloned()
+                    .collect(),
+                true,
+            )?;
+        }
         for witness in dependency_pool {
             let basis = witness.binding;
             if !locator_within(Path::new(&basis.path), &root) {
@@ -3374,7 +3427,10 @@ impl Core {
                 name,
                 allow_losses,
             } => {
-                let source = absolute_path(Path::new(source))?;
+                let requested_source = absolute_path(Path::new(source))?;
+                let source = tree
+                    .map(|tree| tree.source.clone())
+                    .unwrap_or_else(|| requested_source.clone());
                 let parent = absolute_path(Path::new(parent))?;
                 valid_name(name)?;
                 self.managed_node(&root, &source, false)?;
@@ -3382,18 +3438,52 @@ impl Core {
                 self.check_subtree_boundary(&root, &source)?;
                 let target = parent.join(name);
                 ensure_absent(&target)?;
-                snapshot_tree(&source, &mut files, &mut directories, false)?;
+                let mut members = Vec::new();
+                if let Some(tree) = tree {
+                    if !crate::history::history_relative_path(&requested_source, &tree.source)
+                        .is_some_and(|p| p.as_os_str().is_empty())
+                    {
+                        return Err(CoreError::new(
+                            "operationConflict",
+                            "Copy source differs from original authorized tree",
+                        ));
+                    }
+                    members.extend(tree.files.clone());
+                    directories.extend(tree.directories.clone());
+                } else {
+                    snapshot_tree(&source, &mut members, &mut directories, false)?;
+                }
+                files.extend(members.clone());
                 let schema_path = root.join(ConfigRole::Schema.filename());
-                let schema = capture_optional(&schema_path)?;
+                let schema = if let Some(tree) = tree {
+                    tree.schema.binding.captured.clone()
+                } else {
+                    capture_optional(&schema_path)?
+                };
+                let mut context = members.clone();
+                for witness in transfer_witnesses {
+                    context.push(witness.binding.captured.clone().ok_or_else(|| {
+                        CoreError::new(
+                            "basisRequired",
+                            "Transfer sources require original present bytes",
+                        )
+                    })?);
+                }
+                let inventory = tree
+                    .map(|_| self.feature_copy_inventory(&root, &context))
+                    .transpose()?;
                 let mutation = self.plan_copy(
                     &root,
                     &source,
                     &target,
-                    &files,
+                    &members,
                     &directories,
                     &mut preview,
                     *allow_losses,
                     schema.as_ref(),
+                    inventory
+                        .as_ref()
+                        .map(|inventory| (inventory, context.as_slice())),
                 )?;
                 if let Some(config) = schema {
                     files.push(config);
@@ -3412,7 +3502,15 @@ impl Core {
                 instantiated_source,
                 source_base_id,
             } => {
-                let canonical = absolute_path(Path::new(source))?;
+                let requested_canonical = absolute_path(Path::new(source))?;
+                let canonical = tree
+                    .map(|tree| {
+                        tree.source.join(format!(
+                            "{}.typ",
+                            tree.source.file_name().unwrap().to_string_lossy()
+                        ))
+                    })
+                    .unwrap_or_else(|| requested_canonical.clone());
                 let source = canonical.parent().ok_or_else(|| {
                     CoreError::new("templateSource", "Template source has no Node parent")
                 })?;
@@ -3423,7 +3521,11 @@ impl Core {
                         "Templates require the exact admitted canonical source",
                     ));
                 }
-                self.verify_snapshot(&canonical, source_base_id, Some(&original))?;
+                // The original token binds the caller's exact locator spelling;
+                // the authorized tree uses the same guarded physical entry's
+                // actual relative names. Do not replace the token or weaken its
+                // file/parent/byte comparison to normalize a mixed slash input.
+                self.verify_snapshot(&requested_canonical, source_base_id, Some(&original))?;
                 let parent = absolute_path(Path::new(parent))?;
                 valid_name(name)?;
                 self.owned_parent(&root, &parent)?;
@@ -3432,7 +3534,20 @@ impl Core {
                 ensure_absent(&target)?;
                 let mut originals = Vec::new();
                 let mut original_dirs = Vec::new();
-                snapshot_tree(source, &mut originals, &mut original_dirs, false)?;
+                if let Some(tree) = tree {
+                    if !crate::history::history_relative_path(&requested_canonical, &canonical)
+                        .is_some_and(|p| p.as_os_str().is_empty())
+                    {
+                        return Err(CoreError::new(
+                            "operationConflict",
+                            "Template source differs from original authorized tree",
+                        ));
+                    }
+                    originals.extend(tree.files.clone());
+                    original_dirs.extend(tree.directories.clone());
+                } else {
+                    snapshot_tree(source, &mut originals, &mut original_dirs, false)?;
+                }
                 let mut instantiated = originals.clone();
                 let owner = self
                     .admitted_binding(&original.stamp.identity)
@@ -3445,7 +3560,34 @@ impl Core {
                     .unwrap()
                     .bytes = initialize_source(instantiated_source, &owner.node_id)?.into_bytes();
                 let schema_path = root.join(ConfigRole::Schema.filename());
-                let schema = capture_optional(&schema_path)?;
+                let schema = if let Some(tree) = tree {
+                    tree.schema.binding.captured.clone()
+                } else {
+                    capture_optional(&schema_path)?
+                };
+                let mut context = instantiated.clone();
+                for witness in transfer_witnesses {
+                    let captured = witness.binding.captured.clone().ok_or_else(|| {
+                        CoreError::new(
+                            "basisRequired",
+                            "Transfer sources require original present bytes",
+                        )
+                    })?;
+                    // The template author proposal replaces only its own
+                    // source in the transfer view, never the guarded original.
+                    if !originals.iter().any(|f| {
+                        crate::history::history_relative_path(
+                            Path::new(&f.path),
+                            Path::new(&captured.path),
+                        )
+                        .is_some_and(|p| p.as_os_str().is_empty())
+                    }) {
+                        context.push(captured);
+                    }
+                }
+                let inventory = tree
+                    .map(|_| self.feature_copy_inventory(&root, &context))
+                    .transpose()?;
                 let mutation = self.plan_copy(
                     &root,
                     source,
@@ -3453,8 +3595,11 @@ impl Core {
                     &instantiated,
                     &original_dirs,
                     &mut preview,
-                    false,
+                    tree.is_some(),
                     schema.as_ref(),
+                    inventory
+                        .as_ref()
+                        .map(|inventory| (inventory, context.as_slice())),
                 )?;
                 preview.new_node_id = preview.node_map.get(&owner.node_id).cloned();
                 files.extend(originals);
@@ -3963,6 +4108,7 @@ impl Core {
             directories,
             mutation,
             receipt,
+            hosted_destination: destination_slot.map(str::to_owned),
             expected_membership: cut.map(|c| c.members),
             absent_dependencies,
             write_parents,
@@ -4131,7 +4277,11 @@ impl Core {
                 let guard = ParentGuard::acquire(Path::new(&f.path))?;
                 let write = matches!(&t.mutation, Mutation::Update {files} if files.iter().any(|c|c.path==f.path && c.before.as_ref()!=Some(&c.after)))
                     || matches!(&t.mutation, Mutation::CreateTree {updates,..} if updates.iter().any(|c|c.path == f.path && c.before.as_ref()!=Some(&c.after)));
-                let mut handle = guard.open_file(write, false)?;
+                let mut handle = if !write && operation_read_control(root, Path::new(&f.path)) {
+                    guard.open_read_guard_file()?
+                } else {
+                    guard.open_file(write, false)?
+                };
                 if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
                     return Err(CoreError::new(
                         "conflict",
@@ -4204,7 +4354,12 @@ impl Core {
                     let write = updates
                         .iter()
                         .any(|c| c.path == file.path && c.before.as_ref() != Some(&c.after));
-                    let mut handle = guard.open_file(write, false)?;
+                    let mut handle =
+                        if !write && operation_read_control(root, Path::new(&file.path)) {
+                            guard.open_read_guard_file()?
+                        } else {
+                            guard.open_file(write, false)?
+                        };
                     if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
                         return Err(CoreError::new(
                             "conflict",
@@ -5063,6 +5218,7 @@ impl Core {
         preview: &mut OperationPreview,
         allow_losses: bool,
         schema_config: Option<&CapturedFile>,
+        authorized_inventory: Option<(&Inventory, &[CapturedFile])>,
     ) -> Result<Mutation> {
         use weftext_knowledge as knowledge;
         let workspace = self.require_workspace(root)?;
@@ -5072,7 +5228,10 @@ impl Core {
             weftext_data::Schema::bundled()
         }
         .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
-        let inventory = self.inventory(root)?;
+        let inventory = match authorized_inventory {
+            Some((inventory, _)) => inventory.clone(),
+            None => self.inventory(root)?,
+        };
         if !inventory.complete {
             return Err(CoreError::new(
                 "coverageIncomplete",
@@ -5101,7 +5260,24 @@ impl Core {
                 workspace_id: workspace.workspace_id.clone(),
                 node_id: id.clone(),
             };
-            let observed = if let Some(f) = files.iter().find(|f| f.path == item.path) {
+            let observed = if let Some((_, context)) = authorized_inventory {
+                context
+                    .iter()
+                    .find(|f| {
+                        crate::history::history_relative_path(
+                            Path::new(&f.path),
+                            Path::new(&item.path),
+                        )
+                        .is_some_and(|p| p.as_os_str().is_empty())
+                    })
+                    .cloned()
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "scopeChanged",
+                            "Original authorized transfer source is absent",
+                        )
+                    })?
+            } else if let Some(f) = files.iter().find(|f| f.path == item.path) {
                 f.clone()
             } else {
                 capture_optional(Path::new(&item.path))?
@@ -5567,6 +5743,25 @@ fn locator_equal(a: &str, b: &str) -> bool {
     a.replace('/', "\\")
         .eq_ignore_ascii_case(&b.replace('/', "\\"))
 }
+/// Read-only root controls remain write/delete protected while Core may read
+/// their metadata/rules again inside the same decision. Author leaves retain
+/// their original share-zero writer/read behavior.
+pub(crate) fn operation_read_control(root: &Path, path: &Path) -> bool {
+    path.parent().is_some_and(|parent| {
+        crate::history::history_relative_path(parent, root)
+            .is_some_and(|p| p.as_os_str().is_empty())
+    }) && path.file_name().is_some_and(|name| {
+        matches!(
+            name.to_str(),
+            Some(
+                ".weftext-workspace.json"
+                    | ".weftext-format"
+                    | ".weftext-mvp-commit.json"
+                    | ".weftext-rules"
+            )
+        )
+    })
+}
 pub(crate) fn sorted_entries(entries: Vec<(std::ffi::OsString, u32)>, _: &Path) -> Vec<String> {
     let mut names = entries
         .into_iter()
@@ -5757,6 +5952,12 @@ pub(crate) fn snapshot_tree(
     let mut queue = vec![root.to_path_buf()];
     let mut total = files.iter().map(|f| f.bytes.len()).sum::<usize>();
     while let Some(path) = queue.pop() {
+        if dirs.len() >= MAX_OPERATION_FILES {
+            return Err(CoreError::new(
+                "budget",
+                "Snapshot exceeds 5000 directories; no partial success",
+            ));
+        }
         let guard = ParentGuard::acquire(&path.join(".snapshot-prospective"))?;
         let (entries, complete) = guard.directory_entries(MAX_OPERATION_FILES)?;
         if !complete {
@@ -5782,6 +5983,12 @@ pub(crate) fn snapshot_tree(
             }
             let child = path.join(name);
             if attrs & 0x10 != 0 {
+                if dirs.len() + queue.len() >= MAX_OPERATION_FILES {
+                    return Err(CoreError::new(
+                        "budget",
+                        "Captured and queued snapshot directories exceed 5000",
+                    ));
+                }
                 queue.push(child);
             } else {
                 let captured = capture_optional(&child)?

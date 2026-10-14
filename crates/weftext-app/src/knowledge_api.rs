@@ -2275,7 +2275,7 @@ impl<'de> Deserialize<'de> for UniqueJson {
         deserializer.deserialize_any(Visitor)
     }
 }
-fn template_registry(
+pub(crate) fn template_registry(
     file: &SnapshotFile,
 ) -> Result<(Value, Vec<knowledge::TemplateDefinition>), ApiError> {
     let settings = file
@@ -2316,7 +2316,7 @@ fn template_registry(
     }
     Ok((settings, definitions))
 }
-fn template_value(value: &knowledge::TemplateValue) -> Value {
+pub(crate) fn template_value(value: &knowledge::TemplateValue) -> Value {
     match value {
         knowledge::TemplateValue::Null => Value::Null,
         knowledge::TemplateValue::Text(v) => json!(v),
@@ -2351,7 +2351,7 @@ fn template_catalog(bundle: &Bundle) -> Result<Value, ApiError> {
     );
     Ok(json!(catalog))
 }
-fn parse_template_value(
+pub(crate) fn parse_template_value(
     input: &Value,
     kind: knowledge::TemplateSlotKind,
 ) -> Result<knowledge::TemplateValue, ApiError> {
@@ -2507,7 +2507,7 @@ async fn register_template(
     preview["preview"]["templateAfter"] = after;
     Ok(Json(preview))
 }
-fn template_source(intent: &Value) -> Result<String, ApiError> {
+pub(crate) fn template_source(intent: &Value) -> Result<String, ApiError> {
     if text(intent, "templateId")? != "native-note" {
         return Err(ApiError::bad("未知原生模板"));
     }

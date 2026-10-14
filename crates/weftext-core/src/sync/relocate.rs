@@ -440,6 +440,7 @@ impl Core {
             directories,
             mutation,
             receipt,
+            hosted_destination: None,
             expected_membership: None,
             absent_dependencies: vec![],
             write_parents,

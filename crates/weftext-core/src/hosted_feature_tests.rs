@@ -467,8 +467,8 @@ fn hosted_feature_rejects_unopened_intents_and_bad_identifiers_before_binding() 
     let request = OperationRequest {
         operation_id: fresh(),
         root: display(&f.root),
-        intent: OperationIntent::TrashNode {
-            source: display(f.source.parent().unwrap()),
+        intent: OperationIntent::BackupLibrary {
+            destination: display(&f._temp.path().join("not-authorized-backup")),
         },
     };
     assert_eq!(

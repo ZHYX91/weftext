@@ -124,6 +124,10 @@ Node `A/A.typ→B/B.typ`仍两步：为目录与canonical leaf保存准确对象
 
 默认普通Windows后端不把同用户“private文件夹”当隔离。Plan固定源snapshot成员和exact blobs、一个fresh map、所有目标目录/文件及预算。源snapshot是逻辑cut的已接纳版本或明确获权选中观察；若要求完整subtree而成员未证则coverage/pending，不能悄悄少copy。
 
+托管 copy/template 的完整子树读取与导出由 Server 在捕获前分别授权。Core 的不透明 FeatureTreeWitness 固定准确所有者、源树文件／目录成员、物理身份、父对象、字节和原 Schema／根控制文件；成员和保留字节有界。传输 inventory 仅从该已获权 cut 和显式 inputs 的原获权上下文建立，不调用全库 inventory 读取其他正文，也不将目标父对象的命名空间证据当成引用读取授权。没有证明的普通外部路径链接保原值并报告复制损失；需要目标证明的 typed ref 缺少该上下文时拒绝 copyRef，不能仅凭稳定引用读取目标。原 Plan 仍承担保存、提交和恢复，见证本身不授予新权限。
+
+预先配置的托管目标槽位通过原 FrozenOperation 的可选 hosted_destination 绑定实际目标选择器，不从来源锚点推断。只有原托管结构准备写入该字段；本地、旧记录及其他生产者保持缺省，不回填历史。新建／复制／模板的原出生证据，或改名／移动／恢复的原 Relocate 叶身份，与当前已纳管对象和准确位置共同证明槽位资格。名字相同、字节相同或另一次本地创建不足以认领该槽位；读取结果还需 Server 当前独立读取授权。
+
 安装算法：
 
 1. 在操作日志及exact blobs已durable后取得§5.1目标祖先/父闭包和Core范围reader barrier。预算预留计划文件数对应的同时handle容量；不足在安装前失败/显式改批，不先半写。

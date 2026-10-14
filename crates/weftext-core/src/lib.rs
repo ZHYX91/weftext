@@ -8,8 +8,8 @@ mod history;
 mod hosted;
 pub use hosted::{
     ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus, ActorFieldStatus,
-    ActorHistoryRestoreStatus, ActorSaveStatus, HostedDefinitionReservationRequest,
-    HostedSaveRequest,
+    ActorHistoryRestoreStatus, ActorSaveStatus, ActorStructureNode, ActorStructureReceipt,
+    FeatureTreeWitness, HostedDefinitionReservationRequest, HostedSaveRequest,
 };
 #[cfg(all(test, windows))]
 mod history_tests;

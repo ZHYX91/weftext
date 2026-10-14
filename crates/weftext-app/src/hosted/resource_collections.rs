@@ -19,6 +19,8 @@ pub(super) struct Collection {
     pub(super) expected_owner: Option<NodeRef>,
     #[serde(default)]
     pub(super) from_import_slot: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub(super) from_structure_slot: bool,
     #[serde(default = "query_scopes::live")]
     pub(super) lifecycle: String,
     #[serde(default)]
@@ -36,6 +38,9 @@ pub(super) struct Rights {
 }
 fn canonical_uuid(value: &str) -> bool {
     uuid::Uuid::parse_str(value).is_ok_and(|id| id.to_string() == value)
+}
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 pub(super) fn split_member<'a>(config: &Config, id: &'a str) -> Option<(&'a str, &'a str)> {
     let (collection, member) = id.split_once('/')?;
@@ -55,7 +60,10 @@ pub(super) fn valid_config(config: &Config) -> bool {
             valid_id(id)
                 && !config.files.contains_key(id)
                 && !config.resources.contains_key(id)
-                && (c.expected_owner.is_some() != c.from_import_slot)
+                && usize::from(c.expected_owner.is_some())
+                    + usize::from(c.from_import_slot)
+                    + usize::from(c.from_structure_slot)
+                    == 1
                 && c.expected_owner.as_ref().is_none_or(|owner| {
                     canonical_uuid(&owner.workspace_id) && canonical_uuid(&owner.node_id)
                 })
@@ -65,8 +73,12 @@ pub(super) fn valid_config(config: &Config) -> bool {
                     f.lifecycle == c.lifecycle
                         && if let Some(expected) = &c.expected_owner {
                             f.expected_node.as_ref().is_none_or(|n| n == expected)
-                        } else {
+                        } else if c.from_import_slot {
                             f.importable && f.lifecycle == "live" && f.expected_node.is_none()
+                        } else {
+                            c.from_structure_slot
+                                && config.structure_slots.contains_key(&c.owner)
+                                && f.lifecycle == "live"
                         }
                 })
         })
@@ -132,6 +144,30 @@ pub(super) fn effective_owner(inner: &HostedInner, collection: &str) -> Result<N
         .ok_or_else(unavailable)?;
     if let Some(expected) = &c.expected_owner {
         return Ok(expected.clone());
+    }
+    if c.from_structure_slot {
+        let file = inner
+            .config
+            .files
+            .get(&c.owner)
+            .filter(|f| f.lifecycle == "live")
+            .ok_or_else(unavailable)?;
+        let node = inner
+            .core
+            .qualified_structure_slot_at(
+                &inner.config.root,
+                &inner.config.root.join(&file.path),
+                &c.owner,
+            )
+            .map_err(core_error)?;
+        if file
+            .expected_node
+            .as_ref()
+            .is_some_and(|owner| owner != &node.owner)
+        {
+            return Err(changed());
+        }
+        return Ok(node.owner);
     }
     if !c.from_import_slot {
         return Err(unavailable());
@@ -502,6 +538,7 @@ mod tests {
                 owner: "Shared".into(),
                 expected_owner: Some(existing.expected_owner),
                 from_import_slot: false,
+                from_structure_slot: false,
                 lifecycle: "live".into(),
                 title: "明确批准的集合".into(),
             },

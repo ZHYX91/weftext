@@ -149,6 +149,18 @@ export class WorkspaceTools {
       if (this.active === "query" && !this.inspector.contains(document.activeElement)) this.queryPanel.documentChanged();
     }, 450);
   }
+  async refreshAfterSync(root: string): Promise<void> {
+    clearTimeout(this.refreshTimer);
+    const sameRoot = (value?: string): boolean => value?.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase() === root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+    // Query results depend on the library, even without an open source. The
+    // panel retains its current plan/parameters; frozen outputs stay frozen.
+    if (sameRoot(this.library?.root)) await this.queryPanel.refresh();
+    if (!sameRoot(this.host.getDocument()?.root)) return;
+    if (this.active === "data") await this.propertyPanel.refresh();
+    // Knowledge refresh also renews the selected media/annotation catalog.
+    // Its own input guard retains an actively edited review form.
+    await this.knowledgePanel.refresh();
+  }
   async projectionChanged(surface: HTMLElement | null, mappings: KnowledgeTextMapping[]): Promise<void> {
     this.knowledgePanel.attachSurface(surface, mappings);
     if (this.host.getDocument()?.nodeId) await this.knowledgePanel.refresh();

@@ -350,6 +350,7 @@ impl Capture {
         file: &weftext_core::SnapshotFile,
         workspace: &str,
     ) -> Result<PathBuf, ApiError> {
+        structure::guard_slot(inner, resource)?;
         if let Some(path) = self.coordinates.get(resource) {
             return Ok(path.clone());
         }

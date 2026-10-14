@@ -790,6 +790,7 @@ pub(super) mod tests {
                 owner: r.owner,
                 expected_owner: Some(r.expected_owner),
                 from_import_slot: false,
+                from_structure_slot: false,
                 lifecycle: r.lifecycle,
                 title: "公开集合".into(),
             },

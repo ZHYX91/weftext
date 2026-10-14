@@ -5,7 +5,9 @@ use super::*;
 use std::collections::BTreeMap;
 #[path = "hosted_feature.rs"]
 mod feature;
-pub use feature::ActorFeatureStatus;
+pub use feature::{
+    ActorFeatureStatus, ActorStructureNode, ActorStructureReceipt, FeatureTreeWitness,
+};
 #[path = "hosted_definition.rs"]
 mod definition;
 #[cfg(all(test, windows))]

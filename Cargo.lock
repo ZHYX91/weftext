@@ -4379,6 +4379,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
+ "typst-syntax",
  "url",
  "uuid",
  "weftext-core",

@@ -17,6 +17,7 @@ mod query_providers;
 mod query_scopes;
 mod resource_collections;
 mod review;
+mod structure;
 mod sync_transport;
 use axum::Extension;
 use base64::Engine as _;
@@ -90,6 +91,8 @@ struct User {
     #[serde(default)]
     resource_collections: BTreeMap<String, resource_collections::Rights>,
     #[serde(default)]
+    structure: structure::Rights,
+    #[serde(default)]
     sync_owner: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -120,6 +123,10 @@ struct Config {
     resources: BTreeMap<String, media::Resource>,
     #[serde(default)]
     resource_collections: BTreeMap<String, resource_collections::Collection>,
+    #[serde(default)]
+    structure_slots: BTreeMap<String, structure::Slot>,
+    #[serde(default)]
+    structure_templates: BTreeMap<String, structure::Template>,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -253,6 +260,9 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !structure::valid_rights(config, &user.structure) {
+            return Err(ApiError::bad("结构授权须引用明确配置的源对象与固定目标槽"));
+        }
         if !resource_collections::valid_rights(config, &user.resource_collections) {
             return Err(ApiError::bad(
                 "资源集合须明确配置；下载须具备读取权，Trash 集合不可导入",
@@ -369,14 +379,17 @@ impl HostedInner {
         {
             return Err(unavailable());
         }
-        self.policy
+        let rights = self
+            .policy
             .users
             .get(actor)
             .filter(|u| u.enabled)
             .and_then(|u| u.grants.get(resource))
             .filter(|r| r.read)
             .cloned()
-            .ok_or_else(unavailable)
+            .ok_or_else(unavailable)?;
+        structure::guard_slot(self, resource)?;
+        Ok(rights)
     }
     fn actor_generation(&self, actor: &str) -> u64 {
         self.policy.users.get(actor).map_or(0, |u| u.epoch)
@@ -870,6 +883,7 @@ async fn update_policy(
                             && old.library == user.library
                             && old.resources == user.resources
                             && old.resource_collections == user.resource_collections
+                            && old.structure == user.structure
                             && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);
@@ -1000,7 +1014,10 @@ pub(super) async fn serve(
         }
     }
     let mut references = BTreeSet::new();
-    if !media::valid_config(&config) || !resource_collections::valid_config(&config) {
+    if !media::valid_config(&config)
+        || !resource_collections::valid_config(&config)
+        || !structure::valid_config(&config)
+    {
         return Err("Invalid explicitly configured owned resource".into());
     }
     for (id, directory) in &config.directories {
@@ -1108,6 +1125,7 @@ pub(super) async fn serve(
         .merge(library::router())
         .merge(media::router())
         .merge(resource_collections::router())
+        .merge(structure::router())
         .merge(query::router())
         .merge(definition::router())
         .merge(embedded_query::router())

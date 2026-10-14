@@ -189,6 +189,20 @@ Trash 槽可以把准确登记的图片、辅助 Typst 等资源列为显式 inp
 
 `files.<id>.inputs` 与 `styleInputs` 可明确选择单个成员或 `collectionId/*`。每次执行冻结实际成员和原集合版本，逐项校验资源 read；用于 Office 的原资源还须 download。`*` 遇到未识别成员不能报告完整编译，静态字段 Query 不展开无关集合。预览、语义 Query、校对与样式共用这一捕获；成员或已接纳 manifest 版本变化会拒绝旧执行／旧校对计划。已生成 Office 工件仍交付原字节，只检查原授权和配置，不扩展后来成员。准确 Trash 集合只读，已登记但确实缺失的输入令语义 Query 部分可用。`scripts/test_hosted_resource_collections.py` 纳入 check/package；具体测试结果沿用候选记录。
 
+## 创建、模板与笔记结构操作
+
+托管结构入口复用 Core 原有新建、改名、移动、完整复制、模板、回收与恢复计划。部署者配置 `structureSlots.<id> = {parent, name, types?}`；parent 指向已配置且实际纳管的目录 ID，name 固定目标名称。同 ID 的 files 项必须准确指向 `PARENT/NAME/NAME.typ`，且为 live、editable、非 importable。客户端仅提交这些选择器，不提交服务器路径。预留位置由原已提交的托管生产操作、目标槽位和当前物理身份共同确认；普通本地新建、原始复制或后来占用相同路径的其他对象不会自动获得预授权。
+
+用户的 `structure.sources.<fileId>` 分别设置 rename、move、trash、restore、copy、template、treeRead、treeExport；`structure.destinations.<slotId>` 分别设置 create、receive，全部默认拒绝。正文 read/write 不隐含结构权限，创建也不自动获得新对象的正文、字段、批注或资源权限。改名必须同父目录，移动保持原名称；复制和注册模板另需明确的整个源子树 treeRead/treeExport 及 Schema read。这项完整子树授权包括其未单列配置的成员，必须在首次读取之前成立；实现不扫描其他库对象来补全传输引用。
+
+`GET structure` 只列获权来源、位置、模板和可用状态。`structure/prepare|commit|operation|settle` 使用原 resource、operationId 和 planId。create/copy/template 以目标槽位为请求锚；rename/move/trash/restore 以原来源为锚。恢复须提供该用户原回收操作的准确外部编号，不提供任意回收站目录枚举。预览保留原意图、身份映射及明确损失；commit 的 acceptLosses 不得替代未展示的损失确认。未知结果查询和结束沿用原持久操作，重启不另建编号，已结束请求不能迟到生效。原计划按当前授权代次、配置和实际来源、成员、父目录及 Schema 复验。
+
+create 可带 `capture = {title?, body?, bodyMode?, types?, fields?}`。默认 text 将正文与标题按字面原生编码；markup 只接受可证明不会执行任意代码或追加身份／字段声明的排版内容。types 必须来自该槽位的明确允许集；fields 使用准确 FieldId 和原生值，显式值、必填值与实际原生默认值分别要求字段 read/write，并按原 Schema、提供者及约束验证。没有值的可选字段不因 absent 默认而要求写权。Core 分配唯一新身份，不由表单提供。内置 native-note 模板使用字面 title/body；`structureTemplates.<id> = {source, templateId}` 则选择已登记的准确原生模板，固定原设置、来源、参数槽和完整子树。
+
+成功回执中的 result.resource 指向准确目标槽位；canOpen 另核当前独立正文读取权。WebUI 仅在用户明确选择时打开该入口。当前编辑器受到移动或回收影响时，保留个人草稿和撤销，停止把旧会话当作新位置；结果回执不替换后来输入，也不自动换 Base。复制产生独立身份，改名、移动与恢复继续原身份。该接口接通与实际测试范围沿用同一候选记录；完整 v0.6 的剩余消费者仍须单独完成。
+
+结构创建的资源集合可预先使用 `fromStructureSlot: true`，owner 指向准确槽位；它与 expectedOwner、fromImportSlot 互斥。集合所有者仍须通过原托管结构生产记录及当前物理身份证明，不能读取未由该槽位产生的占位对象。集合 read/download/import 继续分别授权，原生资源登记仍是成员依据；`files.<id>.inputs` 可预选该集合，创建成功后直接使用原有媒体与编译消费者。结构请求的可选 inputs 列出额外独立获权的文件选择器，固定它们的原依据以验证明确引用，不自动扫描或展开全库。
+
 ## 批注、校对与建议事务
 
 对象的 `annotations` 分别设置 `read`、`write`、`target`、`accept`、`proofread`，省略均为 false。当前审阅入口以批注 read 为基础；批注 write 可独立于正文权限。仅批注读取交付讨论、作者、回复和处理状态，不交付目标摘录、替换文字、源码范围或私有身份。target 允许查看该对象既有批注的目标摘录与准确位置；它不授予整篇正文或源摘要。新建正文目标、正文重新定位及重新确认建议需要正文 read、批注 write 和 target；应用建议还需要正文 write 和 accept。媒体目标使用上面的独立资源权限。校对另外需要正文 read、target、proofread；将结果加入批注还需要批注 write。服务端使用已认证用户归属，不接受客户端冒署作者。

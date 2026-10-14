@@ -7,11 +7,13 @@ import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
 import { HostedLibrary } from "./hosted-library";
 import { HostedMedia } from "./hosted-media";
+import { HostedStructure } from "./hosted-structure";
+import type { StructureReceipt, StructureRequest } from "./hosted-structure-state";
 import { nodeFragmentOrigin, nodeReferenceParts, nodeSourceHash, nodeTargetDraft, sameHostedNodeAudience, type HostedNodeAudience, type HostedNodeBasis, type HostedNodeFragmentResult, type HostedNodeResolution } from "./hosted-navigation-state";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
-import { draftDisposition, applySaveResult, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
+import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
 type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
@@ -30,6 +32,7 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="comparison" hidden><h2>核对并保留双方稿</h2><p>上方是你的草稿，下方是当前服务端稿。编辑上方内容，确认合并依据后再保存；确认本身不会改正文。</p><pre id="current"></pre><button id="rebase">已核对，以当前稿作为保存依据</button></section>
 <section id="history-list" aria-label="托管笔记时间线" hidden></section>
 <section id="library" aria-label="托管库配置与样式" hidden></section>
+<section id="structure" aria-label="托管结构操作" hidden></section>
 <section id="fields" aria-label="获权字段与查询" hidden></section>
 <section id="query" aria-label="托管高级查询" hidden></section>
 <section id="review" aria-label="托管批注与校对" hidden></section>
@@ -65,6 +68,15 @@ let requestEpoch = 0;
 let authorizationEpoch = 0;
 let compareRequired = false;
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
+const retiredStructureSessions = new Set<string>();
+const retiredStructureSources = new Set<string>();
+function sessionAudience() { return { authorization: authorizationEpoch, credential: token, actor: identity?.actor, generation: identity?.generation, deployment: identity?.deployment }; }
+async function closeOwnedSession(sessionId: string, captured: Pick<HostedNodeAudience, "authorization" | "credential" | "actor" | "generation" | "deployment">): Promise<void> {
+  const current = sessionAudience(); if ((["authorization", "credential", "actor", "generation", "deployment"] as const).some(key => captured[key] !== current[key])) return;
+  // Disposing a former coordinate must never be interpreted as revoking a
+  // different view. Use the captured audience and no global error delivery.
+  try { await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store" }); } catch { /* No alternate source is installed by cleanup. */ }
+}
 const status = (message: string) => { el("status").textContent = message; };
 const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ? {
   resource: doc.resource, source: source.value, dirty: source.value !== doc.source || compareRequired, pending: !!draft?.pending,
@@ -89,6 +101,46 @@ const library = new HostedLibrary(el("library"), request, async role => {
   if (epoch === requestEpoch) status("库配置原操作已提交，受影响预览重新编译；正文草稿与撤销历史保留，未保存正文。");
 });
 const media: HostedMedia = new HostedMedia(el("media"), (path, body, signal) => request(path, body, false, 0, signal), context => review.mediaChanged(context), context => review.openMedia(context));
+let structureDocuments: { resource: string; title: string }[] = [];
+const structures = new HostedStructure(el("structure"), request, {
+  protect: async (intent, phase) => {
+    const epoch = requestEpoch, selected = doc; await source.flush(); if (epoch !== requestEpoch || doc !== selected) throw new Error("保护期间正文或用户已变化，未执行旧结构操作。"); retain();
+    if (selected && draft && intent.source === selected.resource) {
+      if (draft.pending || history.hasPending(selected.resource)) throw new Error("原正文保存或历史恢复仍未核对，请先处理原操作。");
+      if (source.pausedSession) { if (phase === "commit" || intent.kind === "restore") return; throw new Error("原正文结构会话已暂停，请明确重新读取与核对后操作。"); }
+      const ref = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId });
+      if (epoch !== requestEpoch || doc !== selected) throw new Error("核对期间原正文会话已变化。");
+      draft = bindHostedDraftReference(draft, ref.reference); retain(); await request("draft", { sessionId: selected.sessionId, source: source.value });
+      if (epoch !== requestEpoch || doc !== selected) throw new Error("草稿保护期间用户或对象已变化。"); retain();
+      if (phase === "commit" && ["rename", "move", "trash", "restore"].includes(intent.kind)) { retiredStructureSessions.add(selected.sessionId); retiredStructureSources.add(selected.resource); clearTimeout(draftTimer); clearNodeNavigation(); source.pauseSession(); compareRequired = true; controls(); }
+    }
+  },
+  changed: async (receipt, intent) => {
+    const epoch = requestEpoch;
+    if (doc && draft && intent.source === doc.resource && ["rename", "move", "trash", "restore"].includes(intent.kind)) { retiredStructureSessions.add(doc.sessionId); retiredStructureSources.add(doc.resource); retain(); clearTimeout(draftTimer); source.pauseSession(); compareRequired = true; controls(); }
+    await list(); if (epoch !== requestEpoch) return; await queries.refreshCatalog(); if (epoch !== requestEpoch) return; await media.refresh(); if (epoch === requestEpoch) status("原结构操作已提交；个人草稿保留，结果仍需独立获权后明确打开。");
+  },
+  open: openStructureResult,
+});
+async function openStructureResult(result: NonNullable<StructureReceipt["result"]>, intent: StructureRequest): Promise<void> {
+  if (!result.canOpen) throw new Error("结构结果尚无独立正文读取资格。");
+  if (!["rename", "move", "restore"].includes(intent.kind)) { await openQueryResource(result.resource); return; }
+  const epoch = requestEpoch, audience = sessionAudience(), selected = doc; await source.flush(); if (epoch !== requestEpoch || audience.credential !== token) return; retain(); const expected = `weftext-node://${result.nodeRef.workspaceId}/${result.nodeRef.nodeId}`;
+  const original = selected?.resource === intent.source && draft ? { ...draft, source: source.value } : intent.source ? cached(intent.source) : undefined;
+  const fresh = await request<Doc>("open", { resource: result.resource }); let adopted = false;
+  try {
+    if (epoch !== requestEpoch || doc !== selected) return;
+    const ref = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: fresh.sessionId });
+    if (epoch !== requestEpoch || doc !== selected || ref.reference !== expected || ref.resource !== fresh.resource) throw new Error("原结构对象的新位置资格已变化，未采用另一对象。");
+    if (original?.reference === expected) {
+      const retained = selected?.resource === intent.source && draft ? { ...draft, source: source.value } : original;
+      if (selected?.resource === intent.source && source.pausedSession) source.rebindResourceAlias(fresh.resource);
+      requestEpoch++; installDocument(fresh, retained); adopted = true;
+      if (fresh.rights.write && retained.source !== fresh.source) { await request("draft", { sessionId: fresh.sessionId, source: retained.source }); if (doc === fresh) scheduleCurrentDraft(); }
+    } else { requestEpoch++; installDocument(fresh, cached(fresh.resource) ?? { source: fresh.recoveredDraft ?? fresh.source, baseSource: fresh.recoveredDraftBaseSource ?? fresh.source, reference: ref.reference }); adopted = true; }
+    if (selected) await closeOwnedSession(selected.sessionId, audience);
+  } finally { if (!adopted) await closeOwnedSession(fresh.sessionId, audience); }
+}
 let stableReference: { resource: string; sessionId: string; reference: string } | undefined;
 let nodeNavigationVersion = 0;
 function clearNodeNavigation() { nodeNavigationVersion++; el("node-navigation").replaceChildren(); el("node-navigation").hidden = true; }
@@ -126,9 +178,10 @@ async function navigateReference(reference: string) {
         if (target.resource !== resolved.resource) throw new Error("暂存目标与获权对象不符，未安装正文。");
         const raw = sessionStorage.getItem(cachePrefix + target.resource); let local: HostedDraft | undefined;
         try { local = raw === null ? undefined : JSON.parse(raw) as HostedDraft; } catch { throw new Error("目标的本页恢复稿无法解析；原记录保留，未安装另一份正文。"); }
-        targetDraft = nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, local);
+        targetDraft = nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, source.pausedSession && draft?.reference === parts.base ? { ...draft, source: source.value } : local);
       }
-      const basis: HostedNodeBasis = { sessionId: target.sessionId, source: currentTarget ? source.value : targetDraft.source, serial: currentTarget ? source.serial : 0, sourceHash: await nodeSourceHash(currentTarget ? source.value : targetDraft.source) };
+      const retainedAlias = !currentTarget && source.pausedSession && draft?.reference === parts.base;
+      const basis: HostedNodeBasis = { sessionId: target.sessionId, source: currentTarget ? source.value : targetDraft.source, serial: currentTarget || retainedAlias ? source.serial : 0, sourceHash: await nodeSourceHash(currentTarget ? source.value : targetDraft.source) };
       if (!sameHostedNodeAudience(captured, nodeAudience())) return;
       await request("editor/map", basis); if (!sameHostedNodeAudience(captured, nodeAudience())) return;
       const result = await request<HostedNodeFragmentResult>("navigation/fragment", { ...basis, reference });
@@ -137,8 +190,10 @@ async function navigateReference(reference: string) {
       if (!origin) { const reason = { missing: "目标当前个人草稿中缺少此标签", ambiguous: "目标当前个人草稿中标签有歧义", unavailable: "目标当前个人草稿无法准确定位此标签", found: "标签没有准确范围" }[result.fragment.status]; nodeNavigationMessage(reference, `${reason}；当前正文与 Undo 保留，未丢弃片段打开整篇。`, true); return; }
       if (busy) { nodeNavigationMessage(reference, "当前操作仍在核对，未采用迟到的片段范围；请操作完成后重新点击原链接。", true); return; }
       if (!currentTarget) {
+        if (retainedAlias) source.rebindResourceAlias(target.resource);
         requestEpoch++; installDocument(target, targetDraft); adopted = true;
-        if (prior) void request("close", { sessionId: prior.sessionId }).catch(() => {});
+        if (prior) void closeOwnedSession(prior.sessionId, captured);
+        scheduleCurrentDraft();
       }
       source.locateNodeFragment(origin, { sessionId: target.sessionId, source: basis.source, serial: basis.serial });
       nodeNavigationMessage(reference, `已按目标当前个人草稿唯一定位标签「${result.fragment.label}」的准确源码范围；正文与 Undo 未修改。`);
@@ -147,12 +202,12 @@ async function navigateReference(reference: string) {
       if (sameHostedNodeAudience(captured, nodeAudience())) { const message = `${error instanceof Error ? error.message : "片段定位未完成"} 当前正文保留。`; nodeNavigationMessage(reference, message, reference.includes("#")); status(message); }
   } finally {
       // Never send an old actor's temporary session to the newly connected actor.
-      if (staged && !adopted && captured.credential === token && captured.actor === identity?.actor && captured.deployment === identity?.deployment && captured.generation === identity?.generation) { try { await request("close", { sessionId: staged.sessionId }); } catch { /* No result or target Draft is installed when cleanup fails. */ } }
+      if (staged && !adopted) await closeOwnedSession(staged.sessionId, captured);
   }
 }
 async function readReference(selected: Doc, epoch: number) {
   stableReference = undefined; el("stable-link").hidden = true; el<HTMLInputElement>("node-reference").value = "";
-  try { const result = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || doc !== selected) return; if (result.resource !== selected.resource || !/^weftext-node:\/\//.test(result.reference)) throw new Error("当前笔记没有获权稳定身份。"); stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: result.reference }; el<HTMLInputElement>("node-reference").value = result.reference; el("stable-link").hidden = false; controls(); } catch (error) { if (epoch === requestEpoch && doc === selected) status(error instanceof Error ? error.message : "稳定身份当前不可用。"); }
+  try { const result = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || doc !== selected || !draft) return; if (result.resource !== selected.resource || !/^weftext-node:\/\//.test(result.reference)) throw new Error("当前笔记没有获权稳定身份。"); const qualified = bindHostedDraftReference({ ...draft, source: source.value }, result.reference); sessionStorage.setItem(cachePrefix + selected.resource, JSON.stringify(qualified)); draft = qualified; stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: result.reference }; el<HTMLInputElement>("node-reference").value = result.reference; el("stable-link").hidden = false; controls(); } catch (error) { if (epoch === requestEpoch && doc === selected) status(error instanceof Error ? error.message : "稳定身份当前不可用。"); }
 }
 async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied" | "superseded"> {
   const selected = doc, epoch = requestEpoch;
@@ -198,12 +253,13 @@ async function openQueryResource(resource: string) { const epoch = requestEpoch;
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
+  retiredStructureSessions.clear(); retiredStructureSources.clear(); structureDocuments = [];
   clearNodeNavigation();
   requestEpoch++; authorizationEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = ""; stableReference = undefined;
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
-  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear()]) {
+  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear(), () => structures.clear()]) {
     try { clear(); } catch (error) { clearErrors.push(error); }
   }
   el("documents").replaceChildren();
@@ -222,6 +278,7 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
   const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store", signal});
   if (!response.ok) {
     const result = await response.json() as {error?:{code:string;message:string}};
+    const requestTarget = data as { sessionId?: string; resource?: string } | undefined, retired = !!requestTarget && (typeof requestTarget.sessionId === "string" && retiredStructureSessions.has(requestTarget.sessionId) || typeof requestTarget.resource === "string" && retiredStructureSources.has(requestTarget.resource));
     // Only a read-only preview can wait for the shared compiler. Author save
     // requests keep their explicit original-operation recovery path.
     if (path === "preview" && response.status === 429 && attempt < 5) {
@@ -229,26 +286,28 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
       if (epoch === requestEpoch && credential === token) return request(path, data, bytes, attempt + 1, signal);
     }
     if (response.status === 401 && sameHostedQueryIdentity(captured, audience())) clearDisplay("凭据失效，已清除本页缓存。", true);
-    if (response.status === 404 && path === "query" && sameHostedQueryIdentity(captured, audience())) {
+    if ([404, 409, 410].includes(response.status) && retired && sameHostedQueryIdentity(captured, audience())) {
+      try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧展示与缓存已清除。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* A retired structural coordinate never clears a newer buffer or actor. */ }
+    } else if (response.status === 404 && path === "query" && sameHostedQueryIdentity(captured, audience())) {
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience())) { if (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation) { clearDisplay("授权策略已变化，旧展示与缓存已清除，请刷新文档列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } else if (sameHostedQueryAudience(captured, audience())) queries.refuseResult("此查询对象或范围不可用；原计划、参数和个人正文草稿保留，未交付结果。"); } }
       catch { if (sameHostedQueryAudience(captured, audience())) queries.refuseResult("查询资格核对未完成，结果暂不交付；原计划与个人草稿保留，请重新连接核对。"); }
     } else if ([404, 410].includes(response.status) && path.startsWith("media/") && sameHostedQueryIdentity(captured, audience())) {
       // A hidden/unknown asset is not a revocation of the independently open
       // note. Only a current identity's changed actor epoch clears all views.
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧媒体与缓存已清除，请刷新目录。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Caller stops this resource delivery; personal source remains protected. */ }
-    } else if ([404, 409, 410].includes(response.status) && path.startsWith("navigation/") && sameHostedQueryIdentity(captured, audience())) {
+    } else if ([404, 409, 410].includes(response.status) && (path.startsWith("navigation/") || path.startsWith("structure/")) && sameHostedQueryIdentity(captured, audience())) {
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧链接定位与缓存已清除，请刷新列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Stop this link delivery without treating a hidden same-epoch target as source revocation. */ }
-    } else if (response.status === 404 && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    } else if (response.status === 404 && !retired && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("structure/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
     throw new HostedError(result.error?.code ?? "request", result.error?.code === "basisRequired" && path.startsWith("query/") ? "保存带范围的定义需要已安装的规则基线；请由管理员明确安装库规则后重试，原草稿与提案保留，未自动创建规则。" : result.error?.message ?? "请求失败", response.status);
   }
   return (bytes ? response.arrayBuffer() : response.json()) as Promise<T>;
 }
 function controls() {
-  el<HTMLButtonElement>("save").disabled = busy || !doc?.rights.write || compareRequired || !!draft?.pending || !!doc && history.hasPending(doc.resource);
-  for (const id of ["preview","reopen"]) el<HTMLButtonElement>(id).disabled = busy || !doc;
-  el<HTMLButtonElement>("download").disabled = busy || !doc?.rights.download;
-  el<HTMLButtonElement>("history").disabled = busy || !doc?.rights.history;
-  el<HTMLButtonElement>("rebase").disabled = busy || !doc?.rights.write || !!draft?.pending;
+  el<HTMLButtonElement>("save").disabled = busy || !doc?.rights.write || source.pausedSession || compareRequired || !!draft?.pending || !!doc && history.hasPending(doc.resource);
+  for (const id of ["preview","reopen"]) el<HTMLButtonElement>(id).disabled = busy || !doc || source.pausedSession && id === "preview";
+  el<HTMLButtonElement>("download").disabled = busy || !doc?.rights.download || source.pausedSession;
+  el<HTMLButtonElement>("history").disabled = busy || !doc?.rights.history || source.pausedSession;
+  el<HTMLButtonElement>("rebase").disabled = busy || !doc?.rights.write || source.pausedSession || !!draft?.pending;
   el<HTMLButtonElement>("copy-reference").disabled = busy || !stableReference || stableReference.sessionId !== doc?.sessionId;
 }
 function retain() {
@@ -269,13 +328,14 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation); await media.connect(next.deployment, next.actor, next.generation);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation); await media.connect(next.deployment, next.actor, next.generation); await structures.connect(next.deployment, next.actor, next.generation); structures.setDocuments(structureDocuments);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
   const rows = term ? (await request<{rows: {resource:string;title:string}[];complete:boolean}>("search",{text:term})) : undefined;
   const items = rows?.rows ?? (await request<{documents:{resource:string;title:string}[]}>("documents")).documents;
   if (epoch !== requestEpoch) return;
+  structureDocuments = items; structures.setDocuments(items);
   el("documents").replaceChildren(...items.map(item => { const button = document.createElement("button"); button.textContent = item.title; button.onclick = () => run(() => open(item.resource)); return button; }));
   if (rows) status(rows.complete ? `在可访问范围找到 ${items.length} 项` : `搜索未完整，仅显示已取得的 ${items.length} 项`);
 }
@@ -293,11 +353,16 @@ async function open(resource: string) {
   const local = cached(resource);
   if (prior) {
     try { await request("close",{sessionId:prior.sessionId}); }
-    catch (e) { if (!(e instanceof HostedError) || e.http !== 410) throw e; }
+    catch (e) { if (!(e instanceof HostedError) || e.http !== 410 && !(e.http === 404 && retiredStructureSessions.has(prior.sessionId))) throw e; }
   }
   const epoch = ++requestEpoch;
   const opened = await request<Doc>("open",{resource});
   if (epoch !== requestEpoch) return;
+  if (prior && draft?.reference && source.pausedSession && prior.resource !== resource) {
+    const ref = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: opened.sessionId });
+    if (epoch !== requestEpoch) return;
+    if (ref.resource === opened.resource && ref.reference === draft.reference) { const retained = { ...draft, source: source.value }; source.rebindResourceAlias(resource); installDocument(opened, retained); scheduleCurrentDraft(); return; }
+  }
   doc = opened;
   draft = local ?? {source:opened.recoveredDraft ?? opened.source,baseSource:opened.recoveredDraftBaseSource ?? opened.source};
   let recoveredSave = false;
@@ -368,7 +433,7 @@ function scheduleCurrentDraft() {
   clearTimeout(draftTimer);
   const captured = doc; const epoch = requestEpoch;
   draftTimer = setTimeout(() => {
-    if (!captured || doc !== captured || epoch !== requestEpoch || !captured.rights.write || compareRequired || draft?.pending || busy || history.hasPending(captured.resource)) return;
+    if (!captured || doc !== captured || epoch !== requestEpoch || source.pausedSession || !captured.rights.write || compareRequired || draft?.pending || busy || history.hasPending(captured.resource)) return;
     void request("draft",{sessionId:captured.sessionId,source:source.value}).catch(() => {});
   },800);
 }
@@ -378,7 +443,7 @@ el("refresh").onclick = () => void run(async () => {
   const epoch = requestEpoch, current = await request<Me>("me"); if (epoch !== requestEpoch) return;
   if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment) clearDisplay("授权策略已更新，旧展示与缓存已清除。");
   identity = current; cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation); sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
-  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation); await media.connect(current.deployment, current.actor, current.generation);
+  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation); await media.connect(current.deployment, current.actor, current.generation); await structures.connect(current.deployment, current.actor, current.generation); structures.setDocuments(structureDocuments);
 });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
@@ -421,7 +486,7 @@ el("download").onclick = () => void run(async () => {
 el("history").onclick = () => void history.open();
 el("copy-reference").onclick = () => void run(async () => { const selected = stableReference, epoch = requestEpoch; if (!selected || selected.sessionId !== doc?.sessionId) return; const latest = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || stableReference !== selected || latest.resource !== selected.resource || latest.reference !== selected.reference) return; await navigator.clipboard.writeText(latest.reference); if (epoch === requestEpoch) status("已复制当前获权稳定笔记链接。"); });
 window.addEventListener("offline",()=>status("连接中断，本页草稿仍保留；不会自动提交。"));
-window.addEventListener("beforeunload", e=>{if(media.hasPending || library.hasPending || history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
+window.addEventListener("beforeunload", e=>{if(structures.hasPending || media.hasPending || library.hasPending || history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
 setInterval(()=>{
   if(!identity || busy) return;
   const old=identity, epoch=requestEpoch, credential=token;

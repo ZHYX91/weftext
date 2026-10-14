@@ -34,6 +34,7 @@ export class HostedEditor {
   private sessionId = "";
   private resource = "";
   private blocked = true;
+  private paused = false;
   private mode: ViewMode = "styled";
   private projection?: Projection;
   private generation = 0;
@@ -56,13 +57,16 @@ export class HostedEditor {
   get serial(): number { return this.editor?.generation ?? 0; }
   get viewMode(): ViewMode { return this.mode; }
   get selection(): { from: number; to: number } | undefined { return this.editor?.selection; }
+  get pausedSession(): boolean { return this.paused; }
+  pauseSession(): void { clearTimeout(this.timer); this.generation++; this.paused = true; this.sessionId = ""; this.projection = undefined; this.queries?.invalidate(); this.mode = "source"; this.editor?.tokens([], false); this.editor?.readOnly(this.blocked); this.paint(true); this.message.textContent = "原对象的结构会话已暂停；当前草稿与 Undo 保留，请明确打开新位置核对后继续。"; }
+  rebindResourceAlias(resource: string): void { if (!this.editor || !this.paused) throw new Error("原对象编辑器未暂停，不能重绑未经核对的别名。"); this.resource = resource; }
   select(from: number, to: number): void { this.editor?.select(from, to); }
   locateNodeFragment(origin: Origin, basis: EmbeddedQueryBasis): void {
     if (!this.editor || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis) || origin.isMain !== true || origin.path !== `resource:${this.resource}` || !sourceBoundary(basis.source, origin.utf16From) || !sourceBoundary(basis.source, origin.utf16To) || basis.source.slice(origin.utf16From, origin.utf16To) !== origin.raw) throw new Error("定位期间目标草稿已变化，未采用旧标签范围。");
     // Selecting the actual native author range changes neither source nor Undo.
     this.mode = "source"; this.editor.clearReveal(); this.editor.readOnly(this.blocked); this.paint(true); this.editor.select(origin.utf16From, origin.utf16To); this.queryHost?.modeChanged?.();
   }
-  set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read"); if (this.blocked === value) return; this.blocked = value; this.paint(); }
+  set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read" || this.paused && this.mode !== "source"); if (this.blocked === value) return; this.blocked = value; this.paint(); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
   async historyBasis(settle = false): Promise<EmbeddedQueryBasis> {
     if (settle) await this.flush();
@@ -88,6 +92,7 @@ export class HostedEditor {
     return basis;
   }
   open(sessionId: string, resource: string, source: string): void {
+    this.paused = false;
     // Reopening the same retained draft changes its Base/session, not Undo.
     if (this.resource !== resource || !this.editor) {
       this.clear(); this.resource = resource;
@@ -131,6 +136,7 @@ export class HostedEditor {
     clearTimeout(this.timer); this.generation++; this.queries?.dispose(); this.queries = undefined; this.queryPreview = false; this.writing?.dispose(); this.editor?.view.destroy();
     this.writing = undefined; this.editor = undefined; this.projection = undefined; this.resource = ""; this.sessionId = "";
     this.blocked = true; this.container.replaceChildren();
+    this.paused = false;
     this.sourceHost.replaceChildren(); this.flow.replaceChildren(); this.toolbar.replaceChildren(); this.message.textContent = "";
     // Shared structure dialogs may contain the just-revoked source. Dispose
     // both their visible data and their pending controller capability.
@@ -169,7 +175,7 @@ export class HostedEditor {
     const writing = this.writing, editor = this.editor; if (!writing || !editor) return;
     if (writing.state.composing) { await writing.deferUntilCompositionEnds(() => this.changeMode(mode)); return; }
     await writing.settleForSessionChange(); if (this.editor !== editor) return;
-    editor.clearReveal(); this.mode = mode; editor.readOnly(this.blocked || mode === "read");
+    editor.clearReveal(); this.mode = mode; editor.readOnly(this.blocked || mode === "read" || this.paused && mode !== "source");
     this.queries?.modeChanged();
     this.queryHost?.modeChanged?.();
     if (this.projection) editor.tokens(this.projection.sourceInfo.syntaxTokens, mode === "styled"); this.paint(true);
@@ -194,7 +200,7 @@ export class HostedEditor {
     if (!this.sourceHost.hidden && editor.view.dom.parentElement !== this.sourceHost) editor.mount(this.sourceHost);
     const options = { onError: this.error, revealSource: (range: WritingRange) => this.reveal(range), insertLink: () => insertWritingLink(writing) };
     this.toolbar.replaceChildren();
-    if (!this.blocked && this.mode !== "read") {
+    if (!this.blocked && this.mode !== "read" && (!this.paused || this.mode === "source")) {
       if (this.mode === "write") this.toolbar.append(createWritingToolbar(writing, options));
       else this.toolbar.append(this.button("撤销", () => writing.undo()), this.button("重做", () => writing.redo()));
     }
