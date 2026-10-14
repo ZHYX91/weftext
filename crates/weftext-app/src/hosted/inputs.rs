@@ -1,8 +1,8 @@
 //! Explicit compilation inputs. A source grant never supplies sibling assets.
 use super::*;
 use weftext_core::{
-    MissingResourceWitness, QualifiedResource, QualifiedResourceInput, QueryNodeWitness,
-    SnapshotWitness,
+    MissingResourceWitness, QualifiedResource, QualifiedResourceCollection, QualifiedResourceInput,
+    QueryNodeWitness, SnapshotWitness,
 };
 
 const MAX_INPUTS: usize = 64;
@@ -18,17 +18,14 @@ fn changed() -> ApiError {
 fn budget() -> ApiError {
     ApiError::bad("本次输入及其原始依据超出 32 MiB 或 64 个输入的预算")
 }
-pub(super) fn path<'a>(inner: &'a HostedInner, id: &str) -> Result<&'a str, ApiError> {
-    inner
-        .config
-        .files
-        .get(id)
-        .map(|f| f.path.as_str())
-        .or_else(|| inner.config.resources.get(id).map(|r| r.path.as_str()))
-        .ok_or_else(unavailable)
+pub(super) fn path(inner: &HostedInner, actor: &str, id: &str) -> Result<String, ApiError> {
+    if let Some(file) = inner.config.files.get(id) {
+        return Ok(file.path.clone());
+    }
+    Ok(media::resolve_asset(inner, actor, id)?.path)
 }
 pub(super) fn access(inner: &HostedInner, actor: &str, id: &str) -> Result<(), ApiError> {
-    if inner.config.resources.contains_key(id) {
+    if media::valid_input(&inner.config, id) {
         media::input_access(inner, actor, id, false)
     } else {
         inner.rights(actor, id).map(|_| ())
@@ -44,7 +41,7 @@ pub(super) fn binding_hash(
     for id in ids {
         if let Some(file) = inner.config.files.get(id) {
             files.insert(id, file);
-        } else if inner.config.resources.contains_key(id) {
+        } else if media::valid_input(&inner.config, id) {
             assets.insert(id.clone());
         } else {
             return Err(unavailable());
@@ -59,10 +56,11 @@ pub(super) fn read_files(
     actor: &str,
     ids: &[String],
 ) -> Result<BTreeMap<String, Vec<u8>>, ApiError> {
+    let (ids, collections) = resource_collections::expand_inputs(inner, actor, ids)?;
     if ids.len() > MAX_INPUTS {
         return Err(budget());
     }
-    for id in ids {
+    for id in &ids {
         access(inner, actor, id)?;
     }
     let paths = ids
@@ -73,14 +71,15 @@ pub(super) fn read_files(
         .core
         .hosted_files(&inner.config.root, &paths.into_iter().collect::<Vec<_>>())
         .map_err(|_| unavailable())?;
-    let mut bytes = files.values().map(Vec::len).sum::<usize>();
+    let mut bytes = files.values().map(Vec::len).sum::<usize>()
+        + collections
+            .iter()
+            .map(|(_, c)| c.retained_bytes())
+            .sum::<usize>();
     if bytes > MAX_BYTES {
         return Err(budget());
     }
-    for id in ids
-        .iter()
-        .filter(|id| inner.config.resources.contains_key(*id))
-    {
+    for id in ids.iter().filter(|id| media::is_asset(&inner.config, id)) {
         let resource = media::capture_input(inner, actor, id)?;
         bytes = bytes
             .checked_add(resource.bytes().len())
@@ -88,7 +87,7 @@ pub(super) fn read_files(
         if bytes > MAX_BYTES {
             return Err(budget());
         }
-        let path = path(inner, id)?.to_owned();
+        let path = path(inner, actor, id)?;
         if files
             .get(&path)
             .is_some_and(|old| old.as_slice() != resource.bytes())
@@ -96,6 +95,12 @@ pub(super) fn read_files(
             return Err(changed());
         }
         files.insert(path, resource.bytes().to_vec());
+    }
+    for (_, collection) in collections {
+        inner
+            .core
+            .validate_resource_collection_witness(&inner.config.root, &collection.witness)
+            .map_err(|_| changed())?;
     }
     Ok(files)
 }
@@ -117,6 +122,8 @@ struct Entry {
 #[derive(Clone)]
 pub(super) struct Captured {
     ids: BTreeSet<String>,
+    selections: BTreeSet<String>,
+    collections: BTreeMap<String, Arc<QualifiedResourceCollection>>,
     binding: String,
     entries: Arc<BTreeMap<String, Entry>>,
     bytes: usize,
@@ -125,6 +132,44 @@ type InputView<'a> = (&'a str, &'a [u8], bool);
 impl Captured {
     pub(super) fn ids(&self) -> &BTreeSet<String> {
         &self.ids
+    }
+    pub(super) fn authority_ids(&self) -> BTreeSet<String> {
+        self.ids.union(&self.selections).cloned().collect()
+    }
+    pub(super) fn matches_selection(&self, selections: &[String]) -> bool {
+        selections.iter().cloned().collect::<BTreeSet<_>>() == self.selections
+    }
+    pub(super) fn members_for(&self, selections: &[String]) -> Result<BTreeSet<String>, ApiError> {
+        let mut ids = BTreeSet::new();
+        for selected in selections {
+            if !self.selections.contains(selected) {
+                return Err(changed());
+            }
+            if let Some(collection) = selected.strip_suffix("/*") {
+                if !self.collections.contains_key(collection) {
+                    return Err(changed());
+                }
+                let prefix = format!("{collection}/");
+                ids.extend(
+                    self.ids
+                        .iter()
+                        .filter(|id| id.starts_with(&prefix))
+                        .cloned(),
+                );
+            } else {
+                if !self.ids.contains(selected) {
+                    return Err(changed());
+                }
+                ids.insert(selected.clone());
+            }
+        }
+        Ok(ids)
+    }
+    pub(super) fn collection_revisions(&self) -> BTreeMap<String, Option<String>> {
+        self.collections
+            .iter()
+            .map(|(id, c)| (id.clone(), c.revision.clone()))
+            .collect()
     }
     pub(super) fn retained_bytes(&self) -> usize {
         self.bytes
@@ -160,11 +205,18 @@ impl Captured {
             .collect()
     }
     pub(super) fn validate(&self, inner: &HostedInner, actor: &str) -> Result<(), ApiError> {
-        for id in &self.ids {
+        let authority = self.authority_ids();
+        for id in &authority {
             access(inner, actor, id)?;
         }
-        if binding_hash(inner, &self.ids)? != self.binding {
+        if binding_hash(inner, &authority)? != self.binding {
             return Err(changed());
+        }
+        for collection in self.collections.values() {
+            inner
+                .core
+                .validate_resource_collection_witness(&inner.config.root, &collection.witness)
+                .map_err(|_| changed())?;
         }
         for e in self.entries.values() {
             match &e.evidence {
@@ -198,6 +250,10 @@ impl Captured {
     }
     pub(super) fn plan_witnesses(&self) -> Result<Vec<SnapshotWitness>, ApiError> {
         let mut result = vec![];
+        for collection in self.collections.values() {
+            Core::merge_resource_collection_witness(&mut result, &collection.witness)
+                .map_err(|_| changed())?;
+        }
         for e in self.entries.values() {
             // Missing inputs are read-only Query evidence, never a write basis.
             if e.bytes.is_none() {
@@ -241,20 +297,32 @@ fn capture_inputs(
     ids: &[String],
     allow_missing: bool,
 ) -> Result<Captured, ApiError> {
-    let ids = ids.iter().cloned().collect::<BTreeSet<_>>();
+    let selections = ids.iter().cloned().collect::<BTreeSet<_>>();
+    let (expanded, collections) = resource_collections::expand_inputs(inner, actor, ids)?;
+    let ids = expanded.into_iter().collect::<BTreeSet<_>>();
+    let collections = collections.into_iter().collect::<BTreeMap<_, _>>();
     if ids.len() > MAX_INPUTS {
         return Err(budget());
     }
     for id in &ids {
         access(inner, actor, id)?;
     }
-    let binding = binding_hash(inner, &ids)?;
+    let authority = ids.union(&selections).cloned().collect();
+    let binding = binding_hash(inner, &authority)?;
     let mut entries = BTreeMap::new();
-    let mut bytes = binding.len();
+    let mut bytes = binding.len() + selections.iter().map(String::len).sum::<usize>();
+    for (id, c) in &collections {
+        bytes = bytes
+            .saturating_add(id.len())
+            .saturating_add(c.retained_bytes());
+        if bytes > MAX_BYTES {
+            return Err(budget());
+        }
+    }
     for id in &ids {
-        let entry = if inner.config.resources.contains_key(id) {
+        let entry = if media::is_asset(&inner.config, id) {
             let qualified = if allow_missing {
-                let r = &inner.config.resources[id];
+                let r = media::resolve_asset(inner, actor, id)?;
                 let owner = &inner.config.files[&r.owner];
                 inner
                     .core
@@ -270,7 +338,7 @@ fn capture_inputs(
             } else {
                 QualifiedResourceInput::Present(Box::new(media::capture_input(inner, actor, id)?))
             };
-            let path = path(inner, id)?.to_owned();
+            let path = path(inner, actor, id)?;
             match qualified {
                 QualifiedResourceInput::Present(resource) => {
                     bytes = bytes.saturating_add(resource.witness.retained_bytes());
@@ -355,6 +423,8 @@ fn capture_inputs(
     }
     let captured = Captured {
         ids,
+        selections,
+        collections,
         binding,
         entries: Arc::new(entries),
         bytes,

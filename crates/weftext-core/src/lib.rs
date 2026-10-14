@@ -18,8 +18,12 @@ mod journal;
 mod operations;
 mod query_scope;
 mod resource;
+mod resource_collection;
 pub use resource::{
     MissingResourceWitness, QualifiedResource, QualifiedResourceInput, ResourceWitness,
+};
+pub use resource_collection::{
+    QualifiedResourceCollection, ResourceCollectionEntry, ResourceCollectionWitness,
 };
 #[cfg(all(test, windows))]
 mod library_resource_tests;

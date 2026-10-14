@@ -48,7 +48,7 @@ WebUI 提供源码、带样式源码、按需语法、可视写作、阅读五�
 
 `scripts/test_hosted_review.py` 继承 `test_hosted_fields.py`、`test_hosted_editor.py` 和原 `test_hosted.py` 的完整检查并接入 `scripts/mvp.py check/package`，测试真实程序的双用户冲突、独立草稿、操作幂等与重启、拒绝本地路径 API、隐藏对象不披露、历史分权、冻结编译、同一字节续下载及持久撤权。浏览器还需验证登录、丢响应、断线草稿、合并和缓存清理；实际结果随候选记录，不由文档建立通过。
 
-**尚未接入 Server**：结构操作、本地其他输出格式、资源集合与资源导入。准确配置的媒体、媒体批注目标及显式资源输入，连同库配置／样式、历史、Query 与 Office 的当前范围见下文。静态部署项是资源消费者的起点，不代表资源生产流程完成。这些工作继续属于 v0.6，原本地功能保持本地使用。不能借本地 API 越过托管授权。实时协作、其他 OS 后端、Mobile / CLI 整体验收以及自动化按后续里程碑推进。
+**尚未接入 Server**：结构操作及本地其他输出格式。准确资源、获权集合与原件导入、Word 导入槽位的资源预授权、媒体批注目标及显式资源输入，连同库配置／样式、历史、Query 与 Office 的当前范围见下文。这些工作继续属于 v0.6，原本地功能保持本地使用。不能借本地 API 越过托管授权。实时协作、其他 OS 后端、Mobile / CLI 整体验收以及自动化按后续里程碑推进。
 
 ## 保存历史与稳定 Node 导航
 
@@ -171,7 +171,19 @@ Trash 槽可以把准确登记的图片、辅助 Typst 等资源列为显式 inp
 
 浏览器核对完整长度和摘要后，使用共享媒体查看器显示。PNG/JPEG/GIF/WebP、有界普通 PDF、WAV 和支持的 MP4 从真实字节取得事实；不支持的文件可以添加整资源批注，但不会虚构区域。媒体批注新建和重新定位要求资源 read，加所属笔记的批注 read/write/target，不要求正文 read。图片／PDF 区域及音视频区间按选中版本核对实际尺寸、页号和时基。原计划保留 Core 资源依据，重启后仍校验准确版本；纯讨论操作不读取目标字节，Trash 资源只读。媒体选择和稳定资源链接保留当前正文草稿；复制原件由独立 download 权限控制。
 
-`scripts/test_hosted_media.py` 纳入 check/package，覆盖真实 HTTP 交付、媒体事实、原批注计划、明确编译输入、冻结输出及 Trash 依赖。浏览器验收另存证据目录。实际通过范围和限制以候选验收记录为准；配置资源读取不代表集合／导入或原生 Office 兼容性已经验收。
+`scripts/test_hosted_media.py` 纳入 check/package，覆盖真实 HTTP 交付、媒体事实、原批注计划、明确编译输入、冻结输出及 Trash 依赖。浏览器验收另存证据目录。实际通过范围和限制以候选验收记录为准；配置资源读取不代表原生 Office 兼容性已经验收。
+
+## 获权资源集合与原件导入
+
+部署者可配置 `resourceCollections.<id> = {owner, expectedOwner, lifecycle, title}`，绑定一个文件 ID、准确 NodeRef 与 live／trash 生命周期。用户的同名 `resourceCollections` 分别授予 `{read, download, import}`，省略拒绝；download 要求 read，import 可以独立于资源 read 和正文权限，Trash 不允许 import。这是预先授予该准确所有者当前和未来已登记资源的集合权限，导入不会修改策略。原生 `weftext.resources.json` 仍是成员与位置的唯一依据，不扫描同目录文件补齐资源。
+
+尚未创建的 DOCX 导入槽位可用互斥的 `fromImportSlot: true` 代替 `expectedOwner`，所属文件须是 live、importable 的原槽位。导入前集合不可用；导入后 Core 从已提交的原 ImportDocx/CreateTree 计划、原出生和实际文件身份推导准确所有者，仍核当前声明和位置。当前路径上的任意新笔记、复制标记或同字节替换不能借用这个预授权。该模式只覆盖原导入路径；经 Core 移动并改部署路径时须显式配置 `expectedOwner`。管理员可提前将该集合的 `/*` 放入导入文件的 inputs，另授集合 read／download，使原生预览与 Office 使用真实导入资源；这不会在导入时补赋权限。
+
+`GET media` 的 `collections` 只列至少一项获权集合；其中 `status` 和总 coverage 如实报告不可用项。可读成员使用 `collectionId/ResourceId` 作为托管 asset ID，稳定 ResourceRef 保持原格式。Core 先核准确所有者、当前已接纳的 manifest 与资源出生，再读取明确选中的叶；未知、重复或未接纳记录保持原件并计为不完整。manifest 上限 2 MiB／64 条，集合依据计入原 32 MiB 消费预算。已提交 manifest 被删除或外部修改不能伪装成新空集合；真正从未初始化的空集合只产生只读的缺席见证，不能当成持久写依据。
+
+`media/import/prepare|commit|operation|settle` 只接收集合 ID、文件名、本次上传字节和原 operationId／planId。原件至多 16 MiB，路由 JSON 限额 24 MiB。prepare 展示本次原件的名称、长度和实际媒体事实，复用原 Core ImportResource 计划；明确 commit 才以 create-only 方式同时安装原件和登记。原完整请求先留在浏览器，再发送准备；丢响应或重启查询同一编号，改意图不能重用编号，明确结束未知请求持久阻止迟到提交。原预览有效期 15 分钟；所有者、部署绑定或授权代次变化使旧计划不可提交，重新授权不复活它。import-only 用户可取得自己原操作产生的引用，但不能借回执读取集合或其他原件。
+
+`files.<id>.inputs` 与 `styleInputs` 可明确选择单个成员或 `collectionId/*`。每次执行冻结实际成员和原集合版本，逐项校验资源 read；用于 Office 的原资源还须 download。`*` 遇到未识别成员不能报告完整编译，静态字段 Query 不展开无关集合。预览、语义 Query、校对与样式共用这一捕获；成员或已接纳 manifest 版本变化会拒绝旧执行／旧校对计划。已生成 Office 工件仍交付原字节，只检查原授权和配置，不扩展后来成员。准确 Trash 集合只读，已登记但确实缺失的输入令语义 Query 部分可用。`scripts/test_hosted_resource_collections.py` 纳入 check/package；具体测试结果沿用候选记录。
 
 ## 批注、校对与建议事务
 
@@ -196,6 +208,6 @@ WebUI“Office 导入与输出”提供 DOCX 正文／批注／待审文字修�
 
 `GET office`、`POST office/template` 与 `office/export/prepare|status|confirm|chunk` 都在 `/api/hosted/` 下。原 requestId 和完整冻结请求先保留在本标签页，然后准备工件；确认须匹配原 digest，并明确接受该工件报告的损失。Core 持久登记原 ID 与请求指纹；重复请求返回原工件，换内容冲突。服务重启、到期或撤权丢弃临时工件，原 ID 只返回 expired，不重新生成当前内容。未知原请求可查 notRegistered；失败原请求保持失败。生成完成前检查原权限代次、配置绑定、正文和依赖快照，每个下载块再次检查全部交付权限。确认后的准确字节不因后续编辑改变；浏览器收齐后验证长度和 SHA-256 才交付。
 
-DOCX 导入要求管理员事先配置一个 `importable: true`、`editable: true` 的空槽位，路径固定为 `PARENT/NAME/document/document.typ`（PARENT 可为空，即库根）；例如 `Imported/document/document.typ`。用户须有该对象 read、write 和 office.import。客户端只选择对象 ID，不能传服务端路径。`office/import-targets` 列出获权槽位和是否尚未占用；父目录仍须满足原 Core 的纳管条件。`office/import/prepare|commit|operation|settle` 复用原 create-only ImportDocx 计划，创建完整原生树、转换正文和批注，并保留 DOCX 原件及图片。准备的安全损失说明与原计划持久保留，确认才能提交；同一原操作重启后继续核对，不覆盖已占用目录。结束未安装的原请求会阻止迟到提交。未知成员和恢复语义沿用 Core，不另造导入 writer。导入生成的原件、图片或其他资源不会自动变成托管 inputs 或获得读取／输出／下载权限，部署者仍须逐项配置；当前不提供客户端自动授权。
+DOCX 导入要求管理员事先配置一个 `importable: true`、`editable: true` 的空槽位，路径固定为 `PARENT/NAME/document/document.typ`（PARENT 可为空，即库根）；例如 `Imported/document/document.typ`。用户须有该对象 read、write 和 office.import。客户端只选择对象 ID，不能传服务端路径。`office/import-targets` 列出获权槽位和是否尚未占用；父目录仍须满足原 Core 的纳管条件。`office/import/prepare|commit|operation|settle` 复用原 create-only ImportDocx 计划，创建完整原生树、转换正文和批注，并保留 DOCX 原件及图片。准备的安全损失说明与原计划持久保留，确认才能提交；同一原操作重启后继续核对，不覆盖已占用目录。结束未安装的原请求会阻止迟到提交。未知成员和恢复语义沿用 Core，不另造导入 writer。导入生成的资源默认不获得读取／输出／下载权限；部署者可逐项配置，或通过上面的 fromImportSlot 集合提前授予明确资源权限并选为 inputs。客户端不能借导入修改策略。
 
 Office 输出最多 32 件、单用户 8 件，输入／工件分别最多 32 MiB，保留工件与预览合计 64 MiB，15 分钟到期；每块下载最多 64 KiB。模板和 DOCX 原件各最多 16 MiB，对应路由 JSON 限额 24 MiB，其他托管路由保持 3 MiB。冻结 Query 最多 32 份、单用户 8 份、数据与限定 Schema 合计 32 MiB，至多保留 15 分钟。达到容量时只淘汰同一用户最旧结果，旧 queryId 明确过期，既有已准备 Office 工件仍保留原字节；不淘汰其他用户结果或自动重跑。新结果自身或其他用户占额使其无法容纳时，拒绝新结果并保留已有缓存。浏览器存储容量可能更小；写入失败会保留本页原件和输入、提示复制／重新选择，并阻止无法保留原编号的新请求或提交。`test_hosted_office.py` 使用真实转换和 HTTP 校验独立授权、原工件、审阅交换、限定 Schema、重启、原导入及撤权；`test_hosted_office_browser.mjs EXE NEW_EVIDENCE_DIRECTORY` 是后台浏览器入口。真实 Word／WPS 等兼容性按候选记录逐项验收，不由 HTTP 或 ZIP 检查替代。

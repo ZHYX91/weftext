@@ -463,6 +463,8 @@ pub(super) struct ExecutionAuthority {
     input_binding: String,
     #[serde(default)]
     resource_revisions: BTreeMap<String, Option<String>>,
+    #[serde(default)]
+    collection_revisions: BTreeMap<String, Option<String>>,
 }
 enum StyleEvidence {
     Disabled {
@@ -512,6 +514,11 @@ pub(super) fn validate_execution_versions(
     authority: &ExecutionAuthority,
 ) -> Result<(), ApiError> {
     authorize_execution(inner, actor, authority)?;
+    for (id, revision) in &authority.collection_revisions {
+        if resource_collections::capture(inner, actor, id)?.revision != *revision {
+            return Err(changed());
+        }
+    }
     for (id, revision) in &authority.resource_revisions {
         if media::capture_input(inner, actor, id)?.revision != *revision {
             return Err(changed());
@@ -538,7 +545,18 @@ impl Environment {
             }
             self.authority.resource_revisions.insert(id, revision);
         }
-        self.authority.inputs.extend(captured.ids().iter().cloned());
+        for (id, revision) in captured.collection_revisions() {
+            if self
+                .authority
+                .collection_revisions
+                .get(&id)
+                .is_some_and(|old| old != &revision)
+            {
+                return Err(changed());
+            }
+            self.authority.collection_revisions.insert(id, revision);
+        }
+        self.authority.inputs.extend(captured.authority_ids());
         self.authority.input_binding = inputs::binding_hash(inner, &self.authority.inputs)?;
         self.bytes = self.bytes.saturating_add(captured.retained_bytes());
         if self.bytes > MAX_CACHE {
@@ -714,7 +732,7 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
         .retained_bytes()
         .saturating_add(doc.source.len())
         .saturating_add(captured.retained_bytes());
-    for id in &input_ids {
+    for id in captured.ids() {
         let (path, content, _) = captured.entry(id)?.ok_or_else(changed)?;
         bytes = bytes.saturating_add(content.len().div_ceil(3) * 4);
         if bytes > MAX_CACHE {
@@ -730,9 +748,10 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
     }
     Ok(Environment {
         authority: ExecutionAuthority {
-            input_binding: inputs::binding_hash(inner, &input_ids)?,
+            input_binding: inputs::binding_hash(inner, &captured.authority_ids())?,
             resource_revisions: captured.revisions(),
-            inputs: input_ids,
+            collection_revisions: captured.collection_revisions(),
+            inputs: captured.authority_ids(),
             style_used: true,
             config_hash,
         },

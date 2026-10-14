@@ -40,6 +40,7 @@ struct Ticket {
     purpose: Purpose,
     binding: String,
     resource: Arc<QualifiedResource>,
+    collection: Option<Arc<weftext_core::QualifiedResourceCollection>>,
     descriptor: Value,
     expires: Instant,
 }
@@ -126,6 +127,11 @@ pub(super) fn input_access(
     asset: &str,
     download: bool,
 ) -> Result<(), ApiError> {
+    if let Some(collection) = resource_collections::selection(&inner.config, asset)
+        .or_else(|| resource_collections::split_member(&inner.config, asset).map(|(c, _)| c))
+    {
+        return resource_collections::input_access(inner, actor, collection, download);
+    }
     if !inner.config.resources.contains_key(asset) {
         return Err(unavailable());
     }
@@ -138,6 +144,72 @@ pub(super) fn input_access(
         .filter(|r| r.read && (!download || r.download))
         .map(|_| ())
         .ok_or_else(unavailable)
+}
+pub(super) fn is_asset(config: &Config, id: &str) -> bool {
+    config.resources.contains_key(id) || resource_collections::split_member(config, id).is_some()
+}
+pub(super) fn valid_input(config: &Config, id: &str) -> bool {
+    is_asset(config, id) || resource_collections::selection(config, id).is_some()
+}
+/// Resolve a single registered member. Never derives a locator from a client UUID.
+pub(super) fn resolve_asset(
+    inner: &HostedInner,
+    actor: &str,
+    asset: &str,
+) -> Result<Resource, ApiError> {
+    resolve_with_collection(inner, actor, asset).map(|(r, _)| r)
+}
+type ResolvedAsset = (
+    Resource,
+    Option<Arc<weftext_core::QualifiedResourceCollection>>,
+);
+fn resolve_with_collection(
+    inner: &HostedInner,
+    actor: &str,
+    asset: &str,
+) -> Result<ResolvedAsset, ApiError> {
+    input_access(inner, actor, asset, false)?;
+    if let Some(configured) = inner.config.resources.get(asset) {
+        return Ok((configured.clone(), None));
+    }
+    let (collection, member) =
+        resource_collections::split_member(&inner.config, asset).ok_or_else(unavailable)?;
+    let captured = Arc::new(resource_collections::capture(inner, actor, collection)?);
+    let mut matching = captured
+        .entries
+        .iter()
+        .filter(|entry| entry.resource_ref.rsplit('/').next() == Some(member));
+    let entry = matching.next().ok_or_else(unavailable)?;
+    if matching.next().is_some() {
+        return Err(unavailable());
+    }
+    let c = &inner.config.resource_collections[collection];
+    let owner = &inner.config.files[&c.owner];
+    let directory = std::path::Path::new(&owner.path)
+        .parent()
+        .ok_or_else(changed)?;
+    let path = directory
+        .join(&entry.relative_path)
+        .to_string_lossy()
+        .into_owned();
+    let title = std::path::Path::new(&entry.relative_path)
+        .file_name()
+        .and_then(|p| p.to_str())
+        .ok_or_else(changed)?
+        .to_owned();
+    inner
+        .core
+        .validate_resource_collection_witness(&inner.config.root, &captured.witness)
+        .map_err(|_| changed())?;
+    let resource = Resource {
+        owner: c.owner.clone(),
+        expected_owner: captured.owner.clone(),
+        path,
+        title,
+        reference: entry.resource_ref.clone(),
+        lifecycle: c.lifecycle.clone(),
+    };
+    Ok((resource, Some(captured)))
 }
 fn changed() -> ApiError {
     ApiError::new(
@@ -157,31 +229,29 @@ pub(super) fn binding_hash(
     inner: &HostedInner,
     assets: &BTreeSet<String>,
 ) -> Result<String, ApiError> {
-    let resources = assets
-        .iter()
-        .map(|id| {
-            inner
-                .config
-                .resources
-                .get(id)
-                .map(|r| (id, r))
-                .ok_or_else(unavailable)
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
-    let owners = resources
-        .values()
-        .map(|r| {
-            inner
-                .config
-                .files
-                .get(&r.owner)
-                .map(|f| (&r.owner, f))
-                .ok_or_else(unavailable)
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let mut resources = BTreeMap::new();
+    let mut collections = BTreeMap::new();
+    let mut owners = BTreeMap::new();
+    for id in assets {
+        let owner = if let Some(r) = inner.config.resources.get(id) {
+            resources.insert(id, r);
+            &r.owner
+        } else {
+            let collection = resource_collections::selection(&inner.config, id)
+                .or_else(|| resource_collections::split_member(&inner.config, id).map(|(c, _)| c))
+                .ok_or_else(unavailable)?;
+            let c = &inner.config.resource_collections[collection];
+            collections.insert(id, c);
+            &c.owner
+        };
+        owners.insert(
+            owner,
+            inner.config.files.get(owner).ok_or_else(unavailable)?,
+        );
+    }
     Ok(digest(
         &serde_json::to_vec(
-            &json!({"root":inner.config.root,"resources":resources,"owners":owners}),
+            &json!({"root":inner.config.root,"resources":resources,"collections":collections,"owners":owners}),
         )
         .map_err(|_| changed())?,
     ))
@@ -192,7 +262,7 @@ pub(super) fn capture_input(
     asset: &str,
 ) -> Result<QualifiedResource, ApiError> {
     input_access(inner, actor, asset, false)?;
-    let r = inner.config.resources.get(asset).ok_or_else(unavailable)?;
+    let r = resolve_asset(inner, actor, asset)?;
     let owner = inner.config.files.get(&r.owner).ok_or_else(unavailable)?;
     inner
         .core
@@ -217,7 +287,7 @@ pub(super) fn exact(
     if revision.is_empty() || revision.len() > 100 {
         return Err(changed());
     }
-    let r = inner.config.resources.get(asset).ok_or_else(unavailable)?;
+    let r = resolve_asset(inner, actor, asset)?;
     let owner = inner.config.files.get(&r.owner).ok_or_else(unavailable)?;
     inner
         .core
@@ -243,7 +313,7 @@ pub(super) fn validate_original(
         .core
         .validate_resource_witness(&inner.config.root, &original.witness)
         .map_err(|_| changed())?;
-    let configured = inner.config.resources.get(asset).ok_or_else(unavailable)?;
+    let configured = resolve_asset(inner, actor, asset)?;
     if configured.expected_owner != original.owner
         || configured.reference != original.resource_ref
         || configured.lifecycle != original.lifecycle
@@ -251,14 +321,6 @@ pub(super) fn validate_original(
         return Err(changed());
     }
     Ok(())
-}
-pub(super) fn describe(
-    inner: &HostedInner,
-    actor: &str,
-    asset: &str,
-    resource: &QualifiedResource,
-) -> Result<Value, ApiError> {
-    profile(inner, actor, asset, resource).map(|(value, _)| value)
 }
 fn profile(
     inner: &HostedInner,
@@ -273,13 +335,16 @@ fn profile(
     if resource.witness.retained_bytes() > MAX_BYTES {
         return Err(ApiError::bad("资源及其准确依据超过 32 MiB 交付预算"));
     }
-    let config = &inner.config.resources[asset];
+    let config = resolve_asset(inner, actor, asset)?;
     let (metadata, content_type) = crate::media_api::inspect_media(resource.bytes());
     let ready = resource.revision.as_ref().is_some_and(|rev| {
         crate::media_api::metadata_facts(&metadata, &resource.resource_ref, rev).is_some()
     });
-    let download = inner.policy.users[actor].resources[asset].download;
-    let descriptor = json!({"asset":asset,"resourceId":asset,"owner":config.owner,"resource":resource.resource_ref,"name":config.title,"title":config.title,"revision":resource.revision,"bytes":resource.bytes().len(),"contentType":content_type,"metadata":metadata,"annotationReady":ready,"wholeAnnotationReady":resource.revision.is_some(),"currentness":if resource.revision.is_some(){"accepted"}else{"observed"},"lifecycle":resource.lifecycle,"download":download,"status":"ready"});
+    let download = input_access(inner, actor, asset, true).is_ok();
+    let mut descriptor = json!({"asset":asset,"resourceId":asset,"owner":config.owner,"resource":resource.resource_ref,"name":config.title,"title":config.title,"revision":resource.revision,"bytes":resource.bytes().len(),"contentType":content_type,"metadata":metadata,"annotationReady":ready,"wholeAnnotationReady":resource.revision.is_some(),"currentness":if resource.revision.is_some(){"accepted"}else{"observed"},"lifecycle":resource.lifecycle,"download":download,"status":"ready"});
+    if let Some((collection, _)) = resource_collections::split_member(&inner.config, asset) {
+        descriptor["collection"] = collection.into();
+    }
     if resource.witness.retained_bytes().saturating_add(
         serde_json::to_vec(&descriptor)
             .map_err(|_| changed())?
@@ -295,11 +360,23 @@ pub(super) struct Context {
     pub(super) resource: Arc<QualifiedResource>,
     pub(super) metadata: crate::media_api::ResourceMetadata,
     pub(super) descriptor: Value,
+    pub(super) collection: Option<Arc<weftext_core::QualifiedResourceCollection>>,
 }
 impl Context {
     pub(super) fn retained_bytes(&self) -> usize {
         self.resource.witness.retained_bytes()
+            + self.collection.as_ref().map_or(0, |c| c.retained_bytes())
             + serde_json::to_vec(&(&self.metadata, &self.descriptor)).map_or(MAX_BYTES, |v| v.len())
+    }
+    pub(super) fn validate(&self, inner: &HostedInner, actor: &str) -> Result<(), ApiError> {
+        validate_original(inner, actor, &self.asset, &self.resource)?;
+        if let Some(c) = &self.collection {
+            inner
+                .core
+                .validate_resource_collection_witness(&inner.config.root, &c.witness)
+                .map_err(|_| changed())?;
+        }
+        Ok(())
     }
 }
 pub(super) fn context(
@@ -308,11 +385,32 @@ pub(super) fn context(
     asset: &str,
     revision: Option<&str>,
 ) -> Result<Context, ApiError> {
-    let resource = Arc::new(match revision {
-        Some(rev) => exact(inner, actor, asset, rev)?,
-        None => capture_input(inner, actor, asset)?,
-    });
-    if resource.witness.retained_bytes() > MAX_BYTES {
+    let (configured, collection) = resolve_with_collection(inner, actor, asset)?;
+    let owner = inner
+        .config
+        .files
+        .get(&configured.owner)
+        .ok_or_else(unavailable)?;
+    let resource = Arc::new(
+        inner
+            .core
+            .qualified_resource_at(
+                &inner.config.root,
+                &inner.config.root.join(&owner.path),
+                &configured.expected_owner,
+                &configured.reference,
+                &inner.config.root.join(&configured.path),
+                &configured.lifecycle,
+                revision,
+            )
+            .map_err(|_| changed())?,
+    );
+    if resource
+        .witness
+        .retained_bytes()
+        .saturating_add(collection.as_ref().map_or(0, |c| c.retained_bytes()))
+        > MAX_BYTES
+    {
         return Err(ApiError::bad("资源目标依据超过 32 MiB 预算"));
     }
     let (descriptor, metadata) = profile(inner, actor, asset, &resource)?;
@@ -322,29 +420,41 @@ pub(super) fn context(
         resource,
         metadata,
         descriptor,
+        collection,
     };
     if context.retained_bytes() > MAX_BYTES {
         return Err(ApiError::bad("资源目标依据超过 32 MiB 预算"));
     }
+    context.validate(inner, actor)?;
     Ok(context)
 }
 pub(super) fn expire_revoked(inner: &mut HostedInner) {
     let now = Instant::now();
     let policy = &inner.policy;
+    let config = &inner.config;
     inner.media.tickets.retain(|_, t| {
         t.expires > now
             && policy.users.get(&t.actor).is_some_and(|u| {
                 u.enabled
                     && u.epoch == t.epoch
-                    && u.resources
-                        .get(&t.asset)
-                        .is_some_and(|r| r.read && (t.purpose == Purpose::View || r.download))
+                    && if let Some((collection, _)) =
+                        resource_collections::split_member(config, &t.asset)
+                    {
+                        u.resource_collections
+                            .get(collection)
+                            .is_some_and(|r| r.read && (t.purpose == Purpose::View || r.download))
+                    } else {
+                        u.resources
+                            .get(&t.asset)
+                            .is_some_and(|r| r.read && (t.purpose == Purpose::View || r.download))
+                    }
             })
     });
 }
 fn retain(inner: &mut HostedInner, ticket: Ticket) -> Result<String, ApiError> {
     expire_revoked(inner);
     let bytes = ticket.resource.witness.retained_bytes()
+        + ticket.collection.as_ref().map_or(0, |c| c.retained_bytes())
         + serde_json::to_vec(&ticket.descriptor)
             .map_err(|_| changed())?
             .len();
@@ -359,6 +469,7 @@ fn retain(inner: &mut HostedInner, ticket: Ticket) -> Result<String, ApiError> {
             (
                 id.clone(),
                 t.resource.witness.retained_bytes()
+                    + t.collection.as_ref().map_or(0, |c| c.retained_bytes())
                     + serde_json::to_vec(&t.descriptor).map_or(MAX_BYTES, |v| v.len()),
             )
         })
@@ -397,21 +508,42 @@ fn retain(inner: &mut HostedInner, ticket: Ticket) -> Result<String, ApiError> {
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;let mut resources=vec![];let mut bytes=0usize;let mut complete=true;
-        for (asset,config) in &inner.config.resources {
-            if input_access(inner,&actor,asset,false).is_err() {continue;}
-            let captured=capture_input(inner,&actor,asset);
-            let row=match captured {Ok(r) if bytes.saturating_add(r.witness.retained_bytes())<=MAX_BYTES=>{
-                let ready=describe(inner,&actor,asset,&r).and_then(|row| {
-                    validate_original(inner,&actor,asset,&r)?;
-                    let charge=r.witness.retained_bytes()+serde_json::to_vec(&row).map_err(|_|changed())?.len();
-                    if bytes.saturating_add(charge)>MAX_BYTES {return Err(ApiError::bad("资源目录超过 32 MiB 读取预算"));}
-                    bytes+=charge;Ok(row)
-                });
-                match ready {Ok(row)=>row,Err(_)=>{complete=false;json!({"asset":asset,"owner":config.owner,"name":config.title,"title":config.title,"lifecycle":config.lifecycle,"status":"unavailable"})}}
-            },_=>{complete=false;json!({"asset":asset,"owner":config.owner,"name":config.title,"title":config.title,"lifecycle":config.lifecycle,"status":"unavailable"})}};
+        let mut assets=inner.config.resources.keys().filter(|id|input_access(inner,&actor,id,false).is_ok()).cloned().collect::<Vec<_>>();
+        let mut collections=vec![];let mut witnesses=vec![];
+        for (id,c) in &inner.config.resource_collections {
+            let Some(rights)=inner.policy.users[&actor].resource_collections.get(id).filter(|r|r.read || r.r#import) else {continue;};
+            let captured=resource_collections::qualify(inner,id);
+            let ready=match captured {Ok(captured) if bytes.saturating_add(captured.retained_bytes())<=MAX_BYTES=>{
+                bytes+=captured.retained_bytes();
+                if rights.read {
+                    if captured.unrecognized_entries>0 {complete=false;}
+                    for e in &captured.entries {assets.push(format!("{id}/{}",e.resource_ref.rsplit('/').next().ok_or_else(changed)?));}
+                }
+                witnesses.push((id.clone(),Arc::new(captured)));true
+            },_=>{complete=false;false}};
+            collections.push(json!({"collection":id,"owner":c.owner,"title":resource_collections::title(inner,id)?,"lifecycle":c.lifecycle,"read":rights.read,"download":rights.download,"import":rights.r#import,"status":if ready{"ready"}else{"unavailable"}}));
+        }
+        for asset in assets {
+            let config=resolve_asset(inner,&actor,&asset);
+            let ready=context(inner,&actor,&asset,None).and_then(|context| {
+                if bytes.saturating_add(context.retained_bytes())>MAX_BYTES {return Err(ApiError::bad("资源目录超过 32 MiB 读取预算"));}
+                bytes+=context.retained_bytes();context.validate(inner,&actor)?;Ok(context.descriptor)
+            });
+            let row=match ready {Ok(row)=>row,Err(_)=>{complete=false;
+                let mut row=json!({"asset":asset,"status":"unavailable"});
+                if let Ok(c)=config {row["owner"]=c.owner.into();row["name"]=c.title.clone().into();row["title"]=c.title.into();row["lifecycle"]=c.lifecycle.into();}
+                if let Some((c,_))=resource_collections::split_member(&inner.config,&asset) {row["collection"]=c.into();}
+                row}};
             resources.push(row);
         }
-        Ok(json!({"resources":resources,"coverage":if complete{"complete"}else{"partial"},"scope":"configuredAuthorizedResources"}))
+        for (id,c) in witnesses {
+            if inner.core.validate_resource_collection_witness(&inner.config.root,&c.witness).is_err() {
+                complete=false;
+                for row in &mut collections {if row["collection"]==id {row["status"]="unavailable".into();}}
+                resources.retain(|row|row["collection"]!=id);
+            }
+        }
+        Ok(json!({"resources":resources,"collections":collections,"coverage":if complete{"complete"}else{"partial"},"scope":"configuredAuthorizedResources"}))
     }).await?))
 }
 async fn prepare_delivery(
@@ -424,12 +556,10 @@ async fn prepare_delivery(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
             input_access(inner, &actor, &req.asset, purpose == Purpose::Download)?;
-            let resource = Arc::new(exact(inner, &actor, &req.asset, &req.revision)?);
-            if resource.witness.retained_bytes() > MAX_BYTES {
-                return Err(ApiError::bad("资源及其准确依据超过 32 MiB 交付预算"));
-            }
-            let mut descriptor = describe(inner, &actor, &req.asset, &resource)?;
-            validate_original(inner, &actor, &req.asset, &resource)?;
+            let context = context(inner, &actor, &req.asset, Some(&req.revision))?;
+            context.validate(inner, &actor)?;
+            let resource = context.resource;
+            let mut descriptor = context.descriptor;
             descriptor["purpose"] = value(purpose)?;
             descriptor["sha256"] = resource.content_hash.clone().into();
             descriptor["expiresInMs"] = 900000.into();
@@ -440,6 +570,7 @@ async fn prepare_delivery(
                 asset: req.asset,
                 purpose,
                 resource,
+                collection: context.collection,
                 descriptor: descriptor.clone(),
                 expires: Instant::now() + TTL,
             };
@@ -470,6 +601,7 @@ async fn deliver(state: HostedState, auth: Auth, req: ChunkRequest, purpose: Pur
         input_access(inner,&actor,&t.asset,purpose==Purpose::Download)?;
         if t.epoch!=inner.actor_generation(&actor) || binding_hash(inner,&BTreeSet::from([t.asset.clone()]))?!=t.binding {return Err(gone());}
         validate_original(inner,&actor,&t.asset,&t.resource).map_err(|_|gone())?;
+        if let Some(c)=&t.collection {inner.core.validate_resource_collection_witness(&inner.config.root,&c.witness).map_err(|_|gone())?;}
         let original=t.resource.bytes();if req.offset>original.len(){return Err(ApiError::bad("偏移超出原资源"));}
         let end=req.offset.saturating_add(CHUNK).min(original.len());let bytes=&original[req.offset..end];
         Ok(json!({"ticket":req.ticket,"purpose":purpose,"bytesBase64":base64::engine::general_purpose::STANDARD.encode(bytes),"offset":req.offset,"length":bytes.len(),"total":original.len(),"sha256":t.resource.content_hash,"done":end==original.len()}))
@@ -498,18 +630,45 @@ async fn resolve(
         let actor=inner.actor(&auth)?;
         let base=req.reference.split_once('#').map_or(req.reference.as_str(),|(base,_)|base);
         if req.reference.len()>2048 || split_reference(base).is_none(){return Err(ApiError::bad("请使用完整的稳定资源引用"));}
-        let mut matching=inner.config.resources.iter().filter(|(id,r)|r.reference==base && input_access(inner,&actor,id,false).is_ok());
-        let (asset,config)=matching.next().ok_or_else(unavailable)?;if matching.next().is_some(){return Err(unavailable());}
-        let resource=match req.revision.as_deref(){Some(revision)=>exact(inner,&actor,asset,revision)?,None=>capture_input(inner,&actor,asset)?};
-        let revision=resource.revision.clone().ok_or_else(changed)?;
+        let mut candidates=inner.config.resources.iter().filter(|(id,r)|r.reference==base && input_access(inner,&actor,id,false).is_ok()).map(|(id,_)|id.clone()).collect::<BTreeSet<_>>();
+        let mut bytes=0usize;
+        for (id,c) in &inner.config.resource_collections {
+            if c.expected_owner.as_ref().is_some_and(|owner|owner.workspace_id!=split_reference(base).unwrap().0) || resource_collections::input_access(inner,&actor,id,false).is_err(){continue;}
+            if let Ok(captured)=resource_collections::capture(inner,&actor,id) {
+                bytes=bytes.saturating_add(captured.retained_bytes());
+                if bytes>MAX_BYTES {return Err(ApiError::bad("资源解析准确依据超过 32 MiB 预算"));}
+                if let Some(e)=captured.entries.iter().find(|e|e.resource_ref==base) {candidates.insert(format!("{id}/{}",e.resource_ref.rsplit('/').next().unwrap()));}
+            }
+        }
+        // Multiple explicitly granted aliases of the same original object are
+        // useful. Prove equality, then choose a deterministic authorized alias;
+        // its independent download grant alone controls its delivery.
+        let mut selected:Option<Context>=None;let mut failure=None;
+        for candidate in candidates {
+            match context(inner,&actor,&candidate,req.revision.as_deref()) {
+                Ok(candidate)=>{
+                    bytes=bytes.saturating_add(candidate.retained_bytes());
+                    if bytes>MAX_BYTES {return Err(ApiError::bad("资源解析准确依据超过 32 MiB 预算"));}
+                    if let Some(previous)=&selected {
+                        if previous.resource.owner!=candidate.resource.owner || previous.resource.resource_ref!=candidate.resource.resource_ref
+                            || previous.resource.revision!=candidate.resource.revision || previous.resource.content_hash!=candidate.resource.content_hash
+                            || previous.resource.lifecycle!=candidate.resource.lifecycle {return Err(unavailable());}
+                        candidate.validate(inner,&actor)?;
+                    } else {selected=Some(candidate);}
+                },Err(error)=>failure=Some(error),
+            }
+        }
+        let context=selected.ok_or_else(||failure.unwrap_or_else(unavailable))?;
+        let config=resolve_asset(inner,&actor,&context.asset)?;
+        let resource=&context.resource;let revision=resource.revision.clone().ok_or_else(changed)?;
         let inventory=knowledge::InventorySnapshot {generation:String::new(),coverage:knowledge::Coverage::Complete,nodes:vec![],resources:vec![knowledge::ResourceSnapshot {key:resource.resource_ref.clone(),path:String::new(),revision_id:revision.clone()}]};
         let source=knowledge::NodeSnapshot {owner:config.expected_owner.clone(),path:String::new(),library_path:String::new(),revision_id:String::new(),source:String::new(),title:None,aliases:vec![],labels:vec![],labels_complete:false};
         let resolution=knowledge::resolve_link(&req.reference,&source,&inventory);
         if resolution.resource.as_deref()!=Some(&resource.resource_ref){return Err(unavailable());}
-        let (mut descriptor,metadata)=profile(inner,&actor,asset,&resource)?;
-        let fragment=crate::knowledge_api::resource_fragment_metadata(&metadata,resolution.fragment.as_deref());
+        let mut descriptor=context.descriptor.clone();
+        let fragment=crate::knowledge_api::resource_fragment_metadata(&context.metadata,resolution.fragment.as_deref());
         descriptor["viewerTarget"]=json!({"resource":resource.resource_ref,"revision":revision,"fragment":resolution.fragment,"resourceFragment":fragment});
-        validate_original(inner,&actor,asset,&resource)?;Ok(descriptor)
+        context.validate(inner,&actor)?;Ok(descriptor)
     }).await?))
 }
 
@@ -619,6 +778,141 @@ pub(super) mod tests {
             .unwrap();
         drop(inner);
         (temp, state, auth, revision)
+    }
+    #[cfg(windows)]
+    fn collection_alias(state: &HostedState, download: bool) -> String {
+        let mut inner = state.inner.lock().unwrap();
+        let r = inner.config.resources["Diagram"].clone();
+        let asset = format!("Owned/{}", r.reference.rsplit('/').next().unwrap());
+        inner.config.resource_collections.insert(
+            "Owned".into(),
+            resource_collections::Collection {
+                owner: r.owner,
+                expected_owner: Some(r.expected_owner),
+                from_import_slot: false,
+                lifecycle: r.lifecycle,
+                title: "公开集合".into(),
+            },
+        );
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .resource_collections
+            .insert(
+                "Owned".into(),
+                resource_collections::Rights {
+                    read: true,
+                    download,
+                    r#import: false,
+                },
+            );
+        asset
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn collection_alias_preserves_stable_ref_and_each_alias_download_grant() {
+        let (_temp, state, auth, revision) = fixture();
+        let asset = collection_alias(&state, true);
+        let reference = state.inner.lock().unwrap().config.resources["Diagram"]
+            .reference
+            .clone();
+        let selected = resolve(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Resolve {
+                reference,
+                revision: Some(revision.clone()),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(selected["asset"], "Diagram");
+        assert_eq!(selected["download"], false);
+        assert_eq!(
+            prepare_download(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(Read {
+                    asset: "Diagram".into(),
+                    revision: revision.clone()
+                })
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::NOT_FOUND
+        );
+        let allowed = prepare_download(
+            State(state.clone()),
+            Extension(auth),
+            Json(Read { asset, revision }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(allowed["collection"], "Owned");
+        assert_eq!(allowed["purpose"], "download");
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn collection_ticket_keeps_original_membership_and_import_only_catalog_hides_members() {
+        let (_temp, state, auth, revision) = fixture();
+        let asset = collection_alias(&state, false);
+        let delivered = read(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Read { asset, revision }),
+        )
+        .await
+        .unwrap()
+        .0;
+        let ticket = delivered["ticket"].as_str().unwrap().to_owned();
+        {
+            let mut inner = state.inner.lock().unwrap();
+            let root = inner.config.root.clone();
+            let op = uuid::Uuid::new_v4().to_string();
+            let plan = inner
+                .core
+                .prepare_import_resource(
+                    &root,
+                    root.join("Shared/Shared.typ"),
+                    "later.bin",
+                    b"later".to_vec(),
+                    &op,
+                )
+                .unwrap();
+            inner.core.execute_operation(&op, &plan.plan_id).unwrap();
+        }
+        assert_eq!(
+            view_chunk(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(ChunkRequest { ticket, offset: 0 })
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::GONE
+        );
+        {
+            let mut inner = state.inner.lock().unwrap();
+            let alice = inner.policy.users.get_mut("alice").unwrap();
+            alice.resources.clear();
+            alice.resource_collections.get_mut("Owned").unwrap().read = false;
+            alice
+                .resource_collections
+                .get_mut("Owned")
+                .unwrap()
+                .r#import = true;
+        }
+        let result = catalog(State(state), Extension(auth)).await.unwrap().0;
+        assert!(result["resources"].as_array().unwrap().is_empty());
+        assert_eq!(result["collections"][0]["import"], true);
+        assert!(!result.to_string().contains("later.bin"));
+        assert!(!result.to_string().contains("private-locator"));
     }
     #[cfg(windows)]
     async fn open_view(state: &HostedState, auth: &Auth, revision: &str) -> Value {

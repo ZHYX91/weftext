@@ -15,6 +15,7 @@ mod office_import;
 mod query;
 mod query_providers;
 mod query_scopes;
+mod resource_collections;
 mod review;
 mod sync_transport;
 use axum::Extension;
@@ -87,6 +88,8 @@ struct User {
     #[serde(default)]
     resources: BTreeMap<String, media::Rights>,
     #[serde(default)]
+    resource_collections: BTreeMap<String, resource_collections::Rights>,
+    #[serde(default)]
     sync_owner: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -115,6 +118,8 @@ struct Config {
     style_inputs: Vec<String>,
     #[serde(default)]
     resources: BTreeMap<String, media::Resource>,
+    #[serde(default)]
+    resource_collections: BTreeMap<String, resource_collections::Collection>,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -248,6 +253,11 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !resource_collections::valid_rights(config, &user.resource_collections) {
+            return Err(ApiError::bad(
+                "资源集合须明确配置；下载须具备读取权，Trash 集合不可导入",
+            ));
+        }
         if !media::valid_rights(config, &user.resources) {
             return Err(ApiError::bad(
                 "资源授权须引用明确配置的 asset；下载须同时具备读取权",
@@ -859,6 +869,7 @@ async fn update_policy(
                             && old.query_scopes == user.query_scopes
                             && old.library == user.library
                             && old.resources == user.resources
+                            && old.resource_collections == user.resource_collections
                             && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);
@@ -950,7 +961,7 @@ pub(super) async fn serve(
         || config
             .style_inputs
             .iter()
-            .any(|id| !config.files.contains_key(id) && !config.resources.contains_key(id))
+            .any(|id| !config.files.contains_key(id) && !media::valid_input(&config, id))
         || config.style_inputs.iter().collect::<BTreeSet<_>>().len() != config.style_inputs.len()
     {
         return Err("Invalid explicit style inputs".into());
@@ -980,14 +991,16 @@ pub(super) async fn serve(
         {
             return Err("Invalid configured resource".into());
         }
-        if file.inputs.iter().any(|i| {
-            (!config.files.contains_key(i) && !config.resources.contains_key(i)) || i == id
-        }) {
+        if file
+            .inputs
+            .iter()
+            .any(|i| (!config.files.contains_key(i) && !media::valid_input(&config, i)) || i == id)
+        {
             return Err("Invalid configured dependency".into());
         }
     }
     let mut references = BTreeSet::new();
-    if !media::valid_config(&config) {
+    if !media::valid_config(&config) || !resource_collections::valid_config(&config) {
         return Err("Invalid explicitly configured owned resource".into());
     }
     for (id, directory) in &config.directories {
@@ -1094,6 +1107,7 @@ pub(super) async fn serve(
         .merge(navigation::router())
         .merge(library::router())
         .merge(media::router())
+        .merge(resource_collections::router())
         .merge(query::router())
         .merge(definition::router())
         .merge(embedded_query::router())

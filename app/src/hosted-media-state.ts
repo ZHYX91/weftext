@@ -3,12 +3,13 @@ import type { MediaRegionInput } from "./knowledge-state";
 import type { ResourceOpenTarget } from "./media-selection";
 import { resourceOpenError, storedMediaSelection } from "./media-selection";
 import { validateMediaRegion } from "./knowledge-state";
+import type { HostedResourceCollection } from "./hosted-media-import-state";
 export { resourceCellReferences as mediaCellReferences } from "./media-selection";
 
 export type MediaPurpose = "view" | "download";
 export interface HostedMediaUnavailable { asset: string; owner: string; title: string; name: string; lifecycle: "live" | "trash"; status: "unavailable" }
 export interface HostedMediaDescriptor extends Omit<HostedMediaUnavailable, "status"> { status: "ready"; resource: string; revision: string; bytes: number; contentType: string; metadata: ResourceMetadata; annotationReady: boolean; wholeAnnotationReady: boolean; currentness: "accepted"; download: boolean }
-export interface HostedMediaCatalog { resources: (HostedMediaDescriptor | HostedMediaUnavailable)[]; coverage: "complete" | "partial"; scope: "configuredAuthorizedResources" }
+export interface HostedMediaCatalog { resources: (HostedMediaDescriptor | HostedMediaUnavailable)[]; collections?: HostedResourceCollection[]; coverage: "complete" | "partial"; scope: "configuredAuthorizedResources" }
 export interface HostedMediaResolved extends HostedMediaDescriptor { viewerTarget: ResourceOpenTarget & { fragment?: string; resourceFragment?: { status: "none" | "found" | "missing" | "unavailable"; pageIndex?: number } } }
 export interface HostedMediaTicket extends Omit<HostedMediaDescriptor, "download" | "status"> { ticket: string; purpose: MediaPurpose; sha256: string; expiresInMs: number }
 export interface HostedMediaChunk { ticket: string; purpose: MediaPurpose; bytesBase64: string; offset: number; length: number; total: number; sha256: string; done: boolean }

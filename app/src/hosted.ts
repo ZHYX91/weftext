@@ -363,7 +363,7 @@ el("download").onclick = () => void run(async () => {
 el("history").onclick = () => void history.open();
 el("copy-reference").onclick = () => void run(async () => { const selected = stableReference, epoch = requestEpoch; if (!selected || selected.sessionId !== doc?.sessionId) return; const latest = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || stableReference !== selected || latest.resource !== selected.resource || latest.reference !== selected.reference) return; await navigator.clipboard.writeText(latest.reference); if (epoch === requestEpoch) status("已复制当前获权稳定笔记链接。"); });
 window.addEventListener("offline",()=>status("连接中断，本页草稿仍保留；不会自动提交。"));
-window.addEventListener("beforeunload", e=>{if(library.hasPending || history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
+window.addEventListener("beforeunload", e=>{if(media.hasPending || library.hasPending || history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
 setInterval(()=>{
   if(!identity || busy) return;
   const old=identity, epoch=requestEpoch, credential=token;

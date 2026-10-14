@@ -233,6 +233,31 @@ pub(super) fn freeze(
     ApiError,
 > {
     inner.rights(actor, resource)?;
+    let selected = inner
+        .config
+        .files
+        .get(resource)
+        .ok_or_else(unavailable)?
+        .inputs
+        .clone();
+    let captured = inputs::capture(inner, actor, &selected)?;
+    freeze_with_inputs(inner, actor, resource, source, captured)
+}
+pub(super) fn freeze_with_inputs(
+    inner: &mut HostedInner,
+    actor: &str,
+    resource: &str,
+    source: &str,
+    captured_inputs: inputs::Captured,
+) -> Result<
+    (
+        WorkerRequest,
+        BTreeMap<String, String>,
+        library::Environment,
+    ),
+    ApiError,
+> {
+    inner.rights(actor, resource)?;
     writing_api::validate_source(source, None)?;
     let file = inner
         .config
@@ -240,7 +265,11 @@ pub(super) fn freeze(
         .get(resource)
         .ok_or_else(unavailable)?
         .clone();
-    let captured_inputs = inputs::capture(inner, actor, &file.inputs)?;
+    captured_inputs.validate(inner, actor)?;
+    // This entry only reuses an already frozen selection for this exact slot.
+    if !captured_inputs.matches_selection(&file.inputs) {
+        return Err(unavailable());
+    }
     let mut files = captured_inputs.files()?;
     let dependencies = files.iter().map(|(p, b)| (p.clone(), digest(b))).collect();
     files.insert(file.path.clone(), source.as_bytes().to_vec());

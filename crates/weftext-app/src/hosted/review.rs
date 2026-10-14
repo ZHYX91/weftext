@@ -113,6 +113,8 @@ struct MediaDecision {
     reference: String,
     revision: String,
     binding: String,
+    #[serde(default)]
+    collection_revision: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -334,17 +336,23 @@ fn authorize_media(
     d: &MediaDecision,
 ) -> Result<(), ApiError> {
     media::input_access(inner, actor, &d.asset, false)?;
-    let configured = inner
-        .config
-        .resources
-        .get(&d.asset)
-        .filter(|r| r.owner == owner && r.reference == d.reference && r.lifecycle == "live")
-        .ok_or_else(unavailable)?;
-    let _ = configured;
+    let configured = media::resolve_asset(inner, actor, &d.asset)?;
+    if configured.owner != owner
+        || configured.reference != d.reference
+        || configured.lifecycle != "live"
+    {
+        return Err(unavailable());
+    }
     if media::binding_hash(inner, &BTreeSet::from([d.asset.clone()]))? != d.binding {
         return Err(changed());
     }
     media::exact(inner, actor, &d.asset, &d.revision)?;
+    if let Some((collection, _)) = resource_collections::split_member(&inner.config, &d.asset)
+        && resource_collections::capture(inner, actor, collection)?.revision
+            != d.collection_revision
+    {
+        return Err(changed());
+    }
     Ok(())
 }
 fn media_target(
@@ -367,12 +375,10 @@ fn media_target(
         .as_ref()
         .filter(|m| m.asset == asset && m.resource.revision.as_deref() == Some(revision))
         .ok_or_else(changed)?;
-    let configured = inner
-        .config
-        .resources
-        .get(asset)
-        .filter(|r| r.owner == b.resource && r.lifecycle == "live")
-        .ok_or_else(unavailable)?;
+    let configured = media::resolve_asset(inner, actor, asset)?;
+    if configured.owner != b.resource || configured.lifecycle != "live" {
+        return Err(unavailable());
+    }
     if input
         .get("resource")
         .is_some_and(|r| r.as_str() != Some(configured.reference.as_str()))
@@ -381,7 +387,7 @@ fn media_target(
             "所选 asset 与原稳定资源引用不一致；未改写目标",
         ));
     }
-    media::validate_original(inner, actor, asset, &m.resource)?;
+    m.validate(inner, actor)?;
     let target = crate::knowledge_api::target_from_resource_metadata(
         input,
         &configured.reference,
@@ -393,9 +399,13 @@ fn media_target(
         reference: configured.reference.clone(),
         revision: revision.into(),
         binding: media::binding_hash(inner, &BTreeSet::from([asset.into()]))?,
+        collection_revision: m.collection.as_ref().and_then(|c| c.revision.clone()),
     };
     let mut witnesses = vec![];
     Core::merge_resource_witness(&mut witnesses, &m.resource.witness).map_err(core_error)?;
+    if let Some(c) = &m.collection {
+        Core::merge_resource_collection_witness(&mut witnesses, &c.witness).map_err(core_error)?;
+    }
     Ok((target, decision, witnesses))
 }
 fn rights_json(rights: &Rights) -> Value {
@@ -661,7 +671,7 @@ async fn read(
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?; let rights = access(inner, &actor, &req.resource)?; expire_revoked(inner);
-        if let Some(asset)=&req.asset {media::input_access(inner,&actor,asset,false)?;if !inner.config.resources.get(asset).is_some_and(|r|r.owner==req.resource){return Err(unavailable());}}
+        if let Some(asset)=&req.asset {let configured=media::resolve_asset(inner,&actor,asset)?;if configured.owner!=req.resource{return Err(unavailable());}}
         if inner.review.bases.len() >= 128 || inner.review.bases.values().filter(|b|b.actor==actor).count() >= 32 { return Err(ApiError::bad("批注依据已达上限，请稍后重新读取")); }
         let live=inner.config.files[&req.resource].lifecycle=="live";
         let mut b = capture(inner, &actor, &req.resource, live && (rights.read || (req.asset.is_none() && rights.annotations.target)))?;
@@ -670,7 +680,7 @@ async fn read(
         let mut media_unavailable=None;
         if let Some(asset)=&req.asset {
             media::input_access(inner,&actor,asset,false)?;
-            let configured=inner.config.resources.get(asset).filter(|r|r.owner==req.resource).ok_or_else(unavailable)?;
+            let configured=media::resolve_asset(inner,&actor,asset)?;if configured.owner!=req.resource {return Err(unavailable());}
             match media::context(inner,&actor,asset,None) {
                 Ok(context)=>b.media=Some(Arc::new(context)),
                 Err(error) if error.status==StatusCode::CONFLICT=>media_unavailable=Some(json!({"asset":asset,"owner":configured.owner,"title":configured.title,"name":configured.title,"status":"unavailable"})),
@@ -685,7 +695,7 @@ async fn read(
         let mut response = json!({"resource":req.resource,"basis":null,"annotations":[],"rights":rights_json(&rights),"editable":doc.is_ok()});
         if !live {response["rights"]["sourceRead"]=false.into();response["rights"]["sourceWrite"]=false.into();}
         if rights.read && let Some(node) = &b.node { response["sourceHash"] = json!(digest(node.source.as_bytes())); }
-        if let Some(m)=&b.media {media::validate_original(inner,&actor,&m.asset,&m.resource)?;response["media"]=m.descriptor.clone();}
+        if let Some(m)=&b.media {m.validate(inner,&actor)?;response["media"]=m.descriptor.clone();}
         if let Some(unavailable)=media_unavailable {response["media"]=unavailable;}
         match doc {
             Ok(doc) => {
@@ -1023,7 +1033,7 @@ async fn prepare(
         authorize(&rights,&needs)?;
         if media_selected && matches!(kind.as_str(),"annotationCreate"|"annotationReattach") {
             let asset=text(&req.intent["target"],"asset")?;media::input_access(inner,&actor,asset,false)?;
-            if !inner.config.resources.get(asset).is_some_and(|r|r.owner==req.resource && r.lifecycle=="live") {return Err(unavailable());}
+            let configured=media::resolve_asset(inner,&actor,asset)?;if configured.owner!=req.resource || configured.lifecycle!="live" {return Err(unavailable());}
         }
         if inner.config.files[&req.resource].lifecycle!="live" {return Err(unavailable());}
         let canonical=json!({"resource":req.resource,"basis":req.basis,"intent":req.intent});

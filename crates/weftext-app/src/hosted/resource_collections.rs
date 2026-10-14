@@ -1,0 +1,805 @@
+//! Explicit authority for an owner's current and future registered resources.
+//! The native manifest remains the only membership and locator authority.
+use super::*;
+use axum::extract::DefaultBodyLimit;
+use weftext_core::{
+    ActorFeatureStatus, OperationIntent, OperationRequest, QualifiedResourceCollection,
+};
+use weftext_knowledge::NodeRef;
+
+const MAX_BYTES: usize = 32 * 1024 * 1024;
+const MAX_UPLOAD: usize = 16 * 1024 * 1024;
+const TTL_MS: u64 = 900_000;
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct Collection {
+    pub(super) owner: String,
+    #[serde(default)]
+    pub(super) expected_owner: Option<NodeRef>,
+    #[serde(default)]
+    pub(super) from_import_slot: bool,
+    #[serde(default = "query_scopes::live")]
+    pub(super) lifecycle: String,
+    #[serde(default)]
+    pub(super) title: String,
+}
+#[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct Rights {
+    #[serde(default)]
+    pub(super) read: bool,
+    #[serde(default)]
+    pub(super) download: bool,
+    #[serde(default)]
+    pub(super) r#import: bool,
+}
+fn canonical_uuid(value: &str) -> bool {
+    uuid::Uuid::parse_str(value).is_ok_and(|id| id.to_string() == value)
+}
+pub(super) fn split_member<'a>(config: &Config, id: &'a str) -> Option<(&'a str, &'a str)> {
+    let (collection, member) = id.split_once('/')?;
+    (config.resource_collections.contains_key(collection) && canonical_uuid(member))
+        .then_some((collection, member))
+}
+pub(super) fn selection<'a>(config: &Config, id: &'a str) -> Option<&'a str> {
+    let collection = id.strip_suffix("/*")?;
+    config
+        .resource_collections
+        .contains_key(collection)
+        .then_some(collection)
+}
+pub(super) fn valid_config(config: &Config) -> bool {
+    config.resource_collections.len() <= 64
+        && config.resource_collections.iter().all(|(id, c)| {
+            valid_id(id)
+                && !config.files.contains_key(id)
+                && !config.resources.contains_key(id)
+                && (c.expected_owner.is_some() != c.from_import_slot)
+                && c.expected_owner.as_ref().is_none_or(|owner| {
+                    canonical_uuid(&owner.workspace_id) && canonical_uuid(&owner.node_id)
+                })
+                && c.title.len() <= 500
+                && matches!(c.lifecycle.as_str(), "live" | "trash")
+                && config.files.get(&c.owner).is_some_and(|f| {
+                    f.lifecycle == c.lifecycle
+                        && if let Some(expected) = &c.expected_owner {
+                            f.expected_node.as_ref().is_none_or(|n| n == expected)
+                        } else {
+                            f.importable && f.lifecycle == "live" && f.expected_node.is_none()
+                        }
+                })
+        })
+}
+pub(super) fn valid_rights(config: &Config, rights: &BTreeMap<String, Rights>) -> bool {
+    rights.len() <= 64
+        && rights.iter().all(|(id, r)| {
+            config
+                .resource_collections
+                .get(id)
+                .is_some_and(|c| (!r.download || r.read) && (!r.r#import || c.lifecycle == "live"))
+        })
+}
+fn access<'a>(
+    inner: &'a HostedInner,
+    actor: &str,
+    collection: &str,
+) -> Result<(&'a Collection, &'a Rights), ApiError> {
+    let c = inner
+        .config
+        .resource_collections
+        .get(collection)
+        .ok_or_else(unavailable)?;
+    let r = inner
+        .policy
+        .users
+        .get(actor)
+        .filter(|u| u.enabled)
+        .and_then(|u| u.resource_collections.get(collection))
+        .ok_or_else(unavailable)?;
+    Ok((c, r))
+}
+/// Policy only: frozen outputs must not expand or read a newer manifest.
+pub(super) fn input_access(
+    inner: &HostedInner,
+    actor: &str,
+    collection: &str,
+    download: bool,
+) -> Result<(), ApiError> {
+    let (_, r) = access(inner, actor, collection)?;
+    if !r.read || (download && !r.download) {
+        return Err(unavailable());
+    }
+    Ok(())
+}
+fn changed() -> ApiError {
+    ApiError::new(
+        StatusCode::CONFLICT,
+        "resourceCollectionChanged",
+        "资源集合、准确登记版本或原导入计划已变化；请保留原件并核对原操作。",
+    )
+}
+fn core_error(_: CoreError) -> ApiError {
+    changed()
+}
+/// The special empty Office slot is tied to its original committed producer,
+/// never to whichever author declaration happens to occupy that path now.
+pub(super) fn effective_owner(inner: &HostedInner, collection: &str) -> Result<NodeRef, ApiError> {
+    let c = inner
+        .config
+        .resource_collections
+        .get(collection)
+        .ok_or_else(unavailable)?;
+    if let Some(expected) = &c.expected_owner {
+        return Ok(expected.clone());
+    }
+    if !c.from_import_slot {
+        return Err(unavailable());
+    }
+    let owner = inner
+        .config
+        .files
+        .get(&c.owner)
+        .filter(|f| f.importable && f.lifecycle == "live")
+        .ok_or_else(unavailable)?;
+    inner
+        .core
+        .qualified_imported_query_node_at(&inner.config.root, &inner.config.root.join(&owner.path))
+        .map(|node| node.owner)
+        .map_err(core_error)
+}
+pub(super) fn qualify(
+    inner: &HostedInner,
+    collection: &str,
+) -> Result<QualifiedResourceCollection, ApiError> {
+    let c = inner
+        .config
+        .resource_collections
+        .get(collection)
+        .ok_or_else(unavailable)?;
+    let owner = inner.config.files.get(&c.owner).ok_or_else(unavailable)?;
+    let expected = effective_owner(inner, collection)?;
+    let captured = inner
+        .core
+        .qualified_resource_collection_at(
+            &inner.config.root,
+            &inner.config.root.join(&owner.path),
+            &expected,
+            &c.lifecycle,
+        )
+        .map_err(core_error)?;
+    if captured.retained_bytes() > MAX_BYTES {
+        return Err(ApiError::bad("资源集合准确依据超过 32 MiB 读取预算"));
+    }
+    Ok(captured)
+}
+pub(super) fn capture(
+    inner: &HostedInner,
+    actor: &str,
+    collection: &str,
+) -> Result<QualifiedResourceCollection, ApiError> {
+    input_access(inner, actor, collection, false)?;
+    qualify(inner, collection)
+}
+type ExpandedInputs = (Vec<String>, Vec<(String, Arc<QualifiedResourceCollection>)>);
+pub(super) fn expand_inputs(
+    inner: &HostedInner,
+    actor: &str,
+    ids: &[String],
+) -> Result<ExpandedInputs, ApiError> {
+    let mut actual = BTreeSet::new();
+    let mut captures = BTreeMap::new();
+    let mut bytes = 0usize;
+    for id in ids {
+        if let Some(collection) =
+            selection(&inner.config, id).or_else(|| split_member(&inner.config, id).map(|(c, _)| c))
+        {
+            if !captures.contains_key(collection) {
+                let captured = capture(inner, actor, collection)?;
+                // Unknown/ambiguous records cannot silently disappear from an
+                // explicitly requested complete compilation environment.
+                if selection(&inner.config, id).is_some() && captured.unrecognized_entries > 0 {
+                    return Err(changed());
+                }
+                bytes = bytes.saturating_add(captured.retained_bytes());
+                if bytes > MAX_BYTES {
+                    return Err(ApiError::bad("资源集合准确依据超过 32 MiB 输入预算"));
+                }
+                captures.insert(collection.to_owned(), Arc::new(captured));
+            }
+            let captured = &captures[collection];
+            if selection(&inner.config, id).is_some() {
+                if captured.unrecognized_entries > 0 {
+                    return Err(changed());
+                }
+                for entry in &captured.entries {
+                    let member = entry.resource_ref.rsplit('/').next().ok_or_else(changed)?;
+                    actual.insert(format!("{collection}/{member}"));
+                }
+            } else {
+                let (_, member) = split_member(&inner.config, id).ok_or_else(unavailable)?;
+                if !captured
+                    .entries
+                    .iter()
+                    .any(|e| e.resource_ref.rsplit('/').next() == Some(member))
+                {
+                    return Err(unavailable());
+                }
+                actual.insert(id.clone());
+            }
+        } else {
+            actual.insert(id.clone());
+        }
+        if actual.len() > 64 {
+            return Err(ApiError::bad("显式输入展开后超过 64 项预算"));
+        }
+    }
+    Ok((actual.into_iter().collect(), captures.into_iter().collect()))
+}
+pub(super) fn title<'a>(inner: &'a HostedInner, collection: &'a str) -> Result<&'a str, ApiError> {
+    let c = inner
+        .config
+        .resource_collections
+        .get(collection)
+        .ok_or_else(unavailable)?;
+    Ok(if c.title.is_empty() {
+        inner
+            .config
+            .files
+            .get(&c.owner)
+            .ok_or_else(unavailable)?
+            .title
+            .as_str()
+    } else {
+        &c.title
+    })
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Prepare {
+    collection: String,
+    name: String,
+    bytes_base64: String,
+    operation_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Operation {
+    collection: String,
+    operation_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Commit {
+    collection: String,
+    operation_id: String,
+    plan_id: String,
+}
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Decision {
+    epoch: u64,
+    expires: u64,
+    binding: String,
+    owner: NodeRef,
+}
+pub(super) fn router() -> Router<HostedState> {
+    Router::new()
+        .route("/api/hosted/media/import/prepare", post(prepare))
+        .route("/api/hosted/media/import/commit", post(commit))
+        .route("/api/hosted/media/import/operation", post(operation))
+        .route("/api/hosted/media/import/settle", post(settle))
+        .layer(DefaultBodyLimit::max(24 * 1024 * 1024))
+}
+fn import_access(inner: &HostedInner, actor: &str, id: &str) -> Result<Collection, ApiError> {
+    let (c, r) = access(inner, actor, id)?;
+    if c.lifecycle != "live" || !r.r#import {
+        return Err(unavailable());
+    }
+    Ok(c.clone())
+}
+fn scope(inner: &HostedInner, actor: &str) -> String {
+    format!("{}:resource-import", inner.actor_scope(actor))
+}
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+fn binding(inner: &HostedInner, id: &str) -> Result<String, ApiError> {
+    media::binding_hash(inner, &BTreeSet::from([format!("{id}/*")]))
+}
+fn original_allowed(
+    inner: &HostedInner,
+    actor: &str,
+    id: &str,
+    status: &ActorFeatureStatus,
+) -> bool {
+    serde_json::from_value::<Decision>(status.preview["_resourceImport"].clone()).is_ok_and(|d| {
+        d.epoch == inner.actor_generation(actor)
+            && binding(inner, id).is_ok_and(|b| b == d.binding)
+            && inner
+                .config
+                .resource_collections
+                .get(id)
+                .is_some_and(|_| effective_owner(inner, id).is_ok_and(|owner| owner == d.owner))
+            && inner
+                .config
+                .resource_collections
+                .get(id)
+                .and_then(|c| inner.config.files.get(&c.owner))
+                .is_some_and(|f| {
+                    inner
+                        .core
+                        .qualified_node_at(&inner.config.root, &inner.config.root.join(&f.path))
+                        .is_ok_and(|n| n.owner == d.owner)
+                })
+    })
+}
+fn safe_status(
+    inner: &HostedInner,
+    actor: &str,
+    id: &str,
+    status: ActorFeatureStatus,
+) -> Result<Value, ApiError> {
+    let same = original_allowed(inner, actor, id, &status);
+    let mut preview = json!({});
+    if same {
+        for key in ["summary", "name", "bytes", "contentType", "metadata"] {
+            if let Some(v) = status.preview.get(key) {
+                preview[key] = v.clone();
+            }
+        }
+    }
+    let refs = if same { status.resource_refs } else { vec![] };
+    let assets = refs
+        .iter()
+        .filter_map(|r| {
+            r.rsplit('/')
+                .next()
+                .filter(|s| canonical_uuid(s))
+                .map(|m| format!("{id}/{m}"))
+        })
+        .collect::<Vec<_>>();
+    let allowed = status.status == "prepared"
+        && same
+        && serde_json::from_value::<Decision>(status.preview["_resourceImport"].clone())
+            .is_ok_and(|d| d.expires > now_ms());
+    Ok(
+        json!({"collection":id,"owner":inner.config.resource_collections[id].owner,"operationId":status.operation_id,"status":status.status,"planId":status.plan_id.filter(|_|allowed),"preview":preview,"resourceRefs":refs,"assets":assets,"commitAllowed":allowed}),
+    )
+}
+fn valid_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 240
+        && !name.contains(['/', '\\', ':'])
+        && !name.ends_with(['.', ' '])
+        && !name.chars().any(|c| c.is_control())
+        && !matches!(name, "." | "..")
+}
+async fn prepare(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Prepare>,
+) -> ApiResult {
+    Ok(Json(locked(&state,move|inner| {
+        let actor=inner.actor(&auth)?;let config=import_access(inner,&actor,&req.collection)?;
+        if !valid_name(&req.name){return Err(ApiError::bad("资源名称必须是一个有效文件名"));}
+        if req.bytes_base64.len()>MAX_UPLOAD.div_ceil(3)*4 {return Err(ApiError::bad("资源原件上限为 16 MiB"));}
+        let bytes=base64::engine::general_purpose::STANDARD.decode(&req.bytes_base64).map_err(|_|ApiError::bad("资源原件编码无效"))?;
+        if bytes.len()>MAX_UPLOAD {return Err(ApiError::bad("资源原件上限为 16 MiB"));}
+        let fp=digest(&serde_json::to_vec(&json!({"collection":req.collection,"name":req.name,"uploadDigest":digest(&bytes)})).map_err(|_|changed())?);
+        let actor_scope=scope(inner,&actor);
+        if let Some(old)=inner.core.with_actor(&actor_scope,|core|core.actor_feature_retry(&req.collection,&req.operation_id,&fp)).map_err(core_error)? {return safe_status(inner,&actor,&req.collection,old);}
+        let captured=qualify(inner,&req.collection)?;
+        let root=inner.config.root.clone();let owner_path=root.join(&inner.config.files[&config.owner].path);
+        let node=inner.core.qualified_query_node_at(&root,&owner_path,&captured.owner,"live").map_err(core_error)?;
+        let directory=owner_path.parent().ok_or_else(changed)?;
+        let cut=inner.core.read_snapshot(&root,&[directory.join("weftext.resources.json").to_string_lossy().into_owned(),directory.join(&req.name).to_string_lossy().into_owned()]).map_err(core_error)?;
+        let ids=cut.files.iter().map(|f|f.base_id.clone()).collect::<Vec<_>>();
+        let result=(|| {
+            let mut pool=vec![];
+            Core::merge_query_node_witness(&mut pool,&node.witness).map_err(core_error)?;
+            if captured.initialized {Core::merge_resource_collection_witness(&mut pool,&captured.witness).map_err(core_error)?;}
+            inner.core.validate_resource_collection_witness(&root,&captured.witness).map_err(core_error)?;
+            if captured.retained_bytes().saturating_add(node.witness.retained_bytes()).saturating_add(bytes.len())>MAX_BYTES {return Err(ApiError::bad("原件及准确导入依据超过 32 MiB 预算"));}
+            let (metadata,content_type)=crate::media_api::inspect_media(&bytes);
+            let decision=Decision{epoch:inner.actor_generation(&actor),expires:now_ms().saturating_add(TTL_MS),binding:binding(inner,&req.collection)?,owner:captured.owner};
+            let preview=json!({"summary":"以原生资源导入所选所有者，保留现有登记和未知成员；不保存正文或增加读取授权。","name":req.name,"bytes":bytes.len(),"contentType":content_type,"metadata":metadata,"_resourceImport":decision});
+            let request=OperationRequest{operation_id:req.operation_id.clone(),root:root.to_string_lossy().into_owned(),intent:OperationIntent::ImportResource{node:owner_path.to_string_lossy().into_owned(),name:req.name,bytes,manifest_base_id:cut.files[0].base_id.clone(),resource_base_id:cut.files[1].base_id.clone()}};
+            let refs=pool.iter().collect::<Vec<_>>();
+            let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare_with_witnesses(&req.collection,&req.operation_id,&fp,request,preview,&[],&refs)).map_err(core_error)?;
+            safe_status(inner,&actor,&req.collection,status)
+        })();
+        for id in ids {let _=inner.core.take_snapshot_witness(&id);}
+        result
+    }).await?))
+}
+async fn operation(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Operation>,
+) -> ApiResult {
+    Ok(Json(locked(&state,move|inner| {
+        let actor=inner.actor(&auth)?;let config=import_access(inner,&actor,&req.collection)?;
+        match inner.core.with_actor(&scope(inner,&actor),|core|core.actor_feature_status(&req.collection,&req.operation_id)).map_err(core_error)? {
+            Some(status)=>safe_status(inner,&actor,&req.collection,status),
+            None=>Ok(json!({"collection":req.collection,"owner":config.owner,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"resourceRefs":[],"assets":[],"commitAllowed":false}))
+        }
+    }).await?))
+}
+async fn commit(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Commit>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            import_access(inner, &actor, &req.collection)?;
+            let actor_scope = scope(inner, &actor);
+            let old = inner
+                .core
+                .with_actor(&actor_scope, |core| {
+                    core.actor_feature_status(&req.collection, &req.operation_id)
+                })
+                .map_err(core_error)?
+                .ok_or_else(changed)?;
+            if old.status == "prepared"
+                && (!original_allowed(inner, &actor, &req.collection, &old)
+                    || old.plan_id.as_deref() != Some(&req.plan_id)
+                    || !serde_json::from_value::<Decision>(old.preview["_resourceImport"].clone())
+                        .is_ok_and(|d| d.expires > now_ms()))
+            {
+                return Err(changed());
+            }
+            let status = inner
+                .core
+                .with_actor(&actor_scope, |core| {
+                    core.actor_feature_commit(&req.collection, &req.operation_id, &req.plan_id)
+                })
+                .map_err(core_error)?;
+            safe_status(inner, &actor, &req.collection, status)
+        })
+        .await?,
+    ))
+}
+async fn settle(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    Json(req): Json<Operation>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            import_access(inner, &actor, &req.collection)?;
+            let status = inner
+                .core
+                .with_actor(&scope(inner, &actor), |core| {
+                    core.actor_feature_settle(&req.collection, &req.operation_id)
+                })
+                .map_err(core_error)?;
+            safe_status(inner, &actor, &req.collection, status)
+        })
+        .await?,
+    ))
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    fn fixture(read: bool, import: bool) -> (tempfile::TempDir, HostedState, Auth, String) {
+        let (temp, state, auth, _) = media::tests::fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let existing = inner.config.resources["Diagram"].clone();
+        let asset = format!("Owned/{}", existing.reference.rsplit('/').next().unwrap());
+        inner.config.resource_collections.insert(
+            "Owned".into(),
+            Collection {
+                owner: "Shared".into(),
+                expected_owner: Some(existing.expected_owner),
+                from_import_slot: false,
+                lifecycle: "live".into(),
+                title: "明确批准的集合".into(),
+            },
+        );
+        let alice = inner.policy.users.get_mut("alice").unwrap();
+        alice.resources.clear();
+        alice.resource_collections.insert(
+            "Owned".into(),
+            Rights {
+                read,
+                download: false,
+                import,
+            },
+        );
+        drop(inner);
+        (temp, state, auth, asset)
+    }
+    async fn propose(
+        state: &HostedState,
+        auth: &Auth,
+        id: &str,
+        name: &str,
+        bytes: &[u8],
+    ) -> Result<Value, ApiError> {
+        prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Prepare {
+                collection: "Owned".into(),
+                name: name.into(),
+                bytes_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+                operation_id: id.into(),
+            }),
+        )
+        .await
+        .map(|r| r.0)
+    }
+    #[test]
+    fn selection_and_policy_do_not_infer_filesystem_members_or_write_trash() {
+        let (_temp, state, _auth, asset) = fixture(true, false);
+        let mut inner = state.inner.lock().unwrap();
+        assert!(media::is_asset(&inner.config, &asset));
+        assert!(media::valid_input(&inner.config, "Owned/*"));
+        assert!(!media::is_asset(&inner.config, "Owned/*"));
+        for id in [
+            "Owned/../private.png",
+            "Owned/private.png",
+            "Unknown/*",
+            "Owned/*/nested",
+        ] {
+            assert!(!media::valid_input(&inner.config, id));
+        }
+        let random = format!("Owned/{}", uuid::Uuid::new_v4());
+        // A pure grant check is deliberately separate from actual membership.
+        media::input_access(&inner, "alice", &random, false).unwrap();
+        assert!(media::resolve_asset(&inner, "alice", &random).is_err());
+        assert!(media::input_access(&inner, "alice", &asset, true).is_err());
+        inner
+            .config
+            .resource_collections
+            .get_mut("Owned")
+            .unwrap()
+            .lifecycle = "trash".into();
+        assert!(!valid_rights(
+            &inner.config,
+            &BTreeMap::from([(
+                "Owned".into(),
+                Rights {
+                    r#import: true,
+                    ..Default::default()
+                }
+            )])
+        ));
+    }
+    #[test]
+    fn import_slot_mode_is_exclusive_and_cannot_borrow_an_ordinary_node_birth() {
+        let (_temp, state, _auth, asset) = fixture(true, false);
+        let mut inner = state.inner.lock().unwrap();
+        inner
+            .config
+            .resource_collections
+            .get_mut("Owned")
+            .unwrap()
+            .from_import_slot = true;
+        assert!(!valid_config(&inner.config));
+        inner
+            .config
+            .resource_collections
+            .get_mut("Owned")
+            .unwrap()
+            .expected_owner = None;
+        assert!(!valid_config(&inner.config));
+        inner.config.files.get_mut("Shared").unwrap().importable = true;
+        // Marking a configured file as a future slot cannot manufacture the
+        // original committed ImportDocx/CreateTree physical birth evidence.
+        assert!(effective_owner(&inner, "Owned").is_err());
+        assert!(media::resolve_asset(&inner, "alice", &asset).is_err());
+        inner.config.files.get_mut("Shared").unwrap().expected_node = Some(NodeRef {
+            workspace_id: uuid::Uuid::new_v4().to_string(),
+            node_id: uuid::Uuid::new_v4().to_string(),
+        });
+        assert!(!valid_config(&inner.config));
+    }
+    #[test]
+    fn expansion_uses_only_registered_symbols_and_retains_member_and_selector_witness() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let (_temp, state, _auth, asset) = fixture(true, false);
+        let inner = state.inner.lock().unwrap();
+        let locked = std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(inner.config.root.join("Shared/private-locator.png"))
+            .unwrap();
+        let (members, w) =
+            expand_inputs(&inner, "alice", &[asset.clone(), "Owned/*".into()]).unwrap();
+        assert_eq!(members, vec![asset.clone()]);
+        assert_eq!(w.len(), 1);
+        assert_eq!(w[0].0, "Owned");
+        assert!(w[0].1.revision.is_some());
+        assert!(inner.rights("alice", "Shared").is_err());
+        // Compilation and viewer capture must still acquire the selected body.
+        assert!(media::capture_input(&inner, "alice", &asset).is_err());
+        let before =
+            media::binding_hash(&inner, &BTreeSet::from([asset, "Owned/*".into()])).unwrap();
+        assert_eq!(
+            before,
+            media::binding_hash(
+                &inner,
+                &BTreeSet::from([members[0].clone(), "Owned/*".into()])
+            )
+            .unwrap()
+        );
+        drop(locked);
+    }
+    #[tokio::test]
+    async fn import_only_receipt_preserves_source_and_does_not_grant_resource_read() {
+        let (_temp, state, auth, _asset) = fixture(false, true);
+        let source = std::fs::read(
+            state
+                .inner
+                .lock()
+                .unwrap()
+                .config
+                .root
+                .join("Shared/Shared.typ"),
+        )
+        .unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let proposal = propose(&state, &auth, &id, "own-upload.bin", b"ONLY_MY_UPLOAD")
+            .await
+            .unwrap();
+        assert_eq!(proposal["status"], "prepared");
+        assert_eq!(proposal["preview"]["bytes"], 14);
+        assert!(!proposal.to_string().contains("private-locator"));
+        assert!(!proposal.to_string().contains("Saved B"));
+        assert_eq!(proposal["resourceRefs"].as_array().unwrap().len(), 1);
+        let replay = propose(&state, &auth, &id, "own-upload.bin", b"ONLY_MY_UPLOAD")
+            .await
+            .unwrap();
+        assert_eq!(proposal, replay);
+        assert_eq!(
+            propose(&state, &auth, &id, "another.bin", b"ONLY_MY_UPLOAD")
+                .await
+                .unwrap_err()
+                .status,
+            StatusCode::CONFLICT
+        );
+        let result = commit(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Commit {
+                collection: "Owned".into(),
+                operation_id: id,
+                plan_id: proposal["planId"].as_str().unwrap().into(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(result["status"], "committed");
+        assert_eq!(result["resourceRefs"], proposal["resourceRefs"]);
+        let inner = state.inner.lock().unwrap();
+        let new_asset = result["assets"][0].as_str().unwrap();
+        assert_eq!(
+            media::resolve_asset(&inner, "alice", new_asset)
+                .err()
+                .unwrap()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            std::fs::read(inner.config.root.join("Shared/Shared.typ")).unwrap(),
+            source
+        );
+        assert_eq!(
+            std::fs::read(inner.config.root.join("Shared/own-upload.bin")).unwrap(),
+            b"ONLY_MY_UPLOAD"
+        );
+        assert_eq!(qualify(&inner, "Owned").unwrap().entries.len(), 2);
+    }
+    #[tokio::test]
+    async fn settled_unknown_and_prepared_imports_never_install_late_requests() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let missing = uuid::Uuid::new_v4().to_string();
+        let settled = settle(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Operation {
+                collection: "Owned".into(),
+                operation_id: missing.clone(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(settled["status"], "cancelled");
+        let late = propose(&state, &auth, &missing, "late.bin", b"late")
+            .await
+            .unwrap();
+        assert_eq!(late["status"], "cancelled");
+        assert!(late["assets"].as_array().unwrap().is_empty());
+        let known = uuid::Uuid::new_v4().to_string();
+        let prepared = propose(&state, &auth, &known, "cancelled.bin", b"late")
+            .await
+            .unwrap();
+        assert_eq!(prepared["status"], "prepared");
+        let settled = settle(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Operation {
+                collection: "Owned".into(),
+                operation_id: known.clone(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(settled["status"], "cancelled");
+        assert_eq!(
+            propose(&state, &auth, &known, "cancelled.bin", b"late")
+                .await
+                .unwrap()["status"],
+            "cancelled"
+        );
+        let inner = state.inner.lock().unwrap();
+        assert!(!inner.config.root.join("Shared/late.bin").exists());
+        assert!(!inner.config.root.join("Shared/cancelled.bin").exists());
+    }
+    #[tokio::test]
+    async fn original_owner_remap_never_exposes_or_commits_old_import_plan() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let id = uuid::Uuid::new_v4().to_string();
+        let proposal = propose(&state, &auth, &id, "old-plan.bin", b"old")
+            .await
+            .unwrap();
+        {
+            let mut inner = state.inner.lock().unwrap();
+            let root = inner.config.root.clone();
+            let owner = inner
+                .core
+                .qualified_node_at(&root, &root.join("Target/Target.typ"))
+                .unwrap()
+                .owner;
+            let c = inner.config.resource_collections.get_mut("Owned").unwrap();
+            c.owner = "Target".into();
+            c.expected_owner = Some(owner);
+        }
+        let replay = propose(&state, &auth, &id, "old-plan.bin", b"old")
+            .await
+            .unwrap();
+        assert_eq!(replay["status"], "prepared");
+        assert_eq!(replay["preview"], json!({}));
+        assert_eq!(replay["commitAllowed"], false);
+        assert!(replay["assets"].as_array().unwrap().is_empty());
+        assert_eq!(
+            commit(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(Commit {
+                    collection: "Owned".into(),
+                    operation_id: id,
+                    plan_id: proposal["planId"].as_str().unwrap().into()
+                })
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::CONFLICT
+        );
+        assert!(
+            !state
+                .inner
+                .lock()
+                .unwrap()
+                .config
+                .root
+                .join("Shared/old-plan.bin")
+                .exists()
+        );
+    }
+}

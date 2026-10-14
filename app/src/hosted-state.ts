@@ -6,7 +6,7 @@ export interface HostedQueryAudience { epoch: number; credential: string; actor?
 export function sameHostedQueryIdentity(left: HostedQueryAudience, right: HostedQueryAudience): boolean { return left.epoch === right.epoch && left.credential === right.credential && left.actor === right.actor && left.deployment === right.deployment && left.generation === right.generation; }
 export function sameHostedQueryAudience(left: HostedQueryAudience, right: HostedQueryAudience): boolean { return sameHostedQueryIdentity(left, right) && left.sessionId === right.sessionId && left.queryVersion === right.queryVersion; }
 /** Server actor epochs partition every recoverable protected consumer cache. */
-export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" | "query" | "history" | "library", deployment: string, actor: string, generation: number): string {
+export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" | "query" | "history" | "library" | "resource-import", deployment: string, actor: string, generation: number): string {
   if (!deployment || !actor || !Number.isSafeInteger(generation) || generation < 0) throw new Error("服务端授权版本无效，未恢复旧缓存。");
   return `weftext-hosted-${kind}:${encodeURIComponent(deployment)}:${encodeURIComponent(actor)}:g${generation}:`;
 }

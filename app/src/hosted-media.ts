@@ -2,6 +2,8 @@ import { action, ui } from "./data-panel";
 import { mountMediaViewer, type MediaViewer } from "./media-viewer";
 import type { MediaRegionInput } from "./knowledge-state";
 import type { ResourceOpenTarget } from "./media-selection";
+import { HostedResourceImports } from "./hosted-media-import";
+import { resourceCollection } from "./hosted-media-import-state";
 import { decodeMediaDescriptor, mediaChunk, mediaFingerprint, mediaResolved, mediaTicket, mediaViewerDescriptor, type HostedMediaCatalog, type HostedMediaChunk, type HostedMediaDescriptor, type HostedMediaResolved, type HostedMediaSelection, type HostedMediaTicket, type MediaPurpose } from "./hosted-media-state";
 export type HostedMediaRequest = <T>(path: string, body?: unknown, signal?: AbortSignal) => Promise<T>;
 
@@ -20,17 +22,22 @@ export class HostedMedia {
   private surface = ui("section");
   private actions = ui("section");
   private message = ui("p", "hint");
+  private coverage = ui("p", "hint");
+  private importHost = ui("section");
+  private imports: HostedResourceImports;
   private downloading = false;
-  constructor(private host: HTMLElement, private request: HostedMediaRequest, private selectionChanged: (context: HostedMediaSelection | null) => void, private review: (context: HostedMediaSelection) => void | Promise<void>) { this.clear(); }
+  constructor(private host: HTMLElement, private request: HostedMediaRequest, private selectionChanged: (context: HostedMediaSelection | null) => void, private review: (context: HostedMediaSelection) => void | Promise<void>) { this.imports = new HostedResourceImports(this.importHost, request, () => this.refresh()); this.clear(false); }
+  get hasPending() { return this.imports.hasPending; }
   context(): HostedMediaSelection | null { return this.selected ? { descriptor: structuredClone(this.selected), target: this.target && { ...this.target } } : null; }
   private stopView() {
     this.version++; for (const controller of this.controllers) controller.abort(); this.controllers.clear(); this.viewer?.dispose(); this.viewer = undefined;
     for (const url of this.urls) URL.revokeObjectURL(url); this.urls.clear(); this.selected = undefined; this.target = null; this.downloading = false; this.surface.replaceChildren(); this.actions.replaceChildren(); this.selectionChanged(null);
   }
-  clear() { this.epoch++; this.catalogVersion++; this.stopView(); this.catalog = { resources: [], coverage: "complete", scope: "configuredAuthorizedResources" }; this.picker.replaceChildren(); this.message.textContent = ""; this.host.replaceChildren(); this.host.hidden = true; }
-  async connect(_deployment: string, _actor: string, _generation: number) {
-    this.clear(); this.host.hidden = false; this.picker.setAttribute("aria-label", "托管获权资源"); this.picker.onchange = () => { void this.openAsset(this.picker.value).catch(error => this.show(error)); };
-    this.host.replaceChildren(ui("h2", "", "获权资源与媒体"), ui("p", "hint", "查看、下载与媒体批注分别授权。资源查看不打开或保存正文；回收站资源仅供只读查看。"), this.picker, action("刷新获权资源目录", () => this.refresh().catch(error => this.show(error))), this.message, this.surface, this.actions); await this.refresh();
+  clear(removeCache = true) { this.epoch++; this.catalogVersion++; this.stopView(); this.catalog = { resources: [], coverage: "complete", scope: "configuredAuthorizedResources" }; this.picker.replaceChildren(); this.message.textContent = ""; this.coverage.textContent = ""; this.host.replaceChildren(); this.host.hidden = true; this.imports.clear(removeCache); }
+  async connect(deployment: string, actor: string, generation: number) {
+    this.clear(false); this.imports.connect(deployment, actor, generation); this.host.hidden = false; this.picker.setAttribute("aria-label", "托管获权资源"); this.picker.onchange = () => { void this.openAsset(this.picker.value).catch(error => this.show(error)); };
+    this.coverage.setAttribute("aria-label", "托管资源目录完整性");
+    this.host.replaceChildren(ui("h2", "", "获权资源与媒体"), ui("p", "hint", "查看、下载与媒体批注分别授权。资源查看不打开或保存正文；回收站资源仅供只读查看。"), this.picker, action("刷新获权资源目录", () => this.refresh().catch(error => this.show(error))), this.coverage, this.message, this.surface, this.actions, this.importHost); await this.refresh();
   }
   private show(error: unknown) { this.message.textContent = error instanceof Error ? error.message : "资源当前不可用，未采用其他版本。"; }
   private stamp() { return { epoch: this.epoch, version: this.version }; }
@@ -38,15 +45,15 @@ export class HostedMedia {
   async refresh() {
     const epoch = this.epoch, catalogVersion = ++this.catalogVersion, result = await this.request<HostedMediaCatalog>("media"); if (epoch !== this.epoch || catalogVersion !== this.catalogVersion) return;
     if (!result || result.scope !== "configuredAuthorizedResources" || !["complete", "partial"].includes(result.coverage) || !Array.isArray(result.resources)) throw new Error("媒体目录缺少获权范围或完整性状态。");
-    const previous = this.selected; this.catalog = { ...result, resources: result.resources.map(decodeMediaDescriptor) };
+    const previous = this.selected; this.catalog = { ...result, resources: result.resources.map(decodeMediaDescriptor), collections: (result.collections ?? []).map(resourceCollection) }; this.imports.setCatalog(this.catalog.collections ?? []);
     if (previous) { const fresh = this.catalog.resources.find(item => item.asset === previous.asset); if (!fresh || fresh.status !== "ready" || mediaFingerprint(fresh) !== mediaFingerprint(previous)) this.stopView(); else this.selected = fresh; }
     const empty = ui("option", "", "选择获权资源…"); empty.value = ""; this.picker.replaceChildren(empty, ...this.catalog.resources.map(item => { const option = ui("option", "", `${item.title}${item.lifecycle === "trash" ? "（回收站只读）" : ""}${item.status === "unavailable" ? "（不可用）" : ""}`); option.value = item.asset; option.disabled = item.status === "unavailable"; return option; })); this.picker.value = this.selected?.asset ?? "";
-    this.message.textContent = result.coverage === "partial" ? "资源目录部分可用；不可用获权条目保留，不能当作完整空集合。" : result.resources.length ? "只列显式获权资源；选择后读取准确版本。" : "本次获权目录完整，无可交付资源。"; this.renderActions();
+    this.coverage.textContent = result.coverage === "partial" ? "资源目录部分可用；不可用获权条目保留，不能当作完整空集合。" : result.resources.length ? "只列显式获权资源；选择后读取准确版本。" : "本次获权目录完整，无可交付资源。"; this.renderActions();
   }
   async openReference(reference: string, revision?: string, initial?: MediaRegionInput) {
     this.stopView(); const stamp = this.stamp(); this.message.textContent = "正在独立解析获权稳定资源引用…";
     try { const resolved = mediaResolved(await this.request<HostedMediaResolved>("media/resolve", { reference, ...(revision ? { revision } : {}) }), reference, revision); if (!this.current(stamp)) return;
-      this.mount(resolved, resolved.viewerTarget, initial);
+      this.mount(resolved, resolved.viewerTarget, initial); this.message.textContent = "稳定资源引用已独立获权解析；准确版本的读取与解码状态见下方查看器。";
     } catch (error) { if (this.current(stamp)) { this.stopView(); this.show(error); } }
   }
   async openAsset(asset: string, revision?: string, initial?: MediaRegionInput) {

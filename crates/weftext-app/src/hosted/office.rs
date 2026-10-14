@@ -165,7 +165,7 @@ fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Re
             .flat_map(|q| &q.execution.inputs),
     );
     for r in style_inputs {
-        if inner.config.resources.contains_key(r) {
+        if media::valid_input(&inner.config, r) {
             media::input_access(inner, actor, r, true)?;
             continue;
         }
@@ -175,7 +175,7 @@ fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Re
         }
     }
     for r in &needs.resources {
-        if inner.config.resources.contains_key(r) {
+        if media::valid_input(&inner.config, r) {
             media::input_access(inner, actor, r, true)?;
             continue;
         }
@@ -311,6 +311,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
         .map(|q| fields::frozen_query(inner, actor, q))
         .transpose()?;
     let mut sources = BTreeSet::new();
+    let mut captured_dependencies = None;
     if let Some(r) = &req.resource {
         let f = inner
             .config
@@ -318,8 +319,11 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
             .get(r)
             .filter(|f| f.editable)
             .ok_or_else(unavailable)?;
+        let selected = f.inputs.clone();
+        let captured = inputs::capture(inner, actor, &selected)?;
         sources.insert(r.clone());
-        sources.extend(f.inputs.iter().cloned());
+        sources.extend(captured.ids().iter().cloned());
+        captured_dependencies = Some(captured);
     }
     let fields = query
         .as_ref()
@@ -359,7 +363,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
                 Ok(inner
                     .config
                     .root
-                    .join(inputs::path(inner, r)?)
+                    .join(inputs::path(inner, actor, r)?)
                     .to_string_lossy()
                     .into_owned())
             })
@@ -430,8 +434,9 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
                 .unwrap_or(b"{\"version\":1,\"annotations\":[]}");
             reviews = freeze_reviews(annotations, &current, req)?;
         }
+        let captured = captured_dependencies.take().ok_or_else(failed)?;
         let (worker, dependencies, captured_environment) =
-            editor::freeze(inner, actor, r, &source)?;
+            editor::freeze_with_inputs(inner, actor, r, &source, captured)?;
         needs.execution = captured_environment.authority.clone();
         access(inner, actor, &needs, false)?;
         environment = Some(captured_environment);

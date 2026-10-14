@@ -354,7 +354,11 @@ impl Core {
             },
         )))
     }
-    fn resource_owner_birth_known(&self, id: &str, owner: &weftext_knowledge::NodeRef) -> bool {
+    pub(crate) fn resource_owner_birth_known(
+        &self,
+        id: &str,
+        owner: &weftext_knowledge::NodeRef,
+    ) -> bool {
         self.operations
             .values()
             .filter(|plan| self.committed(&plan.operation_id))

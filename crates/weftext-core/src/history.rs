@@ -202,6 +202,15 @@ impl Core {
         Ok(())
     }
     pub(crate) fn node_placement_paths(&self, birth: &Birth) -> Result<BTreeSet<String>> {
+        self.node_placement_paths_at(birth, None)
+    }
+    /// Project the same identity-proved placement history at an original
+    /// committed decision. Missing legacy ordering cannot prove nonexistence.
+    pub(crate) fn node_placement_paths_at(
+        &self,
+        birth: &Birth,
+        through: Option<u64>,
+    ) -> Result<BTreeSet<String>> {
         let mut places = BTreeSet::<String>::new();
         let mut birth_sequence = None;
         for p in self
@@ -214,7 +223,19 @@ impl Core {
                     && b.workspace_id == birth.workspace_id
                     && b.identity == birth.identity
             }) {
-                birth_sequence = self.history_commit_time(p)?.1;
+                let sequence = self.history_commit_time(p)?.1;
+                if let Some(limit) = through {
+                    let sequence = sequence.ok_or_else(|| {
+                        CoreError::new(
+                            "historyUnavailable",
+                            "Original placement ordering is unavailable",
+                        )
+                    })?;
+                    if sequence > limit {
+                        continue;
+                    }
+                }
+                birth_sequence = sequence;
                 if p.kind == "createNote" {
                     places.insert(p.path.clone());
                 }
@@ -230,21 +251,33 @@ impl Core {
                 }
             }
         }
-        self.replay_placements(
+        self.replay_placements_at(
             places,
             birth_sequence,
             &birth.identity,
             Some(&birth.node_id),
             None,
+            through,
         )
     }
     pub(crate) fn replay_placements(
+        &self,
+        places: BTreeSet<String>,
+        born: Option<u64>,
+        identity: &FileIdentity,
+        node: Option<&str>,
+        directory: Option<&str>,
+    ) -> Result<BTreeSet<String>> {
+        self.replay_placements_at(places, born, identity, node, directory, None)
+    }
+    fn replay_placements_at(
         &self,
         mut places: BTreeSet<String>,
         born: Option<u64>,
         identity: &FileIdentity,
         node: Option<&str>,
         directory: Option<&str>,
+        through: Option<u64>,
     ) -> Result<BTreeSet<String>> {
         let mut edges = Vec::new();
         for p in self
@@ -256,6 +289,17 @@ impl Core {
                 && matches!(t.mutation, Mutation::Relocate { .. })
             {
                 let sequence = self.history_commit_time(p)?.1;
+                if let Some(limit) = through {
+                    let sequence = sequence.ok_or_else(|| {
+                        CoreError::new(
+                            "historyUnavailable",
+                            "Original placement ordering is unavailable",
+                        )
+                    })?;
+                    if sequence > limit {
+                        continue;
+                    }
+                }
                 if !matches!((born,sequence),(Some(a),Some(b)) if b<=a) {
                     edges.push((sequence, t));
                 }

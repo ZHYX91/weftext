@@ -359,7 +359,9 @@ fn same_snapshot_dependency(original: &SnapshotBinding, incoming: &SnapshotBindi
             if a.stamp.identity == b.stamp.identity)
 }
 fn verify_duplicate_snapshot(original: &SnapshotBinding, incoming: &SnapshotBinding) -> Result<()> {
-    if original.parent != incoming.parent
+    if !crate::history::history_relative_path(Path::new(&original.path), Path::new(&incoming.path))
+        .is_some_and(|relative| relative.as_os_str().is_empty())
+        || original.parent != incoming.parent
         || original.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
             != incoming.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
     {
@@ -852,6 +854,7 @@ impl Core {
         Ok(facts)
     }
     pub(crate) fn validate_recovery_scope(&self, t: &FrozenOperation) -> Result<()> {
+        self.validate_resource_collection_initialization(t)?;
         let Some(expected) = &t.expected_membership else {
             return Ok(());
         };
@@ -3745,6 +3748,18 @@ impl Core {
                 }
                 let manifest = capture_optional(&manifest_path)?;
                 self.verify_snapshot(&manifest_path, manifest_base_id, manifest.as_ref())?;
+                if manifest
+                    .as_ref()
+                    .is_some_and(|file| file.bytes.len() > MAX_SOURCE_BYTES)
+                {
+                    return Err(CoreError::new(
+                        "budget",
+                        "Owned resource manifest exceeds 2 MiB",
+                    ));
+                }
+                if manifest.is_none() {
+                    self.require_resource_collection_uninitialized(&owner)?;
+                }
                 let current = capture_optional(&target)?;
                 self.verify_snapshot(&target, resource_base_id, current.as_ref())?;
                 if current.is_some() {
@@ -3759,6 +3774,12 @@ impl Core {
                     return Err(CoreError::new(
                         "resourceManifest",
                         "Unsupported resource manifest",
+                    ));
+                }
+                if value["resources"].as_array().unwrap().len() >= 64 {
+                    return Err(CoreError::new(
+                        "budget",
+                        "At most 64 registered resource descriptors",
                     ));
                 }
                 if value["resources"]
@@ -3781,6 +3802,13 @@ impl Core {
                     .as_array_mut()
                     .unwrap()
                     .push(serde_json::json!({"resourceId":resource_id,"path":name}));
+                let manifest_after = serde_json::to_vec_pretty(&value)?;
+                if manifest_after.len() > MAX_SOURCE_BYTES {
+                    return Err(CoreError::new(
+                        "budget",
+                        "Owned resource manifest exceeds 2 MiB",
+                    ));
+                }
                 let changes = vec![
                     FileChange {
                         path: display(&target),
@@ -3792,7 +3820,7 @@ impl Core {
                         path: display(&manifest_path),
                         base_id: Some(manifest_base_id.clone()),
                         before: manifest.as_ref().map(|f| f.bytes.clone()),
-                        after: serde_json::to_vec_pretty(&value)?,
+                        after: manifest_after,
                     },
                 ];
                 if let Some(f) = manifest {
@@ -3812,6 +3840,28 @@ impl Core {
                 Mutation::Update { files: changes }
             }
         };
+        // Owned membership is an original committed dependency too. Reserve
+        // its version in this same Plan before installation, so both normal
+        // execution and original-plan recovery publish its exact observation.
+        if let Mutation::CreateTree {
+            files: output,
+            births,
+            ..
+        } = &mutation
+        {
+            for file in output.iter().filter(|file| {
+                Path::new(&file.path).file_name()
+                    == Some(std::ffi::OsStr::new("weftext.resources.json"))
+                    && births.iter().any(|birth| {
+                        Path::new(&birth.path).parent() == Path::new(&file.path).parent()
+                    })
+            }) {
+                preview
+                    .revisions
+                    .entry(file.path.clone())
+                    .or_insert_with(fresh);
+            }
+        }
         let result_path = match &mutation {
             Mutation::Relocate { target, .. } | Mutation::CreateTree { target, .. } => {
                 target.clone()
@@ -3831,7 +3881,63 @@ impl Core {
         plan.workspace_id = Some(workspace.workspace_id);
         plan.node_id = preview.new_node_id.clone();
         files.sort_by(|a, b| a.path.cmp(&b.path));
-        files.dedup_by(|a, b| a.path == b.path);
+        let mut required_paths = match &mutation {
+            Mutation::Update { files } => files
+                .iter()
+                .map(|file| file.path.clone())
+                .collect::<BTreeSet<_>>(),
+            Mutation::CreateTree { updates, .. } | Mutation::Relocate { updates, .. } => {
+                updates.iter().map(|file| file.path.clone()).collect()
+            }
+        };
+        if let Mutation::Relocate {
+            source, old_leaf, ..
+        } = &mutation
+        {
+            required_paths.insert(display(&Path::new(source).join(old_leaf)));
+        }
+        let mut unique = Vec::<CapturedFile>::new();
+        let mut identities = BTreeMap::new();
+        for file in files {
+            let identity = &file.stamp.identity;
+            let key = (identity.volume, identity.index, identity.created);
+            if let Some(&index) = identities.get(&key) {
+                let original: &mut CapturedFile = &mut unique[index];
+                // Dedup only a proven spelling alias of the same directory
+                // entry. Different hardlink leaves are separate namespace
+                // dependencies and cannot be folded into one read handle.
+                if file.stamp != original.stamp
+                    || file.bytes != original.bytes
+                    || !crate::history::history_relative_path(
+                        Path::new(&file.path),
+                        Path::new(&original.path),
+                    )
+                    .is_some_and(|relative| relative.as_os_str().is_empty())
+                    || !backend::same_directory(
+                        Path::new(&file.path).parent().unwrap(),
+                        Path::new(&original.path).parent().unwrap(),
+                    )?
+                {
+                    return Err(CoreError::new(
+                        "staleBase",
+                        "Competing frozen versions or locators for one physical dependency",
+                    ));
+                }
+                if required_paths.contains(&file.path) {
+                    if required_paths.contains(&original.path) && file.path != original.path {
+                        return Err(CoreError::new(
+                            "invalidIntent",
+                            "One physical writer has multiple distinct requested spellings",
+                        ));
+                    }
+                    *original = file;
+                }
+            } else {
+                identities.insert(key, unique.len());
+                unique.push(file);
+            }
+        }
+        let files = unique;
         let mut write_parents = Vec::new();
         let writes = match &mutation {
             Mutation::Update { files } => files.iter().collect::<Vec<_>>(),
@@ -3948,6 +4054,7 @@ impl Core {
         if !matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
             self.require_workspace(root)?;
         }
+        self.validate_resource_collection_initialization(t)?;
         if let Some(expected) = &t.expected_membership {
             let current = self.admitted_snapshot(root)?;
             if !current.complete

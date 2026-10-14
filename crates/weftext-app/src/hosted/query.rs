@@ -1464,17 +1464,17 @@ fn capture(
             authority.definitions.insert(d.resource.clone(), false);
             authority.inputs.insert(d.resource.clone());
         }
+        let captured_inputs =
+            inputs::capture_query(inner, &actor, &inputs.iter().cloned().collect::<Vec<_>>())?;
         let mut file_resources = resources
             .iter()
             .chain(owners.values())
-            .chain(&inputs)
+            .chain(captured_inputs.ids())
             .cloned()
             .collect::<BTreeSet<_>>();
         if let Some(d) = &draft {
             file_resources.insert(d.resource.clone());
         }
-        let captured_inputs =
-            inputs::capture_query(inner, &actor, &inputs.iter().cloned().collect::<Vec<_>>())?;
         let mut paths = vec![config.path.clone()];
         paths.extend(
             file_resources
@@ -1483,7 +1483,7 @@ fn capture(
                     Ok(inner
                         .config
                         .root
-                        .join(inputs::path(inner, r)?)
+                        .join(inputs::path(inner, &actor, r)?)
                         .to_string_lossy()
                         .into_owned())
                 })
@@ -1721,6 +1721,7 @@ fn capture(
             inputs = needed_inputs;
             continue;
         }
+        authority.inputs.extend(captured_inputs.authority_ids());
         authorize_authority(inner, &actor, &authority)?;
         context.parameters = req.parameters.clone();
         let explicit = (!validate_only).then_some(&selected_providers);
@@ -1856,8 +1857,8 @@ fn capture(
                     .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
                 {
                     let config_file = &inner.config.files[r];
-                    let missing = config_file
-                        .inputs
+                    let row_inputs = captured_inputs.members_for(&config_file.inputs)?;
+                    let missing = row_inputs
                         .iter()
                         .map(|input| captured_inputs.entry(input).map(|entry| entry.is_none()))
                         .collect::<Result<Vec<_>, _>>()?
@@ -1867,8 +1868,7 @@ fn capture(
                         complete = false;
                         continue;
                     }
-                    let input_sizes = config_file
-                        .inputs
+                    let input_sizes = row_inputs
                         .iter()
                         .map(|input| {
                             let (path, bytes, accepted) =
@@ -1888,8 +1888,7 @@ fn capture(
                             input_sizes,
                         )?,
                     )?;
-                    let mut frozen_files = config_file
-                        .inputs
+                    let mut frozen_files = row_inputs
                         .iter()
                         .map(|input| {
                             let (path, bytes, accepted) =
@@ -1926,7 +1925,10 @@ fn capture(
         let environment = if workers.is_empty() {
             None
         } else {
-            let environment = library::environment(inner, &actor)?;
+            let mut environment = library::environment(inner, &actor)?;
+            // Frozen semantic results carry their actual compilation input
+            // authority into downstream Office delivery as well as Query read.
+            environment.attach_inputs(inner, &actor, captured_inputs.clone())?;
             charge_bytes(&mut worker_bytes, environment.retained_bytes())?;
             for (_, worker) in &mut workers {
                 let before = serialized_query_bytes(worker)?;
