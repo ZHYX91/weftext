@@ -195,6 +195,10 @@ pub(crate) struct Binding {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct PrepareRequest {
+    #[serde(default)]
+    pub(crate) review_mode: String,
+    #[serde(default)]
+    pub(crate) include_resolved: bool,
     pub(crate) request_id: String,
     pub(crate) session_id: String,
     pub(crate) source: String,
@@ -508,19 +512,34 @@ async fn prepare_import(
     State(state): State<AppState>,
     Json(req): Json<ImportRequest>,
 ) -> ApiResult {
-    if !["native", "bibtex", "csl-json", "ris"].contains(&req.format.as_str()) {
-        return Err(ApiError::bad("请选择 Weftext 原生资料包或支持的文献格式"));
+    if !["native", "docx", "bibtex", "csl-json", "ris"].contains(&req.format.as_str()) {
+        return Err(ApiError::bad(
+            "请选择 Word、Weftext 原生资料包或支持的文献格式",
+        ));
     }
     let loc = location(&state, &req.session_id)?;
     if std::path::Path::new(&req.root) != loc.root {
         return Err(ApiError::bad("目标库与当前会话不一致"));
     }
     let bytes = decode(&req.bytes_base64)?;
-    let preview = core_call(&state, move |core| {
+    let is_docx = req.format == "docx";
+    let (preview, files) = core_call(&state, move |core| {
+        let operation_id = req.operation_id.clone();
         if core.operation_details(&req.operation_id).is_err() {
             core.check_session_base(&req.session_id, &req.base_id)?;
         }
-        if req.format == "native" {
+        let preview = if req.format == "docx" {
+            core.prepare_operation(weftext_core::OperationRequest {
+                operation_id: req.operation_id,
+                root: req.root,
+                intent: weftext_core::OperationIntent::ImportDocx {
+                    parent: req.parent,
+                    name: req.name,
+                    bytes,
+                    allow_losses: true,
+                },
+            })
+        } else if req.format == "native" {
             core.prepare_native_import(
                 &req.root,
                 &req.parent,
@@ -542,15 +561,41 @@ async fn prepare_import(
                     allow_losses: true,
                 },
             )
-        }
+        }?;
+        let files = if is_docx {
+            core.prepared_operation_files(&operation_id)?
+        } else {
+            vec![]
+        };
+        Ok((preview, files))
     })
     .await?;
-    Ok(Json(value(preview)?))
+    let mut output = value(preview)?;
+    if is_docx {
+        let source = files
+            .iter()
+            .find(|f| f.path.ends_with("document.typ"))
+            .and_then(|f| std::str::from_utf8(&f.after).ok())
+            .unwrap_or_default();
+        let annotations = files
+            .iter()
+            .find(|f| f.path.ends_with("weftext.annotations.json"))
+            .and_then(|f| serde_json::from_slice::<Value>(&f.after).ok())
+            .unwrap_or_default();
+        let records = annotations["annotations"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        output["contentPreview"] = json!({"source":source.chars().take(12000).collect::<String>(),"truncated":source.chars().count()>12000,
+            "comments":records.iter().filter(|r|r["suggestion"].is_null()).count(),"revisions":records.iter().filter(|r|!r["suggestion"].is_null()).count(),
+            "annotations":records.iter().take(200).map(|r|json!({"author":r["attribution"],"body":r["body"],"excerpt":r["target"]["anchor"]["visibleExcerpt"],"unlocated":r["target"]["kind"]=="wholeResource"})).collect::<Vec<_>>()});
+    }
+    Ok(Json(output))
 }
 async fn commit_import(State(state): State<AppState>, Json(req): Json<ImportCommit>) -> ApiResult {
     let receipt = core_call(&state, move |core| {
         let preview = core.operation_details(&req.operation_id)?;
-        if !["importNative", "importBibliography"].contains(&preview.kind.as_str()) {
+        if !["importNative", "importBibliography", "importDocx"].contains(&preview.kind.as_str()) {
             return Err(CoreError::new("wrongOperation", "Not an import operation"));
         }
         if !preview.losses.is_empty() && !req.accept_losses {
@@ -755,6 +800,8 @@ mod tests {
         store(&state).unwrap().jobs.get_mut(&id).unwrap().born =
             Instant::now() - TTL - Duration::from_secs(1);
         let req = PrepareRequest {
+            review_mode: String::new(),
+            include_resolved: false,
             request_id: id.clone(),
             session_id: "missing".into(),
             source: String::new(),

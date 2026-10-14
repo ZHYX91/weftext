@@ -62,7 +62,7 @@ class OutputDialog {
   private readonly confirmButton: HTMLButtonElement;
   private readonly downloadButton: HTMLButtonElement;
   private readonly importFile = ui("input", "data-input");
-  private readonly importFormat = select([["native", "Weftext 原生内容包"], ["bibtex", "BibTeX 文献（.bib）"], ["csl-json", "CSL JSON 文献"], ["ris", "RIS 文献（.ris）"]], "native");
+  private readonly importFormat = select([["native", "Weftext 原生内容包"], ["docx", "Word 正文、批注与修订（.docx）"], ["bibtex", "BibTeX 文献（.bib）"], ["csl-json", "CSL JSON 文献"], ["ris", "RIS 文献（.ris）"]], "native");
   private readonly parent = ui("input", "data-input");
   private readonly name = ui("input", "data-input");
   private readonly importFileNote = ui("p", "data-help", "请选择原生内容包。导入会先检查原件并预览新副本。" );
@@ -99,11 +99,16 @@ class OutputDialog {
     this.template.type = "file"; this.template.onchange = () => { void this.inspectTemplate(); };
     this.acceptOutput.type = "checkbox"; this.acceptOutput.onchange = () => this.drawState();
     const grid = ui("div", "output-grid"); grid.append(labeled("输出格式", this.format), labeled("Office 样式策略", this.style));
+    const review = select([["none", "正文版"], ["comments", "带批注审阅版"], ["changes", "批注及待审文字修订"]], this.output.draft.reviewMode ?? "none");
+    review.onchange = () => this.change(() => this.output.setDraft({ reviewMode: review.value as "none" | "comments" | "changes" }));
+    const resolved = ui("input"); resolved.type = "checkbox"; resolved.checked = this.output.draft.includeResolved ?? false;
+    resolved.onchange = () => this.change(() => this.output.setDraft({ includeResolved: resolved.checked }));
+    grid.append(labeled("Word 审阅内容（需已保存正文）", review), labeled("同时导出已解决批注", resolved));
     this.prepareButton = action("生成并查看预览", () => this.prepare(), "data-button primary"); this.confirmButton = action("确认本次文件", () => this.confirm(), "data-button"); this.downloadButton = action("下载已确认文件", () => this.download(), "data-button");
     const buttons = ui("div", "output-actions"); buttons.append(this.prepareButton, this.confirmButton, this.downloadButton);
     outputSection.append(grid, labeled("Office 模板文件（可选）", this.template), this.templateNote, this.bindingHost, this.outputPreview, labeled("已阅读并接受上方列明的损失", this.acceptOutput), this.outputStatus, buttons);
     this.outputStatus.setAttribute("role", "status"); this.outputStatus.setAttribute("aria-live", "polite");
-    const importSection = ui("details", "output-import"); importSection.append(ui("summary", "", "导入原生内容包或文献记录"));
+    const importSection = ui("details", "output-import"); importSection.append(ui("summary", "", "导入 Word、原生内容包或文献记录"));
     this.importFile.type = "file"; this.importFile.accept = ".zip,.weftext"; this.importFile.onchange = () => { void this.readImport(); };
     this.parent.value = basis.root; this.name.placeholder = "例如：导入副本"; this.name.value = "导入副本";
     for (const input of [this.parent, this.name]) input.oninput = () => { this.inputGeneration++; this.refreshImportInput(); };
@@ -205,7 +210,7 @@ class OutputDialog {
   private async inspectImport(): Promise<void> {
     this.mapping = null; this.mappingError = false; this.importMapping.replaceChildren();
     const format = this.importFormat.value; const uploaded = this.uploadedImport;
-    if (format === "native" || !uploaded || this.importReadError) { this.drawState(); return; }
+    if (["native", "docx"].includes(format) || !uploaded || this.importReadError) { this.drawState(); return; }
     const generation = this.importGate.begin(); this.readingMapping = true; this.importStatus.textContent = "正在检查文献完整记录与字段映射…"; this.drawState();
     try {
       const result = await this.host.request<BibliographyInspection>("/api/exchange/inspect", { format, bytesBase64: uploaded.bytesBase64 }); if (!this.importGate.accepts(generation)) return;
@@ -221,10 +226,10 @@ class OutputDialog {
     try { const basis = this.output.basis; this.exchange.setInput({ sessionId: basis.sessionId, baseId: basis.baseId, root: basis.root, parent: this.parent.value, name: this.name.value, format: this.importFormat.value as ExchangeFormat, bytesBase64: this.uploadedImport.bytesBase64 }); this.importPreview.replaceChildren(); this.acceptImport.checked = false; this.importStatus.textContent = "原件与位置已保留，等待检查与预览。"; } catch (error) { this.report(error, this.importStatus); } this.drawState();
   }
   private async prepareImport(): Promise<void> {
-    if (this.importReadError || this.mappingError || this.readingMapping || this.importFormat.value !== "native" && (!this.mapping || bibliographyConflictCount(this.mapping))) { this.report(new Error("请先取得无冲突的完整文献映射提案，再准备创建计划。"), this.importStatus); return; }
+    if (this.importReadError || this.mappingError || this.readingMapping || !["native", "docx"].includes(this.importFormat.value) && (!this.mapping || bibliographyConflictCount(this.mapping))) { this.report(new Error("请先取得无冲突的完整文献映射提案，再准备创建计划。"), this.importStatus); return; }
     if (!this.parent.value || !this.name.value) { this.report(new Error("请输入导入位置与新副本名称。"), this.importStatus); return; }
     const promise = this.exchange.prepare(); this.importStatus.textContent = "正在检查完整原件并准备导入计划…"; this.drawState();
-    try { const plan = await promise; this.importPreview.replaceChildren(...(plan.summary ?? []).map(line => ui("p", "output-summary", line)), lossList(plan.losses)); if (plan.changes) this.importPreview.append(previewContent(plan.changes)); if (plan.preview !== undefined) this.importPreview.append(previewContent(plan.preview)); this.acceptImport.checked = false; this.importStatus.classList.remove("data-warning"); this.importStatus.textContent = "计划已准备；确认后创建上述新副本。"; }
+    try { const plan = await promise; this.importPreview.replaceChildren(...(plan.summary ?? []).map(line => ui("p", "output-summary", line)), lossList(plan.losses)); if (plan.contentPreview) { const p = plan.contentPreview; this.importPreview.append(ui("h4", "", `Word 导入：${p.comments} 条批注，${p.revisions} 条待审修订`), ui("p", "data-help", "正文采用修订前基线；插入和删除保留为待审建议。原 Word 文件同时保存。"), ui("pre", "output-source-preview", p.source.replace(/^#metadata[^\n]*\n/, ""))); if (p.truncated) this.importPreview.append(ui("p", "data-help", "此处仅显示前 12000 字符；导入保留完整正文。")); for (const a of p.annotations) this.importPreview.append(ui("p", "", `${a.author}：${a.body}（${a.unlocated ? "未定位，保留在原件资料上" : a.excerpt || "插入点／回复"}）`)); } if (plan.changes) this.importPreview.append(previewContent(plan.changes)); if (plan.preview !== undefined) this.importPreview.append(previewContent(plan.preview)); this.acceptImport.checked = false; this.importStatus.classList.remove("data-warning"); this.importStatus.textContent = "计划已准备；确认后创建上述新副本。"; }
     catch (error) { this.report(error, this.importStatus); } finally { this.drawState(); }
   }
   private async commitImport(): Promise<void> {
@@ -251,9 +256,9 @@ class OutputDialog {
     this.confirmButton.disabled = !this.output.prepared || this.output.busy || this.output.uncertain === "prepare" || this.output.uncertain === "download" || this.output.confirmed || !!this.output.prepared.losses.length && !this.acceptOutput.checked; this.confirmButton.textContent = this.output.uncertain === "confirm" ? "检查原文件确认结果" : "确认本次文件";
     this.downloadButton.disabled = !this.output.confirmed || this.output.busy || this.output.uncertain === "confirm"; this.downloadButton.textContent = this.output.received ? "再次下载同一文件" : "下载已确认文件";
     const importLocked = this.exchange.locked || this.readingImport || this.readingMapping; this.importFile.disabled = importLocked; this.importFormat.disabled = importLocked; this.parent.disabled = importLocked; this.name.disabled = importLocked;
-    this.importFile.accept = ({ native: ".zip,.weftext", bibtex: ".bib,.bibtex", "csl-json": ".json", ris: ".ris" } as Record<string, string>)[this.importFormat.value];
+    this.importFile.accept = ({ native: ".zip,.weftext", docx: ".docx", bibtex: ".bib,.bibtex", "csl-json": ".json", ris: ".ris" } as Record<string, string>)[this.importFormat.value];
     this.importMapping.querySelectorAll<HTMLButtonElement>("button").forEach(button => { button.disabled = importLocked; });
-    const unmapped = this.importFormat.value !== "native" && (!this.mapping || bibliographyConflictCount(this.mapping) > 0);
+    const unmapped = !["native", "docx"].includes(this.importFormat.value) && (!this.mapping || bibliographyConflictCount(this.mapping) > 0);
     this.importPrepare.disabled = !this.uploadedImport || this.importReadError || this.mappingError || unmapped || this.exchange.busy || this.readingImport || this.readingMapping || this.exchange.uncertain === "commit" || !!this.exchange.receipt; this.importPrepare.textContent = this.exchange.uncertain === "prepare" ? "检查原导入预览" : "检查原件并预览导入";
     this.acceptImport.disabled = this.exchange.busy || this.exchange.uncertain === "commit" || !!this.exchange.receipt || !this.exchange.plan?.losses.length; this.acceptImport.parentElement!.hidden = !this.exchange.plan?.losses.length;
     this.importCommit.disabled = !this.exchange.plan || this.exchange.busy || this.readingImport || this.readingMapping || this.importReadError || this.mappingError || unmapped || this.exchange.uncertain === "prepare" || !this.exchange.receipt && !!this.exchange.plan.losses.length && !this.acceptImport.checked; this.importCommit.textContent = this.exchange.receipt ? "刷新已导入的副本" : this.exchange.uncertain === "commit" ? "检查原导入结果" : "创建已预览的新副本";

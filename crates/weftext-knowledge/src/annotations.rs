@@ -662,12 +662,17 @@ fn verify_json_number_preservation(bytes: &[u8]) -> Result<()> {
 }
 impl AnnotationDocument {
     pub fn create(&self, record: AnnotationRecord) -> Result<Vec<u8>> {
-        record.target.validate()?;
+        self.create_many(vec![record])
+    }
+    pub fn create_many(&self, records: Vec<AnnotationRecord>) -> Result<Vec<u8>> {
         let mut value = self.value.clone();
-        value["annotations"].as_array_mut().unwrap().push(
-            serde_json::to_value(record)
-                .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?,
-        );
+        for record in records {
+            record.target.validate()?;
+            value["annotations"].as_array_mut().unwrap().push(
+                serde_json::to_value(record)
+                    .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?,
+            );
+        }
         let bytes = serde_json::to_vec_pretty(&value)
             .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
         decode_annotations(&bytes)?;
@@ -1050,7 +1055,7 @@ pub fn suggestion_plan(
     }
     // A replacement of literal source text is the first safe operation profile.
     // Complex formatted selections need the Editor's separate verified operation.
-    let safe = ordinary_text_range(&source.source, &anchor.source_range);
+    let safe = writable_suggestion_range(&source.source, &anchor.source_range);
     if !safe
         || anchor
             .source_range

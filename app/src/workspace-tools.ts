@@ -77,6 +77,11 @@ export class WorkspaceTools {
     this.propertyPanel = new DataPanel(dataHost); this.outputPanel = new OutputPanel({ ...dataHost, embeddedQueries: host.embeddedQueries, imported: async receipt => { const root = receipt.root ?? dataHost.getDocument()?.root; if (!root) throw new Error("导入回执缺少可刷新资料库位置，实际回执已保留。"); await host.refreshLibrary?.(root); if (this.library?.root === root) await this.queryPanel.refresh(); } }); this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query));
     this.knowledgePanel = mountKnowledgePanel(this.knowledgeContainer, {
       context: () => this.context(), load: context => api("/api/knowledge/read", { context }),
+      proofread: async (context, options) => {
+        const render = await api<{ ok: boolean }>("/api/render", { sessionId: context.sessionId, source: context.source, serial: context.serial });
+        if (!render.ok) throw new Error("当前正文编译未成功，请先处理预览诊断再校对。");
+        return api("/api/knowledge/proofread", { context, options });
+      },
       prepare: (intent, context) => api("/api/knowledge/prepare", { operationId: operationId(), context, intent }),
       commit: (plan, context) => this.commit(plan, context),
       navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,

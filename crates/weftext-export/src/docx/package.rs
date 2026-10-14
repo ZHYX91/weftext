@@ -154,6 +154,37 @@ impl Package {
     pub fn xml(&self, name: &str) -> Result<Option<Element>, DocxError> {
         self.parts.get(name).map(|b| xml::parse(b)).transpose()
     }
+    /// Resolve a unique internal main-document relationship, never a guessed filename.
+    pub fn related_part(&self, kind: &str, fallback: &str) -> Result<String, DocxError> {
+        let relations: Vec<_> = self
+            .rels
+            .children
+            .iter()
+            .filter_map(Xml::element)
+            .filter(|e| e.get("Type") == Some(kind))
+            .collect();
+        if relations.len() > 1 {
+            return Err(DocxError::new("批注部件关系不唯一"));
+        }
+        let Some(rel) = relations.first() else {
+            return Ok(fallback.into());
+        };
+        if rel.get("TargetMode") == Some("External") {
+            return Err(DocxError::new("批注部件不能指向外部"));
+        }
+        let target = rel
+            .get("Target")
+            .ok_or_else(|| DocxError::new("批注部件缺少目标"))?;
+        let path = if target.starts_with('/') {
+            target.trim_start_matches('/').to_owned()
+        } else {
+            format!("word/{target}")
+        };
+        if !self.parts.contains_key(&path) {
+            return Err(DocxError::new("批注关系指向缺失部件"));
+        }
+        Ok(path)
+    }
     pub fn set_xml(&mut self, name: &str, e: &Element) {
         self.parts.insert(name.into(), xml::serialize(e));
     }

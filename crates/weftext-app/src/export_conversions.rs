@@ -66,6 +66,7 @@ pub(crate) fn template_slots(format: &str, bytes: &[u8]) -> Result<Value, ApiErr
 }
 
 struct DocumentCut {
+    reviews: Vec<weftext_export::docx::DocxReview>,
     files: BTreeMap<String, Vec<u8>>,
     style: Option<StyleModule>,
     schema: Schema,
@@ -87,11 +88,18 @@ fn capture(
     loc: &Location,
     req: &PrepareRequest,
 ) -> Result<DocumentCut, CoreError> {
+    if !matches!(
+        req.review_mode.as_str(),
+        "" | "none" | "comments" | "changes"
+    ) {
+        return Err(CoreError::new("reviewMode", "请选择正文、批注或修订输出"));
+    }
     core.check_session_base(&req.session_id, &req.base_id)?;
     let inventory = core.inventory(&loc.root)?;
     let key = relative(&loc.root, &loc.path)?;
     if inventory.workspace_id.is_some() {
         let mut frozen = core.admitted_compile_snapshot(&loc.root, "live")?;
+        let reviews = freeze_reviews(&frozen, loc, req)?;
         let owner_id = frozen
             .snapshot
             .files
@@ -116,6 +124,7 @@ fn capture(
         let citations = super::citation_api::freeze_citations(&mut frozen, &req.source, &loc.path)?;
         core.check_session_base(&req.session_id, &req.base_id)?;
         Ok(DocumentCut {
+            reviews,
             files: frozen.files,
             style: frozen.style,
             schema,
@@ -128,6 +137,12 @@ fn capture(
             complete: frozen.snapshot.complete,
         })
     } else {
+        if matches!(req.review_mode.as_str(), "comments" | "changes") && req.format == "docx" {
+            return Err(CoreError::new(
+                "reviewUnavailable",
+                "当前普通文件没有受管批注，请选择正文输出",
+            ));
+        }
         if inventory.status != "ordinary" {
             return Err(CoreError::new(
                 "unadmittedLibrary",
@@ -161,6 +176,7 @@ fn capture(
         let schema_json = serde_json::to_value(&schema)?;
         core.check_session_base(&req.session_id, &req.base_id)?;
         Ok(DocumentCut {
+            reviews: vec![],
             files,
             style: None,
             schema,
@@ -177,6 +193,86 @@ fn capture(
             complete: true,
         })
     }
+}
+fn freeze_reviews(
+    frozen: &weftext_core::AdmittedCompileSnapshot,
+    loc: &Location,
+    req: &PrepareRequest,
+) -> Result<Vec<weftext_export::docx::DocxReview>, CoreError> {
+    use weftext_knowledge as k;
+    if req.format != "docx" || !matches!(req.review_mode.as_str(), "comments" | "changes") {
+        return Ok(vec![]);
+    }
+    let source = frozen
+        .snapshot
+        .files
+        .iter()
+        .find(|f| Path::new(&f.path) == loc.path)
+        .ok_or_else(|| CoreError::new("reviewSource", "正文不在准确快照内"))?;
+    if source.bytes.as_deref() != Some(req.source.as_bytes()) {
+        return Err(CoreError::new(
+            "reviewDraft",
+            "带批注／修订输出需要已保存的准确正文；请先保存并重新打开输出面板，草稿保留",
+        ));
+    }
+    let key = relative(
+        &loc.root,
+        &loc.path
+            .parent()
+            .ok_or_else(|| CoreError::new("reviewSource", "缺少笔记目录"))?
+            .join("weftext.annotations.json"),
+    )?;
+    let Some(bytes) = frozen.files.get(&key) else {
+        return Ok(vec![]);
+    };
+    let annotations =
+        k::decode_annotations(bytes).map_err(|e| CoreError::new(&e.code, e.message))?;
+    let owner = k::NodeRef {
+        workspace_id: frozen
+            .snapshot
+            .inventory
+            .workspace_id
+            .clone()
+            .unwrap_or_default(),
+        node_id: source.node_id.clone().unwrap_or_default(),
+    };
+    let current = k::NodeSnapshot {
+        owner: owner.clone(),
+        path: source.path.clone(),
+        library_path: relative(&loc.root, &loc.path)?,
+        revision_id: source.revision.clone().unwrap_or_default(),
+        source: req.source.clone(),
+        title: None,
+        aliases: vec![],
+        labels: vec![],
+        labels_complete: false,
+    };
+
+    let mut selected: std::collections::BTreeSet<String> = annotations
+        .records
+        .iter()
+        .filter(|r| r.reply_to.is_none() && (req.include_resolved || r.review_state == "open"))
+        .map(|r| r.annotation_id.clone())
+        .collect();
+    loop {
+        let n = selected.len();
+        for r in &annotations.records {
+            if r.reply_to.as_ref().is_some_and(|p| selected.contains(p)) {
+                selected.insert(r.annotation_id.clone());
+            }
+        }
+        if n == selected.len() {
+            break;
+        }
+    }
+    Ok(annotations.records.iter().filter(|r|selected.contains(&r.annotation_id)).map(|r| {
+        let range=r.target.anchor().and_then(|a|k::resolve_anchor(a,Some(&current),&[]).current_range);
+        let replacement=if req.review_mode=="changes" {r.suggestion.as_ref().filter(|s|s.state=="pending" && !s.requires_reconfirmation && s.confirmed_revision==current.revision_id && range.as_ref().is_some_and(|range|k::writable_suggestion_range(&req.source,range))).map(|s|s.replacement.clone())}else{None};
+        let mut body=r.body.clone(); if let Some(s)=&r.suggestion {body.push_str(&format!("\n建议状态：{}；拟替换为：{}",s.state,s.replacement));if req.review_mode=="changes" && s.state=="pending" && replacement.is_none(){body.push_str("\n此建议不满足准确文字修订输出条件，仅保留批注。");}}
+        let empty_body_point = range.as_ref().is_some_and(|r|r.from==r.to && r.from==req.source.len() && k::writable_suggestion_range(&req.source,r));
+        let downgrade_reason = (req.review_mode=="changes" && r.suggestion.as_ref().is_some_and(|s|s.state=="pending") && replacement.is_none()).then(||"此待审建议不满足准确文字修订输出条件；能定位的目标仅输出普通批注，否则列为未定位损失".into());
+        weftext_export::docx::DocxReview{id:r.annotation_id.clone(),parent:r.reply_to.clone(),author:r.attribution.clone(),date:weftext_export::docx::word_comment_date(&r.created_at),body,resolved:r.review_state=="resolved",range:range.map(|r|(r.from,r.to)),whole_document:matches!(&r.target,k::AnnotationTarget::WholeDocument{node}if node==&owner),replacement,downgrade_reason,empty_body_point}
+    }).collect())
 }
 
 pub(crate) async fn generate(
@@ -287,7 +383,10 @@ pub(crate) async fn generate(
                         template,
                         frozen_result.as_ref(),
                         query.as_ref().map(|q| q.columns.as_slice()),
-                        &embedded,
+                        DocxExtras {
+                            embedded: &embedded,
+                            reviews: &cut.reviews,
+                        },
                     ),
                     "xlsx" => xlsx(
                         &req_owned,
@@ -613,6 +712,10 @@ pub(crate) fn query_losses(result: &QueryResult) -> Vec<ExportLoss> {
     }
     losses
 }
+struct DocxExtras<'a> {
+    embedded: &'a [super::embedded_output::FrozenEmbedded],
+    reviews: &'a [weftext_export::docx::DocxReview],
+}
 fn docx(
     req: &PrepareRequest,
     mut render: RenderOutput,
@@ -620,8 +723,9 @@ fn docx(
     template: Option<Vec<u8>>,
     query: Option<&QueryResult>,
     columns: Option<&[String]>,
-    embedded: &[super::embedded_output::FrozenEmbedded],
+    extras: DocxExtras<'_>,
 ) -> Result<(ExportArtifact, Value), ApiError> {
+    let DocxExtras { embedded, reviews } = extras;
     let mut bindings = BTreeMap::new();
     let mut losses = vec![];
     let mut query_bound = false;
@@ -689,15 +793,18 @@ fn docx(
         }
         losses.extend(query_losses(query));
     }
-    let artifact = weftext_export::docx::export_docx(DocxInput {
-        render: &render,
-        template: template.as_deref(),
-        bindings: &bindings,
-        options: DocxOptions {
-            preserve_source_styles: req.style_policy == "source",
-            reject_losses: false,
+    let artifact = weftext_export::docx::export_reviewed_docx(
+        DocxInput {
+            render: &render,
+            template: template.as_deref(),
+            bindings: &bindings,
+            options: DocxOptions {
+                preserve_source_styles: req.style_policy == "source",
+                reject_losses: false,
+            },
         },
-    })
+        reviews,
+    )
     .map_err(convert_error)?;
     let preview = json!({"target":"html","title":render.products.as_ref().and_then(|p|p.title.clone()),"body":render.products.as_ref().and_then(|p|p.body.clone()),"bindings":req.bindings,"rowCount":query.map(|q|q.rows.len())});
     let mut artifact = artifact;
@@ -973,6 +1080,7 @@ mod tests {
         );
         let projection = weftext_data::project(&source, &schema);
         let cut = DocumentCut {
+            reviews: vec![],
             files: BTreeMap::new(),
             style: None,
             schema_json: serde_json::to_value(&schema).unwrap(),

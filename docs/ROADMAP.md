@@ -10,7 +10,7 @@ translation_status: synced
 
 2026-10-13: plan the current scope as **one initial MVP plus seven further milestones**. Version numbers divide the work and may become multiple smaller releases after testing. They are neither delivery dates nor claims of implementation. [REQUIREMENTS](REQUIREMENTS.md) remains the scope authority; research candidates are not automatically included.
 
-The local **0.5.0-alpha.3** candidate covers bounded Windows features from v0.2–v0.5 below. See the [preview guide](MVP.md) for actual availability, checks and outstanding acceptance. The version number does not establish complete IME, rich-editing, arbitrary Office conversion or cross-platform acceptance.
+The local **0.5.0-alpha.4** candidate covers bounded Windows features from v0.2–v0.5 below. See the [preview guide](MVP.md) for actual availability, checks and outstanding acceptance. The version number does not establish complete IME, rich-editing, arbitrary Office conversion or cross-platform acceptance.
 
 | Milestone | What users can accomplish | Main requirements and completion conditions |
 | --- | --- | --- |
@@ -50,6 +50,23 @@ The following conditions govern this implementation and acceptance. Per-case out
 | IQV07 Multiple queries and complex source | In a note with multiple queries, edit only the selected definition. Preserve original source and explain limits when the builder cannot express it, its source is ambiguous or syntax is temporarily invalid; never simplify, guess a source or overwrite another query. |
 
 This round covers local notes and existing local authorization boundaries. **v0.6** verifies separate multiuser authorization for history listing/reading/comparing/restoring, cached/displayed content after revocation, and received/missing/concurrent versions after synchronization. Timestamps alone cannot turn synchronized history into a false single causal chain. File-version timelines always remain distinct from Query business timelines for tasks/events.
+
+## v0.5 addition: proofreading, annotations and Word review interchange
+
+Implementation of [REQUIREMENTS](REQUIREMENTS.md) §5.7 was confirmed on 2026-10-14. This belongs to stage 4 cross-object capabilities, extends v0.4 annotation foundations and completes the local path in v0.5 before v0.6. The earlier bounded alpha.3 closeout does not establish these additions or rewrite previous acceptance results.
+
+| Order | v0.5 implementation slice | Completion gate |
+| --- | --- | --- |
+| 1 | Annotation provenance, proofreading rules/states and exact ranges/insertion positions for basic revisions | Reuse annotation JSON and Core transactions; retain old annotations, replies and unknown data; never guess stale positions. |
+| 2 | Four local checks, results panel and batch annotation creation | Distinguish valid/suspect/excluded ranges; locate text across formatting; repeated runs do not duplicate annotations and late results cannot appear current. |
+| 3 | Body-only and annotated Word output | Map comment text, ranges, attribution and replies according to actual support; report unlocated/unsupported items; do not rerun proofreading during export. |
+| 4 | Word body, resources, comments and replies import | Retain exact originals/losses; separate new object identity from Word IDs; never overwrite existing notes. |
+| 5 | Basic text insertion/deletion/replacement import, handling and export | Pending remains pending; accepting/rejecting has correct effects; overlapping, structural and formatting revisions are never silently flattened. |
+| 6 | Complete round-trip acceptance on one candidate | Annotated/tracked DOCX → Weftext proofreading/replies/suggestion handling → DOCX → real Word inspection; list WPS/LibreOffice results independently. |
+
+Required counterexamples include a word split across bold/italic runs, Chinese/non-BMP characters, repeated identical text, paragraph/table boundaries, crossed symbols, empty dictionaries, overlapping matches, ignored items, edits after checking, edits around insertion points, comments on deleted text, duplicate clicks/lost responses, source/annotation commit conflicts, unknown DOCX parts and complex revisions. Preview, confirmation and download refer to identical content; XML checks are not Office interaction acceptance.
+
+v0.6 validates separate permissions, batch conflicts, offline sync, revoked results/history/artifact caches and downloads across this entire path. v0.7 completes other promised platforms; local rules do not wait for v0.8 Agents. Full complex Word revision round-tripping and AI semantic proofreading are not automatically included. Use existing candidate records for actual progress/results rather than creating another acceptance authority.
 
 ## Later validation and scope
 

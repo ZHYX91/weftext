@@ -1,10 +1,15 @@
 //! Editable DOCX conversion of one frozen successful HTML consumer tree.
 //! No Typst reparsing, Query evaluation, filesystem access, or resource fetch.
 //! Templates use standard Word content controls, bound by their exact tag.
+mod import;
 mod math;
 mod package;
+mod review;
 mod styles;
 mod xml;
+pub use import::build_docx_native_package;
+pub use review::DocxReview;
+pub use review::word_comment_date;
 
 use crate::{ExportArtifact, ExportError, ExportLoss};
 use base64::Engine as _;
@@ -104,9 +109,15 @@ fn controls(e: &Element, parent: &str, out: &mut Vec<TemplateControl>) {
 }
 
 pub fn export_docx(input: DocxInput<'_>) -> crate::Result<ExportArtifact> {
-    convert(input).map_err(Into::into)
+    convert(input, &[]).map_err(Into::into)
 }
-fn convert(input: DocxInput<'_>) -> Result<ExportArtifact, DocxError> {
+pub fn export_reviewed_docx(
+    input: DocxInput<'_>,
+    reviews: &[DocxReview],
+) -> crate::Result<ExportArtifact> {
+    convert(input, reviews).map_err(Into::into)
+}
+fn convert(input: DocxInput<'_>, reviews: &[DocxReview]) -> Result<ExportArtifact, DocxError> {
     if !input.render.ok {
         return Err(DocxError::new("DOCX 需要一次成功的冻结 HTML 编译"));
     }
@@ -304,7 +315,8 @@ fn convert(input: DocxInput<'_>) -> Result<ExportArtifact, DocxError> {
             "w:numIdMacAtCleanup",
         ],
     );
-    let losses = ctx.losses;
+    let mut losses = ctx.losses;
+    review::apply(&mut package, &mut doc, reviews, &mut losses)?;
     if input.options.reject_losses && !losses.is_empty() {
         return Err(DocxError::new(format!(
             "已拒绝 DOCX 损失：{}",
@@ -1072,10 +1084,14 @@ impl Context<'_> {
             }
         }
         if n.kind == "text" {
-            return Ok(vec![text_run(
-                n.text.as_deref().unwrap_or(""),
-                &style.properties(),
-            )]);
+            let mut run = text_run(n.text.as_deref().unwrap_or(""), &style.properties());
+            if let Some(origin) = &n.origin
+                && origin.is_main
+                && Some(origin.raw.as_str()) == n.text.as_deref()
+            {
+                run.source = Some((origin.from, origin.raw.clone()));
+            }
+            return Ok(vec![run]);
         }
         if tag == "br" {
             let mut r = Element::new("w:r");

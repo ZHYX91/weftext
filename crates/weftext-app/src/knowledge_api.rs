@@ -15,6 +15,7 @@ use weftext_knowledge as knowledge;
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/api/knowledge/read", post(read))
+        .route("/api/knowledge/proofread", post(proofread))
         .route("/api/knowledge/prepare", post(prepare))
         .route("/api/knowledge/template-preview", post(template_preview))
         .route("/api/knowledge/link-copy", post(link_copy))
@@ -278,6 +279,65 @@ struct Context {
 #[serde(rename_all = "camelCase")]
 struct ReadRequest {
     context: Context,
+}
+#[derive(Deserialize)]
+struct ProofreadRequest {
+    context: Context,
+    options: knowledge::ProofreadOptions,
+}
+fn proofreading_scan(
+    state: &AppState,
+    context: &Context,
+    bundle: &Bundle,
+    options: &knowledge::ProofreadOptions,
+) -> Result<knowledge::ProofreadResult, ApiError> {
+    let tree = render_tree(state, context, &bundle.style_generation)?.ok_or_else(|| {
+        ApiError::new(
+            StatusCode::CONFLICT,
+            "preview_required",
+            "请等待当前正文预览成功后再校对；不会使用旧稿结果",
+        )
+    })?;
+    knowledge::proofread(&tree, &context.source, options).map_err(knowledge_error)
+}
+fn existing_finding(
+    document: &knowledge::AnnotationDocument,
+    finding: &knowledge::ProofreadFinding,
+    current: &knowledge::NodeSnapshot,
+) -> bool {
+    document.records.iter().any(|record| {
+        let origin = record.unknown.get("proofreading");
+        origin.is_some_and(|v| {
+            v["ruleId"] == finding.rule_id && v["ruleVersion"] == finding.rule_version
+        }) && record
+            .target
+            .anchor()
+            .and_then(|anchor| knowledge::resolve_anchor(anchor, Some(current), &[]).current_range)
+            .zip(finding.source_range.as_ref())
+            .is_some_and(|(a, b)| a.from == b.from && a.to == b.to && a.raw == b.raw)
+    })
+}
+async fn proofread(
+    State(state): State<AppState>,
+    Json(request): Json<ProofreadRequest>,
+) -> ApiResult {
+    observe(&state, &request.context)?;
+    let bundle = bundle(&state, &request.context).await?;
+    let scan = proofreading_scan(&state, &request.context, &bundle, &request.options)?;
+    let existing = annotation_document(&bundle.annotations_file)
+        .ok()
+        .map(|document| {
+            scan.findings
+                .iter()
+                .filter(|f| existing_finding(&document, f, &bundle.committed))
+                .map(|f| f.id.clone())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    exact(&state, &request.context)?;
+    let mut output = value(scan)?;
+    output["existing"] = json!(existing);
+    Ok(Json(output))
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1321,7 +1381,7 @@ fn source_target(
         "whole_document" | "wholeDocument" => Ok(knowledge::AnnotationTarget::WholeDocument {
             node: bundle.committed.owner.clone(),
         }),
-        "source_range" | "sourceRange" | "source_element" | "sourceElement" => {
+        "source_range" | "sourceRange" | "source_element" | "sourceElement" | "source_point" => {
             clean_source(context, bundle)?;
             if bundle.committed.revision_id.is_empty() {
                 return Err(ApiError::new(
@@ -1332,8 +1392,18 @@ fn source_target(
             }
             let from = utf16_byte(&context.source, integer(target, "from")?)?;
             let to = utf16_byte(&context.source, integer(target, "to")?)?;
-            if from >= to {
+            let point = target["kind"] == "source_point";
+            if !point && from >= to || point && from != to {
                 return Err(ApiError::bad("范围批注需要非空选区"));
+            }
+            if point
+                && !knowledge::writable_suggestion_range(
+                    &context.source,
+                    &knowledge::ExactRange::new(&context.source, from, to)
+                        .map_err(knowledge_error)?,
+                )
+            {
+                return Err(ApiError::bad("插入点须位于准确可写的普通正文中"));
             }
             let anchor = knowledge::source_anchor(
                 &bundle.committed,
@@ -1468,13 +1538,21 @@ async fn prepare_annotation(
             });
         }
     }
-    if matches!(
-        kind,
-        "annotationCreate" | "annotationReattach" | "annotationReconfirm"
-    ) && matches!(
-        request.intent["target"]["kind"].as_str(),
-        Some("source_range" | "sourceRange" | "source_element" | "sourceElement")
-    ) {
+    if kind == "annotationProofread"
+        || matches!(
+            kind,
+            "annotationCreate" | "annotationReattach" | "annotationReconfirm"
+        ) && matches!(
+            request.intent["target"]["kind"].as_str(),
+            Some(
+                "source_range"
+                    | "sourceRange"
+                    | "source_element"
+                    | "sourceElement"
+                    | "source_point"
+            )
+        )
+    {
         clean_source(&request.context, &bundle)?;
         let loc = location(state, &request.context.session_id)?;
         let path = bundle.source_file.path.clone();
@@ -1497,6 +1575,74 @@ async fn prepare_annotation(
         });
     }
     let after = match kind {
+        "annotationProofread" => {
+            clean_source(&request.context, &bundle)?;
+            let options: knowledge::ProofreadOptions =
+                serde_json::from_value(request.intent["options"].clone())
+                    .map_err(|e| ApiError::bad(e.to_string()))?;
+            let ids: BTreeSet<String> = serde_json::from_value(request.intent["findings"].clone())
+                .map_err(|_| ApiError::bad("请选择当前校对结果"))?;
+            if ids.is_empty() || ids.len() > 200 {
+                return Err(ApiError::bad("每批请选择 1 至 200 条校对结果"));
+            }
+            let scan = proofreading_scan(state, &request.context, &bundle, &options)?;
+            if ids
+                .iter()
+                .any(|id| !scan.findings.iter().any(|f| &f.id == id))
+            {
+                return Err(ApiError::bad("所选校对结果已变化，请重新检查"));
+            }
+            let editor = weftext_engine::inspect_editor(&bundle.committed.source);
+            let mut records = vec![];
+            for finding in scan.findings.iter().filter(|f| ids.contains(&f.id)) {
+                if existing_finding(&document, finding, &bundle.committed) {
+                    continue;
+                }
+                let range = finding
+                    .source_range
+                    .as_ref()
+                    .ok_or_else(|| ApiError::bad("所选结果没有准确作者源位置，请保留只读提示"))?;
+                let target = source_target(
+                    &request.context,
+                    &bundle,
+                    &json!({"kind":"source_range","from":range.utf16_from,"to":range.utf16_to,"visibleExcerpt":finding.excerpt}),
+                )?;
+                let executable = finding.executable
+                    && editor.literal_regions.iter().any(|r| {
+                        r.range.writable && r.range.from <= range.from && r.range.to >= range.to
+                    });
+                let mut record = new_record(
+                    target,
+                    format!(
+                        "{}：{}{}",
+                        finding.excerpt,
+                        finding.message,
+                        finding
+                            .replacement
+                            .as_ref()
+                            .map(|r| format!("；建议：{} → {r}", finding.excerpt))
+                            .unwrap_or_default()
+                    ),
+                    if executable { "suggestion" } else { "comment" }.into(),
+                    if executable {
+                        finding.replacement.clone()
+                    } else {
+                        None
+                    },
+                );
+                record.attribution = "Weftext 校对".into();
+                record.labels = vec!["proofreading".into(), finding.category.clone()];
+                if request.intent["ignore"] == true {
+                    record.review_state = "resolved".into();
+                    if let Some(s) = &mut record.suggestion {
+                        s.state = "rejected".into();
+                    }
+                }
+                record.unknown.insert("proofreading".into(),json!({"ruleId":finding.rule_id,"ruleVersion":finding.rule_version,"category":finding.category,"ignored":request.intent["ignore"]==true}));
+                records.push(record);
+            }
+            document.create_many(records).map_err(knowledge_error)?
+        }
         "annotationCreate" => {
             let target = match media_target {
                 Some(target) => target,
@@ -1584,12 +1730,8 @@ async fn prepare_annotation(
                 .find(|record| record.annotation_id == id)
                 .and_then(|record| record.target.anchor())
                 .ok_or_else(|| ApiError::bad("此建议缺少准确原文目标"))?;
-            let editor = weftext_engine::inspect_editor(&bundle.committed.source);
-            if !editor.literal_regions.iter().any(|region| {
-                region.range.writable
-                    && region.range.from <= anchor.source_range.from
-                    && region.range.to >= anchor.source_range.to
-            }) {
+            if !knowledge::writable_suggestion_range(&bundle.committed.source, &anchor.source_range)
+            {
                 return Err(ApiError::new(
                     StatusCode::CONFLICT,
                     "source_entry",

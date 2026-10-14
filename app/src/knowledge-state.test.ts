@@ -63,6 +63,9 @@ test("selection anchors reject partial combining characters, emoji sequences and
   assert.equal(isGraphemeRange(text, 3, 8), true);
   assert.equal(isGraphemeRange(text, 8, 9), false);
   assert.equal(isGraphemeRange(text, 8, 10), true);
+  assert.equal(isGraphemeRange(text, 3, 3), false);
+  assert.equal(isGraphemeRange(text, 3, 3, true), true);
+  assert.equal(isGraphemeRange(text, 2, 2, true), false);
 });
 
 test("stale, rejected and unverified suggestions preserve discussion but cannot expose accept action", () => {

@@ -7,7 +7,7 @@ translation_status: source
 
 # Weftext
 
-基于原生 Typst 的文件型知识与写作工具。当前状态：**0.5.0-alpha.3 Windows 本地候选，完整产品仍在推进**。旧原型已归档，不是当前构建依赖。
+基于原生 Typst 的文件型知识与写作工具。当前状态：**0.5.0-alpha.4 Windows 本地候选，完整产品仍在推进**。旧原型已归档，不是当前构建依赖。
 
 - [本地候选使用与边界](docs/MVP.zh-CN.md)：写作、属性与 Query、链接与批注、Office 输出与资料交换，以及保存恢复；含构建命令和实际限制。
 - [版本路线图](docs/ROADMAP.zh-CN.md)：首版之后 7 个里程碑，覆盖当前已确认需求。

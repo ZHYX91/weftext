@@ -4,11 +4,13 @@ mod annotations;
 mod copy;
 mod links;
 mod mentions;
+mod proofreading;
 
 pub use annotations::*;
 pub use copy::*;
 pub use links::*;
 pub use mentions::*;
+pub use proofreading::*;
 
 use serde::{Deserialize, Serialize};
 
@@ -184,6 +186,18 @@ pub(crate) fn ordinary_text_range(source: &str, range: &ExactRange) -> bool {
         node.children().any(|child| walk(&child, range))
     }
     walk(&typst_syntax::LinkedNode::new(parsed.root()), range)
+}
+
+/// Text suggestions use one literal leaf, or the Editor's separately proved
+/// empty trailing body slot. Never invent a neighboring nonempty preimage.
+pub fn writable_suggestion_range(source: &str, range: &ExactRange) -> bool {
+    ordinary_text_range(source, range)
+        || range.from == range.to
+            && range.verify(source)
+            && (source.is_empty() || source.ends_with("\n\n"))
+            && weftext_engine::inspect_editor(source)
+                .body_insertion
+                .is_some_and(|point| point.writable && point.from == range.from)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

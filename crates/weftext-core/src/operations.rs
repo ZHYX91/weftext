@@ -91,6 +91,13 @@ pub enum OperationIntent {
         #[serde(default)]
         allow_losses: bool,
     },
+    ImportDocx {
+        parent: String,
+        name: String,
+        bytes: Vec<u8>,
+        #[serde(default)]
+        allow_losses: bool,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2376,6 +2383,21 @@ impl Core {
             }
         }
         let mutation = match &request.intent {
+            OperationIntent::ImportDocx {
+                parent,
+                name,
+                bytes,
+                allow_losses,
+            } => self.plan_docx_import(
+                &root,
+                Path::new(parent),
+                name,
+                bytes,
+                *allow_losses,
+                &mut preview,
+                &mut files,
+                &mut absent_dependencies,
+            )?,
             OperationIntent::ImportNative {
                 parent,
                 name,
@@ -4209,6 +4231,7 @@ fn intent_kind(intent: &OperationIntent) -> &'static str {
         OperationIntent::ImportResource { .. } => "importResource",
         OperationIntent::ImportNative { .. } => "importNative",
         OperationIntent::ImportBibliography { .. } => "importBibliography",
+        OperationIntent::ImportDocx { .. } => "importDocx",
     }
 }
 pub(crate) fn canonical_json_bytes(value: &serde_json::Value) -> Result<Vec<u8>> {

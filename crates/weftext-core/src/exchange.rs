@@ -226,6 +226,84 @@ impl Core {
     }
 
     #[allow(clippy::too_many_arguments)]
+    pub(crate) fn plan_docx_import(
+        &mut self,
+        root: &Path,
+        parent: &Path,
+        name: &str,
+        bytes: &[u8],
+        allow_losses: bool,
+        preview: &mut OperationPreview,
+        dependencies: &mut Vec<CapturedFile>,
+        absent: &mut Vec<AbsentDependency>,
+    ) -> Result<Mutation> {
+        let config = self.read_config(root, ConfigRole::Schema)?;
+        let schema = match config.bytes {
+            Some(bytes) => decode(&bytes)?,
+            None => include_str!("../../../docs/design/examples/schema.authoring.json").into(),
+        };
+        let package =
+            weftext_export::docx::build_docx_native_package(bytes, &schema, &preview.operation_id)
+                .map_err(|e| CoreError::new("docxImport", e.to_string()))?;
+        let mut mutation = self.plan_content_import(
+            root,
+            parent,
+            name,
+            package,
+            None,
+            allow_losses,
+            preview,
+            dependencies,
+            absent,
+        )?;
+        // This producer authored the exact new source/targets together. Rebind only
+        // anchors whose full source preimage survived Core's verified copy map.
+        if let Mutation::CreateTree { files, .. } = &mut mutation {
+            let sources: BTreeMap<_, _> = files
+                .iter()
+                .filter(|f| f.path.ends_with(".typ"))
+                .map(|f| (f.path.clone(), f.after.clone()))
+                .collect();
+            for file in files
+                .iter_mut()
+                .filter(|f| f.path.ends_with("weftext.annotations.json"))
+            {
+                let mut data: serde_json::Value = serde_json::from_slice(&file.after)?;
+                for record in data["annotations"].as_array_mut().ok_or_else(|| {
+                    CoreError::new("docxAnnotations", "Missing annotation records")
+                })? {
+                    if record["suggestion"].is_null() || record.get("copyTargetState").is_some() {
+                        continue;
+                    }
+                    let anchor: Option<knowledge::SourceAnchor> =
+                        serde_json::from_value(record["target"]["anchor"].clone()).ok();
+                    if let Some(anchor) = anchor
+                        && sources.iter().any(|(path, bytes)| {
+                            preview.revisions.get(path) == Some(&anchor.revision_id)
+                                && std::str::from_utf8(bytes)
+                                    .is_ok_and(|source| anchor.source_range.verify(source))
+                        })
+                    {
+                        record["suggestion"]["confirmedRevision"] = anchor.revision_id.into();
+                        record["suggestion"]["requiresReconfirmation"] = false.into();
+                    }
+                }
+                file.after = serde_json::to_vec_pretty(&data)?;
+                if let Some(change) = preview
+                    .changes
+                    .iter_mut()
+                    .find(|change| change.path == file.path)
+                {
+                    change.bytes = file.after.len();
+                }
+                knowledge::decode_annotations(&file.after)
+                    .map_err(|e| CoreError::new(&e.code, e.message))?;
+            }
+        }
+        Ok(mutation)
+    }
+
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn plan_native_import(
         &mut self,
         root: &Path,

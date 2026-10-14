@@ -8,7 +8,7 @@ translation_status: synced
 
 # Weftext
 
-A file-based knowledge and writing tool built around native Typst. Current state: **a 0.5.0-alpha.3 Windows local candidate; the complete product remains in progress**. Archived prototypes are not current build dependencies.
+A file-based knowledge and writing tool built around native Typst. Current state: **a 0.5.0-alpha.4 Windows local candidate; the complete product remains in progress**. Archived prototypes are not current build dependencies.
 
 - [Local candidate use and boundaries](docs/MVP.md): writing, properties/Query, links/annotations, Office output/interchange and save/recovery, with build commands and actual limitations.
 - [Version roadmap](docs/ROADMAP.md): seven milestones after the first version, covering current confirmed requirements.

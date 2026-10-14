@@ -12,6 +12,8 @@ pub(super) enum Xml {
 
 #[derive(Clone, Debug)]
 pub(super) struct Element {
+    /// In-memory authored text provenance; never parsed from or written to XML.
+    pub source: Option<(usize, String)>,
     pub name: String,
     pub attrs: Vec<(String, String)>,
     pub children: Vec<Xml>,
@@ -20,6 +22,7 @@ pub(super) struct Element {
 impl Element {
     pub fn new(name: &str) -> Self {
         Self {
+            source: None,
             name: name.into(),
             attrs: vec![],
             children: vec![],

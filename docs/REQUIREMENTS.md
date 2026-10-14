@@ -186,6 +186,19 @@ The interface explains actual retention coverage and unavailable versions. It do
 
 This item and §5.4.1 receive local completion during v0.5; multiuser history access and synchronized version presentation are verified with v0.6. Current implementation limits do not reduce required user outcomes. [ROADMAP](ROADMAP.md) records delivery boundaries/acceptance and [CORE](design/CORE.md) owns the rules.
 
+### 5.7 Local proofreading and Word review interchange
+
+On 2026-10-14 the user confirmed additions to RQ02, RQ18–20 and RQ24: complete local Word import → proofreading/review → Word export in v0.5; validate multi-user, synchronization and permissions in v0.6. Alpha.3 does not contain this complete path; the following are implementation and acceptance requirements.
+
+- Proofreading is independent of export. Suspicious characters/symbol correction, typos, paired symbols (including crossed nesting) and sensitive terms have separate switches. Use local rules, user dictionaries and exclusions without another product or external AI. A match is not necessarily an error; only explicit replacements become executable suggestions.
+- Select a body range or the whole document, inspect results, then add all, a category or selected results to existing annotation JSON in one action. Repeated runs do not duplicate annotations or overwrite replies/handled states; changed text requires revalidation. Check visible text with exact source mapping rather than mechanically treating Typst syntax, code, equations or URLs as prose.
+- Manual, imported and proofreading annotations share one system, retaining provenance, original author/time, replies, resolution and history. Attribution does not establish an application account or permission. Unlocated discussion survives without same-text guessing. Applying a suggestion still commits source and state together through Core.
+- DOCX body import retains originals, structure, resources and unknown information with a loss preview, mapping comments/replies into the new document. Template upload is not body import. The first basic-revision profile supports exactly mappable text insertion, deletion and replacement, retaining pending review without silently accepting or rejecting changes.
+- Export offers body-only and annotated review copies, with selected annotations becoming real Word comments. Word tracked-change output is a separate choice, not suggestion text presented as revisions. Export consumes fixed source, annotations and rule results without silently rerunning proofreading or editing author documents.
+- Complex formatting/move/structural revisions, unmappable ranges and unsupported target data retain originals and explicit impacts/options; retaining originals does not establish full round-trip support. Real Word validates import, edits, replies, acceptance/rejection and re-export. Record WPS and LibreOffice support separately; one application cannot establish another's acceptance.
+
+Sequence and completion gates are in [ROADMAP](ROADMAP.md). [FEATURES](design/FEATURES.md) §§9.7,10.2,11.3 own proofreading/revisions, import and export respectively. AI semantic proofreading remains a later evaluation item, not a prerequisite for local rules.
+
 ## 6. Bringing the original 21 findings into the new design
 
 Original IDs use the `A2-GLOBAL-6B13-` prefix; their fixed-scope reports and CLOSED states remain historical facts. This table extracts requirements and consequences only: the current independent design disposition is in [new architecture REVIEW](design/REVIEW.md) §7, and **each still requires product implementation verification**; this table does not automatically transfer historical closures. Removing a mechanism can make its field-specific counterexample inapplicable, but cannot automatically eliminate the general harm. Apply the same standard to subsequent Typst findings.

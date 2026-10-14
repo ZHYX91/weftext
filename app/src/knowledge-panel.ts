@@ -1,4 +1,5 @@
 import "./knowledge-view.css";
+import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult } from "./proofreading-panel";
 import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
 import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput } from "./knowledge-state";
 import type { Origin, RenderNode } from "./types";
@@ -73,6 +74,7 @@ export interface KnowledgeReceipt { status: string; message?: string; operationI
 export interface KnowledgeIntent { kind: string; [key: string]: unknown }
 export interface KnowledgeTextMapping { nodeKey: string; node: Text | HTMLElement; text: string; origin?: Origin | null }
 export interface KnowledgeHost {
+  proofread?(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>;
   context(): KnowledgeContext | null;
   load(context: KnowledgeContext): Promise<KnowledgeSnapshot>;
   /** A fresh preparation must qualify the current Draft and freeze every effect. */
@@ -89,7 +91,7 @@ export interface KnowledgeHost {
   beforeAction?(): Promise<void>;
   canEditSource?(): boolean;
 }
-export type KnowledgePanelTab = "links" | "mentions" | "annotations" | "files" | "templates";
+export type KnowledgePanelTab = "links" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
 export interface KnowledgePanel {
   refresh(): Promise<void>;
   selectTab(tab: KnowledgePanelTab): void;
@@ -126,6 +128,7 @@ function nativeTree(node: RenderNode): Node {
 export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost): KnowledgePanel {
   container.classList.add("knowledge-panel"); container.setAttribute("aria-label", "知识与批注");
   const gate = new KnowledgeReadGate();
+  const proofreading = new ProofreadingPanel({ context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new Error("校对接口不可用")), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, notify: message => host.notify(message, true) });
   let snapshot: KnowledgeSnapshot | null = null;
   let snapshotBasis: KnowledgeContext | null = null;
   let tab = "links";
@@ -509,8 +512,8 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         reconsider.append(element("p", "knowledge-help knowledge-reconfirm-selection", draft.selection ? `已选择 UTF-16 [${draft.selection.from}, ${draft.selection.to})。` : "请先在正文或源码中选择目标，再取当前准确选区。"));
         reconsider.append(action("准备重新确认", async () => {
           const context = host.context(); const selection = draft!.selection;
-          if (!context || context.dirty || !selection || !sameKnowledgeBasis(draft!.basis, context) || !isGraphemeRange(context.source, selection.from, selection.to)) { report("请先保存源并重新取当前完整字符范围。建议文字已保留。"); return; }
-          await perform("重新确认建议的目标与文字", { kind: "annotationReconfirm", annotationId: id, target: { kind: "source_range", ...selection }, replacement: draft!.replacement });
+          if (!context || context.dirty || !selection || !sameKnowledgeBasis(draft!.basis, context) || !isGraphemeRange(context.source, selection.from, selection.to, true) || selection.from === selection.to && !draft!.replacement) { report("请先保存源并重新取当前完整字符范围，插入建议也可取正文光标位置。建议文字已保留。"); return; }
+          await perform("重新确认建议的目标与文字", { kind: "annotationReconfirm", annotationId: id, target: { kind: selection.from === selection.to ? "source_point" : "source_range", ...selection }, replacement: draft!.replacement });
         })); card.append(reconsider);
       }
       card.append(controls);
@@ -624,14 +627,14 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     container.replaceChildren();
     const heading = element("div", "knowledge-heading"); heading.append(element("strong", "", "知识与批注"), action("刷新", refresh, "knowledge-refresh")); container.append(heading);
     const tabs = element("div", "knowledge-tabs"); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", "知识面板");
-    for (const [id, label] of [["links", "链接"], ["mentions", "潜在链接"], ["annotations", "批注"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "mentions", "annotations", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : 4)) % 5]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
+    for (const [id, label] of [["links", "链接"], ["mentions", "潜在链接"], ["annotations", "批注"], ["proofreading", "校对"], ["files", "文件"], ["templates", "模板"]]) { const control = action(label, () => { tab = id; render(); }, "knowledge-tab"); control.setAttribute("role", "tab"); control.setAttribute("aria-selected", String(tab === id)); control.tabIndex = tab === id ? 0 : -1; control.onkeydown = event => { if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key)) return; event.preventDefault(); const ids = ["links", "mentions", "annotations", "proofreading", "files", "templates"]; const index = ids.indexOf(tab); tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length]; render(); container.querySelector<HTMLButtonElement>('[aria-selected="true"]')?.focus(); }; tabs.append(control); }
     container.append(tabs, status);
     if (pendingPlan) { const pending = element("div", "knowledge-warning", `原操作 ${pendingPlan.plan.operationId} 结果待确认。`); if (host.inspectOperation) pending.append(action("检查原操作", inspectPending)); container.append(pending); }
     const body = element("div", "knowledge-body"); body.setAttribute("role", "tabpanel"); container.append(body);
     if (!host.context()) { body.append(element("p", "knowledge-empty", "打开笔记后查看链接、批注和文件操作。")); return; }
     body.append(element("p", "knowledge-help knowledge-current", host.context()!.path));
     for (const message of snapshot?.warnings ?? []) body.append(element("p", "knowledge-warning", message));
-    if (tab === "links") renderLinks(body); else if (tab === "mentions") renderMentions(body); else if (tab === "annotations") renderAnnotations(body); else if (tab === "files") renderFiles(body); else renderTemplates(body);
+    if (tab === "links") renderLinks(body); else if (tab === "mentions") renderMentions(body); else if (tab === "annotations") renderAnnotations(body); else if (tab === "proofreading") proofreading.render(body); else if (tab === "files") renderFiles(body); else renderTemplates(body);
     body.scrollTop = scroll;
     if (focusKey) container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
   }

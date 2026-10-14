@@ -10,8 +10,9 @@ export interface OutputFile { name: string; bytesBase64: string }
 export interface TemplateAnchor { name: string; kind: "content" | "cell" | "range" | "table"; label?: string; supported?: boolean; reason?: string }
 export interface TemplateInspection { slots: TemplateAnchor[]; warnings: (string | OutputLoss)[] }
 export interface OutputBinding { kind: "body" | "title" | "field" | "query" | "text"; field?: string; text?: string }
-export interface ExportDraft { format: ExportFormat; stylePolicy: ExportStylePolicy; template?: OutputFile; bindings: Record<string, OutputBinding>; query?: FrozenQuery }
+export interface ExportDraft { format: ExportFormat; stylePolicy: ExportStylePolicy; template?: OutputFile; bindings: Record<string, OutputBinding>; query?: FrozenQuery; reviewMode?: "none" | "comments" | "changes"; includeResolved?: boolean }
 export interface ExportRequest {
+  reviewMode?: "none" | "comments" | "changes"; includeResolved?: boolean;
   requestId: string; sessionId: string; source: string; serial: number; baseId: string;
   format: ExportFormat; stylePolicy: ExportStylePolicy; template?: OutputFile; bindings?: Record<string, OutputBinding>; queryId?: string;
   embeddedQueries?: EmbeddedQuerySelection[];
@@ -65,6 +66,7 @@ export class OutputController {
       this.pending = {
         requestId: this.host.id(), sessionId: this.basis.sessionId, source: this.basis.source, serial: this.basis.serial, baseId: this.basis.baseId,
         format: this.draft.format, stylePolicy: this.draft.stylePolicy,
+        ...(this.draft.format === "docx" ? { reviewMode: this.draft.reviewMode ?? "none", includeResolved: this.draft.includeResolved ?? false } : {}),
         ...(this.draft.template ? { template: clone(this.draft.template), bindings: clone(this.draft.bindings) } : {}),
         ...(this.draft.query ? { queryId: this.draft.query.queryId } : {}),
         ...(["docx", "pdf"].includes(this.draft.format) ? { embeddedQueries: clone([...this.embeddedQueries]) } : {}),
@@ -117,7 +119,7 @@ export class OutputReadGate {
   invalidate(): void { this.generation++; }
 }
 
-export type ExchangeFormat = "native" | "bibtex" | "csl-json" | "ris";
+export type ExchangeFormat = "native" | "docx" | "bibtex" | "csl-json" | "ris";
 export type ExchangeLoss = string | OutputLoss | { code: string; detail: string; path: string };
 export interface BibliographyInspection { records: { conflicts: unknown[]; [key: string]: unknown }[]; losses: OutputLoss[] }
 export function bibliographyConflictCount(result: BibliographyInspection): number {
@@ -125,7 +127,7 @@ export function bibliographyConflictCount(result: BibliographyInspection): numbe
   return result.records.reduce((count, record) => count + record.conflicts.length, 0);
 }
 export interface ExchangeRequest { operationId: string; sessionId: string; baseId: string; root: string; parent: string; name: string; bytesBase64: string; format: ExchangeFormat }
-export interface ExchangePlan { operationId: string; planId: string; summary?: string[]; losses: ExchangeLoss[]; changes?: unknown[]; preview?: unknown; status?: string; code?: string; message?: string }
+export interface ExchangePlan { operationId: string; planId: string; summary?: string[]; losses: ExchangeLoss[]; changes?: unknown[]; preview?: unknown; contentPreview?: { source: string; truncated: boolean; comments: number; revisions: number; annotations: {author: string; body: string; excerpt: string | null; unlocated: boolean}[] }; status?: string; code?: string; message?: string }
 export interface ExchangeReceipt { operationId?: string; planId?: string; status: string; document?: unknown; documents?: unknown[]; path?: string; root?: string; sessionId?: string; source?: string; code?: string; message?: string }
 export interface ExchangeTransport { id(): string; prepare(request: ExchangeRequest): Promise<ExchangePlan>; commit(request: { operationId: string; planId: string; acceptLosses: boolean }): Promise<ExchangeReceipt> }
 

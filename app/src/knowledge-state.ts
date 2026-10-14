@@ -76,8 +76,8 @@ export function canApplySuggestion(state: { purpose?: string; suggestionState?: 
   return state.purpose === "suggestion" && state.suggestionState === "pending" && state.verified !== false && (state.targetResolution === "exact" || state.targetResolution === "mapped");
 }
 
-export function isGraphemeRange(text: string, start: number, end: number): boolean {
-  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > text.length) return false;
+export function isGraphemeRange(text: string, start: number, end: number, allowPoint = false): boolean {
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start || !allowPoint && end === start || end > text.length) return false;
   const boundaries = new Set<number>([text.length]);
   for (const part of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) boundaries.add(part.index);
   return boundaries.has(start) && boundaries.has(end);
