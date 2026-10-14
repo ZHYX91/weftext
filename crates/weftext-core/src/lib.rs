@@ -12,6 +12,7 @@ mod history_tests;
 mod inventory;
 mod journal;
 mod operations;
+pub mod sync;
 mod transaction_recovery;
 pub use directory_identity::{
     NavigationPreparation, NavigationTarget, TagRecord, TagRegistrySnapshot,

@@ -166,6 +166,8 @@ Core reader获得多对象逻辑提交原子可见性；普通外部工具可看
 
 ## 7. 同所有者同步与冲突
 
+实现进度（2026-10-14，alpha.1 之后的开发代码）：Core 已加入有界的 manifest/blob 因果验证与私有持久暂存。配对固定 WorkspaceId 和准确 genesis；摘要覆盖完整严格解析的 manifest。笔记源、批注、所属资源与位置组成同一冲突单元，schema/settings/tags 和目录分别有内容角色；任何角色均不承载权限或作业执行资格。接收端检查完整 parents、before revisions 和语义依赖，缺内容不接纳为 head；并发同对象保各版本与共同 base。按选中对象导出完整因果／事务闭包，保冲突双方，不要求无关对象的内容；producer 应按真实依赖选择 parents，不能让每次编辑都依赖全库 frontier。当前硬上限为 2,000 commits、每 manifest 4 MiB／5,000 文件、单 blob 64 MiB、每 store 元数据与 blob 合计 256 MiB，超限明确失败，不截成“完整”。已做内核乱序、冲突、部分选择、损坏、原请求重试和重启测试；尚未接通作者提交的 publication、Core 安装／新副本身份建立及用户同步入口，因此不宣称托管同步或离线产品闭环已交付。
+
 managed 同步传输一个 immutable `CommitManifest + exact blobs` bundle：WorkspaceId、事务、因果 parents、writer replica、所有真实出生/改动/退休、before/after RevisionId、结构/schema 改变与准确 transform。同一 manifest 的校验摘要覆盖整个对象；校验失败/缺 blob/placeholder/父历史缺失只进入 staging，不成为新 head。
 
 默认信任自己的设备与传输账户，摘要用于完整性；不声称抵抗 malicious transport。若部署承诺不可信 transport/撤销设备防护，采用一个登记设备身份与一个签名 commit 域，签完整 manifest；历史按当时有效登记/撤销因果 cut 验证，冲突撤销不能被选择另一 branch 抹除。无需两个专用签名 profile、CP/Notice 和每个 revision 的独立 seal。
