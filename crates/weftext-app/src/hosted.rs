@@ -6,7 +6,9 @@ mod editor;
 mod embedded_query;
 mod fields;
 mod history_api;
+mod inputs;
 mod library;
+mod media;
 mod navigation;
 mod office;
 mod office_import;
@@ -83,6 +85,8 @@ struct User {
     #[serde(default)]
     library: library::Rights,
     #[serde(default)]
+    resources: BTreeMap<String, media::Rights>,
+    #[serde(default)]
     sync_owner: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -109,6 +113,8 @@ struct Config {
     directories: BTreeMap<String, query_scopes::Directory>,
     #[serde(default)]
     style_inputs: Vec<String>,
+    #[serde(default)]
+    resources: BTreeMap<String, media::Resource>,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -132,6 +138,7 @@ struct HostedInner {
     review: review::Store,
     office: office::Store,
     library: library::Store,
+    media: media::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -241,6 +248,11 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !media::valid_rights(config, &user.resources) {
+            return Err(ApiError::bad(
+                "资源授权须引用明确配置的 asset；下载须同时具备读取权",
+            ));
+        }
         if !library::valid_rights(&user.library) {
             return Err(ApiError::bad("库配置写入须具备同角色读取权"));
         }
@@ -442,21 +454,7 @@ impl HostedInner {
         actor: &str,
         resources: &[String],
     ) -> Result<BTreeMap<String, Vec<u8>>, ApiError> {
-        let mut paths = BTreeSet::new();
-        for resource in resources {
-            self.rights(actor, resource)?;
-            paths.insert(
-                self.config
-                    .files
-                    .get(resource)
-                    .ok_or_else(unavailable)?
-                    .path
-                    .clone(),
-            );
-        }
-        self.core
-            .hosted_files(&self.config.root, &paths.into_iter().collect::<Vec<_>>())
-            .map_err(|_| unavailable())
+        inputs::read_files(self, actor, resources)
     }
 }
 
@@ -523,7 +521,7 @@ fn protected_response(mut response: Response) -> Response {
         HeaderValue::from_static("nosniff"),
     );
     headers.insert("referrer-policy", HeaderValue::from_static("no-referrer"));
-    headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"));
+    headers.insert("content-security-policy", HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self'; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'"));
     response
 }
 
@@ -860,6 +858,7 @@ async fn update_policy(
                             && old.query_providers == user.query_providers
                             && old.query_scopes == user.query_scopes
                             && old.library == user.library
+                            && old.resources == user.resources
                             && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);
@@ -897,6 +896,7 @@ async fn update_policy(
             fields::expire_revoked(inner);
             review::expire_revoked(inner);
             office::expire_revoked(inner);
+            media::expire_revoked(inner);
             Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
         })
         .await?,
@@ -950,7 +950,7 @@ pub(super) async fn serve(
         || config
             .style_inputs
             .iter()
-            .any(|id| !config.files.contains_key(id))
+            .any(|id| !config.files.contains_key(id) && !config.resources.contains_key(id))
         || config.style_inputs.iter().collect::<BTreeSet<_>>().len() != config.style_inputs.len()
     {
         return Err("Invalid explicit style inputs".into());
@@ -980,15 +980,16 @@ pub(super) async fn serve(
         {
             return Err("Invalid configured resource".into());
         }
-        if file
-            .inputs
-            .iter()
-            .any(|i| !config.files.contains_key(i) || i == id)
-        {
+        if file.inputs.iter().any(|i| {
+            (!config.files.contains_key(i) && !config.resources.contains_key(i)) || i == id
+        }) {
             return Err("Invalid configured dependency".into());
         }
     }
     let mut references = BTreeSet::new();
+    if !media::valid_config(&config) {
+        return Err("Invalid explicitly configured owned resource".into());
+    }
     for (id, directory) in &config.directories {
         if !valid_id(id)
             || !query_scopes::valid_directory(directory)
@@ -1079,6 +1080,7 @@ pub(super) async fn serve(
             review: review::Store::default(),
             office: office::Store::default(),
             library: library::Store::default(),
+            media: media::Store::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -1091,6 +1093,7 @@ pub(super) async fn serve(
         .merge(history_api::router())
         .merge(navigation::router())
         .merge(library::router())
+        .merge(media::router())
         .merge(query::router())
         .merge(definition::router())
         .merge(embedded_query::router())

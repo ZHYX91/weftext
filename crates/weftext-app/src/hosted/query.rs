@@ -195,9 +195,7 @@ pub(super) fn authorize_authority(
         }
     }
     for resource in &authority.inputs {
-        if !access(resource)?.read {
-            return Err(unavailable());
-        }
+        inputs::access(inner, actor, resource)?;
     }
     Ok(())
 }
@@ -458,6 +456,7 @@ struct Capture {
     authority: Authority,
     config_hash: String,
     witnesses: Vec<(String, SnapshotWitness)>,
+    inputs: inputs::Captured,
     scopes: query_scopes::Capture,
     input: weftext_data::FrozenQueryInput,
     schema: Schema,
@@ -1474,15 +1473,22 @@ fn capture(
         if let Some(d) = &draft {
             file_resources.insert(d.resource.clone());
         }
+        let captured_inputs =
+            inputs::capture_query(inner, &actor, &inputs.iter().cloned().collect::<Vec<_>>())?;
         let mut paths = vec![config.path.clone()];
-        paths.extend(file_resources.iter().map(|r| {
-            inner
-                .config
-                .root
-                .join(&inner.config.files[r].path)
-                .to_string_lossy()
-                .into_owned()
-        }));
+        paths.extend(
+            file_resources
+                .iter()
+                .map(|r| {
+                    Ok(inner
+                        .config
+                        .root
+                        .join(inputs::path(inner, r)?)
+                        .to_string_lossy()
+                        .into_owned())
+                })
+                .collect::<Result<Vec<_>, ApiError>>()?,
+        );
         if paths.len() > 64 {
             return Err(invalid());
         }
@@ -1708,7 +1714,7 @@ fn capture(
             }
         }
         for r in &needed_inputs {
-            inner.rights(&actor, r)?;
+            inputs::access(inner, &actor, r)?;
         }
         authority.inputs.extend(needed_inputs.clone());
         if needed_inputs != inputs {
@@ -1850,19 +1856,27 @@ fn capture(
                     .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
                 {
                     let config_file = &inner.config.files[r];
+                    let missing = config_file
+                        .inputs
+                        .iter()
+                        .map(|input| captured_inputs.entry(input).map(|entry| entry.is_none()))
+                        .collect::<Result<Vec<_>, _>>()?
+                        .into_iter()
+                        .any(|missing| missing);
+                    if missing {
+                        complete = false;
+                        continue;
+                    }
                     let input_sizes = config_file
                         .inputs
                         .iter()
                         .map(|input| {
-                            let config = &inner.config.files[input];
-                            let file = snapshots.get(input).ok_or_else(changed)?;
-                            if file.currentness != "accepted" {
+                            let (path, bytes, accepted) =
+                                captured_inputs.entry(input)?.ok_or_else(changed)?;
+                            if !accepted {
                                 return Err(changed());
                             }
-                            Ok((
-                                config.path.len(),
-                                file.bytes.as_ref().ok_or_else(changed)?.len(),
-                            ))
+                            Ok((path.len(), bytes.len()))
                         })
                         .collect::<Result<Vec<_>, ApiError>>()?;
                     charge_bytes(
@@ -1878,14 +1892,13 @@ fn capture(
                         .inputs
                         .iter()
                         .map(|input| {
-                            let config = &inner.config.files[input];
-                            let file = snapshots.get(input).ok_or_else(changed)?;
-                            let bytes = file.bytes.as_ref().ok_or_else(changed)?;
-                            if file.currentness != "accepted" {
+                            let (path, bytes, accepted) =
+                                captured_inputs.entry(input)?.ok_or_else(changed)?;
+                            if !accepted {
                                 return Err(changed());
                             }
                             Ok((
-                                config.path.clone(),
+                                path.to_owned(),
                                 base64::engine::general_purpose::STANDARD.encode(bytes),
                             ))
                         })
@@ -1927,12 +1940,14 @@ fn capture(
         let columns = weftext_data::query_output_columns(&req.plan, &context.definitions)
             .map_err(|_| invalid())?;
         let config_hash = office::binding_hash(inner, &all_resources(&authority))?;
+        charge_bytes(&mut worker_bytes, captured_inputs.retained_bytes())?;
         return Ok(Capture {
             actor: actor.clone(),
             epoch: inner.actor_generation(&actor),
             authority,
             config_hash,
             witnesses,
+            inputs: captured_inputs,
             scopes,
             input: weftext_data::FrozenQueryInput {
                 cut_id: cut_id.clone(),
@@ -1967,6 +1982,7 @@ async fn execute_captured(
         &captured.plan,
     )?;
     charge_bytes(&mut execution_bytes, captured.scopes.retained_bytes())?;
+    charge_bytes(&mut execution_bytes, captured.inputs.retained_bytes())?;
     if let Some(environment) = &captured.environment {
         charge_bytes(&mut execution_bytes, environment.retained_bytes())?;
     }
@@ -2053,6 +2069,7 @@ async fn execute_captured(
         if office::binding_hash(inner,&all_resources(&captured.authority))?!=captured.config_hash{return Err(changed());}
         for (path,witness) in &captured.witnesses{inner.core.validate_snapshot_witness(&inner.config.root,path,witness).map_err(|_|changed())?;}
         captured.scopes.recheck(inner,&actor)?;
+        captured.inputs.validate(inner,&actor)?;
         if let Some(environment)=&captured.environment {environment.recheck(inner,&actor)?;}
         if let Some(d)=&captured.draft && let (Some(id),Some(serial))=(&d.session_id,d.serial){let (_,session,_)=inner.session(&auth,id)?;if session.resource!=d.resource{return Err(unavailable());}writing_api::exact_version(&inner.editor_versions,id,&d.source,serial)?;}
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}

@@ -131,21 +131,7 @@ pub(super) fn binding_hash(
     inner: &HostedInner,
     resources: &BTreeSet<String>,
 ) -> Result<String, ApiError> {
-    let files: BTreeMap<_, _> = resources
-        .iter()
-        .map(|r| {
-            inner
-                .config
-                .files
-                .get(r)
-                .map(|f| (r, f))
-                .ok_or_else(unavailable)
-        })
-        .collect::<Result<_, _>>()?;
-    Ok(digest(
-        &serde_json::to_vec(&json!({"root":inner.config.root,"files":files}))
-            .map_err(|_| failed())?,
-    ))
+    inputs::binding_hash(inner, resources)
 }
 fn failed() -> ApiError {
     ApiError::new(
@@ -179,12 +165,20 @@ fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Re
             .flat_map(|q| &q.execution.inputs),
     );
     for r in style_inputs {
+        if inner.config.resources.contains_key(r) {
+            media::input_access(inner, actor, r, true)?;
+            continue;
+        }
         let grant = user.grants.get(r).ok_or_else(unavailable)?;
         if !grant.read || !grant.office.export || (download && !grant.office.download) {
             return Err(unavailable());
         }
     }
     for r in &needs.resources {
+        if inner.config.resources.contains_key(r) {
+            media::input_access(inner, actor, r, true)?;
+            continue;
+        }
         let grant = user.grants.get(r).ok_or_else(unavailable)?;
         if !grant.office.export
             || (download && !grant.office.download)
@@ -362,14 +356,14 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
             .sources
             .iter()
             .map(|r| {
-                inner
+                Ok(inner
                     .config
                     .root
-                    .join(&inner.config.files[r].path)
+                    .join(inputs::path(inner, r)?)
                     .to_string_lossy()
-                    .into_owned()
+                    .into_owned())
             })
-            .collect();
+            .collect::<Result<Vec<_>, ApiError>>()?;
         if needs.review.is_some() {
             paths.push(
                 main.parent()

@@ -3,6 +3,7 @@ import { parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState,
 import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHostedScope, hostedDependencyMap, hostedScopeDraft, HostedQueryGate, type HostedProviderDescriptor, type HostedQueryDependencies, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow, type HostedSeriesPolicyDescriptor, type HostedScopeCatalog } from "./hosted-query-state";
 import { hostedCachePrefix } from "./hosted-state";
 import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
+import { mediaCellReferences } from "./hosted-media-state";
 
 type Product = "title" | "body" | "headings" | "types" | "self";
 type Resource = { resource: string; title: string; fields: string[]; products: Record<Product, boolean>; relations: string[]; definitions: boolean; definitionHistory: boolean };
@@ -34,7 +35,7 @@ export class HostedQuery {
   private results = ui("section");
   private scopeControls = ui("section");
   private definitions?: HostedQueryDefinitions;
-  constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost, private dependenciesChanged?: () => void) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost, private dependenciesChanged?: () => void, private openMedia?: (reference: string) => Promise<void>) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
   dependencies(): HostedQueryDependencies { return exactHostedDependencies(this.draft, this.catalog); }
   get version() { return this.inputRevision; }
   refuseResult(message: string) { this.gate.clear(); this.result = undefined; this.resultInput = undefined; this.message.textContent = message; this.renderResults(); }
@@ -187,7 +188,7 @@ export class HostedQuery {
     if (result.aggregateExact === false) this.results.append(ui("p", "hint", "此汇总仅对应已知输入，不代表完整总数。"));
     for (const diagnostic of result.diagnostics) this.results.append(ui("p", "hint", diagnosticText(diagnostic)));
     const table = ui("table"); table.setAttribute("aria-label", "托管高级查询冻结结果"); const head = ui("tr"); for (const column of result.columns) head.append(ui("th", "", column)); head.append(ui("th", "", "独立获权导航")); table.append(head);
-    for (const row of result.rows) { const line = ui("tr"); for (const column of result.columns) line.append(ui("td", `cell-${row.cells[column]?.state ?? "unprojected"}`, text(row.cells[column]))); const target = ui("td"); if (row.canOpen === true && row.resource) { const open = action("打开获权正文", () => this.openRow(row)); open.disabled = !current; target.append(open); } else target.textContent = "无正文读取资格 / 派生行"; line.append(target); table.append(line); }
+    for (const row of result.rows) { const line = ui("tr"); for (const column of result.columns) { const cell = row.cells[column], value = ui("td", `cell-${cell?.state ?? "unprojected"}`, text(cell)); if (this.openMedia && cell) for (const reference of mediaCellReferences(cell)) { const open = action("独立查看获权资源", async () => { try { await this.openMedia!(reference); } catch (error) { this.message.textContent = error instanceof Error ? error.message : "资源当前不可用，查询输入保留。"; } }); open.disabled = !current; value.append(open); } line.append(value); } const target = ui("td"); if (row.canOpen === true && row.resource) { const open = action("打开获权正文", () => this.openRow(row)); open.disabled = !current; target.append(open); } else target.textContent = "无正文读取资格 / 派生行"; line.append(target); table.append(line); }
     this.results.append(table); if (result.rows.some(row => row.lifecycle === "trash")) this.results.append(ui("p", "hint", "本次含回收站来源，只读结果不提供恢复、删除或正文写入资格。")); if (!result.rows.length) this.results.append(ui("p", "hint", current && result.coverage === "complete" && result.freshness === "current" && !result.limited ? "本次明确范围内的完整空结果。" : "已知范围没有结果，不能断言完整为空。"));
     const output = action("将原冻结查询交给 Office", () => this.output(result.queryId, { columns: result.columns, rowCount: result.rows.length, coverage: result.coverage })); output.disabled = !current || this.busy; this.results.append(output);
   }

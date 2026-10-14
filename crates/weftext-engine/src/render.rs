@@ -877,6 +877,7 @@ pub fn safe_url(value: &str) -> bool {
         || lower.starts_with("mailto:")
         || lower.starts_with("tel:")
         || lower.starts_with("weftext-node://")
+        || lower.starts_with("weftext-resource://")
         || lower.starts_with("weftext-workspace://")
         || local_file
         || value.starts_with('#')

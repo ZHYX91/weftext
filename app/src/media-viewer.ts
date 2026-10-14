@@ -15,23 +15,23 @@ export type ResourceMetadata = { kind: "image"; width: number; height: number }
   | { kind: "video"; timebase: { numerator: number; denominator: number }; durationTick: number; width: number; height: number }
   | { kind: "unsupported"; message: string };
 export interface MediaResource {
-  resourceId: string; resource: string; nodeId: string; name: string; revision: string | null;
-  readBasis: string; bytes: number; contentType: string; metadata: ResourceMetadata; annotationReady: boolean; currentness: string;
+  resourceId: string; resource: string; nodeId?: string; name: string; revision: string | null;
+  readBasis?: string; bytes: number; contentType: string; metadata: ResourceMetadata; annotationReady: boolean; currentness: string;
 }
 export interface ResourceList { resources: MediaResource[]; warnings?: string[] }
 export interface MediaViewerHost {
-  context(): { sessionId: string } | null;
+  context(): { sessionId?: string; viewerId?: string } | null;
   list(sessionId: string): Promise<ResourceList>;
   read(sessionId: string, resource: string, revision: string): Promise<Blob>;
   importResource?(file: File, sessionId: string): Promise<void>;
   notify(message: string, error?: boolean): void;
 }
 export interface MediaViewer { dispose(): void; selection(): MediaRegionInput | null }
-interface MediaViewerOptions { readOnly?: boolean; open?: ResourceOpenTarget }
+export interface MediaViewerOptions { readOnly?: boolean; open?: ResourceOpenTarget; allowSaveCopy?: boolean; fixedResource?: boolean }
 
 /** Open a resolved resource in an independent read-only panel/dialog. */
-export function mountResourceViewer(container: HTMLElement, host: MediaViewerHost, target: ResourceOpenTarget): { dispose(): void } {
-  return mountMediaViewer(container, host, () => {}, undefined, { readOnly: true, open: target });
+export function mountResourceViewer(container: HTMLElement, host: MediaViewerHost, target: ResourceOpenTarget, options: Pick<MediaViewerOptions, "allowSaveCopy"> = {}): { dispose(): void } {
+  return mountMediaViewer(container, host, () => {}, undefined, { ...options, readOnly: true, open: target });
 }
 
 /** An opt-in list preview reads the exact resource version independently of
@@ -76,16 +76,20 @@ function labeled(label: string, control: HTMLElement): HTMLLabelElement { const 
 export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, selected: (target: MediaRegionInput | null) => void, initial?: MediaRegionInput, options: MediaViewerOptions = {}): MediaViewer {
   container.classList.add("media-viewer");
   const sessionId = host.context()?.sessionId;
+  const viewerId = host.context()?.viewerId;
+  const lifetime = viewerId ?? sessionId;
   let disposed = false, generation = 0, pageGeneration = 0, resource: MediaResource | null = null, current: MediaRegionInput | null = null;
   let remembered = initial ? { ...initial } : undefined;
   let objectUrl: string | null = null, pdf: PDFDocumentProxy | null = null, loading: PDFDocumentLoadingTask | null = null, rendering: RenderTask | null = null;
   let player: HTMLMediaElement | null = null;
+  let decodingImage: HTMLImageElement | null = null;
+  const cancelDecoding = new Set<() => void>();
   const toolbar = el("div", "media-toolbar"), choose = el("select", "media-input"), status = el("p", "media-status", "正在读取当前笔记的资源清单…");
   const controls = el("div", "media-controls"), preview = el("div", "media-preview"), details = el("p", "media-details");
-  const saveCopy = options.readOnly ? button("保存准确资源副本", () => { if (!objectUrl || !resource) return; const download = el("a"); download.href = objectUrl; download.download = resource.name; download.click(); }) : null;
+  const saveCopy = options.readOnly && options.allowSaveCopy !== false ? button("保存准确资源副本", () => { if (!objectUrl || !resource) return; const download = el("a"); download.href = objectUrl; download.download = resource.name; download.click(); }) : null;
   choose.setAttribute("aria-label", "选择已登记资源"); toolbar.append(choose, button("刷新资源", () => refresh()));
   if (saveCopy) { saveCopy.disabled = true; toolbar.append(saveCopy); }
-  choose.hidden = !!options.readOnly;
+  choose.hidden = !!options.readOnly || !!options.fixedResource;
   container.append(toolbar, status, controls, preview, details);
   if (host.importResource && sessionId && !options.readOnly) {
     const picker = el("input", "media-file"); picker.type = "file"; picker.setAttribute("aria-label", "导入资源文件"); picker.hidden = true;
@@ -94,7 +98,8 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
   }
   function message(error: unknown): string { return error instanceof Error ? error.message : "资源读取未完成，请重新打开；批注草稿已保留。"; }
   function report(text: string, error = false): void { status.textContent = text; status.classList.toggle("error", error); if (error) host.notify(text, true); }
-  function active(ticket: number): boolean { return !disposed && generation === ticket && host.context()?.sessionId === sessionId; }
+  function currentLifetime(): string | undefined { const context = host.context(); return context?.viewerId ?? context?.sessionId; }
+  function active(ticket: number): boolean { return !disposed && generation === ticket && currentLifetime() === lifetime; }
   function set(value: MediaRegionInput | null): void { current = options.readOnly ? null : value; if (current) remembered = { ...current }; selected(current && validateMediaRegion(current) === null ? { ...current } : null); updateDetails(); }
   function updateDetails(): void {
     if (!current) { details.textContent = options.readOnly ? "只读查看准确资源版本。" : "请选择准确版本并在真实预览中取目标。"; return; }
@@ -104,6 +109,8 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
     const error = validateMediaRegion(current); if (error) details.textContent += ` ${error}`;
   }
   function clean(): void {
+    for (const cancel of cancelDecoding) cancel(); cancelDecoding.clear();
+    if (decodingImage) { decodingImage.removeAttribute("src"); decodingImage = null; }
     if (saveCopy) saveCopy.disabled = true;
     pageGeneration++; rendering?.cancel(); rendering = null;
     if (loading) { void loading.destroy(); loading = null; } else if (pdf) { void pdf.loadingTask.destroy(); } pdf = null;
@@ -111,10 +118,10 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
     if (objectUrl) URL.revokeObjectURL(objectUrl); objectUrl = null; controls.replaceChildren(); preview.replaceChildren();
   }
   async function refresh(): Promise<void> {
-    if (!sessionId || host.context()?.sessionId !== sessionId) { report("请先打开已接纳的笔记。"); return; }
+    if (!lifetime || currentLifetime() !== lifetime) { report("当前资源查看资格已变化，请重新打开。"); return; }
     const ticket = ++generation; set(null); clean(); choose.disabled = true;
     try {
-      const result = await host.list(sessionId); if (!active(ticket)) return;
+      const result = await host.list(lifetime); if (!active(ticket)) return;
       choose.replaceChildren(); const empty = el("option", "", "选择笔记资源…"); empty.value = ""; choose.append(empty);
       for (const item of result.resources) { const option = el("option", "", `${item.name}${item.revision ? "" : "（版本未接纳）"}`); option.value = item.resource; option.disabled = !item.revision; choose.append(option); }
       choose.disabled = false; report(result.warnings?.join("；") || (result.resources.length ? "选择资源以打开实际字节。" : "当前笔记没有已登记资源，可导入一个文件。"));
@@ -131,10 +138,10 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
   }
   async function open(item: MediaResource): Promise<void> {
     const ticket = ++generation; clean(); set(null); resource = item;
-    if (!sessionId || !item.revision) { report("资源尚无准确已接纳版本。"); return; }
+    if (!lifetime || !item.revision) { report("资源尚无准确已接纳版本。"); return; }
     report("正在读取并解码准确资源版本…");
     try {
-      const blob = await host.read(sessionId, item.resource, item.revision); if (!active(ticket)) return;
+      const blob = await host.read(lifetime, item.resource, item.revision); if (!active(ticket)) return;
       if (blob.size !== item.bytes || blob.type !== item.contentType) throw new Error("资源交付与清单不一致，请重新打开。");
       objectUrl = URL.createObjectURL(blob);
       if (saveCopy) saveCopy.disabled = false;
@@ -175,7 +182,8 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
   }
   async function showImage(item: MediaResource, ticket: number): Promise<void> {
     if (item.metadata.kind !== "image") return;
-    const image = el("img"); image.alt = item.name; image.draggable = false; image.src = objectUrl!; await image.decode(); if (!active(ticket)) return;
+    const image = el("img"); decodingImage = image; image.alt = item.name; image.draggable = false; image.src = objectUrl!;
+    try { await image.decode(); } finally { if (decodingImage === image) decodingImage = null; } if (!active(ticket)) return;
     const { width, height } = item.metadata;
     if (image.naturalWidth !== width || image.naturalHeight !== height) throw new Error("浏览器解码的原始像素与资源元数据不一致，区域输入已保留。");
     set(restore({ ...base("image_region"), width, height })); drawSurface(image, width, height, true);
@@ -207,7 +215,11 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
   async function showPlayer(item: MediaResource, ticket: number): Promise<void> {
     const metadata = item.metadata; if (metadata.kind !== "audio" && metadata.kind !== "video") return;
     const native = metadata.kind === "audio" ? el("audio") : el("video"); player = native; native.controls = true; native.preload = "metadata"; native.src = objectUrl!;
-    await new Promise<void>((resolve, reject) => { native.onloadedmetadata = () => resolve(); native.onerror = () => reject(new Error("浏览器无法解码该媒体；准确资源原件保留。")); });
+    await new Promise<void>((resolve, reject) => {
+      const cancel = () => { native.onloadedmetadata = null; native.onerror = null; reject(new Error("媒体查看已结束，未安装旧解码结果。")); }; cancelDecoding.add(cancel);
+      native.onloadedmetadata = () => { cancelDecoding.delete(cancel); resolve(); };
+      native.onerror = () => { cancelDecoding.delete(cancel); reject(new Error("浏览器无法解码该媒体；准确资源原件保留。")); };
+    });
     if (!active(ticket)) return;
     const seconds = metadata.durationTick * metadata.timebase.denominator / metadata.timebase.numerator;
     if (!Number.isFinite(native.duration) || Math.abs(native.duration - seconds) > Math.max(metadata.timebase.denominator / metadata.timebase.numerator, 1e-9)) throw new Error("播放器的时间线与资源采样时基不一致，不能创建准确区间。");

@@ -2,9 +2,21 @@
 export interface MediaPoint { x: number; y: number }
 export interface MediaRectangle { x: number; y: number; rectWidth: number; rectHeight: number }
 import type { MediaRegionInput } from "./knowledge-state";
+import type { Cell, NativeValue } from "./data-panel";
 import { validateMediaRegion } from "./knowledge-state";
 
 export interface ResourceOpenTarget { resource: string; revision: string; pageIndex?: number }
+/** Only explicit typed stable refs gain resource navigation, never local paths. */
+export function resourceCellReferences(cell: Cell): string[] {
+  const found = new Set<string>(); let budget = 512;
+  const visit = (value: NativeValue, depth = 0): void => {
+    if (!value || --budget < 0 || depth > 16) return;
+    if (value.kind === "text" && /^weftext-resource:\/\//.test(value.value)) found.add(value.value);
+    else if (value.kind === "array") value.value.forEach(child => visit(child, depth + 1));
+    else if (value.kind === "record") value.value.forEach(child => visit(child.value, depth + 1));
+  };
+  if (cell.state === "value" && cell.value) visit(cell.value); return [...found];
+}
 /** Resource navigation may only restore an exact matched version. Page indexes
  * arrive normalized by the server; this code never interprets a raw fragment. */
 export function resourceOpenError(target: ResourceOpenTarget, resource: { resource: string; revision: string | null; metadata: { kind: string; pages?: readonly unknown[] } }): string | null {

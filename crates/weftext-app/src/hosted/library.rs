@@ -163,12 +163,7 @@ fn now() -> u64 {
         .as_secs()
 }
 fn config_hash(inner: &HostedInner) -> Result<String, ApiError> {
-    let inputs = inner
-        .config
-        .style_inputs
-        .iter()
-        .map(|id| (id, inner.config.files.get(id)))
-        .collect::<BTreeMap<_, _>>();
+    let inputs = inputs::binding_hash(inner, &inner.config.style_inputs.iter().cloned().collect())?;
     Ok(digest(
         &serde_json::to_vec(
             &json!({"root":inner.config.root,"deployment":inner.config.deployment,"inputs":inputs}),
@@ -464,6 +459,10 @@ pub(super) struct ExecutionAuthority {
     pub(super) style_used: bool,
     #[serde(default)]
     config_hash: String,
+    #[serde(default)]
+    input_binding: String,
+    #[serde(default)]
+    resource_revisions: BTreeMap<String, Option<String>>,
 }
 enum StyleEvidence {
     Disabled {
@@ -474,7 +473,6 @@ enum StyleEvidence {
 }
 struct Evidence {
     style: StyleEvidence,
-    inputs: Vec<(String, SnapshotWitness)>,
 }
 #[derive(Clone)]
 pub(super) struct Environment {
@@ -482,6 +480,7 @@ pub(super) struct Environment {
     module: Option<weftext_engine::StyleModule>,
     files: BTreeMap<String, String>,
     evidence: Arc<Evidence>,
+    input_sets: Vec<inputs::Captured>,
     bytes: usize,
 }
 pub(super) fn authorize_execution(
@@ -496,11 +495,58 @@ pub(super) fn authorize_execution(
         return Err(unavailable());
     }
     for id in &authority.inputs {
-        inner.rights(actor, id)?;
+        inputs::access(inner, actor, id)?;
+    }
+    if !authority.input_binding.is_empty()
+        && inputs::binding_hash(inner, &authority.inputs)? != authority.input_binding
+    {
+        return Err(changed());
+    }
+    Ok(())
+}
+/// A prepared author effect must still refer to its original portable resource
+/// versions. Already-frozen output delivery only rechecks authority/bindings.
+pub(super) fn validate_execution_versions(
+    inner: &HostedInner,
+    actor: &str,
+    authority: &ExecutionAuthority,
+) -> Result<(), ApiError> {
+    authorize_execution(inner, actor, authority)?;
+    for (id, revision) in &authority.resource_revisions {
+        if media::capture_input(inner, actor, id)?.revision != *revision {
+            return Err(changed());
+        }
     }
     Ok(())
 }
 impl Environment {
+    pub(super) fn attach_inputs(
+        &mut self,
+        inner: &HostedInner,
+        actor: &str,
+        captured: inputs::Captured,
+    ) -> Result<(), ApiError> {
+        captured.validate(inner, actor)?;
+        for (id, revision) in captured.revisions() {
+            if self
+                .authority
+                .resource_revisions
+                .get(&id)
+                .is_some_and(|old| old != &revision)
+            {
+                return Err(changed());
+            }
+            self.authority.resource_revisions.insert(id, revision);
+        }
+        self.authority.inputs.extend(captured.ids().iter().cloned());
+        self.authority.input_binding = inputs::binding_hash(inner, &self.authority.inputs)?;
+        self.bytes = self.bytes.saturating_add(captured.retained_bytes());
+        if self.bytes > MAX_CACHE {
+            return Err(ApiError::bad("编译环境与原输入依据超出 32 MiB 预算"));
+        }
+        self.input_sets.push(captured);
+        Ok(())
+    }
     pub(super) fn apply(&self, worker: &mut WorkerRequest) -> Result<(), ApiError> {
         let files = worker.frozen_files.get_or_insert_with(BTreeMap::new);
         for (path, bytes) in &self.files {
@@ -536,11 +582,8 @@ impl Environment {
                 .validate_library_style_witness(&inner.config.root, w),
         }
         .map_err(core_error)?;
-        for (path, w) in &self.evidence.inputs {
-            inner
-                .core
-                .validate_snapshot_witness(&inner.config.root, path, w)
-                .map_err(core_error)?;
+        for captured in &self.input_sets {
+            captured.validate(inner, actor)?;
         }
         Ok(())
     }
@@ -549,15 +592,10 @@ impl Environment {
     }
     pub(super) fn plan_witnesses(&self) -> Result<Vec<SnapshotWitness>, ApiError> {
         let mut pool = vec![];
-        Core::merge_snapshot_witnesses(
-            &mut pool,
-            self.evidence
-                .inputs
-                .iter()
-                .map(|(_, w)| w.clone())
-                .collect(),
-        )
-        .map_err(core_error)?;
+        for captured in &self.input_sets {
+            Core::merge_snapshot_witnesses(&mut pool, captured.plan_witnesses()?)
+                .map_err(core_error)?;
+        }
         match &self.evidence.style {
             StyleEvidence::Disabled { witness, .. } => {
                 Core::merge_snapshot_witnesses(&mut pool, vec![witness.clone()])
@@ -625,10 +663,8 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
             },
             module: None,
             files: BTreeMap::new(),
-            evidence: Arc::new(Evidence {
-                style,
-                inputs: vec![],
-            }),
+            evidence: Arc::new(Evidence { style }),
+            input_sets: vec![],
             bytes,
         });
     }
@@ -667,46 +703,35 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
         relative.clone()
     };
     let mut files = BTreeMap::new();
-    let mut witnesses = vec![];
-    let mut input_ids = BTreeSet::new();
+    let input_ids = inner
+        .config
+        .style_inputs
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let captured = inputs::capture(inner, actor, &input_ids.iter().cloned().collect::<Vec<_>>())?;
     let mut bytes = style_witness
         .retained_bytes()
-        .saturating_add(doc.source.len());
-    for id in inner.config.style_inputs.clone() {
-        inner.rights(actor, &id)?;
-        let file = inner.config.files.get(&id).ok_or_else(unavailable)?;
-        let snapshot = inner
-            .core
-            .read_snapshot(
-                &root,
-                &[root.join(&file.path).to_string_lossy().into_owned()],
-            )
-            .map_err(core_error)?
-            .files
-            .remove(0);
-        let witness = inner
-            .core
-            .take_snapshot_witness(&snapshot.base_id)
-            .map_err(core_error)?;
-        let content = snapshot.bytes.ok_or_else(changed)?;
-        bytes = bytes
-            .saturating_add(witness.retained_bytes())
-            .saturating_add(content.len().div_ceil(3) * 4);
+        .saturating_add(doc.source.len())
+        .saturating_add(captured.retained_bytes());
+    for id in &input_ids {
+        let (path, content, _) = captured.entry(id)?.ok_or_else(changed)?;
+        bytes = bytes.saturating_add(content.len().div_ceil(3) * 4);
         if bytes > MAX_CACHE {
             return Err(ApiError::bad("编译环境超出 32 MiB 输入预算；输入仍保留"));
         }
         files.insert(
-            file.path.clone(),
-            base64::engine::general_purpose::STANDARD.encode(&content),
+            path.to_owned(),
+            base64::engine::general_purpose::STANDARD.encode(content),
         );
-        witnesses.push((snapshot.path, witness));
-        input_ids.insert(id);
     }
     if bytes > MAX_CACHE {
         return Err(ApiError::bad("编译环境超出 32 MiB 输入预算"));
     }
     Ok(Environment {
         authority: ExecutionAuthority {
+            input_binding: inputs::binding_hash(inner, &input_ids)?,
+            resource_revisions: captured.revisions(),
             inputs: input_ids,
             style_used: true,
             config_hash,
@@ -720,8 +745,8 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
         files,
         evidence: Arc::new(Evidence {
             style: StyleEvidence::Enabled(Box::new(style_witness)),
-            inputs: witnesses,
         }),
+        input_sets: vec![captured],
         bytes,
     })
 }
@@ -900,6 +925,7 @@ mod tests {
                 review: Default::default(),
                 office: Default::default(),
                 library: Default::default(),
+                media: Default::default(),
             })),
             origin,
             host,

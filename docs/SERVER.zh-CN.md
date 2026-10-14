@@ -48,7 +48,7 @@ WebUI 提供源码、带样式源码、按需语法、可视写作、阅读五�
 
 `scripts/test_hosted_review.py` 继承 `test_hosted_fields.py`、`test_hosted_editor.py` 和原 `test_hosted.py` 的完整检查并接入 `scripts/mvp.py check/package`，测试真实程序的双用户冲突、独立草稿、操作幂等与重启、拒绝本地路径 API、隐藏对象不披露、历史分权、冻结编译、同一字节续下载及持久撤权。浏览器还需验证登录、丢响应、断线草稿、合并和缓存清理；实际结果随候选记录，不由文档建立通过。
 
-**尚未接入 Server**：批注的资源与媒体目标、结构操作、媒体及其完整消费者撤权。已有库配置与样式、历史与稳定 Node 导航、Query 定义、独立 Provider 授权、明确目录与回收站查询、正文内嵌消费及 Office 的当前托管范围见下文；本地其他输出格式及导入资源的自动配置仍待接入。这些工作继续属于 v0.6，原本地功能保持本地使用。不能借本地 API 越过托管授权。实时协作、其他 OS 后端、Mobile / CLI 整体验收以及自动化按后续里程碑推进。
+**尚未接入 Server**：结构操作、本地其他输出格式、资源集合与资源导入。准确配置的媒体、媒体批注目标及显式资源输入，连同库配置／样式、历史、Query 与 Office 的当前范围见下文。静态部署项是资源消费者的起点，不代表资源生产流程完成。这些工作继续属于 v0.6，原本地功能保持本地使用。不能借本地 API 越过托管授权。实时协作、其他 OS 后端、Mobile / CLI 整体验收以及自动化按后续里程碑推进。
 
 ## 保存历史与稳定 Node 导航
 
@@ -129,7 +129,7 @@ WebUI 的“获权字段与查询”使用已有原生值表单，支持枚举�
 
 Trash 文件槽须显式配置准确路径、`lifecycle: "trash"` 和 `expectedNode: {workspaceId, nodeId}`，并保持 `editable/importable` 为 false。它的字段／产品读取还需独立 `queryScopes.trash`；这些槽不开放正文编辑、历史恢复、字段写入、批注写入、建议接受或导入，本入口不执行恢复或清除。部署者在实际回收后更新明确槽位；未指定目录的 Trash 查询也只使用获权配置对象，不是全回收站自动浏览。恢复后旧资格失效。结果只读，Office 使用原冻结结果并在交付时复检范围权限与授权代次，重新授权不复活旧工件。
 
-当前 Trash 槽只接准确主源码。图片、辅助 Typst 等依赖还需在 v0.6 的资源消费者中接入独立只读角色与权限；不能把回收站资源假标为 live 来绕过资格。需要这些依赖的原生产品若无法取得完整获权输入，明确不可用或 partial，不计为完整结果。此边界不影响本片独立字段查询，亦不代表整个 v0.6 已完成。
+Trash 槽可以把准确登记的图片、辅助 Typst 等资源列为显式 inputs。每个资源另须 read，且保持与所属 Trash 笔记一致的准确所有者和 lifecycle；不能假标为 live 绕过资格。若原登记叶确实缺失，且 manifest 已接纳、资源原出生证明有效，受影响行的语义产品为 unavailable，覆盖为 partial；静态字段仍可查询。所有者或 manifest 身份缺失、对象替换、撤权及预算错误仍拒绝资格。恢复笔记使旧 Trash 资格失效，Query 和媒体读取本身不恢复对象。
 
 `scripts/test_hosted_scopes.py` 纳入产品检查入口，后台浏览器另用 `scripts/test_hosted_scopes_browser.mjs`。实际通过范围随候选记录，不由此说明建立验收结论。
 
@@ -159,13 +159,23 @@ Trash 文件槽须显式配置准确路径、`lifecycle: "trash"` 和 `expectedN
 
 `library/prepare|commit|operation|settle` 沿用原 Core 操作编号与计划。配置和样式草稿独立于正文 Draft；准备先保留完整原请求，展示 before/after，再明确提交。未知结果查询或重试同一原编号，服务重启后恢复原计划；结束未安装请求阻止迟到提交。期间输入变化使旧提案只能核对，不能覆盖新输入。配置 JSON 保留未知成员；原生样式使用与本地相同的控件和源码入口，复杂源码仍可完整编辑。style.write 允许修改该样式的启用状态和原设置选择器；仅 settings.write 不能借默认样式设置绕过样式权限。
 
-预览、富编辑呈现、实际语义 Query、校对与 Office 编译共用一次捕获的样式环境。启用库样式时须有 styleUse；静态字段查询不执行或读取样式。配置 `styleInputs` 为管理员明确指定的已有资源 ID，每个输入另须 read，Office 还须 export / download。编译只使用冻结输入，交付前重验原样式、设置、身份、依赖和当前授权。styleUse 不授予样式源码读取；内部编译入口与未授权的真实模块路径隔离，路径和源码诊断不向客户端交付。
+预览、富编辑呈现、实际语义 Query、校对与 Office 编译共用一次捕获的样式环境。启用库样式时须有 styleUse；静态字段查询不执行或读取样式。配置 `styleInputs` 为管理员明确指定的文件或资源 ID，每个输入另须 read。文件输入用于 Office 还须 export / download；资源输入另须自己的资源 download。编译只使用冻结输入，交付前重验原样式、设置、身份、依赖和当前授权。styleUse 不授予样式源码读取；内部编译入口与未授权的真实模块路径隔离，路径和源码诊断不向客户端交付。
 
 样式变更刷新当前呈现和之后的查询，不重写正文、重置 Undo 或丢弃未决保存。已经完成的 Office 工件保留原字节和摘要，不因后来样式变化重算；交付仍检查原输入配置、styleUse 和当前权限代次。校对批注计划保留原扫描使用的样式依赖，重启或样式变化不能把旧扫描当作当前结果提交。`test_hosted_library.py` 纳入产品 check/package；浏览器入口为 `test_hosted_library_browser.mjs EXE NEW_EVIDENCE_DIRECTORY`。具体通过范围和未验项以候选验收记录为准。
 
+## 准确资源与媒体目标
+
+`resources.<assetId>` 配置一个已登记资源：`owner` 为文件 ID，另有 `expectedOwner: {workspaceId, nodeId}`、相对 `path`、显示 `title`、稳定 `reference` 和 `lifecycle`（live 或 trash）。资源 ID 与文件 ID 不重叠。`users.<id>.resources.<assetId>` 分别授予 read / download，省略均为 false，download 要求 read。所属笔记正文、批注与 Office 权限不隐含资源权限。`files.<id>.inputs` 和 `styleInputs` 可显式列入这些资源 ID；不通过目录扫描补齐兄弟输入，也不自动配置导入产生的资源。
+
+`GET /api/hosted/media` 只列获权配置项，并报告 complete / partial。`media/resolve` 接收获权的稳定 ResourceRef 和可选准确版本，PDF 片段按实际页数检查。读取使用 media/read、media/chunk；复制原件使用独立的 media/download/prepare、media/download/chunk。票据绑定用户、授权代次、用途、原资源身份、配置所有者和准确 portable revision，分块至多 64 KiB，有效期 15 分钟；服务至多保留 32 张、单用户 8 张，共用 32 MiB 原始依据预算。撤权、重启或替换对象不会让旧票据续取新版本。
+
+浏览器核对完整长度和摘要后，使用共享媒体查看器显示。PNG/JPEG/GIF/WebP、有界普通 PDF、WAV 和支持的 MP4 从真实字节取得事实；不支持的文件可以添加整资源批注，但不会虚构区域。媒体批注新建和重新定位要求资源 read，加所属笔记的批注 read/write/target，不要求正文 read。图片／PDF 区域及音视频区间按选中版本核对实际尺寸、页号和时基。原计划保留 Core 资源依据，重启后仍校验准确版本；纯讨论操作不读取目标字节，Trash 资源只读。媒体选择和稳定资源链接保留当前正文草稿；复制原件由独立 download 权限控制。
+
+`scripts/test_hosted_media.py` 纳入 check/package，覆盖真实 HTTP 交付、媒体事实、原批注计划、明确编译输入、冻结输出及 Trash 依赖。浏览器验收另存证据目录。实际通过范围和限制以候选验收记录为准；配置资源读取不代表集合／导入或原生 Office 兼容性已经验收。
+
 ## 批注、校对与建议事务
 
-对象的 `annotations` 分别设置 `read`、`write`、`target`、`accept`、`proofread`，省略均为 false。当前审阅入口以批注 read 为基础；批注 write 可独立于正文权限。仅批注读取交付讨论、作者、回复和处理状态，不交付目标摘录、替换文字、源码范围或私有身份。target 允许查看该对象既有批注的目标摘录与准确位置；它不授予整篇正文或源摘要。新建目标、重新定位及重新确认建议需要正文 read、批注 write 和 target；应用建议还需要正文 write 和 accept。校对另外需要正文 read、target、proofread；将结果加入批注还需要批注 write。服务端使用已认证用户归属，不接受客户端冒署作者。
+对象的 `annotations` 分别设置 `read`、`write`、`target`、`accept`、`proofread`，省略均为 false。当前审阅入口以批注 read 为基础；批注 write 可独立于正文权限。仅批注读取交付讨论、作者、回复和处理状态，不交付目标摘录、替换文字、源码范围或私有身份。target 允许查看该对象既有批注的目标摘录与准确位置；它不授予整篇正文或源摘要。新建正文目标、正文重新定位及重新确认建议需要正文 read、批注 write 和 target；应用建议还需要正文 write 和 accept。媒体目标使用上面的独立资源权限。校对另外需要正文 read、target、proofread；将结果加入批注还需要批注 write。服务端使用已认证用户归属，不接受客户端冒署作者。
 
 WebUI“批注与校对”有独立的对象选择与草稿。先打开、保存并核对对应正文，再读取批注，可用当前 UTF-16 选区、插入点或整篇笔记创建批注；无法准确映射的建议不能执行。讨论用户可单独回复、解决、重新打开或拒绝建议，不因目标正文单独变化而丢失讨论写入资格。已有批注与回复使用同一 `weftext.annotations.json`，保留未知成员。应用建议经原 Core writer 同时提交准确正文补丁与 accepted 状态，原个人正文草稿仍保留，界面要求重新读取核对。
 
@@ -173,12 +183,12 @@ WebUI“批注与校对”有独立的对象选择与草稿。先打开、保存
 
 `review/read`、`review/proofread`、`review/prepare`、`review/commit`、`review/operation` 和 `review/settle` 都在 `/api/hosted/` 下。准备先持久绑定原用户、对象、意图、操作编号和安全预览；用户明确确认原计划后才提交。网络丢响应或服务重启查询同一原操作，不新编号重试。未安装的原请求可持久结束，阻止迟到请求；已安装但待恢复的操作只报告原状态。权限变化使旧依据、扫描及可提交预览失效，重新授权不能复活旧计划。批注恢复输入与正文草稿分开保留；在线撤权清除本页展示和恢复缓存，迟到响应不能恢复旧内容。
 
-批注依据 15 分钟到期，服务最多 128 份、单用户 32 份；扫描最多 32 份、单用户 8 份，和依据共用 64 MiB 保留预算。单批注文件至多 4 MiB、原操作预览至多 2 MiB、每批最多 200 个结果，底层 Core 文件预算仍适用。重启丢弃临时依据与扫描，持久原操作仍可核对。当前目标创建只接受具有 Core 身份和已接纳源码版本的管理笔记；目标不可用仍保留获权讨论。`test_hosted_review.py` 检查分别授权、准确目标、回复与未知成员、建议原子性、冲突、重启与撤权及真实编译校对；`test_hosted_review_browser.mjs EXE NEW_EVIDENCE_DIRECTORY` 检查实际选区、讨论、建议、校对、离线输入、丢响应和迟到交付。资源／媒体目标仍待接入；Office 审阅交换见下文，不能把本地通过视作 Server 通过。
+批注依据 15 分钟到期，服务最多 128 份、单用户 32 份；扫描最多 32 份、单用户 8 份，和依据共用 64 MiB 保留预算。单批注文件至多 4 MiB、原操作预览至多 2 MiB、每批最多 200 个结果，底层 Core 文件预算仍适用。重启丢弃临时依据与扫描，持久原操作仍可核对。正文目标要求具有 Core 身份和已接纳源码版本的管理笔记；媒体目标使用上面的独立资源资格。目标不可用仍保留获权讨论。`test_hosted_review.py` 检查分别授权、准确目标、回复与未知成员、建议原子性、冲突、重启与撤权及真实编译校对；`test_hosted_review_browser.mjs EXE NEW_EVIDENCE_DIRECTORY` 检查实际选区、讨论、建议、校对、离线输入、丢响应和迟到交付。Office 审阅交换见下文，不能把本地通过视作 Server 通过。
 
 
 ## Office 导入、输出与准确下载
 
-每个对象的 `office` 分别授予 `export`、`download`、`import`，省略为 false；它们与已保存原生源码的 `download` 分开。DOCX 正文输出要求正文 read 和 office.export，每个明确编译 input 也须分别具备两项权限。带批注或修订还要求该正文的 annotations.read 和 target；不要求 accept，也不因此接受建议。XLSX 使用已经显示的冻结字段 Query，每个实际字段来源须保有字段 read 和 office.export；不要求整篇正文 read。下载另对全部实际输入来源检查 office.download，正文读写或原生源码下载权不隐含授予它。
+每个文件的 `office` 分别授予 `export`、`download`、`import`，省略为 false；它们与已保存原生源码的 `download` 分开。DOCX 正文输出要求主文件和每个显式文件输入具备正文 read 与 office.export；资源输入则要求自己的资源 read 与 download。带批注或修订还要求该正文的 annotations.read 和 target；不要求 accept，也不因此接受建议。XLSX 使用已经显示的冻结字段 Query，每个实际字段来源须保有字段 read 和 office.export，不要求整篇正文 read。下载另对全部文件来源检查 office.download，对资源输入检查资源 download；正文读写或原生源码下载权不隐含授予这些权限。
 
 WebUI“Office 导入与输出”提供 DOCX 正文／批注／待审文字修订，以及 XLSX 冻结查询结果。正文可选择当前准确草稿；带批注或修订必须先保存并核对准确正文。未能安全定位的目标作为转换损失，不猜测位置；其他笔记／媒体的目标权限不会从当前笔记继承。输出复用本地纯转换器和原生冻结编译，不补读整个资料库。XLSX 保留原列序、所有原查询行和 Cell 状态；可见结构附表只带该次获权字段的限定 Schema。旧结果不因后来改稿或改字段而重跑，完整性和覆盖仍按原结果显示。
 

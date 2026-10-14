@@ -332,6 +332,24 @@ fn projected_file_links_require_a_local_authority_free_uri() {
     assert!(!output.html.contains("javascript:"));
 }
 
+#[test]
+fn projected_resource_links_preserve_exact_reference_and_fragment() {
+    let dir = TempDir::new().unwrap();
+    let reference = "weftext-resource://d502838a-3359-4a2d-979f-eb1d8b34556a/354ed3b0-e49e-40ae-87fb-cdd7bb64fc17#page=2";
+    let output = render(
+        &format!("#link(\"{reference}\")[资源第二页]\n#link(\"javascript:alert(1)\")[拒绝脚本]"),
+        dir.path(),
+    );
+    assert!(output.ok, "{:?}", output.diagnostics);
+    assert!(output.html.contains(&format!("href=\"{reference}\"")));
+    assert!(!output.html.contains("javascript:"));
+    fn retained(node: &RenderNode, reference: &str) -> bool {
+        (node.tag.as_deref() == Some("a") && node.attrs.get("href").is_some_and(|v| v == reference))
+            || node.children.iter().any(|child| retained(child, reference))
+    }
+    assert!(retained(output.tree.as_ref().unwrap(), reference));
+}
+
 #[cfg(windows)]
 #[test]
 fn windows_junctions_cannot_escape_the_dependency_root() {

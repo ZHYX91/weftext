@@ -410,7 +410,7 @@ async fn prepare_import(
     )?))
 }
 
-fn metadata_facts(
+pub(crate) fn metadata_facts(
     metadata: &ResourceMetadata,
     resource: &str,
     revision: &str,
@@ -460,7 +460,7 @@ fn unsupported(message: impl Into<String>, mime: &str) -> (ResourceMetadata, Str
         mime.into(),
     )
 }
-fn inspect_media(bytes: &[u8]) -> (ResourceMetadata, String) {
+pub(crate) fn inspect_media(bytes: &[u8]) -> (ResourceMetadata, String) {
     if bytes.starts_with(b"%PDF-") {
         return match pdf_metadata(bytes) {
             Ok(metadata) => (metadata, "application/pdf".into()),

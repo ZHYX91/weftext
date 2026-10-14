@@ -34,6 +34,7 @@ struct Basis {
     annotations: SnapshotFile,
     source: Option<SnapshotFile>,
     node: Option<knowledge::NodeSnapshot>,
+    media: Option<Arc<media::Context>>,
     expires: Instant,
 }
 impl Basis {
@@ -45,6 +46,7 @@ impl Basis {
                 .and_then(|f| f.bytes.as_ref())
                 .map_or(0, Vec::len)
             + self.node.as_ref().map_or(0, |n| n.source.len())
+            + self.media.as_ref().map_or(0, |m| m.retained_bytes())
     }
 }
 #[derive(Clone)]
@@ -101,11 +103,23 @@ struct Decision {
     needs: Needs,
     #[serde(default)]
     execution: library::ExecutionAuthority,
+    #[serde(default)]
+    media: Option<MediaDecision>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MediaDecision {
+    asset: String,
+    reference: String,
+    revision: String,
+    binding: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Read {
     resource: String,
+    #[serde(default)]
+    asset: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -154,6 +168,21 @@ pub(super) fn expire_revoked(inner: &mut HostedInner) {
             .get(actor)
             .is_some_and(|u| u.enabled && u.epoch == epoch)
     };
+    let expired = inner
+        .review
+        .bases
+        .values()
+        .filter(|b| b.expires <= Instant::now() || !current(&b.actor, b.epoch))
+        .flat_map(snapshot_ids)
+        .chain(
+            inner
+                .review
+                .scans
+                .values()
+                .filter(|s| s.expires <= Instant::now() || !current(&s.actor, s.epoch))
+                .flat_map(|s| s.dependencies.iter().map(|f| f.base_id.clone())),
+        )
+        .collect::<BTreeSet<_>>();
     inner
         .review
         .bases
@@ -162,6 +191,28 @@ pub(super) fn expire_revoked(inner: &mut HostedInner) {
         .review
         .scans
         .retain(|_, s| s.expires > Instant::now() && current(&s.actor, s.epoch));
+    release_unretained(inner, expired);
+}
+fn release_unretained(inner: &mut HostedInner, ids: BTreeSet<String>) {
+    let retained = inner
+        .review
+        .bases
+        .values()
+        .flat_map(snapshot_ids)
+        .chain(
+            inner
+                .review
+                .scans
+                .values()
+                .flat_map(|s| s.dependencies.iter().map(|f| f.base_id.clone())),
+        )
+        .collect::<BTreeSet<_>>();
+    for id in ids.difference(&retained) {
+        let _ = inner.core.take_snapshot_witness(id);
+    }
+}
+fn snapshot_ids(b: &Basis) -> impl Iterator<Item = String> + '_ {
+    std::iter::once(b.annotations.base_id.clone()).chain(b.source.iter().map(|f| f.base_id.clone()))
 }
 fn scope(inner: &HostedInner, actor: &str) -> String {
     format!("{}:review", inner.actor_scope(actor))
@@ -211,7 +262,12 @@ fn access(inner: &HostedInner, actor: &str, resource: &str) -> Result<Rights, Ap
         .filter(|r| r.annotations.read)
         .cloned()
         .ok_or_else(unavailable)?;
-    if !inner.config.files.get(resource).is_some_and(|f| f.editable) {
+    if !inner
+        .config
+        .files
+        .get(resource)
+        .is_some_and(|f| f.editable || f.lifecycle == "trash")
+    {
         return Err(unavailable());
     }
     Ok(rights)
@@ -256,6 +312,92 @@ fn needs(kind: &str) -> Result<Needs, ApiError> {
     }
     Ok(n)
 }
+fn is_media_target(value: &Value) -> bool {
+    matches!(
+        value["kind"].as_str(),
+        Some(
+            "whole_resource"
+                | "wholeResource"
+                | "image_region"
+                | "imageRegion"
+                | "pdf_region"
+                | "pdfRegion"
+                | "media_interval"
+                | "mediaInterval"
+        )
+    )
+}
+fn authorize_media(
+    inner: &HostedInner,
+    actor: &str,
+    owner: &str,
+    d: &MediaDecision,
+) -> Result<(), ApiError> {
+    media::input_access(inner, actor, &d.asset, false)?;
+    let configured = inner
+        .config
+        .resources
+        .get(&d.asset)
+        .filter(|r| r.owner == owner && r.reference == d.reference && r.lifecycle == "live")
+        .ok_or_else(unavailable)?;
+    let _ = configured;
+    if media::binding_hash(inner, &BTreeSet::from([d.asset.clone()]))? != d.binding {
+        return Err(changed());
+    }
+    media::exact(inner, actor, &d.asset, &d.revision)?;
+    Ok(())
+}
+fn media_target(
+    inner: &HostedInner,
+    actor: &str,
+    b: &Basis,
+    input: &Value,
+) -> Result<
+    (
+        knowledge::AnnotationTarget,
+        MediaDecision,
+        Vec<weftext_core::SnapshotWitness>,
+    ),
+    ApiError,
+> {
+    let asset = text(input, "asset")?;
+    let revision = text(input, "revision")?;
+    let m = b
+        .media
+        .as_ref()
+        .filter(|m| m.asset == asset && m.resource.revision.as_deref() == Some(revision))
+        .ok_or_else(changed)?;
+    let configured = inner
+        .config
+        .resources
+        .get(asset)
+        .filter(|r| r.owner == b.resource && r.lifecycle == "live")
+        .ok_or_else(unavailable)?;
+    if input
+        .get("resource")
+        .is_some_and(|r| r.as_str() != Some(configured.reference.as_str()))
+    {
+        return Err(ApiError::bad(
+            "所选 asset 与原稳定资源引用不一致；未改写目标",
+        ));
+    }
+    media::validate_original(inner, actor, asset, &m.resource)?;
+    let target = crate::knowledge_api::target_from_resource_metadata(
+        input,
+        &configured.reference,
+        revision,
+        &m.metadata,
+    )?;
+    let decision = MediaDecision {
+        asset: asset.into(),
+        reference: configured.reference.clone(),
+        revision: revision.into(),
+        binding: media::binding_hash(inner, &BTreeSet::from([asset.into()]))?,
+    };
+    let mut witnesses = vec![];
+    Core::merge_resource_witness(&mut witnesses, &m.resource.witness).map_err(core_error)?;
+    Ok((target, decision, witnesses))
+}
 fn rights_json(rights: &Rights) -> Value {
     let mut value = serde_json::to_value(&rights.annotations).unwrap();
     value["sourceRead"] = json!(rights.read);
@@ -264,19 +406,9 @@ fn rights_json(rights: &Rights) -> Value {
 }
 fn config_hash(inner: &HostedInner, resource: &str) -> Result<String, ApiError> {
     let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
-    let inputs: BTreeMap<_, _> = file
-        .inputs
-        .iter()
-        .map(|id| {
-            inner
-                .config
-                .files
-                .get(id)
-                .map(|f| (id.clone(), f.path.clone()))
-                .ok_or_else(unavailable)
-        })
-        .collect::<Result<_, _>>()?;
-    Ok(digest(&serde_json::to_vec(&json!({"root":inner.config.root,"source":file.path,"editable":file.editable,"inputs":inputs})).map_err(|_|changed())?))
+    let mut ids = file.inputs.iter().cloned().collect::<BTreeSet<_>>();
+    ids.insert(resource.into());
+    inputs::binding_hash(inner, &ids)
 }
 fn document(b: &Basis) -> Result<knowledge::AnnotationDocument, ApiError> {
     knowledge::decode_annotations(
@@ -363,6 +495,10 @@ fn capture(
             .and_then(|f| f.bytes.as_ref())
             .is_some_and(|b| b.len() > MAX_DOCUMENT_BYTES)
     {
+        let _ = inner.core.take_snapshot_witness(&annotations.base_id);
+        if let Some(file) = &source {
+            let _ = inner.core.take_snapshot_witness(&file.base_id);
+        }
         return Err(ApiError::bad("批注或原文超过本次读取预算"));
     }
     Ok(Basis {
@@ -372,6 +508,7 @@ fn capture(
         annotations,
         source,
         node,
+        media: None,
         expires: Instant::now() + TTL,
     })
 }
@@ -428,6 +565,7 @@ fn projection(
     doc: &knowledge::AnnotationDocument,
     node: Option<&knowledge::NodeSnapshot>,
     target: bool,
+    media: Option<&media::Context>,
 ) -> Value {
     let views = knowledge::annotation_views(doc, node, &[]);
     let items: Vec<_> = views.iter().filter(|v| v.reply_to.is_none()).map(|v| {
@@ -435,7 +573,9 @@ fn projection(
         let own = target && node.is_some_and(|n| match &record.target { knowledge::AnnotationTarget::WholeDocument { node } => node == &n.owner, _ => record.target.anchor().is_some_and(|a| a.node == n.owner) });
         let range = (own && matches!(v.target_state.as_str(), "exact" | "mapped")).then(|| record.target.anchor().and_then(|a| knowledge::resolve_anchor(a, node, &[]).current_range)).flatten();
         let whole = own && matches!(record.target, knowledge::AnnotationTarget::WholeDocument { .. });
-        let state = if !target || !own { "unavailable" } else if whole { "exact" } else { &v.target_state };
+        let media_own=target && media.is_some_and(|m|resource_basis(&record.target).is_some_and(|(reference,revision)|reference==m.resource.resource_ref && Some(revision)==m.resource.revision.as_deref())
+            && (matches!(&record.target,knowledge::AnnotationTarget::WholeResource {..}) || crate::media_api::metadata_facts(&m.metadata,&m.resource.resource_ref,revision_from(&m.resource)).is_some_and(|facts|knowledge::validate_resource_target(&record.target,&facts).is_ok())));
+        let state = if media_own {"exact"} else if !target || !own { "unavailable" } else if whole { "exact" } else { &v.target_state };
         let verified = own && matches!(state, "exact" | "mapped") && (whole || range.is_some());
         let replies: Vec<_> = views.iter().filter(|reply| reply.reply_to.is_some() && thread_root(doc, &reply.annotation_id) == Some(v.annotation_id.as_str())).map(|reply| json!({"id":reply.annotation_id,"replyTo":reply.reply_to,"body":reply.body,"author":reply.attribution,"createdAt":reply.created_at})).collect();
         let mut item = json!({"id":v.annotation_id,"annotationId":v.annotation_id,"body":v.body,"purpose":v.purpose,"reviewState":v.review_state,"suggestionState":v.suggestion_state,"author":v.attribution,"createdAt":v.created_at,"verified":verified,"targetResolution":state,"replies":replies});
@@ -444,9 +584,42 @@ fn projection(
             if verified { item["sourceLocation"] = json!({"from":range.utf16_from,"to":range.utf16_to}); }
         }
         if own && let Some(suggestion) = &record.suggestion { item["replacement"] = json!(suggestion.replacement); }
+        if media_own && let Some(m)=media {item["verified"]=true.into();item["resourceLocation"]=json!({"asset":m.asset,"resource":m.resource.resource_ref,"revision":m.resource.revision,"target":record.target});}
         item
     }).collect();
     json!(items)
+}
+fn resource_basis(target: &knowledge::AnnotationTarget) -> Option<(&str, &str)> {
+    match target {
+        knowledge::AnnotationTarget::WholeResource {
+            resource,
+            revision_id,
+        }
+        | knowledge::AnnotationTarget::ImageRegion {
+            resource,
+            revision_id,
+            ..
+        }
+        | knowledge::AnnotationTarget::PdfRegion {
+            resource,
+            revision_id,
+            ..
+        }
+        | knowledge::AnnotationTarget::PdfTextRange {
+            resource,
+            revision_id,
+            ..
+        }
+        | knowledge::AnnotationTarget::MediaInterval {
+            resource,
+            revision_id,
+            ..
+        } => Some((resource, revision_id)),
+        _ => None,
+    }
+}
+fn revision_from(resource: &weftext_core::QualifiedResource) -> &str {
+    resource.revision.as_deref().unwrap_or_default()
 }
 fn thread_root<'a>(doc: &'a knowledge::AnnotationDocument, id: &'a str) -> Option<&'a str> {
     let mut id = id;
@@ -467,7 +640,12 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
                 .grants
                 .iter()
                 .filter(|(id, r)| {
-                    r.annotations.read && inner.config.files.get(*id).is_some_and(|f| f.editable)
+                    r.annotations.read
+                        && inner
+                            .config
+                            .files
+                            .get(*id)
+                            .is_some_and(|f| f.editable || f.lifecycle == "trash")
                 })
                 .map(|(id, r)| json!({"resource":id,"rights":rights_json(r)}))
                 .collect();
@@ -483,18 +661,35 @@ async fn read(
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?; let rights = access(inner, &actor, &req.resource)?; expire_revoked(inner);
+        if let Some(asset)=&req.asset {media::input_access(inner,&actor,asset,false)?;if !inner.config.resources.get(asset).is_some_and(|r|r.owner==req.resource){return Err(unavailable());}}
         if inner.review.bases.len() >= 128 || inner.review.bases.values().filter(|b|b.actor==actor).count() >= 32 { return Err(ApiError::bad("批注依据已达上限，请稍后重新读取")); }
-        let b = capture(inner, &actor, &req.resource, rights.annotations.target || rights.read)?;
+        let live=inner.config.files[&req.resource].lifecycle=="live";
+        let mut b = capture(inner, &actor, &req.resource, live && (rights.read || (req.asset.is_none() && rights.annotations.target)))?;
+        let cleanup=snapshot_ids(&b).collect::<Vec<_>>();
+        let result=(|| {
+        let mut media_unavailable=None;
+        if let Some(asset)=&req.asset {
+            media::input_access(inner,&actor,asset,false)?;
+            let configured=inner.config.resources.get(asset).filter(|r|r.owner==req.resource).ok_or_else(unavailable)?;
+            match media::context(inner,&actor,asset,None) {
+                Ok(context)=>b.media=Some(Arc::new(context)),
+                Err(error) if error.status==StatusCode::CONFLICT=>media_unavailable=Some(json!({"asset":asset,"owner":configured.owner,"title":configured.title,"name":configured.title,"status":"unavailable"})),
+                Err(error)=>return Err(error),
+            }
+        }
         let total = inner.review.bytes();
         if total.saturating_add(b.bytes()) > MAX_BYTES { return Err(ApiError::bad("批注依据缓存已达预算，请稍后重新读取")); }
         inner.core.validate_snapshot(&inner.config.root, &b.annotations.path, &b.annotations.base_id).map_err(|_|changed())?;
         if let Some(source) = &b.source { inner.core.validate_snapshot(&inner.config.root, &source.path, &source.base_id).map_err(|_|changed())?; }
         let doc = document(&b);
         let mut response = json!({"resource":req.resource,"basis":null,"annotations":[],"rights":rights_json(&rights),"editable":doc.is_ok()});
+        if !live {response["rights"]["sourceRead"]=false.into();response["rights"]["sourceWrite"]=false.into();}
         if rights.read && let Some(node) = &b.node { response["sourceHash"] = json!(digest(node.source.as_bytes())); }
+        if let Some(m)=&b.media {media::validate_original(inner,&actor,&m.asset,&m.resource)?;response["media"]=m.descriptor.clone();}
+        if let Some(unavailable)=media_unavailable {response["media"]=unavailable;}
         match doc {
             Ok(doc) => {
-                response["annotations"] = projection(&doc, b.node.as_ref(), rights.annotations.target);
+                response["annotations"] = projection(&doc, b.node.as_ref(), rights.annotations.target, b.media.as_deref());
                 let id = uuid::Uuid::new_v4().to_string(); response["basis"] = json!(id); inner.review.bases.insert(id, b);
             },
             Err(_) => {
@@ -504,7 +699,11 @@ async fn read(
                 response["warning"] = json!("批注记录受损或格式尚不支持；原文件保留，讨论仅供只读核对。");
             },
         }
+        if response["basis"].is_null() {for id in &cleanup {let _=inner.core.take_snapshot_witness(id);}}
         Ok(response)
+        })();
+        if result.is_err() {for id in cleanup {let _=inner.core.take_snapshot_witness(&id);}}
+        result
     }).await?))
 }
 
@@ -802,6 +1001,9 @@ fn safe_status(
                 && config_hash(inner, &status.resource).is_ok_and(|hash| hash == d.config_hash)
                 && authorize(rights, &d.needs).is_ok()
                 && library::authorize_execution(inner, actor, &d.execution).is_ok()
+                && d.media
+                    .as_ref()
+                    .is_none_or(|m| authorize_media(inner, actor, &status.resource, m).is_ok())
         });
     Ok(
         json!({"operationId":status.operation_id,"resource":status.resource,"status":status.status,"planId":status.plan_id.filter(|_|commit_allowed),"preview":preview,"commitAllowed":commit_allowed}),
@@ -815,17 +1017,29 @@ async fn prepare(
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?; let rights=access(inner,&actor,&req.resource)?;
         if let Some(object)=req.intent.as_object_mut() { for key in ["attribution","author","createdAt"] {object.remove(key);} }
-        let kind=text(&req.intent,"kind")?.to_owned(); let needs=needs(&kind)?; authorize(&rights,&needs)?;
+        let kind=text(&req.intent,"kind")?.to_owned(); let mut needs=needs(&kind)?;
+        let media_selected=is_media_target(&req.intent["target"]);
+        if media_selected && matches!(kind.as_str(),"annotationCreate"|"annotationReattach") {needs.source_read=false;}
+        authorize(&rights,&needs)?;
+        if media_selected && matches!(kind.as_str(),"annotationCreate"|"annotationReattach") {
+            let asset=text(&req.intent["target"],"asset")?;media::input_access(inner,&actor,asset,false)?;
+            if !inner.config.resources.get(asset).is_some_and(|r|r.owner==req.resource && r.lifecycle=="live") {return Err(unavailable());}
+        }
+        if inner.config.files[&req.resource].lifecycle!="live" {return Err(unavailable());}
         let canonical=json!({"resource":req.resource,"basis":req.basis,"intent":req.intent});
         let fingerprint=digest(&serde_json::to_vec(&canonical).map_err(|_|changed())?); let actor_scope=scope(inner,&actor);
         if let Some(old)=inner.core.with_actor(&actor_scope,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&rights,old);}
         let b=basis(inner,&actor,&req.resource,&req.basis,needs.source_read)?; let doc=document(&b)?;
-        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
+        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut media_decision=None; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
         let annotation_id=req.intent["annotationId"].as_str(); if let Some(id)=annotation_id {preview["annotationId"]=json!(id);}
         let after=match kind.as_str() {
             "annotationCreate" => {
                 let purpose=req.intent["purpose"].as_str().unwrap_or("comment"); if !matches!(purpose,"comment"|"mark"|"suggestion") {return Err(ApiError::bad("未知批注目的"));}
-                let target=target(&req.intent["target"],b.node.as_ref().unwrap())?;
+                let target=if media_selected {
+                    if purpose=="suggestion" {return Err(ApiError::bad("媒体目标可评论或标记；文字替换建议需要准确作者源范围"));}
+                    let (target,decision,pool)=media_target(inner,&actor,&b,&req.intent["target"])?;
+                    witnesses=pool;media_decision=Some(decision);target
+                }else{target(&req.intent["target"],b.node.as_ref().ok_or_else(changed)?)?};
                 let replacement=if purpose=="suggestion" { if target.anchor().is_none(){return Err(ApiError::bad("文字建议需要准确原文范围或插入点"));} Some(text(&req.intent,"replacement")?.to_owned()) } else {None};
                 let body=text(&req.intent,"body")?.to_owned(); preview["body"]=json!(body); if let Some(r)=&replacement {preview["replacement"]=json!(r);}
                 let new=record(&actor,target,body,purpose.into(),replacement); preview["annotationId"]=json!(new.annotation_id); doc.create(new).map_err(knowledge_error)?
@@ -837,7 +1051,15 @@ async fn prepare(
             },
             "annotationResolve" => doc.resolve(text(&req.intent,"annotationId")?,req.intent["resolved"].as_bool().ok_or_else(||ApiError::bad("需要明确讨论状态"))?).map_err(knowledge_error)?,
             "annotationReject" => doc.reject(text(&req.intent,"annotationId")?).map_err(knowledge_error)?,
-            "annotationReattach" => doc.reattach(text(&req.intent,"annotationId")?,target(&req.intent["target"],b.node.as_ref().unwrap())?).map_err(knowledge_error)?,
+            "annotationReattach" => {
+                let id=text(&req.intent,"annotationId")?;
+                let target=if media_selected {
+                    if doc.records.iter().find(|r|r.annotation_id==id).is_some_and(|r|r.suggestion.is_some()) {return Err(ApiError::bad("已有文字建议不能重新附着到媒体目标"));}
+                    let (target,decision,pool)=media_target(inner,&actor,&b,&req.intent["target"])?;
+                    witnesses=pool;media_decision=Some(decision);target
+                }else{target(&req.intent["target"],b.node.as_ref().ok_or_else(changed)?)?};
+                doc.reattach(id,target).map_err(knowledge_error)?
+            },
             "annotationReconfirm" => {
                 let replacement=text(&req.intent,"replacement")?.to_owned(); preview["replacement"]=json!(replacement);
                 doc.reconfirm(text(&req.intent,"annotationId")?,target(&req.intent["target"],b.node.as_ref().unwrap())?,replacement).map_err(knowledge_error)?
@@ -881,7 +1103,7 @@ async fn prepare(
         if after.len()>MAX_DOCUMENT_BYTES {return Err(ApiError::bad("批注变更超过本次保存预算"));}
         if needs.source_read&&kind!="annotationAccept" {dependencies.push(b.source.as_ref().unwrap().base_id.clone());}
         changes.push(change(&b.annotations,after));
-        preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution})?;
+        preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution,media:media_decision})?;
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:inner.config.root.to_string_lossy().into_owned(),intent:OperationIntent::UpdateFiles {changes}};
         let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare_with_witnesses(&req.resource,&req.operation_id,&fingerprint,request,preview,&dependencies,&witnesses.iter().collect::<Vec<_>>())).map_err(core_error)?;
         safe_status(inner,&actor,&rights,status)
@@ -927,7 +1149,10 @@ async fn commit(
             let decision: Decision =
                 serde_json::from_value(old.preview["_review"].clone()).map_err(|_| changed())?;
             authorize(&rights, &decision.needs)?;
-            library::authorize_execution(inner, &actor, &decision.execution)?;
+            library::validate_execution_versions(inner, &actor, &decision.execution)?;
+            if let Some(m) = &decision.media {
+                authorize_media(inner, &actor, &req.resource, m)?;
+            }
             if decision.actor_epoch != inner.actor_generation(&actor)
                 || decision.expires_at_unix_ms <= now_ms()
                 || decision.config_hash != config_hash(inner, &req.resource)?
@@ -942,8 +1167,24 @@ async fn commit(
                 })
                 .map_err(core_error)?;
             if status.status == "committed" {
+                let released = inner
+                    .review
+                    .bases
+                    .values()
+                    .filter(|b| b.resource == req.resource)
+                    .flat_map(snapshot_ids)
+                    .chain(
+                        inner
+                            .review
+                            .scans
+                            .values()
+                            .filter(|s| s.resource == req.resource)
+                            .flat_map(|s| s.dependencies.iter().map(|f| f.base_id.clone())),
+                    )
+                    .collect();
                 inner.review.bases.retain(|_, b| b.resource != req.resource);
                 inner.review.scans.retain(|_, s| s.resource != req.resource);
+                release_unretained(inner, released);
             }
             safe_status(inner, &actor, &rights, status)
         })
@@ -970,4 +1211,187 @@ async fn settle(
         })
         .await?,
     ))
+}
+
+#[cfg(all(test, windows))]
+mod media_tests {
+    use super::*;
+    async fn context(state: &HostedState, auth: &Auth) -> Value {
+        read(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Read {
+                resource: "Shared".into(),
+                asset: Some("Diagram".into()),
+            }),
+        )
+        .await
+        .unwrap()
+        .0
+    }
+    fn intent(revision: &str) -> Value {
+        json!({"kind":"annotationCreate","purpose":"comment","body":"媒体讨论😀","target":{"kind":"image_region","asset":"Diagram","revision":revision,"x":0,"y":0,"rectWidth":1,"rectHeight":1}})
+    }
+    async fn propose(state: &HostedState, auth: &Auth, basis: &str, intent: Value) -> Value {
+        prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Prepare {
+                resource: "Shared".into(),
+                basis: basis.into(),
+                operation_id: uuid::Uuid::new_v4().to_string(),
+                intent,
+            }),
+        )
+        .await
+        .unwrap()
+        .0
+    }
+    #[tokio::test]
+    async fn exact_media_annotation_needs_its_own_read_but_no_body_access() {
+        let (_temp, state, auth, revision) = media::tests::fixture();
+        let before = context(&state, &auth).await;
+        assert!(before.get("sourceHash").is_none());
+        assert_eq!(before["media"]["revision"], revision);
+        let original = {
+            let inner = state.inner.lock().unwrap();
+            std::fs::read(inner.config.root.join("Shared/Shared.typ")).unwrap()
+        };
+        let plan = propose(
+            &state,
+            &auth,
+            before["basis"].as_str().unwrap(),
+            intent(&revision),
+        )
+        .await;
+        assert_eq!(plan["status"], "prepared");
+        assert!(plan["preview"].get("source").is_none());
+        let done = commit(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Commit {
+                resource: "Shared".into(),
+                operation_id: plan["operationId"].as_str().unwrap().into(),
+                plan_id: plan["planId"].as_str().unwrap().into(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(done["status"], "committed");
+        let after = context(&state, &auth).await;
+        let record = &after["annotations"][0];
+        assert_eq!(record["body"], "媒体讨论😀");
+        assert_eq!(record["targetResolution"], "exact");
+        assert!(record.get("visibleExcerpt").is_none());
+        assert!(record.get("sourceLocation").is_none());
+        assert_eq!(record["resourceLocation"]["target"]["kind"], "imageRegion");
+        assert_eq!(record["resourceLocation"]["target"]["revisionId"], revision);
+        let inner = state.inner.lock().unwrap();
+        assert_eq!(
+            std::fs::read(inner.config.root.join("Shared/Shared.typ")).unwrap(),
+            original
+        );
+    }
+    #[tokio::test]
+    async fn media_target_wrong_reference_and_fake_geometry_do_not_register_operations() {
+        let (_temp, state, auth, revision) = media::tests::fixture();
+        let before = context(&state, &auth).await;
+        for variant in [0, 1] {
+            let mut request = intent(&revision);
+            if variant == 0 {
+                request["target"]["resource"] = json!(format!(
+                    "weftext-resource://{}/{}",
+                    uuid::Uuid::new_v4(),
+                    uuid::Uuid::new_v4()
+                ));
+            } else {
+                request["target"]["width"] = 999.into();
+            }
+            let id = uuid::Uuid::new_v4().to_string();
+            assert!(
+                prepare(
+                    State(state.clone()),
+                    Extension(auth.clone()),
+                    Json(Prepare {
+                        resource: "Shared".into(),
+                        basis: before["basis"].as_str().unwrap().into(),
+                        operation_id: id.clone(),
+                        intent: request
+                    })
+                )
+                .await
+                .is_err()
+            );
+            assert_eq!(
+                operation(
+                    State(state.clone()),
+                    Extension(auth.clone()),
+                    Json(Operation {
+                        resource: "Shared".into(),
+                        operation_id: id
+                    })
+                )
+                .await
+                .unwrap()
+                .0["status"],
+                "notRegistered"
+            );
+        }
+        let sidecar = state
+            .inner
+            .lock()
+            .unwrap()
+            .config
+            .root
+            .join("Shared/weftext.annotations.json");
+        assert!(!sidecar.exists());
+    }
+    #[tokio::test]
+    async fn ordinary_discussion_reply_does_not_borrow_the_medias_revoked_read() {
+        let (_temp, state, auth, revision) = media::tests::fixture();
+        let before = context(&state, &auth).await;
+        let plan = propose(
+            &state,
+            &auth,
+            before["basis"].as_str().unwrap(),
+            intent(&revision),
+        )
+        .await;
+        let _ = commit(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Commit {
+                resource: "Shared".into(),
+                operation_id: plan["operationId"].as_str().unwrap().into(),
+                plan_id: plan["planId"].as_str().unwrap().into(),
+            }),
+        )
+        .await
+        .unwrap();
+        {
+            let mut inner = state.inner.lock().unwrap();
+            let user = inner.policy.users.get_mut("alice").unwrap();
+            user.resources.clear();
+            user.epoch += 1;
+        }
+        let discussion = read(
+            State(state.clone()),
+            Extension(auth.clone()),
+            Json(Read {
+                resource: "Shared".into(),
+                asset: None,
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        let record = &discussion["annotations"][0];
+        assert_eq!(record["body"], "媒体讨论😀");
+        assert_eq!(record["targetResolution"], "unavailable");
+        assert!(record.get("resourceLocation").is_none());
+        let reply=propose(&state,&auth,discussion["basis"].as_str().unwrap(),json!({"kind":"annotationReply","annotationId":record["annotationId"],"body":"独立讨论回复"})).await;
+        assert_eq!(reply["status"], "prepared");
+        assert_eq!(reply["commitAllowed"], true);
+    }
 }

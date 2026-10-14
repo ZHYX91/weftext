@@ -163,6 +163,7 @@ fn scrub_tree(tree: &mut Value, resource: &str, writable: bool) {
                 tree["tag"] == "a"
                     && !href.chars().any(char::is_control)
                     && (href.starts_with("weftext-node://")
+                        || href.starts_with("weftext-resource://")
                         || href
                             .get(..7)
                             .is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
@@ -233,8 +234,14 @@ pub(super) fn freeze(
 > {
     inner.rights(actor, resource)?;
     writing_api::validate_source(source, None)?;
-    let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
-    let mut files = inner.files(actor, &file.inputs)?;
+    let file = inner
+        .config
+        .files
+        .get(resource)
+        .ok_or_else(unavailable)?
+        .clone();
+    let captured_inputs = inputs::capture(inner, actor, &file.inputs)?;
+    let mut files = captured_inputs.files()?;
     let dependencies = files.iter().map(|(p, b)| (p.clone(), digest(b))).collect();
     files.insert(file.path.clone(), source.as_bytes().to_vec());
     let mut worker = WorkerRequest {
@@ -250,7 +257,8 @@ pub(super) fn freeze(
                 .collect(),
         ),
     };
-    let environment = library::environment(inner, actor)?;
+    let mut environment = library::environment(inner, actor)?;
+    environment.attach_inputs(inner, actor, captured_inputs)?;
     environment.apply(&mut worker)?;
     Ok((worker, dependencies, environment))
 }
@@ -306,6 +314,7 @@ mod tests {
             "https://example.test/a",
             "HTTP://example.test/b",
             "weftext-node://workspace/node",
+            "weftext-resource://workspace/resource",
         ] {
             let mut tree = json!({"kind":"tag","tag":"a","origin":{"isMain":true,"path":"C:/private/note.typ"},
                 "attrs":{"href":href,"onclick":"unsafe()","style":"private","data-private":"secret"},"children":[]});

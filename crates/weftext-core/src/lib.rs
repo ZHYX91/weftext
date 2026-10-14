@@ -18,7 +18,9 @@ mod journal;
 mod operations;
 mod query_scope;
 mod resource;
-pub use resource::{QualifiedResource, ResourceWitness};
+pub use resource::{
+    MissingResourceWitness, QualifiedResource, QualifiedResourceInput, ResourceWitness,
+};
 #[cfg(all(test, windows))]
 mod library_resource_tests;
 #[cfg(all(test, windows))]

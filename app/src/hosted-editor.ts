@@ -21,6 +21,7 @@ export interface HostedEditorQueryHost {
   output(query: FrozenQuery, result: QueryResult): void | Promise<void>;
   modeChanged?(): void;
   navigateReference?(reference: string): Promise<void>;
+  navigateResource?(reference: string): Promise<void>;
   dependencies?(): HostedQueryDependencies;
 }
 const modes: [ViewMode, string][] = [["source", "V01 源码"], ["styled", "V02 带样式源码"], ["focus", "V03 按需语法"], ["write", "V04 可视写作"], ["read", "V05 阅读"]];
@@ -112,7 +113,7 @@ export class HostedEditor {
           if (!editor.reveal({ from: item.range.utf16From, to: item.range.utf16To, raw: item.range.raw }, this.value)) return false;
           editor.readOnly(false); editor.mount(host); return true;
         },
-        closeReveal: () => editor.clearReveal(), openRow: this.queryHost.openRow, canOpenRow: this.queryHost.canOpenRow,
+        closeReveal: () => editor.clearReveal(), openRow: this.queryHost.openRow, canOpenRow: this.queryHost.canOpenRow, openResource: this.queryHost.navigateResource,
         openOwner: this.queryHost.openOwner, canOpenOwner: () => false, output: this.queryHost.output, notify: message => this.error(new Error(message)),
       });
     } else if (this.editor.source !== source) {
@@ -234,6 +235,9 @@ export class HostedEditor {
         else if (/^weftext-node:\/\//.test(item.attrs.href) && this.queryHost?.navigateReference) {
           const reference = item.attrs.href; el.setAttribute("href", "#"); el.addEventListener("click", event => { if (event.target instanceof Element && event.target.closest("input,textarea,button,[contenteditable=true],[role=button]")) return; event.preventDefault(); void this.queryHost!.navigateReference!(reference).catch(this.error); });
           if (writable) openReference = this.button("打开稳定链接", () => this.queryHost!.navigateReference!(reference));
+        } else if (/^weftext-resource:\/\//.test(item.attrs.href) && this.queryHost?.navigateResource) {
+          const reference = item.attrs.href; el.setAttribute("href", "#"); el.addEventListener("click", event => { if (event.target instanceof Element && event.target.closest("input,textarea,button,[contenteditable=true],[role=button]")) return; event.preventDefault(); void this.queryHost!.navigateResource!(reference).catch(this.error); });
+          if (writable) openReference = this.button("查看稳定资源链接", () => this.queryHost!.navigateResource!(reference));
         }
       }
       for (const child of item.children ?? []) el.append(draw(child));

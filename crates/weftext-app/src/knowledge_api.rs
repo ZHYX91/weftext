@@ -192,7 +192,7 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
 fn resource_fragment(bytes: &[u8], fragment: Option<&str>) -> Value {
     resource_fragment_metadata(&crate::media_api::metadata_from_bytes(bytes), fragment)
 }
-fn resource_fragment_metadata(
+pub(crate) fn resource_fragment_metadata(
     metadata: &crate::media_api::ResourceMetadata,
     fragment: Option<&str>,
 ) -> Value {
@@ -1065,13 +1065,42 @@ fn target_from_resource(
     input: &Value,
     resource: &crate::media_api::QualifiedResource,
 ) -> Result<knowledge::AnnotationTarget, ApiError> {
-    let address = resource.resource_ref.clone();
     let revision_id = resource
         .file
         .revision
         .clone()
         .ok_or_else(|| ApiError::bad("资源尚无已接纳的准确版本"))?;
-    let target = match (text(input, "kind")?, &resource.metadata) {
+    target_from_resource_metadata(
+        input,
+        &resource.resource_ref,
+        &revision_id,
+        &resource.metadata,
+    )
+}
+pub(crate) fn target_from_resource_metadata(
+    input: &Value,
+    address: &str,
+    revision_id: &str,
+    metadata: &crate::media_api::ResourceMetadata,
+) -> Result<knowledge::AnnotationTarget, ApiError> {
+    if matches!(
+        input["kind"].as_str(),
+        Some("whole_resource" | "wholeResource")
+    ) {
+        let target = knowledge::AnnotationTarget::WholeResource {
+            resource: address.to_owned(),
+            revision_id: revision_id.to_owned(),
+        };
+        if address.is_empty() || revision_id.is_empty() {
+            return Err(ApiError::bad("整资源评论需要准确资源引用和已接纳版本"));
+        }
+        return Ok(target);
+    }
+    let facts = crate::media_api::metadata_facts(metadata, address, revision_id)
+        .ok_or_else(|| ApiError::bad("此资源缺少已验证的区域证据"))?;
+    let address = address.to_owned();
+    let revision_id = revision_id.to_owned();
+    let target = match (text(input, "kind")?, metadata) {
         ("whole_resource" | "wholeResource", _) => knowledge::AnnotationTarget::WholeResource {
             resource: address,
             revision_id,
@@ -1186,14 +1215,7 @@ fn target_from_resource(
             ));
         }
     };
-    knowledge::validate_resource_target(
-        &target,
-        resource
-            .facts
-            .as_ref()
-            .ok_or_else(|| ApiError::bad("此资源缺少已验证的区域证据"))?,
-    )
-    .map_err(knowledge_error)?;
+    knowledge::validate_resource_target(&target, &facts).map_err(knowledge_error)?;
     Ok(target)
 }
 fn enrich_ref(reference: &mut Value, inventory: &knowledge::InventorySnapshot) {

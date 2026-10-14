@@ -144,6 +144,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_hosted_providers.py', exe)
         run(sys.executable, 'scripts/test_hosted_scopes.py', exe)
         run(sys.executable, 'scripts/test_hosted_library.py', exe)
+        run(sys.executable, 'scripts/test_hosted_media.py', exe)
         run(sys.executable, 'scripts/test_hosted_definition.py', exe)
         run(sys.executable, 'scripts/test_hosted_history.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)

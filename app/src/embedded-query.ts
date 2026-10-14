@@ -4,6 +4,7 @@ import { parseQueryParameters, parseQueryPlan, queryResultState, queryRowLifecyc
 import type { Origin, RenderNode, ViewMode } from "./types";
 import { textareaSourceDraft, utf8Offset } from "./writing";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
+import { resourceCellReferences } from "./media-selection";
 
 export interface EmbeddedQueryBasis { sessionId: string; source: string; serial: number }
 export interface EmbeddedQueryOccurrence {
@@ -86,6 +87,7 @@ export interface EmbeddedQueryHost {
   openRow(row: QueryRow, plan: QueryPlan | null): Promise<void>;
   /** Hosted targets carry independent navigation authority, without local paths. */
   canOpenRow?(row: QueryRow, plan: QueryPlan | null): boolean;
+  openResource?(reference: string): Promise<void>;
   openOwner(origin: Origin): Promise<void>;
   canOpenOwner?(origin: Origin): boolean;
   output?(query: FrozenQuery, result: QueryResult): void | Promise<void>;
@@ -228,7 +230,11 @@ export class EmbeddedQueryController {
     const columns = result.columns ?? [...new Set(result.rows.flatMap(row => Object.keys(row.cells)))];
     header.append(element("th", "", "笔记")); for (const column of columns) header.append(element("th", "", fieldNames[column] ?? column)); const thead = element("thead"); thead.append(header); table.append(thead); const tbody = element("tbody");
     for (const row of result.rows) { const tr = element("tr"), target = element("td"); const title = row.cells.title?.state === "value" ? formatNativeValue(row.cells.title.value) : row.path?.replaceAll("\\", "/").split("/").at(-1) ?? (row as { resource?: string }).resource ?? "汇总 / 生成行";
-      if (this.host.canOpenRow ? this.host.canOpenRow(row, plan) : row.path && queryRowLifecycle(row, plan)) target.append(action(title, () => this.host.openRow(row, plan), this.host)); else target.textContent = title; tr.append(target); for (const column of columns) tr.append(element("td", `cell-${row.cells[column]?.state ?? "unprojected"}`, row.cells[column] ? cellText(row.cells[column]) : "未投影")); tbody.append(tr);
+      if (this.host.canOpenRow ? this.host.canOpenRow(row, plan) : row.path && queryRowLifecycle(row, plan)) target.append(action(title, () => this.host.openRow(row, plan), this.host)); else target.textContent = title; tr.append(target);
+      for (const column of columns) { const cell = row.cells[column], td = element("td", `cell-${cell?.state ?? "unprojected"}`, cell ? cellText(cell) : "未投影");
+        if (cell && this.host.openResource) for (const reference of resourceCellReferences(cell)) { const open = action("独立查看获权资源", () => this.host.openResource!(reference), this.host); open.disabled = !definitionCurrent || result.superseded === true; td.append(open); }
+        tr.append(td);
+      } tbody.append(tr);
     }
     table.append(tbody); tableHost.append(table); mount.append(tableHost);
   }

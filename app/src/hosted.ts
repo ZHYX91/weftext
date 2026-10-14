@@ -6,6 +6,7 @@ import { HostedEditor } from "./hosted-editor";
 import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
 import { HostedLibrary } from "./hosted-library";
+import { HostedMedia } from "./hosted-media";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
@@ -30,6 +31,7 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="fields" aria-label="获权字段与查询" hidden></section>
 <section id="query" aria-label="托管高级查询" hidden></section>
 <section id="review" aria-label="托管批注与校对" hidden></section>
+<section id="media" aria-label="托管获权资源与媒体" hidden></section>
 <section id="office" aria-label="Office 导入与输出" hidden></section>
 <iframe id="render" title="获权内容预览" sandbox="" hidden></iframe></article></section>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -41,15 +43,16 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
   output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
   modeChanged: () => queries.authorChanged(),
   navigateReference,
+  navigateResource,
   dependencies: () => queries.dependencies(),
 });
-const review = new HostedReview(el("review"), request, () => doc ? {
+const review: HostedReview = new HostedReview(el("review"), request, () => doc ? {
   resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
   serial: source.serial, baseId: doc.baseId, dirty: source.value !== doc.source || compareRequired,
   pending: !!draft?.pending, selection: source.selection,
 } : null, () => source.flush(), (from, to) => source.select(from, to), (resource, changed) => {
   if (changed && doc?.resource === resource) { compareRequired = true; controls(); status("建议已提交到服务端；个人草稿保留，请重新读取与核对正文。"); }
-});
+}, { context: () => media.context(), open: (asset, revision, initial) => media.openAsset(asset, revision, initial) });
 let token = sessionStorage.getItem("weftext-hosted-token") ?? "";
 let identity: Me | undefined;
 let doc: Doc | undefined;
@@ -72,7 +75,7 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
     if (!doc || !draft || resource !== doc.resource) return;
     draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations ?? [], receipts, includeReserved); retain();
   },
-}, () => source.queryInputsChanged());
+}, () => source.queryInputsChanged(), navigateResource);
 const history = new HostedHistory(el("history-list"), request, {
   context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
   basis: settle => source.historyBasis(settle), pendingChanged: () => { controls(); queries.authorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,
@@ -83,7 +86,13 @@ const library = new HostedLibrary(el("library"), request, async role => {
   if (role === "schema" || role === "rules") await queries.refreshCatalog();
   if (epoch === requestEpoch) status("库配置原操作已提交，受影响预览重新编译；正文草稿与撤销历史保留，未保存正文。");
 });
+const media: HostedMedia = new HostedMedia(el("media"), (path, body, signal) => request(path, body, false, 0, signal), context => review.mediaChanged(context), context => review.openMedia(context));
 let stableReference: { resource: string; sessionId: string; reference: string } | undefined;
+async function navigateResource(reference: string) {
+  const epoch = authorizationEpoch;
+  if (doc) { await source.flush(); if (epoch !== authorizationEpoch) return; retain(); }
+  if (epoch === authorizationEpoch) await media.openReference(reference);
+}
 async function navigateReference(reference: string) {
   const epoch = requestEpoch; await source.flush(); retain();
   if (epoch !== requestEpoch) return;
@@ -144,7 +153,7 @@ function clearDisplay(message: string, clearToken = false) {
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
-  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear()]) {
+  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear()]) {
     try { clear(); } catch (error) { clearErrors.push(error); }
   }
   el("documents").replaceChildren();
@@ -157,23 +166,27 @@ function clearDisplay(message: string, clearToken = false) {
   if (clearToken) { token = ""; identity = undefined; remove("weftext-hosted-token"); remove("weftext-hosted-identity"); el("workspace").hidden = true; el("login").hidden = false; el("logout").hidden = true; }
   controls(); status(clearErrors.length ? `${message.split(/[，。]/)[0]}。受保护展示已清除；浏览器拒绝删除部分恢复缓存，请在浏览器中清除此站点数据。` : message);
 }
-async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0): Promise<T> {
+async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal): Promise<T> {
   const epoch = requestEpoch, credential = token;
   const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
-  const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store"});
+  const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store", signal});
   if (!response.ok) {
     const result = await response.json() as {error?:{code:string;message:string}};
     // Only a read-only preview can wait for the shared compiler. Author save
     // requests keep their explicit original-operation recovery path.
     if (path === "preview" && response.status === 429 && attempt < 5) {
       await new Promise(resolve => setTimeout(resolve, 500));
-      if (epoch === requestEpoch && credential === token) return request(path, data, bytes, attempt + 1);
+      if (epoch === requestEpoch && credential === token) return request(path, data, bytes, attempt + 1, signal);
     }
     if (response.status === 401 && sameHostedQueryIdentity(captured, audience())) clearDisplay("凭据失效，已清除本页缓存。", true);
     if (response.status === 404 && path === "query" && sameHostedQueryIdentity(captured, audience())) {
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience())) { if (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation) { clearDisplay("授权策略已变化，旧展示与缓存已清除，请刷新文档列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } else if (sameHostedQueryAudience(captured, audience())) queries.refuseResult("此查询对象或范围不可用；原计划、参数和个人正文草稿保留，未交付结果。"); } }
       catch { if (sameHostedQueryAudience(captured, audience())) queries.refuseResult("查询资格核对未完成，结果暂不交付；原计划与个人草稿保留，请重新连接核对。"); }
-    } else if (response.status === 404 && path !== "query" && !path.startsWith("navigation/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    } else if ([404, 410].includes(response.status) && path.startsWith("media/") && sameHostedQueryIdentity(captured, audience())) {
+      // A hidden/unknown asset is not a revocation of the independently open
+      // note. Only a current identity's changed actor epoch clears all views.
+      try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧媒体与缓存已清除，请刷新目录。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Caller stops this resource delivery; personal source remains protected. */ }
+    } else if (response.status === 404 && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
     throw new HostedError(result.error?.code ?? "request", result.error?.code === "basisRequired" && path.startsWith("query/") ? "保存带范围的定义需要已安装的规则基线；请由管理员明确安装库规则后重试，原草稿与提案保留，未自动创建规则。" : result.error?.message ?? "请求失败", response.status);
   }
   return (bytes ? response.arrayBuffer() : response.json()) as Promise<T>;
@@ -204,7 +217,7 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation); await media.connect(next.deployment, next.actor, next.generation);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -307,7 +320,7 @@ el("refresh").onclick = () => void run(async () => {
   const epoch = requestEpoch, current = await request<Me>("me"); if (epoch !== requestEpoch) return;
   if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment) clearDisplay("授权策略已更新，旧展示与缓存已清除。");
   identity = current; cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation); sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
-  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation);
+  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation); await media.connect(current.deployment, current.actor, current.generation);
 });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
