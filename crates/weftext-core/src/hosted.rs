@@ -6,6 +6,13 @@ use std::collections::BTreeMap;
 #[path = "hosted_feature.rs"]
 mod feature;
 pub use feature::ActorFeatureStatus;
+#[path = "hosted_definition.rs"]
+mod definition;
+#[cfg(all(test, windows))]
+pub(crate) use definition::test_failpoint as definition_test_failpoint;
+pub use definition::{
+    ActorDefinitionProposal, ActorDefinitionStatus, HostedDefinitionReservationRequest,
+};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -154,6 +161,10 @@ struct ActorOperation {
     field: Option<FieldOperation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     feature: Option<feature::FeatureOperation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    definition: Option<definition::DefinitionOperation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    save_definition_reservations: Vec<definition::SaveDefinitionReservation>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -299,10 +310,10 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        if record.feature.is_some() {
+        if record.feature.is_some() || record.definition.is_some() {
             return Err(CoreError::new(
                 "operationConflict",
-                "This operation belongs to a reviewed feature proposal",
+                "This operation belongs to a feature or definition proposal",
             ));
         }
         if self.actor.as_ref() != Some(&record.actor) {
@@ -339,6 +350,8 @@ impl Core {
                 cancelled: false,
                 field: None,
                 feature: None,
+                definition: None,
+                save_definition_reservations: vec![],
             },
             Err(e) => return Err(e.into()),
         };
@@ -363,14 +376,39 @@ impl Core {
         resource: &str,
         request: HostedSaveRequest,
     ) -> Result<ActorSaveStatus> {
+        self.actor_save_definitions_internal(resource, None, request, &[])
+    }
+    pub(super) fn actor_save_definitions_internal(
+        &mut self,
+        resource: &str,
+        root: Option<&Path>,
+        request: HostedSaveRequest,
+        proposal_ids: &[String],
+    ) -> Result<ActorSaveStatus> {
         let path = self.actor_record(&request.operation_id)?;
         check_size(request.source.as_bytes())?;
-        let fingerprint = hash(&serde_json::to_vec(&serde_json::json!({
+        let ids = definition::canonical_proposal_ids(proposal_ids)?;
+        let mut intent = serde_json::json!({
             "resource":resource,"session":request.session_id,"base":request.base_id,"source":request.source
-        }))?);
+        });
+        if !ids.is_empty() {
+            intent["definitionReservations"] = serde_json::to_value(&ids)?;
+        }
+        let fingerprint = hash(&serde_json::to_vec(&intent)?);
         let record = match fs::read(&path) {
             Ok(bytes) => {
                 let record: ActorOperation = serde_json::from_slice(&bytes)?;
+                if record.actor != *self.actor.as_ref().unwrap()
+                    || record.resource != resource
+                    || record.field.is_some()
+                    || record.feature.is_some()
+                    || record.definition.is_some()
+                {
+                    return Err(CoreError::new(
+                        "operationConflict",
+                        "The original actor save differs",
+                    ));
+                }
                 if record.cancelled {
                     return Err(CoreError::new(
                         "operationCancelled",
@@ -392,6 +430,21 @@ impl Core {
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 self.check_actor_session(&request.session_id)?;
+                let reservations = if ids.is_empty() {
+                    vec![]
+                } else {
+                    self.capture_definition_save_reservations(
+                        resource,
+                        root.ok_or_else(|| {
+                            CoreError::new(
+                                "basisRequired",
+                                "The definition owner library is required",
+                            )
+                        })?,
+                        &request,
+                        &ids,
+                    )?
+                };
                 let record = ActorOperation {
                     actor: self.actor.clone().unwrap(),
                     resource: resource.into(),
@@ -400,12 +453,17 @@ impl Core {
                     cancelled: false,
                     field: None,
                     feature: None,
+                    definition: None,
+                    save_definition_reservations: reservations,
                 };
                 journal::private_create(&path, &serde_json::to_vec(&record)?)?;
                 record
             }
             Err(e) => return Err(e.into()),
         };
+        #[cfg(all(test, windows))]
+        definition_test_failpoint("actorSaveDurable")?;
+        self.freeze_definition_save_reservations(&request, &record)?;
         self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -520,6 +578,8 @@ impl Core {
                 cell,
             }),
             feature: None,
+            definition: None,
+            save_definition_reservations: vec![],
         };
         journal::private_create(&path, &serde_json::to_vec(&record)?)?;
         self.save(SaveRequest {
@@ -553,6 +613,8 @@ impl Core {
                     cell: serde_json::Value::Null,
                 }),
                 feature: None,
+                definition: None,
+                save_definition_reservations: vec![],
             };
             journal::private_create(
                 &self.actor_record(operation)?,

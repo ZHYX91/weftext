@@ -295,6 +295,23 @@ pub(crate) struct SnapshotBinding {
 pub struct SnapshotWitness {
     binding: SnapshotBinding,
 }
+fn same_snapshot_dependency(original: &SnapshotBinding, incoming: &SnapshotBinding) -> bool {
+    Path::new(&original.path) == Path::new(&incoming.path)
+        || matches!((&original.captured, &incoming.captured), (Some(a), Some(b))
+            if a.stamp.identity == b.stamp.identity)
+}
+fn verify_duplicate_snapshot(original: &SnapshotBinding, incoming: &SnapshotBinding) -> Result<()> {
+    if original.parent != incoming.parent
+        || original.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
+            != incoming.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
+    {
+        return Err(CoreError::new(
+            "staleBase",
+            "Competing read witnesses for one dependency",
+        ));
+    }
+    Ok(())
+}
 #[derive(Clone)]
 pub(crate) struct AdmittedBasis {
     root: String,
@@ -1037,6 +1054,9 @@ impl Core {
             .values()
             .filter(|p| self.committed(&p.operation_id))
         {
+            if self.hosted_definition_key_admitted(p, &owner, key)? {
+                return Ok(true);
+            }
             let reservation =
                 fs::read(self.journal_path(&p.operation_id, "definition-reservation"))
                     .ok()
@@ -1480,6 +1500,151 @@ impl Core {
         }
         self.check_pending(&path)?;
         self.verify_snapshot_binding(&path, &witness.binding, capture_optional(&path)?.as_ref())
+    }
+    /// Consume each validation's owned witnesses into one bounded exact pool.
+    /// Duplicates are dropped only after their complete versions agree. An
+    /// error empties the pool; the caller must discard the failed save request.
+    pub fn merge_snapshot_witnesses(
+        pool: &mut Vec<SnapshotWitness>,
+        incoming: Vec<SnapshotWitness>,
+    ) -> Result<()> {
+        let original = std::mem::take(pool);
+        if original.len() > 2048 || incoming.len() > 2048 {
+            return Err(CoreError::new(
+                "budget",
+                "At most 2048 original read witnesses per batch",
+            ));
+        }
+        let mut merged = Vec::<SnapshotWitness>::new();
+        let mut total = 0usize;
+        for witness in original.into_iter().chain(incoming) {
+            let basis = &witness.binding;
+            if let Some(existing) = merged
+                .iter()
+                .find(|existing| same_snapshot_dependency(&existing.binding, basis))
+            {
+                verify_duplicate_snapshot(&existing.binding, basis)?;
+                continue;
+            }
+            let captured = basis.captured.as_ref().ok_or_else(|| {
+                CoreError::new(
+                    "basisRequired",
+                    "A guarded definition dependency must exist",
+                )
+            })?;
+            total = total.checked_add(captured.bytes.len()).ok_or_else(|| {
+                CoreError::new(
+                    "budget",
+                    "Guarded read dependencies exceed their byte budget",
+                )
+            })?;
+            if merged.len() == 64 || total > MAX_OPERATION_BYTES {
+                return Err(CoreError::new(
+                    "budget",
+                    "Merged read dependencies exceed 64 files or 64 MiB",
+                ));
+            }
+            merged.push(witness);
+        }
+        *pool = merged;
+        Ok(())
+    }
+    /// Protect every actual read dependency through the action's durable write.
+    /// The owner is excluded before opening: save acquires its own share-zero
+    /// write handle and validates the current actor session through that handle.
+    pub fn with_guarded_snapshot_witnesses<T>(
+        &mut self,
+        root: &Path,
+        witnesses: &[&SnapshotWitness],
+        write_owner_path: &Path,
+        action: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let root = absolute_path(root)?;
+        let owner = absolute_path(write_owner_path)?;
+        self.require_workspace(&root)?;
+        if !owner.starts_with(&root) {
+            return Err(CoreError::new(
+                "outsideRoot",
+                "The writer belongs outside this library",
+            ));
+        }
+        if witnesses.len() > 2048 {
+            return Err(CoreError::new(
+                "budget",
+                "At most 2048 original read witnesses",
+            ));
+        }
+        let mut selected = Vec::<&SnapshotBinding>::new();
+        let mut total = 0usize;
+        for witness in witnesses {
+            let basis = &witness.binding;
+            let path = Path::new(&basis.path);
+            if !path.starts_with(&root) {
+                return Err(CoreError::new(
+                    "outsideRoot",
+                    "A read witness belongs outside this library",
+                ));
+            }
+            if path == owner {
+                continue;
+            }
+            if let Some(original) = selected
+                .iter()
+                .find(|original| same_snapshot_dependency(original, basis))
+            {
+                verify_duplicate_snapshot(original, basis)?;
+                continue;
+            }
+            let captured = basis.captured.as_ref().ok_or_else(|| {
+                CoreError::new(
+                    "basisRequired",
+                    "A guarded definition dependency must exist",
+                )
+            })?;
+            total = total.checked_add(captured.bytes.len()).ok_or_else(|| {
+                CoreError::new(
+                    "budget",
+                    "Guarded read dependencies exceed their byte budget",
+                )
+            })?;
+            if total > MAX_OPERATION_BYTES {
+                return Err(CoreError::new(
+                    "budget",
+                    "Guarded read dependencies exceed 64 MiB",
+                ));
+            }
+            if selected.len() == 64 {
+                return Err(CoreError::new(
+                    "budget",
+                    "At most 64 unique guarded read dependencies",
+                ));
+            }
+            selected.push(basis);
+        }
+        let mut guards = vec![];
+        let mut handles = vec![];
+        for basis in selected {
+            let path = Path::new(&basis.path);
+            self.check_pending(path)?;
+            let guard = ParentGuard::acquire(path)?;
+            let mut handle = guard.open_file(false, false)?;
+            let actual_stamp = stamp(&handle)?;
+            self.check_pending_identity(&actual_stamp.identity)?;
+            let bytes = read_blob(&mut handle)?;
+            let expected = basis.captured.as_ref().unwrap();
+            if guard.directory_identity()? != basis.parent
+                || actual_stamp != expected.stamp
+                || bytes != expected.bytes
+            {
+                return Err(CoreError::new(
+                    "staleBase",
+                    "A guarded read dependency changed after validation",
+                ));
+            }
+            guards.push(guard);
+            handles.push(handle);
+        }
+        action(self)
     }
     pub fn validate_library_style(&self, root: impl AsRef<Path>, base_id: &str) -> Result<()> {
         let root = absolute_path(root.as_ref())?;

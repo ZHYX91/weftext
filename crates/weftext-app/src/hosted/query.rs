@@ -287,7 +287,7 @@ fn read_definitions(
         .map_err(|_| changed())?,
         _ => current,
     };
-    let definitions = weftext_data::saved_queries(&content)
+    let candidates = weftext_data::saved_queries(&content)
         .map_err(|_| changed())?
         .into_iter()
         .filter(|d| {
@@ -298,16 +298,24 @@ fn read_definitions(
             })
         })
         .collect::<Vec<_>>();
-    if selection.is_some() && definitions.len() != 1 {
+    if selection.is_some() && candidates.len() != 1 {
         return Err(changed());
     }
-    for definition in &definitions {
-        if !inner
+    let mut definitions = vec![];
+    let mut unavailable = vec![];
+    for definition in candidates {
+        if inner
             .core
             .is_definition_key_admitted(&root, owner, &definition.key)
             .map_err(|_| changed())?
         {
+            definitions.push(definition);
+        } else if selection.is_some() {
             return Err(changed());
+        } else {
+            unavailable.push(
+                json!({"key":definition.key,"label":definition.label,"status":"unavailable"}),
+            );
         }
     }
     inner
@@ -319,16 +327,38 @@ fn read_definitions(
         _ => snapshot.revision,
     };
     Ok(
-        json!({"resource":resource,"ownerRevision":revision,"definitions":definitions,"selection":selection}),
+        json!({"resource":resource,"ownerRevision":revision,"definitions":definitions,"selection":selection,
+            "coverage":if unavailable.is_empty(){"complete"}else{"partial"},"unavailable":unavailable}),
     )
 }
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
-    locked(&state,move|inner| {
-        let actor=inner.actor(&auth)?;let grants=inner.policy.users[&actor].grants.clone();let mut resources=vec![];let mut definitions=vec![];let mut unavailable_definitions=vec![];
-        for (resource,rights) in grants {let Some(file)=inner.config.files.get(&resource).filter(|f|f.editable)else{continue;};let fields=rights.fields.iter().filter(|(_,r)|r.read).map(|(id,_)|id.clone()).collect::<Vec<_>>();
-            if fields.is_empty()&&!rights.query.definitions&&!rights.query.products.values().any(|p|*p)&&rights.query.relations.is_empty(){continue;}
-            resources.push(json!({"resource":resource,"title":file.title,"fields":fields,"products":PRODUCTS.iter().map(|p|(*p,rights.query.products.get(*p).copied().unwrap_or(false))).collect::<BTreeMap<_,_>>(),"relations":rights.query.relations,"definitions":rights.query.definitions,"definitionHistory":rights.query.definition_history}));
-            if rights.query.definitions {match read_definitions(inner,&actor,&resource,None){Ok(result)=>{for definition in result["definitions"].as_array().ok_or_else(changed)?{let mut d=definition.clone();d["resource"]=json!(resource);d["revision"]=result["ownerRevision"].clone();definitions.push(d);}},Err(_)=>unavailable_definitions.push(json!({"resource":resource,"status":"unavailable"}))}}
+    locked(&state, move |inner| {
+        let actor = inner.actor(&auth)?;
+        let grants = inner.policy.users[&actor].grants.clone();
+        let mut resources = vec![];
+        let mut definitions = vec![];
+        let mut unavailable_definitions = vec![];
+        for (resource, rights) in grants {
+            let Some(file) = inner.config.files.get(&resource).filter(|f| f.editable) else { continue; };
+            let fields = rights.fields.iter().filter(|(_, r)| r.read).map(|(id, _)| id.clone()).collect::<Vec<_>>();
+            if fields.is_empty() && !rights.query.definitions && !rights.query.products.values().any(|p| *p) && rights.query.relations.is_empty() { continue; }
+            resources.push(json!({"resource":resource,"title":file.title,"fields":fields,
+                "products":PRODUCTS.iter().map(|p|(*p,rights.query.products.get(*p).copied().unwrap_or(false))).collect::<BTreeMap<_,_>>(),
+                "relations":rights.query.relations,"definitions":rights.query.definitions,"definitionHistory":rights.query.definition_history}));
+            if rights.query.definitions {
+                match read_definitions(inner, &actor, &resource, None) {
+                    Ok(result) => {
+                        for definition in result["definitions"].as_array().ok_or_else(changed)? {
+                            let mut definition = definition.clone();
+                            definition["resource"] = json!(resource);
+                            definition["revision"] = result["ownerRevision"].clone();
+                            definitions.push(definition);
+                        }
+                        if result["coverage"] == "partial" { unavailable_definitions.push(json!({"resource":resource,"status":"unavailable"})); }
+                    }
+                    Err(_) => unavailable_definitions.push(json!({"resource":resource,"status":"unavailable"})),
+                }
+            }
         }
         Ok(Json(json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty(){"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions})))
     }).await
@@ -578,6 +608,7 @@ struct DefinitionContext<'a> {
     workspace: &'a str,
     role: &'a str,
     draft: Option<&'a Draft>,
+    draft_keys: Option<&'a BTreeSet<String>>,
 }
 fn freeze_definitions(
     inner: &mut HostedInner,
@@ -592,6 +623,7 @@ fn freeze_definitions(
         workspace,
         role,
         draft,
+        draft_keys,
     } = selected;
     let mut context = weftext_data::FrozenAdvancedInput::default();
     let mut baselines = BTreeMap::new();
@@ -620,7 +652,7 @@ fn freeze_definitions(
             let owner_id = current.node_id.as_ref().unwrap();
             let key = selected_key(&dependency.selection);
             let local = draft.filter(|d| d.resource == resource && !pinned);
-            if local.is_none()
+            if (local.is_none() || draft_keys.is_some_and(|keys| !keys.contains(key)))
                 && !inner
                     .core
                     .is_definition_key_admitted(&inner.config.root, owner_id, key)
@@ -722,6 +754,345 @@ fn freeze_definitions(
                 .collect();
             return Ok((context, false));
         }
+    }
+    Err(invalid())
+}
+pub(super) struct DefinitionValidationRequest<'a> {
+    pub(super) resource: &'a str,
+    pub(super) source: &'a str,
+    pub(super) plan: &'a QueryPlan,
+    pub(super) binding: Option<&'a SavedQueryBinding>,
+    pub(super) draft_keys: &'a BTreeSet<String>,
+}
+pub(super) struct DefinitionValidation {
+    pub(super) binding: SavedQueryBinding,
+    pub(super) schema: Schema,
+    pub(super) context: weftext_data::FrozenAdvancedInput,
+    pub(super) plan: QueryPlan,
+    pub(super) guard: DefinitionGuard,
+}
+fn canonical_definition_owners(
+    plan: &mut QueryPlan,
+    owners: &BTreeMap<String, String>,
+) -> Result<(), ApiError> {
+    if let Some(advanced) = &mut plan.advanced {
+        if let Some(call) = &mut advanced.call {
+            call.owner = owners.get(&call.owner).ok_or_else(changed)?.clone();
+        }
+        for child in &mut advanced.union_all {
+            canonical_definition_owners(child, owners)?;
+        }
+        if let Some(related) = &mut advanced.related {
+            canonical_definition_owners(&mut related.from, owners)?;
+        }
+    }
+    Ok(())
+}
+pub(super) struct DefinitionGuard {
+    actor: String,
+    epoch: u64,
+    authority: Authority,
+    config_hash: String,
+    pub(super) witnesses: Vec<(String, SnapshotWitness)>,
+    pub(super) owner_path: PathBuf,
+}
+impl DefinitionGuard {
+    pub(super) fn recheck(&self, inner: &HostedInner, auth: &Auth) -> Result<(), ApiError> {
+        let actor = inner.actor(auth)?;
+        if actor != self.actor || inner.actor_generation(&actor) != self.epoch {
+            return Err(expired());
+        }
+        authorize_authority(inner, &actor, &self.authority)?;
+        if office::binding_hash(inner, &all_resources(&self.authority))? != self.config_hash {
+            return Err(changed());
+        }
+        for (path, witness) in &self.witnesses {
+            inner
+                .core
+                .validate_snapshot_witness(&inner.config.root, path, witness)
+                .map_err(|_| changed())?;
+        }
+        Ok(())
+    }
+}
+fn static_authority(
+    grants: &BTreeMap<String, Rights>,
+    configured: &BTreeSet<String>,
+    demands: &weftext_data::QueryReadRequirements,
+) -> Result<Authority, ApiError> {
+    let mut authority = Authority::default();
+    for field in &demands.fields {
+        let (resource, _) = grants
+            .iter()
+            .find(|(r, g)| configured.contains(*r) && g.fields.get(field).is_some_and(|f| f.read))
+            .ok_or_else(unavailable)?;
+        authority
+            .fields
+            .entry(resource.clone())
+            .or_default()
+            .insert(field.clone());
+    }
+    for product in &demands.products {
+        let (resource, _) = grants
+            .iter()
+            .find(|(r, g)| {
+                configured.contains(*r) && g.query.products.get(product).copied().unwrap_or(false)
+            })
+            .ok_or_else(unavailable)?;
+        authority
+            .products
+            .entry(resource.clone())
+            .or_default()
+            .insert(product.clone());
+    }
+    for relation in &demands.relations {
+        let (resource, _) = grants
+            .iter()
+            .find(|(r, g)| configured.contains(*r) && g.query.relations.contains(relation))
+            .ok_or_else(unavailable)?;
+        authority
+            .relations
+            .entry(resource.clone())
+            .or_default()
+            .insert(relation.clone());
+    }
+    if demands.type_filter && !demands.products.contains("types") {
+        return Err(unavailable());
+    }
+    Ok(authority)
+}
+/// Type-check a saved carrier without fetching query rows, evaluating parameters
+/// or compiling body products. Only the configured owner/schema and actual
+/// definition calls enter the immutable read closure.
+pub(super) fn validate_definition(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    request: DefinitionValidationRequest<'_>,
+) -> Result<DefinitionValidation, ApiError> {
+    let DefinitionValidationRequest {
+        resource,
+        source: draft_source,
+        plan,
+        binding,
+        draft_keys,
+    } = request;
+    let actor = inner.actor(auth)?;
+    definitions_access(inner, &actor, resource, false)?;
+    if !inner.rights(&actor, resource)?.write {
+        return Err(unavailable());
+    }
+    writing_api::validate_source(draft_source, None)?;
+    request_budget(&QueryRequest {
+        fields: BTreeSet::new(),
+        resources: None,
+        products: BTreeSet::new(),
+        relations: BTreeSet::new(),
+        parameters: BTreeMap::new(),
+        plan: plan.clone(),
+    })?;
+    let config = inner
+        .core
+        .read_config(&inner.config.root, ConfigRole::Schema)
+        .map_err(|_| changed())?;
+    drop(
+        inner
+            .core
+            .take_snapshot_witness(&config.base_id)
+            .map_err(|_| changed())?,
+    );
+    let workspace = config
+        .role_ref
+        .strip_prefix("weftext-config://")
+        .and_then(|s| s.strip_suffix("/schema"))
+        .ok_or_else(changed)?
+        .to_owned();
+    let owner_path = inner.config.root.join(&inner.config.files[resource].path);
+    let mut owners = BTreeMap::new();
+    for _ in 0..64 {
+        let resources = owners
+            .values()
+            .cloned()
+            .chain([resource.to_owned()])
+            .collect::<BTreeSet<String>>();
+        if resources.len() >= 64 {
+            return Err(invalid());
+        }
+        let paths = std::iter::once(config.path.clone())
+            .chain(resources.iter().map(|r| {
+                inner
+                    .config
+                    .root
+                    .join(&inner.config.files[r].path)
+                    .to_string_lossy()
+                    .into_owned()
+            }))
+            .collect::<Vec<_>>();
+        let mut files = inner
+            .core
+            .read_snapshot(&inner.config.root, &paths)
+            .map_err(|_| changed())?
+            .files;
+        let witnesses = take_witnesses(inner, &files)?;
+        let schema_file = files.remove(0);
+        // Persisted definitions always have an admitted, exact config revision;
+        // the bundled default is only an execution/read fallback.
+        let current_revision = schema_file.revision.as_ref().ok_or_else(changed)?;
+        let current_schema = schema_from(&schema_file)?;
+        let binding = binding.cloned().unwrap_or(SavedQueryBinding {
+            schema: config.role_ref.clone(),
+            revision: current_revision.clone(),
+            language: "weftext.query.cel.v1".into(),
+        });
+        if binding.schema != config.role_ref || binding.language != "weftext.query.cel.v1" {
+            return Err(changed());
+        }
+        let baseline = if binding.revision == *current_revision {
+            current_schema.clone()
+        } else {
+            let bytes = inner
+                .core
+                .read_config_revision(&inner.config.root, ConfigRole::Schema, &binding.revision)
+                .map_err(|_| changed())?;
+            Schema::from_author_json(std::str::from_utf8(&bytes).map_err(|_| changed())?)
+                .map_err(|_| changed())?
+        };
+        let files = resources.into_iter().zip(files).collect::<BTreeMap<_, _>>();
+        let owner = files.get(resource).ok_or_else(changed)?;
+        // The accepted Core identity remains authoritative even when an
+        // ordinary save retained unfinished body syntax. Repairing that body
+        // must not require its previous bytes to qualify as a Query carrier.
+        source(owner)?;
+        let draft_id = weftext_data::narrow_query_metadata(draft_source, &current_schema)
+            .map_err(|_| changed())?
+            .0;
+        if owner.node_id.as_ref() != Some(&draft_id) {
+            return Err(changed());
+        }
+        let draft = Draft {
+            resource: resource.into(),
+            source: draft_source.into(),
+            binding: binding.clone(),
+            session_id: None,
+            serial: None,
+        };
+        let mut authority = Authority {
+            definitions: BTreeMap::from([(resource.into(), false)]),
+            inputs: BTreeSet::from([resource.into()]),
+            ..Default::default()
+        };
+        let (mut context, expanded) = freeze_definitions(
+            inner,
+            &actor,
+            plan,
+            &files,
+            DefinitionContext {
+                workspace: &workspace,
+                role: &config.role_ref,
+                draft: Some(&draft),
+                draft_keys: Some(draft_keys),
+            },
+            &mut owners,
+            &mut authority,
+        )?;
+        if expanded {
+            continue;
+        }
+        let demands = weftext_data::query_read_requirements(plan, &baseline, &context)
+            .map_err(|_| unavailable())?;
+        let configured = inner
+            .config
+            .files
+            .iter()
+            .filter(|(_, f)| f.editable)
+            .map(|(id, _)| id.clone())
+            .collect();
+        let effects = static_authority(&inner.policy.users[&actor].grants, &configured, &demands)?;
+        authority.fields = effects.fields;
+        authority.products = effects.products;
+        authority.relations = effects.relations;
+        authorize_authority(inner, &actor, &authority)?;
+        let schema = restricted_schema(
+            &baseline,
+            &demands.fields,
+            &demands.types,
+            &demands.relations,
+        )?;
+        let current = restricted_schema(
+            &current_schema,
+            &demands.fields,
+            &demands.types,
+            &demands.relations,
+        )?;
+        if !weftext_data::baseline_contract_compatible(&schema, &current).map_err(|_| changed())? {
+            return Err(changed());
+        }
+        for selected in &mut context.schemas {
+            selected.projection = restricted_schema(
+                &selected.projection,
+                &demands.fields,
+                &demands.types,
+                &demands.relations,
+            )?;
+        }
+        let canonical_owners = owners
+            .iter()
+            .map(|(selector, resource)| {
+                let id = files[resource].node_id.as_ref().ok_or_else(changed)?;
+                Ok((selector.clone(), format!("weftext-node://{workspace}/{id}")))
+            })
+            .collect::<Result<BTreeMap<_, _>, ApiError>>()?;
+        let mut plan = plan.clone();
+        canonical_definition_owners(&mut plan, &canonical_owners)?;
+        let mut canonical_context = Vec::<weftext_data::FrozenDefinitionOwner>::new();
+        for mut owner in std::mem::take(&mut context.definitions) {
+            owner.owner = canonical_owners
+                .get(&owner.owner)
+                .ok_or_else(changed)?
+                .clone();
+            if let Some(existing) = canonical_context
+                .iter_mut()
+                .find(|o| o.owner == owner.owner)
+            {
+                for revision in owner.history {
+                    if let Some(old) = existing
+                        .history
+                        .iter()
+                        .find(|r| r.revision == revision.revision)
+                    {
+                        if old.source != revision.source || old.current != revision.current {
+                            return Err(changed());
+                        }
+                    } else {
+                        existing.history.push(revision);
+                    }
+                }
+            } else {
+                canonical_context.push(owner);
+            }
+        }
+        context.definitions = canonical_context;
+        weftext_data::validate_query_plan_with_context(&plan, &schema, &context)
+            .map_err(|_| unavailable())?;
+        // Definitions, historical baselines and typed parameters share the
+        // execution input cap even though this path never compiles any rows.
+        let mut validation_bytes = 0;
+        charge_serialized(&mut validation_bytes, &(&context, &schema, &plan))?;
+        let config_hash = office::binding_hash(inner, &all_resources(&authority))?;
+        let epoch = inner.actor_generation(&actor);
+        return Ok(DefinitionValidation {
+            binding,
+            schema,
+            context,
+            plan,
+            guard: DefinitionGuard {
+                actor,
+                epoch,
+                authority,
+                config_hash,
+                witnesses,
+                owner_path,
+            },
+        });
     }
     Err(invalid())
 }
@@ -847,6 +1218,7 @@ fn capture(
                 workspace: &workspace,
                 role: &config.role_ref,
                 draft: draft.as_ref(),
+                draft_keys: None,
             },
             &mut owners,
             &mut authority,
@@ -904,7 +1276,13 @@ fn capture(
                 .collect();
         }
         let demands = weftext_data::query_read_requirements(&req.plan, &root_schema, &context)
-            .map_err(|_| invalid())?;
+            .map_err(|_| {
+                if draft.is_some() {
+                    unavailable()
+                } else {
+                    invalid()
+                }
+            })?;
         if draft.is_some() {
             req.fields = demands.fields.clone();
             req.products = demands.products.clone();
@@ -1031,8 +1409,15 @@ fn capture(
             )?;
         }
         context.parameters = req.parameters.clone();
-        weftext_data::validate_query_plan_with_context(&req.plan, &schema, &context)
-            .map_err(|_| invalid())?;
+        weftext_data::validate_query_plan_with_context(&req.plan, &schema, &context).map_err(
+            |_| {
+                if draft.is_some() {
+                    unavailable()
+                } else {
+                    invalid()
+                }
+            },
+        )?;
         let cut_id = uuid::Uuid::new_v4().to_string();
         let mut notes = vec![];
         let mut metadata = BTreeMap::new();
@@ -1370,6 +1755,95 @@ mod tests {
             notes: vec![],
             advanced: None,
         }
+    }
+
+    #[test]
+    fn definition_static_authority_requires_each_product_field_and_relation_separately() {
+        let mut grants = BTreeMap::from([(
+            "Shared".into(),
+            Rights {
+                read: true,
+                write: true,
+                query: QueryRights {
+                    definitions: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )]);
+        let configured = BTreeSet::from(["Shared".into()]);
+        let mut demands = weftext_data::QueryReadRequirements::default();
+        demands.fields.insert("tasks/status".into());
+        assert_eq!(
+            static_authority(&grants, &configured, &demands)
+                .err()
+                .unwrap()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        grants.get_mut("Shared").unwrap().fields.insert(
+            "tasks/status".into(),
+            FieldRights {
+                read: true,
+                write: false,
+            },
+        );
+        demands.products.insert("body".into());
+        assert_eq!(
+            static_authority(&grants, &configured, &demands)
+                .err()
+                .unwrap()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        grants
+            .get_mut("Shared")
+            .unwrap()
+            .query
+            .products
+            .insert("body".into(), true);
+        demands.relations.insert("task-parent".into());
+        assert!(static_authority(&grants, &configured, &demands).is_err());
+        grants
+            .get_mut("Shared")
+            .unwrap()
+            .query
+            .relations
+            .insert("task-parent".into());
+        let proof = static_authority(&grants, &configured, &demands).unwrap();
+        assert_eq!(proof.fields["Shared"], demands.fields);
+        assert_eq!(proof.products["Shared"], demands.products);
+        assert_eq!(proof.relations["Shared"], demands.relations);
+        assert!(static_authority(&grants, &BTreeSet::new(), &demands).is_err());
+    }
+
+    #[test]
+    fn native_owner_normalization_recurses_and_preserves_pinned_selection_and_arguments() {
+        let mut plan: QueryPlan = serde_json::from_value(json!({"advanced":{"related":{"relation":"parent","direction":"forward","from":{"advanced":{"unionAll":[
+            {"advanced":{"call":{"owner":"Shared","selection":{"mode":"pinned","key":"original-key","revision":"original-revision"},"arguments":{"wanted":"\"open\""}}}},
+            {"advanced":{"call":{"owner":"Other","selection":{"mode":"current","key":"other-key"}}}}
+        ]}}}}})).unwrap();
+        canonical_definition_owners(
+            &mut plan,
+            &BTreeMap::from([
+                ("Shared".into(), "weftext-node://workspace/first".into()),
+                ("Other".into(), "weftext-node://workspace/second".into()),
+            ]),
+        )
+        .unwrap();
+        let value = serde_json::to_value(&plan).unwrap();
+        let first =
+            &value["advanced"]["related"]["from"]["advanced"]["unionAll"][0]["advanced"]["call"];
+        assert_eq!(first["owner"], "weftext-node://workspace/first");
+        assert_eq!(
+            first["selection"],
+            json!({"mode":"pinned","key":"original-key","revision":"original-revision"})
+        );
+        assert_eq!(first["arguments"]["wanted"], "\"open\"");
+        let second =
+            &value["advanced"]["related"]["from"]["advanced"]["unionAll"][1]["advanced"]["call"];
+        assert_eq!(second["owner"], "weftext-node://workspace/second");
+        assert!(canonical_definition_owners(&mut plan, &BTreeMap::new()).is_err());
     }
 
     #[test]

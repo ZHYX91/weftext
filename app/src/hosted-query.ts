@@ -2,6 +2,7 @@ import { action, diagnosticText, formatNativeValue, ui, type Cell } from "./data
 import { parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState, type QueryPlan } from "./query-panel";
 import { decodeHostedQuery, HostedQueryGate, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow } from "./hosted-query-state";
 import { hostedCachePrefix } from "./hosted-state";
+import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
 
 type Product = "title" | "body" | "headings" | "types" | "self";
 type Resource = { resource: string; title: string; fields: string[]; products: Record<Product, boolean>; relations: string[]; definitions: boolean; definitionHistory: boolean };
@@ -30,9 +31,16 @@ export class HostedQuery {
   private message = ui("p", "hint");
   private controls = ui("section");
   private results = ui("section");
-  constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void) { this.clear(false); }
+  private definitions?: HostedQueryDefinitions;
+  constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
+  authorChanged(force = false) { void this.definitions?.authorChanged(force); }
+  async refreshCatalog(): Promise<void> {
+    const epoch = this.epoch;
+    try { const catalog = await this.request<Catalog>("query/catalog"); if (epoch !== this.epoch) return; this.catalog = catalog; this.renderControls(); }
+    catch (error) { if (epoch === this.epoch) this.message.textContent = error instanceof Error ? error.message : "当前定义目录刷新失败，原计划和冻结结果保留。"; }
+  }
   clear(removeCache = true) {
-    this.epoch++; this.gate.clear(); this.busy = false; this.result = undefined; this.resultInput = undefined; this.draft = initial(); this.catalog = { resources: [], definitions: [] }; this.unreadable = undefined;
+    this.epoch++; this.gate.clear(); this.definitions?.clear(); this.busy = false; this.result = undefined; this.resultInput = undefined; this.draft = initial(); this.catalog = { resources: [], definitions: [] }; this.unreadable = undefined;
     this.host.replaceChildren(); this.host.hidden = true; this.controls.replaceChildren(); this.results.replaceChildren(); this.message.textContent = ""; this.key = "";
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-query:")) sessionStorage.removeItem(key); this.key = "";
   }
@@ -49,6 +57,7 @@ export class HostedQuery {
       if (!this.draft.owner) this.draft.owner = catalog.definitions[0]?.resource ?? catalog.resources.find(item => item.definitions)?.resource ?? "";
       this.renderControls();
     } catch (error) { if (epoch === this.epoch) this.message.textContent = error instanceof Error ? error.message : "查询目录暂不可用，原输入保留。"; }
+    if (epoch === this.epoch && this.definitions) { this.host.append(this.definitions.element); await this.definitions.connect(deployment, actor, generation); }
   }
   private fingerprint() { return JSON.stringify(this.draft); }
   private persist() { if (!this.key || this.unreadable !== undefined) return; try { sessionStorage.setItem(this.key, JSON.stringify(this.draft)); } catch { this.message.textContent = "无法保留查询控件输入，请先复制计划与参数；查询不会修改正文。"; } }
@@ -105,13 +114,13 @@ export class HostedQuery {
   private async readDefinitions() {
     if (this.busy) return; const epoch = this.epoch, fingerprint = this.fingerprint(), draft = structuredClone(this.draft); this.busy = true; this.renderControls();
     try { if (draft.selection === "pinned" && (!draft.definition || !draft.revision || !this.catalog.resources.find(item => item.resource === draft.owner)?.definitionHistory)) throw new Error("固定定义缺少准确 key、历史版本或独立权限。");
-      const result = await this.request<{ resource: string; ownerRevision: string | null; definitions: Definition[] }>("query/definitions", { resource: draft.owner, ...(draft.definition ? { selection: { mode: draft.selection, key: draft.definition, ...(draft.selection === "pinned" ? { revision: draft.revision } : {}) } } : {}) });
+      const result = await this.request<{ resource: string; ownerRevision: string | null; definitions: Definition[]; coverage?: "complete" | "partial"; unavailable?: { key: string; label: string; status: "unavailable" }[] }>("query/definitions", { resource: draft.owner, ...(draft.definition ? { selection: { mode: draft.selection, key: draft.definition, ...(draft.selection === "pinned" ? { revision: draft.revision } : {}) } } : {}) });
       if (epoch !== this.epoch || this.fingerprint() !== fingerprint) return; if (result.resource !== draft.owner || !Array.isArray(result.definitions)) throw new Error("保存定义回执与原选择不一致。" );
       const incoming = result.definitions.map(item => ({ ...item, resource: result.resource, revision: result.ownerRevision ?? undefined }));
       if (draft.definition && (incoming.length !== 1 || incoming[0].key !== draft.definition)) throw new Error("保存定义回执没有保留准确 key，未采用同名替代定义。");
       // A historical read must not replace the catalog's current definition.
       if (draft.selection === "current") this.catalog.definitions = [...this.catalog.definitions.filter(item => item.resource !== result.resource || !!draft.definition && draft.definition !== item.key), ...incoming];
-      this.message.textContent = `${draft.selection === "pinned" ? "准确固定" : "当前"}定义已读取 · ${result.ownerRevision ?? "版本不可用"} · ${incoming.length} 项；未保存正文。`;
+      this.message.textContent = `${draft.selection === "pinned" ? "准确固定" : "当前"}定义已读取 · ${result.ownerRevision ?? "版本不可用"} · ${incoming.length} 项${result.coverage === "partial" ? ` · 部分可用，${(result.unavailable ?? []).map(item => `${item.label} (${item.key})`).join("、") || "部分声明"} 尚不可作为已接纳定义执行` : ""}；未保存正文。`;
     } catch (error) { if (epoch === this.epoch && this.fingerprint() === fingerprint) this.message.textContent = error instanceof Error ? error.message : String(error); }
     finally { if (epoch === this.epoch) { this.busy = false; this.renderControls(); } }
   }

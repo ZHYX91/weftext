@@ -1,12 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applySaveResult, draftDisposition, hostedCachePrefix } from "./hosted-state";
+import { applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, type HostedDraft } from "./hosted-state";
 test("offline source compares its original base and preserves newer input after a receipt", () => {
   assert.equal(draftDisposition("base", {source:"offline",baseSource:"base"}), "restore");
   assert.equal(draftDisposition("someone else", {source:"offline",baseSource:"base"}), "compare");
   assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "current");
   assert.equal(draftDisposition("sent", {source:"new typing",baseSource:"old",pending:{operationId:"one",source:"sent"}}), "unknown");
   assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent"), {source:"new typing",baseSource:"sent"});
+});
+test("original save freezes reservation IDs while later typing and Undo retain the owner reservations", () => {
+  const draft: HostedDraft = { source: "proposal", baseSource: "base", definitionReservations: ["first"] };
+  const request = freezeHostedSave(draft, "session", "base-id", "save-one");
+  draft.pending = { operationId: request.operationId, source: request.source, request };
+  draft.source = "new typing"; draft.definitionReservations!.push("later");
+  assert.deepEqual(request, { sessionId: "session", baseId: "base-id", operationId: "save-one", source: "proposal", definitionReservations: ["first"] });
+  assert.deepEqual(applySaveResult(draft, "proposal"), { source: "new typing", baseSource: "proposal", definitionReservations: ["first", "later"] });
+  const undo: HostedDraft = { ...applySaveResult(draft, "proposal"), source: "base" };
+  assert.deepEqual(freezeHostedSave(undo, "new-session", "new-base", "save-two").definitionReservations, ["first", "later"]);
+});
+test("a pending-only directory cannot accumulate unbound IDs or prove admission; exact statuses clean the next Save", () => {
+  const directory = Array.from({ length: 128 }, (_, index) => ({ operationId: `server-pending-${index}`, status: "reserved" }));
+  assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], directory), ["applied", "unknown"]);
+  assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], []), ["applied", "unknown"]);
+  assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], [{ operationId: "unknown", status: "notRegistered" }]), ["applied", "unknown"]);
+  const draft: HostedDraft = { source: "saved carrier", baseSource: "base", definitionReservations: ["applied", "cancelled", "unknown"] };
+  const original = freezeHostedSave(draft, "session", "base", "save-first");
+  draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations!, [{ operationId: "applied", status: "admitted" }, { operationId: "cancelled", status: "cancelled" }]);
+  assert.deepEqual(freezeHostedSave(draft, "session", "new-base", "save-next").definitionReservations, ["unknown"]);
+  assert.deepEqual(original.definitionReservations, ["applied", "cancelled", "unknown"]);
+  assert.throws(() => freezeHostedSave({ ...draft, definitionReservations: directory.slice(0, 33).map(item => item.operationId) }, "session", "base", "blocked"), /32/);
 });
 test("a new server actor epoch cannot look up old source, preview, input or original-plan cache", () => {
   for (const kind of ["draft", "field", "review", "office", "query"] as const) {

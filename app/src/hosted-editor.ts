@@ -18,6 +18,7 @@ export interface HostedEditorQueryHost {
   canOpenRow(row: QueryRow, plan: QueryPlan | null): boolean;
   openOwner(origin: Origin): Promise<void>;
   output(query: FrozenQuery, result: QueryResult): void | Promise<void>;
+  modeChanged?(): void;
 }
 const modes: [ViewMode, string][] = [["source", "V01 源码"], ["styled", "V02 带样式源码"], ["focus", "V03 按需语法"], ["write", "V04 可视写作"], ["read", "V05 阅读"]];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = "", name = ""): HTMLElementTagNameMap[K] { const el = document.createElement(tag); el.textContent = text; el.className = name; return el; }
@@ -54,6 +55,15 @@ export class HostedEditor {
   select(from: number, to: number): void { this.editor?.select(from, to); }
   set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read"); if (this.blocked === value) return; this.blocked = value; this.paint(); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
+  refreshQueries(): void { if (!this.editor) return; this.queries?.invalidate(); this.schedule(0); }
+  async prepareQueryBasis(): Promise<EmbeddedQueryBasis> {
+    await this.flush();
+    const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial };
+    if (!this.editor || this.blocked || this.mode === "read" || this.writing?.state.composing) throw new Error("请在当前可写正文中提出保存定义，尚未发送提案。");
+    await this.request("editor/map", basis);
+    if (!sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis) || this.blocked || this.viewMode === "read") throw new Error("登记期间草稿或编辑资格已变化，请重新核对当前计划。");
+    return basis;
+  }
   open(sessionId: string, resource: string, source: string): void {
     // Reopening the same retained draft changes its Base/session, not Undo.
     if (this.resource !== resource || !this.editor) {
@@ -138,6 +148,7 @@ export class HostedEditor {
     await writing.settleForSessionChange(); if (this.editor !== editor) return;
     editor.clearReveal(); this.mode = mode; editor.readOnly(this.blocked || mode === "read");
     this.queries?.modeChanged();
+    this.queryHost?.modeChanged?.();
     if (this.projection) editor.tokens(this.projection.sourceInfo.syntaxTokens, mode === "styled"); this.paint(true);
   }
   private reveal(origin: Origin | WritingRange): void {

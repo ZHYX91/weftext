@@ -5,7 +5,7 @@ import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
 import { HostedQuery } from "./hosted-query";
 import type { HostedQueryRow } from "./hosted-query-state";
-import { draftDisposition, applySaveResult, hostedCachePrefix, type HostedDraft } from "./hosted-state";
+import { draftDisposition, applySaveResult, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
 type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
@@ -33,6 +33,7 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
   openRow: row => { const target = row as HostedQueryRow; if (target.canOpen !== true || !target.resource) return Promise.reject(new Error("此查询行没有独立正文读取资格。")); return openQueryResource(target.resource); },
   openOwner: async () => { throw new Error("此查询来源没有独立获权导航对象，未按路径猜打开。"); },
   output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
+  modeChanged: () => queries.authorChanged(),
 });
 const review = new HostedReview(el("review"), request, () => doc ? {
   resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
@@ -54,7 +55,15 @@ const status = (message: string) => { el("status").textContent = message; };
 const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ? {
   resource: doc.resource, source: source.value, dirty: source.value !== doc.source || compareRequired, pending: !!draft?.pending,
 } : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? e.message : "刷新文档列表失败，请重试")); });
-const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => office.setQuery(id, metadata));
+const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => office.setQuery(id, metadata), {
+  context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
+  prepareBasis: () => source.prepareQueryBasis(),
+  apply: (patches, basis) => source.applyQueryPatches(patches, basis, "input.query.definition.proposal"),
+  reservations: (resource, receipts, includeReserved = false) => {
+    if (!doc || !draft || resource !== doc.resource) return;
+    draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations ?? [], receipts, includeReserved); retain();
+  },
+});
 async function openQueryResource(resource: string) { const epoch = requestEpoch; await source.flush(); if (epoch !== requestEpoch) return; await run(() => open(resource)); }
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
@@ -150,38 +159,42 @@ async function open(resource: string) {
   if (epoch !== requestEpoch) return;
   doc = opened;
   draft = local ?? {source:opened.recoveredDraft ?? opened.source,baseSource:opened.recoveredDraftBaseSource ?? opened.source};
+  let recoveredSave = false;
   if (draft.pending) {
     let outcome = await request<SaveStatus>("operation",{operationId:draft.pending.operationId});
     if (["notRegistered","notCommitted"].includes(outcome.status)) outcome = await request<SaveStatus>("operation/settle",{resource,operationId:draft.pending.operationId});
     if (epoch !== requestEpoch) return;
-    if (outcome.status === "committed") { draft = applySaveResult(draft,draft.pending.source); }
-    else if (["cancelled","resolved"].includes(outcome.status)) { draft = {source:draft.source,baseSource:draft.baseSource}; }
+    if (outcome.status === "committed") { draft = applySaveResult(draft,draft.pending.source); recoveredSave = true; }
+    else if (["cancelled","resolved"].includes(outcome.status)) { delete draft.pending; }
     else status("原保存尚需恢复，请保留草稿并联系管理员；不会重复提交。");
   }
-  if (!draft.pending && draftDisposition(opened.source,draft) === "current") draft = {source:opened.source,baseSource:opened.source};
+  if (!draft.pending && draftDisposition(opened.source,draft) === "current") draft = { ...draft, source:opened.source, baseSource:opened.source };
   source.open(opened.sessionId, opened.resource, draft.source); source.disabled = !opened.rights.write;
   el("title").textContent = opened.title;
   compareRequired = opened.recoveredDraftConflict || draftDisposition(opened.source,draft) === "compare";
   el("comparison").hidden = !compareRequired; el("current").textContent = compareRequired ? opened.source : "";
   el("history-list").hidden = true; el("historical").textContent = ""; el("versions").replaceChildren();
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
-  retain(); controls();
+  retain(); controls(); queries.authorChanged(true);
+  if (recoveredSave) void queries.refreshCatalog();
   status(draft.pending ? "原保存结果尚未确定，暂不允许再次保存。" : compareRequired ? "双方稿已保留，请核对后合并。" : draft.source !== opened.source ? "已恢复个人草稿，尚未保存正文。" : "已读取当前稿。");
 }
 async function save() {
   if (!doc || !draft || draft.pending || compareRequired) return;
   await source.flush();
   if (!doc || !draft || draft.pending || compareRequired) return;
-  const sent = source.value;
+  draft.source = source.value;
+  const sent = draft.source;
   const epoch = requestEpoch;
   const op = crypto.randomUUID();
-  draft.pending = {operationId:op,source:sent}; retain(); controls();
+  const exactRequest = freezeHostedSave(draft, doc.sessionId, doc.baseId, op);
+  draft.pending = {operationId:op,source:sent,request:exactRequest}; retain(); controls(); queries.authorChanged();
   try {
-    const result = await request<SaveStatus>("save",{sessionId:doc.sessionId,baseId:doc.baseId,operationId:op,source:sent});
+    const result = await request<SaveStatus>("save",exactRequest);
     if (epoch !== requestEpoch || !doc || !draft) return;
     if (result.status !== "committed") { status("保存尚未确认，请核对原操作结果。"); return; }
     doc.baseId = result.baseId!; doc.source = sent;
-    draft = applySaveResult(draft,sent); retain(); status("已保存。" + (draft.source !== sent ? "新输入仍在草稿中。" : ""));
+    draft = applySaveResult(draft,sent); retain(); source.refreshQueries(); queries.authorChanged(true); void queries.refreshCatalog(); status("已保存。" + (draft.source !== sent ? "新输入仍在草稿中。" : ""));
   } catch (error) {
     if (epoch !== requestEpoch || !draft) throw error;
     // Network/unknown failure keeps the exact original ID until status lookup.
@@ -201,6 +214,7 @@ async function run(action: () => Promise<void>) {
 function sourceChanged() {
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   try { retain(); status(navigator.onLine ? "个人草稿，尚未保存正文。" : "连接中断，本页草稿仍保留。"); } catch { status("浏览器无法保留恢复稿，请先复制你的输入。"); }
+  queries.authorChanged();
   clearTimeout(draftTimer);
   const captured = doc; const epoch = requestEpoch;
   draftTimer = setTimeout(() => {

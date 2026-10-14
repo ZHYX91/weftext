@@ -1,6 +1,7 @@
 //! A separate hosted boundary. Local path, library, recovery and feature APIs
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
+mod definition;
 mod editor;
 mod embedded_query;
 mod fields;
@@ -144,6 +145,16 @@ struct SessionRequest {
 struct SourceRequest {
     session_id: String,
     source: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SourceSaveRequest {
+    session_id: String,
+    base_id: String,
+    source: String,
+    operation_id: String,
+    #[serde(default)]
+    definition_reservations: Vec<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -552,20 +563,21 @@ async fn draft(
 async fn save(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<weftext_core::HostedSaveRequest>,
+    Json(req): Json<SourceSaveRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
-            let (actor, session, rights) = inner.session(&auth, &req.session_id)?;
-            if !rights.write {
-                return Err(unavailable());
-            }
-            let status = inner
-                .core
-                .with_actor(&inner.actor_scope(&actor), |c| {
-                    c.actor_save(&session.resource, req)
-                })
-                .map_err(HostedInner::core_error)?;
+            let status = definition::save(
+                inner,
+                &auth,
+                weftext_core::HostedSaveRequest {
+                    session_id: req.session_id,
+                    base_id: req.base_id,
+                    source: req.source,
+                    operation_id: req.operation_id,
+                },
+                req.definition_reservations,
+            )?;
             value(status)
         })
         .await?,
@@ -1046,6 +1058,7 @@ pub(super) async fn serve(
         .merge(editor::router())
         .merge(fields::router())
         .merge(query::router())
+        .merge(definition::router())
         .merge(embedded_query::router())
         .merge(review::router())
         .merge(office::router())

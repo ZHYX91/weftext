@@ -392,6 +392,8 @@ impl Core {
                 docx_import,
                 import_losses: None,
             }),
+            definition: None,
+            save_definition_reservations: vec![],
         };
         journal::private_create(
             &self.actor_record(external_operation_id)?,
@@ -483,6 +485,8 @@ impl Core {
                     docx_import: false,
                     import_losses: None,
                 }),
+                definition: None,
+                save_definition_reservations: vec![],
             },
         };
         if let Some(status) = self.actor_feature_status(resource, operation)? {

@@ -6,7 +6,10 @@ mod exchange;
 mod export_read;
 mod history;
 mod hosted;
-pub use hosted::{ActorFeatureStatus, ActorFieldStatus, ActorSaveStatus, HostedSaveRequest};
+pub use hosted::{
+    ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus, ActorFieldStatus,
+    ActorSaveStatus, HostedDefinitionReservationRequest, HostedSaveRequest,
+};
 #[cfg(all(test, windows))]
 mod history_tests;
 mod inventory;
@@ -589,9 +592,13 @@ impl Core {
         plan.receipt.as_mut().unwrap().revision_id = Some(content_revision);
         plan.history_restore = restore;
         self.stage(plan.clone())?;
+        #[cfg(all(test, windows))]
+        hosted::definition_test_failpoint("saveStaged")?;
         if plan.before.as_ref() != Some(&plan.after) {
             write_source(&mut file, &plan.after)?;
         }
+        #[cfg(all(test, windows))]
+        hosted::definition_test_failpoint("sourceWritten")?;
         let new_stamp = stamp(&file)?;
         self.record_observation(
             &plan.operation_id,
@@ -601,6 +608,8 @@ impl Core {
             plan.content_revision.as_ref().unwrap(),
         )?;
         self.commit(&plan)?;
+        #[cfg(all(test, windows))]
+        hosted::definition_test_failpoint("saveCommitted")?;
         let receipt = plan.receipt.clone().unwrap();
         self.sessions.insert(
             request.session_id.clone(),

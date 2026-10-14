@@ -1,6 +1,7 @@
 // Disconnected drafts carry their actual base. Reopening never silently adopts
 // a new base for an older proposal, including after a lost save response.
-export interface HostedDraft { source: string; baseSource: string; pending?: { operationId: string; source: string } }
+export interface HostedSaveRequest { sessionId: string; baseId: string; operationId: string; source: string; definitionReservations?: string[] }
+export interface HostedDraft { source: string; baseSource: string; definitionReservations?: string[]; pending?: { operationId: string; source: string; request?: HostedSaveRequest } }
 /** Server actor epochs partition every recoverable protected consumer cache. */
 export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" | "query", deployment: string, actor: string, generation: number): string {
   if (!deployment || !actor || !Number.isSafeInteger(generation) || generation < 0) throw new Error("服务端授权版本无效，未恢复旧缓存。");
@@ -13,5 +14,18 @@ export function draftDisposition(saved: string, cached?: HostedDraft): "current"
 }
 export function applySaveResult(draft: HostedDraft, saved: string): HostedDraft {
   // Typing after dispatch must not be replaced by the older committed proposal.
-  return { source: draft.source, baseSource: saved };
+  const { pending: _pending, ...retained } = draft;
+  return { ...retained, baseSource: saved };
+}
+export function freezeHostedSave(draft: HostedDraft, sessionId: string, baseId: string, operationId: string): HostedSaveRequest {
+  if ((draft.definitionReservations?.length ?? 0) > 32) throw new Error("本次草稿关联超过 32 个定义预约，请先按原编号核对并明确处理，尚未发送保存。");
+  return { sessionId, baseId, operationId, source: draft.source, ...(draft.definitionReservations?.length ? { definitionReservations: [...draft.definitionReservations] } : {}) };
+}
+export function mergeDefinitionReservations(ids: readonly string[], receipts: readonly { operationId: string; status: string }[], includeReserved = false): string[] {
+  const next = new Set(ids);
+  for (const receipt of receipts) {
+    if (["admitted", "cancelled"].includes(receipt.status)) next.delete(receipt.operationId);
+    else if (includeReserved && ["reserved", "recoveryPending"].includes(receipt.status)) next.add(receipt.operationId);
+  }
+  return [...next];
 }
