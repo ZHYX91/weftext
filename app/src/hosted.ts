@@ -1,6 +1,7 @@
 import "./hosted.css";
 import { HostedFields } from "./hosted-fields";
 import { HostedReview } from "./hosted-review";
+import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
 import { draftDisposition, applySaveResult, type HostedDraft } from "./hosted-state";
 
@@ -20,9 +21,10 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="history-list" hidden><h2>保留的保存版本</h2><div id="versions"></div><pre id="historical"></pre></section>
 <section id="fields" aria-label="获权字段与查询" hidden></section>
 <section id="review" aria-label="托管批注与校对" hidden></section>
+<section id="office" aria-label="Office 导入与输出" hidden></section>
 <iframe id="render" title="获权内容预览" sandbox="" hidden></iframe></article></section>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const fields = new HostedFields(el("fields"), request);
+const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata));
 const source = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message));
 const review = new HostedReview(el("review"), request, () => doc ? {
   resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
@@ -41,11 +43,14 @@ let requestEpoch = 0;
 let compareRequired = false;
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
 const status = (message: string) => { el("status").textContent = message; };
+const office = new HostedOffice(el("office"), request, () => doc ? {
+  resource: doc.resource, source: source.value, dirty: source.value !== doc.source || compareRequired, pending: !!draft?.pending,
+} : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? e.message : "刷新文档列表失败，请重试")); });
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
   requestEpoch++; doc = undefined; draft = undefined; compareRequired = false;
-  source.clear(); fields.clear(); review.clear(); el("documents").replaceChildren();
+  source.clear(); fields.clear(); review.clear(); office.clear(); el("documents").replaceChildren();
   el("title").textContent = "选择文档"; el("current").textContent = "";
   el("versions").replaceChildren(); el("historical").textContent = "";
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
@@ -98,7 +103,7 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor); await review.connect(next.deployment, next.actor);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor); await review.connect(next.deployment, next.actor); await office.connect(next.deployment, next.actor);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -187,7 +192,7 @@ function sourceChanged() {
 }
 el<HTMLFormElement>("login").onsubmit = e => {e.preventDefault(); token = el<HTMLInputElement>("token").value.trim(); void run(connect);};
 el("logout").onclick = () => { clearDisplay("已退出。",true); el<HTMLInputElement>("token").value = ""; };
-el("refresh").onclick = () => void run(async () => { await list(); if (identity) { await fields.connect(identity.deployment, identity.actor); await review.connect(identity.deployment, identity.actor); } });
+el("refresh").onclick = () => void run(async () => { await list(); if (identity) { await fields.connect(identity.deployment, identity.actor); await review.connect(identity.deployment, identity.actor); await office.connect(identity.deployment, identity.actor); } });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
 el("reopen").onclick = () => void run(() => open(doc!.resource));

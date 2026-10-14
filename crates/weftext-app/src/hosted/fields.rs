@@ -6,6 +6,53 @@ use weftext_data::{NativeValue, Schema, narrow_profile, narrow_write_fields, pat
 #[derive(Default)]
 pub(super) struct Store {
     bases: HashMap<String, Basis>,
+    queries: HashMap<String, FrozenQuery>,
+}
+#[derive(Clone)]
+pub(super) struct FrozenQuery {
+    pub(super) actor: String,
+    pub(super) epoch: u64,
+    pub(super) resources: BTreeSet<String>,
+    pub(super) authorities: BTreeMap<String, BTreeSet<String>>,
+    pub(super) config_hash: String,
+    pub(super) result: weftext_data::QueryResult,
+    pub(super) columns: Vec<String>,
+    pub(super) schema: Schema,
+    expires: Instant,
+}
+pub(super) fn frozen_query(
+    inner: &HostedInner,
+    actor: &str,
+    id: &str,
+) -> Result<FrozenQuery, ApiError> {
+    let query = inner
+        .fields
+        .queries
+        .get(id)
+        .filter(|q| {
+            q.actor == actor
+                && q.epoch == inner.actor_generation(actor)
+                && q.expires > Instant::now()
+        })
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::GONE,
+                "queryExpired",
+                "原查询结果已失效，请明确重新执行查询",
+            )
+        })?;
+    for (resource, fields) in &query.authorities {
+        for field in fields {
+            rights(inner, actor, resource, field, false)?;
+        }
+    }
+    if office::binding_hash(inner, &query.resources)? != query.config_hash {
+        return Err(conflict());
+    }
+    Ok(query.clone())
+}
+pub(super) fn query_catalog(inner: &HostedInner, actor: &str) -> Vec<Value> {
+    inner.fields.queries.iter().filter_map(|(id,q)|frozen_query(inner,actor,id).ok().map(|_|json!({"queryId":id,"columns":q.columns,"rowCount":q.result.rows.len(),"coverage":q.result.coverage}))).collect()
 }
 #[derive(Clone)]
 struct Basis {
@@ -194,12 +241,31 @@ async fn query(
                     Ok(())
                 })?;
             }
-            Ok(json!({"result":result,"scope":"authorizedFieldIntersection","readOnly":true}))
+            expire_revoked(inner);
+            let size = |q:&FrozenQuery| serde_json::to_vec(&(&q.result,&q.schema)).map_or(32*1024*1024,|b|b.len());
+            let mut authorities:BTreeMap<String,BTreeSet<String>>=resources.iter().map(|r|(r.clone(),req.fields.clone())).collect();
+            if authorities.is_empty() { for field in &req.fields { let resource=inner.policy.users[&actor].grants.keys().find(|r|rights(inner,&actor,r,field,false).is_ok()).ok_or_else(unavailable)?;authorities.entry(resource.clone()).or_default().insert(field.clone()); } }
+            let qualified_resources=authorities.keys().cloned().collect();
+            let query=FrozenQuery { actor:actor.clone(), epoch:inner.actor_generation(&actor),config_hash:office::binding_hash(inner,&qualified_resources)?,resources:qualified_resources,authorities,result:result.clone(),columns:req.plan.select.iter().map(|c|c.name.clone()).collect(),schema:restricted,expires:Instant::now()+Duration::from_secs(900) };
+            if inner.fields.queries.len() >= 32 || inner.fields.queries.values().filter(|q|q.actor==actor).count() >= 8 || inner.fields.queries.values().map(size).sum::<usize>().saturating_add(size(&query)) > 32*1024*1024 {
+                return Err(ApiError::bad("冻结查询结果缓存已满，请稍后再试"));
+            }
+            let query_id=uuid::Uuid::new_v4().to_string();
+            inner.fields.queries.insert(query_id.clone(),query);
+            Ok(json!({"result":result,"queryId":query_id,"columns":req.plan.select.iter().map(|c|&c.name).collect::<Vec<_>>(),"scope":"authorizedFieldIntersection","readOnly":true}))
         })
         .await?,
     ))
 }
 pub(super) fn expire_revoked(inner: &mut HostedInner) {
+    inner.fields.queries.retain(|_, q| {
+        q.expires > Instant::now()
+            && inner
+                .policy
+                .users
+                .get(&q.actor)
+                .is_some_and(|u| u.enabled && u.epoch == q.epoch)
+    });
     inner.fields.bases.retain(|_, basis| {
         basis.expires > Instant::now()
             && inner

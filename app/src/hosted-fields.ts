@@ -24,7 +24,7 @@ export class HostedFields {
   private readonly editor = ui("section");
   private readonly message = ui("p", "hint");
   private readonly results = ui("section");
-  constructor(private host: HTMLElement, private request: Request) { this.clear(false); }
+  constructor(private host: HTMLElement, private request: Request, private onQuery?: (id: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void) { this.clear(false); }
   clear(removeCache = true) {
     this.epoch++; this.profile = undefined; this.selected = undefined; this.draft = undefined;
     this.grants = []; this.busy = false; this.form = undefined; this.formDraft = undefined; this.unreadableDraft = undefined; this.picker.replaceChildren(); this.editor.replaceChildren(); this.results.replaceChildren();
@@ -47,7 +47,7 @@ export class HostedFields {
     const predicate = ui("input"); predicate.setAttribute("aria-label", "CEL 筛选条件"); predicate.placeholder = 'CEL 筛选，例如 status == "open"（可留空）';
     this.host.append(ui("h3", "", "字段 Query"), queryField, predicate, action("运行查询", () => this.run(async () => {
       const epoch = this.epoch;
-      const response = await this.request<{ result: { rows: { entityKey?: string; cells: Record<string, Cell> }[]; coverage: string; limited: boolean } }>("query", { fields: [queryField.value], plan: { where: predicate.value || null } });
+      const response = await this.request<{ queryId: string; columns: string[]; result: { rows: { entityKey?: string; cells: Record<string, Cell> }[]; coverage: string; limited: boolean } }>("query", { fields: [queryField.value], plan: { where: predicate.value || null } });
       if (epoch !== this.epoch) return;
       const table = ui("table"); table.setAttribute("aria-label", "获权字段查询结果");
       for (const row of response.result.rows) {
@@ -56,6 +56,7 @@ export class HostedFields {
         table.append(tr);
       }
       this.results.replaceChildren(ui("p", "", `获权范围 ${response.result.rows.length} 行${response.result.coverage === "partial" || response.result.limited ? " · 结果未完整" : ""}`), table);
+      this.onQuery?.(response.queryId, { columns: response.columns, rowCount: response.result.rows.length, coverage: response.result.coverage });
     })), this.results);
   }
   private key(g = this.selected!) { return this.prefix + encodeURIComponent(g.resource) + ":" + encodeURIComponent(g.fieldId); }

@@ -12,3 +12,9 @@
 #review button { margin: .2rem; }
 #review article { border: 1px solid #ccd6d3; margin-top: .7rem; padding: 1rem; }
 #review .review-pending { background: #faf5e8; padding: 1rem; border-left: 4px solid #a6752c; }
+#office { border-top: 1px solid #ccd6d3; margin-top: 2rem; padding-top: 1rem; }
+#office textarea { min-height: 5rem; font-family: inherit; padding: .7rem; }
+#office select, #office input { max-width: 100%; margin: .4rem; padding: .4rem; }
+#office fieldset { border: 1px solid #ccd6d3; margin: .6rem 0; }
+#office button { margin: .2rem; }
+#office label { display: block; margin: .4rem 0; }

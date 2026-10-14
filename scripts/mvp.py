@@ -139,6 +139,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_review_interchange.py', exe)
         # Includes source/editor/field boundaries and separately authorized review.
         run(sys.executable, 'scripts/test_hosted_review.py', exe)
+        run(sys.executable, 'scripts/test_hosted_office.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)
         run(sys.executable, 'scripts/test_remote_sync.py', exe)
     if args.action == 'package':

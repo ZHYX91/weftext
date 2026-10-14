@@ -3,6 +3,8 @@
 use super::*;
 mod editor;
 mod fields;
+mod office;
+mod office_import;
 mod review;
 mod sync_transport;
 use axum::Extension;
@@ -22,6 +24,8 @@ struct FileEntry {
     #[serde(default)]
     editable: bool,
     #[serde(default)]
+    importable: bool,
+    #[serde(default)]
     inputs: Vec<String>,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
@@ -39,6 +43,8 @@ struct Rights {
     fields: BTreeMap<String, FieldRights>,
     #[serde(default)]
     annotations: review::ReviewRights,
+    #[serde(default)]
+    office: office::OfficeRights,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -100,6 +106,7 @@ struct HostedInner {
     editor_versions: HashMap<String, writing_api::EditorVersion>,
     fields: fields::Store,
     review: review::Store,
+    office: office::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -215,6 +222,18 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
             return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
         }
         for (resource, rights) in &user.grants {
+            if rights.office.r#import
+                && (!rights.read
+                    || !rights.write
+                    || !config
+                        .files
+                        .get(resource)
+                        .is_some_and(|f| f.importable && f.editable))
+            {
+                return Err(ApiError::bad(
+                    "Office 导入须具备配置空目标的正文读写和明确导入权限",
+                ));
+            }
             if (rights.annotations.write && !rights.annotations.read)
                 || (rights.annotations.accept
                     && (!rights.annotations.write || !rights.annotations.target || !rights.write))
@@ -846,6 +865,7 @@ async fn update_policy(
             sync_transport::expire_revoked(inner);
             fields::expire_revoked(inner);
             review::expire_revoked(inner);
+            office::expire_revoked(inner);
             Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
         })
         .await?,
@@ -903,6 +923,16 @@ pub(super) async fn serve(
             || file.path.contains(':')
             || !paths.insert(file.path.replace('\\', "/").to_lowercase())
             || (file.editable && p.extension().is_none_or(|e| e != "typ"))
+            || (file.importable
+                && (!file.editable
+                    || p.file_name().is_none_or(|n| n != "document.typ")
+                    || p.parent()
+                        .and_then(|p| p.file_name())
+                        .is_none_or(|n| n != "document")
+                    || p.parent()
+                        .and_then(|p| p.parent())
+                        .and_then(|p| p.file_name())
+                        .is_none()))
             || file.title.len() > 500
             || file.inputs.len() > 64
         {
@@ -996,6 +1026,7 @@ pub(super) async fn serve(
             editor_versions: HashMap::new(),
             fields: fields::Store::default(),
             review: review::Store::default(),
+            office: office::Store::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -1006,6 +1037,8 @@ pub(super) async fn serve(
         .merge(editor::router())
         .merge(fields::router())
         .merge(review::router())
+        .merge(office::router())
+        .merge(office_import::router())
         .route("/api/hosted/me", get(me))
         .route("/api/hosted/documents", get(list))
         .route("/api/hosted/open", post(open))
