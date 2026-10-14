@@ -574,7 +574,10 @@ fn convert(req: Prepare, cut: &Cut, render: Option<Value>) -> Result<ExportArtif
                 name: "资料".into(),
                 columns: q.columns.clone(),
                 result: q.result.clone(),
-                schema: Some(serde_json::to_value(&q.schema).map_err(|_| failed())?),
+                schema: Some(
+                    serde_json::to_value(query_providers::delivery_schema(&q.schema))
+                        .map_err(|_| failed())?,
+                ),
             }],
             template: cut.template.as_ref().map(|bytes| xlsx::XlsxTemplate {
                 bytes: bytes.clone(),

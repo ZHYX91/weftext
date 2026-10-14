@@ -634,6 +634,7 @@ mod integration_tests {
         let users = BTreeMap::from([(
             "alice".into(),
             User {
+                query_providers: Default::default(),
                 epoch: 0,
                 token_sha256: digest(b"token"),
                 enabled: true,

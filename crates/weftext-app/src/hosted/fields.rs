@@ -82,7 +82,7 @@ pub(super) fn retain_query(
         authorities.entry(resource.clone()).or_default();
     }
     let resources = authorities.keys().cloned().collect();
-    let size_bytes = query::serialized_query_bytes(&(&result, &schema))?;
+    let size_bytes = query::serialized_query_bytes(&(&result, &schema, &columns, &authority))?;
     let retained = FrozenQuery {
         actor: actor.into(),
         epoch: inner.actor_generation(actor),

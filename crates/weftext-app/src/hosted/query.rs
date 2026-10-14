@@ -122,8 +122,10 @@ pub(super) struct QueryRights {
     #[serde(default)]
     pub(super) relations: BTreeSet<String>,
 }
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize)]
 pub(super) struct Authority {
+    pub(super) providers: query_providers::Selection,
+    pub(super) provider_dependencies: weftext_data::QueryProviderDependencies,
     pub(super) fields: BTreeMap<String, BTreeSet<String>>,
     pub(super) products: BTreeMap<String, BTreeSet<String>>,
     pub(super) definitions: BTreeMap<String, bool>,
@@ -135,6 +137,7 @@ pub(super) fn authorize_authority(
     actor: &str,
     authority: &Authority,
 ) -> Result<(), ApiError> {
+    query_providers::authorize(inner, actor, &authority.providers)?;
     let user = inner
         .policy
         .users
@@ -199,6 +202,10 @@ pub(super) fn valid_rights(rights: &QueryRights) -> bool {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct QueryRequest {
+    #[serde(default, deserialize_with = "query_providers::unique_fingerprints")]
+    pub(super) providers: BTreeMap<String, String>,
+    #[serde(default, deserialize_with = "query_providers::unique_fingerprints")]
+    pub(super) series_policies: BTreeMap<String, String>,
     #[serde(default)]
     pub(super) fields: BTreeSet<String>,
     pub(super) resources: Option<BTreeSet<String>>,
@@ -222,14 +229,14 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/query/definitions", post(definitions))
         .route("/api/hosted/query", post(run))
 }
-fn changed() -> ApiError {
+pub(super) fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "queryUnavailable",
         "查询的准确定义、版本或获权依据已变化，请保留输入并明确重新执行。",
     )
 }
-fn invalid() -> ApiError {
+pub(super) fn invalid() -> ApiError {
     ApiError::bad("查询不可用：请检查获权字段、参数、表达式及预算")
 }
 fn source(file: &SnapshotFile) -> Result<String, ApiError> {
@@ -360,8 +367,43 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
                 }
             }
         }
-        Ok(Json(json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty(){"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions})))
+        let provider_catalog = provider_catalog(inner, &actor);
+        let mut result = json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty()&&provider_catalog["providerCoverage"]=="complete"{"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions});
+        result.as_object_mut().unwrap().extend(provider_catalog.as_object().unwrap().clone());
+        Ok(Json(result))
     }).await
+}
+fn provider_catalog(inner: &mut HostedInner, actor: &str) -> Value {
+    let rights = inner.policy.users[actor].query_providers.clone();
+    if rights.providers.is_empty() && rights.series_policies.is_empty() {
+        return query_providers::unavailable_catalog(&rights);
+    }
+    let root = inner.config.root.clone();
+    let result = (|| {
+        let config = inner
+            .core
+            .read_config(&root, ConfigRole::Schema)
+            .map_err(|_| changed())?;
+        let witness = inner
+            .core
+            .take_snapshot_witness(&config.base_id)
+            .map_err(|_| changed())?;
+        let schema = match config.bytes {
+            Some(bytes) if config.revision.is_some() => {
+                Schema::from_author_json(std::str::from_utf8(&bytes).map_err(|_| changed())?)
+                    .map_err(|_| changed())?
+            }
+            Some(_) => return Err(changed()),
+            None => Schema::bundled().map_err(|_| changed())?,
+        };
+        let result = query_providers::catalog(&schema, &rights)?;
+        inner
+            .core
+            .validate_snapshot_witness(&root, &config.path, &witness)
+            .map_err(|_| changed())?;
+        Ok(result)
+    })();
+    result.unwrap_or_else(|_: ApiError| query_providers::unavailable_catalog(&rights))
 }
 async fn definitions(
     State(state): State<HostedState>,
@@ -449,6 +491,10 @@ fn row_access(
     Ok(())
 }
 fn request_budget(req: &QueryRequest) -> Result<(), ApiError> {
+    query_providers::budget(&query_providers::Selection {
+        providers: req.providers.clone(),
+        series_policies: req.series_policies.clone(),
+    })?;
     if req.fields.len() > 64
         || req.products.iter().any(|p| !PRODUCTS.contains(&p.as_str()))
         || req.relations.len() > 64
@@ -541,6 +587,116 @@ fn restricted_schema(
         .cloned()
         .collect();
     Ok(result)
+}
+struct ProviderProjection<'a> {
+    fields: &'a BTreeSet<String>,
+    types: &'a BTreeSet<String>,
+    relations: &'a BTreeSet<String>,
+    explicit: Option<&'a query_providers::Selection>,
+}
+fn provider_requirements(
+    inner: &HostedInner,
+    actor: &str,
+    plan: &QueryPlan,
+    schema: &Schema,
+    context: &weftext_data::FrozenAdvancedInput,
+    fields: &BTreeSet<String>,
+    explicit: Option<&query_providers::Selection>,
+) -> Result<weftext_data::QueryProviderRequirements, ApiError> {
+    let inaccessible = || {
+        if explicit.is_some() {
+            invalid()
+        } else {
+            unavailable()
+        }
+    };
+    query_providers::check_shape_names(schema, fields, plan).map_err(|_| inaccessible())?;
+    for dependency in weftext_data::definition_dependencies(plan, &context.definitions)
+        .map_err(|_| inaccessible())?
+    {
+        let owner = context
+            .definitions
+            .iter()
+            .find(|owner| owner.owner == dependency.owner)
+            .ok_or_else(inaccessible)?;
+        let definition = weftext_data::select_definition(&dependency.selection, &owner.history)
+            .map_err(|_| inaccessible())?;
+        let baseline = context
+            .schemas
+            .iter()
+            .find(|baseline| {
+                baseline.schema == definition.binding.schema
+                    && baseline.revision == definition.binding.revision
+            })
+            .ok_or_else(inaccessible)?;
+        query_providers::check_shape_names(&baseline.projection, fields, &definition.plan)
+            .map_err(|_| inaccessible())?;
+    }
+    let mut selected_context = context.clone();
+    let selected_schema = if let Some(selected) = explicit {
+        for baseline in &mut selected_context.schemas {
+            baseline.projection =
+                query_providers::selected_schema(inner, actor, &baseline.projection, selected)?;
+        }
+        query_providers::selected_schema(inner, actor, schema, selected)?
+    } else {
+        schema.clone()
+    };
+    let requirements = if explicit.is_some() {
+        weftext_data::query_provider_runtime_requirements(plan, &selected_schema, &selected_context)
+    } else {
+        weftext_data::query_provider_requirements(plan, &selected_schema, &selected_context)
+    }
+    .map_err(|_| {
+        if explicit.is_some() {
+            invalid()
+        } else {
+            unavailable()
+        }
+    })?;
+    let mut joined = weftext_data::QueryProviderRequirements::default();
+    let mut fingerprints = query_providers::Selection::default();
+    for requirement in requirements {
+        query_providers::merge(
+            &mut fingerprints,
+            &query_providers::Selection {
+                providers: requirement.providers,
+                series_policies: requirement.series_policies,
+            },
+        )?;
+        joined.provider_calls.extend(requirement.provider_calls);
+        joined.validators.extend(requirement.validators);
+        joined.definitions.extend(requirement.definitions);
+        joined
+            .dynamic_selectors
+            .extend(requirement.dynamic_selectors);
+    }
+    joined.providers = fingerprints.providers;
+    joined.series_policies = fingerprints.series_policies;
+    Ok(joined)
+}
+fn restricted_provider_projection(
+    inner: &HostedInner,
+    actor: &str,
+    original: &Schema,
+    demand: &weftext_data::QueryProviderRequirements,
+    projection: &ProviderProjection<'_>,
+) -> Result<(Schema, query_providers::Selection), ApiError> {
+    let mut schema = restricted_schema(
+        original,
+        projection.fields,
+        projection.types,
+        projection.relations,
+    )?;
+    let authority = query_providers::project(
+        inner,
+        actor,
+        original,
+        &mut schema,
+        demand,
+        projection.explicit,
+    )?;
+    Ok((schema, authority))
 }
 fn owner_resource(
     inner: &mut HostedInner,
@@ -710,6 +866,8 @@ fn freeze_definitions(
             )
             .map_err(|_| changed())?;
             request_budget(&QueryRequest {
+                providers: BTreeMap::new(),
+                series_policies: BTreeMap::new(),
                 fields: BTreeSet::new(),
                 resources: None,
                 products: BTreeSet::new(),
@@ -883,6 +1041,8 @@ pub(super) fn validate_definition(
     }
     writing_api::validate_source(draft_source, None)?;
     request_budget(&QueryRequest {
+        providers: BTreeMap::new(),
+        series_policies: BTreeMap::new(),
         fields: BTreeSet::new(),
         resources: None,
         products: BTreeSet::new(),
@@ -1011,28 +1171,44 @@ pub(super) fn validate_definition(
         authority.products = effects.products;
         authority.relations = effects.relations;
         authorize_authority(inner, &actor, &authority)?;
-        let schema = restricted_schema(
+        let providers = provider_requirements(
+            inner,
+            &actor,
+            plan,
             &baseline,
+            &context,
             &demands.fields,
-            &demands.types,
-            &demands.relations,
+            None,
         )?;
-        let current = restricted_schema(
+        let projection = ProviderProjection {
+            fields: &demands.fields,
+            types: &demands.types,
+            relations: &demands.relations,
+            explicit: None,
+        };
+        let (schema, provider_authority) =
+            restricted_provider_projection(inner, &actor, &baseline, &providers, &projection)?;
+        query_providers::merge(&mut authority.providers, &provider_authority)?;
+        let (current, _) = restricted_provider_projection(
+            inner,
+            &actor,
             &current_schema,
-            &demands.fields,
-            &demands.types,
-            &demands.relations,
+            &providers,
+            &projection,
         )?;
         if !weftext_data::baseline_contract_compatible(&schema, &current).map_err(|_| changed())? {
             return Err(changed());
         }
         for selected in &mut context.schemas {
-            selected.projection = restricted_schema(
+            let (schema, provider_authority) = restricted_provider_projection(
+                inner,
+                &actor,
                 &selected.projection,
-                &demands.fields,
-                &demands.types,
-                &demands.relations,
+                &providers,
+                &projection,
             )?;
+            query_providers::merge(&mut authority.providers, &provider_authority)?;
+            selected.projection = schema;
         }
         let canonical_owners = owners
             .iter()
@@ -1105,6 +1281,12 @@ fn capture(
 ) -> Result<Capture, ApiError> {
     let actor = inner.actor(auth)?;
     request_budget(&req)?;
+    let selected_providers = query_providers::Selection {
+        providers: req.providers.clone(),
+        series_policies: req.series_policies.clone(),
+    };
+    // Perform this gate even for resources=[] and before any Schema discovery.
+    query_providers::authorize(inner, &actor, &selected_providers)?;
     req.plan.take.get_or_insert(500);
     let grants = inner.policy.users[&actor].grants.clone();
     for field in &req.fields {
@@ -1392,21 +1574,50 @@ fn capture(
             continue;
         }
         authorize_authority(inner, &actor, &authority)?;
-        let schema = restricted_schema(&root_schema, &req.fields, &demands.types, &req.relations)?;
-        let current_restricted =
-            restricted_schema(&full_schema, &req.fields, &demands.types, &req.relations)?;
+        context.parameters = req.parameters.clone();
+        let explicit = (!validate_only).then_some(&selected_providers);
+        let providers = provider_requirements(
+            inner,
+            &actor,
+            &req.plan,
+            &root_schema,
+            &context,
+            &req.fields,
+            explicit,
+        )
+        .map_err(|error| {
+            if draft.is_some() && error.status == StatusCode::BAD_REQUEST {
+                unavailable()
+            } else {
+                error
+            }
+        })?;
+        let projection = ProviderProjection {
+            fields: &req.fields,
+            types: &demands.types,
+            relations: &req.relations,
+            explicit,
+        };
+        let (schema, provider_authority) =
+            restricted_provider_projection(inner, &actor, &root_schema, &providers, &projection)?;
+        query_providers::merge(&mut authority.providers, &provider_authority)?;
+        let (current_restricted, _) =
+            restricted_provider_projection(inner, &actor, &full_schema, &providers, &projection)?;
         if !weftext_data::baseline_contract_compatible(&schema, &current_restricted)
             .map_err(|_| changed())?
         {
             return Err(changed());
         }
         for baseline in &mut context.schemas {
-            baseline.projection = restricted_schema(
+            let (schema, provider_authority) = restricted_provider_projection(
+                inner,
+                &actor,
                 &baseline.projection,
-                &req.fields,
-                &demands.types,
-                &req.relations,
+                &providers,
+                &projection,
             )?;
+            query_providers::merge(&mut authority.providers, &provider_authority)?;
+            baseline.projection = schema;
         }
         context.parameters = req.parameters.clone();
         weftext_data::validate_query_plan_with_context(&req.plan, &schema, &context).map_err(
@@ -1638,21 +1849,36 @@ async fn execute_captured(
             note.products = Some(products);
         }
     }
-    let mut result = weftext_data::execute_authorized_query(
-        &captured.input,
-        &captured.plan,
-        &captured.schema,
-        &weftext_data::QueryBudget {
-            max_rows: 5000,
-            ..Default::default()
-        },
-        &captured.metadata,
-    )
-    .map_err(|_| invalid())?;
+    let (mut result, provider_dependencies) =
+        weftext_data::execute_authorized_query_with_provider_dependencies(
+            &captured.input,
+            &captured.plan,
+            &captured.schema,
+            &weftext_data::QueryBudget {
+                max_rows: 5000,
+                ..Default::default()
+            },
+            &captured.metadata,
+        )
+        .map_err(|_| invalid())?;
     if result.rows.len() > 500 {
         return Err(invalid());
     }
     let auth = auth.clone();
+    captured.authority.provider_dependencies = provider_dependencies;
+    for consumed in &captured.authority.provider_dependencies.baselines {
+        for (actual, selected) in [
+            (&consumed.providers, &captured.authority.providers.providers),
+            (
+                &consumed.series_policies,
+                &captured.authority.providers.series_policies,
+            ),
+        ] {
+            if actual.iter().any(|(id, fp)| selected.get(id) != Some(fp)) {
+                return Err(unavailable());
+            }
+        }
+    }
     locked(state,move|inner|{
         let actor=inner.actor(&auth)?;if actor!=captured.actor||inner.actor_generation(&actor)!=captured.epoch{return Err(expired());}authorize_authority(inner,&actor,&captured.authority)?;
         if office::binding_hash(inner,&all_resources(&captured.authority))?!=captured.config_hash{return Err(changed());}
@@ -1687,11 +1913,14 @@ pub(super) async fn run_embedded(
     plan: QueryPlan,
     binding: SavedQueryBinding,
     parameters: BTreeMap<String, NativeValue>,
+    providers: query_providers::Selection,
     session_id: String,
     serial: u64,
 ) -> Result<Value, ApiError> {
     let check = auth.clone();
     let req = QueryRequest {
+        providers: providers.providers,
+        series_policies: providers.series_policies,
         fields: BTreeSet::new(),
         resources: None,
         products: BTreeSet::new(),
@@ -1722,6 +1951,8 @@ pub(super) async fn validate_embedded(
 ) -> Result<(), ApiError> {
     let check = auth.clone();
     let req = QueryRequest {
+        providers: BTreeMap::new(),
+        series_policies: BTreeMap::new(),
         fields: BTreeSet::new(),
         resources: None,
         products: BTreeSet::new(),

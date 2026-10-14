@@ -10,6 +10,7 @@ import type { Origin, RenderNode, SyntaxToken, ViewMode } from "./types";
 import "./writing.css";
 import "./hosted-editor.css";
 import "./embedded-query.css";
+import type { HostedQueryDependencies } from "./hosted-query-state";
 
 interface Projection { ok: boolean; tree: RenderNode | null; source: string; serial: number; message: string; sourceInfo: { syntaxTokens: SyntaxToken[] } }
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
@@ -20,6 +21,7 @@ export interface HostedEditorQueryHost {
   output(query: FrozenQuery, result: QueryResult): void | Promise<void>;
   modeChanged?(): void;
   navigateReference?(reference: string): Promise<void>;
+  dependencies?(): HostedQueryDependencies;
 }
 const modes: [ViewMode, string][] = [["source", "V01 源码"], ["styled", "V02 带样式源码"], ["focus", "V03 按需语法"], ["write", "V04 可视写作"], ["read", "V05 阅读"]];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = "", name = ""): HTMLElementTagNameMap[K] { const el = document.createElement(tag); el.textContent = text; el.className = name; return el; }
@@ -69,6 +71,7 @@ export class HostedEditor {
     this.editor.applyPatches(basis.source, [{ from: 0, to: basis.source.length, expected: basis.source, insert: value }], undefined, "input.history.restore"); this.schedule(0);
   }
   refreshQueries(): void { if (!this.editor) return; this.queries?.invalidate(); this.schedule(0); }
+  queryInputsChanged(): void { this.queries?.runInputsChanged(); }
   async prepareQueryBasis(): Promise<EmbeddedQueryBasis> {
     await this.flush();
     const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial };
@@ -100,7 +103,7 @@ export class HostedEditor {
         editable: () => this.editor === editor && !this.blocked && this.mode !== "read" && !this.writing?.state.composing,
         request: (path, body) => {
           const routes: Record<string, string> = { "/api/query/embedded/discover": "query/embedded/discover", "/api/query/embedded/run": "query/embedded/run", "/api/query/embedded/edit": "query/embedded/edit" };
-          if (!routes[path]) throw new Error("托管查询没有此读取入口。"); return this.request(routes[path], body);
+          if (!routes[path]) throw new Error("托管查询没有此读取入口。"); const dependencies = path === "/api/query/embedded/run" ? this.queryHost?.dependencies?.() ?? { providers: {}, seriesPolicies: {} } : undefined; return this.request(routes[path], dependencies ? { ...(body as object), ...dependencies } : body);
         },
         prepareEdit: () => this.flush(), apply: async (patches, basis, event) => this.applyQueryPatches(patches, basis, event),
         reveal: (item, host) => {

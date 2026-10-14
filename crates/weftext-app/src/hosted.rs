@@ -10,6 +10,7 @@ mod navigation;
 mod office;
 mod office_import;
 mod query;
+mod query_providers;
 mod review;
 mod sync_transport;
 use axum::Extension;
@@ -69,6 +70,8 @@ struct User {
     token_sha256: String,
     enabled: bool,
     grants: BTreeMap<String, Rights>,
+    #[serde(default)]
+    query_providers: query_providers::Rights,
     #[serde(default)]
     sync_owner: bool,
 }
@@ -223,6 +226,11 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !query_providers::valid_rights(&user.query_providers) {
+            return Err(ApiError::bad(
+                "Provider 与 SeriesPolicy 授权须使用有界的明确 ID",
+            ));
+        }
         if user.sync_owner && config.sync_identity.is_none() {
             return Err(ApiError::bad("完整同步授权须先在部署配置中明确配对身份"));
         }
@@ -811,6 +819,7 @@ async fn update_policy(
                         old.enabled == user.enabled
                             && old.token_sha256 == user.token_sha256
                             && old.grants == user.grants
+                            && old.query_providers == user.query_providers
                             && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);

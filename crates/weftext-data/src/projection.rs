@@ -293,7 +293,11 @@ fn merge_validation(out: &mut Validation, v: Validation) {
     out.unavailable.extend(v.unavailable);
     out.unbound.extend(v.unbound);
 }
-fn select_values<'a>(value: &'a NativeValue, path: &[SchemaPath], out: &mut Vec<&'a NativeValue>) {
+pub(crate) fn select_values<'a>(
+    value: &'a NativeValue,
+    path: &[SchemaPath],
+    out: &mut Vec<&'a NativeValue>,
+) {
     if path.is_empty() {
         out.push(value);
         return;

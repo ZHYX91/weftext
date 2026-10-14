@@ -376,6 +376,7 @@ fn validate_plan_static(
                     &shapes,
                     &mut remaining,
                     &QueryBudget::default(),
+                    None,
                 );
             }
             if !plan.select.is_empty()
@@ -429,6 +430,7 @@ fn validate_plan_static(
                 &shapes,
                 &mut remaining,
                 &QueryBudget::default(),
+                None,
             );
         }
         if let Some(related) = &a.related {
@@ -462,6 +464,7 @@ fn validate_plan_static(
                 &parameters,
                 &shapes,
                 &mut remaining,
+                None,
             )?;
         }
         distinct_terminal(
@@ -472,6 +475,7 @@ fn validate_plan_static(
             &parameters,
             &shapes,
             &mut remaining,
+            None,
         )
     }
     visit(input, plan, schema, context, &mut 0, 0).map(|_| ())
@@ -966,6 +970,16 @@ pub(crate) fn execute_advanced_query(
     limits: &QueryBudget,
     metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
 ) -> Result<QueryResult> {
+    execute_advanced_query_traced(input, plan, schema, limits, metadata, None)
+}
+pub(crate) fn execute_advanced_query_traced(
+    input: &FrozenQueryInput,
+    plan: &QueryPlan,
+    schema: &Schema,
+    limits: &QueryBudget,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+    trace: Option<&crate::query_providers::ProviderTrace>,
+) -> Result<QueryResult> {
     let empty = FrozenAdvancedInput::default();
     let context = input.advanced.as_ref().unwrap_or(&empty);
     let definition_bytes = context
@@ -986,8 +1000,9 @@ pub(crate) fn execute_advanced_query(
         nodes: 0,
         source_bytes: definition_bytes,
         metadata,
+        trace: trace.cloned(),
     };
-    runner.run(plan, schema, &context.parameters, 0)
+    runner.run(plan, schema, &context.parameters, 0, None)
 }
 struct Runner<'a> {
     input: &'a FrozenQueryInput,
@@ -997,6 +1012,7 @@ struct Runner<'a> {
     nodes: usize,
     source_bytes: usize,
     metadata: &'a BTreeMap<String, AuthorizedQueryMetadata>,
+    trace: Option<crate::query_providers::ProviderTrace>,
 }
 impl Runner<'_> {
     fn run(
@@ -1005,12 +1021,23 @@ impl Runner<'_> {
         schema: &Schema,
         values: &BTreeMap<String, NativeValue>,
         depth: usize,
+        baseline_key: Option<ProviderBaseline>,
     ) -> Result<QueryResult> {
         self.nodes += 1;
         if depth > MAX_CALL_DEPTH || self.nodes > MAX_PLAN_NODES {
             return Err(DataError(
                 "definition-call expansion budget exhausted".into(),
             ));
+        }
+        let trace = self.trace.as_ref().map(|t| t.at(baseline_key.clone()));
+        if let Some(trace) = &trace {
+            crate::query_providers::trace_parameters(
+                plan,
+                schema,
+                values,
+                trace,
+                &mut self.remaining,
+            )?;
         }
         let (parameters, shapes) = bind_parameters(plan, schema, values)?;
         let advanced = plan.advanced.clone().unwrap_or_default();
@@ -1027,11 +1054,20 @@ impl Runner<'_> {
                 .iter()
                 .map(|(n, s)| (n.clone(), shape_type(schema, s)))
                 .collect();
-            let mut env = query_env(schema)?;
+            let mut env = query_env_traced(schema, trace.as_ref())?;
             env.parameter_shapes = shapes.clone();
             let mut args = BTreeMap::new();
             for (name, expression) in &call.arguments {
                 let compiled = compile(expression, schema, &vars)?;
+                if trace.is_some() {
+                    preflight_provider_expression(
+                        &compiled,
+                        &parameters,
+                        schema,
+                        &mut self.remaining,
+                        &env,
+                    )?;
+                }
                 let cell = evaluate(&compiled, &parameters, schema, &mut self.remaining, &env)?;
                 let value = match cell {
                     Cell::Value { value } => value,
@@ -1040,7 +1076,16 @@ impl Runner<'_> {
                 };
                 args.insert(name.clone(), value);
             }
-            let result = self.run(&definition.plan, baseline, &args, depth + 1)?;
+            let result = self.run(
+                &definition.plan,
+                baseline,
+                &args,
+                depth + 1,
+                Some(ProviderBaseline {
+                    schema: definition.binding.schema.clone(),
+                    revision: definition.binding.revision.clone(),
+                }),
+            )?;
             require_terminal_scope(plan)?;
             return transform(
                 result,
@@ -1050,6 +1095,7 @@ impl Runner<'_> {
                 &shapes,
                 &mut self.remaining,
                 self.limits,
+                trace.as_ref(),
             );
         }
         if !advanced.union_all.is_empty() {
@@ -1057,7 +1103,8 @@ impl Runner<'_> {
             let mut result: Option<QueryResult> = None;
             for (ordinal, branch) in advanced.union_all.iter().enumerate() {
                 let supplied = parameter_subset(branch, &parameters);
-                let mut child = self.run(branch, schema, &supplied, depth + 1)?;
+                let mut child =
+                    self.run(branch, schema, &supplied, depth + 1, baseline_key.clone())?;
                 for row in &mut child.rows {
                     row.key = format!("union/{ordinal}/{}", row.key);
                 }
@@ -1091,11 +1138,18 @@ impl Runner<'_> {
                 &shapes,
                 &mut self.remaining,
                 self.limits,
+                trace.as_ref(),
             );
         }
         if let Some(related) = &advanced.related {
             let supplied = parameter_subset(&related.from, &parameters);
-            let origin = self.run(&related.from, schema, &supplied, depth + 1)?;
+            let origin = self.run(
+                &related.from,
+                schema,
+                &supplied,
+                depth + 1,
+                baseline_key.clone(),
+            )?;
             let available = self
                 .limits
                 .max_source_bytes
@@ -1121,7 +1175,14 @@ impl Runner<'_> {
                 leaf.take = None;
                 leaf.order.clear();
             }
-            let mut result = self.leaf(&filtered, &leaf, schema, &parameters, &shapes)?;
+            let mut result = self.leaf(
+                &filtered,
+                &leaf,
+                schema,
+                &parameters,
+                &shapes,
+                trace.as_ref(),
+            )?;
             result.diagnostics.extend(origin.diagnostics);
             result.diagnostics.extend(gaps);
             if origin.rows.iter().any(|r| r.read_only) {
@@ -1137,6 +1198,7 @@ impl Runner<'_> {
                 &parameters,
                 &shapes,
                 &mut self.remaining,
+                trace.as_ref(),
             );
         }
         let mut leaf = plan.clone();
@@ -1145,7 +1207,14 @@ impl Runner<'_> {
             leaf.take = None;
             leaf.order.clear();
         }
-        let mut result = self.leaf(self.input, &leaf, schema, &parameters, &shapes)?;
+        let mut result = self.leaf(
+            self.input,
+            &leaf,
+            schema,
+            &parameters,
+            &shapes,
+            trace.as_ref(),
+        )?;
         if advanced.distinct.is_some() {
             result = distinct_terminal(
                 result,
@@ -1155,6 +1224,7 @@ impl Runner<'_> {
                 &parameters,
                 &shapes,
                 &mut self.remaining,
+                trace.as_ref(),
             )?;
         }
         Ok(result)
@@ -1166,6 +1236,7 @@ impl Runner<'_> {
         schema: &Schema,
         parameters: &BTreeMap<String, Cell>,
         shapes: &BTreeMap<String, Shape>,
+        trace: Option<&crate::query_providers::ProviderTrace>,
     ) -> Result<QueryResult> {
         let bytes = input.notes.iter().try_fold(0usize, |bytes, n| {
             Ok::<_, DataError>(bytes.saturating_add(query_note_bytes(n, self.metadata)?))
@@ -1194,7 +1265,7 @@ impl Runner<'_> {
             resolved.order.clear();
             resolved.take = None;
         }
-        let mut result = execute_query_leaf(
+        let mut result = execute_query_leaf_traced(
             input,
             &resolved,
             schema,
@@ -1203,6 +1274,7 @@ impl Runner<'_> {
             shapes,
             &mut self.remaining,
             self.metadata,
+            trace,
         )?;
         if grouped {
             sort_terminal(
@@ -1212,6 +1284,7 @@ impl Runner<'_> {
                 parameters,
                 shapes,
                 &mut self.remaining,
+                trace,
             )?;
             if let Some(t) = grouped_take {
                 result.limited |= t < result.rows.len();
@@ -1432,6 +1505,7 @@ fn terminal_env(
     schema: &Schema,
     parameters: &BTreeMap<String, Cell>,
     shapes: &BTreeMap<String, Shape>,
+    trace: Option<&crate::query_providers::ProviderTrace>,
 ) -> Result<(BTreeMap<String, QType>, QueryRuntime)> {
     let mut vars = result.terminal_schema.clone();
     for (name, shape) in shapes {
@@ -1442,7 +1516,7 @@ fn terminal_env(
             return Err(DataError("Parameter collides with terminal column".into()));
         }
     }
-    let mut env = query_env(schema)?;
+    let mut env = query_env_traced(schema, trace)?;
     env.parameter_shapes = shapes.clone();
     // Type adapters for terminal exact text products follow their declared type,
     // including nested list/record members, never a first row's representation.
@@ -1496,8 +1570,9 @@ fn sort_terminal(
     parameters: &BTreeMap<String, Cell>,
     shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
+    trace: Option<&crate::query_providers::ProviderTrace>,
 ) -> Result<()> {
-    let (vars, env) = terminal_env(result, schema, parameters, shapes)?;
+    let (vars, env) = terminal_env(result, schema, parameters, shapes, trace)?;
     if !order.is_empty() {
         let compiled_order = order
             .iter()
@@ -1514,6 +1589,11 @@ fn sort_terminal(
                 Ok(c)
             })
             .collect::<Result<Vec<_>>>()?;
+        if trace.is_some() {
+            for expression in &compiled_order {
+                preflight_provider_expression(expression, parameters, schema, remaining, &env)?;
+            }
+        }
         let mut sorted = vec![];
         for row in std::mem::take(&mut result.rows) {
             let mut cells = row.cells.clone();
@@ -1569,6 +1649,7 @@ fn sort_terminal(
     }
     Ok(())
 }
+#[allow(clippy::too_many_arguments)]
 fn distinct_terminal(
     mut result: QueryResult,
     keys: Option<&[QueryColumn]>,
@@ -1577,6 +1658,7 @@ fn distinct_terminal(
     parameters: &BTreeMap<String, Cell>,
     shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
+    trace: Option<&crate::query_providers::ProviderTrace>,
 ) -> Result<QueryResult> {
     let take = plan.take;
     let order = &plan.order;
@@ -1588,11 +1670,16 @@ fn distinct_terminal(
             "distinct requires explicit typed equality keys".into(),
         ));
     }
-    let (vars, env) = terminal_env(&result, schema, parameters, shapes)?;
+    let (vars, env) = terminal_env(&result, schema, parameters, shapes, trace)?;
     let compiled = keys
         .iter()
         .map(|k| compile(&k.expr, schema, &vars))
         .collect::<Result<Vec<_>>>()?;
+    if trace.is_some() {
+        for expression in &compiled {
+            preflight_provider_expression(expression, parameters, schema, remaining, &env)?;
+        }
+    }
     let mut groups: BTreeMap<String, (String, QueryRow)> = BTreeMap::new();
     for mut row in std::mem::take(&mut result.rows) {
         let mut cells = row.cells.clone();
@@ -1657,7 +1744,15 @@ fn distinct_terminal(
         }
     }
     result.rows = groups.into_values().map(|(_, r)| r).collect();
-    sort_terminal(&mut result, order, schema, parameters, shapes, remaining)?;
+    sort_terminal(
+        &mut result,
+        order,
+        schema,
+        parameters,
+        shapes,
+        remaining,
+        trace,
+    )?;
     if env
         .native_budget_partial
         .load(std::sync::atomic::Ordering::Relaxed)
@@ -1682,6 +1777,7 @@ fn distinct_terminal(
 }
 
 /// Apply the existing CEL expressions to a typed terminal from union/call.
+#[allow(clippy::too_many_arguments)]
 fn transform(
     mut result: QueryResult,
     plan: &QueryPlan,
@@ -1690,8 +1786,9 @@ fn transform(
     shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
     limits: &QueryBudget,
+    trace: Option<&crate::query_providers::ProviderTrace>,
 ) -> Result<QueryResult> {
-    let (mut vars, env) = terminal_env(&result, schema, parameters, shapes)?;
+    let (mut vars, env) = terminal_env(&result, schema, parameters, shapes, trace)?;
     let unnest = plan
         .unnest
         .as_ref()
@@ -1778,6 +1875,18 @@ fn transform(
         }
     }
     let mut rows = vec![];
+    if trace.is_some() {
+        for expression in unnest
+            .iter()
+            .chain(predicate.iter())
+            .chain(&columns)
+            .chain(&orders)
+            .chain(&group_keys)
+            .chain(aggregates.iter().flatten())
+        {
+            preflight_provider_expression(expression, parameters, schema, remaining, &env)?;
+        }
+    }
     'input: for row in std::mem::take(&mut result.rows) {
         let mut cells = row.cells.clone();
         cells.extend(parameters.clone());
@@ -1982,13 +2091,14 @@ fn transform(
             parameters,
             shapes,
             remaining,
+            trace,
         )?;
     }
     result.total_known = result.rows.len();
     let distinct = plan.advanced.as_ref().and_then(|a| a.distinct.as_deref());
     if distinct.is_some() {
         return distinct_terminal(
-            result, distinct, plan, schema, parameters, shapes, remaining,
+            result, distinct, plan, schema, parameters, shapes, remaining, trace,
         );
     }
     if let Some(t) = plan.take {

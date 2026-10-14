@@ -124,6 +124,8 @@ export class EmbeddedQueryController {
   }
   private state(item: EmbeddedQueryOccurrence): QueryPresentation { const key = presentationIdentity(item); let state = this.states.get(key); if (!state) { state = { gate: new EmbeddedQueryRunGate(), loading: false, expanded: false, builderOpen: false, parameters: "{}" }; this.states.set(key, state); } return state; }
   invalidate(): void { this.discoveryGeneration++; for (const state of this.states.values()) { state.gate.invalidate(); state.loading = false; } for (const [mount, association] of this.mounts) this.renderStatusOnly(mount, association); }
+  /** Host-owned execution inputs change independently of native author source. */
+  runInputsChanged(): void { for (const state of this.states.values()) { state.gate.invalidate(); state.loading = false; state.resultBasis = undefined; if (state.result) state.result = { ...state.result, superseded: true }; } for (const [mount, association] of this.mounts) { if (association.occurrence) this.renderResultArea(mount, association, this.state(association.occurrence)); this.renderStatusOnly(mount, association); } }
   async discover(basis: EmbeddedQueryBasis): Promise<boolean> {
     const generation = ++this.discoveryGeneration;
     const discovery = await this.host.request<EmbeddedQueryDiscovery>("/api/query/embedded/discover", basis);

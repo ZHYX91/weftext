@@ -39,6 +39,7 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
   output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
   modeChanged: () => queries.authorChanged(),
   navigateReference,
+  dependencies: () => queries.dependencies(),
 });
 const review = new HostedReview(el("review"), request, () => doc ? {
   resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
@@ -68,7 +69,7 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
     if (!doc || !draft || resource !== doc.resource) return;
     draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations ?? [], receipts, includeReserved); retain();
   },
-});
+}, () => source.queryInputsChanged());
 const history = new HostedHistory(el("history-list"), request, {
   context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
   basis: settle => source.historyBasis(settle), pendingChanged: () => { controls(); queries.authorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,

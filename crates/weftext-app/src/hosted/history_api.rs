@@ -473,6 +473,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
         (
             actor.into(),
             User {
+                query_providers: Default::default(),
                 epoch: 0,
                 token_sha256: digest(actor.as_bytes()),
                 enabled: true,

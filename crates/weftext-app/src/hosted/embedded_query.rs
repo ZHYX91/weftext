@@ -14,6 +14,10 @@ struct Snapshot {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Run {
+    #[serde(default, deserialize_with = "query_providers::unique_fingerprints")]
+    providers: BTreeMap<String, String>,
+    #[serde(default, deserialize_with = "query_providers::unique_fingerprints")]
+    series_policies: BTreeMap<String, String>,
     session_id: String,
     source: String,
     serial: u64,
@@ -154,6 +158,10 @@ async fn run(
         occurrence.plan.ok_or_else(unavailable)?,
         occurrence.binding.ok_or_else(unavailable)?,
         req.parameters,
+        query_providers::Selection {
+            providers: req.providers,
+            series_policies: req.series_policies,
+        },
         basis.session_id.clone(),
         basis.serial,
     )

@@ -1360,6 +1360,8 @@ pub(crate) fn evaluate(
                     arity: *arity,
                     schema: env.schema.clone(),
                     partial: env.provider_partial.clone(),
+                    trace: env.provider_trace.clone(),
+                    failed: env.provider_failed.clone(),
                 },
             )
             .map_err(|e| DataError(e.to_string()))?;
@@ -1454,21 +1456,145 @@ pub(crate) struct QueryRuntime {
     pub(crate) parameter_shapes: BTreeMap<String, Shape>,
     pub(crate) provider_partial: Arc<AtomicBool>,
     pub(crate) native_budget_partial: Arc<AtomicBool>,
+    provider_trace: Option<crate::query_providers::ProviderTrace>,
+    provider_failed: Arc<AtomicBool>,
 }
-pub(crate) fn query_env(schema: &Schema) -> Result<QueryRuntime> {
+pub(crate) fn query_env_traced(
+    schema: &Schema,
+    trace: Option<&crate::query_providers::ProviderTrace>,
+) -> Result<QueryRuntime> {
     Ok(QueryRuntime {
         env: Arc::new(cel::Env::stdlib()),
         schema: Arc::new(schema.clone()),
         parameter_shapes: BTreeMap::new(),
         provider_partial: Arc::new(AtomicBool::new(false)),
         native_budget_partial: Arc::new(AtomicBool::new(false)),
+        provider_trace: trace.cloned(),
+        provider_failed: Arc::new(AtomicBool::new(false)),
     })
+}
+
+/// Only the already authorized original CEL evaluator computes row-free calls.
+/// A subtree with a row/terminal free variable is left for its real occurrence.
+pub(crate) fn preflight_provider_expression(
+    compiled: &Compiled,
+    parameters: &BTreeMap<String, Cell>,
+    schema: &Schema,
+    remaining: &mut u64,
+    env: &QueryRuntime,
+) -> Result<()> {
+    fn contains(ast: &IdedExpr) -> bool {
+        if matches!(&ast.expr,Expr::Call(c) if crate::query_providers::PROVIDER_CALLS.iter().any(|(n,_)| *n==c.func_name))
+        {
+            return true;
+        }
+        let mut copy = ast.clone();
+        let mut found = false;
+        let _ = visit_children_mut(&mut copy, |child| {
+            found |= contains(child);
+            Ok(())
+        });
+        found
+    }
+    fn row_free(
+        ast: &IdedExpr,
+        parameters: &BTreeMap<String, Cell>,
+        locals: &BTreeSet<String>,
+    ) -> bool {
+        match &ast.expr {
+            Expr::Ident(name) => {
+                locals.contains(name)
+                    || parameters
+                        .get(name)
+                        .is_some_and(|c| matches!(c, Cell::Value { .. } | Cell::Null))
+            }
+            Expr::Call(c) if c.func_name == "field" => false,
+            Expr::Comprehension(c) => {
+                if !row_free(&c.iter_range, parameters, locals)
+                    || !row_free(&c.accu_init, parameters, locals)
+                {
+                    return false;
+                }
+                let mut bound = locals.clone();
+                bound.insert(c.iter_var.clone());
+                bound.insert(c.accu_var.clone());
+                if let Some(n) = &c.iter_var2 {
+                    bound.insert(n.clone());
+                }
+                [&c.loop_cond, &c.loop_step, &c.result]
+                    .iter()
+                    .all(|e| row_free(e, parameters, &bound))
+            }
+            _ => {
+                let mut copy = ast.clone();
+                let mut valid = true;
+                let _ = visit_children_mut(&mut copy, |child| {
+                    valid &= row_free(child, parameters, locals);
+                    Ok(())
+                });
+                valid
+            }
+        }
+    }
+    fn visit(
+        ast: &IdedExpr,
+        parameters: &BTreeMap<String, Cell>,
+        schema: &Schema,
+        vars: &BTreeMap<String, QType>,
+        remaining: &mut u64,
+        env: &QueryRuntime,
+    ) -> Result<()> {
+        if !contains(ast) {
+            return Ok(());
+        }
+        if row_free(ast, parameters, &BTreeSet::new()) {
+            let compiled = Compiled {
+                ast: ast.clone(),
+                ty: typecheck(ast, schema, vars, 0)?,
+            };
+            if !matches!(
+                evaluate(&compiled, parameters, schema, remaining, env)?,
+                Cell::Value { .. } | Cell::Null
+            ) || env.provider_failed.load(AtomicOrdering::Relaxed)
+            {
+                return Err(DataError("Query provider unavailable".into()));
+            }
+            return Ok(());
+        }
+        if let Expr::Comprehension(c) = &ast.expr {
+            visit(&c.iter_range, parameters, schema, vars, remaining, env)?;
+            visit(&c.accu_init, parameters, schema, vars, remaining, env)?;
+            let mut scoped = parameters.clone();
+            scoped.remove(&c.iter_var);
+            scoped.remove(&c.accu_var);
+            if let Some(name) = &c.iter_var2 {
+                scoped.remove(name);
+            }
+            for child in [&c.loop_cond, &c.loop_step, &c.result] {
+                visit(child, &scoped, schema, vars, remaining, env)?;
+            }
+            return Ok(());
+        }
+        let mut copy = ast.clone();
+        visit_children_mut(&mut copy, |child| {
+            visit(child, parameters, schema, vars, remaining, env)
+        })
+    }
+    let mut vars = symbols(schema)?;
+    vars.extend(
+        env.parameter_shapes
+            .iter()
+            .map(|(name, shape)| (name.clone(), shape_type(schema, shape))),
+    );
+    visit(&compiled.ast, parameters, schema, &vars, remaining, env)
 }
 struct ProviderFunction {
     name: &'static str,
     arity: usize,
     schema: Arc<Schema>,
     partial: Arc<AtomicBool>,
+    trace: Option<crate::query_providers::ProviderTrace>,
+    failed: Arc<AtomicBool>,
 }
 impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
     fn into_function(
@@ -1490,6 +1616,15 @@ impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
                 .map(|v| from_cel(v.as_ref()))
                 .collect::<Result<Vec<_>>>()
                 .map_err(|e| context.error(e.0))?;
+            if let Some(trace) = &self.trace {
+                let mut dependencies = crate::query_providers::SemanticDependencies::default();
+                dependencies
+                    .call(&self.schema, self.name, &values)
+                    .map_err(|_| context.error("Query provider unavailable"))?;
+                trace
+                    .record(&dependencies)
+                    .map_err(|_| context.error("Query provider dependency budget exhausted"))?;
+            }
             let cell = match self.name {
                 "expandRecurrence" => {
                     let budget =
@@ -1517,6 +1652,12 @@ impl cel::extractors::IntoFunction<ProviderFunction> for ProviderFunction {
                     .map(Cell::value)
                     .unwrap_or_else(|e| Cell::Unavailable { reason: e.0 }),
             };
+            if self.trace.is_some()
+                && matches!(cell, Cell::Unavailable { .. } | Cell::Invalid { .. })
+            {
+                self.partial.store(true, AtomicOrdering::Relaxed);
+                self.failed.store(true, AtomicOrdering::Relaxed);
+            }
             match cell {
                 Cell::Value { value } => {
                     let shape = match self.name {
@@ -1561,6 +1702,25 @@ pub fn execute_authorized_query(
 ) -> Result<QueryResult> {
     crate::query_advanced::execute_advanced_query(input, plan, schema, limits, metadata)
 }
+/// Executes the same CEL/Runner with a bounded, server-private provider read set.
+pub fn execute_authorized_query_with_provider_dependencies(
+    input: &FrozenQueryInput,
+    plan: &QueryPlan,
+    schema: &Schema,
+    limits: &QueryBudget,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+) -> Result<(QueryResult, QueryProviderDependencies)> {
+    let trace = crate::query_providers::ProviderTrace::new();
+    let result = crate::query_advanced::execute_advanced_query_traced(
+        input,
+        plan,
+        schema,
+        limits,
+        metadata,
+        Some(&trace),
+    )?;
+    Ok((result, trace.finish()?))
+}
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn execute_query_leaf(
     input: &FrozenQueryInput,
@@ -1571,6 +1731,30 @@ pub(crate) fn execute_query_leaf(
     parameter_shapes: &BTreeMap<String, Shape>,
     remaining: &mut u64,
     metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+) -> Result<QueryResult> {
+    execute_query_leaf_traced(
+        input,
+        plan,
+        schema,
+        limits,
+        parameters,
+        parameter_shapes,
+        remaining,
+        metadata,
+        None,
+    )
+}
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn execute_query_leaf_traced(
+    input: &FrozenQueryInput,
+    plan: &QueryPlan,
+    schema: &Schema,
+    limits: &QueryBudget,
+    parameters: &BTreeMap<String, Cell>,
+    parameter_shapes: &BTreeMap<String, Shape>,
+    remaining: &mut u64,
+    metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
+    trace: Option<&crate::query_providers::ProviderTrace>,
 ) -> Result<QueryResult> {
     if !matches!(input.coverage.as_str(), "complete" | "partial")
         || !matches!(input.freshness.as_str(), "current" | "stale")
@@ -1704,8 +1888,20 @@ pub(crate) fn execute_query_leaf(
     let mut rows = vec![];
     let mut diagnostics = vec![];
     let mut partial = input.coverage == "partial";
-    let mut env = query_env(schema)?;
+    let mut env = query_env_traced(schema, trace)?;
     env.parameter_shapes = parameter_shapes.clone();
+    if trace.is_some() {
+        for expression in unnest
+            .iter()
+            .chain(predicate.iter())
+            .chain(&selects)
+            .chain(&orders)
+            .chain(&group_keys)
+            .chain(aggregates.iter().flatten())
+        {
+            preflight_provider_expression(expression, parameters, schema, remaining, &env)?;
+        }
+    }
     let mut bytes = 0usize;
     let mut data_rows = vec![];
     'notes: for note in notes {
