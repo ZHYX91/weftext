@@ -1158,38 +1158,111 @@ async fn resolve(State(state): State<AppState>, Json(req): Json<ResolveRequest>)
     ))
 }
 
+pub(crate) fn open_live_entity(
+    core: &mut Core,
+    root: &str,
+    entity_key: &str,
+) -> Result<weftext_core::OpenedDocument, CoreError> {
+    let inventory = core.inventory(root)?;
+    let entry = resolve_entity(&inventory, entity_key)?;
+    let document = core.open(&entry.path, Some(PathBuf::from(&inventory.root)))?;
+    if document.kind != "managed"
+        || document.node_id != entry.node_id
+        || document.workspace_id != inventory.workspace_id
+        || weftext_engine::inspect_metadata(&document.source).id != entry.node_id
+    {
+        return Err(CoreError::new(
+            "identityConflict",
+            "The resolved source changed identity before opening; no other document was selected",
+        ));
+    }
+    Ok(document)
+}
+
 async fn open_entity(State(state): State<AppState>, Json(req): Json<ResolveRequest>) -> ApiResult {
-    let document = core_call(&state,move|core| {
+    let document = core_call(&state, move |core| {
         if req.lifecycle.as_deref() == Some("trash") {
-            let revision = req.revision.as_deref().filter(|revision|!revision.is_empty()).ok_or_else(||CoreError::new("trashSnapshotRequired","Read-only trash opening needs the exact frozen row revision"))?;
+            let revision = req
+                .revision
+                .as_deref()
+                .filter(|revision| !revision.is_empty())
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "trashSnapshotRequired",
+                        "Read-only trash opening needs the exact frozen row revision",
+                    )
+                })?;
             let captured = core.trash_admitted_snapshot(&req.root)?;
-            if !captured.complete {return Err(CoreError::new("coverageIncomplete","The current owned trash set cannot prove a unique identity"));}
-            let workspace = captured.inventory.workspace_id.as_deref().ok_or_else(||CoreError::new("unadmittedLibrary","Trash opening needs the original library"))?;
-            let mut files = captured.files.iter().filter(|file|file.node_id.as_ref().is_some_and(|id|req.entity_key == format!("weftext-node://{workspace}/{id}")));
-            let file = files.next().ok_or_else(||CoreError::new("nodeUnavailable","The exact node is absent from the owned trash set"))?;
-            if files.next().is_some() {return Err(CoreError::new("identityConflict","The owned trash node identity is ambiguous"));}
-            if let Some(base) = revision.strip_prefix("observed-source:") {core.validate_snapshot(&req.root,&file.path,base)?;}
-            else if file.revision.as_deref() != Some(revision) {return Err(CoreError::new("staleBase","The trash row source changed since the query"));}
-            let expected_source = file.bytes.as_deref().ok_or_else(||CoreError::new("sourceUnavailable","The trash source is unavailable"))?;
-            let document = core.open(&file.path,Some(PathBuf::from(&captured.inventory.root)))?;
-            if document.kind != "managedTrash" || document.node_id != file.node_id || document.workspace_id != captured.inventory.workspace_id
-                || document.source.as_bytes() != expected_source || weftext_engine::inspect_metadata(&document.source).id != file.node_id {
-                return Err(CoreError::new("identityConflict","The exact trash source changed before opening"));
+            if !captured.complete {
+                return Err(CoreError::new(
+                    "coverageIncomplete",
+                    "The current owned trash set cannot prove a unique identity",
+                ));
             }
-            if let Some(base) = revision.strip_prefix("observed-source:") {core.validate_snapshot(&req.root,&file.path,base)?;}
+            let workspace = captured.inventory.workspace_id.as_deref().ok_or_else(|| {
+                CoreError::new(
+                    "unadmittedLibrary",
+                    "Trash opening needs the original library",
+                )
+            })?;
+            let mut files = captured.files.iter().filter(|file| {
+                file.node_id
+                    .as_ref()
+                    .is_some_and(|id| req.entity_key == format!("weftext-node://{workspace}/{id}"))
+            });
+            let file = files.next().ok_or_else(|| {
+                CoreError::new(
+                    "nodeUnavailable",
+                    "The exact node is absent from the owned trash set",
+                )
+            })?;
+            if files.next().is_some() {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "The owned trash node identity is ambiguous",
+                ));
+            }
+            if let Some(base) = revision.strip_prefix("observed-source:") {
+                core.validate_snapshot(&req.root, &file.path, base)?;
+            } else if file.revision.as_deref() != Some(revision) {
+                return Err(CoreError::new(
+                    "staleBase",
+                    "The trash row source changed since the query",
+                ));
+            }
+            let expected_source = file.bytes.as_deref().ok_or_else(|| {
+                CoreError::new("sourceUnavailable", "The trash source is unavailable")
+            })?;
+            let document = core.open(&file.path, Some(PathBuf::from(&captured.inventory.root)))?;
+            if document.kind != "managedTrash"
+                || document.node_id != file.node_id
+                || document.workspace_id != captured.inventory.workspace_id
+                || document.source.as_bytes() != expected_source
+                || weftext_engine::inspect_metadata(&document.source).id != file.node_id
+            {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    "The exact trash source changed before opening",
+                ));
+            }
+            if let Some(base) = revision.strip_prefix("observed-source:") {
+                core.validate_snapshot(&req.root, &file.path, base)?;
+            }
             return Ok(document);
         }
-        if req.lifecycle.as_deref().is_some_and(|lifecycle|lifecycle != "live") {return Err(CoreError::new("invalidLifecycle","Unsupported node lifecycle"));}
-        let inventory = core.inventory(&req.root)?;
-        let entry = resolve_entity(&inventory,&req.entity_key)?;
-        let document = core.open(&entry.path,Some(PathBuf::from(&inventory.root)))?;
-        if document.kind != "managed" || document.node_id != entry.node_id
-            || document.workspace_id != inventory.workspace_id
-            || weftext_engine::inspect_metadata(&document.source).id != entry.node_id {
-            return Err(CoreError::new("identityConflict","The resolved source changed identity before opening; no other document was selected"));
+        if req
+            .lifecycle
+            .as_deref()
+            .is_some_and(|lifecycle| lifecycle != "live")
+        {
+            return Err(CoreError::new(
+                "invalidLifecycle",
+                "Unsupported node lifecycle",
+            ));
         }
-        Ok(document)
-    }).await?;
+        open_live_entity(core, &req.root, &req.entity_key)
+    })
+    .await?;
     let mut document = value(document)?;
     if document["kind"] == "managedTrash" {
         document["readOnly"] = json!(true);
@@ -2659,6 +2732,101 @@ mod tests {
             initial: None,
         };
         (directory, state, root.to_string_lossy().to_string())
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn bootstrap_reopens_current_source_and_conflicting_draft_without_reusing_launch_session()
+    {
+        for managed in [true, false] {
+            let (_directory, mut state, root) = fixture();
+            let (initial, draft, changed) = {
+                let mut core = state.core.lock().unwrap();
+                let initial = if managed {
+                    core.create_note(&root, &root, "Launch").unwrap()
+                } else {
+                    let path = Path::new(&root).join("ordinary.typ");
+                    std::fs::write(&path, "Original ordinary source").unwrap();
+                    core.open(path, Some(PathBuf::from(&root))).unwrap()
+                };
+                let draft = format!("{}\nPersonal retained proposal", initial.source);
+                let changed = format!("{}\nExternal current bytes", initial.source);
+                core.persist_draft(&initial.session_id, &draft).unwrap();
+                std::fs::write(&initial.path, &changed).unwrap();
+                (initial, draft, changed)
+            };
+            state.initial = Some(serde_json::to_value(&initial).unwrap());
+            let mut previous_session = initial.session_id.clone();
+            for _ in 0..2 {
+                let Json(result) = ok(crate::bootstrap(State(state.clone())).await);
+                let fresh = &result["initialDocument"];
+                assert!(result["initialDocumentError"].is_null());
+                assert_eq!(fresh["source"], changed);
+                assert_eq!(fresh["recoveredDraft"], draft);
+                assert_eq!(fresh["recoveredDraftBaseSource"], initial.source);
+                assert_eq!(fresh["recoveredDraftConflict"], true);
+                assert_ne!(fresh["sessionId"], previous_session);
+                previous_session = fresh["sessionId"].as_str().unwrap().to_owned();
+                assert!(
+                    state
+                        .locations
+                        .lock()
+                        .unwrap()
+                        .contains_key(&previous_session)
+                );
+                assert_eq!(std::fs::read_to_string(&initial.path).unwrap(), changed);
+            }
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn bootstrap_follows_original_moved_identity_and_refuses_same_byte_replacement() {
+        let (_directory, mut state, root) = fixture();
+        let initial = state
+            .core
+            .lock()
+            .unwrap()
+            .create_note(&root, &root, "Launch")
+            .unwrap();
+        state.initial = Some(serde_json::to_value(&initial).unwrap());
+        let draft = format!("{}\nRetain across movement", initial.source);
+        {
+            let mut core = state.core.lock().unwrap();
+            core.persist_draft(&initial.session_id, &draft).unwrap();
+            let plan = core
+                .prepare_operation(CoreOperationRequest {
+                    root: root.clone(),
+                    operation_id: uuid::Uuid::new_v4().to_string(),
+                    intent: OperationIntent::RenameNode {
+                        source: Path::new(&initial.path)
+                            .parent()
+                            .unwrap()
+                            .to_string_lossy()
+                            .into_owned(),
+                        name: "Moved".into(),
+                    },
+                })
+                .unwrap();
+            core.execute_operation(&plan.operation_id, &plan.plan_id)
+                .unwrap();
+            let namesake = core.create_note(&root, &root, "Launch").unwrap();
+            assert_ne!(namesake.node_id, initial.node_id);
+        }
+        let Json(result) = ok(crate::bootstrap(State(state.clone())).await);
+        let moved = &result["initialDocument"];
+        assert_eq!(moved["nodeId"].as_str(), initial.node_id.as_deref());
+        assert_eq!(moved["recoveredDraft"], draft);
+        let path = PathBuf::from(moved["path"].as_str().unwrap());
+        assert_ne!(path, PathBuf::from(&initial.path));
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::rename(&path, path.with_extension("retained-original")).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        let Json(unavailable) = ok(crate::bootstrap(State(state.clone())).await);
+        assert!(unavailable["initialDocument"].is_null());
+        assert!(unavailable["initialDocumentError"]["code"].is_string());
+        assert!(unavailable["recoveries"].is_array());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
 
     #[cfg(windows)]

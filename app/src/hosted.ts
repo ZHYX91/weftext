@@ -8,6 +8,9 @@ import { HostedHistory } from "./hosted-history";
 import { HostedLibrary } from "./hosted-library";
 import { HostedMedia } from "./hosted-media";
 import { HostedStructure } from "./hosted-structure";
+import { HostedKnowledgeLinks } from "./hosted-knowledge-links";
+import { HostedCitations } from "./hosted-citations";
+import { HostedNavigationRegistry } from "./hosted-navigation-registry";
 import type { StructureReceipt, StructureRequest } from "./hosted-structure-state";
 import { nodeFragmentOrigin, nodeReferenceParts, nodeSourceHash, nodeTargetDraft, sameHostedNodeAudience, type HostedNodeAudience, type HostedNodeBasis, type HostedNodeFragmentResult, type HostedNodeResolution } from "./hosted-navigation-state";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
@@ -35,6 +38,9 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="structure" aria-label="托管结构操作" hidden></section>
 <section id="fields" aria-label="获权字段与查询" hidden></section>
 <section id="query" aria-label="托管高级查询" hidden></section>
+<section id="knowledge-links" aria-label="托管链接与潜在提及" hidden></section>
+<section id="citations" aria-label="托管正式文献引用" hidden></section>
+<section id="navigation-registry" aria-label="托管目录与标签导航" hidden></section>
 <section id="review" aria-label="托管批注与校对" hidden></section>
 <section id="media" aria-label="托管获权资源与媒体" hidden></section>
 <section id="office" aria-label="Office 导入与输出" hidden></section>
@@ -46,7 +52,7 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
   openRow: row => { const target = row as HostedQueryRow; if (target.canOpen !== true || !target.resource) return Promise.reject(new Error("此查询行没有独立正文读取资格。")); return openQueryResource(target.resource); },
   openOwner: async () => { throw new Error("此查询来源没有独立获权导航对象，未按路径猜打开。"); },
   output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
-  modeChanged: () => queries.authorChanged(),
+  modeChanged: () => { queries.authorChanged(); knowledgeAuthorChanged(); },
   navigateReference,
   navigateResource,
   dependencies: () => queries.dependencies(),
@@ -56,7 +62,7 @@ const review: HostedReview = new HostedReview(el("review"), request, () => doc ?
   serial: source.serial, baseId: doc.baseId, dirty: source.value !== doc.source || compareRequired,
   pending: !!draft?.pending, selection: source.selection,
 } : null, () => source.flush(), (from, to) => source.select(from, to), (resource, changed) => {
-  if (changed && doc?.resource === resource) { compareRequired = true; controls(); status("建议已提交到服务端；个人草稿保留，请重新读取与核对正文。"); }
+  if (changed && doc?.resource === resource) { compareRequired = true; knowledgeAuthorChanged(); controls(); status("建议已提交到服务端；个人草稿保留，请重新读取与核对正文。"); }
 }, { context: () => media.context(), open: (asset, revision, initial) => media.openAsset(asset, revision, initial) });
 let token = sessionStorage.getItem("weftext-hosted-token") ?? "";
 let identity: Me | undefined;
@@ -79,8 +85,10 @@ async function closeOwnedSession(sessionId: string, captured: Pick<HostedNodeAud
 }
 const status = (message: string) => { el("status").textContent = message; };
 const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ? {
-  resource: doc.resource, source: source.value, dirty: source.value !== doc.source || compareRequired, pending: !!draft?.pending,
-} : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? e.message : "刷新文档列表失败，请重试")); });
+  resource: doc.resource, source: source.value, sessionId: doc.sessionId, baseId: doc.baseId, serial: source.serial, paused: source.pausedSession, dirty: source.value !== doc.source || compareRequired, pending: !!draft?.pending || history.hasPending(doc.resource),
+} : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? e.message : "刷新文档列表失败，请重试")); }, {
+  identity: hostedIdentity, basis: () => source.historyBasis(true), embeddedQueries: () => source.outputSelections(), authorizationChanged: authorizationsChanged,
+});
 const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => office.setQuery(id, metadata), {
   context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
   prepareBasis: () => source.prepareQueryBasis(),
@@ -90,13 +98,31 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
     draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations ?? [], receipts, includeReserved); retain();
   },
 }, () => source.queryInputsChanged(), navigateResource);
+const knowledgeLinks = new HostedKnowledgeLinks(el("knowledge-links"), (path, body, signal) => request(path, body, false, 0, signal), {
+  identity: hostedIdentity,
+  context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
+  flush: async () => { await source.historyBasis(true); },
+  apply: async (patches, basis, event) => { retain(); await source.applyQueryPatches(patches, basis, event); },
+  navigate: reference => reference.startsWith("weftext-resource://") ? navigateResource(reference) : navigateReference(reference),
+  select: (from, to) => source.selectSourceRange(from, to),
+  authorizationChanged: (message, current) => { clearDisplay(message); identity = { ...identity!, ...current }; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(identity)); },
+});
+function hostedIdentity() { return identity ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, authorization: authorizationEpoch } : null; }
+function authorizationsChanged(message: string, current: { actor: string; deployment: string; generation: number }) { clearDisplay(message); if (identity) identity = { ...identity, ...current }; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(identity)); }
+const citations = new HostedCitations(el("citations"), request, {
+  identity: hostedIdentity,
+  context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
+  basis: () => source.historyBasis(true), apply: async (patches, basis) => { retain(); await source.applyQueryPatches(patches, basis, "input.citation.proposal"); }, authorizationChanged: authorizationsChanged,
+});
+function knowledgeAuthorChanged() { knowledgeLinks.documentChanged(); citations.documentChanged(); }
+const navigationRegistry = new HostedNavigationRegistry(el("navigation-registry"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged });
 const history = new HostedHistory(el("history-list"), request, {
   context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
-  basis: settle => source.historyBasis(settle), pendingChanged: () => { controls(); queries.authorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,
+  basis: settle => source.historyBasis(settle), pendingChanged: () => { controls(); queries.authorChanged(); knowledgeAuthorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,
 });
 const library = new HostedLibrary(el("library"), request, async role => {
   const epoch = requestEpoch; await source.flush(); if (epoch !== requestEpoch) return;
-  source.refreshEnvironment(); queries.environmentChanged(); el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
+  source.refreshEnvironment(); queries.environmentChanged(); knowledgeLinks.environmentChanged(); el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   if (role === "schema" || role === "rules") await queries.refreshCatalog();
   if (epoch === requestEpoch) status("库配置原操作已提交，受影响预览重新编译；正文草稿与撤销历史保留，未保存正文。");
 });
@@ -112,12 +138,12 @@ const structures = new HostedStructure(el("structure"), request, {
       if (epoch !== requestEpoch || doc !== selected) throw new Error("核对期间原正文会话已变化。");
       draft = bindHostedDraftReference(draft, ref.reference); retain(); await request("draft", { sessionId: selected.sessionId, source: source.value });
       if (epoch !== requestEpoch || doc !== selected) throw new Error("草稿保护期间用户或对象已变化。"); retain();
-      if (phase === "commit" && ["rename", "move", "trash", "restore"].includes(intent.kind)) { retiredStructureSessions.add(selected.sessionId); retiredStructureSources.add(selected.resource); clearTimeout(draftTimer); clearNodeNavigation(); source.pauseSession(); compareRequired = true; controls(); }
+      if (phase === "commit" && ["rename", "move", "trash", "restore"].includes(intent.kind)) { retiredStructureSessions.add(selected.sessionId); retiredStructureSources.add(selected.resource); clearTimeout(draftTimer); clearNodeNavigation(); source.pauseSession(); knowledgeAuthorChanged(); compareRequired = true; controls(); }
     }
   },
   changed: async (receipt, intent) => {
     const epoch = requestEpoch;
-    if (doc && draft && intent.source === doc.resource && ["rename", "move", "trash", "restore"].includes(intent.kind)) { retiredStructureSessions.add(doc.sessionId); retiredStructureSources.add(doc.resource); retain(); clearTimeout(draftTimer); source.pauseSession(); compareRequired = true; controls(); }
+    if (doc && draft && intent.source === doc.resource && ["rename", "move", "trash", "restore"].includes(intent.kind)) { retiredStructureSessions.add(doc.sessionId); retiredStructureSources.add(doc.resource); retain(); clearTimeout(draftTimer); source.pauseSession(); knowledgeAuthorChanged(); compareRequired = true; controls(); }
     await list(); if (epoch !== requestEpoch) return; await queries.refreshCatalog(); if (epoch !== requestEpoch) return; await media.refresh(); if (epoch === requestEpoch) status("原结构操作已提交；个人草稿保留，结果仍需独立获权后明确打开。");
   },
   open: openStructureResult,
@@ -227,7 +253,7 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
     doc = fresh; source.open(fresh.sessionId, fresh.resource, retainedSource); source.disabled = !fresh.rights.write;
     draft = { ...draft, source: retainedSource, baseSource: installed ? fresh.source : originalDraftBase };
     compareRequired = !installed; el("comparison").hidden = installed; el("current").textContent = installed ? "" : fresh.source;
-    el("title").textContent = fresh.title; adopted = true; retain(); history.documentChanged(); controls(); queries.authorChanged(true); void queries.refreshCatalog(); void readReference(fresh, epoch);
+    el("title").textContent = fresh.title; adopted = true; retain(); history.documentChanged(); controls(); queries.authorChanged(true); knowledgeAuthorChanged(); void queries.refreshCatalog(); void readReference(fresh, epoch);
     try { await request("close", { sessionId: selected.sessionId }); } catch (error) { if (!(error instanceof HostedError) || error.http !== 410) throw error; }
     if (installed && retainedSource !== fresh.source && fresh.rights.write) await request("draft", { sessionId: fresh.sessionId, source: retainedSource });
     return installed ? "applied" : "superseded";
@@ -245,7 +271,7 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
     if (epoch !== requestEpoch || doc !== selected || !draft) throw new Error("重新读取期间对象或用户已变化，未采用旧回执。");
     record.status = hostedHistoryStatus(record, confirmed); if (!unavailableCommittedHistory(record)) throw new Error("原结果交付状态已变化，请重新查询并核对原结果。");
     const retainedSource = source.value; doc = fresh; draft = { ...draft, source: retainedSource }; source.open(fresh.sessionId, fresh.resource, retainedSource); source.disabled = !fresh.rights.write;
-    compareRequired = true; el("comparison").hidden = false; el("current").textContent = fresh.source; el("title").textContent = fresh.title; adopted = true; retain(); history.documentChanged(); controls(); void readReference(fresh, epoch);
+    compareRequired = true; el("comparison").hidden = false; el("current").textContent = fresh.source; el("title").textContent = fresh.title; adopted = true; retain(); history.documentChanged(); knowledgeAuthorChanged(); controls(); void readReference(fresh, epoch);
     try { await request("close", { sessionId: selected.sessionId }); } catch (error) { if (!(error instanceof HostedError) || error.http !== 410) throw error; }
   } finally { if (!adopted) { try { await request("close", { sessionId: fresh.sessionId }); } catch { /* Preserve original evidence when cleanup is unavailable. */ } } }
 }
@@ -259,7 +285,7 @@ function clearDisplay(message: string, clearToken = false) {
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
-  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear(), () => structures.clear()]) {
+  for (const clear of [() => source.clear(), () => knowledgeLinks.clear(), () => citations.clear(), () => navigationRegistry.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear(), () => media.clear(), () => structures.clear()]) {
     try { clear(); } catch (error) { clearErrors.push(error); }
   }
   el("documents").replaceChildren();
@@ -295,9 +321,9 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
       // A hidden/unknown asset is not a revocation of the independently open
       // note. Only a current identity's changed actor epoch clears all views.
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧媒体与缓存已清除，请刷新目录。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Caller stops this resource delivery; personal source remains protected. */ }
-    } else if ([404, 409, 410].includes(response.status) && (path.startsWith("navigation/") || path.startsWith("structure/")) && sameHostedQueryIdentity(captured, audience())) {
+    } else if ([404, 409, 410].includes(response.status) && (path.startsWith("navigation/") || path.startsWith("structure/") || path.startsWith("knowledge-links/") || path.startsWith("citations/") || path.startsWith("export/")) && sameHostedQueryIdentity(captured, audience())) {
       try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience()) && (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation)) { clearDisplay("授权策略已变化，旧链接定位与缓存已清除，请刷新列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } } catch { /* Stop this link delivery without treating a hidden same-epoch target as source revocation. */ }
-    } else if (response.status === 404 && !retired && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("structure/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    } else if (response.status === 404 && !retired && path !== "query" && !path.startsWith("navigation/") && !path.startsWith("structure/") && !path.startsWith("knowledge-links/") && !path.startsWith("citations/") && !path.startsWith("export/") && !path.startsWith("media/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
     throw new HostedError(result.error?.code ?? "request", result.error?.code === "basisRequired" && path.startsWith("query/") ? "保存带范围的定义需要已安装的规则基线；请由管理员明确安装库规则后重试，原草稿与提案保留，未自动创建规则。" : result.error?.message ?? "请求失败", response.status);
   }
   return (bytes ? response.arrayBuffer() : response.json()) as Promise<T>;
@@ -328,7 +354,7 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation); await media.connect(next.deployment, next.actor, next.generation); await structures.connect(next.deployment, next.actor, next.generation); structures.setDocuments(structureDocuments);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation); await media.connect(next.deployment, next.actor, next.generation); await structures.connect(next.deployment, next.actor, next.generation); structures.setDocuments(structureDocuments); knowledgeLinks.connect(); await citations.connect(identity!.deployment, identity!.actor, identity!.generation); await navigationRegistry.connect(identity!.deployment, identity!.actor, identity!.generation);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -385,7 +411,7 @@ function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave 
   el("comparison").hidden = !compareRequired; el("current").textContent = compareRequired ? opened.source : "";
   history.documentChanged();
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
-  retain(); controls(); queries.authorChanged(true);
+  retain(); controls(); queries.authorChanged(true); knowledgeAuthorChanged();
   void readReference(opened, epoch);
   if (recoveredSave) void queries.refreshCatalog();
   status(draft.pending ? "原保存结果尚未确定，暂不允许再次保存。" : compareRequired ? "双方稿已保留，请核对后合并。" : draft.source !== opened.source ? "已恢复个人草稿，尚未保存正文。" : "已读取当前稿。");
@@ -399,13 +425,13 @@ async function save() {
   const epoch = requestEpoch;
   const op = crypto.randomUUID();
   const exactRequest = freezeHostedSave(draft, doc.sessionId, doc.baseId, op);
-  draft.pending = {operationId:op,source:sent,request:exactRequest}; retain(); controls(); queries.authorChanged();
+  draft.pending = {operationId:op,source:sent,request:exactRequest}; retain(); controls(); queries.authorChanged(); knowledgeAuthorChanged();
   try {
     const result = await request<SaveStatus>("save",exactRequest);
     if (epoch !== requestEpoch || !doc || !draft) return;
     if (result.status !== "committed") { status("保存尚未确认，请核对原操作结果。"); return; }
     doc.baseId = result.baseId!; doc.source = sent;
-    draft = applySaveResult(draft,sent); retain(); source.refreshQueries(); queries.authorChanged(true); void queries.refreshCatalog(); status("已保存。" + (draft.source !== sent ? "新输入仍在草稿中。" : ""));
+    draft = applySaveResult(draft,sent); retain(); source.refreshQueries(); queries.authorChanged(true); knowledgeAuthorChanged(); void queries.refreshCatalog(); status("已保存。" + (draft.source !== sent ? "新输入仍在草稿中。" : ""));
   } catch (error) {
     if (epoch !== requestEpoch || !draft) throw error;
     // Network/unknown failure keeps the exact original ID until status lookup.
@@ -426,7 +452,7 @@ function sourceChanged() {
   clearNodeNavigation();
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   try { retain(); status(navigator.onLine ? "个人草稿，尚未保存正文。" : "连接中断，本页草稿仍保留。"); } catch { status("浏览器无法保留恢复稿，请先复制你的输入。"); }
-  queries.authorChanged();
+  queries.authorChanged(); knowledgeAuthorChanged();
   scheduleCurrentDraft();
 }
 function scheduleCurrentDraft() {
@@ -443,7 +469,7 @@ el("refresh").onclick = () => void run(async () => {
   const epoch = requestEpoch, current = await request<Me>("me"); if (epoch !== requestEpoch) return;
   if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment) clearDisplay("授权策略已更新，旧展示与缓存已清除。");
   identity = current; cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation); sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
-  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation); await media.connect(current.deployment, current.actor, current.generation); await structures.connect(current.deployment, current.actor, current.generation); structures.setDocuments(structureDocuments);
+  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation); await media.connect(current.deployment, current.actor, current.generation); await structures.connect(current.deployment, current.actor, current.generation); structures.setDocuments(structureDocuments); knowledgeLinks.connect(); await citations.connect(identity!.deployment, identity!.actor, identity!.generation); await navigationRegistry.connect(identity!.deployment, identity!.actor, identity!.generation);
 });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
@@ -452,7 +478,7 @@ el("rebase").onclick = () => void run(async () => {
   if (!doc || !draft) return;
   await source.flush();
   await request("draft/resolve",{sessionId:doc.sessionId,source:source.value});
-  draft.baseSource = doc.source; compareRequired = false; retain(); el("comparison").hidden = true; status("合并依据已确认，原草稿已保留；点击保存才提交正文。");
+  draft.baseSource = doc.source; compareRequired = false; knowledgeAuthorChanged(); retain(); el("comparison").hidden = true; status("合并依据已确认，原草稿已保留；点击保存才提交正文。");
 });
 el("preview").onclick = () => void run(async () => {
   const epoch = requestEpoch;

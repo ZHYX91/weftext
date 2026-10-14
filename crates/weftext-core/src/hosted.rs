@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 mod feature;
 pub use feature::{
     ActorFeatureStatus, ActorStructureNode, ActorStructureReceipt, FeatureTreeWitness,
+    HostedNavigationIntent,
 };
 #[path = "hosted_definition.rs"]
 mod definition;

@@ -166,7 +166,28 @@ async fn run(
         basis.serial,
     )
     .await?;
-    check(&state, &auth, &basis, false, false).await?;
+    let check_auth = auth.clone();
+    let check_basis = basis.clone();
+    let query_id = output["queryId"]
+        .as_str()
+        .ok_or_else(unavailable)?
+        .to_owned();
+    let occurrence_id = req.occurrence_id.clone();
+    locked(&state, move |inner| {
+        let (actor, _, _) = qualify(inner, &check_auth, &check_basis, false, false)?;
+        fields::bind_embedded_query(
+            inner,
+            &actor,
+            &query_id,
+            export_api::EmbeddedQueryBasis {
+                session_id: check_basis.session_id,
+                source_hash: weftext_engine::source_hash(&check_basis.source),
+                serial: check_basis.serial,
+                occurrence_id,
+            },
+        )
+    })
+    .await?;
     let mut result = output["result"].clone();
     result["queryId"] = output["queryId"].clone();
     result["columns"] = output["columns"].clone();

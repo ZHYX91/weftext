@@ -48,7 +48,9 @@ WebUI 提供源码、带样式源码、按需语法、可视写作、阅读五�
 
 `scripts/test_hosted_review.py` 继承 `test_hosted_fields.py`、`test_hosted_editor.py` 和原 `test_hosted.py` 的完整检查并接入 `scripts/mvp.py check/package`，测试真实程序的双用户冲突、独立草稿、操作幂等与重启、拒绝本地路径 API、隐藏对象不披露、历史分权、冻结编译、同一字节续下载及持久撤权。浏览器还需验证登录、丢响应、断线草稿、合并和缓存清理；实际结果随候选记录，不由文档建立通过。
 
-**尚未接入 Server**：结构操作及本地其他输出格式。准确资源、获权集合与原件导入、Word 导入槽位的资源预授权、媒体批注目标及显式资源输入，连同库配置／样式、历史、Query 与 Office 的当前范围见下文。这些工作继续属于 v0.6，原本地功能保持本地使用。不能借本地 API 越过托管授权。实时协作、其他 OS 后端、Mobile / CLI 整体验收以及自动化按后续里程碑推进。
+以下章节描述当前 v0.6 的托管实现合同，包括结构、知识链接、目录／标签、文献和新增输出格式；合同接通不等于完成候选验收。每项仍须按实际程序、HTTP、浏览器及需要的真实宿主证据确认，不能借本地 API 越过托管授权。实时协作、其他 OS 后端、Mobile / CLI 整体验收以及自动化按后续里程碑推进；v0.6.1 的新引用分类／选择器等增强不由本批合同提前授予。
+
+`files.<id>.editable` 限制正文、字段及恢复等写入，不再把已纳管的只读笔记排除在阅读之外。live 的 `editable: false` 对象只有在准确 `.typ` 路径上经 Core 证明原 Managed Node 身份、当前位置、`expectedNode`（若配置）及文件 witness 时才成为可打开的作者文档；JSON、二进制和未接纳的普通编译输入不会因此出现在文档、搜索或稳定导航中。原 `editable: true` 普通源码阅读能力保留。只读 Managed Note 可作为链接／反链／提及目标，并按独立权限查看历史、窄字段或输出；正文 Save、历史恢复、字段写入及 Office 导入仍须各自写权限和 editable。字段读取仍可独立于正文 read。
 
 ## 保存历史与稳定 Node 导航
 
@@ -68,6 +70,16 @@ WebUI 提供源码、带样式源码、按需语法、可视写作、阅读五�
 
 `scripts/test_hosted_history.py` 通过真实 HTTP 覆盖分权、双方草稿、准确比较、恢复与原操作重启、外部冲突、配置重绑和移动／复制导航，并纳入现有 `scripts/mvp.py check/package`。浏览器的 Undo、迟到结果、持久保留失败与撤权另由 `scripts/test_hosted_history_browser.mjs` 验证；实际通过范围仍随候选记录。
 
+
+## 知识链接、字段引用与潜在提及
+
+`POST /api/hosted/knowledge-links/read` 消费 `{sessionId, source, sourceHash, serial}` 的准确当前草稿，返回原生出链、ID／路径反链、最终编译链接、字段引用及潜在提及。候选范围明确为 `configuredAuthorizedManagedSources`：先按每个对象的独立正文 read 筛选，再资格化其原 Node 与文件 witness，不扫描环境库或按同名补候选。资源和集合另依各自权限捕获。隐藏和未知目标一致不可用；read-only Managed Note 也可成为目标。预算为 16 MiB 源码、32 MiB 保留依据、最多八个相关编译及 8 MiB 返回数据；覆盖显示 complete／partial，编译不全、歧义、未纳管对象或预算不足不被冒作完整无结果。
+
+原生标题和原文链接来自正文 read。别名仅从独立 field.read 的 `core/aliases`、`contacts/names` 推导，typed refs 仅从独立获权 Field 的最小定义和值推导；必须在推导前收窄 Schema。源码里已有相同字值不等于获权私有 Schema 意义，library.schema.read 也不扩大 Field 权。没有字段权时不读取 Schema；有字段权时私下保留原 Field 权与 Schema witness，交付前复核。字段引用范围为 `explicitAuthorizedFields`，提及词典范围为 `nativeTitlesAndAuthorizedNameFields`；重叠词和同词的多个获权目标保留独立选择，不替用户猜目标。
+
+`knowledge-links/convert` 与 `copy` 消费原完整草稿 basis、read 返回的 snapshot 和准确 occurrence／提及范围。转换只产生严格当前草稿的范围补丁，`saved: false`，由共享 SourceEditor／Undo 应用并通过原 Save 提交；只读当前源不能转换回写。ID、源相对和库内地址保持原 URI 片段编码与显示内容。original 复制允许保留原已写入的 URI 和完整链接，即使目标未解析；生成 file 地址拒绝，不能用任意 file URI 授予宿主路径。权限代次、原 owner／witness、字段权、Schema、资源／集合和原编译输入均复核；旧 serial、同字节 ABA、换会话或撤权后的迟到结果不能安装。
+
+`scripts/test_hosted_knowledge_links.py` 提供源码范围、原草稿不保存、重叠候选、字段语义权限、片段、只读目标、配置变更及迟到撤权的 HTTP 入口。新增合同和测试源码不构成已通过 HTTP 或浏览器 Undo 的声明。
 
 ## 同所有者远程托管同步
 
@@ -137,6 +149,16 @@ Trash 槽可以把准确登记的图片、辅助 Typst 等资源列为显式 inp
 
 `scripts/test_hosted_scopes.py` 纳入产品检查入口，后台浏览器另用 `scripts/test_hosted_scopes_browser.mjs`。实际通过范围随候选记录，不由此说明建立验收结论。
 
+## 目录接纳与标签注册表
+
+`users.<id>.navigation` 默认拒绝，分别配置 `directories: [已配置目录 ID]`、`admitDirectories: [接纳槽 ID]`、`tags: {read, create, rename}`。目录读取独立于 queryScopes.directories，不授予子笔记正文、字段或 Query 范围；标签 create／rename 各自独立，且必须同时具备注册表 read。`Config.navigation.directoryAdmissions.<slot> = {path, title}` 固定服务端目标；空 path 明确表示库根，非空路径须为库内普通相对路径，title 必有。客户端只选择 slot，不接受 root 或 path。目录及接纳授权各最多 64 项。
+
+`GET /api/hosted/navigation/registry` 只投影获权配置目录和接纳槽；标签注册表只在 tags.read 时读取。目录用原 `qualified_query_scope_at` 和 witness 验准确稳定身份，不使用全库发现。目录返回 complete／partial，标签返回 complete／partial／unavailable；标签不完整时不提供写 basis。公开对象只带选择器、标题、稳定 reference、可用状态及原获权条目，不交付宿主路径、未获权目录或隐藏计数。标签写 basis 为 actor／epoch／准确注册表绑定的私有有界缓存：单份最多 4 MiB、共 32 MiB、服务最多 128 份、单用户 16 份、15 分钟到期。
+
+`navigation/registry/prepare|commit|operation|settle` 复用 Core 原 `HostedNavigationIntent`、DirectoryId／TagId 分配和 actor feature 日志。prepare 接受原 operationId 及 admitDirectory／createTag／renameTag 意图；Tag 意图还消费原 basis，rename 固定原 tag reference。安全预览剔除物理路径。提交仅消费原 planId、actor、授权代次、配置绑定及未过期决议；重试、重启和丢响应不再分配身份，未知请求可结束以阻止迟到执行。复制目录标记或用同字节替换注册表不能获得原身份。
+
+`navigation/registry/resolve` 区分已配置目录、标签和刚接纳目录。一般读者须明确获权配置的 directory reference；刚接纳目录仅原用户凭原 committed operationId、原 slot 和准确 navigationRef 继续解析，仍核当前权限、代次、配置及实际对象。不会从已占用路径建新 owner ledger 或补授权给其他用户。`scripts/test_hosted_navigation_registry.py` 提供目录／Query 分权、库根接纳、跨用户回执、原操作重启、撤权、未知 fence 和同名／复制身份反例；真实 HTTP／浏览器通过范围仍随候选记录。
+
 ## 高级 Query、定义与正文内嵌
 
 每对象的 `query` 独立设置 `definitions`、`definitionHistory`、`products` 与 `relations`，默认不授权。products 的键为 `title`、`body`、`headings`、`types`、`self`，relations 是永久 RelationId 数组；正文 read 不隐含这些权限。未获权的语义产品不会因同名 CEL 表达式或原始源码可读而交付。字段值、关系断言、目标类型与实际编译输入均在求值前确定所需授权，不通过隐藏正文执行推导窄字段值。
@@ -166,6 +188,14 @@ Trash 槽可以把准确登记的图片、辅助 Typst 等资源列为显式 inp
 预览、富编辑呈现、实际语义 Query、校对与 Office 编译共用一次捕获的样式环境。启用库样式时须有 styleUse；静态字段查询不执行或读取样式。配置 `styleInputs` 为管理员明确指定的文件或资源 ID，每个输入另须 read。文件输入用于 Office 还须 export / download；资源输入另须自己的资源 download。编译只使用冻结输入，交付前重验原样式、设置、身份、依赖和当前授权。styleUse 不授予样式源码读取；内部编译入口与未授权的真实模块路径隔离，路径和源码诊断不向客户端交付。
 
 样式变更刷新当前呈现和之后的查询，不重写正文、重置 Undo 或丢弃未决保存。已经完成的 Office 工件保留原字节和摘要，不因后来样式变化重算；交付仍检查原输入配置、styleUse 和当前权限代次。校对批注计划保留原扫描使用的样式依赖，重启或样式变化不能把旧扫描当作当前结果提交。`test_hosted_library.py` 纳入产品 check/package；浏览器入口为 `test_hosted_library_browser.mjs EXE NEW_EVIDENCE_DIRECTORY`。具体通过范围和未验项以候选验收记录为准。
+
+## 文献生成与出版字段权
+
+每个 Work 对象另配置 `citations: {use, export, download}`，默认 false；使用文献还须该对象 `fields["library/publication"].read`。这些能力不由正文 read、library.schema.read、Office、PDF 或原生包权限推定；出版字段读取不要求整篇 Work 正文 read。`GET /api/hosted/citations` 只列独立获权且经原身份／Work 类型资格核对的配置对象。`citations/propose` 消费当前 session／sourceHash／serial、准确 key 和获权 Work 选择器，给出原生静态 `weftext.citations` 声明及引用的草稿补丁；须当前正文 write 和 editable，不执行第二保存协议。
+
+预览、Query 和输出的编译从唯一直接静态原生声明中的稳定 Work 引用生成虚拟 `weftext.citations.bib`，只使用获权 publication 切片，不扫描标题或整个库、不向工件交付 Work 私有正文或整篇正文摘要。内部保留原 Node／文件身份、已保存版本、源与 Schema／规则 witness；对当前主稿里的同一 Work 使用准确草稿字段。生成槽和显式真实输入重名时拒绝，既有资源不被覆盖。每次生成最多 64 个明确 Work、32 MiB 依据；异步编译和工件完成前复核原字段、原输入、配置和权限。工件确认／分块交付再查全部实际引用的 citations.export／download；冻结后的 bytes 不因以后改稿重算。
+
+本批接通既有出版字段和原生引用，不加入 v0.6.1 的新引用分类、选择器或脚注增强。新增文献／输出 HTTP 入口为 `scripts/test_hosted_citations_outputs.py`；该脚本及文档不替代浏览器或真实 Office 验收。
 
 ## 准确资源与媒体目标
 
@@ -222,7 +252,19 @@ WebUI“批注与校对”有独立的对象选择与草稿。先打开、保存
 
 WebUI“Office 导入与输出”提供 DOCX 正文／批注／待审文字修订，以及 XLSX 冻结查询结果。正文可选择当前准确草稿；带批注或修订必须先保存并核对准确正文。未能安全定位的目标作为转换损失，不猜测位置；其他笔记／媒体的目标权限不会从当前笔记继承。输出复用本地纯转换器和原生冻结编译，不补读整个资料库。XLSX 保留原列序、所有原查询行和 Cell 状态；可见结构附表只带该次获权字段的限定 Schema。旧结果不因后来改稿或改字段而重跑，完整性和覆盖仍按原结果显示。
 
-用户可上传 DOCX 内容控件模板或 XLSX 命名范围／表格模板，先检查实际槽位，再明确绑定正文、标题、字面文本或冻结 Query；XLSX 当前只接受字面文本和 Query 槽位。默认使用模板样式，也可选择源样式并核对映射损失。模板是用户本次提供的原件字节，检查不读取服务器资料或执行 Office。获权正文的准确源码与查询前 12 行供核对；工件使用全量冻结输入，超预算明确失败。
+用户可上传 DOCX 内容控件模板或 XLSX 命名范围／表格模板，先检查实际槽位，再明确绑定正文、标题、字面文本、准确 FieldId 或冻结 Query。字段绑定要求每个实际来源 field.read 和 office.export；只含字段／字面值的交付不因此要求或提供整篇正文 read。XLSX 可仅输出明确字段快照，也可复用原 Query；不能把正文／标题绑定解释为单元格字段。默认使用模板样式，也可选择源样式并核对映射损失。模板是用户本次提供的原件字节，检查不读取服务器资料或执行 Office。获权正文的准确源码与查询前 12 行供核对；工件使用全量冻结输入，超预算明确失败。
+
+统一 `GET /api/hosted/export` 和 `export/prepare|status|confirm|chunk` 复用原 Office 工件协议，原 office/export 别名保留。新增格式的独立配置如下，均默认拒绝：
+
+| 格式／范围 | 准备及交付权 | 准确冻结输入 |
+| --- | --- | --- |
+| PDF | 主正文及实际文件输入的 read + outputs.pdf.export；交付另需 outputs.pdf.download，资源依其独立 read／download | 当前 resource、sessionId、baseId、source、sourceHash、serial 和原编译环境；不接模板或批注／修订参数 |
+| BibTeX／CSL-JSON／RIS | citationWorks 主文件须 read + outputs.bibliography.export／download；selectedWorks 每个所选对象须 outputs.bibliography.export／download；两者另查每个 Work 的 publication.read + citations.use／export／download | bibliographyScope 显式为 citationWorks（捕获的正文声明）或 selectedWorks（最多 64 个明确 Work ID）；两种来源不混用 |
+| native | 管理员 nativeWholeLibraryExport: true 且用户 nativeWholeLibrary.read／export，交付另需 download | savedWholeLibrary 的已保存整库纳管内容和依赖，不是当前笔记或草稿；其中生成文献仍须独立 Work 文献能力 |
+
+原生包包含已保存作者内容、原生依赖和可携的离线文献输入，不包含私有历史、个人草稿或执行日志，不能替代恢复备份。整库权限是显式的完整资料交付能力，不由当前文档／字段／同步权限推出；准备前、工件完成及每块交付持续核对原整库配置和权限。用户界面须清楚标明 savedWholeLibrary，不能把它呈现成当前笔记导出。
+
+DOCX／PDF 可显式选择 `embeddedQueries: [{occurrenceId, queryId}]` 的已经显示结果；每份冻结 Query 记录其原 sessionId／sourceHash／serial／occurrenceId，并与本次准确正文和位置逐项匹配。最多 32 项，重复位置、其他正文的结果或旧 serial 拒绝，不重新运行 Query 或借用别处结果。模板字段、正文内嵌 Query、引用、真实输入及样式能力分别汇入原输出权和 witness 检查；同一 requestId、digest、确认损失及准确分块下载规则适用于全部格式。
 
 `GET office`、`POST office/template` 与 `office/export/prepare|status|confirm|chunk` 都在 `/api/hosted/` 下。原 requestId 和完整冻结请求先保留在本标签页，然后准备工件；确认须匹配原 digest，并明确接受该工件报告的损失。Core 持久登记原 ID 与请求指纹；重复请求返回原工件，换内容冲突。服务重启、到期或撤权丢弃临时工件，原 ID 只返回 expired，不重新生成当前内容。未知原请求可查 notRegistered；失败原请求保持失败。生成完成前检查原权限代次、配置绑定、正文和依赖快照，每个下载块再次检查全部交付权限。确认后的准确字节不因后续编辑改变；浏览器收齐后验证长度和 SHA-256 才交付。
 

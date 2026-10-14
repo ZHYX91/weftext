@@ -73,10 +73,8 @@ fn access(
 ) -> Result<String, ApiError> {
     let actor = inner.actor(auth)?;
     let rights = inner.rights(&actor, resource)?;
-    if !rights.history
-        || write && !rights.write
-        || !inner.config.files.get(resource).is_some_and(|f| f.editable)
-    {
+    let file = author_file(inner, resource)?;
+    if !rights.history || write && (!rights.write || !file.editable) {
         return Err(unavailable());
     }
     Ok(actor)
@@ -484,6 +482,8 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
                 enabled: true,
                 grants: BTreeMap::from([("Shared".into(), rights)]),
                 sync_owner: false,
+                native_whole_library: Default::default(),
+                navigation: Default::default(),
             },
         )
     })
@@ -497,6 +497,8 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
             resource_collections: Default::default(),
             structure_slots: Default::default(),
             structure_templates: Default::default(),
+            native_whole_library_export: false,
+            navigation: Default::default(),
             deployment: "history-test".into(),
             bind: "127.0.0.1:0".parse().unwrap(),
             origin: None,
@@ -541,6 +543,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
         office: Default::default(),
         library: Default::default(),
         media: Default::default(),
+        navigation_registry: Default::default(),
     };
     let doc = inner.open("alice", "Shared").unwrap();
     writing_api::observe_version(

@@ -876,7 +876,8 @@ fn hydration_carries_new_directory_bookmark_root_bookmark_tags_and_owned_child()
             .keys()
             .cloned()
             .collect();
-    assert_eq!(all.len(), 5);
+    assert_eq!(all.len(), 6);
+    assert!(all.contains(&ObjectKey::Rules));
     transfer(&p.a, &p.ar, &p.b, &p.identity, &all);
     run(
         &mut p.b,

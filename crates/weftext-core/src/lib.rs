@@ -9,7 +9,8 @@ mod hosted;
 pub use hosted::{
     ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus, ActorFieldStatus,
     ActorHistoryRestoreStatus, ActorSaveStatus, ActorStructureNode, ActorStructureReceipt,
-    FeatureTreeWitness, HostedDefinitionReservationRequest, HostedSaveRequest,
+    FeatureTreeWitness, HostedDefinitionReservationRequest, HostedNavigationIntent,
+    HostedSaveRequest,
 };
 #[cfg(all(test, windows))]
 mod history_tests;
@@ -38,6 +39,7 @@ pub use directory_identity::{
     NavigationPreparation, NavigationTarget, TagRecord, TagRegistrySnapshot,
 };
 pub use draft_recovery::DraftAlternative;
+pub use exchange::{NativeExport, NativeExportWitness};
 pub use history::{
     HistoryComparison, HistoryRead, HistoryRestoreRequest, HistoryRestoreResult,
     HistoryRestoreStatus, HistoryRetention, HistoryTimeline, HistoryVersion,
@@ -611,6 +613,7 @@ impl Core {
         plan.content_revision = Some(content_revision.clone());
         plan.receipt.as_mut().unwrap().revision_id = Some(content_revision);
         plan.history_restore = restore;
+        self.validate_sync_source_stamp(&session.path, &current_stamp)?;
         self.stage(plan.clone())?;
         #[cfg(all(test, windows))]
         hosted::definition_test_failpoint("saveStaged")?;

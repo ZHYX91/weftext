@@ -9,9 +9,14 @@ const MAX_COMMITS: usize = 2_000;
 const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 mod store;
 mod transport;
-pub use store::{SyncBundle, SyncIdentity, SyncStatus};
+pub use store::{
+    ReceivedSyncFile, ReceivedSyncVersion, ReceivedSyncVersions, SyncBundle, SyncIdentity,
+    SyncStatus,
+};
 pub use transport::SyncTransfer;
+mod adopt;
 pub(crate) mod apply;
+pub use adopt::SyncAdoptionCut;
 mod install;
 mod relocate;
 pub use apply::SyncResolution;
@@ -22,6 +27,10 @@ const MAX_FILES: usize = 5_000;
 const MAX_BLOB_BYTES: usize = 64 * 1024 * 1024;
 const MAX_STORE_BYTES: usize = 256 * 1024 * 1024;
 const MAX_BLOBS: usize = 20_000;
+
+#[cfg(all(test, windows))]
+#[path = "sync/revision_tests.rs"]
+mod revision_tests;
 
 /// Only ordinary content roles can cross the replica boundary. In particular,
 /// there is no job, approval, credential, actor policy, or private draft role.
@@ -39,6 +48,7 @@ pub enum ObjectKey {
     Schema,
     Settings,
     Tags,
+    Rules,
 }
 
 /// A node is one conflict unit, including source, annotations and its owned
@@ -181,6 +191,7 @@ impl Manifest {
                 ObjectKey::Schema => Some(".weftext-schema.json"),
                 ObjectKey::Settings => Some(".weftext-settings.json"),
                 ObjectKey::Tags => Some(".weftext-tags.json"),
+                ObjectKey::Rules => Some(".weftext-rules"),
                 ObjectKey::RootDirectory(_) => Some("weftext.directory.json"),
                 _ => None,
             };

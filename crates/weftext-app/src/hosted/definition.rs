@@ -645,6 +645,8 @@ mod integration_tests {
                 enabled: true,
                 grants: BTreeMap::from([("Shared".into(), rights)]),
                 sync_owner: false,
+                native_whole_library: Default::default(),
+                navigation: Default::default(),
             },
         )]);
         let mut inner = HostedInner {
@@ -656,6 +658,8 @@ mod integration_tests {
                 resource_collections: Default::default(),
                 structure_slots: Default::default(),
                 structure_templates: Default::default(),
+                native_whole_library_export: false,
+                navigation: Default::default(),
                 deployment: "definitions-test".into(),
                 bind: "127.0.0.1:0".parse().unwrap(),
                 origin: None,
@@ -692,6 +696,7 @@ mod integration_tests {
             office: Default::default(),
             library: Default::default(),
             media: Default::default(),
+            navigation_registry: Default::default(),
         };
         let doc = inner.open("alice", "Shared").unwrap();
         writing_api::observe_version(

@@ -1,5 +1,5 @@
 import { api, operationId } from "./api";
-import { SyncFlow, objectKey, sameSyncIdentity, type SyncBinding, type SyncIdentity, type SyncObject, type SyncPending, type SyncStatus, type SyncVersion } from "./sync-state";
+import { SyncFlow, objectKey, sameSyncIdentity, type ReceivedSyncVersions, type SyncAdoptionCut, type SyncBinding, type SyncIdentity, type SyncObject, type SyncPending, type SyncStatus, type SyncVersion } from "./sync-state";
 import "./sync-panel.css";
 import { mountRemoteSync } from "./sync-remote";
 
@@ -12,7 +12,7 @@ function field(label: string, value = ""): { label: HTMLLabelElement; input: HTM
 export async function openSyncPanel(root: string, host: SyncHost): Promise<void> {
   const saved = localStorage.getItem(savedKey);
   const restored: SyncPending | null = saved ? JSON.parse(saved) : null;
-  if (restored && (typeof restored.request?.operationId !== "string" || typeof restored.request?.root !== "string" || typeof restored.attempted !== "boolean" || typeof restored.status !== "string" || (restored.plan && (restored.plan.operationId !== restored.request.operationId || typeof restored.plan.planId !== "string")) || !["cloneSync", "applySync", "mergeSync"].includes(restored.request?.intent?.kind))) throw new Error("保存的同步操作记录无法读取；请保留浏览器记录并检查恢复记录。");
+  if (restored && (typeof restored.request?.operationId !== "string" || typeof restored.request?.root !== "string" || typeof restored.attempted !== "boolean" || typeof restored.status !== "string" || (restored.plan && (restored.plan.operationId !== restored.request.operationId || typeof restored.plan.planId !== "string")) || !["cloneSync", "applySync", "mergeSync", "adoptSyncExternal"].includes(restored.request?.intent?.kind))) throw new Error("保存的同步操作记录无法读取；请保留浏览器记录并检查恢复记录。");
   const flow = new SyncFlow({ request: api, store: p => { if (p) localStorage.setItem(savedKey, JSON.stringify(p)); else localStorage.removeItem(savedKey); } }, restored);
   const dialog = el("dialog"); dialog.className = "sync-panel"; dialog.setAttribute("aria-label", "资料库同步");
   const rootField = field("本机资料库路径", restored?.request.root ?? root);
@@ -21,7 +21,8 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
   const transport = field("交换目录路径（新目录或已配对目录）");
   const original = field("原同步操作编号（地址变化或浏览器记录丢失时）");
   const statusLine = el("p"); statusLine.setAttribute("role", "status");
-  const info = el("p"), objectsHost = el("section"), pendingHost = el("section"), controls = el("div"), inspectHost = el("section");
+  const info = el("p"), objectsHost = el("section"), pendingHost = el("section"), controls = el("div"), historyHost = el("section"), inspectHost = el("section");
+  historyHost.setAttribute("aria-label", "收到的对象历史");
   let binding: SyncBinding | null = null, status: SyncStatus | null = null, busy = false;
   const selected = new Set<string>(); let selectedInitialized = false;
   let remoteControls: ReturnType<typeof mountRemoteSync> | undefined;
@@ -47,6 +48,7 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     if (binding) pair.value = JSON.stringify(binding.identity);
     status = binding ? await api<SyncStatus>("/api/sync/status", { identity: binding.identity }) : null;
     selectedInitialized = false;
+    historyHost.replaceChildren(); inspectHost.replaceChildren();
   }
   async function published(): Promise<void> {
     status = await api<SyncStatus>("/api/sync/publish", { root: targetRoot() });
@@ -65,8 +67,16 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     await host.beforeAction();
     await flow.prepare({ operationId: operationId(), root: targetRoot(), intent: { kind, identity: identity(), objects: picked().map(o => o.object) } });
   }
-  async function inspectVersion(o: SyncObject, version: SyncVersion, common: boolean): Promise<void> {
-    const title = el("h3", `${common ? "共同基础" : "版本"} ${version.revision}`);
+  async function prepareAdoption(): Promise<void> {
+    const currentRoot = targetRoot(), paired = identity(), objects = picked().map(o => o.object);
+    await host.beforeAction();
+    const cut = await api<SyncAdoptionCut>("/api/sync/adoption-cut", { root: currentRoot, identity: paired, objects });
+    if (!sameSyncIdentity(cut.identity, paired)) throw new Error("采纳依据属于另一资料库；未准备操作。");
+    await flow.prepare({ operationId: operationId(), root: currentRoot,
+      intent: { kind: "adoptSyncExternal", identity: cut.identity, expectedInstalled: cut.expectedInstalled, changes: cut.changes } });
+  }
+  async function inspectVersion(o: SyncObject, version: SyncVersion, kind: "head" | "base" | "history"): Promise<void> {
+    const title = el("h3", `${kind === "base" ? "共同基础" : kind === "history" ? "历史版本（只读）" : "版本"} ${version.revision}`);
     inspectHost.replaceChildren(title, el("pre", JSON.stringify({ parent: version.state.parent, name: version.state.name, retired: version.state.retired }, null, 2)));
     for (const [path, digest] of Object.entries(version.state.files)) {
       const section = el("details"); section.append(el("summary", path), el("code", digest));
@@ -75,12 +85,30 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
         content.textContent = result.text ?? `二进制文件或超过文本预览预算：${result.bytes} 字节。`;
       })); inspectHost.append(section);
     }
-    if (!common && binding && o.view.versions.length > 1) {
+    if (kind === "head" && binding && o.view.versions.length > 1) {
       inspectHost.append(el("p", "采用此分支会选择它的完整正文、批注、资源和位置。双方原版本仍保留在历史中。"), button("预览采用此完整分支", async () => {
         await host.beforeAction();
         await flow.prepare({ operationId: operationId(), root: targetRoot(), intent: { kind: "mergeSync", identity: identity(), resolutions: [{ object: o.object, revisions: o.view.versions.map(v => v.revision), state: version.state }], blobs: {} } });
       }));
     }
+  }
+  async function inspectHistory(o: SyncObject, afterCommit?: string): Promise<void> {
+    const result = await api<ReceivedSyncVersions>("/api/sync/history", { identity: identity(), object: o.object, afterCommit, limit: 25 });
+    const installed = binding?.installedVersions.find(([key]) => objectKey(key) === objectKey(o.object))?.[1];
+    historyHost.replaceChildren(el("h3", `收到的对象历史 · ${objectKey(o.object)}`),
+      el("p", "此处只读检查已收到的版本，不改变本机文档或草稿。列表按提交编号分页，不代表时间先后；因果关系见各版本的父提交与前置版本。接收新记录后可重新读取首页。"),
+      el("p", result.coverage === "complete" ? "当前已收到的对象记录均已接纳；这不表示本机已经安装这些版本，也不表示远端历史已经全部收到。" : "当前已收到的对象记录中有尚未接纳的版本；缺件或拒绝记录不可读取正文。"),
+      button("重新读取历史首页", () => inspectHistory(o)));
+    if (!result.versions.length) historyHost.append(el("p", "当前未收到此对象的历史记录。"));
+    for (const version of result.versions) {
+      const entry = el("details"), accepted = version.admission.status === "accepted";
+      entry.append(el("summary", `${version.revision} · ${accepted ? "已接纳" : version.admission.status}${installed === version.revision ? " · 本机已安装" : " · 本机未安装此版本"}`),
+        el("pre", JSON.stringify({ commit: version.commit, parents: version.parents, before: version.before, admission: version.admission, name: version.state.name, retired: version.state.retired }, null, 2)));
+      if (accepted) entry.append(button(`只读查看历史 ${version.revision}`, () => inspectVersion(o, version, "history")));
+      historyHost.append(entry);
+    }
+    if (result.nextCommit) historyHost.append(button("下一页历史", () => inspectHistory(o, result.nextCommit!)));
+    inspectHost.replaceChildren();
   }
   function render(): void {
     dialog.querySelectorAll<HTMLInputElement | HTMLButtonElement | HTMLTextAreaElement>("input,button,textarea").forEach(e => { e.disabled = false; });
@@ -92,14 +120,15 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
       binding = await api<SyncBinding>("/api/sync/enable", { root: path, operationId: id }); pair.value = JSON.stringify(binding.identity);
       await published(); localStorage.removeItem(key);
     }), button("刷新已保存版本", published), button("接收交换目录", async () => {
-      status = await api<SyncStatus>("/api/sync/receive", { identity: identity(), directory: transport.input.value }); selectedInitialized = false; inspectHost.replaceChildren();
+      status = await api<SyncStatus>("/api/sync/receive", { identity: identity(), directory: transport.input.value }); selectedInitialized = false; historyHost.replaceChildren(); inspectHost.replaceChildren();
     }), button("导出所选对象", async () => {
       await api("/api/sync/export", { root: targetRoot(), directory: transport.input.value, objects: picked().map(o => o.object) }); await published();
-    }), button("预览应用所选对象", () => prepare("applySync")), button("预览创建独立副本", () => prepare("cloneSync")));
+    }), button("预览应用所选对象", () => prepare("applySync")), button("预览创建独立副本", () => prepare("cloneSync")), button("预览采纳当前外部修改", prepareAdoption));
     const buttons = Array.from(controls.querySelectorAll("button"));
     buttons[1].disabled = !!binding || !!flow.pending; buttons[2].disabled = !binding || !!flow.pending;
     buttons[4].disabled = !binding || !!flow.pending; buttons[5].disabled = !binding || !status || !!flow.pending; buttons[6].disabled = !!binding || !status || !!flow.pending;
     buttons[0].disabled = !!flow.pending; buttons[3].disabled = !!flow.pending;
+    buttons[7].disabled = !binding || !status || !!flow.pending;
     objectsHost.replaceChildren();
     if (status) {
       if (!selectedInitialized) { selected.clear(); for (const o of status.objects) selected.add(objectKey(o.object)); selectedInitialized = true; }
@@ -112,8 +141,9 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
         check.onchange = () => { if (check.checked) selected.add(objectKey(o.object)); else selected.delete(objectKey(o.object)); };
         label.append(check, document.createTextNode(`${o.view.versions.map(v => v.state.name).filter((n, i, a) => a.indexOf(n) === i).join(" / ") || o.object.kind} (${objectKey(o.object)})`)); row.append(label);
         row.append(el("p", `本机已安装版本：${installed.get(objectKey(o.object)) ?? "未安装"}${o.view.versions.length > 1 ? " · 冲突：保留全部分支" : ""}`));
-        for (const v of o.view.versions) row.append(button(`查看版本 ${v.revision}`, () => inspectVersion(o, v, false)));
-        for (const v of o.view.commonBases) row.append(button(`查看共同基础 ${v.revision}`, () => inspectVersion(o, v, true)));
+        for (const v of o.view.versions) row.append(button(`查看版本 ${v.revision}`, () => inspectVersion(o, v, "head")));
+        for (const v of o.view.commonBases) row.append(button(`查看共同基础 ${v.revision}`, () => inspectVersion(o, v, "base")));
+        row.append(button("查看收到的全部历史", () => inspectHistory(o)));
         objectsHost.append(row);
       }
     }
@@ -121,6 +151,16 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     const p = flow.pending;
     if (p) {
       pendingHost.append(el("h3", `原同步操作：${p.status}`), el("code", p.request.operationId), el("p", `目标：${p.request.root} · ${p.request.intent.kind}`));
+      if (p.request.intent.kind === "adoptSyncExternal") {
+        pendingHost.append(el("p", "明确采纳本机已存在的外部修改，将这些准确字节登记为新的本地版本。此入口不修改正文、不同时修复内容，也不覆盖个人草稿；尚未收到或未安装的版本仍独立保留。"),
+          el("p", "本次核对的已安装对象与版本："), el("pre", JSON.stringify(p.request.intent.expectedInstalled, null, 2)));
+        for (const file of p.request.intent.changes) {
+          const details = el("details"); details.append(el("summary", `${file.path} · ${file.after.length} 字节`));
+          try { details.append(el("pre", new TextDecoder("utf-8", { fatal: true }).decode(new Uint8Array(file.after)))); }
+          catch { details.append(el("p", "此文件不是 UTF-8 文本；原请求保留准确字节。")); }
+          pendingHost.append(details);
+        }
+      }
       if (p.plan) { const list = el("ul"); for (const c of p.plan.changes) list.append(el("li", `${c.action} · ${c.path} · ${c.bytes} 字节`)); pendingHost.append(list); for (const loss of p.plan.losses ?? []) pendingHost.append(el("p", loss.message)); }
       pendingHost.append(button("检查原操作结果", async () => { await flow.inspect(); await refreshCommitted(); }));
       if (!p.attempted && !p.plan) pendingHost.append(button("重试原准备请求", () => flow.retryPrepare()));
@@ -135,9 +175,9 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
   }
   const close = el("button", "关闭同步"); close.type = "button"; close.onclick = () => { remoteControls?.dispose(); dialog.close(); dialog.remove(); };
   dialog.oncancel = event => { if (busy) event.preventDefault(); else { remoteControls?.dispose(); dialog.remove(); } };
-  rootField.input.oninput = () => { binding = null; status = null; inspectHost.replaceChildren(); render(); };
-  pair.oninput = () => { status = null; inspectHost.replaceChildren(); render(); };
-  dialog.append(el("h2", "资料库同步"), el("p", "每个副本有独立工作目录和私有状态。复制配对身份后，通过交换目录传递已保存版本；编辑器里的未保存草稿会保留。"), rootField.label, pairLabel, transport.label, info, controls, statusLine, pendingHost, objectsHost, inspectHost, original.label, button("读取原同步操作", async () => {
+  rootField.input.oninput = () => { binding = null; status = null; historyHost.replaceChildren(); inspectHost.replaceChildren(); render(); };
+  pair.oninput = () => { status = null; historyHost.replaceChildren(); inspectHost.replaceChildren(); render(); };
+  dialog.append(el("h2", "资料库同步"), el("p", "每个副本有独立工作目录和私有状态。复制配对身份后，通过交换目录传递已保存版本；编辑器里的未保存草稿会保留。"), rootField.label, pairLabel, transport.label, info, controls, statusLine, pendingHost, objectsHost, historyHost, inspectHost, original.label, button("读取原同步操作", async () => {
     await flow.recover(original.input.value.trim());
     const p = flow.pending!; rootField.input.value = p.request.root; pair.value = JSON.stringify(p.request.intent.identity); inspectHost.replaceChildren(); await load(); await refreshCommitted();
   }), close);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { importReceipt, officeChunk, outputReceipt, type OfficeOutputReceipt } from "./hosted-office-state";
+import { importReceipt, officeChunk, officeOutputPresentation, outputReceipt, type OfficeOutputReceipt } from "./hosted-office-state";
 
 const prepared: OfficeOutputReceipt = { requestId: "original", status: "prepared", filename: "report.docx", contentType: "application/docx", length: 6, digest: "a".repeat(64), losses: [] };
 test("same original output cannot install replacement bytes from a late or inconsistent receipt", () => {
@@ -18,6 +18,19 @@ test("a resumed download checks exact offset, bounded size, total, digest and co
   const chunk = { bytesBase64: btoa("def"), offset: 3, length: 3, total: 6, sha256: prepared.digest!, done: true };
   assert.deepEqual([...officeChunk(chunk, 3, 6, prepared.digest!)], [100, 101, 102]);
   for (const malformed of [{ ...chunk, offset: 0 }, { ...chunk, total: 7 }, { ...chunk, sha256: "b".repeat(64) }, { ...chunk, done: false }, { ...chunk, length: 4 }, { ...chunk, bytesBase64: "%%%" }]) assert.throws(() => officeChunk(malformed, 3, 6, prepared.digest!));
+});
+test("output cache never redelivers preview or confirm/download authority before original lookup in current epoch", () => {
+  const cached = { ...prepared, preview: { source: "old protected object" } };
+  assert.equal(officeOutputPresentation("original", cached, undefined, 9), undefined);
+  assert.equal(officeOutputPresentation("original", cached, { requestId: "original", epoch: 8 }, 9), undefined);
+  assert.equal(officeOutputPresentation("original", cached, { requestId: "other", epoch: 9 }, 9), undefined);
+  const verification = { requestId: "original", epoch: 9 };
+  assert.equal(officeOutputPresentation("original", cached, verification, 9)?.preview, cached.preview);
+  for (const status of ["notRegistered", "expired", "failed"] as const) {
+    const restored = outputReceipt("original", { ...cached, status });
+    assert.deepEqual(officeOutputPresentation("original", restored, verification, 9), { requestId: "original", status });
+    assert.equal(officeOutputPresentation("original", restored, verification, 10), undefined);
+  }
 });
 test("import recovery never rebinds an original operation or revives a committed effect", () => {
   const request = { resource: "slot", operationId: "original", bytesBase64: "" };

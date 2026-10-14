@@ -1,18 +1,26 @@
-export interface ObjectKey { kind: "node" | "directory" | "rootDirectory" | "schema" | "settings" | "tags"; id?: string }
+export interface ObjectKey { kind: "node" | "directory" | "rootDirectory" | "schema" | "settings" | "rules" | "tags"; id?: string }
 export interface SyncIdentity { workspaceId: string; genesis: string }
 export const sameSyncIdentity = (a: SyncIdentity, b: SyncIdentity): boolean => a.workspaceId === b.workspaceId && a.genesis === b.genesis;
 export interface ObjectState { parent: ObjectKey | null; name: string; retired: boolean; files: Record<string, string>; fileRevisions: Record<string, string> }
 export interface SyncVersion { commit: string; revision: string; state: ObjectState }
+export interface SyncAdmission { status: string; missingParents?: string[]; missingBlobs?: string[]; reason?: string }
+export interface ReceivedSyncVersion extends SyncVersion { parents: string[]; before: string[]; admission: SyncAdmission }
+export interface ReceivedSyncVersions { versions: ReceivedSyncVersion[]; nextCommit: string | null; coverage: "complete" | "partial" }
 export interface SyncObject { object: ObjectKey; view: { versions: SyncVersion[]; commonBases: SyncVersion[] } }
 export interface SyncStatus {
   identity: SyncIdentity; heads: string[]; objects: SyncObject[];
-  commits: { id: string; admission: { status: string; missingParents?: string[]; missingBlobs?: string[]; reason?: string }; unsettledDependencies: ObjectKey[] }[];
+  commits: { id: string; admission: SyncAdmission; unsettledDependencies: ObjectKey[] }[];
 }
 export interface SyncBinding {
   root: string; identity: SyncIdentity; replicaId: string; pendingPublications: number; partial: boolean;
   installedObjects: ObjectKey[]; installedVersions: [ObjectKey, string][]; selectedObjects: ObjectKey[] | null;
 }
-export interface SyncRequest { operationId: string; root: string; intent: { kind: "cloneSync" | "applySync"; identity: SyncIdentity; objects: ObjectKey[] } | { kind: "mergeSync"; identity: SyncIdentity; resolutions: { object: ObjectKey; revisions: string[]; state: ObjectState }[]; blobs: Record<string, number[]> } }
+export interface SyncAdoptionCut {
+  identity: SyncIdentity;
+  expectedInstalled: { object: ObjectKey; revisions: string[] }[];
+  changes: { path: string; baseId: string; before: number[]; after: number[] }[];
+}
+export interface SyncRequest { operationId: string; root: string; intent: { kind: "cloneSync" | "applySync"; identity: SyncIdentity; objects: ObjectKey[] } | { kind: "mergeSync"; identity: SyncIdentity; resolutions: { object: ObjectKey; revisions: string[]; state: ObjectState }[]; blobs: Record<string, number[]> } | ({ kind: "adoptSyncExternal" } & SyncAdoptionCut) }
 export interface SyncPlan { operationId: string; planId: string; status: string; changes: { path: string; action: string; bytes: number }[]; losses: { message: string }[] }
 export interface SyncPending { request: SyncRequest; plan?: SyncPlan; attempted: boolean; status: string }
 export interface SyncFlowHost {

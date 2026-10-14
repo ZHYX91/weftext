@@ -23,6 +23,12 @@ pub struct OperationRequest {
     deny_unknown_fields
 )]
 pub enum OperationIntent {
+    /// Exact observed content adoption, not an edited-after repair path.
+    AdoptSyncExternal {
+        identity: crate::sync::SyncIdentity,
+        expected_installed: Vec<crate::sync::Dependency>,
+        changes: Vec<FileChange>,
+    },
     ApplySync {
         identity: crate::sync::SyncIdentity,
         objects: BTreeSet<crate::sync::ObjectKey>,
@@ -376,7 +382,7 @@ fn verify_duplicate_snapshot(original: &SnapshotBinding, incoming: &SnapshotBind
 pub(crate) struct AdmittedBasis {
     root: String,
     members: BTreeSet<String>,
-    bases: Vec<String>,
+    pub(crate) bases: Vec<String>,
     complete: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -1684,6 +1690,14 @@ impl Core {
     ) -> Result<()> {
         Self::merge_dependency_witnesses(pool, incoming, false)
     }
+    /// Feature plans preserve original absent dependencies too. This does not
+    /// turn an absent observation into a continuously held positive guard.
+    pub fn merge_feature_witnesses(
+        pool: &mut Vec<SnapshotWitness>,
+        incoming: Vec<SnapshotWitness>,
+    ) -> Result<()> {
+        Self::merge_dependency_witnesses(pool, incoming, true)
+    }
     fn merge_dependency_witnesses(
         pool: &mut Vec<SnapshotWitness>,
         incoming: Vec<SnapshotWitness>,
@@ -2254,7 +2268,7 @@ impl Core {
         )?;
         Ok(revision)
     }
-    fn verify_snapshot(
+    pub(crate) fn verify_snapshot(
         &self,
         path: &Path,
         base_id: &str,
@@ -2369,7 +2383,7 @@ impl Core {
     ) -> Result<SnapshotSet> {
         self.read_bounded_snapshot(root.as_ref(), paths, 64)
     }
-    fn read_bounded_snapshot(
+    pub(crate) fn read_bounded_snapshot(
         &mut self,
         root: &Path,
         paths: &[String],
@@ -2715,6 +2729,9 @@ impl Core {
         })
     }
     pub fn prepare_operation(&mut self, request: OperationRequest) -> Result<OperationPreview> {
+        if matches!(request.intent, OperationIntent::AdoptSyncExternal { .. }) {
+            return self.prepare_sync_adoption(request);
+        }
         if matches!(
             request.intent,
             OperationIntent::ApplySync { .. } | OperationIntent::MergeSync { .. }
@@ -3170,7 +3187,8 @@ impl Core {
         let mutation = match &request.intent {
             OperationIntent::CloneSync { .. }
             | OperationIntent::ApplySync { .. }
-            | OperationIntent::MergeSync { .. } => {
+            | OperationIntent::MergeSync { .. }
+            | OperationIntent::AdoptSyncExternal { .. } => {
                 return Err(CoreError::new(
                     "invalidIntent",
                     "Replica intents require their dedicated guarded planner",
@@ -4166,6 +4184,7 @@ impl Core {
             OperationIntent::CloneSync { .. }
                 | OperationIntent::ApplySync { .. }
                 | OperationIntent::MergeSync { .. }
+                | OperationIntent::AdoptSyncExternal { .. }
         ) {
             self.sync_local_owner()?;
         }
@@ -4223,6 +4242,7 @@ impl Core {
                     | OperationIntent::ConfigureStyle { .. }
                     | OperationIntent::ApplySync { .. }
                     | OperationIntent::MergeSync { .. }
+                    | OperationIntent::AdoptSyncExternal { .. }
             )
         {
             for c in changes {
@@ -5581,6 +5601,7 @@ impl Core {
 }
 fn intent_kind(intent: &OperationIntent) -> &'static str {
     match intent {
+        OperationIntent::AdoptSyncExternal { .. } => "adoptSyncExternal",
         OperationIntent::CloneSync { .. } => "cloneSync",
         OperationIntent::ApplySync { .. } => "applySync",
         OperationIntent::MergeSync { .. } => "mergeSync",

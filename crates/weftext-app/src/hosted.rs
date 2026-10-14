@@ -1,15 +1,18 @@
 //! A separate hosted boundary. Local path, library, recovery and feature APIs
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
+mod citations;
 mod definition;
 mod editor;
 mod embedded_query;
 mod fields;
 mod history_api;
 mod inputs;
+mod knowledge_links;
 mod library;
 mod media;
 mod navigation;
+mod navigation_registry;
 mod office;
 mod office_import;
 mod query;
@@ -62,6 +65,10 @@ struct Rights {
     #[serde(default)]
     office: office::OfficeRights,
     #[serde(default)]
+    citations: citations::Rights,
+    #[serde(default)]
+    outputs: office::OutputRights,
+    #[serde(default)]
     query: query::QueryRights,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
@@ -94,6 +101,10 @@ struct User {
     structure: structure::Rights,
     #[serde(default)]
     sync_owner: bool,
+    #[serde(default)]
+    native_whole_library: office::NativeRights,
+    #[serde(default)]
+    navigation: navigation_registry::Rights,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -127,6 +138,10 @@ struct Config {
     structure_slots: BTreeMap<String, structure::Slot>,
     #[serde(default)]
     structure_templates: BTreeMap<String, structure::Template>,
+    #[serde(default)]
+    native_whole_library_export: bool,
+    #[serde(default)]
+    navigation: navigation_registry::Config,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -151,6 +166,7 @@ struct HostedInner {
     office: office::Store,
     library: library::Store,
     media: media::Store,
+    navigation_registry: navigation_registry::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -260,6 +276,12 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !navigation_registry::valid_rights(config, &user.navigation) {
+            return Err(ApiError::bad("导航授权须引用明确配置的目录或接纳槽"));
+        }
+        if !office::valid_native_rights(&user.native_whole_library) {
+            return Err(ApiError::bad("全库输出须明确授予读取、导出与下载权限"));
+        }
         if !structure::valid_rights(config, &user.structure) {
             return Err(ApiError::bad("结构授权须引用明确配置的源对象与固定目标槽"));
         }
@@ -361,6 +383,40 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
     }
     Ok(())
 }
+/// Reading a managed author document is separate from authoring. Compiler
+/// inputs and arbitrary JSON/binary files do not become document sessions.
+fn author_file(inner: &HostedInner, resource: &str) -> Result<FileEntry, ApiError> {
+    let file = inner
+        .config
+        .files
+        .get(resource)
+        .filter(|f| f.lifecycle == "live")
+        .cloned()
+        .ok_or_else(unavailable)?;
+    structure::guard_slot(inner, resource)?;
+    if !file.editable {
+        let path = inner.config.root.join(&file.path);
+        if path.extension().is_none_or(|e| e != "typ") {
+            return Err(unavailable());
+        }
+        let node = inner
+            .core
+            .qualified_node_at(&inner.config.root, &path)
+            .map_err(|_| unavailable())?;
+        if file
+            .expected_node
+            .as_ref()
+            .is_some_and(|n| n != &node.owner)
+        {
+            return Err(unavailable());
+        }
+        inner
+            .core
+            .validate_snapshot_witness(&inner.config.root, &path, &node.witness)
+            .map_err(|_| unavailable())?;
+    }
+    Ok(file)
+}
 impl HostedInner {
     fn actor(&self, auth: &Auth) -> Result<String, ApiError> {
         self.policy
@@ -439,13 +495,7 @@ impl HostedInner {
     }
     fn open(&mut self, actor: &str, resource: &str) -> Result<Value, ApiError> {
         let rights = self.rights(actor, resource)?;
-        let file = self
-            .config
-            .files
-            .get(resource)
-            .filter(|f| f.editable)
-            .cloned()
-            .ok_or_else(unavailable)?;
+        let file = author_file(self, resource)?;
         if self.sessions.len() >= 128
             || self.sessions.values().filter(|s| s.actor == actor).count() >= 32
         {
@@ -567,7 +617,7 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
                     inner
                         .rights(&actor, id)
                         .ok()
-                        .filter(|_| f.editable)
+                        .filter(|_| author_file(inner, id).is_ok())
                         .map(|rights| json!({"resource":id,"title":f.title,"rights":rights}))
                 })
                 .collect::<Vec<_>>();
@@ -733,7 +783,7 @@ async fn search(
         let actor = inner.actor(&auth)?;
         if req.text.is_empty() || req.text.len() > 256 { return Err(ApiError::bad("搜索词须为 1–256 字节")); }
         let mut rows = Vec::new(); let mut complete = true;
-        let docs = inner.config.files.iter().filter(|(id, f)| f.editable && inner.rights(&actor, id).is_ok()).map(|(id,f)| (id.clone(),f.clone())).collect::<Vec<_>>();
+        let docs = inner.config.files.iter().filter(|(id, _)| inner.rights(&actor, id).is_ok() && author_file(inner,id).is_ok()).map(|(id,f)| (id.clone(),f.clone())).collect::<Vec<_>>();
         let mut total = 0;
         for (id, file) in docs {
             match inner.files(&actor, std::slice::from_ref(&id)) {
@@ -881,6 +931,8 @@ async fn update_policy(
                             && old.query_providers == user.query_providers
                             && old.query_scopes == user.query_scopes
                             && old.library == user.library
+                            && old.native_whole_library == user.native_whole_library
+                            && old.navigation == user.navigation
                             && old.resources == user.resources
                             && old.resource_collections == user.resource_collections
                             && old.structure == user.structure
@@ -1015,6 +1067,7 @@ pub(super) async fn serve(
     }
     let mut references = BTreeSet::new();
     if !media::valid_config(&config)
+        || !navigation_registry::valid_config(&config)
         || !resource_collections::valid_config(&config)
         || !structure::valid_config(&config)
     {
@@ -1111,6 +1164,7 @@ pub(super) async fn serve(
             office: office::Store::default(),
             library: library::Store::default(),
             media: media::Store::default(),
+            navigation_registry: Default::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -1122,7 +1176,10 @@ pub(super) async fn serve(
         .merge(fields::router())
         .merge(history_api::router())
         .merge(navigation::router())
+        .merge(navigation_registry::router())
         .merge(library::router())
+        .merge(knowledge_links::router())
+        .merge(citations::router())
         .merge(media::router())
         .merge(resource_collections::router())
         .merge(structure::router())

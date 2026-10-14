@@ -19,6 +19,7 @@ pub(super) struct FrozenQuery {
     pub(super) columns: Vec<String>,
     pub(super) schema: Schema,
     pub(super) query_authority: query::Authority,
+    pub(super) embedded: Option<export_api::EmbeddedQueryBasis>,
     size_bytes: usize,
     expires: Instant,
 }
@@ -61,6 +62,42 @@ pub(super) fn query_catalog(inner: &HostedInner, actor: &str) -> Vec<Value> {
     inner.fields.queries.iter().filter_map(|(id,q)|frozen_query(inner,actor,id).ok().map(|_|json!({"queryId":id,"columns":q.columns,"rowCount":q.result.rows.len(),"coverage":q.result.coverage}))).collect()
 }
 
+pub(super) fn bind_embedded_query(
+    inner: &mut HostedInner,
+    actor: &str,
+    id: &str,
+    basis: export_api::EmbeddedQueryBasis,
+) -> Result<(), ApiError> {
+    let original = frozen_query(inner, actor, id)?;
+    if let Some(bound) = original.embedded {
+        return if bound == basis {
+            Ok(())
+        } else {
+            Err(conflict())
+        };
+    }
+    let extra = basis
+        .session_id
+        .len()
+        .checked_add(basis.source_hash.len())
+        .and_then(|n| n.checked_add(basis.occurrence_id.len()))
+        .and_then(|n| n.checked_add(128))
+        .ok_or_else(conflict)?;
+    let total = inner
+        .fields
+        .queries
+        .values()
+        .try_fold(extra, |n, q| n.checked_add(q.size_bytes))
+        .ok_or_else(conflict)?;
+    if total > 32 * 1024 * 1024 {
+        return Err(conflict());
+    }
+    let current = inner.fields.queries.get_mut(id).ok_or_else(conflict)?;
+    current.size_bytes = current.size_bytes.checked_add(extra).ok_or_else(conflict)?;
+    current.embedded = Some(basis);
+    Ok(())
+}
+
 pub(super) fn retain_query(
     inner: &mut HostedInner,
     actor: &str,
@@ -93,6 +130,7 @@ pub(super) fn retain_query(
         columns,
         schema,
         query_authority: authority,
+        embedded: None,
         size_bytes,
         expires: Instant::now() + Duration::from_secs(900),
     };
@@ -218,7 +256,11 @@ fn rights(
         .filter(|u| u.enabled)
         .and_then(|u| u.grants.get(resource))
         .and_then(|r| r.fields.get(field))
-        .filter(|r| r.read && (!write || r.write))
+        .filter(|r| {
+            r.read
+                && (!write
+                    || r.write && inner.config.files.get(resource).is_some_and(|f| f.editable))
+        })
         .cloned()
         .ok_or_else(unavailable)
 }
@@ -270,12 +312,7 @@ fn with_source<T>(
     ) -> Result<T, ApiError>,
 ) -> Result<T, ApiError> {
     structure::guard_slot(inner, resource)?;
-    let file = inner
-        .config
-        .files
-        .get(resource)
-        .filter(|f| f.editable)
-        .ok_or_else(profile_unavailable)?;
+    let file = author_file(inner, resource).map_err(|_| profile_unavailable())?;
     let path = inner.config.root.join(&file.path);
     let root = inner.config.root.clone();
     let scope = field_scope(inner, actor, operation);
@@ -356,12 +393,13 @@ async fn read(
         expire_revoked(inner);
         let granted = inner.policy.users[&actor].grants[&req.resource].fields.iter()
             .filter(|(_, r)| r.read).map(|(id, _)| id.clone()).collect::<BTreeSet<_>>();
+        let file_writable = inner.config.files.get(&req.resource).is_some_and(|f| f.editable);
         let (mut field, writable) = with_source(inner, &actor, &req.resource, None, |_, doc, schema, history, can_write_schema| {
             let profile = narrow_profile(&doc.source, schema, &BTreeSet::from([req.field_id.clone()]), None)
                 .map_err(|_| profile_unavailable())?;
             if profile.node_id != history.node_id { return Err(profile_unavailable()); }
             let field = profile.fields.into_iter().next().ok_or_else(unavailable)?;
-            let writable = if access.write && field.writable && can_write_schema {
+            let writable = if access.write && file_writable && field.writable && can_write_schema {
                 narrow_write_fields(&doc.source, schema, &req.field_id).ok()
                     .filter(|fields| fields.is_subset(&granted))
                     .and_then(|fields| narrow_profile(&doc.source, schema, &fields, Some(&req.field_id)).ok()
@@ -584,6 +622,7 @@ mod cache_tests {
             columns: vec!["text".into()],
             schema,
             query_authority: query::Authority::default(),
+            embedded: None,
             size_bytes,
             expires: Instant::now() + Duration::from_secs(900 + order),
         }

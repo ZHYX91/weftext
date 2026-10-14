@@ -5,6 +5,10 @@ use std::collections::BTreeMap;
 #[path = "hosted_structure.rs"]
 mod structure;
 pub use structure::{ActorStructureNode, ActorStructureReceipt, FeatureTreeWitness};
+#[path = "hosted_navigation.rs"]
+mod navigation;
+pub use navigation::HostedNavigationIntent;
+use navigation::NavigationFeature;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,6 +24,8 @@ pub struct ActorFeatureStatus {
     pub resource_refs: Vec<String>,
     /// Original allocated or continued identities, never guessed from a title.
     pub node_refs: Vec<weftext_knowledge::NodeRef>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub navigation_ref: Option<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -36,6 +42,9 @@ enum FeatureIntentKind {
     TemplateNode,
     TrashNode,
     RestoreNode,
+    AdmitDirectory,
+    CreateTag,
+    RenameTag,
 }
 impl FeatureIntentKind {
     fn from_intent(intent: &OperationIntent) -> Result<Self> {
@@ -70,6 +79,9 @@ impl FeatureIntentKind {
             Self::TemplateNode => "templateNode",
             Self::TrashNode => "trashNode",
             Self::RestoreNode => "restoreNode",
+            Self::AdmitDirectory => "admitDirectory",
+            Self::CreateTag => "createTag",
+            Self::RenameTag => "renameTag",
         }
     }
     fn has_losses(self) -> bool {
@@ -89,6 +101,8 @@ pub(super) struct FeatureOperation {
     intent_kind: Option<FeatureIntentKind>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     destination_slot: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    navigation: Option<NavigationFeature>,
 }
 impl FeatureOperation {
     fn kind(&self) -> FeatureIntentKind {
@@ -287,6 +301,17 @@ impl Core {
                 .feature
                 .as_ref()
                 .is_some_and(|f| f.docx_import != (f.kind() == FeatureIntentKind::ImportDocx))
+            || record.feature.as_ref().is_some_and(|f| {
+                matches!(
+                    f.kind(),
+                    FeatureIntentKind::AdmitDirectory
+                        | FeatureIntentKind::CreateTag
+                        | FeatureIntentKind::RenameTag
+                ) != f.navigation.is_some()
+                    || f.navigation
+                        .as_ref()
+                        .is_some_and(|n| n.kind() != f.kind() || f.destination_slot.is_some())
+            })
         {
             return Err(conflict());
         }
@@ -308,10 +333,18 @@ impl Core {
                     .transaction
                     .as_ref()
                     .unwrap();
-                let valid_intent = FeatureIntentKind::from_intent(&transaction.request.intent)
-                    .is_ok_and(|kind| kind == record.feature.as_ref().unwrap().kind())
-                    && transaction.hosted_destination
-                        == record.feature.as_ref().unwrap().destination_slot;
+                let feature = record.feature.as_ref().unwrap();
+                let valid_intent = if let Some(navigation) = &feature.navigation {
+                    matches!(
+                        transaction.request.intent,
+                        OperationIntent::UpdateFiles { .. }
+                    ) && transaction.hosted_destination.is_none()
+                        && navigation.matches_plan(self, &record.core_operation_id)?
+                } else {
+                    FeatureIntentKind::from_intent(&transaction.request.intent)
+                        .is_ok_and(|kind| kind == feature.kind())
+                        && transaction.hosted_destination == feature.destination_slot
+                };
                 if !valid_intent {
                     return Err(conflict());
                 }
@@ -386,6 +419,15 @@ impl Core {
         } else {
             vec![]
         };
+        let navigation_ref = if detail.is_some() {
+            feature
+                .navigation
+                .as_ref()
+                .map(|n| n.target(self, &record.core_operation_id))
+                .transpose()?
+        } else {
+            None
+        };
         let mut preview = feature.preview;
         if kind.has_losses() {
             let object = preview.as_object_mut().ok_or_else(conflict)?;
@@ -431,6 +473,7 @@ impl Core {
             },
             resource_refs,
             node_refs,
+            navigation_ref,
         }))
     }
 
@@ -780,6 +823,7 @@ impl Core {
                 import_losses: None,
                 intent_kind: Some(intent_kind),
                 destination_slot: destination_slot.map(str::to_owned),
+                navigation: None,
             }),
             definition: None,
             save_definition_reservations: vec![],
@@ -897,6 +941,7 @@ impl Core {
                     import_losses: None,
                     intent_kind: None,
                     destination_slot: None,
+                    navigation: None,
                 }),
                 definition: None,
                 save_definition_reservations: vec![],

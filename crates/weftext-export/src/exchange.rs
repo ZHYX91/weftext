@@ -25,6 +25,8 @@ pub enum NativeFileRole {
     Annotations,
     Schema,
     Settings,
+    /// A frozen derived citation input, never an admitted author Resource.
+    GeneratedBibliography,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -139,6 +141,123 @@ fn unique_entries<'de, D: serde::Deserializer<'de>>(
 
 pub fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+/// Append one pure derived bibliography to its exact source owner's directory.
+/// This cannot overwrite an original member or a disclosed omitted file. It
+/// changes only the output package; callers retain the original Core and Work
+/// witnesses and independently validate authorization before delivery.
+pub fn append_generated_bibliography(
+    package: &mut NativePackage,
+    owner_node_id: &str,
+    bytes: Vec<u8>,
+) -> Result<()> {
+    validate_native_package(package)?;
+    let owners = package
+        .manifest
+        .entries
+        .iter()
+        .filter(|(_, entry)| {
+            entry.role == NativeFileRole::Source && entry.node_id.as_deref() == Some(owner_node_id)
+        })
+        .map(|(path, _)| path)
+        .collect::<Vec<_>>();
+    if owners.len() != 1 {
+        return Err(NativeError::new(
+            "packageOwner",
+            "Generated bibliography requires one exact source owner",
+        ));
+    }
+    let parent = owners[0].rsplit_once('/').unwrap().0;
+    let path = format!("{parent}/weftext.citations.bib");
+    let occupied = |original: &str| {
+        original.eq_ignore_ascii_case(&path)
+            || original
+                .to_ascii_lowercase()
+                .starts_with(&(path.to_ascii_lowercase() + "/"))
+    };
+    if package.files.keys().any(|original| occupied(original))
+        || package
+            .manifest
+            .losses
+            .iter()
+            .any(|loss| occupied(&loss.path))
+    {
+        return Err(NativeError::new(
+            "packagePath",
+            "Generated bibliography would occupy an original or omitted member",
+        ));
+    }
+    validate_generated_bibliography(&bytes)?;
+    if package.files.len() == MAX_PACKAGE_FILES
+        || package
+            .files
+            .values()
+            .map(Vec::len)
+            .try_fold(bytes.len(), usize::checked_add)
+            .is_none_or(|total| total > MAX_PACKAGE_BYTES)
+    {
+        return Err(NativeError::new(
+            "packageBudget",
+            "Generated bibliography exceeds the native package budget",
+        ));
+    }
+    let mut entry = NativeEntry::new(NativeFileRole::GeneratedBibliography, &bytes);
+    entry.owner_node_id = Some(owner_node_id.into());
+    package.files.insert(path.clone(), bytes);
+    package.manifest.entries.insert(path, entry);
+    Ok(())
+}
+
+fn validate_generated_bibliography(bytes: &[u8]) -> Result<()> {
+    if bytes.len() > 8 * 1024 * 1024 {
+        return Err(NativeError::new(
+            "packageBudget",
+            "Generated bibliography exceeds 8 MiB",
+        ));
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| {
+        NativeError::new("packageBibliography", "Generated bibliography is not UTF-8")
+    })?;
+    let raw = biblatex::RawBibliography::parse(text).map_err(|error| {
+        NativeError::new(
+            "packageBibliography",
+            format!("Generated bibliography is invalid: {error}"),
+        )
+    })?;
+    let mut abbreviations = BTreeSet::new();
+    for abbreviation in &raw.abbreviations {
+        if !abbreviations.insert(abbreviation.key.v.to_ascii_lowercase()) {
+            return Err(NativeError::new(
+                "packageBibliography",
+                "Duplicate generated bibliography abbreviation",
+            ));
+        }
+    }
+    for entry in &raw.entries {
+        let mut fields = BTreeSet::new();
+        for field in &entry.v.fields {
+            if !fields.insert(field.key.v.to_ascii_lowercase()) {
+                return Err(NativeError::new(
+                    "packageBibliography",
+                    "Duplicate generated bibliography field",
+                ));
+            }
+        }
+    }
+    let bibliography = biblatex::Bibliography::from_raw(raw).map_err(|error| {
+        NativeError::new(
+            "packageBibliography",
+            format!("Generated bibliography is invalid: {error}"),
+        )
+    })?;
+    if bibliography.is_empty() || bibliography.len() > 4096 {
+        return Err(NativeError::new(
+            "packageBibliography",
+            "Generated bibliography requires 1 to 4096 records",
+        ));
+    }
+    Ok(())
 }
 
 /// Canonical, cross-platform file paths only. Checking the spelling before any
@@ -328,6 +447,20 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                     ));
                 }
             }
+            NativeFileRole::GeneratedBibliography => {
+                if leaf != "weftext.citations.bib"
+                    || entry.owner_node_id.is_none()
+                    || entry.node_id.is_some()
+                    || entry.resource_id.is_some()
+                    || entry.revision.is_some()
+                {
+                    return Err(NativeError::new(
+                        "packageBibliography",
+                        "Invalid generated bibliography path or identity role",
+                    ));
+                }
+                validate_generated_bibliography(bytes)?;
+            }
         }
         // There are no local admission/control/journal slots in this format.
         if path != ".weftext-schema.json"
@@ -363,7 +496,9 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
             if nearest != Some(owner.as_str())
                 || (matches!(
                     entry.role,
-                    NativeFileRole::Annotations | NativeFileRole::ResourceManifest
+                    NativeFileRole::Annotations
+                        | NativeFileRole::ResourceManifest
+                        | NativeFileRole::GeneratedBibliography
                 ) && path.rsplit_once('/').map(|(parent, _)| parent) != Some(directory))
             {
                 return Err(NativeError::new(
@@ -594,6 +729,148 @@ mod tests {
         let decoded = read_native_package(&first).unwrap();
         assert_eq!(decoded.files, package.files);
         assert_eq!(write_native_package(&decoded).unwrap(), first);
+    }
+    #[test]
+    fn generated_bibliography_is_exact_owned_derived_input() {
+        let mut package = fixture();
+        let source = package.files["Note/Note.typ"].clone();
+        let bytes =
+            b"@article{work2026, title = {Exact title}, author = {One and Two}, year = {2026}}\r\n"
+                .to_vec();
+        append_generated_bibliography(
+            &mut package,
+            "00000000-0000-4000-8000-000000000001",
+            bytes.clone(),
+        )
+        .unwrap();
+        let entry = &package.manifest.entries["Note/weftext.citations.bib"];
+        assert_eq!(entry.role, NativeFileRole::GeneratedBibliography);
+        assert_eq!(
+            entry.owner_node_id.as_deref(),
+            Some("00000000-0000-4000-8000-000000000001")
+        );
+        assert!(entry.node_id.is_none() && entry.resource_id.is_none() && entry.revision.is_none());
+        let decoded = read_native_package(&write_native_package(&package).unwrap()).unwrap();
+        assert_eq!(decoded.files["Note/weftext.citations.bib"], bytes);
+        assert_eq!(decoded.files["Note/Note.typ"], source);
+        assert_eq!(
+            serde_json::to_value(&entry.role).unwrap(),
+            "generatedBibliography"
+        );
+    }
+    #[test]
+    fn generated_bibliography_rejects_collisions_encoding_syntax_and_false_roles() {
+        let owner = "00000000-0000-4000-8000-000000000001";
+        let bytes = b"@article{work2026, title = {Exact title}, year = {2026}}".to_vec();
+        let mut package = fixture();
+        assert_eq!(
+            append_generated_bibliography(
+                &mut package,
+                "00000000-0000-4000-8000-000000000099",
+                bytes.clone()
+            )
+            .unwrap_err()
+            .code,
+            "packageOwner"
+        );
+        for invalid in [
+            vec![255],
+            b"arbitrary non-bibliography text".to_vec(),
+            b"@article{key, title = {One}, title = {Two}}".to_vec(),
+        ] {
+            let mut package = fixture();
+            assert_eq!(
+                append_generated_bibliography(&mut package, owner, invalid)
+                    .unwrap_err()
+                    .code,
+                "packageBibliography"
+            );
+            assert!(!package.files.contains_key("Note/weftext.citations.bib"));
+        }
+        let mut oversized = fixture();
+        assert_eq!(
+            append_generated_bibliography(&mut oversized, owner, vec![b' '; 8 * 1024 * 1024 + 1])
+                .unwrap_err()
+                .code,
+            "packageBudget"
+        );
+        assert!(!oversized.files.contains_key("Note/weftext.citations.bib"));
+        let mut package = fixture();
+        package.manifest.losses.push(NativeLoss {
+            path: "note/WEFTEXT.CITATIONS.BIB".into(),
+            code: "unregisteredFileOmitted".into(),
+            detail: "Existing raw file".into(),
+        });
+        assert_eq!(
+            append_generated_bibliography(&mut package, owner, bytes.clone())
+                .unwrap_err()
+                .code,
+            "packagePath"
+        );
+        let mut package = fixture();
+        append_generated_bibliography(&mut package, owner, bytes.clone()).unwrap();
+        assert_eq!(
+            append_generated_bibliography(&mut package, owner, bytes.clone())
+                .unwrap_err()
+                .code,
+            "packagePath"
+        );
+        for field in ["nodeId", "resourceId", "revision"] {
+            let mut forged = package.clone();
+            let mut entry =
+                serde_json::to_value(&forged.manifest.entries["Note/weftext.citations.bib"])
+                    .unwrap();
+            entry[field] = serde_json::json!(owner);
+            forged.manifest.entries.insert(
+                "Note/weftext.citations.bib".into(),
+                serde_json::from_value(entry).unwrap(),
+            );
+            assert_eq!(
+                validate_native_package(&forged).unwrap_err().code,
+                "packageBibliography",
+                "{field}"
+            );
+        }
+        let mut wrong_path = package.clone();
+        let entry = wrong_path
+            .manifest
+            .entries
+            .remove("Note/weftext.citations.bib")
+            .unwrap();
+        let file = wrong_path
+            .files
+            .remove("Note/weftext.citations.bib")
+            .unwrap();
+        wrong_path
+            .manifest
+            .entries
+            .insert("Note/assets/weftext.citations.bib".into(), entry);
+        wrong_path
+            .files
+            .insert("Note/assets/weftext.citations.bib".into(), file);
+        assert_eq!(
+            validate_native_package(&wrong_path).unwrap_err().code,
+            "packageOwner"
+        );
+        let mut wrong_name = package;
+        let entry = wrong_name
+            .manifest
+            .entries
+            .remove("Note/weftext.citations.bib")
+            .unwrap();
+        let file = wrong_name
+            .files
+            .remove("Note/weftext.citations.bib")
+            .unwrap();
+        wrong_name
+            .manifest
+            .entries
+            .insert("Note/arbitrary.bib".into(), entry);
+        wrong_name.files.insert("Note/arbitrary.bib".into(), file);
+        assert_eq!(
+            validate_native_package(&wrong_name).unwrap_err().code,
+            "packageBibliography"
+        );
     }
     #[test]
     fn manifest_tampering_and_private_admission_are_rejected() {

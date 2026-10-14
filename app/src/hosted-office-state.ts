@@ -1,10 +1,12 @@
 import type { OutputFile, OutputLoss, TemplateInspection } from "./export-state";
 
-export type OfficeFormat = "docx" | "xlsx";
-export type OfficeBinding = { kind: "body" | "title" | "text" | "query"; text?: string };
-export type OfficeDraft = { resource: string; format: OfficeFormat; reviewMode: "none" | "comments" | "changes"; includeResolved: boolean; queryId: string; stylePolicy: "template" | "source"; bindings: Record<string, OfficeBinding>; template?: OutputFile; inspection?: TemplateInspection };
-export type OfficeOutputRequest = Omit<OfficeDraft, "inspection" | "resource" | "queryId"> & { requestId: string; resource?: string; source?: string; queryId?: string };
+export type OfficeFormat = "docx" | "xlsx" | "pdf" | "bibtex" | "csl-json" | "ris" | "native";
+export const officeFormats: OfficeFormat[] = ["docx", "xlsx", "pdf", "bibtex", "csl-json", "ris", "native"];
+export type OfficeBinding = { kind: "body" | "title" | "text" | "query" | "field"; text?: string; field?: string };
+export type OfficeDraft = { resource: string; format: OfficeFormat; reviewMode: "none" | "comments" | "changes"; includeResolved: boolean; queryId: string; stylePolicy: "template" | "source"; bindings: Record<string, OfficeBinding>; template?: OutputFile; inspection?: TemplateInspection; bibliographyScope?: "citationWorks" | "selectedWorks"; works?: string[]; bibliographySource?: "draft" | "saved"; includeEmbedded?: boolean };
+export type OfficeOutputRequest = Pick<OfficeDraft, "format" | "reviewMode" | "includeResolved" | "stylePolicy" | "bindings" | "template"> & { requestId: string; resource?: string; source?: string; queryId?: string; sessionId?: string; baseId?: string; serial?: number; sourceHash?: string; bibliographyScope?: "citationWorks" | "selectedWorks"; works?: string[]; embeddedQueries?: { occurrenceId: string; queryId: string }[] };
 export type OfficeOutputReceipt = { requestId: string; status: "pending" | "prepared" | "confirmed" | "failed" | "expired" | "notRegistered"; filename?: string; contentType?: string; length?: number; digest?: string; losses?: OutputLoss[]; summary?: string; preview?: unknown; message?: string };
+export type OfficeOutputVerification = { requestId: string; epoch: number };
 export type OfficeImportRequest = { resource: string; operationId: string; bytesBase64: string };
 export type OfficeImportReceipt = { operationId: string; resource: string; status: string; planId?: string | null; preview?: { summary?: string | string[]; losses?: OutputLoss[]; source?: string }; commitAllowed?: boolean };
 const uncertain = (message: string) => Object.assign(new Error(message), { code: "resultUnknown" });
@@ -25,6 +27,10 @@ export function outputReceipt(requestId: string, incoming: OfficeOutputReceipt, 
   if (["prepared", "confirmed"].includes(result.status) && (!result.filename || !result.contentType || !Number.isSafeInteger(result.length) || result.length! < 0 || result.length! > 64 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(result.digest ?? "") || !lossesValid(result.losses))) throw uncertain("输出回执缺少准确工件或损失信息，请核对原输出。");
   if (previous?.status === "confirmed" && result.status === "prepared") throw uncertain("已确认输出不能退回另一份准备状态，请核对原输出。");
   return result;
+}
+/** Cache is a recovery locator, never current delivery authority. */
+export function officeOutputPresentation(requestId: string, receipt: OfficeOutputReceipt | undefined, verification: OfficeOutputVerification | undefined, epoch: number): OfficeOutputReceipt | undefined {
+  return receipt && verification?.requestId === requestId && verification.epoch === epoch ? outputReceipt(requestId, receipt) : undefined;
 }
 export function importReceipt(request: OfficeImportRequest, incoming: OfficeImportReceipt, previous?: OfficeImportReceipt): OfficeImportReceipt {
   if (!incoming || incoming.operationId !== request.operationId || incoming.resource !== request.resource || !importStatuses.has(incoming.status)) throw uncertain("导入回执与原操作或目标不一致，请核对原导入。");

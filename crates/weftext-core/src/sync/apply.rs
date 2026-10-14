@@ -48,6 +48,7 @@ impl Core {
             OperationIntent::ApplySync { .. }
                 | OperationIntent::MergeSync { .. }
                 | OperationIntent::CloneSync { .. }
+                | OperationIntent::AdoptSyncExternal { .. }
         ) {
             return Err(invalid("This is not a retained sync proposal"));
         }
@@ -71,6 +72,7 @@ impl Core {
             OperationIntent::ApplySync { .. }
                 | OperationIntent::MergeSync { .. }
                 | OperationIntent::CloneSync { .. }
+                | OperationIntent::AdoptSyncExternal { .. }
         ) {
             return Err(invalid("Only a frozen sync proposal can be cancelled here"));
         }
@@ -773,6 +775,9 @@ pub(crate) fn validate_state(
             .ok_or_else(|| invalid("Missing incoming file blob"))?;
         if matches!(key, ObjectKey::Tags) {
             crate::directory_identity::validate_sync_tags(bytes)?;
+        }
+        if matches!(key, ObjectKey::Rules) {
+            crate::validate_library_rules(bytes)?;
         }
         if matches!(
             path.as_str(),

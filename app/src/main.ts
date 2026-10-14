@@ -1028,8 +1028,8 @@ function scrollFragment(doc: LiveDocument): void {
 
 async function bootstrap(): Promise<void> {
   try {
-    const result = await api<{ library?: Inventory | null; inventory?: Inventory | null; initialDocument?: OpenedDocument | null; recoveries?: RecoveryInfo[]; recentLibraries?: string[] }>("/api/bootstrap");
-    inventory = result.inventory ?? result.library ?? inventory; recoveries = result.recoveries ?? []; startupError = null;
+    const result = await api<{ library?: Inventory | null; inventory?: Inventory | null; initialDocument?: OpenedDocument | null; initialDocumentError?: { message: string } | null; recoveries?: RecoveryInfo[]; recentLibraries?: string[] }>("/api/bootstrap");
+    inventory = result.inventory ?? result.library ?? inventory; recoveries = result.recoveries ?? []; startupError = result.initialDocumentError?.message ?? null;
     if (result.initialDocument && !documents.length) { addDocument(result.initialDocument); try { inventory = await api<Inventory>("/api/library/open", { path: result.initialDocument.root }); } catch { /* The file session remains usable without an inventory. */ } }
   } catch (error) { startupError = error instanceof Error ? error.message : "无法连接本机服务"; }
   renderSidebar(); renderContent();

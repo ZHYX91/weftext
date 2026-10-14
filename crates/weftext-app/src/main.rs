@@ -302,10 +302,56 @@ struct LinkRequest {
 }
 
 async fn bootstrap(State(state): State<AppState>) -> ApiResult {
-    let recovery = core_call(&state, |core| core.recoveries()).await?;
+    // The launch document is a locator, never a reusable source/Draft snapshot.
+    // A browser reload must observe Core's current original identity and Draft.
+    let launch = state.initial.clone();
+    let (recovery, reopened) = core_call(&state, move |core| {
+        let recovery = core.recoveries()?;
+        let reopened = launch.as_ref().map(|original| {
+            let root = original["root"].as_str().ok_or_else(|| {
+                CoreError::new(
+                    "initialUnavailable",
+                    "The original launch root is unavailable",
+                )
+            })?;
+            if let (Some(workspace), Some(node)) = (
+                original["workspaceId"].as_str(),
+                original["nodeId"].as_str(),
+            ) {
+                data_api::open_live_entity(
+                    core,
+                    root,
+                    &format!("weftext-node://{workspace}/{node}"),
+                )
+            } else {
+                let path = original["path"].as_str().ok_or_else(|| {
+                    CoreError::new(
+                        "initialUnavailable",
+                        "The original launch path is unavailable",
+                    )
+                })?;
+                core.open(path, Some(PathBuf::from(root)))
+            }
+        });
+        Ok((recovery, reopened))
+    })
+    .await?;
+    let (initial, initial_error) = match reopened {
+        Some(Ok(document)) => {
+            let document = value(document)?;
+            remember(&state, &document)?;
+            (Some(document), None)
+        }
+        Some(Err(error)) => (
+            None,
+            Some(json!({"code":error.code,
+            "message":"启动文档当前不可用，原草稿保留；请从资料库重新打开。"})),
+        ),
+        None => (None, None),
+    };
     Ok(Json(
         json!({"version":env!("CARGO_PKG_VERSION"),"platform":std::env::consts::OS,
-        "initialDocument":state.initial,"recoveries":recovery,
+        "initialDocument":initial,"initialDocumentError":initial_error,"recoveries":recovery,
         "capabilities":{"ordinaryFiles":true,"folderNodes":true,"sourceEditing":true,
         "boundedRichEditing":true,"nativeTypst":true,"serverSync":false,"officeExport":true,
         "localNoteTimeline":true,"embeddedQueryViews":true}}),
@@ -390,7 +436,7 @@ async fn resolve_draft(
     Ok(Json(json!({"ok":true})))
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 struct WorkerRequest {
     source: String,
     path: PathBuf,

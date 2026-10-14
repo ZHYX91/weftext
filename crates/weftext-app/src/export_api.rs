@@ -17,7 +17,7 @@ pub(crate) struct FrozenQueryOutput {
     pub(crate) columns: Vec<String>,
     pub(crate) schema: Value,
     pub(crate) embedded: Option<EmbeddedQueryBasis>,
-    born: Instant,
+    pub(crate) born: Instant,
 }
 #[derive(Clone, PartialEq)]
 pub(crate) struct EmbeddedQueryBasis {

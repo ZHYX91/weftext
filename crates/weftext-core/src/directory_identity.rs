@@ -817,6 +817,79 @@ impl Core {
         ))
     }
 
+    /// Read the original specialized reservation only after its canonical Plan
+    /// matches. Hosted wrappers must not allocate a new identity during status.
+    pub(crate) fn original_navigation_target(
+        &self,
+        operation_id: &str,
+        canonical: &serde_json::Value,
+    ) -> Result<String> {
+        if self
+            .feature_operation_status(operation_id, canonical)?
+            .is_none()
+        {
+            return Err(CoreError::new(
+                "operationMissing",
+                "Original navigation plan is unavailable",
+            ));
+        }
+        let fingerprint = hash(&operations::canonical_json_bytes(canonical)?);
+        match canonical["kind"].as_str() {
+            Some("admitDirectory") => {
+                let reservation: DirectoryReservation = self
+                    .read_navigation_record(operation_id, "directory-reservation")?
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "invalidState",
+                            "Original directory reservation is unavailable",
+                        )
+                    })?;
+                if reservation.fingerprint != fingerprint
+                    || canonical["root"] != reservation.root
+                    || canonical["path"] != reservation.path
+                {
+                    return Err(CoreError::new(
+                        "operationConflict",
+                        "Original directory reservation differs",
+                    ));
+                }
+                Ok(entity_ref(
+                    "directory",
+                    &reservation.workspace_id,
+                    &reservation.directory_id,
+                ))
+            }
+            Some("createTag") => {
+                let reservation: TagReservation = self
+                    .read_navigation_record(operation_id, "tag-reservation")?
+                    .ok_or_else(|| {
+                        CoreError::new("invalidState", "Original tag reservation is unavailable")
+                    })?;
+                if reservation.fingerprint != fingerprint || canonical["root"] != reservation.root {
+                    return Err(CoreError::new(
+                        "operationConflict",
+                        "Original tag reservation differs",
+                    ));
+                }
+                Ok(entity_ref(
+                    "tag",
+                    &reservation.workspace_id,
+                    &reservation.tag_id,
+                ))
+            }
+            Some("renameTag") => canonical["tagRef"]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| {
+                    CoreError::new("invalidState", "Original tag reference is unavailable")
+                }),
+            _ => Err(CoreError::new(
+                "unsupportedIntent",
+                "Expected an original navigation operation",
+            )),
+        }
+    }
+
     pub fn prepare_directory_admission(
         &mut self,
         root: impl AsRef<Path>,

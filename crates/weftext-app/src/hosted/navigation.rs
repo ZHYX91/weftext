@@ -126,12 +126,7 @@ fn final_owner(
 ) -> Result<(), ApiError> {
     let actor = inner.actor(auth)?;
     inner.rights(&actor, resource)?;
-    let file = inner
-        .config
-        .files
-        .get(resource)
-        .filter(|f| f.editable)
-        .ok_or_else(unavailable)?;
+    let file = author_file(inner, resource)?;
     let root = inner.config.root.clone();
     let path = root.join(&file.path);
     let current = if let Some(session_id) = session_id {
@@ -162,7 +157,7 @@ async fn reference(
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let (actor, session, _) = inner.session(&auth, &req.session_id)?;
-        let file = inner.config.files.get(&session.resource).filter(|f| f.editable).ok_or_else(unavailable)?;
+        let file = author_file(inner, &session.resource)?;
         let root = inner.config.root.clone();
         let path = root.join(&file.path);
         let scope = inner.actor_scope(&actor);
@@ -182,10 +177,17 @@ async fn resolve(
     let check = auth.clone();
     let (resolved,compile)=locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
-        let candidates = inner.config.files.iter().filter(|(r, f)| f.editable && inner.rights(&actor, r).is_ok()).map(|(r, f)| (r.clone(), f.clone())).collect::<Vec<_>>();
+        let candidates = inner.config.files.iter().filter(|(r, _)| inner.rights(&actor, r).is_ok()).map(|(r, f)| (r.clone(), f.clone())).collect::<Vec<_>>();
         let mut partial = false;
         let mut found = None;
         for (resource, file) in candidates {
+            if !file.editable && std::path::Path::new(&file.path).extension().is_none_or(|e| e != "typ") {
+                continue;
+            }
+            let file = match author_file(inner, &resource) {
+                Ok(file) => file,
+                Err(_) => { partial = true; continue; }
+            };
             let path = inner.config.root.join(&file.path);
             match inner.core.qualified_node_at(&inner.config.root, &path) {
                 Ok(qualified) if qualified.owner == target.node => {
@@ -392,12 +394,7 @@ async fn fragment(
             &captured.source,
             captured.serial,
         )?;
-        let file = inner
-            .config
-            .files
-            .get(&session.resource)
-            .filter(|f| f.editable)
-            .ok_or_else(unavailable)?;
+        let file = author_file(inner, &session.resource)?;
         let root = inner.config.root.clone();
         let path = root.join(&file.path);
         let scope = inner.actor_scope(&actor);

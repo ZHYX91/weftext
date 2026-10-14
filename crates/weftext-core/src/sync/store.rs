@@ -47,6 +47,38 @@ pub struct ObjectStatus {
     pub view: ObjectView,
 }
 
+/// Exact retained portable content. This is received history, not an installed
+/// file, a current author identity, or authority to execute the returned bytes.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivedSyncFile {
+    pub object: ObjectKey,
+    pub object_revision: String,
+    pub file_revision: String,
+    pub relative_path: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivedSyncVersion {
+    pub commit: String,
+    pub parents: BTreeSet<String>,
+    pub before: BTreeSet<String>,
+    pub revision: String,
+    pub state: ObjectState,
+    pub admission: Admission,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReceivedSyncVersions {
+    pub versions: Vec<ReceivedSyncVersion>,
+    pub next_commit: Option<String>,
+    /// Completeness of this object's received records; pagination is separate.
+    pub coverage: String,
+}
+
 impl Core {
     /// Full owner transport includes staged records too. Admission and local
     /// installation remain separate; a relay is not another current-file owner.
@@ -172,6 +204,148 @@ impl Core {
         self.check_sync_owner(identity)?;
         let (path, _guards) = self.sync_store(identity, false)?;
         load_graph(&path, identity)
+    }
+
+    /// Read a specified admitted object revision, including retained ancestors
+    /// outside the current heads/common bases. Never substitutes newer content.
+    pub fn read_received_sync_file(
+        &self,
+        identity: &SyncIdentity,
+        object: &ObjectKey,
+        object_revision: &str,
+        relative_path: &str,
+    ) -> Result<ReceivedSyncFile> {
+        key(object)?;
+        uuid(object_revision)?;
+        relative(relative_path)?;
+        let graph = self.read_sync_history(identity)?;
+        let mut selected = None;
+        for (id, manifest) in &graph.manifests {
+            for change in &manifest.changes {
+                if &change.object != object || change.revision != object_revision {
+                    continue;
+                }
+                if graph.status(id)? != Admission::Accepted {
+                    return Err(CoreError::new(
+                        "syncIncomplete",
+                        "The specified received object revision is not admitted",
+                    ));
+                }
+                if selected.replace(&change.after).is_some() {
+                    return Err(invalid("Received object revision is ambiguous"));
+                }
+            }
+        }
+        let state = selected.ok_or_else(|| {
+            CoreError::new(
+                "syncHistoryMissing",
+                "The specified object revision is unavailable",
+            )
+        })?;
+        let digest = state.files.get(relative_path).ok_or_else(|| {
+            CoreError::new(
+                "syncHistoryMissing",
+                "The specified revision has no such file",
+            )
+        })?;
+        let bytes = graph.blob(digest).ok_or_else(|| {
+            CoreError::new(
+                "syncIncomplete",
+                "The specified exact history blob is unavailable",
+            )
+        })?;
+        Ok(ReceivedSyncFile {
+            object: object.clone(),
+            object_revision: object_revision.into(),
+            file_revision: state.file_revisions[relative_path].clone(),
+            relative_path: relative_path.into(),
+            bytes: bytes.to_vec(),
+        })
+    }
+
+    /// Commit IDs provide a lexical cursor, not chronological or causal order.
+    /// Concurrent receive can change the cut; refresh instead of treating pages
+    /// as a durable snapshot. No blobs are copied to enumerate these records.
+    pub fn received_sync_versions(
+        &self,
+        identity: &SyncIdentity,
+        object: &ObjectKey,
+        after_commit: Option<&str>,
+        limit: usize,
+    ) -> Result<ReceivedSyncVersions> {
+        key(object)?;
+        if !(1..=100).contains(&limit) {
+            return Err(CoreError::new(
+                "budget",
+                "History page size must be between 1 and 100",
+            ));
+        }
+        if let Some(cursor) = after_commit {
+            digest(cursor)?;
+        }
+        let graph = self.read_sync_history(identity)?;
+        let records: Vec<_> = graph
+            .manifests
+            .iter()
+            .filter_map(|(id, manifest)| {
+                manifest
+                    .changes
+                    .iter()
+                    .find(|c| &c.object == object)
+                    .map(|c| (id, manifest, c))
+            })
+            .collect();
+        if after_commit
+            .is_some_and(|cursor| !records.iter().any(|(id, _, _)| id.as_str() == cursor))
+        {
+            return Err(CoreError::new(
+                "syncHistoryMissing",
+                "Cursor does not belong to the specified object's received records",
+            ));
+        }
+        let complete = records
+            .iter()
+            .all(|(id, _, _)| graph.admitted.contains(*id));
+        let mut page = ReceivedSyncVersions {
+            versions: Vec::new(),
+            next_commit: None,
+            coverage: if complete { "complete" } else { "partial" }.into(),
+        };
+        let mut records = records
+            .into_iter()
+            .filter(|(id, _, _)| after_commit.is_none_or(|cursor| id.as_str() > cursor))
+            .peekable();
+        while let Some((id, manifest, change)) = records.next() {
+            let version = ReceivedSyncVersion {
+                commit: id.clone(),
+                parents: manifest.parents.clone(),
+                before: change.before.clone(),
+                revision: change.revision.clone(),
+                state: change.after.clone(),
+                admission: graph.status(id)?,
+            };
+            page.versions.push(version);
+            page.next_commit = if records.peek().is_some() {
+                Some(id.clone())
+            } else {
+                None
+            };
+            if serde_json::to_vec(&page)?.len() > MAX_MANIFEST_BYTES {
+                page.versions.pop();
+                if page.versions.is_empty() {
+                    return Err(CoreError::new(
+                        "budget",
+                        "A received history record exceeds the page budget",
+                    ));
+                }
+                page.next_commit = page.versions.last().map(|v| v.commit.clone());
+                break;
+            }
+            if page.versions.len() == limit {
+                break;
+            }
+        }
+        Ok(page)
     }
 
     pub fn export_sync_objects(

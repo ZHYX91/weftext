@@ -140,6 +140,7 @@ if __name__ == '__main__':
         # Includes source/editor/field boundaries and separately authorized review.
         run(sys.executable, 'scripts/test_hosted_review.py', exe)
         run(sys.executable, 'scripts/test_hosted_office.py', exe)
+        run(sys.executable, 'scripts/test_hosted_citations_outputs.py', exe)
         run(sys.executable, 'scripts/test_hosted_query.py', exe)
         run(sys.executable, 'scripts/test_hosted_providers.py', exe)
         run(sys.executable, 'scripts/test_hosted_scopes.py', exe)
@@ -150,7 +151,10 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_hosted_history.py', exe)
         run(sys.executable, 'scripts/test_hosted_navigation_fragments.py', exe)
         run(sys.executable, 'scripts/test_hosted_structure.py', exe)
+        run(sys.executable, 'scripts/test_hosted_knowledge_links.py', exe)
+        run(sys.executable, 'scripts/test_hosted_navigation_registry.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)
+        run(sys.executable, 'scripts/test_sync_history.py', exe)
         run(sys.executable, 'scripts/test_remote_sync.py', exe)
     if args.action == 'package':
         package(exe)

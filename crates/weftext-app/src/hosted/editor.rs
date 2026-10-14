@@ -288,6 +288,10 @@ pub(super) fn freeze_with_inputs(
     };
     let mut environment = library::environment(inner, actor)?;
     environment.attach_inputs(inner, actor, captured_inputs)?;
+    if let Some(citations) = citations::freeze(inner, actor, resource, source)? {
+        citations.inject(&mut worker)?;
+        environment.attach_citations(inner, actor, citations)?;
+    }
     environment.apply(&mut worker)?;
     Ok((worker, dependencies, environment))
 }

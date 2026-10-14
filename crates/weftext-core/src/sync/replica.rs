@@ -35,6 +35,17 @@ pub(crate) struct SyncSetup {
     pub bundle: SyncBundle,
     #[serde(default)]
     pub selection: Option<BTreeSet<ObjectKey>>,
+    /// Original observed receiver objects, never retrofitted from current paths.
+    #[serde(default)]
+    pub physical_bindings: Vec<SyncPhysicalBinding>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SyncPhysicalBinding {
+    pub object: ObjectKey,
+    pub relative_path: String,
+    pub stamp: crate::FileStamp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -163,6 +174,7 @@ impl Core {
         }
         // Directory identity must already be admitted; a copied marker is not
         // made authoritative merely because it is present in this capture.
+        let mut physical_bindings = Vec::new();
         for (relative, bytes) in &captured.files {
             let path = root.join(relative);
             if path
@@ -215,6 +227,9 @@ impl Core {
         for (relative, bytes) in &captured.files {
             let path = root.join(relative);
             if let Some(object) = config_key(&root, &path) {
+                if matches!(object, ObjectKey::Rules) {
+                    crate::validate_library_rules(bytes)?;
+                }
                 let name = path.file_name().unwrap().to_string_lossy().into_owned();
                 objects.insert(
                     object.clone(),
@@ -240,9 +255,24 @@ impl Core {
                 let blob = hash(bytes);
                 let observed = crate::operations::capture_optional(&path)?
                     .ok_or_else(|| invalid("Captured replica file disappeared"))?;
-                if observed.bytes != *bytes {
+                let frozen = self.admitted_cuts[&captured.snapshot.cut_id]
+                    .bases
+                    .iter()
+                    .filter_map(|id| self.snapshots.get(id))
+                    .filter_map(|b| b.captured.as_ref())
+                    .find(|f| {
+                        crate::history::history_relative_path(Path::new(&f.path), &path)
+                            .is_some_and(|p| p.as_os_str().is_empty())
+                    })
+                    .ok_or_else(|| invalid("Original replica cut has no physical file evidence"))?;
+                if observed.bytes != *bytes || observed.stamp != frozen.stamp {
                     return Err(invalid("Captured replica file changed during binding"));
                 }
+                physical_bindings.push(SyncPhysicalBinding {
+                    object: tracked.object.clone(),
+                    relative_path: name.clone(),
+                    stamp: observed.stamp.clone(),
+                });
                 let revision = self.accepted_revision(&observed).unwrap_or_else(fresh);
                 tracked.state.file_revisions.insert(name.clone(), revision);
                 tracked.state.files.insert(name, blob.clone());
@@ -315,6 +345,7 @@ impl Core {
             initial,
             bundle,
             selection: None,
+            physical_bindings,
         };
         let mut plan = Plan::file(
             operation_id.into(),
@@ -587,16 +618,48 @@ impl Core {
         let mut blobs = BTreeMap::new();
         let mut dependencies = BTreeSet::new();
         if let Some(transaction) = &plan.transaction {
+            let mut tracked = BTreeSet::new();
+            let mut leaves = BTreeSet::new();
             for file in &transaction.files {
                 if let Some(key) = owner(&before, root, Path::new(&file.path)) {
-                    let object = &before[&key];
+                    let object = before.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", "An observed configuration has no installed basis; explicitly handle it before publishing"))?;
                     let relative =
                         relative_to(Path::new(&file.path), Path::new(&object.directory))?;
-                    if object
+                    if let Some(revision) = object.state.file_revisions.get(&relative) {
+                        tracked.insert(key);
+                        leaves.insert(revision.clone());
+                    }
+                }
+            }
+            let physical = self.sync_installed_stamps(&before, &tracked, Some(&leaves))?;
+            for file in &transaction.files {
+                if let Some(key) = owner(&before, root, Path::new(&file.path)) {
+                    let object = before.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", "An observed configuration has no installed basis; explicitly handle it before publishing"))?;
+                    let relative =
+                        relative_to(Path::new(&file.path), Path::new(&object.directory))?;
+                    let stamp_changed = object
                         .state
-                        .files
+                        .file_revisions
                         .get(&relative)
-                        .is_some_and(|blob| *blob != hash(&file.bytes))
+                        .map(|revision| {
+                            physical
+                                .get(revision)
+                                .map(|stamp| stamp != &file.stamp)
+                                .ok_or_else(|| {
+                                    CoreError::new(
+                                        "identityUnavailable",
+                                        "Installed input physical evidence is unavailable",
+                                    )
+                                })
+                        })
+                        .transpose()?
+                        .unwrap_or(false);
+                    if stamp_changed
+                        || object
+                            .state
+                            .files
+                            .get(&relative)
+                            .is_some_and(|blob| *blob != hash(&file.bytes))
                     {
                         return Err(CoreError::new(
                             "syncExternalChange",
@@ -838,6 +901,49 @@ impl Core {
         });
         Ok(())
     }
+
+    /// Internal author-save qualification using the caller's already held leaf
+    /// stamp. It grants no sync transport/management access and never reopens
+    /// that share-zero file. A fresh editor Base is not an installed fact.
+    pub(crate) fn validate_sync_source_stamp(
+        &self,
+        path: &Path,
+        observed: &crate::FileStamp,
+    ) -> Result<()> {
+        for setup in self
+            .sync_setups()
+            .into_iter()
+            .filter(|s| path.starts_with(&s.root))
+        {
+            let local = self.sync_local_state(setup)?.0;
+            let Some(key) = owner(&local, Path::new(&setup.root), path) else {
+                continue;
+            };
+            let object = local.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", "An observed configuration has no installed basis; explicitly handle it before saving"))?;
+            let relative = relative_to(path, Path::new(&object.directory))?;
+            let Some(revision) = object.state.file_revisions.get(&relative) else {
+                continue;
+            };
+            let stamps = self.sync_installed_stamps(
+                &local,
+                &BTreeSet::from([key]),
+                Some(&BTreeSet::from([revision.clone()])),
+            )?;
+            let installed = stamps.get(revision).ok_or_else(|| {
+                CoreError::new(
+                    "identityUnavailable",
+                    "Installed source physical evidence is unavailable",
+                )
+            })?;
+            if installed != observed {
+                return Err(CoreError::new(
+                    "syncExternalChange",
+                    "The observed file differs from its original installed physical basis; explicitly adopt external content first",
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 
 fn config_key(root: &Path, path: &Path) -> Option<ObjectKey> {
@@ -848,6 +954,7 @@ fn config_key(root: &Path, path: &Path) -> Option<ObjectKey> {
         ".weftext-schema.json" => Some(ObjectKey::Schema),
         ".weftext-settings.json" => Some(ObjectKey::Settings),
         ".weftext-tags.json" => Some(ObjectKey::Tags),
+        ".weftext-rules" => Some(ObjectKey::Rules),
         _ => None,
     }
 }

@@ -228,6 +228,9 @@ impl Core {
                 if matches!(key, ObjectKey::Tags) {
                     crate::directory_identity::validate_sync_tags(bytes)?;
                 }
+                if matches!(key, ObjectKey::Rules) {
+                    crate::validate_library_rules(bytes)?;
+                }
                 let path = directory.join(relative);
                 preview
                     .revisions
@@ -346,6 +349,7 @@ impl Core {
             root: display(&root),
             identity: identity.clone(),
             replica_id: fresh(),
+            physical_bindings: vec![],
             initial,
             bundle,
             selection: Some(objects.clone()),

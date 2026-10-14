@@ -1930,6 +1930,14 @@ fn capture(
             // Frozen semantic results carry their actual compilation input
             // authority into downstream Office delivery as well as Query read.
             environment.attach_inputs(inner, &actor, captured_inputs.clone())?;
+            for (entity, worker) in &mut workers {
+                let resource = resource_map.get(entity).ok_or_else(changed)?;
+                if let Some(citations) = citations::freeze(inner, &actor, resource, &worker.source)?
+                {
+                    citations.inject(worker)?;
+                    environment.attach_citations(inner, &actor, citations)?;
+                }
+            }
             charge_bytes(&mut worker_bytes, environment.retained_bytes())?;
             for (_, worker) in &mut workers {
                 let before = serialized_query_bytes(worker)?;

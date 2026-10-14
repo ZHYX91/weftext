@@ -470,6 +470,8 @@ pub(super) struct ExecutionAuthority {
     resource_revisions: BTreeMap<String, Option<String>>,
     #[serde(default)]
     collection_revisions: BTreeMap<String, Option<String>>,
+    #[serde(default)]
+    pub(super) citations: citations::Authority,
 }
 enum StyleEvidence {
     Disabled {
@@ -488,6 +490,7 @@ pub(super) struct Environment {
     files: BTreeMap<String, String>,
     evidence: Arc<Evidence>,
     input_sets: Vec<inputs::Captured>,
+    citation_sets: Vec<citations::Capture>,
     bytes: usize,
 }
 pub(super) fn authorize_execution(
@@ -495,6 +498,7 @@ pub(super) fn authorize_execution(
     actor: &str,
     authority: &ExecutionAuthority,
 ) -> Result<(), ApiError> {
+    citations::authorize(inner, actor, &authority.citations, false, false)?;
     if !authority.config_hash.is_empty() && config_hash(inner)? != authority.config_hash {
         return Err(changed());
     }
@@ -532,6 +536,21 @@ pub(super) fn validate_execution_versions(
     Ok(())
 }
 impl Environment {
+    pub(super) fn attach_citations(
+        &mut self,
+        inner: &HostedInner,
+        actor: &str,
+        captured: citations::Capture,
+    ) -> Result<(), ApiError> {
+        captured.validate(inner, actor)?;
+        citations::merge_authority(inner, &mut self.authority.citations, &captured.authority)?;
+        self.bytes = self.bytes.saturating_add(captured.retained_bytes());
+        if self.bytes > MAX_CACHE {
+            return Err(ApiError::bad("编译环境与原文献输入超过 32 MiB 预算"));
+        }
+        self.citation_sets.push(captured);
+        Ok(())
+    }
     pub(super) fn attach_inputs(
         &mut self,
         inner: &HostedInner,
@@ -608,6 +627,9 @@ impl Environment {
         for captured in &self.input_sets {
             captured.validate(inner, actor)?;
         }
+        for captured in &self.citation_sets {
+            captured.validate(inner, actor)?;
+        }
         Ok(())
     }
     pub(super) fn retained_bytes(&self) -> usize {
@@ -615,13 +637,17 @@ impl Environment {
     }
     pub(super) fn plan_witnesses(&self) -> Result<Vec<SnapshotWitness>, ApiError> {
         let mut pool = vec![];
+        for captured in &self.citation_sets {
+            Core::merge_feature_witnesses(&mut pool, captured.plan_witnesses()?)
+                .map_err(core_error)?;
+        }
         for captured in &self.input_sets {
-            Core::merge_snapshot_witnesses(&mut pool, captured.plan_witnesses()?)
+            Core::merge_feature_witnesses(&mut pool, captured.plan_witnesses()?)
                 .map_err(core_error)?;
         }
         match &self.evidence.style {
             StyleEvidence::Disabled { witness, .. } => {
-                Core::merge_snapshot_witnesses(&mut pool, vec![witness.clone()])
+                Core::merge_feature_witnesses(&mut pool, vec![witness.clone()])
             }
             StyleEvidence::Enabled(w) => Core::merge_library_style_witness(&mut pool, w),
         }
@@ -688,6 +714,7 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
             files: BTreeMap::new(),
             evidence: Arc::new(Evidence { style }),
             input_sets: vec![],
+            citation_sets: vec![],
             bytes,
         });
     }
@@ -759,6 +786,7 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
             inputs: captured.authority_ids(),
             style_used: true,
             config_hash,
+            citations: Default::default(),
         },
         module: Some(weftext_engine::StyleModule {
             path: module_path,
@@ -771,6 +799,7 @@ pub(super) fn environment(inner: &mut HostedInner, actor: &str) -> Result<Enviro
             style: StyleEvidence::Enabled(Box::new(style_witness)),
         }),
         input_sets: vec![captured],
+        citation_sets: vec![],
         bytes,
     })
 }
@@ -950,6 +979,7 @@ mod tests {
                 office: Default::default(),
                 library: Default::default(),
                 media: Default::default(),
+                navigation_registry: Default::default(),
             })),
             origin,
             host,

@@ -11,6 +11,8 @@ use weftext_export::exchange::{
     write_native_package,
 };
 use weftext_knowledge as knowledge;
+mod native_export;
+pub use native_export::{NativeExport, NativeExportWitness};
 
 fn native_error(error: weftext_export::exchange::NativeError) -> CoreError {
     CoreError::new(&error.code, error.message)
@@ -48,142 +50,7 @@ impl Core {
     /// and frozen config/schema. Raw unknown files and local history are excluded
     /// with explicit omissions; a native package is not a recovery backup.
     pub fn export_native_package(&mut self, root: impl AsRef<Path>) -> Result<Vec<u8>> {
-        let root = absolute_path(root.as_ref())?;
-        let workspace = self.require_workspace(&root)?;
-        let frozen = self.admitted_compile_snapshot(&root, "live")?;
-        if !frozen.snapshot.complete {
-            return Err(CoreError::new(
-                "coverageIncomplete",
-                "Native export requires a complete admitted live source cut",
-            ));
-        }
-        let mut package = NativePackage {
-            manifest: NativeManifest {
-                format: NATIVE_FORMAT.into(),
-                version: NATIVE_VERSION,
-                package_id: fresh(),
-                workspace_id: workspace.workspace_id,
-                scope: "library".into(),
-                schema_path: ".weftext-schema.json".into(),
-                entries: BTreeMap::new(),
-                losses: Vec::new(),
-            },
-            files: BTreeMap::new(),
-        };
-        for source in &frozen.snapshot.files {
-            let Some(node_id) = &source.node_id else {
-                continue;
-            };
-            let source_path = relative(&root, &source.path)?;
-            let bytes = frozen.files.get(&source_path).cloned().ok_or_else(|| {
-                CoreError::new(
-                    "scopeChanged",
-                    "Admitted source is missing from the frozen cut",
-                )
-            })?;
-            if source.bytes.as_ref() != Some(&bytes) {
-                return Err(CoreError::new(
-                    "scopeChanged",
-                    "Admitted source differs from the frozen native bytes",
-                ));
-            }
-            let mut entry = NativeEntry::new(Role::Source, &bytes);
-            entry.node_id = Some(node_id.clone());
-            entry.revision = source.revision.clone();
-            put(&mut package, source_path, bytes, entry)?;
-            let owner_directory = Path::new(&source.path).parent().unwrap();
-            let manifest_path = relative(
-                &root,
-                &display(&owner_directory.join("weftext.resources.json")),
-            )?;
-            if let Some(bytes) = frozen.files.get(&manifest_path) {
-                let mut entry = NativeEntry::new(Role::ResourceManifest, bytes);
-                entry.owner_node_id = Some(node_id.clone());
-                put(&mut package, manifest_path.clone(), bytes.clone(), entry)?;
-            }
-            for resource in self.managed_resource_snapshot(&root, &source.path)? {
-                let path = relative(&root, &resource.path)?;
-                if resource.identity_status != "admitted"
-                    || frozen.files.get(&path) != Some(&resource.bytes)
-                    || frozen.files.get(&manifest_path) != Some(&resource.manifest_bytes)
-                {
-                    return Err(CoreError::new(
-                        "resourceUnadmitted",
-                        "Native resource binding/bytes differ from the frozen admitted cut",
-                    ));
-                }
-                let role = if frozen
-                    .style
-                    .as_ref()
-                    .is_some_and(|style| style.path == resource.path)
-                {
-                    Role::Style
-                } else {
-                    Role::Resource
-                };
-                let mut entry = NativeEntry::new(role, &resource.bytes);
-                entry.owner_node_id = Some(node_id.clone());
-                entry.resource_id = Some(resource.resource_id);
-                entry.revision = resource.revision;
-                put(&mut package, path, resource.bytes, entry)?;
-            }
-            let annotation_path = relative(
-                &root,
-                &display(&owner_directory.join("weftext.annotations.json")),
-            )?;
-            if let Some(bytes) = frozen.files.get(&annotation_path) {
-                knowledge::decode_annotations(bytes)
-                    .map_err(|e| CoreError::new(&e.code, e.message))?;
-                let mut entry = NativeEntry::new(Role::Annotations, bytes);
-                entry.owner_node_id = Some(node_id.clone());
-                put(&mut package, annotation_path, bytes.clone(), entry)?;
-            }
-        }
-        let schema = frozen
-            .files
-            .get(".weftext-schema.json")
-            .cloned()
-            .unwrap_or_else(|| {
-                include_bytes!("../../../docs/design/examples/schema.authoring.json").to_vec()
-            });
-        weftext_data::Schema::from_author_json(&decode(&schema)?)
-            .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
-        let entry = NativeEntry::new(Role::Schema, &schema);
-        put(&mut package, ".weftext-schema.json".into(), schema, entry)?;
-        if let Some(settings) = frozen.files.get(".weftext-settings.json") {
-            let entry = NativeEntry::new(Role::Settings, settings);
-            put(
-                &mut package,
-                ".weftext-settings.json".into(),
-                settings.clone(),
-                entry,
-            )?;
-        }
-        for path in frozen
-            .files
-            .keys()
-            .filter(|path| !package.files.contains_key(*path))
-        {
-            // These documented local controls are intentionally nonportable.
-            if matches!(
-                path.as_str(),
-                ".weftext-workspace.json" | ".weftext-format" | ".weftext-mvp-commit.json"
-            ) || path.starts_with(".weftext-trash/")
-                || (path == ".weftext-rules"
-                    && serde_json::from_slice::<serde_json::Value>(&frozen.files[path]).is_ok_and(
-                        |value| {
-                            value == serde_json::json!({"version":1,"ignored":[],"unmanaged":[]})
-                        },
-                    ))
-            {
-                continue;
-            }
-            package.manifest.losses.push(NativeLoss {
-                path: path.clone(), code: "unregisteredFileOmitted".into(),
-                detail: "Unregistered/raw bytes are outside the admitted native content selection; use a complete backup to preserve local history and unknown files".into(),
-            });
-        }
-        write_native_package(&package).map_err(native_error)
+        self.capture_native_export(root).map(|export| export.bytes)
     }
 
     pub fn prepare_native_import(
@@ -615,7 +482,10 @@ impl Core {
         }
         let mut transfer = Vec::new();
         for (path, entry) in &package.manifest.entries {
-            if matches!(entry.role, Role::Schema | Role::Settings) {
+            if matches!(
+                entry.role,
+                Role::Schema | Role::Settings | Role::GeneratedBibliography
+            ) {
                 continue;
             }
             let owner = owners.get(path).cloned();
@@ -707,6 +577,12 @@ impl Core {
                 }),
         );
         for (path, entry) in &package.manifest.entries {
+            if entry.role == Role::GeneratedBibliography {
+                preview.losses.push(knowledge::Loss {
+                    path: path.clone(), code: "generatedBibliographyNotInstalled".into(),
+                    detail: "The derived bibliography remains only in the retained original ZIP and is absent from the installed author tree. Regenerate it from the remapped, currently authorized Work data before compiling offline citations".into(),
+                });
+            }
             if matches!(entry.role, Role::Resource | Role::Style) && path.ends_with(".typ") {
                 preview.losses.push(knowledge::Loss {
                     path: path.clone(), code: "resourceModuleContextPreserved".into(),
@@ -997,6 +873,87 @@ mod tests {
             "scopeChanged"
         );
         assert!(!root.join("Frozen").exists());
+    }
+
+    #[test]
+    fn native_generated_bibliography_import_retains_original_without_author_resource_install() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let origin = temp.path().join("Origin");
+        core.create_library(&origin).unwrap();
+        let note = core.create_note(&origin, &origin, "Note").unwrap();
+        let mut package =
+            read_native_package(&core.export_native_package(&origin).unwrap()).unwrap();
+        weftext_export::exchange::append_generated_bibliography(
+            &mut package,
+            note.node_id.as_deref().unwrap(),
+            b"@article{work2026, title = {Exact title}, year = {2026}}\r\n".to_vec(),
+        )
+        .unwrap();
+        let bytes = write_native_package(&package).unwrap();
+        let destination = temp.path().join("Destination");
+        core.create_library(&destination).unwrap();
+        assert_eq!(
+            core.prepare_native_import(
+                &destination,
+                &destination,
+                "Imported",
+                bytes.clone(),
+                &fresh(),
+                false
+            )
+            .unwrap_err()
+            .code,
+            "copyLoss"
+        );
+        assert!(!destination.join("Imported").exists());
+        let preview = core
+            .prepare_native_import(
+                &destination,
+                &destination,
+                "Imported",
+                bytes.clone(),
+                &fresh(),
+                true,
+            )
+            .unwrap();
+        assert!(
+            preview
+                .losses
+                .iter()
+                .any(|loss| loss.code == "generatedBibliographyNotInstalled"
+                    && loss.path == "Note/weftext.citations.bib")
+        );
+        assert!(preview.resource_map.is_empty());
+        core.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap();
+        assert!(
+            !destination
+                .join("Imported/Note/weftext.citations.bib")
+                .exists()
+        );
+        assert!(
+            !destination
+                .join("Imported/Note/weftext.resources.json")
+                .exists()
+        );
+        assert_eq!(
+            fs::read(destination.join("Imported/.weftext-import-originals/original.weftext"))
+                .unwrap(),
+            bytes
+        );
+        let imported = core
+            .open(
+                destination.join("Imported/Note/Note.typ"),
+                Some(destination.clone()),
+            )
+            .unwrap();
+        assert_eq!(imported.node_id.as_ref(), preview.node_map.values().next());
+        assert!(
+            core.managed_resource_snapshot(&destination, &imported.path)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

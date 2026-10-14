@@ -61,6 +61,10 @@ export class HostedEditor {
   pauseSession(): void { clearTimeout(this.timer); this.generation++; this.paused = true; this.sessionId = ""; this.projection = undefined; this.queries?.invalidate(); this.mode = "source"; this.editor?.tokens([], false); this.editor?.readOnly(this.blocked); this.paint(true); this.message.textContent = "原对象的结构会话已暂停；当前草稿与 Undo 保留，请明确打开新位置核对后继续。"; }
   rebindResourceAlias(resource: string): void { if (!this.editor || !this.paused) throw new Error("原对象编辑器未暂停，不能重绑未经核对的别名。"); this.resource = resource; }
   select(from: number, to: number): void { this.editor?.select(from, to); }
+  selectSourceRange(from: number, to: number): void {
+    if (!this.editor || this.writing?.state.composing || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from || to > this.value.length || !sourceBoundary(this.value, from) || !sourceBoundary(this.value, to)) throw new Error("源码出现项没有当前准确范围，未采用旧位置。");
+    this.mode = "source"; this.editor.clearReveal(); this.editor.readOnly(this.blocked); this.paint(true); this.editor.select(from, to); this.queryHost?.modeChanged?.();
+  }
   locateNodeFragment(origin: Origin, basis: EmbeddedQueryBasis): void {
     if (!this.editor || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis) || origin.isMain !== true || origin.path !== `resource:${this.resource}` || !sourceBoundary(basis.source, origin.utf16From) || !sourceBoundary(basis.source, origin.utf16To) || basis.source.slice(origin.utf16From, origin.utf16To) !== origin.raw) throw new Error("定位期间目标草稿已变化，未采用旧标签范围。");
     // Selecting the actual native author range changes neither source nor Undo.
@@ -83,6 +87,7 @@ export class HostedEditor {
   refreshQueries(): void { if (!this.editor) return; this.queries?.invalidate(); this.schedule(0); }
   refreshEnvironment(): void { if (!this.editor) return; this.projection = undefined; this.queryPreview = false; this.queries?.invalidate(); this.message.textContent = "库配置依据已变化，正在重新编译当前草稿；正文与撤销历史保留。"; this.schedule(0); }
   queryInputsChanged(): void { this.queries?.runInputsChanged(); }
+  outputSelections(): { occurrenceId: string; queryId: string }[] { return this.queries?.outputSelections() ?? []; }
   async prepareQueryBasis(): Promise<EmbeddedQueryBasis> {
     await this.flush();
     const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial };
