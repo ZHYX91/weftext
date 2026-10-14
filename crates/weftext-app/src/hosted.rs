@@ -1,6 +1,7 @@
 //! A separate hosted boundary. Local path, library, recovery and feature APIs
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
+mod editor;
 mod sync_transport;
 use axum::Extension;
 use base64::Engine as _;
@@ -82,6 +83,7 @@ struct HostedInner {
     sessions: HashMap<String, HostedSession>,
     downloads: HashMap<String, Download>,
     sync: sync_transport::Store,
+    editor_versions: HashMap<String, writing_api::EditorVersion>,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -452,6 +454,7 @@ async fn close(
                 })
                 .map_err(HostedInner::core_error)?;
             inner.sessions.remove(&req.session_id);
+            inner.editor_versions.remove(&req.session_id);
             Ok(json!({"closed":true}))
         })
         .await?,
@@ -787,6 +790,7 @@ async fn update_policy(
                 .collect::<Vec<_>>();
             for (id, session) in expired_sessions {
                 inner.sessions.remove(&id);
+                inner.editor_versions.remove(&id);
                 let scope = format!("{}:{}", inner.config.deployment, session.actor);
                 inner
                     .core
@@ -948,6 +952,7 @@ pub(super) async fn serve(
             sessions: HashMap::new(),
             downloads: HashMap::new(),
             sync: sync_transport::Store::default(),
+            editor_versions: HashMap::new(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -955,6 +960,7 @@ pub(super) async fn serve(
     };
     let app = Router::new()
         .merge(sync_transport::router())
+        .merge(editor::router())
         .route("/api/hosted/me", get(me))
         .route("/api/hosted/documents", get(list))
         .route("/api/hosted/open", post(open))

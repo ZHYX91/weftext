@@ -171,6 +171,15 @@ export async function editTable(controller: WritingController, structure?: Writi
   });
 }
 
+export async function insertWritingLink(controller: WritingController): Promise<void> {
+  await controller.flush(); const snapshot = controller.snapshot, at = controller.insertionPoint();
+  await dialog("添加链接", "链接作为原生 Typst 内容写入当前草稿，保存后才提交。", (form, done, error) => {
+    const target = element("input", "writing-input"), text = element("input", "writing-input"); target.required = true; text.required = true;
+    form.append(field("目标地址", target), field("显示文字", text)); actions(form, done, "添加");
+    submit(form, error, done, () => controller.execute(guard(controller, snapshot, { kind: "insertBlock", at, block: { kind: "link", target: target.value, text: text.value } })));
+  });
+}
+
 export function createWritingToolbar(controller: WritingController, options: WritingControlOptions = {}): HTMLElement {
   const toolbar = element("div", "writing-toolbar"); toolbar.setAttribute("role", "toolbar"); toolbar.setAttribute("aria-label", "写作工具");
   const tool = (label: string, run: () => Promise<void>) => action(label, () => controller.deferUntilCompositionEnds(run), options);

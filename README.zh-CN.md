@@ -10,7 +10,7 @@ translation_status: source
 基于原生 Typst 的文件型知识与写作工具。当前状态：**0.6.0-alpha.1 Windows 本地与受控服务端候选，完整产品仍在推进**。旧原型已归档，不是当前构建依赖。
 
 - [本地候选使用与边界](docs/MVP.zh-CN.md)：写作、属性与 Query、链接与批注、Office 输出与资料交换，以及保存恢复；含构建命令和实际限制。
-- [Server / WebUI 首个切片](docs/SERVER.zh-CN.md)：多用户源码写作、独立草稿、冲突和撤权；同所有者托管同步已接通，完整功能接入仍待完成。
+- [Server / WebUI 首个切片](docs/SERVER.zh-CN.md)：多用户五档正文写作、独立草稿、冲突和撤权；同所有者托管同步已接通，完整功能接入仍待完成。
 - [版本路线图](docs/ROADMAP.zh-CN.md)：首版之后 7 个里程碑，覆盖当前已确认需求。
 
 - [需求](docs/REQUIREMENTS.zh-CN.md)：唯一当前需求集；27 组需求及导航、丰富类型、库样式、五档视图、中文默认支持。

@@ -11,7 +11,7 @@ translation_status: synced
 A file-based knowledge and writing tool built around native Typst. Current state: **a 0.6.0-alpha.1 Windows local and bounded hosted candidate; the complete product remains in progress**. Archived prototypes are not current build dependencies.
 
 - [Local candidate use and boundaries](docs/MVP.md): writing, properties/Query, links/annotations, Office output/interchange and save/recovery, with build commands and actual limitations.
-- [First Server / WebUI slice](docs/SERVER.md): multiuser source writing, actor drafts, conflicts and revocation; same-owner hosted sync is connected; complete feature integration remains pending.
+- [First Server / WebUI slice](docs/SERVER.md): multiuser five-view native writing, actor drafts, conflicts and revocation; same-owner hosted sync is connected; complete feature integration remains pending.
 - [Version roadmap](docs/ROADMAP.md): seven milestones after the first version, covering current confirmed requirements.
 
 - [Requirements](docs/REQUIREMENTS.md): the single current inventory of 27 groups, including navigation, rich types, library styles, five views and Chinese defaults.

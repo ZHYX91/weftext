@@ -1,4 +1,5 @@
 import "./hosted.css";
+import { HostedEditor } from "./hosted-editor";
 import { draftDisposition, applySaveResult, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
@@ -10,14 +11,14 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <form id="login"><h1>连接写作空间</h1><p>输入管理员提供的个人访问凭据。</p><label>访问凭据<input id="token" type="password" autocomplete="off" required minlength="32"></label><button>连接</button></form>
 <p id="status" role="status" aria-live="polite">尚未连接</p>
 <section id="workspace" hidden><aside><h2>可访问文档</h2><form id="search"><input id="term" aria-label="搜索获权文档" placeholder="按标题或源码搜索"><button>搜索</button></form><button id="refresh">全部文档</button><nav id="documents" aria-label="文档"></nav></aside>
-<article><h1 id="title">选择文档</h1><p class="hint">远端源码编辑；断线时保留本页草稿，重新连接后核对保存结果。多设备同步尚未接通。</p>
+<article><h1 id="title">选择文档</h1><p class="hint">五档共用同一份 Typst 草稿与撤销历史；断线输入保留，重新连接后核对原保存结果。</p>
 <div class="actions"><button id="save" disabled>保存</button><button id="preview" disabled>预览</button><button id="download" disabled>下载已保存源码</button><button id="history" disabled>保存历史</button><button id="reopen" disabled>重新读取与核对</button></div>
-<label for="source">Typst 源码</label><textarea id="source" spellcheck="false" disabled></textarea>
+<section id="source" aria-label="托管文档编辑器"></section>
 <section id="comparison" hidden><h2>核对并保留双方稿</h2><p>上方是你的草稿，下方是当前服务端稿。编辑上方内容，确认合并依据后再保存；确认本身不会改正文。</p><pre id="current"></pre><button id="rebase">已核对，以当前稿作为保存依据</button></section>
 <section id="history-list" hidden><h2>保留的保存版本</h2><div id="versions"></div><pre id="historical"></pre></section>
 <iframe id="render" title="获权内容预览" sandbox="" hidden></iframe></article></section>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const source = el<HTMLTextAreaElement>("source");
+const source = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message));
 let token = sessionStorage.getItem("weftext-hosted-token") ?? "";
 let identity: Me | undefined;
 let doc: Doc | undefined;
@@ -32,7 +33,7 @@ const status = (message: string) => { el("status").textContent = message; };
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
   requestEpoch++; doc = undefined; draft = undefined; compareRequired = false;
-  source.value = ""; source.disabled = true; el("documents").replaceChildren();
+  source.clear(); el("documents").replaceChildren();
   el("title").textContent = "选择文档"; el("current").textContent = "";
   el("versions").replaceChildren(); el("historical").textContent = "";
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
@@ -41,12 +42,21 @@ function clearDisplay(message: string, clearToken = false) {
   if (clearToken) { token = ""; identity = undefined; sessionStorage.removeItem("weftext-hosted-token"); el("workspace").hidden = true; el("login").hidden = false; el("logout").hidden = true; }
   controls(); status(message);
 }
-async function request<T>(path: string, data?: unknown, bytes = false): Promise<T> {
+async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0): Promise<T> {
+  const epoch = requestEpoch, credential = token;
   const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store"});
   if (!response.ok) {
     const result = await response.json() as {error?:{code:string;message:string}};
-    if (response.status === 401) clearDisplay("凭据失效，已清除本页缓存。", true);
-    if (response.status === 404) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    // Only a read-only preview can wait for the shared compiler. Author save
+    // requests keep their explicit original-operation recovery path.
+    if (path === "preview" && response.status === 429 && attempt < 5) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      if (epoch === requestEpoch && credential === token) return request(path, data, bytes, attempt + 1);
+    }
+    if (epoch === requestEpoch && credential === token) {
+      if (response.status === 401) clearDisplay("凭据失效，已清除本页缓存。", true);
+      if (response.status === 404) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    }
     throw new HostedError(result.error?.code ?? "request", result.error?.message ?? "请求失败", response.status);
   }
   return (bytes ? response.arrayBuffer() : response.json()) as Promise<T>;
@@ -87,7 +97,7 @@ async function list(term?: string) {
   if (rows) status(rows.complete ? `在可访问范围找到 ${items.length} 项` : `搜索未完整，仅显示已取得的 ${items.length} 项`);
 }
 async function open(resource: string) {
-  retain();
+  await source.flush(); retain();
   source.disabled = true;
   status("正在重新读取；现有草稿已保留。");
   const currentIdentity = await request<Me>("me");
@@ -114,7 +124,7 @@ async function open(resource: string) {
     else status("原保存尚需恢复，请保留草稿并联系管理员；不会重复提交。");
   }
   if (!draft.pending && draftDisposition(opened.source,draft) === "current") draft = {source:opened.source,baseSource:opened.source};
-  source.value = draft.source; source.disabled = !opened.rights.write;
+  source.open(opened.sessionId, opened.resource, draft.source); source.disabled = !opened.rights.write;
   el("title").textContent = opened.title;
   compareRequired = opened.recoveredDraftConflict || draftDisposition(opened.source,draft) === "compare";
   el("comparison").hidden = !compareRequired; el("current").textContent = compareRequired ? opened.source : "";
@@ -124,6 +134,8 @@ async function open(resource: string) {
   status(draft.pending ? "原保存结果尚未确定，暂不允许再次保存。" : compareRequired ? "双方稿已保留，请核对后合并。" : draft.source !== opened.source ? "已恢复个人草稿，尚未保存正文。" : "已读取当前稿。");
 }
 async function save() {
+  if (!doc || !draft || draft.pending || compareRequired) return;
+  await source.flush();
   if (!doc || !draft || draft.pending || compareRequired) return;
   const sent = source.value;
   const epoch = requestEpoch;
@@ -151,7 +163,7 @@ async function run(action: () => Promise<void>) {
   try { await action(); } catch (e) { status(e instanceof Error ? e.message : "请求未完成；草稿仍保留。"); }
   finally { busy = false; source.disabled = !doc?.rights.write; controls(); }
 }
-source.addEventListener("input", () => {
+function sourceChanged() {
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
   try { retain(); status(navigator.onLine ? "个人草稿，尚未保存正文。" : "连接中断，本页草稿仍保留。"); } catch { status("浏览器无法保留恢复稿，请先复制你的输入。"); }
   clearTimeout(draftTimer);
@@ -160,7 +172,7 @@ source.addEventListener("input", () => {
     if (!captured || epoch !== requestEpoch || draft?.pending || busy) return;
     void request("draft",{sessionId:captured.sessionId,source:source.value}).catch(() => {});
   },800);
-});
+}
 el<HTMLFormElement>("login").onsubmit = e => {e.preventDefault(); token = el<HTMLInputElement>("token").value.trim(); void run(connect);};
 el("logout").onclick = () => { clearDisplay("已退出。",true); el<HTMLInputElement>("token").value = ""; };
 el("refresh").onclick = () => void run(() => list());
@@ -169,11 +181,13 @@ el("save").onclick = () => void run(save);
 el("reopen").onclick = () => void run(() => open(doc!.resource));
 el("rebase").onclick = () => void run(async () => {
   if (!doc || !draft) return;
+  await source.flush();
   await request("draft/resolve",{sessionId:doc.sessionId,source:source.value});
   draft.baseSource = doc.source; compareRequired = false; retain(); el("comparison").hidden = true; status("合并依据已确认，原草稿已保留；点击保存才提交正文。");
 });
 el("preview").onclick = () => void run(async () => {
   const epoch = requestEpoch;
+  await source.flush();
   const renderedSource = source.value;
   const rendered = await request<{ok:boolean;html:string;message:string}>("preview",{sessionId:doc!.sessionId,source:renderedSource});
   if (epoch !== requestEpoch) return;

@@ -441,7 +441,7 @@ pub(crate) async fn check_style_environment(
     .await
 }
 
-async fn fonts() -> ApiResult {
+pub(crate) async fn fonts() -> ApiResult {
     let mut manifest = weftext_engine::bundled_font_manifest();
     if let Some(fonts) = manifest["fonts"].as_array_mut() {
         for font in fonts {
@@ -483,7 +483,7 @@ fn stale_snapshot() -> ApiError {
     )
 }
 
-fn validate_source(source: &str, source_hash: Option<&str>) -> Result<(), ApiError> {
+pub(crate) fn validate_source(source: &str, source_hash: Option<&str>) -> Result<(), ApiError> {
     if source.len() > weftext_core::MAX_SOURCE_BYTES {
         return Err(ApiError::bad(
             "编辑上限为 2 MiB；请保留原文并使用外部编辑器处理更大文件",
@@ -499,7 +499,7 @@ fn validate_source(source: &str, source_hash: Option<&str>) -> Result<(), ApiErr
     Ok(())
 }
 
-fn observe_version(
+pub(crate) fn observe_version(
     versions: &mut HashMap<String, EditorVersion>,
     session_id: &str,
     source: &str,
@@ -523,7 +523,7 @@ fn observe_version(
     Ok(())
 }
 
-fn exact_version(
+pub(crate) fn exact_version(
     versions: &HashMap<String, EditorVersion>,
     session_id: &str,
     source: &str,
