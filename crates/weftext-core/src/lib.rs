@@ -6,7 +6,7 @@ mod exchange;
 mod export_read;
 mod history;
 mod hosted;
-pub use hosted::{ActorSaveStatus, HostedSaveRequest};
+pub use hosted::{ActorFieldStatus, ActorSaveStatus, HostedSaveRequest};
 #[cfg(all(test, windows))]
 mod history_tests;
 mod inventory;

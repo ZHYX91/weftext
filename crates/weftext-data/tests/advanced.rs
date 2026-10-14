@@ -18,6 +18,7 @@ fn note(id: &str, kind: &str, fields: &str) -> FrozenNote {
         lifecycle: "live".into(),
         title: Some(id.into()),
         body: Some("body".into()),
+        authorized_fields: None,
         products: None,
     }
 }

@@ -430,6 +430,13 @@ struct Declaration {
     close: usize,
 }
 fn declaration(source: &str, label: &str) -> Result<Declaration> {
+    declaration_selected(source, label, None)
+}
+fn declaration_selected(
+    source: &str,
+    label: &str,
+    selected: Option<&BTreeSet<String>>,
+) -> Result<Declaration> {
     if source.len() > native::NATIVE_MAX_BYTES {
         return Err(DataError("Structured source byte budget exceeded".into()));
     }
@@ -474,6 +481,11 @@ fn declaration(source: &str, label: &str) -> Result<Declaration> {
         };
         if !seen.insert(k.clone()) {
             return Err(DataError("Duplicate decoded root dictionary key".into()));
+        }
+        // A narrow producer inspects root keys/control bindings, but does not
+        // decode, validate, or evaluate unselected author values.
+        if selected.is_some_and(|keys| !keys.contains(&k)) && k != "id" && k != "types" {
+            continue;
         }
         children.push((
             ValuePath::Member { key: k },
@@ -543,7 +555,14 @@ fn controls(d: &Declaration) -> Result<(String, Vec<String>)> {
 }
 /// Project independently static fields even when an adjacent field is computed.
 pub fn project(source: &str, schema: &Schema) -> NoteProjection {
-    let d = match declaration(source, "weftext") {
+    project_selected(source, schema, None)
+}
+fn project_selected(
+    source: &str,
+    schema: &Schema,
+    selected: Option<&BTreeSet<String>>,
+) -> NoteProjection {
+    let d = match declaration_selected(source, "weftext", selected) {
         Ok(d) => d,
         Err(e) => {
             return NoteProjection {
@@ -577,6 +596,7 @@ pub fn project(source: &str, schema: &Schema) -> NoteProjection {
     let fields = schema
         .applicable_fields(&resolved)
         .into_iter()
+        .filter(|(field, _)| selected.is_none_or(|keys| keys.contains(&field.key)))
         .map(|(field, required)| {
             let node = root_field(&d, &field.key);
             let mut unbound = vec![];
@@ -666,7 +686,17 @@ pub fn patch_field(
     path: &[ValuePath],
     replacement: &NativeValue,
 ) -> Result<FieldPatch> {
-    let projection = project(source, schema);
+    patch_field_selected(source, schema, key, path, replacement, None)
+}
+fn patch_field_selected(
+    source: &str,
+    schema: &Schema,
+    key: &str,
+    path: &[ValuePath],
+    replacement: &NativeValue,
+    selected: Option<&BTreeSet<String>>,
+) -> Result<FieldPatch> {
+    let projection = project_selected(source, schema, selected);
     if projection.qualification != "qualified" || !projection.diagnostics.is_empty() {
         return Err(DataError(
             "Cannot edit unqualified/conflicting control types".into(),
@@ -675,20 +705,25 @@ pub fn patch_field(
     let field = projection
         .fields
         .iter()
-        .find(|f| f.key == key || f.field_id == key)
+        .find(|f| f.field_id == key || selected.is_none() && f.key == key)
         .ok_or_else(|| DataError("Field is not contributed by current types".into()))?;
     if !field.writable {
         return Err(DataError(
             "Computed or provider-unavailable field is read-only".into(),
         ));
     }
-    let d = declaration(source, "weftext")?;
+    let d = declaration_selected(source, "weftext", selected)?;
     if let Some(node) = root_field(&d, &field.key)
         && let Some(value) = &node.value
     {
         editable_shape_at(
             schema,
-            &schema.field(&field.field_id).unwrap().shape,
+            &schema
+                .fields
+                .iter()
+                .find(|f| f.id == field.field_id)
+                .unwrap()
+                .shape,
             value,
             path,
         )?;
@@ -708,7 +743,12 @@ pub fn patch_field(
             }
             let selected_shape = editable_shape_at(
                 schema,
-                &schema.field(&field.field_id).unwrap().shape,
+                &schema
+                    .fields
+                    .iter()
+                    .find(|f| f.id == field.field_id)
+                    .unwrap()
+                    .shape,
                 n.value.as_ref().unwrap(),
                 path,
             )?;
@@ -736,7 +776,7 @@ pub fn patch_field(
         }
     };
     let patched = format!("{}{}{}", &source[..from], text, &source[to..]);
-    let after = project(&patched, schema);
+    let after = project_selected(&patched, schema, selected);
     if after.qualification != "qualified"
         || after.id != projection.id
         || after.types != projection.types
@@ -1468,3 +1508,7 @@ pub fn capture_template(
         .ok_or_else(|| DataError("Creation template writer mismatch".into()))?;
     Ok(format!("#metadata(({tail}"))
 }
+
+#[path = "narrow.rs"]
+mod narrow;
+pub use narrow::*;

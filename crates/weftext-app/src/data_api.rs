@@ -259,6 +259,10 @@ fn resolved_schema(core: &mut Core, root: &Path) -> Result<(SchemaSource, Schema
     Ok((config, schema))
 }
 
+pub(crate) fn hosted_schema(core: &mut Core, root: &Path) -> Result<Schema, CoreError> {
+    resolved_schema(core, root).map(|(_, schema)| schema)
+}
+
 pub(crate) async fn knowledge_schema(
     state: &AppState,
     root: PathBuf,
@@ -1483,6 +1487,7 @@ fn query_snapshot_impl(
             lifecycle: lifecycle.into(),
             title: None,
             body: None,
+            authorized_fields: None,
             products: None,
         });
     }

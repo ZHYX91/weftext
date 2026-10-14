@@ -2,6 +2,7 @@
 //! are deliberately not mounted here. Every resource comes from operator config.
 use super::*;
 mod editor;
+mod fields;
 mod sync_transport;
 use axum::Extension;
 use base64::Engine as _;
@@ -33,6 +34,16 @@ struct Rights {
     history: bool,
     #[serde(default)]
     download: bool,
+    #[serde(default)]
+    fields: BTreeMap<String, FieldRights>,
+}
+#[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FieldRights {
+    #[serde(default)]
+    read: bool,
+    #[serde(default)]
+    write: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -84,6 +95,7 @@ struct HostedInner {
     downloads: HashMap<String, Download>,
     sync: sync_transport::Store,
     editor_versions: HashMap<String, writing_api::EditorVersion>,
+    fields: fields::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -199,6 +211,18 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
             return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
         }
         for (resource, rights) in &user.grants {
+            if rights.fields.len() > 64
+                || rights.fields.iter().any(|(id, field)| {
+                    id.is_empty()
+                        || id.len() > 256
+                        || (field.write && !field.read)
+                        || (field.write && !config.files.get(resource).is_some_and(|f| f.editable))
+                })
+            {
+                return Err(ApiError::bad(
+                    "字段授权须使用明确 FieldId；写入须同时授予该字段读取权",
+                ));
+            }
             if !config.files.contains_key(resource)
                 || (!rights.read && (rights.write || rights.history || rights.download))
                 || (rights.write && !config.files[resource].editable)
@@ -805,6 +829,7 @@ async fn update_policy(
                     .is_some_and(|u| u.epoch == d.generation)
             });
             sync_transport::expire_revoked(inner);
+            fields::expire_revoked(inner);
             Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
         })
         .await?,
@@ -953,6 +978,7 @@ pub(super) async fn serve(
             downloads: HashMap::new(),
             sync: sync_transport::Store::default(),
             editor_versions: HashMap::new(),
+            fields: fields::Store::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -961,6 +987,7 @@ pub(super) async fn serve(
     let app = Router::new()
         .merge(sync_transport::router())
         .merge(editor::router())
+        .merge(fields::router())
         .route("/api/hosted/me", get(me))
         .route("/api/hosted/documents", get(list))
         .route("/api/hosted/open", post(open))

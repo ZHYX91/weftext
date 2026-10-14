@@ -138,7 +138,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_v05_completion.py', exe)
         run(sys.executable, 'scripts/test_review_interchange.py', exe)
         # Extends the complete hosted boundary suite with native editor cases.
-        run(sys.executable, 'scripts/test_hosted_editor.py', exe)
+        run(sys.executable, 'scripts/test_hosted_fields.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)
         run(sys.executable, 'scripts/test_remote_sync.py', exe)
     if args.action == 'package':

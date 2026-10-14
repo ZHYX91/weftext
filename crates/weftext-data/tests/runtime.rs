@@ -24,6 +24,7 @@ fn input(source: String) -> FrozenQueryInput {
             lifecycle: "live".into(),
             title: Some("一项任务".into()),
             body: Some("正文".into()),
+            authorized_fields: None,
             products: None,
         }],
     }

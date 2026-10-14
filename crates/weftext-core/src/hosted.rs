@@ -17,6 +17,43 @@ pub struct HostedSaveRequest {
 mod tests {
     use super::*;
     #[test]
+    fn hosted_schema_guard_requires_admitted_file_and_blocks_external_write_during_decision() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("library");
+        let mut core = Core::new(temp.path().join("state")).unwrap();
+        core.create_library(&root).unwrap();
+        let missing = core.read_config(&root, ConfigRole::Schema).unwrap();
+        assert!(
+            core.with_hosted_schema(&root, &missing, |_| Ok(()))
+                .is_err()
+        );
+        let bytes = include_bytes!("../../../docs/design/examples/schema.authoring.json").to_vec();
+        let operation = fresh();
+        let plan = core
+            .prepare_config_save(&root, ConfigRole::Schema, None, bytes.clone(), &operation)
+            .unwrap();
+        core.execute_operation(&operation, &plan.plan_id).unwrap();
+        let installed = core.read_config(&root, ConfigRole::Schema).unwrap();
+        let path = root.join(".weftext-schema.json");
+        core.with_hosted_schema(&root, &installed, |_| {
+            assert!(fs::write(&path, b"changed").is_err());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        fs::write(&path, b"external").unwrap();
+        assert!(
+            core.with_hosted_schema(&root, &installed, |_| Ok(()))
+                .is_err()
+        );
+        fs::write(&path, bytes).unwrap();
+        assert!(
+            core.with_hosted_schema(&root, &installed, |_| Ok(()))
+                .is_err()
+        );
+    }
+
+    #[test]
     fn actor_drafts_are_separate_and_scope_is_restored_after_error() {
         let temp = tempfile::tempdir().unwrap();
         let path = temp.path().join("note.typ");
@@ -110,9 +147,61 @@ struct ActorOperation {
     core_operation_id: String,
     #[serde(default)]
     cancelled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    field: Option<FieldOperation>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FieldOperation {
+    field_id: String,
+    cell: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActorFieldStatus {
+    pub operation_id: String,
+    pub resource: String,
+    pub field_id: String,
+    pub status: String,
+    pub cell: Option<serde_json::Value>,
 }
 
 impl Core {
+    /// Keep the installed, admitted schema behind a share-zero handle through
+    /// the field writer's decision. A missing/bundled default cannot provide a
+    /// protected filesystem absence witness, so it remains read-only here.
+    pub fn with_hosted_schema<T>(
+        &mut self,
+        root: &Path,
+        expected: &ConfigDocument,
+        action: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let root = absolute_path(root)?;
+        self.require_workspace(&root)?;
+        let path = root.join(".weftext-schema.json");
+        let guard = ParentGuard::acquire(&path)?;
+        let mut file = guard.open_file(false, false)?;
+        let bytes = read_source(&mut file)?;
+        let captured = operations::CapturedFile {
+            path: display(&path),
+            bytes,
+            stamp: stamp(&file)?,
+        };
+        if expected.path != captured.path
+            || expected.bytes.as_ref() != Some(&captured.bytes)
+            || expected.revision.is_none()
+            || self.accepted_revision(&captured) != expected.revision
+        {
+            return Err(CoreError::new(
+                "schemaBasisChanged",
+                "Installed schema witness unavailable",
+            ));
+        }
+        action(self)
+    }
+
     pub fn with_actor<T>(
         &mut self,
         actor: &str,
@@ -237,6 +326,7 @@ impl Core {
                 fingerprint: String::new(),
                 core_operation_id: fresh(),
                 cancelled: false,
+                field: None,
             },
             Err(e) => return Err(e.into()),
         };
@@ -296,6 +386,7 @@ impl Core {
                     fingerprint,
                     core_operation_id: fresh(),
                     cancelled: false,
+                    field: None,
                 };
                 journal::private_create(&path, &serde_json::to_vec(&record)?)?;
                 record
@@ -312,6 +403,151 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new("invalidState", "The original operation record is missing")
             })
+    }
+
+    /// A narrow receipt discloses neither the internal source/base nor another
+    /// field's operation. Callers authorize the named field before this lookup.
+    pub fn actor_field_status(
+        &self,
+        resource: &str,
+        field_id: &str,
+        operation: &str,
+    ) -> Result<Option<ActorFieldStatus>> {
+        let bytes = match fs::read(self.actor_record(operation)?) {
+            Ok(bytes) => bytes,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+        let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        let field = record
+            .field
+            .filter(|f| f.field_id == field_id)
+            .filter(|_| record.resource == resource)
+            .ok_or_else(|| {
+                CoreError::new("operationConflict", "Operation field or resource differs")
+            })?;
+        let status = self
+            .actor_save_status(operation)?
+            .ok_or_else(|| CoreError::new("invalidState", "Missing original operation"))?;
+        Ok(Some(ActorFieldStatus {
+            operation_id: operation.into(),
+            resource: resource.into(),
+            field_id: field_id.into(),
+            cell: (status.status == "committed").then_some(field.cell),
+            status: status.status,
+        }))
+    }
+
+    pub fn actor_field_retry(
+        &self,
+        resource: &str,
+        field_id: &str,
+        operation: &str,
+        fingerprint: &str,
+    ) -> Result<Option<ActorFieldStatus>> {
+        let status = self.actor_field_status(resource, field_id, operation)?;
+        if status.is_some() {
+            let record: ActorOperation =
+                serde_json::from_slice(&fs::read(self.actor_record(operation)?)?)?;
+            if !record.cancelled && record.fingerprint != fingerprint {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    "The original field intent differs",
+                ));
+            }
+        }
+        Ok(status)
+    }
+
+    /// Durable intent binding precedes the exact Core source save. A retry
+    /// returns the original status, including notCommitted; it never derives a
+    /// second source proposal from a newer field profile or ephemeral session.
+    pub fn actor_field_save(
+        &mut self,
+        resource: &str,
+        field_id: &str,
+        fingerprint: &str,
+        cell: serde_json::Value,
+        request: HostedSaveRequest,
+    ) -> Result<ActorFieldStatus> {
+        check_size(request.source.as_bytes())?;
+        check_size(&serde_json::to_vec(&cell)?)?;
+        if field_id.is_empty() || field_id.len() > 256 || fingerprint.len() != 64 {
+            return Err(CoreError::new("invalidField", "Invalid field intent"));
+        }
+        let path = self.actor_record(&request.operation_id)?;
+        match fs::read(&path) {
+            Ok(bytes) => {
+                let record: ActorOperation = serde_json::from_slice(&bytes)?;
+                let status = self
+                    .actor_field_status(resource, field_id, &request.operation_id)?
+                    .ok_or_else(|| {
+                        CoreError::new("invalidState", "Missing original field operation")
+                    })?;
+                if !record.cancelled && record.fingerprint != fingerprint {
+                    return Err(CoreError::new(
+                        "operationConflict",
+                        "The original field intent differs",
+                    ));
+                }
+                return Ok(status);
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+        self.check_actor_session(&request.session_id)?;
+        let record = ActorOperation {
+            actor: self.actor.clone().unwrap(),
+            resource: resource.into(),
+            fingerprint: fingerprint.into(),
+            core_operation_id: fresh(),
+            cancelled: false,
+            field: Some(FieldOperation {
+                field_id: field_id.into(),
+                cell,
+            }),
+        };
+        journal::private_create(&path, &serde_json::to_vec(&record)?)?;
+        self.save(SaveRequest {
+            session_id: request.session_id,
+            base_id: request.base_id,
+            source: request.source,
+            operation_id: record.core_operation_id,
+        })?;
+        self.actor_field_status(resource, field_id, &request.operation_id)?
+            .ok_or_else(|| CoreError::new("invalidState", "Missing original field operation"))
+    }
+
+    pub fn actor_field_settle(
+        &mut self,
+        resource: &str,
+        field_id: &str,
+        operation: &str,
+    ) -> Result<ActorFieldStatus> {
+        if self
+            .actor_field_status(resource, field_id, operation)?
+            .is_none()
+        {
+            let record = ActorOperation {
+                actor: self.actor.clone().unwrap(),
+                resource: resource.into(),
+                fingerprint: String::new(),
+                core_operation_id: fresh(),
+                cancelled: true,
+                field: Some(FieldOperation {
+                    field_id: field_id.into(),
+                    cell: serde_json::Value::Null,
+                }),
+            };
+            journal::private_create(
+                &self.actor_record(operation)?,
+                &serde_json::to_vec(&record)?,
+            )?;
+        } else {
+            self.actor_settle(resource, operation)?;
+        }
+        self.actor_field_status(resource, field_id, operation)?
+            .ok_or_else(|| CoreError::new("invalidState", "Missing settled field operation"))
     }
 
     /// Explicit allowlisted file set; no ambient tree enumeration or fallback.

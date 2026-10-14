@@ -112,6 +112,10 @@ pub struct FrozenNote {
     pub body: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub products: Option<NoteProducts>,
+    /// Trusted in-process field producer only; wire JSON cannot install this.
+    /// Values are keyed by canonical FieldId, never author keys or source ranges.
+    #[serde(skip)]
+    pub authorized_fields: Option<BTreeMap<String, Cell>>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1625,13 +1629,44 @@ pub(crate) fn execute_query_leaf(
         if note.lifecycle != lifecycle || !in_directory(&note.path, &plan.scope) {
             continue;
         }
-        bytes += note.source.len();
+        bytes += if let Some(fields) = &note.authorized_fields {
+            serde_json::to_vec(fields)?.len()
+        } else {
+            note.source.len()
+        };
         if bytes > limits.max_source_bytes || data_rows.len() >= limits.max_rows {
             partial = true;
             diagnostics.push("host-budget-exhausted".into());
             break;
         }
-        let projection = project(&note.source, schema);
+        let projection = if let Some(fields) = &note.authorized_fields {
+            NoteProjection {
+                qualification: "qualified".into(),
+                id: None,
+                types: vec![],
+                resolved_types: vec![],
+                fields: schema
+                    .fields
+                    .iter()
+                    .map(|f| FieldProjection {
+                        field_id: f.id.clone(),
+                        key: f.key.clone(),
+                        cell: fields.get(&f.id).cloned().unwrap_or(Cell::Unavailable {
+                            reason: "authorized-field-unavailable".into(),
+                        }),
+                        source_range: None,
+                        raw: None,
+                        writable: false,
+                        required: false,
+                        unbound: vec![],
+                    })
+                    .collect(),
+                unknown_fields: vec![],
+                diagnostics: vec![],
+            }
+        } else {
+            project(&note.source, schema)
+        };
         if projection.qualification != "qualified" {
             partial = true;
             diagnostics.push(format!(
@@ -1682,6 +1717,20 @@ pub(crate) fn execute_query_leaf(
                     .collect(),
             )),
         );
+        if note.authorized_fields.is_some() {
+            cells.insert(
+                "self".into(),
+                Cell::Unavailable {
+                    reason: "identity-not-authorized".into(),
+                },
+            );
+            cells.insert(
+                "types".into(),
+                Cell::Unavailable {
+                    reason: "types-not-authorized".into(),
+                },
+            );
+        }
         cells.insert(
             "title".into(),
             note.title
