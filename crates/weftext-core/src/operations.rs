@@ -23,6 +23,15 @@ pub struct OperationRequest {
     deny_unknown_fields
 )]
 pub enum OperationIntent {
+    ApplySync {
+        identity: crate::sync::SyncIdentity,
+        objects: BTreeSet<crate::sync::ObjectKey>,
+    },
+    MergeSync {
+        identity: crate::sync::SyncIdentity,
+        resolutions: Vec<crate::sync::SyncResolution>,
+        blobs: BTreeMap<String, Vec<u8>>,
+    },
     CloneSync {
         identity: crate::sync::SyncIdentity,
         objects: BTreeSet<crate::sync::ObjectKey>,
@@ -363,6 +372,28 @@ pub(crate) struct FrozenOperation {
     pub(crate) write_parents: Vec<(String, FileIdentity)>,
 }
 impl FrozenOperation {
+    fn updated_resource_owner(
+        &self,
+        path: &Path,
+        application: Option<&sync::apply::SyncApplication>,
+    ) -> Option<String> {
+        if let Some(application) = application {
+            // Receiver ownership comes from the reviewed content role and
+            // placement, never a metadata claim in arbitrary resource bytes.
+            return application
+                .after
+                .iter()
+                .filter_map(|o| match &o.object {
+                    sync::ObjectKey::Node(id) if path.starts_with(&o.directory) => Some((o, id)),
+                    _ => None,
+                })
+                .max_by_key(|(o, _)| Path::new(&o.directory).components().count())
+                .map(|(_, id)| id.clone());
+        }
+        // The ordinary resource/style planners each have exactly one owner.
+        (self.preview.node_map.len() == 1)
+            .then(|| self.preview.node_map.values().next().unwrap().clone())
+    }
     pub(crate) fn affects(&self, path: &Path) -> bool {
         let target = display(path).to_lowercase();
         let within = |p: &str| {
@@ -727,7 +758,9 @@ impl Core {
                     .filter(|b| Path::new(path).starts_with(Path::new(&b.path).parent().unwrap()))
                     .max_by_key(|b| Path::new(&b.path).components().count())
                     .map(|b| b.node_id.clone()),
-                Mutation::Update { .. } => t.preview.node_map.values().next().cloned(),
+                Mutation::Update { .. } => {
+                    t.updated_resource_owner(Path::new(path), plan.sync_application.as_ref())
+                }
                 _ => None,
             }
             .ok_or_else(|| CoreError::new("invalidState", "Resource owner is missing"))?;
@@ -820,6 +853,7 @@ impl Core {
         )
     }
     pub fn prepared_operation_files(&self, operation_id: &str) -> Result<Vec<FileChange>> {
+        self.check_sync_operation_access(operation_id)?;
         let t = self
             .operations
             .get(operation_id)
@@ -1088,7 +1122,7 @@ impl Core {
                 )
             })
     }
-    fn admitted_resource(
+    pub(crate) fn admitted_resource(
         &self,
         id: &str,
         workspace: &str,
@@ -1527,7 +1561,7 @@ impl Core {
             },
         })
     }
-    fn accepted_revision(&self, captured: &CapturedFile) -> Option<String> {
+    pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Option<String> {
         self.operations
             .values()
             .filter(|p| self.committed(&p.operation_id))
@@ -2029,6 +2063,12 @@ impl Core {
         })
     }
     pub fn prepare_operation(&mut self, request: OperationRequest) -> Result<OperationPreview> {
+        if matches!(
+            request.intent,
+            OperationIntent::ApplySync { .. } | OperationIntent::MergeSync { .. }
+        ) {
+            return self.prepare_sync_application(request);
+        }
         if matches!(request.intent, OperationIntent::CloneSync { .. }) {
             return self.prepare_sync_clone(request);
         }
@@ -2395,10 +2435,12 @@ impl Core {
             }
         }
         let mutation = match &request.intent {
-            OperationIntent::CloneSync { .. } => {
+            OperationIntent::CloneSync { .. }
+            | OperationIntent::ApplySync { .. }
+            | OperationIntent::MergeSync { .. } => {
                 return Err(CoreError::new(
                     "invalidIntent",
-                    "Replica creation has its own create-only planner",
+                    "Replica intents require their dedicated guarded planner",
                 ));
             }
             OperationIntent::ImportDocx {
@@ -3145,6 +3187,7 @@ impl Core {
         Ok(preview)
     }
     pub fn operation_details(&self, operation_id: &str) -> Result<OperationPreview> {
+        self.check_sync_operation_access(operation_id)?;
         let p = self
             .operations
             .get(operation_id)
@@ -3188,7 +3231,12 @@ impl Core {
         let t = plan.transaction.as_ref().ok_or_else(|| {
             CoreError::new("operationConflict", "This ID belongs to a legacy operation")
         })?;
-        if matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
+        if matches!(
+            t.request.intent,
+            OperationIntent::CloneSync { .. }
+                | OperationIntent::ApplySync { .. }
+                | OperationIntent::MergeSync { .. }
+        ) {
             self.sync_local_owner()?;
         }
         if t.preview.plan_id != plan_id {
@@ -3206,6 +3254,7 @@ impl Core {
                 "The original operation may have effects; inspect it and do not execute again",
             ));
         }
+        self.validate_sync_application(&plan)?;
         let root = Path::new(&t.request.root);
         if let OperationIntent::CloneSync { identity, .. } = &t.request.intent
             && self
@@ -3239,7 +3288,10 @@ impl Core {
         if let Mutation::Update { files: changes } = &t.mutation
             && !matches!(
                 t.request.intent,
-                OperationIntent::ImportResource { .. } | OperationIntent::ConfigureStyle { .. }
+                OperationIntent::ImportResource { .. }
+                    | OperationIntent::ConfigureStyle { .. }
+                    | OperationIntent::ApplySync { .. }
+                    | OperationIntent::MergeSync { .. }
             )
         {
             for c in changes {
@@ -3459,7 +3511,14 @@ impl Core {
                         resource_births.push(ResourceBirth {
                             resource_id: reference.rsplit('/').next().unwrap().into(),
                             workspace_id: plan.workspace_id.clone().unwrap(),
-                            node_id: t.preview.node_map.values().next().unwrap().clone(),
+                            node_id: t
+                                .updated_resource_owner(
+                                    Path::new(&c.path),
+                                    plan.sync_application.as_ref(),
+                                )
+                                .ok_or_else(|| {
+                                    CoreError::new("invalidState", "Resource owner is missing")
+                                })?,
                             identity: stamp(&file)?.identity,
                         });
                     }
@@ -3674,7 +3733,7 @@ impl Core {
         let _ = ParentGuard::acquire(&parent.join(".parent-prospective"))?;
         Ok(())
     }
-    fn managed_node(
+    pub(crate) fn managed_node(
         &self,
         root: &Path,
         directory: &Path,
@@ -4276,6 +4335,8 @@ impl Core {
 fn intent_kind(intent: &OperationIntent) -> &'static str {
     match intent {
         OperationIntent::CloneSync { .. } => "cloneSync",
+        OperationIntent::ApplySync { .. } => "applySync",
+        OperationIntent::MergeSync { .. } => "mergeSync",
         OperationIntent::RenameNode { .. } => "renameNode",
         OperationIntent::MoveNode { .. } => "moveNode",
         OperationIntent::CopyNode { .. } => "copyNode",
@@ -4408,7 +4469,7 @@ pub(crate) fn ensure_absent(path: &Path) -> Result<()> {
         Err(e) => Err(e.into()),
     }
 }
-fn capture_optional(path: &Path) -> Result<Option<CapturedFile>> {
+pub(crate) fn capture_optional(path: &Path) -> Result<Option<CapturedFile>> {
     let guard = ParentGuard::acquire(path)?;
     match guard.open_file(false, false) {
         Ok(mut file) => {

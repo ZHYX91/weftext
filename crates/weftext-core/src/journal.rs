@@ -22,6 +22,8 @@ pub(crate) struct Plan {
     pub sync_setup: Option<sync::replica::SyncSetup>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sync_publication: Option<sync::replica::SyncPublication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_application: Option<sync::apply::SyncApplication>,
 }
 impl Plan {
     pub fn file(
@@ -49,6 +51,7 @@ impl Plan {
             history_restore: None,
             sync_setup: None,
             sync_publication: None,
+            sync_application: None,
         }
     }
 }
@@ -365,6 +368,7 @@ impl Core {
         }
     }
     pub fn inspect_recovery(&self, operation_id: &str) -> Result<RecoveryInfo> {
+        self.check_sync_operation_access(operation_id)?;
         valid_operation_id(operation_id)?;
         let plan = self.operations.get(operation_id).ok_or_else(|| {
             CoreError::new("operationMissing", "No retained operation has this ID")
@@ -432,6 +436,7 @@ impl Core {
         ))
     }
     pub fn resolve_recovery(&mut self, operation_id: &str, action: &str) -> Result<RecoveryInfo> {
+        self.check_sync_operation_access(operation_id)?;
         valid_operation_id(operation_id)?;
         let plan = self.operations.get(operation_id).cloned().ok_or_else(|| {
             CoreError::new("operationMissing", "No retained operation has this ID")

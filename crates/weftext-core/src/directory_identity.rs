@@ -304,7 +304,7 @@ impl Core {
         }
     }
 
-    fn directory_admitted(
+    pub(crate) fn directory_admitted(
         &self,
         workspace: &str,
         id: &str,
@@ -403,6 +403,28 @@ impl Core {
                     == Some(identity)
                     && files.iter().any(|f| {
                         f.path == display(&registry)
+                            && tag_document(Some(&f.after))
+                                .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))
+                    })
+                {
+                    return Ok(true);
+                }
+            }
+            if plan.workspace_id.as_deref() == Some(workspace)
+                && plan
+                    .sync_application
+                    .as_ref()
+                    .is_some_and(|a| a.root == display(root))
+                && let Some(transaction) = &plan.transaction
+                && let operations::Mutation::Update { files } = &transaction.mutation
+            {
+                let registry = display(&root.join(TAG_REGISTRY));
+                if transaction
+                    .files
+                    .iter()
+                    .any(|f| f.path == registry && f.stamp.identity == *identity)
+                    && files.iter().any(|f| {
+                        f.path == registry
                             && tag_document(Some(&f.after))
                                 .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))
                     })

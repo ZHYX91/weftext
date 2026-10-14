@@ -139,7 +139,7 @@ impl Core {
     }
 }
 
-fn load_graph(path: &Path, identity: &SyncIdentity) -> Result<ReplicaGraph> {
+pub(super) fn load_graph(path: &Path, identity: &SyncIdentity) -> Result<ReplicaGraph> {
     let mut graph = ReplicaGraph::new(&identity.workspace_id, &identity.genesis)?;
     for (folder, extension, limit) in [
         ("blobs", ".blob", MAX_BLOB_BYTES),
@@ -195,7 +195,7 @@ fn status(graph: &ReplicaGraph, identity: &SyncIdentity) -> Result<SyncStatus> {
     })
 }
 
-fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
+pub(super) fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
     let guard = ParentGuard::acquire(path)?;
     let file = guard.open_file(false, false)?;
     let mut bytes = Vec::new();
@@ -206,7 +206,7 @@ fn read_record(path: &Path, limit: usize) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
-fn immutable(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(super) fn immutable(path: &Path, bytes: &[u8]) -> Result<()> {
     match read_record(path, bytes.len()) {
         Ok(existing) if existing == bytes => Ok(()),
         Ok(_) => Err(invalid("Existing immutable record differs")),

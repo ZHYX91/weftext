@@ -8,8 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 const MAX_COMMITS: usize = 2_000;
 const MAX_MANIFEST_BYTES: usize = 4 * 1024 * 1024;
 mod store;
+mod transport;
 pub use store::{SyncBundle, SyncIdentity, SyncStatus};
+pub use transport::SyncTransfer;
+pub(crate) mod apply;
 mod install;
+pub use apply::SyncResolution;
 pub(crate) mod replica;
 pub use replica::SyncBindingInfo;
 const MAX_CHANGES: usize = 5_000;
@@ -442,12 +446,21 @@ impl ReplicaGraph {
             .dependencies
             .iter()
             .filter(|dependency| {
+                // A transaction may read and then change the same object.
+                // Its output fulfills that read prerequisite; comparing current
+                // against its own preimage would incorrectly block every edit.
+                let expected = self.manifests[id]
+                    .changes
+                    .iter()
+                    .find(|c| c.object == dependency.object)
+                    .map(|c| BTreeSet::from([c.revision.clone()]))
+                    .unwrap_or_else(|| dependency.revisions.clone());
                 current.get(&dependency.object).is_none_or(|v| {
                     v.versions
                         .iter()
                         .map(|v| v.revision.clone())
                         .collect::<BTreeSet<_>>()
-                        != dependency.revisions
+                        != expected
                 })
             })
             .map(|d| d.object.clone())

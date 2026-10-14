@@ -28,6 +28,9 @@ impl RecoveryCapture {
 }
 impl Core {
     pub(crate) fn inspect_transaction_recovery(&self, plan: &Plan) -> Result<RecoveryInfo> {
+        if plan.sync_setup.is_some() || plan.sync_application.is_some() {
+            self.sync_local_owner()?;
+        }
         let t = plan.transaction.as_ref().unwrap();
         let capture = self.capture_transaction_recovery(plan, false)?;
         let installing = self.journal_path(&plan.operation_id, "install").exists();
@@ -82,6 +85,9 @@ impl Core {
         plan: &Plan,
         action: &str,
     ) -> Result<RecoveryInfo> {
+        if plan.sync_setup.is_some() || plan.sync_application.is_some() {
+            self.sync_local_owner()?;
+        }
         if !matches!(
             action,
             "keepCurrent" | "adoptAfterImages" | "resumeOriginalPlan"

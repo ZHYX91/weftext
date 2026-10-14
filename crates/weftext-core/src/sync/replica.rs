@@ -10,7 +10,12 @@ use crate::{
     valid_operation_id,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+type LocalState<'a> = (
+    BTreeMap<ObjectKey, LocalObject>,
+    BTreeMap<String, &'a Vec<u8>>,
+);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct LocalObject {
     pub object: ObjectKey,
@@ -361,6 +366,16 @@ impl Core {
         self.receive_sync(&setup.identity, bundle)
     }
 
+    pub(crate) fn check_sync_operation_access(&self, operation: &str) -> Result<()> {
+        if self
+            .operations
+            .get(operation)
+            .is_some_and(|p| p.sync_setup.is_some() || p.sync_application.is_some())
+        {
+            self.sync_local_owner()?;
+        }
+        Ok(())
+    }
     pub(crate) fn sync_local_owner(&self) -> Result<()> {
         if self.actor.is_some() {
             Err(CoreError::new(
@@ -396,7 +411,7 @@ impl Core {
             })
             .collect()
     }
-    fn sync_setup_for(&self, root: &Path) -> Result<&SyncSetup> {
+    pub(crate) fn sync_setup_for(&self, root: &Path) -> Result<&SyncSetup> {
         let matches: Vec<_> = self
             .sync_setups()
             .into_iter()
@@ -430,8 +445,82 @@ impl Core {
         Ok(records.into_iter().map(|r| r.1).collect())
     }
 
+    pub(crate) fn sync_local_state<'a>(&'a self, setup: &'a SyncSetup) -> Result<LocalState<'a>> {
+        let mut objects: BTreeMap<_, _> = setup
+            .initial
+            .iter()
+            .cloned()
+            .map(|o| (o.object.clone(), o))
+            .collect();
+        let mut known_blobs: BTreeMap<_, _> = setup
+            .bundle
+            .blobs
+            .iter()
+            .map(|(id, bytes)| (id.clone(), bytes))
+            .collect();
+        let mut records = Vec::new();
+        for p in self.operations.values() {
+            if (p
+                .sync_publication
+                .as_ref()
+                .is_some_and(|v| v.root == setup.root)
+                || p.sync_application
+                    .as_ref()
+                    .is_some_and(|v| v.root == setup.root))
+                && self.committed(&p.operation_id)
+            {
+                let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
+                    self.journal_path(&p.operation_id, "commit"),
+                )?)?;
+                let sequence = fact["commitSequence"]
+                    .as_u64()
+                    .ok_or_else(|| invalid("Replica event lacks commit order"))?;
+                records.push((sequence, p));
+            }
+        }
+        records.sort_by_key(|r| r.0);
+        for (_, plan) in records {
+            if let Some(applied) = &plan.sync_application {
+                objects.extend(applied.after.iter().cloned().map(|o| (o.object.clone(), o)));
+                known_blobs.extend(applied.blobs.iter().map(|(id, bytes)| (id.clone(), bytes)));
+                continue;
+            }
+            let prior = plan.sync_publication.as_ref().unwrap();
+            let commit = prior.manifest.id()?;
+            for c in &prior.manifest.changes {
+                let location = prior
+                    .locations
+                    .iter()
+                    .find(|(key, _)| key == &c.object)
+                    .map(|(_, p)| p.clone())
+                    .or_else(|| objects.get(&c.object).map(|o| o.directory.clone()))
+                    .ok_or_else(|| invalid("Publication has no local object locator"))?;
+                objects.insert(
+                    c.object.clone(),
+                    LocalObject {
+                        object: c.object.clone(),
+                        directory: location,
+                        commit: commit.clone(),
+                        revision: c.revision.clone(),
+                        state: c.after.clone(),
+                    },
+                );
+            }
+            for (key, path) in &prior.locations {
+                if let Some(o) = objects.get_mut(key) {
+                    o.directory = path.clone();
+                }
+            }
+            known_blobs.extend(prior.blobs.iter().map(|(id, bytes)| (id.clone(), bytes)));
+        }
+        Ok((objects, known_blobs))
+    }
+
     pub(crate) fn freeze_sync_publication(&self, plan: &mut Plan) -> Result<()> {
-        if plan.sync_setup.is_some() || plan.sync_publication.is_some() {
+        if plan.sync_setup.is_some()
+            || plan.sync_publication.is_some()
+            || plan.sync_application.is_some()
+        {
             return Ok(());
         }
         if plan.transaction.as_ref().is_some_and(|t| {
@@ -462,46 +551,7 @@ impl Core {
         let root = Path::new(&setup.root);
         // Hosted save publication is internal writer responsibility; it does
         // not expose any history or transport bytes to the authenticated actor.
-        let mut objects: BTreeMap<_, _> = setup
-            .initial
-            .iter()
-            .cloned()
-            .map(|o| (o.object.clone(), o))
-            .collect();
-        let mut known_blobs: BTreeMap<_, _> = setup
-            .bundle
-            .blobs
-            .iter()
-            .map(|(id, bytes)| (id.clone(), bytes))
-            .collect();
-        for prior in self.sync_publications(&setup.root)? {
-            let commit = prior.manifest.id()?;
-            for c in &prior.manifest.changes {
-                let location = prior
-                    .locations
-                    .iter()
-                    .find(|(key, _)| key == &c.object)
-                    .map(|(_, p)| p.clone())
-                    .or_else(|| objects.get(&c.object).map(|o| o.directory.clone()))
-                    .ok_or_else(|| invalid("Publication has no local object locator"))?;
-                objects.insert(
-                    c.object.clone(),
-                    LocalObject {
-                        object: c.object.clone(),
-                        directory: location,
-                        commit: commit.clone(),
-                        revision: c.revision.clone(),
-                        state: c.after.clone(),
-                    },
-                );
-            }
-            for (key, path) in &prior.locations {
-                if let Some(o) = objects.get_mut(key) {
-                    o.directory = path.clone();
-                }
-            }
-            known_blobs.extend(prior.blobs.iter().map(|(id, bytes)| (id.clone(), bytes)));
-        }
+        let (mut objects, known_blobs) = self.sync_local_state(setup)?;
         let before = objects.clone();
         let mut blobs = BTreeMap::new();
         let mut dependencies = BTreeSet::new();
