@@ -347,6 +347,10 @@ pub(crate) enum Mutation {
     },
     CreateTree {
         target: String,
+        /// Hydration creates only absent descendants of a separately guarded
+        /// existing workspace root. Ordinary creation still requires absence.
+        #[serde(default)]
+        existing_target: bool,
         directories: Vec<String>,
         files: Vec<FileChange>,
         births: Vec<NewBirth>,
@@ -403,9 +407,21 @@ impl FrozenOperation {
         match &self.mutation {
             Mutation::Relocate { source, target, .. } => within(source) || within(target),
             Mutation::CreateTree {
-                target, updates, ..
+                target,
+                existing_target,
+                directories,
+                files,
+                updates,
+                ..
             } => {
-                within(target)
+                (!existing_target && within(target))
+                    || (*existing_target
+                        && directories
+                            .iter()
+                            .any(|d| within(&display(&Path::new(target).join(d)))))
+                    || files
+                        .iter()
+                        .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
                     || updates
                         .iter()
                         .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
@@ -753,6 +769,9 @@ impl Core {
                 ));
             }
             let node_id = match &t.mutation {
+                Mutation::CreateTree { .. } if plan.sync_application.is_some() => {
+                    t.updated_resource_owner(Path::new(path), plan.sync_application.as_ref())
+                }
                 Mutation::CreateTree { births, .. } => births
                     .iter()
                     .filter(|b| Path::new(path).starts_with(Path::new(&b.path).parent().unwrap()))
@@ -1562,16 +1581,38 @@ impl Core {
         })
     }
     pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Option<String> {
-        self.operations
+        let digest = hash(&captured.bytes);
+        let mut candidates = self
+            .operations
             .values()
             .filter(|p| self.committed(&p.operation_id))
-            .find_map(|p| {
-                let facts = self.read_observation_facts(&p.operation_id).ok()?;
-                facts
+            .filter_map(|p| {
+                let revision = self
+                    .read_observation_facts(&p.operation_id)
+                    .ok()?
                     .into_iter()
-                    .find(|f| f.stamp == captured.stamp && f.hash == hash(&captured.bytes))
-                    .map(|f| f.revision)
+                    .find(|f| f.stamp == captured.stamp && f.hash == digest)?
+                    .revision;
+                let commit: serde_json::Value = serde_json::from_slice(
+                    &fs::read(self.journal_path(&p.operation_id, "commit")).ok()?,
+                )
+                .ok()?;
+                Some((commit["commitSequence"].as_u64().unwrap_or(0), revision))
             })
+            .collect::<Vec<_>>();
+        candidates.sort_by_key(|v| v.0);
+        let (sequence, revision) = candidates.last()?;
+        // Same physical bytes can acquire a different portable revision after
+        // an explicit branch choice. Use the durable local decision order,
+        // never HashMap traversal or timestamps. Ambiguous legacy facts fail.
+        if candidates
+            .iter()
+            .any(|(s, r)| s == sequence && r != revision)
+        {
+            None
+        } else {
+            Some(revision.clone())
+        }
     }
     pub fn reserve_source_revision(
         &mut self,
@@ -2581,6 +2622,7 @@ impl Core {
                 preview.revisions.insert(display(&path), fresh());
                 preview.changes.push(change(&path, "create", source.len()));
                 Mutation::CreateTree {
+                    existing_target: false,
                     target: display(&target),
                     directories: Vec::new(),
                     files: vec![FileChange {
@@ -2873,6 +2915,7 @@ impl Core {
                         .map(|f| change(Path::new(&f.path), "backup", f.after.len())),
                 );
                 Mutation::CreateTree {
+                    existing_target: false,
                     target: display(&target),
                     directories: dirs,
                     files: output,
@@ -3020,6 +3063,7 @@ impl Core {
                             .map(|f| change(Path::new(&f.path), "create", f.after.len())),
                     );
                     Mutation::CreateTree {
+                        existing_target: false,
                         target: display(&target),
                         directories: vec![],
                         files: output,
@@ -3047,7 +3091,7 @@ impl Core {
                     .parent()
                     .ok_or_else(|| CoreError::new("invalidPath", "Missing resource owner"))?;
                 let canonical = self.managed_node(&root, directory, false)?;
-                if canonical.path != *node {
+                if Path::new(&canonical.path) != node_path {
                     return Err(CoreError::new(
                         "unsupportedRole",
                         "Select the canonical admitted Node source",
@@ -3345,7 +3389,7 @@ impl Core {
                 self.check_pending(Path::new(&f.path))?;
                 let guard = ParentGuard::acquire(Path::new(&f.path))?;
                 let write = matches!(&t.mutation, Mutation::Update {files} if files.iter().any(|c|c.path==f.path && c.before.as_ref()!=Some(&c.after)))
-                    || matches!(&t.mutation, Mutation::CreateTree {updates,..} if updates.iter().any(|c|c.path == f.path));
+                    || matches!(&t.mutation, Mutation::CreateTree {updates,..} if updates.iter().any(|c|c.path == f.path && c.before.as_ref()!=Some(&c.after)));
                 let mut handle = guard.open_file(write, false)?;
                 if stamp(&handle)? != f.stamp || read_blob(&mut handle)? != f.bytes {
                     return Err(CoreError::new(
@@ -3539,19 +3583,44 @@ impl Core {
             }
             Mutation::CreateTree {
                 target,
+                existing_target,
                 directories,
                 files: output,
                 births,
                 updates,
             } => {
-                if !matches!(
+                if *existing_target {
+                    if !matches!(
+                        t.request.intent,
+                        OperationIntent::ApplySync { .. } | OperationIntent::MergeSync { .. }
+                    ) || Path::new(target) != root
+                    {
+                        return Err(CoreError::new(
+                            "invalidPlan",
+                            "Existing-tree creation requires the original sync workspace",
+                        ));
+                    }
+                } else if !matches!(
                     t.request.intent,
                     OperationIntent::BackupLibrary { .. } | OperationIntent::CloneSync { .. }
                 ) {
                     self.owned_parent(root, Path::new(target).parent().unwrap())?;
                 }
-                let guard = ParentGuard::acquire(Path::new(target))?;
-                ensure_absent(Path::new(target))?;
+                let guard_path = if *existing_target {
+                    root.join(".sync-root")
+                } else {
+                    PathBuf::from(target)
+                };
+                let guard = ParentGuard::acquire(&guard_path)?;
+                if !existing_target {
+                    ensure_absent(Path::new(target))?;
+                }
+                for relative in directories {
+                    ensure_absent(&Path::new(target).join(relative))?;
+                }
+                for c in output {
+                    ensure_absent(Path::new(&c.path))?;
+                }
                 let mut update_creates = Vec::new();
                 for c in updates.iter().filter(|c| c.before.is_none()) {
                     let g = ParentGuard::acquire(Path::new(&c.path))?;
@@ -3559,9 +3628,12 @@ impl Core {
                     update_creates.push((g, c));
                 }
                 self.install_record(&plan)?;
-                let directory = guard.create_directory()?;
-                self.record_materialized(operation_id, Path::new(target), &directory)?;
-                let mut dir_handles = BTreeMap::from([(PathBuf::new(), directory)]);
+                let mut dir_handles = BTreeMap::new();
+                if !existing_target {
+                    let directory = guard.create_directory()?;
+                    self.record_materialized(operation_id, Path::new(target), &directory)?;
+                    dir_handles.insert(PathBuf::new(), directory);
+                }
                 let mut dirs = directories.iter().map(PathBuf::from).collect::<Vec<_>>();
                 dirs.sort_by(|a, b| {
                     a.components()
@@ -3572,21 +3644,23 @@ impl Core {
                 dirs.dedup();
                 for relative in dirs {
                     let parent = relative.parent().unwrap_or_else(|| Path::new(""));
-                    let parent = dir_handles.get(parent).ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Missing planned parent directory")
-                    })?;
-                    let handle = ParentGuard::child_directory(
-                        parent,
-                        relative.file_name().unwrap().to_str().unwrap(),
-                    )
-                    .map_err(|mut e| {
-                        e.message = format!(
-                            "Create directory {}: {}",
-                            display(&Path::new(target).join(&relative)),
-                            e.message
-                        );
-                        e
-                    })?;
+                    let handle = if let Some(parent) = dir_handles.get(parent) {
+                        ParentGuard::child_directory(
+                            parent,
+                            relative.file_name().unwrap().to_str().unwrap(),
+                        )?
+                    } else if *existing_target {
+                        let parent_guard =
+                            ParentGuard::acquire(&Path::new(target).join(&relative))?;
+                        let handle = parent_guard.create_directory()?;
+                        guards.push(parent_guard);
+                        handle
+                    } else {
+                        return Err(CoreError::new(
+                            "invalidPlan",
+                            "Missing planned parent directory",
+                        ));
+                    };
                     self.record_materialized(
                         operation_id,
                         &Path::new(target).join(&relative),
@@ -3600,15 +3674,21 @@ impl Core {
                     let relative = Path::new(&c.path).strip_prefix(target).map_err(|_| {
                         CoreError::new("invalidPlan", "Planned file escaped target")
                     })?;
-                    let parent = dir_handles
-                        .get(relative.parent().unwrap_or_else(|| Path::new("")))
-                        .ok_or_else(|| {
-                            CoreError::new("invalidPlan", "Missing planned file parent")
-                        })?;
-                    let mut file = ParentGuard::child_file(
-                        parent,
-                        relative.file_name().unwrap().to_str().unwrap(),
-                    )?;
+                    let mut file = if let Some(parent) =
+                        dir_handles.get(relative.parent().unwrap_or_else(|| Path::new("")))
+                    {
+                        ParentGuard::child_file(
+                            parent,
+                            relative.file_name().unwrap().to_str().unwrap(),
+                        )?
+                    } else if *existing_target {
+                        let parent_guard = ParentGuard::acquire(Path::new(&c.path))?;
+                        let file = parent_guard.open_file(true, true)?;
+                        guards.push(parent_guard);
+                        file
+                    } else {
+                        return Err(CoreError::new("invalidPlan", "Missing planned file parent"));
+                    };
                     self.record_materialized(operation_id, Path::new(&c.path), &file)?;
                     write_blob(&mut file, &c.after)?;
                     if let Some(revision) = t.preview.revisions.get(&c.path) {
@@ -3627,22 +3707,31 @@ impl Core {
                         });
                     }
                     if let Some(reference) = t.preview.resource_map.get(&c.path) {
-                        let owner = births
-                            .iter()
-                            .filter(|b| {
-                                Path::new(&c.path).starts_with(Path::new(&b.path).parent().unwrap())
-                            })
-                            .max_by_key(|b| Path::new(&b.path).components().count())
-                            .ok_or_else(|| {
-                                CoreError::new(
-                                    "invalidPlan",
-                                    "A fresh resource lacks its fresh owner",
-                                )
-                            })?;
+                        let owner = if plan.sync_application.is_some() {
+                            t.updated_resource_owner(
+                                Path::new(&c.path),
+                                plan.sync_application.as_ref(),
+                            )
+                        } else {
+                            births
+                                .iter()
+                                .filter(|b| {
+                                    Path::new(&c.path)
+                                        .starts_with(Path::new(&b.path).parent().unwrap())
+                                })
+                                .max_by_key(|b| Path::new(&b.path).components().count())
+                                .map(|b| b.node_id.clone())
+                        }
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "invalidPlan",
+                                "A fresh resource lacks its reviewed owner",
+                            )
+                        })?;
                         resource_births.push(ResourceBirth {
                             resource_id: reference.rsplit('/').next().unwrap().into(),
                             workspace_id: plan.workspace_id.clone().unwrap(),
-                            node_id: owner.node_id.clone(),
+                            node_id: owner,
                             identity: stamp(&file)?.identity,
                         });
                     }
@@ -3654,7 +3743,9 @@ impl Core {
                         .iter()
                         .position(|f| f.path == c.path)
                         .ok_or_else(|| CoreError::new("invalidPlan", "Missing config preimage"))?;
-                    write_source(&mut handles[index], &c.after)?;
+                    if c.before.as_ref() != Some(&c.after) {
+                        write_blob(&mut handles[index], &c.after)?;
+                    }
                     observations.push(RevisionFact {
                         path: c.path.clone(),
                         stamp: stamp(&handles[index])?,
@@ -3665,7 +3756,7 @@ impl Core {
                 for (g, c) in update_creates {
                     let mut f = g.open_file(true, true)?;
                     self.record_materialized(operation_id, Path::new(&c.path), &f)?;
-                    write_source(&mut f, &c.after)?;
+                    write_blob(&mut f, &c.after)?;
                     observations.push(RevisionFact {
                         path: c.path.clone(),
                         stamp: stamp(&f)?,
@@ -4324,6 +4415,7 @@ impl Core {
                 .map(|f| change(Path::new(&f.path), "copy", f.after.len())),
         );
         Ok(Mutation::CreateTree {
+            existing_target: false,
             target: display(target),
             directories,
             files: output,

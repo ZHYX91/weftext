@@ -57,6 +57,7 @@ pub struct SyncBindingInfo {
     pub pending_publications: usize,
     pub partial: bool,
     pub selected_objects: Option<BTreeSet<ObjectKey>>,
+    pub installed_objects: BTreeSet<ObjectKey>,
 }
 
 impl Core {
@@ -150,6 +151,7 @@ impl Core {
                     commit: String::new(),
                     revision: fresh(),
                     state: ObjectState {
+                        file_revisions: BTreeMap::new(),
                         parent: None,
                         name,
                         retired: directory.starts_with(root.join(".weftext-trash")),
@@ -193,6 +195,7 @@ impl Core {
                         commit: String::new(),
                         revision: fresh(),
                         state: ObjectState {
+                            file_revisions: BTreeMap::new(),
                             parent: None,
                             name: path
                                 .parent()
@@ -220,6 +223,7 @@ impl Core {
                         commit: String::new(),
                         revision: fresh(),
                         state: ObjectState {
+                            file_revisions: BTreeMap::new(),
                             parent: None,
                             name,
                             retired: false,
@@ -233,6 +237,13 @@ impl Core {
                 let name = relative_to(&path, Path::new(&tracked.directory))?;
                 super::relative(&name)?;
                 let blob = hash(bytes);
+                let observed = crate::operations::capture_optional(&path)?
+                    .ok_or_else(|| invalid("Captured replica file disappeared"))?;
+                if observed.bytes != *bytes {
+                    return Err(invalid("Captured replica file changed during binding"));
+                }
+                let revision = self.accepted_revision(&observed).unwrap_or_else(fresh);
+                tracked.state.file_revisions.insert(name.clone(), revision);
                 tracked.state.files.insert(name, blob.clone());
                 bundle.blobs.insert(blob, bytes.clone());
             }
@@ -335,13 +346,26 @@ impl Core {
                 pending += 1;
             }
         }
+        let mut selected = setup.selection.clone();
+        if let Some(selected) = &mut selected {
+            for plan in self.operations.values() {
+                if let Some(application) = &plan.sync_application
+                    && application.root == setup.root
+                    && self.committed(&plan.operation_id)
+                {
+                    selected.extend(application.selection.iter().cloned());
+                }
+            }
+        }
+        let installed_objects = self.sync_local_state(setup)?.0.into_keys().collect();
         Ok(SyncBindingInfo {
             root: setup.root.clone(),
             identity: setup.identity.clone(),
             replica_id: setup.replica_id.clone(),
             pending_publications: pending,
             partial: setup.selection.is_some(),
-            selected_objects: setup.selection.clone(),
+            selected_objects: selected,
+            installed_objects,
         })
     }
 
@@ -578,6 +602,9 @@ impl Core {
             match &transaction.mutation {
                 Mutation::Update { files } => {
                     for file in files {
+                        register_directory(&mut objects, root, file)?;
+                    }
+                    for file in files {
                         patch(&mut objects, root, file, &known_blobs, &mut blobs)?;
                     }
                 }
@@ -587,8 +614,33 @@ impl Core {
                     updates,
                     ..
                 } => {
-                    for birth in births {
-                        register_node(&mut objects, root, Path::new(&birth.path), &birth.node_id)?;
+                    let mut entries: Vec<_> = births
+                        .iter()
+                        .map(|b| (Path::new(&b.path), Some(b), None))
+                        .chain(
+                            files
+                                .iter()
+                                .filter(|f| {
+                                    Path::new(&f.path)
+                                        .file_name()
+                                        .is_some_and(|n| n == "weftext.directory.json")
+                                })
+                                .map(|f| (Path::new(&f.path), None, Some(f))),
+                        )
+                        .collect();
+                    entries.sort_by_key(|(path, _, _)| path.components().count());
+                    for (_, birth, marker) in entries {
+                        if let Some(birth) = birth {
+                            register_node(
+                                &mut objects,
+                                root,
+                                Path::new(&birth.path),
+                                &birth.node_id,
+                            )?;
+                        }
+                        if let Some(marker) = marker {
+                            register_directory(&mut objects, root, marker)?;
+                        }
                     }
                     for file in files.iter().chain(updates) {
                         patch(&mut objects, root, file, &known_blobs, &mut blobs)?;
@@ -619,6 +671,12 @@ impl Core {
                         invalid("Relocated canonical file is missing from replica basis")
                     })?;
                     node.state.files.insert(new_leaf.clone(), source_hash);
+                    let revision = node
+                        .state
+                        .file_revisions
+                        .remove(old_leaf)
+                        .ok_or_else(|| invalid("Relocated canonical revision is missing"))?;
+                    node.state.file_revisions.insert(new_leaf.clone(), revision);
                     node.state.name = Path::new(new_leaf)
                         .file_stem()
                         .unwrap()
@@ -673,6 +731,38 @@ impl Core {
             )?;
         } else {
             return Ok(());
+        }
+        let file_revisions: Vec<_> = if let Some(transaction) = &plan.transaction {
+            transaction
+                .preview
+                .revisions
+                .iter()
+                .map(|(p, r)| (p.clone(), r.clone()))
+                .collect()
+        } else {
+            plan.content_revision
+                .clone()
+                .or_else(|| plan.receipt.as_ref().map(|r| r.base_id.clone()))
+                .map(|r| vec![(plan.path.clone(), r)])
+                .unwrap_or_default()
+        };
+        for (path, revision) in file_revisions {
+            if let Some(key) = owner(&objects, root, Path::new(&path)) {
+                let object = objects.get_mut(&key).unwrap();
+                let relative = relative_to(Path::new(&path), Path::new(&object.directory))?;
+                if object.state.files.contains_key(&relative) {
+                    object.state.file_revisions.insert(relative, revision);
+                }
+            }
+        }
+        for object in objects.values_mut() {
+            for path in object.state.files.keys() {
+                object
+                    .state
+                    .file_revisions
+                    .entry(path.clone())
+                    .or_insert_with(fresh);
+            }
         }
         let mut changes = Vec::new();
         let mut parents = BTreeSet::new();
@@ -812,6 +902,56 @@ fn relative_to(path: &Path, directory: &Path) -> Result<String> {
         .to_string_lossy()
         .replace('\\', "/"))
 }
+fn register_directory(
+    objects: &mut BTreeMap<ObjectKey, LocalObject>,
+    root: &Path,
+    file: &FileChange,
+) -> Result<()> {
+    let path = Path::new(&file.path);
+    if file.before.is_some()
+        || path
+            .file_name()
+            .is_none_or(|n| n != "weftext.directory.json")
+    {
+        return Ok(());
+    }
+    crate::directory_identity::validate_directory_marker(&file.after)?;
+    let marker: serde_json::Value = serde_json::from_slice(&file.after)?;
+    let id = marker["directoryId"]
+        .as_str()
+        .ok_or_else(|| invalid("Directory identity missing"))?;
+    let directory = path.parent().unwrap();
+    let key = if directory == root {
+        ObjectKey::RootDirectory(id.into())
+    } else {
+        ObjectKey::Directory(id.into())
+    };
+    if objects.contains_key(&key) {
+        return Err(invalid("Directory identity already exists in this replica"));
+    }
+    let parent = if directory == root {
+        None
+    } else {
+        parent_id(objects, root, directory.parent().unwrap())?
+    };
+    objects.insert(
+        key.clone(),
+        LocalObject {
+            object: key,
+            directory: display(directory),
+            commit: String::new(),
+            revision: String::new(),
+            state: ObjectState {
+                file_revisions: BTreeMap::new(),
+                parent,
+                name: directory.file_name().unwrap().to_string_lossy().into(),
+                retired: false,
+                files: BTreeMap::new(),
+            },
+        },
+    );
+    Ok(())
+}
 fn register_node(
     objects: &mut BTreeMap<ObjectKey, LocalObject>,
     root: &Path,
@@ -832,6 +972,7 @@ fn register_node(
             commit: String::new(),
             revision: String::new(),
             state: ObjectState {
+                file_revisions: BTreeMap::new(),
                 parent,
                 name: path.file_stem().unwrap().to_string_lossy().into(),
                 retired: false,
@@ -861,6 +1002,7 @@ fn patch(
                 commit: String::new(),
                 revision: String::new(),
                 state: ObjectState {
+                    file_revisions: BTreeMap::new(),
                     parent: None,
                     name: path.file_name().unwrap().to_string_lossy().into(),
                     retired: false,

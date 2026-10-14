@@ -2169,7 +2169,7 @@ async fn save_definition(
         let definition = weftext_data::saved_queries(&patch.source)
             .map_err(|error| CoreError::new("invalidQueryDefinition", error.to_string()))?.into_iter()
             .find(|definition| definition.key == key).ok_or_else(|| CoreError::new("definitionUnavailable", "Committed definition could not be projected"))?;
-        Ok((document, definition, Some(receipt.base_id), patch))
+        Ok((document, definition, Some(receipt.revision_id.unwrap_or(receipt.base_id)), patch))
     }).await?;
     definition_write_response(
         &state,
@@ -2289,7 +2289,12 @@ fn replay_saved_definition(
             "The original effect is retained, but its current source changed identity",
         ));
     }
-    Ok(Some((document, definition, Some(receipt.base_id), patch)))
+    Ok(Some((
+        document,
+        definition,
+        Some(receipt.revision_id.unwrap_or(receipt.base_id)),
+        patch,
+    )))
 }
 
 fn definition_write_response(
@@ -3507,7 +3512,11 @@ mod tests {
         assert!(!document_matches_committed_source(&reopened, &committed));
         let owner = document["nodeId"].as_str().unwrap().to_string();
         let retained = ok(core_call(&state, move |core| {
-            core.read_source_revision(root, &owner, &receipt.base_id)
+            core.read_source_revision(
+                root,
+                &owner,
+                receipt.revision_id.as_deref().unwrap_or(&receipt.base_id),
+            )
         })
         .await);
         assert_eq!(retained, committed.as_bytes());

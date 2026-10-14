@@ -22,6 +22,7 @@ impl Fixture {
         let blob = hash(text.as_bytes());
         self.blobs.insert(blob.clone(), text.as_bytes().to_vec());
         ObjectState {
+            file_revisions: BTreeMap::from([("Note.typ".into(), fresh())]),
             parent: None,
             name: "Note".into(),
             retired: false,
@@ -251,6 +252,11 @@ fn schema_dependency_is_explicit_and_detects_concurrent_change() {
     let mut f = Fixture::new();
     let base = f.change(f.node.clone(), &[], "base");
     let mut schema = f.change(ObjectKey::Schema, &[], "schema v1");
+    let revision = schema.after.file_revisions.remove("Note.typ").unwrap();
+    schema
+        .after
+        .file_revisions
+        .insert(".weftext-schema.json".into(), revision);
     let blob = schema.after.files.remove("Note.typ").unwrap();
     schema
         .after
@@ -350,10 +356,16 @@ fn paths_are_portable_and_never_host_paths_or_runtime_state() {
         let mut change = f.change(f.node.clone(), &[], "bytes");
         let blob = change.after.files.remove("Note.typ").unwrap();
         change.after.files.insert(path.into(), blob);
+        let revision = change.after.file_revisions.remove("Note.typ").unwrap();
+        change.after.file_revisions.insert(path.into(), revision);
         assert!(f.manifest(&[], vec![change]).id().is_err(), "{path}");
     }
     let mut change = f.change(f.node.clone(), &[], "bytes");
     change.after.files.insert("note.typ".into(), hash(b"other"));
+    change
+        .after
+        .file_revisions
+        .insert("note.typ".into(), fresh());
     assert!(f.manifest(&[], vec![change]).id().is_err());
 }
 
@@ -488,4 +500,39 @@ fn several_hundred_offline_versions_keep_exact_head_and_common_base() {
     let view = graph.objects().unwrap();
     assert_eq!(view[&f.node].versions.len(), 2);
     assert_eq!(view[&f.node].common_bases[0].revision, birth.revision);
+}
+
+#[test]
+fn file_revision_cannot_rebind_other_bytes_or_other_owner() {
+    let mut f = Fixture::new();
+    let base = f.change(f.node.clone(), &[], "original");
+    let genesis = f.manifest(&[], vec![base.clone()]);
+    let mut graph = f.graph(&genesis);
+    let root = f.offer(&mut graph, &genesis);
+    let mut bad = f.change(f.node.clone(), &[&base.revision], "changed bytes");
+    bad.after.file_revisions = base.after.file_revisions.clone();
+    let manifest = f.manifest(&[&root], vec![bad]);
+    for (id, blob) in &f.blobs {
+        graph.offer_blob(id, blob.clone()).unwrap();
+    }
+    assert!(matches!(
+        graph
+            .offer_manifest(&manifest.id().unwrap(), manifest)
+            .unwrap(),
+        Admission::Rejected { .. }
+    ));
+    let mut bad = f.change(f.other.clone(), &[], "original");
+    bad.after.file_revisions = base.after.file_revisions.clone();
+    let manifest = f.manifest(&[&root], vec![bad]);
+    assert!(matches!(
+        graph
+            .offer_manifest(&manifest.id().unwrap(), manifest)
+            .unwrap(),
+        Admission::Rejected { .. }
+    ));
+    assert_eq!(
+        graph.objects().unwrap()[&f.node].versions[0].revision,
+        base.revision
+    );
+    assert!(!graph.objects().unwrap().contains_key(&f.other));
 }

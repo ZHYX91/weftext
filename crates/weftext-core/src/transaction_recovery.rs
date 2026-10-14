@@ -305,13 +305,16 @@ impl Core {
             Mutation::Update { files } => capture.changes = files.clone(),
             Mutation::CreateTree {
                 target,
+                existing_target,
                 directories,
                 files,
                 updates,
                 ..
             } => {
                 capture.changes = files.iter().chain(updates).cloned().collect();
-                self.capture_created_directory(plan, target, &mut capture)?;
+                if !existing_target {
+                    self.capture_created_directory(plan, target, &mut capture)?;
+                }
                 for relative in directories {
                     self.capture_created_directory(
                         plan,

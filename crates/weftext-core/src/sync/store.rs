@@ -237,6 +237,7 @@ mod tests {
                 before: BTreeSet::new(),
                 revision: fresh(),
                 after: ObjectState {
+                    file_revisions: BTreeMap::from([("Note.typ".into(), fresh())]),
                     parent: None,
                     name: "Note".into(),
                     retired: false,

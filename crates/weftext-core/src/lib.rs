@@ -132,6 +132,8 @@ pub struct SaveAsRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Receipt {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revision_id: Option<String>,
     pub operation_id: String,
     pub status: String,
     pub path: String,
@@ -562,6 +564,7 @@ impl Core {
             "save",
         );
         plan.receipt = Some(Receipt {
+            revision_id: None,
             operation_id: request.operation_id,
             status: "saved".into(),
             path: display(&session.path),
@@ -572,6 +575,18 @@ impl Core {
             },
             message: "Local NTFS save committed; source/schema semantics are not certified".into(),
         });
+        let content_revision = if plan.before.as_ref() == Some(&plan.after) {
+            self.accepted_revision(&operations::CapturedFile {
+                path: display(&session.path),
+                bytes: plan.after.clone(),
+                stamp: current_stamp.clone(),
+            })
+            .unwrap_or_else(fresh)
+        } else {
+            plan.receipt.as_ref().unwrap().base_id.clone()
+        };
+        plan.content_revision = Some(content_revision.clone());
+        plan.receipt.as_mut().unwrap().revision_id = Some(content_revision);
         plan.history_restore = restore;
         self.stage(plan.clone())?;
         if plan.before.as_ref() != Some(&plan.after) {
@@ -583,7 +598,7 @@ impl Core {
             &session.path,
             &new_stamp,
             &plan.after,
-            &plan.receipt.as_ref().unwrap().base_id,
+            plan.content_revision.as_ref().unwrap(),
         )?;
         self.commit(&plan)?;
         let receipt = plan.receipt.clone().unwrap();
@@ -635,6 +650,7 @@ impl Core {
             "saveAs",
         );
         plan.receipt = Some(Receipt {
+            revision_id: None,
             operation_id: request.operation_id,
             status: "saved".into(),
             path: display(&path),
@@ -823,6 +839,7 @@ impl Core {
         );
         plan.workspace_id = Some(workspace.workspace_id.clone());
         plan.node_id = Some(node_id.clone());
+        plan.content_revision = Some(fresh());
         self.stage(plan.clone())?;
         let directory = match guard.create_directory() {
             Ok(d) => d,
@@ -844,7 +861,7 @@ impl Core {
             &path,
             &stamp(&file)?,
             source.as_bytes(),
-            &fresh(),
+            plan.content_revision.as_ref().unwrap(),
         )?;
         self.commit(&plan)?;
         drop(file);

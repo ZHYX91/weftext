@@ -631,3 +631,558 @@ fn received_registry_update_admits_new_tags_only_on_original_guarded_file() {
         .is_err()
     );
 }
+
+#[test]
+fn partial_replica_hydrates_new_tree_and_compound_existing_update_in_one_decision() {
+    let mut p = pair(&["Note"]);
+    let new = p.a.create_note(&p.ar, &p.ar, "New").unwrap();
+    let child = p.a.create_note(&p.ar, p.ar.join("New"), "Child").unwrap();
+    let resource =
+        p.a.prepare_import_resource(&p.ar, &child.path, "new.bin", vec![1, 0, 255], &fresh())
+            .unwrap();
+    p.a.execute_operation(&resource.operation_id, &resource.plan_id)
+        .unwrap();
+    let child_key = ObjectKey::Node(child.node_id.clone().unwrap());
+    let new_key = ObjectKey::Node(new.node_id.clone().unwrap());
+    let paths = [display(&p.ar.join("Note/Note.typ")), child.path.clone()];
+    let cut = p.a.read_snapshot(&p.ar, &paths).unwrap();
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::UpdateFiles {
+            changes: cut
+                .files
+                .iter()
+                .map(|f| {
+                    let mut after = f.bytes.clone().unwrap();
+                    after.extend_from_slice(b"\ncompound with hydrated child");
+                    FileChange {
+                        path: f.path.clone(),
+                        base_id: Some(f.base_id.clone()),
+                        before: f.bytes.clone(),
+                        after,
+                    }
+                })
+                .collect(),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let req = apply(&p);
+    let preview = p.b.prepare_operation(req.clone()).unwrap();
+    assert_eq!(p.b.prepare_operation(req).unwrap().plan_id, preview.plan_id);
+    assert!(!p.br.join("New").exists());
+    assert_eq!(
+        p.b.sync_binding_info(&p.br)
+            .unwrap()
+            .installed_objects
+            .len(),
+        1
+    );
+    p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    let opened =
+        p.b.open(p.br.join("New/Child/Child.typ"), Some(p.br.clone()))
+            .unwrap();
+    assert_eq!(opened.node_id, child.node_id);
+    assert!(opened.source.ends_with("compound with hydrated child"));
+    assert!(
+        fs::read_to_string(p.br.join("Note/Note.typ"))
+            .unwrap()
+            .ends_with("compound with hydrated child")
+    );
+    let resources = p.b.managed_resource_snapshot(&p.br, &opened.path).unwrap();
+    assert_eq!(resources[0].bytes, vec![1, 0, 255]);
+    assert_eq!(resources[0].identity_status, "admitted");
+    let info = p.b.sync_binding_info(&p.br).unwrap();
+    assert!(info.installed_objects.contains(&child_key));
+    assert!(info.installed_objects.contains(&new_key));
+    assert_eq!(info.pending_publications, 0);
+    let source = format!("{}\nlocal hydrated edit", opened.source);
+    p.b.save(SaveRequest {
+        session_id: opened.session_id,
+        base_id: opened.base_id,
+        operation_id: fresh(),
+        source: source.clone(),
+    })
+    .unwrap();
+    transfer(
+        &p.b,
+        &p.br,
+        &p.a,
+        &p.identity,
+        &BTreeSet::from([child_key.clone()]),
+    );
+    let graph = p.a.read_sync_history(&p.identity).unwrap();
+    assert_eq!(graph.objects().unwrap()[&child_key].versions.len(), 1);
+    assert!(graph.blob(&hash(source.as_bytes())).is_some());
+}
+
+#[test]
+fn hydration_rechecks_absent_directory_and_does_not_advance_existing_source_on_collision() {
+    let mut p = pair(&["Note"]);
+    let new = p.a.create_note(&p.ar, &p.ar, "New").unwrap();
+    p.keys.insert(ObjectKey::Node(new.node_id.unwrap()));
+    save(&mut p.a, &p.ar, "Note", "incoming existing update");
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let before = fs::read(p.br.join("Note/Note.typ")).unwrap();
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    fs::create_dir(p.br.join("New")).unwrap();
+    fs::write(p.br.join("New/user.txt"), "external owner").unwrap();
+    assert_eq!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap_err()
+            .code,
+        "exists"
+    );
+    assert_eq!(fs::read(p.br.join("Note/Note.typ")).unwrap(), before);
+    assert_eq!(
+        fs::read_to_string(p.br.join("New/user.txt")).unwrap(),
+        "external owner"
+    );
+    assert!(!p.br.join("New/New.typ").exists());
+    assert!(!p.b.journal_path(&preview.operation_id, "install").exists());
+}
+
+#[test]
+fn hydrated_node_afterimage_recovery_uses_original_objects_and_keeps_unrelated_session() {
+    let mut p = pair(&["Note"]);
+    let unrelated =
+        p.b.open(p.br.join("Note/Note.typ"), Some(p.br.clone()))
+            .unwrap();
+    let new = p.a.create_note(&p.ar, &p.ar, "New").unwrap();
+    let selected = BTreeSet::from([ObjectKey::Node(new.node_id.clone().unwrap())]);
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &selected);
+    let preview = run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: selected.clone(),
+        },
+    );
+    assert_eq!(
+        p.b.sessions[&unrelated.session_id].base_id,
+        unrelated.base_id
+    );
+    fs::rename(
+        p.b.journal_path(&preview.operation_id, "commit"),
+        p._temp.path().join("retained-hydration-commit.json"),
+    )
+    .unwrap();
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        p.b.resolve_recovery(&preview.operation_id, "adoptAfterImages")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    assert_eq!(
+        p.b.open(p.br.join("New/New.typ"), Some(p.br.clone()))
+            .unwrap()
+            .node_id,
+        new.node_id
+    );
+    assert!(
+        p.b.sync_binding_info(&p.br)
+            .unwrap()
+            .selected_objects
+            .unwrap()
+            .is_superset(&selected)
+    );
+    assert_eq!(
+        p.b.sync_binding_info(&p.br).unwrap().pending_publications,
+        0
+    );
+}
+
+#[test]
+fn hydration_carries_new_directory_bookmark_root_bookmark_tags_and_owned_child() {
+    let mut p = pair(&["Note"]);
+    let folder = p.ar.join("Folder");
+    fs::create_dir(&folder).unwrap();
+    let bookmark =
+        p.a.prepare_directory_admission(&p.ar, &folder, &fresh())
+            .unwrap();
+    p.a.execute_operation(&bookmark.preview.operation_id, &bookmark.preview.plan_id)
+        .unwrap();
+    let root_bookmark =
+        p.a.prepare_directory_admission(&p.ar, &p.ar, &fresh())
+            .unwrap();
+    p.a.execute_operation(
+        &root_bookmark.preview.operation_id,
+        &root_bookmark.preview.plan_id,
+    )
+    .unwrap();
+    let child = p.a.create_note(&p.ar, &folder, "Child").unwrap();
+    let registry = p.a.read_tag_registry(&p.ar).unwrap();
+    let tag =
+        p.a.prepare_create_tag(&p.ar, "new synchronized tag", &registry.base_id, &fresh())
+            .unwrap();
+    p.a.execute_operation(&tag.preview.operation_id, &tag.preview.plan_id)
+        .unwrap();
+    p.a.publish_sync(&p.ar).unwrap();
+    let all: BTreeSet<_> =
+        p.a.read_sync_history(&p.identity)
+            .unwrap()
+            .objects()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+    assert_eq!(all.len(), 5);
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &all);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: all,
+        },
+    );
+    assert_eq!(
+        p.b.open(p.br.join("Folder/Child/Child.typ"), Some(p.br.clone()))
+            .unwrap()
+            .node_id,
+        child.node_id
+    );
+    assert_eq!(
+        p.b.resolve_navigation_target(&p.br, &bookmark.target_ref)
+            .unwrap()
+            .status,
+        "managed"
+    );
+    assert_eq!(
+        p.b.resolve_navigation_target(&p.br, &root_bookmark.target_ref)
+            .unwrap()
+            .status,
+        "managed"
+    );
+    let receiver_tags = p.b.read_tag_registry(&p.br).unwrap();
+    assert!(receiver_tags.complete);
+    assert_eq!(receiver_tags.tags[0].tag_ref, tag.target_ref);
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        p.b.resolve_navigation_target(&p.br, &root_bookmark.target_ref)
+            .unwrap()
+            .status,
+        "managed"
+    );
+    let newborn =
+        p.b.create_note(&p.br, p.br.join("Folder"), "LocalChild")
+            .unwrap();
+    p.b.publish_sync(&p.br).unwrap();
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    assert!(
+        graph
+            .objects()
+            .unwrap()
+            .contains_key(&ObjectKey::Node(newborn.node_id.unwrap()))
+    );
+}
+
+fn node_snapshot(core: &mut Core, root: &Path, name: &str) -> weftext_knowledge::NodeSnapshot {
+    let file = core
+        .read_snapshot(
+            root,
+            &[display(&root.join(name).join(format!("{name}.typ")))],
+        )
+        .unwrap()
+        .files
+        .remove(0);
+    weftext_knowledge::NodeSnapshot {
+        owner: weftext_knowledge::NodeRef {
+            workspace_id: core.require_workspace(root).unwrap().workspace_id,
+            node_id: file.node_id.unwrap(),
+        },
+        path: file.path,
+        library_path: format!("{name}/{name}.typ"),
+        revision_id: file.revision.unwrap(),
+        source: String::from_utf8(file.bytes.unwrap()).unwrap(),
+        title: None,
+        aliases: vec![],
+        labels: vec![],
+        labels_complete: false,
+    }
+}
+
+#[test]
+fn actual_source_and_resource_revisions_keep_annotation_anchor_exact_after_clone_and_update() {
+    use weftext_knowledge as knowledge;
+    let mut p = pair(&["Note"]);
+    let baseline = node_snapshot(&mut p.a, &p.ar, "Note");
+    let copied = node_snapshot(&mut p.b, &p.br, "Note");
+    assert_eq!(baseline.revision_id, copied.revision_id);
+    let old_anchor =
+        knowledge::source_anchor(&baseline, 0, baseline.source.len(), baseline.source.clone())
+            .unwrap();
+    assert_eq!(
+        knowledge::resolve_anchor(&old_anchor, Some(&copied), &[]).status,
+        "exact"
+    );
+    save(&mut p.a, &p.ar, "Note", "待批注文字");
+    let current = node_snapshot(&mut p.a, &p.ar, "Note");
+    let start = current.source.find("待批注文字").unwrap();
+    let anchor =
+        knowledge::source_anchor(&current, start, current.source.len(), "待批注文字".into())
+            .unwrap();
+    let record = knowledge::AnnotationRecord {
+        annotation_id: fresh(),
+        reply_to: None,
+        attribution: "reviewer".into(),
+        created_at: "2026-10-14T00:00:00Z".into(),
+        purpose: "comment".into(),
+        body: "检查这个位置".into(),
+        labels: vec![],
+        appearance: serde_json::json!({}),
+        review_state: "open".into(),
+        target: knowledge::AnnotationTarget::SourceRange { anchor },
+        suggestion: None,
+        target_history: vec![],
+        unknown: BTreeMap::new(),
+    };
+    let annotations = knowledge::decode_annotations(br#"{"version":1,"annotations":[]}"#)
+        .unwrap()
+        .create(record)
+        .unwrap();
+    let annotation_path = p.ar.join("Note/weftext.annotations.json");
+    let cut =
+        p.a.read_snapshot(&p.ar, &[current.path.clone(), display(&annotation_path)])
+            .unwrap();
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::UpdateFiles {
+            changes: vec![
+                FileChange {
+                    path: current.path,
+                    base_id: Some(cut.files[0].base_id.clone()),
+                    before: cut.files[0].bytes.clone(),
+                    after: cut.files[0].bytes.clone().unwrap(),
+                },
+                FileChange {
+                    path: display(&annotation_path),
+                    base_id: Some(cut.files[1].base_id.clone()),
+                    before: None,
+                    after: annotations.clone(),
+                },
+            ],
+        },
+    );
+    let resource =
+        p.a.prepare_import_resource(
+            &p.ar,
+            p.ar.join("Note/Note.typ"),
+            "image.bin",
+            vec![1, 2, 255],
+            &fresh(),
+        )
+        .unwrap();
+    p.a.execute_operation(&resource.operation_id, &resource.plan_id)
+        .unwrap();
+    let original_resource =
+        p.a.managed_resource_snapshot(&p.ar, p.ar.join("Note/Note.typ"))
+            .unwrap()
+            .remove(0);
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let intent = apply(&p).intent;
+    run(&mut p.b, &p.br, intent);
+    let receiver = node_snapshot(&mut p.b, &p.br, "Note");
+    assert_eq!(receiver.revision_id, current.revision_id);
+    let document = knowledge::decode_annotations(
+        &fs::read(p.br.join("Note/weftext.annotations.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        knowledge::annotation_views(&document, Some(&receiver), &[])[0].target_state,
+        "exact"
+    );
+    assert_eq!(
+        fs::read(p.br.join("Note/weftext.annotations.json")).unwrap(),
+        annotations
+    );
+    assert_eq!(
+        p.b.managed_resource_snapshot(&p.br, p.br.join("Note/Note.typ"))
+            .unwrap()[0]
+            .revision,
+        original_resource.revision
+    );
+    assert_eq!(
+        p.b.read_source_revision(&p.br, &receiver.owner.node_id, &receiver.revision_id)
+            .unwrap(),
+        receiver.source.as_bytes()
+    );
+    let reopened_session =
+        p.b.open(p.br.join("Note/Note.typ"), Some(p.br.clone()))
+            .unwrap();
+    let no_op =
+        p.b.save(SaveRequest {
+            session_id: reopened_session.session_id,
+            base_id: reopened_session.base_id,
+            operation_id: fresh(),
+            source: reopened_session.source,
+        })
+        .unwrap();
+    assert_eq!(
+        no_op.revision_id.as_deref(),
+        Some(current.revision_id.as_str())
+    );
+    assert_eq!(
+        node_snapshot(&mut p.b, &p.br, "Note").revision_id,
+        current.revision_id
+    );
+    assert_eq!(
+        p.b.sync_binding_info(&p.br).unwrap().pending_publications,
+        0
+    );
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    let reopened = node_snapshot(&mut p.b, &p.br, "Note");
+    assert_eq!(
+        knowledge::annotation_views(&document, Some(&reopened), &[])[0].target_state,
+        "exact"
+    );
+    let third_root = p._temp.path().join("third-library");
+    let mut third = Core::new(p._temp.path().join("third-private")).unwrap();
+    transfer(&p.a, &p.ar, &third, &p.identity, &p.keys);
+    run(
+        &mut third,
+        &third_root,
+        OperationIntent::CloneSync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    let copied = node_snapshot(&mut third, &third_root, "Note");
+    let copied_annotations = knowledge::decode_annotations(
+        &fs::read(third_root.join("Note/weftext.annotations.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        knowledge::annotation_views(&copied_annotations, Some(&copied), &[])[0].target_state,
+        "exact"
+    );
+}
+
+#[test]
+fn equal_bytes_explicit_branch_choice_keeps_the_chosen_revision_through_restart() {
+    let mut p = pair(&["Note"]);
+    save(&mut p.a, &p.ar, "Note", "same independent text");
+    save(&mut p.b, &p.br, "Note", "same independent text");
+    let a_snapshot = node_snapshot(&mut p.a, &p.ar, "Note");
+    let b_snapshot = node_snapshot(&mut p.b, &p.br, "Note");
+    assert_eq!(a_snapshot.source, b_snapshot.source);
+    assert_ne!(a_snapshot.revision_id, b_snapshot.revision_id);
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    p.b.publish_sync(&p.br).unwrap();
+    let objects =
+        p.b.read_sync_history(&p.identity)
+            .unwrap()
+            .objects()
+            .unwrap();
+    let key = p.keys.first().unwrap().clone();
+    let sides = &objects[&key];
+    let selected = sides
+        .versions
+        .iter()
+        .find(|v| v.state.file_revisions["Note.typ"] == a_snapshot.revision_id)
+        .unwrap()
+        .state
+        .clone();
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::MergeSync {
+            identity: p.identity.clone(),
+            resolutions: vec![SyncResolution {
+                object: key,
+                revisions: revisions(sides),
+                state: selected,
+            }],
+            blobs: BTreeMap::new(),
+        },
+    );
+    assert_eq!(
+        node_snapshot(&mut p.b, &p.br, "Note").revision_id,
+        a_snapshot.revision_id
+    );
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        node_snapshot(&mut p.b, &p.br, "Note").revision_id,
+        a_snapshot.revision_id
+    );
+}
+
+#[test]
+fn existing_node_can_receive_a_new_resource_subdirectory_with_original_recovery() {
+    let mut p = pair(&["Note"]);
+    let graph = p.a.read_sync_history(&p.identity).unwrap();
+    let view = graph.objects().unwrap();
+    let key = p.keys.first().unwrap().clone();
+    let base = &view[&key].versions[0];
+    let mut state = base.state.clone();
+    let resource_id = fresh();
+    let manifest = serde_json::to_vec(&serde_json::json!({"version":1,"resources":[{"resourceId":resource_id,"path":"assets/file.bin"}]})).unwrap();
+    let binary = vec![0, 255, 1, 3];
+    state
+        .files
+        .insert("weftext.resources.json".into(), hash(&manifest));
+    state
+        .file_revisions
+        .insert("weftext.resources.json".into(), fresh());
+    state.files.insert("assets/file.bin".into(), hash(&binary));
+    state
+        .file_revisions
+        .insert("assets/file.bin".into(), fresh());
+    let received = Manifest {
+        version: 1,
+        workspace_id: p.identity.workspace_id.clone(),
+        replica_id: fresh(),
+        operation_id: fresh(),
+        parents: BTreeSet::from([base.commit.clone()]),
+        dependencies: vec![],
+        changes: vec![Change {
+            object: key,
+            before: BTreeSet::from([base.revision.clone()]),
+            revision: fresh(),
+            after: state,
+        }],
+    };
+    p.b.receive_sync(
+        &p.identity,
+        SyncBundle {
+            manifests: BTreeMap::from([(received.id().unwrap(), received)]),
+            blobs: BTreeMap::from([(hash(&manifest), manifest), (hash(&binary), binary.clone())]),
+        },
+    )
+    .unwrap();
+    let intent = apply(&p).intent;
+    let preview = run(&mut p.b, &p.br, intent);
+    let resources =
+        p.b.managed_resource_snapshot(&p.br, p.br.join("Note/Note.typ"))
+            .unwrap();
+    assert_eq!(resources[0].resource_id, resource_id);
+    assert_eq!(resources[0].bytes, binary);
+    assert_eq!(resources[0].identity_status, "admitted");
+    fs::rename(
+        p.b.journal_path(&preview.operation_id, "commit"),
+        p._temp.path().join("retained-resource-commit.json"),
+    )
+    .unwrap();
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        p.b.resolve_recovery(&preview.operation_id, "adoptAfterImages")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    assert_eq!(
+        p.b.managed_resource_snapshot(&p.br, p.br.join("Note/Note.typ"))
+            .unwrap()[0]
+            .identity_status,
+        "admitted"
+    );
+}

@@ -229,6 +229,9 @@ impl Core {
                     crate::directory_identity::validate_sync_tags(bytes)?;
                 }
                 let path = directory.join(relative);
+                preview
+                    .revisions
+                    .insert(display(&path), state.file_revisions[relative].clone());
                 let name = path.file_name().unwrap().to_string_lossy();
                 if matches!(
                     name.as_ref(),
@@ -315,7 +318,10 @@ impl Core {
             .into_values()
             .map(|(path, after)| {
                 preview.changes.push(change(&path, "receive", after.len()));
-                preview.revisions.insert(display(&path), fresh());
+                preview
+                    .revisions
+                    .entry(display(&path))
+                    .or_insert_with(fresh);
                 FileChange {
                     path: display(&path),
                     base_id: None,
@@ -350,6 +356,7 @@ impl Core {
             files: vec![],
             directories: vec![],
             mutation: Mutation::CreateTree {
+                existing_target: false,
                 target: display(&root),
                 directories: directories.into_iter().collect(),
                 files,

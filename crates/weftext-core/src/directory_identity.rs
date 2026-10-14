@@ -322,6 +322,8 @@ impl Core {
                     OperationIntent::CopyNode { .. }
                         | OperationIntent::TemplateNode { .. }
                         | OperationIntent::CloneSync { .. }
+                        | OperationIntent::ApplySync { .. }
+                        | OperationIntent::MergeSync { .. }
                 )
                 && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
             {
@@ -339,6 +341,21 @@ impl Core {
                             )?
                             .as_ref()
                             == Some(identity)
+                    {
+                        return Ok(true);
+                    }
+                }
+            }
+            if plan.workspace_id.as_deref() == Some(workspace)
+                && let Some(application) = &plan.sync_application
+                && let Some(transaction) = &plan.transaction
+            {
+                for object in &application.after {
+                    if matches!(&object.object, sync::ObjectKey::RootDirectory(value) if value == id)
+                        && transaction.write_parents.iter().any(|(p, bound)| {
+                            Path::new(p).parent() == Some(Path::new(&object.directory))
+                                && bound == identity
+                        })
                     {
                         return Ok(true);
                     }
@@ -393,6 +410,8 @@ impl Core {
                 && matches!(
                     transaction.request.intent,
                     OperationIntent::CloneSync { .. }
+                        | OperationIntent::ApplySync { .. }
+                        | OperationIntent::MergeSync { .. }
                 )
                 && let operations::Mutation::CreateTree { files, .. } = &transaction.mutation
             {
@@ -416,14 +435,18 @@ impl Core {
                     .as_ref()
                     .is_some_and(|a| a.root == display(root))
                 && let Some(transaction) = &plan.transaction
-                && let operations::Mutation::Update { files } = &transaction.mutation
             {
+                let updates = match &transaction.mutation {
+                    operations::Mutation::Update { files } => files,
+                    operations::Mutation::CreateTree { updates, .. } => updates,
+                    _ => continue,
+                };
                 let registry = display(&root.join(TAG_REGISTRY));
                 if transaction
                     .files
                     .iter()
                     .any(|f| f.path == registry && f.stamp.identity == *identity)
-                    && files.iter().any(|f| {
+                    && updates.iter().any(|f| {
                         f.path == registry
                             && tag_document(Some(&f.after))
                                 .is_ok_and(|doc| doc.tags.iter().any(|tag| tag.tag_id == id))

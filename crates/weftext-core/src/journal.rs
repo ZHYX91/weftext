@@ -24,6 +24,8 @@ pub(crate) struct Plan {
     pub sync_publication: Option<sync::replica::SyncPublication>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sync_application: Option<sync::apply::SyncApplication>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_revision: Option<String>,
 }
 impl Plan {
     pub fn file(
@@ -52,6 +54,7 @@ impl Plan {
             sync_setup: None,
             sync_publication: None,
             sync_application: None,
+            content_revision: None,
         }
     }
 }

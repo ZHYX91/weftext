@@ -50,6 +50,9 @@ pub struct ObjectState {
     pub name: String,
     pub retired: bool,
     pub files: BTreeMap<String, String>,
+    /// Portable content revisions are distinct from local ReadBasis tokens and
+    /// from the enclosing multi-file conflict-unit revision.
+    pub file_revisions: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,6 +130,26 @@ impl Manifest {
             }
             for before in &change.before {
                 uuid(before)?;
+            }
+            if !change
+                .after
+                .files
+                .keys()
+                .eq(change.after.file_revisions.keys())
+                || change
+                    .after
+                    .file_revisions
+                    .values()
+                    .collect::<BTreeSet<_>>()
+                    .len()
+                    != change.after.file_revisions.len()
+            {
+                return Err(invalid(
+                    "Every portable file requires its exact distinct content revision",
+                ));
+            }
+            for revision in change.after.file_revisions.values() {
+                uuid(revision)?;
             }
             if let Some(parent) = &change.after.parent {
                 key(parent)?;
@@ -524,6 +547,29 @@ impl ReplicaGraph {
             // content, so missing objects cannot silently masquerade as deletes.
             if change.before.is_empty() && change.after.retired {
                 return Err(invalid("Cannot retire an object that was never born"));
+            }
+        }
+        // Repeated immutable content can keep its revision through a move or
+        // merge. A revision may never be reassigned to other bytes or an owner.
+        let mut file_versions = BTreeMap::new();
+        for prior in self
+            .admitted
+            .iter()
+            .map(|id| &self.manifests[id])
+            .chain(std::iter::once(manifest))
+        {
+            for change in &prior.changes {
+                for (path, revision) in &change.after.file_revisions {
+                    let binding = (&change.object, &change.after.files[path]);
+                    if file_versions
+                        .insert(revision, binding)
+                        .is_some_and(|old| old != binding)
+                    {
+                        return Err(invalid(
+                            "A portable file revision was reused for other bytes or owner",
+                        ));
+                    }
+                }
             }
         }
         for dependency in &manifest.dependencies {

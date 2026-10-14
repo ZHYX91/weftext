@@ -775,6 +775,7 @@ impl Core {
                 .map(|file| change(Path::new(&file.path), "import", file.after.len())),
         );
         Ok(Mutation::CreateTree {
+            existing_target: false,
             target: display(&target),
             directories: directories.into_iter().collect(),
             files: output,

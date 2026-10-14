@@ -262,6 +262,7 @@ fn clone_rejects_content_identity_mismatch_before_creating_a_file() {
             before: BTreeSet::new(),
             revision: fresh(),
             after: ObjectState {
+                file_revisions: BTreeMap::from([("Note.typ".into(), fresh())]),
                 parent: None,
                 name: "Note".into(),
                 retired: false,

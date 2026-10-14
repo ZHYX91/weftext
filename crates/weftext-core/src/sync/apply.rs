@@ -9,7 +9,9 @@ use crate::{
     backend::ParentGuard,
     display, fresh,
     journal::Plan,
-    operations::{FileChange, FrozenOperation, Mutation, capture_optional, change},
+    operations::{
+        FileChange, FrozenOperation, Mutation, NewBirth, capture_optional, change, ensure_absent,
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +31,8 @@ pub(crate) struct SyncApplication {
     pub before: Vec<LocalObject>,
     pub after: Vec<LocalObject>,
     pub expected_versions: Vec<Dependency>,
+    #[serde(default)]
+    pub selection: BTreeSet<ObjectKey>,
     pub blobs: BTreeMap<String, Vec<u8>>,
 }
 
@@ -191,6 +195,27 @@ impl Core {
                 .iter()
                 .flat_map(|k| current[k].versions.iter().map(|v| v.commit.clone()))
                 .collect();
+            let mut resolutions = resolutions.clone();
+            for resolution in &mut resolutions {
+                resolution.state.file_revisions = resolution
+                    .state
+                    .files
+                    .iter()
+                    .map(|(path, digest)| {
+                        let retained = current[&resolution.object]
+                            .versions
+                            .iter()
+                            .find(|v| {
+                                v.state.files.get(path) == Some(digest)
+                                    && v.state.file_revisions.get(path)
+                                        == resolution.state.file_revisions.get(path)
+                            })
+                            .and_then(|v| v.state.file_revisions.get(path))
+                            .cloned();
+                        (path.clone(), retained.unwrap_or_else(fresh))
+                    })
+                    .collect();
+            }
             let manifest = Manifest {
                 version: 1,
                 workspace_id: identity.workspace_id.clone(),
@@ -261,6 +286,51 @@ impl Core {
             resource_map: BTreeMap::new(),
             losses: vec![],
         };
+        let mut locations = BTreeMap::new();
+        let mut remaining: BTreeSet<_> = states.keys().cloned().collect();
+        while !remaining.is_empty() {
+            let prior = remaining.len();
+            for key in remaining.clone() {
+                let state = &states[&key].state;
+                let directory = if matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
+                    let parent = if let Some(parent) = &state.parent {
+                        let Some(parent) = locations.get(parent) else {
+                            continue;
+                        };
+                        parent
+                    } else {
+                        &root
+                    };
+                    parent.join(&state.name)
+                } else {
+                    root.clone()
+                };
+                locations.insert(key.clone(), directory);
+                remaining.remove(&key);
+            }
+            if remaining.len() == prior {
+                return Err(invalid("Placement has a missing parent or a cycle"));
+            }
+        }
+        let mut directory_claims = BTreeMap::new();
+        for (key, directory) in &locations {
+            if matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
+                let name = display(directory).to_lowercase();
+                if directory_claims.insert(name.clone(), key.clone()).is_some()
+                    || local.values().any(|o| {
+                        &o.object != key
+                            && matches!(o.object, ObjectKey::Node(_) | ObjectKey::Directory(_))
+                            && o.directory.to_lowercase() == name
+                    })
+                {
+                    return Err(invalid(
+                        "Another content object occupies the incoming directory",
+                    ));
+                }
+            }
+        }
+        let mut created_directories = BTreeSet::new();
+        let mut births = Vec::new();
         let mut before = Vec::new();
         let mut after = Vec::new();
         let mut blobs = BTreeMap::new();
@@ -270,39 +340,49 @@ impl Core {
         let mut paths = BTreeSet::new();
         let mut resource_ids = BTreeSet::new();
         for (key, version) in states {
-            let old = local.get(&key).ok_or_else(|| {
-                CoreError::new(
-                    "syncHydrationRequired",
-                    "This application requires an object not yet installed in the partial replica",
-                )
-            })?;
+            let old = local.get(&key);
             let state = &version.state;
-            if state.parent != old.state.parent
-                || state.name != old.state.name
-                || state.retired != old.state.retired
-                || state.retired
-                || old.state.files.keys().any(|p| !state.files.contains_key(p))
+            let directory = &locations[&key];
+            if state.retired
+                || old.is_some_and(|old| {
+                    state.parent != old.state.parent
+                        || state.name != old.state.name
+                        || state.retired != old.state.retired
+                        || Path::new(&old.directory) != directory
+                        || old.state.files.keys().any(|p| !state.files.contains_key(p))
+                })
             {
                 return Err(CoreError::new(
                     "syncStructureRequired",
                     "Placement, retirement and file removal require a guarded structure application",
                 ));
             }
-            let directory = Path::new(&old.directory);
+            if old.is_none() && matches!(key, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
+                ensure_absent(directory)?;
+            }
             let resources = validate_state(&graph, &key, state)?;
             if let ObjectKey::Node(id) = &key {
-                let canonical = self.managed_node(&root, directory, false)?;
-                if self
-                    .admitted_binding(&canonical.stamp.identity)
-                    .is_none_or(|b| b.node_id != *id)
-                {
-                    return Err(invalid(
-                        "Local node is no longer the originally admitted object",
-                    ));
+                if old.is_some() {
+                    let canonical = self.managed_node(&root, directory, false)?;
+                    if self
+                        .admitted_binding(&canonical.stamp.identity)
+                        .is_none_or(|b| b.node_id != *id)
+                    {
+                        return Err(invalid(
+                            "Local node is no longer the originally admitted object",
+                        ));
+                    }
+                } else {
+                    births.push(NewBirth {
+                        path: display(&directory.join(format!("{}.typ", state.name))),
+                        node_id: id.clone(),
+                    });
                 }
                 preview.node_map.insert(id.clone(), id.clone());
             }
-            if let ObjectKey::Directory(id) | ObjectKey::RootDirectory(id) = &key {
+            if let ObjectKey::Directory(id) | ObjectKey::RootDirectory(id) = &key
+                && old.is_some()
+            {
                 let guard = ParentGuard::acquire(&directory.join("weftext.directory.json"))?;
                 if !self.directory_admitted(
                     &identity.workspace_id,
@@ -320,9 +400,24 @@ impl Core {
                     return Err(invalid("Incoming files overlap"));
                 }
                 self.check_pending(&path)?;
-                let captured = capture_optional(&path)?;
+                let mut parent = path.parent().unwrap();
+                while !parent.exists() && parent != root {
+                    created_directories.insert(display(
+                        parent
+                            .strip_prefix(&root)
+                            .map_err(|_| invalid("Incoming file escaped root"))?,
+                    ));
+                    parent = parent
+                        .parent()
+                        .ok_or_else(|| invalid("Incoming file escaped root"))?;
+                }
+                let captured = if path.parent().unwrap().exists() {
+                    capture_optional(&path)?
+                } else {
+                    None
+                };
                 if captured.as_ref().map(|f| hash(&f.bytes)).as_ref()
-                    != old.state.files.get(relative)
+                    != old.and_then(|o| o.state.files.get(relative))
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
@@ -364,7 +459,8 @@ impl Core {
                             format!("weftext-resource://{}/{id}", identity.workspace_id),
                         );
                     }
-                } else if captured.is_none()
+                } else if old.is_some()
+                    && captured.is_none()
                     && relative != "weftext.annotations.json"
                     && relative != "weftext.resources.json"
                 {
@@ -372,11 +468,7 @@ impl Core {
                         "A newly received file requires an admitted content role",
                     ));
                 }
-                let revision = captured
-                    .as_ref()
-                    .filter(|f| f.bytes == bytes)
-                    .and_then(|f| self.accepted_revision(f))
-                    .unwrap_or_else(fresh);
+                let revision = state.file_revisions[relative].clone();
                 let prior = captured.as_ref().map(|f| f.bytes.clone());
                 if let Some(file) = captured {
                     files.push(file);
@@ -388,10 +480,12 @@ impl Core {
                 };
                 preview.changes.push(change(&path, action, bytes.len()));
                 preview.revisions.insert(display(&path), revision);
-                write_parents.push((
-                    display(&path),
-                    ParentGuard::acquire(&path)?.directory_identity()?,
-                ));
+                if path.parent().unwrap().exists() {
+                    write_parents.push((
+                        display(&path),
+                        ParentGuard::acquire(&path)?.directory_identity()?,
+                    ));
+                }
                 changes.push(FileChange {
                     path: display(&path),
                     base_id: None,
@@ -400,10 +494,12 @@ impl Core {
                 });
                 blobs.insert(digest.clone(), bytes);
             }
-            before.push(old.clone());
+            if let Some(old) = old {
+                before.push(old.clone());
+            }
             after.push(LocalObject {
                 object: key,
-                directory: old.directory.clone(),
+                directory: display(directory),
                 commit: version.commit,
                 revision: version.revision,
                 state: version.state,
@@ -446,15 +542,47 @@ impl Core {
             before,
             after,
             expected_versions,
+            selection: requested,
             blobs,
         });
         plan.sync_publication = publication;
+        let mutation = if !births.is_empty()
+            || !created_directories.is_empty()
+            || after_has_new_object(plan.sync_application.as_ref().unwrap())
+        {
+            for relative in &created_directories {
+                let directory = root.join(relative);
+                if directory.parent().unwrap().exists() {
+                    write_parents.push((
+                        display(&directory),
+                        ParentGuard::acquire(&directory)?.directory_identity()?,
+                    ));
+                }
+            }
+            let root_member = root.join(".sync-root");
+            write_parents.push((
+                display(&root_member),
+                ParentGuard::acquire(&root_member)?.directory_identity()?,
+            ));
+            let (output, updates): (Vec<_>, Vec<_>) =
+                changes.into_iter().partition(|c| c.before.is_none());
+            Mutation::CreateTree {
+                target: display(&root),
+                existing_target: true,
+                directories: created_directories.into_iter().collect(),
+                files: output,
+                births,
+                updates,
+            }
+        } else {
+            Mutation::Update { files: changes }
+        };
         plan.transaction = Some(FrozenOperation {
             request,
             preview: preview.clone(),
             files,
             directories: vec![],
-            mutation: Mutation::Update { files: changes },
+            mutation,
             receipt,
             expected_membership: None,
             absent_dependencies: vec![],
@@ -478,6 +606,10 @@ impl Core {
             .before
             .iter()
             .any(|v| local.get(&v.object) != Some(v))
+            || application.after.iter().any(|v| {
+                !application.before.iter().any(|old| old.object == v.object)
+                    && local.contains_key(&v.object)
+            })
         {
             return Err(CoreError::new(
                 "syncBasisChanged",
@@ -498,6 +630,12 @@ impl Core {
         }
         Ok(())
     }
+}
+fn after_has_new_object(application: &SyncApplication) -> bool {
+    application
+        .after
+        .iter()
+        .any(|v| !application.before.iter().any(|old| old.object == v.object))
 }
 fn revisions(view: &ObjectView) -> BTreeSet<String> {
     view.versions.iter().map(|v| v.revision.clone()).collect()
