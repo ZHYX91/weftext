@@ -192,6 +192,7 @@ impl Core {
             || record.resource != resource
             || record.feature.is_none()
             || record.field.is_some()
+            || record.history.is_some()
         {
             return Err(conflict());
         }
@@ -394,6 +395,7 @@ impl Core {
             }),
             definition: None,
             save_definition_reservations: vec![],
+            history: None,
         };
         journal::private_create(
             &self.actor_record(external_operation_id)?,
@@ -487,6 +489,7 @@ impl Core {
                 }),
                 definition: None,
                 save_definition_reservations: vec![],
+                history: None,
             },
         };
         if let Some(status) = self.actor_feature_status(resource, operation)? {

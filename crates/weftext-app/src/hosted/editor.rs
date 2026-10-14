@@ -153,10 +153,24 @@ fn scrub_tree(tree: &mut Value, resource: &str, writable: bool) {
         tree["origin"] = Value::Null;
         tree["writable"] = json!(false);
     }
-    // Only the native Query carrier's presentation identifiers may cross this
-    // boundary. Its AST occurrence and independently authorized execution are
-    // checked by the Query consumer; arbitrary metadata is never forwarded.
+    // Query carrier identifiers and ordinary/native link destinations are
+    // presentation data. Their consumers independently authorize execution or
+    // target opening; arbitrary metadata and active attributes never cross.
     if tree["kind"] == "tag" {
+        let href = tree["attrs"]["href"]
+            .as_str()
+            .filter(|href| {
+                tree["tag"] == "a"
+                    && !href.chars().any(char::is_control)
+                    && (href.starts_with("weftext-node://")
+                        || href
+                            .get(..7)
+                            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("http://"))
+                        || href
+                            .get(..8)
+                            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("https://")))
+            })
+            .map(str::to_owned);
         tree["attrs"] = Value::Object(
             ["data-weftext-query-label", "data-weftext-query-occurrence"]
                 .into_iter()
@@ -167,6 +181,9 @@ fn scrub_tree(tree: &mut Value, resource: &str, writable: bool) {
                 })
                 .collect(),
         );
+        if let Some(href) = href {
+            tree["attrs"]["href"] = json!(href);
+        }
     }
     if let Some(children) = tree["children"].as_array_mut() {
         for child in children {
@@ -269,4 +286,42 @@ pub(super) async fn compile_frozen(
             "无法在获权依赖内完成预览",
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hosted_links_keep_destinations_without_forwarding_active_attributes_or_paths() {
+        for href in [
+            "https://example.test/a",
+            "HTTP://example.test/b",
+            "weftext-node://workspace/node",
+        ] {
+            let mut tree = json!({"kind":"tag","tag":"a","origin":{"isMain":true,"path":"C:/private/note.typ"},
+                "attrs":{"href":href,"onclick":"unsafe()","style":"private","data-private":"secret"},"children":[]});
+            scrub_tree(&mut tree, "Shared", false);
+            assert_eq!(tree["attrs"], json!({"href":href}));
+            assert_eq!(tree["origin"]["path"], "resource:Shared");
+            assert_eq!(tree["writable"], false);
+        }
+        for href in [
+            "javascript:alert(1)",
+            "file:///C:/private/note.typ",
+            "C:/private/note.typ",
+            "data:text/html,unsafe",
+            "https://example.test/\nprivate",
+        ] {
+            let mut tree = json!({"kind":"tag","tag":"a","attrs":{"href":href},"children":[]});
+            scrub_tree(&mut tree, "Shared", true);
+            assert!(tree["attrs"].as_object().unwrap().is_empty());
+        }
+        let mut carrier = json!({"kind":"tag","tag":"span","attrs":{"href":"https://example.test/","data-weftext-query-label":"query-one","data-weftext-query-occurrence":"1","data-private":"secret"},"children":[]});
+        scrub_tree(&mut carrier, "Shared", true);
+        assert_eq!(
+            carrier["attrs"],
+            json!({"data-weftext-query-label":"query-one","data-weftext-query-occurrence":"1"})
+        );
+    }
 }

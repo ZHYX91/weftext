@@ -9,10 +9,15 @@ pub use feature::ActorFeatureStatus;
 #[path = "hosted_definition.rs"]
 mod definition;
 #[cfg(all(test, windows))]
+pub(crate) use definition::set_test_failpoint;
+#[cfg(all(test, windows))]
 pub(crate) use definition::test_failpoint as definition_test_failpoint;
 pub use definition::{
     ActorDefinitionProposal, ActorDefinitionStatus, HostedDefinitionReservationRequest,
 };
+#[path = "hosted_history.rs"]
+mod actor_history;
+pub use actor_history::ActorHistoryRestoreStatus;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -165,6 +170,8 @@ struct ActorOperation {
     definition: Option<definition::DefinitionOperation>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     save_definition_reservations: Vec<definition::SaveDefinitionReservation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    history: Option<actor_history::HistoryOperation>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -310,7 +317,7 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        if record.feature.is_some() || record.definition.is_some() {
+        if record.feature.is_some() || record.definition.is_some() || record.history.is_some() {
             return Err(CoreError::new(
                 "operationConflict",
                 "This operation belongs to a feature or definition proposal",
@@ -352,6 +359,7 @@ impl Core {
                 feature: None,
                 definition: None,
                 save_definition_reservations: vec![],
+                history: None,
             },
             Err(e) => return Err(e.into()),
         };
@@ -403,6 +411,7 @@ impl Core {
                     || record.field.is_some()
                     || record.feature.is_some()
                     || record.definition.is_some()
+                    || record.history.is_some()
                 {
                     return Err(CoreError::new(
                         "operationConflict",
@@ -455,6 +464,7 @@ impl Core {
                     feature: None,
                     definition: None,
                     save_definition_reservations: reservations,
+                    history: None,
                 };
                 journal::private_create(&path, &serde_json::to_vec(&record)?)?;
                 record
@@ -580,6 +590,7 @@ impl Core {
             feature: None,
             definition: None,
             save_definition_reservations: vec![],
+            history: None,
         };
         journal::private_create(&path, &serde_json::to_vec(&record)?)?;
         self.save(SaveRequest {
@@ -615,6 +626,7 @@ impl Core {
                 feature: None,
                 definition: None,
                 save_definition_reservations: vec![],
+                history: None,
             };
             journal::private_create(
                 &self.actor_record(operation)?,

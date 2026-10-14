@@ -15,6 +15,10 @@ thread_local! {
     static FAILPOINT: std::cell::Cell<Option<&'static str>> = const { std::cell::Cell::new(None) };
 }
 #[cfg(all(test, windows))]
+pub(crate) fn set_test_failpoint(point: &'static str) {
+    FAILPOINT.with(|active| active.set(Some(point)));
+}
+#[cfg(all(test, windows))]
 pub(crate) fn test_failpoint(point: &str) -> Result<()> {
     FAILPOINT.with(|active| {
         if active.get() == Some(point) {
@@ -208,6 +212,7 @@ impl Core {
             || record.field.is_some()
             || record.feature.is_some()
             || !record.save_definition_reservations.is_empty()
+            || record.history.is_some()
         {
             return Err(conflict());
         }
@@ -356,6 +361,7 @@ impl Core {
                 }),
             }),
             save_definition_reservations: vec![],
+            history: None,
         };
         let bytes = serde_json::to_vec(&record)?;
         if bytes.len() > MAX_RECORD_BYTES {
@@ -481,6 +487,7 @@ impl Core {
                 feature: None,
                 definition: Some(DefinitionOperation { proposal: None }),
                 save_definition_reservations: vec![],
+                history: None,
             },
         };
         if let Some(status) = self.actor_definition_status(resource, operation)? {

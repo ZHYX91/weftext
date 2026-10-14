@@ -109,8 +109,8 @@ try{
  await fillSource(page,initial+'未保存预览。');assert.equal(await page.locator('#render').isHidden(),true);
  await page.getByRole('button',{name:'预览',exact:true}).click();
  await page.frameLocator('#render').locator('body').filter({hasText:'未保存预览'}).waitFor({timeout:5000});
- await page.getByRole('button',{name:'保存历史',exact:true}).click();await page.locator('#history-list:not([hidden])').waitFor();assert.ok(await page.locator('#versions button').count()>1);
- await page.locator('#versions button').first().click();await page.locator('#historical').filter({hasText:'#metadata'}).waitFor();
+ await page.getByRole('button',{name:'保存历史',exact:true}).click();await page.locator('#history-list [data-version-id]').first().waitFor();assert.ok(await page.locator('#history-list [data-version-id]').count()>1);
+ await page.locator('#history-list [data-version-id]').first().click();await page.getByLabel('所选准确旧版 · 只读源码',{exact:true}).filter({hasText:'#metadata'}).waitFor();
  const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'下载已保存源码',exact:true}).click();const download=await downloading;await download.saveAs(path.join(out,'download.typ'));
  assert.equal((await readFile(path.join(out,'download.typ'))).toString(),initial+'丢响应已提交。');
  await page.locator('#render').scrollIntoViewIfNeeded();
@@ -136,7 +136,7 @@ try{
  const policy=await api('/api/hosted/admin/policy',undefined,'admin');policy.users.alice.grants={};
  await api('/api/hosted/admin/policy',{expectedGeneration:policy.generation,users:policy.users},'admin');
  await page.locator('#status').filter({hasText:'缓存已清除'}).waitFor({timeout:12000});assert.equal(await sourceValue(page),'');releaseEdit();await pause(500);assert.equal(await sourceValue(page),'');await page.unroute('**/api/hosted/editor/edit');
- assert.equal(await page.locator('#render').isHidden(),true);assert.match(await sourceValue(bob),/仍保留/);
+ assert.equal(await page.locator('#render').isHidden(),true);assert.equal(await page.locator('#history-list').isHidden(),true);assert.equal(await page.locator('#stable-link').isHidden(),true);assert.match(await sourceValue(bob),/仍保留/);
  const cached=await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-draft:')));assert.deepEqual(cached,[]);
  result.cases.push('revoked actor display/preview/cache cleared, late rich edit cannot restore the old draft, and other actor draft survives');
  assert.deepEqual(result.pageErrors,[]);result.completed=true;

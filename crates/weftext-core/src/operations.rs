@@ -295,6 +295,20 @@ pub(crate) struct SnapshotBinding {
 pub struct SnapshotWitness {
     binding: SnapshotBinding,
 }
+/// One explicitly selected, live canonical node. This is a read witness, not
+/// a writer or a claim that an external source has a committed revision.
+pub struct QualifiedNode {
+    pub owner: weftext_knowledge::NodeRef,
+    pub revision: Option<String>,
+    pub source_hash: String,
+    pub witness: SnapshotWitness,
+    pub(crate) identity: FileIdentity,
+}
+impl QualifiedNode {
+    pub(crate) fn captured_file(&self) -> &CapturedFile {
+        self.witness.binding.captured.as_ref().unwrap()
+    }
+}
 fn same_snapshot_dependency(original: &SnapshotBinding, incoming: &SnapshotBinding) -> bool {
     Path::new(&original.path) == Path::new(&incoming.path)
         || matches!((&original.captured, &incoming.captured), (Some(a), Some(b))
@@ -519,6 +533,105 @@ impl FrozenOperation {
     }
 }
 impl Core {
+    /// Qualify only an operator-selected source; never discover ambient nodes.
+    pub fn qualified_node_at(&self, root: &Path, path: &Path) -> Result<QualifiedNode> {
+        let root = absolute_path(root)?;
+        let path = absolute_path(path)?;
+        let workspace = self.require_workspace(&root)?;
+        if !path.starts_with(&root)
+            || !is_canonical(&path)
+            || path.components().any(|c| {
+                c.as_os_str()
+                    .to_string_lossy()
+                    .eq_ignore_ascii_case(".weftext-trash")
+            })
+        {
+            return Err(CoreError::new(
+                "unsupportedRole",
+                "Select an exact live canonical node source",
+            ));
+        }
+        self.check_pending(&path)?;
+        self.check_discovery_boundary(&root, path.parent().unwrap())?;
+        let guard = ParentGuard::acquire(&path)?;
+        let mut file = guard.open_file(false, false)?;
+        let actual = stamp(&file)?;
+        self.check_pending_identity(&actual.identity)?;
+        let bytes = read_source(&mut file)?;
+        let birth = self.admitted_binding(&actual.identity).ok_or_else(|| {
+            CoreError::new(
+                "identityPending",
+                "The selected object has no committed node admission",
+            )
+        })?;
+        if birth.workspace_id != workspace.workspace_id
+            || weftext_engine::inspect_metadata(&decode(&bytes)?)
+                .id
+                .as_ref()
+                != Some(&birth.node_id)
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                "The current declaration, workspace and object admission differ",
+            ));
+        }
+        self.check_history_placement(&birth, &path)?;
+        let captured = CapturedFile {
+            path: display(&path),
+            bytes,
+            stamp: actual,
+        };
+        Ok(QualifiedNode {
+            owner: weftext_knowledge::NodeRef {
+                workspace_id: birth.workspace_id,
+                node_id: birth.node_id,
+            },
+            revision: self.accepted_revision(&captured),
+            source_hash: hash(&captured.bytes),
+            identity: captured.stamp.identity.clone(),
+            witness: SnapshotWitness {
+                binding: SnapshotBinding {
+                    path: captured.path.clone(),
+                    captured: Some(captured),
+                    parent: guard.directory_identity()?,
+                },
+            },
+        })
+    }
+    pub fn qualified_node_for_session_at(
+        &self,
+        root: &Path,
+        path: &Path,
+        session_id: &str,
+    ) -> Result<QualifiedNode> {
+        self.check_actor_session(session_id)?;
+        let session = &self.sessions[session_id];
+        if session.path != absolute_path(path)? {
+            return Err(CoreError::new(
+                "operationConflict",
+                "The opened and configured owner paths differ",
+            ));
+        }
+        let current = self.qualified_node_at(root, path)?;
+        let original = self
+            .admitted_binding(&session.stamp.identity)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityPending",
+                    "The original opened node admission is unavailable",
+                )
+            })?;
+        if session.node_id.as_ref() != Some(&current.owner.node_id)
+            || session.stamp.identity != current.identity
+            || original.workspace_id != current.owner.workspace_id
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                "The current object differs from the original opened owner",
+            ));
+        }
+        Ok(current)
+    }
     pub fn saved_operation_source(
         &self,
         operation_id: &str,

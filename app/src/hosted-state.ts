@@ -3,7 +3,7 @@
 export interface HostedSaveRequest { sessionId: string; baseId: string; operationId: string; source: string; definitionReservations?: string[] }
 export interface HostedDraft { source: string; baseSource: string; definitionReservations?: string[]; pending?: { operationId: string; source: string; request?: HostedSaveRequest } }
 /** Server actor epochs partition every recoverable protected consumer cache. */
-export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" | "query", deployment: string, actor: string, generation: number): string {
+export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" | "query" | "history", deployment: string, actor: string, generation: number): string {
   if (!deployment || !actor || !Number.isSafeInteger(generation) || generation < 0) throw new Error("服务端授权版本无效，未恢复旧缓存。");
   return `weftext-hosted-${kind}:${encodeURIComponent(deployment)}:${encodeURIComponent(actor)}:g${generation}:`;
 }

@@ -19,6 +19,7 @@ export interface HostedEditorQueryHost {
   openOwner(origin: Origin): Promise<void>;
   output(query: FrozenQuery, result: QueryResult): void | Promise<void>;
   modeChanged?(): void;
+  navigateReference?(reference: string): Promise<void>;
 }
 const modes: [ViewMode, string][] = [["source", "V01 源码"], ["styled", "V02 带样式源码"], ["focus", "V03 按需语法"], ["write", "V04 可视写作"], ["read", "V05 阅读"]];
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, text = "", name = ""): HTMLElementTagNameMap[K] { const el = document.createElement(tag); el.textContent = text; el.className = name; return el; }
@@ -55,6 +56,18 @@ export class HostedEditor {
   select(from: number, to: number): void { this.editor?.select(from, to); }
   set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read"); if (this.blocked === value) return; this.blocked = value; this.paint(); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
+  async historyBasis(settle = false): Promise<EmbeddedQueryBasis> {
+    if (settle) await this.flush();
+    const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial };
+    if (!this.editor || !basis.sessionId) throw new Error("当前正文会话已变化，未登记旧稿。");
+    await this.request("editor/map", basis);
+    if (!this.editor || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis)) throw new Error("草稿在读取期间已变化，输入保留，请重新核对。");
+    return basis;
+  }
+  applyHistorySource(value: string, basis: EmbeddedQueryBasis): void {
+    if (!this.editor || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis)) throw new Error("恢复期间的新输入已保留，未替换当前草稿。");
+    this.editor.applyPatches(basis.source, [{ from: 0, to: basis.source.length, expected: basis.source, insert: value }], undefined, "input.history.restore"); this.schedule(0);
+  }
   refreshQueries(): void { if (!this.editor) return; this.queries?.invalidate(); this.schedule(0); }
   async prepareQueryBasis(): Promise<EmbeddedQueryBasis> {
     await this.flush();
@@ -210,9 +223,14 @@ export class HostedEditor {
       }
       if (item.kind === "frame") return node("p", "此布局需分页呈现；可使用独立预览或源码入口。", "hint");
       const el = nativeElement(item);
+      let openReference: HTMLButtonElement | undefined;
       if (item.tag === "a" && typeof item.attrs.href === "string") {
         el.setAttribute("title", item.attrs.href);
         if (/^https?:\/\//i.test(item.attrs.href)) { el.setAttribute("href", item.attrs.href); el.setAttribute("target", "_blank"); el.setAttribute("rel", "noopener noreferrer"); }
+        else if (/^weftext-node:\/\//.test(item.attrs.href) && this.queryHost?.navigateReference) {
+          const reference = item.attrs.href; el.setAttribute("href", "#"); el.addEventListener("click", event => { if (event.target instanceof Element && event.target.closest("input,textarea,button,[contenteditable=true],[role=button]")) return; event.preventDefault(); void this.queryHost!.navigateReference!(reference).catch(this.error); });
+          if (writable) openReference = this.button("打开稳定链接", () => this.queryHost!.navigateReference!(reference));
+        }
       }
       for (const child of item.children ?? []) el.append(draw(child));
       if (item.text) el.append(document.createTextNode(item.text));
@@ -220,8 +238,9 @@ export class HostedEditor {
       if (writable && item.origin?.isMain) {
         const range = writing.map?.structures.find(s => s.range.utf16From === item.origin!.utf16From && s.range.utf16To === item.origin!.utf16To)?.range;
         const controls = range && createStructureControls(writing, range, options);
-        if (controls) { const wrapper = node("div"); wrapper.append(el, controls); return wrapper; }
+        if (controls) { const wrapper = node("div"); wrapper.append(el, controls); if (openReference) wrapper.append(openReference); return wrapper; }
       }
+      if (openReference) { const wrapper = node("div"); wrapper.append(el, openReference); return wrapper; }
       return el;
     };
     this.flow.append(draw(projection.tree));

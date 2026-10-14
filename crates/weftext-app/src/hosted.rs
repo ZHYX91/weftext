@@ -5,6 +5,8 @@ mod definition;
 mod editor;
 mod embedded_query;
 mod fields;
+mod history_api;
+mod navigation;
 mod office;
 mod office_import;
 mod query;
@@ -166,12 +168,6 @@ struct OperationStatus {
 struct Settle {
     resource: String,
     operation_id: String,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct HistoryRequest {
-    session_id: String,
-    version_id: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -652,41 +648,6 @@ async fn settle(
         .await?,
     ))
 }
-async fn history(
-    State(state): State<HostedState>,
-    Extension(auth): Extension<Auth>,
-    Json(req): Json<SessionRequest>,
-) -> ApiResult {
-    Ok(Json(locked(&state, move |inner| {
-        let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
-        if !rights.history { return Err(unavailable()); }
-        let timeline = inner.core.with_actor(&inner.actor_scope(&actor), |c| c.list_history(&req.session_id)).map_err(HostedInner::core_error)?;
-        Ok(json!({"versions":timeline.versions,"retention":timeline.retention,"currentness":timeline.currentness}))
-    }).await?))
-}
-async fn history_read(
-    State(state): State<HostedState>,
-    Extension(auth): Extension<Auth>,
-    Json(req): Json<HistoryRequest>,
-) -> ApiResult {
-    Ok(Json(
-        locked(&state, move |inner| {
-            let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
-            if !rights.history {
-                return Err(unavailable());
-            }
-            value(
-                inner
-                    .core
-                    .with_actor(&inner.actor_scope(&actor), |c| {
-                        c.read_history(&req.session_id, &req.version_id)
-                    })
-                    .map_err(HostedInner::core_error)?,
-            )
-        })
-        .await?,
-    ))
-}
 async fn search(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
@@ -1057,6 +1018,8 @@ pub(super) async fn serve(
         .merge(sync_transport::router())
         .merge(editor::router())
         .merge(fields::router())
+        .merge(history_api::router())
+        .merge(navigation::router())
         .merge(query::router())
         .merge(definition::router())
         .merge(embedded_query::router())
@@ -1073,8 +1036,6 @@ pub(super) async fn serve(
         .route("/api/hosted/operation", post(status))
         .route("/api/hosted/operation/settle", post(settle))
         .route("/api/hosted/search", post(search))
-        .route("/api/hosted/history", post(history))
-        .route("/api/hosted/history/read", post(history_read))
         .route("/api/hosted/preview", post(preview))
         .route("/api/hosted/download/prepare", post(prepare_download))
         .route("/api/hosted/download/chunk", post(chunk))

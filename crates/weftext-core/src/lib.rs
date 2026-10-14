@@ -8,7 +8,8 @@ mod history;
 mod hosted;
 pub use hosted::{
     ActorDefinitionProposal, ActorDefinitionStatus, ActorFeatureStatus, ActorFieldStatus,
-    ActorSaveStatus, HostedDefinitionReservationRequest, HostedSaveRequest,
+    ActorHistoryRestoreStatus, ActorSaveStatus, HostedDefinitionReservationRequest,
+    HostedSaveRequest,
 };
 #[cfg(all(test, windows))]
 mod history_tests;
@@ -34,8 +35,8 @@ pub use journal::RecoveryInfo;
 pub use operations::{
     AdmittedCompileSnapshot, AdmittedSnapshot, ConfigDocument, ConfigRole, FileChange,
     LibraryStyleDocument, ManagedResource, OperationChange, OperationIntent, OperationPreview,
-    OperationReceipt, OperationRequest, SavedOperationSource, SnapshotFile, SnapshotSet,
-    SnapshotWitness, TrashEntry,
+    OperationReceipt, OperationRequest, QualifiedNode, SavedOperationSource, SnapshotFile,
+    SnapshotSet, SnapshotWitness, TrashEntry,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

@@ -187,7 +187,7 @@ impl Core {
         })
     }
 
-    fn check_history_placement(&self, birth: &Birth, current: &Path) -> Result<()> {
+    pub(crate) fn check_history_placement(&self, birth: &Birth, current: &Path) -> Result<()> {
         let mut places = BTreeSet::<String>::new();
         let mut birth_sequence = None;
         let mut relocations = Vec::new();
@@ -294,6 +294,9 @@ impl Core {
     }
 
     fn history_records(&self, context: &HistoryContext) -> Result<Vec<HistoryRecord>> {
+        self.history_records_for(&context.birth)
+    }
+    fn history_records_for(&self, birth: &Birth) -> Result<Vec<HistoryRecord>> {
         let mut records = Vec::new();
         for p in self
             .operations
@@ -301,19 +304,19 @@ impl Core {
             .filter(|p| self.committed(&p.operation_id))
         {
             let candidate = if matches!(p.kind.as_str(), "save" | "createNote") {
-                (p.identity.as_ref() == Some(&context.birth.identity)
-                    || (p.node_id.as_ref() == Some(&context.birth.node_id)
-                        && p.workspace_id.as_ref() == Some(&context.birth.workspace_id)))
+                (p.identity.as_ref() == Some(&birth.identity)
+                    || (p.node_id.as_ref() == Some(&birth.node_id)
+                        && p.workspace_id.as_ref() == Some(&birth.workspace_id)))
                 .then(|| (p.path.clone(), p.after.clone()))
             } else {
                 p.transaction.as_ref().and_then(|t| {
-                    if p.workspace_id.as_ref() != Some(&context.birth.workspace_id) {
+                    if p.workspace_id.as_ref() != Some(&birth.workspace_id) {
                         return None;
                     }
                     let identity_path = t
                         .files
                         .iter()
-                        .find(|f| f.stamp.identity == context.birth.identity)
+                        .find(|f| f.stamp.identity == birth.identity)
                         .map(|f| f.path.as_str());
                     match &t.mutation {
                         Mutation::Update { files } => files
@@ -328,7 +331,7 @@ impl Core {
                         } => {
                             let born = births
                                 .iter()
-                                .find(|b| b.node_id == context.birth.node_id)
+                                .find(|b| b.node_id == birth.node_id)
                                 .map(|b| b.path.as_str());
                             files
                                 .iter()
@@ -343,7 +346,7 @@ impl Core {
                             let path = t.relocated_path(original);
                             let changed_revision = p.sync_application.as_ref().is_some_and(|application| {
                                 application.before.iter().any(|object| {
-                                    matches!(&object.object, sync::ObjectKey::Node(id) if id == &context.birth.node_id)
+                                    matches!(&object.object, sync::ObjectKey::Node(id) if id == &birth.node_id)
                                         && object.state.file_revisions.get(&format!("{}.typ", object.state.name)) != t.preview.revisions.get(&path)
                                 })
                             });
@@ -372,7 +375,7 @@ impl Core {
                 let facts = self.read_observation_facts(&p.operation_id)?;
                 let fact = facts
                     .into_iter()
-                    .find(|f| f.path == path && f.stamp.identity == context.birth.identity)
+                    .find(|f| f.path == path && f.stamp.identity == birth.identity)
                     .ok_or_else(|| {
                         CoreError::new("missing", "The exact committed revision witness is missing")
                     })?;
@@ -420,8 +423,7 @@ impl Core {
         // history record, and must not be omitted merely because it was not the
         // operation's final output.
         for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id)
-                && p.workspace_id.as_ref() == Some(&context.birth.workspace_id)
+            self.committed(&p.operation_id) && p.workspace_id.as_ref() == Some(&birth.workspace_id)
         }) {
             let bytes = match fs::read(self.journal_path(&p.operation_id, "revision-reservation")) {
                 Ok(bytes) => bytes,
@@ -429,7 +431,7 @@ impl Core {
                 Err(e) => return Err(e.into()),
             };
             let r: operations::RevisionReservation = serde_json::from_slice(&bytes)?;
-            if r.stamp.identity != context.birth.identity
+            if r.stamp.identity != birth.identity
                 || records
                     .iter()
                     .any(|record| record.version.revision_id.as_ref() == Some(&r.revision))
@@ -485,6 +487,38 @@ impl Core {
                         .is_some_and(|f| f.stamp == context.current.stamp)
             })
             .max_by_key(|r| r.version.commit_sequence)
+    }
+    pub(crate) fn current_saved_history_operation(
+        &self,
+        current: &QualifiedNode,
+    ) -> Result<Option<String>> {
+        if current.revision.is_none() {
+            return Ok(None);
+        }
+        let birth = Birth {
+            node_id: current.owner.node_id.clone(),
+            workspace_id: current.owner.workspace_id.clone(),
+            identity: current.identity.clone(),
+        };
+        let captured = current.captured_file();
+        let records = self.history_records_for(&birth)?;
+        let saved = records
+            .iter()
+            .filter(|record| {
+                record.bytes.as_ref() == Some(&captured.bytes)
+                    && record
+                        .fact
+                        .as_ref()
+                        .is_some_and(|fact| fact.stamp == captured.stamp)
+            })
+            .max_by_key(|record| record.version.commit_sequence)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "currentSavedUnavailable",
+                    "The exact current saved operation evidence is unavailable",
+                )
+            })?;
+        Ok(Some(saved.version.operation_id.clone()))
     }
     pub fn list_history(&self, session_id: &str) -> Result<HistoryTimeline> {
         let context = self.history_context(session_id)?;
@@ -581,6 +615,39 @@ impl Core {
             )
         })?;
         self.authorize_restore_result(binding)?;
+        self.retained_restore_result(plan)
+    }
+    pub(crate) fn restore_result_at(
+        &self,
+        plan: &journal::Plan,
+        root: &Path,
+        path: &Path,
+    ) -> Result<HistoryRestoreResult> {
+        let binding = plan.history_restore.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "operationConflict",
+                "This operation is not a history restore",
+            )
+        })?;
+        let current = self.qualified_node_at(root, path)?;
+        if current.owner.node_id != binding.node_id
+            || current.owner.workspace_id != binding.workspace_id
+            || current.identity != binding.identity
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                "The explicitly selected restore owner differs",
+            ));
+        }
+        self.retained_restore_result(plan)
+    }
+    fn retained_restore_result(&self, plan: &journal::Plan) -> Result<HistoryRestoreResult> {
+        let binding = plan.history_restore.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "operationConflict",
+                "This operation is not a history restore",
+            )
+        })?;
         let retained: journal::Plan =
             serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "plan"))?)?;
         if serde_json::to_vec(&retained)? != serde_json::to_vec(plan)? {
@@ -734,6 +801,36 @@ impl Core {
         request: HistoryRestoreRequest,
         fingerprint: String,
     ) -> Result<HistoryRestoreResult> {
+        self.restore_history_preflight_impl(request, fingerprint, None)
+    }
+    pub(crate) fn restore_history_at(
+        &mut self,
+        root: &Path,
+        path: &Path,
+        request: HistoryRestoreRequest,
+    ) -> Result<HistoryRestoreResult> {
+        if !matches!(request.draft_action.as_str(), "retain" | "none") {
+            return Err(CoreError::new(
+                "invalidDraftAction",
+                "Choose retain or none explicitly",
+            ));
+        }
+        self.check_session_base(&request.session_id, &request.base_id)?;
+        if self.sessions[&request.session_id].path != absolute_path(path)? {
+            return Err(CoreError::new(
+                "operationConflict",
+                "The session and configured owner path differ",
+            ));
+        }
+        let fingerprint = hash(&serde_json::to_vec(&request)?);
+        self.restore_history_preflight_impl(request, fingerprint, Some((root, path)))
+    }
+    fn restore_history_preflight_impl(
+        &mut self,
+        request: HistoryRestoreRequest,
+        fingerprint: String,
+        explicit_owner: Option<(&Path, &Path)>,
+    ) -> Result<HistoryRestoreResult> {
         let context = self.history_context(&request.session_id)?;
         let selected = self.selected_history_record(&context, &request.version_id)?;
         // The editor buffer belongs to the session's original Base. A raced
@@ -801,7 +898,11 @@ impl Core {
             },
             Some(binding),
         )?;
-        self.restore_result(&self.operations[&operation_id])
+        if let Some((root, path)) = explicit_owner {
+            self.restore_result_at(&self.operations[&operation_id], root, path)
+        } else {
+            self.restore_result(&self.operations[&operation_id])
+        }
     }
 }
 fn append_draft_alternatives(out: &mut Vec<DraftAlternative>, draft: &Draft) {
