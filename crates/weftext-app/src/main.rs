@@ -35,6 +35,7 @@ mod hosted;
 mod knowledge_api;
 mod media_api;
 mod navigation_api;
+mod sync_api;
 mod writing_api;
 
 static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");
@@ -926,6 +927,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .merge(knowledge_api::router())
         .merge(media_api::router())
         .merge(navigation_api::router())
+        .merge(sync_api::router())
         .merge(export_api::router())
         .route("/api/bootstrap", get(bootstrap))
         .route("/api/open", post(open))

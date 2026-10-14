@@ -2,6 +2,7 @@ import "./data-view.css";
 import "./style-panel.css";
 import "./export-panel.css";
 import { api, apiBlob, operationId } from "./api";
+import { openSyncPanel } from "./sync-panel";
 import { createLibraryTrashController } from "./library-trash";
 import { mountMediaViewer, mountResourceViewer } from "./media-viewer";
 import type { ResourceOpenTarget } from "./media-selection";
@@ -32,6 +33,7 @@ export interface WorkspaceToolsHost {
   notify(message: string, error?: boolean): void;
   stylesChanged(root: string): Promise<void>;
   refreshLibrary?(root: string): Promise<void>;
+  syncApplied(root: string): Promise<void>;
 }
 
 /** UI composition only: every action uses the document's existing Draft or Core. */
@@ -96,6 +98,7 @@ export class WorkspaceTools {
       }, selected, initial),
     });
     this.bar.append(this.button("属性", () => this.show("data")), this.button("链接与批注", () => this.show("knowledge")), this.button("查询与视图", () => this.show("query")), this.button("输出与导入", () => this.outputPanel.open()), this.button("库样式", () => this.showStyles()), this.button("回收站", async () => { if (!this.library?.workspaceId) throw new Error("请先打开笔记库。"); await this.host.beforeAction(); await this.libraryTrash.open(this.library.root); }));
+    this.bar.append(this.button("同步", async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }));
   }
   private button(label: string, run: () => void | Promise<void>): HTMLButtonElement {
     const button = document.createElement("button"); button.type = "button"; button.className = "text-button"; button.textContent = label;

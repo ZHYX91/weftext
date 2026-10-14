@@ -244,7 +244,10 @@ impl Core {
             .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
             .is_some_and(|r| {
                 r["operationId"] == id
-                    && matches!(r["action"].as_str(), Some("keepCurrent" | "createRejected"))
+                    && matches!(
+                        r["action"].as_str(),
+                        Some("keepCurrent" | "createRejected" | "cancelPrepared")
+                    )
             })
     }
     pub(crate) fn resolve_record(&self, id: &str, action: &str) -> Result<()> {

@@ -102,6 +102,52 @@ fn key(pair: &Pair, name: &str) -> ObjectKey {
 }
 
 #[test]
+fn cancellation_of_unstarted_sync_is_durable_but_install_marker_requires_recovery() {
+    let mut p = pair(&["Note"]);
+    save(&mut p.a, &p.ar, "Note", "remote edit");
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let request = apply(&p);
+    let preview = p.b.prepare_operation(request.clone()).unwrap();
+    let path = p.br.join("Note/Note.typ");
+    let original = fs::read(&path).unwrap();
+    fs::write(&path, b"external third state").unwrap();
+    assert!(
+        p.b.cancel_prepared_sync(&preview.operation_id, &fresh())
+            .is_err()
+    );
+    assert_eq!(
+        p.b.cancel_prepared_sync(&preview.operation_id, &preview.plan_id)
+            .unwrap()
+            .status,
+        "resolved"
+    );
+    assert_eq!(fs::read(&path).unwrap(), b"external third state");
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(p.b.prepare_operation(request).unwrap().status, "resolved");
+    assert!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .is_err()
+    );
+    fs::write(&path, original).unwrap();
+    let request = apply(&p);
+    let preview = p.b.prepare_operation(request).unwrap();
+    // The marker alone fences cancellation; bytes cannot prove no prior effect.
+    fs::write(
+        p.b.journal_path(&preview.operation_id, "install"),
+        b"unknown",
+    )
+    .unwrap();
+    assert_eq!(
+        p.b.cancel_prepared_sync(&preview.operation_id, &preview.plan_id)
+            .unwrap_err()
+            .code,
+        "recoveryPending"
+    );
+    assert!(!p.b.resolved(&preview.operation_id));
+}
+
+#[test]
 fn incoming_save_keeps_draft_does_not_echo_and_later_offline_save_uses_received_predecessor() {
     let mut p = pair(&["Note"]);
     let dirty =

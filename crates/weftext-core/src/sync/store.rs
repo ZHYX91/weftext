@@ -38,6 +38,7 @@ pub struct SyncStatus {
 pub struct CommitStatus {
     pub id: String,
     pub admission: Admission,
+    pub unsettled_dependencies: Vec<ObjectKey>,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +48,11 @@ pub struct ObjectStatus {
 }
 
 impl Core {
+    /// A read does not drain the outbox or install a received version.
+    pub fn sync_status(&self, identity: &SyncIdentity) -> Result<SyncStatus> {
+        status(&self.read_sync_history(identity)?, identity)
+    }
+
     /// Receive into private staging only. Every byte is validated before any
     /// payload is written; a crash can leave a complete subset, never a partial
     /// visible record. Retry the same records to finish that subset.
@@ -174,6 +180,7 @@ pub(super) fn load_graph(path: &Path, identity: &SyncIdentity) -> Result<Replica
 }
 
 fn status(graph: &ReplicaGraph, identity: &SyncIdentity) -> Result<SyncStatus> {
+    let objects = graph.objects()?;
     Ok(SyncStatus {
         identity: identity.clone(),
         heads: graph.heads(),
@@ -184,11 +191,15 @@ fn status(graph: &ReplicaGraph, identity: &SyncIdentity) -> Result<SyncStatus> {
                 Ok(CommitStatus {
                     id: id.clone(),
                     admission: graph.status(id)?,
+                    unsettled_dependencies: if graph.admitted.contains(id) {
+                        graph.unsettled_dependencies_at(id, &objects)?
+                    } else {
+                        Vec::new()
+                    },
                 })
             })
             .collect::<Result<_>>()?,
-        objects: graph
-            .objects()?
+        objects: objects
             .into_iter()
             .map(|(object, view)| ObjectStatus { object, view })
             .collect(),

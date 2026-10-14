@@ -58,6 +58,7 @@ pub struct SyncBindingInfo {
     pub partial: bool,
     pub selected_objects: Option<BTreeSet<ObjectKey>>,
     pub installed_objects: BTreeSet<ObjectKey>,
+    pub installed_versions: Vec<(ObjectKey, String)>,
 }
 
 impl Core {
@@ -357,7 +358,12 @@ impl Core {
                 }
             }
         }
-        let installed_objects = self.sync_local_state(setup)?.0.into_keys().collect();
+        let local = self.sync_local_state(setup)?.0;
+        let installed_objects = local.keys().cloned().collect();
+        let installed_versions = local
+            .into_iter()
+            .map(|(key, value)| (key, value.revision))
+            .collect();
         Ok(SyncBindingInfo {
             root: setup.root.clone(),
             identity: setup.identity.clone(),
@@ -366,6 +372,7 @@ impl Core {
             partial: setup.selection.is_some(),
             selected_objects: selected,
             installed_objects,
+            installed_versions,
         })
     }
 

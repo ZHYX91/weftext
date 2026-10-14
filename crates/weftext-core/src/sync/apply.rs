@@ -37,6 +37,62 @@ pub(crate) struct SyncApplication {
 }
 
 impl Core {
+    /// Recover the exact retained proposal by its original ID, including after
+    /// a browser origin/port change. Never creates or executes a proposal.
+    pub fn sync_operation_request(&self, operation_id: &str) -> Result<OperationRequest> {
+        self.sync_local_owner()?;
+        self.operation_details(operation_id)?;
+        let transaction = self.operations[operation_id].transaction.as_ref().unwrap();
+        if !matches!(
+            transaction.request.intent,
+            OperationIntent::ApplySync { .. }
+                | OperationIntent::MergeSync { .. }
+                | OperationIntent::CloneSync { .. }
+        ) {
+            return Err(invalid("This is not a retained sync proposal"));
+        }
+        Ok(transaction.request.clone())
+    }
+
+    /// Abandon a frozen sync proposal only before its original install marker.
+    /// Unlike recovery's keepCurrent, no assertion about current file bytes is
+    /// needed: this operation has never entered the filesystem effect phase.
+    pub fn cancel_prepared_sync(
+        &mut self,
+        operation_id: &str,
+        plan_id: &str,
+    ) -> Result<OperationPreview> {
+        self.sync_local_owner()?;
+        let preview = self.operation_details(operation_id)?;
+        let plan = self.operations.get(operation_id).unwrap();
+        let transaction = plan.transaction.as_ref().unwrap();
+        if !matches!(
+            transaction.request.intent,
+            OperationIntent::ApplySync { .. }
+                | OperationIntent::MergeSync { .. }
+                | OperationIntent::CloneSync { .. }
+        ) {
+            return Err(invalid("Only a frozen sync proposal can be cancelled here"));
+        }
+        if preview.plan_id != plan_id {
+            return Err(CoreError::new(
+                "planConflict",
+                "Cancel the exact original sync proposal",
+            ));
+        }
+        if matches!(preview.status.as_str(), "committed" | "resolved") {
+            return Ok(preview);
+        }
+        if self.journal_path(operation_id, "install").exists() {
+            return Err(CoreError::new(
+                "recoveryPending",
+                "Original installation may have effects; inspect recovery instead",
+            ));
+        }
+        self.resolve_record(operation_id, "cancelPrepared")?;
+        self.operation_details(operation_id)
+    }
+
     pub(crate) fn prepare_sync_application(
         &mut self,
         request: OperationRequest,

@@ -462,10 +462,17 @@ impl ReplicaGraph {
     /// An install consumer must also check cross-object semantic prerequisites.
     /// The returned map does not hide a conflicting object from unrelated ones.
     pub fn unsettled_dependencies(&self, id: &str) -> Result<Vec<ObjectKey>> {
+        self.unsettled_dependencies_at(id, &self.objects()?)
+    }
+
+    fn unsettled_dependencies_at(
+        &self,
+        id: &str,
+        current: &BTreeMap<ObjectKey, ObjectView>,
+    ) -> Result<Vec<ObjectKey>> {
         if !self.admitted.contains(id) {
             return Err(invalid("Manifest is not admitted"));
         }
-        let current = self.objects()?;
         Ok(self.manifests[id]
             .dependencies
             .iter()

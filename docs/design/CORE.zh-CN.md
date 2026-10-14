@@ -308,3 +308,10 @@ RQ01–10 的源、类型、标题/混排/深标题与 Word 由 SOURCE/EDITOR/FE
 全部场景在新方案上重新验证，未沿用旧 CLOSED。P0 必须实际完成 Windows 同句柄写/已有 mapping/filter/父rename、同目录对象move/Node两步rename/copy发布/no-replace/flush/crash恢复和第三态保全；Server 双实例旧holder fence、撤权与读/chunk/cache/commit竞争；官方 post-show/收敛语义和origin桥对照。P1 必须完成多副本乱序/partial/并发与同ID重试、预算/大库活动文档不等全scan、类型端到端/真实Office可编辑、Job unknown/费用/stop。文档自洽或短时句柄 probe 不能代替断电、文件系统、产品和性能证据。
 
 本设计确有不可删除的复杂性：文件安装/恢复、当前资格与历史版本分开、完整负依赖、披露边界、因果冲突和外部责任。被删除的是无实际部署依据的旧协议族、重复模型与第二权威；真正旧数据若出现，先保原件，再以显式 import/recovery 工具处理具体格式。
+
+
+### 本地同步消费者与原提案取消
+
+本地 sync API 分别提供配对、启用、状态、发布、目录接收/导出和准确版本文件读取，复用原 OperationRequest / Preview / Receipt 的 clone/apply/merge 入口。状态读取不发布、不安装；已安装 portable revision 与接收图分别返回，依赖诊断比较历史依赖和当前图，不以旧提交诊断阻塞无关对象。版本文件读取必须匹配指定对象、当前分支或共同基础及其中的准确文件，不以路径猜测文件或执行文本。全部入口只允许本地所有者；hosted actor 不获得此能力。
+
+浏览器先持久保留准确请求，再发准备或确认；查询不执行，准备丢响应只重试原请求。按原编号找回入口返回 Core 保留的准确请求和当前预览，支持浏览器地址变化。新增 cancelPrepared 只适用于准确 planId 的原同步事务：原提交/已结束结果保持幂等；安装标记存在则拒绝并要求原恢复；尚未进入安装时，仅持久记录取消，不检查或写入当前文件。这样允许放弃被外部修改使之过期的提案，同时保证迟到原 execute 不能生效。它与 keepCurrent 对原参与对象的完整恢复证明不同，不能用于跳过已发生安装的恢复。
