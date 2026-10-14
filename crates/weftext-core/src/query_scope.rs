@@ -405,7 +405,7 @@ impl Core {
         }
         Ok(controls)
     }
-    fn query_rules_ever_committed(&self, root: &Path) -> Result<bool> {
+    pub(crate) fn query_rules_ever_committed(&self, root: &Path) -> Result<bool> {
         let workspace = self.require_workspace(root)?.workspace_id;
         for p in self.operations.values().filter(|p| {
             self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(&workspace)

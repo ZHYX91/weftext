@@ -57,6 +57,7 @@ struct Scan {
     result: knowledge::ProofreadResult,
     inputs: BTreeMap<String, String>,
     dependencies: Vec<SnapshotFile>,
+    environment: library::Environment,
     expires: Instant,
 }
 impl Scan {
@@ -66,6 +67,7 @@ impl Scan {
             .map(|f| f.bytes.as_ref().map_or(0, Vec::len))
             .sum::<usize>()
             + serde_json::to_vec(&self.result).map_or(MAX_BYTES, |b| b.len())
+            + self.environment.retained_bytes()
     }
 }
 #[derive(Default)]
@@ -97,6 +99,8 @@ struct Decision {
     expires_at_unix_ms: u64,
     config_hash: String,
     needs: Needs,
+    #[serde(default)]
+    execution: library::ExecutionAuthority,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -528,7 +532,7 @@ async fn proofread(
     let check = auth.clone();
     let resource = req.resource.clone();
     let basis_id = req.basis.clone();
-    let (b, input, inputs, dependencies) = locked(&state, move |inner| {
+    let (b, input, inputs, dependencies, environment) = locked(&state, move |inner| {
         let actor = inner.actor(&check)?;
         let rights = access(inner, &actor, &resource)?;
         authorize(
@@ -541,7 +545,7 @@ async fn proofread(
             },
         )?;
         let b = basis(inner, &actor, &resource, &basis_id, true)?;
-        let (input, inputs) =
+        let (input, inputs, environment) =
             editor::freeze(inner, &actor, &resource, &b.node.as_ref().unwrap().source)?;
         let paths: Vec<_> = inputs
             .keys()
@@ -564,7 +568,7 @@ async fn proofread(
                 return Err(changed());
             }
         }
-        Ok((b, input, inputs, dependencies))
+        Ok((b, input, inputs, dependencies, environment))
     })
     .await?;
     let output = editor::compile_frozen(&state, input).await?;
@@ -602,6 +606,7 @@ async fn proofread(
             }
             validate_basis(inner, &b, true)?;
             editor::validate_inputs(inner, &actor, &req.resource, &inputs)?;
+            environment.recheck(inner, &actor)?;
             for f in &dependencies {
                 inner
                     .core
@@ -649,6 +654,7 @@ async fn proofread(
                 result,
                 inputs,
                 dependencies,
+                environment,
                 expires: Instant::now() + TTL,
             };
             if inner.review.bytes().saturating_add(scan.bytes()) > MAX_BYTES {
@@ -795,6 +801,7 @@ fn safe_status(
                 && d.expires_at_unix_ms > now_ms()
                 && config_hash(inner, &status.resource).is_ok_and(|hash| hash == d.config_hash)
                 && authorize(rights, &d.needs).is_ok()
+                && library::authorize_execution(inner, actor, &d.execution).is_ok()
         });
     Ok(
         json!({"operationId":status.operation_id,"resource":status.resource,"status":status.status,"planId":status.plan_id.filter(|_|commit_allowed),"preview":preview,"commitAllowed":commit_allowed}),
@@ -813,7 +820,7 @@ async fn prepare(
         let fingerprint=digest(&serde_json::to_vec(&canonical).map_err(|_|changed())?); let actor_scope=scope(inner,&actor);
         if let Some(old)=inner.core.with_actor(&actor_scope,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&fingerprint)).map_err(core_error)? {return safe_status(inner,&actor,&rights,old);}
         let b=basis(inner,&actor,&req.resource,&req.basis,needs.source_read)?; let doc=document(&b)?;
-        let mut changes=vec![]; let mut dependencies=vec![]; let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
+        let mut changes=vec![]; let mut dependencies=vec![]; let mut witnesses=vec![]; let mut execution=library::ExecutionAuthority::default(); let mut preview=json!({"kind":kind,"summary":"保存所选批注变更"});
         let annotation_id=req.intent["annotationId"].as_str(); if let Some(id)=annotation_id {preview["annotationId"]=json!(id);}
         let after=match kind.as_str() {
             "annotationCreate" => {
@@ -848,6 +855,9 @@ async fn prepare(
                 let scan_id=text(&req.intent,"scanId")?;
                 let scan=inner.review.scans.get(scan_id).filter(|s|s.actor==actor&&s.epoch==b.epoch&&s.resource==req.resource&&s.basis==req.basis&&s.options_hash==hash&&s.expires>Instant::now()).cloned().ok_or_else(changed)?;
                 editor::validate_inputs(inner,&actor,&req.resource,&scan.inputs)?;
+                scan.environment.recheck(inner,&actor)?;
+                execution=scan.environment.authority.clone();
+                witnesses=scan.environment.plan_witnesses()?;
                 for f in &scan.dependencies {inner.core.validate_snapshot(&inner.config.root,&f.path,&f.base_id).map_err(|_|changed())?;if Some(&f.path)!=b.source.as_ref().map(|s|&s.path) { dependencies.push(f.base_id.clone()); }}
                 let ids:BTreeSet<String>=serde_json::from_value(req.intent["findings"].clone()).map_err(|_|ApiError::bad("请选择准确原校对结果"))?;
                 if ids.is_empty()||ids.len()>200||ids.iter().any(|id|!scan.result.findings.iter().any(|f|&f.id==id)) {return Err(ApiError::bad("每批请选择原检查中的 1 至 200 条结果"));}
@@ -871,9 +881,9 @@ async fn prepare(
         if after.len()>MAX_DOCUMENT_BYTES {return Err(ApiError::bad("批注变更超过本次保存预算"));}
         if needs.source_read&&kind!="annotationAccept" {dependencies.push(b.source.as_ref().unwrap().base_id.clone());}
         changes.push(change(&b.annotations,after));
-        preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs})?;
+        preview["_review"]=value(Decision {actor_epoch:b.epoch,expires_at_unix_ms:now_ms().saturating_add(TTL.as_millis() as u64),config_hash:config_hash(inner,&req.resource)?,needs,execution})?;
         let request=OperationRequest {operation_id:req.operation_id.clone(),root:inner.config.root.to_string_lossy().into_owned(),intent:OperationIntent::UpdateFiles {changes}};
-        let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare(&req.resource,&req.operation_id,&fingerprint,request,preview,&dependencies)).map_err(core_error)?;
+        let status=inner.core.with_actor(&actor_scope,|core|core.actor_feature_prepare_with_witnesses(&req.resource,&req.operation_id,&fingerprint,request,preview,&dependencies,&witnesses.iter().collect::<Vec<_>>())).map_err(core_error)?;
         safe_status(inner,&actor,&rights,status)
     }).await?))
 }
@@ -917,6 +927,7 @@ async fn commit(
             let decision: Decision =
                 serde_json::from_value(old.preview["_review"].clone()).map_err(|_| changed())?;
             authorize(&rights, &decision.needs)?;
+            library::authorize_execution(inner, &actor, &decision.execution)?;
             if decision.actor_epoch != inner.actor_generation(&actor)
                 || decision.expires_at_unix_ms <= now_ms()
                 || decision.config_hash != config_hash(inner, &req.resource)?

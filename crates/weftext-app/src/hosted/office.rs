@@ -27,6 +27,7 @@ pub(super) struct Store {
 }
 #[derive(Clone)]
 struct Needs {
+    execution: library::ExecutionAuthority,
     sources: BTreeSet<String>,
     fields: BTreeMap<String, BTreeSet<String>>,
     query_authority: Option<query::Authority>,
@@ -98,6 +99,7 @@ struct Inspect {
 }
 struct Cut {
     worker: Option<WorkerRequest>,
+    environment: Option<library::Environment>,
     snapshots: Vec<SnapshotFile>,
     query: Option<fields::FrozenQuery>,
     reviews: Vec<docx::DocxReview>,
@@ -160,6 +162,7 @@ fn scope(inner: &HostedInner, actor: &str) -> String {
     format!("{}:office-output", inner.actor_scope(actor))
 }
 fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Result<(), ApiError> {
+    library::authorize_execution(inner, actor, &needs.execution)?;
     if let Some(authority) = &needs.query_authority {
         query::authorize_authority(inner, actor, authority)?;
     }
@@ -169,6 +172,18 @@ fn access(inner: &HostedInner, actor: &str, needs: &Needs, download: bool) -> Re
         .get(actor)
         .filter(|u| u.enabled)
         .ok_or_else(expired)?;
+    let style_inputs = needs.execution.inputs.iter().chain(
+        needs
+            .query_authority
+            .iter()
+            .flat_map(|q| &q.execution.inputs),
+    );
+    for r in style_inputs {
+        let grant = user.grants.get(r).ok_or_else(unavailable)?;
+        if !grant.read || !grant.office.export || (download && !grant.office.download) {
+            return Err(unavailable());
+        }
+    }
     for r in &needs.resources {
         let grant = user.grants.get(r).ok_or_else(unavailable)?;
         if !grant.office.export
@@ -321,7 +336,8 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
         .cloned()
         .chain(fields.keys().cloned())
         .collect();
-    let needs = Needs {
+    let mut needs = Needs {
+        execution: library::ExecutionAuthority::default(),
         binding: binding_hash(inner, &resources)?,
         resources,
         sources,
@@ -339,6 +355,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
     let mut reviews = vec![];
     let mut preview =
         json!({"format":req.format,"stylePolicy":req.style_policy,"reviewMode":req.review_mode});
+    let mut environment = None;
     let worker = if let Some(r) = &req.resource {
         let main = inner.config.root.join(&inner.config.files[r].path);
         let mut paths: Vec<_> = needs
@@ -419,7 +436,11 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
                 .unwrap_or(b"{\"version\":1,\"annotations\":[]}");
             reviews = freeze_reviews(annotations, &current, req)?;
         }
-        let (worker, dependencies) = editor::freeze(inner, actor, r, &source)?;
+        let (worker, dependencies, captured_environment) =
+            editor::freeze(inner, actor, r, &source)?;
+        needs.execution = captured_environment.authority.clone();
+        access(inner, actor, &needs, false)?;
+        environment = Some(captured_environment);
         for (p, h) in dependencies {
             if !snapshots.iter().any(|f| {
                 Path::new(&f.path) == inner.config.root.join(&p)
@@ -443,6 +464,9 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
             json!("预览显示至多 12 行；工件使用全部原查询行及其准确状态，不重新执行查询。");
     }
     let reserved = template.as_ref().map_or(0, Vec::len)
+        + environment
+            .as_ref()
+            .map_or(0, library::Environment::retained_bytes)
         + serde_json::to_vec(&preview).map_or(MAX_STORE, |b| b.len())
         + snapshots
             .iter()
@@ -457,6 +481,7 @@ fn capture(inner: &mut HostedInner, actor: &str, req: &Prepare) -> Result<Cut, A
     }
     Ok(Cut {
         worker,
+        environment,
         snapshots,
         query,
         reviews,
@@ -739,6 +764,7 @@ async fn prepare(
         None
     };
     let snapshots = std::mem::take(&mut cut.snapshots);
+    let environment = cut.environment.take();
     let converted = tokio::task::spawn_blocking(move || convert(req, &cut, render))
         .await
         .map_err(|_| failed())?;
@@ -750,6 +776,9 @@ async fn prepare(
             .filter(|j| j.status == "pending")
             .ok_or_else(failed)?;
         snapshot_check(inner, &snapshots)?;
+        if let Some(environment) = &environment {
+            environment.recheck(inner, &actor)?;
+        }
         let artifact = converted?;
         let used = inner
             .office

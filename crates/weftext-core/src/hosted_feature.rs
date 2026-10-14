@@ -12,6 +12,40 @@ pub struct ActorFeatureStatus {
     pub plan_id: Option<String>,
     /// Host author preview plus fixed safe import losses, never a copied Core preview.
     pub preview: serde_json::Value,
+    pub intent_kind: String,
+    /// Stable refs allocated by the original Core plan, never filesystem paths.
+    pub resource_refs: Vec<String>,
+}
+
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum FeatureIntentKind {
+    UpdateFiles,
+    ImportDocx,
+    ConfigureStyle,
+    ImportResource,
+}
+impl FeatureIntentKind {
+    fn from_intent(intent: &OperationIntent) -> Result<Self> {
+        match intent {
+            OperationIntent::UpdateFiles { .. } => Ok(Self::UpdateFiles),
+            OperationIntent::ImportDocx { .. } => Ok(Self::ImportDocx),
+            OperationIntent::ConfigureStyle { .. } => Ok(Self::ConfigureStyle),
+            OperationIntent::ImportResource { .. } => Ok(Self::ImportResource),
+            _ => Err(CoreError::new(
+                "unsupportedIntent",
+                "Hosted reviewed features permit only UpdateFiles, ImportDocx, ConfigureStyle or ImportResource",
+            )),
+        }
+    }
+    fn name(self) -> &'static str {
+        match self {
+            Self::UpdateFiles => "updateFiles",
+            Self::ImportDocx => "importDocx",
+            Self::ConfigureStyle => "configureStyle",
+            Self::ImportResource => "importResource",
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -22,6 +56,17 @@ pub(super) struct FeatureOperation {
     docx_import: bool,
     #[serde(default)]
     import_losses: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    intent_kind: Option<FeatureIntentKind>,
+}
+impl FeatureOperation {
+    fn kind(&self) -> FeatureIntentKind {
+        self.intent_kind.unwrap_or(if self.docx_import {
+            FeatureIntentKind::ImportDocx
+        } else {
+            FeatureIntentKind::UpdateFiles
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -193,6 +238,12 @@ impl Core {
             || record.feature.is_none()
             || record.field.is_some()
             || record.history.is_some()
+            || record.definition.is_some()
+            || !record.save_definition_reservations.is_empty()
+            || record
+                .feature
+                .as_ref()
+                .is_some_and(|f| f.docx_import != (f.kind() == FeatureIntentKind::ImportDocx))
         {
             return Err(conflict());
         }
@@ -214,15 +265,8 @@ impl Core {
                     .transaction
                     .as_ref()
                     .unwrap();
-                let valid_intent = match transaction.request.intent {
-                    OperationIntent::UpdateFiles { .. } => {
-                        !record.feature.as_ref().unwrap().docx_import
-                    }
-                    OperationIntent::ImportDocx { .. } => {
-                        record.feature.as_ref().unwrap().docx_import
-                    }
-                    _ => false,
-                };
+                let valid_intent = FeatureIntentKind::from_intent(&transaction.request.intent)
+                    .is_ok_and(|kind| kind == record.feature.as_ref().unwrap().kind());
                 if !valid_intent {
                     return Err(conflict());
                 }
@@ -276,6 +320,26 @@ impl Core {
             )?;
         }
         let feature = record.feature.unwrap();
+        let kind = feature.kind();
+        let resource_refs = if matches!(
+            kind,
+            FeatureIntentKind::ImportResource | FeatureIntentKind::ConfigureStyle
+        ) && matches!(status, "prepared" | "committed" | "recoveryPending")
+        {
+            detail
+                .as_ref()
+                .map(|p| {
+                    p.resource_map
+                        .values()
+                        .cloned()
+                        .collect::<std::collections::BTreeSet<_>>()
+                        .into_iter()
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
         let mut preview = feature.preview;
         if feature.docx_import {
             let object = preview.as_object_mut().ok_or_else(conflict)?;
@@ -292,6 +356,12 @@ impl Core {
             status: status.into(),
             plan_id: detail.map(|p| p.plan_id),
             preview,
+            intent_kind: if record.cancelled && record.fingerprint.is_empty() {
+                "unknown".into()
+            } else {
+                kind.name().into()
+            },
+            resource_refs,
         }))
     }
 
@@ -322,10 +392,41 @@ impl Core {
         resource: &str,
         external_operation_id: &str,
         fingerprint: &str,
-        mut request: OperationRequest,
+        request: OperationRequest,
         preview: serde_json::Value,
         dependencies: &[String],
     ) -> Result<ActorFeatureStatus> {
+        self.actor_feature_prepare_with_witnesses(
+            resource,
+            external_operation_id,
+            fingerprint,
+            request,
+            preview,
+            dependencies,
+            &[],
+        )
+    }
+    /// Persist original read-only dependencies in the same operation Plan.
+    /// No witness becomes a writable snapshot basis. Absent dependencies use
+    /// the existing predecision absence check, not a sustained absence lock.
+    #[allow(clippy::too_many_arguments)]
+    pub fn actor_feature_prepare_with_witnesses(
+        &mut self,
+        resource: &str,
+        external_operation_id: &str,
+        fingerprint: &str,
+        mut request: OperationRequest,
+        preview: serde_json::Value,
+        dependencies: &[String],
+        witnesses: &[&SnapshotWitness],
+    ) -> Result<ActorFeatureStatus> {
+        let intent_kind = FeatureIntentKind::from_intent(&request.intent)?;
+        if let Some(record) = self.actor_feature_record(resource, external_operation_id)?
+            && !(record.cancelled && record.fingerprint.is_empty())
+            && record.feature.as_ref().unwrap().kind() != intent_kind
+        {
+            return Err(conflict());
+        }
         if let Some(status) =
             self.actor_feature_retry(resource, external_operation_id, fingerprint)?
         {
@@ -364,14 +465,36 @@ impl Core {
                 }
                 parent.len() > 64 * 1024 || bytes.is_empty() || bytes.len() > 16 * 1024 * 1024
             }
+            OperationIntent::ConfigureStyle {
+                base_id, source, ..
+            } => {
+                valid_operation_id(base_id)?;
+                source.len() > MAX_SOURCE_BYTES
+            }
+            OperationIntent::ImportResource {
+                node,
+                name,
+                bytes,
+                manifest_base_id,
+                resource_base_id,
+            } => {
+                valid_name(name)?;
+                valid_operation_id(manifest_base_id)?;
+                valid_operation_id(resource_base_id)?;
+                node.len() > 64 * 1024 || bytes.len() > 32 * 1024 * 1024
+            }
             _ => {
                 return Err(CoreError::new(
                     "unsupportedIntent",
-                    "Hosted reviewed features permit only UpdateFiles or ImportDocx",
+                    "Hosted reviewed features require one of the supported typed intents",
                 ));
             }
         };
-        if over_budget || dependencies.len() > 64 || request.root.len() > 64 * 1024 {
+        if over_budget
+            || dependencies.len() > 64
+            || witnesses.len() > 2048
+            || request.root.len() > 64 * 1024
+        {
             return Err(CoreError::new(
                 "budget",
                 "Hosted review exceeds its explicit participant or byte budget",
@@ -392,6 +515,7 @@ impl Core {
                 preview,
                 docx_import,
                 import_losses: None,
+                intent_kind: Some(intent_kind),
             }),
             definition: None,
             save_definition_reservations: vec![],
@@ -402,9 +526,9 @@ impl Core {
             &serde_json::to_vec(&record)?,
         )?;
         request.operation_id = record.core_operation_id.clone();
-        self.prepare_dependent_feature_operation(request, &serde_json::json!({
+        self.prepare_dependent_feature_operation_with_witnesses(request, &serde_json::json!({
             "kind":"hostedReviewedFeature","actor":record.actor,"resource":record.resource,"fingerprint":record.fingerprint,
-        }), dependencies)?;
+        }), dependencies,witnesses)?;
         self.actor_feature_status(resource, external_operation_id)?
             .ok_or_else(|| CoreError::new("invalidState", "Missing original feature operation"))
     }
@@ -486,6 +610,7 @@ impl Core {
                     preview: serde_json::Value::Null,
                     docx_import: false,
                     import_losses: None,
+                    intent_kind: None,
                 }),
                 definition: None,
                 save_definition_reservations: vec![],

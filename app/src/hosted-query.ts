@@ -38,6 +38,7 @@ export class HostedQuery {
   dependencies(): HostedQueryDependencies { return exactHostedDependencies(this.draft, this.catalog); }
   get version() { return this.inputRevision; }
   refuseResult(message: string) { this.gate.clear(); this.result = undefined; this.resultInput = undefined; this.message.textContent = message; this.renderResults(); }
+  environmentChanged() { this.inputRevision++; this.gate.changed(); if (this.result) this.result = { ...this.result, superseded: true }; this.message.textContent = "库配置已变化，原冻结结果保留为旧依据；计划和参数未改，请明确重新运行。"; this.renderResults(); }
   private dependencyBasis() { return JSON.stringify([this.draft.providers, this.draft.seriesPolicies, ...(["providers", "seriesPolicies"] as const).map(kind => Object.keys(this.draft[kind]).map(id => [id, this.catalog[kind]?.find(item => item.id === id)?.fingerprint ?? null]))]); }
   authorChanged(force = false) { void this.definitions?.authorChanged(force); }
   async refreshCatalog(): Promise<void> {

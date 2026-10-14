@@ -475,6 +475,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
             User {
                 query_providers: Default::default(),
                 query_scopes: Default::default(),
+                library: Default::default(),
                 epoch: 0,
                 token_sha256: digest(actor.as_bytes()),
                 enabled: true,
@@ -488,6 +489,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
         core,
         config: Config {
             directories: Default::default(),
+            style_inputs: Default::default(),
             deployment: "history-test".into(),
             bind: "127.0.0.1:0".parse().unwrap(),
             origin: None,
@@ -530,6 +532,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
         fields: Default::default(),
         review: Default::default(),
         office: Default::default(),
+        library: Default::default(),
     };
     let doc = inner.open("alice", "Shared").unwrap();
     writing_api::observe_version(

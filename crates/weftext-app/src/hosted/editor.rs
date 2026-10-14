@@ -198,7 +198,7 @@ async fn render(
 ) -> ApiResult {
     let captured = req.clone();
     let check = auth.clone();
-    let (input, dependencies) = locked(&state, move |inner| {
+    let (input, dependencies, environment) = locked(&state, move |inner| {
         let (actor, session, _) = qualify(inner, &check, &captured, true, false)?;
         freeze(inner, &actor, &session.resource, &captured.source)
     })
@@ -207,6 +207,7 @@ async fn render(
     locked(&state, move |inner| {
         let (actor, session, rights) = qualify(inner, &auth, &req, false, false)?;
         validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+        environment.recheck(inner, &actor)?;
         let mut output = output?;
         scrub_tree(&mut output["tree"], &session.resource, rights.write);
         let mut info = json!({"syntaxTokens":output["sourceInfo"]["syntaxTokens"],"syntaxValid":output["sourceInfo"]["syntaxValid"],"bodyInsertion":output["sourceInfo"]["bodyInsertion"]});
@@ -218,33 +219,40 @@ async fn render(
 }
 /// Internal compilation capability shared by authorized writing and review.
 pub(super) fn freeze(
-    inner: &HostedInner,
+    inner: &mut HostedInner,
     actor: &str,
     resource: &str,
     source: &str,
-) -> Result<(WorkerRequest, BTreeMap<String, String>), ApiError> {
+) -> Result<
+    (
+        WorkerRequest,
+        BTreeMap<String, String>,
+        library::Environment,
+    ),
+    ApiError,
+> {
     inner.rights(actor, resource)?;
     writing_api::validate_source(source, None)?;
     let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
     let mut files = inner.files(actor, &file.inputs)?;
     let dependencies = files.iter().map(|(p, b)| (p.clone(), digest(b))).collect();
     files.insert(file.path.clone(), source.as_bytes().to_vec());
-    Ok((
-        WorkerRequest {
-            source: source.into(),
-            path: file.path.clone().into(),
-            root: inner.config.root.clone(),
-            paged: false,
-            style: None,
-            frozen_files: Some(
-                files
-                    .into_iter()
-                    .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
-                    .collect(),
-            ),
-        },
-        dependencies,
-    ))
+    let mut worker = WorkerRequest {
+        source: source.into(),
+        path: file.path.clone().into(),
+        root: inner.config.root.clone(),
+        paged: false,
+        style: None,
+        frozen_files: Some(
+            files
+                .into_iter()
+                .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
+                .collect(),
+        ),
+    };
+    let environment = library::environment(inner, actor)?;
+    environment.apply(&mut worker)?;
+    Ok((worker, dependencies, environment))
 }
 pub(super) fn validate_inputs(
     inner: &HostedInner,

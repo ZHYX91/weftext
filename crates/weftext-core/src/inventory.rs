@@ -268,19 +268,22 @@ impl Core {
 }
 fn read_rules(root: &Path) -> Result<Rules> {
     let path = root.join(".weftext-rules");
-    let mut rules = Rules::default();
     if !path.exists() {
-        return Ok(rules);
+        return Ok(Rules::default());
     }
     let guard = ParentGuard::acquire(&path)?;
     let mut file = guard.open_read_guard_file()?;
     let bytes = read_source(&mut file)?;
+    Ok(parse_rules(&bytes))
+}
+fn parse_rules(bytes: &[u8]) -> Rules {
+    let mut rules = Rules::default();
     // This MVP intentionally defines an exact-path subset, no .gitignore inheritance.
-    let value: serde_json::Value = match serde_json::from_slice(&bytes) {
+    let value: serde_json::Value = match serde_json::from_slice(bytes) {
         Ok(v) => v,
         Err(_) => {
             rules.warnings.push(".weftext-rules is unsupported: this MVP accepts JSON {version:1,ignored:[relative paths],unmanaged:[relative paths]}".into());
-            return Ok(rules);
+            return rules;
         }
     };
     if value["version"] != 1
@@ -292,7 +295,7 @@ fn read_rules(root: &Path) -> Result<Rules> {
         rules
             .warnings
             .push("Unsupported .weftext-rules format/version".into());
-        return Ok(rules);
+        return rules;
     }
     for (key, set) in [
         ("ignored", &mut rules.ignored),
@@ -323,7 +326,19 @@ fn read_rules(root: &Path) -> Result<Rules> {
             set.insert(path);
         }
     }
-    Ok(rules)
+    rules
+}
+/// Validate the same closed exact-path rules format used by discovery.
+pub fn validate_library_rules(bytes: &[u8]) -> Result<()> {
+    check_size(bytes)?;
+    let rules = parse_rules(bytes);
+    if !rules.warnings.is_empty() {
+        return Err(CoreError::new(
+            "unsupportedRules",
+            rules.warnings.join("; "),
+        ));
+    }
+    Ok(())
 }
 fn excluded(path: &Path, set: &HashSet<PathBuf>) -> bool {
     set.iter().any(|p| path.starts_with(p))

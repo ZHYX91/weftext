@@ -38,7 +38,7 @@ test("a pending-only directory cannot accumulate unbound IDs or prove admission;
   assert.throws(() => freezeHostedSave({ ...draft, definitionReservations: directory.slice(0, 33).map(item => item.operationId) }, "session", "base", "blocked"), /32/);
 });
 test("a new server actor epoch cannot look up old source, preview, input or original-plan cache", () => {
-  for (const kind of ["draft", "field", "review", "office", "query", "history"] as const) {
+  for (const kind of ["draft", "field", "review", "office", "query", "history", "library"] as const) {
     const old = hostedCachePrefix(kind, "deployment", "actor", 1), current = hostedCachePrefix(kind, "deployment", "actor", 2), original = { operationId: "one", source: "protected", preview: "old", value: "unfinished" };
     const storage = new Map([[old + "resource", original]]); // Failed removeItem leaves the actual old record.
     assert.equal(storage.get(current + "resource"), undefined); assert.equal(storage.get(old + "resource"), original);

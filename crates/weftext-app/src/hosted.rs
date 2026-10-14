@@ -6,6 +6,7 @@ mod editor;
 mod embedded_query;
 mod fields;
 mod history_api;
+mod library;
 mod navigation;
 mod office;
 mod office_import;
@@ -80,6 +81,8 @@ struct User {
     #[serde(default)]
     query_scopes: query_scopes::Rights,
     #[serde(default)]
+    library: library::Rights,
+    #[serde(default)]
     sync_owner: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -104,6 +107,8 @@ struct Config {
     files: BTreeMap<String, FileEntry>,
     #[serde(default)]
     directories: BTreeMap<String, query_scopes::Directory>,
+    #[serde(default)]
+    style_inputs: Vec<String>,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -126,6 +131,7 @@ struct HostedInner {
     fields: fields::Store,
     review: review::Store,
     office: office::Store,
+    library: library::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -235,6 +241,9 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !library::valid_rights(&user.library) {
+            return Err(ApiError::bad("库配置写入须具备同角色读取权"));
+        }
         if !query_scopes::validate_rights(config, &user.query_scopes) {
             return Err(ApiError::bad("目录范围授权须引用有界的明确配置目录"));
         }
@@ -730,25 +739,14 @@ async fn preview(
     let sid = req.session_id.clone();
     let check = auth.clone();
     let source = req.source;
-    let (input, generation) = locked(&state, move |inner| {
+    let (input, dependencies, environment, generation) = locked(&state, move |inner| {
         let (actor, session, _) = inner.session(&check, &sid)?;
-        let file = &inner.config.files[&session.resource];
-        let mut files = inner.files(&actor, &file.inputs)?;
-        files.insert(file.path.clone(), source.as_bytes().to_vec());
+        let (input, dependencies, environment) =
+            editor::freeze(inner, &actor, &session.resource, &source)?;
         Ok((
-            WorkerRequest {
-                source,
-                path: file.path.clone().into(),
-                root: inner.config.root.clone(),
-                paged: false,
-                style: None,
-                frozen_files: Some(
-                    files
-                        .into_iter()
-                        .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
-                        .collect(),
-                ),
-            },
+            input,
+            dependencies,
+            environment,
             inner.actor_generation(&actor),
         ))
     })
@@ -763,8 +761,10 @@ async fn preview(
     })?;
     let output = render_worker(input).await;
     locked(&state, move |inner| {
-        let (actor, _, _) = inner.session(&auth, &req.session_id)?;
+        let (actor, session, _) = inner.session(&auth, &req.session_id)?;
         if inner.actor_generation(&actor) != generation { return Err(unavailable()); }
+        editor::validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+        environment.recheck(inner, &actor)?;
         let output = output.map_err(|_| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY, "previewUnavailable", "预览未完成，源码与草稿仍保留。"))?;
         // Return rendered content only. Compiler paths, origins and ambient
         // metadata are not part of this bounded hosted presentation API.
@@ -859,6 +859,7 @@ async fn update_policy(
                             && old.grants == user.grants
                             && old.query_providers == user.query_providers
                             && old.query_scopes == user.query_scopes
+                            && old.library == user.library
                             && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);
@@ -945,6 +946,15 @@ pub(super) async fn serve(
         return Err("Invalid deployment, administrator digest or resource budget".into());
     }
     let mut paths = BTreeSet::new();
+    if config.style_inputs.len() > 64
+        || config
+            .style_inputs
+            .iter()
+            .any(|id| !config.files.contains_key(id))
+        || config.style_inputs.iter().collect::<BTreeSet<_>>().len() != config.style_inputs.len()
+    {
+        return Err("Invalid explicit style inputs".into());
+    }
     for (id, file) in &config.files {
         let p = std::path::Path::new(&file.path);
         if !valid_id(id)
@@ -1068,6 +1078,7 @@ pub(super) async fn serve(
             fields: fields::Store::default(),
             review: review::Store::default(),
             office: office::Store::default(),
+            library: library::Store::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -1079,6 +1090,7 @@ pub(super) async fn serve(
         .merge(fields::router())
         .merge(history_api::router())
         .merge(navigation::router())
+        .merge(library::router())
         .merge(query::router())
         .merge(definition::router())
         .merge(embedded_query::router())

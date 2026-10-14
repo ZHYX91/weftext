@@ -134,6 +134,7 @@ pub(super) struct QueryRights {
 }
 #[derive(Clone, Default, Serialize)]
 pub(super) struct Authority {
+    pub(super) execution: library::ExecutionAuthority,
     pub(super) scopes: query_scopes::Authority,
     pub(super) providers: query_providers::Selection,
     pub(super) provider_dependencies: weftext_data::QueryProviderDependencies,
@@ -148,6 +149,7 @@ pub(super) fn authorize_authority(
     actor: &str,
     authority: &Authority,
 ) -> Result<(), ApiError> {
+    library::authorize_execution(inner, actor, &authority.execution)?;
     query_providers::authorize(inner, actor, &authority.providers)?;
     query_scopes::authorize(inner, actor, &authority.scopes)?;
     let user = inner
@@ -463,6 +465,7 @@ struct Capture {
     metadata: BTreeMap<String, weftext_data::AuthorizedQueryMetadata>,
     columns: Vec<String>,
     workers: Vec<(String, WorkerRequest)>,
+    environment: Option<library::Environment>,
     products: BTreeSet<String>,
     resource_map: BTreeMap<String, String>,
     draft: Option<Draft>,
@@ -1905,6 +1908,22 @@ fn capture(
                 }
             }
         }
+        // Static field projections never read or execute the library style.
+        // All semantic workers in this cut share one captured environment.
+        let environment = if workers.is_empty() {
+            None
+        } else {
+            let environment = library::environment(inner, &actor)?;
+            charge_bytes(&mut worker_bytes, environment.retained_bytes())?;
+            for (_, worker) in &mut workers {
+                let before = serialized_query_bytes(worker)?;
+                environment.apply(worker)?;
+                let after = serialized_query_bytes(worker)?;
+                charge_bytes(&mut worker_bytes, after.saturating_sub(before))?;
+            }
+            authority.execution = environment.authority.clone();
+            Some(environment)
+        };
         let columns = weftext_data::query_output_columns(&req.plan, &context.definitions)
             .map_err(|_| invalid())?;
         let config_hash = office::binding_hash(inner, &all_resources(&authority))?;
@@ -1928,6 +1947,7 @@ fn capture(
             metadata,
             columns,
             workers,
+            environment,
             products: req.products,
             resource_map,
             draft,
@@ -1947,6 +1967,9 @@ async fn execute_captured(
         &captured.plan,
     )?;
     charge_bytes(&mut execution_bytes, captured.scopes.retained_bytes())?;
+    if let Some(environment) = &captured.environment {
+        charge_bytes(&mut execution_bytes, environment.retained_bytes())?;
+    }
     for (entity, worker) in std::mem::take(&mut captured.workers) {
         let output = editor::compile_frozen(state, worker).await?;
         let products = if output["ok"] == true {
@@ -2030,6 +2053,7 @@ async fn execute_captured(
         if office::binding_hash(inner,&all_resources(&captured.authority))?!=captured.config_hash{return Err(changed());}
         for (path,witness) in &captured.witnesses{inner.core.validate_snapshot_witness(&inner.config.root,path,witness).map_err(|_|changed())?;}
         captured.scopes.recheck(inner,&actor)?;
+        if let Some(environment)=&captured.environment {environment.recheck(inner,&actor)?;}
         if let Some(d)=&captured.draft && let (Some(id),Some(serial))=(&d.session_id,d.serial){let (_,session,_)=inner.session(&auth,id)?;if session.resource!=d.resource{return Err(unavailable());}writing_api::exact_version(&inner.editor_versions,id,&d.source,serial)?;}
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
         result.diagnostics=result.diagnostics.into_iter().map(|_|"获权投影或表达式有未决结果；请核对Cell状态与覆盖范围。".into()).collect::<BTreeSet<_>>().into_iter().collect();

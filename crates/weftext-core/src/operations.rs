@@ -159,18 +159,21 @@ pub struct OperationReceipt {
 pub enum ConfigRole {
     Schema,
     WorkspaceSettings,
+    Rules,
 }
 impl ConfigRole {
     fn filename(self) -> &'static str {
         match self {
             Self::Schema => ".weftext-schema.json",
             Self::WorkspaceSettings => ".weftext-settings.json",
+            Self::Rules => ".weftext-rules",
         }
     }
     fn role(self) -> &'static str {
         match self {
             Self::Schema => "schema",
             Self::WorkspaceSettings => "workspace-settings",
+            Self::Rules => "rules",
         }
     }
 }
@@ -203,6 +206,35 @@ pub(crate) struct StyleBasis {
     owner: Option<SnapshotBinding>,
     source: String,
     resource_ref: Option<String>,
+}
+pub struct LibraryStyleWitness {
+    basis: StyleBasis,
+}
+impl LibraryStyleWitness {
+    pub fn retained_bytes(&self) -> usize {
+        style_basis_retained_bytes(&self.basis)
+    }
+}
+fn style_basis_retained_bytes(basis: &StyleBasis) -> usize {
+    std::mem::size_of::<LibraryStyleWitness>()
+        + basis.root.capacity()
+        + basis.source.capacity()
+        + basis.resource_ref.as_ref().map_or(0, String::capacity)
+        + [
+            Some(&basis.settings),
+            basis.style.as_ref(),
+            basis.manifest.as_ref(),
+            basis.owner.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|b| {
+            b.path.capacity()
+                + b.captured
+                    .as_ref()
+                    .map_or(0, |f| f.path.capacity() + f.bytes.capacity())
+        })
+        .sum::<usize>()
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1645,6 +1677,13 @@ impl Core {
         pool: &mut Vec<SnapshotWitness>,
         incoming: Vec<SnapshotWitness>,
     ) -> Result<()> {
+        Self::merge_dependency_witnesses(pool, incoming, false)
+    }
+    fn merge_dependency_witnesses(
+        pool: &mut Vec<SnapshotWitness>,
+        incoming: Vec<SnapshotWitness>,
+        allow_absent: bool,
+    ) -> Result<()> {
         let original = std::mem::take(pool);
         if original.len() > 2048 || incoming.len() > 2048 {
             return Err(CoreError::new(
@@ -1663,18 +1702,20 @@ impl Core {
                 verify_duplicate_snapshot(&existing.binding, basis)?;
                 continue;
             }
-            let captured = basis.captured.as_ref().ok_or_else(|| {
-                CoreError::new(
+            if basis.captured.is_none() && !allow_absent {
+                return Err(CoreError::new(
                     "basisRequired",
                     "A guarded definition dependency must exist",
-                )
-            })?;
-            total = total.checked_add(captured.bytes.len()).ok_or_else(|| {
-                CoreError::new(
-                    "budget",
-                    "Guarded read dependencies exceed their byte budget",
-                )
-            })?;
+                ));
+            }
+            total = total
+                .checked_add(basis.captured.as_ref().map_or(0, |f| f.bytes.len()))
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "budget",
+                        "Guarded read dependencies exceed their byte budget",
+                    )
+                })?;
             if merged.len() == 64 || total > MAX_OPERATION_BYTES {
                 return Err(CoreError::new(
                     "budget",
@@ -1813,19 +1854,22 @@ impl Core {
     }
     pub fn validate_library_style(&self, root: impl AsRef<Path>, base_id: &str) -> Result<()> {
         let root = absolute_path(root.as_ref())?;
-        self.require_workspace(&root)?;
         let b = self
             .style_bases
             .get(base_id)
             .ok_or_else(|| CoreError::new("staleBase", "Style basis is unavailable"))?;
-        if b.root != display(&root) {
+        self.validate_style_basis(&root, b)
+    }
+    fn validate_style_basis(&self, root: &Path, b: &StyleBasis) -> Result<()> {
+        self.require_workspace(root)?;
+        if b.root != display(root) {
             return Err(CoreError::new(
                 "outsideRoot",
                 "Style basis belongs to a different library",
             ));
         }
         if b.style.is_some() {
-            self.managed_node(&root, &root.join("Styles"), false)?;
+            self.managed_node(root, &root.join("Styles"), false)?;
         }
         for basis in [
             &b.settings,
@@ -1846,6 +1890,56 @@ impl Core {
                 ));
             }
         }
+        Ok(())
+    }
+    pub fn take_library_style_witness(&mut self, base_id: &str) -> Result<LibraryStyleWitness> {
+        self.style_bases
+            .remove(base_id)
+            .map(|basis| LibraryStyleWitness { basis })
+            .ok_or_else(|| {
+                CoreError::new("basisRequired", "The original style basis is unavailable")
+            })
+    }
+    pub fn validate_library_style_witness(
+        &self,
+        root: &Path,
+        witness: &LibraryStyleWitness,
+    ) -> Result<()> {
+        self.validate_style_basis(&absolute_path(root)?, &witness.basis)
+    }
+    /// Copy the original read-only style dependencies into a bounded Plan pool.
+    /// Absent settings are negative observations: the original Plan rechecks
+    /// absence before its decision; this does not lock a nonexistent file.
+    /// Such a pool belongs to actor_feature_prepare_with_witnesses, not to the
+    /// sustained positive-file guard used for saved definitions.
+    pub fn merge_library_style_witness(
+        pool: &mut Vec<SnapshotWitness>,
+        witness: &LibraryStyleWitness,
+    ) -> Result<()> {
+        let basis = &witness.basis;
+        let incoming = [
+            Some(&basis.settings),
+            basis.style.as_ref(),
+            basis.manifest.as_ref(),
+            basis.owner.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|binding| SnapshotWitness {
+            binding: binding.clone(),
+        })
+        .collect();
+        Self::merge_dependency_witnesses(pool, incoming, true)
+    }
+    pub fn library_style_basis_retained_bytes(&self, base_id: &str) -> Result<usize> {
+        let basis = self.style_bases.get(base_id).ok_or_else(|| {
+            CoreError::new("basisRequired", "The original style basis is unavailable")
+        })?;
+        Ok(style_basis_retained_bytes(basis))
+    }
+    pub fn discard_library_style_basis(&mut self, base_id: &str) -> Result<()> {
+        valid_operation_id(base_id)?;
+        self.style_bases.remove(base_id);
         Ok(())
     }
     pub fn library_style_basis(
@@ -1899,12 +1993,25 @@ impl Core {
     }
     pub fn read_library_style(&mut self, root: impl AsRef<Path>) -> Result<LibraryStyleDocument> {
         let root = absolute_path(root.as_ref())?;
-        let workspace = self.require_workspace(&root)?;
+        let mut temporary = Vec::new();
+        let result = self.read_library_style_inner(&root, &mut temporary);
+        for base in temporary {
+            self.snapshots.remove(&base);
+        }
+        result
+    }
+    fn read_library_style_inner(
+        &mut self,
+        root: &Path,
+        temporary: &mut Vec<String>,
+    ) -> Result<LibraryStyleDocument> {
+        let workspace = self.require_workspace(root)?;
         let settings_path = root.join(ConfigRole::WorkspaceSettings.filename());
         let settings = self
-            .read_snapshot(&root, &[display(&settings_path)])?
+            .read_snapshot(root, &[display(&settings_path)])?
             .files
             .remove(0);
+        temporary.push(settings.base_id.clone());
         let settings_binding = self.snapshots[&settings.base_id].clone();
         let value: serde_json::Value = settings
             .bytes
@@ -1941,15 +2048,20 @@ impl Core {
                 )
             })?;
             valid_operation_id(resource_id)?;
-            self.managed_node(&root, &root.join("Styles"), false)?;
-            let snapshots = self.read_snapshot(
-                &root,
-                &[
-                    display(&path),
-                    display(&root.join("Styles/weftext.resources.json")),
-                    display(&root.join("Styles/Styles.typ")),
-                ],
-            )?;
+            self.managed_node(root, &root.join("Styles"), false)?;
+            let mut snapshots = SnapshotSet {
+                files: Vec::new(),
+                complete: true,
+            };
+            for path in [
+                &path,
+                &root.join("Styles/weftext.resources.json"),
+                &root.join("Styles/Styles.typ"),
+            ] {
+                let snapshot = self.read_snapshot(root, &[display(path)])?.files.remove(0);
+                temporary.push(snapshot.base_id.clone());
+                snapshots.files.push(snapshot);
+            }
             let module = &snapshots.files[0];
             let manifest = &snapshots.files[1];
             let value: serde_json::Value =
@@ -2015,7 +2127,7 @@ impl Core {
         self.style_bases.insert(
             base_id.clone(),
             StyleBasis {
-                root: display(&root),
+                root: display(root),
                 settings: settings_binding,
                 style: style_binding,
                 manifest: manifest_binding,
@@ -2182,6 +2294,16 @@ impl Core {
             .read_snapshot(&root, &[display(&path)])?
             .files
             .remove(0);
+        if matches!(role, ConfigRole::Rules)
+            && snapshot.bytes.is_none()
+            && self.query_rules_ever_committed(&root)?
+        {
+            self.snapshots.remove(&snapshot.base_id);
+            return Err(CoreError::new(
+                "rulesUnavailable",
+                "Previously committed rules are missing; no default or implicit reinstallation is available",
+            ));
+        }
         Ok(ConfigDocument {
             role_ref: format!(
                 "weftext-config://{}/{}",
@@ -2203,6 +2325,9 @@ impl Core {
         operation_id: &str,
     ) -> Result<OperationPreview> {
         let root = absolute_path(root.as_ref())?;
+        if matches!(role, ConfigRole::Rules) {
+            crate::validate_library_rules(&after)?;
+        }
         if let Some(t) = self
             .operations
             .get(operation_id)
@@ -2594,7 +2719,7 @@ impl Core {
         if matches!(request.intent, OperationIntent::CloneSync { .. }) {
             return self.prepare_sync_clone(request);
         }
-        self.prepare_internal(request, None, None, &[])
+        self.prepare_internal(request, None, None, &[], &[])
     }
     /// Freeze the finite admitted source set and all bounded native filesystem
     /// inputs together. The engine may only read this map; absent inputs remain
@@ -2830,6 +2955,7 @@ impl Core {
             None,
             Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
             &[],
+            &[],
         )
     }
     pub fn prepare_dependent_feature_operation(
@@ -2843,6 +2969,22 @@ impl Core {
             None,
             Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
             base_ids,
+            &[],
+        )
+    }
+    pub(crate) fn prepare_dependent_feature_operation_with_witnesses(
+        &mut self,
+        request: OperationRequest,
+        canonical_author_intent: &serde_json::Value,
+        base_ids: &[String],
+        witnesses: &[&SnapshotWitness],
+    ) -> Result<OperationPreview> {
+        self.prepare_internal(
+            request,
+            None,
+            Some(hash(&canonical_json_bytes(canonical_author_intent)?)),
+            base_ids,
+            witnesses,
         )
     }
     /// Strong product actions freeze the complete admitted-set membership and
@@ -2864,7 +3006,7 @@ impl Core {
                 "Strong action requires its complete admitted set cut",
             ));
         }
-        self.prepare_internal(request, Some(cut), None, &[])
+        self.prepare_internal(request, Some(cut), None, &[], &[])
     }
     fn prepare_internal(
         &mut self,
@@ -2872,6 +3014,7 @@ impl Core {
         cut: Option<AdmittedBasis>,
         author_fingerprint: Option<String>,
         dependencies: &[String],
+        witnesses: &[&SnapshotWitness],
     ) -> Result<OperationPreview> {
         valid_operation_id(&request.operation_id)?;
         let fingerprint = author_fingerprint.unwrap_or(hash(&serde_json::to_vec(&request)?));
@@ -2902,11 +3045,23 @@ impl Core {
         let mut files = Vec::new();
         let mut directories = Vec::new();
         let mut absent_dependencies = Vec::new();
+        let mut dependency_pool = Vec::new();
+        let mut incoming = Vec::with_capacity(dependencies.len());
         for id in dependencies {
             let basis =
                 self.snapshots.get(id).cloned().ok_or_else(|| {
                     CoreError::new("staleBase", "A dependency basis is unavailable")
                 })?;
+            incoming.push(SnapshotWitness { binding: basis });
+        }
+        Self::merge_dependency_witnesses(&mut dependency_pool, incoming, true)?;
+        Self::merge_dependency_witnesses(
+            &mut dependency_pool,
+            witnesses.iter().map(|w| (*w).clone()).collect(),
+            true,
+        )?;
+        for witness in dependency_pool {
+            let basis = witness.binding;
             if !locator_within(Path::new(&basis.path), &root) {
                 return Err(CoreError::new(
                     "outsideRoot",
@@ -2915,7 +3070,7 @@ impl Core {
             }
             self.check_pending(Path::new(&basis.path))?;
             let current = capture_optional(Path::new(&basis.path))?;
-            self.verify_snapshot(Path::new(&basis.path), id, current.as_ref())?;
+            self.verify_snapshot_binding(Path::new(&basis.path), &basis, current.as_ref())?;
             if let Some(f) = current {
                 files.push(f);
             } else {
@@ -4701,6 +4856,9 @@ impl Core {
             ));
         }
         let name = path.file_name().unwrap_or_default();
+        if path.parent() == Some(root) && name == ".weftext-rules" {
+            return crate::validate_library_rules(after);
+        }
         if name == "weftext.directory.json" {
             return crate::directory_identity::validate_directory_marker(after).map(|_| ());
         }
@@ -5190,7 +5348,7 @@ fn value_enabled(bytes: &Option<Vec<u8>>) -> Result<bool> {
 fn default_style_source() -> &'static str {
     weftext_engine::DEFAULT_LIBRARY_STYLE
 }
-fn resource_path(directory: &Path, name: &str) -> Result<PathBuf> {
+pub(crate) fn resource_path(directory: &Path, name: &str) -> Result<PathBuf> {
     let relative = PathBuf::from(name);
     if relative.is_absolute()
         || relative.as_os_str().is_empty()

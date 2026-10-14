@@ -144,7 +144,7 @@ export class NativeStyleController {
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text = ""): HTMLElementTagNameMap[K] {
   const result = document.createElement(tag); result.className = className; result.textContent = text; return result;
 }
-function controlReason(reason: string): string {
+export function nativeStyleControlReason(reason: string): string {
   return ({
     "syntax-invalid": "样式语法尚未有效，请在源码中修复。",
     "missing-or-ambiguous-entry": "没有唯一的库样式入口，请使用完整源码。",
@@ -154,6 +154,22 @@ function controlReason(reason: string): string {
     "unverified-standard-binding": "无法确认这条规则使用原生标准元素，请使用源码。",
     "unproven-scope": "此规则的作用范围无法由简化控件确认，请使用源码。",
   } as Record<string, string>)[reason] ?? reason;
+}
+
+/** Both local and hosted panels edit the same inspected native parameter. */
+export function nativeStyleControlInput(control: NativeStyleControl, value: NativeStyleValue): HTMLInputElement | HTMLSelectElement {
+  if (control.kind === "select") {
+    const select = element("select", "text-input");
+    for (const [index, option] of (control.options ?? []).entries()) {
+      const entry = element("option", "", option.label); entry.value = String(index); entry.selected = option.value === value; select.append(entry);
+    }
+    return select;
+  }
+  const input = element("input", "text-input"); input.type = control.kind === "number" ? "number" : control.kind === "boolean" ? "checkbox" : "text";
+  if (control.kind === "boolean") input.checked = Boolean(value); else input.value = String(value);
+  if (control.min !== undefined) input.min = String(control.min); if (control.max !== undefined) input.max = String(control.max);
+  if (control.kind === "number") input.step = "any";
+  return input;
 }
 
 /** Import style-panel.css and retain this returned controller per library.
@@ -219,26 +235,14 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
     for (const control of state.controls) {
       const currentValue = controller.changes[control.key] ?? control.value;
       const label = element("label", "field-label", control.label + (control.unit ? `（${control.unit}）` : ""));
-      let input: HTMLInputElement | HTMLSelectElement;
-      if (control.kind === "select") {
-        const select = element("select", "text-input");
-        for (const [index, option] of (control.options ?? []).entries()) {
-          const entry = element("option", "", option.label); entry.value = String(index); entry.selected = option.value === currentValue; select.append(entry);
-        }
-        input = select;
-      } else {
-        input = element("input", "text-input"); input.type = control.kind === "number" ? "number" : control.kind === "boolean" ? "checkbox" : "text";
-        if (control.kind === "boolean") input.checked = Boolean(currentValue); else input.value = String(currentValue);
-        if (control.min !== undefined) input.min = String(control.min); if (control.max !== undefined) input.max = String(control.max);
-        if (control.kind === "number") input.step = "any";
-      }
+      const input = nativeStyleControlInput(control, currentValue);
       input.onchange = () => {
         try {
           const value = control.kind === "select" ? control.options![Number(input.value)].value : control.kind === "boolean" ? (input as HTMLInputElement).checked : control.kind === "number" ? Number(input.value) : input.value;
           controller.setControl(control.key, value); edited();
         } catch (error) { showError(error); }
       };
-      label.append(input); if (control.reason) label.append(element("span", "field-help", controlReason(control.reason))); controls.append(label); inputs.push({ input, control });
+      label.append(input); if (control.reason) label.append(element("span", "field-help", nativeStyleControlReason(control.reason))); controls.append(label); inputs.push({ input, control });
     }
     if (!state.controls.length) notices.append(element("p", "field-help", "这份模块没有可无损编辑的简化控件。请使用原生源码入口；全部现有规则保持原样。"));
     refresh();

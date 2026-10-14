@@ -71,6 +71,7 @@ export class HostedEditor {
     this.editor.applyPatches(basis.source, [{ from: 0, to: basis.source.length, expected: basis.source, insert: value }], undefined, "input.history.restore"); this.schedule(0);
   }
   refreshQueries(): void { if (!this.editor) return; this.queries?.invalidate(); this.schedule(0); }
+  refreshEnvironment(): void { if (!this.editor) return; this.projection = undefined; this.queryPreview = false; this.queries?.invalidate(); this.message.textContent = "库配置依据已变化，正在重新编译当前草稿；正文与撤销历史保留。"; this.schedule(0); }
   queryInputsChanged(): void { this.queries?.runInputsChanged(); }
   async prepareQueryBasis(): Promise<EmbeddedQueryBasis> {
     await this.flush();

@@ -17,6 +17,10 @@ mod inventory;
 mod journal;
 mod operations;
 mod query_scope;
+mod resource;
+pub use resource::{QualifiedResource, ResourceWitness};
+#[cfg(all(test, windows))]
+mod library_resource_tests;
 #[cfg(all(test, windows))]
 mod query_scope_tests;
 pub use query_scope::{
@@ -36,13 +40,14 @@ pub use history::{
 mod recovery_tests;
 
 use backend::{FileIdentity, FileStamp, ParentGuard, stamp};
+pub use inventory::validate_library_rules;
 pub use inventory::{Inventory, InventoryEntry};
 pub use journal::RecoveryInfo;
 pub use operations::{
     AdmittedCompileSnapshot, AdmittedSnapshot, ConfigDocument, ConfigRole, FileChange,
-    LibraryStyleDocument, ManagedResource, OperationChange, OperationIntent, OperationPreview,
-    OperationReceipt, OperationRequest, QualifiedNode, SavedOperationSource, SnapshotFile,
-    SnapshotSet, SnapshotWitness, TrashEntry,
+    LibraryStyleDocument, LibraryStyleWitness, ManagedResource, OperationChange, OperationIntent,
+    OperationPreview, OperationReceipt, OperationRequest, QualifiedNode, SavedOperationSource,
+    SnapshotFile, SnapshotSet, SnapshotWitness, TrashEntry,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

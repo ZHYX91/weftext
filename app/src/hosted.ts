@@ -5,6 +5,7 @@ import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
 import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
+import { HostedLibrary } from "./hosted-library";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
@@ -25,6 +26,7 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="source" aria-label="托管文档编辑器"></section>
 <section id="comparison" hidden><h2>核对并保留双方稿</h2><p>上方是你的草稿，下方是当前服务端稿。编辑上方内容，确认合并依据后再保存；确认本身不会改正文。</p><pre id="current"></pre><button id="rebase">已核对，以当前稿作为保存依据</button></section>
 <section id="history-list" aria-label="托管笔记时间线" hidden></section>
+<section id="library" aria-label="托管库配置与样式" hidden></section>
 <section id="fields" aria-label="获权字段与查询" hidden></section>
 <section id="query" aria-label="托管高级查询" hidden></section>
 <section id="review" aria-label="托管批注与校对" hidden></section>
@@ -74,6 +76,12 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
 const history = new HostedHistory(el("history-list"), request, {
   context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
   basis: settle => source.historyBasis(settle), pendingChanged: () => { controls(); queries.authorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,
+});
+const library = new HostedLibrary(el("library"), request, async role => {
+  const epoch = requestEpoch; await source.flush(); if (epoch !== requestEpoch) return;
+  source.refreshEnvironment(); queries.environmentChanged(); el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
+  if (role === "schema" || role === "rules") await queries.refreshCatalog();
+  if (epoch === requestEpoch) status("库配置原操作已提交，受影响预览重新编译；正文草稿与撤销历史保留，未保存正文。");
 });
 let stableReference: { resource: string; sessionId: string; reference: string } | undefined;
 async function navigateReference(reference: string) {
@@ -136,7 +144,7 @@ function clearDisplay(message: string, clearToken = false) {
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
-  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear()]) {
+  for (const clear of [() => source.clear(), () => fields.clear(), () => review.clear(), () => queries.clear(), () => office.clear(), () => history.clear(), () => library.clear()]) {
     try { clear(); } catch (error) { clearErrors.push(error); }
   }
   el("documents").replaceChildren();
@@ -196,7 +204,7 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor, next.generation); await review.connect(next.deployment, next.actor, next.generation); await queries.connect(next.deployment, next.actor, next.generation); await office.connect(next.deployment, next.actor, next.generation); await history.connect(next.deployment, next.actor, next.generation); await library.connect(next.deployment, next.actor, next.generation);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -299,7 +307,7 @@ el("refresh").onclick = () => void run(async () => {
   const epoch = requestEpoch, current = await request<Me>("me"); if (epoch !== requestEpoch) return;
   if (!identity || current.generation !== identity.generation || current.actor !== identity.actor || current.deployment !== identity.deployment) clearDisplay("授权策略已更新，旧展示与缓存已清除。");
   identity = current; cachePrefix = hostedCachePrefix("draft", current.deployment, current.actor, current.generation); sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current));
-  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation);
+  await list(); await fields.connect(current.deployment, current.actor, current.generation); await review.connect(current.deployment, current.actor, current.generation); await queries.connect(current.deployment, current.actor, current.generation); await office.connect(current.deployment, current.actor, current.generation); await history.connect(current.deployment, current.actor, current.generation); await library.connect(current.deployment, current.actor, current.generation);
 });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
@@ -342,7 +350,7 @@ el("download").onclick = () => void run(async () => {
 el("history").onclick = () => void history.open();
 el("copy-reference").onclick = () => void run(async () => { const selected = stableReference, epoch = requestEpoch; if (!selected || selected.sessionId !== doc?.sessionId) return; const latest = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }); if (epoch !== requestEpoch || stableReference !== selected || latest.resource !== selected.resource || latest.reference !== selected.reference) return; await navigator.clipboard.writeText(latest.reference); if (epoch === requestEpoch) status("已复制当前获权稳定笔记链接。"); });
 window.addEventListener("offline",()=>status("连接中断，本页草稿仍保留；不会自动提交。"));
-window.addEventListener("beforeunload", e=>{if(history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
+window.addEventListener("beforeunload", e=>{if(library.hasPending || history.hasPending() || draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
 setInterval(()=>{
   if(!identity || busy) return;
   const old=identity, epoch=requestEpoch, credential=token;
