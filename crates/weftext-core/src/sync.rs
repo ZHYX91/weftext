@@ -13,6 +13,7 @@ pub use store::{SyncBundle, SyncIdentity, SyncStatus};
 pub use transport::SyncTransfer;
 pub(crate) mod apply;
 mod install;
+mod relocate;
 pub use apply::SyncResolution;
 pub(crate) mod replica;
 pub use replica::SyncBindingInfo;

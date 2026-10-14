@@ -1186,3 +1186,512 @@ fn existing_node_can_receive_a_new_resource_subdirectory_with_original_recovery(
         "admitted"
     );
 }
+
+#[test]
+fn received_rename_retains_resources_history_draft_and_physical_identity() {
+    let mut p = pair(&["Note", "Other"]);
+    let note = key(&p, "Note");
+    save(&mut p.a, &p.ar, "Note", "saved before rename");
+    let resource =
+        p.a.prepare_import_resource(
+            &p.ar,
+            p.ar.join("Note/Note.typ"),
+            "raw.bin",
+            vec![0, 1, 255],
+            &fresh(),
+        )
+        .unwrap();
+    p.a.execute_operation(&resource.operation_id, &resource.plan_id)
+        .unwrap();
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    let before =
+        p.b.read_snapshot(&p.br, &[display(&p.br.join("Note/Note.typ"))])
+            .unwrap()
+            .files
+            .remove(0);
+    let physical = capture_optional(&p.br.join("Note/Note.typ"))
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity;
+    let dirty =
+        p.b.open(p.br.join("Note/Note.typ"), Some(p.br.clone()))
+            .unwrap();
+    p.b.persist_draft(&dirty.session_id, "unsaved local proposal")
+        .unwrap();
+    let other =
+        p.b.open(p.br.join("Other/Other.typ"), Some(p.br.clone()))
+            .unwrap();
+    let history = p.b.list_history(&dirty.session_id).unwrap();
+    fs::write(p.br.join("Note/local-companion.txt"), "only here").unwrap();
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "Renamed".into(),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let request = apply(&p);
+    let preview = p.b.prepare_operation(request.clone()).unwrap();
+    p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    assert!(!p.br.join("Note").exists());
+    assert_eq!(
+        fs::read(p.br.join("Renamed/raw.bin")).unwrap(),
+        vec![0, 1, 255]
+    );
+    assert_eq!(
+        fs::read_to_string(p.br.join("Renamed/local-companion.txt")).unwrap(),
+        "only here"
+    );
+    assert_eq!(
+        capture_optional(&p.br.join("Renamed/Renamed.typ"))
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
+        physical
+    );
+    assert_eq!(p.b.sessions[&other.session_id].base_id, other.base_id);
+    assert_eq!(
+        p.b.read_draft(&p.br.join("Renamed/Renamed.typ"))
+            .unwrap()
+            .unwrap()
+            .source,
+        "unsaved local proposal"
+    );
+    let after =
+        p.b.read_snapshot(&p.br, &[display(&p.br.join("Renamed/Renamed.typ"))])
+            .unwrap()
+            .files
+            .remove(0);
+    assert_eq!(after.revision, before.revision);
+    let reopened =
+        p.b.open(p.br.join("Renamed/Renamed.typ"), Some(p.br.clone()))
+            .unwrap();
+    assert_eq!(
+        p.b.list_history(&reopened.session_id)
+            .unwrap()
+            .versions
+            .len(),
+        history.versions.len()
+    );
+    assert_eq!(
+        p.b.prepare_operation(request).unwrap().plan_id,
+        preview.plan_id
+    );
+    assert_eq!(
+        p.b.sync_binding_info(&p.br).unwrap().pending_publications,
+        0
+    );
+    p.b.resolve_draft(&reopened.session_id, "discardRecovered", None)
+        .unwrap();
+    save(&mut p.b, &p.br, "Renamed", "after received rename");
+    transfer(&p.b, &p.br, &p.a, &p.identity, &p.keys);
+    assert_eq!(
+        p.a.read_sync_history(&p.identity)
+            .unwrap()
+            .objects()
+            .unwrap()[&note]
+            .versions
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn received_subtree_move_updates_child_locations_and_retirement_uses_real_trash_consumers() {
+    let mut p = pair(&["Note", "Destination"]);
+    let child = p.a.create_note(&p.ar, p.ar.join("Note"), "Child").unwrap();
+    let child_key = ObjectKey::Node(child.node_id.clone().unwrap());
+    p.keys.insert(child_key.clone());
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    let parent_key = key(&p, "Note");
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::MoveNode {
+            source: display(&p.ar.join("Note")),
+            parent: display(&p.ar.join("Destination")),
+        },
+    );
+    let selected = BTreeSet::from([parent_key.clone()]);
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &selected);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: selected.clone(),
+        },
+    );
+    assert!(p.br.join("Destination/Note/Child/Child.typ").exists());
+    let setup = p.b.sync_setup_for(&p.br).unwrap();
+    let (local, _) = p.b.sync_local_state(setup).unwrap();
+    assert_eq!(
+        Path::new(&local[&child_key].directory),
+        p.br.join("Destination/Note/Child")
+    );
+    let trashed = run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::TrashNode {
+            source: display(&p.ar.join("Destination/Note")),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &selected);
+    let receiver_trash = run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: selected.clone(),
+        },
+    );
+    let entries = p.b.trash_entries(&p.br).unwrap();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].operation_id, receiver_trash.operation_id);
+    let live = p.b.admitted_snapshot(&p.br).unwrap();
+    assert!(live.complete);
+    assert_eq!(live.membership_ids.len(), 1);
+    let trash = p.b.trash_admitted_snapshot(&p.br).unwrap();
+    assert!(trash.complete);
+    assert_eq!(trash.membership_ids.len(), 2);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RestoreNode {
+            trash_operation_id: trashed.operation_id,
+            parent: display(&p.ar),
+            name: "Restored".into(),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &selected);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: selected,
+        },
+    );
+    assert!(p.br.join("Restored/Restored.typ").exists());
+    assert!(p.br.join("Restored/Child/Child.typ").exists());
+    assert!(p.b.trash_entries(&p.br).unwrap().is_empty());
+    assert_eq!(
+        p.b.admitted_snapshot(&p.br).unwrap().membership_ids.len(),
+        3
+    );
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        p.b.open(p.br.join("Restored/Child/Child.typ"), Some(p.br.clone()))
+            .unwrap()
+            .node_id,
+        child.node_id
+    );
+}
+
+#[test]
+fn received_relocation_rechecks_all_preimages_and_recovery_keeps_unknown_effects_guarded() {
+    let mut p = pair(&["Note"]);
+    fs::write(p.br.join("Note/companion.bin"), [0, 7]).unwrap();
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "Moved".into(),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    fs::write(p.br.join("Note/companion.bin"), [8, 9]).unwrap();
+    assert_eq!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap_err()
+            .code,
+        "conflict"
+    );
+    assert!(!p.b.journal_path(&preview.operation_id, "install").exists());
+    assert!(p.br.join("Note/Note.typ").exists());
+    let next = p.b.prepare_operation(apply(&p)).unwrap();
+    p.b.execute_operation(&next.operation_id, &next.plan_id)
+        .unwrap();
+    fs::rename(
+        p.b.journal_path(&next.operation_id, "commit"),
+        p._temp.path().join("retained-move-decision.json"),
+    )
+    .unwrap();
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    let recovery = p.b.inspect_recovery(&next.operation_id).unwrap();
+    assert_eq!(
+        recovery.coherence,
+        "knownAfter",
+        "{}",
+        serde_json::to_string(&recovery).unwrap()
+    );
+    fs::write(p.br.join("Moved/companion.bin"), [4, 5]).unwrap();
+    assert_eq!(
+        p.b.inspect_recovery(&next.operation_id).unwrap().coherence,
+        "thirdState"
+    );
+    assert!(
+        p.b.resolve_recovery(&next.operation_id, "adoptAfterImages")
+            .is_err()
+    );
+    fs::write(p.br.join("Moved/companion.bin"), [8, 9]).unwrap();
+    let expected_revision = p.b.operations[&next.operation_id]
+        .transaction
+        .as_ref()
+        .unwrap()
+        .preview
+        .revisions
+        .iter()
+        .find(|(path, _)| Path::new(path) == p.br.join("Moved/Moved.typ"))
+        .unwrap()
+        .1
+        .clone();
+    assert_eq!(
+        p.b.resolve_recovery(&next.operation_id, "adoptAfterImages")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    assert_eq!(
+        p.b.sync_binding_info(&p.br).unwrap().pending_publications,
+        0
+    );
+    let source =
+        p.b.read_snapshot(&p.br, &[display(&p.br.join("Moved/Moved.typ"))])
+            .unwrap()
+            .files
+            .remove(0);
+    assert_eq!(source.revision.as_ref(), Some(&expected_revision));
+}
+
+#[test]
+fn received_move_does_not_split_a_content_change_or_replace_an_occupied_destination() {
+    let mut p = pair(&["Note"]);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "New".into(),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let prepared = p.b.prepare_operation(apply(&p)).unwrap();
+    fs::create_dir(p.br.join("New")).unwrap();
+    fs::write(p.br.join("New/owner.txt"), "user directory").unwrap();
+    assert_eq!(
+        p.b.execute_operation(&prepared.operation_id, &prepared.plan_id)
+            .unwrap_err()
+            .code,
+        "exists"
+    );
+    assert!(!p.b.journal_path(&prepared.operation_id, "install").exists());
+    assert_eq!(
+        fs::read_to_string(p.br.join("New/owner.txt")).unwrap(),
+        "user directory"
+    );
+    save(
+        &mut p.a,
+        &p.ar,
+        "New",
+        "change while receiver has old placement",
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    assert_eq!(
+        p.b.prepare_operation(apply(&p)).unwrap_err().code,
+        "syncStructureRequired"
+    );
+    assert!(p.br.join("Note/Note.typ").exists());
+}
+
+#[test]
+fn concurrent_renames_require_explicit_choice_and_preserve_both_portable_branches() {
+    let mut p = pair(&["Note"]);
+    let node = p.keys.first().unwrap().clone();
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "Left".into(),
+        },
+    );
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::RenameNode {
+            source: display(&p.br.join("Note")),
+            name: "Right".into(),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    assert_eq!(
+        p.b.prepare_operation(apply(&p)).unwrap_err().code,
+        "syncConflict"
+    );
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    let objects = graph.objects().unwrap();
+    let view = &objects[&node];
+    assert_eq!(view.versions.len(), 2);
+    let resolution = SyncResolution {
+        object: node.clone(),
+        revisions: revisions(view),
+        state: view
+            .versions
+            .iter()
+            .find(|v| v.state.name == "Left")
+            .unwrap()
+            .state
+            .clone(),
+    };
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::MergeSync {
+            identity: p.identity.clone(),
+            resolutions: vec![resolution],
+            blobs: BTreeMap::new(),
+        },
+    );
+    assert!(p.br.join("Left/Left.typ").exists());
+    assert!(!p.br.join("Right").exists());
+    transfer(&p.b, &p.br, &p.a, &p.identity, &p.keys);
+    let graph = p.a.read_sync_history(&p.identity).unwrap();
+    let merged = graph.objects().unwrap()[&node].versions[0].clone();
+    assert_eq!(graph.manifest(&merged.commit).unwrap().parents.len(), 2);
+    assert_eq!(merged.state.name, "Left");
+    assert!(
+        view.versions
+            .iter()
+            .all(|v| graph.manifest(&v.commit).is_some())
+    );
+}
+
+#[test]
+fn locally_restore_received_trash_then_publish_uses_received_retirement_as_predecessor() {
+    let mut p = pair(&["Note"]);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::TrashNode {
+            source: display(&p.ar.join("Note")),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let preview = run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(p.b.trash_entries(&p.br).unwrap().len(), 1);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::RestoreNode {
+            trash_operation_id: preview.operation_id,
+            parent: display(&p.br),
+            name: "Recovered".into(),
+        },
+    );
+    transfer(&p.b, &p.br, &p.a, &p.identity, &p.keys);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    assert!(p.ar.join("Recovered/Recovered.typ").exists());
+    let graph = p.a.read_sync_history(&p.identity).unwrap();
+    let objects = graph.objects().unwrap();
+    let view = &objects[p.keys.first().unwrap()];
+    assert_eq!(view.versions.len(), 1);
+    assert!(!view.versions[0].state.retired);
+}
+
+#[test]
+fn received_move_rejects_same_byte_resource_replacement_and_changed_parent_dependency() {
+    let mut p = pair(&["Note", "Parent"]);
+    let resource =
+        p.a.prepare_import_resource(
+            &p.ar,
+            p.ar.join("Note/Note.typ"),
+            "asset.bin",
+            vec![2, 3],
+            &fresh(),
+        )
+        .unwrap();
+    p.a.execute_operation(&resource.operation_id, &resource.plan_id)
+        .unwrap();
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::MoveNode {
+            source: display(&p.ar.join("Note")),
+            parent: display(&p.ar.join("Parent")),
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    let original_parent = fs::read(p.br.join("Parent/Parent.typ")).unwrap();
+    fs::write(p.br.join("Parent/Parent.typ"), "external parent source").unwrap();
+    assert_eq!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap_err()
+            .code,
+        "conflict"
+    );
+    assert!(!p.b.journal_path(&preview.operation_id, "install").exists());
+    fs::write(p.br.join("Parent/Parent.typ"), original_parent).unwrap();
+    fs::rename(
+        p.br.join("Note/asset.bin"),
+        p._temp.path().join("original-asset.bin"),
+    )
+    .unwrap();
+    fs::write(p.br.join("Note/asset.bin"), [2, 3]).unwrap();
+    assert_eq!(
+        p.b.prepare_operation(apply(&p)).unwrap_err().code,
+        "syncExternalChange"
+    );
+    assert!(p.br.join("Note/Note.typ").exists());
+}

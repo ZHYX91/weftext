@@ -1,4 +1,4 @@
-//! Incoming content uses the existing guarded Update transaction. The original
+//! Incoming content uses existing guarded Update, CreateTree and Relocate transactions. The original
 //! plan also freezes installed portable versions; receipt recovery cannot echo
 //! received content as a new local edit or lose its causal predecessor.
 use super::replica::{LocalObject, SyncPublication};
@@ -268,6 +268,22 @@ impl Core {
                 locations: vec![],
             })
         };
+        if states.iter().any(|(key, version)| {
+            local
+                .get(key)
+                .is_some_and(|old| super::relocate::placement_changed(&old.state, &version.state))
+        }) {
+            return self.prepare_sync_relocation(super::relocate::RelocationInput {
+                request: request.clone(),
+                identity: identity.clone(),
+                fingerprint,
+                local,
+                states,
+                expected_versions,
+                selection: requested,
+                publication,
+            });
+        }
         let kind = if publication.is_some() {
             "mergeSync"
         } else {

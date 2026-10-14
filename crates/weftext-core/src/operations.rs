@@ -376,6 +376,41 @@ pub(crate) struct FrozenOperation {
     pub(crate) write_parents: Vec<(String, FileIdentity)>,
 }
 impl FrozenOperation {
+    pub(crate) fn is_trash(&self) -> bool {
+        matches!(&self.mutation, Mutation::Relocate { source, target, .. }
+            if source != target && Path::new(target).parent() == Some(Path::new(&self.request.root).join(".weftext-trash").as_path()))
+    }
+
+    pub(crate) fn relocated_files(&self) -> Vec<FileChange> {
+        let Mutation::Relocate {
+            source,
+            target,
+            old_leaf,
+            new_leaf,
+            ..
+        } = &self.mutation
+        else {
+            return vec![];
+        };
+        self.files
+            .iter()
+            .map(|f| {
+                let path = match Path::new(&f.path).strip_prefix(source) {
+                    Ok(relative) if relative == Path::new(old_leaf) => {
+                        display(&Path::new(target).join(new_leaf))
+                    }
+                    Ok(relative) => display(&Path::new(target).join(relative)),
+                    Err(_) => f.path.clone(),
+                };
+                FileChange {
+                    path,
+                    base_id: None,
+                    before: Some(f.bytes.clone()),
+                    after: f.bytes.clone(),
+                }
+            })
+            .collect()
+    }
     fn updated_resource_owner(
         &self,
         path: &Path,
@@ -625,9 +660,7 @@ impl Core {
             let Some(previous) = &p.transaction else {
                 continue;
             };
-            if previous.request.root != t.request.root
-                || !matches!(previous.request.intent, OperationIntent::TrashNode { .. })
-            {
+            if previous.request.root != t.request.root || !previous.is_trash() {
                 continue;
             }
             if let Mutation::Relocate {
@@ -673,10 +706,11 @@ impl Core {
             CoreError::new("invalidState", "Recovery needs the original transaction")
         })?;
         let stamps = materialized.iter().cloned().collect::<BTreeMap<_, _>>();
+        let relocated = t.relocated_files();
         let output = match &t.mutation {
             Mutation::Update { files } => files.iter().collect::<Vec<_>>(),
             Mutation::CreateTree { files, updates, .. } => files.iter().chain(updates).collect(),
-            Mutation::Relocate { .. } => vec![],
+            Mutation::Relocate { .. } => relocated.iter().collect(),
         };
         let facts = output
             .iter()
@@ -1403,9 +1437,7 @@ impl Core {
             let Some(t) = &p.transaction else {
                 continue;
             };
-            if t.request.root != display(&root)
-                || !matches!(t.request.intent, OperationIntent::TrashNode { .. })
-            {
+            if t.request.root != display(&root) || !t.is_trash() {
                 continue;
             }
             if let Mutation::Relocate {
@@ -1866,7 +1898,7 @@ impl Core {
             }
             if let Some(t) = &p.transaction
                 && t.request.root == display(&root)
-                && matches!(t.request.intent, OperationIntent::TrashNode { .. })
+                && t.is_trash()
                 && let Mutation::Relocate { target, .. } = &t.mutation
             {
                 // An actually present, owned trash tree determines which
@@ -2003,9 +2035,7 @@ impl Core {
             let Some(t) = &p.transaction else {
                 continue;
             };
-            if t.request.root != display(&root)
-                || !matches!(t.request.intent, OperationIntent::TrashNode { .. })
-            {
+            if t.request.root != display(&root) || !t.is_trash() {
                 continue;
             }
             let Mutation::Relocate { target, .. } = &t.mutation else {
@@ -2579,9 +2609,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new("trashMissing", "No retained trash operation has this ID")
                     })?;
-                if !self.committed(trash_operation_id)
-                    || !matches!(previous.request.intent, OperationIntent::TrashNode { .. })
-                {
+                if !self.committed(trash_operation_id) || !previous.is_trash() {
                     return Err(CoreError::new(
                         "trashMissing",
                         "Trash operation is not committed",
@@ -3451,6 +3479,43 @@ impl Core {
                 {
                     self.owned_parent(root, target.parent().unwrap())?;
                 }
+                for file in t
+                    .files
+                    .iter()
+                    .filter(|f| !Path::new(&f.path).starts_with(source))
+                {
+                    self.check_pending(Path::new(&file.path))?;
+                    let guard = ParentGuard::acquire(Path::new(&file.path))?;
+                    let mut handle = guard.open_file(false, false)?;
+                    if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
+                        return Err(CoreError::new(
+                            "conflict",
+                            "A relocation prerequisite changed after review",
+                        ));
+                    }
+                    guards.push(guard);
+                    handles.push(handle);
+                }
+                if plan.sync_application.is_some() {
+                    let mut preliminary = NamespaceGuard::acquire(
+                        source,
+                        if *create_trash_parent {
+                            root
+                        } else {
+                            target.parent().unwrap()
+                        },
+                    )?;
+                    if preliminary.source_identity()? != *source_identity
+                        || preliminary.parent_identity()? != *target_parent_identity
+                    {
+                        return Err(CoreError::new(
+                            "conflict",
+                            "Original relocation closure changed",
+                        ));
+                    }
+                    let held = validate_relocation_tree(&mut preliminary, t, false)?;
+                    drop(held);
+                }
                 let mut trash_guard = None;
                 let mut trash_directory = None;
                 if *create_trash_parent {
@@ -3465,7 +3530,7 @@ impl Core {
                     trash_directory = Some(directory);
                     trash_guard = Some(guard);
                 }
-                let namespace = NamespaceGuard::acquire(source, target.parent().unwrap())?;
+                let mut namespace = NamespaceGuard::acquire(source, target.parent().unwrap())?;
                 if namespace.source_identity()? != *source_identity
                     || (!create_trash_parent
                         && namespace.parent_identity()? != *target_parent_identity)
@@ -3474,6 +3539,11 @@ impl Core {
                         "conflict",
                         "A source directory or target parent was replaced",
                     ));
+                }
+                if plan.sync_application.is_some() {
+                    let frozen = validate_relocation_tree(&mut namespace, t, false)?;
+                    drop(frozen);
+                    namespace.release_source_descendants();
                 }
                 let mut leaf = namespace.open_source_file(old_leaf, old_leaf != new_leaf)?;
                 let captured = t
@@ -3516,7 +3586,42 @@ impl Core {
                         "Canonical object binding changed during rename",
                     ));
                 }
+                drop(reopened);
+                let retained = if plan.sync_application.is_some() {
+                    validate_relocation_tree(&mut namespace, t, true)?
+                } else {
+                    vec![]
+                };
+                if plan.sync_application.is_some() {
+                    let facts = t
+                        .files
+                        .iter()
+                        .filter(|f| Path::new(&f.path).starts_with(source))
+                        .zip(&retained)
+                        .filter_map(|(file, handle)| {
+                            let relative = Path::new(&file.path).strip_prefix(source).unwrap();
+                            let path = if relative == Path::new(old_leaf) {
+                                target.join(new_leaf)
+                            } else {
+                                target.join(relative)
+                            };
+                            t.preview.revisions.get(&display(&path)).map(|revision| {
+                                Ok(RevisionFact {
+                                    path: display(&path),
+                                    stamp: stamp(handle)?,
+                                    hash: hash(&file.bytes),
+                                    revision: revision.clone(),
+                                })
+                            })
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    journal::private_create(
+                        &self.journal_path(operation_id, "observations"),
+                        &serde_json::to_vec(&facts)?,
+                    )?;
+                }
                 self.commit(&plan)?;
+                drop(retained);
                 drop(trash_directory);
                 drop(trash_guard);
             }
@@ -3858,7 +3963,7 @@ impl Core {
         }
         Ok(file)
     }
-    fn prepare_relocation(
+    pub(crate) fn prepare_relocation(
         &self,
         root: &Path,
         source: &Path,
@@ -4596,7 +4701,71 @@ pub(crate) fn sorted_entries(entries: Vec<(std::ffi::OsString, u32)>, _: &Path) 
     names.sort();
     names
 }
-fn snapshot_tree(
+fn validate_relocation_tree(
+    namespace: &mut NamespaceGuard,
+    t: &FrozenOperation,
+    after: bool,
+) -> Result<Vec<File>> {
+    let Mutation::Relocate {
+        source,
+        old_leaf,
+        new_leaf,
+        ..
+    } = &t.mutation
+    else {
+        unreachable!()
+    };
+    for directory in &t.directories {
+        let relative = Path::new(&directory.path)
+            .strip_prefix(source)
+            .map_err(|_| CoreError::new("invalidPlan", "Directory outside relocation"))?;
+        let (identity, entries, complete) =
+            namespace.source_directory_snapshot(relative, MAX_OPERATION_FILES)?;
+        let mut expected = directory.entries.clone();
+        if after && relative.as_os_str().is_empty() && old_leaf != new_leaf {
+            for entry in &mut expected {
+                if let Some(attrs) = entry.strip_prefix(&format!("{old_leaf}:")) {
+                    *entry = format!("{new_leaf}:{attrs}");
+                }
+            }
+            expected.sort();
+        }
+        if !complete
+            || identity != directory.identity
+            || sorted_entries(entries, Path::new(&directory.path)) != expected
+        {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "Moved directory membership or identity differs from the frozen tree",
+            ));
+        }
+    }
+    let mut held = Vec::new();
+    for file in t
+        .files
+        .iter()
+        .filter(|f| Path::new(&f.path).starts_with(source))
+    {
+        let relative = Path::new(&file.path)
+            .strip_prefix(source)
+            .map_err(|_| CoreError::new("invalidPlan", "File outside relocation"))?;
+        let relative = if after && relative == Path::new(old_leaf) {
+            Path::new(new_leaf)
+        } else {
+            relative
+        };
+        let mut handle = namespace.open_source_descendant(relative)?;
+        if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
+            return Err(CoreError::new(
+                "conflict",
+                "Moved file no longer matches its frozen identity and bytes",
+            ));
+        }
+        held.push(handle);
+    }
+    Ok(held)
+}
+pub(crate) fn snapshot_tree(
     root: &Path,
     files: &mut Vec<CapturedFile>,
     dirs: &mut Vec<CapturedDirectory>,

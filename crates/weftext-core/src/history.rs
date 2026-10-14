@@ -155,7 +155,7 @@ impl Core {
             .operations
             .values()
             .find(|p| {
-                p.kind == "createLibrary"
+                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
                     && p.workspace_id.as_ref() == Some(&birth.workspace_id)
                     && self.committed(&p.operation_id)
             })
@@ -603,7 +603,7 @@ impl Core {
             .operations
             .values()
             .find(|p| {
-                p.kind == "createLibrary"
+                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
                     && p.workspace_id.as_ref() == Some(&binding.workspace_id)
                     && self.committed(&p.operation_id)
             })

@@ -20,6 +20,8 @@ pub(crate) struct FileStamp {
     pub size: u64,
 }
 
+type DirectorySnapshot = (FileIdentity, Vec<(std::ffi::OsString, u32)>, bool);
+
 #[cfg(windows)]
 mod platform {
     use super::*;
@@ -300,6 +302,98 @@ mod platform {
             &buffer[..n as usize],
         )))
     }
+    fn directory_entries(
+        directory: &File,
+        max: usize,
+    ) -> Result<(Vec<(std::ffi::OsString, u32)>, bool)> {
+        // Enumerate the actual protected directory handle. A concurrent reparse
+        // attribute edit cannot redirect this enumeration through a path string.
+        let mut names = Vec::new();
+        let mut buffer = vec![0u64; 8192]; // aligned 64 KiB kernel output buffer
+        let mut restart = 1;
+        loop {
+            let mut io = IoStatus {
+                status: 0,
+                information: 0,
+            };
+            let status = unsafe {
+                NtQueryDirectoryFile(
+                    directory.as_raw_handle(),
+                    null_mut(),
+                    null(),
+                    null_mut(),
+                    &mut io,
+                    buffer.as_mut_ptr().cast(),
+                    (buffer.len() * 8) as u32,
+                    1,
+                    0,
+                    null(),
+                    restart,
+                )
+            };
+            restart = 0;
+            if status as u32 == 0x80000006 {
+                break;
+            }
+            if status < 0 {
+                return Err(native_error(status));
+            }
+            if io.information == 0 || io.information > buffer.len() * 8 {
+                return Err(CoreError::new(
+                    "inventoryUnavailable",
+                    "Directory enumeration returned incomplete data",
+                ));
+            }
+            // SAFETY: the output bytes are initialized; lengths are checked below.
+            let bytes =
+                unsafe { std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), io.information) };
+            let mut offset = 0;
+            loop {
+                if offset + 64 > bytes.len() {
+                    return Err(CoreError::new(
+                        "inventoryUnavailable",
+                        "Truncated directory entry",
+                    ));
+                }
+                let u32_at = |pos| u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap());
+                let next = u32_at(offset) as usize;
+                let attrs = u32_at(offset + 56);
+                let name_len = u32_at(offset + 60) as usize;
+                if !name_len.is_multiple_of(2) || offset + 64 + name_len > bytes.len() {
+                    return Err(CoreError::new(
+                        "inventoryUnavailable",
+                        "Invalid directory entry length",
+                    ));
+                }
+                let wide = bytes[offset + 64..offset + 64 + name_len]
+                    .as_chunks::<2>()
+                    .0
+                    .iter()
+                    .map(|p| u16::from_le_bytes([p[0], p[1]]))
+                    .collect::<Vec<_>>();
+                let name = std::ffi::OsString::from_wide(&wide);
+                if name != "." && name != ".." {
+                    if names.len() == max {
+                        return Ok((names, false));
+                    }
+                    names.push((name, attrs));
+                }
+                if next == 0 {
+                    break;
+                }
+                if next < 64 || !next.is_multiple_of(8) {
+                    return Err(CoreError::new(
+                        "inventoryUnavailable",
+                        "Invalid directory entry offset",
+                    ));
+                }
+                offset = offset.checked_add(next).ok_or_else(|| {
+                    CoreError::new("inventoryUnavailable", "Directory entry overflow")
+                })?;
+            }
+        }
+        Ok((names, true))
+    }
     pub(crate) struct ParentGuard {
         dirs: Vec<File>,
         pub name: std::ffi::OsString,
@@ -312,95 +406,7 @@ mod platform {
             &self,
             max: usize,
         ) -> Result<(Vec<(std::ffi::OsString, u32)>, bool)> {
-            // Enumerate the actual protected directory handle. A concurrent reparse
-            // attribute edit cannot redirect this enumeration through a path string.
-            let directory = self.dirs.last().unwrap();
-            let mut names = Vec::new();
-            let mut buffer = vec![0u64; 8192]; // aligned 64 KiB kernel output buffer
-            let mut restart = 1;
-            loop {
-                let mut io = IoStatus {
-                    status: 0,
-                    information: 0,
-                };
-                let status = unsafe {
-                    NtQueryDirectoryFile(
-                        directory.as_raw_handle(),
-                        null_mut(),
-                        null(),
-                        null_mut(),
-                        &mut io,
-                        buffer.as_mut_ptr().cast(),
-                        (buffer.len() * 8) as u32,
-                        1,
-                        0,
-                        null(),
-                        restart,
-                    )
-                };
-                restart = 0;
-                if status as u32 == 0x80000006 {
-                    break;
-                }
-                if status < 0 {
-                    return Err(native_error(status));
-                }
-                if io.information == 0 || io.information > buffer.len() * 8 {
-                    return Err(CoreError::new(
-                        "inventoryUnavailable",
-                        "Directory enumeration returned incomplete data",
-                    ));
-                }
-                // SAFETY: the output bytes are initialized; lengths are checked below.
-                let bytes = unsafe {
-                    std::slice::from_raw_parts(buffer.as_ptr().cast::<u8>(), io.information)
-                };
-                let mut offset = 0;
-                loop {
-                    if offset + 64 > bytes.len() {
-                        return Err(CoreError::new(
-                            "inventoryUnavailable",
-                            "Truncated directory entry",
-                        ));
-                    }
-                    let u32_at = |pos| u32::from_le_bytes(bytes[pos..pos + 4].try_into().unwrap());
-                    let next = u32_at(offset) as usize;
-                    let attrs = u32_at(offset + 56);
-                    let name_len = u32_at(offset + 60) as usize;
-                    if !name_len.is_multiple_of(2) || offset + 64 + name_len > bytes.len() {
-                        return Err(CoreError::new(
-                            "inventoryUnavailable",
-                            "Invalid directory entry length",
-                        ));
-                    }
-                    let wide = bytes[offset + 64..offset + 64 + name_len]
-                        .as_chunks::<2>()
-                        .0
-                        .iter()
-                        .map(|p| u16::from_le_bytes([p[0], p[1]]))
-                        .collect::<Vec<_>>();
-                    let name = std::ffi::OsString::from_wide(&wide);
-                    if name != "." && name != ".." {
-                        if names.len() == max {
-                            return Ok((names, false));
-                        }
-                        names.push((name, attrs));
-                    }
-                    if next == 0 {
-                        break;
-                    }
-                    if next < 64 || !next.is_multiple_of(8) {
-                        return Err(CoreError::new(
-                            "inventoryUnavailable",
-                            "Invalid directory entry offset",
-                        ));
-                    }
-                    offset = offset.checked_add(next).ok_or_else(|| {
-                        CoreError::new("inventoryUnavailable", "Directory entry overflow")
-                    })?;
-                }
-            }
-            Ok((names, true))
+            directory_entries(self.dirs.last().unwrap(), max)
         }
         pub fn acquire(path: &Path) -> Result<Self> {
             let path = crate::absolute_path(path)?;
@@ -579,6 +585,46 @@ mod platform {
                 delete,
             )
         }
+        /// Descendants are resolved from the retained original directory handle,
+        /// including after its move. Never reopen the old pathname as authority.
+        fn source_directory(&mut self, relative: &Path) -> Result<&File> {
+            let mut path = self.source.clone();
+            for part in relative.components() {
+                let std::path::Component::Normal(name) = part else {
+                    return Err(CoreError::new(
+                        "invalidPath",
+                        "Expected relative source descendant",
+                    ));
+                };
+                let next = path.join(name);
+                if !self.dirs.contains_key(&next) {
+                    let directory = nt_open(self.dirs.get(&path), name, true, false, false)?;
+                    self.dirs.insert(next.clone(), directory);
+                }
+                path = next;
+            }
+            Ok(&self.dirs[&path])
+        }
+        pub fn source_directory_snapshot(
+            &mut self,
+            relative: &Path,
+            max: usize,
+        ) -> Result<DirectorySnapshot> {
+            let directory = self.source_directory(relative)?;
+            let (entries, complete) = directory_entries(directory, max)?;
+            Ok((stamp(directory)?.identity, entries, complete))
+        }
+        pub fn open_source_descendant(&mut self, relative: &Path) -> Result<File> {
+            let name = relative
+                .file_name()
+                .ok_or_else(|| CoreError::new("invalidPath", "Missing descendant filename"))?;
+            let directory = self.source_directory(relative.parent().unwrap())?;
+            nt_open(Some(directory), name, false, false, false)
+        }
+        pub fn release_source_descendants(&mut self) {
+            self.dirs
+                .retain(|path, _| path == &self.source || !path.starts_with(&self.source));
+        }
         pub fn rename_leaf(&self, file: &File, name: &str) -> Result<()> {
             rename_handle(file, self.dirs.get(&self.source).unwrap(), name)
         }
@@ -714,6 +760,23 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub fn source_directory_snapshot(
+            &mut self,
+            _: &Path,
+            _: usize,
+        ) -> Result<DirectorySnapshot> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub fn open_source_descendant(&mut self, _: &Path) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub fn release_source_descendants(&mut self) {}
         pub fn rename_leaf(&self, _: &File, _: &str) -> Result<()> {
             Err(CoreError::new(
                 "unsupportedPlatform",

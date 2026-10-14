@@ -195,7 +195,10 @@ impl Core {
             let mut materialized = Vec::new();
             for (index, file) in &mut capture.files {
                 let member = &capture.members[*index];
-                if member.role == "write" {
+                if member.role == "write"
+                    || (matches!(t.mutation, Mutation::Relocate { .. })
+                        && t.preview.revisions.contains_key(&member.path))
+                {
                     let change = capture
                         .changes
                         .iter()
@@ -324,6 +327,7 @@ impl Core {
                 }
             }
             Mutation::Relocate { .. } => {
+                capture.changes = t.relocated_files();
                 self.capture_relocation(plan, &mut capture)?;
                 capture.complete();
                 return Ok(capture);
@@ -662,51 +666,105 @@ impl Core {
         } else {
             self.capture_bound_directory(&display(target_parent), target_parent_identity, capture)?;
         }
-        for (path, before, after) in [
-            (source, Some(source_identity), None),
-            (target, None, Some(source_identity)),
-        ] {
-            let mut member = directory_member(path, "namespace", before, after);
-            match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
-                Ok(guard) => {
-                    let identity = guard.directory_identity()?;
-                    member.current = directory_blob(Some(&identity));
-                    member.current_identity = Some((&identity).into());
-                    member.matches_before = before == Some(&identity);
-                    member.matches_after = after == Some(&identity);
-                    member.state = if member.matches_before {
-                        "knownBefore"
-                    } else if member.matches_after {
-                        "knownAfter"
-                    } else {
-                        "thirdState"
-                    }
-                    .into();
-                    member.identity_binding = if &identity == source_identity {
-                        "original"
-                    } else {
-                        "mismatch"
-                    }
-                    .into();
-                    capture.guards.push(guard);
+        let root_entries = t
+            .directories
+            .iter()
+            .find(|d| Path::new(&d.path) == Path::new(source))
+            .map(|d| &d.entries);
+        let renamed_entries = root_entries.map(|entries| {
+            let mut entries = entries.clone();
+            for entry in &mut entries {
+                if let Some(attrs) = entry.strip_prefix(&format!("{old_leaf}:")) {
+                    *entry = format!("{new_leaf}:{attrs}");
                 }
-                Err(e) if e.code == "missing" => {
-                    member.matches_before = before.is_none();
-                    member.matches_after = after.is_none();
-                    member.state = if member.matches_before {
-                        "knownBefore"
-                    } else {
-                        "knownAfter"
-                    }
-                    .into();
-                    member.identity_binding = "missing".into();
-                    if let Ok(parent) = ParentGuard::acquire(Path::new(path)) {
-                        capture.guards.push(parent);
-                    }
-                }
-                Err(e) => member.message = e.message,
             }
-            capture.members.push(member);
+            entries.sort();
+            entries
+        });
+        self.capture_namespace_directory(
+            source,
+            Some(source_identity),
+            None,
+            root_entries,
+            capture,
+        )?;
+        self.capture_namespace_directory(
+            target,
+            None,
+            Some(source_identity),
+            renamed_entries.as_ref(),
+            capture,
+        )?;
+        for directory in t
+            .directories
+            .iter()
+            .filter(|d| Path::new(&d.path) != Path::new(source))
+        {
+            let relative = Path::new(&directory.path)
+                .strip_prefix(source)
+                .map_err(|_| CoreError::new("invalidPlan", "Directory outside original move"))?;
+            self.capture_namespace_directory(
+                &directory.path,
+                Some(&directory.identity),
+                None,
+                Some(&directory.entries),
+                capture,
+            )?;
+            self.capture_namespace_directory(
+                &display(&Path::new(target).join(relative)),
+                None,
+                Some(&directory.identity),
+                Some(&directory.entries),
+                capture,
+            )?;
+        }
+        for (path, identity) in &t.write_parents {
+            self.capture_bound_directory(
+                &display(Path::new(path).parent().unwrap()),
+                identity,
+                capture,
+            )?;
+        }
+        for file in &t.files {
+            if !Path::new(&file.path).starts_with(source) {
+                self.capture_recovery_file(
+                    plan,
+                    &file.path,
+                    "readDependency",
+                    Some(&file.bytes),
+                    Some(&file.bytes),
+                    Some(&file.stamp.identity),
+                    false,
+                    capture,
+                )?;
+                continue;
+            }
+            let relative = Path::new(&file.path)
+                .strip_prefix(source)
+                .map_err(|_| CoreError::new("invalidPlan", "File outside original move"))?;
+            if relative == Path::new(old_leaf) {
+                continue;
+            }
+            self.capture_recovery_file(
+                plan,
+                &file.path,
+                "namespace",
+                Some(&file.bytes),
+                None,
+                Some(&file.stamp.identity),
+                false,
+                capture,
+            )?;
+            self.capture_recovery_file(
+                plan,
+                &display(&Path::new(target).join(relative)),
+                "namespace",
+                None,
+                Some(&file.bytes),
+                Some(&file.stamp.identity),
+                false,
+                capture,
+            )?;
         }
         self.capture_recovery_file(
             plan,
@@ -750,6 +808,70 @@ impl Core {
                 intermediate.message = "The original canonical object is at the intermediate leaf name; namespace recovery remains pending and no replay is permitted".into();
             }
         }
+        Ok(())
+    }
+    fn capture_namespace_directory(
+        &self,
+        path: &str,
+        before: Option<&FileIdentity>,
+        after: Option<&FileIdentity>,
+        entries: Option<&Vec<String>>,
+        capture: &mut RecoveryCapture,
+    ) -> Result<()> {
+        let expected = before.or(after).unwrap();
+        let mut member = directory_member(path, "namespace", before, after);
+        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+            Ok(guard) => {
+                let identity = guard.directory_identity()?;
+                member.current = directory_blob(Some(&identity));
+                member.current_identity = Some((&identity).into());
+                member.matches_before = before == Some(&identity);
+                member.matches_after = after == Some(&identity);
+                member.state = if member.matches_before {
+                    "knownBefore"
+                } else if member.matches_after {
+                    "knownAfter"
+                } else {
+                    "thirdState"
+                }
+                .into();
+                member.identity_binding = if &identity == expected {
+                    "original"
+                } else {
+                    "mismatch"
+                }
+                .into();
+                if let Some(entries) = entries {
+                    let (actual, complete) = guard.directory_entries(5000)?;
+                    if !complete || operations::sorted_entries(actual, Path::new(path)) != *entries
+                    {
+                        member.matches_before = false;
+                        member.matches_after = false;
+                        member.state = "thirdState".into();
+                        member.message =
+                            "Relocation directory membership differs from the original frozen tree"
+                                .into();
+                    }
+                }
+                capture.guards.push(guard);
+            }
+            Err(e) if e.code == "missing" => {
+                member.matches_before = before.is_none();
+                member.matches_after = after.is_none();
+                member.state = if member.matches_before {
+                    "knownBefore"
+                } else {
+                    "knownAfter"
+                }
+                .into();
+                member.identity_binding = "missing".into();
+                if let Ok(parent) = ParentGuard::acquire(Path::new(path)) {
+                    capture.guards.push(parent);
+                }
+            }
+            Err(e) => member.message = e.message,
+        }
+        capture.members.push(member);
         Ok(())
     }
     fn capture_bound_directory(
