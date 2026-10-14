@@ -344,6 +344,9 @@ pub(crate) enum Mutation {
         old_leaf: String,
         new_leaf: String,
         leaf_identity: FileIdentity,
+        /// Exact content participants at their final paths, in the same decision.
+        #[serde(default)]
+        updates: Vec<FileChange>,
     },
     CreateTree {
         target: String,
@@ -381,7 +384,7 @@ impl FrozenOperation {
             if source != target && Path::new(target).parent() == Some(Path::new(&self.request.root).join(".weftext-trash").as_path()))
     }
 
-    pub(crate) fn relocated_files(&self) -> Vec<FileChange> {
+    pub(crate) fn relocated_path(&self, path: &str) -> String {
         let Mutation::Relocate {
             source,
             target,
@@ -390,26 +393,38 @@ impl FrozenOperation {
             ..
         } = &self.mutation
         else {
+            return path.into();
+        };
+        match Path::new(path).strip_prefix(source) {
+            Ok(relative) if relative == Path::new(old_leaf) => {
+                display(&Path::new(target).join(new_leaf))
+            }
+            Ok(relative) => display(&Path::new(target).join(relative)),
+            Err(_) => path.into(),
+        }
+    }
+    pub(crate) fn relocated_files(&self) -> Vec<FileChange> {
+        let Mutation::Relocate { updates, .. } = &self.mutation else {
             return vec![];
         };
-        self.files
+        let mut files: BTreeMap<_, _> = self
+            .files
             .iter()
             .map(|f| {
-                let path = match Path::new(&f.path).strip_prefix(source) {
-                    Ok(relative) if relative == Path::new(old_leaf) => {
-                        display(&Path::new(target).join(new_leaf))
-                    }
-                    Ok(relative) => display(&Path::new(target).join(relative)),
-                    Err(_) => f.path.clone(),
-                };
-                FileChange {
-                    path,
-                    base_id: None,
-                    before: Some(f.bytes.clone()),
-                    after: f.bytes.clone(),
-                }
+                let path = self.relocated_path(&f.path);
+                (
+                    path.clone(),
+                    FileChange {
+                        path,
+                        base_id: None,
+                        before: Some(f.bytes.clone()),
+                        after: f.bytes.clone(),
+                    },
+                )
             })
-            .collect()
+            .collect();
+        files.extend(updates.iter().map(|f| (f.path.clone(), f.clone())));
+        files.into_values().collect()
     }
     fn updated_resource_owner(
         &self,
@@ -440,7 +455,18 @@ impl FrozenOperation {
             target == p || target.starts_with(&(p + "\\"))
         };
         match &self.mutation {
-            Mutation::Relocate { source, target, .. } => within(source) || within(target),
+            Mutation::Relocate {
+                source,
+                target,
+                updates,
+                ..
+            } => {
+                within(source)
+                    || within(target)
+                    || updates
+                        .iter()
+                        .any(|c| c.before.as_ref() != Some(&c.after) && Path::new(&c.path) == path)
+            }
             Mutation::CreateTree {
                 target,
                 existing_target,
@@ -811,10 +837,9 @@ impl Core {
                     .filter(|b| Path::new(path).starts_with(Path::new(&b.path).parent().unwrap()))
                     .max_by_key(|b| Path::new(&b.path).components().count())
                     .map(|b| b.node_id.clone()),
-                Mutation::Update { .. } => {
+                Mutation::Update { .. } | Mutation::Relocate { .. } => {
                     t.updated_resource_owner(Path::new(path), plan.sync_application.as_ref())
                 }
-                _ => None,
             }
             .ok_or_else(|| CoreError::new("invalidState", "Resource owner is missing"))?;
             resources.push(ResourceBirth {
@@ -917,7 +942,7 @@ impl Core {
             Mutation::CreateTree { files, updates, .. } => {
                 files.iter().chain(updates).cloned().collect()
             }
-            Mutation::Relocate { .. } => vec![],
+            Mutation::Relocate { updates, .. } => updates.clone(),
         })
     }
     pub fn committed_operation_receipt(
@@ -1150,6 +1175,11 @@ impl Core {
                     "No decision witness for this revision",
                 )
             })?;
+        let relocated = p
+            .transaction
+            .as_ref()
+            .map(|t| t.relocated_files())
+            .unwrap_or_default();
         let bytes = if matches!(p.kind.as_str(), "save" | "createNote") {
             Some(&p.after)
         } else {
@@ -1162,7 +1192,10 @@ impl Core {
                     .chain(updates)
                     .find(|f| f.path == fact.path)
                     .map(|f| &f.after),
-                _ => None,
+                Mutation::Relocate { .. } => relocated
+                    .iter()
+                    .find(|f| f.path == fact.path)
+                    .map(|f| &f.after),
             })
         };
         bytes
@@ -3464,6 +3497,7 @@ impl Core {
                 old_leaf,
                 new_leaf,
                 leaf_identity,
+                updates,
             } => {
                 let source = Path::new(source);
                 let target = Path::new(target);
@@ -3486,7 +3520,10 @@ impl Core {
                 {
                     self.check_pending(Path::new(&file.path))?;
                     let guard = ParentGuard::acquire(Path::new(&file.path))?;
-                    let mut handle = guard.open_file(false, false)?;
+                    let write = updates
+                        .iter()
+                        .any(|c| c.path == file.path && c.before.as_ref() != Some(&c.after));
+                    let mut handle = guard.open_file(write, false)?;
                     if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
                         return Err(CoreError::new(
                             "conflict",
@@ -3497,6 +3534,9 @@ impl Core {
                     handles.push(handle);
                 }
                 if plan.sync_application.is_some() {
+                    for file in &t.files {
+                        self.check_pending(Path::new(&file.path))?;
+                    }
                     let mut preliminary = NamespaceGuard::acquire(
                         source,
                         if *create_trash_parent {
@@ -3515,6 +3555,7 @@ impl Core {
                     }
                     let held = validate_relocation_tree(&mut preliminary, t, false)?;
                     drop(held);
+                    validate_relocation_creations(&mut preliminary, t)?;
                 }
                 let mut trash_guard = None;
                 let mut trash_directory = None;
@@ -3587,41 +3628,75 @@ impl Core {
                     ));
                 }
                 drop(reopened);
-                let retained = if plan.sync_application.is_some() {
+                let mut retained = if plan.sync_application.is_some() {
                     validate_relocation_tree(&mut namespace, t, true)?
                 } else {
                     vec![]
                 };
+                let mut created = Vec::new();
                 if plan.sync_application.is_some() {
-                    let facts = t
+                    // All existing participants are retained at the verified new
+                    // placement before any content write or create-only output.
+                    for change in updates.iter().filter(|c| c.before.is_none()) {
+                        let path = Path::new(&change.path);
+                        let file = if let Ok(relative) = path.strip_prefix(target) {
+                            namespace.open_source_output(relative, true, true)?
+                        } else {
+                            let guard = ParentGuard::acquire(path)?;
+                            let file = guard.open_file(true, true)?;
+                            guards.push(guard);
+                            file
+                        };
+                        self.record_materialized(operation_id, path, &file)?;
+                        created.push((change.path.clone(), file));
+                    }
+                    let changes = t.relocated_files();
+                    let mut participant_paths = Vec::new();
+                    let mut participants = Vec::new();
+                    for (file, handle) in t
                         .files
                         .iter()
                         .filter(|f| Path::new(&f.path).starts_with(source))
-                        .zip(&retained)
-                        .filter_map(|(file, handle)| {
-                            let relative = Path::new(&file.path).strip_prefix(source).unwrap();
-                            let path = if relative == Path::new(old_leaf) {
-                                target.join(new_leaf)
-                            } else {
-                                target.join(relative)
-                            };
-                            t.preview.revisions.get(&display(&path)).map(|revision| {
-                                Ok(RevisionFact {
-                                    path: display(&path),
-                                    stamp: stamp(handle)?,
-                                    hash: hash(&file.bytes),
-                                    revision: revision.clone(),
-                                })
-                            })
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    journal::private_create(
-                        &self.journal_path(operation_id, "observations"),
-                        &serde_json::to_vec(&facts)?,
-                    )?;
+                        .zip(&mut retained)
+                    {
+                        participant_paths.push(t.relocated_path(&file.path));
+                        participants.push(handle);
+                    }
+                    for (file, handle) in t
+                        .files
+                        .iter()
+                        .filter(|f| !Path::new(&f.path).starts_with(source))
+                        .zip(&mut handles)
+                    {
+                        participant_paths.push(file.path.clone());
+                        participants.push(handle);
+                    }
+                    for (path, file) in &mut created {
+                        participant_paths.push(path.clone());
+                        participants.push(file);
+                    }
+                    let mut stamps = Vec::new();
+                    for (path, handle) in participant_paths.iter().zip(participants) {
+                        let change = changes.iter().find(|c| &c.path == path).ok_or_else(|| {
+                            CoreError::new("invalidPlan", "Missing compound participant")
+                        })?;
+                        if change.before.as_ref() != Some(&change.after) {
+                            write_blob(handle, &change.after)?;
+                        }
+                        if read_blob(handle)? != change.after {
+                            return Err(CoreError::new(
+                                "recoveryPending",
+                                "Compound afterimage verification failed",
+                            ));
+                        }
+                        stamps.push((path.clone(), stamp(handle)?));
+                    }
+                    validate_relocation_membership(&mut namespace, t, true, true)?;
+                    self.publish_recovery_facts(&plan, &stamps)?;
                 }
                 self.commit(&plan)?;
                 drop(retained);
+                drop(created);
                 drop(trash_directory);
                 drop(trash_guard);
             }
@@ -4082,6 +4157,7 @@ impl Core {
             old_leaf,
             new_leaf,
             leaf_identity,
+            updates: vec![],
         })
     }
     fn validate_update(&self, root: &Path, path: &Path, after: &[u8]) -> Result<()> {
@@ -4701,6 +4777,111 @@ pub(crate) fn sorted_entries(entries: Vec<(std::ffi::OsString, u32)>, _: &Path) 
     names.sort();
     names
 }
+fn validate_relocation_membership(
+    namespace: &mut NamespaceGuard,
+    t: &FrozenOperation,
+    after: bool,
+    include_creations: bool,
+) -> Result<()> {
+    let Mutation::Relocate {
+        source,
+        target,
+        old_leaf,
+        new_leaf,
+        ..
+    } = &t.mutation
+    else {
+        unreachable!()
+    };
+    let target = Path::new(target);
+    for directory in &t.directories {
+        let relative = Path::new(&directory.path)
+            .strip_prefix(source)
+            .map_err(|_| CoreError::new("invalidPlan", "Directory outside relocation"))?;
+        let (identity, mut entries, complete) =
+            namespace.source_directory_snapshot(relative, MAX_OPERATION_FILES)?;
+        let mut expected = directory.entries.clone();
+        if after && relative.as_os_str().is_empty() && old_leaf != new_leaf {
+            for entry in &mut expected {
+                if let Some(attrs) = entry.strip_prefix(&format!("{old_leaf}:")) {
+                    *entry = format!("{new_leaf}:{attrs}");
+                }
+            }
+            expected.sort();
+        }
+        if include_creations
+            && after
+            && let Mutation::Relocate { updates, .. } = &t.mutation
+        {
+            let final_directory = if relative.as_os_str().is_empty() {
+                target.to_path_buf()
+            } else {
+                target.join(relative)
+            };
+            for change in updates.iter().filter(|c| {
+                c.before.is_none() && Path::new(&c.path).parent() == Some(final_directory.as_path())
+            }) {
+                let name = Path::new(&change.path).file_name().unwrap();
+                if !entries.iter().any(|(actual, _)| actual == name) {
+                    return Err(CoreError::new(
+                        "scopeChanged",
+                        "A newly created relocation participant is missing",
+                    ));
+                }
+                entries.retain(|(actual, _)| actual != name);
+            }
+        }
+        if !complete
+            || identity != directory.identity
+            || sorted_entries(entries, Path::new(&directory.path)) != expected
+        {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "Moved directory membership or identity differs from the frozen tree",
+            ));
+        }
+    }
+    Ok(())
+}
+fn validate_relocation_creations(
+    namespace: &mut NamespaceGuard,
+    t: &FrozenOperation,
+) -> Result<()> {
+    let Mutation::Relocate {
+        source,
+        target,
+        old_leaf,
+        new_leaf,
+        updates,
+        ..
+    } = &t.mutation
+    else {
+        unreachable!()
+    };
+    if old_leaf != new_leaf && Path::new(source).join(new_leaf).exists() {
+        return Err(CoreError::new(
+            "exists",
+            "The renamed canonical filename is already occupied",
+        ));
+    }
+    for change in updates.iter().filter(|c| c.before.is_none()) {
+        if let Ok(relative) = Path::new(&change.path).strip_prefix(target) {
+            match namespace.open_source_descendant(relative) {
+                Err(e) if e.code == "missing" => {}
+                Err(e) => return Err(e),
+                Ok(_) => {
+                    return Err(CoreError::new(
+                        "exists",
+                        "Incoming created participant is already occupied",
+                    ));
+                }
+            }
+        } else {
+            ensure_absent(Path::new(&change.path))?;
+        }
+    }
+    Ok(())
+}
 fn validate_relocation_tree(
     namespace: &mut NamespaceGuard,
     t: &FrozenOperation,
@@ -4715,31 +4896,7 @@ fn validate_relocation_tree(
     else {
         unreachable!()
     };
-    for directory in &t.directories {
-        let relative = Path::new(&directory.path)
-            .strip_prefix(source)
-            .map_err(|_| CoreError::new("invalidPlan", "Directory outside relocation"))?;
-        let (identity, entries, complete) =
-            namespace.source_directory_snapshot(relative, MAX_OPERATION_FILES)?;
-        let mut expected = directory.entries.clone();
-        if after && relative.as_os_str().is_empty() && old_leaf != new_leaf {
-            for entry in &mut expected {
-                if let Some(attrs) = entry.strip_prefix(&format!("{old_leaf}:")) {
-                    *entry = format!("{new_leaf}:{attrs}");
-                }
-            }
-            expected.sort();
-        }
-        if !complete
-            || identity != directory.identity
-            || sorted_entries(entries, Path::new(&directory.path)) != expected
-        {
-            return Err(CoreError::new(
-                "scopeChanged",
-                "Moved directory membership or identity differs from the frozen tree",
-            ));
-        }
-    }
+    validate_relocation_membership(namespace, t, after, false)?;
     let mut held = Vec::new();
     for file in t
         .files
@@ -4754,7 +4911,15 @@ fn validate_relocation_tree(
         } else {
             relative
         };
-        let mut handle = namespace.open_source_descendant(relative)?;
+        let write = if let Mutation::Relocate { updates, .. } = &t.mutation {
+            let final_path = t.relocated_path(&file.path);
+            updates
+                .iter()
+                .any(|c| c.path == final_path && c.before.as_ref() != Some(&c.after))
+        } else {
+            false
+        };
+        let mut handle = namespace.open_source_output(relative, write, false)?;
         if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
             return Err(CoreError::new(
                 "conflict",

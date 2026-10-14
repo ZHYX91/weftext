@@ -1,11 +1,12 @@
-//! Pure incoming subtree relocation reuses the original namespace transaction.
-//! Content/placement combinations stay pending until one complete plan exists.
+//! Incoming subtree placement and content share the original namespace decision.
 use super::apply::SyncApplication;
 use super::replica::{LocalObject, SyncPublication};
 use super::*;
 use crate::backend::ParentGuard;
 use crate::journal::Plan;
-use crate::operations::{FrozenOperation, capture_optional, snapshot_tree};
+use crate::operations::{
+    FileChange, FrozenOperation, Mutation, capture_optional, change, snapshot_tree,
+};
 use crate::{Core, OperationPreview, OperationReceipt, OperationRequest, Path, display, fresh};
 
 pub(crate) struct RelocationInput {
@@ -17,6 +18,7 @@ pub(crate) struct RelocationInput {
     pub expected_versions: Vec<Dependency>,
     pub selection: BTreeSet<ObjectKey>,
     pub publication: Option<SyncPublication>,
+    pub graph: ReplicaGraph,
 }
 
 pub(crate) fn placement_changed(old: &ObjectState, new: &ObjectState) -> bool {
@@ -44,6 +46,7 @@ impl Core {
             expected_versions,
             selection,
             publication,
+            graph,
         } = input;
         let changed: Vec<_> = states
             .iter()
@@ -82,19 +85,17 @@ impl Core {
         expected.name = state.name.clone();
         expected.parent = state.parent.clone();
         expected.retired = state.retired;
-        if expected != *state {
+        if expected
+            .files
+            .keys()
+            .any(|name| !state.files.contains_key(name))
+        {
             return Err(structure_required());
         }
-        // Do not split an incoming compound transaction around an unrelated edit
-        // or creation. The whole reviewed state must be representable here.
-        for (other, version) in &states {
-            if other != *key
-                && local
-                    .get(other)
-                    .is_none_or(|old| old.state != version.state)
-            {
-                return Err(structure_required());
-            }
+        // All changed content participates below; no independent creation or
+        // additional placement can be silently split out of this transaction.
+        if states.keys().any(|object| !local.contains_key(object)) {
+            return Err(structure_required());
         }
         let parent = if let Some(parent) = &state.parent {
             let parent = local.get(parent).ok_or_else(structure_required)?;
@@ -129,7 +130,7 @@ impl Core {
             resource_map: BTreeMap::new(),
             losses: vec![],
         };
-        let mutation = self.prepare_relocation(
+        let mut mutation = self.prepare_relocation(
             &root,
             source,
             &target,
@@ -143,6 +144,10 @@ impl Core {
         // Preserve arbitrary local companion files, but every managed file must
         // still be the exact installed portable preimage. Raw edits need adoption.
         let mut write_parents = Vec::new();
+        let mut updates = Vec::new();
+        let mut blobs = BTreeMap::new();
+        let mut file_paths = BTreeSet::new();
+        let mut resource_ids = BTreeSet::new();
         let mut before = Vec::new();
         let mut after = Vec::new();
         for (object, old) in &local {
@@ -260,27 +265,150 @@ impl Core {
                 new.revision = version.revision.clone();
                 new.state = version.state.clone();
             }
-            if moved.is_some() {
+            if moved.is_none()
+                && let ObjectKey::Node(id) = object
+            {
+                let path = Path::new(&old.directory).join(format!("{}.typ", old.state.name));
+                let file = files
+                    .iter()
+                    .find(|f| Path::new(&f.path) == path)
+                    .ok_or_else(structure_required)?;
+                if self
+                    .admitted_binding(&file.stamp.identity)
+                    .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
+                {
+                    return Err(CoreError::new(
+                        "syncExternalChange",
+                        "Unmoved content participant lost its original identity",
+                    ));
+                }
+            }
+            let resources = super::apply::validate_state(&graph, object, &new.state)?;
+            let old_name = |name: &str| {
+                if object == *key && name == format!("{}.typ", new.state.name) {
+                    format!("{}.typ", old.state.name)
+                } else {
+                    name.to_string()
+                }
+            };
+            let retained: BTreeSet<_> = new.state.files.keys().map(|name| old_name(name)).collect();
+            if old.state.files.keys().any(|name| !retained.contains(name)) {
+                return Err(structure_required());
+            }
+            for (name, digest) in &new.state.files {
+                let path = Path::new(&new.directory).join(name);
+                if !file_paths.insert(display(&path).to_lowercase()) {
+                    return Err(invalid("Compound incoming content files overlap"));
+                }
+                let preimage = Path::new(&old.directory).join(old_name(name));
+                let captured = files.iter().find(|f| Path::new(&f.path) == preimage);
+                let expected = old.state.files.get(&old_name(name));
+                if captured.map(|f| hash(&f.bytes)).as_ref() != expected {
+                    return Err(CoreError::new(
+                        "syncExternalChange",
+                        "A new incoming filename is occupied by local content",
+                    ));
+                }
+                if captured.is_none() {
+                    if !preimage.parent().unwrap().exists() {
+                        return Err(structure_required());
+                    }
+                    if capture_optional(&preimage)?.is_some() {
+                        return Err(CoreError::new(
+                            "syncExternalChange",
+                            "Incoming creation is occupied",
+                        ));
+                    }
+                    if !resources.contains_key(name)
+                        && !matches!(
+                            name.as_str(),
+                            "weftext.annotations.json" | "weftext.resources.json"
+                        )
+                    {
+                        return Err(structure_required());
+                    }
+                    if moved.is_none() {
+                        write_parents.push((
+                            display(&path),
+                            ParentGuard::acquire(&preimage)?.directory_identity()?,
+                        ));
+                    }
+                }
+                if let Some(resource_id) = resources.get(name) {
+                    if !resource_ids.insert(resource_id.clone()) {
+                        return Err(invalid(
+                            "Compound incoming resource identity is duplicated across owners",
+                        ));
+                    }
+                    let ObjectKey::Node(owner) = object else {
+                        return Err(structure_required());
+                    };
+                    if let Some(file) = captured {
+                        if !self.admitted_resource(
+                            resource_id,
+                            &identity.workspace_id,
+                            owner,
+                            &file.stamp.identity,
+                        ) {
+                            return Err(CoreError::new(
+                                "syncExternalChange",
+                                "Incoming resource changed its admitted identity",
+                            ));
+                        }
+                    } else {
+                        preview.resource_map.insert(
+                            display(&path),
+                            format!("weftext-resource://{}/{resource_id}", identity.workspace_id),
+                        );
+                    }
+                }
+                if matches!(object, ObjectKey::Tags)
+                    && captured.is_some_and(|f| self.accepted_revision(f).is_none())
+                {
+                    return Err(CoreError::new(
+                        "syncExternalChange",
+                        "Registry no longer has its original observed admission",
+                    ));
+                }
+                let bytes = graph.blob(digest).ok_or_else(structure_required)?.to_vec();
+                let prior = captured.map(|f| f.bytes.clone());
+                if prior.as_ref() != Some(&bytes) {
+                    preview.changes.push(change(&path, "receive", bytes.len()));
+                }
                 preview
                     .revisions
-                    .extend(new.state.file_revisions.iter().map(|(name, revision)| {
-                        (
-                            display(&Path::new(&new.directory).join(name)),
-                            revision.clone(),
-                        )
-                    }));
+                    .insert(display(&path), new.state.file_revisions[name].clone());
+                blobs.insert(digest.clone(), bytes.clone());
+                updates.push(FileChange {
+                    path: display(&path),
+                    base_id: None,
+                    before: prior,
+                    after: bytes,
+                });
             }
             before.push(old.clone());
             after.push(new);
         }
-        if files.len() > MAX_FILES
-            || files.iter().map(|f| f.bytes.len()).sum::<usize>() > MAX_BLOB_BYTES
+        if files.len() + updates.iter().filter(|c| c.before.is_none()).count() > MAX_FILES
+            || files.iter().map(|f| f.bytes.len()).sum::<usize>()
+                + updates.iter().map(|f| f.after.len()).sum::<usize>()
+                > MAX_BLOB_BYTES
         {
             return Err(CoreError::new(
                 "budget",
                 "Relocation including prerequisites exceeds the 64 MiB / 5000 file budget",
             ));
         }
+        for file in &files {
+            self.check_pending(Path::new(&file.path))?;
+        }
+        let Mutation::Relocate {
+            updates: frozen, ..
+        } = &mut mutation
+        else {
+            unreachable!()
+        };
+        *frozen = updates;
         if !preview.node_map.contains_key(node_id) {
             return Err(structure_required());
         }
@@ -302,7 +430,7 @@ impl Core {
             after,
             expected_versions,
             selection,
-            blobs: BTreeMap::new(),
+            blobs,
         });
         plan.sync_publication = publication;
         plan.transaction = Some(FrozenOperation {

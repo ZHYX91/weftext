@@ -282,6 +282,7 @@ impl Core {
                 expected_versions,
                 selection: requested,
                 publication,
+                graph,
             });
         }
         let kind = if publication.is_some() {
@@ -657,7 +658,7 @@ fn revisions(view: &ObjectView) -> BTreeSet<String> {
     view.versions.iter().map(|v| v.revision.clone()).collect()
 }
 
-fn validate_state(
+pub(crate) fn validate_state(
     graph: &ReplicaGraph,
     key: &ObjectKey,
     state: &ObjectState,

@@ -339,7 +339,16 @@ impl Core {
                                 })
                                 .map(|f| (f.path.clone(), f.after.clone()))
                         }
-                        Mutation::Relocate { .. } => None,
+                        Mutation::Relocate { updates, .. } => identity_path.and_then(|original| {
+                            let path = t.relocated_path(original);
+                            let changed_revision = p.sync_application.as_ref().is_some_and(|application| {
+                                application.before.iter().any(|object| {
+                                    matches!(&object.object, sync::ObjectKey::Node(id) if id == &context.birth.node_id)
+                                        && object.state.file_revisions.get(&format!("{}.typ", object.state.name)) != t.preview.revisions.get(&path)
+                                })
+                            });
+                            updates.iter().find(|file| file.path == path && (file.before.as_ref() != Some(&file.after) || changed_revision)).map(|file| (file.path.clone(), file.after.clone()))
+                        }),
                     }
                 })
             };

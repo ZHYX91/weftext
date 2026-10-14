@@ -3,6 +3,7 @@
 use super::*;
 use journal::{Plan, RecoveryBlob, RecoveryIdentity, RecoveryMember};
 use operations::{FileChange, Mutation, read_blob, write_blob};
+use std::collections::BTreeSet;
 
 struct RecoveryCapture {
     members: Vec<RecoveryMember>,
@@ -57,10 +58,7 @@ impl Core {
             if installing && capture.members.iter().all(|m| m.matches_after) {
                 allowed_actions.push("adoptAfterImages".into());
             }
-            if installing
-                && capture.coherence == "mixedKnown"
-                && matches!(t.mutation, Mutation::Update { .. })
-            {
+            if installing && capture.coherence == "mixedKnown" && can_resume_content(t, &capture) {
                 allowed_actions.push("resumeOriginalPlan".into());
             }
         }
@@ -117,8 +115,7 @@ impl Core {
                 && match action {
                     "adoptAfterImages" => capture.members.iter().all(|m| m.matches_after),
                     "resumeOriginalPlan" => {
-                        capture.coherence == "mixedKnown"
-                            && matches!(t.mutation, Mutation::Update { .. })
+                        capture.coherence == "mixedKnown" && can_resume_content(t, &capture)
                     }
                     _ => false,
                 };
@@ -328,7 +325,7 @@ impl Core {
             }
             Mutation::Relocate { .. } => {
                 capture.changes = t.relocated_files();
-                self.capture_relocation(plan, &mut capture)?;
+                self.capture_relocation(plan, &mut capture, write)?;
                 capture.complete();
                 return Ok(capture);
             }
@@ -616,7 +613,12 @@ impl Core {
         capture.members.push(member);
         Ok(())
     }
-    fn capture_relocation(&self, plan: &Plan, capture: &mut RecoveryCapture) -> Result<()> {
+    fn capture_relocation(
+        &self,
+        plan: &Plan,
+        capture: &mut RecoveryCapture,
+        write: bool,
+    ) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
         let Mutation::Relocate {
             source,
@@ -627,35 +629,33 @@ impl Core {
             leaf_identity,
             target_parent_identity,
             create_trash_parent,
-            ..
+            updates,
         } = &t.mutation
         else {
             unreachable!()
         };
-        let bytes = t
+        let canonical = t
             .files
             .iter()
-            .find(|f| f.path == display(&Path::new(source).join(old_leaf)))
-            .ok_or_else(|| CoreError::new("invalidPlan", "Missing relocation canonical preimage"))?
-            .bytes
-            .as_slice();
+            .find(|f| Path::new(&f.path) == Path::new(source).join(old_leaf))
+            .ok_or_else(|| {
+                CoreError::new("invalidPlan", "Missing relocation canonical preimage")
+            })?;
         if source == target {
             self.capture_bound_directory(source, source_identity, capture)?;
             self.capture_recovery_file(
                 plan,
-                &display(&Path::new(source).join(old_leaf)),
+                &canonical.path,
                 "namespace",
-                Some(bytes),
-                Some(bytes),
+                Some(&canonical.bytes),
+                Some(&canonical.bytes),
                 Some(leaf_identity),
                 false,
                 capture,
             )?;
             return Ok(());
         }
-        let target_parent = Path::new(target)
-            .parent()
-            .ok_or_else(|| CoreError::new("invalidPlan", "Missing relocation target parent"))?;
+        let target_parent = Path::new(target).parent().unwrap();
         if *create_trash_parent {
             self.capture_bound_directory(
                 &display(target_parent.parent().unwrap()),
@@ -666,6 +666,19 @@ impl Core {
         } else {
             self.capture_bound_directory(&display(target_parent), target_parent_identity, capture)?;
         }
+        let creations_at = |path: &Path| -> BTreeSet<String> {
+            updates
+                .iter()
+                .filter(|c| c.before.is_none() && Path::new(&c.path).parent() == Some(path))
+                .map(|c| {
+                    Path::new(&c.path)
+                        .file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect()
+        };
         let root_entries = t
             .directories
             .iter()
@@ -686,6 +699,7 @@ impl Core {
             Some(source_identity),
             None,
             root_entries,
+            &BTreeSet::new(),
             capture,
         )?;
         self.capture_namespace_directory(
@@ -693,8 +707,10 @@ impl Core {
             None,
             Some(source_identity),
             renamed_entries.as_ref(),
+            &creations_at(Path::new(target)),
             capture,
         )?;
+        let moved = capture.members.last().is_some_and(|m| m.matches_after);
         for directory in t
             .directories
             .iter()
@@ -703,18 +719,21 @@ impl Core {
             let relative = Path::new(&directory.path)
                 .strip_prefix(source)
                 .map_err(|_| CoreError::new("invalidPlan", "Directory outside original move"))?;
+            let destination = Path::new(target).join(relative);
             self.capture_namespace_directory(
                 &directory.path,
                 Some(&directory.identity),
                 None,
                 Some(&directory.entries),
+                &BTreeSet::new(),
                 capture,
             )?;
             self.capture_namespace_directory(
-                &display(&Path::new(target).join(relative)),
+                &display(&destination),
                 None,
                 Some(&directory.identity),
                 Some(&directory.entries),
+                &creations_at(&destination),
                 capture,
             )?;
         }
@@ -726,23 +745,21 @@ impl Core {
             )?;
         }
         for file in &t.files {
+            let final_path = t.relocated_path(&file.path);
+            let update = updates.iter().find(|c| c.path == final_path);
+            let after = update.map_or(file.bytes.as_slice(), |c| c.after.as_slice());
+            let changed = after != file.bytes;
             if !Path::new(&file.path).starts_with(source) {
                 self.capture_recovery_file(
                     plan,
                     &file.path,
-                    "readDependency",
+                    if changed { "write" } else { "readDependency" },
                     Some(&file.bytes),
-                    Some(&file.bytes),
+                    Some(after),
                     Some(&file.stamp.identity),
-                    false,
+                    write && changed,
                     capture,
                 )?;
-                continue;
-            }
-            let relative = Path::new(&file.path)
-                .strip_prefix(source)
-                .map_err(|_| CoreError::new("invalidPlan", "File outside original move"))?;
-            if relative == Path::new(old_leaf) {
                 continue;
             }
             self.capture_recovery_file(
@@ -757,35 +774,35 @@ impl Core {
             )?;
             self.capture_recovery_file(
                 plan,
-                &display(&Path::new(target).join(relative)),
-                "namespace",
-                None,
-                Some(&file.bytes),
+                &final_path,
+                if moved && changed {
+                    "write"
+                } else {
+                    "namespace"
+                },
+                if moved && changed {
+                    Some(&file.bytes)
+                } else {
+                    None
+                },
+                Some(after),
                 Some(&file.stamp.identity),
-                false,
+                write && moved && changed,
                 capture,
             )?;
         }
-        self.capture_recovery_file(
-            plan,
-            &display(&Path::new(source).join(old_leaf)),
-            "namespace",
-            Some(bytes),
-            None,
-            Some(leaf_identity),
-            false,
-            capture,
-        )?;
-        self.capture_recovery_file(
-            plan,
-            &display(&Path::new(target).join(new_leaf)),
-            "namespace",
-            None,
-            Some(bytes),
-            Some(leaf_identity),
-            false,
-            capture,
-        )?;
+        for change in updates.iter().filter(|c| c.before.is_none()) {
+            self.capture_recovery_file(
+                plan,
+                &change.path,
+                "write",
+                None,
+                Some(&change.after),
+                None,
+                write,
+                capture,
+            )?;
+        }
         if old_leaf != new_leaf {
             self.capture_recovery_file(
                 plan,
@@ -802,10 +819,10 @@ impl Core {
                 i.volume == leaf_identity.volume
                     && i.index == leaf_identity.index.to_string()
                     && i.created == leaf_identity.created.to_string()
-            }) && intermediate.current.sha256.as_deref() == Some(hash(bytes).as_str())
+            }) && intermediate.current.sha256.as_deref() == Some(hash(&canonical.bytes).as_str())
             {
                 intermediate.state = "knownIntermediate".into();
-                intermediate.message = "The original canonical object is at the intermediate leaf name; namespace recovery remains pending and no replay is permitted".into();
+                intermediate.message = "Canonical leaf rename exists but namespace move is not complete; no replay is permitted".into();
             }
         }
         Ok(())
@@ -816,6 +833,7 @@ impl Core {
         before: Option<&FileIdentity>,
         after: Option<&FileIdentity>,
         entries: Option<&Vec<String>>,
+        introduced: &BTreeSet<String>,
         capture: &mut RecoveryCapture,
     ) -> Result<()> {
         let expected = before.or(after).unwrap();
@@ -842,7 +860,9 @@ impl Core {
                 }
                 .into();
                 if let Some(entries) = entries {
-                    let (actual, complete) = guard.directory_entries(5000)?;
+                    let (mut actual, complete) = guard.directory_entries(5000)?;
+                    actual
+                        .retain(|(name, _)| !introduced.contains(name.to_string_lossy().as_ref()));
                     if !complete || operations::sorted_entries(actual, Path::new(path)) != *entries
                     {
                         member.matches_before = false;
@@ -897,6 +917,21 @@ impl Core {
         }
         capture.members.push(member);
         Ok(())
+    }
+}
+fn can_resume_content(t: &operations::FrozenOperation, capture: &RecoveryCapture) -> bool {
+    match &t.mutation {
+        Mutation::Update { .. } => true,
+        Mutation::Relocate { updates, .. } if !updates.is_empty() => {
+            capture.members.iter().all(|m| {
+                if m.role == "write" {
+                    m.matches_before || m.matches_after
+                } else {
+                    m.matches_after
+                }
+            })
+        }
+        _ => false,
     }
 }
 fn directory_blob(identity: Option<&FileIdentity>) -> RecoveryBlob {

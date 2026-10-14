@@ -1490,7 +1490,7 @@ fn received_relocation_rechecks_all_preimages_and_recovery_keeps_unknown_effects
 }
 
 #[test]
-fn received_move_does_not_split_a_content_change_or_replace_an_occupied_destination() {
+fn received_move_and_content_change_both_refuse_an_occupied_destination() {
     let mut p = pair(&["Note"]);
     run(
         &mut p.a,
@@ -1522,10 +1522,7 @@ fn received_move_does_not_split_a_content_change_or_replace_an_occupied_destinat
         "change while receiver has old placement",
     );
     transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
-    assert_eq!(
-        p.b.prepare_operation(apply(&p)).unwrap_err().code,
-        "syncStructureRequired"
-    );
+    assert_eq!(p.b.prepare_operation(apply(&p)).unwrap_err().code, "exists");
     assert!(p.br.join("Note/Note.typ").exists());
 }
 
@@ -1694,4 +1691,597 @@ fn received_move_rejects_same_byte_resource_replacement_and_changed_parent_depen
         "syncExternalChange"
     );
     assert!(p.br.join("Note/Note.typ").exists());
+}
+
+fn compound_move_pair() -> Pair {
+    let mut p = pair(&["Note", "Other"]);
+    let selected = BTreeSet::from([key(&p, "Note")]);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "New".into(),
+        },
+    );
+    for name in ["New", "Other"] {
+        let resource =
+            p.a.prepare_import_resource(
+                &p.ar,
+                p.ar.join(name).join(format!("{name}.typ")),
+                "new.bin",
+                vec![0, 255, 9],
+                &fresh(),
+            )
+            .unwrap();
+        p.a.execute_operation(&resource.operation_id, &resource.plan_id)
+            .unwrap();
+    }
+    let paths = [
+        p.ar.join("New/New.typ"),
+        p.ar.join("Other/Other.typ"),
+        p.ar.join("New/weftext.annotations.json"),
+    ];
+    let cut =
+        p.a.read_snapshot(&p.ar, &paths.iter().map(|p| display(p)).collect::<Vec<_>>())
+            .unwrap();
+    let changes = cut
+        .files
+        .iter()
+        .enumerate()
+        .map(|(i, file)| {
+            let after = if i == 2 {
+                br#"{"version":1,"annotations":[],"review":"received together"}"#.to_vec()
+            } else {
+                let mut bytes = file.bytes.clone().unwrap();
+                bytes.extend_from_slice(b"\nreceived compound source");
+                bytes
+            };
+            FileChange {
+                path: file.path.clone(),
+                base_id: Some(file.base_id.clone()),
+                before: file.bytes.clone(),
+                after,
+            }
+        })
+        .collect();
+    run(&mut p.a, &p.ar, OperationIntent::UpdateFiles { changes });
+    p.keys = selected;
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    p
+}
+
+fn simulate_original_namespace_after(p: &mut Pair, preview: &OperationPreview) {
+    // Crash fixture keeps the original physical objects and the reviewed plan.
+    // It simulates an interrupted original namespace step, never a retry writer.
+    crate::journal::private_create(
+        &p.b.journal_path(&preview.operation_id, "install"),
+        br#"{"testInterruption":true}"#,
+    )
+    .unwrap();
+    fs::rename(p.br.join("Note/Note.typ"), p.br.join("Note/New.typ")).unwrap();
+    fs::rename(p.br.join("Note"), p.br.join("New")).unwrap();
+}
+
+#[test]
+fn compound_received_move_commits_sources_annotations_resources_and_outside_participant_together() {
+    let mut p = compound_move_pair();
+    let dirty =
+        p.b.open(p.br.join("Note/Note.typ"), Some(p.br.clone()))
+            .unwrap();
+    p.b.persist_draft(&dirty.session_id, "independent draft retained")
+        .unwrap();
+    let before_history = p.b.list_history(&dirty.session_id).unwrap().versions.len();
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    assert!(
+        preview
+            .changes
+            .iter()
+            .any(|c| Path::new(&c.path) == p.br.join("Other/Other.typ"))
+    );
+    p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    assert!(!p.br.join("Note").exists());
+    for relative in [
+        "New/New.typ",
+        "Other/Other.typ",
+        "New/weftext.annotations.json",
+        "New/new.bin",
+        "New/weftext.resources.json",
+    ] {
+        assert_eq!(
+            fs::read(p.br.join(relative)).unwrap(),
+            fs::read(p.ar.join(relative)).unwrap()
+        );
+    }
+    let resources =
+        p.b.managed_resource_snapshot(&p.br, p.br.join("New/New.typ"))
+            .unwrap();
+    assert_eq!(resources[0].identity_status, "admitted");
+    assert_eq!(resources[0].bytes, [0, 255, 9]);
+    let reopened =
+        p.b.open(p.br.join("New/New.typ"), Some(p.br.clone()))
+            .unwrap();
+    assert_eq!(
+        p.b.read_draft(&p.br.join("New/New.typ"))
+            .unwrap()
+            .unwrap()
+            .source,
+        "independent draft retained"
+    );
+    let history = p.b.list_history(&reopened.session_id).unwrap();
+    assert_eq!(history.versions.len(), before_history + 1);
+    let latest = history
+        .versions
+        .iter()
+        .find(|v| v.operation_id == preview.operation_id)
+        .unwrap();
+    assert_eq!(
+        p.b.read_history(&reopened.session_id, &latest.version_id)
+            .unwrap()
+            .source,
+        reopened.source
+    );
+    let receiver = node_snapshot(&mut p.b, &p.br, "New");
+    let author = node_snapshot(&mut p.a, &p.ar, "New");
+    assert_eq!(receiver.revision_id, author.revision_id);
+    assert_eq!(
+        p.b.read_source_revision(&p.br, &reopened.node_id.unwrap(), &receiver.revision_id)
+            .unwrap(),
+        receiver.source.as_bytes()
+    );
+    p.b.resolve_draft(&reopened.session_id, "discardRecovered", None)
+        .unwrap();
+    save(&mut p.b, &p.br, "New", "next offline commit");
+    transfer(&p.b, &p.br, &p.a, &p.identity, &p.keys);
+    assert_eq!(
+        p.a.read_sync_history(&p.identity)
+            .unwrap()
+            .objects()
+            .unwrap()[p.keys.first().unwrap()]
+        .versions
+        .len(),
+        1
+    );
+}
+
+#[test]
+fn compound_received_move_resumes_only_content_after_proven_original_namespace_completion() {
+    let mut p = compound_move_pair();
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    simulate_original_namespace_after(&mut p, &preview);
+    let changes = p.b.prepared_operation_files(&preview.operation_id).unwrap();
+    let source = changes
+        .iter()
+        .find(|c| Path::new(&c.path) == p.br.join("New/New.typ"))
+        .unwrap();
+    fs::write(&source.path, &source.after).unwrap();
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    let inspected = p.b.inspect_recovery(&preview.operation_id).unwrap();
+    assert_eq!(
+        inspected.coherence,
+        "mixedKnown",
+        "{}",
+        serde_json::to_string(&inspected).unwrap()
+    );
+    assert!(
+        inspected
+            .allowed_actions
+            .iter()
+            .any(|a| a == "resumeOriginalPlan"),
+        "{}",
+        serde_json::to_string(&inspected).unwrap()
+    );
+    assert_eq!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .unwrap_err()
+            .code,
+        "recoveryPending"
+    );
+    let result =
+        p.b.resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
+            .unwrap();
+    assert_eq!(result.status, "committed");
+    assert_eq!(
+        p.b.resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    for change in changes {
+        assert_eq!(fs::read(&change.path).unwrap(), change.after);
+    }
+    assert_eq!(
+        p.b.managed_resource_snapshot(&p.br, p.br.join("New/New.typ"))
+            .unwrap()[0]
+            .identity_status,
+        "admitted"
+    );
+    assert_eq!(
+        p.b.sync_binding_info(&p.br).unwrap().pending_publications,
+        0
+    );
+    fs::rename(
+        p.b.journal_path(&preview.operation_id, "commit"),
+        p._temp.path().join("retained-compound-decision.json"),
+    )
+    .unwrap();
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    assert_eq!(
+        p.b.inspect_recovery(&preview.operation_id)
+            .unwrap()
+            .coherence,
+        "knownAfter"
+    );
+    assert_eq!(
+        p.b.resolve_recovery(&preview.operation_id, "adoptAfterImages")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    let received = node_snapshot(&mut p.b, &p.br, "New");
+    let author = node_snapshot(&mut p.a, &p.ar, "New");
+    assert_eq!(received.revision_id, author.revision_id);
+    save(&mut p.b, &p.br, "New", "after original compound recovery");
+}
+
+#[test]
+fn compound_received_move_never_resumes_unknown_namespace_or_external_third_state() {
+    let mut p = compound_move_pair();
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    crate::journal::private_create(&p.b.journal_path(&preview.operation_id, "install"), b"{}")
+        .unwrap();
+    fs::rename(p.br.join("Note/Note.typ"), p.br.join("Note/New.typ")).unwrap();
+    let intermediate = p.b.inspect_recovery(&preview.operation_id).unwrap();
+    assert!(
+        !intermediate
+            .allowed_actions
+            .iter()
+            .any(|a| a == "resumeOriginalPlan")
+    );
+    assert!(
+        p.b.resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
+            .is_err()
+    );
+    assert!(!p.br.join("New").exists());
+    fs::rename(p.br.join("Note"), p.br.join("New")).unwrap();
+    fs::write(p.br.join("Other/Other.typ"), "external third manuscript").unwrap();
+    let other = fs::read(p.br.join("New/New.typ")).unwrap();
+    assert_eq!(
+        p.b.inspect_recovery(&preview.operation_id)
+            .unwrap()
+            .coherence,
+        "thirdState"
+    );
+    assert!(
+        p.b.resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
+            .is_err()
+    );
+    assert_eq!(fs::read(p.br.join("New/New.typ")).unwrap(), other);
+    assert_eq!(
+        fs::read_to_string(p.br.join("Other/Other.typ")).unwrap(),
+        "external third manuscript"
+    );
+    assert!(!p.br.join("New/new.bin").exists());
+}
+
+#[test]
+fn compound_received_move_preflights_new_files_before_any_namespace_or_content_effect() {
+    let mut p = compound_move_pair();
+    let preview = p.b.prepare_operation(apply(&p)).unwrap();
+    let other = fs::read(p.br.join("Other/Other.typ")).unwrap();
+    fs::write(p.br.join("Note/new.bin"), "external occupied resource").unwrap();
+    assert!(
+        p.b.execute_operation(&preview.operation_id, &preview.plan_id)
+            .is_err()
+    );
+    assert!(!p.b.journal_path(&preview.operation_id, "install").exists());
+    assert!(p.br.join("Note/Note.typ").exists());
+    assert!(!p.br.join("New").exists());
+    assert_eq!(fs::read(p.br.join("Other/Other.typ")).unwrap(), other);
+    assert_eq!(
+        fs::read_to_string(p.br.join("Note/new.bin")).unwrap(),
+        "external occupied resource"
+    );
+}
+
+#[test]
+fn compound_move_edit_conflict_requires_explicit_both_side_merge() {
+    let mut p = pair(&["Note"]);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "New".into(),
+        },
+    );
+    let a_source = save(&mut p.a, &p.ar, "New", "author moved and edited");
+    let b_source = save(&mut p.b, &p.br, "Note", "receiver edited independently");
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    assert_eq!(
+        p.b.prepare_operation(apply(&p)).unwrap_err().code,
+        "syncConflict"
+    );
+    let node = p.keys.first().unwrap().clone();
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    let objects = graph.objects().unwrap();
+    let sides = &objects[&node];
+    let mut state = sides
+        .versions
+        .iter()
+        .find(|v| v.state.name == "New")
+        .unwrap()
+        .state
+        .clone();
+    let merged = format!("{a_source}\nreceiver edited independently");
+    state
+        .files
+        .insert("New.typ".into(), hash(merged.as_bytes()));
+    let preview = run(
+        &mut p.b,
+        &p.br,
+        OperationIntent::MergeSync {
+            identity: p.identity.clone(),
+            resolutions: vec![SyncResolution {
+                object: node.clone(),
+                revisions: revisions(sides),
+                state,
+            }],
+            blobs: BTreeMap::from([(hash(merged.as_bytes()), merged.as_bytes().to_vec())]),
+        },
+    );
+    assert_eq!(
+        fs::read_to_string(p.br.join("New/New.typ")).unwrap(),
+        merged
+    );
+    assert!(!p.br.join("Note").exists());
+    transfer(&p.b, &p.br, &p.a, &p.identity, &p.keys);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::ApplySync {
+            identity: p.identity.clone(),
+            objects: p.keys.clone(),
+        },
+    );
+    assert_eq!(
+        fs::read_to_string(p.ar.join("New/New.typ")).unwrap(),
+        merged
+    );
+    let graph = p.a.read_sync_history(&p.identity).unwrap();
+    assert!(graph.blob(&hash(a_source.as_bytes())).is_some());
+    assert!(graph.blob(&hash(b_source.as_bytes())).is_some());
+    let view = graph.objects().unwrap();
+    assert_eq!(view[&node].versions.len(), 1);
+    assert_eq!(
+        graph
+            .manifest(&view[&node].versions[0].commit)
+            .unwrap()
+            .operation_id,
+        preview.operation_id
+    );
+}
+
+#[test]
+fn compound_move_keeps_real_review_anchor_and_existing_resource_revision_after_restart() {
+    use weftext_knowledge as knowledge;
+    let mut p = pair(&["Note"]);
+    let resource =
+        p.a.prepare_import_resource(
+            &p.ar,
+            p.ar.join("Note/Note.typ"),
+            "asset.bin",
+            vec![1, 2],
+            &fresh(),
+        )
+        .unwrap();
+    p.a.execute_operation(&resource.operation_id, &resource.plan_id)
+        .unwrap();
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    let intent = apply(&p).intent;
+    run(&mut p.b, &p.br, intent);
+    let identity = capture_optional(&p.br.join("Note/asset.bin"))
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity;
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::RenameNode {
+            source: display(&p.ar.join("Note")),
+            name: "New".into(),
+        },
+    );
+    save(&mut p.a, &p.ar, "New", "移动后的批注文字😀");
+    let current = node_snapshot(&mut p.a, &p.ar, "New");
+    let start = current.source.find("移动后的批注文字").unwrap();
+    let anchor = knowledge::source_anchor(
+        &current,
+        start,
+        current.source.len(),
+        "移动后的批注文字😀".into(),
+    )
+    .unwrap();
+    let annotations = knowledge::decode_annotations(br#"{"version":1,"annotations":[]}"#)
+        .unwrap()
+        .create(knowledge::AnnotationRecord {
+            annotation_id: fresh(),
+            reply_to: None,
+            attribution: "reviewer".into(),
+            created_at: "2026-10-14T00:00:00Z".into(),
+            purpose: "comment".into(),
+            body: "Keep the exact moved range".into(),
+            labels: vec![],
+            appearance: serde_json::json!({}),
+            review_state: "open".into(),
+            target: knowledge::AnnotationTarget::SourceRange { anchor },
+            suggestion: None,
+            target_history: vec![],
+            unknown: BTreeMap::new(),
+        })
+        .unwrap();
+    let annotation_path = p.ar.join("New/weftext.annotations.json");
+    let snapshot =
+        p.a.read_snapshot(&p.ar, &[display(&annotation_path)])
+            .unwrap()
+            .files
+            .remove(0);
+    run(
+        &mut p.a,
+        &p.ar,
+        OperationIntent::UpdateFiles {
+            changes: vec![FileChange {
+                path: snapshot.path,
+                base_id: Some(snapshot.base_id),
+                before: snapshot.bytes,
+                after: annotations.clone(),
+            }],
+        },
+    );
+    transfer(&p.a, &p.ar, &p.b, &p.identity, &p.keys);
+    // Resource replacement is an admitted manifest fixture; local import remains create-only.
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    let views = graph.objects().unwrap();
+    let node = p.keys.first().unwrap().clone();
+    let prior = &views[&node].versions[0];
+    let mut updated_state = prior.state.clone();
+    let resource_revision = fresh();
+    updated_state
+        .files
+        .insert("asset.bin".into(), hash(&[0, 255, 3]));
+    updated_state
+        .file_revisions
+        .insert("asset.bin".into(), resource_revision.clone());
+    let manifest = Manifest {
+        version: 1,
+        workspace_id: p.identity.workspace_id.clone(),
+        replica_id: fresh(),
+        operation_id: fresh(),
+        parents: BTreeSet::from([prior.commit.clone()]),
+        changes: vec![Change {
+            object: node,
+            before: BTreeSet::from([prior.revision.clone()]),
+            revision: fresh(),
+            after: updated_state,
+        }],
+        dependencies: vec![],
+    };
+    p.b.receive_sync(
+        &p.identity,
+        SyncBundle {
+            manifests: BTreeMap::from([(manifest.id().unwrap(), manifest)]),
+            blobs: BTreeMap::from([(hash(&[0, 255, 3]), vec![0, 255, 3])]),
+        },
+    )
+    .unwrap();
+    let intent = apply(&p).intent;
+    run(&mut p.b, &p.br, intent);
+    drop(p.b);
+    p.b = Core::new(&p.bd).unwrap();
+    let receiver = node_snapshot(&mut p.b, &p.br, "New");
+    assert_eq!(receiver.revision_id, current.revision_id);
+    let document = knowledge::decode_annotations(
+        &fs::read(p.br.join("New/weftext.annotations.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        knowledge::annotation_views(&document, Some(&receiver), &[])[0].target_state,
+        "exact"
+    );
+    assert_eq!(
+        capture_optional(&p.br.join("New/asset.bin"))
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
+        identity
+    );
+    let received =
+        p.b.managed_resource_snapshot(&p.br, p.br.join("New/New.typ"))
+            .unwrap()
+            .remove(0);
+    assert_eq!(received.bytes, [0, 255, 3]);
+    assert_eq!(received.revision, Some(resource_revision));
+}
+
+#[test]
+fn compound_move_rejects_one_resource_identity_claimed_by_distinct_owners() {
+    let mut p = compound_move_pair();
+    let graph = p.b.read_sync_history(&p.identity).unwrap();
+    let objects = graph.objects().unwrap();
+    let note = objects
+        .iter()
+        .find(|(_, v)| v.versions[0].state.name == "New")
+        .unwrap();
+    let other = objects
+        .iter()
+        .find(|(_, v)| v.versions[0].state.name == "Other")
+        .unwrap();
+    let resource_id = serde_json::from_slice::<serde_json::Value>(
+        graph
+            .blob(&note.1.versions[0].state.files["weftext.resources.json"])
+            .unwrap(),
+    )
+    .unwrap()["resources"][0]["resourceId"]
+        .clone();
+    let mut registry: serde_json::Value = serde_json::from_slice(
+        graph
+            .blob(&other.1.versions[0].state.files["weftext.resources.json"])
+            .unwrap(),
+    )
+    .unwrap();
+    registry["resources"][0]["resourceId"] = resource_id;
+    let bytes = serde_json::to_vec(&registry).unwrap();
+    let mut other_state = other.1.versions[0].state.clone();
+    other_state
+        .files
+        .insert("weftext.resources.json".into(), hash(&bytes));
+    other_state
+        .file_revisions
+        .insert("weftext.resources.json".into(), fresh());
+    let manifest = Manifest {
+        version: 1,
+        workspace_id: p.identity.workspace_id.clone(),
+        replica_id: fresh(),
+        operation_id: fresh(),
+        parents: BTreeSet::from([
+            note.1.versions[0].commit.clone(),
+            other.1.versions[0].commit.clone(),
+        ]),
+        changes: vec![
+            Change {
+                object: note.0.clone(),
+                before: revisions(note.1),
+                revision: fresh(),
+                after: note.1.versions[0].state.clone(),
+            },
+            Change {
+                object: other.0.clone(),
+                before: revisions(other.1),
+                revision: fresh(),
+                after: other_state,
+            },
+        ],
+        dependencies: vec![],
+    };
+    p.b.receive_sync(
+        &p.identity,
+        SyncBundle {
+            manifests: BTreeMap::from([(manifest.id().unwrap(), manifest)]),
+            blobs: BTreeMap::from([(hash(&bytes), bytes)]),
+        },
+    )
+    .unwrap();
+    let error = p.b.prepare_operation(apply(&p)).unwrap_err();
+    assert!(
+        error.message.contains("duplicated across owners"),
+        "{error:?}"
+    );
+    assert!(p.br.join("Note/Note.typ").exists());
+    assert!(!p.br.join("New").exists());
+    assert!(!p.br.join("Other/new.bin").exists());
 }

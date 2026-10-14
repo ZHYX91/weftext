@@ -438,8 +438,8 @@ impl Core {
             {
                 let updates = match &transaction.mutation {
                     operations::Mutation::Update { files } => files,
-                    operations::Mutation::CreateTree { updates, .. } => updates,
-                    _ => continue,
+                    operations::Mutation::CreateTree { updates, .. }
+                    | operations::Mutation::Relocate { updates, .. } => updates,
                 };
                 let registry = display(&root.join(TAG_REGISTRY));
                 if transaction

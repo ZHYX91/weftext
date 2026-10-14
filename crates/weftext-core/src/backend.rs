@@ -615,11 +615,19 @@ mod platform {
             Ok((stamp(directory)?.identity, entries, complete))
         }
         pub fn open_source_descendant(&mut self, relative: &Path) -> Result<File> {
+            self.open_source_output(relative, false, false)
+        }
+        pub fn open_source_output(
+            &mut self,
+            relative: &Path,
+            write: bool,
+            create: bool,
+        ) -> Result<File> {
             let name = relative
                 .file_name()
                 .ok_or_else(|| CoreError::new("invalidPath", "Missing descendant filename"))?;
             let directory = self.source_directory(relative.parent().unwrap())?;
-            nt_open(Some(directory), name, false, false, false)
+            nt_open(Some(directory), name, false, write, create)
         }
         pub fn release_source_descendants(&mut self) {
             self.dirs
@@ -771,6 +779,12 @@ mod platform {
             ))
         }
         pub fn open_source_descendant(&mut self, _: &Path) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub fn open_source_output(&mut self, _: &Path, _: bool, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 "Windows backend required",
