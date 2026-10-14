@@ -2,6 +2,9 @@
 // a new base for an older proposal, including after a lost save response.
 export interface HostedSaveRequest { sessionId: string; baseId: string; operationId: string; source: string; definitionReservations?: string[] }
 export interface HostedDraft { source: string; baseSource: string; definitionReservations?: string[]; pending?: { operationId: string; source: string; request?: HostedSaveRequest } }
+export interface HostedQueryAudience { epoch: number; credential: string; actor?: string; deployment?: string; generation?: number; sessionId?: string; queryVersion: number }
+export function sameHostedQueryIdentity(left: HostedQueryAudience, right: HostedQueryAudience): boolean { return left.epoch === right.epoch && left.credential === right.credential && left.actor === right.actor && left.deployment === right.deployment && left.generation === right.generation; }
+export function sameHostedQueryAudience(left: HostedQueryAudience, right: HostedQueryAudience): boolean { return sameHostedQueryIdentity(left, right) && left.sessionId === right.sessionId && left.queryVersion === right.queryVersion; }
 /** Server actor epochs partition every recoverable protected consumer cache. */
 export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" | "query" | "history", deployment: string, actor: string, generation: number): string {
   if (!deployment || !actor || !Number.isSafeInteger(generation) || generation < 0) throw new Error("服务端授权版本无效，未恢复旧缓存。");

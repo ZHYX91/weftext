@@ -1390,6 +1390,29 @@ fn received_subtree_move_updates_child_locations_and_retirement_uses_real_trash_
         },
     );
     assert!(p.br.join("Destination/Note/Child/Child.typ").exists());
+    let moved_child =
+        p.b.open(
+            p.br.join("Destination/Note/Child/Child.typ"),
+            Some(p.br.clone()),
+        )
+        .unwrap();
+    assert!(
+        !p.b.list_history(&moved_child.session_id)
+            .unwrap()
+            .versions
+            .is_empty()
+    );
+    let child_owner = weftext_knowledge::NodeRef {
+        workspace_id: p.identity.workspace_id.clone(),
+        node_id: child.node_id.clone().unwrap(),
+    };
+    p.b.qualified_query_node_at(
+        &p.br,
+        &p.br.join("Destination/Note/Child/Child.typ"),
+        &child_owner,
+        "live",
+    )
+    .unwrap();
     let setup = p.b.sync_setup_for(&p.br).unwrap();
     let (local, _) = p.b.sync_local_state(setup).unwrap();
     assert_eq!(
@@ -1441,6 +1464,13 @@ fn received_subtree_move_updates_child_locations_and_retirement_uses_real_trash_
     );
     assert!(p.br.join("Restored/Restored.typ").exists());
     assert!(p.br.join("Restored/Child/Child.typ").exists());
+    p.b.qualified_query_node_at(
+        &p.br,
+        &p.br.join("Restored/Child/Child.typ"),
+        &child_owner,
+        "live",
+    )
+    .unwrap();
     assert!(p.b.trash_entries(&p.br).unwrap().is_empty());
     assert_eq!(
         p.b.admitted_snapshot(&p.br).unwrap().membership_ids.len(),
@@ -1448,6 +1478,15 @@ fn received_subtree_move_updates_child_locations_and_retirement_uses_real_trash_
     );
     drop(p.b);
     p.b = Core::new(&p.bd).unwrap();
+    let restored_child =
+        p.b.open(p.br.join("Restored/Child/Child.typ"), Some(p.br.clone()))
+            .unwrap();
+    assert!(
+        !p.b.list_history(&restored_child.session_id)
+            .unwrap()
+            .versions
+            .is_empty()
+    );
     assert_eq!(
         p.b.open(p.br.join("Restored/Child/Child.typ"), Some(p.br.clone()))
             .unwrap()

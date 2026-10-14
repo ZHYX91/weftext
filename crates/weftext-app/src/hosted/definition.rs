@@ -47,8 +47,12 @@ fn conflict() -> ApiError {
         "原定义提案、对象、准确基线或调用依据不可用；草稿已保留，请核对原操作。",
     )
 }
-fn core_error(_: CoreError) -> ApiError {
-    conflict()
+fn core_error(error: CoreError) -> ApiError {
+    if error.code == "basisRequired" {
+        HostedInner::core_error(error)
+    } else {
+        conflict()
+    }
 }
 fn save_validation_error(error: ApiError) -> ApiError {
     if error.status == StatusCode::BAD_REQUEST {
@@ -292,7 +296,7 @@ async fn prepare(
                 })?;
                 validation.guard.recheck(inner, &auth)?;
                 let root = inner.config.root.clone();
-                let witnesses = validation.guard.witnesses.iter().map(|(_, w)| w).collect::<Vec<_>>();
+                let witnesses = validation.guard.snapshot_witnesses();
                 inner.core.with_guarded_snapshot_witnesses(&root, &witnesses, &validation.guard.owner_path, |core| {
                     core.with_actor(&scope, |core| core.actor_definition_reserve(&req.resource, &root, weftext_core::HostedDefinitionReservationRequest {
                         session_id: req.session_id.clone(), base_id: req.base_id.clone(), operation_id: req.operation_id.clone(),
@@ -485,14 +489,10 @@ pub(super) fn save(
         // Core compares every duplicate by its actual path/object and frozen
         // parent/stamp/bytes before releasing it. The original witnesses stay
         // in the bounded pool until its final guarded write decision.
-        Core::merge_snapshot_witnesses(
-            &mut witness_pool,
-            std::mem::take(&mut validation.guard.witnesses)
-                .into_iter()
-                .map(|(_, w)| w)
-                .collect(),
-        )
-        .map_err(core_error)?;
+        validation
+            .guard
+            .merge_witnesses(&mut witness_pool)
+            .map_err(core_error)?;
         guards.push(validation.guard);
     }
     for guard in &guards {
@@ -635,6 +635,7 @@ mod integration_tests {
             "alice".into(),
             User {
                 query_providers: Default::default(),
+                query_scopes: Default::default(),
                 epoch: 0,
                 token_sha256: digest(b"token"),
                 enabled: true,
@@ -645,6 +646,7 @@ mod integration_tests {
         let mut inner = HostedInner {
             core,
             config: Config {
+                directories: Default::default(),
                 deployment: "definitions-test".into(),
                 bind: "127.0.0.1:0".parse().unwrap(),
                 origin: None,
@@ -654,6 +656,8 @@ mod integration_tests {
                 files: BTreeMap::from([(
                     "Shared".into(),
                     FileEntry {
+                        lifecycle: "live".into(),
+                        expected_node: None,
                         path: "Shared/Shared.typ".into(),
                         title: "Shared".into(),
                         editable: true,

@@ -14,13 +14,23 @@ fn budget_exceeded() -> ApiError {
         "查询的累计冻结输入或原生产物超过 32 MiB 预算，请缩小范围后明确重新执行。",
     )
 }
-fn charge_bytes(used: &mut usize, bytes: usize) -> Result<(), ApiError> {
+pub(super) fn charge_bytes(used: &mut usize, bytes: usize) -> Result<(), ApiError> {
     let next = used.checked_add(bytes).ok_or_else(budget_exceeded)?;
     if next > QUERY_BYTES {
         return Err(budget_exceeded());
     }
     *used = next;
     Ok(())
+}
+fn snapshot_capture_bytes(witnesses: &[(String, SnapshotWitness)]) -> Result<usize, ApiError> {
+    let mut bytes = 0;
+    for (_, witness) in witnesses {
+        // The visible cut bytes and the opaque original evidence coexist
+        // during capture. Both allocations participate in the same cap.
+        charge_bytes(&mut bytes, witness.retained_bytes())?;
+        charge_bytes(&mut bytes, witness.retained_bytes())?;
+    }
+    Ok(bytes)
 }
 struct BudgetWriter<'a>(&'a mut usize);
 impl std::io::Write for BudgetWriter<'_> {
@@ -124,6 +134,7 @@ pub(super) struct QueryRights {
 }
 #[derive(Clone, Default, Serialize)]
 pub(super) struct Authority {
+    pub(super) scopes: query_scopes::Authority,
     pub(super) providers: query_providers::Selection,
     pub(super) provider_dependencies: weftext_data::QueryProviderDependencies,
     pub(super) fields: BTreeMap<String, BTreeSet<String>>,
@@ -138,6 +149,7 @@ pub(super) fn authorize_authority(
     authority: &Authority,
 ) -> Result<(), ApiError> {
     query_providers::authorize(inner, actor, &authority.providers)?;
+    query_scopes::authorize(inner, actor, &authority.scopes)?;
     let user = inner
         .policy
         .users
@@ -346,13 +358,13 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         let mut definitions = vec![];
         let mut unavailable_definitions = vec![];
         for (resource, rights) in grants {
-            let Some(file) = inner.config.files.get(&resource).filter(|f| f.editable) else { continue; };
+            let Some(file) = inner.config.files.get(&resource).filter(|f| f.editable || f.lifecycle=="trash" && inner.policy.users[&actor].query_scopes.trash) else { continue; };
             let fields = rights.fields.iter().filter(|(_, r)| r.read).map(|(id, _)| id.clone()).collect::<Vec<_>>();
             if fields.is_empty() && !rights.query.definitions && !rights.query.products.values().any(|p| *p) && rights.query.relations.is_empty() { continue; }
-            resources.push(json!({"resource":resource,"title":file.title,"fields":fields,
+            resources.push(json!({"resource":resource,"title":file.title,"lifecycle":file.lifecycle,"readOnly":file.lifecycle=="trash","fields":fields,
                 "products":PRODUCTS.iter().map(|p|(*p,rights.query.products.get(*p).copied().unwrap_or(false))).collect::<BTreeMap<_,_>>(),
                 "relations":rights.query.relations,"definitions":rights.query.definitions,"definitionHistory":rights.query.definition_history}));
-            if rights.query.definitions {
+            if rights.query.definitions && file.lifecycle=="live" {
                 match read_definitions(inner, &actor, &resource, None) {
                     Ok(result) => {
                         for definition in result["definitions"].as_array().ok_or_else(changed)? {
@@ -368,8 +380,10 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
             }
         }
         let provider_catalog = provider_catalog(inner, &actor);
-        let mut result = json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty()&&provider_catalog["providerCoverage"]=="complete"{"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions});
+        let scope_catalog = query_scopes::catalog(inner,&actor);
+        let mut result = json!({"resources":resources,"definitions":definitions,"coverage":if unavailable_definitions.is_empty()&&provider_catalog["providerCoverage"]=="complete"&&scope_catalog["scopeCoverage"]=="complete"{"complete"}else{"partial"},"unavailableDefinitions":unavailable_definitions});
         result.as_object_mut().unwrap().extend(provider_catalog.as_object().unwrap().clone());
+        result.as_object_mut().unwrap().extend(scope_catalog.as_object().unwrap().clone());
         Ok(Json(result))
     }).await
 }
@@ -442,6 +456,7 @@ struct Capture {
     authority: Authority,
     config_hash: String,
     witnesses: Vec<(String, SnapshotWitness)>,
+    scopes: query_scopes::Capture,
     input: weftext_data::FrozenQueryInput,
     schema: Schema,
     plan: QueryPlan,
@@ -480,7 +495,11 @@ fn row_access(
         .grants
         .get(resource)
         .ok_or_else(unavailable)?;
-    if !inner.config.files.get(resource).is_some_and(|f| f.editable)
+    if !inner
+        .config
+        .files
+        .get(resource)
+        .is_some_and(|f| f.editable && f.lifecycle == "live" || f.lifecycle == "trash")
         || (!rights.fields.values().any(|f| f.read)
             && !rights.query.products.values().any(|p| *p)
             && !rights.query.definitions
@@ -508,8 +527,7 @@ fn request_budget(req: &QueryRequest) -> Result<(), ApiError> {
         *nodes += 1;
         if *nodes > 1024
             || depth > 64
-            || plan.scope.directory.is_some()
-            || !matches!(plan.scope.lifecycle.as_str(), "" | "live")
+            || !matches!(plan.scope.lifecycle.as_str(), "" | "live" | "trash")
             || plan.take.is_some_and(|n| n > 500)
         {
             return Err(invalid());
@@ -952,6 +970,8 @@ pub(super) struct DefinitionGuard {
     authority: Authority,
     config_hash: String,
     pub(super) witnesses: Vec<(String, SnapshotWitness)>,
+    scopes: query_scopes::Capture,
+    scope_snapshots: Vec<SnapshotWitness>,
     pub(super) owner_path: PathBuf,
 }
 impl DefinitionGuard {
@@ -961,6 +981,7 @@ impl DefinitionGuard {
             return Err(expired());
         }
         authorize_authority(inner, &actor, &self.authority)?;
+        self.scopes.recheck(inner, &actor)?;
         if office::binding_hash(inner, &all_resources(&self.authority))? != self.config_hash {
             return Err(changed());
         }
@@ -971,6 +992,26 @@ impl DefinitionGuard {
                 .map_err(|_| changed())?;
         }
         Ok(())
+    }
+    pub(super) fn snapshot_witnesses(&self) -> Vec<&SnapshotWitness> {
+        self.witnesses
+            .iter()
+            .map(|(_, w)| w)
+            .chain(&self.scope_snapshots)
+            .collect()
+    }
+    pub(super) fn merge_witnesses(
+        &mut self,
+        pool: &mut Vec<SnapshotWitness>,
+    ) -> Result<(), CoreError> {
+        Core::merge_snapshot_witnesses(
+            pool,
+            std::mem::take(&mut self.witnesses)
+                .into_iter()
+                .map(|(_, w)| w)
+                .chain(std::mem::take(&mut self.scope_snapshots))
+                .collect(),
+        )
     }
 }
 fn static_authority(
@@ -1050,6 +1091,7 @@ pub(super) fn validate_definition(
         parameters: BTreeMap::new(),
         plan: plan.clone(),
     })?;
+    query_scopes::preauthorize(inner, &actor, plan)?;
     let config = inner
         .core
         .read_config(&inner.config.root, ConfigRole::Schema)
@@ -1157,13 +1199,29 @@ pub(super) fn validate_definition(
         if expanded {
             continue;
         }
+        let mut scopes = query_scopes::capture(
+            inner,
+            &actor,
+            plan,
+            &mut context,
+            snapshot_capture_bytes(&witnesses)?,
+        )?;
+        if scopes.needs_rules_guard() {
+            for (r, file) in &files {
+                scopes.qualify_node(inner, r, file, &workspace)?;
+            }
+        }
+        authority.scopes = scopes.authority.clone();
         let demands = weftext_data::query_read_requirements(plan, &baseline, &context)
             .map_err(|_| unavailable())?;
         let configured = inner
             .config
             .files
             .iter()
-            .filter(|(_, f)| f.editable)
+            .filter(|(_, f)| {
+                f.editable
+                    || f.lifecycle == "trash" && inner.policy.users[&actor].query_scopes.trash
+            })
             .map(|(id, _)| id.clone())
             .collect();
         let effects = static_authority(&inner.policy.users[&actor].grants, &configured, &demands)?;
@@ -1219,6 +1277,7 @@ pub(super) fn validate_definition(
             .collect::<Result<BTreeMap<_, _>, ApiError>>()?;
         let mut plan = plan.clone();
         canonical_definition_owners(&mut plan, &canonical_owners)?;
+        query_scopes::canonicalize(inner, &actor, &mut plan)?;
         let mut canonical_context = Vec::<weftext_data::FrozenDefinitionOwner>::new();
         for mut owner in std::mem::take(&mut context.definitions) {
             owner.owner = canonical_owners
@@ -1251,10 +1310,43 @@ pub(super) fn validate_definition(
             .map_err(|_| unavailable())?;
         // Definitions, historical baselines and typed parameters share the
         // execution input cap even though this path never compiles any rows.
-        let mut validation_bytes = 0;
-        charge_serialized(&mut validation_bytes, &(&context, &schema, &plan))?;
         let config_hash = office::binding_hash(inner, &all_resources(&authority))?;
         let epoch = inner.actor_generation(&actor);
+        let mut scope_snapshots = scopes.guard_witnesses()?;
+        if scopes.needs_rules_guard() {
+            let rules = inner
+                .core
+                .read_snapshot(
+                    &inner.config.root,
+                    &[inner
+                        .config
+                        .root
+                        .join(".weftext-rules")
+                        .to_string_lossy()
+                        .into_owned()],
+                )
+                .map_err(|_| changed())?
+                .files
+                .remove(0);
+            let witness = inner
+                .core
+                .take_snapshot_witness(&rules.base_id)
+                .map_err(|_| changed())?;
+            if rules.bytes.is_none() {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "basisRequired",
+                    "目录或 Trash 定义的保存保护需要现存的库规则文件；请由库所有者显式安装后重试。",
+                ));
+            }
+            Core::merge_snapshot_witnesses(&mut scope_snapshots, vec![witness])
+                .map_err(|_| changed())?;
+        }
+        let mut validation_bytes = scopes.retained_bytes();
+        for witness in &scope_snapshots {
+            charge_bytes(&mut validation_bytes, witness.retained_bytes())?;
+        }
+        charge_serialized(&mut validation_bytes, &(&context, &schema, &plan))?;
         return Ok(DefinitionValidation {
             binding,
             schema,
@@ -1266,6 +1358,8 @@ pub(super) fn validate_definition(
                 authority,
                 config_hash,
                 witnesses,
+                scopes,
+                scope_snapshots,
                 owner_path,
             },
         });
@@ -1281,6 +1375,7 @@ fn capture(
 ) -> Result<Capture, ApiError> {
     let actor = inner.actor(auth)?;
     request_budget(&req)?;
+    query_scopes::preauthorize(inner, &actor, &req.plan)?;
     let selected_providers = query_providers::Selection {
         providers: req.providers.clone(),
         series_policies: req.series_policies.clone(),
@@ -1316,11 +1411,21 @@ fn capture(
         inner.rights(&actor, &d.resource)?;
         writing_api::validate_source(&d.source, None)?;
     }
-    let mut resources = match req.resources.clone() {
-        Some(resources) => resources,
-        None => grants
+    let preliminary_lifecycles = weftext_data::required_query_lifecycles(&req.plan, &[]).ok();
+    for resource in req.resources.iter().flatten() {
+        row_access(inner, &actor, resource, &req)?;
+    }
+    let mut resources = match (&req.resources, &preliminary_lifecycles) {
+        (_, None) => BTreeSet::new(),
+        (Some(resources), Some(lifecycles)) => resources
+            .iter()
+            .filter(|r| lifecycles.contains(&inner.config.files[*r].lifecycle))
+            .cloned()
+            .collect(),
+        (None, Some(lifecycles)) => grants
             .keys()
             .filter(|r| row_access(inner, &actor, r, &req).is_ok())
+            .filter(|r| lifecycles.contains(&inner.config.files[*r].lifecycle))
             .cloned()
             .collect(),
     };
@@ -1408,6 +1513,39 @@ fn capture(
         if expanded {
             continue;
         }
+        let mut scopes = query_scopes::capture(
+            inner,
+            &actor,
+            &req.plan,
+            &mut context,
+            snapshot_capture_bytes(&witnesses)?,
+        )?;
+        for r in owners.values().chain(draft.iter().map(|d| &d.resource)) {
+            scopes.qualify_node(inner, r, snapshots.get(r).ok_or_else(changed)?, &workspace)?;
+        }
+        authority.scopes = scopes.authority.clone();
+        let selected = match &req.resources {
+            Some(selected) => selected
+                .iter()
+                .filter(|r| scopes.includes(&inner.config.files[*r].lifecycle))
+                .cloned()
+                .collect(),
+            None => grants
+                .keys()
+                .filter(|r| {
+                    row_access(inner, &actor, r, &req).is_ok()
+                        && scopes.includes(&inner.config.files[*r].lifecycle)
+                })
+                .cloned()
+                .collect(),
+        };
+        if resources != selected {
+            resources = selected;
+            continue;
+        }
+        authority.fields.retain(|r, _| resources.contains(r));
+        authority.products.retain(|r, _| resources.contains(r));
+        authority.relations.retain(|r, _| resources.contains(r));
         let mut root_schema = full_schema.clone();
         if let Some(d) = &draft {
             if d.binding.schema != config.role_ref || d.binding.language != "weftext.query.cel.v1" {
@@ -1472,6 +1610,7 @@ fn capture(
             resources = grants
                 .keys()
                 .filter(|r| row_access(inner, &actor, r, &req).is_ok())
+                .filter(|r| scopes.includes(&inner.config.files[*r].lifecycle))
                 .cloned()
                 .collect();
             if resources
@@ -1633,7 +1772,8 @@ fn capture(
         let mut notes = vec![];
         let mut metadata = BTreeMap::new();
         let mut workers = vec![];
-        let mut worker_bytes = 0;
+        let mut worker_bytes = scopes.retained_bytes();
+        charge_serialized(&mut worker_bytes, &(&context, &schema, &req.plan))?;
         let mut resource_map = BTreeMap::new();
         let mut complete = true;
         if !validate_only {
@@ -1645,6 +1785,10 @@ fn capture(
                     complete = false;
                     continue;
                 };
+                let before = scopes.retained_bytes();
+                let coordinate = scopes.qualify_node(inner, r, file, &workspace)?;
+                charge_bytes(&mut worker_bytes, scopes.retained_bytes() - before)?;
+                authority.scopes = scopes.authority.clone();
                 let source = draft
                     .as_ref()
                     .filter(|d| &d.resource == r)
@@ -1688,10 +1832,10 @@ fn capture(
                 );
                 notes.push(weftext_data::FrozenNote {
                     entity_key: entity.clone(),
-                    path: format!("resource:{r}"),
+                    path: coordinate.to_string_lossy().into_owned(),
                     source: String::new(),
                     revision: cut_id.clone(),
-                    lifecycle: "live".into(),
+                    lifecycle: inner.config.files[r].lifecycle.clone(),
                     title: None,
                     body: None,
                     products: None,
@@ -1770,6 +1914,7 @@ fn capture(
             authority,
             config_hash,
             witnesses,
+            scopes,
             input: weftext_data::FrozenQueryInput {
                 cut_id: cut_id.clone(),
                 schema_revision: cut_id,
@@ -1801,6 +1946,7 @@ async fn execute_captured(
         &captured.schema,
         &captured.plan,
     )?;
+    charge_bytes(&mut execution_bytes, captured.scopes.retained_bytes())?;
     for (entity, worker) in std::mem::take(&mut captured.workers) {
         let output = editor::compile_frozen(state, worker).await?;
         let products = if output["ok"] == true {
@@ -1883,11 +2029,12 @@ async fn execute_captured(
         let actor=inner.actor(&auth)?;if actor!=captured.actor||inner.actor_generation(&actor)!=captured.epoch{return Err(expired());}authorize_authority(inner,&actor,&captured.authority)?;
         if office::binding_hash(inner,&all_resources(&captured.authority))?!=captured.config_hash{return Err(changed());}
         for (path,witness) in &captured.witnesses{inner.core.validate_snapshot_witness(&inner.config.root,path,witness).map_err(|_|changed())?;}
+        captured.scopes.recheck(inner,&actor)?;
         if let Some(d)=&captured.draft && let (Some(id),Some(serial))=(&d.session_id,d.serial){let (_,session,_)=inner.session(&auth,id)?;if session.resource!=d.resource{return Err(unavailable());}writing_api::exact_version(&inner.editor_versions,id,&d.source,serial)?;}
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
         result.diagnostics=result.diagnostics.into_iter().map(|_|"获权投影或表达式有未决结果；请核对Cell状态与覆盖范围。".into()).collect::<BTreeSet<_>>().into_iter().collect();
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
-        for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.rights(&actor,&resource).is_ok());}}
+        for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.config.files[&resource].lifecycle=="live"&&inner.config.files[&resource].editable&&inner.rights(&actor,&resource).is_ok());}}
         let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority)?;
         Ok(json!({"result":public,"queryId":id,"columns":captured.columns,"scope":"authorizedProjection","readOnly":true}))
     }).await
@@ -1948,7 +2095,7 @@ pub(super) async fn validate_embedded(
     source: String,
     plan: QueryPlan,
     binding: SavedQueryBinding,
-) -> Result<(), ApiError> {
+) -> Result<QueryPlan, ApiError> {
     let check = auth.clone();
     let req = QueryRequest {
         providers: BTreeMap::new(),
@@ -1968,7 +2115,11 @@ pub(super) async fn validate_embedded(
         serial: None,
     };
     locked(state, move |inner| {
-        capture(inner, &check, req, Some(draft), true).map(|_| ())
+        let captured = capture(inner, &check, req, Some(draft), true)?;
+        captured.scopes.recheck(inner, &captured.actor)?;
+        let mut plan = captured.plan;
+        query_scopes::canonicalize(inner, &captured.actor, &mut plan)?;
+        Ok(plan)
     })
     .await
 }

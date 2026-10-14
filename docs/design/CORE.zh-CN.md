@@ -116,6 +116,8 @@ destination parent等于source对象或在source后代链中时拒绝，不能�
 
 Node `A/A.typ→B/B.typ`仍两步：为目录与canonical leaf保存准确对象/名称/恢复责任，leaf rename no-replace后关闭妨碍outer rename的leaf handle；目录guard和完整祖先/目标父闭包保持。outer rename后重新取得实际canonical file guard，验证原对象/控制角色和公开声明的外部改变。新leaf/新root第三态只pending；no-replace回退绝不覆盖。这个释放leaf的窗口不持久授予旧source写资格，也不声称全树内容固定。
 
+后代的历史／Query 身份续接还须有原 Relocate 内的准确成员位置证据：从已有出生／目录接纳事实选出相关成员，记录相对位置、稳定 ID、实际文件／目录对象及父对象，不扫描私有正文，也不另建位置账本。这是位置证据，不给普通 move 增加全树字节 CAS；合法晚改和新增仍随原树保留。执行及原操作恢复必须核对成员实际对象，再承认相应位置延续。只有旧路径前缀的祖先移动日志不能证明后代随行；另一对象占用旧地址后的移动不得被原后代借用，无法证明时明确身份待处理。
+
 普通source save也使用文件的父/祖先闭包加该文件RW share0 guard，在同一文件handle核Base并写/flush/commit。可捕获的ancestor/target-parent改变不能在最后检查后绕到另一库；busy保稿重试。所有文件guard的范围有限，不要求全库锁。
 
 ### 5.3 copy与template：固定snapshot成员，不虚构私有目录隔离

@@ -9,6 +9,7 @@ struct RecoveryCapture {
     members: Vec<RecoveryMember>,
     guards: Vec<ParentGuard>,
     files: Vec<(usize, File)>,
+    placement_files: Vec<File>,
     changes: Vec<FileChange>,
     coherence: String,
 }
@@ -232,6 +233,7 @@ impl Core {
             members: Vec::new(),
             guards: Vec::new(),
             files: Vec::new(),
+            placement_files: Vec::new(),
             changes: Vec::new(),
             coherence: String::new(),
         };
@@ -630,6 +632,7 @@ impl Core {
             target_parent_identity,
             create_trash_parent,
             updates,
+            members,
         } = &t.mutation
         else {
             unreachable!()
@@ -711,6 +714,52 @@ impl Core {
             capture,
         )?;
         let moved = capture.members.last().is_some_and(|m| m.matches_after);
+        for member in members {
+            let locator =
+                Path::new(if moved { target } else { source }).join(&member.relative_path);
+            let mut fact = directory_member(
+                &display(&locator),
+                "placement",
+                Some(&member.identity),
+                Some(&member.identity),
+            );
+            fact.kind = "file".into();
+            match ParentGuard::acquire(&locator).and_then(|g| {
+                if g.directory_identity()? != member.parent {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "Placement member parent changed",
+                    ));
+                }
+                let h = g.open_placement_file()?;
+                if stamp(&h)?.identity != member.identity {
+                    return Err(CoreError::new(
+                        "thirdState",
+                        "Placement member object changed",
+                    ));
+                }
+                Ok((g, h))
+            }) {
+                Ok((g, h)) => {
+                    fact.matches_before = !moved;
+                    fact.matches_after = moved;
+                    fact.state = if moved { "knownAfter" } else { "knownBefore" }.into();
+                    fact.identity_binding = "original".into();
+                    capture.guards.push(g);
+                    capture.placement_files.push(h);
+                }
+                Err(e) => {
+                    fact.state = if e.code == "thirdState" {
+                        "thirdState"
+                    } else {
+                        "unavailable"
+                    }
+                    .into();
+                    fact.message = e.message;
+                }
+            }
+            capture.members.push(fact);
+        }
         for directory in t
             .directories
             .iter()

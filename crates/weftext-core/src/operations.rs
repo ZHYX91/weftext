@@ -292,8 +292,20 @@ pub(crate) struct SnapshotBinding {
 }
 /// An owned read witness. It cannot be deserialized or used as a write basis;
 /// dropping it releases the captured bytes without retaining them in Core.
+#[derive(Clone)]
 pub struct SnapshotWitness {
-    binding: SnapshotBinding,
+    pub(crate) binding: SnapshotBinding,
+}
+impl SnapshotWitness {
+    pub fn retained_bytes(&self) -> usize {
+        std::mem::size_of::<Self>()
+            + self.binding.path.capacity()
+            + self
+                .binding
+                .captured
+                .as_ref()
+                .map_or(0, |f| f.bytes.capacity() + f.path.capacity())
+    }
 }
 /// One explicitly selected, live canonical node. This is a read witness, not
 /// a writer or a claim that an external source has a committed revision.
@@ -369,6 +381,16 @@ pub(crate) struct NewBirth {
     pub(crate) path: String,
     pub(crate) node_id: String,
 }
+/// Physical placement evidence only. Source bytes are deliberately not frozen:
+/// ordinary moves carry late edits and late children with the original tree.
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct RelocationMember {
+    pub(crate) relative_path: String,
+    pub(crate) identity: FileIdentity,
+    pub(crate) parent: FileIdentity,
+    pub(crate) node_id: Option<String>,
+    pub(crate) directory_id: Option<String>,
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) enum Mutation {
     Relocate {
@@ -380,6 +402,8 @@ pub(crate) enum Mutation {
         old_leaf: String,
         new_leaf: String,
         leaf_identity: FileIdentity,
+        #[serde(default)]
+        members: Vec<RelocationMember>,
         /// Exact content participants at their final paths, in the same decision.
         #[serde(default)]
         updates: Vec<FileChange>,
@@ -1605,7 +1629,7 @@ impl Core {
         let root = absolute_path(root.as_ref())?;
         let path = absolute_path(path.as_ref())?;
         self.require_workspace(&root)?;
-        if !path.starts_with(&root) {
+        if crate::history::history_relative_path(&path, &root).is_none() {
             return Err(CoreError::new(
                 "outsideRoot",
                 "Snapshot belongs outside the library",
@@ -1675,7 +1699,7 @@ impl Core {
         let root = absolute_path(root)?;
         let owner = absolute_path(write_owner_path)?;
         self.require_workspace(&root)?;
-        if !owner.starts_with(&root) {
+        if crate::history::history_relative_path(&owner, &root).is_none() {
             return Err(CoreError::new(
                 "outsideRoot",
                 "The writer belongs outside this library",
@@ -1687,19 +1711,17 @@ impl Core {
                 "At most 2048 original read witnesses",
             ));
         }
+        let owner_identity = stamp(&ParentGuard::acquire(&owner)?.open_placement_file()?)?.identity;
         let mut selected = Vec::<&SnapshotBinding>::new();
         let mut total = 0usize;
         for witness in witnesses {
             let basis = &witness.binding;
             let path = Path::new(&basis.path);
-            if !path.starts_with(&root) {
+            if crate::history::history_relative_path(path, &root).is_none() {
                 return Err(CoreError::new(
                     "outsideRoot",
                     "A read witness belongs outside this library",
                 ));
-            }
-            if path == owner {
-                continue;
             }
             if let Some(original) = selected
                 .iter()
@@ -1740,7 +1762,37 @@ impl Core {
             let path = Path::new(&basis.path);
             self.check_pending(path)?;
             let guard = ParentGuard::acquire(path)?;
-            let mut handle = guard.open_file(false, false)?;
+            if basis
+                .captured
+                .as_ref()
+                .is_some_and(|f| f.stamp.identity == owner_identity)
+            {
+                if guard.directory_identity()? != basis.parent {
+                    return Err(CoreError::new(
+                        "staleBase",
+                        "The guarded writer's original parent changed",
+                    ));
+                }
+                guards.push(guard);
+                continue;
+            }
+            let control = path.parent() == Some(root.as_path())
+                && path.file_name().is_some_and(|name| {
+                    matches!(
+                        name.to_str(),
+                        Some(
+                            ".weftext-workspace.json"
+                                | ".weftext-format"
+                                | ".weftext-mvp-commit.json"
+                                | ".weftext-rules"
+                        )
+                    )
+                });
+            let mut handle = if control {
+                guard.open_read_guard_file()?
+            } else {
+                guard.open_file(false, false)?
+            };
             let actual_stamp = stamp(&handle)?;
             self.check_pending_identity(&actual_stamp.identity)?;
             let bytes = read_blob(&mut handle)?;
@@ -3864,6 +3916,7 @@ impl Core {
                 new_leaf,
                 leaf_identity,
                 updates,
+                members,
             } => {
                 let source = Path::new(source);
                 let target = Path::new(target);
@@ -3952,6 +4005,9 @@ impl Core {
                     drop(frozen);
                     namespace.release_source_descendants();
                 }
+                let member_handles = validate_relocation_members(&mut namespace, members)?;
+                drop(member_handles);
+                namespace.release_source_descendants();
                 let mut leaf = namespace.open_source_file(old_leaf, old_leaf != new_leaf)?;
                 let captured = t
                     .files
@@ -3986,6 +4042,11 @@ impl Core {
                         .to_str()
                         .ok_or_else(|| CoreError::new("invalidName", "Non-UTF8 target name"))?,
                 )?;
+                // Windows denies renaming an ancestor while its members have
+                // no-delete handles. The original namespace closure remains
+                // held across that single step; reacquire and verify members
+                // from that same physical root before any commit.
+                let member_handles = validate_relocation_members(&mut namespace, members)?;
                 let reopened = namespace.open_moved_file(new_leaf)?;
                 if stamp(&reopened)?.identity != *leaf_identity {
                     return Err(CoreError::new(
@@ -4061,6 +4122,7 @@ impl Core {
                     self.publish_recovery_facts(&plan, &stamps)?;
                 }
                 self.commit(&plan)?;
+                drop(member_handles);
                 drop(retained);
                 drop(created);
                 drop(trash_directory);
@@ -4468,7 +4530,7 @@ impl Core {
         let create_trash_parent = target
             .parent()
             .is_some_and(|p| p == root.join(".weftext-trash") && !p.exists());
-        let namespace = NamespaceGuard::acquire(
+        let mut namespace = NamespaceGuard::acquire(
             source,
             if create_trash_parent {
                 root
@@ -4514,6 +4576,20 @@ impl Core {
             .insert(birth.node_id.clone(), birth.node_id);
         let leaf_identity = file.stamp.identity.clone();
         files.push(file);
+        let members = if preview.kind == "renameNode"
+            || preview.kind == "moveNode"
+            || preview.kind == "trashNode"
+            || preview.kind == "restoreNode"
+        {
+            self.capture_relocation_members(
+                &mut namespace,
+                source,
+                &old_leaf,
+                &workspace.workspace_id,
+            )?
+        } else {
+            vec![]
+        };
         Ok(Mutation::Relocate {
             source: display(source),
             target: display(target),
@@ -4523,8 +4599,99 @@ impl Core {
             old_leaf,
             new_leaf,
             leaf_identity,
+            members,
             updates: vec![],
         })
+    }
+    fn capture_relocation_members(
+        &self,
+        namespace: &mut NamespaceGuard,
+        source: &Path,
+        old_leaf: &str,
+        workspace: &str,
+    ) -> Result<Vec<RelocationMember>> {
+        let mut candidates = Vec::new();
+        let mut seen = std::collections::BTreeSet::new();
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
+            for birth in self
+                .read_births(&p.operation_id)?
+                .into_iter()
+                .filter(|b| b.workspace_id == workspace)
+            {
+                if !seen.insert(birth.node_id.clone()) {
+                    continue;
+                }
+                for path in self.node_placement_paths(&birth)? {
+                    if let Some(relative) =
+                        crate::history::history_relative_path(Path::new(&path), source)
+                    {
+                        candidates.push((
+                            relative,
+                            Some(birth.node_id.clone()),
+                            None,
+                            birth.identity.clone(),
+                        ));
+                    }
+                }
+            }
+        }
+        for (_, id, identity) in self.directory_admission_candidates(workspace)? {
+            for path in self.query_directory_placements(workspace, &id, &identity)? {
+                if let Some(relative) =
+                    crate::history::history_relative_path(Path::new(&path), source)
+                {
+                    candidates.push((
+                        relative.join("weftext.directory.json"),
+                        None,
+                        Some(id.clone()),
+                        identity.clone(),
+                    ));
+                }
+            }
+        }
+        let mut members = Vec::<RelocationMember>::new();
+        for (relative, node_id, directory_id, expected) in candidates {
+            if relative == Path::new(old_leaf) {
+                continue;
+            }
+            if members
+                .iter()
+                .any(|m| Path::new(&m.relative_path) == relative)
+            {
+                continue;
+            }
+            // A moved-out/replaced or inaccessible member does not stop an
+            // ordinary whole-tree move. It simply gains no placement proof.
+            let Ok(handle) = namespace.open_source_placement(&relative) else {
+                continue;
+            };
+            let actual = stamp(&handle)?.identity;
+            let parent = namespace.source_parent_identity(&relative)?;
+            if (node_id.is_some() && actual != expected)
+                || (directory_id.is_some() && parent != expected)
+            {
+                continue;
+            }
+            if members.len() == MAX_OPERATION_FILES {
+                return Err(CoreError::new(
+                    "budget",
+                    "Placement member evidence exceeds its bounded operation budget",
+                ));
+            }
+            members.push(RelocationMember {
+                relative_path: display(&relative),
+                identity: actual,
+                parent,
+                node_id,
+                directory_id,
+            });
+        }
+        namespace.release_source_descendants();
+        Ok(members)
     }
     fn validate_update(&self, root: &Path, path: &Path, after: &[u8]) -> Result<()> {
         if !path.starts_with(root) || path.components().any(|c| c.as_os_str() == ".weftext-trash") {
@@ -5208,6 +5375,26 @@ fn validate_relocation_membership(
         }
     }
     Ok(())
+}
+fn validate_relocation_members(
+    namespace: &mut NamespaceGuard,
+    members: &[RelocationMember],
+) -> Result<Vec<File>> {
+    let mut held = Vec::new();
+    for member in members {
+        let relative = Path::new(&member.relative_path);
+        let handle = namespace.open_source_placement(relative)?;
+        if stamp(&handle)?.identity != member.identity
+            || namespace.source_parent_identity(relative)? != member.parent
+        {
+            return Err(CoreError::new(
+                "scopeChanged",
+                "A placement-only member object or parent changed; source bytes are not a move precondition",
+            ));
+        }
+        held.push(handle);
+    }
+    Ok(held)
 }
 fn validate_relocation_creations(
     namespace: &mut NamespaceGuard,

@@ -188,9 +188,22 @@ impl Core {
     }
 
     pub(crate) fn check_history_placement(&self, birth: &Birth, current: &Path) -> Result<()> {
+        let places = self.node_placement_paths(birth)?;
+        if places.len() != 1
+            || !places
+                .iter()
+                .any(|p| same_placement_path(Path::new(p), current).unwrap_or(false))
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                "No committed application placement proves this exact object",
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn node_placement_paths(&self, birth: &Birth) -> Result<BTreeSet<String>> {
         let mut places = BTreeSet::<String>::new();
         let mut birth_sequence = None;
-        let mut relocations = Vec::new();
         for p in self
             .operations
             .values()
@@ -216,69 +229,106 @@ impl Core {
                     );
                 }
             }
+        }
+        self.replay_placements(
+            places,
+            birth_sequence,
+            &birth.identity,
+            Some(&birth.node_id),
+            None,
+        )
+    }
+    pub(crate) fn replay_placements(
+        &self,
+        mut places: BTreeSet<String>,
+        born: Option<u64>,
+        identity: &FileIdentity,
+        node: Option<&str>,
+        directory: Option<&str>,
+    ) -> Result<BTreeSet<String>> {
+        let mut edges = Vec::new();
+        for p in self
+            .operations
+            .values()
+            .filter(|p| self.committed(&p.operation_id))
+        {
             if let Some(t) = &p.transaction
-                && let Mutation::Relocate {
-                    source,
-                    target,
-                    old_leaf,
-                    new_leaf,
-                    ..
-                } = &t.mutation
+                && matches!(t.mutation, Mutation::Relocate { .. })
             {
                 let sequence = self.history_commit_time(p)?.1;
-                relocations.push((
-                    sequence,
-                    source.clone(),
-                    target.clone(),
-                    old_leaf.clone(),
-                    new_leaf.clone(),
-                ));
-            }
-        }
-        // Reusing an old pathname for a new note must not attach the former
-        // occupant's earlier relocations to this note's fresh birth.
-        relocations.retain(|r| match (birth_sequence, r.0) {
-            (Some(born), Some(moved)) => moved > born,
-            _ => true,
-        });
-        relocations.sort_by_key(|r| r.0);
-        // Legacy edges are applied only when their actual source is reached.
-        // Each edge is consumed once, so cycles never invent an ordering.
-        let mut remaining = relocations;
-        while let Some(index) = remaining.iter().position(|(_, source, _, _, _)| {
-            places
-                .iter()
-                .any(|p| history_relative_path(Path::new(p), Path::new(source)).is_some())
-        }) {
-            let (_, source, target, old_leaf, new_leaf) = remaining.remove(index);
-            let prior = places.iter().cloned().collect::<Vec<_>>();
-            for p in prior {
-                if let Some(relative) = history_relative_path(Path::new(&p), Path::new(&source)) {
-                    let moved = if relative == Path::new(&old_leaf) {
-                        Path::new(&target).join(&new_leaf)
-                    } else {
-                        Path::new(&target).join(&relative)
-                    };
-                    places.remove(&p);
-                    places.insert(display(&moved));
+                if !matches!((born,sequence),(Some(a),Some(b)) if b<=a) {
+                    edges.push((sequence, t));
                 }
             }
         }
-        if places.len() != 1
-            || !places.iter().any(|p| {
-                p.replace('/', "\\")
-                    .eq_ignore_ascii_case(&display(current).replace('/', "\\"))
-            })
-        {
-            return Err(CoreError::new(
-                "identityPending",
-                "No committed application move or rename proves the current placement; recover identity before browsing history",
-            ));
+        edges.sort_by_key(|e| e.0);
+        for (_, t) in edges {
+            let Mutation::Relocate {
+                source,
+                target,
+                old_leaf,
+                new_leaf,
+                leaf_identity,
+                source_identity,
+                members,
+                ..
+            } = &t.mutation
+            else {
+                unreachable!()
+            };
+            for prior in places.iter().cloned().collect::<Vec<_>>() {
+                let Some(relative) = history_relative_path(Path::new(&prior), Path::new(source))
+                else {
+                    continue;
+                };
+                let exact = if node.is_some() && relative == Path::new(old_leaf) {
+                    leaf_identity == identity
+                } else if directory.is_some() && relative.as_os_str().is_empty() {
+                    source_identity == identity
+                } else {
+                    members.iter().any(|m| {
+                        if let Some(id) = node {
+                            m.node_id.as_deref() == Some(id)
+                                && &m.identity == identity
+                                && Path::new(&m.relative_path) == relative
+                        } else {
+                            m.directory_id.as_deref() == directory
+                                && &m.parent == identity
+                                && Path::new(&m.relative_path).parent() == Some(relative.as_path())
+                        }
+                    }) || (node.is_some()
+                        && t.files.iter().any(|f| {
+                            &f.stamp.identity == identity
+                                && history_relative_path(Path::new(&f.path), Path::new(source))
+                                    .as_ref()
+                                    == Some(&relative)
+                        }))
+                        || (directory.is_some()
+                            && t.directories.iter().any(|d| {
+                                &d.identity == identity
+                                    && history_relative_path(Path::new(&d.path), Path::new(source))
+                                        .as_ref()
+                                        == Some(&relative)
+                            }))
+                };
+                if !exact {
+                    continue;
+                }
+                let moved = if node.is_some() && relative == Path::new(old_leaf) {
+                    Path::new(target).join(new_leaf)
+                } else {
+                    Path::new(target).join(relative)
+                };
+                places.remove(&prior);
+                places.insert(display(&moved));
+            }
         }
-        Ok(())
+        Ok(places)
     }
-
-    fn history_commit_time(&self, plan: &journal::Plan) -> Result<(Option<u64>, Option<u64>)> {
+    pub(crate) fn history_commit_time(
+        &self,
+        plan: &journal::Plan,
+    ) -> Result<(Option<u64>, Option<u64>)> {
         let v: serde_json::Value =
             serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "commit"))?)?;
         if v["operationId"] != plan.operation_id
@@ -923,7 +973,7 @@ fn append_draft_alternatives(out: &mut Vec<DraftAlternative>, draft: &Draft) {
         }
     }
 }
-fn history_relative_path(path: &Path, prefix: &Path) -> Option<PathBuf> {
+pub(crate) fn history_relative_path(path: &Path, prefix: &Path) -> Option<PathBuf> {
     let mut components = path.components();
     for prior in prefix.components() {
         let actual = components.next()?;
@@ -936,4 +986,23 @@ fn history_relative_path(path: &Path, prefix: &Path) -> Option<PathBuf> {
         }
     }
     Some(components.collect())
+}
+pub(crate) fn same_placement_path(expected: &Path, actual: &Path) -> Result<bool> {
+    if !history_relative_path(expected, actual).is_some_and(|p| p.as_os_str().is_empty()) {
+        return Ok(false);
+    }
+    // Resolve only these two explicit parent directories. Their final handle
+    // coordinates preserve real OS names without Unicode case folding.
+    let a = ParentGuard::acquire(expected)?;
+    let b = ParentGuard::acquire(actual)?;
+    Ok(a.directory_identity()? == b.directory_identity()?
+        && a.directory_coordinates()? == b.directory_coordinates()?
+        && expected
+            .file_name()
+            .zip(actual.file_name())
+            .is_some_and(|(a, b)| {
+                a == b
+                    || a.to_string_lossy()
+                        .eq_ignore_ascii_case(&b.to_string_lossy())
+            }))
 }

@@ -195,7 +195,7 @@ async fn edit(
             if !occurrence.builder_supported {
                 return Err(query_error(weftext_data::DataError(String::new())));
             }
-            query::validate_embedded(
+            let plan = query::validate_embedded(
                 &state,
                 &auth,
                 session.resource,

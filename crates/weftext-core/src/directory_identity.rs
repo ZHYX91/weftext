@@ -170,7 +170,7 @@ fn same_path(locator: &str, path: &Path) -> bool {
     }
 }
 
-fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
+pub(crate) fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
     let (prefix, rest) = reference.split_once("://").ok_or_else(|| {
         CoreError::new(
             "invalidReference",
@@ -310,6 +310,17 @@ impl Core {
         id: &str,
         identity: &FileIdentity,
     ) -> Result<bool> {
+        Ok(!self
+            .directory_admission_paths(workspace, id, identity)?
+            .is_empty())
+    }
+    pub(crate) fn directory_admission_paths(
+        &self,
+        workspace: &str,
+        id: &str,
+        identity: &FileIdentity,
+    ) -> Result<Vec<(String, String)>> {
+        let mut origins = vec![];
         for plan in self
             .operations
             .values()
@@ -342,7 +353,10 @@ impl Core {
                             .as_ref()
                             == Some(identity)
                     {
-                        return Ok(true);
+                        origins.push((
+                            display(Path::new(&file.path).parent().unwrap()),
+                            plan.operation_id.clone(),
+                        ));
                     }
                 }
             }
@@ -357,7 +371,7 @@ impl Core {
                                 && bound == identity
                         })
                     {
-                        return Ok(true);
+                        origins.push((object.directory.clone(), plan.operation_id.clone()));
                     }
                 }
             }
@@ -386,11 +400,59 @@ impl Core {
                         && serde_json::from_slice::<DirectoryMarker>(&change.after)
                             .is_ok_and(|marker| marker.directory_id == id)
                 }) {
-                    return Ok(true);
+                    origins.push((reservation.path.clone(), plan.operation_id.clone()));
                 }
             }
         }
-        Ok(false)
+        Ok(origins)
+    }
+    pub(crate) fn directory_admission_candidates(
+        &self,
+        workspace: &str,
+    ) -> Result<Vec<(String, String, FileIdentity)>> {
+        let mut candidates = Vec::new();
+        for p in self.operations.values().filter(|p| {
+            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(workspace)
+        }) {
+            if let Some(r) = self.read_navigation_record::<DirectoryReservation>(
+                &p.operation_id,
+                "directory-reservation",
+            )? {
+                candidates.push((r.path, r.directory_id, r.identity));
+            }
+            if let Some(t) = &p.transaction
+                && let operations::Mutation::CreateTree { files, .. } = &t.mutation
+            {
+                for f in files.iter().filter(|f| {
+                    Path::new(&f.path)
+                        .file_name()
+                        .is_some_and(|n| n == DIRECTORY_MARKER)
+                }) {
+                    if let Ok(m) = serde_json::from_slice::<DirectoryMarker>(&f.after) {
+                        let parent = Path::new(&f.path).parent().unwrap();
+                        if let Some(identity) =
+                            self.materialized_identity(&p.operation_id, parent)?
+                        {
+                            candidates.push((display(parent), m.directory_id, identity));
+                        }
+                    }
+                }
+            }
+            if let Some(a) = &p.sync_application
+                && let Some(t) = &p.transaction
+            {
+                for o in &a.after {
+                    if let sync::ObjectKey::RootDirectory(id) = &o.object
+                        && let Some((_, identity)) = t.write_parents.iter().find(|(path, _)| {
+                            Path::new(path).parent() == Some(Path::new(&o.directory))
+                        })
+                    {
+                        candidates.push((o.directory.clone(), id.clone(), identity.clone()));
+                    }
+                }
+            }
+        }
+        Ok(candidates)
     }
 
     fn tag_admitted(

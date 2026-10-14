@@ -169,6 +169,12 @@ impl Core {
                 path.as_str(),
                 ".weftext-workspace.json" | ".weftext-format" | ".weftext-mvp-commit.json"
             ) || path.starts_with(".weftext-trash/")
+                || (path == ".weftext-rules"
+                    && serde_json::from_slice::<serde_json::Value>(&frozen.files[path]).is_ok_and(
+                        |value| {
+                            value == serde_json::json!({"version":1,"ignored":[],"unmanaged":[]})
+                        },
+                    ))
             {
                 continue;
             }

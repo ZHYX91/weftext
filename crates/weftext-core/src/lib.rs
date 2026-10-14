@@ -16,6 +16,12 @@ mod history_tests;
 mod inventory;
 mod journal;
 mod operations;
+mod query_scope;
+#[cfg(all(test, windows))]
+mod query_scope_tests;
+pub use query_scope::{
+    QualifiedQueryNode, QualifiedQueryScope, QueryNodeWitness, QueryScopeWitness,
+};
 pub mod sync;
 mod transaction_recovery;
 pub use directory_identity::{
@@ -304,9 +310,11 @@ impl Core {
         });
         let kind = if admitted.is_some()
             && path.strip_prefix(&root).ok().is_some_and(|p| {
-                p.components()
-                    .next()
-                    .is_some_and(|c| c.as_os_str() == ".weftext-trash")
+                p.components().next().is_some_and(|c| {
+                    c.as_os_str()
+                        .to_string_lossy()
+                        .eq_ignore_ascii_case(".weftext-trash")
+                })
             }) {
             "managedTrash"
         } else if admitted.is_some() && (!candidate || info.id != admitted) {
@@ -529,11 +537,11 @@ impl Core {
             ));
         }
         self.check_pending(&session.path)?;
-        if session
-            .path
-            .components()
-            .any(|c| c.as_os_str() == ".weftext-trash")
-        {
+        if session.path.components().any(|c| {
+            c.as_os_str()
+                .to_string_lossy()
+                .eq_ignore_ascii_case(".weftext-trash")
+        }) {
             return Err(CoreError::new(
                 "trashReadOnly",
                 "Restore the node before editing its source",
@@ -736,6 +744,10 @@ impl Core {
             ),
             (".weftext-format".into(), b"weftext.typst.v1\n".to_vec()),
             (
+                ".weftext-rules".into(),
+                br#"{"version":1,"ignored":[],"unmanaged":[]}"#.to_vec(),
+            ),
+            (
                 ".weftext-mvp-commit.json".into(),
                 serde_json::to_vec(
                     &serde_json::json!({"workspaceId": workspace_id,"operationId": operation_id,"storageProfile": STORAGE_PROFILE}),
@@ -886,7 +898,7 @@ impl Core {
         }
         let read_control = |path: &Path| -> Result<Vec<u8>> {
             let guard = ParentGuard::acquire(path)?;
-            let mut file = guard.open_file(false, false)?;
+            let mut file = guard.open_read_guard_file()?;
             read_source(&mut file)
         };
         let config: WorkspaceConfig = match serde_json::from_slice(&read_control(&config_path)?) {
@@ -907,7 +919,9 @@ impl Core {
         let operation_id = activation["operationId"].as_str().unwrap_or("");
         let owned = self.operations.get(operation_id).is_some_and(|p| {
             matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                && p.path == display(root)
+                && crate::history::history_relative_path(root, Path::new(&p.path))
+                    .is_some_and(|p| p.as_os_str().is_empty())
+                && backend::same_directory(Path::new(&p.path), root).unwrap_or(false)
                 && p.workspace_id.as_ref() == Some(&config.workspace_id)
                 && self.committed(operation_id)
         });

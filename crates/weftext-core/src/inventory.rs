@@ -273,7 +273,7 @@ fn read_rules(root: &Path) -> Result<Rules> {
         return Ok(rules);
     }
     let guard = ParentGuard::acquire(&path)?;
-    let mut file = guard.open_file(false, false)?;
+    let mut file = guard.open_read_guard_file()?;
     let bytes = read_source(&mut file)?;
     // This MVP intentionally defines an exact-path subset, no .gitignore inheritance.
     let value: serde_json::Value = match serde_json::from_slice(&bytes) {

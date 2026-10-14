@@ -8,7 +8,7 @@ import { HostedHistory } from "./hosted-history";
 import { currentHostedHistoryResult, hostedHistoryStatus, unavailableCommittedHistory, type HostedHistoryRecord, type HostedHistoryStatus } from "./hosted-history-state";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
-import { draftDisposition, applySaveResult, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, type HostedDraft } from "./hosted-state";
+import { draftDisposition, applySaveResult, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
 
 type Rights = { read: boolean; write: boolean; history: boolean; download: boolean };
 type Doc = { resource: string; title: string; sessionId: string; baseId: string; source: string; recoveredDraft?: string; recoveredDraftBaseSource?: string; recoveredDraftConflict: boolean; rights: Rights };
@@ -55,6 +55,7 @@ let draft: HostedDraft | undefined;
 let cachePrefix = "";
 let busy = false;
 let requestEpoch = 0;
+let authorizationEpoch = 0;
 let compareRequired = false;
 let draftTimer: ReturnType<typeof setTimeout> | undefined;
 const status = (message: string) => { el("status").textContent = message; };
@@ -131,7 +132,7 @@ async function openQueryResource(resource: string) { const epoch = requestEpoch;
 
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
-  requestEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = ""; stableReference = undefined;
+  requestEpoch++; authorizationEpoch++; doc = undefined; draft = undefined; compareRequired = false; cachePrefix = ""; stableReference = undefined;
   const clearErrors: unknown[] = [];
   // A blocked storage provider must never stop the remaining protected views
   // from disposing their in-memory capabilities and visible content.
@@ -150,6 +151,7 @@ function clearDisplay(message: string, clearToken = false) {
 }
 async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0): Promise<T> {
   const epoch = requestEpoch, credential = token;
+  const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
   const response = await fetch(`/api/hosted/${path}`, {method:data === undefined ? "GET" : "POST", headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},body:data === undefined ? undefined : JSON.stringify(data),cache:"no-store"});
   if (!response.ok) {
     const result = await response.json() as {error?:{code:string;message:string}};
@@ -159,11 +161,12 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
       await new Promise(resolve => setTimeout(resolve, 500));
       if (epoch === requestEpoch && credential === token) return request(path, data, bytes, attempt + 1);
     }
-    if (epoch === requestEpoch && credential === token) {
-      if (response.status === 401) clearDisplay("凭据失效，已清除本页缓存。", true);
-      if (response.status === 404 && !path.startsWith("navigation/")) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
-    }
-    throw new HostedError(result.error?.code ?? "request", result.error?.message ?? "请求失败", response.status);
+    if (response.status === 401 && sameHostedQueryIdentity(captured, audience())) clearDisplay("凭据失效，已清除本页缓存。", true);
+    if (response.status === 404 && path === "query" && sameHostedQueryIdentity(captured, audience())) {
+      try { const current = await request<Me>("me"); if (sameHostedQueryIdentity(captured, audience())) { if (current.actor !== captured.actor || current.deployment !== captured.deployment || current.generation !== captured.generation) { clearDisplay("授权策略已变化，旧展示与缓存已清除，请刷新文档列表。"); identity = current; sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(current)); } else if (sameHostedQueryAudience(captured, audience())) queries.refuseResult("此查询对象或范围不可用；原计划、参数和个人正文草稿保留，未交付结果。"); } }
+      catch { if (sameHostedQueryAudience(captured, audience())) queries.refuseResult("查询资格核对未完成，结果暂不交付；原计划与个人草稿保留，请重新连接核对。"); }
+    } else if (response.status === 404 && path !== "query" && !path.startsWith("navigation/") && epoch === requestEpoch && credential === token) clearDisplay("对象或授权已变化，已清除旧内容。请刷新文档列表。");
+    throw new HostedError(result.error?.code ?? "request", result.error?.code === "basisRequired" && path.startsWith("query/") ? "保存带范围的定义需要已安装的规则基线；请由管理员明确安装库规则后重试，原草稿与提案保留，未自动创建规则。" : result.error?.message ?? "请求失败", response.status);
   }
   return (bytes ? response.arrayBuffer() : response.json()) as Promise<T>;
 }

@@ -142,6 +142,7 @@ if __name__ == '__main__':
         run(sys.executable, 'scripts/test_hosted_office.py', exe)
         run(sys.executable, 'scripts/test_hosted_query.py', exe)
         run(sys.executable, 'scripts/test_hosted_providers.py', exe)
+        run(sys.executable, 'scripts/test_hosted_scopes.py', exe)
         run(sys.executable, 'scripts/test_hosted_definition.py', exe)
         run(sys.executable, 'scripts/test_hosted_history.py', exe)
         run(sys.executable, 'scripts/test_sync.py', exe)

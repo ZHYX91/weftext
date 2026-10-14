@@ -191,6 +191,31 @@ mod platform {
         create: bool,
         delete: bool,
     ) -> Result<File> {
+        nt_open_mode(
+            parent,
+            name,
+            directory,
+            write,
+            create,
+            delete,
+            AccessProfile::Ordinary,
+        )
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum AccessProfile {
+        Ordinary,
+        Placement,
+        SharedRead,
+    }
+    fn nt_open_mode(
+        parent: Option<&File>,
+        name: &std::ffi::OsStr,
+        directory: bool,
+        write: bool,
+        create: bool,
+        delete: bool,
+        profile: AccessProfile,
+    ) -> Result<File> {
         let mut wide: Vec<u16> = name.encode_wide().collect();
         if wide.len() > 16000 {
             return Err(CoreError::new("invalidPath", "Path is too long"));
@@ -213,8 +238,11 @@ mod platform {
             status: 0,
             information: 0,
         };
-        let access = READ
-            | READ_ATTR
+        let access = if profile == AccessProfile::Placement {
+            0
+        } else {
+            READ
+        } | READ_ATTR
             | SYNCHRONIZE
             | if write { WRITE } else { 0 }
             | if delete { DELETE } else { 0 };
@@ -226,7 +254,13 @@ mod platform {
                 &mut io,
                 null(),
                 if directory { 0x10 } else { 0x80 },
-                if directory { SHARE_RW } else { 0 },
+                if directory || profile == AccessProfile::Placement {
+                    SHARE_RW
+                } else if profile == AccessProfile::SharedRead {
+                    1
+                } else {
+                    0
+                },
                 if create { 2 } else { 1 },
                 REPARSE_OPEN | SYNC | if directory { DIRECTORY } else { NON_DIRECTORY },
                 null(),
@@ -282,7 +316,7 @@ mod platform {
             size: ((i.size_high as u64) << 32) | i.size_low as u64,
         })
     }
-    fn volume_path(file: &File) -> Result<PathBuf> {
+    pub(crate) fn file_coordinates(file: &File) -> Result<PathBuf> {
         let mut buffer = vec![0u16; 32768];
         let n = unsafe {
             GetFinalPathNameByHandleW(
@@ -402,6 +436,9 @@ mod platform {
         pub fn directory_identity(&self) -> Result<FileIdentity> {
             Ok(stamp(self.dirs.last().unwrap())?.identity)
         }
+        pub(crate) fn directory_coordinates(&self) -> Result<PathBuf> {
+            file_coordinates(self.dirs.last().unwrap())
+        }
         pub fn directory_entries(
             &self,
             max: usize,
@@ -420,7 +457,7 @@ mod platform {
             let drive = PathBuf::from(format!("{}\\", &text[..2]));
             let root_nt = format!("\\??\\{}", drive.display());
             let root = nt_open(None, std::ffi::OsStr::new(&root_nt), true, false, false)?;
-            let guid = volume_path(&root)?;
+            let guid = file_coordinates(&root)?;
             let mut guid_wide: Vec<u16> = guid.as_os_str().encode_wide().collect();
             guid_wide.push(0);
             let mut fsname = [0u16; 32];
@@ -473,6 +510,28 @@ mod platform {
         }
         pub fn open_file(&self, write: bool, create: bool) -> Result<File> {
             nt_open(self.dirs.last(), &self.name, false, write, create)
+        }
+        pub(crate) fn open_placement_file(&self) -> Result<File> {
+            nt_open_mode(
+                self.dirs.last(),
+                &self.name,
+                false,
+                false,
+                false,
+                false,
+                AccessProfile::Placement,
+            )
+        }
+        pub(crate) fn open_read_guard_file(&self) -> Result<File> {
+            nt_open_mode(
+                self.dirs.last(),
+                &self.name,
+                false,
+                false,
+                false,
+                false,
+                AccessProfile::SharedRead,
+            )
         }
         pub fn create_directory(&self) -> Result<File> {
             nt_open(self.dirs.last(), &self.name, true, true, true)
@@ -617,6 +676,24 @@ mod platform {
         pub fn open_source_descendant(&mut self, relative: &Path) -> Result<File> {
             self.open_source_output(relative, false, false)
         }
+        pub(crate) fn open_source_placement(&mut self, relative: &Path) -> Result<File> {
+            let name = relative
+                .file_name()
+                .ok_or_else(|| CoreError::new("invalidPath", "Missing placement filename"))?;
+            let directory = self.source_directory(relative.parent().unwrap())?;
+            nt_open_mode(
+                Some(directory),
+                name,
+                false,
+                false,
+                false,
+                false,
+                AccessProfile::Placement,
+            )
+        }
+        pub(crate) fn source_parent_identity(&mut self, relative: &Path) -> Result<FileIdentity> {
+            Ok(stamp(self.source_directory(relative.parent().unwrap())?)?.identity)
+        }
         pub fn open_source_output(
             &mut self,
             relative: &Path,
@@ -717,6 +794,18 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub(crate) fn open_placement_file(&self) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn open_read_guard_file(&self) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub fn create_directory(&self) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
@@ -730,6 +819,12 @@ mod platform {
             ))
         }
         pub fn child_directory(_: &File, _: &str) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn directory_coordinates(&self) -> Result<PathBuf> {
             Err(CoreError::new(
                 "unsupportedPlatform",
                 "Windows backend required",
@@ -784,6 +879,18 @@ mod platform {
                 "Windows backend required",
             ))
         }
+        pub(crate) fn open_source_placement(&mut self, _: &Path) -> Result<File> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
+        pub(crate) fn source_parent_identity(&mut self, _: &Path) -> Result<FileIdentity> {
+            Err(CoreError::new(
+                "unsupportedPlatform",
+                "Windows backend required",
+            ))
+        }
         pub fn open_source_output(&mut self, _: &Path, _: bool, _: bool) -> Result<File> {
             Err(CoreError::new(
                 "unsupportedPlatform",
@@ -810,6 +917,12 @@ mod platform {
             ))
         }
     }
+    pub(crate) fn file_coordinates(_: &File) -> Result<PathBuf> {
+        Err(CoreError::new(
+            "unsupportedPlatform",
+            "Windows backend required",
+        ))
+    }
     pub(crate) fn stamp(_: &File) -> Result<FileStamp> {
         Err(CoreError::new(
             "unsupportedPlatform",
@@ -823,4 +936,12 @@ mod platform {
         ))
     }
 }
-pub(crate) use platform::{NamespaceGuard, ParentGuard, publish_private_create, stamp};
+pub(crate) use platform::{
+    NamespaceGuard, ParentGuard, file_coordinates, publish_private_create, stamp,
+};
+pub(crate) fn same_directory(a: &Path, b: &Path) -> Result<bool> {
+    let a = ParentGuard::acquire(&a.join(".directory-identity-prospective"))?;
+    let b = ParentGuard::acquire(&b.join(".directory-identity-prospective"))?;
+    Ok(a.directory_identity()? == b.directory_identity()?
+        && a.directory_coordinates()? == b.directory_coordinates()?)
+}

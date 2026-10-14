@@ -474,6 +474,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
             actor.into(),
             User {
                 query_providers: Default::default(),
+                query_scopes: Default::default(),
                 epoch: 0,
                 token_sha256: digest(actor.as_bytes()),
                 enabled: true,
@@ -486,6 +487,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
     let mut inner = HostedInner {
         core,
         config: Config {
+            directories: Default::default(),
             deployment: "history-test".into(),
             bind: "127.0.0.1:0".parse().unwrap(),
             origin: None,
@@ -501,6 +503,8 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
                 (
                     resource.into(),
                     FileEntry {
+                        lifecycle: "live".into(),
+                        expected_node: None,
                         path: path.into(),
                         title: resource.into(),
                         editable: true,

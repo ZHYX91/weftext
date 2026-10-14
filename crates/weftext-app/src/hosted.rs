@@ -11,6 +11,7 @@ mod office;
 mod office_import;
 mod query;
 mod query_providers;
+mod query_scopes;
 mod review;
 mod sync_transport;
 use axum::Extension;
@@ -27,6 +28,10 @@ use std::{
 struct FileEntry {
     path: String,
     title: String,
+    #[serde(default = "query_scopes::live")]
+    lifecycle: String,
+    #[serde(default)]
+    expected_node: Option<weftext_knowledge::NodeRef>,
     #[serde(default)]
     editable: bool,
     #[serde(default)]
@@ -73,6 +78,8 @@ struct User {
     #[serde(default)]
     query_providers: query_providers::Rights,
     #[serde(default)]
+    query_scopes: query_scopes::Rights,
+    #[serde(default)]
     sync_owner: bool,
 }
 #[derive(Clone, Deserialize, Serialize)]
@@ -95,6 +102,8 @@ struct Config {
     root: PathBuf,
     admin_token_sha256: String,
     files: BTreeMap<String, FileEntry>,
+    #[serde(default)]
+    directories: BTreeMap<String, query_scopes::Directory>,
     users: BTreeMap<String, User>,
     #[serde(default)]
     sync_identity: Option<weftext_core::sync::SyncIdentity>,
@@ -226,6 +235,9 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
         return Err(ApiError::bad("用户上限为 128"));
     }
     for (id, user) in users {
+        if !query_scopes::validate_rights(config, &user.query_scopes) {
+            return Err(ApiError::bad("目录范围授权须引用有界的明确配置目录"));
+        }
         if !query_providers::valid_rights(&user.query_providers) {
             return Err(ApiError::bad(
                 "Provider 与 SeriesPolicy 授权须使用有界的明确 ID",
@@ -241,6 +253,21 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
             return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
         }
         for (resource, rights) in &user.grants {
+            if config
+                .files
+                .get(resource)
+                .is_some_and(|f| f.lifecycle == "trash")
+                && (rights.write
+                    || rights.fields.values().any(|r| r.write)
+                    || rights.annotations.write
+                    || rights.annotations.accept
+                    || rights.annotations.proofread
+                    || rights.office.r#import)
+            {
+                return Err(ApiError::bad(
+                    "Trash 对象只读，不能配置正文、字段、批注、校对或导入写入权限",
+                ));
+            }
             if !query::valid_rights(&rights.query) {
                 return Err(ApiError::bad(
                     "查询定义历史须具备定义读取权；语义产品及关系须明确授权",
@@ -303,6 +330,14 @@ impl HostedInner {
             .ok_or_else(expired)
     }
     fn rights(&self, actor: &str, resource: &str) -> Result<Rights, ApiError> {
+        if !self
+            .config
+            .files
+            .get(resource)
+            .is_some_and(|f| f.lifecycle == "live")
+        {
+            return Err(unavailable());
+        }
         self.policy
             .users
             .get(actor)
@@ -341,6 +376,9 @@ impl HostedInner {
             "operationConflict" => "同一操作编号不能用于不同内容。",
             "identityConflict" => "须保留笔记的稳定身份声明。",
             "historyUnavailable" => "所选历史版本不可用，未替换为当前版本。",
+            "basisRequired" => {
+                "目录或 Trash 定义的保存保护需要现存的库规则文件；请由库所有者显式安装后重试。"
+            }
             _ => "文件操作未完成，草稿仍可保留；请查看服务端恢复状态。",
         };
         ApiError {
@@ -820,6 +858,7 @@ async fn update_policy(
                             && old.token_sha256 == user.token_sha256
                             && old.grants == user.grants
                             && old.query_providers == user.query_providers
+                            && old.query_scopes == user.query_scopes
                             && old.sync_owner == user.sync_owner
                     })
                     .map_or(next.generation, |old| old.epoch);
@@ -901,6 +940,7 @@ pub(super) async fn serve(
     if !valid_id(&config.deployment)
         || !valid_digest(&config.admin_token_sha256)
         || config.files.len() > 256
+        || config.directories.len() > 64
     {
         return Err("Invalid deployment, administrator digest or resource budget".into());
     }
@@ -926,6 +966,7 @@ pub(super) async fn serve(
                         .is_none()))
             || file.title.len() > 500
             || file.inputs.len() > 64
+            || !query_scopes::valid_file(file)
         {
             return Err("Invalid configured resource".into());
         }
@@ -935,6 +976,15 @@ pub(super) async fn serve(
             .any(|i| !config.files.contains_key(i) || i == id)
         {
             return Err("Invalid configured dependency".into());
+        }
+    }
+    let mut references = BTreeSet::new();
+    for (id, directory) in &config.directories {
+        if !valid_id(id)
+            || !query_scopes::valid_directory(directory)
+            || !references.insert(directory.reference.clone())
+        {
+            return Err("Invalid configured directory scope".into());
         }
     }
     validate_users(&config, &config.users).map_err(|e| e.message)?;

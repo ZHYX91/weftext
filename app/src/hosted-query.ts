@@ -1,14 +1,14 @@
 import { action, diagnosticText, formatNativeValue, ui, type Cell } from "./data-panel";
 import { parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState, type QueryPlan } from "./query-panel";
-import { decodeHostedQuery, exactHostedDependencies, hostedDependencyMap, HostedQueryGate, type HostedProviderDescriptor, type HostedQueryDependencies, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow, type HostedSeriesPolicyDescriptor } from "./hosted-query-state";
+import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHostedScope, hostedDependencyMap, hostedScopeDraft, HostedQueryGate, type HostedProviderDescriptor, type HostedQueryDependencies, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow, type HostedSeriesPolicyDescriptor, type HostedScopeCatalog } from "./hosted-query-state";
 import { hostedCachePrefix } from "./hosted-state";
 import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
 
 type Product = "title" | "body" | "headings" | "types" | "self";
 type Resource = { resource: string; title: string; fields: string[]; products: Record<Product, boolean>; relations: string[]; definitions: boolean; definitionHistory: boolean };
 type Definition = { resource?: string; key: string; label: string; revision?: string; plan?: QueryPlan; binding?: unknown };
-type Catalog = { resources: Resource[]; definitions: Definition[]; providers?: HostedProviderDescriptor[]; seriesPolicies?: HostedSeriesPolicyDescriptor[]; coverage?: "complete" | "partial"; providerCoverage?: "complete" | "partial"; unavailableDefinitions?: { resource: string; status: "unavailable" }[]; unavailableProviders?: { id: string; status: "unavailable" }[]; unavailableSeriesPolicies?: { id: string; status: "unavailable" }[] };
-type Draft = HostedQueryDependencies & { resources: string[]; fields: string[]; products: Product[]; relations: string[]; plan: string; parameters: string; owner: string; definition: string; selection: "current" | "pinned"; revision: string; visual?: { where: string; columns: string; order: string } };
+type Catalog = HostedScopeCatalog & { resources: Resource[]; definitions: Definition[]; providers?: HostedProviderDescriptor[]; seriesPolicies?: HostedSeriesPolicyDescriptor[]; coverage?: "complete" | "partial"; providerCoverage?: "complete" | "partial"; unavailableDefinitions?: { resource: string; status: "unavailable" }[]; unavailableProviders?: { id: string; status: "unavailable" }[]; unavailableSeriesPolicies?: { id: string; status: "unavailable" }[] };
+type Draft = HostedQueryDependencies & { resources: string[]; fields: string[]; products: Product[]; relations: string[]; plan: string; parameters: string; owner: string; definition: string; selection: "current" | "pinned"; revision: string; scopeDraft?: QueryPlan["scope"]; visual?: { where: string; columns: string; order: string } };
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
 const productNames: Record<Product, string> = { title: "标题", body: "呈现正文", headings: "真实深标题", types: "笔记类型", self: "自身稳定身份" };
 const basePlan = (): QueryPlan => ({ scope: { descendants: true, lifecycle: "live" }, types: [], select: [], order: [] });
@@ -21,6 +21,7 @@ const text = (cell?: Cell) => !cell ? "未投影" : cell.state === "value" ? for
 export class HostedQuery {
   private epoch = 0;
   private key = "";
+  private inputRevision = 0;
   private draft = initial();
   private catalog: Catalog = { resources: [], definitions: [] };
   private gate = new HostedQueryGate();
@@ -31,26 +32,29 @@ export class HostedQuery {
   private message = ui("p", "hint");
   private controls = ui("section");
   private results = ui("section");
+  private scopeControls = ui("section");
   private definitions?: HostedQueryDefinitions;
   constructor(private host: HTMLElement, private request: Request, private open: (resource: string) => Promise<void>, private output: (queryId: string, metadata: { columns: string[]; rowCount: number; coverage: string }) => void, author?: HostedDefinitionHost, private dependenciesChanged?: () => void) { if (author) this.definitions = new HostedQueryDefinitions(request, author, () => this.draft.plan, resource => this.catalog.resources.some(item => item.resource === resource && item.definitions)); this.clear(false); }
   dependencies(): HostedQueryDependencies { return exactHostedDependencies(this.draft, this.catalog); }
+  get version() { return this.inputRevision; }
+  refuseResult(message: string) { this.gate.clear(); this.result = undefined; this.resultInput = undefined; this.message.textContent = message; this.renderResults(); }
   private dependencyBasis() { return JSON.stringify([this.draft.providers, this.draft.seriesPolicies, ...(["providers", "seriesPolicies"] as const).map(kind => Object.keys(this.draft[kind]).map(id => [id, this.catalog[kind]?.find(item => item.id === id)?.fingerprint ?? null]))]); }
   authorChanged(force = false) { void this.definitions?.authorChanged(force); }
   async refreshCatalog(): Promise<void> {
     const epoch = this.epoch;
-    try { const catalog = await this.request<Catalog>("query/catalog"); if (epoch !== this.epoch) return; const previous = this.dependencyBasis(); this.catalog = catalog; if (previous !== this.dependencyBasis()) { this.changed(); this.dependenciesChanged?.(); } this.renderControls(); }
+    try { const catalog = await this.request<Catalog>("query/catalog"); if (epoch !== this.epoch) return; const previous = this.dependencyBasis(), previousScope = JSON.stringify([this.catalog.directories, this.catalog.trash]); this.catalog = catalog; if (previous !== this.dependencyBasis() || previousScope !== JSON.stringify([catalog.directories, catalog.trash])) { this.changed(); this.dependenciesChanged?.(); } this.renderControls(); }
     catch (error) { if (epoch === this.epoch) this.message.textContent = error instanceof Error ? error.message : "当前定义目录刷新失败，原计划和冻结结果保留。"; }
   }
   clear(removeCache = true) {
-    this.epoch++; this.gate.clear(); this.definitions?.clear(); this.busy = false; this.result = undefined; this.resultInput = undefined; this.draft = initial(); this.catalog = { resources: [], definitions: [] }; this.unreadable = undefined;
-    this.host.replaceChildren(); this.host.hidden = true; this.controls.replaceChildren(); this.results.replaceChildren(); this.message.textContent = ""; this.key = "";
+    this.epoch++; this.inputRevision++; this.gate.clear(); this.definitions?.clear(); this.busy = false; this.result = undefined; this.resultInput = undefined; this.draft = initial(); this.catalog = { resources: [], definitions: [] }; this.unreadable = undefined;
+    this.host.replaceChildren(); this.host.hidden = true; this.controls.replaceChildren(); this.results.replaceChildren(); this.scopeControls.replaceChildren(); this.message.textContent = ""; this.key = "";
     this.dependenciesChanged?.();
     if (removeCache) for (const key of Object.keys(sessionStorage)) if (key.startsWith("weftext-hosted-query:")) sessionStorage.removeItem(key); this.key = "";
   }
   async connect(deployment: string, actor: string, generation: number) {
     this.clear(false); const epoch = this.epoch; this.key = hostedCachePrefix("query", deployment, actor, generation) + "controls";
     let raw: string | null = null;
-    try { raw = sessionStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw) as Draft; if (!Array.isArray(parsed.resources) || !Array.isArray(parsed.fields) || !Array.isArray(parsed.products) || !Array.isArray(parsed.relations) || typeof parsed.plan !== "string" || typeof parsed.parameters !== "string" || !["current", "pinned"].includes(parsed.selection)) throw new Error(); this.draft = { ...parsed, providers: hostedDependencyMap(parsed.providers), seriesPolicies: hostedDependencyMap(parsed.seriesPolicies) }; } }
+    try { raw = sessionStorage.getItem(this.key); if (raw) { const parsed = JSON.parse(raw) as Draft; if (!Array.isArray(parsed.resources) || !Array.isArray(parsed.fields) || !Array.isArray(parsed.products) || !Array.isArray(parsed.relations) || typeof parsed.plan !== "string" || typeof parsed.parameters !== "string" || !["current", "pinned"].includes(parsed.selection)) throw new Error(); this.draft = { ...parsed, providers: hostedDependencyMap(parsed.providers), seriesPolicies: hostedDependencyMap(parsed.seriesPolicies), scopeDraft: hostedScopeDraft(parsed.scopeDraft) }; } }
     catch { this.unreadable = raw ?? ""; }
     this.host.hidden = false; this.host.replaceChildren(ui("h2", "", "托管高级 Query"), ui("p", "hint", "字段、正文产品、关系与保存定义分别授权。这里编辑临时计划；运行和结果导航均不保存正文。"), this.message, this.controls, this.results);
     this.renderControls();
@@ -65,7 +69,7 @@ export class HostedQuery {
   }
   private fingerprint() { return JSON.stringify(this.draft); }
   private persist() { if (!this.key || this.unreadable !== undefined) return; try { sessionStorage.setItem(this.key, JSON.stringify(this.draft)); } catch { this.message.textContent = "无法保留查询控件输入，请先复制计划与参数；查询不会修改正文。"; } }
-  private changed() { this.gate.changed(); if (this.result) this.result = { ...this.result, superseded: true }; this.message.textContent = this.busy ? "输入已更新，旧请求不会替换新计划或参数。原结果若保留，会标明对应先前输入。" : "临时查询输入已更新，尚未运行当前计划；正文保持保留。"; this.persist(); this.renderResults(); }
+  private changed() { this.inputRevision++; this.gate.changed(); if (this.result) this.result = { ...this.result, superseded: true }; this.message.textContent = this.busy ? "输入已更新，旧请求不会替换新计划或参数。原结果若保留，会标明对应先前输入。" : "临时查询输入已更新，尚未运行当前计划；正文保持保留。"; this.persist(); this.renderResults(); }
   private writePlan(plan: QueryPlan) { this.draft.plan = JSON.stringify(plan, null, 2); this.draft.visual = undefined; this.changed(); this.renderControls(); }
   private checkboxes<T extends string>(legend: string, values: T[], chosen: T[], update: (items: T[]) => void) {
     const group = ui("fieldset"); group.append(ui("legend", "", legend));
@@ -80,6 +84,26 @@ export class HostedQuery {
       const detail = kind === "providers" ? (() => { const provider = item as HostedProviderDescriptor; return `${provider.implementation.id} · ABI ${provider.implementation.abi} · ${provider.data.kind}${provider.data.key ? ` ${provider.data.key}` : ""}${provider.data.version ? ` / ${provider.data.version}` : ""} · ${(provider.queryNames ?? []).join("、")}`; })() : (() => { const policy = item as HostedSeriesPolicyDescriptor; return `${policy.key} · ${policy.kinds.join("、")} · ${policy.rule} · calendar ${policy.calendar ?? "不可用 / 未获权"} · zone ${policy.zone ?? "不可用 / 未获权"}${policy.status === "unavailable" ? " · 政策依赖不可用" : ""}；相关 Provider 仍须分别选择。`; })(); group.append(ui("p", "hint", detail)); }
     for (const [id, fingerprint] of Object.entries(selection)) { const item = descriptors.find(item => item.id === id); if (!item || item.fingerprint !== fingerprint) group.append(ui("p", "hint", `保留的原${title}选择 ${id}（${fingerprint}）当前不可用或已改版；请取消原选择或明确选择目录中的新版本，不会自动更新。`), action(`移除原${title}选择 ${id}`, () => update(id))); }
     if (!descriptors.length) group.append(ui("p", "hint", `本次没有可选的${title}。`)); return group;
+  }
+  private renderScopes() {
+    this.scopeControls.replaceChildren(); let parsed: QueryPlan | undefined; try { parsed = parseQueryPlan(this.draft.plan); } catch { /* Preserve incomplete JSON verbatim. */ }
+    const current = this.draft.scopeDraft ?? parsed?.scope ?? basePlan().scope, directories = this.catalog.directories ?? [], group = ui("fieldset"); group.append(ui("legend", "", "顶层查询范围"));
+    if (this.catalog.scopeCoverage === "partial") group.append(ui("p", "hint", "获权范围目录部分可用；不可用项保留，不代表完整空范围。"));
+    const options: [string, string][] = [["", "全部明确获权对象（无目录限制）"], ...directories.map(item => [item.reference, `${item.title || item.id} · ${item.kind === "node" ? "笔记目录" : "管理目录"} · ${item.lifecycle ?? "live"}${item.status === "unavailable" ? " · 不可用" : ""}`] as [string, string])];
+    if (current.directory && !options.some(([value]) => value === current.directory)) options.push([current.directory, `保留原范围 ${current.directory}（不按同名替换）`]);
+    const directory = select("托管查询目录范围", options, current.directory ?? ""), descendants = ui("input"), lifecycle = select("托管查询生命周期", [["live", "在库笔记"], ["trash", "回收站（只读）"]], current.lifecycle); descendants.type = "checkbox"; descendants.checked = current.descendants; descendants.setAttribute("aria-label", "托管查询包含子目录");
+    for (const option of directory.options) { const item = directories.find(item => item.reference === option.value); if (item) option.disabled = item.status !== "available" || item.lifecycle === "trash" && this.catalog.trash !== true; }
+    lifecycle.options[1].disabled = this.catalog.trash !== true;
+    const update = () => { this.draft.scopeDraft = { ...(directory.value ? { directory: directory.value } : {}), descendants: descendants.checked, lifecycle: lifecycle.value as "live" | "trash" }; this.changed(); this.renderScopes(); };
+    directory.onchange = update; descendants.onchange = update; lifecycle.onchange = update;
+    const label = ui("label", "data-label", "包含子目录"); label.prepend(descendants); group.append(directory, label, lifecycle);
+    try { exactHostedScope(current, this.catalog); } catch (error) { group.append(ui("p", "hint", error instanceof Error ? error.message : String(error))); }
+    if (this.draft.scopeDraft) group.append(ui("p", "hint", "范围控件尚未应用到临时计划；运行已暂停。原 JSON 与嵌套范围保持保留。"));
+    if (!parsed) group.append(ui("p", "hint", "完整计划 JSON 尚未有效；范围输入独立保留，应用不会替换或补全原 JSON。"));
+    if (parsed?.advanced?.call || parsed?.advanced?.unionAll) group.append(ui("p", "hint", "此计划的外层范围须保持默认；请在实际扫描分支或保存定义内设置范围，不会自动改写嵌套计划。"));
+    const apply = action("应用范围到临时计划", () => { try { exactHostedScope(current, this.catalog); const plan = applyHostedScope(this.draft.plan, current); this.draft.plan = plan; delete this.draft.scopeDraft; this.changed(); this.renderControls(); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } });
+    const cancel = action("放弃未应用范围输入", () => { delete this.draft.scopeDraft; this.changed(); this.renderControls(); }); cancel.disabled = !this.draft.scopeDraft;
+    group.append(apply, cancel, ui("p", "hint", "只修改最外层 scope，不改 union、related 或保存定义调用中的嵌套范围。目录、回收站与字段/正文分别授权；结果不授恢复、删除或写入。")); this.scopeControls.append(group);
   }
   private renderControls() {
     const disclosures = new Map([...this.controls.querySelectorAll<HTMLDetailsElement>("details[data-query-disclosure]")].map(item => [item.dataset.queryDisclosure, item.open]));
@@ -100,7 +124,7 @@ export class HostedQuery {
     this.controls.append(this.checkboxes("获权关系", [...new Set(selected.flatMap(item => item.relations))], draft.relations, items => { draft.relations = items; this.changed(); this.renderControls(); }));
     this.controls.append(this.dependencyControls("providers"), this.dependencyControls("seriesPolicies"), ui("p", "hint", "Provider 与系列政策仅按本次准确指纹显式选择，不自动全选。这些选择也用于当前正文内嵌查询；保存定义的 current / pinned 选择仍独立，不会固定或改写本次 Provider 数据。"));
     const refresh = action("刷新获权 Provider 与查询目录", () => this.refreshCatalog()); refresh.disabled = this.busy; this.controls.append(refresh);
-    const plan = input("托管完整查询计划（JSON）", draft.plan, true), parameters = input("托管查询参数（原生值 JSON）", draft.parameters, true); plan.control.oninput = () => { draft.plan = plan.control.value; this.changed(); }; parameters.control.oninput = () => { draft.parameters = parameters.control.value; this.changed(); }; this.controls.append(plan.host, parameters.host);
+    const plan = input("托管完整查询计划（JSON）", draft.plan, true), parameters = input("托管查询参数（原生值 JSON）", draft.parameters, true); plan.control.oninput = () => { draft.plan = plan.control.value; this.changed(); this.renderScopes(); }; parameters.control.oninput = () => { draft.parameters = parameters.control.value; this.changed(); }; this.controls.append(plan.host, parameters.host); this.renderScopes(); this.controls.append(this.scopeControls);
     const visual = ui("details"); visual.dataset.queryDisclosure = "visual"; visual.append(ui("summary", "", "可视化条件与高级组合"));
     let parsed: QueryPlan | undefined; try { parsed = parseQueryPlan(draft.plan); } catch { /* Invalid source is kept verbatim. */ }
     const where = input("托管可视条件（CEL）", draft.visual?.where ?? parsed?.where ?? ""), columns = input("托管投影列（JSON）", draft.visual?.columns ?? JSON.stringify(parsed?.select ?? [], null, 2), true), order = input("托管排序（JSON）", draft.visual?.order ?? JSON.stringify(parsed?.order ?? [], null, 2), true);
@@ -144,12 +168,13 @@ export class HostedQuery {
   }
   private async run() {
     if (this.busy) return; const epoch = this.epoch, fingerprint = this.fingerprint(), draft = structuredClone(this.draft), token = this.gate.begin(fingerprint); this.busy = true; this.message.textContent = "正在按明确获权输入运行；等待期间的新计划和参数仍可编辑。"; this.renderControls();
-    try { if (draft.resources.some(resource => !this.catalog.resources.some(item => item.resource === resource))) throw new Error("查询对象授权已变化，原输入保留，请重新选择。");
+    try { if (draft.scopeDraft) throw new Error("范围控件尚未应用到临时计划，请明确应用或放弃原范围输入后再运行。"); if (draft.resources.some(resource => !this.catalog.resources.some(item => item.resource === resource))) throw new Error("查询对象授权已变化，原输入保留，请重新选择。");
       for (const resource of draft.resources) { const scope = this.catalog.resources.find(item => item.resource === resource)!;
         if (draft.fields.some(field => !scope.fields.includes(field)) || draft.products.some(product => !scope.products[product]) || draft.relations.some(relation => !scope.relations.includes(relation))) throw new Error(`所选对象 ${resource} 没有全部请求字段、产品或关系的独立权限；请调整明确范围，原输入保留。`);
       }
       const dependencies = exactHostedDependencies(draft, this.catalog);
-      const response = await this.request<HostedQueryResponse>("query", { resources: draft.resources, fields: draft.fields, products: draft.products, relations: draft.relations, ...dependencies, parameters: parseQueryParameters(draft.parameters), plan: parseQueryPlan(draft.plan) });
+      const plan = parseQueryPlan(draft.plan); exactHostedScope(plan.scope, this.catalog);
+      const response = await this.request<HostedQueryResponse>("query", { resources: draft.resources, fields: draft.fields, products: draft.products, relations: draft.relations, ...dependencies, parameters: parseQueryParameters(draft.parameters), plan });
       if (!this.gate.current(token, this.fingerprint())) return; this.result = decodeHostedQuery(response); this.resultInput = fingerprint; this.message.textContent = "已取得本次冻结结果；定义和个人正文草稿均未保存。";
     } catch (error) { if (this.gate.current(token, this.fingerprint())) { if (this.result) this.result = { ...this.result, superseded: true }; this.message.textContent = error instanceof Error ? error.message : String(error); } }
     finally { if (epoch === this.epoch) { this.busy = false; this.renderControls(); this.renderResults(); } }
@@ -162,7 +187,7 @@ export class HostedQuery {
     for (const diagnostic of result.diagnostics) this.results.append(ui("p", "hint", diagnosticText(diagnostic)));
     const table = ui("table"); table.setAttribute("aria-label", "托管高级查询冻结结果"); const head = ui("tr"); for (const column of result.columns) head.append(ui("th", "", column)); head.append(ui("th", "", "独立获权导航")); table.append(head);
     for (const row of result.rows) { const line = ui("tr"); for (const column of result.columns) line.append(ui("td", `cell-${row.cells[column]?.state ?? "unprojected"}`, text(row.cells[column]))); const target = ui("td"); if (row.canOpen === true && row.resource) { const open = action("打开获权正文", () => this.openRow(row)); open.disabled = !current; target.append(open); } else target.textContent = "无正文读取资格 / 派生行"; line.append(target); table.append(line); }
-    this.results.append(table); if (!result.rows.length) this.results.append(ui("p", "hint", current && result.coverage === "complete" && result.freshness === "current" && !result.limited ? "本次明确范围内的完整空结果。" : "已知范围没有结果，不能断言完整为空。"));
+    this.results.append(table); if (result.rows.some(row => row.lifecycle === "trash")) this.results.append(ui("p", "hint", "本次含回收站来源，只读结果不提供恢复、删除或正文写入资格。")); if (!result.rows.length) this.results.append(ui("p", "hint", current && result.coverage === "complete" && result.freshness === "current" && !result.limited ? "本次明确范围内的完整空结果。" : "已知范围没有结果，不能断言完整为空。"));
     const output = action("将原冻结查询交给 Office", () => this.output(result.queryId, { columns: result.columns, rowCount: result.rows.length, coverage: result.coverage })); output.disabled = !current || this.busy; this.results.append(output);
   }
   private async openRow(row: HostedQueryRow) { if (row.canOpen !== true || !row.resource || !this.result || this.result.superseded || this.resultInput !== this.fingerprint()) return; try { await this.open(row.resource); } catch (error) { this.message.textContent = error instanceof Error ? error.message : String(error); } }

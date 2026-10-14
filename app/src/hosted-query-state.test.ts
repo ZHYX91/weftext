@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeHostedQuery, exactHostedDependencies, hostedDependencyMap, HostedQueryGate } from "./hosted-query-state";
+import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHostedScope, hostedDependencyMap, hostedScopeDraft, HostedQueryGate } from "./hosted-query-state";
 
 test("frozen query preserves zero-row column order and keeps partial/stale/diagnostics distinct", () => {
   const input = { queryId: "original", columns: ["second", "first"], result: { rows: [], coverage: "partial" as const, freshness: "stale" as const, diagnostics: [{ message: "dependency unavailable" }], totalKnown: 0, limited: false } };
@@ -9,6 +9,27 @@ test("frozen query preserves zero-row column order and keeps partial/stale/diagn
   assert.throws(() => decodeHostedQuery({ ...input, columns: ["first", "first"] }));
   assert.throws(() => decodeHostedQuery({ ...input, result: { ...input.result, queryId: "replacement" } }));
   assert.throws(() => decodeHostedQuery({ ...input, result: { ...input.result, columns: ["first", "second"] } }));
+});
+test("explicit top-level scope application preserves every nested producer and refuses incomplete JSON without replacing it", () => {
+  const nested = { scope: { directory: "old-native-ref", descendants: false, lifecycle: "trash" }, select: [{ name: "value", expr: "status" }] }, original = { select: [{ name: "status", expr: "status" }], advanced: { related: { relation: "parents", from: { advanced: { unionAll: [nested, nested] } } } } };
+  const next = JSON.parse(applyHostedScope(JSON.stringify(original), { directory: "weftext-dir://workspace/directory", descendants: true, lifecycle: "live" })); assert.deepEqual(next.advanced, original.advanced); assert.deepEqual(next.select, original.select); assert.equal(next.types, undefined); assert.equal(next.scope.directory, "weftext-dir://workspace/directory");
+  assert.equal(JSON.parse(applyHostedScope(JSON.stringify(next), { descendants: false, lifecycle: "live" })).scope.directory, undefined);
+  for (const input of ['{ 尚未完成😀', '{"scope":{"lifecycle":"trash"},"select":']) assert.throws(() => applyHostedScope(input, { descendants: true, lifecycle: "live" }));
+});
+test("terminal calls and union producers keep default outer scope; actual nested branch scopes are never guessed or rewritten", () => {
+  for (const advanced of [{ call: { owner: "owner", selection: { mode: "current", key: "key" } } }, { unionAll: [{ scope: { directory: "branch", descendants: false, lifecycle: "trash" } }] }]) {
+    const source = JSON.stringify({ advanced }); for (const scope of [{ directory: "other", descendants: true, lifecycle: "live" as const }, { descendants: false, lifecycle: "live" as const }, { descendants: true, lifecycle: "trash" as const }]) assert.throws(() => applyHostedScope(source, scope), /实际扫描分支/);
+    assert.deepEqual(JSON.parse(applyHostedScope(source, { descendants: true, lifecycle: "live" })).advanced, advanced);
+  }
+});
+test("directory and Trash scopes require their independent exact catalog eligibility and never follow a same-id replacement", () => {
+  const directory = { id: "area", title: "获权目录", reference: "native-old-ref", kind: "directory" as const, status: "available" as const }, catalog = { directories: [directory], trash: false };
+  exactHostedScope({ directory: "native-old-ref", descendants: true, lifecycle: "live" }, catalog); exactHostedScope({ descendants: true, lifecycle: "live" }, {});
+  assert.throws(() => exactHostedScope({ directory: "native-old-ref", descendants: true, lifecycle: "live" }, { ...catalog, directories: [{ ...directory, reference: "native-new-ref" }] }));
+  assert.throws(() => exactHostedScope({ directory: "area", descendants: true, lifecycle: "live" }, { ...catalog, directories: [{ ...directory, status: "unavailable" }] }));
+  assert.throws(() => exactHostedScope({ descendants: true, lifecycle: "trash" }, catalog)); assert.throws(() => exactHostedScope({ directory: "area", descendants: true, lifecycle: "trash" }, { ...catalog, trash: true }));
+  exactHostedScope({ directory: "area", descendants: true, lifecycle: "trash" }, { trash: true, directories: [{ ...directory, lifecycle: "trash" }] });
+  for (const invalid of [null, [], { descendants: true }, { descendants: true, lifecycle: "live", hidden: "path" }]) assert.throws(() => hostedScopeDraft(invalid));
 });
 test("query row lineage cannot fabricate navigation or an undeclared output column", () => {
   const input = { queryId: "original", columns: ["status"], result: { rows: [{ key: "row", readOnly: true, canOpen: true, cells: { status: { state: "value" as const, value: { kind: "text" as const, value: "open" } } } }], coverage: "complete" as const, freshness: "current" as const, diagnostics: [], totalKnown: 1, limited: false } };
