@@ -173,45 +173,14 @@ async fn render(
     let check = auth.clone();
     let (input, dependencies) = locked(&state, move |inner| {
         let (actor, session, _) = qualify(inner, &check, &captured, true, false)?;
-        let file = &inner.config.files[&session.resource];
-        let mut files = inner.files(&actor, &file.inputs)?;
-        let dependencies = files
-            .iter()
-            .map(|(p, b)| (p.clone(), digest(b)))
-            .collect::<BTreeMap<_, _>>();
-        files.insert(file.path.clone(), captured.source.into_bytes());
-        Ok((
-            WorkerRequest {
-                source: req_source(&files, &file.path)?,
-                path: file.path.clone().into(),
-                root: inner.config.root.clone(),
-                paged: false,
-                style: None,
-                frozen_files: Some(
-                    files
-                        .into_iter()
-                        .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
-                        .collect(),
-                ),
-            },
-            dependencies,
-        ))
+        freeze(inner, &actor, &session.resource, &captured.source)
     })
     .await?;
-    let _permit = state.render_gate.try_acquire().map_err(|_| {
-        ApiError::new(
-            StatusCode::TOO_MANY_REQUESTS,
-            "busy",
-            "预览正在运行，请稍后再试",
-        )
-    })?;
-    let output = render_worker(input).await;
+    let output = compile_frozen(&state, input).await;
     locked(&state, move |inner| {
         let (actor, session, rights) = qualify(inner, &auth, &req, false, false)?;
-        let file = &inner.config.files[&session.resource];
-        let current = inner.files(&actor, &file.inputs)?.iter().map(|(p,b)|(p.clone(),digest(b))).collect::<BTreeMap<_,_>>();
-        if current != dependencies { return Err(ApiError::new(StatusCode::CONFLICT,"staleEnvironment","获权依赖已变化，请重新预览；草稿仍保留")); }
-        let mut output = output.map_err(|_| ApiError::new(StatusCode::UNPROCESSABLE_ENTITY,"previewUnavailable","预览未完成，草稿仍保留"))?;
+        validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+        let mut output = output?;
         scrub_tree(&mut output["tree"], &session.resource, rights.write);
         let mut info = json!({"syntaxTokens":output["sourceInfo"]["syntaxTokens"],"syntaxValid":output["sourceInfo"]["syntaxValid"],"bodyInsertion":output["sourceInfo"]["bodyInsertion"]});
         if !rights.write { readonly(&mut info); }
@@ -220,6 +189,74 @@ async fn render(
             "message":if output["ok"] == true { "" } else { "无法在当前获权依赖内编译；草稿保留，可在源码入口修正" }})))
     }).await
 }
-fn req_source(files: &BTreeMap<String, Vec<u8>>, path: &str) -> Result<String, ApiError> {
-    String::from_utf8(files[path].clone()).map_err(|_| ApiError::bad("正文须为 UTF-8"))
+/// Internal compilation capability shared by authorized writing and review.
+pub(super) fn freeze(
+    inner: &HostedInner,
+    actor: &str,
+    resource: &str,
+    source: &str,
+) -> Result<(WorkerRequest, BTreeMap<String, String>), ApiError> {
+    inner.rights(actor, resource)?;
+    writing_api::validate_source(source, None)?;
+    let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
+    let mut files = inner.files(actor, &file.inputs)?;
+    let dependencies = files.iter().map(|(p, b)| (p.clone(), digest(b))).collect();
+    files.insert(file.path.clone(), source.as_bytes().to_vec());
+    Ok((
+        WorkerRequest {
+            source: source.into(),
+            path: file.path.clone().into(),
+            root: inner.config.root.clone(),
+            paged: false,
+            style: None,
+            frozen_files: Some(
+                files
+                    .into_iter()
+                    .map(|(p, b)| (p, base64::engine::general_purpose::STANDARD.encode(b)))
+                    .collect(),
+            ),
+        },
+        dependencies,
+    ))
+}
+pub(super) fn validate_inputs(
+    inner: &HostedInner,
+    actor: &str,
+    resource: &str,
+    expected: &BTreeMap<String, String>,
+) -> Result<(), ApiError> {
+    inner.rights(actor, resource)?;
+    let file = inner.config.files.get(resource).ok_or_else(unavailable)?;
+    let current = inner
+        .files(actor, &file.inputs)?
+        .iter()
+        .map(|(p, b)| (p.clone(), digest(b)))
+        .collect::<BTreeMap<_, _>>();
+    if &current != expected {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "staleEnvironment",
+            "获权依赖已变化，请重新检查。",
+        ));
+    }
+    Ok(())
+}
+pub(super) async fn compile_frozen(
+    state: &HostedState,
+    input: WorkerRequest,
+) -> Result<Value, ApiError> {
+    let _permit = state.render_gate.try_acquire().map_err(|_| {
+        ApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "busy",
+            "预览正在运行，请稍后再试",
+        )
+    })?;
+    render_worker(input).await.map_err(|_| {
+        ApiError::new(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "previewUnavailable",
+            "无法在获权依赖内完成预览",
+        )
+    })
 }

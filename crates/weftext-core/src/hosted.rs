@@ -3,6 +3,9 @@
 //! configured resources before calling it, and again before disclosing results.
 use super::*;
 use std::collections::BTreeMap;
+#[path = "hosted_feature.rs"]
+mod feature;
+pub use feature::ActorFeatureStatus;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -149,6 +152,8 @@ struct ActorOperation {
     cancelled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     field: Option<FieldOperation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    feature: Option<feature::FeatureOperation>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -294,6 +299,12 @@ impl Core {
             Err(e) => return Err(e.into()),
         };
         let record: ActorOperation = serde_json::from_slice(&bytes)?;
+        if record.feature.is_some() {
+            return Err(CoreError::new(
+                "operationConflict",
+                "This operation belongs to a reviewed feature proposal",
+            ));
+        }
         if self.actor.as_ref() != Some(&record.actor) {
             return Err(CoreError::new(
                 "invalidActor",
@@ -327,6 +338,7 @@ impl Core {
                 core_operation_id: fresh(),
                 cancelled: false,
                 field: None,
+                feature: None,
             },
             Err(e) => return Err(e.into()),
         };
@@ -387,6 +399,7 @@ impl Core {
                     core_operation_id: fresh(),
                     cancelled: false,
                     field: None,
+                    feature: None,
                 };
                 journal::private_create(&path, &serde_json::to_vec(&record)?)?;
                 record
@@ -506,6 +519,7 @@ impl Core {
                 field_id: field_id.into(),
                 cell,
             }),
+            feature: None,
         };
         journal::private_create(&path, &serde_json::to_vec(&record)?)?;
         self.save(SaveRequest {
@@ -538,6 +552,7 @@ impl Core {
                     field_id: field_id.into(),
                     cell: serde_json::Value::Null,
                 }),
+                feature: None,
             };
             journal::private_create(
                 &self.actor_record(operation)?,

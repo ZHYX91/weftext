@@ -3,6 +3,7 @@
 use super::*;
 mod editor;
 mod fields;
+mod review;
 mod sync_transport;
 use axum::Extension;
 use base64::Engine as _;
@@ -36,6 +37,8 @@ struct Rights {
     download: bool,
     #[serde(default)]
     fields: BTreeMap<String, FieldRights>,
+    #[serde(default)]
+    annotations: review::ReviewRights,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -96,6 +99,7 @@ struct HostedInner {
     sync: sync_transport::Store,
     editor_versions: HashMap<String, writing_api::EditorVersion>,
     fields: fields::Store,
+    review: review::Store,
 }
 #[derive(Clone)]
 struct HostedSession {
@@ -211,6 +215,17 @@ fn validate_users(config: &Config, users: &BTreeMap<String, User>) -> Result<(),
             return Err(ApiError::bad("用户标识或唯一凭据摘要无效"));
         }
         for (resource, rights) in &user.grants {
+            if (rights.annotations.write && !rights.annotations.read)
+                || (rights.annotations.accept
+                    && (!rights.annotations.write || !rights.annotations.target || !rights.write))
+                || (rights.annotations.proofread && (!rights.read || !rights.annotations.target))
+                || (rights.annotations.write
+                    && !config.files.get(resource).is_some_and(|f| f.editable))
+            {
+                return Err(ApiError::bad(
+                    "批注写入须具备批注读取权；校对和应用建议须具备各自正文与目标权限",
+                ));
+            }
             if rights.fields.len() > 64
                 || rights.fields.iter().any(|(id, field)| {
                     id.is_empty()
@@ -830,6 +845,7 @@ async fn update_policy(
             });
             sync_transport::expire_revoked(inner);
             fields::expire_revoked(inner);
+            review::expire_revoked(inner);
             Ok(json!({"generation":inner.policy.generation,"status":"applied"}))
         })
         .await?,
@@ -979,6 +995,7 @@ pub(super) async fn serve(
             sync: sync_transport::Store::default(),
             editor_versions: HashMap::new(),
             fields: fields::Store::default(),
+            review: review::Store::default(),
         })),
         origin: origin.clone().into(),
         host: host.into(),
@@ -988,6 +1005,7 @@ pub(super) async fn serve(
         .merge(sync_transport::router())
         .merge(editor::router())
         .merge(fields::router())
+        .merge(review::router())
         .route("/api/hosted/me", get(me))
         .route("/api/hosted/documents", get(list))
         .route("/api/hosted/open", post(open))

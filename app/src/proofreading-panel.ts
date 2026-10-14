@@ -4,7 +4,7 @@ import { sameKnowledgeBasis } from "./knowledge-state";
 export interface ProofreadRule { id: string; version: string; category: string; text: string; message: string; replacement: string | null }
 export interface ProofreadOptions { characters: boolean; typos: boolean; pairs: boolean; sensitive: boolean; rules: ProofreadRule[]; allowlist: string[]; selection: [number, number] | null }
 interface Finding { id: string; category: string; ruleId: string; excerpt: string; message: string; replacement: string | null; executable: boolean; sourceRange: { from: number; to: number; utf16From: number; utf16To: number } | null }
-export interface ProofreadResult { coverage: string; findings: Finding[]; warnings: string[]; checkedCharacters: number; existing: string[] }
+export interface ProofreadResult { coverage: string; findings: Finding[]; warnings: string[]; checkedCharacters: number; existing: string[]; scanId?: string }
 interface Host { context(): KnowledgeContext | null; scan(context: KnowledgeContext, options: ProofreadOptions): Promise<ProofreadResult>; perform(label: string, intent: KnowledgeIntent): Promise<boolean>; selectSource?(from: number, to: number): void; beforeAction?(): Promise<void>; notify(message: string): void }
 const categories: Record<string, string> = { character: "错误字符／符号", typo: "错别字", pair: "成对符号", sensitive: "敏感词" };
 export function decodeProofreadingOptions(input: unknown): ProofreadOptions {
@@ -38,10 +38,11 @@ export class ProofreadingPanel {
   private container: HTMLElement | null = null;
   private message = "";
   private ruleDraft = { category: "typo", text: "", replacement: "", message: "", replace: true };
-  constructor(private host: Host) {
-    try { const saved = localStorage.getItem("weftext-proofread-options-v1"); if (saved) this.options = decodeProofreadingOptions(JSON.parse(saved)); } catch { /* Keep independent defaults. */ }
+  constructor(private host: Host, private preferences: { storageKey: string | null; title: string } = { storageKey: "weftext-proofread-options-v1", title: "本地校对" }) {
+    try { const saved = preferences.storageKey ? localStorage.getItem(preferences.storageKey) : null; if (saved) this.options = decodeProofreadingOptions(JSON.parse(saved)); } catch { /* Keep independent defaults. */ }
   }
-  private save(): void { this.result = null; this.generation++; try { localStorage.setItem("weftext-proofread-options-v1", JSON.stringify({ ...this.options, selection: null })); } catch { this.message = "规则暂存在本次会话，无法保存本机设置。"; } }
+  private save(): void { this.result = null; this.generation++; try { if (this.preferences.storageKey) localStorage.setItem(this.preferences.storageKey, JSON.stringify({ ...this.options, selection: null })); } catch { this.message = "规则暂存在本次会话，无法保存本机设置。"; } }
+  dispose(): void { this.generation++; this.container = null; this.result = null; this.basis = null; }
   render(container: HTMLElement): void { this.container = container; this.draw(); }
   private async run(): Promise<void> {
     if (this.busy) return;
@@ -71,7 +72,7 @@ export class ProofreadingPanel {
     if (!findings.length || findings.length > 200) { this.message = "每批请选择 1 至 200 条可定位结果。"; this.draw(); return; }
     const result = this.result; this.busy = true;
     try {
-      const ok = await this.host.perform(ignore ? "忽略所选校对结果并保存记录" : "批量加入校对批注", { kind: "annotationProofread", options: this.checkedOptions, findings, ignore });
+      const ok = await this.host.perform(ignore ? "忽略所选校对结果并保存记录" : "批量加入校对批注", { kind: "annotationProofread", options: this.checkedOptions, findings, ignore, ...(result.scanId ? { scanId: result.scanId } : {}) });
       if (ok && this.result === result) { result.existing.push(...findings); for (const id of findings) this.selected.delete(id); this.message = ignore ? "忽略记录已保存，可在已解决批注中查看。" : "所选结果已加入批注，可在批注页审阅和回复。"; }
     } catch (error) { this.message = error instanceof Error ? error.message : String(error); }
     finally { this.busy = false; }
@@ -79,13 +80,13 @@ export class ProofreadingPanel {
   }
   private draw(): void {
     const root = this.container; if (!root) return; root.replaceChildren();
-    root.append(el("h3", "本地校对"), el("p", "校对可见正文；不会检查代码、公式和链接内容，也不会自动修改文字。"));
+    root.append(el("h3", this.preferences.title), el("p", "校对可见正文；不会检查代码、公式和链接内容，也不会自动修改文字。"));
     for (const [key, label] of [["characters", categories.character], ["typos", categories.typo], ["pairs", categories.pair], ["sensitive", categories.sensitive]] as const) {
       const check = el("input"); check.type = "checkbox"; check.checked = this.options[key]; check.disabled = this.busy;
       check.onchange = () => { this.options[key] = check.checked; this.save(); }; root.append(field(label, check));
     }
     const settings = el("details"); settings.append(el("summary", `词典与白名单（${this.options.rules.length} 条规则）`));
-    settings.append(el("p", "词典按准确词条匹配；未配置时会提示。设置暂存当前浏览器地址，重启或换地址前请导出规则文件，以便重新导入。"));
+    settings.append(el("p", this.preferences.storageKey ? "词典按准确词条匹配；未配置时会提示。设置暂存当前浏览器地址，重启或换地址前请导出规则文件，以便重新导入。" : "词典按准确词条匹配；规则仅在本次连接保留，可导出规则文件后重新导入。"));
     const file = el("input"); file.type = "file"; file.accept = ".json,application/json";
     file.onchange = () => { void (async () => { try { const input = file.files?.[0]; if (!input) return; if (input.size > 8 * 1024 * 1024) throw new Error("规则文件超过 8 MiB。"); const options = decodeProofreadingOptions(JSON.parse(await input.text())); this.options = options; this.save(); this.message = `已载入 ${options.rules.length} 条规则和 ${options.allowlist.length} 条白名单。`; } catch (error) { this.message = error instanceof Error ? error.message : String(error); } this.draw(); })(); };
     settings.append(field("导入规则 JSON（替换当前规则与白名单）", file), button("导出规则 JSON", () => { const url = URL.createObjectURL(new Blob([JSON.stringify({ ...this.options, selection: null }, null, 2)], { type: "application/json" })); const link = el("a"); link.href = url; link.download = "weftext-proofreading.json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); }));

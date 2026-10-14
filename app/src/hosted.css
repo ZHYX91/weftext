@@ -5,3 +5,10 @@
 #fields fieldset { border: 1px solid #ccd6d3; }
 #fields table { border-collapse: collapse; width: 100%; }
 #fields td, #fields th { padding: .5rem; border-bottom: 1px solid #ccd6d3; text-align: left; }
+#review { border-top: 1px solid #ccd6d3; margin-top: 2rem; padding-top: 1rem; }
+#review textarea { min-height: 4rem; font-family: inherit; padding: .7rem; }
+#review select, #review input { max-width: 100%; margin: .4rem; padding: .4rem; }
+#review fieldset { border: 1px solid #ccd6d3; margin: .6rem 0; }
+#review button { margin: .2rem; }
+#review article { border: 1px solid #ccd6d3; margin-top: .7rem; padding: 1rem; }
+#review .review-pending { background: #faf5e8; padding: 1rem; border-left: 4px solid #a6752c; }

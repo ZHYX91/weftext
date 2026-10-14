@@ -36,6 +36,9 @@ export class HostedEditor {
     this.message.setAttribute("role", "status");
   }
   get value(): string { return this.writing?.recoverySource() ?? this.editor?.source ?? ""; }
+  get serial(): number { return this.editor?.generation ?? 0; }
+  get selection(): { from: number; to: number } | undefined { return this.editor?.selection; }
+  select(from: number, to: number): void { this.editor?.select(from, to); }
   set disabled(value: boolean) { this.editor?.readOnly(value || this.mode === "read"); if (this.blocked === value) return; this.blocked = value; this.paint(); }
   async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
   open(sessionId: string, resource: string, source: string): void {

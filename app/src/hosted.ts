@@ -1,5 +1,6 @@
 import "./hosted.css";
 import { HostedFields } from "./hosted-fields";
+import { HostedReview } from "./hosted-review";
 import { HostedEditor } from "./hosted-editor";
 import { draftDisposition, applySaveResult, type HostedDraft } from "./hosted-state";
 
@@ -18,10 +19,18 @@ root.innerHTML = `<header><span class="brand">Weftext</span><span>远端写作 �
 <section id="comparison" hidden><h2>核对并保留双方稿</h2><p>上方是你的草稿，下方是当前服务端稿。编辑上方内容，确认合并依据后再保存；确认本身不会改正文。</p><pre id="current"></pre><button id="rebase">已核对，以当前稿作为保存依据</button></section>
 <section id="history-list" hidden><h2>保留的保存版本</h2><div id="versions"></div><pre id="historical"></pre></section>
 <section id="fields" aria-label="获权字段与查询" hidden></section>
+<section id="review" aria-label="托管批注与校对" hidden></section>
 <iframe id="render" title="获权内容预览" sandbox="" hidden></iframe></article></section>`;
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const fields = new HostedFields(el("fields"), request);
 const source = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(error.message));
+const review = new HostedReview(el("review"), request, () => doc ? {
+  resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
+  serial: source.serial, baseId: doc.baseId, dirty: source.value !== doc.source || compareRequired,
+  pending: !!draft?.pending, selection: source.selection,
+} : null, () => source.flush(), (from, to) => source.select(from, to), (resource, changed) => {
+  if (changed && doc?.resource === resource) { compareRequired = true; controls(); status("建议已提交到服务端；个人草稿保留，请重新读取与核对正文。"); }
+});
 let token = sessionStorage.getItem("weftext-hosted-token") ?? "";
 let identity: Me | undefined;
 let doc: Doc | undefined;
@@ -36,7 +45,7 @@ const status = (message: string) => { el("status").textContent = message; };
 class HostedError extends Error { constructor(public code: string, message: string, public http: number) { super(message); } }
 function clearDisplay(message: string, clearToken = false) {
   requestEpoch++; doc = undefined; draft = undefined; compareRequired = false;
-  source.clear(); fields.clear(); el("documents").replaceChildren();
+  source.clear(); fields.clear(); review.clear(); el("documents").replaceChildren();
   el("title").textContent = "选择文档"; el("current").textContent = "";
   el("versions").replaceChildren(); el("historical").textContent = "";
   el<HTMLIFrameElement>("render").srcdoc = ""; el("render").hidden = true;
@@ -89,7 +98,7 @@ async function connect() {
   sessionStorage.setItem("weftext-hosted-identity", JSON.stringify(next));
   sessionStorage.setItem("weftext-hosted-token", token);
   el("login").hidden = true; el("workspace").hidden = false; el("logout").hidden = false;
-  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor);
+  status(`${next.actor} · ${next.version} · 已连接`); await list(); await fields.connect(next.deployment, next.actor); await review.connect(next.deployment, next.actor);
 }
 async function list(term?: string) {
   const epoch = requestEpoch;
@@ -178,7 +187,7 @@ function sourceChanged() {
 }
 el<HTMLFormElement>("login").onsubmit = e => {e.preventDefault(); token = el<HTMLInputElement>("token").value.trim(); void run(connect);};
 el("logout").onclick = () => { clearDisplay("已退出。",true); el<HTMLInputElement>("token").value = ""; };
-el("refresh").onclick = () => void run(async () => { await list(); if (identity) await fields.connect(identity.deployment, identity.actor); });
+el("refresh").onclick = () => void run(async () => { await list(); if (identity) { await fields.connect(identity.deployment, identity.actor); await review.connect(identity.deployment, identity.actor); } });
 el<HTMLFormElement>("search").onsubmit = e => {e.preventDefault();void run(() => list(el<HTMLInputElement>("term").value.trim()));};
 el("save").onclick = () => void run(save);
 el("reopen").onclick = () => void run(() => open(doc!.resource));
@@ -230,7 +239,10 @@ window.addEventListener("offline",()=>status("连接中断，本页草稿仍保�
 window.addEventListener("beforeunload", e=>{if(draft && (draft.pending || draft.source!==draft.baseSource)){e.preventDefault();}});
 setInterval(()=>{
   if(!identity || busy) return;
-  const old=identity;
-  void request<Me>("me").then(next=>{if(next.generation!==old.generation){clearDisplay("授权策略已变化，旧展示与缓存已清除，请刷新文档列表。");identity=next;sessionStorage.setItem("weftext-hosted-identity",JSON.stringify(next));}}).catch(()=>{});
+  const old=identity, epoch=requestEpoch, credential=token;
+  void request<Me>("me").then(next=>{
+    if(epoch!==requestEpoch || credential!==token || identity!==old) return;
+    if(next.generation!==old.generation || next.actor!==old.actor || next.deployment!==old.deployment){clearDisplay("授权策略已变化，旧展示与缓存已清除，请刷新文档列表。");identity=next;sessionStorage.setItem("weftext-hosted-identity",JSON.stringify(next));}
+  }).catch(()=>{});
 },5000);
 if(token) void run(connect);
