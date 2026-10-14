@@ -102,6 +102,18 @@ pub struct TypedRefClosure {
     pub complete: bool,
     pub reasons: Vec<String>,
 }
+/// References proved inside the declared field Shapes only. Unbound author
+/// members are preserved outside this claim, even if they contain URI text.
+/// This neither establishes target identity nor replaces `validate_note` for
+/// required fields, Type constraints and the caller's frozen resource context.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeclaredTypedRefClosure {
+    pub slots: Vec<TypedRefSlot>,
+    pub complete: bool,
+    pub reasons: Vec<String>,
+    pub unbound: Vec<String>,
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchTerms {
@@ -1360,6 +1372,70 @@ pub fn typed_ref_closure(source: &str, schema: &Schema) -> Result<TypedRefClosur
         slots: out,
         complete: reasons.is_empty(),
         reasons,
+    })
+}
+/// Discover only exact official AST literals belonging to declared Shapes.
+/// Unlike the full-copy closure, legal unbound members do not invalidate this
+/// limited proof. Their contents are never searched for possible references.
+/// Computed/invalid known values remain incomplete; a legal nullable `none`
+/// contributes no reference. Source bytes are never changed.
+pub fn declared_typed_ref_closure(
+    source: &str,
+    schema: &Schema,
+) -> Result<DeclaredTypedRefClosure> {
+    let d = declaration(source, "weftext")?;
+    let (_, tokens) = controls(&d)?;
+    let (types, validation) = schema.expand_types(&tokens);
+    if !validation.is_valid() {
+        return Err(DataError("Type closure unavailable".into()));
+    }
+    let projection = project(source, schema);
+    let mut unbound = projection
+        .unknown_fields
+        .iter()
+        .map(|field| format!("unbound root field: {}", field.key))
+        .collect::<Vec<_>>();
+    let mut slots = vec![];
+    let mut reasons = vec![];
+    for (field, _) in schema.applicable_fields(&types) {
+        let Some(node) = root_field(&d, &field.key) else {
+            continue;
+        };
+        let Some(value) = node.value.as_ref() else {
+            reasons.push(format!(
+                "{}: computed field ref closure unavailable",
+                field.id
+            ));
+            continue;
+        };
+        if field.nullable && matches!(value, NativeValue::None) {
+            continue;
+        }
+        let validation = schema.validate(&field.shape, value);
+        unbound.extend(
+            validation
+                .unbound
+                .iter()
+                .map(|path| format!("{}: {path}", field.id)),
+        );
+        if !validation.is_valid() {
+            reasons.push(format!("{}: invalid/unavailable typed value", field.id));
+            continue;
+        }
+        ref_walk(
+            schema,
+            &field.shape,
+            node,
+            &field.id,
+            &mut vec![],
+            &mut slots,
+        )?;
+    }
+    Ok(DeclaredTypedRefClosure {
+        slots,
+        complete: reasons.is_empty(),
+        reasons,
+        unbound,
     })
 }
 fn ref_walk(
