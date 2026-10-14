@@ -275,6 +275,12 @@ class Outputs(features.LocalFeatures):
         numbering = ET.fromstring(parts['word/numbering.xml'])
         self.assertTrue(any(start.attrib.get(f'{{{W}}}val') == '5'
                             for start in numbering.iter(f'{{{W}}}startOverride')))
+        leading = self.ordinary(source.replace('= Reset run-in target <reset>',
+            'Before run-in body.\n= Reset run-in target <reset>'))
+        _, output = self.prepare_output(leading, 'docx')
+        self.assertTrue(any(loss['code'] == 'run-in-leading-body-loss' for loss in output['losses']))
+        self.keep('leading-run-in-preview.json', json.dumps(output, ensure_ascii=False, indent=2))
+        self.download_output(output, 'leading-run-in.docx')
 
     def test_03_docx_standard_controls_preserve_template_footer_and_theme(self):
         doc, source = self.rich_document()

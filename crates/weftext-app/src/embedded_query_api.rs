@@ -126,6 +126,18 @@ async fn run(State(state): State<AppState>, Json(req): Json<RunRequest>) -> ApiR
         req.serial,
         req.source_hash.as_deref(),
     )?;
+    if let Some(id) = result["queryId"].as_str() {
+        export_api::bind_embedded_query(
+            &state,
+            id,
+            export_api::EmbeddedQueryBasis {
+                session_id: req.session_id.clone(),
+                source_hash: weftext_engine::source_hash(&req.source),
+                serial: req.serial,
+                occurrence_id: req.occurrence_id.clone(),
+            },
+        )?;
+    }
     Ok(Json(
         json!({"serial":req.serial,"source":req.source,"sourceHash":weftext_engine::source_hash(&req.source),"occurrenceId":req.occurrence_id,"draftPreview":true,"result":result}),
     ))

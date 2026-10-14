@@ -4,6 +4,7 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use typst::introspection::{Introspector, MetadataElem};
 use typst_layout::PagedDocument;
 use typst_pdf::PdfOptions;
 
@@ -23,9 +24,18 @@ pub struct PagedOutput {
     pub font_families: Vec<String>,
     pub compiler_version: String,
     pub target: String,
+    #[serde(default)]
+    pub embedded_queries: Vec<crate::CompiledLabel>,
 }
 
 impl Engine {
+    pub fn render_frozen_paged(
+        &self,
+        input: &crate::FrozenRenderRequest,
+    ) -> Result<PagedOutput, EngineError> {
+        let world = LocalWorld::frozen(&self.library, &self.fonts, input)?;
+        self.paged_world(&world)
+    }
     pub fn render_paged(
         &self,
         source: &str,
@@ -58,8 +68,28 @@ impl Engine {
             .collect();
         let mut pdf_base64 = None;
         let mut page_count = 0;
+        let mut queries = std::collections::BTreeMap::<String, crate::CompiledLabel>::new();
         match compiled.output {
             Ok(document) => {
+                for content in document.introspector().query_labelled() {
+                    if content.to_packed::<MetadataElem>().is_some()
+                        && let Some(label) = content.label()
+                        && label.resolve().as_str().starts_with("weftext-query-")
+                    {
+                        let label = label.resolve().as_str().to_string();
+                        let entry = queries
+                            .entry(label.clone())
+                            .or_insert(crate::CompiledLabel {
+                                label,
+                                count: 0,
+                                origins: vec![],
+                            });
+                        entry.count += 1;
+                        if let Some(origin) = crate::render::origin(content.span(), world) {
+                            entry.origins.push(origin);
+                        }
+                    }
+                }
                 page_count = document.pages().len();
                 if page_count > PAGE_LIMIT {
                     diagnostics.push(budget_diagnostic("分页超过 1,000 页输出上限"));
@@ -91,6 +121,7 @@ impl Engine {
             font_families: self.families.clone(),
             compiler_version: "0.15.1".into(),
             target: "paged".into(),
+            embedded_queries: queries.into_values().collect(),
         })
     }
 }

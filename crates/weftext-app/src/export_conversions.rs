@@ -28,7 +28,7 @@ fn unavailable(message: impl Into<String>) -> ApiError {
 fn convert_error(error: impl std::fmt::Display) -> ApiError {
     unavailable(error.to_string())
 }
-fn report(code: &str, message: &str) -> ExportLoss {
+pub(crate) fn report(code: &str, message: &str) -> ExportLoss {
     ExportLoss {
         code: code.into(),
         message: message.into(),
@@ -189,6 +189,9 @@ pub(crate) async fn generate(
     let base = req.base_id.clone();
     core_call(state, move |core| core.check_session_base(&sid, &base)).await?;
     let mut preview = json!({"format":req.format,"document":{"sessionId":req.session_id,"baseId":req.base_id,"serial":req.serial,"sourceHash":weftext_engine::source_hash(&req.source),"scope":"currentDraft"},"stylePolicy":req.style_policy});
+    if !req.embedded_queries.is_empty() && !matches!(req.format.as_str(), "docx" | "pdf") {
+        return Err(ApiError::bad("正文查询结果只适用于 DOCX/PDF 随文输出"));
+    }
     if !matches!(req.format.as_str(), "docx" | "xlsx")
         && (req.template.is_some() || !req.bindings.is_empty())
     {
@@ -211,7 +214,10 @@ pub(crate) async fn generate(
             json!({"source":req.source,"sourceBytes":req.source.len()}),
         ),
         "native" => native(state, req, &loc).await?,
+        "pdf" => pdf(state, req, &loc).await?,
         "docx" | "xlsx" | "bibtex" | "cslJson" | "csl-json" | "ris" => {
+            let embedded = super::embedded_output::freeze(state, req, &loc.root.to_string_lossy())?;
+            preview["embeddedQueries"] = super::embedded_output::preview(&embedded);
             let cut_req = req.clone();
             let cut_loc = loc.clone();
             let mut cut = core_call(state, move |core| capture(core, &cut_loc, &cut_req)).await?;
@@ -281,6 +287,7 @@ pub(crate) async fn generate(
                         template,
                         frozen_result.as_ref(),
                         query.as_ref().map(|q| q.columns.as_slice()),
+                        &embedded,
                     ),
                     "xlsx" => xlsx(
                         &req_owned,
@@ -316,6 +323,71 @@ pub(crate) async fn generate(
     let base = req.base_id.clone();
     core_call(state, move |core| core.check_session_base(&sid, &base)).await?;
     Ok((artifact, preview))
+}
+
+async fn pdf(
+    state: &AppState,
+    req: &PrepareRequest,
+    loc: &Location,
+) -> Result<(ExportArtifact, Value), ApiError> {
+    let embedded = super::embedded_output::freeze(state, req, &loc.root.to_string_lossy())?;
+    let cut_req = req.clone();
+    let cut_loc = loc.clone();
+    let cut = core_call(state, move |core| capture(core, &cut_loc, &cut_req)).await?;
+    let mut input = FrozenRenderRequest {
+        source: req.source.clone(),
+        path: loc.path.clone(),
+        root: loc.root.clone(),
+        files: cut.files,
+        style: cut.style,
+    };
+    let compile = |value: Value| -> Result<weftext_engine::PagedOutput, ApiError> {
+        let output: weftext_engine::PagedOutput =
+            serde_json::from_value(value).map_err(|_| ApiError::internal("冻结分页合同无效"))?;
+        if !output.ok {
+            return Err(unavailable(format!(
+                "PDF 编译失败：{}",
+                output
+                    .diagnostics
+                    .iter()
+                    .map(|d| d.message.as_str())
+                    .collect::<Vec<_>>()
+                    .join("；")
+            )));
+        }
+        Ok(output)
+    };
+    let original = compile(render_frozen_target_worker(state, input.clone(), true).await?)?;
+    let (source, losses) =
+        super::embedded_output::paged_source(&req.source, &embedded, &original.embedded_queries)?;
+    let output = if source == req.source {
+        original
+    } else {
+        input.source = source;
+        let key = relative(&loc.root, &loc.path).map_err(ApiError::from)?;
+        input.files.insert(key, input.source.as_bytes().to_vec());
+        compile(render_frozen_target_worker(state, input, true).await?)?
+    };
+    let bytes = decode(
+        output
+            .pdf_base64
+            .as_deref()
+            .ok_or_else(|| unavailable("PDF 没有生成文件"))?,
+    )?;
+    let preview = json!({"target":"paged","scope":"frozenDraftWithSelectedQueryResults","cutId":cut.cut_id,"complete":cut.complete,"warnings":cut.warnings,"pageCount":output.page_count,"embeddedQueries":super::embedded_output::preview(&embedded),"diagnostics":output.diagnostics});
+    Ok((
+        ExportArtifact {
+            bytes,
+            content_type: "application/pdf".into(),
+            extension: "pdf".into(),
+            losses,
+            summary: format!(
+                "原生 PDF：{} 页，保留已选择正文查询的冻结行和原运行状态",
+                output.page_count
+            ),
+        },
+        preview,
+    ))
 }
 
 async fn native(
@@ -386,7 +458,7 @@ fn field_cell(projection: &NoteProjection, name: &str) -> Result<Cell, ApiError>
     }
     Ok(matches[0].cell.clone())
 }
-fn cell_text(cell: &Cell) -> Result<String, ApiError> {
+pub(crate) fn cell_text(cell: &Cell) -> Result<String, ApiError> {
     Ok(match cell {
         Cell::Value { value } => match value {
             NativeValue::Text(s)
@@ -446,7 +518,7 @@ fn binding_cell(
         _ => Err(ApiError::bad("单元格槽位仅支持typed属性、标题或固定文字")),
     }
 }
-fn node(tag: &str, key: String, children: Vec<RenderNode>) -> RenderNode {
+pub(crate) fn node(tag: &str, key: String, children: Vec<RenderNode>) -> RenderNode {
     RenderNode {
         key,
         kind: "element".into(),
@@ -458,7 +530,7 @@ fn node(tag: &str, key: String, children: Vec<RenderNode>) -> RenderNode {
         writable: false,
     }
 }
-fn text_node(text: String, key: String) -> RenderNode {
+pub(crate) fn text_node(text: String, key: String) -> RenderNode {
     RenderNode {
         key,
         kind: "text".into(),
@@ -470,7 +542,10 @@ fn text_node(text: String, key: String) -> RenderNode {
         writable: false,
     }
 }
-fn query_table(result: &QueryResult, columns: &[String]) -> Result<RenderNode, ApiError> {
+pub(crate) fn query_table(
+    result: &QueryResult,
+    columns: &[String],
+) -> Result<RenderNode, ApiError> {
     if columns.is_empty() || columns.len() > 512 || result.rows.len() > 4999 {
         return Err(unavailable("DOCX Query表格超过行列预算；没有截断行"));
     }
@@ -528,7 +603,7 @@ fn query_table(result: &QueryResult, columns: &[String]) -> Result<RenderNode, A
     }
     Ok(node("table", "frozen-query-table".into(), rows))
 }
-fn query_losses(result: &QueryResult) -> Vec<ExportLoss> {
+pub(crate) fn query_losses(result: &QueryResult) -> Vec<ExportLoss> {
     let mut losses = vec![report(
         "docx_query_structure",
         "DOCX中的Query表保留列顺序、行顺序、精确文字与各Cell状态；机器重入需要原生/完整XLSX结构输出。",
@@ -538,15 +613,6 @@ fn query_losses(result: &QueryResult) -> Vec<ExportLoss> {
     }
     losses
 }
-fn embedded_query_count(node: &RenderNode) -> usize {
-    usize::from(node.kind == "tag" && node.attrs.contains_key("data-weftext-query-label"))
-        + node
-            .children
-            .iter()
-            .map(embedded_query_count)
-            .sum::<usize>()
-}
-
 fn docx(
     req: &PrepareRequest,
     mut render: RenderOutput,
@@ -554,21 +620,19 @@ fn docx(
     template: Option<Vec<u8>>,
     query: Option<&QueryResult>,
     columns: Option<&[String]>,
+    embedded: &[super::embedded_output::FrozenEmbedded],
 ) -> Result<(ExportArtifact, Value), ApiError> {
     let mut bindings = BTreeMap::new();
     let mut losses = vec![];
     let mut query_bound = false;
-    // Browser-only result widgets are not part of a frozen native compilation.
-    // Never silently omit them or run a different live query during conversion.
-    if (template.is_none() || req.bindings.values().any(|binding| binding.kind == "body"))
-        && render
-            .tree
-            .as_ref()
-            .is_some_and(|tree| embedded_query_count(tree) > 0)
-    {
+    if template.is_none() || req.bindings.values().any(|binding| binding.kind == "body") {
+        if let Some(tree) = render.tree.as_mut() {
+            losses.extend(super::embedded_output::materialize(tree, embedded)?);
+        }
+    } else if !embedded.is_empty() {
         losses.push(report(
-            "embedded_query_results_not_materialized",
-            "正文内嵌 Query 的浏览器结果未纳入本次原生正文编译；DOCX 不包含这些位置的结果。可单独选择已显示的冻结 Query 结果输出，转换不会重新执行查询。",
+            "embedded_query_body_not_selected",
+            "本次模板未绑定正文；已选择的正文查询结果不在输出范围。",
         ));
     }
     for (name, binding) in &req.bindings {

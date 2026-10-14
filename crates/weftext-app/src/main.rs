@@ -26,6 +26,7 @@ use weftext_core::{Core, CoreError, SaveAsRequest, SaveRequest};
 mod bibliography_import_api;
 mod citation_api;
 mod data_api;
+mod embedded_output;
 mod embedded_query_api;
 mod export_api;
 mod export_conversions;
@@ -488,6 +489,13 @@ async fn render_frozen_worker(
     state: &AppState,
     request: weftext_engine::FrozenRenderRequest,
 ) -> Result<Value, ApiError> {
+    render_frozen_target_worker(state, request, false).await
+}
+async fn render_frozen_target_worker(
+    state: &AppState,
+    request: weftext_engine::FrozenRenderRequest,
+    paged: bool,
+) -> Result<Value, ApiError> {
     use base64::Engine as _;
     let total: usize = request.files.values().map(Vec::len).sum();
     if total > 64 * 1024 * 1024 || request.source.len() > 2 * 1024 * 1024 {
@@ -504,7 +512,7 @@ async fn render_frozen_worker(
         source: request.source,
         path: request.path,
         root: request.root,
-        paged: false,
+        paged,
         style: request.style,
         frozen_files: Some(
             request
@@ -818,9 +826,6 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
         weftext_engine::Engine::new()?
     };
     let output = if let Some(files) = input.frozen_files {
-        if input.paged {
-            return Err("Frozen Query compilation requires the Html target".into());
-        }
         let mut decoded = std::collections::BTreeMap::new();
         let mut total = 0usize;
         for (path, bytes) in files {
@@ -833,13 +838,18 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
             }
             decoded.insert(path, bytes);
         }
-        serde_json::to_value(engine.render_frozen(&weftext_engine::FrozenRenderRequest {
+        let request = weftext_engine::FrozenRenderRequest {
             source: input.source,
             path: input.path,
             root: input.root,
             files: decoded,
             style: input.style,
-        })?)?
+        };
+        if input.paged {
+            serde_json::to_value(engine.render_frozen_paged(&request)?)?
+        } else {
+            serde_json::to_value(engine.render_frozen(&request)?)?
+        }
     } else if input.paged {
         serde_json::to_value(if let Some(style) = &input.style {
             engine.render_paged_with_style(&input.source, &input.path, &input.root, style)?

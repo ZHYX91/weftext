@@ -16,7 +16,21 @@ pub(crate) struct FrozenQueryOutput {
     pub(crate) value: Value,
     pub(crate) columns: Vec<String>,
     pub(crate) schema: Value,
+    pub(crate) embedded: Option<EmbeddedQueryBasis>,
     born: Instant,
+}
+#[derive(Clone, PartialEq)]
+pub(crate) struct EmbeddedQueryBasis {
+    pub(crate) session_id: String,
+    pub(crate) source_hash: String,
+    pub(crate) serial: u64,
+    pub(crate) occurrence_id: String,
+}
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct EmbeddedQuerySelection {
+    pub(crate) occurrence_id: String,
+    pub(crate) query_id: String,
 }
 struct Job {
     input: String,
@@ -112,9 +126,26 @@ pub(crate) fn retain_query(
             value: output.clone(),
             columns,
             schema,
+            embedded: None,
             born: Instant::now(),
         },
     );
+    Ok(())
+}
+pub(crate) fn bind_embedded_query(
+    state: &AppState,
+    id: &str,
+    basis: EmbeddedQueryBasis,
+) -> Result<(), ApiError> {
+    let mut store = store(state)?;
+    let query = store
+        .queries
+        .get_mut(id)
+        .ok_or_else(|| ApiError::bad("冻结查询已过期，请明确重新运行"))?;
+    if query.embedded.is_some() {
+        return Err(ApiError::bad("冻结查询已绑定，不能重新关联正文位置"));
+    }
+    query.embedded = Some(basis);
     Ok(())
 }
 pub(crate) fn frozen_query(
@@ -176,6 +207,8 @@ pub(crate) struct PrepareRequest {
     #[serde(default)]
     pub(crate) bindings: BTreeMap<String, Binding>,
     pub(crate) query_id: Option<String>,
+    #[serde(default)]
+    pub(crate) embedded_queries: Vec<EmbeddedQuerySelection>,
 }
 fn template_style() -> String {
     "template".into()
@@ -732,6 +765,7 @@ mod tests {
             template: None,
             bindings: BTreeMap::new(),
             query_id: None,
+            embedded_queries: vec![],
         };
         assert_eq!(
             prepare(State(state.clone()), Json(req))

@@ -273,7 +273,7 @@ pub(crate) fn diagnostic(d: &SourceDiagnostic, world: &LocalWorld<'_>) -> Diagno
     }
 }
 
-fn origin(span: Span, world: &LocalWorld<'_>) -> Option<Origin> {
+pub(crate) fn origin(span: Span, world: &LocalWorld<'_>) -> Option<Origin> {
     let id = span.id()?;
     let source = world.source(id).ok()?;
     let node = source.find(span)?;

@@ -13,9 +13,10 @@ import { mountKnowledgePanel, type KnowledgeContext, type KnowledgePlan, type Kn
 import { sameKnowledgeBasis, type KnowledgeNodeRef } from "./knowledge-state";
 import { openLibraryStylePanel, type NativeStyleController } from "./style-panel";
 import type { OpenedDocument } from "./types";
-import type { FrozenQuery } from "./export-state";
+import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
 
 export interface WorkspaceToolsHost {
+  embeddedQueries?(): EmbeddedQuerySelection[];
   getDocument(): (DocumentBasis & { dirty: boolean; workspaceId?: string }) | null;
   selection(): KnowledgeContext["selection"];
   applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
@@ -73,7 +74,7 @@ export class WorkspaceTools {
         await host.created(opened);
       },
     };
-    this.propertyPanel = new DataPanel(dataHost); this.outputPanel = new OutputPanel({ ...dataHost, imported: async receipt => { const root = receipt.root ?? dataHost.getDocument()?.root; if (!root) throw new Error("导入回执缺少可刷新资料库位置，实际回执已保留。"); await host.refreshLibrary?.(root); if (this.library?.root === root) await this.queryPanel.refresh(); } }); this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query));
+    this.propertyPanel = new DataPanel(dataHost); this.outputPanel = new OutputPanel({ ...dataHost, embeddedQueries: host.embeddedQueries, imported: async receipt => { const root = receipt.root ?? dataHost.getDocument()?.root; if (!root) throw new Error("导入回执缺少可刷新资料库位置，实际回执已保留。"); await host.refreshLibrary?.(root); if (this.library?.root === root) await this.queryPanel.refresh(); } }); this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query));
     this.knowledgePanel = mountKnowledgePanel(this.knowledgeContainer, {
       context: () => this.context(), load: context => api("/api/knowledge/read", { context }),
       prepare: (intent, context) => api("/api/knowledge/prepare", { operationId: operationId(), context, intent }),

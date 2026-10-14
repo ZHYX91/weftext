@@ -52,6 +52,32 @@ fn frozen_world_has_no_ambient_file_fallback_and_keeps_real_relative_origins() {
 }
 
 #[test]
+fn frozen_paged_uses_its_own_query_witnesses_and_no_ambient_dependencies() {
+    let dir = TempDir::new().unwrap();
+    fs::create_dir(dir.path().join("notes")).unwrap();
+    fs::write(dir.path().join("notes/inc.typ"), "ambient").unwrap();
+    let denied = engine()
+        .render_frozen_paged(&request("#include \"inc.typ\"", dir.path()))
+        .unwrap();
+    assert!(!denied.ok);
+    let source = "#metadata((key: \"direct\")) <weftext-query-direct>\n#context if target() == \"paged\" [#metadata(1) <weftext-query-paged>] else [#metadata(2) <weftext-query-html>]";
+    let input = request(source, dir.path());
+    let output = engine().render_frozen_paged(&input).unwrap();
+    assert!(output.ok, "{:?}", output.diagnostics);
+    assert_eq!(
+        output
+            .embedded_queries
+            .iter()
+            .map(|q| q.label.as_str())
+            .collect::<Vec<_>>(),
+        vec!["weftext-query-direct", "weftext-query-paged"]
+    );
+    assert_eq!(output.embedded_queries[0].count, 1);
+    assert!(output.embedded_queries[0].origins[0].is_main);
+    assert_eq!(output.embedded_queries[0].origins[0].from, 1);
+}
+
+#[test]
 fn frozen_lexical_inputs_reject_outside_aliases_and_mismatched_authorities() {
     let dir = TempDir::new().unwrap();
     for path in ["../outside.typ", "/absolute.typ", "C:/outside.typ"] {

@@ -113,3 +113,17 @@ test("bibliography conflict inspection counts all explicit conflicts and never t
   assert.equal(bibliographyConflictCount({ records: [{ conflicts: [] }], losses: [] }), 0);
   assert.throws(() => bibliographyConflictCount({ records: [{}], losses: [] } as unknown as BibliographyInspection), /完整返回冲突/);
 });
+
+
+test("body Query output freezes each selection and never carries it into an unrelated format", async () => {
+  const selected = [{ occurrenceId: "body-first", queryId: "retained-a" }];
+  const calls: ExportRequest[] = [];
+  const controller = new OutputController(transport({ prepare: async request => { calls.push(structuredClone(request)); return prepared(request); } }), basis(), undefined, selected);
+  selected[0].queryId = "later-b";
+  await controller.prepare();
+  assert.deepEqual(calls[0].embeddedQueries, [{ occurrenceId: "body-first", queryId: "retained-a" }]);
+  controller.setDraft({ format: "pdf" }); await controller.prepare();
+  assert.deepEqual(calls[1].embeddedQueries, calls[0].embeddedQueries);
+  controller.setDraft({ format: "xlsx" }); await controller.prepare();
+  assert.equal(calls[2].embeddedQueries, undefined);
+});

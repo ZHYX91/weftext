@@ -9,6 +9,7 @@ five-view controls, focus, touch, keyboard, Undo or late browser result handling
 import argparse
 import copy
 import hashlib
+import io
 import json
 from pathlib import Path
 import queue
@@ -18,6 +19,8 @@ import sys
 import threading
 import time
 import unittest
+import zipfile
+import xml.etree.ElementTree as ET
 
 import test_local_features as features
 
@@ -712,6 +715,150 @@ class V05Completion(features.LocalFeatures):
         (products / 'embedded-query-export-preview.json').write_text(
             json.dumps(output, ensure_ascii=False, indent=2), encoding='utf-8')
         self.assertEqual(Path(doc['path']).read_bytes(), original)
+
+
+    def materialized_fixture(self):
+        root, _, _, doc, _ = self.query_fixture(multiple=True)
+        occurrences = self.discover(doc)['occurrences']
+        source = doc['source']
+        for item in occurrences:
+            source = source.replace(item['range']['raw'], '')
+        source += '\n\n输出前文。\n\n' + occurrences[0]['range']['raw'] + '\n\n输出中段。\n\n' + occurrences[1]['range']['raw'] + '\n\n输出后文。\n'
+        discovery = self.discover(doc, source, serial=10)
+        selections = []
+        for item in discovery['occurrences']:
+            result = self.run_embedded(doc, source, item['id'], serial=10)['result']
+            selections.append({'occurrenceId': item['id'], 'queryId': result['queryId']})
+        return root, doc, source, selections
+
+    def materialized_export(self, doc, source, selections, fmt, name, **options):
+        request = {'requestId': features.uid(), 'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
+                   'source': source, 'serial': 10, 'format': fmt, 'embeddedQueries': selections, **options}
+        output = self.api('/api/export/prepare', request)
+        self.assertEqual(output['status'], 'prepared', output)
+        self.assertEqual(self.api('/api/export/prepare', request), output)
+        self.api('/api/export/confirm', {'id': output['id'], 'acceptLosses': True})
+        _, payload, _ = self.raw('/api/export/download', {'id': output['id']})
+        self.assertEqual(hashlib.sha256(payload).hexdigest(), output['digest'])
+        products = self.root / 'output-products'; products.mkdir(exist_ok=True)
+        (products / f'{name}.{fmt}').write_bytes(payload)
+        (products / f'{name}.json').write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding='utf-8')
+        self.assertEqual(Path(doc['path']).read_bytes(), doc['source'].encode())
+        return output, payload
+
+    def test_15_docx_embedded_results_keep_body_order_and_frozen_rows(self):
+        root, doc, source, selections = self.materialized_fixture()
+        self.capture(root, '查询之后新增，不应混入结果', ['task'], {'status': features.text('open')})
+        output, payload = self.materialized_export(doc, source, selections, 'docx', 'embedded-frozen-body')
+        self.assertFalse(any(l['code'] == 'embedded_query_results_not_materialized' for l in output['losses']))
+        self.assertEqual([q['rowCount'] for q in output['preview']['embeddedQueries']], [1, 1])
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            xml = ET.fromstring(archive.read('word/document.xml'))
+        ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+        text = ''.join(t.text or '' for t in xml.iter(ns + 't'))
+        self.assertLess(text.index('输出前文'), text.index('查询 '))
+        self.assertLess(text.index('查询 '), text.index('输出中段'))
+        self.assertLess(text.index('输出中段'), text.rindex('查询 '))
+        self.assertLess(text.rindex('查询 '), text.index('输出后文'))
+        tables = list(xml.iter(ns + 'tbl'))
+        self.assertEqual(len(tables), 2)
+        self.assertEqual([len(list(t.iter(ns + 'tr'))) for t in tables], [2, 2])
+        self.assertIn('open', text); self.assertIn('done', text)
+        # Template body uses the same materialization, preserving its untouched footer.
+        import test_outputs as outputs
+        template, _, _ = outputs.docx_template()
+        self.materialized_export(doc, source, selections, 'docx', 'embedded-template-body',
+                                 template={'name': 'template.docx', 'bytesBase64': outputs.b64(template)},
+                                 bindings={'BodySlot': {'kind': 'body'}, 'TitleSlot': {'kind': 'text', 'text': '冻结查询报告'},
+                                           'LabelSlot': {'kind': 'text', 'text': '保留模板样式'}})
+
+    def test_16_native_pdf_materializes_exact_results_without_saving(self):
+        _, doc, source, selections = self.materialized_fixture()
+        output, payload = self.materialized_export(doc, source, selections, 'pdf', 'embedded-frozen-pdf')
+        self.assertTrue(payload.startswith(b'%PDF-'))
+        self.assertEqual(output['preview']['target'], 'paged')
+        self.assertGreater(output['preview']['pageCount'], 0)
+        self.assertEqual(len(output['preview']['embeddedQueries']), 2)
+        self.assertFalse(any(l['code'] == 'embedded_query_results_not_materialized' for l in output['losses']))
+
+    def test_17_body_output_rejects_cross_query_duplicate_and_old_draft_results(self):
+        _, doc, source, selections = self.materialized_fixture()
+        request = {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': source,
+                   'serial': 10, 'format': 'docx', 'embeddedQueries': selections}
+        swapped = copy.deepcopy(selections); swapped[0]['queryId'] = selections[1]['queryId']
+        for bad in [swapped, [selections[0], selections[0]]]:
+            output = self.api('/api/export/prepare', {**request, 'requestId': features.uid(), 'embeddedQueries': bad})
+            self.assertEqual(output['status'], 'failed', output)
+        self.discover(doc, source, serial=11)
+        output = self.api('/api/export/prepare', {**request, 'requestId': features.uid(), 'serial': 11})
+        self.assertEqual(output['status'], 'failed', output)
+        self.assertEqual(Path(doc['path']).read_bytes(), doc['source'].encode())
+
+    def test_18_partial_and_error_results_are_visible_in_body_output(self):
+        _, doc, source, _ = self.materialized_fixture()
+        occurrence = self.discover(doc, source, serial=10)['occurrences'][0]
+        plan = copy.deepcopy(occurrence['plan']); plan['where'] = "priority == 'high'"
+        edited = self.edit_embedded(doc, source, occurrence['id'], serial=10, plan=plan)
+        discovery = self.discover(doc, edited['source'], serial=11)
+        chosen = self.occurrence(discovery, occurrence['label'])
+        result = self.run_embedded(doc, edited['source'], chosen['id'], serial=11)['result']
+        self.assertEqual(result['coverage'], 'partial'); self.assertTrue(result['diagnostics'])
+        for fmt in ['docx', 'pdf']:
+            output = self.api('/api/export/prepare', {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+                'baseId': doc['baseId'], 'source': edited['source'], 'serial': 11, 'format': fmt,
+                'embeddedQueries': [{'occurrenceId': chosen['id'], 'queryId': result['queryId']}]})
+            self.assertEqual(output['status'], 'prepared', output)
+            self.assertTrue(any(l['code'] == 'query_incomplete' for l in output['losses']))
+            self.assertTrue(any(l['code'] == 'embedded_query_results_not_materialized' for l in output['losses']))
+            self.assertEqual(output['preview']['embeddedQueries'][0]['coverage'], 'partial')
+            self.api('/api/export/confirm', {'id': output['id'], 'acceptLosses': True})
+            _, payload, _ = self.raw('/api/export/download', {'id': output['id']})
+            folder = self.root / 'output-products'; folder.mkdir(exist_ok=True)
+            (folder / ('partial-result.' + fmt)).write_bytes(payload)
+            if fmt == 'docx':
+                with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                    xml = ET.fromstring(archive.read('word/document.xml'))
+                text = ''.join(xml.itertext())
+                self.assertIn('partial', text); self.assertIn('不能据此断言全库为空', text)
+                self.assertIn('诊断', text)
+
+
+    def test_19_inline_query_boundaries_and_pdf_binding_guard(self):
+        _, _, _, doc, _ = self.query_fixture()
+        occurrence = self.discover(doc)['occurrences'][0]
+        raw = occurrence['range']['raw']
+        base = doc['source'].replace(raw, '')
+        for serial, fmt, prefix, expected in [
+            (10, 'docx', '普通前文 *加粗前文* ', 'prepared'),
+            (11, 'docx', '#emph[样式内部 ', 'failed'),
+            (12, 'pdf', '#let table = (..args) => [替代布局]\n普通前文 ', 'failed'),
+        ]:
+            source = base + '\n\n' + prefix + raw + ' 后文' + (']' if serial == 11 else '')
+            current = self.discover(doc, source, serial=serial)['occurrences'][0]
+            if serial == 11:
+                self.assertFalse(current['runnable'])
+                self.run_embedded(doc, source, current['id'], serial=serial, status=409)
+                continue
+            selections = []
+            if serial == 10:
+                result = self.run_embedded(doc, source, current['id'], serial=serial)['result']
+                selections = [{'occurrenceId': current['id'], 'queryId': result['queryId']}]
+            output = self.api('/api/export/prepare', {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+                'baseId': doc['baseId'], 'source': source, 'serial': serial, 'format': fmt,
+                'embeddedQueries': selections})
+            self.assertEqual(output['status'], expected, output)
+            if expected == 'prepared':
+                self.api('/api/export/confirm', {'id': output['id'], 'acceptLosses': True})
+                _, payload, _ = self.raw('/api/export/download', {'id': output['id']})
+                with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                    xml = ET.fromstring(archive.read('word/document.xml'))
+                ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+                body = xml.find(ns + 'body')
+                table = next(i for i, child in enumerate(body) if child.tag == ns + 'tbl')
+                self.assertIn('加粗前文', ''.join(body[table - 2].itertext()))
+                self.assertTrue(list(body[table - 2].iter(ns + 'b')))
+                self.assertIn('后文', ''.join(body[table + 1].itertext()))
+            self.assertEqual(Path(doc['path']).read_bytes(), doc['source'].encode())
 
 
 if __name__ == '__main__':

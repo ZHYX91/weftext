@@ -9,7 +9,7 @@ translation_status: source
 
 ## 当前阶段
 
-固定旧基线已接受；本轮有界修订及实测边界见 [REVIEW](design/REVIEW.zh-CN.md) §8。当前 **0.5.0-alpha.2** 是 Windows／NTFS 本地程序加浏览器，使用与限制见 [MVP](MVP.zh-CN.md)，后续范围见[路线图](ROADMAP.zh-CN.md)。真实 OS IME、完整辅助技术和断电验收仍未完成；v0.7 多端及整体验收与下述隔离执行路径属于后续工作，不是已实现的产品能力。旧原型依赖问题留在归档，不使新的纯设计检查依赖旧 UI 或 npm 审计。
+固定旧基线已接受；本轮有界修订及实测边界见 [REVIEW](design/REVIEW.zh-CN.md) §8。当前 **0.5.0-alpha.3** 是 Windows／NTFS 本地程序加浏览器，使用与限制见 [MVP](MVP.zh-CN.md)，后续范围见[路线图](ROADMAP.zh-CN.md)。真实 OS IME、完整辅助技术和断电验收仍未完成；v0.7 多端及整体验收与下述隔离执行路径属于后续工作，不是已实现的产品能力。旧原型依赖问题留在归档，不使新的纯设计检查依赖旧 UI 或 npm 审计。
 
 ## 日常检查
 

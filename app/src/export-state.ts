@@ -1,7 +1,8 @@
 /** Output owns a frozen draft and one artifact ID. It never writes author data. */
 import type { DocumentBasis } from "./data-panel";
 
-export type ExportFormat = "docx" | "xlsx" | "native" | "bibtex" | "csl-json" | "ris" | "source";
+export type ExportFormat = "docx" | "pdf" | "xlsx" | "native" | "bibtex" | "csl-json" | "ris" | "source";
+export interface EmbeddedQuerySelection { occurrenceId: string; queryId: string }
 export type ExportStylePolicy = "template" | "source";
 export interface OutputLoss { code: string; message: string; location?: string }
 export interface FrozenQuery { queryId: string; label: string; rowCount: number; coverage: "complete" | "partial"; freshness: "current" | "stale"; limited?: boolean }
@@ -13,6 +14,7 @@ export interface ExportDraft { format: ExportFormat; stylePolicy: ExportStylePol
 export interface ExportRequest {
   requestId: string; sessionId: string; source: string; serial: number; baseId: string;
   format: ExportFormat; stylePolicy: ExportStylePolicy; template?: OutputFile; bindings?: Record<string, OutputBinding>; queryId?: string;
+  embeddedQueries?: EmbeddedQuerySelection[];
 }
 export interface PreparedOutput { id: string; requestId?: string; filename: string; contentType: string; length: number; digest: string; summary: string; losses: OutputLoss[]; preview?: unknown; status: "prepared" | "confirmed" }
 export interface OutputJobFailure { id?: string; requestId?: string; status: "pending" | "failed"; code?: string; message?: string }
@@ -42,9 +44,11 @@ export class OutputController {
   uncertain: "prepare" | "confirm" | "download" | null = null;
   private pending: ExportRequest | null = null;
   private confirmRequest: { id: string; acceptLosses: boolean } | null = null;
+  readonly embeddedQueries: readonly EmbeddedQuerySelection[];
 
-  constructor(readonly host: OutputTransport, basis: DocumentBasis, query?: FrozenQuery) {
+  constructor(readonly host: OutputTransport, basis: DocumentBasis, query?: FrozenQuery, embeddedQueries: readonly EmbeddedQuerySelection[] = []) {
     this.basis = Object.freeze(clone(basis));
+    this.embeddedQueries = clone(embeddedQueries);
     this.draft = { format: query ? "xlsx" : "docx", stylePolicy: "template", bindings: {}, ...(query ? { query: clone(query) } : {}) };
   }
   get locked(): boolean { return this.busy || this.uncertain !== null; }
@@ -63,6 +67,7 @@ export class OutputController {
         format: this.draft.format, stylePolicy: this.draft.stylePolicy,
         ...(this.draft.template ? { template: clone(this.draft.template), bindings: clone(this.draft.bindings) } : {}),
         ...(this.draft.query ? { queryId: this.draft.query.queryId } : {}),
+        ...(["docx", "pdf"].includes(this.draft.format) ? { embeddedQueries: clone([...this.embeddedQueries]) } : {}),
       };
     }
     this.busy = true;

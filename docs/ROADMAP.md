@@ -10,7 +10,7 @@ translation_status: synced
 
 2026-10-13: plan the current scope as **one initial MVP plus seven further milestones**. Version numbers divide the work and may become multiple smaller releases after testing. They are neither delivery dates nor claims of implementation. [REQUIREMENTS](REQUIREMENTS.md) remains the scope authority; research candidates are not automatically included.
 
-The local **0.5.0-alpha.2** candidate covers bounded Windows features from v0.2–v0.5 below. See the [preview guide](MVP.md) for actual availability, checks and outstanding acceptance. The version number does not establish complete IME, rich-editing, arbitrary Office conversion or cross-platform acceptance.
+The local **0.5.0-alpha.3** candidate covers bounded Windows features from v0.2–v0.5 below. See the [preview guide](MVP.md) for actual availability, checks and outstanding acceptance. The version number does not establish complete IME, rich-editing, arbitrary Office conversion or cross-platform acceptance.
 
 | Milestone | What users can accomplish | Main requirements and completion conditions |
 | --- | --- | --- |

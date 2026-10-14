@@ -1,8 +1,8 @@
 import { action, decodeProjection, diagnosticText, fieldNames, formatNativeValue, ui, type NoteProjection, type PanelHost } from "./data-panel";
-import { bibliographyConflictCount, ExchangeController, OutputController, OutputReadGate, type BibliographyInspection, type ExchangeFormat, type ExchangeLoss, type ExchangeReceipt, type ExportFormat, type ExportStylePolicy, type FrozenQuery, type OutputBinding, type OutputFile, type TemplateInspection } from "./export-state";
+import { bibliographyConflictCount, ExchangeController, OutputController, OutputReadGate, type BibliographyInspection, type ExchangeFormat, type ExchangeLoss, type ExchangeReceipt, type ExportFormat, type EmbeddedQuerySelection, type ExportStylePolicy, type FrozenQuery, type OutputBinding, type OutputFile, type TemplateInspection } from "./export-state";
 import type { OpenedDocument } from "./types";
 
-const formats: [ExportFormat, string][] = [["docx", "Word 文档（.docx）"], ["xlsx", "Excel 工作簿（.xlsx）"], ["native", "Weftext 原生内容包"], ["bibtex", "BibTeX 文献（.bib）"], ["csl-json", "CSL JSON 文献"], ["ris", "RIS 文献（.ris）"], ["source", "准确 Typst 源码（.typ）"]];
+const formats: [ExportFormat, string][] = [["docx", "Word 文档（.docx）"], ["pdf", "PDF 文档（含已显示正文查询）"], ["xlsx", "Excel 工作簿（.xlsx）"], ["native", "Weftext 原生内容包"], ["bibtex", "BibTeX 文献（.bib）"], ["csl-json", "CSL JSON 文献"], ["ris", "RIS 文献（.ris）"], ["source", "准确 Typst 源码（.typ）"]];
 let nextId = 0;
 function labeled(label: string, control: HTMLElement): HTMLElement {
   const result = ui("div", "output-control"); control.id ||= `output-control-${++nextId}`;
@@ -42,7 +42,7 @@ function previewContent(value: unknown, label = "查看冻结输入与完整预�
   details.append(draw(value, 0)); return details;
 }
 
-export interface OutputPanelHost extends PanelHost { imported?(receipt: ExchangeReceipt): Promise<void> }
+export interface OutputPanelHost extends PanelHost { embeddedQueries?(): EmbeddedQuerySelection[]; imported?(receipt: ExchangeReceipt): Promise<void> }
 
 class OutputDialog {
   readonly dialog = ui("dialog", "modal output-panel");
@@ -84,14 +84,15 @@ class OutputDialog {
   private mapping: BibliographyInspection | null = null;
   private inputGeneration = 0;
 
-  constructor(private readonly host: OutputPanelHost, basis: NonNullable<ReturnType<PanelHost["getDocument"]>>, query?: FrozenQuery) {
-    this.output = new OutputController({ id: () => crypto.randomUUID(), prepare: request => host.request("/api/export/prepare", request), confirm: request => host.request("/api/export/confirm", request), download: request => { if (!host.requestBlob) throw new Error("当前环境没有二进制下载入口。"); return host.requestBlob("/api/export/download", request); }, digest }, basis, query);
+  constructor(private readonly host: OutputPanelHost, basis: NonNullable<ReturnType<PanelHost["getDocument"]>>, query?: FrozenQuery, embedded: EmbeddedQuerySelection[] = []) {
+    this.output = new OutputController({ id: () => crypto.randomUUID(), prepare: request => host.request("/api/export/prepare", request), confirm: request => host.request("/api/export/confirm", request), download: request => { if (!host.requestBlob) throw new Error("当前环境没有二进制下载入口。"); return host.requestBlob("/api/export/download", request); }, digest }, basis, query, embedded);
     this.exchange = new ExchangeController({ id: () => crypto.randomUUID(), prepare: request => host.request("/api/exchange/prepare", request), commit: request => host.request("/api/exchange/commit", request) });
     const heading = ui("h2", "", "输出与导入"); heading.id = `output-heading-${++nextId}`; this.dialog.setAttribute("aria-labelledby", heading.id);
     const header = ui("header", "output-header"); header.append(heading, action("关闭", () => this.dialog.close(), "data-button compact"));
     const basisInfo = ui("p", "data-help", `笔记输入已固定：${basis.path} · 草稿版本 ${basis.serial}。关闭后重新打开会保留本次输入与操作。`);
     const sourceDetails = ui("details", "output-detail"); sourceDetails.append(ui("summary", "", "查看本次原生源码"), ui("pre", "output-source", basis.source));
     const outputSection = ui("section", "output-section"); outputSection.append(ui("h3", "", "生成文件"));
+    outputSection.append(ui("p", "data-help", `DOCX／PDF 随文输出已固定 ${embedded.length} 份正文查询结果，保留原运行状态；缺少结果的位置会明确说明。`));
     if (query) outputSection.append(ui("p", query.coverage === "partial" || query.freshness === "stale" || query.limited ? "data-warning" : "data-help", `查询输入已固定：${query.label} · ${query.rowCount} 行 · ${query.coverage === "complete" ? "完整范围" : "部分范围"}${query.limited ? " · 已有结果上限" : ""}${query.freshness === "stale" ? " · 当前性未确认" : ""}。输出保留本次行与列顺序。`));
     this.format = select(formats, this.output.draft.format); this.format.onchange = () => this.change(() => { this.output.setDraft({ format: this.format.value as ExportFormat }); this.inspection = null; this.templateError = false; this.template.value = ""; this.templateNote.classList.remove("data-warning"); this.gate.invalidate(); this.drawBindings(); });
     this.style = select([["template", "采用输出模板样式（默认）"], ["source", "保留笔记原生样式"]], "template"); this.style.onchange = () => this.change(() => this.output.setDraft({ stylePolicy: this.style.value as ExportStylePolicy }));
@@ -266,7 +267,8 @@ export class OutputPanel {
   async open(query?: FrozenQuery): Promise<void> {
     await this.host.prepareAction?.(); const basis = this.host.getDocument();
     if (!basis) { this.host.notify("请先打开一个笔记，再选择输出或导入。", true); return; }
-    const key = `${basis.sessionId}/${basis.serial}/${basis.baseId}/${query?.queryId ?? "note"}`;
-    let dialog = this.dialogs.get(key); if (!dialog) { dialog = new OutputDialog(this.host, basis, query); this.dialogs.set(key, dialog); } dialog.open();
+    const embedded = this.host.embeddedQueries?.() ?? [];
+    const key = `${basis.sessionId}/${basis.serial}/${basis.baseId}/${query?.queryId ?? "note"}/${JSON.stringify(embedded)}`;
+    let dialog = this.dialogs.get(key); if (!dialog) { dialog = new OutputDialog(this.host, basis, query, embedded); this.dialogs.set(key, dialog); } dialog.open();
   }
 }

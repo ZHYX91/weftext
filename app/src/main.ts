@@ -113,6 +113,7 @@ let projectionMappings: KnowledgeTextMapping[] = [];
 let readingSelection: { sessionId: string; serial: number; selection: NonNullable<KnowledgeContext["selection"]> } | null = null;
 
 const workspaceTools = new WorkspaceTools({
+  embeddedQueries: () => current?.queries.outputSelections() ?? [],
   getDocument: () => current && !current.sourceTrashed ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty } : null,
   selection: () => {
     if (!current) return undefined;
@@ -517,7 +518,7 @@ function renderDocument(): void {
     pagedPreview = new PagedPreview(host, { basis: () => current === doc ? { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial } : null, request: basis => api("/api/paged", basis), fileName: () => basename(doc.session.path).replace(/\.typ$/i, ".pdf"), onError: showError });
     void pagedPreview.render();
     if (doc.queries.hasQueries) {
-      const flow = el("section", "flow-pane paged-query-flow"); flow.append(el("p", "embedded-query-help", "内嵌 Query 结果仅在此连续视图显示。原生分页预览和 PDF 尚未包含这些结果。")); renderHost = el("div", "flow-document preview-document"); renderHost.setAttribute("aria-label", "含正文查询的连续草稿预览"); flow.append(renderHost); body.append(flow); flowScroll = flow; renderProjection(doc);
+      const flow = el("section", "flow-pane paged-query-flow"); flow.append(el("p", "embedded-query-help", "此处原生分页预览不含查询结果。需要随文 PDF 时，在“输出与导入”选择“PDF 文档（含已显示正文查询）”，固定当前结果后生成。")); renderHost = el("div", "flow-document preview-document"); renderHost.setAttribute("aria-label", "含正文查询的连续草稿预览"); flow.append(renderHost); body.append(flow); flowScroll = flow; renderProjection(doc);
     }
   } else if (["source", "styled"].includes(doc.mode)) {
     const sourcePane = el("section", "source-pane"); sourcePane.setAttribute("aria-label", "源码编辑区"); sourcePane.append(sourceToolbar(doc)); const host = el("div", "source-host"); sourcePane.append(host); doc.editor.mount(host); body.append(sourcePane);

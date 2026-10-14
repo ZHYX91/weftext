@@ -3,7 +3,7 @@ import { diagnosticText, fieldNames, formatNativeValue, type Cell } from "./data
 import { parseQueryParameters, parseQueryPlan, queryResultState, queryRowLifecycle, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
 import type { Origin, RenderNode, ViewMode } from "./types";
 import { textareaSourceDraft, utf8Offset } from "./writing";
-import type { FrozenQuery } from "./export-state";
+import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
 
 export interface EmbeddedQueryBasis { sessionId: string; source: string; serial: number }
 export interface EmbeddedQueryOccurrence {
@@ -106,6 +106,15 @@ export class EmbeddedQueryController {
   constructor(private readonly host: EmbeddedQueryHost) {}
   get hasQueries(): boolean { return !!this.discovery?.occurrences.length; }
   get occurrences(): readonly EmbeddedQueryOccurrence[] { return this.discovery?.occurrences ?? []; }
+  outputSelections(): EmbeddedQuerySelection[] {
+    const basis = this.host.basis();
+    if (!sameQueryBasis(this.discoveryBasis, basis)) return [];
+    return this.occurrences.flatMap(item => {
+      const state = this.states.get(presentationIdentity(item));
+      return state?.result?.queryId && !state.loading && !state.error && !state.result.superseded && sameQueryBasis(state.resultBasis ?? null, basis)
+        ? [{ occurrenceId: item.id, queryId: state.result.queryId }] : [];
+    });
+  }
   private state(item: EmbeddedQueryOccurrence): QueryPresentation { const key = presentationIdentity(item); let state = this.states.get(key); if (!state) { state = { gate: new EmbeddedQueryRunGate(), loading: false, expanded: false, builderOpen: false, parameters: "{}" }; this.states.set(key, state); } return state; }
   invalidate(): void { this.discoveryGeneration++; for (const state of this.states.values()) { state.gate.invalidate(); state.loading = false; } for (const [mount, association] of this.mounts) this.renderStatusOnly(mount, association); }
   async discover(basis: EmbeddedQueryBasis): Promise<boolean> {

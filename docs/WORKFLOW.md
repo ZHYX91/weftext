@@ -10,7 +10,7 @@ translation_status: synced
 
 ## Current stage
 
-The earlier fixed design baseline was accepted; [REVIEW](design/REVIEW.md) §8 records the bounded refinements and actual evidence limits. Current **0.5.0-alpha.2** is a Windows/NTFS local program with a browser; see [MVP](MVP.md) for use and limits and the [roadmap](ROADMAP.md) for later scope. Real OS IME, complete assistive-technology and power-loss acceptance remain incomplete. The v0.7 multiple-client milestone and isolated execution routes below are future work, not implemented product capabilities. Archived prototype dependencies do not make current documentation checks depend on the old UI or npm audit.
+The earlier fixed design baseline was accepted; [REVIEW](design/REVIEW.md) §8 records the bounded refinements and actual evidence limits. Current **0.5.0-alpha.3** is a Windows/NTFS local program with a browser; see [MVP](MVP.md) for use and limits and the [roadmap](ROADMAP.md) for later scope. Real OS IME, complete assistive-technology and power-loss acceptance remain incomplete. The v0.7 multiple-client milestone and isolated execution routes below are future work, not implemented product capabilities. Archived prototype dependencies do not make current documentation checks depend on the old UI or npm audit.
 
 ## Routine checks
 
